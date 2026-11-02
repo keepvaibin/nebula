@@ -20,6 +20,14 @@
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
+#include "galaxy/ui/home_menu_model.h"
+#include "galaxy/ui/settings_model.h"
+#include "galaxy/ui/settings_graphics_page.h"
+#include "galaxy/ui/settings_general_page.h"
+#include "galaxy/ui/settings_display_page.h"
+#include "galaxy/ui/settings_advanced_page.h"
+#include "galaxy/ui/settings_system_page.h"
+#include "galaxy/ui/settings_save_model.h"
 
 #include <algorithm>
 #include <array>
@@ -112,36 +120,8 @@ constexpr int kDlssDownloadMegabytes = 31;  // NVIDIA's DLSS files, as downloade
 // Settings pages built from rows (DISPLAY, GRAPHICS, GAME, MODS, SYSTEM: settings_page): a label, the
 // value for the draft, how left/right change the draft (none: the row is fixed) and a help line; a
 // heading starts a section and is never selected. CONTROLS and AUDIO keep their own rows.
-struct SettingsRow {
-    std::string label;
-    std::string value;
-    std::function<void(RenderConfig&, int)> change;
-    std::string help;
-    bool heading = false;
-    std::string key;  // names the row across rebuilds (a mod's buttons)
-    std::uint8_t names = 0u;  // the mod's own words, shown as they are: 1 its label, 2 its value
-    // A row of buttons (nothing to change): their words, and what pressing the one at an index does. Left and right
-    // move between them; A, Space or a click presses one (Right too when there is only one).
-    std::vector<std::string> buttons;
-    std::function<void(RenderConfig&, unsigned)> press;
-    std::uint8_t list = 0u;  // the MODS page's lists: 1 off, 2 on (a mod, or the list's title)
-    bool held = false;       // a mod picked up to move
-    // A setting along a range (a slider): its steps from the first value and where it is.
-    std::uint16_t slider_steps = 0u;
-    std::uint16_t slider_at = 0u;
-};
-
-// A row of buttons; its value is their words with '|' between them (NEBULA_SETTINGS_ROW_BUTTONS).
-SettingsRow button_row(std::string label, std::vector<std::string> buttons, std::function<void(RenderConfig&, unsigned)> press,
-                       std::string help) {
-    SettingsRow row{std::move(label), {}, nullptr, std::move(help)};
-    for (const std::string& word : buttons) {
-        row.value += (row.value.empty() ? "" : "|") + word;
-    }
-    row.buttons = std::move(buttons);
-    row.press = std::move(press);
-    return row;
-}
+using ui::SettingsRow;
+using ui::button_row;
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
                                        const RenderFeatureCaps& caps);
 bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
@@ -162,11 +142,7 @@ std::vector<unsigned> available_upscalers() {
 }
 
 // Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3), at least 1x.
-unsigned quality_render_scale(unsigned output_scale, unsigned quality) {
-    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
-    const long scale = std::lround(static_cast<float>(output_scale) / kRatio[std::min(quality, 4u)]);
-    return std::clamp(static_cast<unsigned>(std::max(scale, 1l)), 1u, std::max(output_scale, 1u));
-}
+using ui::quality_render_scale;
 
 // Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
 bool spatial_quality_mode(const RenderConfig& render) {
@@ -222,104 +198,35 @@ std::atomic<bool> s_system_menu_active{false};
 std::recursive_mutex s_native_settings_mutex;
 
 std::atomic<bool> s_native_settings_visible{false};
-// The HOME Menu (home_menu_open): its list, or "are you sure?" for reset and leaving; the selected answer; the choice
-// the game polls (-1 none yet). The game draws it once it reads home_menu_view; draw_home_menu is the fallback. The
-// window, simulation and render threads change it under s_home_menu_mutex.
-std::mutex s_home_menu_mutex;
-std::atomic<bool> s_home_menu_visible{false};
-std::atomic<unsigned> s_home_menu_row{0};
-std::atomic<int> s_home_menu_asking{0};  // the choice asked about: 0 none (the list), 1 leave, 2 reset
-std::atomic<int> s_home_menu_choice{-1};
-std::atomic<bool> s_home_menu_drawn_by_game{false};
-constexpr unsigned kHomeMenuRows = 3;
-// The list top to bottom and the choice each makes: return to the game, reset, leave (the console's Wii Menu).
+galaxy::ui::HomeMenuModel s_home_menu;
+constexpr unsigned kHomeMenuRows = galaxy::ui::HomeMenuModel::rows;
+constexpr unsigned kHomeMenuAnswers = galaxy::ui::HomeMenuModel::answers;
 constexpr const char* kHomeMenuRowText[kHomeMenuRows] = {"RETURN TO GAME", "RESET", "QUIT TO DESKTOP"};
-constexpr int kHomeMenuRowChoice[kHomeMenuRows] = {0, 2, 1};
-// "Are you sure?": no (selected first), then yes, as the game's own questions place them.
-constexpr unsigned kHomeMenuAnswers = 2;
 constexpr const char* kHomeMenuAnswerText[kHomeMenuAnswers] = {"NO", "YES"};
 
-unsigned home_menu_answer_count() {
-    return s_home_menu_asking.load(std::memory_order_relaxed) != 0 ? kHomeMenuAnswers : kHomeMenuRows;
-}
-
-void close_home_menu_with(int choice) {
-    s_home_menu_choice.store(choice, std::memory_order_release);
-    s_home_menu_visible.store(false, std::memory_order_release);
-}
-
-// Back (Escape, B, no): from the question to its row in the list, from the list to the game.
-void back_home_menu() {
-    const int asking = s_home_menu_asking.load(std::memory_order_relaxed);
-    if (asking == 0) {
-        close_home_menu_with(0);
-        return;
-    }
-    s_home_menu_asking.store(0, std::memory_order_relaxed);
-    for (unsigned row = 0; row < kHomeMenuRows; ++row) {
-        if (kHomeMenuRowChoice[row] == asking) {
-            s_home_menu_row.store(row, std::memory_order_relaxed);
-        }
-    }
-}
-
-// An answer chosen (Enter, A, a click): returning to the game closes at once; reset and leaving ask first.
-void choose_home_menu_answer(unsigned answer) {
-    const int asking = s_home_menu_asking.load(std::memory_order_relaxed);
-    if (asking != 0) {
-        if (answer == 1u) {
-            close_home_menu_with(asking);
-        } else {
-            back_home_menu();
-        }
-        return;
-    }
-    const int choice = kHomeMenuRowChoice[answer % kHomeMenuRows];
-    if (choice == 0) {
-        close_home_menu_with(0);
-        return;
-    }
-    s_home_menu_asking.store(choice, std::memory_order_relaxed);
-    s_home_menu_row.store(0u, std::memory_order_relaxed);
-}
-
-// Keys while the HOME Menu is open (controllers arrive as keys too: the D-pad as the arrows, A as kAcceptKey, Y as
-// Return, B and Menu as Escape). Every key is the menu's: the game and the settings menu wait.
 bool handle_home_menu_key(WPARAM key, bool was_down) {
-    if (was_down && key != VK_UP && key != VK_DOWN && key != VK_LEFT && key != VK_RIGHT) {
-        return true;
-    }
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    const unsigned count = home_menu_answer_count();
-    const unsigned row = s_home_menu_row.load(std::memory_order_relaxed) % count;
+    using galaxy::ui::HomeAction;
+    HomeAction action = HomeAction::Ignore;
     switch (key) {
     case VK_UP:
-    case VK_LEFT:
-        s_home_menu_row.store((row + count - 1u) % count, std::memory_order_relaxed);
-        break;
+    case VK_LEFT: action = HomeAction::Previous; break;
     case VK_DOWN:
-    case VK_RIGHT:
-        s_home_menu_row.store((row + 1u) % count, std::memory_order_relaxed);
-        break;
+    case VK_RIGHT: action = HomeAction::Next; break;
     case VK_RETURN:
     case VK_SPACE:
-    case galaxy::input::settings_pad::kKeyAccept:
-        choose_home_menu_answer(row);
-        break;
+    case galaxy::input::settings_pad::kKeyAccept: action = HomeAction::Accept; break;
     case VK_ESCAPE:
-    case VK_BACK:
-        back_home_menu();
-        break;
-    case VK_HOME:
-        close_home_menu_with(0);
-        break;
-    default:
-        break;
+    case VK_BACK: action = HomeAction::Back; break;
+    case VK_HOME: action = HomeAction::Close; break;
+    default: break;
     }
+    s_home_menu.key(action, was_down);
     return true;
 }
-std::atomic<bool> s_native_settings_dirty{false};
-std::atomic<bool> s_native_settings_save_error{false};
+ui::SettingsSaveModel s_settings_save{
+    save_runtime_settings_to_file, save_render_config_to_file,
+    [] { std::cerr << "[settings] save failed; kept for retry\n"; },
+    [] { SetThreadDescription(GetCurrentThread(), L"Nebula Settings Save"); }};
 std::atomic<unsigned> s_native_settings_tab{0};
 std::atomic<unsigned> s_native_settings_row{0};
 // The selected row's selected button, for the page and row it was chosen on (page << 16 | row); selecting a row
@@ -412,106 +319,12 @@ std::uint32_t s_handled_key_normalized = 0u;
 constexpr unsigned kNativeSettingsTabCount = 8;
 
 // Each language in its own name (UTF-8: Ç, Ñ, 日本語); a disc offers only its own, whose letters its font has.
-const char* game_language_name(GameLanguage language) {
-    switch (language) {
-    case GameLanguage::Japanese: return "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E";
-    case GameLanguage::German: return "DEUTSCH";
-    case GameLanguage::French: return "FRAN\xC3\x87" "AIS";
-    case GameLanguage::Spanish: return "ESPA\xC3\x91" "OL";
-    case GameLanguage::Italian: return "ITALIANO";
-    case GameLanguage::Dutch: return "NEDERLANDS";
-    case GameLanguage::English:
-    case GameLanguage::Auto: break;
-    }
-    return "ENGLISH";
-}
+using ui::game_language_name;
+using ui::native_settings_first_row;
+using ui::kNativeSettingsVisibleRows;
 
-// Rows the panel shows at once; longer pages scroll.
-constexpr unsigned kNativeSettingsVisibleRows = 9u;
-
-unsigned native_settings_first_row(unsigned first, unsigned selected, unsigned count) {
-    if (count <= kNativeSettingsVisibleRows) return 0u;
-    if (selected < first) first = selected;
-    if (selected >= first + kNativeSettingsVisibleRows) first = selected + 1u - kNativeSettingsVisibleRows;
-    return std::min(first, count - kNativeSettingsVisibleRows);
-}
-
-// Writes both settings files when something changed. Each atomic replace flushes the disk, which a busy or
-// scanned disk can hold for tens of milliseconds and more.
-bool write_dirty_settings_files() {
-    if (!s_native_settings_dirty.exchange(false, std::memory_order_acq_rel)) {
-        return true;
-    }
-    bool runtime_saved = false;
-    bool render_saved = false;
-    try {
-        runtime_saved = save_runtime_settings_to_file();
-    } catch (...) {
-        runtime_saved = false;
-    }
-    try {
-        render_saved = save_render_config_to_file();
-    } catch (...) {
-        render_saved = false;
-    }
-    if (!runtime_saved || !render_saved) {
-        s_native_settings_dirty.store(true, std::memory_order_release);
-        const bool already_reported =
-            s_native_settings_save_error.exchange(
-                true,
-                std::memory_order_acq_rel);
-        if (!already_reported) {
-            std::cerr << "[settings] save failed; kept for retry\n";
-        }
-        return false;
-    }
-    s_native_settings_save_error.store(false, std::memory_order_release);
-    return true;
-}
-
-// Saves run on a worker: the menu, the window thread and the render thread hold the settings lock while they
-// ask for one, and the render thread takes that lock every frame the menu is open.
-std::mutex s_settings_save_mutex;
-std::condition_variable s_settings_save_changed;
-bool s_settings_save_requested = false;  // guarded by s_settings_save_mutex
-bool s_settings_save_running = false;    // guarded by s_settings_save_mutex
-
-void settings_save_worker() {
-    SetThreadDescription(GetCurrentThread(), L"Nebula Settings Save");
-    for (;;) {
-        {
-            std::unique_lock<std::mutex> lock(s_settings_save_mutex);
-            s_settings_save_changed.wait(lock, [] { return s_settings_save_requested; });
-            s_settings_save_requested = false;
-            s_settings_save_running = true;
-        }
-        (void)write_dirty_settings_files();
-        {
-            const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
-            s_settings_save_running = false;
-        }
-        s_settings_save_changed.notify_all();
-    }
-}
-
-bool settings_save_pending() {
-    const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
-    return s_settings_save_requested || s_settings_save_running;
-}
-
-float step_gain(float current, int delta) {
-    const float snapped = std::round(current * 20.0f) / 20.0f;
-    return std::clamp(snapped + static_cast<float>(delta) * 0.05f, 0.0f, 2.0f);
-}
-
-bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
-    return a.display_mode != b.display_mode || a.monitor != b.monitor ||
-        a.fullscreen_width != b.fullscreen_width ||
-        a.fullscreen_height != b.fullscreen_height ||
-        a.fullscreen_refresh_hz != b.fullscreen_refresh_hz ||
-        (a.display_mode == kDisplayWindowed &&
-         (a.window_width != b.window_width || a.window_height != b.window_height));
-}
+using ui::step_gain;
+using ui::display_settings_differ;
 
 const MonitorInfo* settings_monitor(const RenderConfig& render);
 
@@ -533,89 +346,21 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
 // GRAPHICS > FRAME RATE. INTERPOLATION OFF presents the game's own frames (FRAME RATE LIMIT 30 or 60); NATIVE adds
 // Nebula's interpolated frames up to the TARGET FRAME RATE; DLSS FRAME GENERATION has NVIDIA's generated frames reach
 // it. The target is max_fps (0: the display's refresh rate); frame_generation selects DLSS.
-enum class Interpolation : unsigned { kOff, kNative, kFrameGeneration };
-
-Interpolation interpolation_of(const RenderConfig& render) {
-    if (render.frame_generation != 0u) {
-        return Interpolation::kFrameGeneration;
-    }
-    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-    return rate != 0u && rate <= 61u ? Interpolation::kOff : Interpolation::kNative;
+using ui::Interpolation;
+ui::FrameRateCaps settings_frame_rate_caps(const RenderConfig& render, bool offer = false) {
+    return {settings_refresh_hz(render), offer && frame_generation_offered(),
+            streamline::frame_generation_supported(), streamline::frame_generation_dynamic(),
+            streamline::frame_generation_max()};
 }
-
-// The targets a mode offers, lowest first (0: the display's refresh rate): the standard rates
-// below the display's, then its own. With a temporal upscaler native interpolation runs at
-// multiples of 60, as does frame generation without dynamic multi frame generation (and at most
-// the multiplier the GPU runs).
+Interpolation interpolation_of(const RenderConfig& render) { return ui::interpolation_of(render); }
 std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {
-    std::vector<unsigned> targets;
-    if (mode == Interpolation::kOff) {
-        return targets;
-    }
-    const unsigned refresh = settings_refresh_hz(render);
-    const bool generated = mode == Interpolation::kFrameGeneration;
-    // NVIDIA's fixed frame generation makes whole multiples of the game's 60.
-    const bool sixties = generated && streamline::frame_generation_supported() && !streamline::frame_generation_dynamic();
-    const unsigned most = generated && streamline::frame_generation_supported()
-        ? 60u * (streamline::frame_generation_max() + 1u) : 1000u;
-    for (const unsigned rate : {120u, 144u, 165u, 180u, 240u, 360u}) {
-        if (refresh != 0u && rate + 1u >= refresh) {
-            break;
-        }
-        if ((rate == 180u && !sixties) || (sixties && rate % 60u != 0u) || rate > most) {
-            continue;
-        }
-        targets.push_back(rate);
-    }
-    // Its own rate: above 60, and with the multiples of 60 only where it is one (frame generation
-    // takes the largest multiple at or below it).
-    const bool own = refresh == 0u || (refresh > 61u && (!sixties || generated || refresh % 60u <= 1u ||
-                                                          refresh % 60u >= 59u));
-    if (own) {
-        targets.push_back(0u);
-    }
-    return targets;
+    return ui::interpolation_targets(mode, settings_frame_rate_caps(render));
 }
-
 std::vector<Interpolation> interpolation_modes(const RenderConfig& render) {
-    std::vector<Interpolation> modes{Interpolation::kOff};
-    if (!interpolation_targets(render, Interpolation::kNative).empty()) {
-        modes.push_back(Interpolation::kNative);
-    }
-    if (frame_generation_offered() && !interpolation_targets(render, Interpolation::kFrameGeneration).empty()) {
-        modes.push_back(Interpolation::kFrameGeneration);
-    }
-    return modes;
+    return ui::interpolation_modes(settings_frame_rate_caps(render, true));
 }
-
-// Keeps the draft's target one its mode offers: the same, else the highest at or below it (the
-// display's rate counting as its refresh), else the lowest offered; a mode with none turns off.
 void normalize_interpolation(RenderConfig& render) {
-    const Interpolation mode = interpolation_of(render);
-    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-    if (mode == Interpolation::kOff) {
-        render.max_fps = rate != 0u && rate <= 30u ? 30.0f : 60.0f;
-        return;
-    }
-    const auto targets = interpolation_targets(render, mode);
-    if (targets.empty()) {
-        render.frame_generation = 0u;
-        render.max_fps = 60.0f;
-        return;
-    }
-    if (std::find(targets.begin(), targets.end(), rate) != targets.end()) {
-        return;
-    }
-    const unsigned refresh = settings_refresh_hz(render);
-    const unsigned wanted = rate == 0u ? (refresh != 0u ? refresh : 1000u) : rate;
-    unsigned chosen = targets.front();
-    for (const unsigned target : targets) {
-        const unsigned value = target == 0u ? (refresh != 0u ? refresh : 1000u) : target;
-        if (value <= wanted) {
-            chosen = target;
-        }
-    }
-    render.max_fps = static_cast<float>(chosen);
+    ui::normalize_interpolation(render, settings_frame_rate_caps(render));
 }
 
 const MonitorInfo* settings_monitor(const RenderConfig& render) {
@@ -734,12 +479,8 @@ void sanitize_settings_draft(RenderConfig& render) {
 unsigned controls_changes();
 
 // The LIGHTING row: 0 per vertex, 1 per pixel, 2 enhanced.
-unsigned lighting_mode(const RenderConfig& render) {
-    return render.enhanced_lighting ? 2u : render.per_pixel_lighting ? 1u : 0u;
-}
+using ui::lighting_mode;
 
-// The game's settings the menu changed since it took them (its input mode is the controls draft's), each merged into
-// `live` when given: a setting changed elsewhere meanwhile keeps that value unless the menu changed it too.
 unsigned runtime_draft_changes(RuntimeSettings* live) {
     const RuntimeSettings& d = s_runtime_draft;
     const RuntimeSettings& b = s_runtime_base;
@@ -1184,7 +925,7 @@ void revert_display_settings() {
     s_settings_draft.fullscreen_refresh_hz = render.fullscreen_refresh_hz;
     s_settings_draft.window_width = render.window_width;
     s_settings_draft.window_height = render.window_height;
-    s_native_settings_dirty.store(true, std::memory_order_release);
+    s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
     std::cerr << "[settings] display reverted\n";
 }
@@ -1303,7 +1044,7 @@ void apply_native_settings_draft() {
         s_display_confirm_deadline_ms = GetTickCount64() + kDisplayConfirmMs;
     }
     s_settings_applied_ms = GetTickCount64();
-    s_native_settings_dirty.store(true, std::memory_order_release);
+    s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
     std::cerr << "[settings] applied " << changes << " change"
               << (changes == 1u ? "" : "s") << '\n';
@@ -1822,7 +1563,7 @@ void request_native_settings_close() {
 }
 
 bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false) {
-    if (s_home_menu_visible.load(std::memory_order_acquire)) {
+    if (s_home_menu.visible.load(std::memory_order_acquire)) {
         return handle_home_menu_key(key, was_down);
     }
     // A controller's A changes the selected setting, as Right does, and presses the selected button.
@@ -2388,472 +2129,79 @@ std::string pad_hints(std::string text) {
     return text;
 }
 
-std::string percent_text(float value) {
-    char text[32]{};
-    std::snprintf(
-        text,
-        sizeof(text),
-        "%u%%",
-        static_cast<unsigned>(std::lround(value * 100.0f)));
-    return text;
-}
+using ui::percent_text;
+using ui::mods_ui_text;
+using ui::upper_ascii;
+using ui::settings_step;
 
-const char* exposed_text(const RenderFeatureStatus& status) {
-    return status.settings_exposed ? "READY" : "HIDDEN";
-}
-
-// A name as the menu shows it, shortened to `width` characters (the overlay's font draws it in capitals).
-std::string mods_ui_text(std::string_view text, std::size_t width) {
-    std::size_t characters = 0u;
-    std::size_t cut = text.size();
-    for (std::size_t i = 0; i < text.size(); ++i) {
-        if ((static_cast<unsigned char>(text[i]) & 0xC0u) == 0x80u) continue;
-        if (characters == width - 3u) cut = i;
-        ++characters;
+class WindowDisplayPageHost final : public ui::DisplayPageHost {
+public:
+    ui::DisplayPageState query(const RenderConfig& render) const override {
+        ui::DisplayPageState state;
+        const MonitorInfo* current = settings_monitor(render);
+        for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
+            const auto& monitor = s_settings_monitors[i];
+            state.monitors.push_back({narrow_utf8(monitor.device), monitor.name});
+            if (&monitor == current) state.current_monitor = i;
+        }
+        state.output_size = settings_output_size(render);
+        state.window_sizes = settings_window_sizes(current, render.aspect_mode);
+        state.frame_rates = settings_frame_rate_caps(render);
+        return state;
     }
-    return characters <= width ? std::string(text) : std::string(text.substr(0, cut)) + "...";
-}
-
-std::string upper_ascii(std::string text) {
-    for (char& ch : text) {
-        if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
+    void changed(ui::DisplayChange change, RenderConfig& draft) const override {
+        if ((change == ui::DisplayChange::Mode || change == ui::DisplayChange::Aspect) &&
+            draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) snap_window_size(draft);
+        if (change != ui::DisplayChange::Aspect) sanitize_settings_draft(draft);
+        if (change == ui::DisplayChange::Monitor) normalize_interpolation(draft);
     }
-    return text;
-}
-
-// One step of a row's choice, clamped to its ends.
-unsigned settings_step(unsigned value, unsigned count, int delta) {
-    return static_cast<unsigned>(std::clamp(static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
-}
+};
 
 std::vector<SettingsRow> display_page(const RenderConfig& render) {
-    std::vector<SettingsRow> rows;
-    char text[96]{};
-    const MonitorInfo* monitor = settings_monitor(render);
-    rows.push_back({"SCREEN", {}, nullptr, {}, true});
-    {
-        std::string value = "PRIMARY";
-        if (monitor != nullptr) {
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
-                if (&s_settings_monitors[i] == monitor) index = i;
-            }
-            const std::string name = monitor->name.empty() ? std::string("Display") : mods_ui_text(monitor->name, 22u);
-            std::snprintf(text, sizeof(text), "%u %s", static_cast<unsigned>(index + 1u), name.c_str());
-            value = text;
-        }
-        SettingsRow row{"MONITOR", value, nullptr, "THE DISPLAY THE GAME RUNS ON"};
-        if (s_settings_monitors.size() >= 2u) {
-            row.change = [](RenderConfig& draft, int delta) {
-                const MonitorInfo* current = settings_monitor(draft);
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
-                    if (&s_settings_monitors[i] == current) index = i;
-                }
-                const std::size_t next = settings_step(static_cast<unsigned>(index),
-                                                       static_cast<unsigned>(s_settings_monitors.size()), delta);
-                if (next == index) return;
-                const std::string device = narrow_utf8(s_settings_monitors[next].device);
-                draft.monitor.fill('\0');
-                std::memcpy(draft.monitor.data(), device.data(), std::min(device.size(), draft.monitor.size() - 1u));
-                // A fullscreen mode belongs to its monitor; start from the new one's desktop mode.
-                draft.fullscreen_width = 0u;
-                draft.fullscreen_height = 0u;
-                draft.fullscreen_refresh_hz = 0u;
-                sanitize_settings_draft(draft);
-                normalize_interpolation(draft);
-            };
-        }
-        rows.push_back(std::move(row));
-    }
-    {
-        static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS FULLSCREEN"};
-        rows.push_back({"DISPLAY MODE", kModes[std::min(render.display_mode, kDisplayBorderless)],
-                        [](RenderConfig& draft, int delta) {
-                            draft.display_mode = settings_step(std::min(draft.display_mode, kDisplayBorderless), 2u, delta);
-                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                                snap_window_size(draft);
-                            }
-                            sanitize_settings_draft(draft);
-                        },
-                        "BORDERLESS FILLS THE SCREEN AND SWITCHES INSTANTLY"});
-    }
-    {
-        const auto [w, h] = settings_output_size(render);
-        std::snprintf(text, sizeof(text), "%uX%u", w, h);
-        SettingsRow row{"RESOLUTION", text, nullptr, "BORDERLESS USES THE DESKTOP RESOLUTION"};
-        if (render.display_mode == kDisplayWindowed) {
-            row.help = "THE WINDOW SIZE";
-            row.change = [](RenderConfig& draft, int delta) {
-                const auto sizes = settings_window_sizes(settings_monitor(draft), draft.aspect_mode);  // smallest first
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < sizes.size(); ++i) {
-                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
-                        std::uint64_t{draft.window_width} * draft.window_height) {
-                        index = i;
-                    }
-                }
-                const int moved = static_cast<int>(index) + delta;
-                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
-                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
-                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
-                sanitize_settings_draft(draft);
-            };
-        }
-        rows.push_back(std::move(row));
-    }
-    {
-        const unsigned hz = settings_refresh_hz(render);
-        std::snprintf(text, sizeof(text), "%u HZ", hz != 0u ? hz : 60u);
-        rows.push_back({"REFRESH RATE", text, nullptr, "SET IN THE WINDOWS DISPLAY SETTINGS"});
-    }
-    {
-        static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
-        static_assert(std::size(kAspects) == kAspectModeCount);
-        rows.push_back({"ASPECT RATIO", kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)],
-                        [](RenderConfig& draft, int delta) {
-                            draft.aspect_mode = settings_step(draft.aspect_mode, kAspectModeCount, delta);
-                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                                snap_window_size(draft);
-                            }
-                        },
-                        "AUTO MATCHES THE WINDOW. WIDER SHOWS MORE OF THE WORLD"});
-    }
-    rows.push_back({"VSYNC", render.vsync_interval == 0u ? "OFF" : "ON",
-                    [](RenderConfig& draft, int) {
-                        draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
-                        normalize_interpolation(draft);
-                    },
-                    "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
-    rows.push_back({"INTERFACE", {}, nullptr, {}, true});
-    rows.push_back({"HUD RESOLUTION", render.hud_output_resolution ? "DISPLAY" : "INTERNAL",
-                    [](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; },
-                    "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
-    return rows;
+    static const WindowDisplayPageHost host;
+    return ui::display_page(render, host);
 }
 
 void open_folder_in_explorer(const std::filesystem::path& folder);
 
+class WindowGraphicsPageHost final : public ui::GraphicsPageHost {
+public:
+    ui::GraphicsPageState query(const RenderConfig& render) const override {
+        ui::GraphicsPageState state;
+        state.upscalers = available_upscalers();
+        state.scale_cap = settings_scale_cap(render);
+        const unsigned internal = std::clamp(render.scene_target_scale, 1u, state.scale_cap);
+        state.render_scale = upscaler_render_scale(render, internal);
+        state.logical_width = kFrameWidth;
+        state.logical_height = kFrameHeight;
+        state.dlss_supported = streamline::dlss_supported();
+        state.dlss_installed = dlss_installed_now();
+        state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
+        state.temporal_upscaling = temporal_upscaler(render) != 0u;
+        state.spatial_upscaling = spatial_quality_mode(render);
+        state.curved_surfaces_offered = curved_surfaces_offered();
+        state.measured_fps = host_window::measured_present_hz.load(std::memory_order_relaxed) *
+                             (frame_generation_running() ? static_cast<double>(streamline::frames_presented()) : 1.0);
+        state.frame_rates = settings_frame_rate_caps(render, true);
+        state.anti_aliasing_text = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
+        if (render.texture_packs) {
+            const auto packs = TexturePacks::summary();
+            state.texture_packs = {packs.textures, packs.levels, packs.indexed, packs.unreadable};
+        }
+        return state;
+    }
+    void open_folder(ui::GraphicsFolder folder) const override {
+        open_folder_in_explorer(folder == ui::GraphicsFolder::TextureDumps ? texture_dump_directory() : movie_directory());
+    }
+};
+
 std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
-    std::vector<SettingsRow> rows;
-    char text[96]{};
-    rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
-    {
-        static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS"};
-        const std::vector<unsigned> choices = available_upscalers();
-        const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
-        std::string value = kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
-        if (offered && render.upscaler == 3u && !streamline::dlss_supported()) {
-            value += dlss_installed_now() ? " (AFTER RESTART)" : " (DOWNLOAD)";
-        }
-        rows.push_back({"UPSCALING", value,
-                        [](RenderConfig& draft, int delta) {
-                            const std::vector<unsigned> options = available_upscalers();
-                            std::size_t index = 0u;
-                            for (std::size_t i = 0; i < options.size(); ++i) {
-                                if (options[i] == draft.upscaler) index = i;
-                            }
-                            draft.upscaler = options[settings_step(static_cast<unsigned>(index),
-                                                                   static_cast<unsigned>(options.size()), delta)];
-                            normalize_interpolation(draft);
-                        },
-                        "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
-    }
-    const unsigned internal = std::clamp(render.scene_target_scale, 1u, settings_scale_cap(render));
-    const unsigned render_scale = upscaler_render_scale(render, internal);
-    // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
-    const bool rt_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
-    const bool rt_on = rt_offered && render.ray_tracing_enabled;
-    const bool upscaled = temporal_upscaler(render) != 0u || spatial_quality_mode(render);
-    {
-        static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-        static constexpr const char* kDlss[] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-        static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-        const bool temporal = render.upscaler >= 2u;
-        const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
-        const unsigned upscaler = std::min(render.upscaler, 3u);
-        std::snprintf(text, sizeof(text), "%s (%uX)",
-                      upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
-                      render_scale);
-        rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
-                        [](RenderConfig& draft, int delta) {
-                            if (draft.upscaler >= 2u) {
-                                draft.temporal_quality = settings_step(std::min(draft.temporal_quality, 4u), 5u, delta);
-                            } else {
-                                draft.spatial_quality = settings_step(std::min(draft.spatial_quality, 4u), 5u, delta);
-                            }
-                        },
-                        "THE RENDER RESOLUTION BELOW THE INTERNAL ONE. QUALITY RENDERS THE MOST PIXELS"});
-    }
-    {
-        std::string value = "MATCH OUTPUT";
-        if (!render.internal_follow_window) {
-            std::snprintf(text, sizeof(text), "%uX %uX%u%s", internal, kFrameWidth * internal, kFrameHeight * internal,
-                          internal >= settings_scale_cap(render) ? " MAX" : "");
-            value = text;
-        }
-        rows.push_back({"INTERNAL RESOLUTION", value,
-                        [](RenderConfig& draft, int delta) {
-                            const unsigned cap = settings_scale_cap(draft);
-                            const unsigned current = draft.internal_follow_window ? 0u
-                                                                                  : std::clamp(draft.scene_target_scale, 1u, cap);
-                            const unsigned next = settings_step(current, cap + 1u, delta);
-                            if (next == 0u) {
-                                draft.internal_follow_window = true;
-                            } else {
-                                draft.internal_follow_window = false;
-                                draft.scene_target_scale = next;
-                            }
-                        },
-                        upscaled ? "THE UPSCALER'S OUTPUT. MATCH OUTPUT FOLLOWS THE SCREEN"
-                                 : "MATCH OUTPUT RENDERS AT THE SCREEN RESOLUTION"});
-    }
-    std::snprintf(text, sizeof(text), "%u%%", std::min(render.sharpness, 100u));
-    rows.push_back({"SHARPENING", text,
-                    [](RenderConfig& draft, int delta) {
-                        draft.sharpness = static_cast<unsigned>(
-                            std::clamp(static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
-                    },
-                    "CONTRAST-ADAPTIVE SHARPENING OF THE FINAL IMAGE"});
-    rows.back().slider_steps = 10u;
-    rows.back().slider_at = static_cast<std::uint16_t>(std::min(render.sharpness, 100u) / 10u);
-    {
-        std::string value = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
-        if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
-        if (render.aa_mode != 0u && render.msaa_samples > 1u && render.upscaler != 2u && render.upscaler != 3u &&
-            !render.ray_tracing_enabled) {
-            value += " (OFF WITH MSAA)";
-        }
-        rows.push_back({"ANTI-ALIASING", value,
-                        [](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
-                        "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
-    }
-    if (render.aa_mode == 1u || render.aa_mode == 2u) {
-        static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
-        rows.push_back({"SMAA QUALITY", kQuality[std::min(render.smaa_quality, 3u)],
-                        [](RenderConfig& draft, int delta) {
-                            draft.smaa_quality = settings_step(std::min(draft.smaa_quality, 3u), 4u, delta);
-                        },
-                        "HIGHER FINDS MORE EDGES"});
-    }
-    if (!rt_on) {
-        const unsigned samples = std::bit_floor(std::clamp(render.msaa_samples, 1u, 8u));
-        std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
-        if (samples > 1u && (render.upscaler == 2u || render.upscaler == 3u)) value += " (OFF WITH DLSS / FSR 3)";
-        rows.push_back({"MSAA", value,
-                        [](RenderConfig& draft, int delta) {
-                            const unsigned index = static_cast<unsigned>(
-                                std::countr_zero(std::bit_floor(std::clamp(draft.msaa_samples, 1u, 8u))));
-                            draft.msaa_samples = 1u << settings_step(index, 4u, delta);
-                        },
-                        "SAMPLES EACH EDGE OF THE 3D SCENE SEVERAL TIMES. COSTS GPU TIME"});
-    }
-
-    if (rt_offered) {
-        rows.push_back({"RAY TRACING", {}, nullptr, {}, true});
-        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
-                        [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
-                        "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
-    }
-    if (rt_on) {
-        // rt_quality: 0 medium, 1 high, 2 low; a change restarts the ray tracer (RendererD3D12::reconcile_ray_tracing).
-        static constexpr unsigned kOrder[] = {2u, 0u, 1u};
-        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW"};
-        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, 2u)],
-                        [](RenderConfig& draft, int delta) {
-                            const unsigned quality = std::min(draft.rt_quality, 2u);
-                            const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
-                            draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
-                        },
-                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER"});
-        // The effects players choose, each switched live.
-        const auto effect_row = [&](const char* name, bool RenderConfig::*field, const char* help) {
-            rows.push_back({name, render.*field ? "ON" : "OFF",
-                            [field](RenderConfig& draft, int) { draft.*field = !(draft.*field); }, help});
-        };
-        effect_row("REFLECTIONS", &RenderConfig::rt_reflections,
-                   "TRACED REFLECTIONS ON METAL, GLOSSY FLOORS, GLASS AND CRYSTAL");
-        effect_row("WATER REFLECTIONS", &RenderConfig::rt_water,
-                   "TRACED REFLECTIONS AND REFRACTION ON SEAS, LAKES AND POOLS");
-        effect_row("SUN RAYS", &RenderConfig::rt_sun_rays, "SHAFTS OF LIGHT THE AIR SCATTERS AROUND THE SUN");
-        effect_row("LENS BLOOM", &RenderConfig::rt_lens_bloom, "LIGHT THE LENS SCATTERS AROUND EVERY BRIGHT SURFACE");
-    }
-
-    rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
-    const Interpolation mode = interpolation_of(render);
-    {
-        std::string value = mode == Interpolation::kOff      ? "OFF"
-                            : mode == Interpolation::kNative ? "NATIVE"
-                                                             : "DLSS FRAME GENERATION";
-        if (mode == Interpolation::kFrameGeneration) {
-            if (!streamline::frame_generation_supported()) value += " (AFTER RESTART)";
-            else if (render.upscaler != 3u) value += " (NEEDS DLSS)";
-        }
-        rows.push_back({"INTERPOLATION", value,
-                        [](RenderConfig& draft, int delta) {
-                            const auto modes = interpolation_modes(draft);
-                            const Interpolation current = interpolation_of(draft);
-                            std::size_t index = 0u;
-                            for (std::size_t i = 0; i < modes.size(); ++i) {
-                                if (modes[i] == current) index = i;
-                            }
-                            const Interpolation next = modes[settings_step(static_cast<unsigned>(index),
-                                                                           static_cast<unsigned>(modes.size()), delta)];
-                            if (next == current) return;
-                            draft.frame_generation = next == Interpolation::kFrameGeneration ? 1u : 0u;
-                            // Interpolation starts at the display's own rate.
-                            draft.max_fps = next == Interpolation::kOff ? 60.0f : 0.0f;
-                            if (next == Interpolation::kFrameGeneration && draft.upscaler != 3u) {
-                                draft.upscaler = 3u;  // frame generation runs with DLSS
-                            }
-                            normalize_interpolation(draft);
-                        },
-                        mode == Interpolation::kOff ? "THE GAME RUNS AT 60. NATIVE OR DLSS ADD FRAMES BETWEEN"
-                        : mode == Interpolation::kNative
-                            ? "NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION"
-                            : "NVIDIA GENERATES THE FRAMES BETWEEN THE GAME'S 60"});
-    }
-    const double measured = host_window::measured_present_hz.load(std::memory_order_relaxed) *
-                            (frame_generation_running() ? static_cast<double>(streamline::frames_presented()) : 1.0);
-    char now[48]{};
-    std::snprintf(now, sizeof(now), "SHOWING %.1f FPS", measured);
-    if (mode == Interpolation::kOff) {
-        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-        rows.push_back({"FRAME RATE LIMIT", rate <= 30u ? "30 FPS" : "60 FPS",
-                        [](RenderConfig& draft, int delta) { draft.max_fps = delta < 0 ? 30.0f : 60.0f; },
-                        now});
-    } else {
-        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-        if (rate == 0u) {
-            const unsigned refresh = settings_refresh_hz(render);
-            std::snprintf(text, sizeof(text), refresh != 0u ? "MATCH REFRESH (%u HZ)" : "MATCH REFRESH", refresh);
-        } else {
-            std::snprintf(text, sizeof(text), "%u FPS", rate);
-        }
-        rows.push_back({"TARGET FRAME RATE", text,
-                        [](RenderConfig& draft, int delta) {
-                            const auto targets = interpolation_targets(draft, interpolation_of(draft));
-                            if (targets.empty()) return;
-                            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
-                            std::size_t index = targets.size() - 1u;
-                            for (std::size_t i = 0; i < targets.size(); ++i) {
-                                if (targets[i] == current) index = i;
-                            }
-                            draft.max_fps = static_cast<float>(targets[settings_step(
-                                static_cast<unsigned>(index), static_cast<unsigned>(targets.size()), delta)]);
-                        },
-                        now});
-    }
-
-    rows.push_back({"DETAIL", {}, nullptr, {}, true});
-    {
-        static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
-        if (render.anisotropic_filtering <= 1u) {
-            std::snprintf(text, sizeof(text), "TRILINEAR");
-        } else {
-            std::snprintf(text, sizeof(text), "%uX ANISOTROPIC", std::min(render.anisotropic_filtering, 16u));
-        }
-        rows.push_back({"TEXTURE FILTERING", text,
-                        [](RenderConfig& draft, int delta) {
-                            std::size_t index = 0u;
-                            for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
-                                if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
-                            }
-                            draft.anisotropic_filtering = kAnisotropy[settings_step(
-                                static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()), delta)];
-                        },
-                        "SHARPER TEXTURES ON FLOORS AND WALLS AT AN ANGLE"});
-    }
-    rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
-                    [](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
-                    "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
-    if (curved_surfaces_offered()) {
-        rows.push_back({"CURVED SURFACES", render.curved_surfaces ? "ON" : "OFF",
-                        [](RenderConfig& draft, int) { draft.curved_surfaces = !draft.curved_surfaces; },
-                        "ROUNDS THE OUTLINES OF CURVED MODELS"});
-    }
-    if (!rt_on) {
-        static constexpr const char* kLighting[] = {"PER VERTEX", "PER PIXEL", "ENHANCED"};
-        rows.push_back({"LIGHTING", kLighting[lighting_mode(render)],
-                        [](RenderConfig& draft, int delta) {
-                            const unsigned mode = settings_step(lighting_mode(draft), 3u, delta);
-                            draft.per_pixel_lighting = mode != 0u;
-                            draft.enhanced_lighting = mode == 2u;
-                        },
-                        lighting_mode(render) == 2u
-                            ? "HIGHLIGHTS, SOFT SKY LIGHT AND SHINIER METALS FROM THE GAME'S OWN LIGHTS"
-                            : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
-    }
-    if (!rt_on) {
-        rows.push_back({"AMBIENT OCCLUSION", render.ambient_occlusion ? "ON" : "OFF",
-                        [](RenderConfig& draft, int) { draft.ambient_occlusion = !draft.ambient_occlusion; },
-                        "SOFT SHADOWS IN CORNERS, CREASES AND WHERE THINGS MEET THE GROUND"});
-    }
-    {
-        const bool enhanced = render.bloom_mode == kBloomEnhanced;
-        rows.push_back({"BLOOM", enhanced ? "ENHANCED" : "NATIVE",
-                        [](RenderConfig& draft, int) {
-                            draft.bloom_mode = draft.bloom_mode == kBloomEnhanced ? kBloomNative : kBloomEnhanced;
-                        },
-                        enhanced ? "THE GAME'S GLOW REBUILT AT THE FULL RESOLUTION"
-                                 : "THE GAME'S OWN GLOW, AS THE CONSOLE DRAWS IT"});
-        if (enhanced) {
-            // In steps of ten percent; 0 off.
-            const unsigned value = std::min(render.bloom, kMaxBloom);
-            if (value == 0u) {
-                std::snprintf(text, sizeof(text), "OFF");
-            } else {
-                std::snprintf(text, sizeof(text), "%u%%", value);
-            }
-            rows.push_back({"  INTENSITY", text,
-                            [](RenderConfig& draft, int delta) {
-                                draft.bloom = static_cast<unsigned>(std::clamp(
-                                    static_cast<int>(std::min(draft.bloom, kMaxBloom)) + delta * 10, 0,
-                                    static_cast<int>(kMaxBloom)));
-                            },
-                            "THE ENHANCED GLOW'S STRENGTH"});
-            rows.back().slider_steps = static_cast<std::uint16_t>(kMaxBloom / 10u);
-            rows.back().slider_at = static_cast<std::uint16_t>(value / 10u);
-        }
-    }
-    // Texture packs (the enabled mods') apply with the settings above; the folders of dumped textures and movies.
-    rows.push_back({"TEXTURE PACKS", {}, nullptr, {}, true});
-    rows.push_back({"TEXTURE PACKS", !render.texture_packs ? "OFF" : render.texture_pack_preload ? "PRELOAD" : "ON",
-                    [](RenderConfig& draft, int delta) {
-                        const int mode = !draft.texture_packs ? 0 : draft.texture_pack_preload ? 2 : 1;
-                        const unsigned next = settings_step(static_cast<unsigned>(mode), 3u, delta);
-                        draft.texture_packs = next != 0u;
-                        draft.texture_pack_preload = next == 2u;
-                    },
-                    "ON LOADS TEXTURES AS THEY APPEAR. PRELOAD LOADS THEM ALL AT ONCE"});
-    if (render.texture_packs) {
-        const galaxy::render::TexturePacks::Summary packs = galaxy::render::TexturePacks::summary();
-        char value[32]{};
-        std::snprintf(value, sizeof(value), "%llu TEXTURES", static_cast<unsigned long long>(packs.textures));
-        std::string help = "REPLACEMENT TEXTURES IN THE ENABLED MODS";
-        if (packs.levels != 0u) help += ", WITH " + std::to_string(packs.levels) + " MIP LEVELS";
-        if (!packs.unreadable.empty()) {
-            help += ". " + std::to_string(packs.unreadable.size()) + " FILE NAME" +
-                    (packs.unreadable.size() == 1u ? " IS" : "S ARE") + " NOT TEXTURE NAMES: " +
-                    mods_ui_text(packs.unreadable.front(), 48u);
-        }
-        rows.push_back({"  REPLACEMENTS", packs.indexed ? std::string(value) : std::string("READING"), nullptr, help});
-    }
-    rows.push_back({"DUMP TEXTURES", render.texture_dump ? "ON" : "OFF",
-                    [](RenderConfig& draft, int) { draft.texture_dump = !draft.texture_dump; },
-                    "SAVES EVERY TEXTURE THE GAME SHOWS, FOR MAKING A PACK"});
-    rows.push_back(button_row("TEXTURE DUMPS FOLDER", {"OPEN"},
-                              [](RenderConfig&, unsigned) { open_folder_in_explorer(texture_dump_directory()); },
-                              "WHERE DUMPED TEXTURES GO"));
-    rows.push_back({"MOVIES", {}, nullptr, {}, true});
-    rows.push_back(button_row("MOVIES FOLDER", {"OPEN"}, [](RenderConfig&, unsigned) { open_folder_in_explorer(movie_directory()); },
-                              "VIDEOS NAMED LIKE THE GAME'S (PROLOGUEA.MP4) PLAY INSTEAD"));
-    return rows;
+    static const WindowGraphicsPageHost host;
+    return ui::graphics_page(render, host);
 }
 
 // GAME > GALAXY SELECT: the galaxy and star the TRAVEL row goes to.
-std::size_t s_galaxy_select_stage = 0u;
-std::uint32_t s_galaxy_select_star = 1u;
+ui::AdvancedPageModel s_advanced_page;
 
 // Mii import (GENERAL page): the last import's result and the console's Mii count (read again after an import).
 std::mutex s_mii_mutex;
@@ -3592,177 +2940,58 @@ bool mods_page_key(WPARAM key, bool accept, bool was_down) {
     return true;
 }
 
-std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
-    std::vector<SettingsRow> rows;
-    char text[32]{};
-    std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 4u));
-    rows.push_back({"TEXT SPEED", runtime.text_speed >= 4u ? std::string("INSTANT") : std::string(text),
-                    [](RenderConfig&, int delta) {
-                        RuntimeSettings& settings = s_runtime_draft;
-                        settings.text_speed = settings_step(std::clamp(settings.text_speed, 1u, 4u) - 1u, 4u, delta) + 1u;
-                    },
-                    "HOW FAST DIALOGUE TEXT APPEARS. INSTANT: EACH PAGE AT ONCE"});
-    {
-        static constexpr const char* kIcons[] = {"AUTO", "WII", "XBOX", "NINTENDO SWITCH", "PLAYSTATION",
-                                                 "KEYBOARD AND MOUSE"};
-        // Auto names the icons it shows now.
-        std::string icons = kIcons[std::min<std::size_t>(static_cast<std::size_t>(runtime.button_icons), 5u)];
-        if (runtime.button_icons == ButtonIcons::Auto) {
-            using galaxy::input::ButtonIconStyle;
-            const ButtonIconStyle shown = galaxy::host::button_icons_auto_style();
-            icons += shown == ButtonIconStyle::Xbox          ? " (XBOX)"
-                     : shown == ButtonIconStyle::Nintendo    ? " (NINTENDO SWITCH)"
-                     : shown == ButtonIconStyle::PlayStation ? " (PLAYSTATION)"
-                     : shown == ButtonIconStyle::Keyboard    ? " (KEYBOARD AND MOUSE)"
-                                                             : " (WII)";
+class WindowGeneralPageHost final : public ui::GeneralPageHost {
+public:
+    ui::GeneralPageState query(const RuntimeSettings& settings) const override {
+        ui::GeneralPageState state;
+        if (settings.button_icons == ButtonIcons::Auto) {
+            using input::ButtonIconStyle;
+            switch (galaxy::host::button_icons_auto_style()) {
+            case ButtonIconStyle::Xbox: state.auto_icons = ButtonIcons::Xbox; break;
+            case ButtonIconStyle::Nintendo: state.auto_icons = ButtonIcons::Nintendo; break;
+            case ButtonIconStyle::PlayStation: state.auto_icons = ButtonIcons::PlayStation; break;
+            case ButtonIconStyle::Keyboard: state.auto_icons = ButtonIcons::Keyboard; break;
+            default: state.auto_icons = ButtonIcons::Wii; break;
+            }
         }
-        rows.push_back({"BUTTON ICONS", icons,
-                        [](RenderConfig&, int delta) {
-                            RuntimeSettings& settings = s_runtime_draft;
-                            settings.button_icons = static_cast<ButtonIcons>(
-                                settings_step(static_cast<unsigned>(settings.button_icons), 6u, delta));
-                        },
-                        "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
-    }
-    rows.push_back({"LANGUAGE", game_language_name(galaxy::game_language_resolved(runtime.language)),
-                    [](RenderConfig&, int delta) {
-                        // Saved when applied; the game switches at the next start (game_language_for_boot).
-                        // The languages on the disc as it is read (galaxy::set_disc_languages); Auto shows the one
-                        // it plays in, and a step chooses from there.
-                        if (delta == 0) return;
-                        RuntimeSettings& settings = s_runtime_draft;
-                        std::vector<GameLanguage> offered;
-                        for (const GameLanguage language : galaxy::kGameLanguages) {
-                            if (galaxy::game_language_on_disc(language)) offered.push_back(language);
-                        }
-                        const GameLanguage current = galaxy::game_language_resolved(settings.language);
-                        std::size_t index = 0u;
-                        for (std::size_t i = 0; i < offered.size(); ++i) {
-                            if (offered[i] == current) index = i;
-                        }
-                        const GameLanguage chosen = offered[settings_step(static_cast<unsigned>(index),
-                                                                         static_cast<unsigned>(offered.size()), delta)];
-                        // Back on the language Auto plays in: Auto again, so nothing is left to apply.
-                        const GameLanguage saved = galaxy::get_runtime_settings().language;
-                        settings.language =
-                            saved == GameLanguage::Auto && chosen == galaxy::game_language_resolved(saved) ? saved
-                                                                                                         : chosen;
-                    },
-                    "THE GAME'S TEXT AND MENUS"});
-    rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),
-                    [](RenderConfig&, int delta) {
-                        if (delta == 0) return;
-                        s_runtime_draft.discord_status = !s_runtime_draft.discord_status;
-                    },
-                    "SHOWS YOUR CURRENT GALAXY AND MISSION IN DISCORD"});
-    {
-        rows.push_back({"MIIS", {}, nullptr, {}, true});
-        std::string status;
+        state.display_language = game_language_resolved(settings.language);
+        for (const GameLanguage language : kGameLanguages) {
+            if (game_language_on_disc(language)) state.languages.push_back(language);
+        }
+        state.saved_language = get_runtime_settings().language;
+        state.resolved_saved_language = game_language_resolved(state.saved_language);
         {
             const std::lock_guard<std::mutex> lock(s_mii_mutex);
-            status = s_mii_status;
+            state.mii_status = s_mii_status;
         }
-        if (s_mii_dialog_open.load(std::memory_order_acquire)) {
-            status = "CHOOSING FILES";
+        state.choosing_miis = s_mii_dialog_open.load(std::memory_order_acquire);
+        state.mii_count = s_mii_count.load(std::memory_order_acquire);
+        if (state.mii_count < 0) {
+            state.mii_count = static_cast<int>(galaxy::host::mii_library_count());
+            s_mii_count.store(state.mii_count, std::memory_order_release);
         }
-        rows.push_back(button_row("IMPORT MIIS", {"IMPORT"}, [](RenderConfig&, unsigned) { start_mii_import_dialog(); },
-                                  status.empty() ? std::string("MIIS FROM A WII, DS, 3DS, WII U, SWITCH, MII STUDIO OR MII "
-                                                               "CREATOR, FOR THE MII ICONS")
-                                                 : status));
-        int count = s_mii_count.load(std::memory_order_acquire);
-        if (count < 0) {
-            count = static_cast<int>(galaxy::host::mii_library_count());
-            s_mii_count.store(count, std::memory_order_release);
-        }
-        char mii_text[32]{};
-        std::snprintf(mii_text, sizeof(mii_text), "%d OF 100", count);
-        rows.push_back({"MIIS ON THIS CONSOLE", mii_text, nullptr, "THE MII ICON PICKER ON THE FILE SELECT SHOWS THEM"});
-        rows.push_back(button_row("MIIS FOLDER", {"OPEN"}, [](RenderConfig&, unsigned) { open_mii_folder(); },
-                                  "FILES PUT HERE ARE IMPORTED AT EVERY START"));
+        return state;
     }
-    return rows;
+    void act(ui::GeneralPageAction action) const override {
+        if (action == ui::GeneralPageAction::ImportMiis) start_mii_import_dialog();
+        else open_mii_folder();
+    }
+};
+
+std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
+    static const WindowGeneralPageHost host;
+    return ui::general_page(runtime, s_runtime_draft, host);
 }
 
 // ADVANCED: any galaxy and star, entered with the game's own stage change (names in its own words), and the Grand
 // Stars that power the Observatory.
 std::vector<SettingsRow> advanced_page() {
-    std::vector<SettingsRow> rows;
-    want_galaxy_select_names();
-    const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-    const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
-    std::string name = galaxy_select_name(stage);
-    if (name.empty()) {
-        name = std::string_view(kGalaxyStages[stage].id) == kObservatoryId ? std::string(kObservatoryName)
-                                                                            : upper_ascii(kGalaxyStages[stage].id);
-    }
-    rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
-    rows.push_back({"GALAXY", name,
-                    [](RenderConfig&, int delta) {
-                        s_galaxy_select_stage = settings_step(
-                            static_cast<unsigned>(std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u)),
-                            static_cast<unsigned>(kGalaxyStageCount), delta);
-                        s_galaxy_select_star = 1u;
-                    },
-                    "ANY GALAXY, FOR TESTING. STARS COLLECTED THERE ARE SAVED"});
-    rows.back().names = 2u;  // the game's own name in the played language
-    std::string star_name = galaxy_select_star_name(stage, star);
-    char star_text[96]{};
-    std::snprintf(star_text, sizeof(star_text), star_name.empty() ? "%u" : "%u  %s", star, star_name.c_str());
-    rows.push_back({"STAR", star_text,
-                    [](RenderConfig&, int delta) {
-                        const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-                        s_galaxy_select_star = settings_step(s_galaxy_select_star - 1u, kGalaxyStages[at].stars,
-                                                             delta) + 1u;
-                    },
-                    "THE MISSION TO PLAY"});
-    rows.back().names = 2u;
-    rows.push_back(button_row("TRAVEL", {"GO"},
-                    [](RenderConfig&, unsigned) {
-                        const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-                        request_galaxy_travel(at, std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[at].stars));
-                        std::cerr << "[settings] travel to " << kGalaxyStages[at].id << ' '
-                                  << s_galaxy_select_star << '\n';
-                        set_native_settings_visible(false);
-                    },
-                    "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"));
-    rows.push_back(button_row("GRAND STARS", {"GET"},
-                    [](RenderConfig&, unsigned) {
-                        request_grand_stars();
-                        std::cerr << "[settings] grand stars\n";
-                        set_native_settings_visible(false);
-                    },
-                    "GIVES THIS SAVE FILE GRAND STARS 1-6 (EVERY DOME POWERED) AND LOADS THE OBSERVATORY. "
-                    "USE A SPARE FILE"));
-    return rows;
+    return s_advanced_page.rows([] { set_native_settings_visible(false); });
 }
 
 std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
-    std::vector<SettingsRow> rows;
-    {
-        std::string name = mods_ui_text(caps.adapter_description.data(), 32u);
-        while (!name.empty() && name.back() == ' ') name.pop_back();
-        rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
-    }
-    char text[64]{};
-    if (caps.dxr_raytracing_tier != 0u) {
-        std::snprintf(text, sizeof(text), "TIER %u.%u %s", caps.dxr_raytracing_tier / 10u, caps.dxr_raytracing_tier % 10u,
-                      exposed_text(caps.dxr));
-    } else {
-        std::snprintf(text, sizeof(text), "NONE");
-    }
-    rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
-    rows.push_back({"NVIDIA STREAMLINE", exposed_text(caps.streamline), nullptr, "LOADS DLSS FROM THE NVIDIA DOWNLOAD"});
-    rows.push_back({"NVIDIA REFLEX", exposed_text(caps.reflex), nullptr, "LOW LATENCY WITH FRAME GENERATION"});
-    rows.push_back({"DLSS", exposed_text(caps.dlss_super_resolution), nullptr, "UPSCALING ON NVIDIA RTX GPUS"});
-    rows.push_back({"DLSS FRAME GENERATION", exposed_text(caps.dlss_frame_generation), nullptr,
-                    "GENERATED FRAMES ON NVIDIA RTX 40 AND 50 GPUS"});
-    std::string post = post_process_caps_text(get_post_process_status());
-    if (const std::size_t colon = post.find(": "); colon != std::string::npos) post.erase(0, colon + 2u);
-    rows.push_back({"POST-PROCESS", post, nullptr, "ANTI-ALIASING, FSR 1 AND SHARPENING"});
-    rows.push_back(button_row("DIAGNOSTICS", {"RECORD"},
-                              [](RenderConfig&, unsigned) { s_diagnostics_ask.store(true, std::memory_order_release); },
-                              {}));
-    return rows;
+    return ui::system_page(caps, post_process_caps_text(get_post_process_status()),
+                           [] { s_diagnostics_ask.store(true, std::memory_order_release); });
 }
 
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
@@ -4096,7 +3325,7 @@ void poll_dlss_download() {
     render.upscaler = 3u;
     set_render_config(render);
     s_settings_draft.upscaler = 3u;
-    s_native_settings_dirty.store(true, std::memory_order_release);
+    s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
     s_dlss_offer = DlssOffer::Ready;
     std::cerr << "[dlss] installed; it starts with the next launch\n";
@@ -4182,17 +3411,7 @@ unsigned display_scene_target_scale_cap() {
 std::atomic<bool> ray_tracing_offered{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
-    if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
-        return true;
-    }
-    static std::once_flag started;
-    std::call_once(started, [] { std::thread(settings_save_worker).detach(); });
-    {
-        const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
-        s_settings_save_requested = true;
-    }
-    s_settings_save_changed.notify_all();
-    return true;  // queued: the worker reports a failed write and keeps the settings dirty
+    return s_settings_save.queue();
 }
 
 unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
@@ -4200,15 +3419,7 @@ unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
 }
 
 // Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.
-void save_native_settings_now() {
-    {
-        std::unique_lock<std::mutex> lock(s_settings_save_mutex);
-        s_settings_save_changed.wait_for(lock, std::chrono::seconds(5), [] {
-            return !s_settings_save_requested && !s_settings_save_running;
-        });
-    }
-    (void)write_dirty_settings_files();
-}
+void save_native_settings_now() { s_settings_save.save_now(); }
 
 // Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
 // apply does, so the next save from the game writes them back rather than over them. Checked twice a second,
@@ -4222,7 +3433,7 @@ void poll_render_config_file() {
     }
     s_next_check_ms = now + 500u;
     // A save of the game's own still in flight would read back as a change made outside it.
-    if (settings_save_pending()) {
+    if (s_settings_save.pending()) {
         return;
     }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
@@ -4567,7 +3778,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 render.window_width = static_cast<unsigned>(client.right);
                 render.window_height = static_cast<unsigned>(client.bottom);
                 set_render_config(render);
-                s_native_settings_dirty.store(true, std::memory_order_release);
+                s_settings_save.dirty.store(true, std::memory_order_release);
                 // Saved now, not when the game closes: Nebula Settings reads the file meanwhile.
                 if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
                     flush_native_settings_if_dirty();
@@ -5303,7 +4514,7 @@ NativeSettingsView build_native_settings_view() {
         const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms ? s_display_confirm_deadline_ms - now_ms : 0u;
         view.status = NativeSettingsStatus::KeepDisplay;
         view.status_number = static_cast<int>((left_ms + 999u) / 1000u);
-    } else if (s_native_settings_save_error.load(std::memory_order_acquire)) {
+    } else if (s_settings_save.error.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::SaveFailed;
     } else if (const unsigned pending = pending_settings_changes(); pending != 0u) {
         view.status = NativeSettingsStatus::Pending;
@@ -5325,12 +4536,12 @@ NativeSettingsView build_native_settings_view() {
 // hovering and chooses with a click.
 void draw_home_menu(UiCanvas& renderer) {
     static bool s_left_was_down = true;
-    if (!s_home_menu_visible.load(std::memory_order_acquire) ||
-        s_home_menu_drawn_by_game.load(std::memory_order_relaxed)) {
+    if (!s_home_menu.visible.load(std::memory_order_acquire) ||
+        s_home_menu.drawn_by_game.load(std::memory_order_relaxed)) {
         s_left_was_down = true;
         return;
     }
-    const int asking = s_home_menu_asking.load(std::memory_order_relaxed);
+    const int asking = s_home_menu.asking.load(std::memory_order_relaxed);
     const unsigned count = asking != 0 ? kHomeMenuAnswers : kHomeMenuRows;
     const char* const* rows = asking != 0 ? kHomeMenuAnswerText : kHomeMenuRowText;
     const int bb_w = static_cast<int>(host_window::backbuffer_width);
@@ -5367,7 +4578,7 @@ void draw_home_menu(UiCanvas& renderer) {
     ui_rect(renderer, x, y, 6, h, rail);
     ui_text(renderer, x + 14 * scale, y + 8 * scale, scale,
             asking == 0 ? "HOME MENU" : (asking == 1 ? "QUIT TO DESKTOP?" : "RESET?"), text);
-    const unsigned selected = s_home_menu_row.load(std::memory_order_relaxed) % count;
+    const unsigned selected = s_home_menu.row.load(std::memory_order_relaxed) % count;
     for (unsigned row = 0; row < count; ++row) {
         const int ry = rows_y + static_cast<int>(row) * row_h;
         if (row == selected) {
@@ -5739,7 +4950,7 @@ bool sharp_2d_requested() noexcept {
 
 bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
-        s_home_menu_visible.load(std::memory_order_relaxed) ||
+        s_home_menu.visible.load(std::memory_order_relaxed) ||
         s_system_menu_active.load(std::memory_order_acquire) ||
         host_window::move_size_active.load(std::memory_order_acquire);
 }
@@ -5759,9 +4970,9 @@ NativeSettingsOverlaySnapshot native_settings_overlay_snapshot() noexcept {
     snapshot.visible =
         s_native_settings_visible.load(std::memory_order_relaxed);
     snapshot.dirty =
-        s_native_settings_dirty.load(std::memory_order_acquire);
+        s_settings_save.dirty.load(std::memory_order_acquire);
     snapshot.save_error =
-        s_native_settings_save_error.load(std::memory_order_acquire);
+        s_settings_save.error.load(std::memory_order_acquire);
     snapshot.tab = tab;
     snapshot.row = row;
     snapshot.tab_count = kNativeSettingsTabCount;
@@ -5940,53 +5151,13 @@ void native_settings_input(NativeSettingsInput input, int arg) {
     }
 }
 
-void home_menu_open() noexcept {
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    s_home_menu_row.store(0u, std::memory_order_relaxed);
-    s_home_menu_asking.store(0, std::memory_order_relaxed);
-    s_home_menu_choice.store(-1, std::memory_order_relaxed);
-    s_home_menu_visible.store(true, std::memory_order_release);
-}
-
-int home_menu_poll() noexcept {
-    return s_home_menu_choice.load(std::memory_order_acquire);
-}
-
-void home_menu_close() noexcept {
-    s_home_menu_visible.store(false, std::memory_order_release);
-}
-
-bool home_menu_visible() noexcept {
-    return s_home_menu_visible.load(std::memory_order_acquire);
-}
-
-int home_menu_view(bool drawing) noexcept {
-    if (!s_home_menu_visible.load(std::memory_order_acquire)) {
-        return -1;
-    }
-    if (drawing) {
-        s_home_menu_drawn_by_game.store(true, std::memory_order_relaxed);
-    }
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    const unsigned row = s_home_menu_row.load(std::memory_order_relaxed) % home_menu_answer_count();
-    return static_cast<int>(row | static_cast<unsigned>(s_home_menu_asking.load(std::memory_order_relaxed)) << 8u);
-}
-
-void home_menu_point(unsigned answer) noexcept {
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    if (s_home_menu_visible.load(std::memory_order_relaxed) && answer < home_menu_answer_count()) {
-        s_home_menu_row.store(answer, std::memory_order_relaxed);
-    }
-}
-
-void home_menu_choose(unsigned answer) noexcept {
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    if (s_home_menu_visible.load(std::memory_order_relaxed) && answer < home_menu_answer_count()) {
-        s_home_menu_row.store(answer, std::memory_order_relaxed);
-        choose_home_menu_answer(answer);
-    }
-}
-
+void home_menu_open() noexcept { s_home_menu.open(); }
+int home_menu_poll() noexcept { return s_home_menu.poll(); }
+void home_menu_close() noexcept { s_home_menu.hide(); }
+bool home_menu_visible() noexcept { return s_home_menu.visible.load(std::memory_order_acquire); }
+int home_menu_view(bool drawing) noexcept { return s_home_menu.view(drawing); }
+void home_menu_point(unsigned answer) noexcept { s_home_menu.point(answer); }
+void home_menu_choose(unsigned answer) noexcept { s_home_menu.click(answer); }
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     const HWND window = reinterpret_cast<HWND>(
         host_window::settings_window.load(std::memory_order_acquire));
@@ -6012,8 +5183,8 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_settings_first_row = 0u;
     s_controls_message_until_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);
-    s_native_settings_dirty.store(false, std::memory_order_relaxed);
-    s_native_settings_save_error.store(false, std::memory_order_relaxed);
+    s_settings_save.dirty.store(false, std::memory_order_relaxed);
+    s_settings_save.error.store(false, std::memory_order_relaxed);
     s_native_settings_tab.store(0u, std::memory_order_relaxed);
     s_native_settings_row.store(0u, std::memory_order_relaxed);
     settle_native_settings_row();
@@ -6046,10 +5217,7 @@ RenderConfig native_settings_draft_for_tests() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     return s_settings_draft;
 }
-void native_settings_wait_saved_for_tests() {
-    std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
-    s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
-}
+void native_settings_wait_saved_for_tests() { s_settings_save.wait_until_idle(); }
 void host_window::native_settings_set_refresh_override_for_tests(unsigned hz) noexcept {
     s_refresh_override_hz.store(hz, std::memory_order_relaxed);
 }

@@ -18,4 +18,7 @@ namespace galaxy::host {
 // leave it off so the variables they change stay visible.
 void set_env_flag_cache_enabled(bool enabled) noexcept;
 
+// Empty on success. Called before startup can write settings, saves or reports.
+[[nodiscard]] const char* test_data_paths_error(int argc, char** argv);
+
 }  // namespace galaxy::host

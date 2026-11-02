@@ -77,47 +77,19 @@ NativeMousePointerProjection project_native_mouse_pointer(
         return projection;
     }
 
-    const auto project_axis = [](int coordinate, int origin, int extent,
-                                 float requested_scale) noexcept {
+    const auto project_axis = [](int coordinate, int origin, int extent) noexcept {
         const float normalized =
             (static_cast<float>(coordinate - origin) /
              static_cast<float>(extent - 1)) *
                 2.0f -
             1.0f;
-        const float clamped_normalized =
-            std::clamp(normalized, -1.0f, 1.0f);
-        const float scale = std::clamp(
-            std::isfinite(requested_scale) ? std::fabs(requested_scale) : 1.0f,
-            0.05f,
-            1.0f);
-        if (scale >= 0.999f) {
-            return clamped_normalized;
-        }
-
-        // Low-gain center band for the game's save-select cursor, then full
-        // camera reach at the edges.
-        constexpr float kCenterBand = 0.50f;
-        const float magnitude = std::fabs(clamped_normalized);
-        const float sign = std::signbit(clamped_normalized) ? -1.0f : 1.0f;
-        if (magnitude <= kCenterBand) {
-            return sign * magnitude * scale;
-        }
-        const float center_edge = kCenterBand * scale;
-        const float edge_scale =
-            (1.0f - center_edge) / (1.0f - kCenterBand);
-        return sign * std::clamp(
-                          center_edge +
-                              (magnitude - kCenterBand) * edge_scale,
-                          0.0f,
-                          1.0f);
+        return std::clamp(normalized, -1.0f, 1.0f);
     };
 
     projection.x = project_axis(
-        sample.client_x, sample.viewport.left, sample.viewport.width,
-        sample.x_scale);
+        sample.client_x, sample.viewport.left, sample.viewport.width);
     projection.y = project_axis(
-        sample.client_y, sample.viewport.top, sample.viewport.height,
-        sample.y_scale);
+        sample.client_y, sample.viewport.top, sample.viewport.height);
     projection.visible = true;
     return projection;
 }
