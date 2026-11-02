@@ -1,17 +1,59 @@
 // Environment variables for the host's switches and test hooks (host_env.h).
 #include "galaxy/host_env.h"
+#include "galaxy/test_data_paths.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <Shlobj.h>
 
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <cwchar>
 #include <stdexcept>
 #include <vector>
 
 namespace galaxy::host {
+const char* test_data_paths_error(int argc, char** argv) {
+    bool test = read_env_flag_uncached("GALAXY_HIDE_WINDOW", false);
+    wchar_t* environment = GetEnvironmentStringsW();
+    if (!environment) return "cannot inspect the test environment";
+    for (const wchar_t* entry = environment; *entry; entry += std::wcslen(entry) + 1) {
+        if (_wcsnicmp(entry, L"GALAXY_TEST_", 12) == 0) test = true;
+    }
+    FreeEnvironmentStringsW(environment);
+    if (!test) return nullptr;
+    const auto work = get_env_path(L"NEBULA_WORK");
+    if (!work || !work->is_absolute()) return "tests require an absolute NEBULA_WORK";
+    wchar_t user_data[MAX_PATH]{};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, user_data))) {
+        return "cannot locate the protected user data folder";
+    }
+    const auto protected_root = std::filesystem::path(user_data) / L"Nebula";
+    if (path_is_within(*work, protected_root) || path_is_within(protected_root, *work)) {
+        return "NEBULA_WORK overlaps the user data folder";
+    }
+    for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_NAND",
+                              L"LOCALAPPDATA", L"GALAXY_RUNTIME_SETTINGS_PATH",
+                              L"GALAXY_RENDER_CONFIG_PATH", L"GALAXY_CRASH_DUMP_DIR"}) {
+        const auto path = get_env_path(name);
+        if (!path || !path_is_within(*path, *work) || path_is_within(*path, protected_root)) {
+            return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";
+        }
+    }
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (std::strcmp(argv[i], "--nand") == 0) {
+            // Match the host's command-line path conversion.
+            if (!path_is_within(std::filesystem::path(argv[i + 1]), *work)) {
+                return "the test save path must be inside NEBULA_WORK";
+            }
+        }
+    }
+    return nullptr;
+}
+
 namespace {
 std::atomic<bool> g_env_flag_cache_enabled{false};
 }  // namespace
