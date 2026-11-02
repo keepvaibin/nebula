@@ -24,6 +24,7 @@ extern "C" {
 #endif
 
 #define NEBULA_GAME_API_VERSION 102u
+#define NEBULA_GAME_API_VERSION 103u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -921,6 +922,20 @@ typedef struct NebulaHostServices {
     int (*asset_child)(void* user, int32_t folder, uint32_t child, NebulaAssetEntry* entry);
     /* Reads `size` bytes at `offset` of a file into dst, before it returns: the bytes read, or -1. */
     int32_t (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst);
+    /* The game's memory: a zeroed block, null if it cannot be had. */
+    void* (*memory_block)(void* user, uint64_t size);
+    /* The game's threads (nebula_threads.h). A new thread sleeps until passed its turn; one that ends sleeps for good: game
+       threads end only with the game. */
+    NebulaHostThread* (*thread_create)(void* user, void (*entry)(void*), void* arg);
+    NebulaHostThread* (*thread_adopt)(void* user);
+    void (*thread_pass)(void* user, NebulaHostThread* to);
+    void (*thread_wait)(void* user, NebulaHostThread* self);
+    void (*thread_exit)(void* user, NebulaHostThread* self);
+    void (*thread_cancel)(void* user, NebulaHostThread* thread);
+    void (*lock)(void* user, int which);
+    void (*unlock)(void* user, int which);
+    /* Each thread's stack at its last wait, as offsets in the module holding `in_module`, to the log. */
+    void (*threads_dump)(void* user, const void* in_module);
     /* A file's bytes in the mapped store, read-only, for the process's life, on their way into memory when this returns
        (call it where a wait for the drive does no harm); null if there is no such file. */
     const void* (*asset_map)(void* user, int32_t file);
