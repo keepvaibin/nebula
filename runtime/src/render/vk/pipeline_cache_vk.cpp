@@ -68,7 +68,7 @@ const TestRefusals& test_refusals() {
     return refusals;
 }
 
-VkBlendFactor gx_src_blend(std::uint32_t f) {
+VkBlendFactor src_blend(std::uint32_t f) {
     switch (f) {
     case 0: return VK_BLEND_FACTOR_ZERO;
     case 1: return VK_BLEND_FACTOR_ONE;
@@ -82,7 +82,7 @@ VkBlendFactor gx_src_blend(std::uint32_t f) {
     }
 }
 
-VkBlendFactor gx_dst_blend(std::uint32_t f) {
+VkBlendFactor dst_blend(std::uint32_t f) {
     switch (f) {
     case 0: return VK_BLEND_FACTOR_ZERO;
     case 1: return VK_BLEND_FACTOR_ONE;
@@ -108,7 +108,7 @@ VkBlendFactor to_alpha_blend(VkBlendFactor factor) {
 }
 
 // GX LogicOp 0-15.
-VkLogicOp gx_logic_op(std::uint32_t op) {
+VkLogicOp logic_op_mode(std::uint32_t op) {
     static constexpr VkLogicOp kOps[16] = {
         VK_LOGIC_OP_CLEAR,        VK_LOGIC_OP_AND,          VK_LOGIC_OP_AND_REVERSE, VK_LOGIC_OP_COPY,
         VK_LOGIC_OP_AND_INVERTED, VK_LOGIC_OP_NO_OP,        VK_LOGIC_OP_XOR,         VK_LOGIC_OP_OR,
@@ -400,8 +400,8 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
             target.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
             target.colorBlendOp = VK_BLEND_OP_REVERSE_SUBTRACT;
         } else {
-            target.srcColorBlendFactor = gx_src_blend((bb >> 2u) & 0x7u);
-            target.dstColorBlendFactor = gx_dst_blend((bb >> 5u) & 0x7u);
+            target.srcColorBlendFactor = src_blend((bb >> 2u) & 0x7u);
+            target.dstColorBlendFactor = dst_blend((bb >> 5u) & 0x7u);
             target.colorBlendOp = VK_BLEND_OP_ADD;
             if (rs.pixfmt != 1u) {
                 // No destination alpha in this pixel format: it reads as one.
@@ -438,7 +438,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         }
     } else if ((bb & (1u << 8u)) != 0u && layout_->logic_op && (compat & kCompatNoLogicOp) == 0u) {
         blend.logicOpEnable = VK_TRUE;
-        blend.logicOp = gx_logic_op((bb >> 9u) & 0xfu);
+        blend.logicOp = logic_op_mode((bb >> 9u) & 0xfu);
     }
     blend.attachmentCount = 1;
     blend.pAttachments = &target;

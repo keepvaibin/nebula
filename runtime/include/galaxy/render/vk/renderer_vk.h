@@ -340,7 +340,7 @@ public:
     }
     // The pipelines' scene target variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene scene target here.
     [[nodiscard]] std::uint8_t scene_variant() const noexcept { return scene_samples_log2(); }
-    [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &gx_layout_; }
+    [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &draw_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
@@ -447,7 +447,7 @@ private:
     // `clear`: begins with both targets cleared to it (scene_pass_clear).
     void begin_scene_pass(const SceneClearValues* clear = nullptr);
     void end_scene_pass();
-    void reset_gx_bindings() noexcept;
+    void reset_draw_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
     // A post-process draw's set: the replay list's while one is recorded, else the frame's.
     [[nodiscard]] VkDescriptorSet allocate_post_set(VkDescriptorSetLayout layout);
@@ -519,7 +519,7 @@ private:
     std::uint64_t last_submitted_ = 0;
 
     // Layouts and passes.
-    vk::RenderLayout gx_layout_{};
+    vk::RenderLayout draw_layout_{};
     VkDescriptorSetLayout utility_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear clamp)
     VkDescriptorSetLayout conversion_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear), s1 (point)
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants

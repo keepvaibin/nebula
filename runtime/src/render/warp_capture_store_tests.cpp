@@ -1480,8 +1480,8 @@ private:
         const D3D12_HEAP_PROPERTIES readback_heap =
             heap_properties(D3D12_HEAP_TYPE_READBACK);
 
-        ComPtr<ID3D12RootSignature> gx_root;
-        ComPtr<ID3D12PipelineState> gx_pipeline;
+        ComPtr<ID3D12RootSignature> draw_root;
+        ComPtr<ID3D12PipelineState> draw_pipeline;
         ComPtr<ID3D12Resource> gx_constants;
         const bool native_depth = source_format == galaxy::render::kSceneDepthResourceFormat;
         const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,

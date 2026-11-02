@@ -230,7 +230,7 @@ const RenderStallInjection& render_stall_injection() {
     return injection;
 }
 
-bool trace_gx_stalls_enabled() {
+bool trace_stalls_enabled() {
     static const bool enabled = [] {
         char value[16]{};
         std::size_t length = 0;
@@ -254,7 +254,7 @@ bool present_on_copy_enabled() {
 
 // GALAXY_GX_FRAME_TIMING_SAMPLE=N times every draw of one frame in N (N >= 2), so a recording holds
 // attributed frames among frames at full speed; the per-draw clocks are too costly for every frame.
-bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
+bool frame_timing_sample_enabled(std::uint64_t frame_index) {
     static const std::uint64_t period = read_env_u64(
         "GALAXY_GX_FRAME_TIMING_SAMPLE", 0u);
     if (period < 2u) {
@@ -333,7 +333,7 @@ struct GameWaitTimer {
     }
 };
 
-std::uint64_t trace_gx_stall_threshold_us() {
+std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
         read_env_u64("GALAXY_TRACE_GX_STALL_US", 1000u);
     return threshold;
@@ -487,7 +487,7 @@ constexpr std::uint32_t matrix_kind_first_row(DrawMatrices::Kind kind) noexcept 
 
 }  // anonymous namespace
 
-void RenderCore::reset_fifo_session_state() {
+void RenderCore::reset_session_state() {
     // While no producer or render thread runs.
     matrices_ = DrawMatrices{};
     draw_state_ = NativeDrawState{};
@@ -559,7 +559,7 @@ bool RenderCore::initialize(int w, int h) {
 
     cadence_diagnostics_ = cadence::global_session_if_enabled();
 
-    reset_fifo_session_state();
+    reset_session_state();
 
     const RenderConfig cfg = get_render_config();
 
@@ -1001,14 +1001,14 @@ void RenderCore::render_frame(
         return;
     }
 
-    const bool trace_gx_stalls = trace_gx_stalls_enabled();
+    const bool trace_stalls_cached = trace_stalls_enabled();
     // frame_index_ belongs to the render thread; the producer samples on its published copy.
     const bool producer_time_detail =
-        trace_gx_stalls ||
-        frame_gx_timing_sample_enabled(
+        trace_stalls_cached ||
+        frame_timing_sample_enabled(
             timing_frame_index_.load(std::memory_order_relaxed));
     // Nothing to render: nothing attached (records, scene markers, captures).
-    const bool empty = producer_shape_records_.empty() && producer_fifo_marker_count_ == 0u &&
+    const bool empty = producer_shape_records_.empty() && producer_stream_marker_count_ == 0u &&
         producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
     if (empty) {
         if (present_swap_chain) {
@@ -1032,7 +1032,7 @@ void RenderCore::render_frame(
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
     take_attached_pointer_depth_capture(chunk);
-    take_attached_fifo_markers(chunk);
+    take_attached_stream_markers(chunk);
     take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
@@ -1041,7 +1041,7 @@ void RenderCore::render_frame(
     chunk.services = services;
     chunk.present_swap_chain = present_swap_chain;
     chunk.black = black;
-    const RenderTimingConfig& timing = get_gx_timing_config();
+    const RenderTimingConfig& timing = get_frame_timing_config();
 
     std::uint64_t producer_wait_ns = 0;
     std::uint64_t diagnostic_queue_wait_ns = 0;
@@ -1131,8 +1131,8 @@ void RenderCore::render_frame(
     }
     queue_cv_.notify_one();
     const std::uint64_t producer_wait_us = producer_wait_ns / 1000u;
-    if (trace_gx_stalls &&
-        producer_wait_us >= trace_gx_stall_threshold_us()) {
+    if (trace_stalls_cached &&
+        producer_wait_us >= trace_stall_threshold_us()) {
         std::cerr << "[gx-queue-wait] wait-us=" << producer_wait_us
                   << " queue-depth=" << queue_depth_after_push
                   << " queue-limit=" << queue_depth_limit << '\n';
@@ -1625,29 +1625,29 @@ void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
 }
 
-void RenderCore::take_attached_fifo_markers(FrameChunk& chunk) noexcept {
-    chunk.fifo_marker_count = 0;
-    chunk.fifo_marker_view_mask = 0;
-    chunk.fifo_marker_sky_up_mask = 0;
-    for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
-        if (chunk.fifo_marker_count < chunk.fifo_markers.size()) {
-            const std::uint8_t index = chunk.fifo_marker_count++;
-            chunk.fifo_markers[index] = producer_fifo_markers_[i];
-            chunk.fifo_marker_serials[index] = producer_fifo_marker_serials_[i];
-            if ((producer_fifo_marker_view_mask_ & (1u << i)) != 0u) {
-                chunk.fifo_marker_views[index] = producer_fifo_marker_views_[i];
-                chunk.fifo_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
+void RenderCore::take_attached_stream_markers(FrameChunk& chunk) noexcept {
+    chunk.stream_marker_count = 0;
+    chunk.stream_marker_view_mask = 0;
+    chunk.stream_marker_sky_up_mask = 0;
+    for (std::uint8_t i = 0; i < producer_stream_marker_count_; ++i) {
+        if (chunk.stream_marker_count < chunk.stream_markers.size()) {
+            const std::uint8_t index = chunk.stream_marker_count++;
+            chunk.stream_markers[index] = producer_stream_markers_[i];
+            chunk.stream_marker_serials[index] = producer_stream_marker_serials_[i];
+            if ((producer_stream_marker_view_mask_ & (1u << i)) != 0u) {
+                chunk.stream_marker_views[index] = producer_stream_marker_views_[i];
+                chunk.stream_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
             }
-            if ((producer_fifo_marker_sky_up_mask_ & (1u << i)) != 0u) {
-                chunk.fifo_marker_sky_up[index] = producer_fifo_marker_sky_up_[i];
-                chunk.fifo_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
+            if ((producer_stream_marker_sky_up_mask_ & (1u << i)) != 0u) {
+                chunk.stream_marker_sky_up[index] = producer_stream_marker_sky_up_[i];
+                chunk.stream_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
             }
-            chunk.fifo_marker_stages[index] = producer_fifo_marker_stages_[i];
+            chunk.stream_marker_stages[index] = producer_stream_marker_stages_[i];
         }
     }
-    producer_fifo_marker_count_ = 0;
-    producer_fifo_marker_view_mask_ = 0;
-    producer_fifo_marker_sky_up_mask_ = 0;
+    producer_stream_marker_count_ = 0;
+    producer_stream_marker_view_mask_ = 0;
+    producer_stream_marker_sky_up_mask_ = 0;
 }
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
@@ -4000,12 +4000,12 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;
     render_movie_frame_=chunk.movie_frame;
-    const bool trace_gx_stalls = trace_gx_stalls_enabled();
+    const bool trace_stalls_cached = trace_stalls_enabled();
     // Per-draw clock reads run on stall-traced and sampled frames only.
-    frame_time_sample_ = frame_gx_timing_sample_enabled(frame_index_);
-    frame_time_detail_ = trace_gx_stalls || frame_time_sample_;
+    frame_time_sample_ = frame_timing_sample_enabled(frame_index_);
+    frame_time_detail_ = trace_stalls_cached || frame_time_sample_;
     // Thread CPU time and cycles of the frame and of its PSO resolution, on request or with the stall trace.
-    pso_cycles_enabled = pso_cycles_requested() || trace_gx_stalls;
+    pso_cycles_enabled = pso_cycles_requested() || trace_stalls_cached;
     // Per-frame phase timing takes a few clock reads and is always on.
     constexpr bool frame_timing_enabled = true;
     const ThreadCounterSample frame_cpu_start = pso_cycles_enabled
@@ -4271,7 +4271,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (!chunk.shape_records.empty() || chunk.fifo_marker_count != 0u ||
+    if (!chunk.shape_records.empty() || chunk.stream_marker_count != 0u ||
         !chunk.stripe_particles.empty() || chunk.pointer_depth_in_frame) {
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
@@ -4286,8 +4286,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             if (capture_in_frame) {
                 splits.push_back({0u, -1, -1});
             }
-            for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
-                splits.push_back({chunk.fifo_marker_serials[i], static_cast<int>(chunk.fifo_markers[i]),
+            for (std::uint8_t i = 0; i < chunk.stream_marker_count; ++i) {
+                splits.push_back({chunk.stream_marker_serials[i], static_cast<int>(chunk.stream_markers[i]),
                                   static_cast<int>(i)});
             }
             for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
@@ -4312,14 +4312,14 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                     on_scene_2d_begin();
                 } else if (split.marker != static_cast<int>(SceneMarker::Scene2DEnd)) {
                     const auto index = static_cast<std::size_t>(split.view);
-                    const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
+                    const bool sky_up = split.view >= 0 && (chunk.stream_marker_sky_up_mask & (1u << index)) != 0u;
                     on_scene_marker(static_cast<SceneMarker>(split.marker),
                         split.view >= 0 &&
-                                (chunk.fifo_marker_view_mask & (1u << index)) != 0u
-                            ? &chunk.fifo_marker_views[index]
+                                (chunk.stream_marker_view_mask & (1u << index)) != 0u
+                            ? &chunk.stream_marker_views[index]
                             : nullptr,
-                        sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up,
-                        split.view >= 0 ? &chunk.fifo_marker_stages[index] : nullptr);
+                        sky_up ? chunk.stream_marker_sky_up[index] : 0u, sky_up,
+                        split.view >= 0 ? &chunk.stream_marker_stages[index] : nullptr);
                 }
             }
             parse_stripes_ = {};
@@ -4339,7 +4339,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         const std::uint64_t diagnostic_parse_end_ns =
             cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
         cadence_diagnostics_->record_phase(
-            cadence::TimingPhase::RenderFifoParse,
+            cadence::TimingPhase::RenderRecords,
             diagnostic_parse_end_ns >= diagnostic_parse_start_ns
                 ? diagnostic_parse_end_ns - diagnostic_parse_start_ns
                 : 0u);
@@ -4524,7 +4524,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // [gx-frame-timing]: stall-traced frames over GALAXY_TRACE_GX_STALL_US (selected=1) and frames
     // sampled by GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). The per-draw *-us fields are measured on
     // those frames only (detail=1); fifo-*-us fields only with the stall trace (the parser profile).
-    if (trace_gx_stalls || frame_time_sample_) {
+    if (trace_stalls_cached || frame_time_sample_) {
         const std::uint64_t total_us = elapsed_us(render_start, render_end);
         // Wall-clock time since the previous emitted line: total-us covers only this function's span,
         // so it cannot tell a busy render thread from an idle one. On a sampled run it spans the
@@ -4539,18 +4539,18 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         const std::uint64_t submit_us = elapsed_us(parse_end, gpu_submit_end);
         const std::uint64_t producer_wait_us = chunk.producer_wait_ns / 1000u;
         if (frame_time_sample_ ||
-            total_us >= trace_gx_stall_threshold_us() ||
-            producer_wait_us >= trace_gx_stall_threshold_us()) {
+            total_us >= trace_stall_threshold_us() ||
+            producer_wait_us >= trace_stall_threshold_us()) {
             std::ostringstream timing_message;
             timing_message << "[gx-frame-timing] frame=" << frame_index_
                   // A frame can be both selected and sampled; selected=0 rows are the unbiased sample.
                   << " selected="
-                  << ((total_us >= trace_gx_stall_threshold_us() ||
-                       producer_wait_us >= trace_gx_stall_threshold_us())
+                  << ((total_us >= trace_stall_threshold_us() ||
+                       producer_wait_us >= trace_stall_threshold_us())
                           ? 1
                           : 0)
                   << " sample=" << (frame_time_sample_ ? 1 : 0)
-                  << " profile=" << (trace_gx_stalls ? 1 : 0)
+                  << " profile=" << (trace_stalls_cached ? 1 : 0)
                   << " detail=" << (frame_time_detail_ ? 1 : 0)
                   << " total-us=" << total_us
                   << " frame-interval-us=" << frame_interval_us
@@ -5466,8 +5466,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             const std::uint64_t total_texture_us =
                 elapsed_us(texture_start, std::chrono::steady_clock::now());
             frame_flush_texture_us_ += total_texture_us;
-            if (trace_gx_stalls_enabled() &&
-                total_texture_us >= trace_gx_stall_threshold_us()) {
+            if (trace_stalls_enabled() &&
+                total_texture_us >= trace_stall_threshold_us()) {
                 std::cerr
                     << "[gx-texture-flush] frame=" << frame_index_
                     << " map-mask=0x" << std::hex
@@ -6364,8 +6364,8 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
     if (time_copy) {
         frame_scene_copy_us_ += copy_us;
     }
-    if (trace_gx_stalls_enabled() &&
-        copy_us >= trace_gx_stall_threshold_us()) {
+    if (trace_stalls_enabled() &&
+        copy_us >= trace_stall_threshold_us()) {
         std::cerr << "[gx-efb-copy-timing] frame=" << frame_index_
                   << " kind=" << (params.display ? "xfb" : "tex")
                   << " us=" << copy_us

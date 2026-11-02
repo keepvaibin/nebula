@@ -102,11 +102,11 @@ bool RendererVk::create_scene_set(SceneSet& set, const FrameMap& map, unsigned s
     VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
     if (samples > 1u) {
         const VkImageView multi[3] = {ms_color->target_view, ms_depth->target_view, color->target_view};
-        framebuffer = make_framebuffer(gx_layout_.pass_for(static_cast<unsigned>(std::countr_zero(samples)), false),
+        framebuffer = make_framebuffer(draw_layout_.pass_for(static_cast<unsigned>(std::countr_zero(samples)), false),
                                        multi);
-        resolve_framebuffer = make_framebuffer(gx_layout_.scene_pass, single);
+        resolve_framebuffer = make_framebuffer(draw_layout_.scene_pass, single);
     } else {
-        framebuffer = make_framebuffer(gx_layout_.scene_pass, single);
+        framebuffer = make_framebuffer(draw_layout_.scene_pass, single);
     }
     // The new targets enter their attachment layouts now, so every later submission (peeks included) finds them so.
     run_one_time([&](VkCommandBuffer commands) {
@@ -236,7 +236,7 @@ void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
     const std::uint32_t width = scene_map_.width;
     const std::uint32_t height = scene_map_.height;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = gx_layout_.scene_pass;
+    begin.renderPass = draw_layout_.scene_pass;
     begin.framebuffer = set.resolve_framebuffer;
     begin.renderArea = {{0, 0}, {width, height}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
@@ -257,7 +257,7 @@ void RendererVk::resolve_scene_depth(VkCommandBuffer commands) {
     if (commands == commands_) {
         // Another command buffer resolves what the frame submitted before it; the frame's own draws since stay due.
         set.depth_dirty = false;
-        reset_gx_bindings();
+        reset_draw_bindings();
     }
 }
 
@@ -335,7 +335,7 @@ void RendererVk::apply_window_size() {
     if (!create_scene_targets(wanted, samples)) {
         return;
     }
-    reset_gx_bindings();
+    reset_draw_bindings();
     std::cout << "[Renderer] internal resolution " << previous.width << "x" << previous.height << " -> " << wanted.width
               << "x" << wanted.height << '\n';
 }
@@ -350,7 +350,7 @@ void RendererVk::carry_over_scene_contents() {
         end_scene_pass();
         begin_scene_pass(&clear);
         end_scene_pass();
-        reset_gx_bindings();
+        reset_draw_bindings();
     }
     if (!scene_carry_color_ || !scene_carry_depth_) {
         scene_carry_color_.reset();
@@ -398,7 +398,7 @@ void RendererVk::carry_over_scene_contents() {
     // The old targets are read by this frame: released when its slot comes round.
     retire(std::move(scene_carry_color_));
     retire(std::move(scene_carry_depth_));
-    reset_gx_bindings();
+    reset_draw_bindings();
 }
 
 void RendererVk::begin_scene_pass(const SceneClearValues* clear) {
@@ -416,7 +416,7 @@ void RendererVk::begin_scene_pass(const SceneClearValues* clear) {
     }
     const VkCommandBuffer commands = commands_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = gx_layout_.pass_for(scene_samples_log2(), clear != nullptr);
+    begin.renderPass = draw_layout_.pass_for(scene_samples_log2(), clear != nullptr);
     begin.framebuffer = scene_framebuffer();
     scene_.depth_dirty = scene_.samples > 1u;
     // The set's own size: the scene target, or a target pass's smaller target (E-07).
@@ -448,7 +448,7 @@ void RendererVk::end_scene_pass() {
     scene_pass_open_ = false;
 }
 
-void RendererVk::reset_gx_bindings() noexcept {
+void RendererVk::reset_draw_bindings() noexcept {
     bound_ = Bound{};
 }
 
@@ -533,7 +533,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
             vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, rgba);
             vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
             vkCmdDraw(commands, 3, 1, 0, 0);
-            reset_gx_bindings();
+            reset_draw_bindings();
             bind_scene();
         } else if (color_enable && alpha_enable) {
             VkClearAttachment attachment{};
@@ -551,7 +551,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
                               scene_utility_pipeline(color_enable ? SceneUtility::ClearRgb : SceneUtility::ClearAlpha));
             vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
             vkCmdDraw(commands, 3, 1, 0, 0);
-            reset_gx_bindings();
+            reset_draw_bindings();
             bind_scene();
         }
     }
@@ -565,7 +565,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
         vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, depth_clear);
         vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
         vkCmdDraw(commands, 3, 1, 0, 0);
-        reset_gx_bindings();
+        reset_draw_bindings();
         bind_scene();
     } else if (depth_enable) {
         // Reversed-Z: GX's farthest (0xFFFFFF) clears to about 0.
@@ -625,7 +625,7 @@ void RendererVk::swap_scene_sets() {
     std::swap(scene_, alt_scene_);
     std::swap(scene_map_, alt_scene_map_);
     output_scene_active_ = !output_scene_active_;
-    reset_gx_bindings();
+    reset_draw_bindings();
 }
 
 // The scene target and the target passes' set trade places (begin_target_pass): targets and scale, the output scene target's state kept.
@@ -635,7 +635,7 @@ void RendererVk::swap_target_set() {
     std::swap(scene_, target_scene_);
     std::swap(scene_map_, target_scene_map_);
     target_pass_active_ = !target_pass_active_;
-    reset_gx_bindings();
+    reset_draw_bindings();
 }
 
 bool RendererVk::begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height) {
@@ -936,7 +936,7 @@ void RendererVk::record_scene_aa() {
     if (replay_list_ != nullptr && ran != AaRun::kNone) {
         post_.hold_scene_targets(replay_list_->held);
     }
-    reset_gx_bindings();
+    reset_draw_bindings();
 }
 
 // The game's bloom (game_bloom_vk.h) at this point of the stream: the scene target pass ends for the passes that copy or read
@@ -1001,13 +1001,13 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
         p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
         if (bloom_.prepare(commands_, in, p, allocate)) {
             begin_scene_pass();
-            bloom_.finish(commands_, gx_layout_.pass_for(scene_samples_log2(), false), scene_samples_log2(), allocate);
+            bloom_.finish(commands_, draw_layout_.pass_for(scene_samples_log2(), false), scene_samples_log2(), allocate);
         }
     }
     if (replay_list_ != nullptr) {
         bloom_.hold(replay_list_->held);
     }
-    reset_gx_bindings();
+    reset_draw_bindings();
 }
 
 // A texture the GPU may still read: released once the submissions that can name it completed.
@@ -1050,7 +1050,7 @@ void RendererVk::attach_texture_uploads(TextureCache& cache) {
 }
 
 gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache) {
-    const VkDescriptorSet set = allocate_table_set(gx_layout_.sets[1]);
+    const VkDescriptorSet set = allocate_table_set(draw_layout_.sets[1]);
     std::array<VkDescriptorImageInfo, kMaxTextureMaps> images{};
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         const bool bound = m < count && handles[m].resource != nullptr;
@@ -1136,7 +1136,7 @@ gpu::Table RendererVk::sampler_table_for(const std::uint32_t keys[8]) {
     if (const auto it = sampler_tables_.find(table_key); it != sampler_tables_.end()) {
         return gpu::Table{reinterpret_cast<std::uint64_t>(it->second)};
     }
-    const VkDescriptorSet set = allocate_persistent_set(gx_layout_.sets[2]);
+    const VkDescriptorSet set = allocate_persistent_set(draw_layout_.sets[2]);
     std::array<VkDescriptorImageInfo, 8> samplers{};
     for (unsigned i = 0; i < 8u; ++i) {
         samplers[i] = {sampler_for(keys[i], cfg), VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
@@ -1179,7 +1179,7 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
     }
     VkDescriptorSet set = VK_NULL_HANDLE;
     if (cached) {
-        set = allocate_persistent_set(gx_layout_.sets[0]);
+        set = allocate_persistent_set(draw_layout_.sets[0]);
     } else {
         // A replay's evaluated palettes (their base moves with each sequence's layout): a set of the replay list's.
         for (const auto& [buffers, existing] : replay_constant_sets_) {
@@ -1190,7 +1190,7 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
         VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
         info.descriptorPool = replay_list_->descriptors;
         info.descriptorSetCount = 1;
-        info.pSetLayouts = &gx_layout_.sets[0];
+        info.pSetLayouts = &draw_layout_.sets[0];
         vk::check(vkAllocateDescriptorSets(vk::Context::get().device(), &info, &set), "replay constants set");
         replay_constant_sets_.push_back({{b0, b1, earlier}, set});
     }
@@ -1459,7 +1459,7 @@ void RendererVk::draw(const DrawCall& call) {
                                              call.blend_vertices != 0u && vertices != 0u ? vertices - 1u : 0u,
                                              earlier_base};
     if (!bound_.blend_valid || blend != bound_.blend) {
-        vkCmdPushConstants(commands, gx_layout_.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(blend), blend.data());
+        vkCmdPushConstants(commands, draw_layout_.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(blend), blend.data());
         bound_.blend = blend;
         bound_.blend_valid = true;
     }
@@ -1481,7 +1481,7 @@ void RendererVk::draw(const DrawCall& call) {
             set = constants_set(buffers[0], buffers[1], buffers[2], 0u, offsets[2] == 0u ? VK_WHOLE_SIZE : kPaletteBytes,
                                 earlier);
         }
-        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, gx_layout_.layout, 0, 1, &set, 3,
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, draw_layout_.layout, 0, 1, &set, 3,
                                 dynamic.data());
         bound_.buffers = buffers;
         bound_.offsets = offsets;
@@ -1490,12 +1490,12 @@ void RendererVk::draw(const DrawCall& call) {
     }
     if (call.texture_table.ptr != 0u && call.texture_table.ptr != bound_.texture_table) {
         const auto set = reinterpret_cast<VkDescriptorSet>(call.texture_table.ptr);
-        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, gx_layout_.layout, 1, 1, &set, 0, nullptr);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, draw_layout_.layout, 1, 1, &set, 0, nullptr);
         bound_.texture_table = call.texture_table.ptr;
     }
     if (call.sampler_table.ptr != 0u && call.sampler_table.ptr != bound_.sampler_table) {
         const auto set = reinterpret_cast<VkDescriptorSet>(call.sampler_table.ptr);
-        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, gx_layout_.layout, 2, 1, &set, 0, nullptr);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, draw_layout_.layout, 2, 1, &set, 0, nullptr);
         bound_.sampler_table = call.sampler_table.ptr;
     }
 
@@ -1686,7 +1686,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdEndRenderPass(commands);
     dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     transition_scene_to_attachment(commands, is_depth_copy);
-    reset_gx_bindings();
+    reset_draw_bindings();
     bind_scene();
 }
 
@@ -1791,7 +1791,7 @@ gpu::TextureRef RendererVk::hand_over_scene_color(gpu::TextureRef fresh) {
     turn_source_ = VK_NULL_HANDLE;
     scene_owed_ = handed;
     ++gpu_window_.handovers;
-    reset_gx_bindings();
+    reset_draw_bindings();
     bind_scene();
     return handed;
 }
@@ -1874,7 +1874,7 @@ VkFramebuffer RendererVk::scene_framebuffer() {
     }
     const VkImageView views[2] = {color.target_view, scene_.depth->target_view};
     VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-    info.renderPass = gx_layout_.scene_pass;
+    info.renderPass = draw_layout_.scene_pass;
     info.attachmentCount = 2;
     info.pAttachments = views;
     info.width = color.width;
@@ -1976,7 +1976,7 @@ vk::Texture* RendererVk::filter_display_picture(const DisplayTexture& source) {
     vkCmdDraw(commands, 3, 1, 0, 0);
     vkCmdEndRenderPass(commands);
     dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    reset_gx_bindings();
+    reset_draw_bindings();
     return &dest;
 }
 
@@ -2103,7 +2103,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        reset_gx_bindings();
+        reset_draw_bindings();
         bind_scene();
         return publish_capture(params, current.texture, is_depth_copy, textures);
     }
@@ -2294,7 +2294,7 @@ bool RendererVk::record_pointer_depth_capture_in_frame() {
                       kFrameHeight, readback.buffer->buffer);
     pointer_depth_rgba_ = reinterpret_cast<const std::uint8_t*>(readback.buffer->mapped);
     pointer_depth_readback_ = readback.buffer.get();
-    reset_gx_bindings();
+    reset_draw_bindings();
     bind_scene();
     pointer_depth_in_frame_ = true;  // fenced at end_frame
     return true;
@@ -2354,7 +2354,7 @@ bool RendererVk::record_async_peek_field_in_frame(std::size_t channel, ReadbackK
     constants.values[15] = -1.0f;
     record_peek_field(commands_, *field.target, kind, constants, kFrameWidth, kFrameHeight,
                       field.readbacks[slot].buffer->buffer);
-    reset_gx_bindings();
+    reset_draw_bindings();
     bind_scene();
     field.fence = kAsyncPeekInFrame;  // fenced at end_frame
     field.pending_slot = slot;
@@ -2446,7 +2446,7 @@ bool RendererVk::debug_copy_scene_to_readback() {
     scene_capture_pending_path_ = scene_capture_path_;
     scene_capture_width_ = w;
     scene_capture_height_ = h;
-    reset_gx_bindings();
+    reset_draw_bindings();
     bind_scene();
     return true;
 }

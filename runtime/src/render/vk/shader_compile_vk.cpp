@@ -256,7 +256,7 @@ EShLanguage language(ShaderStage stage) {
 
 }  // namespace
 
-std::span<const RegisterBinding> gx_draw_bindings() noexcept {
+std::span<const RegisterBinding> draw_bindings() noexcept {
     return kGxDrawBindings;
 }
 
