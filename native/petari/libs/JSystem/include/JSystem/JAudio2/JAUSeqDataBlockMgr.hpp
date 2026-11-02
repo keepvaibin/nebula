@@ -6,7 +6,7 @@
 
 struct JAISeqData;
 struct JAISeqDataUser;
-class JKRArchive;
+class AssetFolder;
 
 struct JAUSeqDataBlock {
     JAUSeqDataBlock();
@@ -29,7 +29,7 @@ public:
 class JAUDynamicSeqDataBlocks {
 public:
     JAUDynamicSeqDataBlocks();
-    void setSeqDataArchive(JKRArchive*);
+    void setSeqDataArchive(AssetFolder*);
     s32 getSeqData(JAISoundID, JAISeqDataUser*, JAISeqData*, bool);
     bool appendDynamicSeqDataBlock(JAUSeqDataBlock*);
     bool loadDynamicSeq(JAISoundID, bool, JAISeqDataUser*);
@@ -43,12 +43,12 @@ public:
     JAUSeqDataBlocks const& getLoadedBlocks() const {
         return mLoadedBlocks;
     }
-    JKRArchive* getSeqDataArchive() {
+    AssetFolder* getSeqDataArchive() {
         return mSeqDataArchive;
     }
 
     /* 0x00 */ JAUSeqDataBlocks mFreeBlocks;
     /* 0x0C */ JAUSeqDataBlocks field_0xc;
     /* 0x18 */ JAUSeqDataBlocks mLoadedBlocks;
-    /* 0x24 */ JKRArchive* mSeqDataArchive;
+    /* 0x24 */ AssetFolder* mSeqDataArchive;
 };

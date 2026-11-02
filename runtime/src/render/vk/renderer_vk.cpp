@@ -1820,7 +1820,7 @@ void RendererVk::ensure_native_settings_corner_texture_loaded() {
         return;
     }
     const auto texture = load_game_texture(host_window::native_settings_content_root,
-                                           "files\\LayoutData\\FileSelect.arc", "myfileselwinframe.tpl");
+                                           "LayoutData/FileSelect.arc", "myfileselwinframe.tpl");
     if (!texture.has_value() || texture->width == 0u || texture->height == 0u) {
         return;
     }

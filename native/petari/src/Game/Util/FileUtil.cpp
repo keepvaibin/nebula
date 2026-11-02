@@ -56,7 +56,7 @@ namespace MR {
         SingletonHolder< FileLoader >::get()->requestLoadToMainRAM(filePath, pDst, pHeap, allocDir, false);
     }
 
-    JKRMemArchive* mountArchive(const char* pFilePath, NebulaArena* pHeap) {
+    AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap) {
         mountAsyncArchive(pFilePath, pHeap);
 
         return receiveArchive(pFilePath);
@@ -98,7 +98,7 @@ namespace MR {
         return SingletonHolder< FileLoader >::get()->receiveFile(filePath);
     }
 
-    JKRMemArchive* receiveArchive(const char* pFilePath) {
+    AssetFolder* receiveArchive(const char* pFilePath) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
@@ -109,11 +109,11 @@ namespace MR {
         SingletonHolder< FileLoader >::get()->receiveAllRequestedFile();
     }
 
-    void createAndAddArchive(void* pArcData, NebulaArena* pHeap, const char* pFilePath) {
-        SingletonHolder< FileLoader >::get()->createAndAddArchive(pArcData, pHeap, pFilePath);
+    void createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pFilePath) {
+        SingletonHolder< FileLoader >::get()->createAndAddArchive(pFolder, pHeap, pFilePath);
     }
 
-    void getMountedArchiveAndHeap(const char* pFilePath, JKRArchive** ppArchive, NebulaArena** ppHeap) {
+    void getMountedArchiveAndHeap(const char* pFilePath, AssetFolder** ppArchive, NebulaArena** ppHeap) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
@@ -136,15 +136,6 @@ namespace MR {
     void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap) {
         SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pHeap);
         SingletonHolder< FileLoader >::get()->removeHolderIfIsEqualHeap(pHeap);
-    }
-
-    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, NebulaArena* pHeap, int align) {
-        const u8* const fileData = static_cast< const u8* >(pArchive->getResource(pFilePath));
-        const u32 fileSize = pArchive->getResSize(fileData);
-        u8* const buffer = new (pHeap, align) u8[fileSize];
-        memcpy(buffer, fileData, fileSize);
-
-        return buffer;
     }
 
     bool isLoadedFile(const char* pFilePath) {

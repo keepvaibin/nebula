@@ -1,4 +1,5 @@
 #include "Game/System/FileLoaderThread.hpp"
+#include "Game/System/AssetFolder.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/Util/FileUtil.hpp"
 
@@ -44,6 +45,7 @@ void FileLoaderThread::loadToMainRAM(RequestFileInfo* pInfo) {
 
 void FileLoaderThread::mountArchiveAndStartCreateResource(RequestFileInfo* pInfo) {
     void* data = ::loadFile(pInfo);
-    MR::createAndAddArchive(data, pInfo->mFileEntry->mHeap, pInfo->mFileName);
+    NebulaArena* const pHeap = pInfo->mFileEntry->mHeap;
+    MR::createAndAddArchive(new (pHeap, 0) AssetFolder(GameAssets::find(pInfo->mFileName), data), pHeap, pInfo->mFileName);
     pInfo->mFileEntry->setContext(data);
 }

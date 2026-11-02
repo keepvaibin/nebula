@@ -15,7 +15,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 MiiFacePartsHolder::MiiFacePartsHolder(int partsNumMax) : LiveActorGroup("Mii\212\347\203\202\203\146\203\213\225\333\216\235" /* Mii顔モデル保持 */, partsNumMax), JKRDisposer(), _34() {
@@ -27,7 +27,7 @@ MiiFacePartsHolder::~MiiFacePartsHolder() {
 }
 
 void MiiFacePartsHolder::init(const JMapInfoIter& rIter) {
-    JKRMemArchive* pArchive = MR::receiveArchive("/ObjectData/MiiFaceDatabase.arc");
+    AssetFolder* pArchive = MR::receiveArchive("/ObjectData/MiiFaceDatabase.arc");
     void* pResBuffer = pArchive->getResource("/RFL_Res.dat");
     u32 resSize = pArchive->getResSize(pResBuffer);
     _38 = MiiInitRes(pResBuffer, resSize, false);

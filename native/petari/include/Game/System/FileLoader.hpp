@@ -12,7 +12,7 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JKRArchive;
+class AssetFolder;
 
 class FileLoader {
 public:
@@ -23,10 +23,10 @@ public:
     bool isLoaded(const char*) const;
     bool isMountedArchive(const char*) const;
     void* receiveFile(const char*);
-    JKRMemArchive* receiveArchive(const char*);
+    AssetFolder* receiveArchive(const char*);
     void receiveAllRequestedFile();
-    JKRMemArchive* createAndAddArchive(void*, NebulaArena*, const char*);
-    void getMountedArchiveAndHeap(const char*, JKRArchive**, NebulaArena**) const;
+    AssetFolder* createAndAddArchive(AssetFolder*, NebulaArena*, const char*);
+    void getMountedArchiveAndHeap(const char*, AssetFolder**, NebulaArena**) const;
     void clearRequestFileInfo(bool);
     void removeHolderIfIsEqualHeap(NebulaArena*);
     void removeFile(const char*);

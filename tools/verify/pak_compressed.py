@@ -21,31 +21,8 @@ class Report:
 def scan_bytes(name, data, report):
     if data[:4] in COMPRESSED:
         report.bad.append(f"{name}: {data[:4].decode()}")
-    elif data[:4] == b"RARC":
-        report.bad.append(f"{name}: archive not in host order")
-    elif data[:4] == b"CRAR":
-        scan_archive(name, data, report)
-
-
-def scan_archive(name, data, report):
-    report.archives += 1
-    data_start = struct.unpack_from("<I", data, 0x0C)[0] + 0x20
-    files = struct.unpack_from("<I", data, 0x28)[0]
-    file_at = struct.unpack_from("<I", data, 0x2C)[0] + 0x20
-    strings_at = struct.unpack_from("<I", data, 0x34)[0] + 0x20
-    for i in range(files):
-        at = file_at + 0x14 * i
-        word = struct.unpack_from("<I", data, at + 4)[0]
-        flags = word >> 24
-        if flags & FLAG_FILE == 0:
-            continue
-        name_at = strings_at + (word & 0xFFFFFF)
-        member = data[name_at : data.index(b"\0", name_at)].decode("latin-1")
-        offset, size = struct.unpack_from("<II", data, at + 8)
-        report.members += 1
-        if flags & (FLAG_COMPRESSED | FLAG_YAZ0):
-            report.bad.append(f"{name}/{member}: compressed flags {flags:#x}")
-        scan_bytes(f"{name}/{member}", data[data_start + offset : data_start + offset + size], report)
+    elif data[:4] in (b"RARC", b"CRAR"):
+        report.bad.append(f"{name}: an archive, not a folder of the store")
 
 
 def main():

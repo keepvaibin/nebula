@@ -387,6 +387,7 @@ target_include_directories(galaxy_gx PRIVATE "${galaxy_utility_shader_dir}" runt
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
 target_link_libraries(galaxy_gx PRIVATE nebula_fidelityfx)
+target_link_libraries(galaxy_gx PUBLIC galaxy_disc_files)
 # NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
 # runtime loads the signed binaries from the user's vendor folder at run time.
 # Empty builds the runtime without DLSS.
@@ -543,6 +544,7 @@ galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.c
 set(gxs runtime/src/render)
 galaxy_test(galaxy_game_asset_extract_tests SOURCES ${gxs}/game_asset_extract_tests.cpp ${gxs}/game_asset_extract.cpp)
 target_include_directories(galaxy_game_asset_extract_tests PRIVATE native/include)
+target_link_libraries(galaxy_game_asset_extract_tests PRIVATE galaxy_disc_files)
 galaxy_test(galaxy_transform_history_tests SOURCES ${gxs}/transform_history_tests.cpp ${gxs}/transform_history.cpp)
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${gxs}/frame_interpolation_tests.cpp
     ${gxs}/frame_interpolation.cpp ${gxs}/transform_history.cpp)
@@ -665,6 +667,7 @@ if(NEBULA_VULKAN)
     target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
+    target_link_libraries(galaxy_gx_vk PUBLIC galaxy_disc_files)
     target_link_libraries(galaxy_gx_vk
         PUBLIC
             nebula_vulkan_deps

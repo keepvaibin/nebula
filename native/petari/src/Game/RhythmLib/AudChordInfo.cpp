@@ -1,11 +1,11 @@
 #include "Game/RhythmLib/AudChordInfo.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/JKernel/JKRArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 
 AudChordTable::AudChordTable() : mLoaded(false), mChordCount(0), mScaleCount(0), mBase(nullptr), mChordOffsets(nullptr), mScaleOffsets(nullptr) {
 }
 
-bool AudChordTable::setChordTable(s32 id, JKRArchive* pArchive) {
+bool AudChordTable::setChordTable(s32 id, AssetFolder* pArchive) {
     mLoaded = false;
 
     if (id < 0) {
@@ -42,7 +42,7 @@ AudChordInfo::AudChordInfo()
     }
 }
 
-void AudChordInfo::init(JKRArchive* pArchive) {
+void AudChordInfo::init(AssetFolder* pArchive) {
     mArchive = pArchive;
 }
 

@@ -2,17 +2,17 @@
 
 #include "Game/Util/Array.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 
 class ArchiveHolderArchiveEntry {
 public:
     /// @brief Creates a new `ArchiveHolderArchiveEntry`.
-    ArchiveHolderArchiveEntry(void*, NebulaArena*, const char*);
+    ArchiveHolderArchiveEntry(AssetFolder*, NebulaArena*, const char*);
 
     /// @brief Destroys the `ArchiveHolderArchiveEntry`.
     ~ArchiveHolderArchiveEntry();
 
-    /* 0x0 */ JKRMemArchive* mArchive;
+    /* 0x0 */ AssetFolder* mArchive;
     /* 0x4 */ NebulaArena* mHeap;
     /* 0x8 */ char* mArchiveName;
 };
@@ -23,22 +23,22 @@ public:
     ArchiveHolder();
 
     /// @brief Creates and adds a new archive entry.
-    /// @param pData The data for the archive.
+    /// @param pFolder The archive.
     /// @param pHeap The heap to allocate the archive in.
     /// @param pArchiveName The name of the archive.
     /// @return The pointer to the created entry.
-    ArchiveHolderArchiveEntry* createAndAdd(void*, NebulaArena*, const char*);
+    ArchiveHolderArchiveEntry* createAndAdd(AssetFolder*, NebulaArena*, const char*);
 
     /// @brief Gets the archive for the given archive name.
     /// @param pArchiveName The name of the archive.
     /// @return The pointer to the found archive, or `nullptr` if not found.
-    JKRMemArchive* getArchive(const char*) const;
+    AssetFolder* getArchive(const char*) const;
 
     /// @brief Gets the archive and heap for the given archive name.
     /// @param pArchiveName The name of the archive.
     /// @param pArchive The output pointer for the archive.
     /// @param pHeap The output pointer for the heap.
-    void getArchiveAndHeap(const char*, JKRArchive**, NebulaArena**) const;
+    void getArchiveAndHeap(const char*, AssetFolder**, NebulaArena**) const;
 
     /// @brief Removes entries that match the given heap.
     /// @param pHeap The heap to compare.

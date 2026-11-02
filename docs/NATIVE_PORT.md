@@ -158,14 +158,15 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 
 ## Byte order
 
-- Everything is host order. The importer turns the game's files once (`crates/nebula-import/src/cook`): archives, J3D, JPA, KCL, JMap, BMG, layouts, audio banks, waves, ghosts. Nothing swaps at access; `nebula_be.hpp` is gone.
-- Offsets the console overwrote with a pointer in place (RARC file entries, KCL, BRFNT, TPL, rhythm tables) hold the target's distance from the slot, which fits the slot's 4 bytes.
+- Everything is host order. The importer turns the game's files once (`crates/nebula-import/src/cook`): J3D, JPA, KCL, JMap, BMG, layouts, audio banks, waves, ghosts. Nothing swaps at access; `nebula_be.hpp` is gone.
+- Offsets the console overwrote with a pointer in place (KCL, BRFNT, TPL, rhythm tables) hold the target's distance from the slot, which fits the slot's 4 bytes.
 - Bitfields: where code also reads a bitfield's word, the native declaration lists the fields from the least significant value bit up, with explicit padding.
 - Saves are written in host order at the size they always had; a console-order save (Wii) and a Switch save read through `SaveBinary` and are written back in host order. Their table keeps its system entry, empty, so older builds read a new save. Times are seconds; an older save's are the console's 60.75 MHz ticks, and the value says which.
 
 ## Memory and the GPU's addresses
 
 - The game's memory is arenas (`NebulaArena`): each has its own 4 GB of addresses from the host and commits memory as it grows, 1 MB at a time. No sizes are given and nothing runs out but the machine's memory. A freed block goes on its size's free list; destroying an arena gives all of it back at once, runs what is registered with it, destroys the arenas made under it, and drops its file views and what the renderer holds from it.
+- The store has no archives: what the disc holds as one is a folder whose files lie side by side (`store.rs`). The game mounts it as one view of those bytes (`AssetFolder`) and asks the store's index for names and order; a file is a place in the view, and nothing parses a directory or fixes one up.
 - The store is mapped read-only for the process's life (`AssetStore::map`, `asset_map`). Waves and streams play from the mapping: no copy. A file the game loads whole, from 8 KB up, is a private view of the store (`asset_map_private`): a page costs memory of the game's only once written, which 98-99 % of them never are; the view goes with the heap it was asked for.
 - The sound memory holds no sound: 1 MB, each wave archive's place in its section, so the archive goes with the section. A voice carries its source's start and end.
 - Images and shapes reach the renderer as records: the game hands each over where it loads or rewrites it, and an arena's going tells the renderer to forget what lay in it (`shape_forget`).

@@ -33,7 +33,7 @@
 #include <JSystem/JAudio2/JAUSoundMgr.hpp>
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JKernel/JKRArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
@@ -49,7 +49,7 @@ const char sJaiSeqResArc[] = "/AudioRes/JaiSeq.arc";
 
 AudSystem* AudSystem::msBasic;
 
-AudSystem* AudNewAudSystem_(JAUSectionHeap* pHeap, JKRArchive* pChordArchive, JKRArchive* pMeArchive, JKRArchive* pRemixArchive, int maxChannels) {
+AudSystem* AudNewAudSystem_(JAUSectionHeap* pHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive, int maxChannels) {
     AudSystem* system = new AudSystem(pHeap, pChordArchive, pMeArchive, pRemixArchive);
     system->mAudience.mMaxChannels = maxChannels;
     return system;
@@ -83,8 +83,8 @@ namespace {
     }
 };  // namespace
 
-AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, JKRArchive* pSeqArchive, JKRArchive* pChordArchive, JKRArchive* pMeArchive,
-                           JKRArchive* pRemixArchive) {
+AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
+                           AssetFolder* pRemixArchive) {
     NebulaArena* currHeap = NebulaArena::getCurrentHeap();
     int maxNumSeq = ::init_JAS_JAI_(pHeap);
     JAUSectionHeap* newHeap = JAUNewSectionHeap(true);
@@ -103,7 +103,7 @@ AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, JKRArchive* pSeqArchive
     u32 maxSeqDataSize = 0;
     if (pSeqArchive == nullptr) {
         if (GameAssets::find(sJaiSeqArc) >= 0) {
-            JKRArchive* seqArc = JKRArchive::mount(sJaiSeqArc, JKRArchive::MOUNT_MODE_MEM, currHeap, JKRArchive::MOUNT_DIRECTION_1);
+            AssetFolder* seqArc = AssetFolder::mount(sJaiSeqArc, currHeap);
             newHeap->setSeqDataArchive(seqArc);
             maxSeqDataSize = AudParams::maxSeqDataSize;
         } else {
@@ -115,11 +115,11 @@ AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, JKRArchive* pSeqArchive
     }
 
     if (pChordArchive == nullptr) {
-        pChordArchive = JKRArchive::mount(sJaiChordArc, JKRArchive::MOUNT_MODE_MEM, newHeap->getHeap(), JKRArchive::MOUNT_DIRECTION_1);
+        pChordArchive = AssetFolder::mount(sJaiChordArc, newHeap->getHeap());
     }
 
     if (pMeArchive == nullptr) {
-        pMeArchive = JKRArchive::mount(sJaiMeArc, JKRArchive::MOUNT_MODE_MEM, newHeap->getHeap(), JKRArchive::MOUNT_DIRECTION_1);
+        pMeArchive = AssetFolder::mount(sJaiMeArc, newHeap->getHeap());
     }
 
     AudSystem* system = AudNewAudSystem_(newHeap, pChordArchive, pMeArchive, pRemixArchive, 1);
@@ -144,7 +144,7 @@ static JAUStdSoundInfo* newSoundInfo(JAUSection* pSection) {
     return soundInfo;
 }
 
-AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, JKRArchive* pChordArchive, JKRArchive* pMeArchive, JKRArchive* pRemixArchive)
+AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, AssetFolder* pChordArchive, AssetFolder* pMeArchive, AssetFolder* pRemixArchive)
     : mIsResetReady(), mIsReset(), mStopThreads(), _828(), mIsPaused(), _82A(), _82B(), _82C(), _830(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
       mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
@@ -215,7 +215,7 @@ AudChordInfo* AudSystem::getChordInfo() {
     return &mRhythmMeSystem->mChordInfo;
 }
 
-void AudSystem::setSpeakerResource(JKRArchive* pArchive) {
+void AudSystem::setSpeakerResource(AssetFolder* pArchive) {
     mSpkSystem->setResource(pArchive, 0, 1);
 }
 
@@ -762,7 +762,7 @@ void AudSystem::initCategoryArrangement() {
     mSeMgr.setCategoryArrangement(arrangement);
 }
 
-void AudSystem::setMeResource(JKRArchive* pArchive, u16 a1, u16 a2) {
+void AudSystem::setMeResource(AssetFolder* pArchive, u16 a1, u16 a2) {
     if (pArchive == nullptr) {
         return;
     }

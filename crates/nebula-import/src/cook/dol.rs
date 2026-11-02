@@ -3,7 +3,7 @@
 //! holds them (the archive cooked like any other), and for the North American release the Grand galaxies' comet
 //! schedules and the event flags as native tables. The game reads them as files (Game/System/NebulaDiscTables.cpp).
 
-use super::{cook_file, Stats};
+use super::{cook_entry, Stats, StoreItem};
 use anyhow::{bail, Context, Result};
 
 /// The folder the files go in, at the disc's root.
@@ -134,7 +134,7 @@ fn event_flags(dol: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// The NebulaData files of a release's main.dol (`game_id`, boot.bin's six characters), cooked.
-pub fn tables(dol: &[u8], game_id: &str, stats: &mut Stats) -> Result<Vec<(String, Vec<u8>)>> {
+pub fn tables(dol: &[u8], game_id: &str, stats: &mut Stats) -> Result<Vec<(String, Vec<StoreItem>)>> {
     if !matches!(game_id, "RMGE01" | "RMGP01" | "RMGJ01") {
         bail!("{game_id} is not a release whose main.dol tables the cooker knows");
     }
@@ -144,14 +144,17 @@ pub fn tables(dol: &[u8], game_id: &str, stats: &mut Stats) -> Result<Vec<(Strin
             .with_context(|| format!("{} ({:#x}, {:#x} bytes) is not in main.dol", blob.name, blob.address, blob.size))?
             .to_vec();
         let name = format!("{FOLDER}/{}", blob.name);
-        let bytes = cook_file(&name, bytes.clone(), stats)?.unwrap_or(bytes);
-        files.push((blob.name.to_string(), bytes));
+        files.push((blob.name.to_string(), cook_entry(&name, bytes, stats)?));
     }
     if game_id == "RMGE01" {
-        files.push(("GalaxyCometSchedules.bin".to_string(), comet_schedules(dol)?));
-        files.push(("GameEventFlags.bin".to_string(), event_flags(dol)?));
+        files.push(("GalaxyCometSchedules.bin".to_string(), whole(comet_schedules(dol)?)));
+        files.push(("GameEventFlags.bin".to_string(), whole(event_flags(dol)?)));
     }
     Ok(files)
+}
+
+fn whole(bytes: Vec<u8>) -> Vec<StoreItem> {
+    vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }]
 }
 
 #[cfg(test)]

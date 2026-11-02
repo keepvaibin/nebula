@@ -8,7 +8,7 @@ head = f.read(64)
 count = struct.unpack_from("<I", head, 12)[0]
 nodes_at, hashes_at, names_at = struct.unpack_from("<QQQ", head, 16)
 f.seek(nodes_at)
-nodes = f.read(32 * count)
+nodes = f.read(40 * count)
 f.seek(names_at)
 names = f.read()
 
@@ -20,7 +20,7 @@ def name_of(off):
 
 arcs = []
 for i in range(count):
-    pos, size, name, parent, flags, res = struct.unpack_from("<QQIIII", nodes, i * 32)
+    pos, size, name, parent, flags, first, children, res = struct.unpack_from("<QQIIIIII", nodes, i * 40)
     if not flags & 1 and name_of(name).startswith("GhostData"):
         arcs.append((name_of(name), pos, size))
 print(len(arcs), "ghost archives")

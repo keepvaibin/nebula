@@ -2529,7 +2529,9 @@ int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaAssetE
     }
     *out = {};
     out->index = entry->index;
-    out->length = entry->length;
+    out->length = static_cast<uint32_t>(entry->length);
+    out->position = entry->position;
+    out->children = entry->children;
     out->folder = entry->folder ? 1 : 0;
     out->name = entry->name;
     return 1;
@@ -2724,7 +2726,7 @@ void test_drive_delay() {
 const void* svc_asset_map(void*, int32_t file) {
     test_drive_delay();
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
-    if (!entry || entry->folder) {
+    if (!entry) {
         return nullptr;
     }
     return gPak.store.map(entry->position, static_cast<std::size_t>(entry->length));
@@ -2733,7 +2735,7 @@ const void* svc_asset_map(void*, int32_t file) {
 void* svc_asset_map_private(void*, int32_t file) {
     test_drive_delay();
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
-    if (!entry || entry->folder) {
+    if (!entry) {
         return nullptr;
     }
     void* const data = gPak.store.map_private(entry->position, static_cast<std::size_t>(entry->length));
@@ -2763,7 +2765,7 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
         std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
                      file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
     }
-    if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size ||
+    if (!entry || file_offset > entry->length || entry->length - file_offset < size ||
         !gPak.store.read(entry->position + file_offset, size, dst)) {
         return -1;
     }

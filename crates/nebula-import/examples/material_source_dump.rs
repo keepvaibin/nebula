@@ -23,10 +23,9 @@ fn scan(
         return scan(name, &archive::expand(bytes)?, flags, out, counts);
     }
     if archive::is_archive(bytes) {
-        archive::rebuild(bytes, &mut |member, data| {
-            scan(&format!("{name}/{member}"), &data, flags, out, counts)?;
-            Ok(None)
-        })?;
+        for member in archive::members(bytes)? {
+            scan(&format!("{name}/{}", member.path), &member.bytes, flags, out, counts)?;
+        }
     } else if bytes.starts_with(b"J3D2") {
         if bytes.len() < 32 {
             bail!("short model header");
