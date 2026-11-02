@@ -40,6 +40,7 @@ struct KCLFile {
     s32 mBlockWidthShift;
     s32 mBlockXShift;
     s32 mBlockXYShift;
+    s32 mTriangleNum;
 };
 
 // A .kcl's header as the importer cooks it (host order, crates/nebula-import cook/native_data.rs): the arrays'
