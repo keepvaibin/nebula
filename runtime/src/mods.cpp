@@ -1169,7 +1169,12 @@ static void cook_mod_files(DiscNode& dir, const std::string& path, const std::ui
             continue;
         }
         // NebulaData's files come from the cooker already (main.dol's tables).
-        if (!node.changed || !cook::cooks(node.name) || node_path.starts_with("/NebulaData/")) continue;
+        if (!node.changed || node_path.starts_with("/NebulaData/")) continue;
+        // A compressed file goes to the cooker whatever its name: the game has no decompressor.
+        std::uint8_t magic[4] = {};
+        if (node.size >= sizeof(magic)) VirtualDisc::read_pieces(node, 0, sizeof(magic), magic, partition, partition_size);
+        const bool compressed = magic[0] == 'Y' && magic[1] == 'a' && (magic[2] == 'z' || magic[2] == 'y') && magic[3] == '0';
+        if (!compressed && !cook::cooks(node.name)) continue;
         const bool partial = std::any_of(node.pieces.begin(), node.pieces.end(),
                                          [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; });
         if (partial) {

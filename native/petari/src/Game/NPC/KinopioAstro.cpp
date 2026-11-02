@@ -40,10 +40,6 @@ namespace {
     const char* sSenderID = "WiiMessageTitle";
 };  // namespace
 
-u32 JKRArchive::getExpandedResSize(const void* pResource) const {
-    return getResSize(pResource);
-}
-
 void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
     NPCActorItem item("Kinopio");
 
