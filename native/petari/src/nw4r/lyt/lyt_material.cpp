@@ -588,7 +588,7 @@ namespace nw4r {
                 const TexMap* const pTexMap = GetTexMapAry();
 
                 for (int i = 0; i < mNum.texMap && i < 8; i++) {
-                    GpuTexObj texObj;
+                    J3DNativeTexObj texObj;
                     pTexMap[i].Get(&texObj);
                     void* pImage;
                     u16 width, height;

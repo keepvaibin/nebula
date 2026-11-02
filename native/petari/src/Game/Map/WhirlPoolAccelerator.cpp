@@ -39,7 +39,7 @@ void WhirlPoolAccelerator::init(const JMapInfoIter& rIter) {
     mHeight = 100.0f * mScale.y;
     MR::calcActorAxisY(&mAxis, this);
     initPoints();
-    mTexture = new JUTTexture(MR::loadTexFromArc("Whirlpool.arc", "Whirlpool.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("Whirlpool.arc", "Whirlpool.bti"));
     initSound(4, false);
     mClippingCenter.set(mPosition);
     mClippingCenter.y += mHeight / 2.0f;

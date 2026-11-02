@@ -18,10 +18,10 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     : mBodyTexture(), mFurTexture(), mIndirectTexture(), mNumLayers(numLayers), mLength(3.0f, 1.0f), mIndirect(0.2f, 1.5f), mBrightness(40.0f, 4.5f),
       mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(GPU_CULL_BACK), mMatIntensity(255),
       mAmbIntensity(50), mUseIndirect(1), mZCompLoc(), mZWrite(), mAdditive(), mAlphaRef(32) {
-    mBodyTexture = new JUTTexture(pBody, 0);
+    mBodyTexture = new JUTTexture(pBody);
 
     if (mIndirectTexture) {
-        mIndirectTexture = new JUTTexture(pIndirect, 0);
+        mIndirectTexture = new JUTTexture(pIndirect);
         mUseIndirect = 1;
     } else {
         mUseIndirect = 0;
@@ -34,10 +34,10 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     pImage->mHeight = 32;
     pImage->mWrapS = GPU_REPEAT;
     pImage->mWrapT = GPU_REPEAT;
-    pImage->mPaletteName = GPU_TLUT0;
-    pImage->mPaletteFormat = GPU_TL_IA8;
-    pImage->mPaletteNum = 0;
-    pImage->mPaletteDataOffset = 0;
+    pImage->mCookedPaletteName = 0;
+    pImage->mCookedPaletteFormat = 0;
+    pImage->mCookedPaletteNum = 0;
+    pImage->mCookedPaletteOffset = 0;
     pImage->mMipmap = false;
     pImage->mDoEdgeLod = false;
     pImage->mBiasClamp = false;
@@ -49,7 +49,7 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     pImage->mImageNum = 1;
     pImage->mLodBias = 0;
     pImage->mImageDataOffset = sizeof(ResTIMG);
-    mFurTexture = new JUTTexture(pImage, 0);
+    mFurTexture = new JUTTexture(pImage);
     mUseDensityMap = 0;
     NebulaMtxIdentity(mFurTexMtx);
     NebulaMtxIdentity(mIndirectTexMtx);

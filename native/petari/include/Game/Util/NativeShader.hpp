@@ -7,7 +7,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/JUtility/JUTPalette.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>
@@ -62,7 +61,7 @@ namespace NativeShader {
     }
 
     // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
-    inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const GpuTexObj* pObj) {
+    inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const J3DNativeTexObj* pObj) {
         void* pImage;
         u16 width, height;
         GpuTexFmt format;

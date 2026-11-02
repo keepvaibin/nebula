@@ -26,7 +26,7 @@ extern "C" void Mii_NativeTextureForm(u32 form, NebulaColor8 c0, NebulaColor8 c1
     sTextureC1 = c1;
 }
 
-extern "C" void Mii_NativeTexturePart(const GpuTexObj* pTexture) {
+extern "C" void Mii_NativeTexturePart(const J3DNativeTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_TEXTURE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
@@ -53,7 +53,7 @@ extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GpuDiffuseFn diffuse, 
     sAlphaTest = alphaTest;
 }
 
-extern "C" void Mii_NativePart(u32 form, NebulaColor8 color, GpuCullMode cull, const GpuTexObj* pTexture) {
+extern "C" void Mii_NativePart(u32 form, NebulaColor8 color, GpuCullMode cull, const J3DNativeTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_FACE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        cull == GPU_CULL_FRONT  ? NEBULA_CULL_FRONT

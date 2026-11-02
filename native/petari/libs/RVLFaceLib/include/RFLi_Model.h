@@ -68,10 +68,10 @@ typedef struct Mii_CharModelRes {
     s16 glassesVtxNrm[1 * VTX_COORDS_IN_NRM]; // at 0x8186
     s16 glassesVtxTxc[4 * VTX_COORDS_IN_TXC]; // at 0x818C
 
-    GpuTexObj faceTexObj;    // at 0x819C
-    GpuTexObj capTexObj;     // at 0x81BC
-    GpuTexObj noseTexObj;    // at 0x81DC
-    GpuTexObj glassesTexObj; // at 0x81FC
+    J3DNativeTexObj faceTexObj;    // at 0x819C
+    J3DNativeTexObj capTexObj;     // at 0x81BC
+    J3DNativeTexObj noseTexObj;    // at 0x81DC
+    J3DNativeTexObj glassesTexObj; // at 0x81FC
 
     s16* hairVtxPos;     // at 0x821C
     s16* hairVtxNrm;     // at 0x8220
@@ -131,7 +131,7 @@ typedef struct Mii_CharModel {
     MiiExpression expression;         // at 0x60
     MiiResolution resolution;         // at 0x64
     Mii_CharModelRes* res;            // at 0x68
-    GpuTexObj* maskTexObj[MiiExp_Max]; // at 0x6C
+    J3DNativeTexObj* maskTexObj[MiiExp_Max]; // at 0x6C
 } Mii_CharModel;
 
 extern Mii_CoordinateData coordinateData;
@@ -150,7 +150,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work,
 NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info);
 void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info);
 void Mii_InitShapeRes(Mii_ShapeRes* shape);
-void Mii_InitTexRes(GpuTexObj* texObj, Mii_PartsShpTex part, u16 file,
+void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file,
                     void* buffer) NO_INLINE;
 void Mii_TransformCoordinate(s16* to, const s16* from);
 

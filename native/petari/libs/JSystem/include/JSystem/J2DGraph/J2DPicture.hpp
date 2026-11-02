@@ -5,9 +5,7 @@
 #include "JSystem/JUtility/TColor.hpp"
 
 class J2DMaterial;
-class JUTPalette;
 struct ResTIMG;
-struct ResTLUT;
 
 enum J2DMirror {
     /* 0 */ MIRROR0,  // temp, figure out later
@@ -53,19 +51,13 @@ public:
     }
     virtual void drawSelf(f32, f32);
     virtual void drawSelf(f32, f32, Mtx*);
-    virtual void initiate(ResTIMG const*, ResTLUT const*);
+    virtual void initiate(ResTIMG const*);
     virtual bool prepareTexture(u8);
     virtual bool append(ResTIMG const* param_0, f32 param_1) {
         return insert(param_0, mTextureNum, param_1);
     }
-    virtual bool append(ResTIMG const* param_0, JUTPalette* param_1, f32 param_2) {
-        return insert(param_0, param_1, mTextureNum, param_2);
-    }
     virtual bool append(char const* param_0, f32 param_1) {
         return insert(param_0, mTextureNum, param_1);
-    }
-    virtual bool append(char const* param_0, JUTPalette* param_1, f32 param_2) {
-        return insert(param_0, param_1, mTextureNum, param_2);
     }
     virtual bool append(JUTTexture* param_0, f32 param_1) {
         return insert(param_0, mTextureNum, param_1);
@@ -73,26 +65,14 @@ public:
     virtual void prepend(ResTIMG const* param_0, f32 param_1) {
         insert(param_0, 0, param_1);
     }
-    virtual void prepend(ResTIMG const* param_0, JUTPalette* param_1, f32 param_2) {
-        insert(param_0, param_1, 0, param_2);
-    }
     virtual void prepend(char const* param_0, f32 param_1) {
         insert(param_0, 0, param_1);
-    }
-    virtual void prepend(char const* param_0, JUTPalette* param_1, f32 param_2) {
-        insert(param_0, param_1, 0, param_2);
     }
     virtual void prepend(JUTTexture* param_0, f32 param_1) {
         insert(param_0, 0, param_1);
     }
-    virtual bool insert(ResTIMG const* param_0, u8 param_1, f32 param_2) {
-        return insert(param_0, NULL, param_1, param_2);
-    }
-    virtual bool insert(ResTIMG const*, JUTPalette*, u8, f32);
-    virtual bool insert(char const* param_0, u8 param_1, f32 param_2) {
-        return insert(param_0, NULL, param_1, param_2);
-    }
-    virtual bool insert(char const*, JUTPalette*, u8, f32);
+    virtual bool insert(ResTIMG const*, u8, f32);
+    virtual bool insert(char const*, u8, f32);
     virtual bool insert(JUTTexture*, u8, f32);
     virtual bool remove(u8);
     virtual bool remove() {
@@ -139,8 +119,6 @@ public:
 
     virtual const ResTIMG* changeTexture(ResTIMG const*, u8);
     virtual const ResTIMG* changeTexture(char const*, u8);
-    virtual const ResTIMG* changeTexture(ResTIMG const*, u8, JUTPalette*);
-    virtual const ResTIMG* changeTexture(char const*, u8, JUTPalette*);
     virtual JUTTexture* getTexture(u8 param_0) const {
         if (param_0 < 4) {
             return mTexture[param_0];
@@ -175,7 +153,6 @@ public:
     }
     virtual void drawFullSet(f32, f32, f32, f32, Mtx*);
     virtual void drawTexCoord(f32, f32, f32, f32, s16, s16, s16, s16, s16, s16, s16, s16, Mtx*);
-    virtual u8 getUsableTlut(u8);
     virtual bool isUsed(ResTIMG const*);
     virtual bool isUsed(ResFONT const* param_0) {
         return J2DPane::isUsed(param_0);
@@ -183,13 +160,12 @@ public:
     virtual void rewriteAlpha() {
     }
 
-    J2DPicture(u64, JGeometry::TBox2< f32 > const&, ResTIMG const*, ResTLUT const*);
     J2DPicture(ResTIMG const*);
     J2DPicture(J2DPane*, JSURandomInputStream*, JKRArchive*);
     J2DPicture();
     J2DPicture(J2DPane*, JSURandomInputStream*, J2DMaterial*);
     void private_readStream(J2DPane*, JSURandomInputStream*, JKRArchive*);
-    void private_initiate(ResTIMG const*, ResTLUT const*);
+    void private_initiate(ResTIMG const*);
     void initinfo();
     void setTevMode();
     static void swap(f32&, f32&);
@@ -198,7 +174,6 @@ public:
     void getNewColor(JUtility::TColor*);
     void setTexCoord(JGeometry::TVec2< s16 >*, JUTTexture const*, J2DBinding, J2DMirror, bool);
     void setTexCoord(JUTTexture const*, J2DBinding, J2DMirror, bool);
-    GpuTlut getTlutID(ResTIMG const*, u8);
 
     void setCornerColor(JUtility::TColor c0, JUtility::TColor c1, JUtility::TColor c2, JUtility::TColor c3);
     void setCornerColor(JUtility::TColor c0) {
@@ -213,7 +188,6 @@ protected:
     /* 0x10A */ JGeometry::TVec2< s16 > field_0x10a[4];
     /* 0x11C */ f32 field_0x11c[4];
     /* 0x124 */ f32 field_0x124[4];
-    /* 0x12C */ JUTPalette* mPalette;
     /* 0x130 */ JUtility::TColor mWhite;
     /* 0x134 */ JUtility::TColor mBlack;
     /* 0x138 */ JUtility::TColor mCornerColor[4];

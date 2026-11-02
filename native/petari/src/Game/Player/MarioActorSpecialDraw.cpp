@@ -140,7 +140,7 @@ void MarioActor::writeBackScreenBox() const {
         return;
     }
 
-    GpuTexObj texture;
+    J3DNativeTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
     J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
@@ -483,7 +483,7 @@ void MarioActor::drawSpinInhibit() const {
 }
 
 void MarioActor::drawColdWaterDamage() const {
-    GpuTexObj texture;
+    J3DNativeTexObj texture;
     u16 width = MR::getFrameBufferWidth();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
@@ -544,7 +544,7 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         return;
     }
 
-    GpuTexObj texture;
+    J3DNativeTexObj texture;
     u16 width = MR::getFrameBufferWidth();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);

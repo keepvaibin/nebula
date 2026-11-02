@@ -2,7 +2,6 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
-#include "JSystem/JUtility/JUTPalette.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
 
 JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
@@ -17,10 +16,10 @@ JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
     texBuf->mHeight = height;
     texBuf->mWrapS = GPU_CLAMP;
     texBuf->mWrapT = GPU_CLAMP;
-    texBuf->mPaletteName = GPU_TLUT0;
-    texBuf->mPaletteFormat = GPU_TL_IA8;
-    texBuf->mPaletteNum = 0;
-    texBuf->mPaletteDataOffset = 0;
+    texBuf->mCookedPaletteName = 0;
+    texBuf->mCookedPaletteFormat = 0;
+    texBuf->mCookedPaletteNum = 0;
+    texBuf->mCookedPaletteOffset = 0;
     texBuf->mMipmap = false;
     texBuf->mDoEdgeLod = false;
     texBuf->mBiasClamp = false;
@@ -32,8 +31,7 @@ JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
     texBuf->mImageNum = 1;
     texBuf->mLodBias = 0;
     texBuf->mImageDataOffset = sizeof(ResTIMG);
-    mEmbPalette = nullptr;
-    storeTIMG(texBuf, static_cast< u8 >(0));
+    storeTIMG(texBuf);
     // Black until its first capture or until the game writes it.
     memset(mImage, 0, bufSize);
     J3DNativeTexture::registerImage(mImage, NEBULA_TEXTURE_LINEAR_L8, width, height, 1);
@@ -43,88 +41,15 @@ JUTTexture::~JUTTexture() {
     if (mFlag & 0x1) {
         delete[] _3C;
     }
-
-    if (mFlag & 0x2) {
-        delete mEmbPalette;
-    }
 }
 
-void JUTTexture::storeTIMG(const ResTIMG* pTIMG, u8 a1) {
-    if (pTIMG != nullptr && a1 < 0x10) {
-        mTIMG = pTIMG;
-        mImage = reinterpret_cast< u8* >(const_cast< ResTIMG* >(pTIMG)) + pTIMG->mImageDataOffset;
-        if (pTIMG->mImageDataOffset == 0)
-            mImage = reinterpret_cast< u8* >(const_cast< ResTIMG* >(pTIMG)) + sizeof(ResTIMG);
-
-        mPalette = nullptr;
-        mTlutName = 0;
-        mWrapS = getTexInfo()->mWrapS;
-        mWrapT = getTexInfo()->mWrapT;
-        mMinType = getTexInfo()->mMinType;
-        mMagType = getTexInfo()->mMagType;
-        mMinLod = static_cast< s8 >(getTexInfo()->mMinLod);
-        mMaxLod = static_cast< s8 >(getTexInfo()->mMaxLod);
-        mLodBias = static_cast< s16 >(getTexInfo()->mLodBias);
-
-        if (getTexInfo()->mPaletteNum == 0) {
-            initTexObj();
-            return;
-        }
-
-        s32 lut;
-        if (getTexInfo()->mPaletteNum > 256) {
-            lut = (a1 % 4) + GPU_BIGTLUT0;
-        } else {
-            lut = a1;
-        }
-
-        if (mEmbPalette == nullptr || (mFlag & 2) == 0) {
-            mEmbPalette = new JUTPalette(static_cast< GpuTlut >(lut), static_cast< GpuTlutFmt >(getTexInfo()->mPaletteFormat),
-                                         static_cast< JUTTransparency >(getTexInfo()->mTransparency), getTexInfo()->mPaletteNum,
-                                         reinterpret_cast< u8* >(const_cast< ResTIMG* >(getTexInfo())) + getTexInfo()->mPaletteDataOffset);
-            setEmbPaletteDelFlag(true);
-        } else {
-            mEmbPalette->storeTLUT(static_cast< GpuTlut >(lut), static_cast< GpuTlutFmt >(getTexInfo()->mPaletteFormat),
-                                   static_cast< JUTTransparency >(getTexInfo()->mTransparency), getTexInfo()->mPaletteNum,
-                                   reinterpret_cast< u8* >(const_cast< ResTIMG* >(getTexInfo())) + getTexInfo()->mPaletteDataOffset);
-        }
-        attachPalette(mEmbPalette);
-    }
-}
-
-void JUTTexture::storeTIMG(const ResTIMG* pTIMG, JUTPalette* pPalette) {
-    GpuTlut tlut;
-
-    if (pPalette != nullptr) {
-        tlut = static_cast< GpuTlut >(pPalette->mName);
-    } else {
-        tlut = GPU_TLUT0;
-    }
-
-    storeTIMG(pTIMG, pPalette, tlut);
-}
-
-void JUTTexture::storeTIMG(ResTIMG const* pTIMG, JUTPalette* pPalette, GpuTlut a1) {
+void JUTTexture::storeTIMG(const ResTIMG* pTIMG) {
     if (pTIMG != nullptr) {
         mTIMG = pTIMG;
         mImage = reinterpret_cast< u8* >(const_cast< ResTIMG* >(pTIMG)) + pTIMG->mImageDataOffset;
         if (pTIMG->mImageDataOffset == 0)
             mImage = reinterpret_cast< u8* >(const_cast< ResTIMG* >(pTIMG)) + sizeof(ResTIMG);
 
-        if ((mFlag & 2) != 0) {
-            delete mEmbPalette;
-        }
-        mEmbPalette = pPalette;
-        setEmbPaletteDelFlag(false);
-        mPalette = nullptr;
-        if (pPalette != nullptr) {
-            mTlutName = a1;
-            if (a1 != pPalette->mName) {
-                pPalette->storeTLUT(a1, static_cast< GpuTlutFmt >(pPalette->mFormat), static_cast< JUTTransparency >(pPalette->mTransparency),
-                                    pPalette->mLutNum, pPalette->mColorTable);
-            }
-        }
-
         mWrapS = getTexInfo()->mWrapS;
         mWrapT = getTexInfo()->mWrapT;
         mMinType = getTexInfo()->mMinType;
@@ -132,32 +57,12 @@ void JUTTexture::storeTIMG(ResTIMG const* pTIMG, JUTPalette* pPalette, GpuTlut a
         mMinLod = static_cast< s8 >(getTexInfo()->mMinLod);
         mMaxLod = static_cast< s8 >(getTexInfo()->mMaxLod);
         mLodBias = static_cast< s16 >(getTexInfo()->mLodBias);
-        init();
+        initTexObj();
     }
-}
-
-void JUTTexture::attachPalette(JUTPalette* pPalette) {
-    if (mTIMG->mPaletteName == GPU_TLUT0) {
-        return;
-    }
-
-    if (pPalette == nullptr && mEmbPalette != nullptr) {
-        mPalette = mEmbPalette;
-    } else {
-        mPalette = pPalette;
-    }
-
-    initTexObj(static_cast< GpuTlut >(mPalette->mName));
 }
 
 void JUTTexture::init() {
-    if (mTIMG->mPaletteNum == 0) {
-        initTexObj();
-    } else if (mEmbPalette != nullptr) {
-        mPalette = mEmbPalette;
-
-        initTexObj(static_cast< GpuTlut >(mPalette->mName));
-    }
+    initTexObj();
 }
 
 void JUTTexture::initTexObj() {
@@ -177,29 +82,6 @@ void JUTTexture::initTexObj() {
     }
     J3DNativeTexture::init(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GpuTexFmt >(mTIMG->mFormat), static_cast< GpuTexWrapMode >(mWrapS),
                  static_cast< GpuTexWrapMode >(mWrapT), mipmapEnabled);
-
-    J3DNativeTexture::initLOD(&mObj, static_cast< GpuTexFilter >(mMinType), static_cast< GpuTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
-                    mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GpuAnisotropy >(mTIMG->mMaxAnisotropy));
-}
-
-void JUTTexture::initTexObj(GpuTlut lut) {
-    GpuBool mipmapEnabled;
-    if (mTIMG->mMipmap != 0) {
-        mipmapEnabled = 1;
-    } else {
-        mipmapEnabled = 0;
-    }
-    mTlutName = lut;
-    u8* image = reinterpret_cast< u8* >(const_cast< ResTIMG* >(mTIMG));
-    image += (mTIMG->mImageDataOffset ? (s32)mTIMG->mImageDataOffset : 0x20);
-    // A texture with its own buffer (made at run time: a capture's or target's picture, or texels the game writes and
-    // hands over itself) has nothing to hand over yet; a texture over loaded data hands its record over.
-    if ((mFlag & 0x1) == 0) {
-        J3DNativeTexture::registerImage(image, mTIMG->mFormat, mTIMG->mWidth, mTIMG->mHeight,
-                                        mTIMG->mImageNum != 0 ? mTIMG->mImageNum : 1);
-    }
-    J3DNativeTexture::initCI(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GpuCITexFmt >(mTIMG->mFormat), static_cast< GpuTexWrapMode >(mWrapS),
-                   static_cast< GpuTexWrapMode >(mWrapT), mipmapEnabled, lut);
 
     J3DNativeTexture::initLOD(&mObj, static_cast< GpuTexFilter >(mMinType), static_cast< GpuTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
                     mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GpuAnisotropy >(mTIMG->mMaxAnisotropy));

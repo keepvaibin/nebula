@@ -64,7 +64,7 @@ void SystemWipeHolder::drawGameScreenCapture() const {
     J2DOrthoGraphSimple graph;
     graph.setPort();
 
-    JUTTexture texture(MR::getScreenResTIMG(), 0);
+    JUTTexture texture(MR::getScreenResTIMG());
 
     J2DPicture picture(&texture);
     f32 width = MR::getScreenWidth();

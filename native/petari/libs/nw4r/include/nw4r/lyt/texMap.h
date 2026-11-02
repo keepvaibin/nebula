@@ -23,7 +23,7 @@ namespace nw4r {
                 SetAnisotropy(GPU_ANISO_1);
             }
 
-            TexMap(const GpuTexObj& rTexObj) {
+            TexMap(const J3DNativeTexObj& rTexObj) {
                 Set(rTexObj);
             }
 
@@ -35,8 +35,8 @@ namespace nw4r {
                 mBits.anisotropy = aniso;
             }
 
-            void Get(_GpuTexObj*) const;
-            void Set(const _GpuTexObj&);
+            void Get(J3DNativeTexObj*) const;
+            void Set(const J3DNativeTexObj&);
             // Image `id` of a cooked TPL file (its image a texture record).
             void ReplaceImage(const void* pTplFile, u32 id = 0);
 

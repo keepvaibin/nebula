@@ -23,7 +23,7 @@ void ScreenPreserver::draw() const {
     J2DOrthoGraphSimple ortho;
     ortho.setPort();
 
-    JUTTexture tex(MR::getScreenResTIMG(), static_cast<u8>(0));
+    JUTTexture tex(MR::getScreenResTIMG());
     J2DPicture pic(&tex);
 
     f32 width = MR::getScreenWidth();
