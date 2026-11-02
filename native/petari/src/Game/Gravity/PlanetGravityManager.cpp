@@ -1,7 +1,10 @@
 #include "Game/Gravity.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 PlanetGravityManager::PlanetGravityManager(const char* pName) : NameObj(pName) {
+    mMaxGravities = 128;
+    mGravities = new PlanetGravity*[mMaxGravities];
     mNumGravities = 0;
 }
 
@@ -12,7 +15,7 @@ bool PlanetGravityManager::calcTotalGravityVector(TVec3f* pGravity, GravityInfo*
     TVec3f totalGravity;
     totalGravity.zero();
 
-    PlanetGravity** pGravities = (PlanetGravity**)&mGravities;
+    PlanetGravity** pGravities = mGravities;
     bool hasCalculated = false;
 
     if (pInfo) {
@@ -87,6 +90,11 @@ bool PlanetGravityManager::calcTotalGravityVector(TVec3f* pGravity, GravityInfo*
 
 void PlanetGravityManager::registerGravity(PlanetGravity* pGravity) {
     pGravity->mIsRegistered = true;
+    if (mNumGravities >= mMaxGravities) {
+        mGravities = MR::growArray(mGravities, mMaxGravities);
+        mMaxGravities *= 2;
+    }
+
     int index = mNumGravities++;
     mGravities[index] = pGravity;
 

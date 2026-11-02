@@ -31,6 +31,10 @@ public:
     JPAResourceManager* getResourceManager(u8 res_mgr_id) const {
         return pResMgrAry[res_mgr_id];
     }
+    void addEmitters(u32);
+    void addParticles(u32);
+    void growEmitters();
+    void growParticles();
     int getEmitterNumber() const {
         return emtrNum - mFreeEmtrList.getNumLinks();
     }
@@ -45,4 +49,5 @@ public:
     /* 0x28 */ u32 ptclNum;
     /* 0x2C */ u8 gidMax;
     /* 0x2D */ u8 ridMax;
+    JKRHeap* mHeap;
 };

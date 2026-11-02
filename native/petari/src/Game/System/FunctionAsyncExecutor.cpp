@@ -63,10 +63,9 @@ void FunctionAsyncExecutorOnMainThread::update() {
 }
 
 FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHolders(), _410(nullptr), _414(nullptr) {
-    for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
-        FunctionAsyncExecutorThread* thread = new FunctionAsyncExecutorThread(MR::getStationedHeap());
-        mThreads[i] = thread;
-        GameThreads::resume(thread->mThread);
+    mThreads.init(2);
+    for (s32 i = 0; i < 2; i++) {
+        addThread();
     }
 
     mMainThreadExec = new FunctionAsyncExecutorOnMainThread(GameThreads::current());
@@ -83,7 +82,7 @@ void FunctionAsyncExecutor::update() {
 void FunctionAsyncExecutor::start(const MR::FunctorBase& rFunc, const char* pName) {
     FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, pName);
     FunctionAsyncExecutorThread* thread = getSuspendThread();
-    thread->mQueue.send(info, false);
+    thread->mQueue.send(info, true);
 }
 
 bool FunctionAsyncExecutor::startOnMainThread(const MR::FunctorBase& rFunc, const char* pName) {
@@ -95,7 +94,7 @@ bool FunctionAsyncExecutor::startOnMainThread(const MR::FunctorBase& rFunc, cons
         return false;
     } else {
         FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, pName);
-        mMainThreadExec->mQueue.send(info, false);
+        mMainThreadExec->mQueue.send(info, true);
         return true;
     }
 }
@@ -171,12 +170,20 @@ FunctionAsyncExecInfo* FunctionAsyncExecutor::createAndAddExecInfo(const MR::Fun
     return info;
 }
 
+FunctionAsyncExecutorThread* FunctionAsyncExecutor::addThread() {
+    FunctionAsyncExecutorThread* thread = new FunctionAsyncExecutorThread(MR::getStationedHeap());
+    mThreads.push_back(thread);
+    GameThreads::resume(thread->mThread);
+    return thread;
+}
+
 FunctionAsyncExecutorThread* FunctionAsyncExecutor::getSuspendThread() {
-    for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
+    for (s32 i = 0; i < mThreads.size(); i++) {
         if (!mThreads[i]->mIsSuspended) {
             return mThreads[i];
         }
     }
 
-    return nullptr;
+    // All busy: one more.
+    return addThread();
 }
