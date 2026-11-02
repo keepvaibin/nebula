@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JAudio2/JASAramStream.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
@@ -53,6 +55,6 @@ public:
     /* 0x2BC */ JAISoundStrategy< JAIStream >* soundStrategy;
     /* 0x2C0 */ JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
     /* 0x2C4 */ bool mIsPaused;
-    /* 0x2C5 */ volatile bool mIsStreamStopped;
-    /* 0x2C6 */ volatile bool mIsStreamStarted;
+    /* 0x2C5 */ NebulaAtomic< bool > mIsStreamStopped;
+    /* 0x2C6 */ NebulaAtomic< bool > mIsStreamStarted;
 };

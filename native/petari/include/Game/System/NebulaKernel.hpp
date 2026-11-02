@@ -25,6 +25,18 @@ struct NebulaThreadQueue {
     void wakeup();
 };
 
+// One thread waits until another says so. A signal with nobody waiting is kept for the next wait; each wait takes it.
+struct NebulaEvent {
+    NebulaThreadQueue waiters;
+    bool signalled;
+
+    void init();
+    void wait();
+    void signal();
+    // A thread sits in wait.
+    bool isWaiting() const { return waiters.head != nullptr; }
+};
+
 struct NebulaThreadLink {
     NebulaThread* next;
     NebulaThread* prev;

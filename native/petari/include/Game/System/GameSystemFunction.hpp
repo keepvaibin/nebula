@@ -10,7 +10,7 @@ namespace GameSystemFunction {
     bool isDoneLoadSystemArchive();
     bool tryToLoadSystemArchive();
     void requestChangeArchivePlayer(bool);
-    bool isEndChangeArchivePlayer();
+    void waitEndChangeArchivePlayer();
     void activateScreenPreserver();
     void deactivateScreenPreserver();
     bool isOccurredSystemWarning();

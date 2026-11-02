@@ -168,18 +168,6 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
     return info->mIsEnd;
 }
 
-NebulaThread* FunctionAsyncExecutor::getOSThread(const char* pName) {
-    for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
-        FunctionAsyncExecutorThread* pThread = mThreads[i];
-
-        if (pThread->mIsSuspended && MR::isEqualString(pThread->mName, pName)) {
-            return pThread->mThread;
-        }
-    }
-
-    return nullptr;
-}
-
 FunctionAsyncExecInfo* FunctionAsyncExecutor::createAndAddExecInfo(const MR::FunctorBase& rFunc, int priority, const char* pName) {
     MR::FunctorBase* func = rFunc.clone(_414);
     FunctionAsyncExecInfo* info = new (_410, 0) FunctionAsyncExecInfo(func, priority, pName);

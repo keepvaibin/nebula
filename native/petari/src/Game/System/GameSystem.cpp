@@ -180,22 +180,6 @@ void GameSystem::initAfterStationedResourceLoaded() {
     mSequenceDirector->initAfterResourceLoaded();
 }
 
-void GameSystem::prepareReset() {
-    mStationedArchiveLoader->prepareReset();
-}
-
-inline bool isSystemWaitForReboot(const GameSystem* pGameSystem) {
-    return pGameSystem->isNerve(GET_NERVE(GameSystem, GameSystemWaitForReboot));
-}
-
-inline bool isSystemNormal(const GameSystem* pGameSystem) {
-    return pGameSystem->isNerve(GET_NERVE(GameSystem, GameSystemNormal));
-}
-
-bool GameSystem::isPreparedReset() const {
-    return isSystemWaitForReboot(this) || isSystemNormal(this) || mStationedArchiveLoader->isPreparedReset();
-}
-
 void GameSystem::frameLoop() {
     MainLoopFramework::sManager->beginRender();
     draw();

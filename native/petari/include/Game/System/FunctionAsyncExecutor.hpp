@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/System/GameThread.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include "Game/Util/Array.hpp"
@@ -27,7 +29,7 @@ public:
     /* 0x00 */ MR::FunctorBase* mFunc;
     /* 0x04 */ int mPriority;
     /* 0x08 */ const char* mName;
-    /* 0x0C */ volatile bool mIsEnd;
+    /* 0x0C */ NebulaAtomic< bool > mIsEnd;
     /* 0x10 */ NebulaMessageQueue mQueue;
     /* 0x30 */ void* mMessage;
 };
@@ -63,7 +65,6 @@ public:
     bool startOnMainThread(const MR::FunctorBase&, const char*);
     void waitForEnd(const char*);
     bool isEnd(const char*) const;
-    NebulaThread* getOSThread(const char*);
     FunctionAsyncExecInfo* createAndAddExecInfo(const MR::FunctorBase&, int, const char*);
     FunctionAsyncExecutorThread* getSuspendThread();
 
