@@ -17,8 +17,6 @@ bool DrawBufferHolder::isBufferGroupEmpty(s32 drawBufferType) const {
     return mBufferGroups[drawBufferType].mActiveExecutors.size() == 0;
 }
 
-#pragma push
-#pragma opt_loop_invariants off
 void DrawBufferHolder::initTable(const DrawBufferInitialTable* pInitialTable, s32 numGroups) {
     mBufferGroups.init(numGroups);
 
@@ -45,7 +43,6 @@ void DrawBufferHolder::initTable(const DrawBufferInitialTable* pInitialTable, s3
 
     mTableInitialized = true;
 }
-#pragma pop
 
 void DrawBufferHolder::allocateActorListBuffer() {
     mTableInitialized = false;

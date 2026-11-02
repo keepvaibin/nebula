@@ -227,9 +227,6 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryDisplayList(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
         (MR::MutexHolder< 0 >::sMutex).unlock();
         MR::initEnvelopeAndEnvMapOrProjMapModelData(modelData);
-        if (MR::isUseFur(modelData) || MR::strcasecmp(pName, "MarioShadow.bdl") == 0) {
-            MR::downFracVtx(modelData);
-        }
         // Lists for its materials, made from their MAT3 data as a .bmd model's are (J3DModelLoader skips the file's).
         modelData->newSharedDisplayList(0);
         MotionSignal::modelResource(modelData, pName);

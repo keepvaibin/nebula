@@ -44,10 +44,6 @@ SmallStone::~SmallStone() {
     delete[] mMembers;
 }
 
-#pragma push
-#pragma opt_loop_invariants off
-#pragma opt_propagation off
-#pragma opt_lifetimes off
 inline bool SmallStoneMember::tryPlaceOnGround(const TVec3f& rStart, const TVec3f& rRay) {
     return MR::getFirstPolyOnLineToMap(&mPosition, nullptr, rStart, rRay);
 }
@@ -172,7 +168,6 @@ void SmallStone::initAfterPlacement() {
     getSensor("Range")->mRadius = radius;
     MR::setClippingTypeSphere(this, 2.0f * radius);
 }
-#pragma pop
 
 void SmallStone::control() {
     for (s32 i = 0; i < mMemberCount; i++) {

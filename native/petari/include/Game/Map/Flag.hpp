@@ -77,7 +77,7 @@ public:
     /* 0x10C */ f32 mRandomWindAccelMax;
     /* 0x110 */ f32 mLightColorMin;
     /* 0x114 */ Color8* mColors;
-    // A GX array, in the console's byte order.
+    // Texture coordinates.
     /* 0x118 */ f32* mTexST;
     /* 0x11C */ JUTTexture* mTexture;
     /* 0x120 */ bool mUseAlpha;

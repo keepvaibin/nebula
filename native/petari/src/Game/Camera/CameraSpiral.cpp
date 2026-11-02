@@ -12,8 +12,6 @@ void CameraSpiral::reset() {
     mTimer = 0;
 }
 
-#pragma push
-#pragma opt_propagation off
 
 CameraTargetObj* CameraSpiral::calc() {
     TVec3f watchPoint;
@@ -80,7 +78,6 @@ CameraTargetObj* CameraSpiral::calc() {
 
     return CameraLocalUtil::getTarget(this);
 }
-#pragma pop
 
 CamTranslatorBase* CameraSpiral::createTranslator() {
     return new CamTranslatorSpiral(this);

@@ -8,6 +8,7 @@ pub mod audio_data;
 pub mod dol;
 pub mod formats;
 pub mod material;
+pub mod mesh;
 pub mod native_data;
 pub mod store;
 pub mod texture;

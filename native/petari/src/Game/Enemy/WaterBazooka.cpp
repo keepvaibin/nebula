@@ -695,8 +695,6 @@ void WaterBazooka::startDemoBreakCapsule() {
     setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakWait));
 }
 
-#pragma push
-#pragma opt_propagation off
 bool WaterBazooka::aimAtMario() {
     if (MR::isStageStateScenarioOpeningCamera()) {
         return true;
@@ -731,7 +729,6 @@ bool WaterBazooka::aimAtMario() {
     mBaseMtx.getXDir(side2);
     return side2.angle(aim) * _180_PI <= 2.0f;
 }
-#pragma pop
 
 void WaterBazooka::switchShowOrHide() {
     if (isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakExplosion)) || isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakEnd))) {

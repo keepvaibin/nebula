@@ -2091,8 +2091,6 @@ void MarioActor::calcAnim() {
     updateRasterScroll();
 }
 
-#pragma push
-#pragma opt_propagation off
 void MarioActor::calcAndSetBaseMtx() {
     if (_1C0 == false) {
         _1C1 = true;
@@ -2410,7 +2408,6 @@ void MarioActor::calcAndSetBaseMtx() {
 
     _EA5 = false;
 }
-#pragma pop
 
 void MarioActor::setBlendMtxTimer(u16 a1) {
     if (a1 == 0) {

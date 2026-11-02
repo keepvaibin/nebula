@@ -51,7 +51,7 @@ public:
     /* 0xA90 */ f32 mTexU2;
     /* 0xA94 */ f32 mTexV2;
     /* 0xA98 */ f32 _A98;
-    // Texture coordinate arrays for GX, in the console's byte order.
+    // Texture coordinate arrays.
     /* 0xA9C */ f32* mVtxTex0Array;
     /* 0xAA0 */ f32* mVtxTex1Array;
     /* 0xAA4 */ f32* mVtxTex2Array;

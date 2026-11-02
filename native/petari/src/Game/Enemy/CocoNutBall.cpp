@@ -477,8 +477,6 @@ void CocoNutBall::exeRebound() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void CocoNutBall::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
@@ -517,7 +515,6 @@ void CocoNutBall::exeFreeze() {
         setNerve(GET_NERVE(CocoNutBall, CocoNutBallNrvFreezeRelease));
     }
 }
-#pragma pop
 
 void CocoNutBall::exeFreezeRelease() {
     if (MR::isFirstStep(this)) {

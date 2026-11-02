@@ -932,8 +932,6 @@ void Rock::exeBreak() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void Rock::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
@@ -985,4 +983,3 @@ void Rock::exeFreeze() {
         setNerve(mUnfreezeNerve);
     }
 }
-#pragma pop

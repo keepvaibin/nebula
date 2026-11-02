@@ -1172,8 +1172,6 @@ bool Hanachan::isOwnSensor(HitSensor* pSensor) {
     return false;
 }
 
-#pragma push
-#pragma opt_propagation off
 void Hanachan::setNerveBlow(const TVec3f& rPos) {
     TVec3f dir = *getPosition() - rPos;
     MR::vecKillElement(dir, mGravity, &dir);
@@ -1209,7 +1207,6 @@ void Hanachan::setNerveBlow(const TVec3f& rPos) {
 
     setNerve(GET_NERVE(Hanachan, HanachanNrvHanachanBlow));
 }
-#pragma pop
 
 void Hanachan::applyPlayerHipDropReaction() {
     if (MR::isPlayerHipDropLand()) {

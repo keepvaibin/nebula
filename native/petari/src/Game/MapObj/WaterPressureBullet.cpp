@@ -58,8 +58,6 @@ void WaterPressureBullet::kill() {
     LiveActor::kill();
 }
 
-#pragma push
-#pragma opt_propagation off
 void WaterPressureBullet::control() {
     if (isNotBound() && MR::isStarPointerPointing2POnTriggerButton(this, "\216\343" /* 弱 */, true, false)) {
         kill();
@@ -75,7 +73,6 @@ void WaterPressureBullet::control() {
         MR::turnVecToVecCosOnPlane(&_8C, stack_8, _98, MR::cosDegree(2.5f));
     }
 }
-#pragma pop
 
 void WaterPressureBullet::calcAndSetBaseMtx() {
     TPos3f pos;

@@ -14,14 +14,8 @@
 MainLoopFramework* MainLoopFramework::sManager;
 
 
-namespace {
-    void waitForFrames(u16);
-
-};  // namespace
-
 void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mClearColor = (NebulaColor8){0, 0, 0, 0};
-    mFramesPerStep = 1;
     mUseAlpha = useAlpha;
     mUseVFilter = true;
     mCombinationRatio = 0.0f;
@@ -32,7 +26,8 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
 }
 
 MainLoopFramework::~MainLoopFramework() {
-    waitBlanking(2);
+    NebulaFrameClock::waitFrame();
+    NebulaFrameClock::waitFrame();
 }
 
 MainLoopFramework* MainLoopFramework::createManager(bool useAlpha) {
@@ -60,10 +55,6 @@ void MainLoopFramework::preGX() {
 void MainLoopFramework::endGX() {
 }
 
-void MainLoopFramework::waitForFrame() {
-    ::waitForFrames(mFramesPerStep);
-}
-
 void MainLoopFramework::beginRender() {
     if ((mDoRenderFrame = ++mRenderCounter >= mRenderInterval)) {
         mRenderCounter = 0;
@@ -89,13 +80,6 @@ void MainLoopFramework::endRender() {
 void MainLoopFramework::endFrame() {
     J3DNativeState::endFrame();
 }
-
-void MainLoopFramework::waitBlanking(int tickCount) {
-    while (tickCount-- > 0) {
-        ::waitForFrames(mFramesPerStep);
-    }
-}
-
 
 // The frame cleared to `color` (its alpha when the frame keeps alpha) and the far depth, with the view, matrix and
 // pixel state the frame's first draws start from.
@@ -133,19 +117,3 @@ void MainLoopFramework::setForOSResetSystem() {
         sManager = nullptr;
     }
 }
-
-namespace {
-    // Waits until `frames` frames (at least one) have passed since the last wait ended.
-    void waitForFrames(u16 frames) {
-        static u32 nextCount;
-        static s8 countInitialized;
-        if (!countInitialized) {
-            nextCount = NebulaFrameClock::count();
-            countInitialized = 1;
-        }
-
-        NebulaFrameClock::waitUntil(nextCount);
-        nextCount = NebulaFrameClock::count() + (frames != 0 ? frames : 1);
-    }
-
-};  // namespace

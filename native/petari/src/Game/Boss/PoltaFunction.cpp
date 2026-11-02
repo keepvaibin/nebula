@@ -177,8 +177,6 @@ namespace PoltaFunction {
 
 // this is the only way I could match this
 // TODO fix
-#pragma push
-#pragma opt_propagation off
     bool appearRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count, s32 rockType) {
         PoltaRock* const pRock = pPolta->mRockHolder->getDeadMember();
         if (pRock == nullptr) {
@@ -217,7 +215,6 @@ namespace PoltaFunction {
         pRock->start(pPolta, position, rOffset);
         return true;
     }
-#pragma pop
 
     bool appearWhiteRockCircle(Polta* pPolta, const TVec3f& rCenter, f32 radius, s32 index, s32 count) {
         return appearRockCircle(pPolta, rCenter, radius, index, count, 0);

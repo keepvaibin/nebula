@@ -33,7 +33,7 @@ namespace {
     }
 }  // namespace
 namespace {
-    // A GX array, in the console's byte order.
+    // Texture coordinates.
     f32 gxArray[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
     static f32 sHeightTable[] = {150.0f, 200.0f, 300.0f, 250.0f};
     static TVec3f sDrawVec(1.0f, 0.0f, 0.0f);
@@ -101,10 +101,6 @@ void WaterPlant::initAfterPlacement() {
 }
 
 // TODO remove me
-#pragma push
-#pragma opt_common_subs off
-#pragma opt_prelinearize off
-#pragma opt_rebuildconditionals off
 void WaterPlant::movement() {
     if (mIsSpin) {
         s32 count = 0;
@@ -179,7 +175,6 @@ void WaterPlant::movement() {
         mIsSpin = true;
     }
 }
-#pragma pop
 
 void WaterPlant::draw() const {
     if (!MR::isValidDraw(this)) {
@@ -352,11 +347,8 @@ void WaterPlantDrawInit::updateSwingPos() {
     }
 }
 
-#pragma push
-#pragma opt_propagation off
 void WaterPlantDrawInit::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     sendPlantMaterial(mPlantATex, ::sFogStartZ, ::sFogEndZ);
 }
-#pragma pop

@@ -242,9 +242,6 @@ void Flag::movement() {
     updateFlag();
 }
 
-#pragma push
-#pragma opt_propagation off
-#pragma opt_loop_invariants off
 void Flag::updateFlag() {
     NebulaVecCrossProduct(&mSide, &mUp, &mFront);
     if (MR::isNearZero(mFront)) {
@@ -377,7 +374,6 @@ void Flag::updateFlag() {
         }
     }
 }
-#pragma pop
 
 void Flag::draw() const {
     if (!MR::isValidDraw(this)) {

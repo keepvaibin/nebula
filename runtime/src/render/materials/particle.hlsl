@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// JPA particles (JSystem/JParticle: JPABaseShape::setGX, JPAResource::setPTev/setCTev): the particle texture (0, or 1
+// JPA particles (JSystem/JParticle: JPABaseShape, JPAResource::setPTev/setCTev): the particle texture (0, or 1
 // for child particles; its lookup moved by the indirect texture 2 when the emitter has one) combined with the
 // emitter's prm (register 0) and env (register 1) colours by its colour mode, alpha the texture's by prm's or prm's
 // alone; a second texture (3) multiplied in; the shape's alpha test; fog. The register file follows the game's changes
@@ -21,17 +21,11 @@ struct MaterialConstants {
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
+    // The game made the vertices: coordinate 0 final (with its projection's q in 2), 1 the corner's own; prm and env on them.
     o.color = v.color0;
-    const uint flags = uint(material.params.z);
-    if ((flags & 4u) != 0u) {
-        const float4 p = float4(v.pos, 1.0);
-        o.uv[0] = float4(dot(p, inline_tex_matrices[0]), dot(p, inline_tex_matrices[1]), dot(p, inline_tex_matrices[2]),
-                         1.0);
-    } else {
-        const float4 c = float4(v.uv[0], 1.0, 1.0);
-        o.uv[0] = float4(dot(c, inline_tex_matrices[0]), dot(c, inline_tex_matrices[1]), 1.0, 0.0);
-    }
-    o.uv[1] = float4(v.uv[0], 1.0, 0.0);
+    o.uv[0] = float4(v.uv[0], v.uv[2].x, 1.0);
+    o.uv[1] = float4(v.uv[1], 1.0, 0.0);
+    o.color1 = v.color1;
 }
 
 bool particle_compare(uint op, float a8, float r8) {
@@ -49,7 +43,10 @@ bool particle_compare(uint op, float a8, float r8) {
 
 float4 material_color(NativeVaryings i) {
     const uint flags = uint(material.params.z);
-    float2 uv = i.uv[0].w != 0.0 ? (i.uv[0].z != 0.0 ? i.uv[0].xy / i.uv[0].z : i.uv[0].xy) : i.uv[0].xy;
+    float2 uv = i.uv[0].xy;
+    if ((flags & 4u) != 0u && i.uv[0].z != 0.0) {
+        uv /= i.uv[0].z;
+    }
     if ((flags & 1u) != 0u) {
         // GX's indirect lookup: the indirect texture's alpha, blue, green less 128 by indirect matrix 0, in texels.
         uint w, h;
@@ -58,8 +55,8 @@ float4 material_color(NativeVaryings i) {
         uv += float2(dot(material.ind_mtx[0].xyz, sv), dot(material.ind_mtx[1].xyz, sv)) / float2(w, h);
     }
     const float4 t = (flags & 8u) != 0u ? tex[1].Sample(samp[1], uv) : tex[0].Sample(samp[0], uv);
-    const float3 prm = material.reg[1].rgb;
-    const float3 env = material.reg[2].rgb;
+    const float3 prm = i.color.rgb;
+    const float3 env = i.color1.rgb;
     float3 c;
     switch (uint(material.params.x)) {
     case 0u: c = t.rgb; break;
@@ -70,7 +67,7 @@ float4 material_color(NativeVaryings i) {
     default: c = prm; break;
     }
     c = saturate(c);
-    float a = uint(material.params.y) == 0u ? t.a * material.reg[1].a : material.reg[1].a;
+    float a = uint(material.params.y) == 0u ? t.a * i.color.a : i.color.a;
     if ((flags & 2u) != 0u) {
         const float4 t3 = tex[3].Sample(samp[3], i.uv[1].xy);
         c *= t3.rgb;

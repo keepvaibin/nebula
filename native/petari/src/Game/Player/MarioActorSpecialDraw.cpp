@@ -446,8 +446,6 @@ namespace {
     }
 };  // namespace
 
-#pragma push
-#pragma global_optimizer off
 void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f32 unused) const {
     f32 radius = 100.0f;
     NebulaNativeMaterial material;
@@ -480,7 +478,6 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
         NebulaMtxMultVecSR(rotation, &tangent, &tangent);
     }
 }
-#pragma pop
 
 void MarioActor::drawSpinInhibit() const {
 }

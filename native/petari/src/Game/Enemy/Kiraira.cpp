@@ -311,8 +311,6 @@ void Kiraira::closeEyes() {
     mEyesOpen = false;
 }
 
-#pragma push
-#pragma opt_propagation off
 void Kiraira::drift() {
     if (mIsRail) {
         bool dead, alive;
@@ -339,7 +337,6 @@ void Kiraira::drift() {
 
     _A8++;
 }
-#pragma pop
 
 void Kiraira::driftOnRail() {
     MR::moveCoordAndFollowTrans(this, mRailCoordSpeed);

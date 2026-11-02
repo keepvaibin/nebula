@@ -408,8 +408,6 @@ void Sandstorm::initTrapModel() {
     }
 }
 
-#pragma push
-#pragma optimization_level 3
 void Sandstorm::updateBindActorMtx() {
     f32 dVar9;
     TVec3f* pPosition;
@@ -450,7 +448,6 @@ void Sandstorm::updateBindActorMtx() {
     mtx.setTrans(mBindActor->mPosition);
     MR::setBaseTRMtx(mBindActor, mtx);
 }
-#pragma pop
 
 void Sandstorm::endBind() {
     MR::tryRumblePadStrong(this, 0);

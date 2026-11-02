@@ -223,8 +223,6 @@ void StarPieceGroup::placementAllPiece() {
     placementPieceOnRail();
 }
 
-#pragma push
-#pragma opt_propagation off
 void StarPieceGroup::placementPieceOnCircle() {
     if (mNumPieces == 1) {
         mPieces[0]->mPosition.set(mPosition);
@@ -251,7 +249,6 @@ void StarPieceGroup::placementPieceOnCircle() {
 
     MR::setClippingTypeSphere(this, mCircleRadius);
 }
-#pragma pop
 
 void StarPieceGroup::placementPieceOnRail() {
     f32 railLength = MR::getRailTotalLength(this);
