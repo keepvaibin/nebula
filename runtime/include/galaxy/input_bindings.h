@@ -77,6 +77,7 @@ enum class SourceKind : std::uint8_t {
     Button = 3,        // code: unified pad button bit index (pad::k*Bit)
     AxisPositive = 4,  // code: PadAxis
     AxisNegative = 5,  // code: PadAxis (sticks only)
+    KeyPosition = 6,   // code: letter at this physical position on a US keyboard (A..Z)
 };
 
 enum class MouseButton : std::uint8_t { Left, Right, Middle, X1, X2 };
@@ -161,6 +162,7 @@ struct PadSample {
 // Keyboard levels for all 256 virtual keys plus mouse buttons.
 struct KeyboardMouseLevels {
     std::array<std::uint64_t, 4> keys{};
+    std::uint32_t letter_positions = 0;
     std::uint8_t mouse = 0;  // bit per MouseButton
     void set_key(std::uint8_t vk, bool down) noexcept {
         const std::uint64_t mask = std::uint64_t{1} << (vk & 63u);
@@ -168,6 +170,14 @@ struct KeyboardMouseLevels {
     }
     [[nodiscard]] bool key(std::uint8_t vk) const noexcept {
         return ((keys[vk >> 6u] >> (vk & 63u)) & 1u) != 0u;
+    }
+    void set_position(std::uint8_t letter, bool down) noexcept {
+        if (letter < 'A' || letter > 'Z') return;
+        const auto mask = std::uint32_t{1} << (letter - 'A');
+        if (down) letter_positions |= mask; else letter_positions &= ~mask;
+    }
+    [[nodiscard]] bool position(std::uint8_t letter) const noexcept {
+        return letter >= 'A' && letter <= 'Z' && ((letter_positions >> (letter - 'A')) & 1u) != 0u;
     }
     [[nodiscard]] bool mouse_button(MouseButton b) const noexcept {
         return ((mouse >> static_cast<unsigned>(b)) & 1u) != 0u;
@@ -265,7 +275,7 @@ struct ControlsConfig {
 [[nodiscard]] BindingTable version3_binding_table(ControlScheme scheme);
 [[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
 // runtime_settings.ini `controls_version`; files without it are version 1.
-inline constexpr unsigned kControlsVersion = 5;
+inline constexpr unsigned kControlsVersion = 6;
 // Version 3 still-pointer defaults (pads), replaced in version 4.
 inline constexpr float kVersion3PointerHideSeconds = 4.0f;
 inline constexpr float kVersion3PointerHideRadius = 0.03f;
@@ -365,6 +375,7 @@ struct KeyList {
     std::size_t count = 0;
 };
 [[nodiscard]] KeyList referenced_keys(const BindingTable& table) noexcept;
+[[nodiscard]] KeyList referenced_key_positions(const BindingTable& table) noexcept;
 
 // The overlay chord/navigation word (native_settings_pad.h, XInput layout) for
 // a unified button mask. Nintendo controllers swap the face buttons so their
