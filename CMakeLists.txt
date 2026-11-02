@@ -470,6 +470,8 @@ galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS ga
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
 galaxy_test(galaxy_cooked_material_tests SOURCES native/tests/cooked_material_tests.cpp)
 target_include_directories(galaxy_cooked_material_tests PRIVATE native/include)
+galaxy_test(galaxy_save_format_tests SOURCES ${rt}/save_format_tests.cpp)
+target_include_directories(galaxy_save_format_tests PRIVATE native/petari/include)
 galaxy_test(galaxy_disc_files_tests SOURCES ${rt}/disc_files_tests.cpp LIBS galaxy_disc_files)
 # The game's calendar (native/petari), compiled against a host the test provides.
 galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp

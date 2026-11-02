@@ -1,4 +1,6 @@
 #include "Game/System/SaveDataHandler.hpp"
+#include "Game/System/SaveFileFormat.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/SaveDataFileAccessor.hpp"
@@ -60,20 +62,27 @@ void SaveDataHandler::requestLoadSaveData() {
 }
 
 bool SaveDataHandler::requestVerifyAfterLoadGameDataFile() {
-    // Version 2 is the console's byte order: its header reads 00 00 00 02.
-    const bool consoleOrder = _14[4] == 0 && _14[7] == 2;
+    // Wii saves are big-endian version 2; Switch saves are little-endian version 2, laid out as Nebula's version 3.
+    NebulaSaveFormat::Header header;
+    const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(_14, _C, header);
+    if (error != NebulaSaveFormat::Error::None) {
+        JUTNativeLog("save: %s\n", NebulaSaveFormat::message(error));
+        return false;
+    }
+    const bool consoleOrder = header.format == NebulaSaveFormat::Format::Wii2;
     gSaveConsoleOrder = consoleOrder;
+    JUTNativeLog("save: read a %s save\n", consoleOrder ? "Wii" : header.format == NebulaSaveFormat::Format::Switch2 ? "Switch" : "Nebula");
 
     SaveDataFileAccessor file(_14);
-    const bool correct = isCorrectFileHeader(_14) && _C == NebulaAlignUp32(file.getFileSize()) &&
-                         file.getCheckSum() == MR::calcCheckSum(_14 + sizeof(u32), file.getFileSize() - sizeof(u32));
-    if (!correct) {
+    if (!isCorrectFileHeader(_14)) {
         gSaveConsoleOrder = false;
         return false;
     }
 
     if (consoleOrder) {
         convertFileHeader(_14);
+    } else {
+        file.setVersion(cSaveFileVersion);
     }
 
     copySaveDataEachFile(_18, _14);
@@ -341,10 +350,6 @@ void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const SysConfigFi
 
 bool SaveDataHandler::isCorrectFileHeader(const u8* pBuffer) {
     const SaveDataFileAccessor file(const_cast< u8* >(pBuffer));
-
-    if (file.getVersion() != (gSaveConsoleOrder ? 2u : cSaveFileVersion)) {
-        return false;
-    }
 
     if (file.getFileSize() >= 0x10000) {
         return false;
