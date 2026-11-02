@@ -20,39 +20,35 @@ constexpr std::size_t kMaxCosmeticArchiveSize = 64u * 1024u * 1024u;
     return offset <= data.size() && count <= data.size() - offset;
 }
 
-[[nodiscard]] std::uint32_t read_be32(
-    std::span<const std::byte> data, std::size_t offset) noexcept {
-    if (!contains_bytes(data, offset, 4)) {
-        return 0;
+// Cooked files are in host order (crates/nebula-import/src/cook/native_data.rs).
+[[nodiscard]] std::uint32_t read32(std::span<const std::byte> data, std::size_t offset) noexcept {
+    std::uint32_t value = 0;
+    if (contains_bytes(data, offset, 4)) {
+        std::memcpy(&value, data.data() + offset, 4);
     }
-    return (static_cast<std::uint32_t>(data[offset]) << 24) |
-        (static_cast<std::uint32_t>(data[offset + 1]) << 16) |
-        (static_cast<std::uint32_t>(data[offset + 2]) << 8) |
-        static_cast<std::uint32_t>(data[offset + 3]);
+    return value;
 }
 
-[[nodiscard]] std::uint16_t read_be16(
-    std::span<const std::byte> data, std::size_t offset) noexcept {
-    if (!contains_bytes(data, offset, 2)) {
-        return 0;
+[[nodiscard]] std::uint16_t read16(std::span<const std::byte> data, std::size_t offset) noexcept {
+    std::uint16_t value = 0;
+    if (contains_bytes(data, offset, 2)) {
+        std::memcpy(&value, data.data() + offset, 2);
     }
-    return static_cast<std::uint16_t>(
-        (static_cast<std::uint32_t>(data[offset]) << 8) |
-        static_cast<std::uint32_t>(data[offset + 1]));
+    return value;
 }
 
 }  // namespace
 
 std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
     std::vector<RarcFile> result;
-    if (data.size() < 0x40 || std::memcmp(data.data(), "RARC", 4) != 0) {
+    if (data.size() < 0x40 || read32(data, 0) != 0x52415243u /* 'RARC' as a host number: "CRAR" on little-endian */) {
         return result;
     }
-    const std::size_t file_data_off = static_cast<std::size_t>(read_be32(data, 0x0C)) + 0x20u;
-    const std::uint32_t num_nodes = read_be32(data, 0x20);
-    const std::size_t node_off = static_cast<std::size_t>(read_be32(data, 0x24)) + 0x20u;
-    const std::size_t entry_off = static_cast<std::size_t>(read_be32(data, 0x2C)) + 0x20u;
-    const std::size_t string_off = static_cast<std::size_t>(read_be32(data, 0x34)) + 0x20u;
+    const std::size_t file_data_off = static_cast<std::size_t>(read32(data, 0x0C)) + 0x20u;
+    const std::uint32_t num_nodes = read32(data, 0x20);
+    const std::size_t node_off = static_cast<std::size_t>(read32(data, 0x24)) + 0x20u;
+    const std::size_t entry_off = static_cast<std::size_t>(read32(data, 0x2C)) + 0x20u;
+    const std::size_t string_off = static_cast<std::size_t>(read32(data, 0x34)) + 0x20u;
 
     // Header counts come from file data; bound them before looping.
     if (num_nodes > 4096u ||
@@ -62,8 +58,8 @@ std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
     for (std::uint32_t n = 0; n < num_nodes; ++n) {
         const std::size_t base =
             static_cast<std::size_t>(node_off) + n * 0x10u;
-        const std::uint16_t entry_count = read_be16(data, base + 0x0A);
-        const std::uint32_t first_entry_idx = read_be32(data, base + 0x0C);
+        const std::uint16_t entry_count = read16(data, base + 0x0A);
+        const std::uint32_t first_entry_idx = read32(data, base + 0x0C);
         if (entry_count > 8192u) {
             continue;
         }
@@ -73,12 +69,12 @@ std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
             if (!contains_bytes(data, ebase, 0x14u)) {
                 continue;
             }
-            const std::uint32_t type_and_name_off = read_be32(data, ebase + 4);
+            const std::uint32_t type_and_name_off = read32(data, ebase + 4);
             // Bit 17 of the (type << 16 | nameOffset) word marks a directory.
             const bool is_dir = (type_and_name_off & 0x00020000u) != 0u;
             const std::uint32_t name_off = type_and_name_off & 0xFFFFu;
-            const std::uint32_t data_off = read_be32(data, ebase + 8);
-            const std::uint32_t data_size = read_be32(data, ebase + 12);
+            const std::uint32_t data_off = read32(data, ebase + 8);
+            const std::uint32_t data_size = read32(data, ebase + 12);
 
             const std::size_t name_start =
                 static_cast<std::size_t>(string_off) + name_off;
@@ -123,22 +119,22 @@ std::optional<std::span<const std::byte>> rarc_find_file(
 }
 
 std::optional<DecodedTexture> tpl_texture(std::span<const std::byte> data) noexcept try {
-    if (data.size() < 12 || read_be32(data, 0) != 0x0020AF30u) {
+    if (data.size() < 12 || read32(data, 0) != 0x0020AF30u) {
         return std::nullopt;
     }
-    const std::uint32_t num_images = read_be32(data, 4);
-    const std::size_t table_off = read_be32(data, 8);
+    const std::uint32_t num_images = read32(data, 4);
+    const std::size_t table_off = read32(data, 8);
     if (num_images == 0 || num_images > (data.size() / 8u) ||
         !contains_bytes(data, table_off, static_cast<std::size_t>(num_images) * 8u)) {
         return std::nullopt;
     }
-    const std::size_t header_off = read_be32(data, table_off);
+    const std::size_t header_off = read32(data, table_off);
     if (header_off == 0 || !contains_bytes(data, header_off, 36u)) {
         return std::nullopt;
     }
-    const std::uint16_t height = read_be16(data, header_off);
-    const std::uint16_t width = read_be16(data, header_off + 2);
-    const std::size_t data_off = read_be32(data, header_off + 8);
+    const std::uint16_t height = read16(data, header_off);
+    const std::uint16_t width = read16(data, header_off + 2);
+    const std::size_t data_off = read32(data, header_off + 8);
     if (!contains_bytes(data, data_off, NEBULA_TEXTURE_HEADER)) {
         return std::nullopt;
     }

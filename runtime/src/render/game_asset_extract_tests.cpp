@@ -23,13 +23,13 @@ void require(bool condition, const char* message) {
 }
 
 void put16(Bytes& bytes, std::size_t offset, unsigned value) {
-    bytes.at(offset) = static_cast<std::byte>((value >> 8) & 255u);
-    bytes.at(offset + 1) = static_cast<std::byte>(value & 255u);
+    bytes.at(offset) = static_cast<std::byte>(value & 255u);
+    bytes.at(offset + 1) = static_cast<std::byte>((value >> 8) & 255u);
 }
 
 void put32(Bytes& bytes, std::size_t offset, std::uint32_t value) {
-    put16(bytes, offset, value >> 16);
-    put16(bytes, offset + 2, value & 65535u);
+    put16(bytes, offset, value & 65535u);
+    put16(bytes, offset + 2, value >> 16);
 }
 
 // A cooked TPL: one image whose data is a texture record of `layout` holding `texels` (the level's bytes).
@@ -93,8 +93,7 @@ void test_malformed_tpl() {
 
 Bytes archive(const Bytes& texture) {
     Bytes bytes(0x80 + texture.size());
-    bytes[0] = std::byte{'R'}; bytes[1] = std::byte{'A'};
-    bytes[2] = std::byte{'R'}; bytes[3] = std::byte{'C'};
+    put32(bytes, 0, 0x52415243u); // 'RARC', a host number when cooked.
     put32(bytes, 0x0C, 0x60); // File data at 0x80, relative to 0x20.
     put32(bytes, 0x20, 1);
     put32(bytes, 0x24, 0x20); // Node at 0x40.
