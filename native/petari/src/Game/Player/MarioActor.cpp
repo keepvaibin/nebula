@@ -392,7 +392,7 @@ void MarioActor::init2(const TVec3f& rA, const TVec3f& rB, s32 initialAnimation)
     _1D1 = 0;
     _A24 = 0;
     _A25 = 0;
-    _1D8 = new (0x20) FBO[MR::getFrameBufferWidth()];
+    _1D8 = new (0x20) FBO[MR::getCanvasWidth()];
     _1E4 = 0.0f;
     _1E8 = 0;
     _1EC = 0.0f;
@@ -2850,8 +2850,8 @@ bool MarioActor::binderFilter(const Triangle* pTriangle) {
 }
 
 namespace MR {
-    s32 getFrameBufferWidth() {
-        return NebulaFrameClock::cFrameWidth;
+    s32 getCanvasWidth() {
+        return NebulaFrameClock::cCanvasWidth;
     }
 };  // namespace MR
 

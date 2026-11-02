@@ -69,7 +69,7 @@ void SystemWipeHolder::drawGameScreenCapture() const {
     J2DPicture picture(&texture);
     f32 width = MR::getScreenWidth();
     // inlined MR::getscreenHeight
-    f32 height = (s32)NebulaFrameClock::cFrameHeight;
+    f32 height = (s32)NebulaFrameClock::cCanvasHeight;
 
     picture.draw(0.0f, 0.0f, width, height, false, false, false);
 }

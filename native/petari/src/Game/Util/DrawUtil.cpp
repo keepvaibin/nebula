@@ -70,7 +70,7 @@ namespace MR {
     }
 
     void setDefaultViewportAndScissor() {
-        s32 width = MR::getFrameBufferWidth();
+        s32 width = MR::getCanvasWidth();
         s32 height = ::getScreenHeightInline();
         J3DNativeView::setViewport(0.0f, 0.0f, width, height, 0.0f, 1.0f);
         J3DNativeView::setScissor(0, 0, width, height);
@@ -102,8 +102,8 @@ namespace MR {
 
     // The frame's depth cleared to far, with the view, matrix and pixel state the next draws start from.
     void clearZBuffer() {
-        u16 width = NebulaFrameClock::cFrameWidth;
-        u16 height = NebulaFrameClock::cFrameHeight;
+        u16 width = NebulaFrameClock::cCanvasWidth;
+        u16 height = NebulaFrameClock::cCanvasHeight;
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
@@ -122,8 +122,8 @@ namespace MR {
     }
 
     void clearAlphaBuffer(u8 alpha) {
-        f32 height = NebulaFrameClock::cFrameHeight;
-        f32 width = NebulaFrameClock::cFrameWidth;
+        f32 height = NebulaFrameClock::cCanvasHeight;
+        f32 width = NebulaFrameClock::cCanvasWidth;
         clearAlphaBuffer(alpha, TVec2f(0.0f, 0.0f), TVec2f(width, height));
     }
 
@@ -131,7 +131,7 @@ namespace MR {
         u16 width = (s32)(rSize.x);
         u16 height = (s32)(rSize.y);
         Mtx44 projection;
-        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getFrameBufferWidth(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getCanvasWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
         J3DNativeState::setCurrentMtx(GPU_PNMTX0);
         Mtx matrix;
@@ -167,7 +167,7 @@ namespace MR {
         J3DNativeShape::setPosition(0, mtxImm);
         J3DNativeState::setCurrentMtx(GPU_PNMTX0);
         Mtx44 projMtx;
-        NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getFrameBufferWidth(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getCanvasWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
         // runtime/src/render/materials/flat_color.hlsl in the colour, depth off, no culling; the blending and writes
         // the drawing state has (its callers set them).
@@ -199,7 +199,7 @@ namespace MR {
 
     void fillScreen(const NebulaColor8& color) {
         fillScreenSetup(color);
-        u16 width = getFrameBufferWidth();
+        u16 width = getCanvasWidth();
         u16 height = getScreenHeight();
         fillScreenArea(TVec2s(0, 0), TVec2s(width, height));
     }
@@ -349,7 +349,7 @@ namespace MR {
     }
 };  // namespace MR
 
-J2DOrthoGraphSimple::J2DOrthoGraphSimple() : J2DOrthoGraph(0.0f, 0.0f, MR::getFrameBufferWidth(), ::getScreenHeightInline(), -30000.0f, 30000.0f) {
+J2DOrthoGraphSimple::J2DOrthoGraphSimple() : J2DOrthoGraph(0.0f, 0.0f, MR::getCanvasWidth(), ::getScreenHeightInline(), -30000.0f, 30000.0f) {
     TBox2f bounds(0.0f, 0.0f, MR::getScreenWidth(), MR::getScreenHeight());
     setOrtho(0.0f, 0.0f, bounds.getWidth(), bounds.getHeight(), -30000.0f, 30000.0f);
 }

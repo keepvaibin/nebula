@@ -7,7 +7,7 @@
 struct ResTIMG;
 
 namespace MR {
-    u32 getViWidth();
+    u32 getPictureSpan();
     f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
     // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
@@ -20,17 +20,17 @@ namespace MR {
     void beginWiiScreenWidth();
     void endWiiScreenWidth();
     inline s32 getScreenHeight() NO_INLINE {
-        return NebulaFrameClock::cFrameHeight;
+        return NebulaFrameClock::cCanvasHeight;
     }
     s32 getSafetyFrameWidth();
     s32 getSafetyFrameLeft();
     s32 getSafetyFrameRight();
-    s32 getFrameBufferWidth() NO_INLINE;
-    inline s32 getFrameBufferHeight() NO_INLINE {
-        return NebulaFrameClock::cFrameHeight;
+    s32 getCanvasWidth() NO_INLINE;
+    inline s32 getCanvasHeight() NO_INLINE {
+        return NebulaFrameClock::cCanvasHeight;
     }
-    void convertFrameBufferPosToScreenPos(TVec2f*, const TVec2f&);
-    void convertScreenPosToFrameBufferPos(TVec2f*, const TVec2f&);
+    void convertCanvasPosToScreenPos(TVec2f*, const TVec2f&);
+    void convertScreenPosToCanvasPos(TVec2f*, const TVec2f&);
     void startToCaptureScreen(const char*);
     void endToCaptureScreen(const char*);
     void captureScreenIfAllow(const char*);

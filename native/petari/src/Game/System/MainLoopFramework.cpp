@@ -72,8 +72,8 @@ void MainLoopFramework::endRender() {
             mPreRenderCallback();
         }
         prepareCopyDisp();
-        J3DNativeState::showFrame(NebulaFrameClock::cFrameWidth,
-                                  NebulaFrameClock::cFrameHeight, mUseVFilter);
+        J3DNativeState::showFrame(NebulaFrameClock::cCanvasWidth,
+                                  NebulaFrameClock::cCanvasHeight, mUseVFilter);
     }
 }
 
@@ -84,8 +84,8 @@ void MainLoopFramework::endFrame() {
 // The frame cleared to `color` (its alpha when the frame keeps alpha) and the far depth, with the view, matrix and
 // pixel state the frame's first draws start from.
 void MainLoopFramework::clearEfb(NebulaColor8 color) {
-    u16 fbWidth = NebulaFrameClock::cFrameWidth;
-    u16 efbHeight = NebulaFrameClock::cFrameHeight;
+    u16 fbWidth = NebulaFrameClock::cCanvasWidth;
+    u16 efbHeight = NebulaFrameClock::cCanvasHeight;
     Mtx44 proj;
     NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
     J3DNativeView::setProjection(proj, GPU_ORTHOGRAPHIC);

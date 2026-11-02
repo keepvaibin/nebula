@@ -478,7 +478,7 @@ namespace TDDraw {
         w = pProjection[5] / (pProjection[6] - projectedZ);
         f32 x;
         if (MR::isScreen16Per9()) {
-            x = ((rScreen.x * MR::getFrameBufferWidth() / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
+            x = ((rScreen.x * MR::getCanvasWidth() / MR::getScreenWidth() - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
         } else {
             x = ((rScreen.x - (pViewport[0] + pViewport[2] / 2.0f)) / w) / (pViewport[2] / 2.0f);
         }
@@ -518,7 +518,7 @@ namespace TDDraw {
         pDest->y = -clipY * viewport[3] / 2 * invW + viewport[1] + viewport[3] / 2;
         pDest->z = clipZ * (viewport[5] - viewport[4]) * invW + viewport[5];
         if (MR::isScreen16Per9()) {
-            pDest->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getFrameBufferWidth();
+            pDest->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getCanvasWidth();
         }
     }
 
@@ -531,7 +531,7 @@ namespace TDDraw {
 
     void fix2Dpos(TVec3f* pPosition) {
         if (MR::isScreen16Per9()) {
-            pPosition->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getFrameBufferWidth();
+            pPosition->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getCanvasWidth();
         }
     }
 
