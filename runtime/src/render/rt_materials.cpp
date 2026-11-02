@@ -419,23 +419,6 @@ const RtMaterial* RtMaterialTable::material(std::uint16_t index) const noexcept 
     return index != 0u && index <= materials_.size() ? &materials_[index - 1u] : nullptr;
 }
 
-float RtMaterialTable::model_light(std::string_view model) const {
-    const auto it = model_rows_.find(lower(std::string(model)));
-    if (it == model_rows_.end()) {
-        return 0.0f;
-    }
-    float light = 0.0f;
-    for (const std::uint16_t index : it->second) {
-        const RtMaterial* const m = material(index);
-        // As the physical emitters take it (rt_lighting.hlsl EmitTriangleCS): its colour, at most white, times the
-        // table's intensity where that passes 1.
-        if (m != nullptr && m->emission != RtEmission::None && !m->no_light && !m->hide) {
-            light = std::max(light, std::max(m->intensity, 1.0f));
-        }
-    }
-    return light;
-}
-
 std::vector<std::pair<std::uint16_t, const RtMaterial*>> RtMaterialTable::stage_materials(
     std::string_view stage) const {
     std::vector<std::pair<std::uint16_t, const RtMaterial*>> out;

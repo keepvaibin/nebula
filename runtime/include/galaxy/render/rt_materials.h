@@ -148,10 +148,6 @@ public:
     // elsewhere stays water). Per material index, its stage material.
     [[nodiscard]] std::vector<std::pair<std::uint16_t, const RtMaterial*>> stage_materials(
         std::string_view stage) const;
-    // The radiance (relative to a white surface under the stage's full light) of the brightest light source among
-    // the textures whose rows name `model` in their object column ("Model/texture", or models apart by spaces),
-    // case-insensitive; 0: the model has none.
-    [[nodiscard]] float model_light(std::string_view model) const;
     // A row with a `material` ("Model/material": the model's resource name and J3D's material name, models apart by
     // spaces) names those models' material alone (MotionSignal::drawMaterial's identity): its texture's material with
     // that row on top (the Observatory's white star lamps, not every white plastic its texture is on). 0: none.

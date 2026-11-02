@@ -891,11 +891,6 @@ void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept
     } catch (...) { /* observational text must not unwind rendering */ }
 }
 
-bool RenderCore::subframes_shown() const {
-    // The renderer's mode, not the chunk's copy of it: a present between chunks follows a change at once.
-    return renderer_.interpolation_mode() && std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_}) > 0u;
-}
-
 void RenderCore::record_presented_display_copy(
     const DisplayTexture& texture) noexcept {
     galaxy::timeline::record(galaxy::timeline::Event::DisplayPresented, texture.slot,
@@ -1797,26 +1792,6 @@ void RenderCore::cancel_screen_frame() {
     screen_frame_open_ = false;
 }
 
-// The recording scene's projection as the ray tracer took its view (scene_depth_view, before the jitter): its
-// sub-frames rebuild their own from it and the scene before's.
-void RenderCore::note_interp_rt_projection() {
-    if (!interp_recording_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u) {
-        return;
-    }
-    InterpScene& scene = interp_scenes_[interp_scene_];
-    if (!scene.valid) {
-        return;
-    }
-    for (unsigned i = 0; i < 6u; ++i) {
-        scene.rt_projection[i] = draw_state_.projection[i];
-    }
-    const FrameMap& map = renderer_.frame_map();
-    scene.rt_viewport[0] = std::fabs(draw_state_.viewport[2]) * map.sx;
-    scene.rt_viewport[1] = std::fabs(draw_state_.viewport[3]) * map.sy;
-    scene.rt_projection_known = true;
-}
-
 RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     const auto projection = [this](unsigned i) {
         return draw_state_.projection[i];
@@ -1844,29 +1819,6 @@ RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     view.min_depth = viewport.min_depth;
     view.max_depth = viewport.max_depth;
     return view;
-}
-
-// The first perspective scene draw with depth since the scene began or the game last cleared its depth
-// (MR::clearZBuffer draws through a flattened viewport after the sky and air layers, which may project otherwise).
-void RenderCore::note_scene_ao_view(const DrawCall& call) {
-    if (ao_scene_applied_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u || !call.has_viewport) {
-        return;
-    }
-    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.frame_map());
-    if (!viewport.valid()) {
-        return;
-    }
-    if (viewport.max_depth - viewport.min_depth < 0.5f) {
-        if ((render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
-            ao_view_set_ = false;
-        }
-        return;
-    }
-    if (!ao_view_set_) {
-        renderer_.set_scene_ao_view(scene_depth_view(viewport));
-        ao_view_set_ = true;
-    }
 }
 
 void RenderCore::apply_scene_ao() {
@@ -4550,14 +4502,6 @@ bool RenderCore::curved_draw(std::uint8_t vtxfmt) const {
     return record_inputs_ != nullptr && record_inputs_->curved != nullptr && record_inputs_->curved->bends;
 }
 
-bool RenderCore::draw_positions_indexed() const noexcept {
-    if (record_inputs_ != nullptr) {
-        return !record_inputs_->own_positions;
-    }
-    // An immediate draw's positions are its own.
-    return false;
-}
-
 namespace {
 
 
@@ -6065,12 +6009,6 @@ void RenderCore::load_light(const state::Op& op) {
     } else {
         matrices_.set_light_position(n, first, second);
     }
-}
-
-void RenderCore::on_invalidate_vertex_cache() {
-    flush_pending_draw_batch();
-    // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
-    // vertices are already invalidated by guest writes and checked byte for byte before each hit.
 }
 
 void boot_step(const char* step) noexcept {

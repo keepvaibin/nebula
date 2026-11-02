@@ -56,7 +56,6 @@ struct ZMode {
 struct BlendMode {
     bool blend_enable;
     bool logic_op_enable;
-    bool dither;
     bool color_update;
     bool alpha_update;
     BlendFactor dst_factor;
@@ -149,10 +148,10 @@ struct ChannelControl {
 // Compile-time checks of the helpers above.
 namespace bitfield_checks {
 
-// Blends as typed values: enable, logic op, dither, colour and alpha update, destination and source factors, subtract,
+// Blends as typed values: enable, logic op, colour and alpha update, destination and source factors, subtract,
 // logic mode, constant alpha.
 constexpr BlendMode blend_of(bool blend, bool logic, BlendFactor dst, BlendFactor src, bool subtract, std::uint8_t mode) {
-    return BlendMode{blend, logic, false, true, false, dst, src, subtract, mode, false, 0u};
+    return BlendMode{blend, logic, true, false, dst, src, subtract, mode, false, 0u};
 }
 constexpr auto kBlend = blend_of(true, false, BlendFactor::InvSrcAlpha, BlendFactor::SrcAlpha, false, 0u);
 

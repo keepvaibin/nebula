@@ -121,14 +121,12 @@ void J3DPEBlockFogOff::initialize() {
     mAlphaComp = 0xFFFF;
     mZMode = 0xFFFF;
     mZCompLoc = 0xFF;
-    mDither = 1;
 }
 
 void J3DPEBlockFull::initialize() {
     mAlphaComp = 0xFFFF;
     mZMode = 0xFFFF;
     mZCompLoc = 0xFF;
-    mDither = 1;
     mFogOffset = 0;
 }
 

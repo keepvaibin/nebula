@@ -92,7 +92,7 @@ namespace {
 }  // namespace
 
 void J3DStateList::setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op,
-                                   GpuBool colorUpdate, GpuBool alphaUpdate, GpuBool dither) {
+                                   GpuBool colorUpdate, GpuBool alphaUpdate) {
     NebulaStateOp& r = add(J3D_STATE_BLEND_ETC);
     r.a[0] = nativeBlendOp(type);
     r.a[1] = nativeFactor(src, true);
@@ -100,7 +100,6 @@ void J3DStateList::setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBle
     r.a[3] = op;
     r.a[4] = colorUpdate;
     r.a[5] = alphaUpdate;
-    r.a[6] = dither;
 }
 
 void J3DStateList::setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op) {

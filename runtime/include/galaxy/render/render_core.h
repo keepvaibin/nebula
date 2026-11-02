@@ -245,7 +245,6 @@ private:
     void on_scene_copy(const CaptureRequest& params);
     // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
     [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
-    void on_invalidate_vertex_cache();
     // A light op's words (GXLoadLightObjImm's), into matrix memory.
     void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
@@ -471,8 +470,6 @@ private:
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
     [[nodiscard]] RtView scene_depth_view(const ScaledViewport& viewport) const;
-    void note_interp_rt_projection();
-    void note_scene_ao_view(const DrawCall& call);
     // The scene's occlusion, once, before its first translucent phase (or at its end).
     void apply_scene_ao();
     // The open scene's candidate key lights: the world-fixed console light 0 of its lit draws, by world
@@ -516,8 +513,6 @@ private:
     bool display_copied_in_chunk_ = false;
     std::atomic<bool> frame_end_presents_{true};  // set_frame_end_presents
     std::uint64_t copy_presented_serial_ = 0u;
-    // Sub-frames show between game frames now (interpolation on and its governors allowing at least one).
-    [[nodiscard]] bool subframes_shown() const;
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;
@@ -1003,8 +998,6 @@ private:
     std::vector<std::uint16_t> immediate_indices_;
     // The vertex inputs the last keys were built with (the console's VCD bits 0-8, or a record's matrix bits and arrays).
     std::uint64_t vertex_source_ = 0;
-    // Whether the draw being made reads indexed positions (a model's): a record does unless its positions are its own.
-    [[nodiscard]] bool draw_positions_indexed() const noexcept;
     bool stop_render_thread_ = false;
     std::exception_ptr render_thread_error_;
     std::uint64_t present_epoch_ = 0;
