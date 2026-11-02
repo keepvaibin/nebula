@@ -48,6 +48,7 @@ void JKRThread::setCommon_mesgQueue(JKRHeap* pHeap, int msgCount) {
 }
 
 void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size, int param_3) {
+    mStartCurrentHeap = JKRHeap::sCurrentHeap;
     mHeap = pHeap;
     mStackSize = stack_size & 0xffffffe0;
     mStackMemory = JKRAllocFromHeap(mHeap, mStackSize, 0x20);
@@ -56,7 +57,9 @@ void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size, int para
 }
 
 void* JKRThread::start(void* pThread) {
-    return static_cast< JKRThread* >(pThread)->run();
+    JKRThread* self = static_cast< JKRThread* >(pThread);
+    JKRHeap::sCurrentHeap = self->mStartCurrentHeap;
+    return self->run();
 }
 
 JKRThread* JKRThread::searchThread(NebulaThread* pThread) {

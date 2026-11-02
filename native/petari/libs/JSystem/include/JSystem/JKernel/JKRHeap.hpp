@@ -176,7 +176,8 @@ public:
     static uintptr_t getAltAramStartAdr();
 
     /* 0x806B70A8 */ static JKRHeap* sGameHeap;
-    /* 0x806B70AC */ static JKRHeap* sCurrentHeap;
+    // Each thread's own; a new thread and an async function start with their starter's.
+    static thread_local JKRHeap* sCurrentHeap;
     /* 0x806B70B0 */ static JKRHeap* sRootHeap;
     static JKRHeap* sSystemHeap;
 

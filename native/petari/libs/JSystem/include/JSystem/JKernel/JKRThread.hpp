@@ -94,6 +94,7 @@ public:
     /* 0x18 */ JSULink< JKRThread > mThreadListLink;
     /* 0x28 */ JKRHeap* mHeap;
     /* 0x2C */ NebulaThread* mThread;
+    JKRHeap* mStartCurrentHeap;
     /* 0x30 */ NebulaMessageQueue mMessageQueue;
     /* 0x50 */ void** mMesgBuffer;
     /* 0x54 */ s32 mMessageCount;

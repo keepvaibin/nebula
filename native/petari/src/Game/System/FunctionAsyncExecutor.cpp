@@ -9,7 +9,7 @@
 #include "JSystem/JUtility/JUTException.hpp"
 
 FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, int priority, const char* pName)
-    : mFunc(pFunc), mPriority(priority), mName(pName), mIsEnd(false) {
+    : mFunc(pFunc), mStarterHeap(JKRHeap::sCurrentHeap), mPriority(priority), mName(pName), mIsEnd(false) {
     mQueue.init(&mMessage, 1);
 }
 
@@ -18,7 +18,9 @@ FunctionAsyncExecInfo::~FunctionAsyncExecInfo() {
 }
 
 void FunctionAsyncExecInfo::execute() {
+    JKRHeap* const previous = mStarterHeap->becomeCurrentHeap();
     (*mFunc)();
+    JKRHeap::sCurrentHeap = previous;
 }
 
 FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)

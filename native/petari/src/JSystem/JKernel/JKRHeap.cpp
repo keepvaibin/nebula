@@ -4,7 +4,7 @@
 #include "JSystem/JUtility/JUTException.hpp"
 
 JKRHeap* JKRHeap::sSystemHeap;
-JKRHeap* JKRHeap::sCurrentHeap;
+thread_local JKRHeap* JKRHeap::sCurrentHeap;
 JKRHeap* JKRHeap::sRootHeap;
 JKRErrorHandler JKRHeap::mErrorHandler;
 

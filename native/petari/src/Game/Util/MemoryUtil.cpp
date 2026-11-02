@@ -11,13 +11,11 @@
 namespace MR {
     CurrentHeapRestorer::CurrentHeapRestorer(JKRHeap* pHeap) {
         _0 = JKRHeap::sCurrentHeap;
-        (MR::MutexHolder< 1 >::sMutex).lock();
         MR::becomeCurrentHeap(pHeap);
     }
 
     CurrentHeapRestorer::~CurrentHeapRestorer() {
         MR::becomeCurrentHeap(_0);
-        (MR::MutexHolder< 1 >::sMutex).unlock();
     }
 
     JKRHeap* getCurrentHeap() {
@@ -66,7 +64,6 @@ namespace MR {
     }
 
     void becomeCurrentHeap(JKRHeap* pHeap) {
-        JASMutexLock lock(&MR::MutexHolder< 1 >::sMutex);
         pHeap->becomeCurrentHeap();
     }
 

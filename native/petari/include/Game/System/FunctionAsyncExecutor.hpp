@@ -27,6 +27,7 @@ public:
     }
 
     /* 0x00 */ MR::FunctorBase* mFunc;
+    JKRHeap* mStarterHeap;  // the current heap where it was started
     /* 0x04 */ int mPriority;
     /* 0x08 */ const char* mName;
     /* 0x0C */ NebulaAtomic< bool > mIsEnd;
