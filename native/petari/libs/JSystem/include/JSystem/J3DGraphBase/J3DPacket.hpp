@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include <NebulaGpu.h>

@@ -532,7 +532,7 @@ void J3DPSMtx33Copy(Mtx3P src, Mtx3P dst) {
     }
 }
 
-void J3DPSMtx33CopyFrom34(__REGISTER MtxPtr src, __REGISTER Mtx3P dst) {
+void J3DPSMtx33CopyFrom34(MtxPtr src, Mtx3P dst) {
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
             dst[i][j] = src[i][j];

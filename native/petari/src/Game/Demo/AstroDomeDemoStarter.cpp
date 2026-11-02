@@ -134,7 +134,7 @@ void AstroDomeDemoStarter::exeSpinDriverAppear() {
         MR::setBaseTRMtx(this, _94);
         MR::showModel(this);
         MR::startBck(this, "Appear");
-        MR::startBckPlayer("SpinDriverWait", 20L);
+        MR::startBckPlayer("SpinDriverWait", 20);
         MR::startSound(this, "SE_OJ_S_SPIN_DRV_APPEAR");
     }
 

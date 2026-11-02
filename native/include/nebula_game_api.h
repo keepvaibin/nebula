@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 106u
+#define NEBULA_GAME_API_VERSION 107u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -437,7 +437,6 @@ enum {
     NEBULA_SETTING_LANGUAGE = 1,
     NEBULA_SETTING_SOUND_MODE,
     NEBULA_SETTING_WIDESCREEN,
-    NEBULA_SETTING_SCREEN_DIMMING,  /* 0 off, 1 on: the screen dims after 5 idle minutes (the game lowers its volume) */
 };
 
 /* A player's controller as the game reads it (input_read): one sample per moment, oldest first. */

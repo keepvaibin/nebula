@@ -702,7 +702,7 @@ void PowerStar::exeAppearDemoKoopa() {
     }
 
     if (MR::isStep(this, 1)) {
-        MR::startBckPlayer(MR::isStageKoopaVs3() ? "DemoKoopaGrandStarVs3" : "DemoKoopaGrandStar", 0L);
+        MR::startBckPlayer(MR::isStageKoopaVs3() ? "DemoKoopaGrandStarVs3" : "DemoKoopaGrandStar", 0);
     }
 
     if (MR::isStageKoopaVs3()) {
@@ -816,7 +816,7 @@ void PowerStar::exeStageClearDemo() {
 
         MR::hideModelIfShown(this);
 
-        MR::startBckPlayer(mIsGrandStar ? "GrandStarGet" : "PowerStarGet", 0L);
+        MR::startBckPlayer(mIsGrandStar ? "GrandStarGet" : "PowerStarGet", 0);
 
         mBaseMtx.setTrans(mPosition);
 

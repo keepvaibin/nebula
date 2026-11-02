@@ -81,7 +81,6 @@ public:
     void exitPauseMenu();
     void updatePauseMenu();
     bool isPauseMenuActive() const;
-    void screenSaverProcess();
     bool isEnableStartSound(JAISoundID);
     void doDvdErrorProcess();
     void exitDvdErrorProcess();

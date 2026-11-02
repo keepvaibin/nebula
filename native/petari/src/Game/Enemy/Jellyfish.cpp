@@ -377,7 +377,7 @@ bool Jellyfish::selectNerveAfterWait() {
     if (MR::isStep(this, 280)) {
         s32 randomVal;
         if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvWait))) {
-            randomVal = MR::getRandom(0l, 3l);
+            randomVal = MR::getRandom(0, 3);
         } else {
             randomVal = 0;
         }

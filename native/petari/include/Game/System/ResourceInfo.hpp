@@ -26,11 +26,6 @@ public:
     void newFileInfoTable(u32);
     ResFileInfo* add(const char*, void*, bool);
     const char* getResName(u32) const;
-    // A call with a long argument (NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< const char*, L >::Type getResName(L index) const {
-        return getResName((u32)index);
-    }
     void* getRes(u32) const;
     void* getRes(const char*) const;
     ResFileInfo* findFileInfo(const char*) const;

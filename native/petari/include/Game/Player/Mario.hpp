@@ -92,11 +92,6 @@ public:
     void setFrontVec(const TVec3f&);
     void setFrontVecKeepUp(const TVec3f&, f32);
     void setFrontVecKeepUp(const TVec3f&, u32);
-    // A call with a long argument (NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< void, L >::Type setFrontVecKeepUp(const TVec3f& rVec, L step) {
-        setFrontVecKeepUp(rVec, (u32)step);
-    }
     void setFrontVecKeepUp(const TVec3f&);
     void setFrontVecKeepUpAngle(const TVec3f&, f32);
     void setFrontVecKeepSide(const TVec3f&);

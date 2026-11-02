@@ -590,7 +590,7 @@ void Syati::updateBlink() {
     if (mBlinkTimer < 0) {
         MR::startBva(this, "Blink");
         s16 frame = MR::getBvaCtrl(this)->mEnd;
-        u32 rand = MR::getRandom(0x78L, 0xF0L);
+        u32 rand = MR::getRandom(0x78, 0xF0);
         mBlinkTimer = frame + rand;
     } else if (MR::isBvaStopped(this)) {
         MR::startBva(this, "Open");

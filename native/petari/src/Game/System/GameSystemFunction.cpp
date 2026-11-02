@@ -6,7 +6,6 @@
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
 #include "Game/System/GameSystem.hpp"
-#include "Game/System/GameSystemDimmingWatcher.hpp"
 #include "Game/System/GameSystemErrorWatcher.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
@@ -209,11 +208,7 @@ namespace GameSystemFunction {
     }
 
     bool setPermissionToCheckWiiRemoteConnectAndScreenDimming(bool permission) {
-        bool permissionPrev = SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateWiiRemoteStatus(permission);
-
-        SingletonHolder< GameSystem >::get()->mDimmingWatcher->_4 = permission;
-
-        return permissionPrev;
+        return SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateWiiRemoteStatus(permission);
     }
 
     void onPauseBeginAllRumble() {

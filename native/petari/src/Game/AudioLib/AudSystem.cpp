@@ -220,7 +220,6 @@ void AudSystem::setSpeakerResource(JKRArchive* pArchive) {
 }
 
 void AudSystem::frameWork() {
-    screenSaverProcess();
     updateHomeButtonMenu();
     updatePauseMenu();
     seFanfareProcess();
@@ -635,15 +634,6 @@ bool AudSystem::isPauseMenuActive() const {
     }
 
     return true;
-}
-
-void AudSystem::screenSaverProcess() {
-    if (NebulaFrameClock::framesUntilDimming() > 0) {
-        return;
-    }
-
-    setSeVolumeSetLevel(AudSystemVolumeController::VolumeSet_ScreenSaver);
-    mBgmMgr.volDownLevel(false);
 }
 
 bool AudSystem::isEnableStartSound(JAISoundID soundID) {

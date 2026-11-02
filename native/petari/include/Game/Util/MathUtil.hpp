@@ -31,11 +31,6 @@ namespace MR {
     /// @param max The exclusive maximum integer.
     /// @return The pseudorandom integer.
     s32 getRandom(s32 min, s32 max);
-    // A call with a long argument (NebulaLongCall).
-    template < typename A, typename B >
-    inline typename NebulaLongCall< s32, A, B >::Type getRandom(A min, B max) {
-        return getRandom((s32)min, (s32)max);
-    }
 
     /// @brief Computes the next pseudorandom floating-point number within the half-open interval `[0.0f, 360.0f)`.
     /// @return The pseudorandom number of degrees.
@@ -580,12 +575,7 @@ namespace MR {
     /// @retval `min` if the integer is less than or equal to `min`.
     /// @retval `max` if the integer is greater than or equal to `max`.
     /// @retval `x` if the integer is greater than `min` and less than `max`.
-    // A call with a long argument (NebulaLongCall).
     inline s32 clamp(s32 x, s32 min, s32 max);
-    template < typename A, typename B, typename C >
-    inline typename NebulaLongCall< s32, A, B, C >::Type clamp(A x, B min, C max) {
-        return clamp((s32)x, (s32)min, (s32)max);
-    }
 
     inline s32 clamp(s32 x, s32 min, s32 max) {
         s32 ret;

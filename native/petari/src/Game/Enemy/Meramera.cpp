@@ -672,7 +672,7 @@ bool Meramera::tryEndChase() {
 }
 
 bool Meramera::tryRunaway() {
-    if (MR::isGreaterStep(this, MR::getRandom(0L, 0L) + ::sRunawayTime)) {
+    if (MR::isGreaterStep(this, MR::getRandom(0, 0) + ::sRunawayTime)) {
         setNerve(GET_NERVE(Meramera, MerameraNrvRunaway));
         return true;
     }
@@ -1039,7 +1039,7 @@ void Meramera::exeRunaway() {
 
                 MR::startSound(this, "SE_EM_MERAMERA_JUMP");
 
-                mRunawayTimer = MR::getRandom(0L, 10L) + 30;
+                mRunawayTimer = MR::getRandom(0, 10) + 30;
             }
         }
 

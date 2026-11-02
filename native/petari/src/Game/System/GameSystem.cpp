@@ -10,7 +10,6 @@
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
-#include "Game/System/GameSystemDimmingWatcher.hpp"
 #include "Game/System/GameSystemErrorWatcher.hpp"
 #include "Game/System/GameSystemFontHolder.hpp"
 #include "Game/System/GameSystemFrameControl.hpp"
@@ -92,7 +91,6 @@ void GameSystem::init() {
     mStationedArchiveLoader = new GameSystemStationedArchiveLoader();
     mHomeButtonLayout = new HomeButtonLayout();
     mHomeButtonStateNotifier = new HomeButtonStateNotifier();
-    mDimmingWatcher = new GameSystemDimmingWatcher();
     setNerve(GET_NERVE(GameSystem, GameSystemInitializeAudio));
 }
 
@@ -234,8 +232,6 @@ void GameSystem::update() {
         mErrorWatcher->movement();
     }
 
-    mDimmingWatcher->_5 = mErrorWatcher->isWarning() || mHomeButtonLayout->isActive() || GameSequenceFunction::isActiveSaveDataHandleSequence();
-    mDimmingWatcher->update();
     updateNerve();
 }
 

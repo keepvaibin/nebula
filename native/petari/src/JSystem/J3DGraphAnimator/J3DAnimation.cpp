@@ -528,8 +528,8 @@ inline f32 J3DHermiteInterpolationS16Keys(f32 pp1, f32 a, f32 b, f32 c, f32 d, f
     return value - end;
 }
 
-inline f32 J3DHermiteInterpolation(__REGISTER f32 pp1, __REGISTER s16 const* pp2, __REGISTER s16 const* pp3, __REGISTER s16 const* pp4,
-                                   __REGISTER s16 const* pp5, __REGISTER s16 const* pp6, __REGISTER s16 const* pp7) {
+inline f32 J3DHermiteInterpolation(f32 pp1, s16 const* pp2, s16 const* pp3, s16 const* pp4,
+                                   s16 const* pp5, s16 const* pp6, s16 const* pp7) {
     return J3DHermiteInterpolationS16Keys(pp1, *pp2, *pp3, *pp4, *pp5, *pp6, *pp7);
 }
 

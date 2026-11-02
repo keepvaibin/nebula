@@ -24,7 +24,4 @@ namespace NebulaSystemSettings {
         return setting(NEBULA_SETTING_WIDESCREEN) == 1;
     }
 
-    bool screenSaver() {
-        return setting(NEBULA_SETTING_SCREEN_DIMMING) != 0;
-    }
 }  // namespace NebulaSystemSettings

@@ -1088,7 +1088,7 @@ void Mario::doLockOnHoming() {
         if (getAnimator()->isAnimationStop()) {
             changeAnimation("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */);
             if (!_750) {
-                setFrontVecKeepUp(direction, 15UL);
+                setFrontVecKeepUp(direction, 15u);
                 _334 = direction;
             }
         }

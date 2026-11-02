@@ -147,7 +147,7 @@ void Rosetta::control() {
     mTurnJointCtrl->update();
 
     if (mMsgCtrl != nullptr && MR::isTalkStart(mMsgCtrl)) {
-        switch (MR::getRandom(0l, 3l)) {
+        switch (MR::getRandom(0, 3)) {
         case 0:
             mParam._1C = "TalkA";
             break;
@@ -161,7 +161,7 @@ void Rosetta::control() {
     }
 
     if (MR::isIntervalStep(this, ::sWaitActionInterval)) {
-        switch (MR::getRandom(0l, 2l)) {
+        switch (MR::getRandom(0, 2)) {
         case 0:
             mParam._14 = "WaitA";
             break;
