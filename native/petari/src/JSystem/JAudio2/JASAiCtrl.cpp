@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
+#include "Game/System/NebulaAtomic.hpp"
 #include "JSystem/JAudio2/JASAudioThread.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
@@ -12,6 +13,7 @@
 #include <nebula_game_api.h>
 #include <nebula_kernel.h>
 #include "Game/System/NebulaKernel.hpp"
+#include "JSystem/JAudio2/JASDriverIF.hpp"
 
 // The host's audio clock asks for each frame (nebula_game_audio_tick, raised on the audio thread as its event): the
 // driver runs the frame's subframes - commands, the voices' updates and one mix each, then the sequencers - and ends
@@ -36,7 +38,7 @@ f32 JASDriver::sDacRate = 32028.5f;
 
 u32 JASDriver::sSubFrames = 0x00000007;
 
-volatile u32 JASDriver::sSubFrameCounter;
+NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
 
 void JASDriver::initAI(void (*callback)(void)) {
     setOutputRate(OUTPUT_RATE_0);
@@ -97,6 +99,9 @@ void JASDriver::updateDSP() {
     JASLfo::updateFreeRun(freeRun);
     JASProbe::stop(3);
     sSubFrameCounter++;
+    if (sSubFrameDone.isWaiting()) {
+        sSubFrameDone.signal();
+    }
 }
 
 f32 JASDriver::getDacRate() {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 // The game's disc (B-12): its files and folders as the host serves them (disc_find, disc_child, disc_read), in place
 // of the console's DVD library. Paths are the disc's ("/StageData/EggStarGalaxy.arc"); a file's entry (its index in
 // the disc's file table) names it as the game's tables do.
@@ -31,7 +33,7 @@ namespace NebulaDisc {
     struct Request {
         Callback mCallback;
         void* mUser;
-        volatile bool mBusy;
+        NebulaAtomic< bool > mBusy;
         s32 mResult;  // when it has ended: the result its callback got
     };
 

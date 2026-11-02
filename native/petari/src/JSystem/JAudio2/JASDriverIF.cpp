@@ -28,12 +28,10 @@ u32 JASDriver::getOutputMode() {
     return JASDriver::JAS_SYSTEM_OUTPUT_MODE;
 }
 
+NebulaEvent JASDriver::sSubFrameDone;
+
 void JASDriver::waitSubFrame() {
-    u32 r31 = getSubFrameCounter();
-    do {
-        NebulaKernel::yield();
-        NebulaKernel::poll();
-    } while (r31 == getSubFrameCounter());
+    sSubFrameDone.wait();
 }
 
 JASCallbackMgr JASDriver::sSyncCallback;

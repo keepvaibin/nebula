@@ -529,6 +529,27 @@ void NebulaThreadQueue::wakeup() {
     NebulaKernel::restoreInterrupts(enabled);
 }
 
+void NebulaEvent::init() {
+    waiters.init();
+    signalled = false;
+}
+
+void NebulaEvent::wait() {
+    const bool enabled = NebulaKernel::disableInterrupts();
+    while (!signalled) {
+        waiters.sleep();
+    }
+    signalled = false;
+    NebulaKernel::restoreInterrupts(enabled);
+}
+
+void NebulaEvent::signal() {
+    const bool enabled = NebulaKernel::disableInterrupts();
+    signalled = true;
+    waiters.wakeup();
+    NebulaKernel::restoreInterrupts(enabled);
+}
+
 void NebulaMutex::init() {
     waiters.init();
     owner = nullptr;

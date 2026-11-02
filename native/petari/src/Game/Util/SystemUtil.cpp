@@ -73,9 +73,7 @@ namespace MR {
     }
 
     void waitEndChangeArchivePlayer() {
-        while (!GameSystemFunction::isEndChangeArchivePlayer()) {
-            NebulaKernel::poll();
-        }
+        GameSystemFunction::waitEndChangeArchivePlayer();
     }
 
     void callMethodAllSceneNameObj(NameObjMethod pMethod) {
@@ -130,24 +128,22 @@ namespace MR {
         return false;
     }
 
-    void suspendAsyncExecuteThread(const char* pThreadName) {
-        NebulaKernel::suspend(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+    namespace {
+        NebulaEvent sSceneInitializeResume;
     }
 
-    void resumeAsyncExecuteThread(const char* pThreadName) {
-        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
-
-        NebulaKernel::resume(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+    void waitSceneInitializeResume() {
+        sSceneInitializeResume.wait();
     }
 
-    bool isSuspendedAsyncExecuteThread(const char* pThreadName) {
-        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
-
-        if (pThread == nullptr) {
+    bool tryResumeSceneInitialize() {
+        if (!sSceneInitializeResume.isWaiting()) {
             return false;
         }
 
-        return NebulaKernel::isSuspended(pThread);
+        sSceneInitializeResume.signal();
+
+        return true;
     }
 
     bool isScreen16Per9() {

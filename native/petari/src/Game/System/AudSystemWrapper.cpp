@@ -49,7 +49,7 @@ void AudSystemWrapper::createAudioSystem() {
     receiveResourceForInitialize();
 
     if (mIsResetDone) {
-        NebulaKernel::suspend(NebulaKernel::current());
+        return;
     }
 
     mDisableReset = true;

@@ -1,4 +1,5 @@
 #include "Game/System/NebulaDisc.hpp"
+#include "Game/System/NebulaAtomic.hpp"
 #include "Game/System/NebulaKernel.hpp"
 
 #include <revolution/os.h>
@@ -16,7 +17,7 @@ namespace {
     struct Slot {
         NebulaDisc::Request* mRequest;  // nullptr when free (game thread only)
         bool mCanceled;
-        volatile s32 mDone;
+        NebulaAtomic< s32 > mDone;
         s32 mResult;
     };
 
@@ -44,7 +45,7 @@ namespace {
 
     void onDiscEvent() {
         for (u32 i = 0; i < cSlots; i++) {
-            if (sSlots[i].mRequest != nullptr && __atomic_load_n(&sSlots[i].mDone, __ATOMIC_ACQUIRE) != 0) {
+            if (sSlots[i].mRequest != nullptr && sSlots[i].mDone != 0) {
                 finish(&sSlots[i]);
             }
         }
@@ -78,7 +79,7 @@ namespace {
 extern "C" NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result) {
     if (slot < cSlots) {
         sSlots[slot].mResult = result;
-        __atomic_store_n(&sSlots[slot].mDone, 1, __ATOMIC_RELEASE);
+        sSlots[slot].mDone = 1;
         nebula_raise_event(NEBULA_EVENT_DISC);
     }
 }
