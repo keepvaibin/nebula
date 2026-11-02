@@ -21,7 +21,7 @@ namespace {
 
 void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mClearColor = (NebulaColor8){0, 0, 0, 0};
-    mRetraceCount = 1;
+    mFramesPerStep = 1;
     mUseAlpha = useAlpha;
     mUseVFilter = true;
     mCombinationRatio = 0.0f;
@@ -60,8 +60,8 @@ void MainLoopFramework::preGX() {
 void MainLoopFramework::endGX() {
 }
 
-void MainLoopFramework::waitForRetrace() {
-    ::waitForFrames(mRetraceCount);
+void MainLoopFramework::waitForFrame() {
+    ::waitForFrames(mFramesPerStep);
 }
 
 void MainLoopFramework::beginRender() {
@@ -92,7 +92,7 @@ void MainLoopFramework::endFrame() {
 
 void MainLoopFramework::waitBlanking(int tickCount) {
     while (tickCount-- > 0) {
-        ::waitForFrames(mRetraceCount);
+        ::waitForFrames(mFramesPerStep);
     }
 }
 
