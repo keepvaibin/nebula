@@ -3,6 +3,7 @@
 #include <JSystem/JKernel/JKRHeap.hpp>
 
 GameThread::GameThread(u32 stackSize, int messageCount, int priority, JKRHeap* pHeap) {
+    mStartCurrentHeap = JKRHeap::sCurrentHeap;
     if (pHeap == nullptr) {
         pHeap = JKRHeap::sCurrentHeap;
     }
@@ -39,7 +40,9 @@ void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize, int priority) 
 }
 
 void* GameThread::start(void* pArg) {
-    return static_cast< GameThread* >(pArg)->run();
+    GameThread* self = static_cast< GameThread* >(pArg);
+    JKRHeap::sCurrentHeap = self->mStartCurrentHeap;
+    return self->run();
 }
 
 void* GameThread::run() {

@@ -60,7 +60,6 @@ extern "C" void nebula_game_main(void) {
     NebulaFrameClock::init();
     HeapMemoryWatcher::createRootHeap();
     (MR::MutexHolder< 0 >::sMutex).init();
-    (MR::MutexHolder< 1 >::sMutex).init();
     (MR::MutexHolder< 2 >::sMutex).init();
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();

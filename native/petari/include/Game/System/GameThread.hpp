@@ -18,6 +18,7 @@ public:
     static void* start(void*);
 
     JKRHeap* mHeap;
+    JKRHeap* mStartCurrentHeap;
     NebulaThread* mThread;
     NebulaMessageQueue mQueue;
     void** mMessageArray;

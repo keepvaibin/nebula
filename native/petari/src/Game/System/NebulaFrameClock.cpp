@@ -1,6 +1,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaAtomic.hpp"
 #include "Game/System/NebulaKernel.hpp"
+#include <JSystem/JKernel/JKRHeap.hpp>
 
 #include <math.h>
 #include <revolution/os.h>
@@ -87,6 +88,7 @@ namespace {
     void* frameThread(void*) {
         while (true) {
             sRetrace.wait();
+            JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
             onFrame();
         }
     }
