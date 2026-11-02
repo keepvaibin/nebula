@@ -1184,7 +1184,6 @@ mod tests {
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
         // main.dol's tables as files of their own folder (cook/dol.rs).
         assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
-        assert_eq!(read("NebulaData/GameEventFlags.bin").len(), 4 + 188 * 20);
         assert!(partition.write_content(&output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
     }
 

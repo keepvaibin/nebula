@@ -1142,7 +1142,7 @@ enum {
     NEBULA_MOVIE_OPENING = -2,
 };
 
-/* Native equivalents of mods' patches to the console's code (memory patches over main.dol's text): the host's mods
+/* Native equivalents of mods' code patches: the host's mods
    layer recognises each by its exact bytes for this disc and the game asks code_patch for it. */
 enum {
     NEBULA_PATCH_FLIP_PANEL_GROUP = 1,       /* value: a FlipPanel group's size (joinToGroupArray's 0x20) */
