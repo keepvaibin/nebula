@@ -65,10 +65,6 @@ void ImageEffectResource::createDOFTexture() {
         _C = createTexture(0.25f, GPU_TF_RGB565);
     }
 
-    if (_10 == nullptr) {
-        _10 = createTexture(0.25f, GPU_TF_RGB565);
-    }
-
     if (_8 == nullptr) {
         _8 = createTexture(0.5f, GPU_TF_I8);
     }
