@@ -56,7 +56,7 @@ namespace GameSequenceFunction {
     bool isSuccessSaveDataHandleSequence();
     void restoreUserFile(UserFile*, int);
     void restoreUserFile(UserFile*, int, bool);
-    void reserveUserName(const wchar_t*);
+    void reserveUserName(const char16_t*);
     void storeSceneStartGameDataHolder();
     void updateGameDataAndSequenceAfterStageResultSequence();
     void startGameDataSaveSequence(bool, bool);

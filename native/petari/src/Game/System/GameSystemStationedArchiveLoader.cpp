@@ -68,12 +68,12 @@ PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), m
 void PlayerHeapHolder::adjust() {
     JKRExpHeap* napa = mNapaHeap;
     if (!napa->isEmpty()) {
-        napa->alloc(0x10000, nullptr);
+        napa->alloc(0x10000, 0);
     }
 
     JKRExpHeap* gddr = mGDDRHeap;
     if (!gddr->isEmpty()) {
-        gddr->alloc(0x10000, nullptr);
+        gddr->alloc(0x10000, 0);
     }
 
     MR::adjustHeapSize(mNapaHeap, nullptr);

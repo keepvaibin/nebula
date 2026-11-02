@@ -673,7 +673,7 @@ void SkeletalFishBoss::initJoint() {
 
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
         char buf[16];
-        snprintf(buf, sizeof(buf), "Joint%02d", i);
+        nebula_snprintf(buf, sizeof(buf), "Joint%02d", i);
         mControllers[i] = MR::createJointDelegatorWithNullChildFunc(this, &SkeletalFishBoss::calcJoint, buf);
         mJointIndicies[MR::getJointIndex(this, buf)] = i;
     }
@@ -901,7 +901,7 @@ void SkeletalFishBoss::resetCamera() {
 
 void SkeletalFishBoss::playDamageBrk() {
     char buf[0x80];
-    snprintf(buf, sizeof(buf), "Damage%dColor", _118);
+    nebula_snprintf(buf, sizeof(buf), "Damage%dColor", _118);
     MR::startBrk(this, buf);
     MR::startBrk(mBossHead, buf);
     _118++;

@@ -450,19 +450,19 @@ bool MR::getRailId(const JMapInfoIter& rIter, s32* pOut) {
 
 bool MR::getJMapInfoV3f(const JMapInfoIter& rIter, const char* pName, TVec3f* pOut) {
     char str[32];
-    sprintf(str, "%sX", pName);
+    nebula_sprintf(str, "%sX", pName);
 
     if (!MR::getValue< f32 >(rIter, str, &pOut->x)) {
         return false;
     }
 
-    sprintf(str, "%sY", pName);
+    nebula_sprintf(str, "%sY", pName);
 
     if (!MR::getValue< f32 >(rIter, str, &pOut->y)) {
         return false;
     }
 
-    sprintf(str, "%sZ", pName);
+    nebula_sprintf(str, "%sZ", pName);
 
     return MR::getValue< f32 >(rIter, str, &pOut->z);
 }

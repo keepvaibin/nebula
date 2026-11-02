@@ -5,7 +5,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstdio>
-#include <va_list.h>
+#include <cstdarg>
 
 IntermissionScene::IntermissionScene() : Scene("IntermissionScene") {
     _54 = 0;
@@ -29,7 +29,7 @@ void IntermissionScene::draw() const {
 void IntermissionScene::setCurrentSceneControllerState(const char* pState, ...) {
     va_list list;
     va_start(list, pState);
-    vsnprintf(mState, sizeof(mState), pState, list);
+    nebula_vsnprintf(mState, sizeof(mState), pState, list);
     va_end(list);
     _54 = 0;
 }

@@ -23,7 +23,9 @@ DisplayListMaker::DisplayListMaker(J3DModel* pModel, const ResourceHolder* pResH
 }
 
 void DisplayListMaker::update() {
-    std::for_each(mMaterialCtrl.begin(), mMaterialCtrl.end(), std::mem_fun(&MaterialCtrl::update));
+    for (auto& item : mMaterialCtrl) {
+        item->update();
+    }
 }
 
 void DisplayListMaker::diff() {

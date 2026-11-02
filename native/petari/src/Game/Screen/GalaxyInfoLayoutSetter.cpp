@@ -15,9 +15,9 @@ namespace {
 };  // namespace
 
 namespace {
-    void addPictureFontStar(wchar_t** ppParam1, wchar_t** ppParam2, const char* pGalaxyName, s32 scenarioNo) {
+    void addPictureFontStar(char16_t** ppParam1, char16_t** ppParam2, const char* pGalaxyName, s32 scenarioNo) {
         GalaxyStatusAccessor galaxyStatusAccessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
-        wchar_t fontCode = '7';
+        char16_t fontCode = '7';
 
         if (GameDataConst::isGrandStar(pGalaxyName, scenarioNo)) {
             fontCode = 'K';
@@ -48,7 +48,7 @@ void GalaxyInfoLayoutSetter::replaceTexture(const char* pGalaxyName) {
     nw4r::lyt::TexMap* texture = nullptr;
 
     for (s32 i = 0; i < fileInfoTable->mCount; i++) {
-        snprintf(btiName, sizeof(btiName), "%s.bti", pGalaxyName);
+        nebula_snprintf(btiName, sizeof(btiName), "%s.bti", pGalaxyName);
 
         if (MR::isEqualStringCase(btiName, fileInfoTable->getResName(i))) {
             texture = mReplaceTexture[i];
@@ -149,11 +149,11 @@ void GalaxyInfoLayoutSetter::updateInfoWithoutComet(const char* pGalaxyName, Gal
 void GalaxyInfoLayoutSetter::setTextBoxStarNum(const char* pGalaxyName) {
     GalaxyStatusAccessor accessor = MR::makeGalaxyStatusAccessor(pGalaxyName);
 
-    wchar_t starBaseBuffer[16];
-    wchar_t starIconBuffer[16];
+    char16_t starBaseBuffer[16];
+    char16_t starIconBuffer[16];
     
-    wchar_t* pStarBase = starIconBuffer;
-    wchar_t* pStarIcon = starBaseBuffer;
+    char16_t* pStarBase = starIconBuffer;
+    char16_t* pStarIcon = starBaseBuffer;
 
     starIconBuffer[0] = '\0';
     starBaseBuffer[0] = '\0';

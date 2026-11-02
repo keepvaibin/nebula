@@ -48,7 +48,7 @@ bool GameDataConst::isQuestionGalaxy(const char* pGalaxyName) {
         }
 
         char flagName[64];
-        snprintf(flagName, sizeof(flagName), "Appear%s", pGalaxyName);
+        nebula_snprintf(flagName, sizeof(flagName), "Appear%s", pGalaxyName);
 
         if (!MR::isEqualString(accessor.getName(), flagName)) {
             continue;
@@ -62,7 +62,7 @@ bool GameDataConst::isQuestionGalaxy(const char* pGalaxyName) {
 
 bool GameDataConst::isGalaxyAppearGreenDriver(const char* pGalaxyName) {
     char flagName[48];
-    snprintf(flagName, sizeof(flagName), "Appear%s", pGalaxyName);
+    nebula_snprintf(flagName, sizeof(flagName), "Appear%s", pGalaxyName);
 
     return !GameEventFlagTable::isExist(flagName) ? false : GameEventFlagTable::isDependedAnother(flagName, "SpecialStarGreenAll");
 }

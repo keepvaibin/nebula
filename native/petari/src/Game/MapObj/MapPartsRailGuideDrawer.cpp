@@ -59,11 +59,15 @@ bool MapPartsRailGuideDrawer::isWorking() const {
 }
 
 void MapPartsRailGuideDrawer::show() {
-    std::for_each(mGuidePoints.begin(), mGuidePoints.end(), std::mem_fun(&LiveActor::appear));
+    for (auto& item : mGuidePoints) {
+        item->appear();
+    }
 }
 
 void MapPartsRailGuideDrawer::hide() {
-    std::for_each(mGuidePoints.begin(), mGuidePoints.end(), std::mem_fun(&LiveActor::kill));
+    for (auto& item : mGuidePoints) {
+        item->kill();
+    }
 }
 
 void MapPartsRailGuideDrawer::initGuidePoints(const JMapInfoIter& rIter) {

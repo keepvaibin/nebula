@@ -63,7 +63,7 @@ void LightCylinder::initLightCylinderByOwner(const JMapInfoIter& rIter) {
 
 void LightCylinder::initLightVolume(const char* pName) {
     char modelName[0x100];
-    snprintf(modelName, sizeof(modelName), "%sLightVolume", pName ? pName : mObjectName);
+    nebula_snprintf(modelName, sizeof(modelName), "%sLightVolume", pName ? pName : mObjectName);
     VolumeModelDrawer* lightVolume = new VolumeModelDrawer("\214\365" /* 光 */, modelName, mHostMtx ? mHostMtx : getBaseMtx());
     mLightVolume = lightVolume;
     lightVolume->mColor.set(mColor);

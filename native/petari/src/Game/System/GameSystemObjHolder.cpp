@@ -47,7 +47,7 @@ void GameSystemObjHolder::initMessageResource() {
 
     char systemMessagePath[128];
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
+    nebula_snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
 
     void* pSystemMessageArchive = MR::copyFileFromArchive(pArchive, systemMessagePath, nullptr, 0);
     MR::createAndAddArchive(pSystemMessageArchive, pHeap, "/Memory/SystemMessage.arc");

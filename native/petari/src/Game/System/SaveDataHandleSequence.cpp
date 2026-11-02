@@ -551,7 +551,7 @@ void SaveDataHandleSequence_FORCE_MATCH_STRINGS() {
 
 void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int index) {
     char dataName[16];
-    snprintf(dataName, sizeof(dataName), "config%1d", index);
+    nebula_snprintf(dataName, sizeof(dataName), "config%1d", index);
 
     mSaveDataHandler->restoreGameDataFile(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
     pUserFile->loadFromConfigDataBinary(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
@@ -559,7 +559,7 @@ void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int 
 
 void SaveDataHandleSequence::restoreUserFileGameData(UserFile* pUserFile, int index, bool isPlayerMario) {
     char dataName[16];
-    snprintf(dataName, sizeof(dataName), "%s%1d", isPlayerMario ? "mario" : "luigi", index);
+    nebula_snprintf(dataName, sizeof(dataName), "%s%1d", isPlayerMario ? "mario" : "luigi", index);
 
     mSaveDataHandler->restoreGameDataFile(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
     pUserFile->loadFromGameDataBinary(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());

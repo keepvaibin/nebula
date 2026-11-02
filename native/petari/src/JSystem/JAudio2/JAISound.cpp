@@ -208,6 +208,6 @@ void JAISound::initTrack_JAISound_(JASTrack* track) {
 
 void JAISound::increasePrepareCount_JAISound_() {
     if ((++mPrepareCount & 0xFF) == 0) {
-        JASReport("It cost %d steps to prepare Sound(ID:%08x, Address%08x).\n", mPrepareCount, *(u32*)&mSoundID, this);
+        JASReport("It cost %d steps to prepare Sound(ID:%08x, Address%p).\n", mPrepareCount, *(u32*)&mSoundID, this);
     }
 }

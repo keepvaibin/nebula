@@ -388,11 +388,11 @@ void KoopaJrShip::shootKillersAfterDamage() {
 }
 
 bool KoopaJrShip::isExistActiveKiller() const {
-    return std::find_if(mKillers.begin(), mKillers.end(), std::not1(std::ptr_fun(&MR::isDead))) != mKillers.end();
+    return std::find_if(mKillers.begin(), mKillers.end(), [&](const auto& item) { return !MR::isDead(item); }) != mKillers.end();
 }
 
 bool KoopaJrShip::isExistActiveKameck() const {
-    return std::find_if(mKamecks.begin(), mKamecks.end(), std::not1(std::ptr_fun(&MR::isDead))) != mKamecks.end();
+    return std::find_if(mKamecks.begin(), mKamecks.end(), [&](const auto& item) { return !MR::isDead(item); }) != mKamecks.end();
 }
 
 void KoopaJrShip::shootMainShells() {
@@ -769,7 +769,9 @@ void KoopaJrShip::exeTurnFront() {
         }
 
         mKamecks[0]->makeActorDeadForce();
-        std::for_each(mKillers.begin(), mKillers.end(), std::mem_func(&HomingKiller::makeActorDead));
+        for (auto& item : mKillers) {
+            item->makeActorDead();
+        }
     }
 
     MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_3RD_DEMO");

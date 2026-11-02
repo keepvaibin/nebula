@@ -135,7 +135,7 @@ namespace GameDataFunction {
     void restoreGalaxyCometStatus(int cometId, u16* pCometStatus, u16* pPastSecond) {
         char eventValueName[20];
 
-        snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
+        nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
 
         *pCometStatus = getCurrentGameDataHolder()->getGameEventValue(eventValueName);
     }
@@ -232,7 +232,7 @@ namespace GameDataFunction {
         return ::getGameDataTemporaryInGalaxy()->mLast1upStarPieceNum;
     }
 
-    const wchar_t* getUserName() {
+    const char16_t* getUserName() {
         return ::getSaveDataHandleSequence()->getCurrentUserFile()->mUserName;
     }
 
@@ -361,7 +361,7 @@ namespace GameDataFunction {
     bool isOnGameEventFlagNormalComet(const char* pGalaxyName) {
         char eventFlagName[64];
 
-        snprintf(eventFlagName, sizeof(eventFlagName), "NormalComet%s", pGalaxyName);
+        nebula_snprintf(eventFlagName, sizeof(eventFlagName), "NormalComet%s", pGalaxyName);
 
         return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName);
     }
@@ -369,7 +369,7 @@ namespace GameDataFunction {
     bool isOnGameEventFlagCoin100Comet(const char* pGalaxyName) {
         char eventFlagName[64];
 
-        snprintf(eventFlagName, sizeof(eventFlagName), "Coin100Comet%s", pGalaxyName);
+        nebula_snprintf(eventFlagName, sizeof(eventFlagName), "Coin100Comet%s", pGalaxyName);
 
         return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName);
     }
@@ -377,7 +377,7 @@ namespace GameDataFunction {
     void updateGalaxyCometStatus(int cometId, u16 cometStatus, u16 pastSecond) {
         char eventValueName[20];
 
-        snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
+        nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
 
         getCurrentGameDataHolder()->setGameEventValue(eventValueName, cometStatus);
     }
@@ -435,7 +435,7 @@ namespace GameDataFunction {
         char eventFlagName[32];
 
         for (int i = 1; i <= 3; i++) {
-            snprintf(eventFlagName, sizeof(eventFlagName), "SpecialStarGreen%1d", i);
+            nebula_snprintf(eventFlagName, sizeof(eventFlagName), "SpecialStarGreen%1d", i);
 
             if (pGameDataHolder->isOnGameEventFlag(eventFlagName)) {
                 greenStarNum++;

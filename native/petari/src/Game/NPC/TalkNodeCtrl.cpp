@@ -251,14 +251,14 @@ void TalkNodeCtrl::readMessage() {
     }
 }
 
-const wchar_t* TalkNodeCtrl::getSubMessage() const {
+const char16_t* TalkNodeCtrl::getSubMessage() const {
     const TalkMessageInfo info = mMessageInfo;
 
-    if (*((wchar_t*)info._0) != 0x1A) {
+    if (*((char16_t*)info._0) != 0x1A) {
         return nullptr;
     }
 
-    MessageEditorMessageTag messageTag = MessageEditorMessageTag((const wchar_t*)&info._0[2]);
+    MessageEditorMessageTag messageTag = MessageEditorMessageTag((const char16_t*)&info._0[2]);
 
     if (((char*)messageTag.mMessage)[1] != 8 || messageTag.mMessage[1] != 0) {
         return nullptr;
@@ -268,7 +268,7 @@ const wchar_t* TalkNodeCtrl::getSubMessage() const {
     u16 param = messageTag.getParam32(0);
 
     if (MessageSystem::getSceneMessageData()->getMessage(&info2, 0, param)) {
-        return (const wchar_t*)info2._0;
+        return (const char16_t*)info2._0;
     }
 
     return nullptr;
@@ -294,7 +294,7 @@ void TalkNodeCtrl::createFlowNode(TalkMessageCtrl* pMsgCtrl, const JMapInfoIter&
     char buf[0x100];
     s32 msgID = MR::getMessageID(rIter);
     const char* zoneName = MR::getCurrentPlacementZoneName();
-    snprintf(buf, sizeof(buf), "%s_%s%03d", zoneName, pName, msgID);
+    nebula_snprintf(buf, sizeof(buf), "%s_%s%03d", zoneName, pName, msgID);
     createFlowNodeDirect(pMsgCtrl, rIter, buf, pCameraInf);
 }
 

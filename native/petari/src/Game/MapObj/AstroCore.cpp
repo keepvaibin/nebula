@@ -73,7 +73,7 @@ void AstroCore::startAnimGrow() {
     s32 v3 = MR::clamp(AstroDemoFunction::getOpenedAstroDomeNum() + 1, 0, 6);
     s32 v4 = MR::clamp(v3, 0, 6);
     char animName[32];
-    snprintf(animName, sizeof(animName), "Revival%d", v4);
+    nebula_snprintf(animName, sizeof(animName), "Revival%d", v4);
     MR::startAllAnim(this, animName);
     getSensor(nullptr)->mRadius = ::sSensorSizeTable[v3];
 }
@@ -82,7 +82,7 @@ void AstroCore::setStateBeforeGrow() {
     s32 v3 = MR::clamp(AstroDemoFunction::getOpenedAstroDomeNum(), 0, 6);
     s32 v4 = MR::clamp(v3, 0, 6);
     char animName[32];
-    snprintf(animName, sizeof(animName), "Revival%d", v4);
+    nebula_snprintf(animName, sizeof(animName), "Revival%d", v4);
     MR::startAllAnim(this, animName);
     MR::setAllAnimFrameAtEnd(this, animName);
     getSensor(nullptr)->mRadius = ::sSensorSizeTable[v3];

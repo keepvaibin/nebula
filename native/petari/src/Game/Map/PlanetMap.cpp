@@ -145,7 +145,7 @@ void PlanetMap::initBloomModel(const char* pModelName) {
     }
 
     char str[256];
-    snprintf(str, 256, "%sBloom", mModelName);
+    nebula_snprintf(str, 256, "%sBloom", mModelName);
     const char* name = mName;
     mBloomModel = MR::createModelObjBloomModel(name, str, getBaseMtx());
     mBloomModel->mScale.set(mScale);

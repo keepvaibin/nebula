@@ -184,7 +184,7 @@ void UFOBase::initSubModel(const JMapInfoIter& rIter, const char* name) {
     mLODCtrl = MR::createLodCtrlMapObj(this, rIter, 100.0f);
     if (MR::isExistSubModel(name, "Bloom")) {
         char buf[0x100];
-        snprintf(buf, sizeof(buf), "%sBloom", name);
+        nebula_snprintf(buf, sizeof(buf), "%sBloom", name);
         const char* name2 = mName;
         mModel = MR::createModelObjBloomModel(name2, buf, getBaseMtx());
         f32 num = 500.0f;

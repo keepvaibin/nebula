@@ -157,7 +157,7 @@ void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserF
 
     for (u32 i = 0; i < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); i++) {
         char fileName[16];
-        snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[i].mName, index);
+        nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[i].mName, index);
 
         SaveDataUserFileInfo userFileInfo;
         fileAccessor.makeUserFileInfo(&userFileInfo, fileName);
@@ -175,13 +175,13 @@ void SaveDataHandler::copyUserFileMemory(int indexDst, int indexSrc) {
 
     for (u32 i = 0; i < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); i++) {
         char srcFileName[16];
-        snprintf(srcFileName, sizeof(srcFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexSrc);
+        nebula_snprintf(srcFileName, sizeof(srcFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexSrc);
 
         SaveDataUserFileInfo srcUserFileInfo;
         fileAccessor.makeUserFileInfo(&srcUserFileInfo, srcFileName);
 
         char dstFileName[16];
-        snprintf(dstFileName, sizeof(dstFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexDst);
+        nebula_snprintf(dstFileName, sizeof(dstFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexDst);
 
         SaveDataUserFileInfo dstUserFileInfo;
         fileAccessor.makeUserFileInfo(&dstUserFileInfo, dstFileName);
@@ -300,9 +300,9 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
             MR::zeroMemory(pName, SaveDataFileAccessor::cNameSize);
 
             char fileName[32];
-            snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[j].mName, i + 1);
+            nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[j].mName, i + 1);
 
-            snprintf(pName, SaveDataFileAccessor::cNameSize, "%s", fileName);
+            nebula_snprintf(pName, SaveDataFileAccessor::cNameSize, "%s", fileName);
             file.setFileOffset(fileIndex, offset);
 
             MR::zeroMemory(pBuffer + offset, ::cSaveFileSpecTable[j].mBufferSize);
@@ -315,7 +315,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
 
     MR::zeroMemory(pSystemName, SaveDataFileAccessor::cNameSize);
 
-    snprintf(pSystemName, SaveDataFileAccessor::cNameSize, "%s", ::cSaveFileSpecSystem.mName);
+    nebula_snprintf(pSystemName, SaveDataFileAccessor::cNameSize, "%s", ::cSaveFileSpecSystem.mName);
     file.setFileOffset(fileIndex, offset);
 
     MR::zeroMemory(pBuffer + offset, ::cSaveFileSpecSystem.mBufferSize);

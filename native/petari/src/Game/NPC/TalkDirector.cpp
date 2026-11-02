@@ -348,10 +348,10 @@ void TalkDirector::appearYesNoSelector(const TalkMessageCtrl* pCtrl) const {
     const char* branchID = pCtrl->getBranchID();
 
     char buffYes[256];
-    snprintf(buffYes, sizeof(buffYes), "Select_%s_Yes", branchID);
+    nebula_snprintf(buffYes, sizeof(buffYes), "Select_%s_Yes", branchID);
 
     char buffNo[256];
-    snprintf(buffNo, sizeof(buffNo), "Select_%s_No", branchID);
+    nebula_snprintf(buffNo, sizeof(buffNo), "Select_%s_No", branchID);
 
     if (pCtrl->isSelectYesNo()) {
         MR::resetYesNoSelectorSE();

@@ -15,7 +15,7 @@
 namespace {
     using namespace nw4r;
     using namespace nw4r::lyt;
-    void SetTagProcessorImpl(Pane* pPane, ut::TagProcessorBase< wchar_t >* pTagProcessor) {
+    void SetTagProcessorImpl(Pane* pPane, ut::TagProcessorBase< char16_t >* pTagProcessor) {
         if (TextBox* pTextBox = ut::DynamicCast< TextBox* >(pPane)) {
             pTextBox->SetTagProcessor(pTagProcessor);
         }
@@ -318,7 +318,7 @@ namespace nw4r {
             return ut::Rect(0.0f, 0.0f, mLayoutSize.width, mLayoutSize.height);
         }
 
-        void Layout::SetTagProcessor(ut::TagProcessorBase< wchar_t >* pTagProcessor) {
+        void Layout::SetTagProcessor(ut::TagProcessorBase< char16_t >* pTagProcessor) {
             SetTagProcessorImpl(mpRootPane, pTagProcessor);
         }
         Pane* Layout::BuildPaneObj(s32 kind, const void* dataPtr, const ResBlockSet& resBlockSet) {

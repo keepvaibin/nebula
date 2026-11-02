@@ -38,7 +38,7 @@ void LightFunction::initLightData() {
 
 ResourceHolder* LightFunction::loadLightArchive() {
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "LightData.arc");
+    nebula_snprintf(buf, sizeof(buf), "LightData.arc");
     return MR::createAndAddResourceHolder(buf);
 }
 
@@ -72,27 +72,27 @@ s32 LightFunction::createZoneDataParser(const char* pZone, JMapInfo** pOut) {
 namespace {
     void getDataLightInfo(JMapInfo* pInfo, int id, LightInfo* pLightInfo, const char* pName) {
         char colorBuf[256];
-        snprintf(colorBuf, sizeof(colorBuf), "%sColor", pName);
+        nebula_snprintf(colorBuf, sizeof(colorBuf), "%sColor", pName);
         MR::getCsvDataColor(&pLightInfo->mColor, pInfo, colorBuf, id);
         char posBuf[256];
-        snprintf(posBuf, sizeof(posBuf), "%sPos", pName);
+        nebula_snprintf(posBuf, sizeof(posBuf), "%sPos", pName);
         MR::getCsvDataVec(&pLightInfo->mPos, pInfo, posBuf, id);
         char camBuf[128];
-        snprintf(camBuf, sizeof(camBuf), "%sFollowCamera", pName);
+        nebula_snprintf(camBuf, sizeof(camBuf), "%sFollowCamera", pName);
         MR::getCsvDataBool(&pLightInfo->mIsFollowCamera, pInfo, camBuf, id);
     }
 
     void getDataActorLightInfo(JMapInfo* pInfo, int lightID, ActorLightInfo* pActorInfo, const char* pName) {
         char lightBuf[256];
-        snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 0);
+        nebula_snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 0);
         getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo0, lightBuf);
-        snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 1);
+        nebula_snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 1);
         getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo1, lightBuf);
         char alphaBuf[256];
-        snprintf(alphaBuf, sizeof(alphaBuf), "%sAlpha2", pName);
+        nebula_snprintf(alphaBuf, sizeof(alphaBuf), "%sAlpha2", pName);
         MR::getCsvDataU8(&pActorInfo->mAlpha2, pInfo, alphaBuf, lightID);
         char ambBuf[256];
-        snprintf(ambBuf, sizeof(ambBuf), "%sAmbient", pName);
+        nebula_snprintf(ambBuf, sizeof(ambBuf), "%sAmbient", pName);
         MR::getCsvDataColor(&pActorInfo->mColor, pInfo, ambBuf, lightID);
     }
 };  // namespace

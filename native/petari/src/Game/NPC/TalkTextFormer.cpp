@@ -124,7 +124,7 @@ namespace MR {
 TalkTextFormer::TalkTextFormer(LayoutActor* pActor, const char* pPaneName) : mHostActor(pActor), mMsg(), _8(), mPaneName(pPaneName) {
 }
 
-void TalkTextFormer::formMessage(const wchar_t* pMessage, s32 mode) {
+void TalkTextFormer::formMessage(const char16_t* pMessage, s32 mode) {
     mMsg = pMessage;
     _8 = mode;
     if (NebulaText::isTalk(pMessage)) {
@@ -146,7 +146,7 @@ void TalkTextFormer::setArg(const CustomTagArg& rTag, s32 argIndex) {
 }
 
 bool TalkTextFormer::nextPage() {
-    const wchar_t* pMessage = MR::getNextMessagePage(mMsg);
+    const char16_t* pMessage = MR::getNextMessagePage(mMsg);
     if (pMessage != nullptr) {
         mMsg = pMessage;
         formMessage(pMessage, _8);

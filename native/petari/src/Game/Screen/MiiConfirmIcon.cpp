@@ -16,7 +16,7 @@ void MiiConfirmIcon::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE_ANON(MiiConfirmIconNrvAppear));
 }
 
-void MiiConfirmIcon::appear(nw4r::lyt::TexMap* pTexMap, const wchar_t* pName) {
+void MiiConfirmIcon::appear(nw4r::lyt::TexMap* pTexMap, const char16_t* pName) {
     MR::replacePaneTexture(this, "ShaMiiDummy", pTexMap, 0);
     MR::replacePaneTexture(this, "PicMiiDummy", pTexMap, 0);
     MR::setTextBoxMessageRecursive(this, "MiiName", pName);

@@ -304,7 +304,7 @@ namespace DemoFunction {
 
     ResourceHolder* loadDemoArchive() {
         char buf[0x100];
-        snprintf(buf, sizeof(buf), "DemoSheet.arc");
+        nebula_snprintf(buf, sizeof(buf), "DemoSheet.arc");
         return MR::createAndAddResourceHolder(buf);
     }
 

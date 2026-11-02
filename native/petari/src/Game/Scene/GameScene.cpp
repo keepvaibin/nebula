@@ -198,8 +198,8 @@ namespace {
     void reportPresence() {
         const char* pStage = MR::getCurrentStageName();
         const s32 scenario = MR::getCurrentScenarioNo();
-        const wchar_t* pGalaxy = MR::getGalaxyNameOnCurrentLanguage(pStage);
-        const wchar_t* pStar = scenario > 0 ? MR::getScenarioNameOnCurrentLanguage(pStage, scenario) : nullptr;
+        const char16_t* pGalaxy = MR::getGalaxyNameOnCurrentLanguage(pStage);
+        const char16_t* pStar = scenario > 0 ? MR::getScenarioNameOnCurrentLanguage(pStage, scenario) : nullptr;
         NebulaHost::presence(reinterpret_cast< const u16* >(pGalaxy), reinterpret_cast< const u16* >(pStar), MR::getPowerStarNum());
     }
 };  // namespace
@@ -296,7 +296,7 @@ void GameScene::draw() const {
             sPendingStarId = action.scenario;
         } else if (action.kind == NEBULA_TEST_SET_PLAYER) {
             // GameDataHolder::isDataMario reads the file's name ("mario1" or "luigi1").
-            snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "%s1",
+            nebula_snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "%s1",
                      action.scenario != 0 ? "luigi" : "mario");
         } else if (action.kind == NEBULA_TEST_SET_GRAND_STARS) {
             // Grand Star n is the first star of its galaxy (SpecialStarGrand1-7 derive from these).
@@ -336,13 +336,13 @@ void GameScene::draw() const {
                 MR::setPictureBookChapterAlreadyRead(atoi(action.stage + sizeof(kRead) - 1));
             } else if (strcmp(action.stage, "LuigiFile") == 0) {
                 // The file played as a Luigi file from here (its name; the stage built next reads it).
-                snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "luigi1");
+                nebula_snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "luigi1");
             } else if (strcmp(action.stage, "SpinAndStarPointer") == 0) {
                 // The story's grant of the spin and the pointer (the Gateway's Luma), which an early save lacks.
                 MR::onGameEventFlagEnableToSpinAndStarPointer();
             } else if (equals != nullptr) {
                 static char sName[sizeof(action.stage)];
-                snprintf(sName, sizeof(sName), "%.*s", (int)(equals - action.stage), action.stage);
+                nebula_snprintf(sName, sizeof(sName), "%.*s", (int)(equals - action.stage), action.stage);
                 GameDataFunction::setGameEventValue(sName, (u16)atoi(equals + 1));
             } else if (const GameEventFlag* pFlag = GameEventFlagTable::findFlag(action.stage)) {
                 GameDataFunction::getCurrentGameDataHolder()->mEventFlagChecker->getChunk()->set(pFlag, true);

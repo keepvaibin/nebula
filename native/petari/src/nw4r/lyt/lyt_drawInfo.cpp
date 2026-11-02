@@ -1,6 +1,6 @@
 #include "nw4r/lyt/drawInfo.h"
 #include "nw4r/math/types.h"
-#include <mem.h>
+#include <cstring>
 
 namespace nw4r {
     namespace lyt {

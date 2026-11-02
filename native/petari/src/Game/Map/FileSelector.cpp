@@ -703,8 +703,8 @@ namespace {
 void FileSelector::setFileInfo(s32 id) {
     NebulaCalendar::Date date;
     u16 nameBuffer[MII_NAME_LEN + 1];
-    wchar_t dateBuffer[32];
-    wchar_t timeBuffer[32];
+    char16_t dateBuffer[32];
+    char16_t timeBuffer[32];
 
     if (static_cast< FileSelectItem* >(mItems->getActor(::getItemArrayIndex(id)))->_146) {
         FileSelectFunc::copyMiiName(nameBuffer, FileSelectIconID());
@@ -1289,7 +1289,7 @@ void FileSelector::exeDemo() {
         return;
     }
 
-    wchar_t name[MII_NAME_LEN + 1];
+    char16_t name[MII_NAME_LEN + 1];
     FileSelectIconID iconId = FileSelectIconID();
 
     getIconId(&iconId, _B4->_140);
@@ -1297,11 +1297,11 @@ void FileSelector::exeDemo() {
     if (iconId.isMii()) {
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), iconId);
     } else if (isUserFileLuigi(_B4->_140)) {
-        const wchar_t* pMessage = MR::getGameMessageDirect(::cLuigiNameMessageID);
+        const char16_t* pMessage = MR::getGameMessageDirect(::cLuigiNameMessageID);
 
         MR::copyString(name, pMessage, ARRAY_SIZE(name));
     } else {
-        const wchar_t* pMessage = MR::getGameMessageDirect(::cMarioNameMessageID);
+        const char16_t* pMessage = MR::getGameMessageDirect(::cMarioNameMessageID);
 
         MR::copyString(name, pMessage, ARRAY_SIZE(name));
     }
@@ -1687,7 +1687,7 @@ void FileSelector::exeMiiConfirm() {
 
         mMiiSelect->getSelectedID(&iconId);
         FileSelectFunc::copyMiiName(name, iconId);
-        mMiiConfirmIcon->appear(mMiiSelect->getSelectedMiiTexMap(), reinterpret_cast< wchar_t* >(name));
+        mMiiConfirmIcon->appear(mMiiSelect->getSelectedMiiTexMap(), reinterpret_cast< char16_t* >(name));
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_MII_CHANGE", "SE_SY_TALK_SELECT_NO");
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);

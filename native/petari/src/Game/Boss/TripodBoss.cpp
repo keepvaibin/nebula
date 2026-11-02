@@ -116,7 +116,7 @@ void TripodBoss::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
 
     char lowName[32];
-    sprintf(lowName, "%sLow", objName);
+    nebula_sprintf(lowName, "%sLow", objName);
 
     mLowModel = new ModelObj("\216\117\213\162\203\173\203\130LOD\203\202\203\146\203\213" /* 三脚ボスLODモデル */, lowName, getBaseMtx(), MR::DrawBufferType_TripodBoss, -2, -2, false);
     mLowModel->initWithoutIter();
@@ -170,7 +170,7 @@ void TripodBoss::initLeg(const JMapInfoIter& rIter) {
     MR::getObjectName(&objName, rIter);
 
     char legShadowName[32];
-    sprintf(legShadowName, "%sLegShadow", objName);
+    nebula_sprintf(legShadowName, "%sLegShadow", objName);
 
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
         mLegs[i] = new TripodBossLeg("\216\117\213\162\203\173\203\130\221\253" /* 三脚ボス足 */);

@@ -568,25 +568,25 @@ namespace MR {
 
     bool isExistCollisionResource(const LiveActor* pActor, const char* pName) {
         char buff[0x80];
-        snprintf(buff, sizeof(buff), "%s.kcl", pName);
+        nebula_snprintf(buff, sizeof(buff), "%s.kcl", pName);
         return getResourceHolder(pActor)->mFileInfoTable->findFileInfo(buff) != nullptr;
     }
 
     bool isExistModel(const char* pName) {
         char buff[0x100];
-        snprintf(buff, sizeof(buff), "/ObjectData/%s.arc", pName);
+        nebula_snprintf(buff, sizeof(buff), "/ObjectData/%s.arc", pName);
         return isFileExist(buff, false);
     }
 
     bool isExistSubModel(const char* pModelName, const char* pSubModelName) {
         char buff[0x100];
-        snprintf(buff, sizeof(buff), "%s%s", pModelName, pSubModelName);
+        nebula_snprintf(buff, sizeof(buff), "%s%s", pModelName, pSubModelName);
         return isExistModel(buff);
     }
 
     J3DModelData* getJ3DModelData(const char* pName) {
         char buff[0x100];
-        snprintf(buff, sizeof(buff), "%s.arc", pName);
+        nebula_snprintf(buff, sizeof(buff), "%s.arc", pName);
         return static_cast< J3DModelData* >(createAndAddResourceHolder(buff)->mModelResTable->getRes(pName));
     }
 

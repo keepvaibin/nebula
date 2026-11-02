@@ -157,7 +157,7 @@ u32 LayoutHolder::count(const char* pExtension, const char* pRoot) {
         if (pFinder->mFileIsFolder) {
             if (pFinder->mName[0] != '.') {
                 char path[128];
-                sprintf(path, "%s%s%s", pRoot, "/", pFinder->mName);
+                nebula_sprintf(path, "%s%s%s", pRoot, "/", pFinder->mName);
                 resCount += count(pExtension, path);
             }
         } else {
@@ -180,7 +180,7 @@ void LayoutHolder::mount(char* pRoot) {
         if (pFinder->mFileIsFolder) {
             if (pFinder->mName[0] != '.') {
                 char path[128];
-                snprintf(path, 128, "%s/%s", pRoot, pFinder->mName);
+                nebula_snprintf(path, 128, "%s/%s", pRoot, pFinder->mName);
                 mount(path);
             }
         } else {

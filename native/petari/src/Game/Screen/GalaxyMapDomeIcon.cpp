@@ -201,7 +201,7 @@ bool GalaxyMapDomeIcon::hasNewGalaxy() const {
 
 namespace {
     AstroDomeCheckerBase::AstroDomeCheckerBase(int param1) {
-        snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
+        nebula_snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
     }
 };  // namespace
 

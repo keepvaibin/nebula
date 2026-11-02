@@ -191,8 +191,8 @@ namespace {
 
     // The question in the played language (NebulaText; the game's own Yes and No answer it), its lines broken as
     // the game's messages are (its text boxes do not wrap).
-    const wchar_t* promptText() {
-        static wchar_t question[128];
+    const char16_t* promptText() {
+        static char16_t question[128];
         NebulaText::get(question, 128, "SkipCutsceneQuestion");
         return question;
     }

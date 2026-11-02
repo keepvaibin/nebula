@@ -30,12 +30,12 @@ public:
     void resetButtonAll();
     void updateButtonAppearance();
     void updateList(s32, bool);
-    wchar_t* makeGalaxyNameText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeStarNumText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeCoinText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeCrownText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeRaceNameText(wchar_t*, int, bool) const;
-    wchar_t* makeRaceTimeText(wchar_t*, int, bool) const;
+    char16_t* makeGalaxyNameText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeStarNumText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeCoinText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeCrownText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeRaceNameText(char16_t*, int, bool) const;
+    char16_t* makeRaceTimeText(char16_t*, int, bool) const;
     void startScrollAnimNext(bool);
     void startScrollAnimPrev();
     bool tryShowSeparator(s32, f32);

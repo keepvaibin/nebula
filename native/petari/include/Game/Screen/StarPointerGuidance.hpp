@@ -44,8 +44,8 @@ public:
     /* 0x2C */ s32 mOutScreenTime;
     /* 0x30 */ s32 mRequestTime1P;
     /* 0x34 */ s32 mRequestTime2P;
-    /* 0x38 */ const wchar_t* mGuidanceMessage;
-    /* 0x3C */ const wchar_t* mPrevGuidanceMessage;
+    /* 0x38 */ const char16_t* mGuidanceMessage;
+    /* 0x3C */ const char16_t* mPrevGuidanceMessage;
     /* 0x40 */ bool mIsActiveRequest1P;
     /* 0x41 */ bool mIsActiveRequest2P;
     /* 0x42 */ bool mIsActive;

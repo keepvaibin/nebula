@@ -353,7 +353,7 @@ bool MarioActor::tryJumpRush() {
 
         bool out = jumpTarget->receiveMessage(ACTMES_AUTORUSH_BEGIN, getSensor("body"));
 
-        if (out != nullptr) {
+        if (out != false) {
             resetSensorCount();
             mVelocity.zero();
             beginRush();

@@ -179,63 +179,63 @@ namespace MR {
         addFilePrefix(pDst, size, pFilePath, getCurrentLanguagePrefix());
 
         if (!isFileExist(pDst, false)) {
-            snprintf(pDst, size, "%s", pFilePath);
+            nebula_snprintf(pDst, size, "%s", pFilePath);
         }
     }
 
     bool makeObjectArchiveFileName(char* pDst, u32 size, const char* pFileName) {
-        snprintf(pDst, size, "/ObjectData/%s", pFileName);
+        nebula_snprintf(pDst, size, "/ObjectData/%s", pFileName);
 
         if (isFileExist(pDst, true)) {
             return true;
         }
 
-        snprintf(pDst, size, "/MapPartsData/%s", pFileName);
+        nebula_snprintf(pDst, size, "/MapPartsData/%s", pFileName);
 
         if (isFileExist(pDst, false)) {
             return true;
         }
 
-        snprintf(pDst, size, "%s", pFileName);
+        nebula_snprintf(pDst, size, "%s", pFileName);
 
         return isFileExist(pDst, true);
     }
 
     bool makeObjectArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool) {
         char fileName[256];
-        snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
+        nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
 
         return makeObjectArchiveFileName(pDst, size, fileName);
     }
 
     bool makeLayoutArchiveFileName(char* pDst, u32 size, const char* pFileName) {
-        snprintf(pDst, size, "/Region/LayoutData/%s", pFileName);
+        nebula_snprintf(pDst, size, "/Region/LayoutData/%s", pFileName);
 
         if (isFileExist(pDst, false)) {
             return true;
         }
 
-        snprintf(pDst, size, "/LayoutData/%s", pFileName);
+        nebula_snprintf(pDst, size, "/LayoutData/%s", pFileName);
 
         if (isFileExist(pDst, true)) {
             return true;
         }
 
-        snprintf(pDst, size, "%s", pFileName);
+        nebula_snprintf(pDst, size, "%s", pFileName);
 
         return isFileExist(pDst, false);
     }
 
     bool makeLayoutArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool fallback) {
         char fileName[64];
-        snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
+        nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
         bool isExistArc = makeLayoutArchiveFileName(pDst, size, fileName);
 
         const char* pAspectSuffix = isScreen16Per9() ? "16x9" : "4x3";
-        snprintf(fileName, sizeof(fileName), "%s%s.arc", pFilePrefix, pAspectSuffix);
+        nebula_snprintf(fileName, sizeof(fileName), "%s%s.arc", pFilePrefix, pAspectSuffix);
         bool isExistAspectArc = makeLayoutArchiveFileName(pDst, size, fileName);
 
-        snprintf(fileName, sizeof(fileName), "%sReplace.arc", pFilePrefix);
+        nebula_snprintf(fileName, sizeof(fileName), "%sReplace.arc", pFilePrefix);
         bool isExistReplaceArc = makeLayoutArchiveFileName(pDst, size, fileName);
 
         bool fileFound = isExistArc || isExistAspectArc || isExistReplaceArc;
@@ -246,11 +246,11 @@ namespace MR {
 
         if (isExistAspectArc) {
             pAspectSuffix = isScreen16Per9() ? "16x9" : "4x3";
-            snprintf(fileName, sizeof(fileName), "%s%s.arc", pFilePrefix, pAspectSuffix);
+            nebula_snprintf(fileName, sizeof(fileName), "%s%s.arc", pFilePrefix, pAspectSuffix);
         } else if (isExistReplaceArc) {
-            snprintf(fileName, sizeof(fileName), "%sReplace.arc", pFilePrefix);
+            nebula_snprintf(fileName, sizeof(fileName), "%sReplace.arc", pFilePrefix);
         } else {
-            snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
+            nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pFilePrefix);
         }
 
         makeLayoutArchiveFileName(pDst, size, fileName);
@@ -259,6 +259,6 @@ namespace MR {
     }
 
     void makeScenarioArchiveFileName(char* pDst, u32 size, const char* pStageName) {
-        snprintf(pDst, size, "/StageData/%s/%sScenario.arc", pStageName, pStageName);
+        nebula_snprintf(pDst, size, "/StageData/%s/%sScenario.arc", pStageName, pStageName);
     }
 };  // namespace MR

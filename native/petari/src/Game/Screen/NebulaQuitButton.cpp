@@ -17,8 +17,8 @@ namespace {
     const s32 cShowDelayFrames = 8;
 
     // The label in the played language (NebulaText; the game's own Yes and No answer the question).
-    const wchar_t* getLabel() {
-        static wchar_t label[64];
+    const char16_t* getLabel() {
+        static char16_t label[64];
         NebulaText::get(label, 64, "QuitToDesktop");
         return label;
     }
@@ -198,8 +198,8 @@ bool NebulaQuitButton::isPointing() const {
 }
 
 // The question the button asks, in the played language.
-const wchar_t* NebulaQuitButton::getQuestion() {
-    static wchar_t question[128];
+const char16_t* NebulaQuitButton::getQuestion() {
+    static char16_t question[128];
     NebulaText::get(question, 128, "QuitQuestion");
     return question;
 }

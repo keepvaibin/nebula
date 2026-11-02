@@ -27,7 +27,7 @@ DemoTalkAnimCtrl::DemoTalkAnimCtrl(LiveActor* pActor, const char* a3, const char
 
 void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const JMapInfoIter& rIter) {
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "%s.canm", a2);
+    nebula_snprintf(buf, sizeof(buf), "%s.canm", a2);
     initForActor(a1);
     _35 = true;
     _34 = _10 == nullptr;
@@ -42,7 +42,7 @@ void DemoTalkAnimCtrl::initForScene(const char* a1, const char* a2, const JMapIn
 
 void DemoTalkAnimCtrl::updateCamera() {
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "%s%s", mActor->mName, _1C);
+    nebula_snprintf(buf, sizeof(buf), "%s%s", mActor->mName, _1C);
     if (DemoFunction::isPauseTimeKeepDemo(_C)) {
         MR::pauseOnAnimCamera(mCameraInfo, buf);
     } else {

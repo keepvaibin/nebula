@@ -25,7 +25,7 @@ public:
     void setLastLoadedMario(bool);
     void onCompleteEndingCurrentPlayer();
     void updateLastModified();
-    void setUserName(const wchar_t*);
+    void setUserName(const char16_t*);
     const char* getGameDataName() const;
     void makeGameDataBinary(u8*, u32) const;
     void loadFromGameDataBinary(const char*, const u8*, u32);
@@ -42,5 +42,5 @@ public:
     /* 0x08 */ bool mIsPlayerMario;
     /* 0x09 */ bool mIsGameDataCorrupted;
     /* 0x0A */ bool mIsConfigDataCorrupted;
-    /* 0x0C */ wchar_t* mUserName;
+    /* 0x0C */ char16_t* mUserName;
 };

@@ -1,5 +1,0 @@
-/* MSL's <cerrno>. */
-#ifndef NEBULA_MSL_CERRNO
-#define NEBULA_MSL_CERRNO
-#include <errno.h>
-#endif

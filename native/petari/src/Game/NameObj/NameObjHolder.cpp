@@ -44,7 +44,9 @@ void NameObjHolder::syncWithFlags() {
 }
 
 void NameObjHolder::callMethodAllObj(NameObjMethod pMethod) {
-    std::for_each(mObjArray1.begin(), mObjArray1.end(), std::mem_fun(pMethod));
+    for (auto& item : mObjArray1) {
+        (item->*pMethod)();
+    }
 }
 
 void NameObjHolder::clearArray() {

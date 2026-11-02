@@ -95,7 +95,7 @@ private:
     /* 0x20 */ InformationMessage* mInfo;
     /* 0x24 */ StaffRollLine** mLine;
     /* 0x28 */ StaffRollPicture* mPicture;
-    /* 0x2C */ const wchar_t* mMsg;
+    /* 0x2C */ const char16_t* mMsg;
     /* 0x30 */ u32 mMsgLineNum;
     /* 0x34 */ u32 mMsgLine;
     /* 0x38 */ TVec2f mTitleLogoPos;

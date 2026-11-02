@@ -36,7 +36,7 @@ void SandUpDownTriRock::init(const JMapInfoIter& rIter) {
 
     for (s32 i = 0; i < ARRAY_SIZE(mRockCollisionParts); i++) {
         char name[256];
-        snprintf(name, sizeof(name), "Move0%d", i);
+        nebula_snprintf(name, sizeof(name), "Move0%d", i);
 
         mRockCollisionParts[i] =
             MR::createCollisionPartsFromLiveActor(this, name, getSensor("body"), MR::getJointMtx(this, name), MR::CollisionScaleType_Unk2);

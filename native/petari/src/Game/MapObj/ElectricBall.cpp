@@ -89,9 +89,9 @@ void ElectricBall::init(const JMapInfoIter& rIter) {
 }
 
 void ElectricBall::initAfterPlacement() {
-    std::for_each(mBalls.begin(), mBalls.end(),
-                  std::binder2nd< std::mem_fun1_ref_t< void, Ball, const TPos3f& >, const TPos3f& >(
-                      std::mem_fun1_ref_t< void, Ball, const TPos3f& >(&Ball::updatePosition), mBaseMtx));
+    for (auto& item : mBalls) {
+        item.updatePosition(mBaseMtx);
+    }
 
     Ball* ball = getNearestBall();
     mClosestBallPos.set(ball->mHost->mPosition);
@@ -113,9 +113,9 @@ void ElectricBall::control() {
         mBaseMtx.concat(mBaseMtx, mtx);
         mBaseMtx.setTrans(mPosition);
 
-        std::for_each(mBalls.begin(), mBalls.end(),
-                      std::binder2nd< std::mem_fun1_ref_t< void, Ball, const TPos3f& >, const TPos3f& >(
-                          std::mem_fun1_ref_t< void, Ball, const TPos3f& >(&Ball::updatePosition), mBaseMtx));
+        for (auto& item : mBalls) {
+            item.updatePosition(mBaseMtx);
+        }
 
         MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
     }
@@ -147,8 +147,9 @@ void ElectricBall::initBalls(const JMapInfoIter& rIter) {
 
     mBalls.init(arg0);
 
-    std::for_each_array(mBalls.begin(), mBalls.end(),
-                        std::binder2nd< std::mem_fun1_t< void, Ball, LiveActor* >, LiveActor* >(std::mem_func(&Ball::init), this));
+    for (auto& item : mBalls) {
+        item.init(this);
+    }
 
     TVec3f vec(mRadius, 0.0f, 0.0f);
     f32 f1 = TWO_PI / mBalls.size();
@@ -180,7 +181,9 @@ void ElectricBall::startMove() {
         mRailMover->start();
     }
 
-    std::for_each_array(mBalls.begin(), mBalls.end(), std::mem_func(&Ball::activate));
+    for (auto& item : mBalls) {
+        item.activate();
+    }
 
     setNerve(GET_NERVE(ElectricBall, HostTypeMove));
 }

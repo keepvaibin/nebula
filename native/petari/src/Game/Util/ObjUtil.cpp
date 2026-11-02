@@ -45,7 +45,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <cstdio>
-#include <va_list.h>
+#include <cstdarg>
 
 void ObjUtil_FORCE_MATCH_SDATA2() {
     (void)57.2957802f;
@@ -528,10 +528,10 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive, const char* pFile) {
 
 const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
     char arcName[256];
-    snprintf(arcName, sizeof(arcName), "%s.arc", pArchive);
+    nebula_snprintf(arcName, sizeof(arcName), "%s.arc", pArchive);
 
     char texName[256];
-    snprintf(texName, sizeof(texName), "%s.bti", pArchive);
+    nebula_snprintf(texName, sizeof(texName), "%s.bti", pArchive);
 
     return loadTexFromArc(arcName, texName);
 }
@@ -539,7 +539,7 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
 namespace {
     bool isExistFileInArcLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) NO_INLINE {
         char buf[0x100];
-        vsnprintf(buf, sizeof(buf), pArchive, pFormat);
+        nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
         return pHolder->mFileInfoTable->isExistRes(buf) != false;
     }
@@ -555,7 +555,7 @@ bool MR::isExistFileInArc(const ResourceHolder* pHolder, const char* pFormat, ..
 namespace {
     JMapInfo* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) NO_INLINE {
         char buf[0x100];
-        vsnprintf(buf, sizeof(buf), pArchive, pFormat);
+        nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
         if (!pHolder->mFileInfoTable->isExistRes(buf)) {
             return nullptr;
@@ -578,7 +578,7 @@ JMapInfo* MR::createCsvParser(const ResourceHolder* pHolder, const char* pFormat
 JMapInfo* MR::createCsvParser(const char* pArchive, const char* pFormat, ...) {
     ResourceHolder* pResourceHolder = SingletonHolder< ResourceHolderManager >::get()->createAndAdd(pArchive, nullptr);
 
-    return MR::createCsvParser(pResourceHolder, pFormat);
+    return MR::createCsvParser(pResourceHolder, "%s", pFormat);
 }
 
 JMapInfo* MR::tryCreateCsvParser(const LiveActor* pActor, const char* pFormat, ...) {
@@ -635,23 +635,23 @@ void MR::getCsvDataBool(bool* pOut, const JMapInfo* pMapInfo, const char* pKey, 
 
 void MR::getCsvDataVec(Vec* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
-    snprintf(key, sizeof(key), "%sX", pKey);
+    nebula_snprintf(key, sizeof(key), "%sX", pKey);
     getCsvDataF32(&pOut->x, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sY", pKey);
+    nebula_snprintf(key, sizeof(key), "%sY", pKey);
     getCsvDataF32(&pOut->y, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sZ", pKey);
+    nebula_snprintf(key, sizeof(key), "%sZ", pKey);
     getCsvDataF32(&pOut->z, pMapInfo, key, idx);
 }
 
 void MR::getCsvDataColor(NebulaColor8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
-    snprintf(key, sizeof(key), "%sR", pKey);
+    nebula_snprintf(key, sizeof(key), "%sR", pKey);
     getCsvDataU8(&pOut->r, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sG", pKey);
+    nebula_snprintf(key, sizeof(key), "%sG", pKey);
     getCsvDataU8(&pOut->g, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sB", pKey);
+    nebula_snprintf(key, sizeof(key), "%sB", pKey);
     getCsvDataU8(&pOut->b, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sA", pKey);
+    nebula_snprintf(key, sizeof(key), "%sA", pKey);
     getCsvDataU8(&pOut->a, pMapInfo, key, idx);
 }
 

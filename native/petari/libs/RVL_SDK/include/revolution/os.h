@@ -1,7 +1,7 @@
 #ifndef OS_H
 #define OS_H
 
-#include <cstdarg>
+#include <stdarg.h>
 #include "revolution/types.h"
 
 #ifdef __cplusplus

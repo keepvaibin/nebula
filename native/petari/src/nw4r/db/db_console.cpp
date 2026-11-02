@@ -1,6 +1,6 @@
 #include "nw4r/db/console.h"
 #include "Game/System/GameThreads.hpp"
-#include <va_list.h>
+#include <cstdarg>
 
 namespace nw4r {
     namespace db {

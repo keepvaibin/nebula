@@ -21,7 +21,7 @@ void JASReport(const char* pFormat, ...) {
     va_start(vl, pFormat);
     GameMutex* pMutex = &sMutex;
     pMutex->lock();
-    vsnprintf(sBuffer + (sTop * 64), 64, pFormat, vl);
+    nebula_vsnprintf(sBuffer + (sTop * 64), 64, pFormat, vl);
     va_end(vl);
 
     sTop++;

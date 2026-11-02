@@ -51,22 +51,22 @@ namespace {
 
     // The game's message tags, as MessageData holds them natively: 0x1A, the tag's byte length and group as two
     // bytes, the tag id, then 16-bit parameters (an 8-bit one in the high byte).
-    wchar_t* addFontSizeTag(wchar_t* pDst, u16 size) {
+    char16_t* addFontSizeTag(char16_t* pDst, u16 size) {
         pDst[0] = 0x1A;
-        pDst[1] = static_cast< wchar_t >(6 | (4 << 8));
+        pDst[1] = static_cast< char16_t >(6 | (4 << 8));
         pDst[2] = size;  // 0: three quarters, 1: the box's size
         return pDst + 3;
     }
 
-    wchar_t* addColorTag(wchar_t* pDst, u8 color) {
+    char16_t* addColorTag(char16_t* pDst, u8 color) {
         pDst[0] = 0x1A;
-        pDst[1] = static_cast< wchar_t >(8 | (0xFF << 8));
+        pDst[1] = static_cast< char16_t >(8 | (0xFF << 8));
         pDst[2] = 0;
-        pDst[3] = static_cast< wchar_t >(color << 8);  // the game's text colours: 0 white, 4 gold
+        pDst[3] = static_cast< char16_t >(color << 8);  // the game's text colours: 0 white, 4 gold
         return pDst + 4;
     }
 
-    wchar_t* addString(wchar_t* pDst, const wchar_t* pSrc, s32 capacity) {
+    char16_t* addString(char16_t* pDst, const char16_t* pSrc, s32 capacity) {
         while (*pSrc != 0 && capacity-- > 1) {
             *pDst++ = *pSrc++;
         }
@@ -253,7 +253,7 @@ void NebulaAchievementToast::control() {
     case StepIdle: {
         // At once, whatever the scene is doing: over cutscenes and their bars, menus and wipes.
         const NebulaAchievementIcon* pIcon = nullptr;
-        const wchar_t* pName = NebulaAchievements::getWaiting(&pIcon);
+        const char16_t* pName = NebulaAchievements::getWaiting(&pIcon);
         if (pName != nullptr) {
             start(pName, pIcon);
         }
@@ -317,7 +317,7 @@ void NebulaAchievementToast::setIcon(const NebulaAchievementIcon* pIcon, f32* pW
     }
 
     // A glyph (or a texture that is missing: the Power Star).
-    wchar_t picture[8];
+    char16_t picture[8];
     MR::addPictureFontTag(picture, pIcon != nullptr && pIcon->mGlyph != 0 ? pIcon->mGlyph : '7');
     MR::setTextBoxMessageRecursive(this, "ConfirmU", picture);
     fitText(mGlyph, cIconSize, 0.0f, pWidth, pHeight);
@@ -328,12 +328,12 @@ void NebulaAchievementToast::setIcon(const NebulaAchievementIcon* pIcon, f32* pW
     }
 }
 
-void NebulaAchievementToast::start(const wchar_t* pName, const NebulaAchievementIcon* pIcon) {
-    wchar_t text[160];
-    wchar_t* pText = addFontSizeTag(text, 0);
+void NebulaAchievementToast::start(const char16_t* pName, const NebulaAchievementIcon* pIcon) {
+    char16_t text[160];
+    char16_t* pText = addFontSizeTag(text, 0);
     pText = addColorTag(pText, 4);
     pText += NebulaText::get(pText, 48, "AchievementGet");
-    pText = addString(pText, L"\n", 2);
+    pText = addString(pText, u"\n", 2);
     pText = addFontSizeTag(pText, 1);
     pText = addColorTag(pText, 0);
     addString(pText, pName, 64);

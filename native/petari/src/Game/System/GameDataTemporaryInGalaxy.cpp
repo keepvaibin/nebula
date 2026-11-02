@@ -86,5 +86,5 @@ void GameDataTemporaryInGalaxy::receiveStageResultParam(const char* pStageName, 
     mStarPieceNum = starPieceNum;
     mCoinNum = coinNum;
 
-    snprintf(mStageName, sizeof(mStageName), "%s", pStageName);
+    nebula_snprintf(mStageName, sizeof(mStageName), "%s", pStageName);
 }

@@ -26,7 +26,7 @@ namespace {
         char messageID[0x80];
 
         do {
-            snprintf(messageID, sizeof(messageID), "%s%03d", pName, count + 1);
+            nebula_snprintf(messageID, sizeof(messageID), "%s%03d", pName, count + 1);
             count++;
         } while (MR::isExistGameMessage(messageID));
 
@@ -235,19 +235,19 @@ void Manual2P::reflectPageIndex() {
     MR::setAnimFrameAndStop(this, mPageIndex, 1);
 
     char messageID[0x80];
-    snprintf(messageID, sizeof(messageID), "2PGuidance%03d", mPageIndex + 1);
+    nebula_snprintf(messageID, sizeof(messageID), "2PGuidance%03d", mPageIndex + 1);
 
     if (MR::isExistGameMessage(messageID)) {
         MR::setTextBoxGameMessageRecursive(this, "Text", messageID);
     }
 
-    snprintf(messageID, sizeof(messageID), "2PGuidanceTitle%03d", mPageIndex + 1);
+    nebula_snprintf(messageID, sizeof(messageID), "2PGuidanceTitle%03d", mPageIndex + 1);
 
     if (MR::isExistGameMessage(messageID)) {
         MR::setTextBoxGameMessageRecursive(this, "Title", messageID);
     }
 
-    MR::setTextBoxFormatRecursive(this, "PageNumber", L"%d/%d", mPageIndex + 1, mPageNum);
+    MR::setTextBoxFormatRecursive(this, "PageNumber", u"%d/%d", mPageIndex + 1, mPageNum);
 
     if (mPageIndex == 0) {
         ButtonPaneController* pPaneCtrl = mLeftPaneCtrl;
