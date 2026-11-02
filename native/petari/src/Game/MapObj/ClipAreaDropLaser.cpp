@@ -13,7 +13,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <NebulaGpuEnums.h>
 
 namespace NrvClipAreaDropLaser {
     NEW_NERVE(ClipAreaDropLaserNrvWait, ClipAreaDropLaser, Wait);

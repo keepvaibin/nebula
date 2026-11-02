@@ -99,10 +99,10 @@ void J3DSys::drawInit() {
     J3DPass::lightMaterial(0, j3dDefaultColInfo);
     J3DPass::lightMaterial(1, j3dDefaultColInfo);
 
-    for (i = 0; i < GPU_MAX_TEVREG; i++)
+    for (i = 0; i < 4; i++)
         J3DPass::constantColor(i, j3dDefaultTevKColor);
 
-    for (i = 0; i < GPU_MAX_TEVREG; i++)
+    for (i = 0; i < 4; i++)
         J3DPass::materialColorWide(i, j3dDefaultTevColor);
 
 
@@ -154,7 +154,7 @@ void J3DSys::reinitIndStages() {
 void J3DSys::reinitPixelProc() {
     J3DPass::noBlend();
     J3DPass::writeColor(true);
-    // SMG1 change -- GPU_FALSE to GPU_TRUE
+    // SMG1 change -- false to true
     J3DPass::writeAlpha(true);
     J3DPass::noFog();
     J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);

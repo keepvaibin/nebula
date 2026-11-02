@@ -1,6 +1,5 @@
 #pragma once
 
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 
 class BloomEffect;

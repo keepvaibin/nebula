@@ -99,9 +99,9 @@ void OceanRingPipeOutside::loadMaterial() const {
     NativeShader::setTexture(material, 0, mWaterPipeIndirectTex);
     NativeShader::setTexture(material, 1, mWaterPipeHighLightTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
 }
 
 void OceanRingPipeOutside::sendGD() {

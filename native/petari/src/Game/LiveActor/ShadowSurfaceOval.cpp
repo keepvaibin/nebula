@@ -9,7 +9,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <NebulaGpuEnums.h>
 
 ShadowSurfaceOval::~ShadowSurfaceOval() {
 }

@@ -16,7 +16,7 @@
 
 FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     : mBodyTexture(), mFurTexture(), mIndirectTexture(), mNumLayers(numLayers), mLength(3.0f, 1.0f), mIndirect(0.2f, 1.5f), mBrightness(40.0f, 4.5f),
-      mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(GPU_CULL_BACK), mMatIntensity(255),
+      mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(J3D_CULL_BACK), mMatIntensity(255),
       mAmbIntensity(50), mUseIndirect(1), mZCompLoc(), mZWrite(), mAdditive(), mAlphaRef(32) {
     mBodyTexture = new JUTTexture(pBody);
 
@@ -102,8 +102,8 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
 
     NativeShader::init(sMaterial, NEBULA_SHADER_FUR, mAdditive ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA,
                        NEBULA_COMPARE_LEQUAL, mZWrite != 0,
-                       mCullMode == GPU_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == GPU_CULL_FRONT ? NEBULA_CULL_FRONT
-                       : mCullMode == GPU_CULL_ALL ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
+                       mCullMode == J3D_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == J3D_CULL_FRONT ? NEBULA_CULL_FRONT
+                       : mCullMode == J3D_CULL_ALL ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
     sMaterial.early_depth = mZCompLoc != 0 ? 1 : 0;
     sMaterial.color_write = 1;
     sMaterial.alpha_write = 0;
@@ -128,9 +128,9 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         pFog[4] = 1.0f;
         pFog[5] = 0.0f;
         pFog[6] = 0.0f;
-        pFog[7] = GPU_FOG_PERSP_LIN;
+        pFog[7] = J3D_FOG_PERSP_LIN;
     } else {
-        pFog[7] = GPU_FOG_NONE;
+        pFog[7] = J3D_FOG_NONE;
     }
 
     Mtx bodyMtx;
@@ -157,7 +157,7 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     u32 mask0 = 0;
     u32 mask1 = 0;
     if (pLight) {
-        // GpuSetChanCtrl's ambient source then material source per channel (GPU_SRC_VTX 1).
+        // The ambient source then material source per channel (1 the vertex).
         sources = (pLight->mColorSource & 1) | (((pLight->mColorSource >> 1) & 1) << 1);
         mask0 = pLight->mLightMask;
         if (useSpecular) {

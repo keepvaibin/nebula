@@ -1,7 +1,6 @@
 #include "nw4r/lyt/common.h"
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/lyt/layout.h"
-#include <NebulaGpuEnums.h>
 #include <cstdio>
 
 namespace nw4r {

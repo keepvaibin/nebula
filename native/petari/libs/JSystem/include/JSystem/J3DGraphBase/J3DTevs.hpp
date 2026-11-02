@@ -51,7 +51,7 @@ public:
 };  // Size = 0x74
 
 // One TEV stage as the console's functions take it: the colour and alpha inputs (GpuTevColorArg, GpuTevAlphaArg), operations
-// (GpuTevOp, compare operations included), bias, scale, clamp and output register, and the swap tables the
+// (u8, compare operations included), bias, scale, clamp and output register, and the swap tables the
 // rasterised colour and the texture read through.
 void makeTexCoordTable();
 void makeAlphaCmpTable();
@@ -89,7 +89,7 @@ inline u8 calcTevSwapTableID(u8 param_0, u8 param_1, u8 param_2, u8 param_3) {
 
   // Size: 0x1
 
-// One indirect TEV stage as GpuSetTevIndirect takes it.
+// One indirect stage.
 struct J3DNBTScale;
 struct J3DTexCoord;
 void loadNBTScale(J3DNBTScale& param_0);
@@ -173,20 +173,20 @@ struct J3DBlend : public J3DBlendInfo {
         mDstFactor = i_factor;
     }
 
-    GpuBlendMode getBlendMode() const {
-        return (GpuBlendMode)mType;
+    u8 getBlendMode() const {
+        return (u8)mType;
     }
 
-    GpuBlendFactor getSrcFactor() const {
-        return (GpuBlendFactor)mSrcFactor;
+    u8 getSrcFactor() const {
+        return (u8)mSrcFactor;
     }
 
-    GpuBlendFactor getDstFactor() const {
-        return (GpuBlendFactor)mDstFactor;
+    u8 getDstFactor() const {
+        return (u8)mDstFactor;
     }
 
-    GpuLogicOp getLogicOp() const {
-        return (GpuLogicOp)mOp;
+    u8 getLogicOp() const {
+        return (u8)mOp;
     }
 
     void setBlendInfo(const J3DBlendInfo& i_blendInfo) {
@@ -282,12 +282,12 @@ struct J3DAlphaComp {
     /* 0x03 */ u8 mRef1;
 };  // Size: 0x4
 
-static inline u32 setChanCtrlMacro(u8 enable, GpuColorSrc ambSrc, GpuColorSrc matSrc, u32 lightMask, GpuDiffuseFn diffuseFn, GpuAttnFn attnFn) {
-    return matSrc << 0 | enable << 1 | (lightMask & 0x0F) << 2 | ambSrc << 6 | ((attnFn == GPU_AF_SPEC) ? GPU_DF_NONE : diffuseFn) << 7 |
-           (attnFn != GPU_AF_NONE) << 9 | (attnFn != GPU_AF_SPEC) << 10 | (lightMask >> 4 & 0x0F) << 11;
+static inline u32 setChanCtrlMacro(u8 enable, u8 ambSrc, u8 matSrc, u32 lightMask, u8 diffuseFn, u8 attnFn) {
+    return matSrc << 0 | enable << 1 | (lightMask & 0x0F) << 2 | ambSrc << 6 | ((attnFn == J3D_AF_SPEC) ? J3D_DF_NONE : diffuseFn) << 7 |
+           (attnFn != J3D_AF_NONE) << 9 | (attnFn != J3D_AF_SPEC) << 10 | (lightMask >> 4 & 0x0F) << 11;
 }
 
-// One colour channel as GpuSetChanCtrl takes it (a specular channel has no diffuse function).
+// One colour channel (a specular channel has no diffuse function).
 class J3DColorChan {
 public:
     J3DColorChan() {
@@ -315,7 +315,7 @@ public:
         mMatSrc = matSrc & 1;
         mAmbSrc = ambSrc & 1;
         mLightMask = lightMask;
-        mDiffuseFn = attnFn == GPU_AF_SPEC ? 0 : diffuseFn & 3;
+        mDiffuseFn = attnFn == J3D_AF_SPEC ? 0 : diffuseFn & 3;
         mAttnFn = attnFn;
     }
 

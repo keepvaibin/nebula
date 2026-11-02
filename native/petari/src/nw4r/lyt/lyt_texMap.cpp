@@ -1,7 +1,6 @@
 #include "nw4r/lyt/common.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "nw4r/lyt/texMap.h"
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 
 namespace nw4r {

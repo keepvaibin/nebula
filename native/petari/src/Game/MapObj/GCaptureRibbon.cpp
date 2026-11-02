@@ -10,7 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 
 GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture(), _990(), _994() {
 }

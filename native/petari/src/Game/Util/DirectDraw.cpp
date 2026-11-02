@@ -14,7 +14,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "math_types.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 
 namespace {
     static Mtx mViewMtx;

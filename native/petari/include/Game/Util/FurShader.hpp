@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <NebulaGpuEnums.h>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 

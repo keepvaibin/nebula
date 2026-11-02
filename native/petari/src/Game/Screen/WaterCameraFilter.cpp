@@ -19,7 +19,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>

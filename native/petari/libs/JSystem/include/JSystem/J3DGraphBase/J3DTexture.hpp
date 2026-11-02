@@ -15,7 +15,7 @@ public:
     J3DTexture(u16 num, ResTIMG* res) : mNum(num), unk_0x2(0), mpRes(res) {
     }
 
-    void loadGX(u16, GpuTexMapID) const;
+    void loadGX(u16, u8) const;
     void entryNum(u16);
     void addResTIMG(u16, ResTIMG const*);
     virtual ~J3DTexture() {

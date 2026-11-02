@@ -37,7 +37,7 @@ namespace nw4r {
             EnableLinearFilter(true, true);
         }
 
-        void CharWriter::LoadTexture(const Glyph& glyph, GpuTexMapID slot) {
+        void CharWriter::LoadTexture(const Glyph& glyph, u8 slot) {
             LoadingTexture loadInfo;
 
             loadInfo.slot = slot;
@@ -48,8 +48,8 @@ namespace nw4r {
                 J3DNativeTexObj tobj;
 
                 J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
-                J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GPU_DISABLE, 0);
-                NativeShader::setTexObj(sMaterial, slot - GPU_TEXMAP0, &tobj);
+                J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
+                NativeShader::setTexObj(sMaterial, slot - 0, &tobj);
                 NativeShader::send(sMaterial);
 
                 mLoadingTexture = loadInfo;
@@ -170,7 +170,7 @@ namespace nw4r {
             const u16 texRight = static_cast< u16 >((glyph.cellX + glyph.widths.glyphWidth) * TEXTURE_COODINATE_ONE / glyph.texWidth);
             const u16 texBottom = static_cast< u16 >((glyph.cellY + glyph.height) * TEXTURE_COODINATE_ONE / glyph.texHeight);
 
-            LoadTexture(glyph, GPU_TEXMAP0);
+            LoadTexture(glyph, 0);
 
             J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {

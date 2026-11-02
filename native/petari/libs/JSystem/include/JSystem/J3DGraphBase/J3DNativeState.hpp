@@ -86,7 +86,7 @@ namespace J3DNativeState {
     void sendLight(const J3DNativeLight* pLight, u8 index);  // light 0-7
     // Whether the frame keeps alpha (the last value kept here: the host changes only when it differs).
     void setFrameAlpha(bool keepAlpha);
-    // The drawing state the game starts from (what GpuInit set on the console), sent before anything is drawn.
+    // The drawing state the game starts from , sent before anything is drawn.
     void initDefaults();
     // The frame's picture is drawn: its top left `width` x `height` becomes the one shown, through the display's
     // vertical filter when `filtered`.

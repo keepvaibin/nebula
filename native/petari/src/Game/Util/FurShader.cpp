@@ -8,7 +8,6 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
-#include <NebulaGpuEnums.h>
 
 CShader::CShader(const J3DModelData* pModelData, const ResTIMG* pTimg) : mIndexArray(), mLengthMap(pTimg) {
     _1C = 0.0f;

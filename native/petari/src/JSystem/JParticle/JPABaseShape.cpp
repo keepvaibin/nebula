@@ -949,60 +949,6 @@ const u8 JPABaseShape::st_c[8] = {
     NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_GREATER, NEBULA_COMPARE_ALWAYS,
 };
 
-GpuTevColorArg JPABaseShape::st_ca[6][4] = {
-    {
-        GPU_CC_ZERO,
-        GPU_CC_TEXC,
-        GPU_CC_ONE,
-        GPU_CC_ZERO,
-    },
-    {
-        GPU_CC_ZERO,
-        GPU_CC_C0,
-        GPU_CC_TEXC,
-        GPU_CC_ZERO,
-    },
-    {
-        GPU_CC_C0,
-        GPU_CC_ONE,
-        GPU_CC_TEXC,
-        GPU_CC_ZERO,
-    },
-    {
-        GPU_CC_C1,
-        GPU_CC_C0,
-        GPU_CC_TEXC,
-        GPU_CC_ZERO,
-    },
-    {
-        GPU_CC_ZERO,
-        GPU_CC_TEXC,
-        GPU_CC_C0,
-        GPU_CC_C1,
-    },
-    {
-        GPU_CC_ZERO,
-        GPU_CC_ZERO,
-        GPU_CC_ZERO,
-        GPU_CC_C0,
-    },
-};
-
-GpuTevAlphaArg JPABaseShape::st_aa[2][4] = {
-    {
-        GPU_CA_ZERO,
-        GPU_CA_TEXA,
-        GPU_CA_A0,
-        GPU_CA_ZERO,
-    },
-    {
-        GPU_CA_ZERO,
-        GPU_CA_ZERO,
-        GPU_CA_ZERO,
-        GPU_CA_A0,
-    },
-};
-
 // The shape's blending and depth (the particle material keeps them) and its alpha test's references (the register
 // file the particle material reads); its colour and alpha modes and compares go into the particle material
 // (JPAResource::sendMaterial).

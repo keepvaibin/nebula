@@ -33,6 +33,10 @@ struct J3DZModeInfo {
     /* 0x3 */ u8 pad;
 };
 
+struct J3DFogAdjTable {
+    u16 r[10];
+};
+
 struct J3DFogInfo {
     J3DFogInfo& operator=(J3DFogInfo const&);
 
@@ -44,7 +48,7 @@ struct J3DFogInfo {
     /* 0x0C */ f32 mNearZ;
     /* 0x10 */ f32 mFarZ;
     /* 0x14 */ NebulaColor8 mColor;
-    /* 0x18 */ GpuFogAdjTable mFogAdjTable;
+    /* 0x18 */ J3DFogAdjTable mFogAdjTable;
 };  // Size: 0x2C
 
 struct J3DBlendInfo {
@@ -279,8 +283,8 @@ inline u16 calcColorChanID(u16 enable, u8 matSrc, u8 lightMask, u8 diffuseFn, u8
     reg = (reg & ~0x1000) | bool(lightMask & 0x20) << 12;
     reg = (reg & ~0x2000) | bool(lightMask & 0x40) << 13;
     reg = (reg & ~0x4000) | bool(lightMask & 0x80) << 14;
-    reg = (reg & ~0x0180) | (attnFn == GPU_AF_SPEC ? 0 : diffuseFn) << 7;
-    reg = (reg & ~0x0200) | (attnFn != GPU_AF_NONE) << 9;
-    reg = (reg & ~0x0400) | (attnFn != GPU_AF_SPEC) << 10;
+    reg = (reg & ~0x0180) | (attnFn == J3D_AF_SPEC ? 0 : diffuseFn) << 7;
+    reg = (reg & ~0x0200) | (attnFn != J3D_AF_NONE) << 9;
+    reg = (reg & ~0x0400) | (attnFn != J3D_AF_SPEC) << 10;
     return reg;
 }
