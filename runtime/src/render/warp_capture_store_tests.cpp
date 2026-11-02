@@ -271,10 +271,11 @@ Pixel oracle_convert(
     const galaxy::render::CaptureRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
+    (void)params;
     const std::array<std::uint32_t, 3> coefficients{
-        capture_filter_upper(params),
-        capture_filter_middle(params),
-        capture_filter_lower(params),
+        0u,
+        64u,
+        0u,
     };
     const auto filtered = [&](std::uint8_t p, std::uint8_t c, std::uint8_t n) {
         return (static_cast<double>(p) * coefficients[0] + static_cast<double>(c) * coefficients[1] +
@@ -343,8 +344,7 @@ Pixel oracle_depth(const std::array<std::uint32_t, 3>& z24_rows, const galaxy::r
     const int minimum = std::clamp(static_cast<int>(params.src_y), 0, 2);
     const int maximum = std::clamp(static_cast<int>(params.src_y) + static_cast<int>(params.src_height) - 1, 0, 2);
     const auto row = [&](int i) { return static_cast<double>(z24_rows[static_cast<std::size_t>(std::clamp(i, minimum, maximum))]); };
-    return depth_pixel((row(0) * capture_filter_upper(params) + row(1) * capture_filter_middle(params) +
-                        row(2) * capture_filter_lower(params)) / 64.0);
+    return depth_pixel((row(1) * 64.0) / 64.0);
 }
 
 Pixel packed_depth(std::uint32_t z24) {
@@ -729,16 +729,15 @@ V main(uint id : SV_VertexID) {
         params.channels = 0u;
         bool passed = expect(detail::scene_identity_copy_box(params, false, 1u,
             16u, 16u).has_value(), "identity RGBA8 filter is admitted");
-        for (unsigned flag = 0u; flag < 7u; ++flag) {
+        for (unsigned flag = 0u; flag < 6u; ++flag) {
             auto rejected = params;
             switch (flag) {
             case 0u: rejected.channels = 6u; break;
-            case 1u: rejected.luma = true; break;
-            case 2u: rejected.half_scale = true; break;
-            case 3u: rejected.display = true; break;
-            case 4u: rejected.src_width = 0u; break;
-            case 5u: rejected.src_x = kFrameWidth - 15u; break;
-            case 6u: rejected.src_y = kFrameHeight - 15u; break;
+            case 1u: rejected.half_scale = true; break;
+            case 2u: rejected.display = true; break;
+            case 3u: rejected.src_width = 0u; break;
+            case 4u: rejected.src_x = kFrameWidth - 15u; break;
+            case 5u: rejected.src_y = kFrameHeight - 15u; break;
             }
             passed &= expect(!detail::scene_identity_copy_box(rejected, false,
                 1u, 16u, 16u), "nonidentity copy cannot bypass conversion");

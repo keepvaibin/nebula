@@ -74,31 +74,25 @@ void JUTTexture::initTexObj() {
 
 void JUTTexture::frameColor(bool half) {
     if (mFlag & 0x1) {
-        const int scale = half ? 2 : 1;
-        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth * scale, mTIMG->mHeight * scale, NEBULA_TARGET_RGB,
-                                 half ? NEBULA_CAPTURE_HALF : 0u);
+        J3DNativeTarget::read(mImage, NEBULA_TARGET_RGB, half ? NEBULA_CAPTURE_HALF : 0u);
     }
 }
 
 void JUTTexture::frameColorAlpha() {
     if (mFlag & 0x1) {
-        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth, mTIMG->mHeight, NEBULA_TARGET_RGBA, 0u);
+        J3DNativeTarget::read(mImage, NEBULA_TARGET_RGBA);
     }
 }
 
 void JUTTexture::frameAlpha(bool half) {
     if (mFlag & 0x1) {
-        const int scale = half ? 2 : 1;
-        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth * scale, mTIMG->mHeight * scale, NEBULA_TARGET_ALPHA,
-                                 half ? NEBULA_CAPTURE_HALF : 0u);
+        J3DNativeTarget::read(mImage, NEBULA_TARGET_ALPHA, half ? NEBULA_CAPTURE_HALF : 0u);
     }
 }
 
 void JUTTexture::frameDepth(bool half) {
     if (mFlag & 0x1) {
-        const int scale = half ? 2 : 1;
-        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth * scale, mTIMG->mHeight * scale, NEBULA_TARGET_RED,
-                                 NEBULA_CAPTURE_DEPTH | (half ? NEBULA_CAPTURE_HALF : 0u));
+        J3DNativeTarget::read(mImage, NEBULA_TARGET_RED, NEBULA_CAPTURE_DEPTH | (half ? NEBULA_CAPTURE_HALF : 0u));
     }
 }
 

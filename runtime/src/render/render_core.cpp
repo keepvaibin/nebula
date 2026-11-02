@@ -5409,18 +5409,11 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     case shapes::Record::Kind::TargetCapture: {
         CaptureRequest request{};
-        request.src_x = record.target_x;
-        request.src_y = record.target_y;
-        request.src_width = record.target_width;
-        request.src_height = record.target_height;
+        request.src_width = static_cast<std::uint16_t>(kFrameWidth);
+        request.src_height = static_cast<std::uint16_t>(kFrameHeight);
         request.key = record.key;
         request.channels = record.target_channels < 7u ? record.target_channels : 0u;
-        request.clear = (record.target_flags & 1u) != 0u;       // NEBULA_CAPTURE_CLEAR
-        request.clear_color = (record.target_flags & 32u) != 0u;
-        request.clear_alpha = (record.target_flags & 64u) != 0u;
-        request.clear_depth = (record.target_flags & 128u) != 0u;
         request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
-        request.luma = (record.target_flags & 4u) != 0u;        // NEBULA_CAPTURE_LUMA
         request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
         on_scene_copy(request);
         return;
@@ -5938,7 +5931,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             }
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution scene target again.
-            display_copy_on_output_ = renderer_.output_scene_active() && !params.clear;
+            display_copy_on_output_ = renderer_.output_scene_active();
             if (renderer_.output_scene_active()) {
                 renderer_.end_output_scene();
                 scene_copies_.set_frame_map(renderer_.frame_map());
@@ -5975,8 +5968,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         const bool is_depth_copy = params.depth;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
         // console's single scene target holds it, not the scene the output-resolution 2D layer was drawn over.
-        const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
-        display_copy_on_output_ = display_copy_on_output_ && !params.clear;
+        const bool from_display = display_copy_on_output_ && !is_depth_copy;
         const bool alias_updated = from_display
             ? renderer_.copy_output_scene_to_texture(params, texture_cache_)
             : renderer_.copy_scene_to_texture(params, texture_cache_, is_depth_copy);
@@ -5992,20 +5984,6 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         }
     }
 
-    // console clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
-    // copy-clear registers, honoring the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
-    // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate, alphaEnable =
-    // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest. GXCopyTex's
-    // own clear settings leave those enables as they were.
-    if (params.clear) {
-        renderer_.clear_scene(
-            0u,
-            0x00FFFFFFu,
-            params.clear_color, params.clear_alpha, params.clear_depth,
-            params.src_x, params.src_y,
-            params.src_width, params.src_height,
-            static_cast<std::uint8_t>(params.depth ? 0u : frame_format()));
-    }
     const std::uint64_t copy_us = time_copy
         ? elapsed_us(copy_start, std::chrono::steady_clock::now())
         : 0u;
@@ -6014,12 +5992,11 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
     }
     if (trace_stalls_enabled() &&
         copy_us >= trace_stall_threshold_us()) {
-        std::cerr << "[gx-efb-copy-timing] frame=" << frame_index_
+        std::cerr << "[frame-read-timing] frame=" << frame_index_
                   << " kind=" << (params.display ? "xfb" : "tex")
                   << " us=" << copy_us
                   << " src=" << params.src_width << 'x' << params.src_height
-                  << " dst=0x" << std::hex << params.key << std::dec
-                  << " clear=" << (params.clear ? 1 : 0) << '\n';
+                  << " dst=0x" << std::hex << params.key << std::dec << '\n';
     }
 }
 

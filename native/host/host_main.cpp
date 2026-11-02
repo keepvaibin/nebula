@@ -2254,23 +2254,18 @@ void svc_target_clear(void*, uint32_t clear_rgba, uint32_t clear_z, uint32_t cha
 #endif
 }
 
-void svc_target_capture(void*, uint64_t key, uint16_t left, uint16_t top, uint16_t width, uint16_t height,
-                        uint32_t channels, uint32_t flags) {
+void svc_frame_read(void*, uint64_t key, uint32_t channels, uint32_t flags) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::TargetCapture;
     record.key = key;
-    record.target_x = left;
-    record.target_y = top;
-    record.target_width = width;
-    record.target_height = height;
     record.target_channels = static_cast<std::uint8_t>(channels);
     record.target_flags = static_cast<std::uint8_t>(flags);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)key, (void)left, (void)top, (void)width, (void)height, (void)channels, (void)flags;
+    (void)key, (void)channels, (void)flags;
 #endif
 }
 
@@ -4164,7 +4159,7 @@ int main(int argc, char** argv) {
     services.target_begin = svc_target_begin;
     services.target_end = svc_target_end;
     services.target_clear = svc_target_clear;
-    services.target_capture = svc_target_capture;
+    services.frame_read = svc_frame_read;
     services.texture_image = svc_texture_image;
     services.mii_record = svc_mii_record;
     services.screen_probe = svc_screen_probe;

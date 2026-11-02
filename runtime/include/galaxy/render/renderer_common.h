@@ -173,8 +173,6 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 // shadow capture) are built at the game's own resolution, box-filtered over the scaled scene target. Their low resolution is
 // part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
 // copies turn the taps into separate offset images. Full-size captures stay scaled. After Dolphin's Super Mario
-// Galaxy Native Bloom mod (iwubcode, GPL-2.0-or-later).
-[[nodiscard]] bool is_effect_copy(unsigned width, unsigned height) noexcept;
 
 // Present pacing with vsync off and a frame-rate cap. The VI paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,

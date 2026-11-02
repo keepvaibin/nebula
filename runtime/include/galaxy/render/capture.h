@@ -69,17 +69,9 @@ struct CaptureRequest {
     std::uint64_t key = 0;          // the texture (0: the frame shown)
     std::uint8_t channels = 0;      // NebulaTargetChannels
     bool display = false;           // the frame shown (frame_show), not a texture
-    bool clear = false;             // the rectangle cleared afterwards (colour and alpha 0, depth far)
-    bool clear_color = false, clear_alpha = false, clear_depth = false;  // what the clear touches
     bool half_scale = false;        // each texel averages 2x2 of the frame's
-    bool luma = false;              // the red channel holds the colour's luminance
     bool depth = false;             // the red channel holds the depth's high byte
 };
-// A line's weights in a copy, in 64ths: the line alone.
-[[nodiscard]] constexpr std::uint32_t capture_filter_upper(const CaptureRequest&) { return 0u; }
-[[nodiscard]] constexpr std::uint32_t capture_filter_middle(const CaptureRequest&) { return 64u; }
-[[nodiscard]] constexpr std::uint32_t capture_filter_lower(const CaptureRequest&) { return 0u; }
-
 struct DisplayTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
