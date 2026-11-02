@@ -16,7 +16,6 @@ namespace AudParams {
     extern const int streamBlockSize;
     extern const int numStreamChannels;
     extern const f32 outputGain;
-    extern const int maxSeqDataSize;
     extern const s32 numInspectableSoundObj;
     extern const f32 masterVolBgm;
     extern const f32 masterVolSe;

@@ -83,6 +83,21 @@ namespace {
     }
 };  // namespace
 
+namespace {
+    // A sequence block holds the largest of them.
+    u32 largestSequence(const AssetFolder* pArchive) {
+        u32 largest = 0;
+        AssetFolder::Item item;
+        for (u32 i = 0; pArchive->getItem(pArchive->getEntry(), i, &item); i++) {
+            if (item.mSize > largest) {
+                largest = item.mSize;
+            }
+        }
+
+        return largest;
+    }
+}  // namespace
+
 AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, AssetFolder* pSeqArchive, AssetFolder* pChordArchive, AssetFolder* pMeArchive,
                            AssetFolder* pRemixArchive) {
     NebulaArena* currHeap = NebulaArena::getCurrentHeap();
@@ -105,13 +120,13 @@ AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, AssetFolder* pSeqArchiv
         if (GameAssets::find(sJaiSeqArc) >= 0) {
             AssetFolder* seqArc = AssetFolder::mount(sJaiSeqArc, currHeap);
             newHeap->setSeqDataArchive(seqArc);
-            maxSeqDataSize = AudParams::maxSeqDataSize;
+            maxSeqDataSize = largestSequence(seqArc);
         } else {
             maxNumSeq = 0;
         }
     } else {
         newHeap->setSeqDataArchive(pSeqArchive);
-        maxSeqDataSize = AudParams::maxSeqDataSize;
+        maxSeqDataSize = largestSequence(pSeqArchive);
     }
 
     if (pChordArchive == nullptr) {
