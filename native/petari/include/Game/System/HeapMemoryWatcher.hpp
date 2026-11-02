@@ -32,7 +32,7 @@ public:
         return mAudSystemHeap;
     }
 
-    void* mSoundMemory;  // wave archives and stream buffers (JASKernel::setupSoundHeap)
+    void* mSoundMemory;  // the root of the wave archives' places in their sections (JASKernel::setupSoundHeap)
     JKRExpHeap* mStationedHeap;
     JKRExpHeap* mGameHeap;
     JKRHeap* mFileCacheHeap;

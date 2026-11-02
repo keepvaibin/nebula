@@ -10,7 +10,7 @@ and the evidence.
 Measurements:
 - Machine: Ryzen 9 9950X3D, 4.3 GHz, Windows 11, clang 22, `-O3` with the module's flags, pinned to one core.
 - Older and low-power CPUs forward stores and divide more slowly, so the ratios below are lower bounds there (H).
-- Reproduce with `native/bench/hotpath_bench.c` and the `perf:` lines of `native/sdk/os/tests/run_tests.sh`.
+- The numbers below came from micro-benchmarks since removed with the code they measured.
 
 ## The start
 
@@ -111,9 +111,9 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
   worked out once in a pass before the classification and stored (64 bytes a vertex) took the sort from 0.88 to
   1.82 ms; the stored corners cost more to read back than the arithmetic they save.
 - The GPU read the resident decoded vertices from upload memory: the sort took 1.27 ms reading them there and 0.46 ms
-  from a local copy. They are now kept in local memory, each run copied once when it becomes resident (Vulkan writes
-  them straight into device memory the CPU can map, `vk::BufferPlace::DeviceMapped`: unified memory, resizable BAR,
-  else host memory).
+  from a local copy. They are now kept in local memory only, each run copied once when it becomes resident through
+  staging memory of that frame (Vulkan writes them straight into device memory the CPU can map,
+  `vk::BufferPlace::DeviceMapped`: unified memory, resizable BAR, else host memory).
 - Debanding ran at the picture's own size before scaling, 3 ms of the 3x frame (`GALAXY_DEBAND=0`: presentation 4.18
   -> 1.16 ms): 3 million pixels, taps up to 70 pixels away. A reduced picture is now scaled to the window first and
   debanded there (a third of the pixels, the radius the same share of the height, the dither at the size it is
@@ -296,6 +296,22 @@ render thread (83-85 ms/s in every build), four rounds interleaved:
 | ThinLTO + profile | 29.1, 28.2 (the disturbed rounds too: 30.2, 30.1) | 7.3 MB |
 
 Pictures 399 of 399 and audio identical to the plain build in deterministic mode (run pcp). Development builds stay plain: they link in a fraction of the time.
+
+## Memory (M)
+
+`GALAXY_TRACE_MEMORY=1` prints what the renderer holds every 600 frames, `=2` adds the process's heaps by block size; `memws`-style
+readings below are the 102-stop tour at stop 30, real time, 1x, NVIDIA. The store is mapped, not copied: waves and streams play from
+it (`asset_map`), and its pages are the file's: no commit, and the system can drop them.
+
+| what | before | now |
+|---|---|---|
+| process, private working set | 2,224 MB (first reading) | 405 MB |
+| upload rings | 464 MB, all resident | 64 MB; the most a frame took: vertex 2.2, index 1.2, constant 1.4, matrix 0.7 |
+| resident vertices | CPU copy + 64 MB upload copy + 64 MB local | 64 MB local |
+| wave archives | 48 MB and more in the sound memory | none: mapped |
+| streams | a whole file in the heap each (29 MB for one) | none: mapped |
+| images of dead scenes | grew to 404 MB over a tour | gone with their scene's heap |
+| game block | 512 MB committed | 385 MB committed, about 80 MB in memory |
 
 ## Planned, measured before adopted (H)
 
