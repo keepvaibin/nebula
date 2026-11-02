@@ -10,7 +10,6 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
-#include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <cstdio>
@@ -324,30 +323,6 @@ namespace GameDataFunction {
 
     bool isOnCompleteEndingMarioAndLuigi() {
         return ::getSaveDataHandleSequence()->getCurrentUserFile()->isOnCompleteEndingMarioAndLuigi();
-    }
-
-    NebulaCalendar::SaveTime getSysConfigFileTimeAnnounced() {
-        return ::getSaveDataHandleSequence()->getSysConfigFile()->getTimeAnnounced();
-    }
-
-    void updateSysConfigFileTimeAnnounced() {
-        ::getSaveDataHandleSequence()->getSysConfigFile()->updateTimeAnnounced();
-    }
-
-    NebulaCalendar::SaveTime getSysConfigFileTimeSent() {
-        return ::getSaveDataHandleSequence()->getSysConfigFile()->getTimeSent();
-    }
-
-    void setSysConfigFileTimeSent(NebulaCalendar::SaveTime timeSent) {
-        ::getSaveDataHandleSequence()->getSysConfigFile()->setTimeSent(timeSent);
-    }
-
-    u32 getSysConfigFileSentBytes() {
-        return ::getSaveDataHandleSequence()->getSysConfigFile()->getSentBytes();
-    }
-
-    void setSysConfigFileSentBytes(u32 sentBytes) {
-        ::getSaveDataHandleSequence()->getSysConfigFile()->setSentBytes(sentBytes);
     }
 
     bool isLuigiLeftSupply() {

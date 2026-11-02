@@ -45,7 +45,6 @@ namespace MR {
     void destroySceneMessage();
     void resetSystemAndGameStatus();
     void stopAllSound(u32);
-    bool isDisplayEncouragePal60Window();
     JMapIdInfo* getPlayerRestartIdInfo();
     void setPlayerRestartIdInfo(const JMapIdInfo&);
 };  // namespace MR

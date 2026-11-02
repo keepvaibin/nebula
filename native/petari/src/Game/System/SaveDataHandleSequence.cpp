@@ -6,7 +6,6 @@
 #include "Game/System/SaveErrorSequence.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/SaveDataHandler.hpp"
-#include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -33,7 +32,7 @@ namespace {
 };  // namespace
 
 SaveDataHandleSequence::SaveDataHandleSequence()
-    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mSysConfigFile(), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
+    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), _24(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), _2A(), _2B(), _2C(), mWorkUserFile(),
       mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
       ,
@@ -45,10 +44,9 @@ SaveDataHandleSequence::SaveDataHandleSequence()
 }
 
 void SaveDataHandleSequence::initAfterResourceLoaded() {
-    mSysConfigFile = new SysConfigFile();
     mCurrentUserFile = new UserFile();
     mBackupUserFile = new UserFile();
-    mSaveDataHandler = new SaveDataHandler(mSysConfigFile, mCurrentUserFile);
+    mSaveDataHandler = new SaveDataHandler(mCurrentUserFile);
 
     mSysInfoWindowConfirm = MR::createSysInfoWindowExecuteWithChildren();
     mSysInfoWindowConfirm->kill();
@@ -322,7 +320,6 @@ void SaveDataHandleSequence::exeSave() {
             (*mJustBeforeSaveFunc)();
         }
 
-        mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
         mSaveDataHandler->storeUserFile(mWorkUserFile);
     }
 
@@ -380,7 +377,6 @@ void SaveDataHandleSequence::exeSaveAllWithoutKeyWait() {
             (*mJustBeforeSaveFunc)();
         }
 
-        mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
     }
 
     if (tryNoSave()) {
@@ -422,7 +418,6 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
             (*mJustBeforeSaveFunc)();
         }
 
-        mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
     }
 
     if (tryNoSave()) {
@@ -502,7 +497,6 @@ void SaveDataHandleSequence::exePreLoadDone() {
     if (!mSaveDataHandler->requestVerifyAfterLoadGameDataFile()) {
         tryNextSaveCopy();
     } else {
-        restoreSysConfigFile(mSysConfigFile);
         _24 = 2;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
@@ -546,10 +540,6 @@ GameDataHolder* SaveDataHandleSequence::getHolder() {
     return mCurrentUserFile->mGameDataHolder;
 }
 
-SysConfigFile* SaveDataHandleSequence::getSysConfigFile() {
-    return mSysConfigFile;
-}
-
 UserFile* SaveDataHandleSequence::getCurrentUserFile() {
     return mCurrentUserFile;
 }
@@ -574,12 +564,6 @@ void SaveDataHandleSequence::restoreUserFileGameData(UserFile* pUserFile, int in
     pUserFile->loadFromGameDataBinary(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
 
     pUserFile->mIsPlayerMario = isPlayerMario;
-}
-
-void SaveDataHandleSequence::restoreSysConfigFile(SysConfigFile* pSysConfigFile) {
-    const char* pName = "sysconf";
-    mSaveDataHandler->restoreGameDataFile(pName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
-    pSysConfigFile->loadFromDataBinary(mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
 }
 
 bool SaveDataHandleSequence::trySave() {

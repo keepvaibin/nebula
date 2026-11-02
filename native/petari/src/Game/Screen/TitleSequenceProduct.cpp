@@ -1,7 +1,6 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/Screen/EncouragePal60Window.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -10,7 +9,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include "Game/System/NebulaCalendar.hpp"
 
 namespace {
     static const s32 sPressABAppearFrame = 25;
@@ -24,7 +22,6 @@ namespace TitleSequenceProductSub {
 };  // namespace TitleSequenceProductSub
 
 namespace {
-    NEW_NERVE(TitleSequenceProductDisplayEncouragePal60Window, TitleSequenceProduct, DisplayEncouragePal60Window);
     NEW_NERVE(TitleSequenceProductBgmPrepare, TitleSequenceProduct, BgmPrepare);
     NEW_NERVE(TitleSequenceProductLogoFadein, TitleSequenceProduct, LogoFadein);
     NEW_NERVE(TitleSequenceProductLogoWait, TitleSequenceProduct, LogoWait);
@@ -34,48 +31,15 @@ namespace {
 };  // namespace
 
 TitleSequenceProduct::TitleSequenceProduct()
-    : NerveExecutor(""), mLogoLayout(nullptr), mPressStartLayout(nullptr), mEncouragePal60Window(nullptr), mAButtonChecker(nullptr),
+    : NerveExecutor(""), mLogoLayout(nullptr), mPressStartLayout(nullptr), mAButtonChecker(nullptr),
       mBButtonChecker(nullptr) {
-    if (MR::isDisplayEncouragePal60Window()) {
-        initNerve(GET_NERVE_ANON(TitleSequenceProductDisplayEncouragePal60Window));
-    } else {
-        initNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
-    }
+    initNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
 
     mLogoLayout = new TitleSequenceProductSub::LogoLayout();
     mPressStartLayout = new SimpleLayout("Press[A][B]", "PressStart", 1, -1);
     mPressStartLayout->initWithoutIter();
     mAButtonChecker = new TriggerChecker();
     mBButtonChecker = new TriggerChecker();
-    mIsDisplayEncouragePal60Window = MR::isDisplayEncouragePal60Window();
-    mEncouragePal60Window = new EncouragePal60Window();
-    mEncouragePal60Window->initWithoutIter();
-    mEncouragePal60Window->kill();
-}
-
-// FIXME: GPR4 and GPR5 are swapped and missing addi instruction.
-void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
-    if (MR::isFirstStep(this)) {
-        NebulaCalendar::SaveTime timeAnnounced = GameDataFunction::getSysConfigFileTimeAnnounced();
-        const NebulaCalendar::SaveTime now = NebulaCalendar::now();
-        s32 day = now / (60 * 60 * 24);
-        s32 dayAnnounced = timeAnnounced / (60 * 60 * 24);
-        dayAnnounced += 100;
-
-        if (timeAnnounced == 0 || now < timeAnnounced || dayAnnounced < day) {
-            mEncouragePal60Window->appear();
-            if (NebulaRegion::isPal()) {
-                GameDataFunction::updateSysConfigFileTimeAnnounced();
-            }
-        }
-    }
-
-    if (MR::isDead(mEncouragePal60Window)) {
-        if (!NebulaRegion::isPal()) {
-            GameDataFunction::updateSysConfigFileTimeAnnounced();
-        }
-        setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
-    }
 }
 
 void TitleSequenceProduct::exeBgmPrepare() {
@@ -160,18 +124,11 @@ void TitleSequenceProduct::exeDead() {
         mLogoLayout->kill();
         mPressStartLayout->kill();
 
-        if (mIsDisplayEncouragePal60Window) {
-            mEncouragePal60Window->kill();
-        }
     }
 }
 
 void TitleSequenceProduct::appear() {
-    if (mIsDisplayEncouragePal60Window) {
-        setNerve(GET_NERVE_ANON(TitleSequenceProductDisplayEncouragePal60Window));
-    } else {
-        setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
-    }
+    setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
 }
 
 void TitleSequenceProduct::kill() {

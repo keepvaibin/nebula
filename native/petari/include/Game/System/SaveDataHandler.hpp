@@ -3,12 +3,11 @@
 #include "Game/System/NerveExecutor.hpp"
 #include "Game/System/SaveRequest.hpp"
 
-class SysConfigFile;
 class UserFile;
 
 class SaveDataHandler : public NerveExecutor {
 public:
-    SaveDataHandler(const SysConfigFile*, const UserFile*);
+    SaveDataHandler(const UserFile*);
 
     void update();
     void requestCheckEnableToCreate();
@@ -18,7 +17,6 @@ public:
     void copyUserFileMemory(int, int);
     void restoreGameDataFile(const char*, void*, u32);
     void storeUserFile(const UserFile*);
-    void storeSysConfigFile(const SysConfigFile*);
     void requestSaveSaveData();
     void requestRemoveSaveData();
     static u32 getEnoughtTempBufferSize();
@@ -29,7 +27,7 @@ public:
     void exeSaveProcessingGameData();
     void exeRemoveProcessingGameData();
     static void resetSaveData(u8*);
-    static void initializeAllFileInSaveData(u8*, const SysConfigFile*, const UserFile*);
+    static void initializeAllFileInSaveData(u8*, const UserFile*);
     static bool isCorrectFileHeader(const u8*);
     static void copySaveDataEachFile(u8*, const u8*);
     void convertFileHeader(u8*);
