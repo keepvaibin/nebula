@@ -20,6 +20,7 @@
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
+#include "galaxy/ui/home_menu_model.h"
 
 #include <algorithm>
 #include <array>
@@ -222,100 +223,29 @@ std::atomic<bool> s_system_menu_active{false};
 std::recursive_mutex s_native_settings_mutex;
 
 std::atomic<bool> s_native_settings_visible{false};
-// The HOME Menu (home_menu_open): its list, or "are you sure?" for reset and leaving; the selected answer; the choice
-// the game polls (-1 none yet). The game draws it once it reads home_menu_view; draw_home_menu is the fallback. The
-// window, simulation and render threads change it under s_home_menu_mutex.
-std::mutex s_home_menu_mutex;
-std::atomic<bool> s_home_menu_visible{false};
-std::atomic<unsigned> s_home_menu_row{0};
-std::atomic<int> s_home_menu_asking{0};  // the choice asked about: 0 none (the list), 1 leave, 2 reset
-std::atomic<int> s_home_menu_choice{-1};
-std::atomic<bool> s_home_menu_drawn_by_game{false};
-constexpr unsigned kHomeMenuRows = 3;
-// The list top to bottom and the choice each makes: return to the game, reset, leave (the console's Wii Menu).
+galaxy::ui::HomeMenuModel s_home_menu;
+constexpr unsigned kHomeMenuRows = galaxy::ui::HomeMenuModel::rows;
+constexpr unsigned kHomeMenuAnswers = galaxy::ui::HomeMenuModel::answers;
 constexpr const char* kHomeMenuRowText[kHomeMenuRows] = {"RETURN TO GAME", "RESET", "QUIT TO DESKTOP"};
-constexpr int kHomeMenuRowChoice[kHomeMenuRows] = {0, 2, 1};
-// "Are you sure?": no (selected first), then yes, as the game's own questions place them.
-constexpr unsigned kHomeMenuAnswers = 2;
 constexpr const char* kHomeMenuAnswerText[kHomeMenuAnswers] = {"NO", "YES"};
 
-unsigned home_menu_answer_count() {
-    return s_home_menu_asking.load(std::memory_order_relaxed) != 0 ? kHomeMenuAnswers : kHomeMenuRows;
-}
-
-void close_home_menu_with(int choice) {
-    s_home_menu_choice.store(choice, std::memory_order_release);
-    s_home_menu_visible.store(false, std::memory_order_release);
-}
-
-// Back (Escape, B, no): from the question to its row in the list, from the list to the game.
-void back_home_menu() {
-    const int asking = s_home_menu_asking.load(std::memory_order_relaxed);
-    if (asking == 0) {
-        close_home_menu_with(0);
-        return;
-    }
-    s_home_menu_asking.store(0, std::memory_order_relaxed);
-    for (unsigned row = 0; row < kHomeMenuRows; ++row) {
-        if (kHomeMenuRowChoice[row] == asking) {
-            s_home_menu_row.store(row, std::memory_order_relaxed);
-        }
-    }
-}
-
-// An answer chosen (Enter, A, a click): returning to the game closes at once; reset and leaving ask first.
-void choose_home_menu_answer(unsigned answer) {
-    const int asking = s_home_menu_asking.load(std::memory_order_relaxed);
-    if (asking != 0) {
-        if (answer == 1u) {
-            close_home_menu_with(asking);
-        } else {
-            back_home_menu();
-        }
-        return;
-    }
-    const int choice = kHomeMenuRowChoice[answer % kHomeMenuRows];
-    if (choice == 0) {
-        close_home_menu_with(0);
-        return;
-    }
-    s_home_menu_asking.store(choice, std::memory_order_relaxed);
-    s_home_menu_row.store(0u, std::memory_order_relaxed);
-}
-
-// Keys while the HOME Menu is open (controllers arrive as keys too: the D-pad as the arrows, A as kAcceptKey, Y as
-// Return, B and Menu as Escape). Every key is the menu's: the game and the settings menu wait.
 bool handle_home_menu_key(WPARAM key, bool was_down) {
-    if (was_down && key != VK_UP && key != VK_DOWN && key != VK_LEFT && key != VK_RIGHT) {
-        return true;
-    }
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    const unsigned count = home_menu_answer_count();
-    const unsigned row = s_home_menu_row.load(std::memory_order_relaxed) % count;
+    using galaxy::ui::HomeAction;
+    HomeAction action = HomeAction::Ignore;
     switch (key) {
     case VK_UP:
-    case VK_LEFT:
-        s_home_menu_row.store((row + count - 1u) % count, std::memory_order_relaxed);
-        break;
+    case VK_LEFT: action = HomeAction::Previous; break;
     case VK_DOWN:
-    case VK_RIGHT:
-        s_home_menu_row.store((row + 1u) % count, std::memory_order_relaxed);
-        break;
+    case VK_RIGHT: action = HomeAction::Next; break;
     case VK_RETURN:
     case VK_SPACE:
-    case galaxy::input::settings_pad::kKeyAccept:
-        choose_home_menu_answer(row);
-        break;
+    case galaxy::input::settings_pad::kKeyAccept: action = HomeAction::Accept; break;
     case VK_ESCAPE:
-    case VK_BACK:
-        back_home_menu();
-        break;
-    case VK_HOME:
-        close_home_menu_with(0);
-        break;
-    default:
-        break;
+    case VK_BACK: action = HomeAction::Back; break;
+    case VK_HOME: action = HomeAction::Close; break;
+    default: break;
     }
+    s_home_menu.key(action, was_down);
     return true;
 }
 std::atomic<bool> s_native_settings_dirty{false};
@@ -1822,7 +1752,7 @@ void request_native_settings_close() {
 }
 
 bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false) {
-    if (s_home_menu_visible.load(std::memory_order_acquire)) {
+    if (s_home_menu.visible.load(std::memory_order_acquire)) {
         return handle_home_menu_key(key, was_down);
     }
     // A controller's A changes the selected setting, as Right does, and presses the selected button.
@@ -5325,12 +5255,12 @@ NativeSettingsView build_native_settings_view() {
 // hovering and chooses with a click.
 void draw_home_menu(UiCanvas& renderer) {
     static bool s_left_was_down = true;
-    if (!s_home_menu_visible.load(std::memory_order_acquire) ||
-        s_home_menu_drawn_by_game.load(std::memory_order_relaxed)) {
+    if (!s_home_menu.visible.load(std::memory_order_acquire) ||
+        s_home_menu.drawn_by_game.load(std::memory_order_relaxed)) {
         s_left_was_down = true;
         return;
     }
-    const int asking = s_home_menu_asking.load(std::memory_order_relaxed);
+    const int asking = s_home_menu.asking.load(std::memory_order_relaxed);
     const unsigned count = asking != 0 ? kHomeMenuAnswers : kHomeMenuRows;
     const char* const* rows = asking != 0 ? kHomeMenuAnswerText : kHomeMenuRowText;
     const int bb_w = static_cast<int>(host_window::backbuffer_width);
@@ -5367,7 +5297,7 @@ void draw_home_menu(UiCanvas& renderer) {
     ui_rect(renderer, x, y, 6, h, rail);
     ui_text(renderer, x + 14 * scale, y + 8 * scale, scale,
             asking == 0 ? "HOME MENU" : (asking == 1 ? "QUIT TO DESKTOP?" : "RESET?"), text);
-    const unsigned selected = s_home_menu_row.load(std::memory_order_relaxed) % count;
+    const unsigned selected = s_home_menu.row.load(std::memory_order_relaxed) % count;
     for (unsigned row = 0; row < count; ++row) {
         const int ry = rows_y + static_cast<int>(row) * row_h;
         if (row == selected) {
@@ -5739,7 +5669,7 @@ bool sharp_2d_requested() noexcept {
 
 bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
-        s_home_menu_visible.load(std::memory_order_relaxed) ||
+        s_home_menu.visible.load(std::memory_order_relaxed) ||
         s_system_menu_active.load(std::memory_order_acquire) ||
         host_window::move_size_active.load(std::memory_order_acquire);
 }
@@ -5940,53 +5870,13 @@ void native_settings_input(NativeSettingsInput input, int arg) {
     }
 }
 
-void home_menu_open() noexcept {
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    s_home_menu_row.store(0u, std::memory_order_relaxed);
-    s_home_menu_asking.store(0, std::memory_order_relaxed);
-    s_home_menu_choice.store(-1, std::memory_order_relaxed);
-    s_home_menu_visible.store(true, std::memory_order_release);
-}
-
-int home_menu_poll() noexcept {
-    return s_home_menu_choice.load(std::memory_order_acquire);
-}
-
-void home_menu_close() noexcept {
-    s_home_menu_visible.store(false, std::memory_order_release);
-}
-
-bool home_menu_visible() noexcept {
-    return s_home_menu_visible.load(std::memory_order_acquire);
-}
-
-int home_menu_view(bool drawing) noexcept {
-    if (!s_home_menu_visible.load(std::memory_order_acquire)) {
-        return -1;
-    }
-    if (drawing) {
-        s_home_menu_drawn_by_game.store(true, std::memory_order_relaxed);
-    }
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    const unsigned row = s_home_menu_row.load(std::memory_order_relaxed) % home_menu_answer_count();
-    return static_cast<int>(row | static_cast<unsigned>(s_home_menu_asking.load(std::memory_order_relaxed)) << 8u);
-}
-
-void home_menu_point(unsigned answer) noexcept {
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    if (s_home_menu_visible.load(std::memory_order_relaxed) && answer < home_menu_answer_count()) {
-        s_home_menu_row.store(answer, std::memory_order_relaxed);
-    }
-}
-
-void home_menu_choose(unsigned answer) noexcept {
-    const std::lock_guard<std::mutex> lock(s_home_menu_mutex);
-    if (s_home_menu_visible.load(std::memory_order_relaxed) && answer < home_menu_answer_count()) {
-        s_home_menu_row.store(answer, std::memory_order_relaxed);
-        choose_home_menu_answer(answer);
-    }
-}
-
+void home_menu_open() noexcept { s_home_menu.open(); }
+int home_menu_poll() noexcept { return s_home_menu.poll(); }
+void home_menu_close() noexcept { s_home_menu.hide(); }
+bool home_menu_visible() noexcept { return s_home_menu.visible.load(std::memory_order_acquire); }
+int home_menu_view(bool drawing) noexcept { return s_home_menu.view(drawing); }
+void home_menu_point(unsigned answer) noexcept { s_home_menu.point(answer); }
+void home_menu_choose(unsigned answer) noexcept { s_home_menu.click(answer); }
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     const HWND window = reinterpret_cast<HWND>(
         host_window::settings_window.load(std::memory_order_acquire));
