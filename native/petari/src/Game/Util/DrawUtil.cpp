@@ -76,9 +76,73 @@ namespace MR {
         J3DNativeView::setScissor(0, 0, width, height);
     }
 
+    // The whole screen in canvas units, for a fill or a picture over it.
+    void setupScreen2D() {
+        setDefaultViewportAndScissor();
+        Mtx44 projection;
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getCanvasWidth(), -30000.0f, 30000.0f);
+        J3DNativeView::setOrthographic(projection);
+        Mtx identity;
+        NebulaMtxIdentity(identity);
+        J3DNativeShape::setPosition(0, identity);
+        J3DNativeShape::setCurrentIdentity();
+        J3DPass::alphaTest(NEBULA_COMPARE_GREATER, 0);
+        J3DPass::depth(false, NEBULA_COMPARE_LEQUAL, false);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::positionMatrix(0);
+    }
+
+    // runtime/src/render/materials/vertex_color.hlsl: the colour over the screen, blended by its alpha.
+    void drawScreenColor(const NebulaColor8& rColor) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_VERTEX_COLOR, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.constants[4] = 0.0f;
+        NativeShader::send(material);
+        const f32 width = getCanvasWidth();
+        const f32 height = ::getScreenHeightInline();
+        const u32 color = static_cast< u32 >(rColor.r) << 24 | static_cast< u32 >(rColor.g) << 16 |
+                          static_cast< u32 >(rColor.b) << 8 | rColor.a;
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::position(width, 0.0f, 0.0f);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::position(width, height, 0.0f);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::position(0.0f, height, 0.0f);
+        J3DNativeDraw::color(color);
+    }
+
+    // runtime/src/render/materials/j2d_picture.hlsl: the texture over the screen.
+    void drawScreenPicture(const JUTTexture& rTexture) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_J2D_PICTURE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        NativeShader::setColor(material, 12, 255, 255, 255, 255);
+        material.constants[16] = 1.0f;
+        material.constants[17] = rTexture.getTransparency() ? 1.0f : 0.0f;
+        NativeShader::setTexture(material, 0, &rTexture);
+        NativeShader::send(material);
+        const f32 width = getCanvasWidth();
+        const f32 height = ::getScreenHeightInline();
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
+        J3DNativeDraw::position(width, 0.0f, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
+        J3DNativeDraw::position(width, height, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
+        J3DNativeDraw::position(0.0f, height, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
+    }
+
     void loadProjectionMtxFor2D() {
-        J2DOrthoGraphSimple orthoGraph;
-        orthoGraph.setPort();
+        MR::setupScreen2D();
     }
 
     void setupDrawForNW4RLayout(f32 scale, bool) {
@@ -343,11 +407,3 @@ namespace MR {
     }
 };  // namespace MR
 
-J2DOrthoGraphSimple::J2DOrthoGraphSimple() : J2DOrthoGraph(0.0f, 0.0f, MR::getCanvasWidth(), ::getScreenHeightInline(), -30000.0f, 30000.0f) {
-    TBox2f bounds(0.0f, 0.0f, MR::getScreenWidth(), MR::getScreenHeight());
-    setOrtho(0.0f, 0.0f, bounds.getWidth(), bounds.getHeight(), -30000.0f, 30000.0f);
-}
-
-void J2DOrthoGraphSimple::setPort() {
-    J2DOrthoGraph::setPort();
-}

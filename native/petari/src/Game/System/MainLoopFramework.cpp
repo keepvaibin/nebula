@@ -6,7 +6,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include "JSystem/JUtility/JUTNativeLog.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
