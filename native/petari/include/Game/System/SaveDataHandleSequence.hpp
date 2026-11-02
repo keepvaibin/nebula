@@ -60,6 +60,7 @@ public:
     void exeSaveAllWithoutWindow();
     void exePreLoad();
     void exePreLoadDone();
+    void tryNextSaveCopy();
     void exeNoSaveConfirmRemind();
     void exeErrorHandling();
     GameDataHolder* getHolder();
@@ -99,4 +100,5 @@ public:
     /* 0x40 */ MR::FunctorBase* mJustBeforeSaveFunc;
     /* 0x44 */ SaveIcon* mSaveIcon;
     bool mWindowFollows;
+    int mSaveCopyLoading = 0;
 };
