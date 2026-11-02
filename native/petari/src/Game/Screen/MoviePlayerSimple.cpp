@@ -28,7 +28,6 @@ namespace {
 namespace {
     NEW_NERVE(MoviePlayerSimpleOff, MoviePlayerSimple, SimpleOff);
     NEW_NERVE(MoviePlayerSimpleOpen, MoviePlayerSimple, Open);
-    NEW_NERVE(MoviePlayerSimplePreload, MoviePlayerSimple, Preload);
     NEW_NERVE(MoviePlayerSimplePlaying, MoviePlayerSimple, Playing);
     NEW_NERVE(MoviePlayerSimpleSuspend, MoviePlayerSimple, SimpleSuspend);
 };  // namespace
@@ -56,7 +55,7 @@ MoviePlayerSimple::~MoviePlayerSimple() {
 void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMovie(this);
 
-    mStream = new MovieStream("MovieStream");
+    mStream = new MovieStream();
 
     mHeap = JKRExpHeap::create(calcNeedMemoryForMovieWorks(), MR::getCurrentHeap(), true);
 
@@ -118,7 +117,7 @@ bool MoviePlayerSimple::isMovieActive() const {
         return false;
     }
 
-    return isNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen)) || isNerve(GET_NERVE_ANON(MoviePlayerSimplePreload)) ||
+    return isNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen)) ||
            isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying)) || isNerve(GET_NERVE_ANON(MoviePlayerSimpleSuspend));
 }
 
@@ -164,27 +163,14 @@ void MoviePlayerSimple::exeSimpleOff() {
 }
 
 void MoviePlayerSimple::exeOpen() {
-    if (MR::isFirstStep(this)) {
-        mStream->open(mMovie->mMovieName);
-    }
-
-    if (mStream->isHeaderRead()) {
-        mMovie->mVideoInfo = mStream->getVideoInfo();
-        mMovie->_20 = 0;
-        mMovie->_19 = false;
-        setFrameRateDefault();
-        mMovie->mBuffer = new (mHeap, 32) u8[mStream->calcNeedMemory()];
-        mStream->setBuffer(mMovie->mBuffer);
-        mStream->preLoad(_44);
-        setNerve(GET_NERVE_ANON(MoviePlayerSimplePreload));
-    }
-}
-
-void MoviePlayerSimple::exePreload() {
-    if (mStream->isPreLoading()) {
-        return;
-    }
-
+    mStream->open(mMovie->mMovieName);
+    mMovie->mVideoInfo = mStream->getVideoInfo();
+    mMovie->_20 = 0;
+    mMovie->_19 = false;
+    setFrameRateDefault();
+    mMovie->mBuffer = new (mHeap, 32) u8[mStream->calcNeedMemory()];
+    mStream->setBuffer(mMovie->mBuffer);
+    mStream->start(_44);
     setNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying));
     appear();
 }
@@ -228,10 +214,6 @@ void MoviePlayerSimple::exePlaying() {
 void MoviePlayerSimple::exeSimpleSuspend() {
 }
 
-void MoviePlayerSimple::control() {
-    mStream->updateNerve();
-}
-
 void MoviePlayerSimple::play(bool a1) {
     _44 = a1;
     setNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen));
@@ -240,7 +222,7 @@ void MoviePlayerSimple::play(bool a1) {
 }
 
 void MoviePlayerSimple::stop() {
-    mStream->loadStop();
+    mStream->stop();
     mStream->close();
     delete[] mMovie->mBuffer;
     mMovie->mBuffer = nullptr;
@@ -249,13 +231,9 @@ void MoviePlayerSimple::stop() {
 }
 
 u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
-    u32 needMemory = 0;
-    needMemory += 0x140000;
-    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight());
-    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight() / 4);
-    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight() / 4);
-
-    return needMemory + 0x1188;
+    // The picture's planes: the frames themselves stay in the mapped store. The game's movies are at most 640x480.
+    const u32 pixels = 640 * 480;
+    return NebulaAlignUp32(pixels) + NebulaAlignUp32(pixels / 4) * 2 + 0x1188;
 }
 
 void MoviePlayerSimple::drawCinemaFrame() const {

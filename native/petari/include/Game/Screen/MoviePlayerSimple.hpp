@@ -27,7 +27,6 @@ public:
 
     virtual void init(const JMapInfoIter&);
     virtual void draw() const;
-    virtual void control();
 
     void startMovie(const char*, bool);
     void stopMovie();
@@ -40,7 +39,6 @@ public:
     void setUnpauseHomeButtonFlag();
     void exeSimpleOff();
     void exeOpen();
-    void exePreload();
     void exePlaying();
     void exeSimpleSuspend();
     void play(bool);

@@ -1383,9 +1383,9 @@ namespace {
         // One block that lasts the game (the stationed heap's room for it, HeapMemoryWatcher): the sheets, our widths,
         // our code maps.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
-        const u32 widthBytes = (sizeof(nw4r::ut::FontWidth) + added * sizeof(nw4r::ut::CharWidths) + 3u) & ~3u;
+        const u32 widthBytes = (sizeof(nw4r::ut::FontWidth) + added * sizeof(nw4r::ut::CharWidths) + 7u) & ~7u;
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
-        const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 3u) & ~3u;
+        const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 7u) & ~7u;
         const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
         JKRHeap* pHeap = MR::getStationedHeap();
         u8* pBlock = bytes <= NebulaIcons::cStationedBytes && pHeap != nullptr && pHeap->getFreeSize() >= static_cast< s32 >(bytes + 64u)
