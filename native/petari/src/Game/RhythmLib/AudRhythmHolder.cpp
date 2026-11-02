@@ -1,6 +1,6 @@
 #include "Game/RhythmLib/AudRhythmHolder.hpp"
 #include "Game/RhythmLib/AudRhythmSeqParser.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 AudRhythmHolder::AudRhythmHolder() : mIsPaused(), mSeqParser(), _168() {
@@ -18,7 +18,7 @@ void AudRhythmHolder::copyInfoFromParser() {
         return;
     }
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mModifiedTempo = mSeqParser->getModifiedTempo();
     mTempo = mSeqParser->getTempo();
 

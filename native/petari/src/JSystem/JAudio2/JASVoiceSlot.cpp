@@ -1,4 +1,4 @@
-#include "JSystem/JAudio2/JASDSPChannel.hpp"
+#include "JSystem/JAudio2/JASVoiceSlot.hpp"
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JAudio2/JASStream.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
@@ -10,22 +10,22 @@
 
 static const s32 MAX_DSP_CHANNELS = 64;
 
-JASDSPChannel* JASDSPChannel::sDspChannels;
+JASVoiceSlot* JASVoiceSlot::sSlots;
 
-JASDSPChannel::JASDSPChannel()
+JASVoiceSlot::JASVoiceSlot()
     : mStatus(STATUS_INACTIVE), mPriority(-1), mFlags(0), field_0xc(0), mCallback(NULL), mCallbackData(NULL), mChannel(NULL) {
 }
 
-void JASDSPChannel::free() {
+void JASVoiceSlot::free() {
     mCallback = NULL;
     mCallbackData = NULL;
 }
 
-void JASDSPChannel::start() {
+void JASVoiceSlot::start() {
     mFlags |= 1;
 }
 
-void JASDSPChannel::drop() {
+void JASVoiceSlot::drop() {
     if (mCallback != NULL) {
         mCallback(CB_DROP, NULL, mCallbackData);
     }
@@ -39,15 +39,15 @@ void JASDSPChannel::drop() {
     }
 }
 
-void JASDSPChannel::initAll() {
-    sDspChannels = new (JASDram, 0x20) JASDSPChannel[MAX_DSP_CHANNELS];
+void JASVoiceSlot::initAll() {
+    sSlots = new (JASDram, 0x20) JASVoiceSlot[MAX_DSP_CHANNELS];
     for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        sDspChannels[i].mChannel = JASDsp::getDSPHandle(i);
+        sSlots[i].mChannel = JASVoice::getVoice(i);
     }
 }
 
-JASDSPChannel* JASDSPChannel::alloc(u8 i_priority, Callback i_callback, void* i_callbackData) {
-    JASDSPChannel* channel = getLowestChannel(i_priority);
+JASVoiceSlot* JASVoiceSlot::alloc(u8 i_priority, Callback i_callback, void* i_callbackData) {
+    JASVoiceSlot* channel = getLowestChannel(i_priority);
     if (channel == NULL) {
         return NULL;
     }
@@ -59,8 +59,8 @@ JASDSPChannel* JASDSPChannel::alloc(u8 i_priority, Callback i_callback, void* i_
     return channel;
 }
 
-JASDSPChannel* JASDSPChannel::allocForce(u8 i_priority, Callback i_callback, void* i_callbackData) {
-    JASDSPChannel* channel = getLowestChannel(i_priority);
+JASVoiceSlot* JASVoiceSlot::allocForce(u8 i_priority, Callback i_callback, void* i_callbackData) {
+    JASVoiceSlot* channel = getLowestChannel(i_priority);
     if (channel == NULL) {
         return NULL;
     }
@@ -73,19 +73,19 @@ JASDSPChannel* JASDSPChannel::allocForce(u8 i_priority, Callback i_callback, voi
     return channel;
 }
 
-void JASDSPChannel::setPriority(u8 i_priority) {
+void JASVoiceSlot::setPriority(u8 i_priority) {
     mPriority = i_priority;
 }
 
-JASDSPChannel* JASDSPChannel::getLowestChannel(int i_priority) {
+JASVoiceSlot* JASVoiceSlot::getLowestChannel(int i_priority) {
     s16 best_priority = 0xff;
     int best_index = -1;
     int best_unknown = 0;
     for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        JASDSPChannel* channel = &sDspChannels[i];
+        JASVoiceSlot* channel = &sSlots[i];
         s16 priority = channel->mPriority;
         if (priority < 0) {
-            return &sDspChannels[i];
+            return &sSlots[i];
         }
         if (priority <= i_priority && priority <= best_priority) {
             if (priority != best_priority || channel->field_0xc > best_unknown) {
@@ -98,15 +98,15 @@ JASDSPChannel* JASDSPChannel::getLowestChannel(int i_priority) {
     if (best_index < 0) {
         return NULL;
     }
-    return &sDspChannels[best_index];
+    return &sSlots[best_index];
 }
 
-JASDSPChannel* JASDSPChannel::getLowestActiveChannel() {
+JASVoiceSlot* JASVoiceSlot::getLowestActiveChannel() {
     s16 best_priority = 0xff;
     int best_index = -1;
     int best_unknown = 0;
     for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        JASDSPChannel* channel = &sDspChannels[i];
+        JASVoiceSlot* channel = &sSlots[i];
         if (channel->mStatus == STATUS_ACTIVE) {
             s16 priority = channel->mPriority;
             if (priority < 0x7f && priority <= best_priority) {
@@ -121,10 +121,10 @@ JASDSPChannel* JASDSPChannel::getLowestActiveChannel() {
     if (best_index < 0) {
         return NULL;
     }
-    return &sDspChannels[best_index];
+    return &sSlots[best_index];
 }
 
-void JASDSPChannel::updateProc() {
+void JASVoiceSlot::updateProc() {
     int ret = 0;
     if (mChannel->isFinish()) {
         mFlags &= ~2;
@@ -195,15 +195,15 @@ void JASDSPChannel::updateProc() {
 }
 
 // The voices' updates, then the host mixes the subframe.
-void JASDSPChannel::updateAll() {
+void JASVoiceSlot::updateAll() {
     for (u32 i = 0; i < MAX_DSP_CHANNELS; i++) {
-        sDspChannels[i].updateProc();
+        sSlots[i].updateProc();
     }
-    JASDsp::mixSubframe();
+    JASVoice::mixSubframe();
 }
 
-int JASDSPChannel::killActiveChannel() {
-    JASDSPChannel* channel = getLowestActiveChannel();
+int JASVoiceSlot::killActiveChannel() {
+    JASVoiceSlot* channel = getLowestActiveChannel();
     if (channel == NULL) {
         return 0;
     } else {
@@ -212,34 +212,34 @@ int JASDSPChannel::killActiveChannel() {
     }
 }
 
-JASDSPChannel* JASDSPChannel::getHandle(u32 i_index) {
-    return &sDspChannels[i_index];
+JASVoiceSlot* JASVoiceSlot::getHandle(u32 i_index) {
+    return &sSlots[i_index];
 }
 
-u32 JASDSPChannel::getNumUse() {
+u32 JASVoiceSlot::getNumUse() {
     u32 count = 0;
     for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if (sDspChannels[i].mStatus == STATUS_ACTIVE) {
+        if (sSlots[i].mStatus == STATUS_ACTIVE) {
             count++;
         }
     }
     return count;
 }
 
-u32 JASDSPChannel::getNumFree() {
+u32 JASVoiceSlot::getNumFree() {
     u32 count = 0;
     for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if (sDspChannels[i].mStatus == STATUS_INACTIVE) {
+        if (sSlots[i].mStatus == STATUS_INACTIVE) {
             count++;
         }
     }
     return count;
 }
 
-u32 JASDSPChannel::getNumBreak() {
+u32 JASVoiceSlot::getNumBreak() {
     u32 count = 0;
     for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if (sDspChannels[i].mStatus == STATUS_DROP) {
+        if (sSlots[i].mStatus == STATUS_DROP) {
             count++;
         }
     }
@@ -257,13 +257,13 @@ uint32_t owner_id(const JAISound* sound) {
 // stream); the track's root (or the stream) names the sound that owns it (JAISe, JAISeq and JAIStream set it when
 // built). Every object it reads lives in a pool or inside a sound, so a sound ending meanwhile leaves a stale name,
 // never a bad read.
-uint32_t voice_owner(JASDSPChannel& dsp, uint32_t* route) {
+uint32_t voice_owner(JASVoiceSlot& dsp, uint32_t* route) {
     *route = 0u;
-    if (dsp.mCallback != JASChannel::dspUpdateCallback) {
+    if (dsp.mCallback != JASChannel::voiceUpdateCallback) {
         return 0u;
     }
     const auto* voice = static_cast<const JASChannel*>(dsp.mCallbackData);
-    if (voice == nullptr || voice->mDspCh != &dsp) {
+    if (voice == nullptr || voice->mSlot != &dsp) {
         return 0u;
     }
     if (voice->mCallback == JASTrack::channelUpdateCallback) {
@@ -290,7 +290,7 @@ uint32_t voice_owner(JASDSPChannel& dsp, uint32_t* route) {
 }  // namespace
 
 // Names the voice's sound on the record once the channel's callback has run (its owner may link only then).
-void JASDSPChannel::nameSound() {
+void JASVoiceSlot::nameSound() {
     if (mStatus != STATUS_ACTIVE || mChannel == NULL) {
         return;
     }

@@ -1,15 +1,15 @@
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "Game/System/NebulaAtomic.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
-#include "JSystem/JAudio2/JASDSPChannel.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "JSystem/JAudio2/JASVoiceSlot.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASCmdStack.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "JSystem/JAudio2/JASDSPChannel.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JAudio2/JASVoiceSlot.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASProbe.hpp"
 
@@ -19,7 +19,7 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 
-// The host's audio clock asks for each frame (nebula_game_audio_tick, raised on the audio thread as its event): the
+// The host's audio clock asks for each frame (nebula_game_sound_frame, raised on the audio thread as its event): the
 // driver runs the frame's subframes - commands, the voices' updates and one mix each, then the sequencers - and ends
 // the frame (the host adds the movie's sound).
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -32,20 +32,20 @@ namespace {
 }  // namespace
 
 // On the host's audio clock thread.
-extern "C" NEBULA_GAME_API void nebula_game_audio_tick(void) {
+extern "C" NEBULA_GAME_API void nebula_game_sound_frame(void) {
     __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
     GameThreads::enterAudio();
     JKRHeap* const previous = JKRHeap::sCurrentHeap;
     JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
-    JASDriver::updateDac();
-    JASDriver::updateDacCallback();
+    JASDriver::updateFrame();
+    JASDriver::updateFrameCallback();
     JKRHeap::sCurrentHeap = previous;
     GameThreads::leaveAudio();
 }
 
 u32 JASDriver::sOutputRate;
 
-f32 JASDriver::sDacRate = 32028.5f;
+f32 JASDriver::sSoundRate = 32028.5f;
 
 u32 JASDriver::sSubFrames = 0x00000007;
 
@@ -55,35 +55,35 @@ NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
 void JASDriver::startAudio() {
     setOutputRate(OUTPUT_RATE_0);
     JASChannel::initBankDisposeMsgQueue();
-    JASDsp::initBuffer();
-    JASDSPChannel::initAll();
+    JASVoice::initAll();
+    JASVoiceSlot::initAll();
     JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(0x48);
-    startDMA();
+    startClock();
 }
 
-void JASDriver::startDMA() {
-    nebula_host()->audio_control(nebula_host()->user, NEBULA_AUDIO_START, getFrameSamples());
+void JASDriver::startClock() {
+    nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_START, getFrameSamples());
 }
 
-void JASDriver::stopDMA() {
-    nebula_host()->audio_control(nebula_host()->user, NEBULA_AUDIO_STOP, 0);
+void JASDriver::stopClock() {
+    nebula_host()->sound_clock(nebula_host()->user, NEBULA_AUDIO_STOP, 0);
 }
 
 void JASDriver::setOutputRate(JASOutputRate rate) {
     sOutputRate = rate;
     if (rate == 0) {
         sSubFrames = 7;
-        sDacRate = 32000.0f;
+        sSoundRate = 32000.0f;
     } else {
         sSubFrames = 10;
-        sDacRate = 48000.0f;
+        sSoundRate = 48000.0f;
     }
-    sDacRate *= 1.0008897f;
+    sSoundRate *= 1.0008897f;
 }
 
 // The frames the clock asked for (at most cMaxCatchUp; the rest are dropped): each one's subframes, then the frame to
 // the output.
-void JASDriver::updateDac() {
+void JASDriver::updateFrame() {
     u32 frames = __atomic_exchange_n(&sFramesAsked, 0u, __ATOMIC_RELAXED);
     if (frames > cMaxCatchUp) {
         frames = cMaxCatchUp;
@@ -95,21 +95,21 @@ void JASDriver::updateDac() {
 
 void JASDriver::mixFrame() {
     for (u32 i = 0; i < getSubFrames(); i++) {
-        updateDSP();
+        updateSubFrame();
     }
     const NebulaHostServices* const host = nebula_host();
-    host->audio_frame(host->user);
+    host->voices_frame(host->user);
 }
 
-void JASDriver::updateDSP() {
+void JASDriver::updateSubFrame() {
     JASProbe::start(3, "SFR-UPDATE");
     JASPortCmd::execAllCommand();
     syncCallback();
     JASChannel::receiveBankDisposeMsg();
-    JASDSPChannel::updateAll();
+    JASVoiceSlot::updateAll();
 
     subframeCallback();
-    f32 freeRun = 32028.5f / getDacRate();
+    f32 freeRun = 32028.5f / getSoundRate();
     JASLfo::updateFreeRun(freeRun);
     JASProbe::stop(3);
     sSubFrameCounter++;
@@ -118,8 +118,8 @@ void JASDriver::updateDSP() {
     }
 }
 
-f32 JASDriver::getDacRate() {
-    return sDacRate;
+f32 JASDriver::getSoundRate() {
+    return sSoundRate;
 }
 
 u32 JASDriver::getSubFrames() {

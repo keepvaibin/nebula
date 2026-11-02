@@ -6,7 +6,7 @@
 #include "Game/RhythmLib/AudMeTrackCallback.hpp"
 #include <JSystem/JAudio2/JASBank.hpp>
 #include <JSystem/JAudio2/JASChannel.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JMath/random.hpp>
 
 AudMeTrack::TList AudMeTrack::sTrackList = AudMeTrack::TList();
@@ -151,13 +151,13 @@ void AudMeTrack::setSeqData(void* pData, u32 meId) {
 }
 
 void AudMeTrack::startSeq() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     sTrackList.append(this);
     mStatus = STATUS_RUN;
 }
 
 void AudMeTrack::stopSeq() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     noteOffAll(0);
     for (s32 i = 0; i < MAX_CHILDREN; i++) {
         if (mChildren[i] != nullptr) {
@@ -170,7 +170,7 @@ void AudMeTrack::stopSeq() {
 }
 
 void AudMeTrack::suspendSeq() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     noteOffAll(0);
     for (s32 i = 0; i < MAX_CHILDREN; i++) {
         if (mChildren[i] != nullptr) {
@@ -182,7 +182,7 @@ void AudMeTrack::suspendSeq() {
 }
 
 void AudMeTrack::stopAtCurrentNoteEnd() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mStopAfterNote = true;
     mSeqCtrl.mStopAfterNote = true;
 
@@ -350,7 +350,7 @@ void AudMeTrack::startNote() {
     mIsInStart = false;
 }
 
-void AudMeTrack::channelUpdateCallback(u32 callbackType, JASChannel* pChannel, JASDsp::TChannel* pDspChannel, void* mCallbackData) {
+void AudMeTrack::channelUpdateCallback(u32 callbackType, JASChannel* pChannel, JASVoice* pDspChannel, void* mCallbackData) {
     AudMeChannelMgr* mgr = reinterpret_cast< AudMeChannelMgr* >(mCallbackData);
 
     switch (callbackType) {

@@ -307,7 +307,7 @@ struct Module {
     decltype(&nebula_game_run) run;
     decltype(&nebula_game_asset_complete) asset_complete;
     decltype(&nebula_game_vi_retrace) vi_retrace;
-    decltype(&nebula_game_audio_tick) audio_tick;
+    decltype(&nebula_game_sound_frame) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
     void (*debug_dump)();  // optional: the module's thread report
@@ -431,7 +431,7 @@ void load_module(const fs::path& path) {
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
     gModule.asset_complete = reinterpret_cast<decltype(gModule.asset_complete)>(find_symbol(module, "nebula_game_asset_complete"));
     gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
-    gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_audio_tick"));
+    gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_sound_frame"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
         reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
@@ -481,8 +481,6 @@ struct Pak {
     galaxy::disc::AssetStore store;
 };
 Pak gPak;
-// The mods this session (galaxy::mods): out until they are rebuilt on the asset store (section W).
-std::unique_ptr<galaxy::mods::ActiveMods> gMods;
 
 void open_pak(const fs::path& path) {
     if (!gPak.store.open(path)) {
@@ -600,17 +598,6 @@ bool nand_path(const char* path, fs::path* out) {
         return false;
     }
     fs::path result = gNandRoot;
-    // A Riivolution mod's savegame: the game's saves in its folder.
-    if (gMods != nullptr && !gMods->save_folder.empty() && !gSaveDataPath.empty() &&
-        std::strncmp(path, gSaveDataPath.c_str(), gSaveDataPath.size()) == 0 &&
-        (path[gSaveDataPath.size()] == '/' || path[gSaveDataPath.size()] == '\0')) {
-        result = gMods->save_folder;
-        path += gSaveDataPath.size();
-        if (*path == '\0') {
-            *out = result;
-            return true;
-        }
-    }
     for (const fs::path& part : fs::path(path + 1)) {
         if (part == ".." || part == ".") {
             return false;
@@ -1517,24 +1504,6 @@ void svc_sharp_2d(void*, uint32_t on) {
 #else
     (void)on;
 #endif
-}
-
-// A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
-int svc_code_patch(void*, uint32_t id, uint32_t* value) {
-    static_assert(galaxy::mods::kPatchFlipPanelGroup == NEBULA_PATCH_FLIP_PANEL_GROUP &&
-                  galaxy::mods::kPatchMessengerExOneUps == NEBULA_PATCH_MESSENGER_EX_ONE_UPS);
-    if (gMods == nullptr) return 0;
-    const auto it = gMods->code_patches.find(id);
-    if (it == gMods->code_patches.end()) return 0;
-    if (value != nullptr) *value = it->second;
-    // Logged the first time the game uses each.
-    static std::atomic<uint64_t> logged{0};
-    if (id < 64u && (logged.fetch_or(uint64_t{1} << id) & (uint64_t{1} << id)) == 0u) {
-        char text[64];
-        std::snprintf(text, sizeof(text), "native patch %u in use (value 0x%08X)", id, it->second);
-        log_line("mods:", text);
-    }
-    return 1;
 }
 
 void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, const void* y, const void* u, const void* v,
@@ -2520,6 +2489,12 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
 
 void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst, uint32_t slot) {
     gFileReads.fetch_add(1, std::memory_order_relaxed);
+    // GALAXY_TRACE_FILE_READS=1: each read with the retrace it came on: two runs of deterministic mode compare by it.
+    static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    if (trace_reads) {
+        std::fprintf(stderr, "[read] retrace %llu entry %d at %llu size %u\n", static_cast<unsigned long long>(gDeterministicRetraces.load()),
+                     file, static_cast<unsigned long long>(file_offset), size);
+    }
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
     if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size) {
         gModule.asset_complete(slot, -1);
@@ -3115,7 +3090,7 @@ void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_
 }
 
 // The game's sound (native_audio.h), on its audio thread. Headless, nothing is mixed.
-void svc_audio_setup(void*, NebulaAudioVoice* voices, uint32_t count, const NebulaAudioEffect* effects,
+void svc_audio_setup(void*, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects,
                      const void* sound_memory, uint32_t sound_memory_size) {
 #if defined(NEBULA_HOST_RENDERER)
     gAudio->setup(voices, count, effects, sound_memory, sound_memory_size, !deterministic_mode());
@@ -3840,23 +3815,6 @@ int main(int argc, char** argv) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
         }
-        if (gMods != nullptr) {
-            galaxy::render::set_texture_pack_mod_folders(gMods->texture_folders);
-            galaxy::render::set_movie_mod_folders(gMods->movie_folders);
-            std::fprintf(stderr, "[mods] %zu mod(s), %u file patch(es), %u unsupported\n%s", gMods->active.size(),
-                         gMods->files_changed, gMods->unsupported, gMods->report.c_str());
-            const std::string text = "Nebula mods applied at the last start (" + game_id + ")\n\n" + gMods->report;
-            (void)galaxy::io::write_text_file_atomically(settings_folder / "mods-report.txt", text);
-            if (!gMods->save_folder.empty()) {
-                // Riivolution's clone: the NAND's saves copied into an empty save folder.
-                const fs::path nand_saves = gNandRoot / gSaveDataPath.substr(1);
-                const bool empty = !fs::exists(gMods->save_folder, error) || fs::is_empty(gMods->save_folder, error);
-                fs::create_directories(gMods->save_folder, error);
-                if (empty && gMods->save_clone && fs::exists(nand_saves, error)) {
-                    fs::copy(nand_saves, gMods->save_folder, fs::copy_options::recursive, error);
-                }
-            }
-        }
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.
             std::string lines;
@@ -3887,11 +3845,6 @@ int main(int argc, char** argv) {
             galaxy::set_disc_languages(languages);
 #endif
         }
-        if (gMods == nullptr && !settings_folder.empty() && fs::exists(settings_folder / "mods-report.txt", error)) {
-            // No mod this start: an earlier start's report must not stand.
-            (void)galaxy::io::write_text_file_atomically(settings_folder / "mods-report.txt",
-                                                         "Nebula mods applied at the last start: none\n");
-        }
     }
 #endif
 
@@ -3903,7 +3856,6 @@ int main(int argc, char** argv) {
     services.fatal = svc_fatal;
     services.scene_marker = svc_scene_marker;
     services.movie_frame = svc_movie_frame;
-    services.code_patch = svc_code_patch;
     services.presence = svc_presence;
     services.achievement = svc_achievement;
     services.achievement_date = svc_achievement_date;
@@ -3923,6 +3875,7 @@ int main(int argc, char** argv) {
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
     services.shape_forget = svc_shape_forget;
+    services.code_patch = [](void*, uint32_t, uint32_t*) -> int { return 0; };  // mods are out until section W
     services.shape_draw = svc_shape_draw;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
@@ -3955,12 +3908,12 @@ int main(int argc, char** argv) {
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;
     services.speaker_samples = svc_speaker_samples;
-    services.audio_setup = svc_audio_setup;
-    services.audio_mix = svc_audio_mix;
-    services.audio_frame = svc_audio_frame;
+    services.voices_setup = svc_audio_setup;
+    services.voices_mix = svc_audio_mix;
+    services.voices_frame = svc_audio_frame;
     services.movie_audio = svc_movie_audio;
     services.movie_audio_control = svc_movie_audio_control;
-    services.audio_control = svc_audio_control;
+    services.sound_clock = svc_audio_control;
     services.hbm = svc_hbm;
     services.movie_video_decode = svc_movie_video_decode;
     services.gpu_coherent = svc_gpu_coherent;

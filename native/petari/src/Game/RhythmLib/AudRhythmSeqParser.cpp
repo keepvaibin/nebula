@@ -1,7 +1,7 @@
 #include "Game/RhythmLib/AudRhythmSeqParser.hpp"
 #include "Game/RhythmLib/AudChordInfo.hpp"
 #include "Game/RhythmLib/AudMeTrackCallback.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASSeqCtrl.hpp>
 #include <JSystem/JAudio2/JASSeqParser.hpp>
 #include <JSystem/JAudio2/JASTrack.hpp>
@@ -134,7 +134,7 @@ s32 AudRhythmSeqParser::parse(JASTrack* pTrack) {
 }
 
 bool AudRhythmSeqParser::checkNoteOn(u32 channel, u32& rPitch, u32& rVelocity, u32& rNoteOff, s64& rTime, bool setOff) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
 
     if (!mNoteInfo[channel].mIsOn) {
         return false;
@@ -171,12 +171,12 @@ bool AudRhythmSeqParser::checkNoteOnKey(u32 key, u32& rVelocity, u32& rNoteOff, 
 }
 
 f32 AudRhythmSeqParser::getTempo() const {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     return mTempo;
 }
 
 f32 AudRhythmSeqParser::getModifiedTempo() const {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     return mModifiedTempo;
 }
 
@@ -369,7 +369,7 @@ void AudRhythmSeqParser::initNoteInfo(u32 channel) {
 }
 
 void AudRhythmSeqParser::init() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mIsActive = false;
     for (u32 i = 0; i < MAX_CHANNELS; i++) {
         initNoteInfo(i);
@@ -380,7 +380,7 @@ void AudRhythmSeqParser::init() {
 }
 
 void AudRhythmSeqParser::activate() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mIsActive = true;
 }
 

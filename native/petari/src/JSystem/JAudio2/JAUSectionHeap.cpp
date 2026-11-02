@@ -2,7 +2,7 @@
 #include "JSystem/JAudio2/JASBNKParser.hpp"
 #include "JSystem/JAudio2/JASBankTable.hpp"
 #include "JSystem/JAudio2/JASBasicWaveBank.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
 #include "JSystem/JAudio2/JASVoiceBank.hpp"
@@ -240,7 +240,7 @@ u8* JAUSection::newStaticSeqDataBlock_(JAISoundID param_0, u32 size) {
         seqDataBlock->region.addr = r28;
         seqDataBlock->region.size = size;
         seqDataBlock->mSoundID = param_0;
-        JASCriticalSection cs;
+        GameAudioExclusion cs;
 
         if (data_.field_0x00.appendDynamicSeqDataBlock(seqDataBlock)) {
             data_.field_0x28.append(link);
@@ -565,7 +565,7 @@ bool JAUSectionHeap::newDynamicSeqBlock(u32 size) {
         seqDataBlock->region.addr = r25;
         seqDataBlock->region.size = size;
         seqDataBlock->mSoundID.setAnonymous();
-        JASCriticalSection cs;
+        GameAudioExclusion cs;
 
         if (sectionHeap_->sectionHeapData_.seqDataBlocks.appendDynamicSeqDataBlock(seqDataBlock)) {
             return true;

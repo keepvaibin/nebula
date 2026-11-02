@@ -57,7 +57,7 @@ JASChannel* JASBank::noteOn(JASBank const* pBank, int progNo, u8 pitch, u8 veloc
     channel->mWavePtr = wavePtr;
     channel->mChannelType = params.mChannelType;
     channel->setBankDisposeID(pBank);
-    channel->setInitPitch(params.mPitch * (waveInfo->mSampleRate / JASDriver::getDacRate()));
+    channel->setInitPitch(params.mPitch * (waveInfo->mSampleRate / JASDriver::getSoundRate()));
     if (params._24 == 0) {
         channel->setKey(pitch - waveInfo->mBaseKey);
     }

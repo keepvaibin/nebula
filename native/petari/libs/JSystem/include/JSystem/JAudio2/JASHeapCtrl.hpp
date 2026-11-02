@@ -1,6 +1,6 @@
 #pragma once
 
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSUList.hpp"

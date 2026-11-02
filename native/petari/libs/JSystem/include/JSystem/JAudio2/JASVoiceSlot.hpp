@@ -1,9 +1,9 @@
 #pragma once
 
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 
-struct JASDSPChannel {
-    typedef s32 (*Callback)(u32, JASDsp::TChannel*, void*);
+struct JASVoiceSlot {
+    typedef s32 (*Callback)(u32, JASVoice*, void*);
 
     enum Status {
         /* 0 */ STATUS_ACTIVE,
@@ -18,7 +18,7 @@ struct JASDSPChannel {
         /* 3 */ CB_DROP,
     };
 
-    JASDSPChannel();
+    JASVoiceSlot();
     void free();
     void start();
     void drop();
@@ -30,18 +30,18 @@ struct JASDSPChannel {
     }
 
     static void initAll();
-    static JASDSPChannel* alloc(u8, Callback, void*);
-    static JASDSPChannel* allocForce(u8, Callback, void*);
-    static JASDSPChannel* getLowestChannel(int);
-    static JASDSPChannel* getLowestActiveChannel();
+    static JASVoiceSlot* alloc(u8, Callback, void*);
+    static JASVoiceSlot* allocForce(u8, Callback, void*);
+    static JASVoiceSlot* getLowestChannel(int);
+    static JASVoiceSlot* getLowestActiveChannel();
     static void updateAll();
     static int killActiveChannel();
-    static JASDSPChannel* getHandle(u32);
+    static JASVoiceSlot* getHandle(u32);
     static u32 getNumUse();
     static u32 getNumFree();
     static u32 getNumBreak();
 
-    static JASDSPChannel* sDspChannels;
+    static JASVoiceSlot* sSlots;
 
     /* 0x00 */ s32 mStatus;
     /* 0x04 */ s16 mPriority;
@@ -49,5 +49,5 @@ struct JASDSPChannel {
     /* 0x0C */ u32 field_0xc;
     /* 0x10 */ Callback mCallback;
     /* 0x14 */ void* mCallbackData;
-    /* 0x18 */ JASDsp::TChannel* mChannel;
+    /* 0x18 */ JASVoice* mChannel;
 };

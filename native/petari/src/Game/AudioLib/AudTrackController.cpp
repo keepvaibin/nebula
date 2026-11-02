@@ -2,7 +2,7 @@
 #include <JSystem/JAudio2/JAISound.hpp>
 #include <JSystem/JAudio2/JAISoundChild.hpp>
 #include <JSystem/JAudio2/JAISoundParams.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASTrack.hpp>
 
 AudTrackController::AudTrackController() : mTrackNo(-1), mHandle(nullptr), mAutoMute(false), mVolume(1.0f) {
@@ -130,10 +130,10 @@ void AudTrackController::muteIfVolumeZero() {
     }
 
     if (child->mParams.mVolume == 0.0f) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         track->mute(true);
     } else {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         track->mute(false);
     }
 }

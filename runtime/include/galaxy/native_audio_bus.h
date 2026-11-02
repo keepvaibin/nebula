@@ -67,7 +67,7 @@ native_audio_bus_from_sound_id(std::uint32_t sound_id) noexcept {
     }
 }
 
-// How the game names a voice's sound (NebulaAudioVoice.sound_route): by its sample format only, or as a sound effect,
+// How the game names a voice's sound (NebulaVoice.sound_route): by its sample format only, or as a sound effect,
 // a sequence or a stream with that sound's ID.
 enum class JAudioOwnerRoute : std::uint8_t { Format, Se, Seq, Stream };
 

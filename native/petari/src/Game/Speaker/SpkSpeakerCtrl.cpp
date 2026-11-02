@@ -2,7 +2,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "Game/Speaker/SpkMixingBuffer.hpp"
 #include "Game/Speaker/SpkSound.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASDriverIF.hpp>
 #include <cstring>
 #include "Game/System/NebulaHost.hpp"
@@ -59,7 +59,7 @@ void SpkSpeakerCtrl::setup() {
 }
 
 void SpkSpeakerCtrl::connect(s32 padChannel) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     sSpeakerInfo[padChannel].mIsConnected = true;
     sSpeakerInfo[padChannel].mIsPlaying = false;
     sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
@@ -69,7 +69,7 @@ void SpkSpeakerCtrl::connect(s32 padChannel) {
 }
 
 void SpkSpeakerCtrl::disconnect(s32 padChannel) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     sSpeakerInfo[padChannel].mIsConnected = false;
     sSpeakerInfo[padChannel].mIsPlaying = false;
     sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
@@ -81,13 +81,13 @@ void SpkSpeakerCtrl::disconnect(s32 padChannel) {
 // The speaker is the host's: it plays as soon as the game turns it on (no handshake with a remote), and its sound
 // goes to the host as 16-bit samples (speaker_samples).
 void SpkSpeakerCtrl::setSpeakerOn(s32 padChannel) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
     SpkSpeakerCtrl::setSpeakerPlay(padChannel);
 }
 
 void SpkSpeakerCtrl::setSpeakerPlay(s32 padChannel) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     sSpeakerInfo[padChannel].mIsPlaying = true;
     sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
     sSpeakerInfo[padChannel].mUsingTimeOut = 8 * 60 * 60;
