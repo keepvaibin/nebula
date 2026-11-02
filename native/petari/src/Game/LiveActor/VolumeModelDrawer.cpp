@@ -26,7 +26,7 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
 void VolumeModelDrawer::draw() const {
     MR::loadProjectionMtx();
     loadModelDrawMtx();
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);
     J3DPass::constantAlpha(true, 0);

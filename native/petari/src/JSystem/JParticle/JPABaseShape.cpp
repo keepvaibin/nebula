@@ -119,22 +119,22 @@ namespace JPAParticleBatch {
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DNativeState::setPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
+    J3DPass::pointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), true);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DNativeState::setLineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
+    J3DPass::lineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), true);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DNativeState::setPointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
+    J3DPass::pointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), true);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DNativeState::setLineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
+    J3DPass::lineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), true);
 }
 
 void JPARegistPrm(JPAEmitterWorkData* work) {

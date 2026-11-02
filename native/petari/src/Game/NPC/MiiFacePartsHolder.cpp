@@ -148,11 +148,11 @@ void MiiFacePartsHolder::drawExtra() const {
 
     MR::loadLight(1);
     setTevOpa();
-    J3DNativeState::setAlphaCompare(GPU_NEQUAL, 255, GPU_AOP_AND, GPU_ALWAYS, GPU_LO_CLEAR);
+    J3DPass::alphaTest(NEBULA_COMPARE_NEQUAL, 255);
     J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ZERO);
     drawEachActor(&MiiFaceParts::drawOpa, &setting);
     setTevXlu();
-    J3DNativeState::setAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
+    J3DPass::alphaTest(NEBULA_COMPARE_GREATER, 0);
     J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     drawEachActor(&MiiFaceParts::drawXlu, &setting);
 }

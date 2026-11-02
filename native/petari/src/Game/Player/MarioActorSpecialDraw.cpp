@@ -625,7 +625,7 @@ void MarioActor::drawSpinEffect() const {
     TVec3f direction(mMario->mFrontVec);
     TVec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
-    J3DNativeState::setLineWidth(36, GPU_TO_ZERO);
+    J3DPass::lineWidth(36);
 
     for (u32 i = 0; i <= 64; i++) {
         TVec3f point(direction);
@@ -640,7 +640,7 @@ void MarioActor::drawSpinEffect() const {
         NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
-    J3DNativeState::setLineWidth(18, GPU_TO_ZERO);
+    J3DPass::lineWidth(18);
 
     for (u32 i = 0; i <= 64; i++) {
         TVec3f point(direction);
@@ -766,7 +766,7 @@ bool MarioActor::drawDarkMask() const {
     J3DNativeDraw::texCoord(0.0f, 4.0f);
     J3DPass::constantAlpha(false, 0);
     J3DPass::writeColor(true);
-    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
+    J3DPass::noAlphaTest();
     TDDraw::close();
     return true;
 }

@@ -249,7 +249,7 @@ NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info) {
 }
 
 void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
-    J3DNativeStateSetAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
+    J3DPassAlphaTest(NEBULA_COMPARE_GREATER, 0);
     J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
     J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
     J3DPassWriteColor(1);
@@ -310,7 +310,7 @@ void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
-    J3DNativeStateSetCurrentMtx(GPU_PNMTX0 + 3u * setting->matrix);
+    J3DPassPositionMatrix((u8)setting->matrix);
 
     if (res->beardDlSize > 0) {
         Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cBeardColor[res->beardColor], front, NULL);
@@ -351,7 +351,7 @@ void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
-    J3DNativeStateSetCurrentMtx(GPU_PNMTX0 + 3u * setting->matrix);
+    J3DPassPositionMatrix((u8)setting->matrix);
 
     Mii_NativePart(MII_I_NATIVE_FORM_MASK, cBlack, front, imodel->maskTexObj[imodel->expression]);
     Mii_DrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);

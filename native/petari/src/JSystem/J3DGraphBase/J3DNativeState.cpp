@@ -620,6 +620,56 @@ namespace J3DPass {
     void positionMatrix(u8 index) {
         send(J3D_STATE_CURRENT_MATRIX, index);
     }
+
+    void noAlphaTest() {
+        J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+    }
+
+    void alphaTest(u8 compare, u8 reference) {
+        J3DNativeState::setAlphaCompare(static_cast< GpuCompare >(compare), reference, GPU_AOP_OR, GPU_NEVER, 0);
+    }
+
+    void noFog() {
+        const NebulaColor8 none = {0, 0, 0, 0};
+        J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, none);
+    }
+
+    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
+        J3DNativeState::setFog(GPU_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
+    }
+
+    void lineWidth(u8 width, bool texelOffset) {
+        J3DNativeState::setLineWidth(width, texelOffset ? GPU_TO_ONE : GPU_TO_ZERO);
+    }
+
+    void pointSize(u8 size, bool texelOffset) {
+        J3DNativeState::setPointSize(size, texelOffset ? GPU_TO_ONE : GPU_TO_ZERO);
+    }
+
+    void materialColor(u8 index, NebulaColor8 color) {
+        J3DNativeState::setTevColor(static_cast< GpuTevRegID >(index), color);
+    }
+
+    void constantColor(u8 index, NebulaColor8 color) {
+        J3DNativeState::setTevKColor(static_cast< GpuTevKColorID >(index), color);
+    }
+
+    void lightMaterial(u8 channel, NebulaColor8 color) {
+        J3DNativeState::setChanMatColor(channel == 0 ? GPU_COLOR0A0 : GPU_COLOR1A1, color);
+    }
+
+    void lightAmbient(u8 channel, NebulaColor8 color) {
+        J3DNativeState::setChanAmbColor(channel == 0 ? GPU_COLOR0A0 : GPU_COLOR1A1, color);
+    }
+
+    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp) {
+        J3DNativeState::setIndTexMtx(static_cast< GpuIndTexMtxID >(GPU_ITM_0 + index), offset, scaleExp);
+    }
+
+    void textureMatrix(u8 coord, u8 matrix) {
+        J3DNativeState::setTexCoordGen2(static_cast< GpuTexCoordID >(coord), GPU_TG_MTX2x4, GPU_TG_TEX0, 30u + 3u * matrix,
+                                        GPU_FALSE, 125);
+    }
 };  // namespace J3DPass
 
 extern "C" {
@@ -649,5 +699,14 @@ void J3DPassConstantAlpha(int on, u8 alpha) {
 }
 void J3DPassPositionMatrix(u8 index) {
     J3DPass::positionMatrix(index);
+}
+void J3DPassNoAlphaTest(void) {
+    J3DPass::noAlphaTest();
+}
+void J3DPassAlphaTest(u8 compare, u8 reference) {
+    J3DPass::alphaTest(compare, reference);
+}
+void J3DPassNoFog(void) {
+    J3DPass::noFog();
 }
 }

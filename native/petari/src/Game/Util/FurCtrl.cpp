@@ -148,7 +148,7 @@ void FurCtrl::drawFur() {
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
     NebulaColor8 fogColor = {0, 0, 0, 0};
-    J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
+    J3DPass::noFog();
 }
 
 void FurCtrl::createFurMap() {

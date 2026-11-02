@@ -75,6 +75,8 @@ public:
     // GpuSetTexCoordGen2's change: setTexCoordGen's and the coordinate's matrix index.
     void setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, u32 mtx, GpuBool normalize, u32 postMtx);
     void setCurrentMtx(u32 id);
+    // Coordinate `coord` is texture coordinate 0 through texture matrix `matrix`.
+    void useTextureMatrix(u8 coord, u8 matrix);
     // GpuSetTevIndWarp's setTevIndirect.
     void setLineWidth(u8 width, GpuTexOffset texOffsets);
     void setPointSize(u8 size, GpuTexOffset texOffsets);

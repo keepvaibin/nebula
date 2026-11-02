@@ -19,7 +19,7 @@ void ShadowVolumeBox::setSize(const TVec3f& rSize) {
 
 void ShadowVolumeBox::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
     makeVertexBuffer();
 }
 

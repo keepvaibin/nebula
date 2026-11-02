@@ -204,6 +204,7 @@ namespace {
                                 : form == PlayerMode_Ice      ? pPlayer->_9C0 != nullptr
                                 : form == PlayerMode_Bee      ? pPlayer->_9E4 != nullptr
                                 : form == PlayerMode_Teresa   ? pPlayer->_9A4 != nullptr
+                                : form == PlayerMode_Hopper   ? pPlayer->_A00 != nullptr
                                 : form == PlayerMode_Tornado  ? pPlayer->mTornadoMario != nullptr
                                                               : true;
             if (loaded) {

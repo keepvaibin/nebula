@@ -112,7 +112,7 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     J3DPass::positionMatrix(0);
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
-    J3DNativeState::setLineWidth(12, GPU_TO_ZERO);
+    J3DPass::lineWidth(12);
     sendZAlphaMaterial();
 
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINE_STRIP, 4, NEBULA_SHAPE_COLOR0);

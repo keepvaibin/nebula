@@ -47,7 +47,7 @@ namespace TDDraw {
     }
 
     void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
-        J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
+        J3DPass::lineWidth(6);
 
         Mtx mtx;
         NebulaMtxIdentity(mtx);
@@ -438,7 +438,7 @@ namespace TDDraw {
         f32 start;
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);
-        J3DNativeState::setFog(GPU_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
+        J3DPass::linearFog(start, end, nearZ, farZ, color);
     }
 
     u32 getTexel32(const JUTTexture* pTexture, u32 x, u32 y) {
