@@ -109,7 +109,8 @@ const LAYOUT_RGBA8: u8 = 0;
 const LAYOUT_L8: u8 = 1;
 const LAYOUT_LA8: u8 = 2;
 const LAYOUT_BLOCK4: u8 = 3;
-const FILTER_AT_UPLOAD: u8 = 1;
+/// No block uses a transparent colour (nebula_cooked_texture.h NEBULA_TEXTURE_OPAQUE_BLOCKS).
+const OPAQUE_BLOCKS: u8 = 2;
 
 fn expand5(v: u16) -> u8 {
     let v = (v & 0x1F) as u8;
@@ -387,6 +388,12 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
         at += image.format.level_bytes(w, h);
         texels.push(out);
     }
+    // A level dithered into a checker of two colours, or with one over its detail, loses it here, once.
+    let mut filtered = false;
+    for (l, level) in texels.iter_mut().enumerate() {
+        let (w, h) = ((image.width >> l).max(1) as usize, (image.height >> l).max(1) as usize);
+        filtered |= flatten_texel_checker(level, w, h) || remove_texel_checker(level, w, h);
+    }
     let all = texels.iter().flatten();
     let fits = if all.clone().all(|t| t[0] == t[1] && t[1] == t[2] && t[2] == t[3]) {
         LAYOUT_L8
@@ -396,12 +403,26 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
         LAYOUT_RGBA8
     };
     // CMPR stays 4 bits a texel: its blocks in row order (block4_level), expanded by the renderer as it uploads.
-    let layout = if image.format == Format::Cmpr {
+    let layout = if image.format == Format::Cmpr && !filtered {
         LAYOUT_BLOCK4
     } else if rank(wider) > rank(fits) {
         wider
     } else {
         fits
+    };
+    let mut blocks = Vec::new();
+    if layout == LAYOUT_BLOCK4 {
+        let mut at = 0usize;
+        for l in 0..levels {
+            let (w, h) = ((image.width >> l).max(1), (image.height >> l).max(1));
+            block4_level(&image.data[at..], w, h, &mut blocks);
+            at += image.format.level_bytes(w, h);
+        }
+    }
+    let flags = if layout == LAYOUT_BLOCK4 && image.width % 4 == 0 && image.height % 4 == 0 && blocks_opaque(&blocks) {
+        OPAQUE_BLOCKS
+    } else {
+        0
     };
     let level0 = &image.data[..image.format.level_bytes(image.width, image.height)];
     let pack_hash = xxh64(level0);
@@ -416,18 +437,12 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
     record.push(levels as u8);
     record.push(layout);
     record.push(image.format as u8);
-    record.push(FILTER_AT_UPLOAD);
+    record.push(flags);
     record.extend_from_slice(&pack_hash.to_le_bytes());
     record.extend_from_slice(&pack_palette_hash.to_le_bytes());
     record.resize(HEADER, 0);
-    let mut at = 0usize;
-    for (l, level) in texels.iter().enumerate() {
-        if layout == LAYOUT_BLOCK4 {
-            let (w, h) = ((image.width >> l).max(1), (image.height >> l).max(1));
-            block4_level(&image.data[at..], w, h, &mut record);
-            at += image.format.level_bytes(w, h);
-            continue;
-        }
+    record.extend_from_slice(&blocks);
+    for level in texels.iter().filter(|_| layout != LAYOUT_BLOCK4) {
         for t in level {
             match layout {
                 LAYOUT_L8 => record.push(t[0]),
@@ -440,6 +455,93 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
     record[12..16].copy_from_slice(&size.to_le_bytes());
     dump(image, levels, &record);
     Ok(record)
+}
+
+/// Whether no block's texel takes the transparent colour of a three-colour block.
+fn blocks_opaque(blocks: &[u8]) -> bool {
+    blocks.chunks_exact(8).all(|b| {
+        let (c0, c1) = (u16::from_le_bytes([b[0], b[1]]), u16::from_le_bytes([b[2], b[3]]));
+        let indices = u32::from_le_bytes([b[4], b[5], b[6], b[7]]);
+        c0 > c1 || indices & (indices >> 1) & 0x5555_5555 == 0
+    })
+}
+
+/// A level of nothing but two colours in a checker becomes their mean.
+fn flatten_texel_checker(p: &mut [[u8; 4]], w: usize, h: usize) -> bool {
+    if w < 4 || h < 4 || p.len() < w * h || p[0] == p[1] {
+        return false;
+    }
+    let (even, odd) = (p[0], p[1]);
+    for y in 0..h {
+        for x in 0..w {
+            if p[y * w + x] != if (x + y) & 1 == 0 { even } else { odd } {
+                return false;
+            }
+        }
+    }
+    let mut flat = [0u8; 4];
+    for c in 0..4 {
+        flat[c] = ((even[c] as u32 + odd[c] as u32 + 1) >> 1) as u8;
+    }
+    p[..w * h].fill(flat);
+    true
+}
+
+/// A level whose detail is mostly a checker in one phase loses the checker: each colour channel less
+/// its local amplitude (alpha stays).
+fn remove_texel_checker(p: &mut [[u8; 4]], w: usize, h: usize) -> bool {
+    let count = w * h;
+    if w < 4 || h < 4 || p.len() < count {
+        return false;
+    }
+    fn detail(p: &[[u8; 4]], w: usize, h: usize, x: usize, y: usize, value: &dyn Fn(&[u8; 4]) -> i32) -> i32 {
+        let at = |x: usize, y: usize| value(&p[y * w + x]);
+        let sum = at(x.saturating_sub(1), y) + at((x + 1).min(w - 1), y) + at(x, y.saturating_sub(1)) + at(x, (y + 1).min(h - 1));
+        let d = 4 * at(x, y) - sum;
+        if (x + y) & 1 == 0 { d } else { -d }
+    }
+    let luma = |t: &[u8; 4]| 54 * t[0] as i32 + 183 * t[1] as i32 + 19 * t[2] as i32;
+    let (mut strong, mut phase) = (0usize, 0i64);
+    for y in 0..h {
+        for x in 0..w {
+            let d = detail(p, w, h, x, y, &luma);
+            if d >= 8 * 256 || d <= -8 * 256 {
+                strong += 1;
+                phase += if d > 0 { 1 } else { -1 };
+            }
+        }
+    }
+    if strong * 5 < count || (phase.unsigned_abs() as usize) * 100 < strong * 95 {
+        return false;
+    }
+    let mut out: Vec<[u8; 4]> = p[..count].to_vec();
+    let mut details = vec![0i32; count];
+    for c in 0..3 {
+        let channel = move |t: &[u8; 4]| t[c] as i32;
+        for y in 0..h {
+            for x in 0..w {
+                details[y * w + x] = detail(p, w, h, x, y, &channel);
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                let (x0, x1, y0, y1) = (x.saturating_sub(1), (x + 1).min(w - 1), y.saturating_sub(1), (y + 1).min(h - 1));
+                let mut sum = 0i32;
+                for sy in y0..=y1 {
+                    for sx in x0..=x1 {
+                        sum += details[sy * w + sx];
+                    }
+                }
+                let taps = ((x1 - x0 + 1) * (y1 - y0 + 1)) as i32;
+                let scale = 8 * taps;
+                let amplitude = (if sum >= 0 { sum + scale / 2 } else { sum - scale / 2 }) / scale;
+                let value = p[y * w + x][c] as i32 - if (x + y) & 1 == 0 { amplitude } else { -amplitude };
+                out[y * w + x][c] = value.clamp(0, 255) as u8;
+            }
+        }
+    }
+    p[..count].copy_from_slice(&out);
+    true
 }
 
 /// One CMPR level as the record's BLOCK4 layout: its 4x4 blocks in row order, ceil(w / 4) across, each 8 bytes:
