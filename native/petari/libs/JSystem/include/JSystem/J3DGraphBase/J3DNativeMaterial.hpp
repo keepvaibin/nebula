@@ -1,6 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
+#include <nebula_game_api.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -10,11 +11,50 @@ class J3DTexture;
 class J3DDisplayListObj;
 struct NebulaMaterialParts;
 struct NebulaNativeMaterial;
-struct NebulaMaterialProgram;
-struct NebulaMaterialValues;
 struct NebulaStateOp;
 
-// A J3D material as the renderer takes it (nebula_game_api.h NebulaMaterialProgram and NebulaMaterialValues): every
+// The parts a material loads (the others keep what was set before).
+enum {
+    J3D_LOADS_FOG = 1u << 0,
+    J3D_LOADS_TEV_COLOR = 1u << 2,
+    J3D_LOADS_KONST_COLOR = 1u << 3,
+    J3D_LOADS_AMBIENT = 1u << 6,
+    J3D_LOADS_LIGHTS = 1u << 7,
+    J3D_LOADS_CHANNELS = 1u << 9,
+    J3D_LOADS_INDIRECT = 1u << 10,
+};
+
+// What a material's draw takes besides its shader, which the cook chose (nebula_cooked_material.h).
+struct J3DMaterialSetup {
+    u8 tex_gens, cull, z_compare_location, fog_type;
+    u16 loads;
+    // 0: the material as its list sets it. Else an instance's differed list: only the parts these J3D flags name.
+    u32 diff_flags;
+    u8 tex_gen_post[8];  // each coordinate's post-transform row (61 the identity)
+    struct { u8 comp0, op, comp1; } alpha_compare;
+    struct { u8 type, source, destination, logic_op; } blend;  // NEBULA_BLEND_*, NEBULA_FACTOR_*
+    struct { u8 enable, func, update; } z_mode;
+    // Coordinate i's texture matrix, when the material has one: `id` its place (a post-transform one from 64), `rows`
+    // 2 or 3, `listed` whether the material's own list loads it (a differed list loads every one).
+    struct { u8 present, listed, id, rows; } texture_matrix[8];
+};
+
+// The material's values.
+struct J3DMaterialValues {
+    s16 tev_color[4][4];
+    u8 konst_color[4][4];
+    u8 material_color[2][4], ambient_color[2][4];
+    u8 light_mask;  // the lights below that are set
+    u8 alpha_ref[2];
+    struct { f32 m[2][3]; s8 scale; } ind_matrix[3];
+    struct { u16 scale_s, scale_t; u8 bias_s, bias_t; } tex_coord_scale[8];
+    NebulaMaterialTexture texture[8];
+    NebulaMaterialLight light[8];
+    struct { f32 start, end, near_z, far_z; u8 color[4]; } fog;
+    f32 texture_matrix[8][12];
+};
+
+// A J3D material as the renderer takes it: every
 // block's settings as values.
 class J3DStateList;
 
@@ -24,7 +64,7 @@ namespace J3DNativeMaterial {
     // The material the next shape draws use, a record after every command written before it.
     // A snapshot's storage, from the current heap (where a material list's buffers come from).
     NebulaMaterialParts* create();
-    // The material as `pList` sets it now (made or patched), into its snapshot; its program goes to the host when it
+    // The material as `pList` sets it now (made or patched), into its snapshot.
     // is new or changed. `diffFlags`: the J3D diff flags of a differed list (0 for a whole list).
     void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList, u32 diffFlags = 0);
     // The material `pList` sets (its snapshot; built now for a list from the model file, which has none).
@@ -32,19 +72,11 @@ namespace J3DNativeMaterial {
     // An instance's differed list (a shape packet's: the material with that instance's animated values), when it has
     // been made.
     void sendDiffered(J3DDisplayListObj* pList);
-    // Tests (NEBULA_OPTION_TEST_MATERIAL_SWEEP): every material of a model just loaded built, and the programs no
-    // native shader is made for registered with the host (whose GALAXY_DUMP_MATERIAL_PROGRAMS file collects them).
-    void sweep(J3DModelData* pModelData);
-    // What sweep also registers until cleared: its materials under these chains of state lists (a null list is skipped):
-    // J3DModelX's and the player's, which change programs at draw.
-    void setSweepChains(const J3DStateList* const (*pChains)[2], u32 count);
     // State changes the game makes (J3DStateList::send), before they go to the host: the register file the J3D
     // materials' constants take, a value change folded into the current native J3D material, and a change of what
     // its shader computes handing its draws back to the drawing state.
     void state(const NebulaStateOp* pOps, u32 count);
     void applyPass(u8 pass);
-    // Before each draw (J3DNativeShape, J3DNativeDraw).
-    void noteDraw();
     // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: colour registers, constant colours, material and
     // ambient colours, indirect matrices, fog, alpha references) as the materials and state changes left it.
     const f32* registers();
@@ -58,7 +90,7 @@ namespace J3DNativeMaterial {
     // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts
     // until the next material: its generated native shader when the material set has its program (depth and culling
     // kept from the drawing state), else the program registered with the host (once) and drawn by the drawing state.
-    void sendWhole(u32 shader, const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues);
+    void sendWhole(u32 shader, const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues);
     // The current J3D material with coordinate 0 its vertices' normals and texture 0 `pImage` (a `width` x `height`
     // RGB565 image, repeated, linear): J3DModelX list 6. False when the current material is not a native J3D one.
     bool overrideCoordinate(const void* pImage, u16 width, u16 height);
