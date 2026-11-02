@@ -17,7 +17,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 #include <nebula_game_api.h>
 #include <cstring>
 

@@ -17,7 +17,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <NebulaGpuEnums.h>
 #include <JSystem/J3DGraphBase/J3DDrawBuffer.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 

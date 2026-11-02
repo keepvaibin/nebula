@@ -3,7 +3,6 @@
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
-#include <NebulaGpuEnums.h>
 
 
 
@@ -224,9 +223,9 @@ void loadNBTScale(J3DNBTScale& NBTScale) {
 }
 
 J3DTexCoordInfo const j3dDefaultTexCoordInfo[8] = {
-    {GPU_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY, 0}, {GPU_MTX2x4, GPU_TG_TEX1, GPU_IDENTITY, 0}, {GPU_MTX2x4, GPU_TG_TEX2, GPU_IDENTITY, 0},
-    {GPU_MTX2x4, GPU_TG_TEX3, GPU_IDENTITY, 0}, {GPU_MTX2x4, GPU_TG_TEX4, GPU_IDENTITY, 0}, {GPU_MTX2x4, GPU_TG_TEX5, GPU_IDENTITY, 0},
-    {GPU_MTX2x4, GPU_TG_TEX6, GPU_IDENTITY, 0}, {GPU_MTX2x4, GPU_TG_TEX7, GPU_IDENTITY, 0},
+    {J3D_MTX2x4, J3D_TG_TEX0, J3D_IDENTITY, 0}, {J3D_MTX2x4, J3D_TG_TEX1, J3D_IDENTITY, 0}, {J3D_MTX2x4, J3D_TG_TEX2, J3D_IDENTITY, 0},
+    {J3D_MTX2x4, J3D_TG_TEX3, J3D_IDENTITY, 0}, {J3D_MTX2x4, J3D_TG_TEX4, J3D_IDENTITY, 0}, {J3D_MTX2x4, J3D_TG_TEX5, J3D_IDENTITY, 0},
+    {J3D_MTX2x4, J3D_TG_TEX6, J3D_IDENTITY, 0}, {J3D_MTX2x4, J3D_TG_TEX7, J3D_IDENTITY, 0},
 };
 
 J3DTexMtxInfo const j3dDefaultTexMtxInfo = {
@@ -263,7 +262,7 @@ static u8 j3dTexCoordTable[7623];
 
 void makeTexCoordTable() {
     u8 texMtx[] = {
-        GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3, GPU_TEXMTX4, GPU_TEXMTX5, GPU_TEXMTX6, GPU_TEXMTX7, GPU_TEXMTX8, GPU_TEXMTX9, GPU_IDENTITY,
+        J3D_TEXMTX0, J3D_TEXMTX1, J3D_TEXMTX2, J3D_TEXMTX3, J3D_TEXMTX4, J3D_TEXMTX5, J3D_TEXMTX6, J3D_TEXMTX7, J3D_TEXMTX8, J3D_TEXMTX9, J3D_IDENTITY,
     };
 
     u8* table = j3dTexCoordTable;
@@ -338,7 +337,7 @@ const u8 j3dDefaultNumChans = 1;
 
 const NebulaColor8 j3dDefaultTevKColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
-const J3DBlendInfo j3dDefaultBlendInfo = {GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP};
+const J3DBlendInfo j3dDefaultBlendInfo = {J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, J3D_LO_NOOP};
 
 const u16 j3dDefaultAlphaCmpID = 0x00E7;
 

@@ -18,7 +18,6 @@
 #include <JSystem/JGeometry/TBox.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
-#include <NebulaGpuEnums.h>
 
 void MarioActor::initScreenBox() {
     _B44 = new (32) u8[0x20000];

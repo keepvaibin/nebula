@@ -27,7 +27,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 #include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 

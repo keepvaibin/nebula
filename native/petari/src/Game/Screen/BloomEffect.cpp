@@ -8,7 +8,6 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include <nebula_game_api.h>
 #include <cstring>

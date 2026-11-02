@@ -44,8 +44,6 @@ public:
     static const u8 st_lo[16];
     static const u8 st_c[8];
     static u8 blendFactor(u32 code, bool source);
-    static GpuTevColorArg st_ca[6][4];
-    static GpuTevAlphaArg st_aa[2][4];
 
     u8 getBlendMode() const {
         return st_bm[mpData->mBlendModeCfg & 0x03];
@@ -59,8 +57,8 @@ public:
     u8 getLogicOp() const {
         return st_lo[(mpData->mBlendModeCfg >> 10) & 0x0F];
     }
-    GpuBool getZCompLoc() const {
-        return (GpuBool)((mpData->mZModeCfg >> 5) & 0x01);
+    bool getZCompLoc() const {
+        return ((mpData->mZModeCfg >> 5) & 0x01) != 0;
     }
 
     bool getZEnable() const {
@@ -90,18 +88,12 @@ public:
         return mpData->mAlphaRef1;
     }
 
-    // The colour and alpha modes (st_ca and st_aa rows: runtime/src/render/materials/particle.hlsl).
+    // The colour and alpha modes (runtime/src/render/materials/particle.hlsl).
     u32 getTevColorMode() const {
         return (mpData->mFlags >> 0x0F) & 0x07;
     }
     u32 getTevAlphaMode() const {
         return (mpData->mFlags >> 0x12) & 0x01;
-    }
-    const GpuTevColorArg* getTevColorArg() const {
-        return st_ca[(mpData->mFlags >> 0x0F) & 0x07];
-    }
-    const GpuTevAlphaArg* getTevAlphaArg() const {
-        return st_aa[(mpData->mFlags >> 0x12) & 0x01];
     }
 
     u32 getType() const {

@@ -31,11 +31,6 @@ namespace {
 };  // namespace
 
 namespace {
-    static GpuTevOp sAlphaTevOperater = GPU_TEV_COMP_A8_GT;
-    static GpuBlendMode sFillBlendMode = GPU_BM_BLEND;
-    static GpuBlendFactor sFillSrcFactor = GPU_BL_SRCALPHA;
-    static GpuBlendFactor sFillDstFactor = GPU_BL_INVSRCALPHA;
-    static GpuLogicOp sFillLogicOp = GPU_LO_NOOP;
     // static const s32 sBlurCount = _;
     // static const f32 sBlurRadius = _;
     // static const f32 sBlurIntensity = _;

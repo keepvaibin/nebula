@@ -38,7 +38,7 @@ namespace NativeShader {
         rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
         rMaterial.alpha_write = 2;
         for (u32 i = 0; i < 8; i++) {
-            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GPU_PTIDENTITY), the console's texgens' default
+            rMaterial.texgen_post[i] = 61;  // the identity post-transform 
         }
     }
 

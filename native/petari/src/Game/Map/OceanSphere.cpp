@@ -626,9 +626,9 @@ void OceanSphere::loadMaterialBack() const {
     pos.zeroTrans();
     pos.scale(0.779175f);
     J3DNativeShape::setTexture(0, pos.toMtxPtr(), 2);
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {0, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
     // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereTevReg0Env
     // toward sOceanSphereTevReg1Env; opaque, depth tested and written, front faces culled, no fog.
     NebulaNativeMaterial material;

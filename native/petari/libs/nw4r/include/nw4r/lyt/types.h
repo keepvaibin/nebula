@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstring>
 #include <NebulaGpu.h>
+#include <nebula_game_api.h>
 #include <nebula_math.h>
 
 namespace nw4r {
@@ -132,24 +133,24 @@ namespace nw4r {
 
         struct ChanCtrl {
             ChanCtrl() : reserve1(0), reserve2(0) {
-                Set(GPU_SRC_VTX, GPU_SRC_VTX);
+                Set(J3D_SRC_VTX, J3D_SRC_VTX);
             }
 
-            ChanCtrl(GpuColorSrc colSrc, GpuColorSrc alpSrc) : reserve1(0), reserve2(0) {
+            ChanCtrl(u8 colSrc, u8 alpSrc) : reserve1(0), reserve2(0) {
                 Set(colSrc, alpSrc);
             }
 
-            void Set(GpuColorSrc colSrc, GpuColorSrc alpSrc) {
+            void Set(u8 colSrc, u8 alpSrc) {
                 matSrcCol = colSrc;
                 matSrcAlp = alpSrc;
             }
 
-            GpuColorSrc GetColorSrc() const {
-                return GpuColorSrc(matSrcCol);
+            u8 GetColorSrc() const {
+                return u8(matSrcCol);
             }
 
-            GpuColorSrc GetAlphaSrc() const {
-                return GpuColorSrc(matSrcAlp);
+            u8 GetAlphaSrc() const {
+                return u8(matSrcAlp);
             }
 
             u8 matSrcCol;
@@ -166,28 +167,28 @@ namespace nw4r {
 
         struct TexCoordGen {
             TexCoordGen() : reserve(0) {
-                Set(GPU_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY);
+                Set(J3D_TG_MTX2x4, J3D_TG_TEX0, J3D_IDENTITY);
             }
 
-            TexCoordGen(GpuTexGenType aTexGenType, GpuTexGenSrc aTexGenSrc, u32 aTexMtx)
+            TexCoordGen(u8 aTexGenType, u8 aTexGenSrc, u32 aTexMtx)
                 : reserve(0)
 
             {
                 Set(aTexGenType, aTexGenSrc, aTexMtx);
             }
 
-            void Set(GpuTexGenType aTexGenType, GpuTexGenSrc aTexGenSrc, u32 aTexMtx) {
+            void Set(u8 aTexGenType, u8 aTexGenSrc, u32 aTexMtx) {
                 texGenType = aTexGenType;
                 texGenSrc = aTexGenSrc;
                 texMtx = u8(aTexMtx);
             }
 
-            GpuTexGenType GetTexGenType() const {
-                return GpuTexGenType(texGenType);
+            u8 GetTexGenType() const {
+                return u8(texGenType);
             }
 
-            GpuTexGenSrc GetTexGenSrc() const {
-                return GpuTexGenSrc(texGenSrc);
+            u8 GetTexGenSrc() const {
+                return u8(texGenSrc);
             }
 
             u32 GetTexMtx() const {
@@ -202,34 +203,34 @@ namespace nw4r {
 
         struct AlphaCompare {
             AlphaCompare() {
-                Set(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
+                Set(NEBULA_COMPARE_ALWAYS, 0, J3D_AOP_AND, NEBULA_COMPARE_ALWAYS, 0);
             }
 
-            AlphaCompare(GpuCompare aComp0, u8 aRef0, GpuAlphaOp aOp, GpuCompare aComp1, u8 aRef1) {
+            AlphaCompare(u8 aComp0, u8 aRef0, u8 aOp, u8 aComp1, u8 aRef1) {
                 Set(aComp0, aRef0, aOp, aComp1, aRef1);
             }
 
-            void Set(GpuCompare aComp0, u8 aRef0, GpuAlphaOp aOp, GpuCompare aComp1, u8 aRef1) {
+            void Set(u8 aComp0, u8 aRef0, u8 aOp, u8 aComp1, u8 aRef1) {
                 comp = u8(aComp0 << 0 | aComp1 << 4);
                 op = aOp;
                 ref0 = aRef0;
                 ref1 = aRef1;
             }
 
-            GpuCompare GetComp0() const {
-                return GpuCompare((comp >> 0) & 0xF);
+            u8 GetComp0() const {
+                return u8((comp >> 0) & 0xF);
             }
 
             u8 GetRef0() const {
                 return ref0;
             }
 
-            GpuAlphaOp GetOp() const {
-                return GpuAlphaOp(op);
+            u8 GetOp() const {
+                return u8(op);
             }
 
-            GpuCompare GetComp1() const {
-                return GpuCompare((comp >> 4) & 0xF);
+            u8 GetComp1() const {
+                return u8((comp >> 4) & 0xF);
             }
 
             u8 GetRef1() const {
@@ -244,34 +245,34 @@ namespace nw4r {
 
         struct BlendMode {
             BlendMode() {
-                Set(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_SET);
+                Set(J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, J3D_LO_SET);
             }
 
-            BlendMode(GpuBlendMode aType, GpuBlendFactor aSrcFactor, GpuBlendFactor aDstFactor, GpuLogicOp aOp) {
+            BlendMode(u8 aType, u8 aSrcFactor, u8 aDstFactor, u8 aOp) {
                 Set(aType, aSrcFactor, aDstFactor, aOp);
             }
 
-            void Set(GpuBlendMode aType, GpuBlendFactor aSrcFactor, GpuBlendFactor aDstFactor, GpuLogicOp aOp) {
+            void Set(u8 aType, u8 aSrcFactor, u8 aDstFactor, u8 aOp) {
                 type = aType;
                 srcFactor = aSrcFactor;
                 dstFactor = aDstFactor;
                 op = aOp;
             }
 
-            GpuBlendMode GetType() const {
-                return GpuBlendMode(type);
+            u8 GetType() const {
+                return u8(type);
             }
 
-            GpuBlendFactor GetSrcFactor() const {
-                return GpuBlendFactor(srcFactor);
+            u8 GetSrcFactor() const {
+                return u8(srcFactor);
             }
 
-            GpuBlendFactor GetDstFactor() const {
-                return GpuBlendFactor(dstFactor);
+            u8 GetDstFactor() const {
+                return u8(dstFactor);
             }
 
-            GpuLogicOp GetOp() const {
-                return GpuLogicOp(op);
+            u8 GetOp() const {
+                return u8(op);
             }
 
             u8 type;

@@ -134,8 +134,8 @@ void FurCtrl::drawFur() {
     }
 
     J3DShape* pShape = pModelData->getShapeNodePointer(mShapeIndex);
-    pShape->mCurrentMtx.setCurrentTexMtx(GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                         GPU_IDENTITY, GPU_IDENTITY);
+    pShape->mCurrentMtx.setCurrentTexMtx(J3D_TEXMTX0, J3D_TEXMTX1, J3D_TEXMTX2, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
+                                         J3D_IDENTITY, J3D_IDENTITY);
     J3DShapePacket* pPacket;
 
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {

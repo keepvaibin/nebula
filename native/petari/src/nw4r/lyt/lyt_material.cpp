@@ -77,11 +77,11 @@ namespace nw4r {
             }
 
             inline u32 GetTexMtxIdx(u32 mtx) {
-                return (mtx - GPU_TEXMTX0) / 3;
+                return (mtx - J3D_TEXMTX0) / 3;
             }
 
             inline u32 GetTexMtx(u32 idx) {
-                return GPU_TEXMTX0 + idx * 3;
+                return J3D_TEXMTX0 + idx * 3;
             }
 
             void SetColorComponentValue(nw4r::ut::Color* pColor, u32 idx, s16 value) {
@@ -180,9 +180,9 @@ namespace nw4r {
             const TexCoordGen* const resTexCoordGens = detail::ConvertOffsToPtr< TexCoordGen >(pRes, resOffs);
             resOffs += sizeof(TexCoordGen) * pRes->resNum.GetTexCoordGenNum();
 
-            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(GPU_MAX_TEXMAP));
+            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(8));
             const u8 texSRTNum = ut::Min(pRes->resNum.GetTexSRTNum(), u8(10));
-            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(GPU_MAX_TEXCOORD));
+            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(8));
             const bool allocChanCtrl = 0 != pRes->resNum.GetChanCtrlNum();
             const bool allocMatCol = 0 != pRes->resNum.GetMatColNum();
             const bool allocAlpComp = pRes->resNum.HasAlphaCompare();
@@ -507,12 +507,12 @@ namespace nw4r {
             bool useVtxColor = true;
             bool useMatColor = false;
 
-            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (GpuSetChanCtrl's material
+            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (the channel's material
             // source; the ambient source the register).
             if (IsChanCtrlCap()) {
                 const ChanCtrl* const pChanCtrl = GetChanCtrlAry();
-                useVtxColor = pChanCtrl->GetColorSrc() == GPU_SRC_VTX || pChanCtrl->GetAlphaSrc() == GPU_SRC_VTX;
-                useMatColor = pChanCtrl->GetColorSrc() == GPU_SRC_REG || pChanCtrl->GetAlphaSrc() == GPU_SRC_REG;
+                useVtxColor = pChanCtrl->GetColorSrc() == J3D_SRC_VTX || pChanCtrl->GetAlphaSrc() == J3D_SRC_VTX;
+                useMatColor = pChanCtrl->GetColorSrc() == J3D_SRC_REG || pChanCtrl->GetAlphaSrc() == J3D_SRC_REG;
             }
 
             bool useRasStage = false;
@@ -547,8 +547,8 @@ namespace nw4r {
                 useTexMtx[i] = false;
             }
 
-            u8 places[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                            GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+            u8 places[8] = {J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
+                            J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY};
             rSetup.tex_gens = mNum.texCoordGen;
             if (mNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
@@ -556,13 +556,13 @@ namespace nw4r {
                 for (int i = 0; i < mNum.texCoordGen; i++) {
                     u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
-                    if (pTexCoordGen[i].GetTexGenType() == GPU_TG_MTX2x4 && texMtx != GPU_IDENTITY) {
+                    if (pTexCoordGen[i].GetTexGenType() == J3D_TG_MTX2x4 && texMtx != J3D_IDENTITY) {
                         useTexMtx[GetTexMtxIdx(texMtx)] = true;
                         setTexMtx = true;
                     }
 
                     if (i < 8) {
-                        rSetup.tex_gen_post[i] = static_cast< u8 >(GPU_PTIDENTITY);
+                        rSetup.tex_gen_post[i] = static_cast< u8 >(J3D_PTIDENTITY);
                     }
                     if (i < 8) {
                         places[i] = static_cast< u8 >(texMtx);
@@ -580,7 +580,7 @@ namespace nw4r {
 
                     math::MTX34 mtx;
                     CalcTextureMtx(&mtx, pTexSrt[i]);
-                    J3DNativeShape::setTexture((GetTexMtx(i) - GPU_TEXMTX0) / 3, mtx, 2);
+                    J3DNativeShape::setTexture((GetTexMtx(i) - J3D_TEXMTX0) / 3, mtx, 2);
                 }
             }
 
@@ -656,9 +656,9 @@ namespace nw4r {
                 rValues.alpha_ref[0] = pAlphaComp->GetRef0();
                 rValues.alpha_ref[1] = pAlphaComp->GetRef1();
             } else {
-                rSetup.alpha_compare.comp0 = GPU_ALWAYS;
-                rSetup.alpha_compare.op = GPU_AOP_AND;
-                rSetup.alpha_compare.comp1 = GPU_ALWAYS;
+                rSetup.alpha_compare.comp0 = NEBULA_COMPARE_ALWAYS;
+                rSetup.alpha_compare.op = J3D_AOP_AND;
+                rSetup.alpha_compare.comp1 = NEBULA_COMPARE_ALWAYS;
             }
 
             if (IsBlendModeCap()) {
@@ -666,14 +666,14 @@ namespace nw4r {
 
                 {
                     const u8 type = pBlendMode->GetType();
-                    rSetup.blend.type = type == GPU_BM_BLEND ? NEBULA_BLEND_ADD : type == GPU_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
-                                          : type == GPU_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+                    rSetup.blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+                                          : type == J3D_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
                 }
                 {
                     // NEBULA_FACTOR_*: the console's source colour factors (2, 3) are the destination's colour.
                     const u8 src = pBlendMode->GetSrcFactor();
-                    rSetup.blend.source = src == GPU_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
-                                            : src == GPU_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
+                    rSetup.blend.source = src == J3D_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
+                                            : src == J3D_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
                 }
                 rSetup.blend.destination = pBlendMode->GetDstFactor();
                 rSetup.blend.logic_op = pBlendMode->GetOp();
@@ -681,13 +681,13 @@ namespace nw4r {
                 rSetup.blend.type = NEBULA_BLEND_ADD;
                 rSetup.blend.source = NEBULA_FACTOR_SRC_ALPHA;
                 rSetup.blend.destination = NEBULA_FACTOR_INV_SRC_ALPHA;
-                rSetup.blend.logic_op = GPU_LO_SET;
+                rSetup.blend.logic_op = J3D_LO_SET;
             }
 
             const bool remap = mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1]);
             const u32 shader = mNativeShaders[(useRasStage ? 1 : 0) | (remap ? 2 : 0)];
             J3DNativeMaterial::sendWhole(shader != 0 ? NEBULA_SHADER_J3D_FIRST + shader - 1 : 0, rSetup, rValues);
-            J3DNativeShape::setCurrent(GPU_PNMTX0, places);
+            J3DNativeShape::setCurrentFromFile(0, places);
 
             return useRasStage && useVtxColor;
         }

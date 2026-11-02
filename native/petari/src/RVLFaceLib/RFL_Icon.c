@@ -113,9 +113,9 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     MiiSetMtx(&model, viewMtx);
 
     drawSetting.lightEnable = TRUE;
-    drawSetting.lightMask = GPU_LIGHT0;
-    drawSetting.diffuse = GPU_DF_CLAMP;
-    drawSetting.attn = GPU_AF_NONE;
+    drawSetting.lightMask = J3D_LIGHT0;
+    drawSetting.diffuse = J3D_DF_CLAMP;
+    drawSetting.attn = J3D_AF_NONE;
     drawSetting.ambColor = (NebulaColor8){160, 160, 160, 255};
     drawSetting.compLoc = 0;
     MiiLoadDrawSetting(&drawSetting);

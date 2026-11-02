@@ -6,7 +6,6 @@
 #include "Game/Util/DirectDraw.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <NebulaGpuEnums.h>
 #include <nebula_math.h>
 
 ShadowSurfaceBox::~ShadowSurfaceBox() {

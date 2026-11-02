@@ -27,7 +27,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cmath>
 #include <cstring>
-#include <NebulaGpuEnums.h>
 
 s16 sgrad_tex_thresh;
 
@@ -370,9 +369,9 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
     J3DNativeTexture::init(&obj, mImagePtr, width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
 
     if (_13A & 1) {
-        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, GPU_FALSE, 0);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
     } else {
-        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, 0);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, false, 0);
     }
 
     NativeShader::setTexObj(sNormalMap, slot, &obj);
@@ -382,7 +381,7 @@ void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
     J3DNativeTexObj obj;
     J3DNativeTexture::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     if ((_13A & 2) != 0 && (_13A & 0x4) != 0) {
-        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, GPU_FALSE, 0);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, false, 0);
     } else if ((_13A & 0x2) != 0) {
         J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_LINEAR, 0.0, 0.0, 0.0, 0, 0);
     } else if ((_13A & 0x4) != 0) {

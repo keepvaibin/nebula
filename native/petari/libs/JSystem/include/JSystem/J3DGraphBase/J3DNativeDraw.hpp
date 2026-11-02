@@ -5,7 +5,7 @@
 #include <nebula_math.h>
 
 #ifdef __cplusplus
-// Vertices the game draws as it sends them, as typed values (nebula_game_api.h immediate): a primitive (GpuBegin's)
+// Vertices the game draws as it sends them, as typed values (nebula_game_api.h immediate): a primitive (u8's)
 // and each vertex's values, one record per primitive after every command written before it.
 namespace J3DNativeDraw {
     // Quads wait here while nothing changes between them, and go as one draw: anything that sends a change or another
