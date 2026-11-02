@@ -884,7 +884,7 @@ void Tamakoro::exeBindEnd() {
 void Tamakoro::addVelocityOperate() {
     mAccelRate = mAccelSensorCtrl->calcMoveVector(&mAccelDir, mGravity);
 
-    TVec3f* vel = &mVelocity;  // this needs to be like this to match...
+    TVec3f* vel = &mVelocity;
     mVelocity.scaleAdd(mAccelRate * (MR::isBindedGround(this) ? 0.4f : 0.2f), mAccelDir, *vel);
 }
 

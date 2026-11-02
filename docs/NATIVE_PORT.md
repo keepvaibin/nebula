@@ -10,14 +10,13 @@ in this tree. **D**: read from the RMGE01 assembly or source. **H**: hypothesis,
   - The fork is Nebula's own code: it is optimised for native speed and need not match the console's object code.
     It will live in Nebula's repository, credited to SMGCommunity. Nothing goes back upstream: Petari does not accept
     AI-generated changes. With every function decompiled there is nothing to track.
-  - Changes stay behind `TARGET_PC` where the console build should stay buildable.
   - It becomes public with Nebula's repository; pushing is the owner's call.
 - Version: RMGE01. The test disc's `main.dol` SHA1 is 9A71008AE1EE9010E267FA67D1F0B0D4F0E895DD, which equals Petari's `config/RMGE01/build.sha1` (M).
 - 99.90% of RMGE01 functions match the DOL byte for byte (decomp.dev). Of the 42 that don't (each audited against the assembly):
   - one has no source: `StarPointerFunction::forceOutsideScreenEdge`, now written from the assembly (D);
   - two differ only in instruction order (D);
-  - 39 are SDK code the platform layer replaces.
-- Kept code: `src/Game` (1,609 units), `src/JSystem` (169), `src/nw4r` (29) and `src/RVLFaceLib` (14). The RVL SDK, MSL, Runtime and MetroTRK are replaced.
+  - 39 are SDK code, gone.
+- Kept code: `src/Game` (1,609 units), `src/JSystem` (169), `src/nw4r` (29) and `src/RVLFaceLib` (14). The RVL SDK, MSL, Runtime and MetroTRK are gone.
 
 ## Build of the game code
 
@@ -46,7 +45,7 @@ Status:
 
 ### Types
 
-- Under `TARGET_PC` the base types are the same fundamental types on every host (`types.h`): `s32` is `int`, `u32` is `unsigned int`, `s64` is `long long`. `int32_t` would be `long` on some hosts and change overload resolution.
+- The base types are the same fundamental types on every host (`types.h`): `s32` is `int`, `u32` is `unsigned int`, `s64` is `long long`. `int32_t` would be `long` on some hosts and change overload resolution.
 - The console's `s32`/`u32` were `long`. The game passes `long` literals (`0L`, `1UL`) to s32/u32 overload sets. `NebulaLongCall` in `types.h` gives exactly those calls a forwarding template. Plain `long` overloads would have made `int` arguments ambiguous (M).
 - Explicit `long` in kept code was respelled `s32`/`u32` (1,990 sites, `native/tools/long_sweep.py`). These are identical types on the console and 64-bit on LP64 hosts otherwise.
 
@@ -159,61 +158,34 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 
 ## Byte order
 
-- Data whose layout the console's files or hardware define keeps the console's byte order in memory; CPU-only state is native. That covers structs laid over loaded files, saves, display lists, vertex arrays and textures. The disc-data audit (`agents/petari-audit/DISC_DATA.md`) found 246 overlay structs with 1,557 fields in 31 formats (M).
-- Such fields are `BE<T>`, a byte swap per access, and 32-bit offsets are `BEOffset<T>` (`native/msl/include/nebula_be.hpp`). Dusklight ships this approach.
-  - Slots the console overwrote with a pointer in place (RARC file entries, KCL, BRFNT, TPL, rhythm tables) hold `SelfRel<T>`: the target's distance from the slot, which fits in the slot's 4 bytes.
-  - `NEBULA_BE(T)`/`NEBULA_OFFSET(T)` read as the plain types for CodeWarrior.
-- Everything the GPU reads stays big-endian, as on the console. That includes the vertex arrays and textures the game builds at run time (ocean, flags, skinning buffers, the fur map, the depth-clear texture), which are written big-endian. Nebula's FIFO parser and renderer then read every source alike. One exception: the arrays indexed loads read (position, normal and texture matrices) are CPU state the game also reads, so they stay in host order and NebulaNative tells the parser (`set_indexed_load_host_order`).
-- Bitfields: where code also reads a bitfield's word, the native declaration lists the fields from the least significant value bit up, with explicit padding, so each field has the console's bit.
-- Saves keep the Wii format (big-endian, chunk payload at offset 12), so existing saves load.
-- CPU-only file data may be converted once at load where every consumer is CPU code, such as BMG message text.
+- Everything is host order. The importer turns the game's files once (`crates/nebula-import/src/cook`): archives, J3D, JPA, KCL, JMap, BMG, layouts, audio banks, waves, ghosts. Nothing swaps at access; `nebula_be.hpp` is gone.
+- Offsets the console overwrote with a pointer in place (RARC file entries, KCL, BRFNT, TPL, rhythm tables) hold the target's distance from the slot, which fits the slot's 4 bytes.
+- Bitfields: where code also reads a bitfield's word, the native declaration lists the fields from the least significant value bit up, with explicit padding.
+- Saves are written in host order at the size they always had; a console-order save (Wii) and a Switch save read through `SaveBinary` and are written back in host order. Their table keeps its system entry, empty, so older builds read a new save.
 
 ## Memory and the GPU's addresses
 
-- The game's memory is one host arena in the console's layout: MEM1 at offset 0, MEM2 at 0x10000000, enlarged for 8-byte pointers. The arena is aligned to its size, so values the game derives from an address's low bits (J3DDrawBuffer's hash slots) are the console's. Nothing maps pointers to physical addresses any more: the renderer and the host's services take the game's pointers.
-- Images reach the renderer as records: the game hands each texture image (and palette) over where it loads or rewrites it (`texture_image`, API 42), and the renderer decodes from its copy. What remains of the console's coherency (file loads' and a few writers' flushes, DMA, disc reads through `gpu_coherent`) only covers images not handed over yet.
-- Game threads run on stacks allocated in the arena.
-- The game draws through typed records (`nebula_game_api.h`; docs/GRAPHICS_ARCHITECTURE.md "Native record stream"): J3D shapes, matrices and materials, the geometry it builds or sends as it draws, drawing state, lights, EFB copies and texture images. No game code calls GX's state, vertex or display-list functions any more.
-- The lens flare's visibility test (the sun sphere's alpha) and the star pointer's and talk balloons' depth are screen probes: the game names its points, the renderer reads those pixels where the drawing has reached, the answers come back a frame or two later (`screen_probe`, `screen_probe_results`).
-- The auxiliary memory (the console's ARAM; `Game/System/NebulaAuxMemory`): the first 14 MB of MEM2's arena, addressed by 32-bit offsets from its base, which JKRAram allocates and the mixer reads wave data at. A transfer is a copy.
+- The game's memory is one block of 385 MB (`NebulaMemory.c`), which the root heap divides: heaps sized for 64-bit data, no console arena, no MEM1 or MEM2. Untouched pages cost address space and commit, not memory: about 80 MB is in memory at a stop. docs/NATIVE_PERFORMANCE.md "Memory" has the table.
+- The store is mapped read-only for the process's life (`AssetStore::map`, `asset_map`). Waves and streams play from the mapping: no copy. Other files are read into the game's heaps.
+- The sound memory holds no sound: 1 MB, each wave archive's place in its section, so the archive goes with the section. A voice carries its source's start and end.
+- Images and shapes reach the renderer as records: the game hands each over where it loads or rewrites it, and a heap's going tells the renderer to forget what lay in it (`shape_forget`).
+- The game draws through typed records (`nebula_game_api.h`; docs/GRAPHICS_ARCHITECTURE.md). No game code calls GX.
+- The lens flare's visibility test and the star pointer's and talk balloons' depth are screen probes: the game names its points, the renderer reads those pixels where the drawing has reached, the answers come back a frame or two later (`screen_probe`, `screen_probe_results`).
+- Each game thread is a host thread with its own stack, at least 256 KB, guarded by the OS.
 
 ## Platform boundary
 
-- The native objects reference **407 symbols** they don't define (M, `native/tools/boundary.py`, 2026-10-29), and this is the whole surface:
-
-  | area | symbols |
-  |---|---|
-  | GX | 71 |
-  | OS | 55 |
-  | C library | 76 |
-  | C++ runtime | 18 |
-  | other | 38 |
-  | NAND | 24 |
-  | VI, WPAD, DVD | 14 each |
-  | NWC24 | 13 |
-  | ARC | 10 |
-  | KPAD | 9 |
-  | MEM | 7 |
-  | MTX/VEC/QUAT | 13 |
-  | AI | 6 |
-  | SC, AR | 5 each |
-  | PPC | 3 |
-  | TPL | 2 |
-  | WENC | 1 |
-
-- 2,480 of the DOL's 2,911 SDK functions are never reached and are not implemented (`droppable_functions.csv`). That includes all of AX, AXFX, MIX, SYN, SEQ, PAD, SI, EXI, BTE, WUD, IPC, ES, USB, NET and EUART.
-- 19 externals are used only by code absent from the DOL (dead-only). They get stubs that stop with a message if ever reached.
-- **GX**: the game's drawing is typed records (above); its native layer (`J3DNativeShape`, `J3DNativeMaterial`, `J3DNativeDraw`, `J3DNativeState`, `J3DNativeView`, `J3DNativeTexture`) replaced the GX and GD calls. Image identities and copy destinations are still the arena's 32-bit physical addresses.
-- **Audio**: JAudio2's 64 voices and four effect lines are records the host's mixer reads (`nebula_game_api.h` audio_*): the game updates them each subframe and the mixer (`runtime/src/audio_mixer.cpp`) mixes them in float at the output device's rate (decode, resampling, filters, sends, panner, effect delays, surround matrix, volume categories). The host's audio clock asks for a frame every 17.5 ms (`nebula_game_audio_tick`), paced by the device's queue; the frame, with the movie player's samples, goes to XAudio2 (Windows) or SDL with the master volume (`runtime/src/native_audio.cpp`, which also writes the tests' WAV dump).
-- **Video timing**: the retrace (60 Hz, as v1.0.1 paces the game; the console's 59.94 would repeat a frame every 17 s on a 60 Hz display), the AI and the remotes run on high-resolution waitable timers. Screen dimming is counted as on the console (idle fields since WPAD's last input or connection, 18000 with SYSCONF's screen saver on); the picture is not darkened, as a PC display dims itself.
+- The game's objects reference only the C and C++ runtimes and the host's services in `nebula_game_api.h` (`tools/progress/census.py`, `native/tools/boundary.py`).
+- **GX**: gone. The game's native layer (`J3DNativeShape`, `J3DNativeMaterial`, `J3DNativeDraw`, `J3DNativeState`, `J3DNativeView`, `J3DNativeTexture`) makes the records.
+- **Audio**: JAudio2's 64 voices and four effect lines are records the host's mixer reads (`voices_setup`, `voices_mix`, `voices_frame`): the game updates them each subframe and the mixer (`runtime/src/audio_mixer.cpp`) mixes them in float at the output device's rate (resampling, filters, sends, panner, effect delays, surround matrix, volume categories). All sources are PCM16 from the importer. The host's clock asks for a frame every 17.5 ms, paced by the device's queue; the frame, with the movie player's samples, goes to WASAPI on Windows (`runtime/src/audio_device_wasapi.cpp`) with the master volume. `runtime/src/native_audio.cpp` also writes the tests' WAV dump, 15 s unless `GALAXY_AUDIO_WAV_DUMP_SECONDS` says more.
+- **Frame timing**: the game waits for its frame on the host's clock (`frame_wait`, `Game/System/NebulaFrameClock`). The remotes run on their own host timers. Screen dimming is counted as on the console (idle time since the last input, with the system's screen saver setting); the picture is not darkened, as a PC display dims itself.
 - **Controls**: the game reads typed input samples (`input_read`, `NebulaInputSample`: buttons, the Nunchuk stick, the pointer with its roll and distance, gravity in g for the remote and the Nunchuk, shake), one every 10 ms and one when it reads, into its own WPad layer (`WPadHolder.cpp`: button edges and repeat, the acceleration filter the game sets, the pointer held through samples without one); no Wii Remote report is built or decoded and KPAD is gone. Nebula's live controls (`runtime/src/input/host_input.cpp`) make the samples; a real remote's driver reads its own reports into them (`runtime/src/input/wiimote_input.cpp`: calibration from its EEPROM, its camera's two lights as the pointer with the game's 0.03/0.5 smoothing). What v1.0.1 read from the console's memory for its control mapping the native game reports as it changes (`game_context`): StarPointerOnOffController's mode (menu or play mapping, rumble held in menus) and the ride Mario is bound to (Star Ball or Ray: tilt steering, and no pointer while the remote points up or down). The game's motor goes to the controller in use (`input_control`).
 - **HOME Menu**: the HOME button library is a PowerPC module on the disc; natively the game's entry points open Nebula's panel over the frame (return to the game, Wii Menu, reset), driven by keyboard, controllers and mouse. Nintendo's own menu natively would need its library (wii-ipl's CC0 decompilation is a later version than SMG's) and a substitute for the IPL ROM font.
-- **Power**: OSShutdownSystem, OSRestart, OSReturnToMenu and OSRebootSystem reach the host (`power`), which closes the game or starts it again. The game's own reset (HOME Menu, reset button) goes back to its boot sequence in place.
-- **Movies**: each THP frame's video component goes to v1.0.1's decoder with its size from the frame header (THP's entropy data is not byte-stuffed, so nothing else bounds a frame).
-- **Display shape**: as v1.0.1's dynamic aspect, the host latches the output's shape at each retrace once the frame is presented (`display_extent`), and the game draws for it (`native/sdk/vi/display_native.c`, `MR::getDisplay`): 4:3 to 32:9; `MR::getScreenWidth` (832 at 16:9, even units), `CameraContext::getAspect`, the NW4R canvas (`setupDrawForNW4RLayout`, both screen/layout conversions; height fit under 16:9), the star-select sky and perspective. Layouts follow v1.0.1's repairs (`LayoutAspect`: full-screen backings, HUD panes on the canvas edges, cinema bars), plus the pause menu's counters (they moved in from the HUD's corners on pausing) and the spin, ball and tilt guidance under the names the game creates them by (v1.0.1's rules named their "Replace" archives) (`native/tools/layout_edge_audit.py` over `GALAXY_TEST_DUMP_LAYOUTS=1` logs: the 38 layouts the tour and menus reach; what it lists is window parts and anchors); UI keeps its 16:9 size against the height when wider and fits the width when narrower, CollisionShadow's capture keeps 832, and the strap screen's white reaches the borders (`scene_surround`). These were site hooks on recompiled code in v1.0.1; natively they are the game's source.
+- **Power**: the game asks the host to close or start again (`app_exit`, `app_restart`). The game's own reset goes back to its boot sequence in place.
+- **Movies**: the importer turns THP files into frames the host decodes (`movie_video_decode`) with PCM16 sound; the game feeds them to the player as it needs them.
+- **Display shape**: as v1.0.1's dynamic aspect, the host latches the output's shape at each retrace once the frame is presented (`display_extent`), and the game draws for it (`MR::getDisplay`): 4:3 to 32:9; `MR::getScreenWidth` (832 at 16:9, even units), `CameraContext::getAspect`, the NW4R canvas (`setupDrawForNW4RLayout`, both screen/layout conversions; height fit under 16:9), the star-select sky and perspective. Layouts follow v1.0.1's repairs (`LayoutAspect`: full-screen backings, HUD panes on the canvas edges, cinema bars), plus the pause menu's counters (they moved in from the HUD's corners on pausing) and the spin, ball and tilt guidance under the names the game creates them by (v1.0.1's rules named their "Replace" archives) (`native/tools/layout_edge_audit.py` over `GALAXY_TEST_DUMP_LAYOUTS=1` logs: the 38 layouts the tour and menus reach; what it lists is window parts and anchors); UI keeps its 16:9 size against the height when wider and fits the width when narrower, CollisionShadow's capture keeps 832, and the strap screen's white reaches the borders (`scene_surround`). These were site hooks on recompiled code in v1.0.1; natively they are the game's source.
 - **Options**: text speed (TalkBalloon, Rosalina's storybook) and the language setting, as v1.0.1.
 - **Crash reports**: a fatal exception in the module or the host, or the game's fatal call, writes a minidump (stacks and what they point at, about 150 KB) from a thread kept for it, and logs the module offset and the game's threads (`GALAXY_CRASH_DUMP_DIR`; else `%LOCALAPPDATA%\Nebula\crashes` for NebulaNative and `crashes\` for the headless host; `GALAXY_CRASH_TEST=1` checks the path). Every exception in the process passes the exception handlers, so theirs are small, uninstrumented frames.
-- **Thread stacks**: each game thread is a host thread with its own stack, at least 256 KB and guarded by the OS.
 - **Tests**: `GALAXY_TEST_GALAXY_TOUR` and `GALAXY_TEST_TELEPORT` as in v1.0.1, and `GALAXY_TEST_EVENTS=kill@frame/...` (a miss through `MR::forceKillPlayerByAbyss`; five reach game over); the host decides, the game acts through `MR::requestChangeStageInGameMoving` and `MR::setPlayerPos` once per scene frame (`test_scene_frame`). `GALAXY_TEST_HOME_ROW` picks a HOME Menu row by its keys. Other events: `star@`, `grandstar@` (taken once the scene plays), `movieN@`, `luigi@`/`mario@` (the file's player from the next scene), `defeat:<model>@` (that model's live actors killed), `wait@`; frames count from the last tour stop. `GALAXY_TEST_DISC_DELAY_US` makes every disc read take that long, `GALAXY_TEST_NAND_DELAY_US` every NAND operation (saves); `GALAXY_TEST_CPU_AFFINITY` (hex mask) limits the processors; `GALAXY_TRACE_THREAD_CPU=1` logs each thread's CPU time per second by name. `GALAXY_TEST_SHADER_KEY_CAPTURE=<file>` appends every shader key the session resolves, for `galaxy_vk_shader_tests <file>`. `GALAXY_TEST_BLOOM_ROUTE=0|1|2` forces the game's bloom route (0 its own chains as the console's, 1 NATIVE, 2 ENHANCED); `GALAXY_TEST_RT_EFFECT_AB=reflections|water|sun_rays|lens_bloom` turns that ray-traced effect off in frames that end in an odd present (at 60 fps every other frame). `GALAXY_TEST_CURVED_AB=1` draws curved surfaces flat in the same frames.
 - **Threads**: every game thread is a host thread (`Game/System/GameThreads`). One at a time changes the game world, under the world lock: the main thread first when it wants to, the scene and archive loaders otherwise, first come first served; a thread lets go of it when it blocks. File loaders and the audio task threads work beside it under their own mutexes. Sound runs on the host's audio clock thread: `excludeAudio` keeps it out of a section. A frame's work runs on a thread of its own, under the world lock. Test mode keeps every thread under the world lock and moves the clock only when no thread can run, so two runs take the same steps.
 
@@ -221,13 +193,9 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 
 | item | state |
 |---|---|
-| Disc data byte order and 64-bit pointers (archives, J3D, JPA, KCL, JMap, BMG, layouts, audio banks; `JKRMemArchive` writes pointers into 32-bit file fields, D) | done: every kept unit compiles and links (M) |
-| 274 US data sections not yet compared byte for byte (`us_data_unverified.csv`) | H: symbol naming; verify against the matching build |
-| Heap sizes: pointers double in size natively, so fixed JKRHeap sizes need a 64-bit allowance | open |
-| `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | deleted: nothing in the game reaches it (the console's linker dropped it too) |
-| THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through v1.0.1's decoder with each frame's size, audio in `native/sdk/thp`; a route that reaches a movie is still to run |
-| Mii data (RFL) without a console NAND | the Mii library is a native file (nebula-miis.txt in the data folder, one line of fields per Mii), started once from a NAND's RFL_DB.dat when it has one; Mii import (runtime/src/mii_import.cpp, mii_formats.cpp) adds any console's Miis to it and the running game reads them as typed records (mii_record) |
-| Volume categories (music, effects, voices) natively | open: v1.0.1 classifies channels from game memory; the native game will report each channel's category |
-| The remote speaker's sound | not in v1.0.1 (a v2 feature on wt-motion); the game's speaker sound reaches the host as 6 kHz samples (`speaker_samples`) and is not played yet |
-| Crash dumps, the single-instance lease and the launcher for NebulaNative | open (release, P7) |
-| aarch64 and LP64 sysroots for the compile census on Linux, Android and macOS | not on this machine |
+| Ghost recordings, the last format swapped at read | cooked to host order; the reader only reads |
+| Mii data (RFL) without a console NAND | the Mii library is a native file, started once from a NAND's RFL_DB.dat when it has one; Mii import adds any console's Miis; the running game reads them as typed records |
+| Volume categories | natively per voice (`voices_mix`, the game reports each channel's category) |
+| The remote speaker's sound | through `speaker_samples` |
+| The release's launcher and single-instance lease | P7 |
+| Other platforms' toolchains and the compile census there | section S |

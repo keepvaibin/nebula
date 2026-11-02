@@ -72,8 +72,6 @@ void DriftWood::exeWait() {
     }
 }
 
-// required to match
-// TODO remove
 void DriftWood::exeVibrate() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_DRIFT_WOOD_PLAYER_ON");

@@ -633,7 +633,6 @@ namespace MR {
         *pValue = ret;
     }
 
-    // wrapper function needed to match all instances of MR::repeat
     inline f32 MOD(f32 x, f32 y) {
         return fmod(x, y);
     }

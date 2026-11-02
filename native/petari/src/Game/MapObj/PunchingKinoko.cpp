@@ -5,11 +5,6 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-void PunchingKinoko_FORCE_EMIT_SCALE() {
-    TVec3f vec;
-    vec.scale(0.0f);
-}
-
 namespace NrvPunchingKinoko {
     NEW_NERVE(PunchingKinokoNrvWait, PunchingKinoko, Wait);
     NEW_NERVE(PunchingKinokoNrvSwing, PunchingKinoko, Swing);

@@ -83,8 +83,6 @@ void AirBubble::appearMove(const TVec3f& rTrans, s32 life) {
     mLife = life > 0 ? life : ::cDefaultLife;
 }
 
-// required to match
-// TODO remove
 void AirBubble::exeWait() {
     if (MR::isFirstStep(this)) {
     }

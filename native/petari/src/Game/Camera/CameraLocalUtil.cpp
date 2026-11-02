@@ -458,12 +458,3 @@ namespace CameraLocalUtil {
     }
 };  // namespace CameraLocalUtil
 
-void CameraLocalUtil_DUMMY() {
-    TPos3f m;
-    TVec3f a, b, c, d;
-    m.setXDir(a);
-    m.setYDir(b);
-    m.setZDir(c);
-    m.setTrans(d);
-    (void)JMAAcosRadian(1.0f);
-}

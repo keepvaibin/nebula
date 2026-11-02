@@ -647,15 +647,6 @@ namespace MR {
         return radius * focalDist / -viewPos.z;
     }
 
-    void StarPointerUtil_DUMMY() {
-        TVec2f a;
-        TVec2f b;
-        TVec3f scale;
-
-        a.sub(b);
-        scale.scale(1.0f);
-    }
-
     bool calcStarPointerStrokeRotateMoment(TVec3f* pMoment, const TVec3f& rPosition, f32 radius, s32 channel) {
         if (!isStarPointerInScreen(channel)) {
             pMoment->zero();

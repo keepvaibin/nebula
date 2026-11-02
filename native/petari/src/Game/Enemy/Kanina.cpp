@@ -518,8 +518,6 @@ void Kanina::initForType(const JMapInfoIter& rIter, KaninaType type) {
     }
 
     if (mType == KaninaType_Blue) {
-        // Likely FAKEMATCH, however including the BenefitItemOneUp header (and by proxy BenefitItemObj)
-        // will emit the nerve instances in sinit.
         mKinokoOneUp = reinterpret_cast< BenefitItemObj* >(MR::createKinokoOneUp());
     }
 }

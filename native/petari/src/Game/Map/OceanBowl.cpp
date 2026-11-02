@@ -85,8 +85,6 @@ bool OceanBowl::isInWater(const TVec3f& rPos) const {
     return !(mUp.dot(rPos - mPosition) > 0.0f);
 }
 
-// only way I could get it to match.
-// TODO remove me
 bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const {
     const TVec3f* pPosition = &mPosition;
     f32 B0 = mRadius;

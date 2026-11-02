@@ -11,10 +11,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-void MarioModule_FORCE_EMIT_STRING() {
-    JUTNativeLog("P_PlanetMap");
-}
-
 bool MarioModule::isInputDisable() const {
     if (mActor->mMario->mMovementStates._22) {
         return true;

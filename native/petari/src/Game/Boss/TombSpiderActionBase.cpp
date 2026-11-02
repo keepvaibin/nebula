@@ -15,7 +15,6 @@
 #include "Game/Util/SoundUtil.hpp"
 
 // NOTE: this function order is how it appears in the debug symbol map, because that order lets the .data section match.
-// Writing directly as the release symbol map produces incorrect .data order.
 
 namespace {
     static const s32 sEnergyMax = 3;

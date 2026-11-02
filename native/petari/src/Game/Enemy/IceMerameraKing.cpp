@@ -30,11 +30,6 @@
 // TODO: the symbol order for header funcs is out of order between JointControlDelegator funcs
 //       and Array funcs. This needs to be fixed in order to link.
 
-void IceMerameraKing_DUMMY() {
-    TVec3f a, b;
-    a.sub(b);
-}
-
 namespace NrvIceMerameraKing {
     NEW_NERVE(HostTypeNrvSearch, IceMerameraKing, Search);
     NEW_NERVE_ONEND(HostTypeNrvBeginDemo, IceMerameraKing, Throw, Throw);

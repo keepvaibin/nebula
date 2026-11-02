@@ -26,10 +26,6 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
-void NPCActor_DUMMY() {
-    (void)JGeometry::TUtil< f32 >::acos(1.0f);
-}
-
 namespace NrvNPCActor {
     NEW_NERVE(NPCActorNrvReaction, NPCActor, Reaction);
     NEW_NERVE(NPCActorNrvWait, NPCActor, Wait);

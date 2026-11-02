@@ -26,8 +26,6 @@ namespace AstroDemoFunction {
         for (u32 index = 0; index < ARRAY_SIZE(::cGrandStarReturnDemoTable); index++) {
             if (MR::isDemoActive(::cGrandStarReturnDemoTable[index])) {
                 result = index;
-                // only way I could get this to match
-                // TODO -- fix me
                 goto found;
             }
         }

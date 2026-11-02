@@ -30,12 +30,6 @@
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
 
-void WaterRoad_DUMMY() {
-    TVec3f a, b;
-    a.sub(b);
-    TVec3f c(1.0f);
-}
-
 namespace {
     static const f32 sRiderSpeedMin = 100.0f;
     static const f32 sRiderSpeedMax = 150.0f;

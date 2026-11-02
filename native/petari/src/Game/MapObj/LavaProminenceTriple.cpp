@@ -7,11 +7,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-void LavaProminenceTriple_DUMMY() {
-    TVec3f a, b;
-    a.add(b);
-}
-
 namespace {
     static const f32 sNoSensorTable[] = {
         0.0f, 59.765598f, 134.2f, 176.045f, 222.6f, 278.26199f, 360.0f,

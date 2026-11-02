@@ -15,7 +15,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
 
-// TODO: this file is not linkable yet due to a mismatch in .data related to TalkMessageFunc
 
 namespace NrvRosettaDemoAstroDomeExplain {
     NEW_NERVE(RosettaDemoAstroDomeExplainNrvExplainDemo, RosettaDemoAstroDomeExplain, Demo);
