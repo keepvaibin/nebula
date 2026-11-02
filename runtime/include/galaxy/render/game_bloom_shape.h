@@ -43,17 +43,17 @@ struct Shape {
     float box = 1.0f;
 };
 
-inline Shape shape_of(unsigned frame_width, unsigned frame_height, unsigned logical_height, unsigned scale) {
+inline Shape shape_of(unsigned frame_width, unsigned frame_height, unsigned logical_height, float scale) {
     Shape s;
-    scale = std::max(scale, 1u);
-    s.f = scale <= 8u ? 4u : (scale + 1u) / 2u;
+    scale = std::max(scale, 1.0f);
+    s.f = scale <= 8.0f ? 4u : (static_cast<unsigned>(std::ceil(scale)) + 1u) / 2u;
     s.w1 = (frame_width + s.f - 1u) / s.f;
     s.h1 = (frame_height + s.f - 1u) / s.f;
     const unsigned cap = std::max(logical_height / 2u, 1u);
     s.n = std::max(2u, (s.h1 + cap - 1u) / cap);
     s.w2 = (s.w1 + s.n - 1u) / s.n;
     s.h2 = (s.h1 + s.n - 1u) / s.n;
-    s.box = 4.0f * static_cast<float>(scale) / static_cast<float>(s.f);
+    s.box = 4.0f * scale / static_cast<float>(s.f);
     return s;
 }
 

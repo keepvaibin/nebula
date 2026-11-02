@@ -127,8 +127,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
     D3D12_RENDER_TARGET_BLEND_DESC& blend = pd.BlendState.RenderTarget[0];
     blend.BlendEnable = FALSE;
     blend.LogicOp = D3D12_LOGIC_OP_NOOP;
-    blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
-                                  D3D12_COLOR_WRITE_ENABLE_BLUE;
+    blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     pd.SampleMask = UINT_MAX;
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -225,6 +224,34 @@ void GameBloom::retire(std::uint64_t frame_index) {
     retired_.erase(std::remove_if(retired_.begin(), retired_.end(),
                                   [&](const Retired& r) { return frame_index > r.release_after_frame; }),
                    retired_.end());
+}
+
+Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_image(ID3D12GraphicsCommandList* list, const Inputs& in,
+                                                                   std::uint64_t frame_index,
+                                                                   unsigned frames_in_flight) {
+    retire(frame_index);
+    Microsoft::WRL::ComPtr<ID3D12Resource> image;
+    if (keep_.resource) {
+        const D3D12_RESOURCE_DESC desc = keep_.resource->GetDesc();
+        if (keep_.width == in.frame_width && keep_.height == in.frame_height &&
+            (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0) {
+            transition(list, keep_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            image = std::move(keep_.resource);
+        } else {
+            retired_.push_back({std::move(keep_.resource), frame_index + frames_in_flight});
+        }
+    }
+    keep_ = {};
+    return image;
+}
+
+void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in) {
+    keep_.resource = std::move(picture);
+    keep_.width = in.frame_width;
+    keep_.height = in.frame_height;
+    keep_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
+    keep_.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    kept_ = true;
 }
 
 bool GameBloom::keep(ID3D12GraphicsCommandList* list, const Inputs& in, std::uint64_t frame_index,

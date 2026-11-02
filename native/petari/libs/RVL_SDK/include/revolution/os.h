@@ -60,55 +60,8 @@ extern s64 __OSStartTime;
 #define ASSERTMSG(exp, msg) ((void)0)
 #endif
 
-inline s16 __OSf32tos16(__REGISTER f32 inF) {
-    __REGISTER s16 out;
-    u32 tmp;
-    __REGISTER u32* tmpPtr = &tmp;
-    // clang-format off
-    if (inF != inF || inF >= 32767.0f) {
-        out = 32767;
-    } else if (inF <= -32768.0f) {
-        out = -32768;
-    } else {
-        out = (s16)inF;
-    }
-    // clang-format on
-
-    return out;
-}
-
-inline void OSf32tos16(f32* f, s16* out) {
-    *out = __OSf32tos16(*f);
-}
-
-inline u8 __OSf32tou8(__REGISTER f32 inF) {
-    __REGISTER u8 out;
-    u32 tmp;
-    __REGISTER u32* tmpPtr = &tmp;
-    // clang-format off
-    if (inF != inF || inF >= 255.0f) {
-        out = 255;
-    } else if (inF > 0.0f) {
-        out = (u8)inF;
-    } else {
-        out = 0;
-    }
-    // clang-format on
-
-    return out;
-}
-
-#ifdef OS_F32_TO_U8_DEFER_INLINE
-static void OSf32tou8(f32* f, u8* out);
-#else
-inline void OSf32tou8(f32* f, u8* out) {
-    *out = __OSf32tou8(*f);
-}
-#endif
-
 #include <NebulaGpu.h>
 #include "revolution/os/OSContext.h"
-#include "revolution/os/OSFastCast.h"
 #include "revolution/os/OSThread.h"
 #include "revolution/os/OSTime.h"
 

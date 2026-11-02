@@ -246,6 +246,3 @@ void JUTTexture::capture(int x, int y, GpuTexFmt format, bool half, u8 clear, bo
     }
 }
 
-void JUTTexture::captureDolTexture(void* pBuffer, int width, int height, int x, int y, bool mipmap, GpuTexFmt format) {
-    captureInto(pBuffer, width, height, x, y, mipmap, format, GPU_FALSE, false);
-}

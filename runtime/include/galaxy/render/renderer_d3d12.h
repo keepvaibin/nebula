@@ -620,7 +620,8 @@ public:
         std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    [[nodiscard]] unsigned scene_target_scale() const noexcept { return frame_.scale(); }
+    [[nodiscard]] const FrameMap& frame_map() const noexcept { return frame_; }
     // The scene target's samples per pixel as a power of two (MSAA; 0 for one sample).
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_msaa_.samples));
@@ -728,7 +729,7 @@ private:
         unsigned width,
         unsigned height,
         unsigned row_pitch);
-    bool create_scene_targets(unsigned scene_target_scale);
+    bool create_scene_targets(const FrameMap& map);
     void carry_over_scene_contents();
     // The MSAA sample count the settings ask for and the device has for the scene target's formats: 1 without MSAA, and
     // with a temporal upscaler or ray tracing, which read the scene target's single-sample targets directly.
@@ -962,7 +963,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> scene_depth_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap_;
-    unsigned scene_target_scale_ = 1;
+    FrameMap frame_ = FrameMap(1u);  // the bound scene target's map (E-08)
     D3D12_CPU_DESCRIPTOR_HANDLE scene_rtv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE scene_dsv_{};
     // The inactive scene target target set (the output-resolution one between frames).
@@ -979,7 +980,7 @@ private:
         bool depth_dirty = false;
     };
     // The set's multisampled targets for `samples` (none for one), with `rtv` and `dsv` pointed at them.
-    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
+    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned samples,
                          D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
     void write_msaa_depth_view(SceneMsaa& msaa);
     [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
@@ -990,7 +991,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
         SceneMsaa msaa;
-        unsigned scale = 0;
+        FrameMap map{};
         bool hdr = false;   // colour kSceneHdrColorFormat (else kSceneColorFormat)
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
@@ -1197,7 +1198,7 @@ private:
     // unordered_access: the colour target takes compute writes (the temporal
     // upscaler's output, as the live output scene target).
     bool create_scene_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
+                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
                         bool hdr = false, unsigned width = kFrameWidth, unsigned height = kFrameHeight);
     void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Table& table);
@@ -1746,6 +1747,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_r8_;  // into one-channel copies
     Microsoft::WRL::ComPtr<ID3D12PipelineState> display_filter_pipeline_;  // 1:1 display copies without gamma
+    // The presented picture of a handed-over frame through the display filter (filter_display_picture).
+    Microsoft::WRL::ComPtr<ID3D12Resource> display_filter_picture_;
+    unsigned display_filter_picture_width_ = 0, display_filter_picture_height_ = 0;
+    gpu::TextureRef filter_display_picture(const DisplayTexture& source);
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
     detail::ConversionRtvSlot conv_scratch_rtv_slot_;

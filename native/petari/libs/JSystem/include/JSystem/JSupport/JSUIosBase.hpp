@@ -6,25 +6,48 @@
 
 enum JSUStreamSeekFrom { SEEK_FROM_START, SEEK_FROM_POSITION, SEEK_FROM_END };
 
-// Natively a scalar a stream reads or writes through its own type (read(&u16Value, 2), writeU32) travels big-endian,
-// as on the console: the streams carry save data and other console-format files. These are the element types swapped;
-// anything else (bytes, structs, void*) passes through unchanged.
+// While a save in the console's byte order is converted (SaveDataHandler): the streams and MR::loadSave* read it so.
+// Everything else is host order.
+inline bool gSaveConsoleOrder = false;
+
 template < typename T >
-struct JSUBigEndianScalar {};
-#define JSU_BIG_ENDIAN_SCALAR(T)                                                                                                                     \
+inline T jsuSwapScalar(T value) {
+    if constexpr (sizeof(T) == 2) {
+        u16 v;
+        __builtin_memcpy(&v, &value, 2);
+        v = __builtin_bswap16(v);
+        __builtin_memcpy(&value, &v, 2);
+    } else if constexpr (sizeof(T) == 4) {
+        u32 v;
+        __builtin_memcpy(&v, &value, 4);
+        v = __builtin_bswap32(v);
+        __builtin_memcpy(&value, &v, 4);
+    } else {
+        u64 v;
+        __builtin_memcpy(&v, &value, 8);
+        v = __builtin_bswap64(v);
+        __builtin_memcpy(&value, &v, 8);
+    }
+    return value;
+}
+
+// A stream's scalars, element by element.
+template < typename T >
+struct JSUScalar {};
+#define JSU_SCALAR(T)                                                                                                                     \
     template <>                                                                                                                                      \
-    struct JSUBigEndianScalar< T > {                                                                                                                 \
+    struct JSUScalar< T > {                                                                                                                 \
         typedef s32 Result;                                                                                                                          \
     };
-JSU_BIG_ENDIAN_SCALAR(u16)
-JSU_BIG_ENDIAN_SCALAR(s16)
-JSU_BIG_ENDIAN_SCALAR(u32)
-JSU_BIG_ENDIAN_SCALAR(s32)
-JSU_BIG_ENDIAN_SCALAR(u64)
-JSU_BIG_ENDIAN_SCALAR(s64)
-JSU_BIG_ENDIAN_SCALAR(f32)
-JSU_BIG_ENDIAN_SCALAR(f64)
-#undef JSU_BIG_ENDIAN_SCALAR
+JSU_SCALAR(u16)
+JSU_SCALAR(s16)
+JSU_SCALAR(u32)
+JSU_SCALAR(s32)
+JSU_SCALAR(u64)
+JSU_SCALAR(s64)
+JSU_SCALAR(f32)
+JSU_SCALAR(f64)
+#undef JSU_SCALAR
 
 class JSUIosBase {
 public:

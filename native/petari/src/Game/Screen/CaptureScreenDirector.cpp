@@ -6,7 +6,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 
 namespace {
@@ -17,7 +17,7 @@ namespace {
 CaptureScreenDirector::CaptureScreenDirector() : NameObj("\211\346\226\312\203\114\203\203\203\166\203\140\203\203" /* 画面キャプチャ */), _C(nullptr), mTimingType("Indirect"), mTexture(nullptr), _18(false) {
     MR::CurrentHeapRestorer heapRestorer(MR::getStationedHeapGDDR3());
 
-    mTexture = new JUTTexture(JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), GPU_TF_RGB565);
+    mTexture = new JUTTexture(NebulaFrameClock::cFrameWidth, NebulaFrameClock::cFrameHeight, GPU_TF_RGB565);
 }
 
 void CaptureScreenDirector::captureIfAllow(const char* pName) {

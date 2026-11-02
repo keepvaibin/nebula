@@ -9,7 +9,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static const u32 sTimeUpWaitFrame = 36000;
@@ -98,7 +98,7 @@ void PlayTimerScene::draw() const {
     JUtility::TColor color(0, 0, 0, alpha);
     graph.setColor(color);
 
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+    f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
     f32 width = MR::getScreenWidth();
     graph.fillBox(0.0f, 0.0f, width, height);
 }

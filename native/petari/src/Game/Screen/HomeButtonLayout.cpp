@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/HomeButtonLayout.hpp"
 #include "Game/Screen/NebulaHomeMenu.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -17,7 +18,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
 
 namespace NrvHomeButtonLayout {
     NEW_NERVE(HomeButtonLayoutDeactive, HomeButtonLayout, Deactive);
@@ -139,7 +139,7 @@ void HomeButtonLayout::draw() const {
     }
 
     Mtx44 projectionMtx;
-    f32 screenHalfHeight = static_cast< s32 >(JUTGetVideoManager()->getEfbHeight()) / 2.0f;
+    f32 screenHalfHeight = static_cast< s32 >(NebulaFrameClock::cFrameHeight) / 2.0f;
     f32 screenHalfWidth = MR::getScreenWidth() / 2.0f;
     NebulaMtxOrtho(projectionMtx, screenHalfHeight, -screenHalfHeight, -screenHalfWidth, screenHalfWidth, 0.0f, 500.0f);
     J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);

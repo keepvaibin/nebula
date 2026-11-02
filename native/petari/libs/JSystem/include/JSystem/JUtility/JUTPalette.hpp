@@ -9,7 +9,7 @@ enum JUTTransparency { UNK0, UNK1 };
 struct ResTLUT {
     /* 0x0 */ u8 mFormat;
     /* 0x1 */ u8 mTransparency;
-    /* 0x2 */ NEBULA_BE(u16) mLutNum;
+    /* 0x2 */ u16 mLutNum;
 };
 
 class JUTPalette {

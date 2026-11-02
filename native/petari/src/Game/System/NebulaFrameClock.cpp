@@ -17,8 +17,8 @@ namespace {
     NebulaFrameGate sGate;
     NebulaEvent sRetrace;
     NebulaThread sThread;
-    NebulaFrameClock::Hook sPreHook;
-    NebulaFrameClock::Hook sPostHook;
+    // Black for the first frames after the game asks for its frame (start).
+    u32 sBlackFrames = ~0u;
     // show() sets the next state; it is what the screen shows from the next frame on.
     bool sNextPicture;
     bool sPicture;
@@ -72,15 +72,15 @@ namespace {
         } else if (sIdleFrames < cTimeToDimming) {
             sIdleFrames++;
         }
-        if (sPreHook != nullptr) {
-            sPreHook(sFrames);
+        if (sBlackFrames != 0) {
+            sBlackFrames--;
+            sNextPicture = false;
+        } else {
+            sNextPicture = true;
         }
         sPicture = sNextPicture;
         nebula_host()->vi_frame(nebula_host()->user, 0, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
-        if (sPostHook != nullptr) {
-            sPostHook(sFrames);
-        }
         sGate.advance();
     }
 
@@ -110,6 +110,12 @@ namespace NebulaFrameClock {
         NebulaKernel::resume(&sThread);
     }
 
+    void startPicture() {
+        waitFrame();
+        waitFrame();
+        sBlackFrames = 2;
+    }
+
     u32 count() {
         return sFrames;
     }
@@ -118,20 +124,18 @@ namespace NebulaFrameClock {
         sGate.waitNext();
     }
 
+    void waitUntil(u32 count) {
+        // A frame cannot pass between the look and the wait: its thread needs the world, which the caller holds.
+        while (static_cast< s32 >(sFrames - count) < 0) {
+            sGate.waitNext();
+        }
+    }
+
     void show(bool picture) {
         sNextPicture = picture;
-    }
-
-    Hook setPreHook(Hook hook) {
-        const Hook previous = sPreHook;
-        sPreHook = hook;
-        return previous;
-    }
-
-    Hook setPostHook(Hook hook) {
-        const Hook previous = sPostHook;
-        sPostHook = hook;
-        return previous;
+        if (!picture) {
+            sBlackFrames = ~0u;
+        }
     }
 
     const NebulaDisplay& display() {
