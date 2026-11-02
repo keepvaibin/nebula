@@ -14,4 +14,6 @@ public:
     /* 0x06 */ bool mIsCalcGravity;
     /* 0x07 */ bool mIsClipped;
     /* 0x08 */ bool mIsInvalidClipping;
+    bool mIsDrawnClipped;  // stopped by the level's distance, its model still drawn because the camera sees it
+    bool mHasPose;         // its own code has placed its model at least once
 };

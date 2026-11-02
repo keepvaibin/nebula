@@ -127,11 +127,6 @@ void DummyDisplayModel::init(const JMapInfoIter& rIter) {
 
     case ITEM_TYPE_KINOPIO:
         _A8 = new LodCtrl(this, rIter);
-        _A8->createLodModel(33, -1, -1);
-        _A8->syncMaterialAnimation();
-        _A8->syncJointAnimation();
-        _A8->initLightCtrl();
-        _A8->setDistanceToMiddleAndLow(800.0f, 1500.0f);
         break;
     }
 

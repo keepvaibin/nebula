@@ -227,6 +227,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         }
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Vulkan initialize failed: " << error.what() << '\n';
+        init_error_ = error.what();
         shutdown();
         return false;
     }

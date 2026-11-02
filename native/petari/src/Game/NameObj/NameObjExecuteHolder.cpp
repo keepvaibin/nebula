@@ -1,3 +1,4 @@
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NameObj/NameObjListExecutor.hpp"
@@ -381,6 +382,27 @@ namespace MR {
 
     bool isConnectToDrawTemporarily(const NameObj* pObj) {
         return ::getNameObjExecuteHolder()->isConnectToDraw(pObj);
+    }
+
+    // Scenery with no draw code of its own. Coins, enemies and characters are left out: a level may place them where
+    // only a later scenario uses them (Space Junk's web coins), relying on their staying clipped there.
+    bool isDrawnFarWhenClipped(const NameObj* pObj) {
+        const NameObjExecuteInfo* pInfo = ::getNameObjExecuteHolder()->getConnectToSceneInfo(pObj);
+        if (pInfo == nullptr || !pInfo->isDrawBufferOnly()) {
+            return false;
+        }
+        switch (pInfo->getMovementType()) {
+        case MR::MovementType_ClippedMapParts:
+        case MR::MovementType_Planet:
+        case MR::MovementType_CollisionMapObj:
+        case MR::MovementType_Environment:
+        case MR::MovementType_MapObj:
+        case MR::MovementType_MapObjDecoration:
+        case MR::MovementType_Sky:
+            return true;
+        default:
+            return false;
+        }
     }
 
     void executeRequirementConnectMovement() {

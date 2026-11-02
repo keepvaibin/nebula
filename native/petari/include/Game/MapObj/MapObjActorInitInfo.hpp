@@ -88,7 +88,6 @@ public:
     /* 0x7C */ f32 mShadowLength;  // Obj_arg2
     /* 0x80 */ const char* _80;
     /* 0x84 */ const char* mDummyChangeTexture;
-    /* 0x88 */ u32 _88;
     /* 0x8C */ bool _8C;
     /* 0x8D */ bool mNoUseLOD;
 };

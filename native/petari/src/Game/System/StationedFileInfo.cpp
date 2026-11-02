@@ -330,11 +330,6 @@ namespace MR {
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/TicoLow.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/CutBush.arc",
         },
         {
@@ -345,22 +340,12 @@ namespace MR {
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/TicoMiddle.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/DemoAstroReturn.arc",
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/AstroMapBoard.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/KinopioLow.arc",
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
@@ -386,11 +371,6 @@ namespace MR {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/TicoFatGoodsStarPiece.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/KinopioMiddle.arc",
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
@@ -445,11 +425,6 @@ namespace MR {
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/RosettaLow.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/AstroCore.arc",
         },
         {
@@ -491,11 +466,6 @@ namespace MR {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/AstroStarPlateTower.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/RosettaMiddle.arc",
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
@@ -571,16 +541,6 @@ namespace MR {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
             "/ObjectData/TicoCometGoodsStar.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/LuigiNPCLow.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/LuigiNPCMiddle.arc",
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,

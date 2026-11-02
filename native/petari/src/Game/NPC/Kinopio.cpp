@@ -47,8 +47,6 @@ namespace {
     static const f32 sUpVecBlendRate = 1.0f;
     static const f32 sDistanceEventPlayerIsNear = 600.0f;
     static const s32 sTimeToCancelEvent = 180;
-    static const f32 sDistanceLodMiddle = 1500.0f;
-    static const f32 sDistanceLodLow = 2500.0f;
     static const f32 sFallGravity = 0.6f;
     static const f32 sFallFrictionRate = 0.98f;
     static const s32 sLandingTime = 3;
@@ -108,12 +106,7 @@ void Kinopio::init(const JMapInfoIter& rIter) {
 
     MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f));
     MR::addToAttributeGroupSearchTurtle(this);
-    s32 isStrictLodDistances = -1;
-    MR::getJMapInfoArg5NoInit(rIter, &isStrictLodDistances);
     mLodCtrl = MR::createLodCtrlNPC(this, rIter);
-    if (isStrictLodDistances != -1) {
-        mLodCtrl->setDistanceToMiddleAndLow(::sDistanceLodMiddle, ::sDistanceLodLow);
-    }
 
     NPCActorItem item("Kinopio");
     MR::getNPCItemData(&item, mGoodsIndex);

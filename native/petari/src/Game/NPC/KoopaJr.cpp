@@ -14,8 +14,6 @@ namespace {
     static const f32 sSensorSize = 175.0f;
     static const f32 sShadowRadius = 100.0f;
     static const s32 sStarPieceNum = 20;
-    static const f32 sLodDistanceToMiddle = 5000.0f;
-    static const f32 sLodDistanceToLow = 10000.0f;
 };  // namespace
 
 namespace NrvKoopaJr {
@@ -64,36 +62,12 @@ void KoopaJr::init(const JMapInfoIter& rIter) {
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoActionFunctor(this, MR::Functor(this, &KoopaJr::startShipBattleTalk), "\203\116\203\142\203\160Jr\211\357\230\142" /* クッパJr会話 */);
-
-        if (mLodCtrl != nullptr) {
-            if (mLodCtrl->_10 != nullptr) {
-                MR::tryRegisterDemoCast(mLodCtrl->_10, rIter);
-            }
-
-            if (mLodCtrl->_14 != nullptr) {
-                MR::tryRegisterDemoCast(mLodCtrl->_14, rIter);
-            }
-        }
-    }
-
-    if (mLodCtrl != nullptr) {
-        mLodCtrl->setDistanceToMiddleAndLow(::sLodDistanceToMiddle, ::sLodDistanceToLow);
     }
 
     MR::onCalcShadow(this, nullptr);
     MR::setShadowDropLength(this, nullptr, 200.0f);
     makeActorAppeared();
     MR::startBva(this, "Apron");
-
-    if (mLodCtrl != nullptr) {
-        if (mLodCtrl->_10 != nullptr) {
-            MR::startBva(mLodCtrl->_10, "Apron");
-        }
-
-        if (mLodCtrl->_14 != nullptr) {
-            MR::startBva(mLodCtrl->_14, "Apron");
-        }
-    }
 }
 
 void KoopaJr::kill() {

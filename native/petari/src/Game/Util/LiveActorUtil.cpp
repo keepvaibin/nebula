@@ -311,14 +311,6 @@ namespace MR {
         return parts;
     }
 
-    const char* createLowModelObjName(const LiveActor* pActor) {
-        return ::createSubModelObjName(pActor, "Low");
-    }
-
-    const char* createMiddleModelObjName(const LiveActor* pActor) {
-        return ::createSubModelObjName(pActor, "Middle");
-    }
-
     PartsModel* createBloomModel(LiveActor* pActor, MtxPtr pMtx) {
         PartsModel* parts = ::createSubModel(pActor, "Bloom", pMtx, 30);
 
@@ -2039,10 +2031,11 @@ namespace MR {
             return;
         }
 
-        if (!isDead(pActor) && !pActor->mFlag.mIsClipped) {
+        if (!isDead(pActor) && (!pActor->mFlag.mIsClipped || pActor->mFlag.mIsDrawnClipped)) {
             disconnectToDrawTemporarily(pActor);
         }
 
+        pActor->mFlag.mIsDrawnClipped = false;
         pActor->mFlag.mIsHiddenModel = true;
     }
 
@@ -2572,50 +2565,18 @@ namespace MR {
 
     LodCtrl* createLodCtrlNPC(LiveActor* pActor, const JMapInfoIter& rIter) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createLodModel(MR::DrawBufferType_NPC, MR::MovementType_NPC, -1);
-        pLod->syncMaterialAnimation();
-        pLod->syncJointAnimation();
-        pLod->initLightCtrl();
-        pLod->offSyncShadowHost();
-        pLod->_1B = true;
         return pLod;
     }
 
-    LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip, s32 lowModelType) {
+    LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createLodModel(MR::DrawBufferType_PlanetLow, lowModelType, MR::DrawBufferType_Sky);
-        pLod->setDistanceToMiddleAndLow(5000.0f, 10000.0f);
-        pLod->setFarClipping(farClip);
-
-        if (pLod->_10 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_10)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_10, pResName);
-        }
-
-        if (pLod->_14 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_14)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_14, pResName);
-        }
-
+        MR::setClippingFar(pActor, farClip);
         return pLod;
     }
 
     LodCtrl* createLodCtrlMapObj(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createLodModel(MR::DrawBufferType_MapObj, -1, MR::DrawBufferType_PlanetLow);
-        pLod->setDistanceToMiddleAndLow(5000.0f, 10000.0f);
-        pLod->setFarClipping(farClip);
-
-        if (pLod->_10 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_10)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_10, pResName);
-        }
-
-        if (pLod->_14 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_14)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_14, pResName);
-        }
-
+        MR::setClippingFar(pActor, farClip);
         return pLod;
     }
 

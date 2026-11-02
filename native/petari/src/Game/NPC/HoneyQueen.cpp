@@ -97,16 +97,12 @@ void HoneyQueen::init(const JMapInfoIter& rIter) {
         MR::useStageSwitchWriteA(this, rIter);
     }
 
-    mLodCtrl->setDistanceToLow(10000.0f);
-    mLodCtrl->setDistanceToMiddle(5000.0f);
     mLodCtrl->setFarClipping(-1.0f);
     mLodCtrl->setClippingTypeSphereContainsModelBoundingBox(100.0f);
 
     MR::setDistanceToTalk(mMsgCtrl, 0.0f);
 
     MR::initFur(this);
-    MR::initFur(mLodCtrl->_10);
-    MR::initFur(mLodCtrl->_14);
 
     makeActorAppeared();
 }

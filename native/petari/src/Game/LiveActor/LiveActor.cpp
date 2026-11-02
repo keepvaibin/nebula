@@ -97,6 +97,7 @@ void LiveActor::makeActorDead() {
     }
 
     mFlag.mIsDead = true;
+    mFlag.mIsDrawnClipped = false;
 
     MR::removeFromClippingTarget(this);
     MR::disconnectToSceneTemporarily(this);
@@ -162,6 +163,7 @@ void LiveActor::calcAnim() {
         return;
     }
 
+    mFlag.mHasPose = true;
     calcAnmMtx();
 
     if (mCollisionParts == nullptr) {
@@ -294,7 +296,7 @@ void LiveActor::startClipped() {
 
     MR::disconnectToSceneTemporarily(this);
 
-    if (MR::isNoEntryDrawBuffer(this)) {
+    if (MR::isNoEntryDrawBuffer(this) || mFlag.mIsDrawnClipped) {
         return;
     }
 
@@ -315,11 +317,29 @@ void LiveActor::endClipped() {
 
     MR::connectToSceneTemporarily(this);
 
+    if (mFlag.mIsDrawnClipped) {
+        mFlag.mIsDrawnClipped = false;
+        return;
+    }
+
     if (MR::isNoEntryDrawBuffer(this)) {
         return;
     }
 
     MR::connectToDrawTemporarily(this);
+}
+
+// The model as its actor would show it standing still, for an actor seen before it has run: its place and its light.
+// Only the base class's own code: an actor's calcAndSetBaseMtx may read what its control sets.
+void LiveActor::prepareDrawClipped() {
+    if (!mFlag.mHasPose && mModelManager != nullptr) {
+        LiveActor::calcAndSetBaseMtx();
+        MR::calcJ3DModel(this);
+    }
+
+    if (mActorLightCtrl != nullptr) {
+        MR::updateLightCtrlDirect(this);
+    }
 }
 
 void LiveActor::initModelManagerWithAnm(const char* pModelName, const char* pAnimName, bool a3) {
