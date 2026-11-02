@@ -523,20 +523,6 @@ std::size_t TextureCache::forget(std::uint64_t key) {
     return retire_key(key);
 }
 
-const std::byte* TextureCache::registered_bytes(std::uint64_t address, std::uint32_t size) const {
-    // The image whose bytes start at or before the address and cover the whole range.
-    auto it = registered_images_.upper_bound(address);
-    if (it == registered_images_.begin()) {
-        return nullptr;
-    }
-    --it;
-    const std::uint64_t offset = address - it->first;
-    if (offset + size > it->second->size()) {
-        return nullptr;
-    }
-    return it->second->data() + offset;
-}
-
 const NebulaTexture* TextureCache::registered_record(std::uint64_t address) const {
     const auto it = registered_images_.find(address);
     if (it == registered_images_.end()) {

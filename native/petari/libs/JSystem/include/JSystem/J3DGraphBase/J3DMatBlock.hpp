@@ -688,15 +688,8 @@ public:
         return 0;
     }
 
-    virtual void setDither(u8 const*) {
-    }
 
-    virtual void setDither(u8) {
-    }
 
-    virtual u8 getDither() const {
-        return 0;
-    }
 
     virtual u32 getFogOffset() const {
         return 0;
@@ -810,17 +803,8 @@ public:
         return mZCompLoc;
     }
 
-    virtual void setDither(u8 const* dither) {
-        mDither = *dither;
-    }
 
-    virtual void setDither(u8 dither) {
-        mDither = dither;
-    }
 
-    virtual u8 getDither() const {
-        return mDither;
-    }
 
     virtual ~J3DPEBlockFogOff() {
     }
@@ -829,7 +813,6 @@ public:
     /* 0x08 */ J3DBlend mBlend;
     /* 0x0C */ J3DZMode mZMode;
     /* 0x0E */ u8 mZCompLoc;
-    /* 0x0F */ u8 mDither;
 };  // Size: 0x10
 
 class J3DPEBlockFull : public J3DPEBlock {
@@ -905,17 +888,8 @@ public:
         return mZCompLoc;
     }
 
-    virtual void setDither(u8 const* dither) {
-        mDither = *dither;
-    }
 
-    virtual void setDither(u8 dither) {
-        mDither = dither;
-    }
 
-    virtual u8 getDither() const {
-        return mDither;
-    }
 
     virtual u32 getFogOffset() const {
         return mFogOffset;
@@ -933,6 +907,5 @@ public:
     /* 0x34 */ J3DBlend mBlend;
     /* 0x38 */ J3DZMode mZMode;
     /* 0x3A */ u8 mZCompLoc;
-    /* 0x3B */ u8 mDither;
     /* 0x3C */ u32 mFogOffset;
 };  // Size: 0x40

@@ -51,17 +51,6 @@ void set_texture_address(TextureMap& t, std::uint64_t image) {
     t.texture = image;
 }
 
-// A channel as the op or record states it (J3DNativeChannel): attenuation 1 specular, 2 directional (none), 3 spot.
-ChannelControl make_channel(std::uint8_t material_source, std::uint8_t enable, std::uint8_t light_mask,
-                           std::uint8_t ambient_source, std::uint8_t diffuse, std::uint8_t attenuation) {
-    return ChannelControl{(material_source & 1u) != 0u,
-                         (enable & 1u) != 0u,
-                         light_mask,
-                         (ambient_source & 1u) != 0u,
-                         static_cast<std::uint8_t>(diffuse & 3u),       // J3DNativeChannel: 0 none, 1 signed, 2 clamped
-                         static_cast<std::uint8_t>(attenuation & 3u)};  // 0 none, 1 specular, 2 directional, 3 spot
-}
-
 }  // namespace
 
 namespace {

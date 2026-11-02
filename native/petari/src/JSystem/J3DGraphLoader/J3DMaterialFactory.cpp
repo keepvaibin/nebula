@@ -139,7 +139,6 @@ J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, i
     i_material->mPEBlock->setBlend(newBlend(i_idx));
     i_material->mPEBlock->setZMode(newZMode(i_idx));
     i_material->mPEBlock->setZCompLoc(newZCompLoc(i_idx));
-    i_material->mPEBlock->setDither(newDither(i_idx));
     for (u8 i = 0; i < tex_num; i++) {
         i_material->mTevBlock->setTexNo(i, newTexNo(i_idx, i));
     }
@@ -207,7 +206,6 @@ J3DMaterial* J3DMaterialFactory::createPatchedMaterial(J3DMaterial* i_material, 
     i_material->mPEBlock->setBlend(newBlend(i_idx));
     i_material->mPEBlock->setZMode(newZMode(i_idx));
     i_material->mPEBlock->setZCompLoc(newZCompLoc(i_idx));
-    i_material->mPEBlock->setDither(newDither(i_idx));
     for (u8 i = 0; i < 8; i++) {
         i_material->mTevBlock->setTexNo(i, newTexNo(i_idx, i));
     }
@@ -435,15 +433,6 @@ const u8 J3DMaterialFactory::newZCompLoc(int i_idx) const {
         return mpZCompLoc[mtl_init_data->mZCompLocIdx];
     } else {
         return 0;
-    }
-}
-
-const u8 J3DMaterialFactory::newDither(int i_idx) const {
-    J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
-    if (mtl_init_data->mDitherIdx != 0xff) {
-        return mpDither[mtl_init_data->mDitherIdx];
-    } else {
-        return 1;
     }
 }
 

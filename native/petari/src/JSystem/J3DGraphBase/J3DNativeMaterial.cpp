@@ -569,7 +569,7 @@ namespace J3DNativeMaterial {
             copyColor(rOut.color, rInfo.mColor);
         }
 
-        // The preset blocks write fixed modes and no fog, and keep the dither (J3DPEBlockOpa, TexEdge, Xlu load).
+        // The preset blocks write fixed modes and no fog (J3DPEBlockOpa, TexEdge, Xlu load).
         const u32 peType = pPE->getType();
         if (peType == 'PEOP' || peType == 'PEED' || peType == 'PEXL') {
             const bool edge = peType == 'PEED';
