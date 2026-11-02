@@ -5,7 +5,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
@@ -62,7 +62,7 @@ void JASStream::init(StreamCallback i_callback, void* i_callbackData) {
     mCallbackData = i_callbackData;
     mCommands.init(mCommandSlots, ARRAY_SIZE(mCommandSlots));
     if (sLoadThread == nullptr) {
-        sLoadThread = JASDvd::getThreadPointer();
+        sLoadThread = JASLoad::getThreadPointer();
     }
 }
 

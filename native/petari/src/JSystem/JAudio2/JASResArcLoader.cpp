@@ -1,6 +1,6 @@
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"
 
@@ -37,5 +37,5 @@ int JASResArcLoader::loadResourceAsync(JKRArchive* archive, u16 id, u8* buffer, 
     args.mCallback = callback;
     args.mCallbackArg = callbackArg;
 
-    return JASDvd::getThreadPointer()->sendCmdMsg(&loadResourceCallback, (void*)&args, sizeof(TLoadResInfo));
+    return JASLoad::getThreadPointer()->sendCmdMsg(&loadResourceCallback, (void*)&args, sizeof(TLoadResInfo));
 }

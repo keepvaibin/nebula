@@ -1,6 +1,5 @@
 #include "JSystem/JAudio2/JAUAudioArcLoader.hpp"
 #include "JSystem/JAudio2/JAISeMgr.hpp"
-#include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JAudio2/JAUSectionHeap.hpp"
 
 
@@ -84,12 +83,10 @@ void JAUAudioArcLoader_withoutCopy::readWS(u32 param_0, void const* param_1, u32
     if (param_2) {
         mSection->loadWaveArc(param_0, param_2);
     }
-    JASReport(".ws resource remains at Heap Head\n");
 }
 
 void JAUAudioArcLoader_withoutCopy::readBNK(u32 param_0, void const* pData) {
     mSection->newBank(pData, param_0);
-    JASReport(".bnk resource remains at Heap Head\n");
 }
 
 void JAUAudioArcLoader_withoutCopy::readBSC(void const* pData, u32 param_1) {

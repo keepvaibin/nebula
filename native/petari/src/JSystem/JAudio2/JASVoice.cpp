@@ -61,7 +61,7 @@ void JASVoice::initAll() {
     for (u8 i = 0; i < 4; i++) {
         setEffectLine(i, false, nullptr);
     }
-    JASHeap* const sound = JASKernel::getAramHeap();
+    JASHeap* const sound = JASKernel::getSoundHeap();
     const NebulaHostServices* const host = nebula_host();
     host->voices_setup(host->user, sVoices, 64, sEffects, sound->getBase(), sound->getSize());
 }
@@ -170,36 +170,37 @@ void JASVoice::initAutoMixer() {
     }
 }
 
-void JASVoice::setAutoMixer(u16 volume, u8 pan_position, u8 rear_position, u8 send, u8) {
-    pan = pan_position;
-    rear = rear_position;
-    panner_send = (send << 8 | send << 1) / 32768.0f;
-    panner_target = volume / 65536.0f;
+void JASVoice::setAutoMixer(f32 volume, f32 pan_position, f32 rear_position, f32 send) {
+    pan = static_cast< u8 >(static_cast< s32 >(pan_position * 127.5f)) / 128.0f;
+    rear = static_cast< u8 >(static_cast< s32 >(rear_position * 127.5f)) / 128.0f;
+    const u8 sendByte = static_cast< s32 >(send * 127.5f);
+    panner_send = (sendByte << 8 | sendByte << 1) / 32768.0f;
+    panner_target = static_cast< u16 >(static_cast< s32 >(volume * 65536.0f)) / 65536.0f;
     panner = 1;
 }
 
-void JASVoice::setPitch(u16 value) {
-    if (value >= 0x7fff) {
-        value = 0x7fff;
-    }
-    // `value`: source samples per 32 kHz sample, 4.12; an oscillator's cycles per 32 kHz sample, 15.17.
+// `ratio`: source samples per 32 kHz sample; an oscillator's frequency, in units of 1 kHz (a constant: eight times its value).
+void JASVoice::setPitch(f32 ratio) {
+    ratio = static_cast< u16 >(static_cast< s32 >(ratio * 4096.0f) >= 0x7fff ? 0x7fff : static_cast< s32 >(ratio * 4096.0f)) / 4096.0f;
     if (format != NEBULA_AUDIO_OSCILLATOR) {
-        rate = value * (32000.0f / 4096.0f);
+        rate = ratio * 32000.0f;
     } else if (oscillator == NEBULA_AUDIO_CONSTANT) {
-        rate = value / 32768.0f;
+        rate = ratio / 8.0f;
     } else {
-        rate = value * (32000.0f / 131072.0f);
+        rate = ratio * 1000.0f;
     }
 }
 
-void JASVoice::setMixerInitVolume(u8 send, s16 volume) {
-    sends[send].current = volume / 65536.0f;
-    sends[send].target = volume / 65536.0f;
+void JASVoice::setMixerInitVolume(u8 send, f32 volume) {
+    volume = static_cast< s16 >(static_cast< u16 >(static_cast< s32 >(volume * 65536.0f))) / 65536.0f;
+    sends[send].current = volume;
+    sends[send].target = volume;
 }
 
-void JASVoice::setMixerVolume(u8 send, s16 volume) {
+void JASVoice::setMixerVolume(u8 send, f32 volume) {
+    volume = static_cast< s16 >(static_cast< u16 >(static_cast< s32 >(volume * 65536.0f))) / 65536.0f;
     if (forced_stop == 0) {
-        sends[send].target = volume / 65536.0f;
+        sends[send].target = volume;
     }
 }
 

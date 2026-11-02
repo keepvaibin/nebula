@@ -272,14 +272,14 @@ JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getC
     return JASKernel::sCommandHeap;
 }
 
-JASHeap JASKernel::audioAramHeap;
+JASHeap JASKernel::soundHeap;
 
 // The sound memory (wave archives and stream buffers): `size` bytes off the root heap,
 // handed out as pointers the mixer reads.
-void JASKernel::setupAramHeap(u32, u32 size) {
-    audioAramHeap.initRootHeap(SingletonHolder< HeapMemoryWatcher >::get()->mSoundMemory, size);
+void JASKernel::setupSoundHeap(u32, u32 size) {
+    soundHeap.initRootHeap(SingletonHolder< HeapMemoryWatcher >::get()->mSoundMemory, size);
 }
 
-JASHeap* JASKernel::getAramHeap() {
-    return &audioAramHeap;
+JASHeap* JASKernel::getSoundHeap() {
+    return &soundHeap;
 }

@@ -17,7 +17,7 @@ constexpr float kFold = 26500.0f / 32768.0f;
 constexpr float kMatrix = 18400.0f / 32768.0f;
 constexpr float kCenterGain = 23170.0f / 32768.0f;
 
-// A forced stop's next gain: half, down to nothing after 16 steps of a full gain.
+// A forced stop's next gain: half, down to nothing below the 16-bit output's step.
 [[nodiscard]] float halved(float gain) noexcept {
     return std::floor(gain * 32768.0f) / 65536.0f;
 }
@@ -42,9 +42,9 @@ constexpr float kCenterGain = 23170.0f / 32768.0f;
     return static_cast<float>(std::sin(2.0 * kPi * step / 64.0)) * kUnit;
 }
 
-// The panner's quarter-sine law: gain for position 0..127.
-[[nodiscard]] float pan_gain(std::uint32_t position) noexcept {
-    return static_cast<float>(std::sin(kPi * position / 256.0));
+// The panner's quarter-sine law: gain for position 0..1.
+[[nodiscard]] float pan_gain(float position) noexcept {
+    return static_cast<float>(std::sin(kPi * position / 2.0));
 }
 
 // Weights by delay in output samples (index 0: the current sample) for taps at `delays` (in 32 kHz samples, may be
@@ -358,7 +358,7 @@ void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out
         return;
     }
     // The source samples this subframe covers, after the previous subframe's last four.
-    const double span = static_cast<double>(voice.rate) / kSubframesPerSecond;
+    const double span = std::min(static_cast<double>(voice.rate) / kSubframesPerSecond, static_cast<double>(kMaxSourceSpan));
     const double end_position = state.phase + span;
     const auto needed = static_cast<std::uint32_t>(end_position);
     float* x = source_.data();
@@ -645,12 +645,10 @@ void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
             voice.finished = 1u;
         }
     }
-    const std::uint32_t pan = std::min<std::uint32_t>(voice.pan, 0x7Fu);
-    const std::uint32_t rear = voice.rear & 0x7Fu;
-    const float left = pan_gain(pan ^ 0x7Fu);
-    const float right = pan_gain(pan);
-    const float front = pan_gain(rear ^ 0x7Fu);
-    const float back = pan_gain(rear);
+    const float left = pan_gain(127.0f / 128.0f - voice.pan);
+    const float right = pan_gain(voice.pan);
+    const float front = pan_gain(127.0f / 128.0f - voice.rear);
+    const float back = pan_gain(voice.rear);
     const std::array<float, 4> gains{left * front, right * front, left * back, right * back};
     const std::array<std::uint32_t, 4> dry{kLeft, kRight, kSurroundLeft, kSurroundRight};
     const std::array<std::uint32_t, 4> wet{kEffect0 + 2u, kEffect0 + 3u, kPannerSendLeft, kPannerSendRight};

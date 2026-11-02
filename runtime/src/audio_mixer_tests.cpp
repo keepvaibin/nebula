@@ -212,8 +212,8 @@ void test_panner() {
     }
     NebulaVoice& v = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_NONE, 0);
     v.panner = 1u;
-    v.pan = 0u;
-    v.rear = 0u;
+    v.pan = 0.0f;
+    v.rear = 0.0f;
     v.panner_volume = 0.25f;
     v.panner_target = 0.25f;
     AudioMixer mixer(48000u);
@@ -222,7 +222,7 @@ void test_panner() {
     const double gain = std::sin(kPi * 127.0 / 256.0) * std::sin(kPi * 127.0 / 256.0);
     expect(near(out[2u * 200u], 0.5 * gain * 16384.0 / 65536.0, 1e-4), "pan left: left", out[2u * 200u]);
     expect(near(out[2u * 200u + 1u], 0.0, 1e-6), "pan left: right silent", out[2u * 200u + 1u]);
-    v.rear = 127u;
+    v.rear = 1.0f;
     out = run(mixer, 3u);
     const double rear = 0.5 * gain * 16384.0 / 65536.0;
     expect(near(out[2u * 300u], rear * 26500.0 / 32768.0 * 32767.0 / 32768.0, 2e-4), "rear left on left",
