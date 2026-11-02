@@ -37,7 +37,9 @@
 //!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
 //!   tables (its console command lists stay: the game does not read them), TEX1's image headers.
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
+//! - BAS (sound animations): counts, ids, times, pitches, flags (bas).
 //! - RARC (archives, after cook::archive::rebuild): header, info block, directory nodes, file entries (rarc_host).
+//! - CIT (chord tables, "CITS"): size, counts, offset tables, scale note offsets (cit).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
 //!   counts and values (rfl_res_host).
 //! - The audio archive (BAA): the command stream, BST, BSTN, BSC, the wave systems (WSYS) and the banks (IBNK)
@@ -1971,6 +1973,53 @@ pub fn rarc_host(bytes: &[u8]) -> Result<Vec<u8>> {
         host16(bytes, &mut out, at + 2)?;
         for o in [4, 8, 0xC, 0x10] {
             host32(bytes, &mut out, at + o)?;
+        }
+    }
+    Ok(out)
+}
+
+/// A sound animation (BAS) in host order: the sound count (16-bit), the 32-bit slot after it, and each 0x20-byte sound:
+/// its id, note-on and note-off times, base pitch, flags and last word (32-bit); the volume, pitch, pan and repeat
+/// bytes stay.
+pub fn bas(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 8 {
+        bail!("a sound animation shorter than its header");
+    }
+    let mut out = bytes.to_vec();
+    let count = host16(bytes, &mut out, 0)? as usize;
+    host32(bytes, &mut out, 4)?;
+    if 8 + 0x20 * count > bytes.len() {
+        bail!("{count} sounds past the sound animation's end");
+    }
+    for i in 0..count {
+        let s = 8 + 0x20 * i;
+        for o in [0, 4, 8, 0xC, 0x10, 0x1C] {
+            host32(bytes, &mut out, s + o)?;
+        }
+    }
+    Ok(out)
+}
+
+/// A chord table (CIT, "CITS", the rhythm library's JaiChord.arc members) in host order: the size word, the chord and
+/// scale counts, the chord and scale offset tables and each scale's up and down note offsets (all from the file's
+/// start); the first word (0) and the note bytes stay.
+pub fn cit(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 16 || &bytes[4..8] != b"CITS" {
+        bail!("not a chord table");
+    }
+    let mut out = bytes.to_vec();
+    host32(bytes, &mut out, 8)?;
+    let chords = host16(bytes, &mut out, 12)? as usize;
+    let scales = host16(bytes, &mut out, 14)? as usize;
+    for i in 0..chords {
+        host32(bytes, &mut out, 16 + 4 * i)?;
+    }
+    let mut seen: HashSet<usize> = HashSet::new();
+    for i in 0..scales {
+        let scale = host32(bytes, &mut out, 16 + 4 * (chords + i))? as usize;
+        if seen.insert(scale) {
+            host32(bytes, &mut out, scale)?;
+            host32(bytes, &mut out, scale + 4)?;
         }
     }
     Ok(out)

@@ -543,9 +543,9 @@ void AudMeTrack::setBaseNoteFromScale(u8* pScaleData, s32 numNotes, bool random)
         u8 ctrl = pScaleData[ctrlList[i]];  // scale tone offset
         u8 note;
         if ((ctrl & 0x80) != 0) {
-            note = chordInfo->mCurScale->up[ctrl & 0x7F];  // getScaleNoteUp
+            note = chordInfo->mCurScaleUp[ctrl & 0x7F];  // getScaleNoteUp
         } else {
-            note = chordInfo->mCurScale->down[ctrl];  // getScaleNoteDown
+            note = chordInfo->mCurScaleDown[ctrl];  // getScaleNoteDown
         }
 
         if (note != 0x7F) {

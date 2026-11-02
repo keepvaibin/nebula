@@ -123,18 +123,6 @@ public:
     } mID;
 };
 
-#ifdef TARGET_PC
-// A sound id in a file (BAS): the big-endian word.
-template <>
-struct BEData< JAISoundID > {
-    BE< u32 > mComposite;
-
-    operator JAISoundID() const {
-        return JAISoundID((u32)mComposite);
-    }
-};
-#endif
-
 class JAISoundHandle {
 public:
     /// @brief Creates a new `JAISoundHandle`.
