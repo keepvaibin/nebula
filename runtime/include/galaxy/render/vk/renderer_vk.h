@@ -422,7 +422,7 @@ private:
     [[nodiscard]] bool restore_surface();
     [[nodiscard]] bool surface_changed() const;
     bool create_layouts();
-    bool create_scene_targets(unsigned scale, unsigned samples);
+    bool create_scene_targets(const FrameMap& map, unsigned samples);
     // The MSAA sample count the settings ask for and the device has for the scene target's formats (1: none).
     [[nodiscard]] unsigned wanted_msaa_samples() const;
     // Before the scene target's single-sample depth is read: the multisampled depth drawn since the last resolve, resolved
@@ -579,7 +579,7 @@ private:
     // through its own view slot (TextureCache::allocate_view) reading the pass's channels.
     struct TargetSlot {
         SceneSet set;
-        unsigned scale = 0;
+        FrameMap map{};
         std::uint64_t used = 0;
         std::uint16_t width = 0, height = 0;  // game units
     };
@@ -993,7 +993,7 @@ private:
     FrameMap replay_scene_map_{};
     SceneSet replay_alt_scene_;  // the replay's output scene target
     FrameMap replay_alt_scale_{};
-    bool create_scene_set(SceneSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kFrameWidth,
+    bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameWidth,
                         unsigned height = kFrameHeight);
     void destroy_scene_set(SceneSet& set);
     DisplayTexture subframe_display_;

@@ -559,7 +559,7 @@ void RendererD3D12::wait_for_gpu() {
     wait_for_fence_value(val);
 }
 
-bool RendererD3D12::create_scene_targets(unsigned scene_target_scale) {
+bool RendererD3D12::create_scene_targets(const FrameMap& map) {
     // The physical targets scale; guest scene target/display picture addresses and dimensions keep the
     // Wii's logical size (as Aurora's lib/window.cpp and lib/gx/gx.cpp do).
     //
@@ -567,11 +567,9 @@ bool RendererD3D12::create_scene_targets(unsigned scene_target_scale) {
     // (out of video memory) leaves the current targets untouched. On success
     // the previous targets move to scene_carry_*, whose contents begin_frame
     // copies into the new ones.
-    const std::uint64_t width =
-        static_cast<std::uint64_t>(kFrameWidth) * scene_target_scale;
-    const std::uint64_t height =
-        static_cast<std::uint64_t>(kFrameHeight) * scene_target_scale;
-    if (scene_target_scale < 1u || scene_target_scale > kMaxSceneScale ||
+    const std::uint64_t width = map.width;
+    const std::uint64_t height = map.height;
+    if (width == 0u || height == 0u || map.scale() > kMaxSceneScale ||
         width > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         height > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         width > static_cast<std::uint64_t>(
@@ -672,7 +670,7 @@ bool RendererD3D12::create_scene_targets(unsigned scene_target_scale) {
     }
     scene_dsv_ = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
     // MSAA: draws and clears go to the multisampled targets; scene_color_ and scene_depth_ hold their resolves.
-    if (!create_scene_msaa(scene_msaa_, scene_depth_.Get(), scene_target_scale, wanted_msaa_samples(), scene_rtv_, scene_dsv_)) {
+    if (!create_scene_msaa(scene_msaa_, scene_depth_.Get(), wanted_msaa_samples(), scene_rtv_, scene_dsv_)) {
         std::cerr << "[Renderer] MSAA targets unavailable; the scene target draws without MSAA\n";
         scene_msaa_.samples = 1u;
         const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -710,7 +708,7 @@ unsigned RendererD3D12::msaa_max_samples() const {
     return msaa_max_samples_;
 }
 
-bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
+bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned samples,
                                     D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv) {
     msaa.color.Reset();
     msaa.depth.Reset();
@@ -723,8 +721,8 @@ bool RendererD3D12::create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, un
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    rd.Width = kFrameWidth * scale;
-    rd.Height = kFrameHeight * scale;
+    rd.Width = depth->GetDesc().Width;
+    rd.Height = depth->GetDesc().Height;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
     rd.Format = kSceneColorFormat;
@@ -1412,11 +1410,11 @@ bool RendererD3D12::can_hand_over_display_copy(const CaptureRequest& params, con
         !post_process_.ready() || !post_process_.reads_held_pictures()) {
         return false;
     }
-    const unsigned scale = frame_.scale();
+    const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(params.src_width, params.src_height, frame_);
     // The display's vertical filter is applied when the frame is presented (present: filter_display_picture).
     return !params.luma && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
-           dest.width == kFrameWidth * scale && dest.height == params.src_height * scale;
+           dest.width == extent.width && dest.height == extent.height;
 }
 
 gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
@@ -1642,11 +1640,22 @@ void RendererD3D12::apply_pending_scene_target_scale() {
     // output, else the render resolution. A quality mode renders below it.
     const unsigned internal =
         std::min(std::clamp(render.scene_target_scale, 1u, kMaxSceneScale), host_window::display_scene_target_scale_cap());
-    const unsigned wanted = host_window::upscaler_render_scale(render, internal);
+    const unsigned wanted_scale = host_window::upscaler_render_scale(render, internal);
+    // Following the window: its picture's exact size, square pixels. A temporal upscaler still takes whole scales.
+    FrameMap wanted(wanted_scale);
+    if (render.internal_follow_window && gpu_budget_cap_ == 0u && wanted_scale == internal) {
+        const auto aspect = galaxy::experimental_effective_host_aspect();
+        const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+            static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+            aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        if (content.width > 0 && content.height > 0) {
+            wanted = FrameMap(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+        }
+    }
     const unsigned live_internal = upscale_output_scale_ != 0u ? upscale_output_scale_ : frame_.scale();
     upscale_output_scale_ = internal;
     const unsigned samples = wanted_msaa_samples();
-    if (wanted == frame_.scale() && samples == scene_msaa_.samples) {
+    if (wanted == frame_ && samples == scene_msaa_.samples) {
         return;
     }
     // Keeps the current targets; the setting returns to the live internal resolution.
@@ -1656,11 +1665,11 @@ void RendererD3D12::apply_pending_scene_target_scale() {
         restored.scene_target_scale = live_internal;
         set_render_config(restored);
         stage_next_start_scene_target_scale(live_internal);
-        host_window::scene_target_scale_rejected.store(wanted, std::memory_order_release);
+        host_window::scene_target_scale_rejected.store(wanted.scale(), std::memory_order_release);
         return restored.internal_follow_window;
     };
-    if (wanted > frame_.scale() && !scene_target_scale_fits_memory(wanted)) {
-        std::cerr << "[Renderer] internal resolution " << wanted
+    if (wanted.scale() > frame_.scale() && !scene_target_scale_fits_memory(wanted.scale())) {
+        std::cerr << "[Renderer] internal resolution " << wanted.scale()
                   << "x exceeds the video-memory budget; staying at "
                   << frame_.scale() << "x\n";
         if (refuse()) {
@@ -1683,19 +1692,17 @@ void RendererD3D12::apply_pending_scene_target_scale() {
     readback_buf_.Reset();
     readback_pending_ = false;
     readback_fence_value_ = 0u;
-    const unsigned previous = frame_.scale();
+    const FrameMap previous = frame_;
     if (!create_scene_targets(wanted)) {
         (void)refuse();
         return;
     }
-    const unsigned applied = wanted;
-    frame_ = FrameMap(applied);
+    frame_ = wanted;
     refresh_scene_conversion_source_views();
     invalidate_gx_bindings();
     bound_scissor_input_scale_ = 0u;
-    std::cout << "[Renderer] internal resolution " << previous << "x -> "
-              << applied << "x (" << kFrameWidth * applied << "x"
-              << kFrameHeight * applied << ")";
+    std::cout << "[Renderer] internal resolution " << previous.width << "x" << previous.height << " -> "
+              << frame_.width << "x" << frame_.height;
     if (scene_msaa_.samples > 1u) {
         std::cout << " MSAA " << scene_msaa_.samples << 'x';
     }
@@ -2332,7 +2339,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned sce
         // A saved scale above what this display can show is clamped here.
         boot_step("queue and swap chain");
         frame_ = FrameMap(std::min(frame_.scale(), host_window::display_scene_target_scale_cap()));
-        if (!create_scene_targets(frame_.scale())) return false;
+        if (!create_scene_targets(frame_)) return false;
 
         if (!create_root_signature()) return false;
 
@@ -7074,10 +7081,10 @@ void RendererD3D12::write_scene_set_views(SceneTargetSet& set, const DescriptorR
 
 bool RendererD3D12::create_scene_set(
     SceneTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views,
+    ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map, bool persistent_views,
     bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height) {
-    const UINT w = width * scale;
-    const UINT h = height * scale;
+    const UINT w = static_cast<UINT>(std::lround(static_cast<double>(width) * map.sx));
+    const UINT h = static_cast<UINT>(std::lround(static_cast<double>(height) * map.sy));
     if (set.color) {
         wait_for_gpu();
     }
@@ -7131,7 +7138,7 @@ bool RendererD3D12::create_scene_set(
     dsv.Format = kSceneDepthFormat;
     dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     device_->CreateDepthStencilView(set.depth.Get(), &dsv, set.dsv);
-    if (!create_scene_msaa(set.msaa, set.depth.Get(), scale, samples, set.rtv, set.dsv)) {
+    if (!create_scene_msaa(set.msaa, set.depth.Get(), samples, set.rtv, set.dsv)) {
         set.color.Reset();
         set.depth.Reset();
         return false;
@@ -7143,7 +7150,7 @@ bool RendererD3D12::create_scene_set(
         // The caller writes views into the frame's descriptor segment per use.
         set.conv_table.reset();
     }
-    set.map = scale;
+    set.map = map;
     return true;
 }
 
@@ -7213,7 +7220,7 @@ bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint16_t width, st
     // A new set starts as a render target; the pass's first clear (RenderCore) fills it. Its copy views are written
     // per use (no persistent descriptors per key).
     if (!kept) {
-        if (!create_scene_set(slot.set, slot.rtv_heap, slot.dsv_heap, frame_.scale(), false, false, 1u, false, width,
+        if (!create_scene_set(slot.set, slot.rtv_heap, slot.dsv_heap, frame_, false, false, 1u, false, width,
                             height)) {
             target_slots_.erase(key);
             return false;
@@ -7607,7 +7614,7 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
     in.rtv = scene_rtv_;
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;
-    in.scale = frame_.scale();
+    in.scale = frame_.sy;
     in.logical_width = kFrameWidth;
     in.logical_height = kFrameHeight;
     in.frame_width = std::min(frame_.width, static_cast<unsigned>(desc.Width));
@@ -7670,7 +7677,7 @@ bool RendererD3D12::begin_output_scene() {
     // least the Wii's own density on a window wider than 16:9 or narrower than 4:3, never above the window's.
     const bool full = temporal || get_render_config().hud_output_resolution || sharp_2d_requested();
     const unsigned layout = full ? 0u : galaxy::layout_density_scale(galaxy::experimental_effective_host_aspect());
-    if (output_scene_active_ || (!full && layout <= frame_.scale())) {
+    if (output_scene_active_ || !frame_.whole() || (!full && layout <= frame_.scale())) {
         return false;
     }
     // A temporal upscaler outputs the internal resolution; the 2D layer alone
@@ -9616,18 +9623,6 @@ bool RendererD3D12::present(
 
     const auto ultrawide =
         galaxy::experimental_effective_host_aspect();
-    // A frame copied before a live internal-resolution change is still a
-    // full-width copy at the scale it was made with.
-    const unsigned source_scale = source->width / kFrameWidth;
-    if (ultrawide &&
-        (source_scale == 0u ||
-         source->width != kFrameWidth * source_scale ||
-         source->height == 0u ||
-         source->height > kFrameHeight * source_scale)) {
-        throw std::runtime_error(
-            "RMGE01 ultrawide aspect requires a full-width Wii display picture copy");
-    }
-
     const UINT buf_idx = swap_chain_->GetCurrentBackBufferIndex();
     const UINT rtv_stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_CPU_DESCRIPTOR_HANDLE back_rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();

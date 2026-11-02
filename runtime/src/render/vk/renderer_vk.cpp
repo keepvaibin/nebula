@@ -142,7 +142,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned scene_
             alloc.commandBufferCount = 1;
             vk::check(vkAllocateCommandBuffers(device, &alloc, &utility_commands_), "vkAllocateCommandBuffers");
         }
-        if (!create_scene_targets(scene_map_.scale(), wanted_msaa_samples()) || !create_utility_pipelines()) {
+        if (!create_scene_targets(scene_map_, wanted_msaa_samples()) || !create_utility_pipelines()) {
             shutdown();
             return false;
         }

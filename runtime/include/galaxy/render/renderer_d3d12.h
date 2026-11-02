@@ -729,7 +729,7 @@ private:
         unsigned width,
         unsigned height,
         unsigned row_pitch);
-    bool create_scene_targets(unsigned scene_target_scale);
+    bool create_scene_targets(const FrameMap& map);
     void carry_over_scene_contents();
     // The MSAA sample count the settings ask for and the device has for the scene target's formats: 1 without MSAA, and
     // with a temporal upscaler or ray tracing, which read the scene target's single-sample targets directly.
@@ -980,7 +980,7 @@ private:
         bool depth_dirty = false;
     };
     // The set's multisampled targets for `samples` (none for one), with `rtv` and `dsv` pointed at them.
-    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
+    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned samples,
                          D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
     void write_msaa_depth_view(SceneMsaa& msaa);
     [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
@@ -1198,7 +1198,7 @@ private:
     // unordered_access: the colour target takes compute writes (the temporal
     // upscaler's output, as the live output scene target).
     bool create_scene_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
+                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
                         bool hdr = false, unsigned width = kFrameWidth, unsigned height = kFrameHeight);
     void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Table& table);
