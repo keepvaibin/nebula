@@ -29,7 +29,7 @@ public:
             mHostMtx.setTrans(mPosition);
         }
 
-        /* 0x8C */ TPos3f mHostMtx;
+        TPos3f mHostMtx;
     };
 
     /// @brief Creates a new `AstroDomeBlueStar`.
@@ -62,10 +62,10 @@ public:
     void exeGalaxyConfirmCancel();
     void exeGalaxyConfirm();
 
-    /* 0x08C */ GCaptureRibbon* mCaptureRibbon;
-    /* 0x090 */ TPos3f mHostMtx;
-    /* 0x0C0 */ TPos3f mBindStartMtx;
-    /* 0x0F0 */ ActorCameraInfo* mCameraInfo;
-    /* 0x0F4 */ TVec3f mZoomPos;
-    /* 0x100 */ CaptureActor* mCaptureActor;
+    GCaptureRibbon* mCaptureRibbon;
+    TPos3f mHostMtx;
+    TPos3f mBindStartMtx;
+    ActorCameraInfo* mCameraInfo;
+    TVec3f mZoomPos;
+    CaptureActor* mCaptureActor;
 };

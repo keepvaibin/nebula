@@ -11,7 +11,7 @@ public:
     class Condition {
     public:
         virtual ~Condition();
-        // Pure, as on the console (the DOL has no vtable of this base; every condition defines it).
+        // Pure (the DOL has no vtable of this base; every condition defines it).
         virtual bool isExecute(const MR::StationedFileInfo*) const = 0;
         virtual NebulaArena* getProperHeap(const MR::StationedFileInfo*) const;
     };

@@ -18,7 +18,7 @@ public:
     const ScenarioData* getScenarioData(s32) const;
     GalaxyStatusAccessor makeAccessor(const char*) const;
 
-    /* 0x0C */ MR::Vector< MR::FixedArray< ScenarioData*, 64 > > mScenarioData;
+    MR::Vector< MR::FixedArray< ScenarioData*, 64 > > mScenarioData;
 };
 
 class ScenarioDataIter {
@@ -29,8 +29,8 @@ public:
     void goNext();
     GalaxyStatusAccessor makeAccessor() const;
 
-    /* 0x00 */ const ScenarioDataParser* mParser;
-    /* 0x04 */ int mCur;
+    const ScenarioDataParser* mParser;
+    int mCur;
 };
 
 class ScenarioData {
@@ -47,9 +47,9 @@ public:
     s32 getZoneNum() const;
     s32 getZoneId(const char*) const;
 
-    /* 0x00 */ JMapInfo* mScenarioData;
-    /* 0x04 */ char* mGalaxyName;
-    /* 0x08 */ JMapInfo* mZoneList;
+    JMapInfo* mScenarioData;
+    char* mGalaxyName;
+    JMapInfo* mZoneList;
 };
 
 namespace ScenarioDataFunction {

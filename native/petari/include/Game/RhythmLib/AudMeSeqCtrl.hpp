@@ -77,11 +77,11 @@ public:
 
     static AudMeSeqParser sDefaultParser;
 
-    /* 0x00 */ s32 mType;
-    /* 0x04 */ s32 mTime;  // TODO: better name, "note time?"
-    /* 0x08 */ AudMeSeqReader mReader;
-    /* 0x44 */ AudMeSeqParser* mParser;
-    /* 0x48 */ bool mIsLocked;
-    /* 0x49 */ bool mStopAfterNote;
-    /* 0x4C */ s32 mProgress;
+    s32 mType;
+    s32 mTime;  // TODO: better name, "note time?"
+    AudMeSeqReader mReader;
+    AudMeSeqParser* mParser;
+    bool mIsLocked;
+    bool mStopAfterNote;
+    s32 mProgress;
 };

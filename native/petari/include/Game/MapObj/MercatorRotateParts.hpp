@@ -15,8 +15,8 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    /* 0x8C */ MapPartsRotator* mRotator;
-    /* 0x90 */ MapPartsAppearController* mAppearController;
-    /* 0x94 */ TVec3f mLocalTrans;
-    /* 0xA0 */ TVec3f mLocalRotate;
+    MapPartsRotator* mRotator;
+    MapPartsAppearController* mAppearController;
+    TVec3f mLocalTrans;
+    TVec3f mLocalRotate;
 };

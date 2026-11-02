@@ -370,10 +370,6 @@ namespace MR {
         return copyJointAnimation(getJ3DModel(pCopyTo), getJ3DModel(pCopyFrom));
     }
 
-    void syncJointAnimation(LiveActor* pActor1, const LiveActor* pActor2) {
-        getJ3DModel(pActor1)->mMtxBuffer = getJ3DModel(pActor2)->getMtxBuffer();
-    }
-
     void syncMaterialAnimation(J3DModel* pModel1, J3DModel* pModel2) {
         u16 materialNum = pModel1->getModelData()->getMaterialNum();
         u16 i;
@@ -394,11 +390,6 @@ namespace MR {
 
     void syncMaterialAnimation(LiveActor* pActor1, const LiveActor* pActor2) {
         return syncMaterialAnimation(getJ3DModel(pActor1), getJ3DModel(pActor2));
-    }
-
-    void FORCE_FUNCTION_ORDER2() {
-        J3DMaterial* mat;
-        ::isUseLightChanNo(mat, 1, 1);
     }
 
     void getLightNum(J3DMaterial* pMaterial, s32* pChan1, s32* pChan2, s32* pChan3, s32* pChan4) {
@@ -563,13 +554,4 @@ namespace MR {
         return static_cast< J3DModelData* >(createAndAddResourceHolder(buff)->mModelResTable->getRes(pName));
     }
 
-    bool isUseFur(const J3DModelData* pModelData) {
-        for (u16 i = 0; i < pModelData->getMaterialNum(); i++) {
-            if (strstr(pModelData->getMaterialName()->getName(i), "Fur")) {
-                return true;
-            }
-        }
-
-        return false;
-    }
 };  // namespace MR

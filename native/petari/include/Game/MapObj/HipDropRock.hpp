@@ -22,9 +22,9 @@ public:
     void initItem(const JMapInfoIter&);
     void appearItem();
 
-    /* 0x8C */ ModelObj* mBreakModel;
-    /* 0x90 */ TMtx34f mBreakModelMtx;
-    /* 0xC0 */ s32 mItemType;
-    /* 0xC4 */ s32 mStarPieceNum;
-    /* 0xC8 */ bool mObjArg7;
+    ModelObj* mBreakModel;
+    TMtx34f mBreakModelMtx;
+    s32 mItemType;
+    s32 mStarPieceNum;
+    bool mObjArg7;
 };

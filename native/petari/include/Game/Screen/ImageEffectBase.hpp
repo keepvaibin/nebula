@@ -33,7 +33,7 @@ public:
         return _10;
     }
 
-    /* 0x0C */ bool _C;
-    /* 0x0D */ bool _D;
-    /* 0x10 */ f32 _10;
+    bool _C;
+    bool _D;
+    f32 _10;
 };

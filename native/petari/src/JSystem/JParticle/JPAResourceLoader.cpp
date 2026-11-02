@@ -23,11 +23,11 @@ JPAResourceLoader::JPAResourceLoader(u8 const* data, JPAResourceManager* mgr) {
 
 // JPC, in host order as the importer cooks it.
 struct JPAResourceHeader {
-    /* 0x0 */ u16 mUsrIdx;
-    /* 0x2 */ u16 mBlockNum;
-    /* 0x4 */ u8 mFieldBlockNum;
-    /* 0x5 */ u8 mKeyBlockNum;
-    /* 0x6 */ u8 mTDB1Num;
+    u16 mUsrIdx;
+    u16 mBlockNum;
+    u8 mFieldBlockNum;
+    u8 mKeyBlockNum;
+    u8 mTDB1Num;
 };
 
 void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {

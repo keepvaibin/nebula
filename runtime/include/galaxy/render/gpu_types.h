@@ -105,7 +105,7 @@ struct DeviceRef {
     bool operator!=(std::nullptr_t) const noexcept { return handle != VK_NULL_HANDLE; }
     bool operator==(std::nullptr_t) const noexcept { return handle == VK_NULL_HANDLE; }
 };
-// console copies stay below 640x528 at scale 6; every Vulkan device reports at least 4096.
+// copies stay below 640x528 at scale 6; every Vulkan device reports at least 4096.
 inline constexpr unsigned kMaxTexture2DDimension = 4096u;
 
 // An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.

@@ -12,5 +12,5 @@ public:
         return "HazeCube";
     }
 
-    /* 0x3C */ f32 mDistance;
+    f32 mDistance;
 };

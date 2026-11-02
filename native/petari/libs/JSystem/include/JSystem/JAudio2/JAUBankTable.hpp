@@ -24,8 +24,8 @@ public:
         mBankPtrTable.set(param_0, param_1);
     }
 
-    /* 0x4 */ JASPtrTable< JASBank > mBankPtrTable;
-    /* 0xC */ u32 field_0xc;
+    JASPtrTable< JASBank > mBankPtrTable;
+    u32 field_0xc;
 };
 
 class JAUBankTableLink : public JSULink< JAUBankTable >, public JAUBankTable {

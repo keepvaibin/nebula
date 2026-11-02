@@ -25,14 +25,14 @@ public:
         mPartialRate = partialRate;
     }
 
-    /* 0x4C */ const char* mString;
-    /* 0x50 */ TVec3f mWPoint;
-    /* 0x5C */ TVec3f mAxis;
-    /* 0x68 */ f32 mAngleA;
-    /* 0x6C */ f32 mDist;
-    /* 0x70 */ f32 mMaxFocusDist;
-    /* 0x74 */ f32 mPartialRate;
-    /* 0x78 */ TVec3f mBaseFront;
-    /* 0x84 */ bool mIsResetting;
-    /* 0x88 */ s32 mInterpolateTime;
+    const char* mString;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mAngleA;
+    f32 mDist;
+    f32 mMaxFocusDist;
+    f32 mPartialRate;
+    TVec3f mBaseFront;
+    bool mIsResetting;
+    s32 mInterpolateTime;
 };

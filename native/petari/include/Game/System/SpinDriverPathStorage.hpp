@@ -23,9 +23,9 @@ public:
         return (1.0f / 256.0f);
     }
 
-    /* 0x00 */ s32 mZoneId;
-    /* 0x04 */ s32 mSpinDriverId;
-    /* 0x08 */ f32 mDrawRange;
+    s32 mZoneId;
+    s32 mSpinDriverId;
+    f32 mDrawRange;
 };
 
 class SpinDriverPathStorageScenario {
@@ -39,7 +39,7 @@ public:
     s32 deserialize(const u8*, u32);
     s32 calcMaxZoneId() const;
 
-    /* 0x00 */ MR::Vector< MR::AssignableArray< SpinDriverPathStorageOne > > mOneStorage;
+    MR::Vector< MR::AssignableArray< SpinDriverPathStorageOne > > mOneStorage;
 };
 
 class SpinDriverPathStorageGalaxy {
@@ -47,7 +47,6 @@ public:
     SpinDriverPathStorageGalaxy(const GalaxyStatusAccessor&);
 
     void resetAllData();
-    s32 setup(int, int, int, f32*);
     void updateValue(int, int, f32);
     s32 serialize(u8*, u32) const;
     s32 deserialize(const u8*, u32);
@@ -56,9 +55,9 @@ public:
         return mScenarioStorage[scenarioNo - 1];
     }
 
-    /* 0x00 */ SpinDriverPathStorageScenario* mScenarioStorage;
-    /* 0x04 */ s32 mNumScenarios;
-    /* 0x08 */ const char* mGalaxyName;
+    SpinDriverPathStorageScenario* mScenarioStorage;
+    s32 mNumScenarios;
+    const char* mGalaxyName;
 };
 
 // NOTE/TODO: This dummy is here to ensure vtable alignment in GameDataAllGalaxyStorage.
@@ -84,5 +83,5 @@ public:
     SpinDriverPathStorageGalaxy* findFromGalaxy(const char*);
     SpinDriverPathStorageGalaxy* findFromHashCode(u16);
 
-    /* 0x08 */ MR::Vector< MR::AssignableArray< SpinDriverPathStorageGalaxy* > > mGalaxyStorage;
+    MR::Vector< MR::AssignableArray< SpinDriverPathStorageGalaxy* > > mGalaxyStorage;
 };

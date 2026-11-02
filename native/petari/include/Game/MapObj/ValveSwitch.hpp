@@ -23,8 +23,8 @@ public:
     void exeEnd();
     void updateBindActorMtx();
 
-    /* 0x8C */ LiveActor* _8C;
-    /* 0x90 */ TPos3f _90;
-    /* 0xC0 */ MapObjConnector* mObjConnector;
-    /* 0xC4 */ bool _C4;
+    LiveActor* _8C;
+    TPos3f _90;
+    MapObjConnector* mObjConnector;
+    bool _C4;
 };

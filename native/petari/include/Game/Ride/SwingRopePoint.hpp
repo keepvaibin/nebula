@@ -34,9 +34,9 @@ public:
         return mPosition;
     }
 
-    /* 0x04 */ TVec3f mPosition;
-    /* 0x10 */ TVec3f mVelocity;
-    /* 0x1C */ TVec3f mSide;
-    /* 0x28 */ TVec3f mUp;
-    /* 0x34 */ TVec3f mFront;
+    TVec3f mPosition;
+    TVec3f mVelocity;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
 };

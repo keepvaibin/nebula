@@ -33,10 +33,6 @@ static NebulaColor8 ColorBlack = {0x00, 0x00, 0x00, 0x00};
 static NebulaColor8 ColorWhite = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DSys::J3DSys() {
-    makeTexCoordTable();
-    makeTevSwapTable();
-    makeAlphaCmpTable();
-    makeZModeTable();
 
     mFlags = 0;
     NebulaMtxIdentity(mViewMtx);
@@ -100,10 +96,10 @@ void J3DSys::drawInit() {
     J3DPass::lightMaterial(1, j3dDefaultColInfo);
 
     for (i = 0; i < 4; i++)
-        J3DPass::constantColor(i, j3dDefaultTevKColor);
+        J3DPass::constantColor(i, j3dDefaultConstantColor);
 
     for (i = 0; i < 4; i++)
-        J3DPass::materialColorWide(i, j3dDefaultTevColor);
+        J3DPass::materialColorWide(i, j3dDefaultRegisterColor);
 
 
 }

@@ -204,6 +204,6 @@ f32 SpkSpeakerCtrl::getDeviceVolume(s32 padChannel) {
         return 0.0f;
     }
 
-    // The console's speaker volume setting at its default (0x58 of 127); the host's speaker gain is the player's.
+    // The speaker volume at its default (0x58 of 127); the host's speaker gain is the player's.
     return 0x58 / 127.0f;
 }

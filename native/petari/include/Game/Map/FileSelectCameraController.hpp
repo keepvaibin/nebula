@@ -27,11 +27,11 @@ public:
     void exeNearPoint();
 
 private:
-    /* 0x8C */ TVec3f mNearTarget;
-    /* 0x98 */ TVec3f mPrevNearTarget;
-    /* 0xA4 */ TVec3f mWPoint;
-    /* 0xB0 */ TVec3f mPrevWPoint;
-    /* 0xBC */ f32 mFovy;
-    /* 0xC0 */ f32 mPrevFovy;
-    /* 0xC4 */ TVec3f mUpVec;
+    TVec3f mNearTarget;
+    TVec3f mPrevNearTarget;
+    TVec3f mWPoint;
+    TVec3f mPrevWPoint;
+    f32 mFovy;
+    f32 mPrevFovy;
+    TVec3f mUpVec;
 };

@@ -37,13 +37,13 @@ public:
     void pauseOff();
 
 private:
-    /* 0x8C */ ProloguePictureBook* mPictureBook;
-    /* 0x90 */ PrologueLetter* mLetter;
-    /* 0x94 */ ModelObj* mScenery;
-    /* 0x98 */ ModelObj* mMarioPosDummyModel;
-    /* 0x9C */ CameraTargetMtx* mCameraTarget;
-    /* 0xA0 */ TMtx34f _A0;
-    /* 0xD0 */ bool _D0;
+    ProloguePictureBook* mPictureBook;
+    PrologueLetter* mLetter;
+    ModelObj* mScenery;
+    ModelObj* mMarioPosDummyModel;
+    CameraTargetMtx* mCameraTarget;
+    TMtx34f _A0;
+    bool _D0;
 };
 
 class PrologueHolder : public NameObj {
@@ -56,7 +56,7 @@ public:
     void start();
 
 private:
-    /* 0xC */ PrologueDirector* mDirector;
+    PrologueDirector* mDirector;
 };
 
 namespace MR {

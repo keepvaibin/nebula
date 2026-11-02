@@ -428,10 +428,6 @@ void SysInfoWindow::setTextBoxArgNumber(s32 arg, s32 param2) {
     MR::setTextBoxArgNumberRecursive(this, mTextParentPaneName, arg, param2);
 }
 
-void SysInfoWindow::setTextBoxArgString(const char16_t* pArg, s32 param2) {
-    MR::setTextBoxArgStringRecursive(this, mTextParentPaneName, pArg, param2);
-}
-
 namespace MR {
     SysInfoWindow* createSysInfoWindow() {
         SysInfoWindow* pWindow = new SysInfoWindow(SysInfoWindow::WindowType_Normal, SysInfoWindow::ExecuteType_Normal);

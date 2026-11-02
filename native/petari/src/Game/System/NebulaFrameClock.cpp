@@ -18,9 +18,6 @@ namespace {
     bool sPicture;
 
     // VI_DM_DEFAULT: 5 minutes of NTSC fields.
-    const u32 cTimeToDimming = 18000;
-    bool sDimming;
-    u32 sIdleFrames;
 
     // The Wii's picture: 16:9 at the game's 832 screen units.
     const f64 cWiiAspect = 16.0 / 9.0;
@@ -61,11 +58,6 @@ namespace {
 
     void onFrame() {
         sFrames++;
-        if (!sDimming) {
-            sIdleFrames = 0;
-        } else if (sIdleFrames < cTimeToDimming) {
-            sIdleFrames++;
-        }
         if (sBlackFrames != 0) {
             sBlackFrames--;
             sNextPicture = false;
@@ -106,17 +98,4 @@ namespace NebulaFrameClock {
         return sDisplay;
     }
 
-    bool enableDimming(bool enable) {
-        const bool previous = sDimming;
-        sDimming = enable && NebulaSystemSettings::screenSaver();
-        return previous;
-    }
-
-    u32 framesUntilDimming() {
-        return cTimeToDimming - sIdleFrames;
-    }
-
-    void resetIdle() {
-        sIdleFrames = 0;
-    }
 }  // namespace NebulaFrameClock

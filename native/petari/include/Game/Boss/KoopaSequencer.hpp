@@ -25,11 +25,11 @@ public:
     void startBattleLevel2();
     void startBattleLevel3();
 
-    /* 0x08 */ Koopa* mKoopa;
-    /* 0x0C */ KoopaDemoPowerUp* mPowerUp;
-    /* 0x10 */ KoopaBattleStairsBase* mBattleStairs;
-    /* 0x14 */ KoopaDemoJumpToPlanet* mJumpToPlanet;
-    /* 0x18 */ u32 mLv;
-    /* 0x1C */ u32 mVs;
-    /* 0x20 */ bool mIsAngry;
+    Koopa* mKoopa;
+    KoopaDemoPowerUp* mPowerUp;
+    KoopaBattleStairsBase* mBattleStairs;
+    KoopaDemoJumpToPlanet* mJumpToPlanet;
+    u32 mLv;
+    u32 mVs;
+    bool mIsAngry;
 };

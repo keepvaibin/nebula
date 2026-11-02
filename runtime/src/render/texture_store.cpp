@@ -80,7 +80,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
 
 std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
-        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_GX_STALL_US"), 1000u);
+        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_RENDER_STALL_US"), 1000u);
     return threshold;
 }
 
@@ -1273,7 +1273,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         : std::chrono::steady_clock::time_point{};
 
     // The key includes the chain length and whether it is generated: the game hand-authors lower levels (fog, lava
-    // and water tinting; Dolphin PRs #6118 and #6875), so authored mips must never alias generated chains.
+    // and water tinting; ), so authored mips must never alias generated chains.
     unsigned levels = 1;
     unsigned source_levels = 1;
     bool generated_mips = false;
@@ -1409,7 +1409,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         const std::uint64_t pre_miss_us =
             elapsed_us(get_start, miss_start);
         if (pre_miss_us >= trace_stall_threshold_us()) {
-            std::cerr << "[gx-texture-premiss] addr=0x" << std::hex
+            std::cerr << "[render-texture-premiss] addr=0x" << std::hex
                       << image.key << std::dec
                       << " size=" << total_source_size
                       << " config-us="
@@ -1590,7 +1590,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         const std::uint64_t post_record_us =
             elapsed_us(upload_record_end, emplace_end);
         if (post_record_us >= trace_stall_threshold_us()) {
-            std::cerr << "[gx-texture-postrecord] addr=0x" << std::hex
+            std::cerr << "[render-texture-postrecord] addr=0x" << std::hex
                       << image.key << std::dec
                       << " entry-us="
                       << elapsed_us(entry_build_start, entry_build_end)
@@ -1604,7 +1604,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     }
     if (trace_stalls &&
         total_us >= trace_stall_threshold_us()) {
-        std::cerr << "[gx-texture-miss] addr=0x" << std::hex
+        std::cerr << "[render-texture-miss] addr=0x" << std::hex
                   << image.key << std::dec
                   << " fmt=" << static_cast<unsigned>(image.disc_format)
                   << " size=" << w << 'x' << h

@@ -8,10 +8,10 @@ class LiveActor;
 typedef MR::Vector< MR::AssignableArray< DrawBufferGroup* > > ExecutorList;
 
 struct DrawBufferInitialTable {
-    /* 0x00 */ u32 mDrawBufferType;
-    /* 0x04 */ s32 mCapacity;
-    /* 0x08 */ u32 mLightType;
-    /* 0x0C */ u32 mDrawCameraType;
+    u32 mDrawBufferType;
+    s32 mCapacity;
+    u32 mLightType;
+    u32 mDrawCameraType;
 };
 
 class DrawBufferHolder {
@@ -32,7 +32,6 @@ public:
 
     ExecutorList& getExecuteList(s32 drawBufferType);
     bool isBufferGroupEmpty(s32 drawBufferType) const;
-    DrawBufferGroup* getDrawBufferGroup(s32 drawBufferType);
 
     // debug symbol map functions
     s32 getActiveActorCount(const char*);
@@ -44,9 +43,8 @@ public:
     void offDrawXluAll();
 
     // TODO: see .cpp
-    void dummy(s32);
 
-    /* 0x00 */ MR::AssignableArray< DrawBufferGroup > mBufferGroups;
-    /* 0x08 */ ExecutorList mExecuteLists[3];
-    /* 0x2C */ bool mTableInitialized;
+    MR::AssignableArray< DrawBufferGroup > mBufferGroups;
+    ExecutorList mExecuteLists[3];
+    bool mTableInitialized;
 };

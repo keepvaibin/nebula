@@ -76,10 +76,6 @@ namespace MR {
         pRailGraphIter->selectEdge(next);
     }
 
-    void calcNextEdgeVector(const RailGraphIter* pIter, TVec3f* pEdge) {
-        pEdge->set(pIter->getNextNode()->_0 - pIter->getCurrentNode()->_0);
-    }
-
     bool isSelectedEdge(const RailGraphIter* pRailGraphIter) {
         return pRailGraphIter->isSelectedEdge();
     }

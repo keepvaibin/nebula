@@ -19,7 +19,7 @@ public:
     }
 
 private:
-    /* 0x00 */ LiveActor* mBoss;
+    LiveActor* mBoss;
 };
 
 namespace BossAccess {

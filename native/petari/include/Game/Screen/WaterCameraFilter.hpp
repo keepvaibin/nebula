@@ -21,9 +21,9 @@ public:
 
     inline void initScreenTex();
 
-    /* 0x8C */ f32 mWaterAlpha;
-    /* 0x90 */ f32 mWavePhase;
-    /* 0x94 */ Color8 mWaterColor;
-    /* 0x98 */ JUTTexture* mScreenTex;
-    /* 0x9C */ JUTTexture* mFilterTex;
+    f32 mWaterAlpha;
+    f32 mWavePhase;
+    Color8 mWaterColor;
+    JUTTexture* mScreenTex;
+    JUTTexture* mFilterTex;
 };

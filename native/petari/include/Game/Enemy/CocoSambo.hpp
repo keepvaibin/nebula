@@ -28,7 +28,7 @@ public:
     void exeSwoonEnd();
     void exeBlow();
 
-    /* 0x9C */ TVec3f mFrontVec;
+    TVec3f mFrontVec;
 };
 
 class CocoSambo : public LiveActor {
@@ -74,13 +74,13 @@ public:
     inline bool isNerveDown();
     inline bool isSensorTryToFallHead(HitSensor* pSensor);
 
-    /* 0x8C */ CocoSamboHead* mHead;
-    /* 0x90 */ TVec3f mHitEffectScale;
-    /* 0x9C */ TVec3f mFrontVec;
-    /* 0xA8 */ TVec3f mUpVec;
-    /* 0xB4 */ f32 mPlayerSearchDistance;
-    /* 0xB8 */ AnimScaleParam* mAnimScaleParam;
-    /* 0xBC */ AnimScaleController* mAnimScaleController;
-    /* 0xC0 */ const Nerve* mDpdPointingEndNerve;
-    /* 0xC4 */ LiveActor** mPointingActorArray;
+    CocoSamboHead* mHead;
+    TVec3f mHitEffectScale;
+    TVec3f mFrontVec;
+    TVec3f mUpVec;
+    f32 mPlayerSearchDistance;
+    AnimScaleParam* mAnimScaleParam;
+    AnimScaleController* mAnimScaleController;
+    const Nerve* mDpdPointingEndNerve;
+    LiveActor** mPointingActorArray;
 };

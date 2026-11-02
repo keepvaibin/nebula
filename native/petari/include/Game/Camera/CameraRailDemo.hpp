@@ -17,10 +17,10 @@ public:
     void calcEaseInOut();
     void calcDamp();
 
-    /* 0x4C */ RailRider* mRailRider;
-    /* 0x50 */ s32 mCalcType;
-    /* 0x54 */ s32 mDemoTime;
-    /* 0x58 */ s32 mDemoTimer;
-    /* 0x5C */ f32 mDampRatio;
-    /* 0x60 */ f32 mCoord;
+    RailRider* mRailRider;
+    s32 mCalcType;
+    s32 mDemoTime;
+    s32 mDemoTimer;
+    f32 mDampRatio;
+    f32 mCoord;
 };

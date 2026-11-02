@@ -22,7 +22,7 @@ public:
     void exeDPDSwoon();
     void endDPDSwoon();
 
-    /* 0x8C */ AnimScaleController* mAnimScaleCtrl;
-    /* 0x90 */ WalkerStateBindStarPointer* mBindStarPointer;
-    /* 0x94 */ MapPartsRailMover* mRailMover;
+    AnimScaleController* mAnimScaleCtrl;
+    WalkerStateBindStarPointer* mBindStarPointer;
+    MapPartsRailMover* mRailMover;
 };

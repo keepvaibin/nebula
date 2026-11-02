@@ -76,7 +76,6 @@ namespace MR {
     void startStarPointerModeDemoWithHandPointerFinger(void*);
     void startStarPointerModeDemoMarioDeath(void*);
     void startStarPointerModeMarioLauncher(void*);
-    void startStarPointerModeHomeButton(void*);
     void startStarPointerModeChooseYesNo(void*);
     void startStarPointerModePauseMenu(void*);
     void startStarPointerModeScenarioSelectScene(void*);

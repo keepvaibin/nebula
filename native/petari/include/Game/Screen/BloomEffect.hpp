@@ -16,8 +16,8 @@ public:
     bool isForEachModel() const;
     void initDraw() const;
 
-    /* 0x14 */ u8 _14;
-    /* 0x18 */ f32 _18;
-    /* 0x1C */ f32 _1C;
-    /* 0x20 */ u8 _20;
+    u8 _14;
+    f32 _18;
+    f32 _1C;
+    u8 _20;
 };

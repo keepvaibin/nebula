@@ -27,10 +27,10 @@ public:
     void exeDisp();
 
 private:
-    /* 0x8C */ TYPE mType;
-    /* 0x90 */ bool _90;
-    /* 0x94 */ LiveActor* _94;
-    /* 0x98 */ s32 mDisplayFrame;
+    TYPE mType;
+    bool _90;
+    LiveActor* _94;
+    s32 mDisplayFrame;
 };
 
 namespace InformationObserverFunction {

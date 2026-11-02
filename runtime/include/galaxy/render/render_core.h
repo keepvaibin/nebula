@@ -70,7 +70,7 @@ namespace galaxy::render {
 // range starting at its base level starts at the replacement's (close up, the game magnifies its
 // base level: the replacement shows its own); a game sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
-// by index, as Dolphin does: the bias moves its LOD back to the game's at the console's resolution
+// by index: the bias moves its LOD back to the game's at the console's resolution
 // (scene_target_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
@@ -152,7 +152,7 @@ public:
             producer_scene_sky_up_ = producer_scene_sky_up_known_ ? encode_octahedral(eye) : 0u;
         }
     }
-    // One particle of a JPA stripe at `stream_offset` of the live console stream
+    // One particle of a JPA stripe at `stream_offset` of the live stream
     // (its two strip vertices follow); carried by the next submission.
     struct StripeParticleMark {
         std::size_t offset = 0;
@@ -245,7 +245,7 @@ private:
     void on_scene_copy(const CaptureRequest& params);
     // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
     [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
-    // A light op's words (GXLoadLightObjImm's), into matrix memory.
+    // A light op's words (the state), into matrix memory.
     void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
@@ -324,7 +324,7 @@ private:
         const RenderServices* services = nullptr;
     };
 
-    // Starts one fresh console command-stream session. Every parser, state and tail mirror resets
+    // Starts one fresh command-stream session. Every parser, state and tail mirror resets
     // together. Resetting only some of them can classify a receipt as event-free after shutdown
     // or reinitialize.
     void reset_session_state();
@@ -472,7 +472,7 @@ private:
     [[nodiscard]] RtView scene_depth_view(const ScaledViewport& viewport) const;
     // The scene's occlusion, once, before its first translucent phase (or at its end).
     void apply_scene_ao();
-    // The open scene's candidate key lights: the world-fixed console light 0 of its lit draws, by world
+    // The open scene's candidate key lights: the world-fixed light 0 of its lit draws, by world
     // direction and colour, with the draws using each and the sum of their ambient registers (0-1)
     // over those taking it from the register (traced).
     struct RtWorldKey {
@@ -547,7 +547,7 @@ private:
         // The game camera (world to eye) of the scene.
         Affine34 view{};
         bool view_known = false;
-        // The projection the ray tracer took the scene's view from (console A, B, C, D, E, F without the temporal jitter)
+        // The projection the ray tracer took the scene's view from
         // and its viewport's size in scene target pixels: sub-frames interpolate it (SubframeTime::projection).
         std::array<float, 6> rt_projection{};
         float rt_viewport[2]{};
@@ -641,7 +641,7 @@ private:
         std::int32_t next = -1;           // next entry of the same shadow
         std::uint16_t position_mask = 0;  // PNMTX slots its records read
         std::uint16_t normal_mask = 0;    // normal matrices its records read
-        std::uint8_t light_mask = 0;      // console lights its records evaluate
+        std::uint8_t light_mask = 0;      // lights its records evaluate
         bool orthographic = false;
         std::uint8_t layer = 0;           // of the records that read it
         PaletteMotion motion{};
@@ -849,7 +849,7 @@ private:
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may
     // run a small bounded number of frames ahead, then blocks on queue_space_cv_. This is the
-    // frame-granular analogue of Dolphin's SyncGPU max-distance throttle. fifo_pool_ recycles chunk
+    // a frame-granular throttle. fifo_pool_ recycles chunk
     // buffers, so the steady state does not allocate.
     std::thread render_thread_;
     std::mutex queue_mutex_;
@@ -982,7 +982,7 @@ private:
     // Gives back a group's resident block.
     void release_record_shape(RecordShape& shape) noexcept;
     // The vertex inputs of the draw being made when a native shape record draws (its corners' matrix slots, its
-    // model's arrays), in place of the console vertex description the stream's draws carry.
+    // model's arrays), in place of the vertex description the stream's draws carry.
     struct RecordVertexInputs {
         std::uint32_t matrix_bits = 0;  // bit 0 position matrix per corner, bits 1-8 texture matrices 0-7
         std::uint64_t positions = 0;    // the position array's key
@@ -995,7 +995,7 @@ private:
     const RecordVertexInputs* record_inputs_ = nullptr;
     // draw_record_immediate's vertices and indices before they go to the rings.
     std::vector<std::uint16_t> immediate_indices_;
-    // The vertex inputs the last keys were built with (the console's VCD bits 0-8, or a record's matrix bits and arrays).
+    // The vertex inputs the last keys were built with.
     std::uint64_t vertex_source_ = 0;
     bool stop_render_thread_ = false;
     std::exception_ptr render_thread_error_;
@@ -1013,7 +1013,7 @@ private:
     [[nodiscard]] bool skip_for_present_rate();
     std::int64_t next_rate_present_qpc_ = 0;
 
-    // console texture base registers store physical addresses (MEM1 0x00000000 and
+    // texture base registers store physical addresses (MEM1 0x00000000 and
     // MEM2 0x10000000), while the CPU can write through cached/uncached
     // aliases. Dirty notifications are normalized to this physical window.
     static constexpr std::uint32_t kMem1PhysicalBase = 0x00000000u;
@@ -1026,11 +1026,11 @@ private:
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};
-    // The native material the draws use (null: the console state's), whether its constants are not yet uploaded, and the
+    // The native material the draws use (null: the state's), whether its constants are not yet uploaded, and the
     // texture maps it binds.
     material::Native native_material_storage_{};
     const material::Native* native_material_ = nullptr;
-    std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a console draw's)
+    std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a draw's)
     bool native_constants_dirty_ = false;
     std::uint8_t native_texture_mask_ = 0u;
     std::uint64_t current_ps_hash_{};
@@ -1092,14 +1092,14 @@ private:
     std::uint64_t matrix_blocks_epoch_ = 0;  // the matrix ring's epoch() the blocks were appended in
     bool matrix_blocks_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
-    // the first draw after begin_frame(), even when console register state did not
+    // the first draw after begin_frame(), even when register state did not
     // change. scene target copies can also replace a game-address texture alias
-    // without rewriting its BP texture registers.
+    // without rewriting its texture state.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
     std::uint8_t current_texture_map_mask_ = 0;
-    // sampled_texture_map_mask(draw_state_) reads DrawCounts, the TEV order, indirect-command and IND_REF registers,
-    // all of which set kDirtyTev; invalidated wherever the BP register file resets.
+    // sampled_texture_map_mask(draw_state_) reads DrawCounts, the material order, indirect-command and IND_REF registers,
+    // all of which set kDirtyTev; invalidated wherever the state resets.
     bool current_texture_map_mask_valid_ = false;
 
     struct TextureBindingKey {
@@ -1134,7 +1134,7 @@ private:
     TextureBindingKey current_texture_binding_key_{};
     bool current_texture_binding_key_valid_ = false;
     // Sampled map mask that produced current_texture_binding_key_. A map-mask
-    // change alone must force a new capture even when no texture BP register
+    // change alone must force a new capture even when no texture state
     // moved, so the key stays an exact function of its inputs.
     std::uint8_t current_texture_binding_key_mask_ = 0;
 
@@ -1279,10 +1279,10 @@ private:
     // GALAXY_GX_FRAME_TIMING_SAMPLE.
     bool frame_time_detail_ = false;
     bool frame_time_sample_ = false;
-    // render_start of the last emitted [gx-frame-timing] line, for frame-interval-us.
+    // render_start of the last emitted [render-frame-timing] line, for frame-interval-us.
     std::chrono::steady_clock::time_point last_frame_timing_emit_{};
     bool last_frame_timing_emit_valid_ = false;
-    // One-time scene target seed clear; console clears only through the copy command's clear bit (on_scene_copy).
+    // One-time scene target seed clear; clears only through the copy command's clear bit (on_scene_copy).
     bool scene_seeded_ = false;
 
     // The last display copy came from the output scene target and nothing has drawn or cleared since: an scene target-to-texture

@@ -192,11 +192,11 @@ void KirairaChain::updatePoints() {
 
 void KirairaChain::control() {
     if (mAccelTimer <= 0) {
-        mAccelPointIdx = MR::getRandom(0L, mPointCount - 1);
+        mAccelPointIdx = MR::getRandom(0, mPointCount - 1);
         if (MR::isExistRail(mHost)) {
-            mAccelTimer = MR::getRandom(3L, 10L);
+            mAccelTimer = MR::getRandom(3, 10);
         } else {
-            mAccelTimer = MR::getRandom(5L, 10L);
+            mAccelTimer = MR::getRandom(5, 10);
         }
 
         mAccel.set< f32 >(MR::getRandom(-0.3f, 0.3f), MR::getRandom(-0.3f, 0.3f), MR::getRandom(-0.3f, 0.3f));

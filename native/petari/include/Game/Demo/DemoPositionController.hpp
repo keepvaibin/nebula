@@ -14,5 +14,5 @@ public:
     void startDemo(const char*);
     void endDemo(const char*);
 
-    /* 0x8C */ ActorCameraInfo* pCameraInfo;
+    ActorCameraInfo* pCameraInfo;
 };

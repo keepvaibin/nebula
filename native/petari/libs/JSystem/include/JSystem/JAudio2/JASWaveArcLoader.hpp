@@ -36,7 +36,6 @@ struct JASWaveArc : JASDisposer {
     bool sendLoadCmd();
     static const u32 cAllocSize = 32;
     bool load(JASHeap*); /* overwritten in OverwriteJAudio */
-    bool loadTail(JASHeap*);
     bool erase();
     void setEntryNum(s32);
     void setFileName(char const*); /* overwritten in OverwriteJAudio */
@@ -64,19 +63,19 @@ struct JASWaveArc : JASDisposer {
 
     struct loadCallbackParams {
         // not official struct name
-        /* 0x0 */ JASWaveArc* mWavArc;
-        /* 0x4 */ s32 mEntryNum;
-        /* 0xC */ u32 _C;
+        JASWaveArc* mWavArc;
+        s32 mEntryNum;
+        u32 _C;
     };
 
-    /* 0x04 */ mutable JASHeap mHeap;  // no bytes to speak of (cAllocSize): an archive's place in its section, which goes with it
-    /* 0x48 */ u32 _48;
-    /* 0x4C */ NebulaAtomic< s32 > mStatus;
-    /* 0x50 */ int mEntryNum;
-    /* 0x54 */ u32 mFileLength;
+    mutable JASHeap mHeap;  // no bytes to speak of (cAllocSize): an archive's place in its section, which goes with it
+    u32 _48;
+    NebulaAtomic< s32 > mStatus;
+    int mEntryNum;
+    u32 mFileLength;
     const u8* mData;
-    /* 0x58 */ u16 _58;
-    /* 0x5C */ GameMutex mMutex;
+    u16 _58;
+    GameMutex mMutex;
 
     // Until an archive has finished loading since the last wait.
     static void waitLoadDone();

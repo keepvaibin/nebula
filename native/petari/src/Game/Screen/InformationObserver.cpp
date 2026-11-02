@@ -12,10 +12,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 struct InformationObserverAttribute {
-    /* 0x00 */ const char* mMessageId;
-    /* 0x04 */ bool _4;
-    /* 0x08 */ const char* mFirstMorphBgmName;
-    /* 0x0C */ const char* mBgmName;
+    const char* mMessageId;
+    bool _4;
+    const char* mFirstMorphBgmName;
+    const char* mBgmName;
 };
 
 static InformationObserverAttribute sAttr[] = {

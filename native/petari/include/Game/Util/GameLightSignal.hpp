@@ -10,7 +10,7 @@ struct ActorLightInfo;
 struct PointLightInfo;
 
 // Nebula: the game's lights for the renderer's ray tracer (__NebulaGameLight, NEBULA_LIGHT_* in nebula_game_api.h),
-// from the objects that own them rather than from the console light registers.
+// from the objects that own them.
 namespace GameLightSignal {
     // LightDirector's construction: a new scene, before its actors are made.
     void sceneStart();

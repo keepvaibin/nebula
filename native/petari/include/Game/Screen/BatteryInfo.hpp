@@ -58,13 +58,13 @@ public:
 
 private:
     /// @brief The pointer to the owning actor instance.
-    /* 0x08 */ LayoutActor* mHost;
+    LayoutActor* mHost;
 
     /// @brief The pointer to the null-terminated name of the pane.
-    /* 0x0C */ const char* mPaneName;
+    const char* mPaneName;
 
     /// @brief The player.
-    /* 0x10 */ int mChannel;
+    int mChannel;
 };
 
 /// @brief The actor for the popup warning the player about their controller's battery level.
@@ -78,6 +78,6 @@ public:
     virtual void control();
 
 private:
-    /* 0x20 */ BatteryInfo* mInfo1P;
-    /* 0x24 */ BatteryInfo* mInfo2P;
+    BatteryInfo* mInfo1P;
+    BatteryInfo* mInfo2P;
 };

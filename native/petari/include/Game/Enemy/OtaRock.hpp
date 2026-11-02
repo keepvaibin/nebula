@@ -49,13 +49,13 @@ public:
     void exeShow();
 
 private:
-    /* 0x8C */ bool mNoThrowCocoNut;
-    /* 0x90 */ CocoNutBall* mCocoNutArray;
-    /* 0x94 */ FireBall* mFireBallArray;
-    /* 0x98 */ FixedPosition* mFixedPosition;
-    /* 0x9C */ s32 mThrowCocoNutCounter;
-    /* 0xA0 */ u32 mWaitFrame;
-    /* 0xA4 */ TPos3f _A4;
-    /* 0xD4 */ TVec3f _D4;
-    /* 0xE0 */ AnimScaleController* mAnimScaleController;
+    bool mNoThrowCocoNut;
+    CocoNutBall* mCocoNutArray;
+    FireBall* mFireBallArray;
+    FixedPosition* mFixedPosition;
+    s32 mThrowCocoNutCounter;
+    u32 mWaitFrame;
+    TPos3f _A4;
+    TVec3f _D4;
+    AnimScaleController* mAnimScaleController;
 };

@@ -18,16 +18,16 @@ public:
         return mSurfacePos;
     }
 
-    /* 0x00 */ f32 mCamWaterDepth;
-    /* 0x04 */ f32 _4;
-    /* 0x08 */ TVec3f mSurfacePos;
-    /* 0x14 */ TVec3f mSurfaceNormal;
-    /* 0x20 */ f32 mWaveHeight;
-    /* 0x24 */ TVec3f mStreamVec;
-    /* 0x30 */ f32 mEdgeDistance;
-    /* 0x34 */ TVec3f mEdgePos;
-    /* 0x40 */ const WaterArea* mWaterArea;
-    /* 0x44 */ const OceanBowl* mOceanBowl;
-    /* 0x48 */ const OceanRing* mOceanRing;
-    /* 0x4C */ const OceanSphere* mOceanSphere;
+    f32 mCamWaterDepth;
+    f32 _4;
+    TVec3f mSurfacePos;
+    TVec3f mSurfaceNormal;
+    f32 mWaveHeight;
+    TVec3f mStreamVec;
+    f32 mEdgeDistance;
+    TVec3f mEdgePos;
+    const WaterArea* mWaterArea;
+    const OceanBowl* mOceanBowl;
+    const OceanRing* mOceanRing;
+    const OceanSphere* mOceanSphere;
 };

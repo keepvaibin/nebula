@@ -70,18 +70,18 @@ void PlayerInput::disconnected() {
 }
 
 void PlayerInput::connectCallback(s32 chan, s32 reason) {
-    PlayerInput* pGamePad = MR::getPlayerInput(chan);
+    PlayerInput* pInput = MR::getPlayerInput(chan);
 
-    if (pGamePad == nullptr) {
+    if (pInput == nullptr) {
         return;
     }
 
     switch (reason) {
     case INPUT_CONNECTED:
-        pGamePad->connected();
+        pInput->connected();
         break;
     case INPUT_DISCONNECTED:
-        pGamePad->disconnected();
+        pInput->disconnected();
         break;
     default:
         break;
@@ -89,9 +89,9 @@ void PlayerInput::connectCallback(s32 chan, s32 reason) {
 }
 
 void PlayerInput::extensionCallback(s32 chan, s32 result) {
-    PlayerInput* pGamePad = MR::getPlayerInput(chan);
+    PlayerInput* pInput = MR::getPlayerInput(chan);
 
-    if (pGamePad == nullptr) {
+    if (pInput == nullptr) {
         return;
     }
 
@@ -99,10 +99,10 @@ void PlayerInput::extensionCallback(s32 chan, s32 result) {
 
     switch (result) {
     case INPUT_HAND_MAIN:
-        pGamePad->mHasMoveStick = false;
+        pInput->mHasMoveStick = false;
         break;
     case INPUT_HAND_SUB:
-        pGamePad->mHasMoveStick = true;
+        pInput->mHasMoveStick = true;
         break;
     case INPUT_HAND_UNKNOWN:
         break;

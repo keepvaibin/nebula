@@ -164,10 +164,6 @@ namespace MR {
         return ::getCaptureScreenDirector()->getResTIMG();
     }
 
-    u8* getScreenTexImage() {
-        return ::getCaptureScreenDirector()->getTexImage();
-    }
-
     void closeWipeCircle(s32 frame) {
         SceneWipeHolderFunction::closeWipe(::sWipeCircle, frame);
     }

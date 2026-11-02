@@ -125,7 +125,7 @@ void WaterCameraFilter::control() {
 
         f32 depth = MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 0.0f, 3000.0f);
         Color8 color(MR::lerp(::sDefaultColor, ::sWaterColor, depth / 3000.0f));
-        mWaterColor.mGXColor = color.mGXColor;
+        mWaterColor.mRGBA = color.mRGBA;
     }
 }
 

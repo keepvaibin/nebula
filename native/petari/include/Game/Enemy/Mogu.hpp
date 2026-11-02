@@ -38,12 +38,12 @@ public:
     bool isNearPlayerHipDrop();
     bool tryPunchHitted(HitSensor*, HitSensor*, bool);
 
-    /* 0x8C */ AnimScaleController* mAnimScaleController;
+    AnimScaleController* mAnimScaleController;
     FixedPosition* _90;
-    /* 0x94 */ MoguStone* mStone;
-    /* 0x98 */ ModelObj* mHole;
-    /* 0x9C */ TVec3f mSight;
+    MoguStone* mStone;
+    ModelObj* mHole;
+    TVec3f mSight;
     TVec3f _A8;
     bool _B4;
-    /* 0xB5 */ bool mIsCannonFleet;
+    bool mIsCannonFleet;
 };

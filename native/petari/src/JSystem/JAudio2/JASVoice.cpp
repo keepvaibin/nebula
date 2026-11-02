@@ -119,10 +119,6 @@ void JASVoice::forceStop() {
     forced_stop = 1;
 }
 
-bool JASVoice::isActive() const {
-    return active != 0;
-}
-
 bool JASVoice::isFinish() const {
     return finished != 0;
 }

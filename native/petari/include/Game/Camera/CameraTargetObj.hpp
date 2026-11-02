@@ -108,7 +108,7 @@ public:
     virtual void resetStatus() {
     }
 
-    /* 0xC */ bool mCameraWall;
+    bool mCameraWall;
 };
 
 class CameraTargetActor : public CameraTargetObj {
@@ -132,11 +132,11 @@ public:
     virtual CubeCameraArea* getCubeCameraArea() const;
     virtual Triangle* getGroundTriangle() const;
 
-    /* 0x10 */ const LiveActor* mActor;
-    /* 0x14 */ TVec3f mUp;
-    /* 0x20 */ TVec3f mFront;
-    /* 0x2C */ TVec3f mSide;
-    /* 0x38 */ CubeCameraArea* mCameraArea;
+    const LiveActor* mActor;
+    TVec3f mUp;
+    TVec3f mFront;
+    TVec3f mSide;
+    CubeCameraArea* mCameraArea;
 };
 
 class CameraTargetPlayer : public CameraTargetObj {
@@ -169,16 +169,16 @@ public:
     virtual bool isDebugMode() const;
     virtual TPos3f* getMapBaseMtx() const;
 
-    /* 0x10 */ const MarioActor* mActor;
-    /* 0x14 */ TVec3f mSide;
-    /* 0x20 */ TVec3f mUp;
-    /* 0x2C */ TVec3f mFront;
-    /* 0x38 */ TVec3f mGravity;
-    /* 0x44 */ TVec3f mGroundPos;
-    /* 0x50 */ CubeCameraArea* mCameraArea;
-    /* 0x54 */ Triangle* mGroundTriangle;
-    /* 0x58 */ u16 mPlayerMovementTimer;
-    /* 0x5A */ bool mIsPlayerMoving;
+    const MarioActor* mActor;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
+    TVec3f mGravity;
+    TVec3f mGroundPos;
+    CubeCameraArea* mCameraArea;
+    Triangle* mGroundTriangle;
+    u16 mPlayerMovementTimer;
+    bool mIsPlayerMoving;
 };
 
 class CameraTargetDemoActor : public LiveActor {
@@ -192,5 +192,5 @@ public:
 
     void setTargetMtx(MtxPtr);
 
-    /* 0x8C */ TPos3f mMtx;
+    TPos3f mMtx;
 };

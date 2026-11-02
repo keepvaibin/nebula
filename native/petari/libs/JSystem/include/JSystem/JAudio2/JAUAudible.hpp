@@ -52,7 +52,7 @@ struct JAUAudibleParam {
     }
 
     u32 getDoppler() const {
-        // The top nibble of mAudibleSw (the console read the word's first halfword).
+        // The top nibble of mAudibleSw.
         return (u32)((mAudibleSw >> 12) & 0xf);
         // return raw >> 28 & 0xF;
     }
@@ -78,22 +78,22 @@ struct JAUAudibleParam {
             u16 _f1;
             u16 mAudibleSw;
         };
-        /* 0x0 */ struct {
-            /* 0x0 */ u8 b0_0 : 4;
-            /* 0x0 */ u8 b0_4 : 1;
-            /* 0x0 */ u8 b0_5 : 1;
-            /* 0x0 */ u8 b0_6 : 1;
-            /* 0x0 */ u8 b0_7 : 1;
-            /* 0x1 */ u8 b1_0 : 1;
-            /* 0x1 */ u8 b1_1 : 1;
-            /* 0x1 */ u8 mVolDistSetting : 2;
-            /* 0x1 */ u8 b1_4_7 : 4;
-            /* 0x2 */ u8 b2;
-            /* 0x3 */ u8 b3;
+        struct {
+            u8 b0_0 : 4;
+            u8 b0_4 : 1;
+            u8 b0_5 : 1;
+            u8 b0_6 : 1;
+            u8 b0_7 : 1;
+            u8 b1_0 : 1;
+            u8 b1_1 : 1;
+            u8 mVolDistSetting : 2;
+            u8 b1_4_7 : 4;
+            u8 b2;
+            u8 b3;
         }
         consoleBits
         ;
-        /* 0x0 */ u32 raw;
+        u32 raw;
     };
 };
 

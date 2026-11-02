@@ -24,10 +24,10 @@ public:
     void startSecondDemo();
     void startThirdDemo();
 
-    /* 0x8C */ GreenCaterpillarBig* mCaterpillar;
-    /* 0x90 */ PartsModel** mWormEatenHill;
-    /* 0x94 */ CollisionParts* mSecondHill;
-    /* 0x98 */ CollisionParts* mThirdHill;
-    /* 0x9C */ CollisionParts* mFourthHill;
-    /* 0xA0 */ LodCtrl* mLodCtrl;
+    GreenCaterpillarBig* mCaterpillar;
+    PartsModel** mWormEatenHill;
+    CollisionParts* mSecondHill;
+    CollisionParts* mThirdHill;
+    CollisionParts* mFourthHill;
+    LodCtrl* mLodCtrl;
 };

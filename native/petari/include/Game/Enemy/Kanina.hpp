@@ -82,16 +82,16 @@ public:
         return mType == KaninaType_Red ? fRed : fBlue;
     }
 
-    /* 0x8C */ JointRumbler* mJointRumbler;
-    /* 0x90 */ BenefitItemObj* mKinokoOneUp;
-    /* 0x94 */ AnimationRandomPlayer* mAnimationRandomPlayer;
-    /* 0x98 */ TVec3f _98;
-    /* 0xA4 */ TQuat4f _A4;
-    /* 0xB4 */ u32 _B4;
-    /* 0xB8 */ u32 _B8;
-    /* 0xBC */ f32 _BC;
-    /* 0xC0 */ TVec3f _C0;
-    /* 0xCC */ KaninaType mType;
-    /* 0xD0 */ TVec3f _D0;
-    /* 0xDC */ s32 _DC;
+    JointRumbler* mJointRumbler;
+    BenefitItemObj* mKinokoOneUp;
+    AnimationRandomPlayer* mAnimationRandomPlayer;
+    TVec3f _98;
+    TQuat4f _A4;
+    u32 _B4;
+    u32 _B8;
+    f32 _BC;
+    TVec3f _C0;
+    KaninaType mType;
+    TVec3f _D0;
+    s32 _DC;
 };

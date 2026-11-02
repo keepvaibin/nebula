@@ -25,5 +25,5 @@ public:
     void addValue(int, int);
 
 private:
-    /* 0x8 */ u16* mValueArray;
+    u16* mValueArray;
 };

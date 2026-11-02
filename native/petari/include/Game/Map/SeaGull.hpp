@@ -18,20 +18,20 @@ public:
     void exeHoverRight();
     void updateHover();
 
-    /* 0x8C */ SeaGullGroup* mSeaGullGroup;
-    /* 0x90 */ s32 mPointIndex;
-    /* 0x94 */ bool mIsReverse;
-    /* 0x98 */ s32 mTargetUpdateTimer;
-    /* 0x9C */ TVec3f* mTargetPosition;
-    /* 0xA0 */ TVec3f mUp;
-    /* 0xAC */ TVec3f mFront;
-    /* 0xB8 */ TVec3f mBankedUp;
-    /* 0xC4 */ TVec3f mSide;
-    /* 0xD0 */ s32 mHoverTimer;
-    /* 0xD4 */ f32 mBankAngle;
-    /* 0xD8 */ s32 mGlideTimer;
-    /* 0xDC */ s32 mLiftTimer;
-    /* 0xE0 */ s32 mChirpTimer;
+    SeaGullGroup* mSeaGullGroup;
+    s32 mPointIndex;
+    bool mIsReverse;
+    s32 mTargetUpdateTimer;
+    TVec3f* mTargetPosition;
+    TVec3f mUp;
+    TVec3f mFront;
+    TVec3f mBankedUp;
+    TVec3f mSide;
+    s32 mHoverTimer;
+    f32 mBankAngle;
+    s32 mGlideTimer;
+    s32 mLiftTimer;
+    s32 mChirpTimer;
 };
 
 class SeaGullGroup : public LiveActor {
@@ -43,6 +43,6 @@ public:
 
     TVec3f* updatePosInfo(s32* pPointIndex, bool isReverse) const;
 
-    /* 0x8C */ s32 mPointCount;
-    /* 0x90 */ TVec3f* mPoints;
+    s32 mPointCount;
+    TVec3f* mPoints;
 };

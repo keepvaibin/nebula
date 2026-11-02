@@ -32,11 +32,11 @@ public:
     void setBgmToRhythmDominant(s32);
     void stopRhythmProcess(s32);
 
-    /* 0x000 */ AudBgm* mBgm[2];
-    /* 0x008 */ u32 mNextBGM[2];
-    /* 0x010 */ u32 mCurrentBGM[2];
-    /* 0x018 */ u32 mLastBGM[2];
-    /* 0x020 */ AudBgmKeeper mKeeper;
-    /* 0x7DC */ AudBgmVolumeController mVolumeController[2];
-    /* 0x8FC */ bool _8FC;
+    AudBgm* mBgm[2];
+    u32 mNextBGM[2];
+    u32 mCurrentBGM[2];
+    u32 mLastBGM[2];
+    AudBgmKeeper mKeeper;
+    AudBgmVolumeController mVolumeController[2];
+    bool _8FC;
 };

@@ -15,9 +15,9 @@ public:
     bool isSameSwitch(const StageSwitchCtrl*) const;
     void addSwitchListener(SwitchEventListener*, u32);
 
-    /* 0x0C */ u32 mFlags;
-    /* 0x10 */ const StageSwitchCtrl* mSwitchCtrl;
-    /* 0x14 */ SwitchEventListener* mSwitchListenerA;
-    /* 0x18 */ SwitchEventListener* mSwitchListenerB;
-    /* 0x1C */ SwitchEventListener* mSwitchListenerAppear;
+    u32 mFlags;
+    const StageSwitchCtrl* mSwitchCtrl;
+    SwitchEventListener* mSwitchListenerA;
+    SwitchEventListener* mSwitchListenerB;
+    SwitchEventListener* mSwitchListenerAppear;
 };

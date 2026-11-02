@@ -17,9 +17,9 @@ namespace {
 /// @brief A namespace for creating `NameObj` instances.
 namespace NameObjFactory {
     struct Name2CreateFunc {
-        /* 0x0 */ const char* mName;
-        /* 0x4 */ CreatorFuncPtr mCreateFunc;
-        /* 0x8 */ const char* mArchiveName;
+        const char* mName;
+        CreatorFuncPtr mCreateFunc;
+        const char* mArchiveName;
     };
 
     struct Name2Archive {
@@ -28,8 +28,8 @@ namespace NameObjFactory {
     };
 
     struct Name2MakeArchiveListFunc {
-        /* 0x0 */ const char* mName;
-        /* 0x4 */ ArchiveFuncPtr mArchiveFunc;
+        const char* mName;
+        ArchiveFuncPtr mArchiveFunc;
     };
 
     CreatorFuncPtr getCreator(const char*);

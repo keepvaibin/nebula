@@ -34,21 +34,21 @@ public:
 
     bool isNrvMove();
 
-    /* 0x08C */ s32 mWaitTime;
-    /* 0x090 */ f32 mMoveSpeed;
-    /* 0x094 */ f32 mMoveRailCoord;
-    /* 0x098 */ f32 mMoveRailEndOffset;
-    /* 0x09C */ TVec3f mRailStartDir;
-    /* 0x0A8 */ TVec3f mRailEndDir;
-    /* 0x0B4 */ TVec3f mRailStartPos;
-    /* 0x0C0 */ TVec3f mRailEndPos;
-    /* 0x0CC */ TPos3f mEffectStartMtx;
-    /* 0x0FC */ TPos3f mEffectEndMtx;
-    /* 0x12C */ TVec3f _12C;
-    /* 0x138 */ PartsModel* mBloomModel;
-    /* 0x13C */ TPos3f mBloomModelMtx;
-    /* 0x16C */ TQuat4f _16C;
-    /* 0x17C */ TVec3f mRailDir;
-    /* 0x188 */ bool mEmitDropEffect;
-    /* 0x18C */ TPos3f _18C;
+    s32 mWaitTime;
+    f32 mMoveSpeed;
+    f32 mMoveRailCoord;
+    f32 mMoveRailEndOffset;
+    TVec3f mRailStartDir;
+    TVec3f mRailEndDir;
+    TVec3f mRailStartPos;
+    TVec3f mRailEndPos;
+    TPos3f mEffectStartMtx;
+    TPos3f mEffectEndMtx;
+    TVec3f _12C;
+    PartsModel* mBloomModel;
+    TPos3f mBloomModelMtx;
+    TQuat4f _16C;
+    TVec3f mRailDir;
+    bool mEmitDropEffect;
+    TPos3f _18C;
 };

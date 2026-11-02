@@ -66,7 +66,6 @@ namespace MR {
     int findPosNrmMtxIndexFromShape(J3DShape*, u16);
     void copyJointAnimation(J3DModel*, J3DModel*);
     void copyJointAnimation(LiveActor*, const LiveActor*);
-    void syncJointAnimation(LiveActor*, const LiveActor*);
     void syncMaterialAnimation(J3DModel*, J3DModel*);
     void syncMaterialAnimation(LiveActor*, const LiveActor*);
     void getLightNum(J3DMaterial*, s32*, s32*, s32*, s32*);
@@ -80,5 +79,4 @@ namespace MR {
     bool isExistSubModel(const char*, const char*);
     J3DModel* newJ3DModel(const ResourceHolder*, const char*, J3DMdlFlag);
     J3DModelData* getJ3DModelData(const char*);
-    bool isUseFur(const J3DModelData*);
 };  // namespace MR

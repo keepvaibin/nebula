@@ -806,14 +806,6 @@ namespace MR {
         GameDataFunction::setGameEventValue("MessageAlreadyRead", value | mask);
     }
 
-    void offMsgLedPattern() {
-        GameDataFunction::setGameEventValue("MsgLedPattern", 0);
-    }
-
-    bool isMsgLedPattern() {
-        return static_cast< u16 >(GameDataFunction::getGameEventValue("MsgLedPattern")) != 0;
-    }
-
     void explainBeeMarioIfAtFirst() {
         if (!GameDataFunction::isOnGameEventFlag("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */)) {
             InformationObserverFunction::explainBee();
@@ -1039,7 +1031,4 @@ namespace MR {
         return (mask & value) != 0;
     }
 
-    void onMsgLedPattern() {
-        GameDataFunction::setGameEventValue("MsgLedPattern", 1);
-    }
 };  // namespace MR

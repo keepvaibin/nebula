@@ -40,13 +40,13 @@ public:
 
     inline bool isPlayerNotNearKinopio();
 
-    /* 0x15C */ s32 mObjArg0;
-    /* 0x160 */ s32 mBehavior;
-    /* 0x164 */ s32 mAppearBehavior;
-    /* 0x168 */ s32 mGoodsIndex;
-    /* 0x16C */ TQuat4f _16C;
-    /* 0x17C */ MapObjConnector* _17C;
-    /* 0x180 */ TakeOutStar* mTakeOutStar;
-    /* 0x184 */ bool mIsSpawnPowerStarMode;
-    /* 0x185 */ bool _185;
+    s32 mObjArg0;
+    s32 mBehavior;
+    s32 mAppearBehavior;
+    s32 mGoodsIndex;
+    TQuat4f _16C;
+    MapObjConnector* _17C;
+    TakeOutStar* mTakeOutStar;
+    bool mIsSpawnPowerStarMode;
+    bool _185;
 };

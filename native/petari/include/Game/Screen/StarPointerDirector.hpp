@@ -16,9 +16,9 @@ public:
 
     static const u32 cReadbackChannel = 1;
 
-    /* 0x08 */ DpdInfo** mInfos;
-    /* 0x0C */ f32 mProjectionParameters[7];
-    /* 0x28 */ f32 mViewportParameters[6];
+    DpdInfo** mInfos;
+    f32 mProjectionParameters[7];
+    f32 mViewportParameters[6];
 };
 
 class StarPointerTransformHolder {
@@ -31,10 +31,10 @@ public:
         return mFovy;
     }
 
-    /* 0x00 */ TPos3f mViewMtx;
-    /* 0x30 */ TProj3f mProjMtx;
-    /* 0x70 */ f32 mFovy;
-    /* 0x74 */ f32 mFocalLength;
+    TPos3f mViewMtx;
+    TProj3f mProjMtx;
+    f32 mFovy;
+    f32 mFocalLength;
 };
 
 class StarPointerDirector {
@@ -67,24 +67,22 @@ public:
         return mIsAllowP1StarPieceShot || mIsAllowP2StarPieceShot;
     }
 
-    /* 0x00 */ bool mIsUpdateTransHolder;
-    /* 0x01 */ bool mIsAllowP1StarPieceShot;
-    /* 0x02 */ bool mIsAllowP2StarPieceShot;
-    /* 0x03 */ bool mIsOSPointerMode;
-    /* 0x04 */ StarPointerController* mControllers;
-    /* 0x08 */ StarPointerLayout* mStarPointerLayouts;
-    /* 0x0C */ StarPointerTransformHolder* mTransHolder;
-    /* 0x10 */ StarPointerPeekZ* mPeekZ;
-    /* 0x14 */ StarPointerGuidance* mGuidance;
-    /* 0x18 */ s32 _18;
-    /* 0x1C */ TVec3f mNozzleAimPos;
+    bool mIsUpdateTransHolder;
+    bool mIsAllowP1StarPieceShot;
+    bool mIsAllowP2StarPieceShot;
+    bool mIsOSPointerMode;
+    StarPointerController* mControllers;
+    StarPointerLayout* mStarPointerLayouts;
+    StarPointerTransformHolder* mTransHolder;
+    StarPointerPeekZ* mPeekZ;
+    StarPointerGuidance* mGuidance;
+    s32 _18;
+    TVec3f mNozzleAimPos;
 };
 
 namespace StarPointerFunction {
     bool forceOutsideScreenEdge(TVec2f*, const TVec2f&, const TVec2f&, f32, f32);
     bool isInScreen(const TVec2f&, f32, f32);
-    bool isOnScreenEdge(const TVec2f&, f32, f32);
-    bool isOnScreenEdge(s32);
     bool forceInsideScreenEdge(TVec2f*);
     StarPointerDirector* getStarPointerDirector();
     s32 getNumStarPointer();

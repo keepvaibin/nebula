@@ -73,11 +73,6 @@ void CameraContext::setNearZ(f32 near) {
     updateProjectionMtx();
 }
 
-void CameraContext::setFarZ(f32 far) {
-    mFarZ = far;
-    updateProjectionMtx();
-}
-
 void CameraContext::setFovy(f32 fovy) {
     mFovy = fovy;
     updateProjectionMtx();

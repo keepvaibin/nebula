@@ -708,22 +708,6 @@ void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASVoice* dspCh
     }
 }
 
-s32 JASTrack::getChannelCount() const {
-    GameAudioExclusion lock;
-    s32 count = 0;
-    for (s32 i = 0; i < mChannelMgrCount; i++) {
-        if (mChannelMgrs[i]) {
-            for (s32 j = 0; j < 8; j++) {
-                if (mChannelMgrs[i]->mChannels[j]) {
-                    count++;
-                }
-            }
-        }
-    }
-
-    return count;
-}
-
 JASTrack* JASTrack::getRootTrack() {
     JASTrack *next, *parent = this;
     for (; next = parent->mParent; parent = next)

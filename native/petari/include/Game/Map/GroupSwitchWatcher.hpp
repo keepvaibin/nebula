@@ -11,8 +11,8 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void control();
 
-    /* 0x8C */ StageSwitchCtrl* mSwitchCtrl;
-    /* 0x90 */ s32 mNumSwitches;
-    /* 0x94 */ s32 mLogicType;
-    /* 0x98 */ s32 mActionType;
+    StageSwitchCtrl* mSwitchCtrl;
+    s32 mNumSwitches;
+    s32 mLogicType;
+    s32 mActionType;
 };

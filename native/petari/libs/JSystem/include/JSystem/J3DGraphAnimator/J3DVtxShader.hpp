@@ -16,5 +16,5 @@ public:
     virtual ~J3DVtxShader() {
     }
 
-    /* 0x04 */ u32 _4;
+    u32 _4;
 };

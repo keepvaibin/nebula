@@ -30,14 +30,14 @@ public:
     void initNerve(const Nerve*);
     s32 getNerveStep() const;
 
-    /* 0x0C */ TVec3f mTranslation;
-    /* 0x18 */ TVec3f mRotation;
-    /* 0x24 */ TVec3f mScale;
-    /* 0x30 */ bool _30;
-    /* 0x34 */ ModelManager* mModelManager;
-    /* 0x38 */ EffectSystem* mEffectSystem;
-    /* 0x3C */ MultiSceneEffectKeeper* mEffectKeeper;
-    /* 0x40 */ Spine* mSpine;
+    TVec3f mTranslation;
+    TVec3f mRotation;
+    TVec3f mScale;
+    bool _30;
+    ModelManager* mModelManager;
+    EffectSystem* mEffectSystem;
+    MultiSceneEffectKeeper* mEffectKeeper;
+    Spine* mSpine;
 };
 
 namespace MultiScene {

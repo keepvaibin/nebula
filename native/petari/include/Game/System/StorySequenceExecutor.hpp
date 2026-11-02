@@ -8,18 +8,18 @@ class NameObj;
 
 class DemoFortressDiscoverCheckList {
 public:
-    /* 0x00 */ const char* mStageName;
-    /* 0x04 */ const char* mStoryEventName;
-    /* 0x08 */ bool _8;
+    const char* mStageName;
+    const char* mStoryEventName;
+    bool _8;
 };
 
 class StorySequenceExecutorType {
 public:
     class DemoSequenceInfo {
     public:
-        /* 0x00 */ u16 _0;
-        /* 0x02 */ u16 _2;
-        /* 0x04 */ const char* _4;
+        u16 _0;
+        u16 _2;
+        const char* _4;
     };
 };
 
@@ -72,12 +72,12 @@ public:
     s32 calcAproposScenarioNoOnAstroGalaxy() const;
     s32 calcAproposScenarioNoOnAstroDome() const;
 
-    /* 0x08 */ const Nerve* mNextNerve;
-    /* 0x0C */ NameObj* mDemoObj;
-    /* 0x10 */ NameObj* mSaveObj;
-    /* 0x14 */ char mStageName[48];
-    /* 0x44 */ s32 mScenarioNo;
-    /* 0x48 */ MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > _48;
-    /* 0x6C */ MR::Vector< MR::FixedArray< StorySequenceExecutorType::DemoSequenceInfo, 8 > > _6C;
-    /* 0xB0 */ bool _B0;
+    const Nerve* mNextNerve;
+    NameObj* mDemoObj;
+    NameObj* mSaveObj;
+    char mStageName[48];
+    s32 mScenarioNo;
+    MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > > _48;
+    MR::Vector< MR::FixedArray< StorySequenceExecutorType::DemoSequenceInfo, 8 > > _6C;
+    bool _B0;
 };

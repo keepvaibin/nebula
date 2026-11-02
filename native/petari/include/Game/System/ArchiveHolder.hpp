@@ -12,9 +12,9 @@ public:
     /// @brief Destroys the `ArchiveHolderArchiveEntry`.
     ~ArchiveHolderArchiveEntry();
 
-    /* 0x0 */ AssetFolder* mArchive;
-    /* 0x4 */ NebulaArena* mHeap;
-    /* 0x8 */ char* mArchiveName;
+    AssetFolder* mArchive;
+    NebulaArena* mHeap;
+    char* mArchiveName;
 };
 
 class ArchiveHolder {
@@ -49,6 +49,6 @@ public:
     /// @return The pointer to the found entry, or `nullptr` if not found.
     ArchiveHolderArchiveEntry* findEntry(const char*) const;
 
-    /* 0x0 */ MR::Vector< MR::AssignableArray< ArchiveHolderArchiveEntry* > > mEntries;
-    /* 0xC */ mutable GameMutex mMutex;
+    MR::Vector< MR::AssignableArray< ArchiveHolderArchiveEntry* > > mEntries;
+    mutable GameMutex mMutex;
 };

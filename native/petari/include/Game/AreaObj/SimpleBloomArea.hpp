@@ -5,10 +5,10 @@
 class SimpleBloomArea : public ImageEffectArea {
 public:
     enum EMaskFilterColor {
-        /* 0x00 */ MASK_FILTER_ALL,
-        /* 0x01 */ MASK_FILTER_RED,
-        /* 0x02 */ MASK_FILTER_GREEN,
-        /* 0x03 */ MASK_FILTER_BLUE,
+        MASK_FILTER_ALL,
+        MASK_FILTER_RED,
+        MASK_FILTER_GREEN,
+        MASK_FILTER_BLUE,
     };
 
     SimpleBloomArea(int, const char*);
@@ -19,7 +19,7 @@ public:
         return "ImageEffectArea";
     }
 
-    /* 0x40 */ u32 mMaskFilterColor;
-    /* 0x44 */ u8 mThreshold;
-    /* 0x45 */ u8 mIntensity;
+    u32 mMaskFilterColor;
+    u8 mThreshold;
+    u8 mIntensity;
 };

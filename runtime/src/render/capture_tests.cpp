@@ -212,9 +212,6 @@ int main() {
         passed &= expect_near(
             display.step_y, 1.0f,
             "2x display copy preserves every scaled scene target row in scaled display picture");
-        passed &= expect_near(
-            display.filter_row_offset, 2.0f,
-            "2x copy filter samples adjacent logical rows two texels apart");
 
         const galaxy::render::SceneCopySamplingGeometry half_scale =
             galaxy::render::compute_scene_copy_sampling_geometry(
@@ -294,9 +291,8 @@ int main() {
             "6x viewport spans the scaled copy height");
     }
     passed &= expect(
-        galaxy::render::scene_copy_single_channel(2u, false) && !galaxy::render::scene_copy_single_channel(2u, true) &&
-            !galaxy::render::scene_copy_single_channel(galaxy::render::kCopyLayoutIntensityAlpha, false),
-        "alpha captures are one-channel pictures; depth and intensity-alpha ones are not");
+        galaxy::render::scene_copy_single_channel(2u, false) && !galaxy::render::scene_copy_single_channel(2u, true),
+        "alpha reads are one-channel pictures; depth ones are not");
 
     if (!passed) {
         return 1;

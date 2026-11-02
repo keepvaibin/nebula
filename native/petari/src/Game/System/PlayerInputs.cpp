@@ -19,24 +19,6 @@ namespace {
 
     NebulaInputSample sSamples[INPUT_SAMPLE_MAX];
 
-    // Activity that keeps the screen from dimming, as the console's controller layer judged it (isAnyInputHeld'
-    // IsControllerDataChanged): a button at once; the accelerometer moving more than 12 counts (of about 104 per g)
-    // or the move stick more than 2 counts (of 128) once the change has held for four samples.
-    const f32 cActivityAccel = 12.0f / 104.0f;
-    const f32 cActivityStick = 2.0f / 128.0f;
-    const u16 cActivitySettle = 3;
-
-    bool exceeds(const f32* pA, const f32* pB, s32 count, f32 limit) {
-        for (s32 i = 0; i < count; i++) {
-            const f32 diff = pA[i] - pB[i];
-            if (diff > limit || diff < -limit) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     f32 clampAccel(f32 value, f32 limit) {
         return value < -limit ? -limit : value > limit ? limit : value;
     }
@@ -44,7 +26,7 @@ namespace {
 
 PlayerInputReader::PlayerInputReader()
     : mStatusArray(), mValidStatusCount(), mDevice(), mState(), mResetRequested(true), mStateMoveStick(false),
-      mSubHandResetRequested(true), mShakeHeld(0), mActivitySample(), mAccelSettle(0), mStickSettle(0) {
+      mSubHandResetRequested(true), mShakeHeld(0) {
     mStatusArray = new PlayerInputSample[INPUT_SAMPLE_MAX];
     MR::zeroMemory(mStatusArray, sizeof(PlayerInputSample) * INPUT_SAMPLE_MAX);
     mShakePresses[0] = mShakePresses[1] = 0;
@@ -101,7 +83,6 @@ void PlayerInputReader::updateConnection(s32 chan, const NebulaInputDevice& rDev
     const bool subPad = rDevice.nunchuk != 0;
 
     if (!wasConnected) {
-        NebulaFrameClock::resetIdle();
         PlayerInput::connectCallback(chan, INPUT_CONNECTED);
     } else if (subPad == hadSubPad) {
         return;
@@ -112,31 +93,6 @@ void PlayerInputReader::updateConnection(s32 chan, const NebulaInputDevice& rDev
     }
 
     PlayerInput::extensionCallback(chan, subPad ? INPUT_HAND_SUB : INPUT_HAND_MAIN);
-}
-
-void PlayerInputReader::watchActivity(const NebulaInputSample& rSample, bool subPad) {
-    const NebulaInputSample& rPrevious = mActivitySample;
-    bool active = rSample.buttons != rPrevious.buttons;
-
-    if (exceeds(rSample.gravity, rPrevious.gravity, 3, cActivityAccel)) {
-        active |= ++mAccelSettle > cActivitySettle;
-    } else {
-        mAccelSettle = 0;
-    }
-
-    if (subPad && exceeds(rSample.stick, rPrevious.stick, 2, cActivityStick)) {
-        active |= ++mStickSettle > cActivitySettle;
-    } else {
-        mStickSettle = 0;
-    }
-
-    if (active) {
-        mAccelSettle = 0;
-        mStickSettle = 0;
-        NebulaFrameClock::resetIdle();
-    }
-
-    mActivitySample = rSample;
 }
 
 // The samples since the last read as the game's own: the buttons of the newest with their edges and repeat; each
@@ -159,7 +115,6 @@ void PlayerInputReader::read(s32 chan) {
         }
 
         mShakeHeld = shake;
-        watchActivity(sSamples[i], device.nunchuk != 0);
     }
 
     if (mResetRequested) {
@@ -296,35 +251,35 @@ PlayerInput* PlayerInputs::getPlayerInput(s32 channel) {
 }
 
 namespace {
-    PlayerInputs* getGamePadHolder() {
+    PlayerInputs* getPlayerInputs() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mPlayerInputs;
     }
 };  // namespace
 
 namespace MR {
     PlayerInput* getPlayerInput(s32 channel) {
-        return ::getGamePadHolder()->getPlayerInput(channel);
+        return ::getPlayerInputs()->getPlayerInput(channel);
     }
 
     void resetPlayerInput() {
-        PlayerInputs* pGamePadHolder;
+        PlayerInputs* pInputs;
 
-        pGamePadHolder = ::getGamePadHolder();
-        pGamePadHolder->resetPad();
+        pInputs = ::getPlayerInputs();
+        pInputs->resetPad();
     }
 
     void setPlayerInputsModeHome() {
-        PlayerInputs* pGamePadHolder;
+        PlayerInputs* pInputs;
 
-        pGamePadHolder = ::getGamePadHolder();
-        pGamePadHolder->mMode = INPUT_MODE_HOME;
+        pInputs = ::getPlayerInputs();
+        pInputs->mMode = INPUT_MODE_HOME;
     }
 
     void setPlayerInputsModeGame() {
-        PlayerInputs* pGamePadHolder;
+        PlayerInputs* pInputs;
 
-        pGamePadHolder = ::getGamePadHolder();
-        pGamePadHolder->mMode = INPUT_MODE_GAME;
+        pInputs = ::getPlayerInputs();
+        pInputs->mMode = INPUT_MODE_GAME;
     }
 
 

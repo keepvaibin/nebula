@@ -13,5 +13,5 @@ public:
         mMutex->unlock();
     }
 
-    /* 0x0 */ GameMutex* mMutex;
+    GameMutex* mMutex;
 };

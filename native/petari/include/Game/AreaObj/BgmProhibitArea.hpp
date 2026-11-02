@@ -14,7 +14,7 @@ public:
         return "BgmProhibitArea";
     }
 
-    /* 0x3C */ bool _3C;
-    /* 0x3D */ bool _3D;
-    /* 0x40 */ TVec3f _40;
+    bool _3C;
+    bool _3D;
+    TVec3f _40;
 };

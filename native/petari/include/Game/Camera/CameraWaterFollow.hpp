@@ -19,13 +19,13 @@ public:
         mSideBlendRateMin = blendRateMin;
     }
 
-    /* 0x4C */ f32 mDistMin;
-    /* 0x50 */ f32 mDistMax;
-    /* 0x54 */ f32 mSideBlendRateMin;
-    /* 0x58 */ f32 mSideBlendRate;
-    /* 0x5C */ s32 mCollideCount;
-    /* 0x60 */ TVec3f mLastMoveDir;
-    /* 0x6C */ bool mIsRounding;
-    /* 0x70 */ s32 mRoundingFrame;
-    /* 0x74 */ TVec3f mSide;
+    f32 mDistMin;
+    f32 mDistMax;
+    f32 mSideBlendRateMin;
+    f32 mSideBlendRate;
+    s32 mCollideCount;
+    TVec3f mLastMoveDir;
+    bool mIsRounding;
+    s32 mRoundingFrame;
+    TVec3f mSide;
 };

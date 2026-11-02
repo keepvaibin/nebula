@@ -336,7 +336,7 @@ struct GameWaitTimer {
 
 std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
-        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_GX_STALL_US"), 1000u);
+        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_RENDER_STALL_US"), 1000u);
     return threshold;
 }
 
@@ -577,7 +577,7 @@ bool RenderCore::initialize(int w, int h) {
         renderer_.shutdown();
         return false;
     }
-    boot_step("efb copies and texture cache");
+    boot_step("frame reads and texture cache");
     // The resident decoded-vertex buffer (a 64 MB upload heap) is created here: creating it at first
     // use stalls gameplay.
     (void)ensure_resident_vertex_buffer();
@@ -887,7 +887,7 @@ void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept
            <<" samples="<<pointer_response_count_<<" mean-us="<<pointer_latency_total_/pointer_response_count_/1000u
            <<" p50-upper-us="<<percentile(50u)<<" p95-upper-us="<<percentile(95u)<<" p99-upper-us="<<percentile(99u)
            <<" max-us="<<pointer_latency_max_/1000u<<" source-serial="<<stamp.serial<<" generation="<<stamp.generation
-           <<" xfb-serial="<<texture.copy_serial<<" selected-ns="<<stamp.selected_ns<<" processed-ns="<<stamp.processed_ns
+           <<" display-serial="<<texture.copy_serial<<" selected-ns="<<stamp.selected_ns<<" processed-ns="<<stamp.processed_ns
            <<" drawn-ns="<<stamp.drawn_ns<<" present-return-ns="<<now
            <<" acquisition-age-clock=GetTickCount64-coarse-ms acquisition-age-samples="<<pointer_acquisition_age_count_
            <<" acquisition-age-mean-ms="<<(pointer_acquisition_age_count_?pointer_acquisition_age_total_/pointer_acquisition_age_count_:0u)
@@ -1006,11 +1006,11 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     resident_vertex_device_ = device;
     UploadBuffer buffer = renderer_.create_resident_vertices(
         static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex),
-        "GX resident decoded vertices");
+        "Resident decoded vertices");
     if (buffer.gpu == 0u) {
         // Not fatal: every hit keeps using the per-frame ring upload.
         resident_vertex_buffer_failed_ = true;
-        std::cerr << "[gx-resident-vertices] buffer creation failed; "
+        std::cerr << "[render-resident-vertices] buffer creation failed; "
                      "decoded vertices stay on the frame ring\n";
         return false;
     }
@@ -1174,7 +1174,7 @@ void RenderCore::render_frame(
     const std::uint64_t producer_wait_us = producer_wait_ns / 1000u;
     if (trace_stalls_cached &&
         producer_wait_us >= trace_stall_threshold_us()) {
-        std::cerr << "[gx-queue-wait] wait-us=" << producer_wait_us
+        std::cerr << "[render-queue-wait] wait-us=" << producer_wait_us
                   << " queue-depth=" << queue_depth_after_push
                   << " queue-limit=" << queue_depth_limit << '\n';
     }
@@ -3279,7 +3279,7 @@ void RenderCore::present_cached_display(
 // Consumer loop (render thread): frames execute in submission order; queued
 // frames are drained before a stop so the last presents land.
 void RenderCore::render_thread_main() {
-    galaxy::host::name_current_thread(L"Nebula GX Render");
+    galaxy::host::name_current_thread(L"Nebula Render");
     galaxy::host::perf_hint_add_current_thread();
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
@@ -3943,7 +3943,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
     // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
-    // is written again in this frame slot even when the console state did not change.
+    // is written again in this frame slot even when the state did not change.
     frame_bindings_dirty_ = true;
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
@@ -4181,7 +4181,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 
 
 
-    // [gx-frame-timing]: stall-traced frames over GALAXY_TRACE_GX_STALL_US (selected=1) and frames
+    // [render-frame-timing]: stall-traced frames over GALAXY_TRACE_RENDER_STALL_US (selected=1) and frames
     // sampled by GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). The per-draw *-us fields are measured on
     // those frames only (detail=1); fifo-*-us fields only with the stall trace (the parser profile).
     if (trace_stalls_cached || frame_time_sample_) {
@@ -4202,7 +4202,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             total_us >= trace_stall_threshold_us() ||
             producer_wait_us >= trace_stall_threshold_us()) {
             std::ostringstream timing_message;
-            timing_message << "[gx-frame-timing] frame=" << frame_index_
+            timing_message << "[render-frame-timing] frame=" << frame_index_
                   // A frame can be both selected and sampled; selected=0 rows are the unbiased sample.
                   << " selected="
                   << ((total_us >= trace_stall_threshold_us() ||
@@ -4236,10 +4236,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " draws=" << frame_draws_issued_
                   << " draw-batches=" << frame_draw_batches_
                   << " no-pso=" << frame_draws_no_pso_
-                  << " xfb-copies=" << frame_display_copies_
+                  << " display-copies=" << frame_display_copies_
                   << " tex-copies=" << frame_tex_copies_
-                  << " efb-alias-updates=" << frame_scene_alias_updates_
-                  << " efb-alias-noops=" << frame_scene_alias_noops_
+                  << " read-alias-updates=" << frame_scene_alias_updates_
+                  << " read-alias-noops=" << frame_scene_alias_noops_
                   << " texture-binding-cache-hits="
                   << frame_texture_binding_cache_hits_
                   << " texture-binding-cache-misses="
@@ -4299,7 +4299,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " immutable-vertex-copied-bytes=" << renderer_.vertex_ring().copied_bytes()
                   << " immutable-vertex-uploads=" << renderer_.vertex_ring().immutable_upload_calls()
                   << " draw-record-us=" << frame_draw_record_us_
-                  << " efb-copy-us=" << frame_scene_copy_us_
+                  << " frame-read-us=" << frame_scene_copy_us_
                   << " resident-vtx-hits=" << frame_resident_vertex_hits_
                   << " curved-split-draws=" << frame_curved_split_draws_
                   << " curved-flat-tris=" << frame_curved_flat_triangles_
@@ -4319,9 +4319,9 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " decoded-tex-entries="
                   << texture_cache_.decoded_map_stats().entries
                   // scene target-copy destinations are allocated at the internal resolution (bytes grow with scene_target_scale^2).
-                  << " efb-copy-dest-bytes="
+                  << " frame-read-dest-bytes="
                   << renderer_.scene_copy_dest_bytes()
-                  << " efb-copy-dest-budget-bytes="
+                  << " frame-read-dest-budget-bytes="
                   << renderer_.scene_copy_dest_budget_bytes()
                   << '\n';
             std::cerr << timing_message.str();
@@ -4393,7 +4393,7 @@ void RenderCore::clear_frame_texture_binding_table_cache() {
     frame_texture_binding_tables_.clear();
     frame_texture_handle_cache_.clear();
     // Dropping the tables invalidates the remembered binding key with them, so flush_draw_state can
-    // trust a valid key without re-deriving it from the BP registers.
+    // trust a valid key without re-deriving it from the state.
     current_texture_binding_key_valid_ = false;
 }
 
@@ -4653,7 +4653,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         : capture_texture_binding_key(texture_map_mask);
     lit_translucent_ = false;
     lit_late_ = false;
-    // A dirty BP input requires a fresh capture, but writes to unused maps,
+    // A dirty input requires a fresh capture, but writes to unused maps,
     // image1/2 or restored register values can leave the effective key equal.
     // Explicit frame/resource invalidation still forces work through tex_dirty.
     const bool texture_binding_changed =
@@ -4682,8 +4682,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // target). Keys only change while a motion scene is (or was) active.
     // Blended triangles (no dual-source alpha) write the reactive mask.
     // The game's scene runs on an RGBA6 scene target (MainLoopFramework::preGX), where every blend that reads the source alpha
-    // is dual-source (needs_dual_src_alpha): it blends at the TEV's 8-bit alpha, not the scene target's 6-bit one, and under
-    // constant destination alpha (GXSetDstAlpha: the translucent lists, Mario, shadows) writes the constant instead.
+    // is dual-source (needs_dual_src_alpha): it blends at the material's 8-bit alpha, not the scene target's 6-bit one, and under
+    // constant destination alpha (the state: the translucent lists, Mario, shadows) writes the constant instead.
     // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the
     // water's and clear surfaces' cover: a fall's spray was painted over). In a temporal scene such a draw blends
     // single-source instead, at the same 8-bit alpha (ShaderGenerator's reactive variant), and writes the mask; a
@@ -4898,7 +4898,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
     // native_tex_matrix reads the vertex's index for those texgens).
     const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
-    // The header word as the last upload wrote it (a console draw's from its key): any change uploads again, or a native
+    // The header word as the last upload wrote it (a draw's from its key): any change uploads again, or a native
     // draw after a console one would read that draw's mask.
     // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
     // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
@@ -5103,7 +5103,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 }
                 const TextureHandle& h = current_texture_handles_[m];
                 std::fprintf(stderr,
-                             "[native-material] shader=%u map=%u image=%llx -> resource=%d %ux%u efb=%d\n",
+                             "[native-material] shader=%u map=%u image=%llx -> resource=%d %ux%u frame=%d\n",
                              native_material_->shader, m,
                              static_cast<unsigned long long>(native_material_->textures[m].image),
                              h.resource != nullptr ? 1 : 0,
@@ -5121,7 +5121,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             if (trace_stalls_enabled() &&
                 total_texture_us >= trace_stall_threshold_us()) {
                 std::cerr
-                    << "[gx-texture-flush] frame=" << frame_index_
+                    << "[render-texture-flush] frame=" << frame_index_
                     << " map-mask=0x" << std::hex
                     << static_cast<unsigned>(texture_map_mask)
                     << std::dec
@@ -5237,7 +5237,7 @@ bool RenderCore::begin_cached_draw_run(
 
     const ScissorRect sc = draw_state_.scissor;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
-    // GX_CULL_ALL.
+    // cull all.
     cached_draw_run_scissor_reject_ =
         cull_all_suppresses_primitive(draw_state_.gen.cull, primitive) ||
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
@@ -5513,7 +5513,7 @@ void RenderCore::apply_native_material(const material::Native* native) {
         out.bias_clamp = false;
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
-    // Its texgens' post-transform matrices, as a console material's texgens set them (a draw's own texgens replace them:
+    // Its texgens' post-transform matrices, as a material's texgens set them (a draw's own texgens replace them:
     // apply_record_matrices).
     for (unsigned i = 0; i < 8u; ++i) {
         if (m.texgen_post[i] == material::kNativeKept) {
@@ -5542,7 +5542,7 @@ void RenderCore::end_native_material() {
         return;
     }
     native_material_ = nullptr;
-    // The console state's pipeline, constants and textures are rebuilt at the next draw, and the next console material loads
+    // The state's pipeline, constants and textures are rebuilt at the next draw, and the next material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     current_pso_key_valid_ = false;
@@ -5946,11 +5946,11 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                 if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
                     seen[count++]=current;
                     const auto scale=renderer_.covering_scale();
-                    std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
+                    std::cerr<<"[display-render-layout] unique="<<count<<" backing-scene="<<640u*scale<<'x'<<456u*scale
                         <<" copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
-                        <<" scaled-xfb="<<display_picture->width<<'x'<<display_picture->height
-                        <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<display_picture->copy_serial<<'\n';
+                        <<" scaled-display="<<display_picture->width<<'x'<<display_picture->height
+                        <<" internal-scale="<<scale<<" display-serial-before-publication="<<display_picture->copy_serial<<'\n';
                 }
             }
             display_picture->pointer_response=render_pointer_response_;
@@ -5975,7 +5975,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         if (alias_updated || decoded_evicted) {
             ++frame_scene_alias_updates_;
             // One address can alternate between format-keyed GPU resources, and the game need not
-            // rewrite the BP texture registers after a copy, so the next draw refreshes every frame table
+            // rewrite the texture state after a copy, so the next draw refreshes every frame table
             // that referenced this alias. A reused texture is updated in place; its SRV stays valid.
             mark_texture_binding_alias_dirty(params);
             texture_bindings_dirty_ = true;
@@ -5993,7 +5993,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
     if (trace_stalls_enabled() &&
         copy_us >= trace_stall_threshold_us()) {
         std::cerr << "[frame-read-timing] frame=" << frame_index_
-                  << " kind=" << (params.display ? "xfb" : "tex")
+                  << " kind=" << (params.display ? "display" : "texture")
                   << " us=" << copy_us
                   << " src=" << params.src_width << 'x' << params.src_height
                   << " dst=0x" << std::hex << params.key << std::dec << '\n';

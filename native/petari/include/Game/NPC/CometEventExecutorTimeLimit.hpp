@@ -19,8 +19,8 @@ public:
 
 private:
     /// @brief The pointer to the actor instance for the timer.
-    /* 0x8C */ TimeLimitLayout* mTimeLimitLayout;
+    TimeLimitLayout* mTimeLimitLayout;
 
     /// @brief The number of seconds to initialize the timer with.
-    /* 0x90 */ u32 mTimeLimit;
+    u32 mTimeLimit;
 };

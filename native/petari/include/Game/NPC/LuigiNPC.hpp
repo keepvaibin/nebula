@@ -51,6 +51,6 @@ public:
     void exeOnTreeFall();
     void exeOnTreeLand();
 
-    /* 0x15C */ TakeOutStar* mTakeOutStar;
-    /* 0x160 */ s32 mType;
+    TakeOutStar* mTakeOutStar;
+    s32 mType;
 };

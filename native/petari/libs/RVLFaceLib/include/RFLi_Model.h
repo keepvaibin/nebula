@@ -18,22 +18,22 @@ extern "C" {
 #define VTX_TXC_SIZE (VTX_COORD_SIZE * VTX_COORDS_IN_TXC)
 
 typedef struct Mii_CoordinateData {
-    u8 uOff;   // at 0x0
-    u8 fOff;   // at 0x1
-    u8 rOff;   // at 0x2
-    BOOL uRev; // at 0x4
-    BOOL fRev; // at 0x8
-    BOOL rRev; // at 0xC
+    u8 uOff;
+    u8 fOff;
+    u8 rOff;
+    BOOL uRev;
+    BOOL fRev;
+    BOOL rRev;
 } Mii_CoordinateData;
 
 typedef struct Mii_CharModelRes {
-    u8 noseDl[0xC0];     // at 0x0
-    u8 capDl[0x560];     // at 0xC0
-    u8 faceDl[0x2E0];    // at 0x620
-    u8 beardDl[0x160];   // at 0x900
-    u8 noselineDl[0x60]; // at 0xA60
-    u8 maskDl[0x380];    // at 0xAC0
-    u8 glassesDl[0x40];  // at 0xE40
+    u8 noseDl[0xC0];
+    u8 capDl[0x560];
+    u8 faceDl[0x2E0];
+    u8 beardDl[0x160];
+    u8 noselineDl[0x60];
+    u8 maskDl[0x380];
+    u8 glassesDl[0x40];
 
     // The parts' textures as records (nebula_cooked_texture.h): their texels in a native layout (at most four bytes
     // each: twice the console's 16-bit and four times its 8-bit sizes) after a 64-byte header.
@@ -42,96 +42,96 @@ typedef struct Mii_CharModelRes {
     u8 noseTex[0x2000 + 0x40];
     u8 glassesTex[0x4000 + 0x40];
 
-    s16 noseVtxPos[23 * VTX_COORDS_IN_POS]; // at 0x6680
-    s16 noseVtxNrm[23 * VTX_COORDS_IN_NRM]; // at 0x670A
+    s16 noseVtxPos[23 * VTX_COORDS_IN_POS];
+    s16 noseVtxNrm[23 * VTX_COORDS_IN_NRM];
 
-    s16 capVtxPos[173 * VTX_COORDS_IN_POS]; // at 0x6794
-    s16 capVtxNrm[246 * VTX_COORDS_IN_NRM]; // at 0x6BA2
-    s16 capVtxTxc[95 * VTX_COORDS_IN_TXC];  // at 0x7166
+    s16 capVtxPos[173 * VTX_COORDS_IN_POS];
+    s16 capVtxNrm[246 * VTX_COORDS_IN_NRM];
+    s16 capVtxTxc[95 * VTX_COORDS_IN_TXC];
 
-    s16 faceVtxPos[66 * VTX_COORDS_IN_POS];  // at 0x72E2
-    s16 faceVtxNrm[66 * VTX_COORDS_IN_NRM];  // at 0x746E
-    s16 faceVtxTxc[115 * VTX_COORDS_IN_TXC]; // at 0x75FA
+    s16 faceVtxPos[66 * VTX_COORDS_IN_POS];
+    s16 faceVtxNrm[66 * VTX_COORDS_IN_NRM];
+    s16 faceVtxTxc[115 * VTX_COORDS_IN_TXC];
 
-    s16 beardVtxPos[40 * VTX_COORDS_IN_POS]; // at 0x77C6
-    s16 beardVtxNrm[68 * VTX_COORDS_IN_NRM]; // at 0x78B6
+    s16 beardVtxPos[40 * VTX_COORDS_IN_POS];
+    s16 beardVtxNrm[68 * VTX_COORDS_IN_NRM];
 
-    s16 noselineVtxPos[6 * VTX_COORDS_IN_POS]; // at 0x7A4E
-    s16 noselineVtxNrm[2 * VTX_COORDS_IN_NRM]; // at 0x7A72
-    s16 noselineVtxTxc[7 * VTX_COORDS_IN_TXC]; // at 0x7A7E
+    s16 noselineVtxPos[6 * VTX_COORDS_IN_POS];
+    s16 noselineVtxNrm[2 * VTX_COORDS_IN_NRM];
+    s16 noselineVtxTxc[7 * VTX_COORDS_IN_TXC];
 
-    s16 maskVtxPos[88 * VTX_COORDS_IN_POS];  // at 0x7A9A
-    s16 maskVtxNrm[86 * VTX_COORDS_IN_NRM];  // at 0x7CAA
-    s16 maskVtxTxc[176 * VTX_COORDS_IN_TXC]; // at 0x7EAE
+    s16 maskVtxPos[88 * VTX_COORDS_IN_POS];
+    s16 maskVtxNrm[86 * VTX_COORDS_IN_NRM];
+    s16 maskVtxTxc[176 * VTX_COORDS_IN_TXC];
 
-    s16 glassesVtxPos[4 * VTX_COORDS_IN_POS]; // at 0x816E
-    s16 glassesVtxNrm[1 * VTX_COORDS_IN_NRM]; // at 0x8186
-    s16 glassesVtxTxc[4 * VTX_COORDS_IN_TXC]; // at 0x818C
+    s16 glassesVtxPos[4 * VTX_COORDS_IN_POS];
+    s16 glassesVtxNrm[1 * VTX_COORDS_IN_NRM];
+    s16 glassesVtxTxc[4 * VTX_COORDS_IN_TXC];
 
-    J3DNativeTexObj faceTexObj;    // at 0x819C
-    J3DNativeTexObj capTexObj;     // at 0x81BC
-    J3DNativeTexObj noseTexObj;    // at 0x81DC
-    J3DNativeTexObj glassesTexObj; // at 0x81FC
+    J3DNativeTexObj faceTexObj;
+    J3DNativeTexObj capTexObj;
+    J3DNativeTexObj noseTexObj;
+    J3DNativeTexObj glassesTexObj;
 
-    s16* hairVtxPos;     // at 0x821C
-    s16* hairVtxNrm;     // at 0x8220
-    u8* hairDl;          // at 0x8224
-    s16* foreheadVtxPos; // at 0x8228
-    s16* foreheadVtxNrm; // at 0x822C
-    u8* foreheadDl;      // at 0x8230
+    s16* hairVtxPos;
+    s16* hairVtxNrm;
+    u8* hairDl;
+    s16* foreheadVtxPos;
+    s16* foreheadVtxNrm;
+    u8* foreheadDl;
 
-    u16 noseDlSize;     // at 0x8234
-    u16 faceDlSize;     // at 0x8236
-    u16 hairDlSize;     // at 0x8238
-    u16 capDlSize;      // at 0x823A
-    u16 foreheadDlSize; // at 0x823C
-    u16 beardDlSize;    // at 0x823E
-    u16 noselineDlSize; // at 0x8240
-    u16 maskDlSize;     // at 0x8242
-    u16 glassesDlSize;  // at 0x8244
+    u16 noseDlSize;
+    u16 faceDlSize;
+    u16 hairDlSize;
+    u16 capDlSize;
+    u16 foreheadDlSize;
+    u16 beardDlSize;
+    u16 noselineDlSize;
+    u16 maskDlSize;
+    u16 glassesDlSize;
 
-    u8 facelineColor; // at 0x8246
-    u8 hairColor;     // at 0x8247
-    u8 beardColor;    // at 0x8248
-    u8 glassesColor;  // at 0x8249
-    u8 favoriteColor; // at 0x824A
+    u8 facelineColor;
+    u8 hairColor;
+    u8 beardColor;
+    u8 glassesColor;
+    u8 favoriteColor;
 
-    BOOL flipHair; // at 0x824C
+    BOOL flipHair;
 
     char UNK_0x8250[0x10];
 } Mii_CharModelRes;
 
 typedef struct Mii_ShapeRes {
-    Mii_PartsShp part; // at 0x0
-    u16 file;          // at 0x4
-    BOOL transform;    // at 0x8
-    BOOL flipX;        // at 0xC
-    s16* vtxPosBuf;    // at 0x10
-    s16* vtxNrmBuf;    // at 0x14
-    s16* vtxTxcBuf;    // at 0x18
-    u8* dlBuf;         // at 0x1C
-    u16 vtxPosBufSize; // at 0x20
-    u16 vtxNrmBufSize; // at 0x22
-    u16 vtxTxcBufSize; // at 0x24
-    u16 dlBufSize;     // at 0x26
-    u16 numVtxPos;     // at 0x28
-    u16 numVtxNrm;     // at 0x2A
-    u16 numVtxTxc;     // at 0x2C
-    u16 dlSize;        // at 0x2E
-    f32 posScale;      // at 0x30
-    Vec* posTrans;     // at 0x34
-    Vec* noseTrans;    // at 0x38
-    Vec* beardTrans;   // at 0x3C
-    Vec* hairTrans;    // at 0x40
+    Mii_PartsShp part;
+    u16 file;
+    BOOL transform;
+    BOOL flipX;
+    s16* vtxPosBuf;
+    s16* vtxNrmBuf;
+    s16* vtxTxcBuf;
+    u8* dlBuf;
+    u16 vtxPosBufSize;
+    u16 vtxNrmBufSize;
+    u16 vtxTxcBufSize;
+    u16 dlBufSize;
+    u16 numVtxPos;
+    u16 numVtxNrm;
+    u16 numVtxTxc;
+    u16 dlSize;
+    f32 posScale;
+    Vec* posTrans;
+    Vec* noseTrans;
+    Vec* beardTrans;
+    Vec* hairTrans;
 } Mii_ShapeRes;
 
 typedef struct Mii_CharModel {
-    Mtx posMtx;                       // at 0x0
-    Mtx nrmMtx;                       // at 0x30
-    MiiExpression expression;         // at 0x60
-    MiiResolution resolution;         // at 0x64
-    Mii_CharModelRes* res;            // at 0x68
-    J3DNativeTexObj* maskTexObj[MiiExp_Max]; // at 0x6C
+    Mtx posMtx;
+    Mtx nrmMtx;
+    MiiExpression expression;
+    MiiResolution resolution;
+    Mii_CharModelRes* res;
+    J3DNativeTexObj* maskTexObj[MiiExp_Max];
 } Mii_CharModel;
 
 extern Mii_CoordinateData coordinateData;

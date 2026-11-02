@@ -48,7 +48,7 @@ public:
     }
 
 private:
-    /* 0x4 */ const char16_t* mMessage;
+    const char16_t* mMessage;
 };
 
 class TextBoxRecursiveSetArgNumber : public TextBoxRecursiveOperation {
@@ -62,8 +62,8 @@ public:
     }
 
 private:
-    /* 0x4 */ s32 mArg;
-    /* 0x8 */ s32 mArgIndex;
+    s32 mArg;
+    s32 mArgIndex;
 };
 
 class TextBoxRecursiveSetArgString : public TextBoxRecursiveOperation {
@@ -77,8 +77,8 @@ public:
     }
 
 private:
-    /* 0x4 */ const char16_t* mArg;
-    /* 0x8 */ s32 mArgIndex;
+    const char16_t* mArg;
+    s32 mArgIndex;
 };
 
 class TextBoxRecursiveSetVerticalPosition : public TextBoxRecursiveOperation {
@@ -92,7 +92,7 @@ public:
     }
 
 private:
-    /* 0x4 */ u8 mPosition;
+    u8 mPosition;
 };
 
 class TextBoxRecursiveSetHorizontalPosition : public TextBoxRecursiveOperation {
@@ -106,7 +106,7 @@ public:
     }
 
 private:
-    /* 0x4 */ u8 mPosition;
+    u8 mPosition;
 };
 
 class TextBoxRecursiveSetFont : public TextBoxRecursiveOperation {
@@ -122,7 +122,7 @@ public:
     }
 
 private:
-    /* 0x4 */ nw4r::ut::Font* mFont;
+    nw4r::ut::Font* mFont;
 };
 
 namespace MR {

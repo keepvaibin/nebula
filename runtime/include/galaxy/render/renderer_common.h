@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// What both console renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
+// What both renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
 // size, one resolved draw, clear values, the scene target conversion shader and its constants, and the sampler-table cache.
 
 #include "galaxy/render/capture.h"
@@ -146,19 +146,12 @@ struct UiSolidQuadConstants {
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 [[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(
-    const CaptureRequest& params,
     bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
-    std::uint8_t copy_format,
+    std::uint8_t channels,
     float src_x,
     float src_y,
     float step_x,
-    float step_y,
-    float filter_row_offset,
-    float rows_per_unit,
-    unsigned logical_scene_height,
-    unsigned reduction_width = 0u) noexcept;
+    float step_y) noexcept;
 
 // A screen probe's constants: the capture shader reads the one pixel of the frame the point names (`depth`: as the
 // 24-bit value in three bytes, otherwise as it is).
@@ -172,7 +165,7 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 // Effect copies (destinations up to 320x228: the bloom pyramid, simple bloom, depth of field, Mario's 160x160
 // shadow capture) are built at the game's own resolution, box-filtered over the scaled scene target. Their low resolution is
 // part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
-// copies turn the taps into separate offset images. Full-size captures stay scaled. After Dolphin's Super Mario
+// copies turn the taps into separate offset images. Full-size captures stay scaled. After Super Mario
 
 // Present pacing with vsync off and a frame-rate cap. The VI paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,

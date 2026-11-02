@@ -39,6 +39,6 @@ public:
         return mBase + offset;
     }
 
-    /* 0x04 */ const u8* mReadPtr;
-    /* 0x08 */ const u8* mBase;
+    const u8* mReadPtr;
+    const u8* mBase;
 };

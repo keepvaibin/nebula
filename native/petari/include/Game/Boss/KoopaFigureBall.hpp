@@ -20,10 +20,10 @@ public:
     virtual MtxPtr getBaseMtx() const;
     virtual void control();
 
-    /* 0x8C */ Koopa* mKoopa;
-    /* 0x90 */ TVec3f mFront;
-    /* 0x9C */ f32 mRadius;
-    /* 0xA0 */ f32 mAngle;
-    /* 0xA4 */ TPos3f mBaseMtx;
-    /* 0xD4 */ const MR::ActorMoveParam* mMoveParam;
+    Koopa* mKoopa;
+    TVec3f mFront;
+    f32 mRadius;
+    f32 mAngle;
+    TPos3f mBaseMtx;
+    const MR::ActorMoveParam* mMoveParam;
 };

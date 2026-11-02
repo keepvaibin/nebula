@@ -194,7 +194,7 @@ inline void SwingRope::exeFreeInvalid() {
 
 void SwingRope::exeBindSlideDownStart() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayer("SwingRopeSlideDownStart", 0L);
+        MR::startBckPlayer("SwingRopeSlideDownStart", 0);
         mSlideSpeed = 0.0f;
     }
 
@@ -400,21 +400,6 @@ bool SwingRope::isAllPointsStop() const {
     return true;
 }
 
-bool SwingRope::isAllPointsSlow() const {
-    for (s32 idx = 0; idx < mNumPoints; idx++) {
-        if (MR::abs(mPoints[idx]->mVelocity.x) > ::sPointSpeedToSlow || MR::abs(mPoints[idx]->mVelocity.y) > ::sPointSpeedToSlow ||
-            MR::abs(mPoints[idx]->mVelocity.z) > ::sPointSpeedToSlow) {
-            return false;
-        }
-
-        if (mPoints[idx]->mUp.y < ::sPointNormalToSlow) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool SwingRope::isStretched() const {
     return MR::abs(mGrabCoord - mBasePos.distance(mSledPoint->mPosition)) < ::sCoordLooseToStretch;
 }
@@ -454,7 +439,7 @@ bool SwingRope::tryJump() {
         MR::endActorCameraAtLanding(this, mCameraInfo);
         MR::startSound(mRider, "SE_PV_JUMP_S");
         MR::startSound(mRider, "SE_PM_JUMP_M");
-        MR::startBckPlayer("SwingRopeSpin", 0L);
+        MR::startBckPlayer("SwingRopeSpin", 0);
 
         MR::setPlayerFrontTargetVec(front, 1);
         MR::endBindAndPlayerWeakGravityJump(this, jumpVec);

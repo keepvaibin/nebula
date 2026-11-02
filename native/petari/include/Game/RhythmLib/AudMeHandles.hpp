@@ -29,7 +29,7 @@ public:
         return mMe;
     }
 
-    /* 0x00 */ AudMe* mMe;
+    AudMe* mMe;
 };
 
 class AudMeHandles {
@@ -51,6 +51,6 @@ public:
         return mNumHandles;
     }
 
-    /* 0x00 */ AudMeHandle* mHandles;
-    /* 0x04 */ int mNumHandles;
+    AudMeHandle* mHandles;
+    int mNumHandles;
 };

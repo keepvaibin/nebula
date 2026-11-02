@@ -35,19 +35,19 @@ namespace JMath {
         return NebulaSqrt(value);
     }
 
-    inline void gekko_ps_copy3(void* dest, const void* src) {
+    inline void copyFloats3(void* dest, const void* src) {
         memcpy(dest, src, 3 * sizeof(f32));
     }
 
-    inline void gekko_ps_copy6(void* dest, const void* src) {
+    inline void copyFloats6(void* dest, const void* src) {
         memcpy(dest, src, 6 * sizeof(f32));
     }
 
-    inline void gekko_ps_copy12(void* pDest, const void* pSrc) {
+    inline void copyFloats12(void* pDest, const void* pSrc) {
         memcpy(pDest, pSrc, 12 * sizeof(f32));
     }
 
-    inline void gekko_ps_copy16(void* pDest, const void* pSrc) {
+    inline void copyFloats16(void* pDest, const void* pSrc) {
         memcpy(pDest, pSrc, 16 * sizeof(f32));
     }
 };  // namespace JMath

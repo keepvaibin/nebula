@@ -9,11 +9,11 @@
 class LiveActor;
 
 struct PointLightInfo {
-    /* 0x00 */ Vec mPos;
-    /* 0x0C */ NebulaColor8 mColor;
-    /* 0x10 */ f32 mRefDistance;
-    /* 0x14 */ f32 mRefBrightness;
-    /* 0x18 */ J3DLightFalloff mDistAttnFn;
+    Vec mPos;
+    NebulaColor8 mColor;
+    f32 mRefDistance;
+    f32 mRefBrightness;
+    J3DLightFalloff mDistAttnFn;
 };
 
 class LightPointCtrl {
@@ -35,12 +35,12 @@ public:
         return mStep;
     }
 
-    /* 0x00 */ s32 mStep;
-    /* 0x04 */ s32 mBlendTime;
-    /* 0x08 */ const LiveActor* mCurrentActor;
-    /* 0x0C */ const LiveActor* mPreviousActor;
-    /* 0x10 */ const LiveActor* mCandidateActor;
-    /* 0x14 */ PointLightInfo* mCurrentInfo;
-    /* 0x18 */ PointLightInfo* mTargetInfo;
-    /* 0x1C */ PointLightInfo* mPreviousInfo;
+    s32 mStep;
+    s32 mBlendTime;
+    const LiveActor* mCurrentActor;
+    const LiveActor* mPreviousActor;
+    const LiveActor* mCandidateActor;
+    PointLightInfo* mCurrentInfo;
+    PointLightInfo* mTargetInfo;
+    PointLightInfo* mPreviousInfo;
 };

@@ -12,7 +12,7 @@ public:
     virtual void init(const JMapInfoIter&) override;
     virtual void calcAndSetBaseMtx() override;
 
-    /* 0x8C */ MtxPtr mMtx;
+    MtxPtr mMtx;
 };
 
 class ModelObjNpc : public LiveActor {
@@ -24,7 +24,7 @@ public:
     virtual void control() override;
     virtual void calcAndSetBaseMtx() override;
 
-    /* 0x8C */ MtxPtr mMtx;
-    /* 0x90 */ LodCtrl* mLodCtrl;
-    /* 0x94 */ ActorJointCtrl* mJointCtrl;
+    MtxPtr mMtx;
+    LodCtrl* mLodCtrl;
+    ActorJointCtrl* mJointCtrl;
 };

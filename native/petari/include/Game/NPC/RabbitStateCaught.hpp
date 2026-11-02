@@ -23,10 +23,10 @@ public:
     void setCaughtStartMarioPose();
     void blendBaseMatrixToMario(f32) const;
 
-    /* 0x10 */ TQuat4f mCaughtStartMarioQuat;
-    /* 0x20 */ TVec3f mCaughtStartMarioTrans;
-    /* 0x2C */ TalkMessageCtrl* mTalkCtrl;
-    /* 0x30 */ ModelObj* mPowerStarModel;
-    /* 0x34 */ TMtx34f mCaughtLandMarioBaseMtx;
-    /* 0x64 */ bool mUsePowerStarModel;
+    TQuat4f mCaughtStartMarioQuat;
+    TVec3f mCaughtStartMarioTrans;
+    TalkMessageCtrl* mTalkCtrl;
+    ModelObj* mPowerStarModel;
+    TMtx34f mCaughtLandMarioBaseMtx;
+    bool mUsePowerStarModel;
 };

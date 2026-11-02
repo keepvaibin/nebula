@@ -16,7 +16,7 @@ public:
     void exeSwingDpd();
     void exeSwingPlayer();
 
-    /* 0x8C */ s32 mItemType;
-    /* 0x90 */ s32 mItemCount;
-    /* 0x94 */ bool mCanGenItem;
+    s32 mItemType;
+    s32 mItemCount;
+    bool mCanGenItem;
 };

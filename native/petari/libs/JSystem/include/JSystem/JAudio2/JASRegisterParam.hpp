@@ -11,5 +11,5 @@ public:
     void write(JASRegisterParam::RegID, u32);
     u32 read(JASRegisterParam::RegID);
 
-    /* 0x0 */ u16 _0[14];
+    u16 _0[14];
 };

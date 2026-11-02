@@ -30,9 +30,9 @@ public:
     void exeReaction();
 
 private:
-    /* 0x15C */ FadeStarter mFadeStarter;
-    /* 0x170 */ NerveExecutor* mDemoExecutor;
-    /* 0x174 */ NerveExecutor* mTalkDemoExecutor;
-    /* 0x178 */ TurnJointCtrl* mTurnJointCtrl;
-    /* 0x17C */ s32 mObjArg0;
+    FadeStarter mFadeStarter;
+    NerveExecutor* mDemoExecutor;
+    NerveExecutor* mTalkDemoExecutor;
+    TurnJointCtrl* mTurnJointCtrl;
+    s32 mObjArg0;
 };

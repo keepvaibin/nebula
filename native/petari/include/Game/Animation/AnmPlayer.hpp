@@ -23,9 +23,9 @@ public:
         return mAnmRes == nullptr || static_cast< s32 >(mFrameCtrl.checkState(1)) == 1 || mFrameCtrl.getRate() == 0.0f;
     }
 
-    /* 0x4 */ J3DAnmBase* mAnmRes;
-    /* 0x8 */ const ResTable* mResTable;
-    /* 0xC */ J3DFrameCtrl mFrameCtrl;
+    J3DAnmBase* mAnmRes;
+    const ResTable* mResTable;
+    J3DFrameCtrl mFrameCtrl;
 };
 
 class MaterialAnmPlayerBase : public AnmPlayerBase {
@@ -38,5 +38,5 @@ public:
     void beginDiff();
     void endDiff();
 
-    /* 0x20 */ J3DModelData* mModelData;
+    J3DModelData* mModelData;
 };

@@ -36,9 +36,9 @@ public:
     void exeDead();
     void exeWaitDemo();
 
-    /* 0x24 */ KoopaBattleVs3Lv1* mBattleLv1;
-    /* 0x28 */ KoopaBattleVs3Lv2* mBattleLv2;
-    /* 0x2C */ KoopaBattleMain* mBattleMain;
-    /* 0x30 */ KoopaDemoFallToPlanetVs3Lv2* mDemoFallToPlanetLv2;
-    /* 0x34 */ KoopaDemoFallToPlanetVs3Lv3* mDemoFallToPlanetLv3;
+    KoopaBattleVs3Lv1* mBattleLv1;
+    KoopaBattleVs3Lv2* mBattleLv2;
+    KoopaBattleMain* mBattleMain;
+    KoopaDemoFallToPlanetVs3Lv2* mDemoFallToPlanetLv2;
+    KoopaDemoFallToPlanetVs3Lv3* mDemoFallToPlanetLv3;
 };

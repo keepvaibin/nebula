@@ -40,9 +40,9 @@
 
 namespace {
     struct AnimSoundInfo {
-        /* 0x00 */ const char* pAnimName;
-        /* 0x04 */ const char* pSoundBM;
-        /* 0x08 */ const char* pSoundBV;
+        const char* pAnimName;
+        const char* pSoundBM;
+        const char* pSoundBV;
     };
 
     const AnimSoundInfo sAnimSoundTable[] = {{"\203\127\203\203\203\223\203\166" /* ジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},

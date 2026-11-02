@@ -34,15 +34,15 @@ public:
     void exeGameDataSave();
     void exeLuigiLetter();
 
-    /* 0x20 */ ButtonPaneController* _20;
-    /* 0x24 */ ButtonPaneController* _24;
-    /* 0x28 */ TVec2f _28;
-    /* 0x30 */ SysInfoWindow* _30;
-    /* 0x34 */ LuigiLetter* mLuigiLetter;
-    /* 0x38 */ ButtonPaneController* _38;
-    /* 0x3C */ TVec2f mStageTitleOffset;
-    /* 0x44 */ TVec2f mCoinNumPos;
-    /* 0x4C */ TVec2f mStarPieceNumPos;
-    /* 0x54 */ bool _54;
+    ButtonPaneController* _20;
+    ButtonPaneController* _24;
+    TVec2f _28;
+    SysInfoWindow* _30;
+    LuigiLetter* mLuigiLetter;
+    ButtonPaneController* _38;
+    TVec2f mStageTitleOffset;
+    TVec2f mCoinNumPos;
+    TVec2f mStarPieceNumPos;
+    bool _54;
     NebulaPauseSettingsButton* mSettingsButton;  // Nebula's settings menu, from the lower band
 };

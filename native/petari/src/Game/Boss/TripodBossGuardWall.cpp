@@ -19,8 +19,8 @@
 
 namespace {
     struct WallPartPlacementAngle {
-        /* 0x00 */ f32 mAngle;
-        /* 0x04 */ s32 mStartTiming;
+        f32 mAngle;
+        s32 mStartTiming;
     };
 
     static WallPartPlacementAngle sWallPartPlacementAngleTable[] = {{0.0f, 4},    {45.0f, 8},   {90.0f, 12},  {135.0f, 16},

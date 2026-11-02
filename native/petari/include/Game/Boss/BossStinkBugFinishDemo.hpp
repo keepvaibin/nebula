@@ -15,5 +15,5 @@ public:
     void exeTryStart();
     void exeAppearPowerStar();
 
-    /* 0x64 */ DemoPositionController* mDemoPositionController;
+    DemoPositionController* mDemoPositionController;
 };

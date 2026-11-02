@@ -11,8 +11,8 @@ public:
 
     virtual void movement();
 
-    /* 0x0C */ s32 mFrame;
-    /* 0x10 */ s32 mDelay;
+    s32 mFrame;
+    s32 mDelay;
 };
 
 class StopSceneController : public NameObj {
@@ -26,6 +26,6 @@ public:
     void requestStopSceneDelay(s32, s32);
     bool isSceneStopped() const;
 
-    /* 0x0C */ NameObjGroup* mDelayRequestArray;
-    /* 0x10 */ s32 mFrame;
+    NameObjGroup* mDelayRequestArray;
+    s32 mFrame;
 };

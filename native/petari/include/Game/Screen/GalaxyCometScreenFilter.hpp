@@ -9,5 +9,5 @@ public:
 
     void setCometType(const char*);
 
-    /* 0x20 */ bool _20;
+    bool _20;
 };

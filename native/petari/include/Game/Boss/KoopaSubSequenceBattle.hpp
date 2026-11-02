@@ -22,6 +22,6 @@ public:
     void exeBattleLv3();
 
 private:
-    /* 0x10 */ KoopaSequencer* mSequencer;
-    /* 0x14 */ KoopaBattleBase* mBattleBase;
+    KoopaSequencer* mSequencer;
+    KoopaBattleBase* mBattleBase;
 };

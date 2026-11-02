@@ -17,13 +17,13 @@ public:
     void show();
     void hide();
 
-    /* 0x8C */ bool _8C;
-    /* 0x8D */ bool mIsVisible;
-    /* 0x8E */ bool _8E;
-    /* 0x8F */ bool _8F;
-    /* 0x90 */ s32 _90;
-    /* 0x94 */ s32 _94;
-    /* 0x98 */ s32 _98;
-    /* 0x9C */ TVec3f mUp;
-    /* 0xA8 */ TVec3f mFront;
+    bool _8C;
+    bool mIsVisible;
+    bool _8E;
+    bool _8F;
+    s32 _90;
+    s32 _94;
+    s32 _98;
+    TVec3f mUp;
+    TVec3f mFront;
 };

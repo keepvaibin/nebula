@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan console renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
+// The Vulkan renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
 // copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"
@@ -260,7 +260,7 @@ bool RendererVk::create_surface_and_device() {
 bool RendererVk::create_layouts() {
     const vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    // scene target depth: 24-bit integer as the console's (and D3D12's D24) where the device has it.
+    // scene target depth: 24-bit integer.
     VkFormatProperties format{};
     vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_D24_UNORM_S8_UINT, &format);
     depth_format_ = (format.optimalTilingFeatures & (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
@@ -1405,7 +1405,7 @@ void RendererVk::report_present_stats() {
     std::ostringstream message;
     message << "[present-stats] fps=" << presents / seconds << " new-serial-hz="
             << static_cast<double>(progress.first_serial_presentations - first_serial_start) / seconds
-            << " xfb-production-hz=" << static_cast<double>(copies - copies_start) / seconds
+            << " display-production-hz=" << static_cast<double>(copies - copies_start) / seconds
             << " frame-ms(avg/max)=" << (stats_.intervals != 0u ? stats_.interval_ms / stats_.intervals : 0.0)
             << '/' << stats_.interval_max_ms << " pace-wait-ms(avg/max)=" << stats_.pace_wait_ms / presents << '/'
             << stats_.pace_wait_max_ms << " present-ms(avg/max)=" << stats_.present_ms / presents << '/'
@@ -1418,7 +1418,7 @@ void RendererVk::report_present_stats() {
     }
     message << " gpu-samples=" << stats_.gpu_samples << " gpu-total-ms=" << stats_.gpu_ms;
     if (pass_queries_ != VK_NULL_HANDLE) {
-        static constexpr const char* kPassNames[] = {"scene", "resolve", "efb-copy", "xfb-copy", "bloom", "scene-aa",
+        static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
                                                      "scene-ao", "upscale", "rt", "present", "curve-sort"};
         static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
         message << " gpu-pass-ms=";

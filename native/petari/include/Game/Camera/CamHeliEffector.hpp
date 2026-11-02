@@ -9,6 +9,6 @@ public:
 
     void update(CameraMan*);
 
-    /* 0x0 */ s32 _0;
-    /* 0x4 */ f32 _4;
+    s32 _0;
+    f32 _4;
 };

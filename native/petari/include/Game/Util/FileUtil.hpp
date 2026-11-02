@@ -18,7 +18,6 @@ namespace MR {
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[in] considerLanguage Determines if the file is localized.
     /// @return The size of the file, in bytes.
-    u32 getFileSize(const char* pFilePath, bool considerLanguage);
 
     /// @brief Converts a file path to its entry number, with respect to the current language.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
@@ -100,7 +99,6 @@ namespace MR {
     /// @brief Determines if an archive file is currently mounted.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @return `true` if the archive file is currently mounted, `false` otherwise.
-    bool isMountedArchive(const char* pFilePath);
 
     /// @brief Determines if an object or layout archive file is currently loaded.
     /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.

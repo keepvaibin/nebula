@@ -15,5 +15,5 @@ public:
     void exeSteam();
     void exeWaitForSwitchOn();
 
-    /* 0x8C */ TVec3f mUp;
+    TVec3f mUp;
 };

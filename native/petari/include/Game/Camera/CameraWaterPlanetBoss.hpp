@@ -26,19 +26,19 @@ public:
         mAngleXMax = angleXMax;
     }
 
-    /* 0x4C */ f32 mDistMin;
-    /* 0x50 */ f32 mDistMax;
-    /* 0x54 */ f32 mSideBlendRateMin;
-    /* 0x58 */ f32 mSideBlendRate;
-    /* 0x5C */ s32 mCollideCount;
-    /* 0x60 */ TVec3f mLastMoveDir;
-    /* 0x6C */ bool mIsBlendUpEnabled;
-    /* 0x70 */ TVec3f mWPoint;
-    /* 0x7C */ f32 mDotFrontMin;
-    /* 0x80 */ f32 mAngleXMin;
-    /* 0x84 */ f32 mDotFrontMax;
-    /* 0x88 */ f32 mAngleXMax;
-    /* 0x8C */ bool mIsRounding;
-    /* 0x90 */ s32 mRoundingFrame;
-    /* 0x94 */ TVec3f mSide;
+    f32 mDistMin;
+    f32 mDistMax;
+    f32 mSideBlendRateMin;
+    f32 mSideBlendRate;
+    s32 mCollideCount;
+    TVec3f mLastMoveDir;
+    bool mIsBlendUpEnabled;
+    TVec3f mWPoint;
+    f32 mDotFrontMin;
+    f32 mAngleXMin;
+    f32 mDotFrontMax;
+    f32 mAngleXMax;
+    bool mIsRounding;
+    s32 mRoundingFrame;
+    TVec3f mSide;
 };

@@ -39,14 +39,14 @@ public:
     void exeDownEnd();
 
 private:
-    /* 0x10 */ s32 mEscapeTime;
-    /* 0x14 */ s32 mMaxEscapeTime;
-    /* 0x18 */ s32 _18;
-    /* 0x1C */ bool mIsTurnClockwise;
-    /* 0x1D */ bool mIsLastHit;
-    /* 0x20 */ MR::ActorMoveParam* mEscapeRunParam;
-    /* 0x24 */ MR::ActorMoveParam* mDamageTailRunParam;
-    /* 0x28 */ u32 mMaxRunFrames;
-    /* 0x2C */ f32 mRotateVelocity;
-    /* 0x30 */ f32 mJumpAwayVelocity;
+    s32 mEscapeTime;
+    s32 mMaxEscapeTime;
+    s32 _18;
+    bool mIsTurnClockwise;
+    bool mIsLastHit;
+    MR::ActorMoveParam* mEscapeRunParam;
+    MR::ActorMoveParam* mDamageTailRunParam;
+    u32 mMaxRunFrames;
+    f32 mRotateVelocity;
+    f32 mJumpAwayVelocity;
 };

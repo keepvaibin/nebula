@@ -12,6 +12,6 @@ public:
     virtual void init(const JMapInfoIter& rIter);
     virtual void calcAndSetBaseMtx();
 
-    /* 0x8C */ const Koopa* mKoopa;
-    /* 0x90 */ MtxPtr mHipMtx;
+    const Koopa* mKoopa;
+    MtxPtr mHipMtx;
 };

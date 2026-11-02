@@ -30,5 +30,5 @@ public:
     static JASChannel* noteOnOsc(int, u8, u8, u16, void (*)(u32, JASChannel*, JASVoice*, void*), void*);
 
 private:
-    /* 0x04 */ JASWaveBank* mWaveBank;
+    JASWaveBank* mWaveBank;
 };

@@ -6,35 +6,35 @@ class JPAEmitterWorkData;
 
 struct JPADynamicsBlockData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ u32 mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u32 mResUserWork;
-    /* 0x10 */ JGeometry::TVec3< f32 > mEmitterScl;
-    /* 0x1C */ JGeometry::TVec3< f32 > mEmitterTrs;
-    /* 0x28 */ JGeometry::TVec3< f32 > mEmitterDir;
-    /* 0x34 */ f32 mInitialVelOmni;
-    /* 0x38 */ f32 mInitialVelAxis;
-    /* 0x3C */ f32 mInitialVelRndm;
-    /* 0x40 */ f32 mInitialVelDir;
-    /* 0x44 */ f32 mSpread;
-    /* 0x48 */ f32 mInitialVelRatio;
-    /* 0x4C */ f32 mRate;
-    /* 0x50 */ f32 mRateRndm;
-    /* 0x54 */ f32 mLifeTimeRndm;
-    /* 0x58 */ f32 mVolumeSweep;
-    /* 0x5C */ f32 mVolumeMinRad;
-    /* 0x60 */ f32 mAirResist;
-    /* 0x64 */ f32 mMoment;
-    /* 0x68 */ JGeometry::TVec3< s16 > mEmitterRot;
-    /* 0x6E */ s16 mMaxFrame;
-    /* 0x70 */ s16 mStartFrame;
-    /* 0x72 */ s16 mLifeTime;
-    /* 0x74 */ u16 mVolumeSize;
-    /* 0x76 */ u16 mDivNumber;
-    /* 0x78 */ u8 mRateStep;
-};  // Size: 0x7C
+    u32 mFlags;
+    u32 mResUserWork;
+    JGeometry::TVec3< f32 > mEmitterScl;
+    JGeometry::TVec3< f32 > mEmitterTrs;
+    JGeometry::TVec3< f32 > mEmitterDir;
+    f32 mInitialVelOmni;
+    f32 mInitialVelAxis;
+    f32 mInitialVelRndm;
+    f32 mInitialVelDir;
+    f32 mSpread;
+    f32 mInitialVelRatio;
+    f32 mRate;
+    f32 mRateRndm;
+    f32 mLifeTimeRndm;
+    f32 mVolumeSweep;
+    f32 mVolumeMinRad;
+    f32 mAirResist;
+    f32 mMoment;
+    JGeometry::TVec3< s16 > mEmitterRot;
+    s16 mMaxFrame;
+    s16 mStartFrame;
+    s16 mLifeTime;
+    u16 mVolumeSize;
+    u16 mDivNumber;
+    u8 mRateStep;
+};
 
 typedef void (*JPADynamicsCalcVolumeFunc)(JPAEmitterWorkData*);
 
@@ -136,6 +136,6 @@ public:
     }
 
 public:
-    /* 0x00 */ const JPADynamicsBlockData* mpData;
-    /* 0x04 */ JPADynamicsCalcVolumeFunc mpCalcVolumeFunc;
+    const JPADynamicsBlockData* mpData;
+    JPADynamicsCalcVolumeFunc mpCalcVolumeFunc;
 };

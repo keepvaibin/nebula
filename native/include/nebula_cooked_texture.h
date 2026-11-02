@@ -73,7 +73,7 @@ typedef struct NebulaTexture {
     uint8_t disc_format;    /* the GX format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
     uint8_t flags;          /* NEBULA_TEXTURE_FILTER_AT_UPLOAD */
-    /* Texture packs name a texture by these (Dolphin's convention): xxh64 of the disc's level-0 bytes, and of the
+    /* Texture packs name a texture by these: xxh64 of the disc's level-0 bytes, and of the
        palette entries a colour-indexed one used (0 for the others). 0 and 0 for an image the game makes. */
     uint64_t pack_hash;
     uint64_t pack_palette_hash;

@@ -19,20 +19,20 @@ public:
     DemoStartInfo();
     DemoStartInfo& operator=(const DemoStartInfo&);
 
-    /* 0x00 */ LiveActor* _0;
-    /* 0x04 */ LayoutActor* _4;
-    /* 0x08 */ NerveExecutor* _8;
-    /* 0x0C */ NameObj* _C;
-    /* 0x10 */ NameObj* _10;
-    /* 0x14 */ DemoExecutor* mDemoExecutor;
-    /* 0x18 */ const char* mDemoName;
-    /* 0x1C */ const char* _1C;
-    /* 0x20 */ const Nerve* _20;
-    /* 0x24 */ u32 _24;
-    /* 0x28 */ DemoType mDemoType;
-    /* 0x2C */ CinemaFrameType mFrameType;
-    /* 0x30 */ StarPointerType mPointerType;
-    /* 0x34 */ DeleteEffectType mDeleteEffectType;
+    LiveActor* _0;
+    LayoutActor* _4;
+    NerveExecutor* _8;
+    NameObj* _C;
+    NameObj* _10;
+    DemoExecutor* mDemoExecutor;
+    const char* mDemoName;
+    const char* _1C;
+    const Nerve* _20;
+    u32 _24;
+    DemoType mDemoType;
+    CinemaFrameType mFrameType;
+    StarPointerType mPointerType;
+    DeleteEffectType mDeleteEffectType;
 };
 
 class DemoStartRequestHolder {
@@ -53,8 +53,8 @@ public:
     DemoStartInfo* find(const NameObj*, const char*) const;
     DemoStartInfo* findEmpty() const;
 
-    /* 0x00 */ DemoStartInfo* mStartInfos[0x10];
-    /* 0x40 */ s32 mNumInfos;
-    /* 0x44 */ MR::FixedRingBuffer< const DemoStartInfo*, 16 > mRequestBuffer;
-    /* 0xA0 */ NameObj* mProxyObj;
+    DemoStartInfo* mStartInfos[0x10];
+    s32 mNumInfos;
+    MR::FixedRingBuffer< const DemoStartInfo*, 16 > mRequestBuffer;
+    NameObj* mProxyObj;
 };

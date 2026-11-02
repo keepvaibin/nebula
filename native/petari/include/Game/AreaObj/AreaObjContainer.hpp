@@ -9,9 +9,9 @@ class AreaObjMgr;
 typedef AreaObjMgr* (*ManagerCreatorFuncPtr)(s32, const char*);
 
 struct Name2CreateManagerFunc {
-    /* 0x0 */ const char* mName;
-    /* 0x4 */ s32 _4;
-    /* 0x8 */ ManagerCreatorFuncPtr mCreateFunc;
+    const char* mName;
+    s32 _4;
+    ManagerCreatorFuncPtr mCreateFunc;
 };
 
 class AreaObjContainer : public NameObj {
@@ -28,8 +28,8 @@ public:
     AreaObj* getAreaObj(const char*, const TVec3f&) const;
 
 private:
-    /* 0x00C */ AreaObjMgr* mManagerArray[0x50];
-    /* 0x14C */ u32 mNumManagers;
+    AreaObjMgr* mManagerArray[0x50];
+    u32 mNumManagers;
 };
 
 namespace MR {

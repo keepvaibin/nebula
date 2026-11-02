@@ -11,7 +11,7 @@ class JAIStreamMgr;
 class JAIStream : public JAISound, public JSULink< JAIStream >, public JASPoolAllocObject< JAIStream > {
 public:
     struct TInner {
-        /* 0x0 */ JASStream mStream;
+        JASStream mStream;
     };
 
     JAIStream(JAIStreamMgr* streamMgr, JAISoundStrategyMgr< JAIStream >* soundStrategyMgr);
@@ -42,15 +42,15 @@ public:
 
     static const int NUM_CHILDREN = 6;
 
-    /* 0x0A8 */ TInner inner_;
-    /* 0x290 */ int mPrepareState;
-    /* 0x294 */ s32 mStreamFileEntry;
-    /* 0x298 */ int mCategory;
-    /* 0x2A0 */ JAISoundChild* children[NUM_CHILDREN];
-    /* 0x2B8 */ JAIStreamMgr* streamMgr;
-    /* 0x2BC */ JAISoundStrategy< JAIStream >* soundStrategy;
-    /* 0x2C0 */ JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
-    /* 0x2C4 */ bool mIsPaused;
-    /* 0x2C5 */ NebulaAtomic< bool > mIsStreamStopped;
-    /* 0x2C6 */ NebulaAtomic< bool > mIsStreamStarted;
+    TInner inner_;
+    int mPrepareState;
+    s32 mStreamFileEntry;
+    int mCategory;
+    JAISoundChild* children[NUM_CHILDREN];
+    JAIStreamMgr* streamMgr;
+    JAISoundStrategy< JAIStream >* soundStrategy;
+    JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
+    bool mIsPaused;
+    NebulaAtomic< bool > mIsStreamStopped;
+    NebulaAtomic< bool > mIsStreamStarted;
 };

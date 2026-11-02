@@ -31,8 +31,8 @@ public:
         return mVelocity;
     }
 
-    /* 0x00 */ TVec3f mPos;
-    /* 0x0C */ TVec3f mVelocity;
+    TVec3f mPos;
+    TVec3f mVelocity;
 };
 
 class JAUDopplerAudibleRelPos {
@@ -49,9 +49,9 @@ public:
         return mDist;
     }
 
-    /* 0x00 */ TVec3f mPos;
-    /* 0x0C */ TVec3f mDir;
-    /* 0x18 */ f32 mDist;
+    TVec3f mPos;
+    TVec3f mDir;
+    f32 mDist;
 };
 
 class JAUDopplerAudibleChannel {
@@ -60,7 +60,7 @@ public:
         return mRelPos.getDir();
     }
 
-    /* 0x00 */ JASSoundParams mParams;
-    /* 0x14 */ JAUDopplerAudibleRelPos mRelPos;
-    /* 0x30 */ f32 mPitch;
+    JASSoundParams mParams;
+    JAUDopplerAudibleRelPos mRelPos;
+    f32 mPitch;
 };

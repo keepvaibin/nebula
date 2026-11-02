@@ -31,9 +31,9 @@ public:
     void exeGalaxyMoveLecture();
     void exeWaitStartDemo();
 
-    /* 0x8C */ AstroDomeCameraController* mCameraController;
-    /* 0x90 */ GalaxySelectBackButton* mBackButton;
-    /* 0x94 */ GalaxySelectInfo* mInfo;
-    /* 0x98 */ GalaxyConfirmLayout* mConfirmLayout;
-    /* 0x9C */ bool _9C;
+    AstroDomeCameraController* mCameraController;
+    GalaxySelectBackButton* mBackButton;
+    GalaxySelectInfo* mInfo;
+    GalaxyConfirmLayout* mConfirmLayout;
+    bool _9C;
 };

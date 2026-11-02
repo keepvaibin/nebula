@@ -27,12 +27,12 @@ public:
     void exeSwitchDown();
     void exeOn();
 
-    /* 0x8C */ u32 _8C;  // useless
-    /* 0x90 */ SpringValue* mSpringValue;
-    /* 0x94 */ MapObjConnector* mConnector;
-    /* 0x98 */ CollisionParts* mSpringModel;
-    /* 0x9C */ TPos3f _9C;
-    /* 0xCC */ bool _CC;
-    /* 0xCD */ bool _CD;
-    /* 0xCE */ bool _CE;
+    u32 _8C;  // useless
+    SpringValue* mSpringValue;
+    MapObjConnector* mConnector;
+    CollisionParts* mSpringModel;
+    TPos3f _9C;
+    bool _CC;
+    bool _CD;
+    bool _CE;
 };

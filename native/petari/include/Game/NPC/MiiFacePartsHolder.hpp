@@ -31,7 +31,7 @@ public:
     void setTevOpa() const;
     void setTevXlu() const;
 
-    /* 0x34 */ MiiDatabase* _34;
-    /* 0x38 */ MiiErrcode _38;
-    /* 0x3C */ s32 _3C;
+    MiiDatabase* _34;
+    MiiErrcode _38;
+    s32 _3C;
 };

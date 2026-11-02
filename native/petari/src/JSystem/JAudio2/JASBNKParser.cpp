@@ -197,10 +197,6 @@ JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, NebulaAren
     return bank;
 }
 
-inline JASInstParam::JASInstParam() {
-    init();
-}
-
 JASBasicBank* JASBNKParser::Ver0::createBasicBank(void const* stream, NebulaArena* heap) {
     if (heap == nullptr) {
         heap = JASDram;

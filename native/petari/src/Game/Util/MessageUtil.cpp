@@ -40,10 +40,6 @@ namespace MR {
         return getGalaxyNameOnCurrentLanguage(getCurrentStageName());
     }
 
-    const char16_t* getCurrentGalaxyNameShortOnCurrentLanguage() {
-        return getGalaxyNameShortOnCurrentLanguage(getCurrentStageName());
-    }
-
     const char16_t* getCurrentScenarioNameOnCurrentLanguage() {
         s32 selectedScenarioNo = getCurrentSelectedScenarioNo();
         s32 scenarioNo = selectedScenarioNo != -1 ? selectedScenarioNo : getCurrentScenarioNo();

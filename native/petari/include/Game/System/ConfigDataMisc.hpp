@@ -23,6 +23,6 @@ public:
     void updateLastModified();
 
 private:
-    /* 0x04 */ u8 mFlag;
-    /* 0x08 */ NebulaCalendar::SaveTime mLastModified;
+    u8 mFlag;
+    NebulaCalendar::SaveTime mLastModified;
 };

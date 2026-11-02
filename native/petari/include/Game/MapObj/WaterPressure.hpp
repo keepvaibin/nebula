@@ -15,6 +15,6 @@ public:
 
     void calcGunPointFromCannon(TPos3f*);
 
-    /* 0xC0 */ ActorCameraInfo* mCameraInfo;
-    /* 0xC4 */ bool mIsInvalidSpinKill;
+    ActorCameraInfo* mCameraInfo;
+    bool mIsInvalidSpinKill;
 };

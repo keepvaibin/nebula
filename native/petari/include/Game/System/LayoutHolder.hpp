@@ -35,8 +35,8 @@ public:
     void mount(s32);
     ResFileInfo* createAndRegisterObject(const char*, void*);
 
-    /* 0x04 */ AssetFolder* mArchive;
-    /* 0x08 */ ResTable mLayoutRes;
-    /* 0x10 */ ResTable mAnimRes;
-    /* 0x18 */ ResTable mResOther;
+    AssetFolder* mArchive;
+    ResTable mLayoutRes;
+    ResTable mAnimRes;
+    ResTable mResOther;
 };

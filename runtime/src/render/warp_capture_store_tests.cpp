@@ -786,10 +786,8 @@ V main(uint id : SV_VertexID) {
                     }
                 }
                 const auto sampling = compute_scene_copy_sampling_geometry(params, size, size, scale);
-                const auto constants = make_scene_conversion_constants(params,
-                    false, false, false, 0u, sampling.src_x, sampling.src_y,
-                    sampling.step_x, sampling.step_y, sampling.filter_row_offset,
-                    static_cast<float>(scale), kFrameHeight);
+                const auto constants = make_scene_conversion_constants(false, 0u, sampling.src_x, sampling.src_y,
+                    sampling.step_x, sampling.step_y);
                 const auto reference = run_bytes(kSceneColorFormat, bytes,
                     source_width, source_height, size, constants,
                     false, nullptr, &upload_box);
@@ -1728,24 +1726,12 @@ galaxy::render::SceneConversionShaderConstants constants_for_case(
     const galaxy::render::CaptureRequest& params,
     unsigned scale,
     bool is_depth,
-    bool intensity,
     std::uint8_t format) {
     const galaxy::render::SceneCopySamplingGeometry sampling =
         galaxy::render::compute_scene_copy_sampling_geometry(
             params, scale, scale, scale);
-    return galaxy::render::make_scene_conversion_constants(
-        params,
-        is_depth,
-        intensity,
-        format == 2u || format == 3u,
-        format,
-        sampling.src_x,
-        sampling.src_y,
-        sampling.step_x,
-        sampling.step_y,
-        sampling.filter_row_offset,
-        static_cast<float>(scale),
-        3u);
+    return galaxy::render::make_scene_conversion_constants(is_depth, format, sampling.src_x, sampling.src_y, sampling.step_x,
+                                                           sampling.step_y);
 }
 
 bool expect_uniform_pixels(
@@ -1763,89 +1749,6 @@ bool expect_uniform_pixels(
         }
     }
     return true;
-}
-
-bool test_scaled_display_filter() {
-    bool passed = true;
-    WarpConversionHarness harness;
-    const std::array<Pixel, 3> rows{
-        Pixel{0u, 0u, 0u, 1u}, Pixel{255u, 0u, 0u, 77u},
-        Pixel{0u, 0u, 0u, 2u}};
-    const auto params = make_filter_params(true);
-    for (const unsigned scale : {1u, 2u, 6u}) {
-        const auto sampling = galaxy::render::compute_display_sampling_geometry(
-            params, scale, scale, scale);
-        const auto texture = galaxy::render::compute_scene_copy_sampling_geometry(
-            params, scale, scale, scale);
-        passed &= expect(sampling.src_y == static_cast<float>(scale) &&
-            sampling.step_x == 1.0f && sampling.step_y == 1.0f &&
-            sampling.filter_row_offset == 1.0f &&
-            texture.filter_row_offset == static_cast<float>(scale),
-            "display filter footprint leaves source mapping and texture copies intact");
-        const auto constants = galaxy::render::make_scene_conversion_constants(
-            params, false, false, true, 7u, sampling.src_x, sampling.src_y,
-            sampling.step_x, sampling.step_y, sampling.filter_row_offset, static_cast<float>(scale), 3u);
-        const auto result = harness.run_color(rows, scale, constants);
-        for (unsigned y = 0; y < scale; ++y) {
-            // The rectangle starts at logical row 1: its first physical row reads itself as the row above.
-            const auto red = static_cast<std::uint8_t>((255u * 32u + 255u * 32u) >> 6u);
-            for (unsigned x = 0; x < scale; ++x) {
-                passed &= expect_pixel(result[y * scale + x], {red, 0u, 0u, 255u},
-                    "scaled display filter stays inside its rectangle, keeping brightness and opaque alpha");
-            }
-        }
-    }
-    return passed;
-}
-
-bool test_cpu_oracle() {
-    bool passed = true;
-    const std::array<Pixel, 3> rows{
-        Pixel{10u, 20u, 30u, 40u},
-        Pixel{40u, 50u, 60u, 77u},
-        Pixel{70u, 80u, 90u, 100u},
-    };
-    galaxy::render::CaptureRequest filter = make_filter_params(true);
-    filter.src_y = 0u;
-    filter.src_height = 2u;
-    passed &= expect_pixel(
-        oracle_from_three_rows(rows, filter, false, 0u),
-        Pixel{40u, 50u, 60u, 77u},
-        "oracle copy: the line as drawn");
-    filter = make_filter_params(true);
-    passed &= expect_pixel(
-        oracle_from_three_rows(rows, filter, false, 0u),
-        Pixel{40u, 50u, 60u, 77u},
-        "oracle filter at the rectangle's top keeps the line");
-
-    const std::array<Pixel, 3> red_rows{
-        Pixel{0u, 0u, 0u, 1u},
-        Pixel{255u, 0u, 0u, 77u},
-        Pixel{0u, 0u, 0u, 2u},
-    };
-    const galaxy::render::CaptureRequest identity = make_filter_params(false);
-    passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 3u),
-        Pixel{82u, 82u, 82u, 82u},
-        "oracle luminance R8 holds Y");
-    passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 4u),
-        Pixel{82u, 82u, 82u, 82u},
-        "oracle luminance G8 holds Y");
-    passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 5u),
-        Pixel{82u, 82u, 82u, 82u},
-        "oracle luminance B8 holds Y");
-
-    const std::array<std::uint32_t, 3> depth_rows{0x102030u, 0x405060u, 0x708090u};
-    galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
-    depth_filter.src_y = 0u;
-    depth_filter.src_height = 2u;
-    passed &= expect_pixel(
-        oracle_depth(depth_rows, depth_filter),
-        Pixel{64u, 64u, 64u, 255u},
-        "oracle copies the depth");
-    return passed;
 }
 
 bool test_warp_against_oracle() {
@@ -1883,32 +1786,18 @@ bool test_warp_against_oracle() {
                     harness.run_color(
                         rows,
                         scale,
-                        constants_for_case(params, scale, false, false, 0u)),
+                        constants_for_case(params, scale, false, 0u)),
                     scale,
                     expected,
                     label);
             }
 
             const galaxy::render::CaptureRequest identity = make_filter_params(false);
-            constexpr std::array<std::uint8_t, 3> kIntensityFormats{
-                3u, 4u, 5u};
-            for (const std::uint8_t format : kIntensityFormats) {
-                char intensity_label[64]{};
-                std::snprintf(
-                    intensity_label,
-                    sizeof(intensity_label),
-                    "%ux intensity format %u",
-                    scale,
-                    static_cast<unsigned>(format));
-                passed &= expect_uniform_pixels(
-                    harness.run_color(
-                        red_rows,
-                        scale,
-                        constants_for_case(identity, scale, false, true, format)),
-                    scale,
-                    oracle_from_three_rows(red_rows, identity, true, format),
-                    intensity_label);
-            }
+            passed &= expect_uniform_pixels(
+                harness.run_color(red_rows, scale, constants_for_case(identity, scale, false, 3u)),
+                scale,
+                oracle_from_three_rows(red_rows, identity, false, 3u),
+                "red in every channel");
 
             const galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
             char depth_label[64]{};
@@ -1921,7 +1810,7 @@ bool test_warp_against_oracle() {
                 harness.run_depth(
                     z24_rows,
                     scale,
-                    constants_for_case(depth_filter, scale, true, false, 0u)),
+                    constants_for_case(depth_filter, scale, true, 0u)),
                 scale,
                 oracle_depth(z24_rows, depth_filter),
                 depth_label);
@@ -1955,7 +1844,7 @@ int main(int argc, char** argv) {
         }
     }
     // Any other argument runs the default suite.
-    bool passed = test_cpu_oracle();
+    bool passed = true;
     passed &= test_generated_mip_uniform_alpha();
     passed &= test_flatten_texel_checker();
     passed &= test_remove_texel_checker();
@@ -1972,7 +1861,6 @@ int main(int argc, char** argv) {
         passed &= harness.test_identity_scene_copy();
         passed &= harness.test_display_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
-        passed &= test_scaled_display_filter();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAILED: WARP texture cache suite: %s\n", error.what());
         passed = false;

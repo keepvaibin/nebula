@@ -8,7 +8,7 @@ class TombSpiderEnvironment {
 public:
     TombSpiderEnvironment(LiveActor*);
 
-    /* 0x00 */ LiveActor* mActor;
-    /* 0x04 */ PlanetMap* mPlanet;
-    /* 0x08 */ ModelObj* mCocoon;
+    LiveActor* mActor;
+    PlanetMap* mPlanet;
+    ModelObj* mCocoon;
 };

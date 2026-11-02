@@ -2,7 +2,7 @@
 // FurDrawer (Game/Util/FurDrawer.cpp): one fur shell. Channel 0 lit by its lights (clamped diffuse), channel 1 the
 // specular lights; the body texture (0) by channel 0 plus the shell's brightness, mixed toward the shell colour by
 // the fur texture (1, its lookup moved by the indirect texture 2 at the shell's scale) plus the specular, doubled; the
-// alpha the shell's base plus the fur's alpha by the shell alpha; drawn above the reference; console fog.
+// alpha the shell's base plus the fur's alpha by the shell alpha; drawn above the reference; fog.
 struct MaterialConstants {
     float4 mat0;     // channel 0's material and ambient colours (0-1)
     float4 amb0;
@@ -14,7 +14,7 @@ struct MaterialConstants {
                      // 1 its material, 2 and 3 channel 1's), w: 1 specular, 2 indirect
     float4 params2;  // x: the indirect scale, y: the alpha reference (0-255), zw: texture 1's size (texels)
     float4 fog;      // start, end, near, far
-    float4 fog_color;  // rgb; w: the console fog type
+    float4 fog_color;  // rgb; w: the fog type
 };
 
 #include "native_material.hlsli"

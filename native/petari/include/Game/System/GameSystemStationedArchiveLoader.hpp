@@ -32,7 +32,7 @@ public:
     void createAndAddPlayerArchives(bool);
     void createAndAddOtherArchives();
 
-    /* 0x8 */ PlayerHeapHolder* mHeapHolder;
+    PlayerHeapHolder* mHeapHolder;
     GameEvent mDone;
 };
 
@@ -50,7 +50,7 @@ public:
 
     virtual bool isExecute(const MR::StationedFileInfo*) const;
 
-    /* 0x4 */ MR::StationedFileInfo::LoadType mLoadType;
+    MR::StationedFileInfo::LoadType mLoadType;
 };
 
 class ConditionIfIsNotPlayer : public StationedArchiveLoader::Condition {
@@ -65,9 +65,9 @@ public:
     virtual bool isExecute(const MR::StationedFileInfo*) const;
     virtual NebulaArena* getProperHeap(const MR::StationedFileInfo*) const;
 
-    /* 0x4 */ NebulaArena* mNapaHeap;
-    /* 0x8 */ NebulaArena* mGDDRHeap;
-    /* 0xC */ bool mIsDataMario;
+    NebulaArena* mNapaHeap;
+    NebulaArena* mGDDRHeap;
+    bool mIsDataMario;
 };
 
 class PlayerHeapHolder {
@@ -78,8 +78,8 @@ public:
     void setIsDataMario(bool isDataMario);
 
 
-    /* 0x0 */ ConditionUsePlayerHeap* mCondition;
-    /* 0x4 */ NebulaArena* mNapaHeap;
-    /* 0x8 */ NebulaArena* mGDDRHeap;
-    /* 0xC */ bool mIsDataMario;
+    ConditionUsePlayerHeap* mCondition;
+    NebulaArena* mNapaHeap;
+    NebulaArena* mGDDRHeap;
+    bool mIsDataMario;
 };

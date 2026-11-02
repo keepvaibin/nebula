@@ -17,8 +17,8 @@ public:
         return mPlantPoints[idx];
     }
 
-    /* 0x00 */ s32 mNumPlantPoints;
-    /* 0x04 */ PlantPoint** mPlantPoints;
-    /* 0x08 */ RailRider* mRailRider;
-    /* 0x0C */ f32 mRailSpeed;
+    s32 mNumPlantPoints;
+    PlantPoint** mPlantPoints;
+    RailRider* mRailRider;
+    f32 mRailSpeed;
 };

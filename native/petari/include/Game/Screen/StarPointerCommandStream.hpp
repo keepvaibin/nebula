@@ -24,12 +24,12 @@ public:
         mColor = color;
     }
 
-    /* 0x20 */ bool _20;
-    /* 0x24 */ s32 mOffScreenTime;
-    /* 0x28 */ f32 _28;
-    /* 0x2C */ const TVec2f* mScreenPos;
-    /* 0x30 */ const TVec3f* mWorldPos;
-    /* 0x34 */ TVec2f mFollowPos;
-    /* 0x3C */ s32 mPadChannel;
-    /* 0x40 */ const NebulaColor8* mColor;
+    bool _20;
+    s32 mOffScreenTime;
+    f32 _28;
+    const TVec2f* mScreenPos;
+    const TVec3f* mWorldPos;
+    TVec2f mFollowPos;
+    s32 mPadChannel;
+    const NebulaColor8* mColor;
 };

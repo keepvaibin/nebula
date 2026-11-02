@@ -23,7 +23,7 @@ public:
     }
 
     inline operator NebulaColor8() const {
-        return mGXColor;
+        return mRGBA;
     }
 
     inline operator u32() const {
@@ -31,7 +31,7 @@ public:
     }
 
     inline const Color8& operator=(const NebulaColor8& rOther) {
-        mGXColor = rOther;
+        mRGBA = rOther;
         return *this;
     }
 
@@ -51,7 +51,7 @@ public:
     }
 
     void set(NebulaColor8 color) {
-        NebulaColor8* const pColor = &mGXColor;
+        NebulaColor8* const pColor = &mRGBA;
         *pColor = color;
     }
 
@@ -62,7 +62,7 @@ public:
             u8 b;
             u8 a;
         };
-        NebulaColor8 mGXColor;
+        NebulaColor8 mRGBA;
     };
 };
 

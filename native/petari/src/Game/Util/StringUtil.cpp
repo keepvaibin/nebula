@@ -19,16 +19,16 @@ extern "C" {
 
 namespace MR {
     struct Tag {
-        /* 0x00 */ u16 _0;
-        /* 0x02 */ u8 mDataSize;
-        /* 0x03 */ u8 _3;
-        /* 0x04 */ char16_t mBuffer[1];
+        u16 _0;
+        u8 mDataSize;
+        u8 _3;
+        char16_t mBuffer[1];
     };
 
     struct TagHeader {
-        /* 0x00 */ u8 mDataSize;
-        /* 0x01 */ u8 mGroup;
-        /* 0x02 */ u16 mTag;
+        u8 mDataSize;
+        u8 mGroup;
+        u16 mTag;
     };
 
     void addFilePrefix(char* pDst, u32 size, const char* pChild, const char* pParent) {
@@ -142,12 +142,6 @@ namespace MR {
         pTag->mBuffer[1] = '\0';
 
         return &pTag->mBuffer[1];
-    }
-
-    char16_t* addPictureFontTagPlayerIcon(char16_t* pDst) {
-        int tag = isPlayerLuigi() ? 76 : 66;
-
-        return MR::addPictureFontTag(pDst, tag);
     }
 
     char16_t* addNewLine(char16_t* pDst) {

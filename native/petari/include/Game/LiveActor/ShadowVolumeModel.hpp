@@ -13,7 +13,7 @@ public:
 
     void initVolumeModel(const char*);
 
-    /* 0x1C */ J3DModelData* mModelData;
+    J3DModelData* mModelData;
 };
 
 inline ShadowVolumeModel::~ShadowVolumeModel() {

@@ -52,7 +52,7 @@ namespace {
             virtual void offBit(int);
             virtual bool isTrue(int) const;
 
-            /* 0x04 */ u32 mBits[N / 32];
+            u32 mBits[N / 32];
         };
     };  // namespace Local
 

@@ -19,8 +19,8 @@ public:
     void exeMoveUnderWater();
     void playRippleSe();
 
-    /* 0x8C */ FloaterFloatingForceTypeSpring* mFloatingForce;
-    /* 0x90 */ const char* mObjectName;
-    /* 0x94 */ TVec3f mFloaterOffset;
-    /* 0xA0 */ s32 mRippleSeCounter;
+    FloaterFloatingForceTypeSpring* mFloatingForce;
+    const char* mObjectName;
+    TVec3f mFloaterOffset;
+    s32 mRippleSeCounter;
 };

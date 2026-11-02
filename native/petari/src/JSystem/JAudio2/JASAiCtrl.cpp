@@ -126,6 +126,3 @@ u32 JASDriver::getFrameSamples() {
     return sSubFrames * 0x50;
 }
 
-u32 JASDriver::getSubFrameCounter() {
-    return sSubFrameCounter;
-}

@@ -10,7 +10,7 @@
 //   1: C2 = stage 0 + light B x raster (B: 0, 1 or stage 0's alpha); alpha A0 + K (1 - (channel alpha or stage 0's))
 //   2: C0 + lerp(C1, C2, texture 2) (modes 2 and 3: stage 1's alpha in place of C0; 4 and 7: C2; 5: texture 2)
 //   3: modes 0-2 only, doubled: 0 stage 2 + its alpha, 1 stage 2 x its alpha, 2 C0 + C2 x stage 2
-// Mode 6 is one stage: channel 0. K is the constant alpha the program leaves unselected (GXInit's KASEL_1: 1). The
+// Mode 6 is one stage: channel 0. K is the constant alpha the program leaves unselected (the state KASEL_1: 1). The
 // alpha is not written (the draw's alpha update is off).
 struct MaterialConstants {
     float4 mat0;     // channel 0's material colour (rgb) and its alpha channel's (a), 0-1

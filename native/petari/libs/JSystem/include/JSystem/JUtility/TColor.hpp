@@ -30,7 +30,7 @@ namespace JUtility {
             a = cA;
         }
 
-        // The u32 form is the console's: 0xRRGGBBAA.
+        // The u32 form is 0xRRGGBBAA.
         void set(u32 u32Color) {
             r = u8(u32Color >> 24);
             g = u8(u32Color >> 16);

@@ -25,6 +25,6 @@ public:
     void exeWaitDemo();
 
 private:
-    /* 0x24 */ KoopaSubSequenceBattle* mSubSequenceBattle;
-    /* 0x28 */ KoopaBattleMain* mBattleMain;
+    KoopaSubSequenceBattle* mSubSequenceBattle;
+    KoopaBattleMain* mBattleMain;
 };

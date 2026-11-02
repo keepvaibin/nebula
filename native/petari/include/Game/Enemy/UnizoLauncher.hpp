@@ -15,6 +15,6 @@ public:
     void exeWait();
     void exeLaunch();
 
-    /* 0x8C */ Unizo** mUnizos;
-    /* 0x90 */ s32 mUnizoNum;
+    Unizo** mUnizos;
+    s32 mUnizoNum;
 };

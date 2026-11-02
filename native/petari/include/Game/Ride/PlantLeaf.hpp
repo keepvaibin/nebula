@@ -24,15 +24,15 @@ public:
         return (MtxPtr)&mPosMtx;
     }
 
-    /* 0x8C */ f32 mSpringCoord;
-    /* 0x90 */ f32 mSpringSpeed;
-    /* 0x94 */ f32 mLeafCoord;
-    /* 0x98 */ f32 mLeafSize;
-    /* 0x9C */ TVec3f mSide;
-    /* 0xA8 */ TVec3f mUp;
-    /* 0xB4 */ TVec3f mFront;
-    /* 0xC0 */ TPos3f mBaseMtx;
-    /* 0xF0 */ TPos3f mPosMtx;
+    f32 mSpringCoord;
+    f32 mSpringSpeed;
+    f32 mLeafCoord;
+    f32 mLeafSize;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
+    TPos3f mBaseMtx;
+    TPos3f mPosMtx;
 };
 
 class PlantLeafDrawInit : public LiveActor {
@@ -43,7 +43,7 @@ public:
 
     void initDraw() const;
 
-    /* 0x8C */ J3DMaterial* mMaterial;
-    /* 0x90 */ J3DShape* mShape;
-    /* 0x94 */ J3DShapeDraw* mShapeDraw;
+    J3DMaterial* mMaterial;
+    J3DShape* mShape;
+    J3DShapeDraw* mShapeDraw;
 };

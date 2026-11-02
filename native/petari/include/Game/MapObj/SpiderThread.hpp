@@ -55,27 +55,27 @@ public:
         return mHangInfos[idx];
     }
 
-    /* 0x8C */ SpiderThreadMainPoint* mMainPoint;
-    /* 0x90 */ SpiderThreadHangInfo** mHangInfos;
-    /* 0x94 */ s32 mNumHangInfos;
-    /* 0x98 */ SpiderThreadHangInfo* mShootHangInfo;
-    /* 0x9C */ s32 mNumRadialLines;
-    /* 0xA0 */ SpiderThreadRadialLine** mRadialLines;
-    /* 0xA4 */ SpiderThreadMainPoint** mAnchorPoints;
-    /* 0xA8 */ s32 mRadialPartsBufferSize;
-    /* 0xAC */ s32 mNumRadialParts;
-    /* 0xB0 */ SpiderThreadPart** mRadialParts;
-    /* 0xB4 */ s32 mCirclePartsBufferSize;
-    /* 0xB8 */ s32 mNumCircleParts;
-    /* 0xBC */ SpiderThreadPart** mCircleParts;
-    /* 0xC0 */ s32 mCutPointsBufferSize;
-    /* 0xC4 */ s32 mNumCutPoints;
-    /* 0xC8 */ SpiderThreadMainPoint** mCutPoints;
-    /* 0xCC */ TVec3f mFront;
-    /* 0xD8 */ SpiderThreadWindCtrl* mWindCtrl;
-    /* 0xDC */ bool mIsBloomOn;
-    /* 0xE0 */ JUTTexture* mThreadTexture;
-    /* 0xE4 */ JUTTexture* mIndirectTexture;
+    SpiderThreadMainPoint* mMainPoint;
+    SpiderThreadHangInfo** mHangInfos;
+    s32 mNumHangInfos;
+    SpiderThreadHangInfo* mShootHangInfo;
+    s32 mNumRadialLines;
+    SpiderThreadRadialLine** mRadialLines;
+    SpiderThreadMainPoint** mAnchorPoints;
+    s32 mRadialPartsBufferSize;
+    s32 mNumRadialParts;
+    SpiderThreadPart** mRadialParts;
+    s32 mCirclePartsBufferSize;
+    s32 mNumCircleParts;
+    SpiderThreadPart** mCircleParts;
+    s32 mCutPointsBufferSize;
+    s32 mNumCutPoints;
+    SpiderThreadMainPoint** mCutPoints;
+    TVec3f mFront;
+    SpiderThreadWindCtrl* mWindCtrl;
+    bool mIsBloomOn;
+    JUTTexture* mThreadTexture;
+    JUTTexture* mIndirectTexture;
 };
 
 namespace MR {

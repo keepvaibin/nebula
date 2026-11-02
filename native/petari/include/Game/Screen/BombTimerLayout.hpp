@@ -22,8 +22,8 @@ public:
     void exeDanger();
     void exeEnd();
 
-    /* 0x20 */ u32 mTimeLimit;
-    /* 0x24 */ u32 mDangerTransFrame;
-    /* 0x28 */ u32 mFrame;
-    /* 0x2C */ bool mIsSuspend;
+    u32 mTimeLimit;
+    u32 mDangerTransFrame;
+    u32 mFrame;
+    bool mIsSuspend;
 };

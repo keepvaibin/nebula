@@ -64,12 +64,12 @@ public:
     void exeShellEnd();
     void exeBecomeJetTurtle();
 
-    /* 0x8C */ JetTurtle* mJetTurtle;
-    /* 0x90 */ MapPartsRailPointPassChecker* mRailPointPassChecker;
-    /* 0x94 */ AnimScaleController* mAnimScaleController;
-    /* 0x98 */ WalkerStateBindStarPointer* mBindStarPointerState;
-    /* 0x9C */ s32 mTurtleType;
-    /* 0xA0 */ TVec3f mAppearPos;
-    /* 0xAC */ TQuat4f mTargetQuat;
-    /* 0xBC */ TVec3f mTurnAxis;
+    JetTurtle* mJetTurtle;
+    MapPartsRailPointPassChecker* mRailPointPassChecker;
+    AnimScaleController* mAnimScaleController;
+    WalkerStateBindStarPointer* mBindStarPointerState;
+    s32 mTurtleType;
+    TVec3f mAppearPos;
+    TQuat4f mTargetQuat;
+    TVec3f mTurnAxis;
 };

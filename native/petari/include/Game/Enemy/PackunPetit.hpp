@@ -47,9 +47,9 @@ public:
     bool tryTurn();
     bool tryDPDSwoon();
 
-    /* 0x8C */ AnimScaleController* mScaleController;
-    /* 0x90 */ WalkerStateBindStarPointer* mStarPointerState;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ ModelObj* mBlownModel;
-    /* 0xA4 */ bool mDontTurn;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mStarPointerState;
+    TVec3f _94;
+    ModelObj* mBlownModel;
+    bool mDontTurn;
 };

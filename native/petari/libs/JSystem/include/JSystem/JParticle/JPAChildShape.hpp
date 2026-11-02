@@ -7,29 +7,29 @@ class JPABaseParticle;
 
 struct JPAChildShapeData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ u32 mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ f32 mPosRndm;
-    /* 0x10 */ f32 mBaseVel;
-    /* 0x14 */ f32 mBaseVelRndm;
-    /* 0x18 */ f32 mVelInfRate;
-    /* 0x1C */ f32 mGravity;
-    /* 0x20 */ f32 mScaleX;
-    /* 0x24 */ f32 mScaleY;
-    /* 0x28 */ f32 mInheritScale;
-    /* 0x2C */ f32 mInheritAlpha;
-    /* 0x30 */ f32 mInheritRGB;
-    /* 0x34 */ NebulaColor8 mPrmClr;
-    /* 0x38 */ NebulaColor8 mEnvClr;
-    /* 0x3C */ f32 mTiming;
-    /* 0x40 */ s16 mLife;
-    /* 0x42 */ s16 mRate;
-    /* 0x44 */ u8 mStep;
-    /* 0x45 */ u8 mTexIdx;
-    /* 0x46 */ s16 mRotSpeed;
-};  // Size: 0x48
+    u32 mFlags;
+    f32 mPosRndm;
+    f32 mBaseVel;
+    f32 mBaseVelRndm;
+    f32 mVelInfRate;
+    f32 mGravity;
+    f32 mScaleX;
+    f32 mScaleY;
+    f32 mInheritScale;
+    f32 mInheritAlpha;
+    f32 mInheritRGB;
+    NebulaColor8 mPrmClr;
+    NebulaColor8 mEnvClr;
+    f32 mTiming;
+    s16 mLife;
+    s16 mRate;
+    u8 mStep;
+    u8 mTexIdx;
+    s16 mRotSpeed;
+};
 
 class JPAChildShape {
 public:
@@ -131,7 +131,7 @@ public:
     }
 
 public:
-    /* 0x00 */ const JPAChildShapeData* mpData;
+    const JPAChildShapeData* mpData;
 };
 
 void JPARegistChildPrmEnv(JPAEmitterWorkData*);

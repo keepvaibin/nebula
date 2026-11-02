@@ -30,14 +30,14 @@ public:
     void exeWait();
     void exeCrumble();
 
-    /* 0x8C */ MogucchiHill* mHost;
-    /* 0x90 */ const char* mModelName;
-    /* 0x94 */ const char* mJointName;
-    /* 0x98 */ const char* mAutoEffectName;
-    /* 0x9C */ TPos3f _9C;
-    /* 0xCC */ bool _CC;
-    /* 0xCD */ bool _CD;
-    /* 0xCE */ bool mHasLightCtrl;
+    MogucchiHill* mHost;
+    const char* mModelName;
+    const char* mJointName;
+    const char* mAutoEffectName;
+    TPos3f _9C;
+    bool _CC;
+    bool _CD;
+    bool mHasLightCtrl;
 };
 
 class MogucchiHill : public LiveActor {
@@ -72,20 +72,20 @@ public:
     void exeMove();
     void exeWait();
 
-    /* 0x8C */ LiveActor* mHost;
-    /* 0x90 */ MogucchiHillPiece* _90;
-    /* 0x94 */ s32 _94;
-    /* 0x98 */ s32 _98;
-    /* 0x9C */ TPos3f mReserveMtx;
-    /* 0xCC */ bool _CC;
-    /* 0xD0 */ f32 _D0;
-    /* 0xD4 */ f32 _D4;
-    /* 0xD8 */ u32 _D8;
-    /* 0xDC */ const char** mModelNameTable;
-    /* 0xE0 */ const char* mJointName;
-    /* 0xE4 */ const char* mAutoEffectName;
-    /* 0xE8 */ bool mHasLightCtrl;
-    /* 0xEC */ s32 _EC;
-    /* 0xF0 */ s32 _F0;
-    /* 0xF4 */ s32 mAppearNum;
+    LiveActor* mHost;
+    MogucchiHillPiece* _90;
+    s32 _94;
+    s32 _98;
+    TPos3f mReserveMtx;
+    bool _CC;
+    f32 _D0;
+    f32 _D4;
+    u32 _D8;
+    const char** mModelNameTable;
+    const char* mJointName;
+    const char* mAutoEffectName;
+    bool mHasLightCtrl;
+    s32 _EC;
+    s32 _F0;
+    s32 mAppearNum;
 };

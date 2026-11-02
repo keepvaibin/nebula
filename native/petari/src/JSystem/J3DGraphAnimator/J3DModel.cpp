@@ -22,11 +22,7 @@ void J3DModel::initialize() {
     mMtxBuffer = NULL;
     mMatPacket = NULL;
     mShapePacket = NULL;
-    mDeformData = NULL;
-    mSkinDeform = NULL;
-    mVtxColorCalc = NULL;
     mUnkCalc1 = NULL;
-    mUnkCalc2 = NULL;
 }
 
 s32 J3DModel::entryModelData(J3DModelData* pModelData, u32 mdlFlags, u32 mtxNum) {
@@ -59,9 +55,6 @@ s32 J3DModel::entryModelData(J3DModelData* pModelData, u32 mdlFlags, u32 mtxNum)
     if (mdlFlags & J3DMdlFlag_UseDefaultJ3D) {
         onFlag(J3DMdlFlag_UseDefaultJ3D);
     }
-    if (mdlFlags & J3DMdlFlag_EnableLOD) {
-        onFlag(J3DMdlFlag_EnableLOD);
-    }
     if (mdlFlags & J3DMdlFlag_UseSharedSnapshot) {
         onFlag(J3DMdlFlag_UseSharedSnapshot);
     }
@@ -70,12 +63,6 @@ s32 J3DModel::entryModelData(J3DModelData* pModelData, u32 mdlFlags, u32 mtxNum)
     }
     if (mdlFlags & J3DMdlFlag_DifferedSnapshots) {
         onFlag(J3DMdlFlag_DifferedSnapshots);
-    }
-    if (mdlFlags & J3DMdlFlag_SkinPosCpu) {
-        onFlag(J3DMdlFlag_SkinPosCpu);
-    }
-    if (mdlFlags & J3DMdlFlag_SkinNrmCpu) {
-        onFlag(J3DMdlFlag_SkinNrmCpu);
     }
 
     return kJ3DError_Success;
@@ -182,18 +169,6 @@ void J3DModel::makeMesh() {
 void J3DModel::calcMaterial() {
     j3dSys.setModel(this);
 
-    if (checkFlag(J3DMdlFlag_SkinPosCpu)) {
-        j3dSys.onFlag(4);
-    } else {
-        j3dSys.offFlag(4);
-    }
-
-    if (checkFlag(J3DMdlFlag_SkinNrmCpu)) {
-        j3dSys.onFlag(8);
-    } else {
-        j3dSys.offFlag(8);
-    }
-
     mModelData->syncJ3DSysFlags();
     j3dSys.setTexture(mModelData->getTexture());
 
@@ -246,7 +221,7 @@ void J3DModel::calcAnmMtx() {
 }
 
 void J3DModel::calcWeightEnvelopeMtx() {
-    if (getModelData()->getWEvlpMtxNum() != 0 && !checkFlag(J3DMdlFlag_EnableLOD)) {
+    if (getModelData()->getWEvlpMtxNum() != 0) {
         if (!getModelData()->checkFlag(0x100)) {
             mMtxBuffer->calcWeightEnvelopeMtx();
         }
@@ -261,34 +236,10 @@ void J3DModel::update() {
 void J3DModel::calc() {
     j3dSys.setModel(this);
 
-    if (checkFlag(J3DMdlFlag_SkinPosCpu)) {
-        j3dSys.onFlag(J3DSysFlag_SkinPosCpu);
-    } else {
-        j3dSys.offFlag(J3DSysFlag_SkinPosCpu);
-    }
-
-    if (checkFlag(J3DMdlFlag_SkinNrmCpu)) {
-        j3dSys.onFlag(J3DSysFlag_SkinNrmCpu);
-    } else {
-        j3dSys.offFlag(J3DSysFlag_SkinNrmCpu);
-    }
-
     mModelData->syncJ3DSysFlags();
     mVertexBuffer.setCurrentVtxPos(mVertexBuffer.mVtxPosArray[0]);
     mVertexBuffer.setCurrentVtxNrm(mVertexBuffer.mVtxNrmArray[0]);
     mVertexBuffer.setCurrentVtxCol(mVertexBuffer.mVtxColArray[0]);
-
-    if (mUnkCalc2 != NULL) {
-        mUnkCalc2->calc(mModelData);
-    }
-
-    if (mDeformData != NULL) {
-        mDeformData->deform(this);
-    }
-
-    if (mVtxColorCalc != NULL) {
-        mVtxColorCalc->calc(this);
-    }
 
     if (mUnkCalc1 != NULL) {
         mUnkCalc1->calc(this);
@@ -297,10 +248,6 @@ void J3DModel::calc() {
     calcAnmMtx();
     calcWeightEnvelopeMtx();
 
-    if (mSkinDeform != NULL) {
-        mSkinDeform->deform(this);
-    }
-
     if (mCalcCallBack != NULL) {
         mCalcCallBack(this, 0);
     }
@@ -308,18 +255,6 @@ void J3DModel::calc() {
 
 void J3DModel::entry() {
     j3dSys.setModel(this);
-
-    if (checkFlag(J3DMdlFlag_SkinPosCpu)) {
-        j3dSys.onFlag(J3DSysFlag_SkinPosCpu);
-    } else {
-        j3dSys.offFlag(J3DSysFlag_SkinPosCpu);
-    }
-
-    if (checkFlag(J3DMdlFlag_SkinNrmCpu)) {
-        j3dSys.onFlag(J3DSysFlag_SkinNrmCpu);
-    } else {
-        j3dSys.offFlag(J3DSysFlag_SkinNrmCpu);
-    }
 
     mModelData->syncJ3DSysFlags();
     j3dSys.setTexture(mModelData->getTexture());
@@ -340,17 +275,6 @@ void J3DModel::viewCalc() {
         if (getMtxCalcMode() == 2) {
             J3DCalcViewBaseMtx(j3dSys.getViewMtx(), mBaseScale, mBaseTransformMtx, (MtxPtr)&mInternalView);
         }
-    } else if (isCpuSkinningOn()) {
-        if (getMtxCalcMode() == 2) {
-            J3DCalcViewBaseMtx(j3dSys.getViewMtx(), mBaseScale, mBaseTransformMtx, (MtxPtr)&mInternalView);
-        }
-    } else if (checkFlag(J3DMdlFlag_SkinPosCpu)) {
-        mMtxBuffer->calcDrawMtx(getMtxCalcMode(), mBaseScale, mBaseTransformMtx);
-        calcNrmMtx();
-        calcBumpMtx();
-    } else if (checkFlag(J3DMdlFlag_SkinNrmCpu)) {
-        mMtxBuffer->calcDrawMtx(getMtxCalcMode(), mBaseScale, mBaseTransformMtx);
-        calcBBoardMtx();
     } else {
         mMtxBuffer->calcDrawMtx(getMtxCalcMode(), mBaseScale, mBaseTransformMtx);
         calcNrmMtx();

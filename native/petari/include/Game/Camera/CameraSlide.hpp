@@ -18,9 +18,9 @@ public:
         mDist = dist;
     }
 
-    /* 0x4C */ TVec3f mAxis;
-    /* 0x58 */ TVec3f mUp;
-    /* 0x64 */ TVec3f mWPoint;
-    /* 0x70 */ f32 mAngleA;
-    /* 0x74 */ f32 mDist;
+    TVec3f mAxis;
+    TVec3f mUp;
+    TVec3f mWPoint;
+    f32 mAngleA;
+    f32 mDist;
 };

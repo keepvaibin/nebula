@@ -124,13 +124,13 @@ namespace MR {
         }
 
         /// @brief The pointer to the array of elements.
-        /* 0x0 */ T* mArr;
+        T* mArr;
 
         /// @brief The number of elements.
-        /* 0x4 */ s32 mMaxSize;
+        s32 mMaxSize;
     };
 
-    /// @brief A contiguous fixed-size array.
+    /// @brief A contiguous array with room for N in itself; a Vector over it past that moves to the arena it lies in.
     template < class T, int N >
     class FixedArray {
     public:
@@ -145,53 +145,59 @@ namespace MR {
         };
         typedef typename RemovePtr< T >::Type Base;
 
-        /// @brief A fixed array cannot grow: it says so, where a write past its end would corrupt what follows it.
         void grow() {
-            NEBULA_PANIC("a table of %d is full", N);
+            const s32 num = size();
+            T* const pNew = new (NebulaArena::findFromRoot(this), 0) T[num * 2];
+            for (s32 i = 0; i < num; i++) {
+                pNew[i] = (*this)[i];
+            }
+            delete[] mMoved;
+            mMoved = pNew;
+            mMovedSize = num * 2;
         }
 
         /// @brief Returns the element at the given position.
         /// @param idx The position of the element.
         /// @return The reference to the element.
         T& operator[](int idx) {
-            return mArr[idx];
+            return mMoved != nullptr ? mMoved[idx] : mArr[idx];
         }
 
         /// @brief Returns the element at the given position.
         /// @param idx The position of the element.
         /// @return The reference to the element.
         const T& operator[](int idx) const {
-            return mArr[idx];
+            return mMoved != nullptr ? mMoved[idx] : mArr[idx];
         }
 
         /// @brief Returns the number of elements.
         /// @return The number of elements.
         int size() const {
-            return N;
+            return mMoved != nullptr ? mMovedSize : N;
         }
 
         /// @brief Returns an iterator to the first element.
         /// @return The pointer to the first element.
         T* begin() {
-            return &mArr[0];
+            return &(*this)[0];
         }
 
         /// @brief Returns an iterator to the first element.
         /// @return The pointer to the first element.
         const T* begin() const {
-            return &mArr[0];
+            return &(*this)[0];
         }
 
         /// @brief Returns an iterator past the last element.
         /// @return The pointer past the last element.
         T* end() {
-            return &mArr[N];
+            return begin() + size();
         }
 
         /// @brief Returns an iterator past the last element.
         /// @return The pointer past the last element.
         const T* end() const {
-            return &mArr[N];
+            return begin() + size();
         }
 
         template < class U >
@@ -207,7 +213,9 @@ namespace MR {
 
     private:
         /// @brief The array of elements.
-        /* 0x0 */ T mArr[N];
+        T mArr[N];
+        T* mMoved = nullptr;
+        s32 mMovedSize = 0;
     };
 
     /// @brief A contiguous growable array.
@@ -347,7 +355,7 @@ namespace MR {
         }
 
         /// @brief The array of elements.
-        /* 0x0 */ T mArray;
+        T mArray;
 
         /// @brief The number of valid elements.
         /* 0x? */ s32 mCount;
@@ -365,9 +373,9 @@ namespace MR {
 
             void operator++();
 
-            /* 0x0 */ T* mHead;
-            /* 0x4 */ T* mTail;
-            /* 0x8 */ T* mEnd;
+            T* mHead;
+            T* mTail;
+            T* mEnd;
         };
 
         inline FixedRingBuffer() {
@@ -378,7 +386,7 @@ namespace MR {
 
         void push_back(const T& val);
 
-        /* 0x00 */ T mBuffer[S];
+        T mBuffer[S];
         /* 0x40 for S=16 */ iterator mHead;
         /* 0x4C for S=16 */ iterator mEnd;
         /* 0x58 for S=16 */ s32 mCount;

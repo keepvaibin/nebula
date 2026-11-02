@@ -21,6 +21,6 @@ public:
     void drawSide(f32, bool, f32) const;
     f32 calcRepeatedRotateCoord(f32) const;
 
-    /* 0x8C */ f32 mOrbitRadius;
-    /* 0x90 */ f32 mAngle;
+    f32 mOrbitRadius;
+    f32 mAngle;
 };

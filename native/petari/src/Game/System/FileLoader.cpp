@@ -55,10 +55,6 @@ bool FileLoader::isLoaded(const char* pName) const {
     return mFileHolder->isExist(pName);
 }
 
-bool FileLoader::isMountedArchive(const char* pName) const {
-    return mArchiveHolder->getArchive(pName) != nullptr;
-}
-
 void* FileLoader::receiveFile(const char* pName) {
     const RequestFileInfo* info = getRequestFileInfoConst(pName);
     if (info != nullptr && info->mFileEntry != nullptr) {

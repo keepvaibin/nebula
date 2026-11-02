@@ -19,6 +19,6 @@ public:
     void exeWait();
     void exeHit();
 
-    /* 0x8C */ Mtx _8C;
-    /* 0xBC */ u16 mTimer;
+    Mtx _8C;
+    u16 mTimer;
 };

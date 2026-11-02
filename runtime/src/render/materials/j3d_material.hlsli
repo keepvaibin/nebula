@@ -10,7 +10,7 @@ struct MaterialConstants {
     float4 amb_color[2];  // and ambient colour
     float4 ind_mtx[6];    // indirect matrix m: rows 2m and 2m + 1 (xyz), its scale applied
     float4 fog;           // start, end, near, far
-    float4 fog_color;     // rgb; w: the console fog type (0 none)
+    float4 fog_color;     // rgb; w: the fog type (0 none)
     float4 alpha_ref;     // the alpha test's references 0 and 1 (0-1)
     float4 tex_scale[8];  // xy: texture coordinate i's console scale (texels per unit), zw: map i's size (texels)
     float4 ovr;           // a pass that replaces the material's colour (j3d_override): x the mode (0 none), y and z
@@ -20,14 +20,14 @@ struct MaterialConstants {
 
 #include "native_material.hlsli"
 
-// the console's colour combiner takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
+// the console's colour combiner takes a register as an operand a, b or c through its low 8 bits: a value an
 // unclamped stage left past 1 or below 0 wraps.
 float j3d_in(float x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 float3 j3d_in(float3 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 // The final result the same way (materials whose last stage does not clamp).
 float4 j3d_out(float4 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 
-// console fog over the colour (native_material.hlsli native_fog) with the material's fog values.
+// fog over the colour (native_material.hlsli native_fog) with the material's fog values.
 float3 j3d_fog(float3 c, float4 pos) {
     return native_fog(c, pos, material.fog, material.fog_color);
 }

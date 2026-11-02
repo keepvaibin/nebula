@@ -45,7 +45,7 @@ namespace Nebula.Launcher
             env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
             env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailed ? "32" : "0";
             env["GALAXY_GX_PSO_CYCLES"] = detailed ? "1" : "0";
-            env["GALAXY_TRACE_GX_STALL_US"] = "20000";
+            env["GALAXY_TRACE_RENDER_STALL_US"] = "20000";
         }
 
         public static void ValidatePair(string app)

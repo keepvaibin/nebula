@@ -19,7 +19,7 @@ namespace {
 
         virtual void operator()(NameObj* pNameObj);
 
-        /* 0x04 */ T mNameObjFunc;
+        T mNameObjFunc;
     };
 
     template < typename T >
@@ -36,8 +36,8 @@ namespace {
 };  // namespace
 
 struct CategoryListInitialTable {
-    /* 0x00 */ u32 mIndex;
-    /* 0x04 */ u32 mCount;
+    u32 mIndex;
+    u32 mCount;
 };
 
 /// @brief Organizes NameObjs by execution category.
@@ -49,9 +49,9 @@ public:
 
         ~CategoryInfo();
 
-        /* 0x00 */ MR::Vector< MR::AssignableArray< NameObj* > > mNameObjArr;
-        /* 0x0C */ MR::FunctorBase* mExecuteBeforeFunction;
-        /* 0x10 */ u32 mCheck;
+        MR::Vector< MR::AssignableArray< NameObj* > > mNameObjArr;
+        MR::FunctorBase* mExecuteBeforeFunction;
+        u32 mCheck;
     };
 
     NameObjCategoryList(u32, const CategoryListInitialTable*, NameObjMethod, bool, const char*);
@@ -67,13 +67,13 @@ public:
     void registerExecuteBeforeFunction(const MR::FunctorBase&, int);
     void initTable(u32, const CategoryListInitialTable*);
 
-    /* 0x00 */ MR::AssignableArray< NameObjCategoryList::CategoryInfo > mCategoryInfo;
+    MR::AssignableArray< NameObjCategoryList::CategoryInfo > mCategoryInfo;
 
-    /* 0x08 */ union {
+    union {
         NameObjRealDelegator< NameObjMethod >* mDelegator;
         NameObjRealDelegator< NameObjMethodConst >* mDelegatorConst;
     };
 
-    /* 0x0C */ bool mBufferAllocated;
-    /* 0x0D */ bool mAllocateByCheck;
+    bool mBufferAllocated;
+    bool mAllocateByCheck;
 };

@@ -35,11 +35,11 @@ public:
 
     bool isMovingDown();  // fabricated
 
-    /* 0x8C */ bool mIsValidInfo;
-    /* 0x90 */ TVec3f _90;
-    /* 0x9C */ TVec3f _9C;
-    /* 0xA8 */ TVec3f _A8;
-    /* 0xB4 */ TVec3f _B4;
-    /* 0xC0 */ s32 mActFrame;
-    /* 0xC4 */ s32 mChaseCounter;
+    bool mIsValidInfo;
+    TVec3f _90;
+    TVec3f _9C;
+    TVec3f _A8;
+    TVec3f _B4;
+    s32 mActFrame;
+    s32 mChaseCounter;
 };

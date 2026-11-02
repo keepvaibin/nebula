@@ -18,9 +18,9 @@ public:
     bool tryRing();
     void startRing(const TVec3f&, const TVec3f&);
 
-    /* 0x8C */ Swinger* mBellSwinger;
-    /* 0x90 */ MtxPtr mSurface2Mtx;
-    /* 0x94 */ Swinger* mBellRodSwinger;
-    /* 0x98 */ MtxPtr mSurface1Mtx;
-    /* 0x9C */ TVec3f mHitMarkPosition;
+    Swinger* mBellSwinger;
+    MtxPtr mSurface2Mtx;
+    Swinger* mBellRodSwinger;
+    MtxPtr mSurface1Mtx;
+    TVec3f mHitMarkPosition;
 };

@@ -20,14 +20,14 @@ public:
     void calcAxis();
     void calcSubAxis();
 
-    /* 0x8C */ TVec3f mAxis;
-    /* 0x98 */ TVec3f mSubAxis;
-    /* 0xA4 */ u16 mActiveTime;
-    /* 0xA6 */ u16 mRevivalTime;
-    /* 0xA8 */ s32 mBoostTime;
-    /* 0xAC */ s32 mMaxDuration;
-    /* 0xB0 */ f32 mSpeedScale;
-    /* 0xB4 */ bool mDoLoop;
-    /* 0xB5 */ bool mDoTurn;
-    /* 0xB8 */ TVec3f mInitialPosition;
+    TVec3f mAxis;
+    TVec3f mSubAxis;
+    u16 mActiveTime;
+    u16 mRevivalTime;
+    s32 mBoostTime;
+    s32 mMaxDuration;
+    f32 mSpeedScale;
+    bool mDoLoop;
+    bool mDoTurn;
+    TVec3f mInitialPosition;
 };

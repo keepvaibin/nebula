@@ -37,7 +37,7 @@ struct NativeDrawState {
     DrawCounts gen{0u, 0u, 1u, CullMode::None, 0u};
     ZMode z{false, CompareFunc::Never, false};
     BlendMode blend{false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
-    bool frame_alpha = false;  // the frame keeps alpha (NEBULA_STATE_FRAME_ALPHA)
+    bool frame_alpha = false;  // the frame keeps alpha
 
     // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient
     // colours (RGBA) of channels 0 and 1.
@@ -73,7 +73,7 @@ struct NativeDrawState {
     // What changed since the last consume_dirty (kStateDirty*; all at the start).
     std::uint32_t dirty = ~0u;
 
-    // A state op (galaxy/render/native_state.h, nebula_game_api.h NEBULA_STATE_*).
+    // A state op (galaxy/render/native_state.h).
     // A draw's blend, depth, culling and writes.
     void apply_pass(const shapes::PassState& pass);
     void apply(const state::Op& op);

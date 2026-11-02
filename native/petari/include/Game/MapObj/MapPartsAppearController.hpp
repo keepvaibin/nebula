@@ -22,7 +22,7 @@ public:
     void exeWait();
     void exeDisappear();
 
-    /* 0x18 */ s32 mSignMotionType;
-    /* 0x1C */ PostureHolder* mPostureHolder;
-    /* 0x20 */ u8 _20;
+    s32 mSignMotionType;
+    PostureHolder* mPostureHolder;
+    u8 _20;
 };

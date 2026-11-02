@@ -131,20 +131,6 @@ void J3DShapePacket::prepareDraw() const {
     j3dSys.setModel(mpModel);
     j3dSys.setShapePacket((J3DShapePacket*)this);
 
-    J3DShapeMtx::setLODFlag(mpModel->checkFlag(J3DMdlFlag_EnableLOD) != 0);
-
-    if (mpModel->checkFlag(J3DMdlFlag_SkinPosCpu)) {
-        mpShape->onFlag(J3DShpFlag_SkinPosCpu);
-    } else {
-        mpShape->offFlag(J3DShpFlag_SkinPosCpu);
-    }
-
-    if (mpModel->checkFlag(J3DMdlFlag_SkinNrmCpu) && mpShape->checkFlag(J3DShpFlag_EnableLod) == false) {
-        mpShape->onFlag(J3DShpFlag_SkinNrmCpu);
-    } else {
-        mpShape->offFlag(J3DShpFlag_SkinNrmCpu);
-    }
-
     mpShape->setCurrentViewNoPtr(mpMtxBuffer->getCurrentViewNoPtr());
     mpShape->setScaleFlagArray(mpMtxBuffer->getScaleFlagArray());
     mpShape->setDrawMtx(mpMtxBuffer->getDrawMtxPtrPtr());

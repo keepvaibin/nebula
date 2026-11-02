@@ -31,11 +31,6 @@ namespace MR {
     /// @param max The exclusive maximum integer.
     /// @return The pseudorandom integer.
     s32 getRandom(s32 min, s32 max);
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
-    template < typename A, typename B >
-    inline typename NebulaLongCall< s32, A, B >::Type getRandom(A min, B max) {
-        return getRandom((s32)min, (s32)max);
-    }
 
     /// @brief Computes the next pseudorandom floating-point number within the half-open interval `[0.0f, 360.0f)`.
     /// @return The pseudorandom number of degrees.
@@ -174,7 +169,6 @@ namespace MR {
     bool turnQuatYDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
     void turnQuatYDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate);
     bool turnQuatZDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
-    void turnQuatZDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate);
 
     /// @brief Returns a number representing the sign of a number.
     /// @param x The number to evaluate.
@@ -411,13 +405,11 @@ namespace MR {
     /// @param[out] pDst A pointer to the three-dimensional fixed-point vector to initialize.
     /// @param[in] rSrc A reference to the three-dimensional floating-point vector to evaluate.
     /// @param q The number of bits to reserve for the decimal portion.
-    void floatToFixed16(TVec3s* pDst, const TVec3f& rSrc, u8 q);
 
     /// @brief Converts a three-dimensional fixed-point vector into a floating-point vector.
     /// @param[out] pDst A pointer to the three-dimensional floating-point vector to initialize.
     /// @param[in] rSrc A reference to the three-dimensional fixed-point vector to evaluate.
     /// @param q The number of bits reserved for the decimal portion.
-    void fixed16ToFloat(TVec3f* pDst, const TVec3s& rSrc, u8 q);
 
     void getRotatedAxisY(TVec3f* pDst, const TVec3f& rSrc);
     void getRotatedAxisZ(TVec3f* pDst, const TVec3f& rSrc);
@@ -580,12 +572,7 @@ namespace MR {
     /// @retval `min` if the integer is less than or equal to `min`.
     /// @retval `max` if the integer is greater than or equal to `max`.
     /// @retval `x` if the integer is greater than `min` and less than `max`.
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     inline s32 clamp(s32 x, s32 min, s32 max);
-    template < typename A, typename B, typename C >
-    inline typename NebulaLongCall< s32, A, B, C >::Type clamp(A x, B min, C max) {
-        return clamp((s32)x, (s32)min, (s32)max);
-    }
 
     inline s32 clamp(s32 x, s32 min, s32 max) {
         s32 ret;

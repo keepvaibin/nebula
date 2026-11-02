@@ -52,17 +52,17 @@ public:
     MiiErrcode makeIconWithFavoriteColor(void* pBuffer, int width, int height) const;
 
     /// @brief The type of database to obtain Mii data from.
-    /* 0x00 */ MiiDataSource mDataSource;
+    MiiDataSource mDataSource;
 
     /// @brief The pointer to the intermediate database.
-    /* 0x04 */ MiiMiddleDB* mMiddleDB;
+    MiiMiddleDB* mMiddleDB;
 
     /// @brief The position of the Mii data in the database.
-    /* 0x08 */ u16 mIndex;
+    u16 mIndex;
 
     /// @brief The resolution of the icon texture.
-    /* 0x0C */ MiiResolution mResolution;
+    MiiResolution mResolution;
 
     /// @brief The combination of facial expressions.
-    /* 0x10 */ u32 mExpressionFlag;
+    u32 mExpressionFlag;
 };

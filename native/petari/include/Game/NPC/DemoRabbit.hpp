@@ -31,6 +31,6 @@ public:
     void exeChange();
     void exeStartBGM();
 
-    /* 0x15C */ TVec3f mFrontVec;
-    /* 0x158 */ s32 mAirTimer;
+    TVec3f mFrontVec;
+    s32 mAirTimer;
 };

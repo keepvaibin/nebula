@@ -33,11 +33,11 @@ public:
         return mSensor;
     }
 
-    /* 0x00 */ CollisionParts* mParts;
-    /* 0x04 */ u32 mIdx;
-    /* 0x08 */ HitSensor* mSensor;
-    /* 0x0C */ TVec3f mNormals[4];
-    /* 0x3C */ TVec3f mPos[3];
+    CollisionParts* mParts;
+    u32 mIdx;
+    HitSensor* mSensor;
+    TVec3f mNormals[4];
+    TVec3f mPos[3];
 };
 
 class HitInfo {
@@ -48,10 +48,10 @@ public:
     bool isCollisionAtEdge() const;
     bool isCollisionAtCorner() const;
 
-    /* 0x00 */ Triangle mParentTriangle;
-    /* 0x60 */ f32 _60;
-    /* 0x64 */ TVec3f mHitPos;
-    /* 0x70 */ TVec3f _70;
-    /* 0x7C */ TVec3f _7C;
-    /* 0x88 */ u8 _88;
+    Triangle mParentTriangle;
+    f32 _60;
+    TVec3f mHitPos;
+    TVec3f _70;
+    TVec3f _7C;
+    u8 _88;
 };

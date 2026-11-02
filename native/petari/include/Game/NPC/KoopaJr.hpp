@@ -31,6 +31,6 @@ public:
     void exeShipBattleDemoTalkWait();
 
 private:
-    /* 0x15C */ bool mIsInvalidAppearStarPiece;
-    /* 0x15D */ bool mIsShipBattleTalk;
+    bool mIsInvalidAppearStarPiece;
+    bool mIsShipBattleTalk;
 };

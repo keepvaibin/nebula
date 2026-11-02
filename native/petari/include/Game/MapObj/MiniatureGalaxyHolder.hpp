@@ -18,11 +18,11 @@ public:
     s32 calcIndex(const LiveActor*) const;
     void updateCometStatus();
 
-    /* 0x8C */ LiveActorGroup* mMiniatureGalaxyGroup;
-    /* 0x90 */ bool _90;
-    /* 0x94 */ MiniatureGalaxy* mCometGalaxy;
-    /* 0x98 */ s32 mCometID;
-    /* 0x9C */ s32 _9C;
+    LiveActorGroup* mMiniatureGalaxyGroup;
+    bool _90;
+    MiniatureGalaxy* mCometGalaxy;
+    s32 mCometID;
+    s32 _9C;
 };
 
 class MiniatureGalaxyFunction {

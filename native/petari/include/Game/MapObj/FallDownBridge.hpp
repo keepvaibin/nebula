@@ -14,10 +14,10 @@ public:
     void exeWait();
     void exeQuake();
 
-    /* 0x8C */ TVec3f _8C;
-    /* 0x98 */ f32 _98;
-    /* 0x9C */ f32 _9C;
-    /* 0xA0 */ f32 _A0;
-    /* 0xA4 */ f32 _A4;
-    /* 0xA8 */ bool _A8;
+    TVec3f _8C;
+    f32 _98;
+    f32 _9C;
+    f32 _A0;
+    f32 _A4;
+    bool _A8;
 };

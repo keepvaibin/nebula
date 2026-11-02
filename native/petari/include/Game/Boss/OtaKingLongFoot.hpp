@@ -26,6 +26,6 @@ public:
     void exeAppearDemo();
     void exeDownDemo();
 
-    /* 0x9C */ s32 mDemoBckStep;
-    /* 0xA0 */ AnimScaleController* mScaleController;
+    s32 mDemoBckStep;
+    AnimScaleController* mScaleController;
 };

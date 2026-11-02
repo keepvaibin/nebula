@@ -41,8 +41,8 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
 
-    /* 0x8C */ bool mIsAppearJumping;
-    /* 0x8D */ bool mIsForbidPause;
-    /* 0x90 */ AnimScaleController* mScaleController;
-    /* 0x94 */ WalkerStateBindStarPointer* mBindStarPointer;
+    bool mIsAppearJumping;
+    bool mIsForbidPause;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mBindStarPointer;
 };

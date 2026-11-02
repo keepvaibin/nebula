@@ -26,8 +26,8 @@ public:
     void exeWait();
     void exeMove();
 
-    /* 0xC4 */ TVec3f _C4;
-    /* 0xD0 */ u8 _D0;
+    TVec3f _C4;
+    u8 _D0;
 };
 
 class RailMoveObjPress : public RailMoveObj {
@@ -73,7 +73,7 @@ public:
     virtual void move();
     virtual bool endMove();
 
-    /* 0xD4 */ DemoCtrlBase* mDemoControl;
+    DemoCtrlBase* mDemoControl;
 };
 
 class RailRotateMoveObj : public RailMoveObj {

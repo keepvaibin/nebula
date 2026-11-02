@@ -10,7 +10,7 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void calcAnim();
 
-    /* 0xE8 */ CollisionParts* mCollision;
+    CollisionParts* mCollision;
 };
 
 namespace MR {

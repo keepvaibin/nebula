@@ -19,8 +19,8 @@ public:
     AudSingleBgm* getValidSingleBgm();
     AudMultiBgm* getValidMultiBgm();
 
-    /* 0x000 */ AudSingleBgm mSingleBgm[2];
-    /* 0x3B8 */ AudMultiBgm mMultiBgm[2];
-    /* 0x7B8 */ u8 mSingleBgmActiveFlags;
-    /* 0x7B9 */ u8 mMultiBgmActiveFlags;
+    AudSingleBgm mSingleBgm[2];
+    AudMultiBgm mMultiBgm[2];
+    u8 mSingleBgmActiveFlags;
+    u8 mMultiBgmActiveFlags;
 };

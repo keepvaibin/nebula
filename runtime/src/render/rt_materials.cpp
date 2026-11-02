@@ -629,7 +629,7 @@ void rt_materials_set_stage(std::string_view stage) {
     g_stage_serial.fetch_add(1u, std::memory_order_relaxed);
     g_stage_materials = table().stage_materials(stage);
     g_stage_identities = table().stage_identities(stage);
-    // Only a stage row names untextured surfaces: elsewhere they stay as the console state shows them.
+    // Only a stage row names untextured surfaces: elsewhere they stay.
     const std::uint16_t untextured = table().index(kRtUntexturedHash);
     g_stage_untextured = 0u;
     for (const auto& [index, material] : g_stage_materials) {

@@ -34,14 +34,14 @@ public:
 
     static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
 
-    /* 0x8C */ ModelObj* mCloudCylinder;
-    /* 0x90 */ TPos3f mRainCylinderMtx;
-    /* 0xC0 */ TPos3f mSplashMtx;
-    /* 0xF0 */ MapPartsRailMover* mRailMover;
-    /* 0xF4 */ LodCtrl* mLodCtrl;
-    /* 0xF8 */ TVec3f mClippingCenter;
-    /* 0x104 */ f32 mRainLength;
-    /* 0x108 */ f32 mShadowDropLength;
-    /* 0x10C */ bool mIsOnPlayer;
-    /* 0x10D */ bool mNoRain;
+    ModelObj* mCloudCylinder;
+    TPos3f mRainCylinderMtx;
+    TPos3f mSplashMtx;
+    MapPartsRailMover* mRailMover;
+    LodCtrl* mLodCtrl;
+    TVec3f mClippingCenter;
+    f32 mRainLength;
+    f32 mShadowDropLength;
+    bool mIsOnPlayer;
+    bool mNoRain;
 };

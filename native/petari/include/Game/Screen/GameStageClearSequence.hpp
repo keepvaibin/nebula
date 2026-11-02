@@ -17,6 +17,6 @@ public:
     void exePowerStarGetDemo();
     void exeGrandStarGetDemo();
 
-    /* 0x20 */ SimpleEffectLayout* mEffectLayout;
-    /* 0x24 */ TVec2f mEffectFollowPos;
+    SimpleEffectLayout* mEffectLayout;
+    TVec2f mEffectFollowPos;
 };

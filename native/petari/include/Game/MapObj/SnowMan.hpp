@@ -25,8 +25,8 @@ public:
     void exeWaitBody();
     void exeWaitHead();
 
-    /* 0x8C */ CollisionParts* mHeadCollisionParts;
-    /* 0x90 */ CollisionParts* mBodyCollisionParts;
-    /* 0x94 */ AnimScaleController* mAnimScaleCtrl;
-    /* 0x98 */ AnimScaleParam* mAnimScaleParam;
+    CollisionParts* mHeadCollisionParts;
+    CollisionParts* mBodyCollisionParts;
+    AnimScaleController* mAnimScaleCtrl;
+    AnimScaleParam* mAnimScaleParam;
 };

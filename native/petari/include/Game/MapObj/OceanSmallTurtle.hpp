@@ -25,21 +25,21 @@ public:
     bool isEndSpringWater();
 
 private:
-    /* 0x8C */ MapPartsRailMover* mRailMover;
-    /* 0x90 */ f32 mFloatUpSpeed;
-    /* 0x94 */ f32 mAccelRate;
-    /* 0x98 */ TVec3f mStartNearestRailPos;
-    /* 0xA4 */ f32 mFloatDelayTimer;  // used as a timer. a float for some reason
-    /* 0xA8 */ f32 mArg1;
-    /* 0xAC */ s32 mBoundTimer;
-    /* 0xB0 */ TVec3f mMercatorPos;
-    /* 0xBC */ TVec3f mInfoRotate;
-    /* 0xC8 */ f32 mBoundDisplacement;
-    /* 0xCC */ TVec3f mRailClippingPos;
-    /* 0xD8 */ f32 mRailClippingRadius;
-    /* 0xDC */ f32 mStartRotationX;
-    /* 0xE0 */ u8 mIsOnPlayer;
-    /* 0xE1 */ u8 isBound;
-    /* 0xE2 */ u8 isStartFloat;
-    /* 0xE4 */ TPos3f mEffectMtx;
+    MapPartsRailMover* mRailMover;
+    f32 mFloatUpSpeed;
+    f32 mAccelRate;
+    TVec3f mStartNearestRailPos;
+    f32 mFloatDelayTimer;  // used as a timer. a float for some reason
+    f32 mArg1;
+    s32 mBoundTimer;
+    TVec3f mMercatorPos;
+    TVec3f mInfoRotate;
+    f32 mBoundDisplacement;
+    TVec3f mRailClippingPos;
+    f32 mRailClippingRadius;
+    f32 mStartRotationX;
+    u8 mIsOnPlayer;
+    u8 isBound;
+    u8 isStartFloat;
+    TPos3f mEffectMtx;
 };

@@ -21,5 +21,5 @@ public:
 
     bool isPlayerInCameraStartRange() const;
 
-    /* 0x8C */ ActorCameraInfo* mCameraInfo;
+    ActorCameraInfo* mCameraInfo;
 };

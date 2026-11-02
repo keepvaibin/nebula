@@ -16,5 +16,5 @@ public:
 
     void exeWait();
 
-    /* 0x15C */ u32 _15C;
+    u32 _15C;
 };

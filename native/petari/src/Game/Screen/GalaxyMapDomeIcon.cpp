@@ -18,8 +18,8 @@ namespace {
         virtual void execute(const char* pGalaxyName) {
         }
 
-        /* 0x04 */ char _4[11];
-        /* 0x0F */ bool mIsPass;
+        char _4[11];
+        bool mIsPass;
     };
 
     class CheckerIsExistNewGalaxy : public AstroDomeCheckerBase {

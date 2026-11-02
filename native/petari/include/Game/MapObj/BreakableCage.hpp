@@ -36,12 +36,12 @@ public:
     void exeWaitStartDemoBreak();
     void exeBreak();
 
-    /* 0x8C */ TPos3f mMtx;
-    /* 0xBC */ ModelObj* mBreakModel;
-    /* 0xC0 */ CageType mCageType;
-    /* 0xC4 */ f32 mRotationSpeed;
-    /* 0xC8 */ DummyDisplayModel* mItemModel;
-    /* 0xCC */ bool mIgnoreGravity;
-    /* 0xCD */ bool mDelayDeadActivate;
-    /* 0xD0 */ ActorCameraInfo* mCameraInfo;
+    TPos3f mMtx;
+    ModelObj* mBreakModel;
+    CageType mCageType;
+    f32 mRotationSpeed;
+    DummyDisplayModel* mItemModel;
+    bool mIgnoreGravity;
+    bool mDelayDeadActivate;
+    ActorCameraInfo* mCameraInfo;
 };

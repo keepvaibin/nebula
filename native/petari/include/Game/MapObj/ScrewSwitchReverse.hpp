@@ -16,6 +16,6 @@ public:
     void exeAdjust();
     void exeScrew();
 
-    /* 0x8C */ LiveActor* mHost;
-    /* 0x90 */ bool mIsForceJump;  // Obj_arg0
+    LiveActor* mHost;
+    bool mIsForceJump;  // Obj_arg0
 };

@@ -40,13 +40,6 @@ const s16 sIIRCutoff[129][4] = {
     {0x4330, 0x0000, 0x0000, 0x0000},
 };
 
-void JASCalc::imixcopy(const s16* s1, const s16* s2, s16* dst, u32 n) {
-    for (; n != 0; n--) {
-        *dst++ = *(s1)++;
-        *dst++ = *(s2)++;
-    }
-}
-
 void JASCalc::bcopyfast(const void* src, void* dest, u32 size) {
     u32 copy1, copy2, copy3, copy4;
     u32* usrc = (u32*)src;

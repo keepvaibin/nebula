@@ -64,7 +64,7 @@ void SpiderCoin::init(const JMapInfoIter& rIter) {
 // The coin hangs on the spider web its boss sets up (TombSpiderEnvironment). In a scenario without the boss there is
 // no web: the console never ran or showed these coins (their draw distance clipped them, far out of reach), and drawn
 // to the far plane for ray-traced light they hung in empty space and bound to the missing web (a crash in Space Junk's
-// first star). With no web after placement, the coin and its cocoon leave the scene, as unseen as on the console.
+// first star). With no web after placement, the coin and its cocoon leave the scene, as unseen.
 void SpiderCoin::initAfterPlacement() {
     if (MR::isExistSceneObj(SceneObj_SpiderThread)) {
         return;

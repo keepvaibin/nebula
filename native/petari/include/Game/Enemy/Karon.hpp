@@ -41,9 +41,9 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
 
-    /* 0x8C */ TerritoryMover* mTerritoryMover;
-    /* 0x90 */ u32 _90;  // unused
-    /* 0x94 */ bool mStopSwAnim;
-    /* 0x98 */ AnimScaleController* mScaleController;
-    /* 0x9C */ WalkerStateBindStarPointer* mStateStarPointer;
+    TerritoryMover* mTerritoryMover;
+    u32 _90;  // unused
+    bool mStopSwAnim;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mStateStarPointer;
 };

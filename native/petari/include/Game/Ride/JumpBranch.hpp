@@ -18,11 +18,11 @@ public:
 
     bool updateBind();
 
-    /* 0x8C */ TVec3f mCenter;
-    /* 0x98 */ TVec3f mSide;
-    /* 0xA4 */ TVec3f mUp;
-    /* 0xB0 */ TVec3f mFront;
-    /* 0xBC */ LiveActor* mRider;
-    /* 0xC0 */ SwingRopePoint* mSwingPoint;
-    /* 0xC4 */ bool mSwingReverse;
+    TVec3f mCenter;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
+    LiveActor* mRider;
+    SwingRopePoint* mSwingPoint;
+    bool mSwingReverse;
 };

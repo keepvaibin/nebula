@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string.h>
 #include <JSystem/JGeometry/TVec.hpp>
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
@@ -36,11 +37,16 @@ public:
 
     struct Flags {
         inline void clear() {
-            *(u32*)this = 0;
+            memset(this, 0, sizeof(*this));
         }
 
-        // directDraw reads the flags as one word (bit i selects display list i): declared last-first, so each
-        // flag has the console's bit (CodeWarrior allocates bitfields from the most significant bit).
+        // Flag i is bit i of the word.
+        u32 word() const {
+            u32 bits;
+            memcpy(&bits, this, sizeof(bits));
+            return bits;
+        }
+
         unsigned _1F : 1;
         unsigned _1E : 1;
         unsigned _1D : 1;
@@ -75,46 +81,46 @@ public:
         unsigned _0 : 1;
     };
 
-    /* 0xDC */ u8 _DC;
-    /* 0xDD */ u8 _DD;
+    u8 _DC;
+    u8 _DD;
     union {
         struct {
-            /* 0xE0 */ Mtx* _E0;
-            /* 0xE4 */ Mtx* _E4;
-            /* 0xE8 */ Mtx* _E8;
-            /* 0xEC */ Mtx* _EC;
-            /* 0xF0 */ Mtx* _F0;
-            /* 0xF4 */ Mtx* _F4;
-            /* 0xF8 */ Mtx* _F8;
-            /* 0xFC */ Mtx* _FC;
-            /* 0x100 */ Mtx* _100;
-            /* 0x104 */ Mtx* _104;
-            /* 0x108 */ Mtx* _108;
-            /* 0x10C */ Mtx* _10C;
-            /* 0x110 */ Mtx* _110;
-            /* 0x114 */ Mtx* _114;
-            /* 0x118 */ Mtx* _118;
-            /* 0x11C */ Mtx* _11C;
+            Mtx* _E0;
+            Mtx* _E4;
+            Mtx* _E8;
+            Mtx* _EC;
+            Mtx* _F0;
+            Mtx* _F4;
+            Mtx* _F8;
+            Mtx* _FC;
+            Mtx* _100;
+            Mtx* _104;
+            Mtx* _108;
+            Mtx* _10C;
+            Mtx* _110;
+            Mtx* _114;
+            Mtx* _118;
+            Mtx* _11C;
         };
         Mtx* mExtraMtxBuffer[16];
     };
-    /* 0x120 */ void (*_120)(void*, u16);
-    /* 0x124 */ void (*mShapeCallback)(J3DShape*);
-    /* 0x128 */ void* _128;
-    /* 0x12C */ J3DModel* _12C;
-    /* 0x1B0 */ Flags mFlags;
+    void (*_120)(void*, u16);
+    void (*mShapeCallback)(J3DShape*);
+    void* _128;
+    J3DModel* _12C;
+    Flags mFlags;
     // The dynamic state list (lighting, alpha) the next draws use; the one set for them.
     const MarioModelTint* _1B4;
     const MarioModelTint* _1B8;
-    /* 0x1C0 */ u16 _1C0;
+    u16 _1C0;
     // Per material: the state list it draws with (texture swaps); the one set for its next draws.
     const void** _1C4;
     const void** _1C8;
-    /* 0x1D0 */ u8 _1D0;
-    /* 0x1D4 */ f32 _1D4;
-    /* 0x1D8 */ u32 _1D8;
-    /* 0x1DC */ u32 _1DC;
-    /* 0x1E0 */ s32 _1E0;
-    /* 0x1E4 */ u8 _1E4;
-    /* 0x1E5 */ u8 _1E5;
+    u8 _1D0;
+    f32 _1D4;
+    u32 _1D8;
+    u32 _1DC;
+    s32 _1E0;
+    u8 _1E4;
+    u8 _1E5;
 };

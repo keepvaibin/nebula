@@ -15,6 +15,6 @@ public:
     MapPartsRailGuideDrawer* createRailGuide(LiveActor* pHost, const char* pModelName, const JMapInfoIter& rIter);
     MapPartsRailGuideDrawer* find(s32 railId);
 
-    /* 0x00C */ MapPartsRailGuideDrawer* mDrawers[64];
-    /* 0x10C */ s32 mNumRailGuides;
+    MapPartsRailGuideDrawer* mDrawers[64];
+    s32 mNumRailGuides;
 };

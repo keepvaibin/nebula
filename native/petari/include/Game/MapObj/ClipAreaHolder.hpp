@@ -16,7 +16,7 @@ public:
 
     bool isInArea(const TVec3f&, f32) const;
 
-    /* 0x18 */ bool mIsActive;
+    bool mIsActive;
 };
 
 class ClipAreaCollisionFilter : public CollisionPartsFilterBase {
@@ -25,8 +25,8 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts*) const;
 
-    /* 0x04 */ const TVec3f* _04;
-    /* 0x08 */ f32 _08;
+    const TVec3f* _04;
+    f32 _08;
 };
 
 namespace MR {

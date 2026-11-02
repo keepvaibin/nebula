@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan console renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
+// The Vulkan renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
 
 #include "renderer_vk_internal.h"
 #include "galaxy/render/vk/renderer_vk.h"
@@ -851,9 +851,8 @@ bool RendererVk::enter_output_scene(unsigned scale) {
     params.src_height = static_cast<std::uint16_t>(kFrameHeight);
     const unsigned width = kFrameWidth * scale;
     const unsigned height = kFrameHeight * scale;
-    const SceneCopySamplingGeometry sampling = compute_display_sampling_geometry(params, width, height, scene_map_);
-    record_conversion_blit(*alt_scene_.color, width, height, params, false, false, true, kCopyLayoutDisplay, sampling.src_x,
-                           sampling.src_y, sampling.step_x, sampling.step_y, sampling.filter_row_offset);
+    const SceneCopySamplingGeometry sampling = compute_scene_copy_sampling_geometry(params, width, height, scene_map_);
+    record_conversion_blit(*alt_scene_.color, width, height, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     end_scene_pass();
     image_barrier(commands_, alt_scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1644,10 +1643,8 @@ void RendererVk::transition_scene_to_attachment(VkCommandBuffer commands, bool d
 
 // The conversion blit (scene_conversion_shader_source): a full-screen triangle into `dest`, sampling the scene target colour
 // or depth. The scene target leaves its attachment layout for the read and returns; `dest` ends shader-readable.
-void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
-                                        const CaptureRequest& params, bool is_depth_copy, bool intensity,
-                                        bool keep_alpha, std::uint8_t copy_format, float src_x, float src_y,
-                                        float step_x, float step_y, float filter_row_offset) {
+void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, bool is_depth_copy,
+                                        std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y) {
     end_scene_pass();
     if (!is_depth_copy) {
         settle_owed_scene();
@@ -1666,7 +1663,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     // A display copy one scene target pixel to one display picture pixel without gamma: its filter alone (display_filter_shader_source).
-    const bool display_filter = copy_format == kCopyLayoutDisplay && keep_alpha && !intensity && !is_depth_copy && !grey &&
+    const bool display_filter = copy_format == kCopyLayoutDisplay && !is_depth_copy && !grey &&
                                 step_x == 1.0f && step_y == 1.0f &&
                                 display_filter_pipeline_ != VK_NULL_HANDLE;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1676,8 +1673,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     const VkDescriptorSet source = is_depth_copy ? scene_.depth_source : scene_color_source();
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(params, is_depth_copy, intensity, keep_alpha, copy_format, src_x, src_y,
-                                      step_x, step_y, filter_row_offset, scene_map_.sy, kFrameHeight);
+        make_scene_conversion_constants(is_depth_copy, copy_format, src_x, src_y, step_x, step_y);
     vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
                        constants.values.data());
     vkCmdDraw(commands, 3, 1, 0, 0);
@@ -1693,8 +1689,7 @@ void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayText
     if (!dest.texture) {
         throw std::runtime_error("display picture copy has no destination texture");
     }
-    // Display copies never convert to intensity; gamma and the copy filter apply.
-    const SceneCopySamplingGeometry sampling = compute_display_sampling_geometry(params, dest.width, dest.height,
+    const SceneCopySamplingGeometry sampling = compute_scene_copy_sampling_geometry(params, dest.width, dest.height,
                                                                            scene_map_);
     const bool logged = logging();
     if (logged) {
@@ -1707,7 +1702,6 @@ void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayText
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.geometry[4] = sampling.filter_row_offset;
         recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
         recording_log_.copies.push_back(copy);
         recording_log_.surround = dest.safety_surround;
@@ -1715,9 +1709,7 @@ void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayText
     }
     {
         const LogPause pause{*this};
-        record_conversion_blit(*dest.texture, dest.width, dest.height, params, false, false, true, kCopyLayoutDisplay,
-                               sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-                               sampling.filter_row_offset);
+        record_conversion_blit(*dest.texture, dest.width, dest.height, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     }
     if (ring_mode_ == RingMode::Interp && !replaying_) {
         // The display copy closes the game frame: its log is complete and the next frame takes a new segment.
@@ -1997,7 +1989,6 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.geometry[4] = sampling.filter_row_offset;
         copy.exact = identity.has_value();
         if (identity) {
             copy.box_left = identity->left;
@@ -2042,11 +2033,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
         bind_scene();
         return publish_capture(params, current.texture, is_depth_copy, textures);
     }
-    // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
-    const bool keep_alpha = params.channels == kCopyLayoutIntensityAlpha;
-    record_conversion_blit(texture, w, h, params, is_depth_copy, false, keep_alpha, params.channels,
-                           sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-                           sampling.filter_row_offset);
+    record_conversion_blit(texture, w, h, is_depth_copy, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     return publish_capture(params, current.texture, is_depth_copy, textures);
 }
 
@@ -2108,7 +2095,7 @@ bool RendererVk::record_screen_probes(std::size_t slot, ScreenProbeKind kind, st
     region.imageExtent = {kScreenProbesMax, 1u, 1u};
     VkImage copy_source = target.image;
     if (vk::Context::get().quirks().linear_readback) {
-        // Through a linear image the size of the target (Dolphin's VKStagingTexture on Qualcomm).
+        // Through a linear image the size of the target.
         if (!probe_target_linear_) {
             probe_target_linear_ = vk::Context::get().create_linear_image(target.width, target.height, target.format, "screen probes linear");
         }

@@ -367,7 +367,6 @@ namespace CameraLocalUtil {
 
 
     void arrangeDistanceByFovy(Camera* pCamera, TVec3f pos, f32 offset) {
-        // https://decomp.me/scratch/jeret
         TVec3f viewDir = getPos(pCamera) - getWatchPos(pCamera);
         if (MR::isNearZero(viewDir)) {
             return;

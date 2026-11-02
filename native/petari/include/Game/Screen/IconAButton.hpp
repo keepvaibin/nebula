@@ -16,9 +16,6 @@ public:
     void open();
     void openWithTalk();
     void openWithRead();
-    void openWithNext();
-    void openWithTerm();
-    void openWithDecide();
     void openWithTurn();
     void openWithoutMessage();
     void term();
@@ -27,7 +24,7 @@ public:
     void exeTerm();
     void updateFollowPos();
 
-    /* 0x20 */ TVec2f mFollowPos;
-    /* 0x28 */ LayoutActor* mFollowActor;
-    /* 0x2C */ char mFollowPaneName[24];
+    TVec2f mFollowPos;
+    LayoutActor* mFollowActor;
+    char mFollowPaneName[24];
 };

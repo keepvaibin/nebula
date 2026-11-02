@@ -16,10 +16,10 @@ public:
     void updateHang();
     void copyInfo(const SpiderThreadHangInfo*);
 
-    /* 0x00 */ LiveActor* mBindedActor;
-    /* 0x04 */ const TVec3f* mPosition;
-    /* 0x08 */ SpiderThreadPart* mThreadPart;
-    /* 0x0C */ s32 mHangIndex;
-    /* 0x10 */ bool mIsHanging;
-    /* 0x14 */ s32 _14;
+    LiveActor* mBindedActor;
+    const TVec3f* mPosition;
+    SpiderThreadPart* mThreadPart;
+    s32 mHangIndex;
+    bool mIsHanging;
+    s32 _14;
 };

@@ -7,5 +7,5 @@ public:
 
     void syncWithFlags();
 
-    /* 0x00 */ bool _0;
+    bool _0;
 };

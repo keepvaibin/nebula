@@ -112,23 +112,6 @@ bool JASWaveArc::sendLoadCmd() {
 }
 
 
-bool JASWaveArc::loadTail(JASHeap* heap) {
-    if (mEntryNum < 0) {
-        return false;
-    }
-    JASMutexLock mutexLock(&mMutex);
-    if (mStatus != 0) {
-        return false;
-    }
-    if (heap == nullptr) {
-        heap = JASWaveArcLoader::getRootHeap();
-    }
-    if (mHeap.allocTail(heap, cAllocSize) == false) {
-        return false;
-    }
-    return sendLoadCmd();
-}
-
 bool JASWaveArc::erase() {
     return mHeap.free();
 }

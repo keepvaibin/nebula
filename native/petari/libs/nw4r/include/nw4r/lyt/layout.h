@@ -40,7 +40,7 @@ namespace nw4r {
         public:
             Layout();
 
-            // From the game's current heap (the console took an allocator the game set; it always set new/delete).
+            // From the game's current heap.
             static void* AllocMemory(u32 size) { return new u8[size]; }
 
             static void FreeMemory(void* mem) { delete[] static_cast< u8* >(mem); }

@@ -25,6 +25,6 @@ public:
     }
 
 private:
-    /* 0x20 */ IconAButton* mAButtonIcon;
-    /* 0x24 */ bool mIsCenter;
+    IconAButton* mAButtonIcon;
+    bool mIsCenter;
 };

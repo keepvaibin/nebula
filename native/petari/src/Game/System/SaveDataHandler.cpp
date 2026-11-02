@@ -13,8 +13,8 @@
 
 namespace {
     struct SaveFileSpec {
-        /* 0x00 */ const char* mName;
-        /* 0x04 */ u32 mBufferSize;
+        const char* mName;
+        u32 mBufferSize;
     };
 
     const char cSaveFileName[] = "GameData.bin";
@@ -265,7 +265,7 @@ void SaveDataHandler::exeSaveProcessingGameData() {
         return;
     }
 
-    // Saved or not, the sequence ends (the console wrote the System Menu's banner next; a PC has no System Menu).
+    // Saved or not, the sequence ends.
     setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
 }
 

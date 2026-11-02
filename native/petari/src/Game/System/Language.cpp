@@ -86,10 +86,6 @@ namespace MR {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mLanguage;
     }
 
-    u32 getLanguageFromIPL() {
-        return getLanguage() & LANGUAGE_MASK;
-    }
-
     const char* getCurrentLanguagePrefix() {
         u32 id = getLanguage();
 

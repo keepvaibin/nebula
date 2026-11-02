@@ -18,6 +18,6 @@ public:
 
     void exeWait();
 
-    /* 0xC0 */ ClipAreaShapeSphere* mShapeSphere;
-    /* 0xC4 */ f32 mBaseSize;
+    ClipAreaShapeSphere* mShapeSphere;
+    f32 mBaseSize;
 };

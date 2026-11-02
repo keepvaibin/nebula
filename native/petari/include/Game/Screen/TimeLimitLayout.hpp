@@ -5,11 +5,11 @@
 class ValueControl;
 
 struct Timing {
-    /* 0x0 */ u32 mScaleStartFrame;
-    /* 0x4 */ u32 mScaleKeepFrame;
-    /* 0x8 */ bool mIsScaleUp;
-    /* 0x9 */ bool mIsScaleDown;
-    /* 0xA */ bool _A;
+    u32 mScaleStartFrame;
+    u32 mScaleKeepFrame;
+    bool mIsScaleUp;
+    bool mIsScaleDown;
+    bool _A;
 };
 
 class TimeUpLayout : public LayoutActor {
@@ -47,11 +47,11 @@ public:
     bool updateNormal();
 
 private:
-    /* 0x20 */ u32 mTime;
-    /* 0x24 */ u32 mTimeLimit;
-    /* 0x28 */ ValueControl* mScaleControl;
-    /* 0x2C */ ValueControl* mFadeControl;
-    /* 0x30 */ const Timing* mCurrentTiming;
-    /* 0x34 */ bool mIsSuspend;
-    /* 0x35 */ bool _35;
+    u32 mTime;
+    u32 mTimeLimit;
+    ValueControl* mScaleControl;
+    ValueControl* mFadeControl;
+    const Timing* mCurrentTiming;
+    bool mIsSuspend;
+    bool _35;
 };

@@ -21,9 +21,9 @@ public:
 
     bool isStartOrWait();
 
-    /* 0x8C */ ModelObj* mWindModel;
-    /* 0x90 */ TVec3f mClippingCenter;
-    /* 0x9C */ f32 mWindLength;
-    /* 0xA0 */ f32 mWindSpeed;
-    /* 0xA4 */ bool mIsTeresaGalaxy;
+    ModelObj* mWindModel;
+    TVec3f mClippingCenter;
+    f32 mWindLength;
+    f32 mWindSpeed;
+    bool mIsTeresaGalaxy;
 };

@@ -21,6 +21,6 @@ public:
     void exeRotate();
     void exeRadiateOnly();
 
-    /* 0x8C */ TVec3f _8C;
-    /* 0x98 */ s32 mState;
+    TVec3f _8C;
+    s32 mState;
 };

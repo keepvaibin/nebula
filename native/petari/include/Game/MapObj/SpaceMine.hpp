@@ -21,8 +21,8 @@ public:
         return val > -1 && val < 2;
     }
 
-    /* 0xC4 */ f32 mRotateSpeed;
-    /* 0xC8 */ TVec3f mClippingRange;
-    /* 0xD4 */ s32 mShadowType;
-    /* 0xD8 */ u8 mIsPlayerNear;
+    f32 mRotateSpeed;
+    TVec3f mClippingRange;
+    s32 mShadowType;
+    u8 mIsPlayerNear;
 };

@@ -5,12 +5,12 @@
 class CubeCameraArea : public AreaObj {
 public:
     enum ECategory {
-        /* 0x00 */ ECategory_Normal,
-        /* 0x01 */ ECategory_Swim,
-        /* 0x02 */ ECategory_WaterSurface,
-        /* 0x03 */ ECategory_GCapture,
-        /* 0x04 */ ECategory_FooFighter,
-        /* 0x05 */ ECategory_None,
+        ECategory_Normal,
+        ECategory_Swim,
+        ECategory_WaterSurface,
+        ECategory_GCapture,
+        ECategory_FooFighter,
+        ECategory_None,
     };
 
     CubeCameraArea(int, const char*);
@@ -31,8 +31,8 @@ public:
         return mZoneID;
     }
 
-    /* 0x3C */ s32 _3C;
-    /* 0x40 */ u32 mZoneID;
+    s32 _3C;
+    u32 mZoneID;
 };
 
 class CubeCameraMgr : public AreaObjMgr {

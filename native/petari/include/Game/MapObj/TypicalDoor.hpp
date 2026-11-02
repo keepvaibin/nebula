@@ -17,8 +17,8 @@ public:
     void exeClose();
     void exeOpen();
 
-    /* 0xC4 */ CollisionParts* mCloseCollision;
-    /* 0xC8 */ CollisionParts* mOpenCollision;
+    CollisionParts* mCloseCollision;
+    CollisionParts* mOpenCollision;
 };
 
 class TypicalDoorOpen : public TypicalDoor {
@@ -41,5 +41,5 @@ public:
     void validateCollision();
     void invalidateCollision();
 
-    /* 0xCC */ bool _CC;
+    bool _CC;
 };

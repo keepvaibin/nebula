@@ -18,15 +18,15 @@ public:
     void update();
     bool isEnd() const;
 
-    /* 0x00 */ s32 mStartDelay;
-    /* 0x04 */ s32 mEndDelay;
-    /* 0x08 */ s32 mFrame;
-    /* 0x0C */ s32 mCharIndex;
-    /* 0x10 */ s32 mWaitTime;
-    /* 0x14 */ u32 mCharCount;
-    /* 0x18 */ bool mEnabled;
-    /* 0x1C */ f32 mCharInterval;
-    /* 0x20 */ f32 mFadeSpeed;
+    s32 mStartDelay;
+    s32 mEndDelay;
+    s32 mFrame;
+    s32 mCharIndex;
+    s32 mWaitTime;
+    u32 mCharCount;
+    bool mEnabled;
+    f32 mCharInterval;
+    f32 mFadeSpeed;
 };
 
 class CustomTagProcessor : public MessageTagSkipTagProcessor {
@@ -70,19 +70,19 @@ public:
         static GroupFunctionInfo sGroupFunctionTable[];
     };
 
-    /* 0x04 */ bool mIsShadow;
-    /* 0x05 */ bool mIsText;
-    /* 0x06 */ bool mIsInfo;
-    /* 0x07 */ bool mNoCharSpace;
-    /* 0x08 */ CustomTagAlphaCtrl mAlphaCtrl;
-    /* 0x2C */ nw4r::lyt::TextBox* mTextBox;
-    /* 0x30 */ u8 mPlayedSounds;
-    /* 0x31 */ u8 mSoundIndex;
-    /* 0x32 */ u8 mColorIndex;
-    /* 0x33 */ NebulaColor8 mColorMappingMin;
-    /* 0x37 */ NebulaColor8 mColorMappingMax;
-    /* 0x40 */ f32 mRubyFontWidth;
-    /* 0x44 */ f32 mRubyFontHeight;
-    /* 0x48 */ f32 mFontWidth;
-    /* 0x4C */ f32 mFontHeight;
+    bool mIsShadow;
+    bool mIsText;
+    bool mIsInfo;
+    bool mNoCharSpace;
+    CustomTagAlphaCtrl mAlphaCtrl;
+    nw4r::lyt::TextBox* mTextBox;
+    u8 mPlayedSounds;
+    u8 mSoundIndex;
+    u8 mColorIndex;
+    NebulaColor8 mColorMappingMin;
+    NebulaColor8 mColorMappingMax;
+    f32 mRubyFontWidth;
+    f32 mRubyFontHeight;
+    f32 mFontWidth;
+    f32 mFontHeight;
 };

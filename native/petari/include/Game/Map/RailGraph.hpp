@@ -20,10 +20,10 @@ public:
     void connectEdgeToNode(s32, s32);
     RailGraphIter getIterator() const;
 
-    /* 0x00 */ RailGraphNode* mNodes;
-    /* 0x04 */ s32 mNodeCount;
-    /* 0x08 */ u32 _8;
-    /* 0x0C */ RailGraphEdge* mEdges;
-    /* 0x10 */ s32 mEdgeCount;
-    /* 0x14 */ s32 _14;
+    RailGraphNode* mNodes;
+    s32 mNodeCount;
+    u32 _8;
+    RailGraphEdge* mEdges;
+    s32 mEdgeCount;
+    s32 _14;
 };

@@ -23,6 +23,6 @@ public:
     PoltaArm* getAttackActor();
 
     u8 padding[0xC];
-    /* 0x1C */ bool mIsLeftArmActor;
-    /* 0x1D */ bool mIsActionAffectBody;
+    bool mIsLeftArmActor;
+    bool mIsActionAffectBody;
 };

@@ -17,7 +17,7 @@ public:
     void exeWait();
     void exeGenerate();
 
-    /* 0x8C */ u32 _8C;
-    /* 0x90 */ s32 mWaitTime;
-    /* 0x94 */ s32 mBubbleLifeTime;
+    u32 _8C;
+    s32 mWaitTime;
+    s32 mBubbleLifeTime;
 };

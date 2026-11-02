@@ -19,5 +19,5 @@ public:
     void exeWait();
     void exeShake();
 
-    /* 0xC4 */ s32 mObjArg0;
+    s32 mObjArg0;
 };

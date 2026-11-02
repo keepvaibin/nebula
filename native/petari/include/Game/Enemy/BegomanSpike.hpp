@@ -49,9 +49,9 @@ public:
     void endTurn();
     void endBindStarPointer();
     void exeBindStarPointer();
-    /* 0x100 */ BegomanHead* mHead;
-    /* 0x104 */ TPos3f mHeadMatrix;
-    /* 0x134 */ ModelObj* mBrokenModel;
-    /* 0x138 */ TPos3f mWaterColumnMatrix;
-    /* 0x168 */ bool mTurnAfterBlow;
+    BegomanHead* mHead;
+    TPos3f mHeadMatrix;
+    ModelObj* mBrokenModel;
+    TPos3f mWaterColumnMatrix;
+    bool mTurnAfterBlow;
 };

@@ -9,12 +9,12 @@ public:
 
     virtual void movement();
 
-    /* 0x0C */ f32 _C;
-    /* 0x10 */ f32 _10;
-    /* 0x14 */ f32 _14;
-    /* 0x18 */ TMtx34f mRotateYMtx;
-    /* 0x48 */ TMtx34f mHiSpeedRotateYMtx;
-    /* 0x78 */ TMtx34f mWaterRotateMtx;
+    f32 _C;
+    f32 _10;
+    f32 _14;
+    TMtx34f mRotateYMtx;
+    TMtx34f mHiSpeedRotateYMtx;
+    TMtx34f mWaterRotateMtx;
 };
 
 namespace MR {
