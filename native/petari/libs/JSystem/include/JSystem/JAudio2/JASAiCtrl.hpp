@@ -9,7 +9,7 @@ enum JASOutputRate {
 };
 
 namespace JASDriver {
-    void initAI(void (*)(void));
+    void startAudio();
     void startDMA();
     void stopDMA();
     void setOutputRate(JASOutputRate);

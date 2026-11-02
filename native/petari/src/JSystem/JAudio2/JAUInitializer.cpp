@@ -11,7 +11,6 @@
 //
 
 #include "JSystem/JAudio2/JASAramStream.hpp"
-#include "JSystem/JAudio2/JASAudioThread.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"

@@ -58,6 +58,8 @@ void nebula_host_thread_pass(NebulaHostThread* pTo);
 void nebula_host_thread_wait(NebulaHostThread* pSelf);
 /* The end of the calling thread, whose turn has been passed on. */
 void nebula_host_thread_exit(NebulaHostThread* pSelf);
+/* Lets another host thread run. */
+void nebula_host_thread_yield(void);
 /* The end of a thread waiting for its turn. */
 void nebula_host_thread_cancel(NebulaHostThread* pThread);
 

@@ -22,6 +22,7 @@
 #else
 #include <errno.h>
 #include <pthread.h>
+#include <sched.h>
 #include <time.h>
 #endif
 
@@ -428,6 +429,14 @@ void nebula_host_thread_wait(NebulaHostThread* pSelf) {
     if (pSelf->cancelled) {
         nebula_host_thread_exit(pSelf);
     }
+}
+
+void nebula_host_thread_yield(void) {
+#if defined(_WIN32)
+    SwitchToThread();
+#else
+    sched_yield();
+#endif
 }
 
 void nebula_host_thread_cancel(NebulaHostThread* pThread) {
