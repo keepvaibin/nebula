@@ -1,5 +1,6 @@
 #include "Game/LiveActor/ClippingActorInfo.hpp"
 #include "Game/LiveActor/ClippingJudge.hpp"
+#include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
@@ -68,8 +69,14 @@ void ClippingActorInfo::updateDrawnClipped() {
     if (drawn) {
         mActor->prepareDrawClipped();
         MR::connectToDrawTemporarily(mActor);
+        if (mActor->mEffectKeeper != nullptr) {
+            mActor->mEffectKeeper->playEmitterOffClipped();
+        }
     } else {
         MR::disconnectToDrawTemporarily(mActor);
+        if (mActor->mEffectKeeper != nullptr) {
+            mActor->mEffectKeeper->stopEmitterOnClipped();
+        }
     }
 }
 

@@ -290,7 +290,7 @@ void LiveActor::startClipped() {
         mSensorKeeper->invalidateBySystem();
     }
 
-    if (mEffectKeeper != nullptr) {
+    if (mEffectKeeper != nullptr && !mFlag.mIsDrawnClipped) {
         mEffectKeeper->stopEmitterOnClipped();
     }
 
