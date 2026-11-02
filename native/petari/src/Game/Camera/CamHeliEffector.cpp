@@ -4,17 +4,6 @@
 #include "Game/Player/MarioActor.hpp"  // DO NOT REMOVE
 #include "Game/Util/MathUtil.hpp"
 
-void CamHeliEffector_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.0000038146973f;
-    (void)0.5f;
-    (void)0.98f;
-    (void)0.001f;
-    (void)60.0f;
-    (void)(MR::pi() / 6.0f);
-}
-
 CamHeliEffector::CamHeliEffector() : _0(), _4() {
 }
 

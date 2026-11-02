@@ -345,8 +345,6 @@ void PlanetMapCreator::createPlanetMapDataTable(JMapInfo* pInfo) {
     }
 }
 
-#pragma push
-#pragma opt_loop_invariants off
 void PlanetMapCreator::addTableData(const JMapInfo* pInfo, s32 idx) {
     PlanetMapData* curData = mPlanetMapData[idx];
     MR::getCsvDataStr(&curData->mPlanetName, pInfo, "PlanetName", idx);
@@ -371,7 +369,6 @@ void PlanetMapCreator::addTableData(const JMapInfo* pInfo, s32 idx) {
         MR::getCsvDataStr(&curData->mForceScenarioData[i], pInfo, data, idx);
     }
 }
-#pragma pop
 
 PlanetMapData* PlanetMapCreator::getTableData(const char* pName) const {
     for (int i = 0; i < mTableCount; i++) {

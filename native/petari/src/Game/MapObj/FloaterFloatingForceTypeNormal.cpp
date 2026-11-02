@@ -3,19 +3,6 @@
 #include "Game/MapObj/FloaterFunction.hpp"
 #include "Game/Util.hpp"
 
-void FloaterFloatingForceTypeNormal_FORCE_MATCH_SDATA2() {
-    (void)0.05f;
-    (void)0.0001f;
-    (void)0.98f;
-    (void)-50.0f;
-    (void)50.0f;
-    (void)10.0f;
-    (void)0.8f;
-    (void)0.1f;
-    (void)-0.1f;
-    (void)0.001f;
-}
-
 namespace {
     // static const f32 sSinkSpeedFric = _;
     // static const f32 sBrakeForce = _;

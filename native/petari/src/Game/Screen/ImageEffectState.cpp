@@ -7,11 +7,6 @@
 #include "Game/Screen/ImageEffectDirector.hpp"
 #include "Game/Screen/ScreenBlurEffect.hpp"
 
-void ImageEffectState_FORCE_MATCH_SDATA2() {
-    (void)0.1f;
-    (void)255.0f;
-}
-
 void ImageEffectState::update() {
     ImageEffectBase* pCurrent = mHost->mCurrentEffect;
     bool isCurrent = pCurrent == getEffect();

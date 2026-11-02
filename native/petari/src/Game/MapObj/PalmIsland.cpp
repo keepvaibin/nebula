@@ -51,8 +51,6 @@ inline void PalmIsland::exeWait() {
 
 // required to match
 // TODO remove
-#pragma push
-#pragma opt_propagation off
 void PalmIsland::exeFloat() {
     if (MR::isFirstStep(this)) {
         _90 = mPosition;
@@ -74,4 +72,3 @@ void PalmIsland::exeFloat() {
     _9C = temp;
     mVelocity.scale(value, *getGravity());
 }
-#pragma pop

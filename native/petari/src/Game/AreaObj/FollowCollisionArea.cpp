@@ -5,10 +5,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-void FollowCollisionArea_FORCE_MATCH_SDATA2() {
-    (void)5.0f;
-}
-
 FollowCollisionArea::~FollowCollisionArea() {
 }
 

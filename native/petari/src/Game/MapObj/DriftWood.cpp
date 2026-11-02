@@ -74,8 +74,6 @@ void DriftWood::exeWait() {
 
 // required to match
 // TODO remove
-#pragma push
-#pragma opt_propagation off
 void DriftWood::exeVibrate() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_DRIFT_WOOD_PLAYER_ON");
@@ -102,7 +100,6 @@ void DriftWood::exeVibrate() {
         }
     }
 }
-#pragma pop
 
 void DriftWood::connectToScene(const MapObjActorInitInfo&) {
     MR::connectToSceneCollisionMapObj(this);

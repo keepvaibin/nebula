@@ -42,16 +42,6 @@
 #include "Game/AudioLib/AudParams.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 
-void Overwrite_FORCE_MATCH_SDATA2() {
-    (void)-2607.5945f;
-    (void)2607.5945f;
-    (void)0.333333f;
-    (void)0.57735f;
-    (void)0.001f;
-    (void)25.0f;
-    (void)0.01f;
-}
-
 namespace {
     const u8 sUnitMask[] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 };  // namespace
@@ -204,10 +194,6 @@ namespace {
         JPAParticleBatch::setProjection(mtx);
     }
 
-// only way I can get these to match
-// TODO find better way
-#pragma push
-#pragma opt_common_subs off
     static void loadPrjAnm(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
         f32 frame = pWork->mpEmtr->getAge();
         const JPABaseShape* pShape = pWork->mpRes->getBsp();
@@ -237,7 +223,6 @@ namespace {
         NebulaMtxConcat(matrix, pSrt, matrix);
         JPAParticleBatch::setProjection(matrix);
     }
-#pragma pop
 
 
     typedef void (*projectionFunc)(JPAEmitterWorkData const*, const Mtx);
@@ -596,13 +581,6 @@ void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     JPAParticleBatch::vertex(end.x, end.y, end.z, 0.0f, 1.0f);
 }
 
-// only way I can get these to match
-// TODO find better way
-#pragma push
-#pragma opt_propagation off
-#pragma opt_common_subs off
-#pragma opt_lifetimes off
-#pragma opt_loop_invariants off
 void JPADrawStripe(JPAEmitterWorkData* pWork) {
     const u32 count = pWork->mpAlivePtcl->getNum();
     JPABaseShape* pShape = pWork->mpRes->getBsp();
@@ -681,13 +659,7 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     }
 
 }
-#pragma pop
 
-#pragma push
-#pragma opt_propagation off
-#pragma opt_common_subs off
-#pragma opt_lifetimes off
-#pragma opt_loop_invariants off
 void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     const u32 count = pWork->mpAlivePtcl->getNum();
     JPABaseShape* pShape = pWork->mpRes->getBsp();
@@ -826,7 +798,6 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     }
 
 }
-#pragma pop
 
 void JPAFieldAir::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
     TVec3f direction(pBlock->getDir());

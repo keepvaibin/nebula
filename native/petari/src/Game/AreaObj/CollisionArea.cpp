@@ -10,10 +10,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 
-void CollisionArea_FORCE_MATCH_SDATA2() {
-    (void)5.0f;
-}
-
 CollisionArea::CollisionArea(int formType, const char* pName) : AreaObj(formType, pName) {
     _3C = 0;
     _40 = 0.0f;

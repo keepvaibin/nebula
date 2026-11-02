@@ -21,28 +21,6 @@
 #include <cmath>
 #include <nebula_math.h>
 
-void ActorMovementUtil_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)-MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)HALF_PI;
-    (void)2.0f;
-    (void)-HALF_PI;
-    (void)FLOAT_MAX;
-    (void)0.001f;
-    (void)0.95f;
-    (void)PI_180;
-    (void)2607.5945f;
-    (void)_180_PI;
-    (void)-0.999f;
-    (void)1000.0f;
-    (void)0.1f;
-}
-
 namespace {
 
     inline void DO_ROTATE(const TPos3f& rMtx, TVec3f* pVec, f32 f1) {

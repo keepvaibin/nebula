@@ -541,14 +541,6 @@ UserFile* SaveDataHandleSequence::getBackupUserFile() {
     return mBackupUserFile;
 }
 
-void SaveDataHandleSequence_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("%s%1d", "%s%1d");
-    MR::isEqualString("mario", "mario");
-    MR::isEqualString("luigi", "luigi");
-    MR::isEqualString("config%1d", "config%1d");
-    MR::isEqualString("sysconf", "sysconf");
-}
-
 void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int index) {
     char dataName[16];
     nebula_snprintf(dataName, sizeof(dataName), "config%1d", index);

@@ -20,13 +20,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include <cstring>
 
-void CameraManGame_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::pi();
-    (void)2.0f;
-}
-
 namespace {
     static const f32 sMinDistance = 300.0f;
     const char* sThruCamName = "\203\146\203\164\203\110\203\213\203\147\203\112\203\201\203\211" /* デフォルトカメラ */;

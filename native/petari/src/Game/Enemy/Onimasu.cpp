@@ -18,17 +18,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void Onimasu_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.000003814697265625f;
-    (void)0.0f;
-    (void)2.0f;
-    (void)1.5707963705062866f;
-    (void)-1.0f;
-    (void)0.5f;
-    (void)3.1415927410125732f;
-}
-
 namespace {
     static const s32 sWaitTime = 90;
     static const s32 sTimeToNextPoint = 30;

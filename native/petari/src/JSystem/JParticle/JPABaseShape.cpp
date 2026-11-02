@@ -342,8 +342,6 @@ void JPAGenTexCrdMtxAnm(JPAEmitterWorkData* param_0) {
 void JPAGenTexCrdMtxPrj(JPAEmitterWorkData* param_0) {
 }
 
-#pragma push
-#pragma opt_common_subs off
 void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     f32 dVar16 = work->mpEmtr->mTick;
@@ -371,10 +369,7 @@ void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     local_108[2][3] = 0.0f;
     setTexMtx(local_108, TexMtx_Rows);
 }
-#pragma pop
 
-#pragma push
-#pragma opt_common_subs off
 void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     f32 dVar16 = param_1->mAge;
@@ -402,7 +397,6 @@ void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1)
     local_108[2][3] = 0.0f;
     setTexMtx(local_108, TexMtx_Rows);
 }
-#pragma pop
 
 namespace {
     void loadImage(JPAEmitterWorkData* work, s32 image) {
@@ -506,8 +500,6 @@ void loadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
     setTexMtx(mtx, TexMtx_Projection);
 }
 
-#pragma push
-#pragma opt_common_subs off
 static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     f32 dVar16 = work->mpEmtr->getAge();
     JPABaseShape* const shape = work->mpRes->getBsp();
@@ -537,7 +529,6 @@ static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     NebulaMtxConcat(local_108, srt, local_108);
     setTexMtx(local_108, TexMtx_Projection);
 }
-#pragma pop
 
 namespace {
     // The quad arrays JPAResource set for the particles being drawn: positions 3 signed bytes, texture coordinates 2.

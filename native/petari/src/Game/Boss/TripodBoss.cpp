@@ -190,10 +190,6 @@ void TripodBoss::initLeg(const JMapInfoIter& rIter) {
 }
 
 // TODO
-#pragma push
-#pragma opt_propagation off
-#pragma opt_loop_invariants off
-#pragma opt_common_subs off
 void TripodBoss::initLegIKPlacement() {
     f32 heightRate = _618;
     f32 widthRate = MR::sqrt(1.0f - heightRate * heightRate);
@@ -237,7 +233,6 @@ void TripodBoss::initLegIKPlacement() {
         getLeg(i)->setWait();
     }
 }
-#pragma pop
 
 void TripodBoss::initMovableArea(const TPos3f& rPos) {
     TVec3f trans;

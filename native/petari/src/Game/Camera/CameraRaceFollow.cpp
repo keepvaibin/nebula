@@ -5,11 +5,6 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraRaceFollow_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)(MR::pi() / 2.0f);
-}
-
 CameraRaceFollow::CameraRaceFollow(const char* pName)
     : Camera(pName), mDistMin(500.0f), mDistMax(1200.0f), mAngleX(MR::toRadian(15.0f)), mIsForcePitch(), mRoundAngleSpeed() {
 }

@@ -5,13 +5,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void CameraCubePlanet_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-    (void)0.5f;
-}
-
 CameraCubePlanet::CameraCubePlanet(const char* pName)
     : Camera(pName), mDist(3000.0f), mAngleX(MR::pi() / 6.0f), mAngleY(0.35f), mUp(0.0f, 1.0f, 0.0f) {
 }

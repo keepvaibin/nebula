@@ -19,15 +19,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void Karikari_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)2.0f;
-}
-
 namespace {
     volatile static const f32 sSize = 30.0f;  // TODO: is this really volatile or is this just a hack
 

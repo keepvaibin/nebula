@@ -9,17 +9,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void MogucchiHill_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)0.5f;
-    (void)120.0f;
-    (void)90000.0f;
-    (void)100.0f;
-    (void)150.0f;
-    (void)0.6f;
-    (void)(1.0f - 0.6f);
-}
-
 namespace {
     static const char* sPieceModelTable[] = {
         "MogucchiHillA",

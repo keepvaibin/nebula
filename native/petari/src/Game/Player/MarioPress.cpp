@@ -170,7 +170,6 @@ bool Mario::checkSidePressPre() {
     return false;
 }
 
-#pragma opt_propagation off
 bool Mario::checkSidePress() {
     TVec3f position;
     if (isStatusActive(MarioStatus_Hang)) {

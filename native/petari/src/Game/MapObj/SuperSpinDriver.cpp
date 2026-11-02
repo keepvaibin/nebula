@@ -9,16 +9,6 @@
 #include "Game/MapObj/SpinDriverUtil.hpp"
 #include "Game/Util.hpp"
 
-void SuperSpinDriver_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)MR::epsilon();
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-}
-
 namespace {
     static const f32 sCanBindTime = 90;
     static s32 cSpaceFlyStartFrame = 10;

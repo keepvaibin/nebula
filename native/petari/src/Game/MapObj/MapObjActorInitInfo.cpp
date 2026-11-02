@@ -5,11 +5,6 @@
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void MapObjActorInitInfo_FORCE_MATCH_STRINGS() {
-    JUTNativeLog("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
-    JUTNativeLog("\230\146\220\257" /* 惑星 */);
-}
-
 MapObjActorInitInfo::MapObjActorInitInfo()
     : mSetDefaultPosition(), mConnectToScene(), mInitBinder(), mHasEffect(), mHasSensors(), mHasShadows(), mCalcGravity(), mUseProjectMapMtx(),
       mInitFur(), mHasRailMover(), mHasRotator(), mHasRailRotator(), _C(), _D(), mUseRailPosture(), mUseBaseMtxFollowTarget(), mIsAffectedByScale(),

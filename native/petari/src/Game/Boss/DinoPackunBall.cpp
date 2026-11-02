@@ -10,20 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void DinoPackunBall_FORCE_MATCH_SDATA2() {
-    (void)135.0f;
-    (void)0.001f;
-    (void)500.0f;
-    (void)1500.0f;
-    (void)5.0f;
-    (void)0.3f;
-    (void)120.0f;
-    (void)40.0f;
-    (void)0.9f;
-    (void)0.88f;
-    (void)8.0f;
-}
-
 namespace NrvDinoPackunBall {
     NEW_NERVE(DinoPackunBallNrvWait, DinoPackunBall, Wait);
     NEW_NERVE(DinoPackunBallNrvShoot, DinoPackunBall, Shoot);

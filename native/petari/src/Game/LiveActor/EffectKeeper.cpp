@@ -13,10 +13,6 @@
 #include <algorithm>
 #include <cstdio>
 
-void EffectKeeper_FORCE_MATCH_SDATA2() {
-    0.0f;
-}
-
 namespace {
     const char* cAttributeEffectTag = "Attr";
 };  // namespace

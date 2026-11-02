@@ -18,15 +18,6 @@ namespace NrvCocoNutBall {
     NEW_NERVE(CocoNutBallNrvFreezeRelease, CocoNutBall, FreezeRelease);
 };  // namespace NrvCocoNutBall
 
-void CocoNutBall_FORCE_MATCH_SDATA2() {
-    (void) 1.0f;
-    (void) 0.0f;
-    (void) MR::epsilon();
-    (void) 3.0f;
-    (void) -1.0f;
-    (void) 2.0f;
-}
-
 CocoNutBall::CocoNutBall(const char* pName)
     : LiveActor(pName), _8C(), _90(0.0f, -1.0f, 0.0f), _9C(), _A0(), _A4(gZeroVec), _B0(gZeroVec), _BC(), _BD(), _BE(), _C0(450.0f), _C4(),
       _C8(0.0f, 1.0f, 0.0f), _D4(10000.0f), _D8() {
@@ -486,8 +477,6 @@ void CocoNutBall::exeRebound() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void CocoNutBall::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
@@ -526,7 +515,6 @@ void CocoNutBall::exeFreeze() {
         setNerve(GET_NERVE(CocoNutBall, CocoNutBallNrvFreezeRelease));
     }
 }
-#pragma pop
 
 void CocoNutBall::exeFreezeRelease() {
     if (MR::isFirstStep(this)) {

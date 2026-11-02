@@ -258,8 +258,6 @@ void KoopaJrShipCannonShell::exeDown() {
         misfire();
 }
 
-#pragma push
-#pragma global_optimizer off
 void KoopaJrShipCannonShell::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
@@ -289,7 +287,6 @@ void KoopaJrShipCannonShell::exeFreeze() {
         setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFly));
     }
 }
-#pragma pop
 
 namespace CannonShellUtil {
     void registerKoopaJrShipCannonShell(CannonShellHolder* pHolder, int shellNum) {

@@ -11,31 +11,6 @@
 
 #include "Game/Util/StringUtil.hpp"
 
-void CocoNut_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("Watermelon", "Watermelon");
-    MR::isEqualString("CocoNut", "CocoNut");
-    MR::isEqualString("BreakWatermelon", "BreakWatermelon");
-    MR::isEqualString("CocoNutBreak", "CocoNutBreak");
-    MR::isEqualString("SE_OJ_COCONUT_HIT", "SE_OJ_COCONUT_HIT");
-    MR::isEqualString("SE_PM_SPIN_HIT", "SE_PM_SPIN_HIT");
-    MR::isEqualString("SE_OJ_COCONUT_LAUNCH", "SE_OJ_COCONUT_LAUNCH");
-    MR::isEqualString("SE_OJ_COCONUT_FLIP_M", "SE_OJ_COCONUT_FLIP_M");
-    MR::isEqualString("SE_OJ_COCONUT_FLIP_S", "SE_OJ_COCONUT_FLIP_S");
-    MR::isEqualString("body", "body");
-    MR::isEqualString("RollingSmoke", "RollingSmoke");
-    MR::isEqualString("RollingSmokeAttrWater", "RollingSmokeAttrWater");
-    MR::isEqualString("RollingSmokeAttrSand", "RollingSmokeAttrSand");
-    MR::isEqualString("Land", "Land");
-    MR::isEqualString("LandAttrWater", "LandAttrWater");
-    MR::isEqualString("WaterColumn", "WaterColumn");
-    MR::isEqualString("SpinHitMark", "SpinHitMark");
-    MR::isEqualString("SE_OJ_COCONUT_BOUND_WATER", "SE_OJ_COCONUT_BOUND_WATER");
-    MR::isEqualString("SE_OJ_COCONUT_BOUND", "SE_OJ_COCONUT_BOUND");
-    MR::isEqualString("SE_OJ_LV_COCONUT_ROLL_WATER", "SE_OJ_LV_COCONUT_ROLL_WATER");
-    MR::isEqualString("SE_OJ_LV_COCONUT_ROLL", "SE_OJ_LV_COCONUT_ROLL");
-    MR::isEqualString("SE_OJ_FALL_IN_WATER_M", "SE_OJ_FALL_IN_WATER_M");
-}
-
 namespace NrvCocoNut {
     NEW_NERVE(CocoNutNrvWait, CocoNut, Wait);
     NEW_NERVE(CocoNutNrvWaitOnBind, CocoNut, WaitOnBind);

@@ -100,24 +100,8 @@ public:
     /* 0x08 */ f32 mNoteOffTime;
     /* 0x0C */ f32 mBasePitch;
     /* 0x10 */  // u32 mFlags;
-#ifdef TARGET_PC
     // The flags are bits of the word (the accessors above test mFlags).
     /* 0x10 */ u32 mFlags;
-#else
-    union {
-        /* 0x10 */ struct {
-            bool mPlaysAtIntervals : 1;
-            bool mSetsLifeTime : 1;
-            bool mStopsWhenSpeedIsZero : 1;
-            bool mStopsWhenNoteOff : 1;
-            bool mPlaysOnlyOnce : 1;
-            bool mStopsWhenAnimationChanges : 1;
-            bool mPlaysOnlyReverse : 1;
-            bool mPlaysOnlyForward : 1;
-        };
-        /* 0x10 */ u32 mFlags;
-    };
-#endif
     /* 0x14 */ u8 mBaseVolume;
     /* 0x15 */ s8 mPitchDelta;
     /* 0x16 */ u8 mPlayTime;
@@ -158,13 +142,9 @@ public:
     }
 
     /* 0x0 */ u16 mNumSounds;
-#ifdef TARGET_PC
     // A runtime pointer in the console's 4-byte slot of the file header; BAS files hold 0 there.
     /* 0x4 */ u32 mControlSlot;
     static constexpr JAUSoundAnimationControl* mControl = nullptr;
-#else
-    /* 0x4 */ JAUSoundAnimationControl* mControl;
-#endif
     /* 0x8 */ JAUSoundAnimationSound mSounds;
 };
 

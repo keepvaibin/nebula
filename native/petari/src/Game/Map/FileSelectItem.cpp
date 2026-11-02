@@ -21,23 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
-void FileSelectItem_FORCE_MATCH_SDATA2() {
-    (void)1000.0f;
-    (void)900.0f;
-    (void)30.0f;
-    (void)27.0f;
-    (void)360.0f;
-    (void)-180.0f;
-    (void)0.03f;
-    (void)-25.0f;
-    (void)25.0f;
-    (void)0.98f;
-    (void)-0.5f;
-    (void)1.2f;
-    (void)10.0f;
-    (void)6.0f;
-}
-
 namespace {
     NEW_NERVE(FileSelectItemNrvNewWait, FileSelectItem, NewWait);
     NEW_NERVE(FileSelectItemNrvExistWait, FileSelectItem, ExistWait);

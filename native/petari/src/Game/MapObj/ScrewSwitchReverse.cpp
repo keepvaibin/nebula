@@ -25,16 +25,6 @@ namespace NrvScrewSwitchReverse {
     NEW_NERVE(ScrewSwitchReverseNrvScrew, ScrewSwitchReverse, Screw);
 };  // namespace NrvScrewSwitchReverse
 
-void ScrewSwitchReverse_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)3.0f;
-    (void)28.0f;
-    (void)-130.0f;
-    (void)120.0f;
-    (void)10.0f;
-    (void)100.0f;
-}
-
 ScrewSwitchReverse::ScrewSwitchReverse(const char* pName) : LiveActor(pName), mHost(), mIsForceJump() {
 }
 

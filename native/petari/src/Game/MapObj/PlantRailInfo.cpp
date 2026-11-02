@@ -5,10 +5,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void PlantRailInfo_FORCE_MATCH_SDATA2() {
-    (void)10000000000.0f;
-}
-
 PlantRailInfo::PlantRailInfo(const JMapInfoIter& rIter, f32 speed) : mRailSpeed(speed), mNumPlantPoints(), mPlantPoints(), mRailRider() {
     mRailRider = new RailRider(rIter);
     mRailRider->setSpeed(mRailSpeed);

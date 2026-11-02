@@ -28,16 +28,6 @@ namespace {
     static const s32 sStepToRisingForFloatSignal = 120;
 };  // namespace
 
-void OceanSmallTurtle_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)2.0f;
-}
-
 OceanSmallTurtle::OceanSmallTurtle(const char* pName)
     : LiveActor(pName), mRailMover(), mFloatUpSpeed(), mAccelRate(::sDefaultAccelRate), mStartNearestRailPos(0.0f), mFloatDelayTimer(), mArg1(),
       mBoundTimer(), mMercatorPos(0.0f), mBoundDisplacement(), mRailClippingPos(0.0f), mRailClippingRadius(), mStartRotationX(), mIsOnPlayer(),

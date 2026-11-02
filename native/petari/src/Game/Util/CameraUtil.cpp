@@ -23,14 +23,6 @@
 
 // TODO: mismatch in .data order likely due to a stripped function containing "CAM_TYPE_DPD"
 
-void CameraUtil_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)-1.0f;
-    (void)MR::pi();
-}
-
 void CameraUtil_DUMMY() {
     TVec4f a(1.0f, 0.0f, 0.0f, 0.0f);
     TVec3f b;

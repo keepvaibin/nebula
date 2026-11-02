@@ -86,8 +86,6 @@ namespace {
     }
 };  // namespace
 
-#pragma push
-#pragma opt_propagation off
 void KoopaShockWave::exeWaveAttack() {
     if (MR::isFirstStep(this)) {
         mPartsModel->makeActorAppeared();
@@ -151,7 +149,6 @@ void KoopaShockWave::exeWaveAttack() {
         kill();
     }
 }
-#pragma pop
 
 void KoopaShockWave::updateHitSensor(HitSensor* pSensor) {
     TVec3f playerPos = *MR::getPlayerPos();

@@ -22,25 +22,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void BenefitItemObj_FORCE_MATCH_SDATA2() {
-    (void)50.0f;
-    (void)5.0f;
-    (void)10.0f;
-    (void)100.0f;
-    (void)2000.0f;
-    (void)0.0010000000474974513f;
-    (void)6.2831854820251465f;
-    (void)7.0f;
-    (void)0.019999999552965164f;
-    (void)1.100000023841858f;
-    (void)0.009999999776482582f;
-    (void)0.949999988079071f;
-    (void)20.0f;
-    (void)0.10000000149011612f;
-    (void)0.20000000298023224f;
-    (void)60.0f;
-}
-
 namespace {
     f32 cAppearThrowUpSpd = 10.0f;
     f32 cAppearThrowUpSpd2 = 15.0f;

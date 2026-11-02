@@ -19,11 +19,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void PrologueDirector_FORCE_MATCH_SDATA2() {
-    1.0f;
-    0.0f;
-}
-
 namespace {
     static const char* sPictureBookDemoName = "\203\166\203\215\203\215\201\133\203\117\203\146\203\202" /* プロローグデモ */;
     static const char* sArriveDemoName = "\216\345\220\154\214\366\203\163\201\133\203\140\217\351\202\311\223\236\222\205" /* 主人公ピーチ城に到着 */;

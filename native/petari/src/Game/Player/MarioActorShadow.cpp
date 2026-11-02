@@ -21,18 +21,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 
-void MarioActorShadow_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)-1.0f;
-    (void)500.0f;
-    (void)0.75f;
-    (void)1000.0f;
-    (void)4503599627370496.0;
-    (void)4503601774854144.0;
-}
-
 void MarioActor::initShadow() {
     _A08 = 1;
 

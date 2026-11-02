@@ -59,8 +59,6 @@ namespace MR {
         }
     }
 
-#pragma push
-#pragma opt_propagation off
     bool getWaterAreaInfo(WaterInfo* pInfo, const TVec3f& rPos, const TVec3f& rGravity, bool skipConnectedArea) {
         if (pInfo->mOceanBowl != nullptr) {
             return pInfo->mOceanBowl->calcWaterInfo(rPos, rGravity, pInfo);
@@ -186,7 +184,6 @@ namespace MR {
 
         return pArea->isInVolume(rPos);
     }
-#pragma pop
 
     bool calcWhirlPoolAccelInfo(const TVec3f& rVec, TVec3f* pVec) {
         return WaterAreaFunction::tryInWhirlPoolAccelerator(rVec, pVec);

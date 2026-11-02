@@ -19,30 +19,6 @@ namespace {
     const f32 hRandomScaleMax = 1.25f;
 };  // namespace
 
-void SmallStone_FORCE_MATCH_SDATA2() {
-    (void)0.017453292f;
-    (void)-360.0f;
-    (void)360.0f;
-    (void)0.75f;
-    (void)1.25f;
-    (void)100.0f;
-    (void)6.2831855f;
-    (void)2607.5945f;
-    (void)-2607.5945f;
-    (void)300.0f;
-    (void)1000.0f;
-    (void)0.01f;
-    (void)57.29578f;
-    (void)120.0f;
-    (void)400.0f;
-    (void)800.0f;
-    (void)0.2f;
-    (void)3.8f;
-    (void)20.0f;
-    (void)40.0f;
-    (void)30.0f;
-}
-
 void SmallStone_FORCE_MATCH_STRINGS(const char** pStrings) {
     pStrings[0] = "CircleShell";
     pStrings[1] = "CircleStrawberry";
@@ -68,10 +44,6 @@ SmallStone::~SmallStone() {
     delete[] mMembers;
 }
 
-#pragma push
-#pragma opt_loop_invariants off
-#pragma opt_propagation off
-#pragma opt_lifetimes off
 inline bool SmallStoneMember::tryPlaceOnGround(const TVec3f& rStart, const TVec3f& rRay) {
     return MR::getFirstPolyOnLineToMap(&mPosition, nullptr, rStart, rRay);
 }
@@ -196,7 +168,6 @@ void SmallStone::initAfterPlacement() {
     getSensor("Range")->mRadius = radius;
     MR::setClippingTypeSphere(this, 2.0f * radius);
 }
-#pragma pop
 
 void SmallStone::control() {
     for (s32 i = 0; i < mMemberCount; i++) {

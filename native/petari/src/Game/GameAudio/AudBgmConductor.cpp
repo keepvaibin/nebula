@@ -10,10 +10,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
 
-void AudBgmConductor_FORCE_MATCH_SDATA2() {
-    f32 f1 = 1.0f;
-}
-
 AudBgmConductor::AudBgmConductor()
     : NameObj("AudBgmConductor"), mStateBits(0), mState(0), mStartDelay(-1), mFadeInDelay(-1), mStopImmediately(false) {
 }

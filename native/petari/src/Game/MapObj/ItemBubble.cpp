@@ -241,8 +241,6 @@ void ItemBubble::calcAndSetBaseMtx() {
     reinterpret_cast< TPos3f* >(getBaseMtx())->setTrans(mPosition);
 }
 
-#pragma push
-#pragma global_optimizer off
 void ItemBubble::exeWait() {
     if (MR::isFirstStep(this)) {
         // Useless...
@@ -288,7 +286,6 @@ void ItemBubble::exeWait() {
         _90[i]->mRotation.y += 8.0f;
     }
 }
-#pragma pop
 
 void ItemBubble::exeBreak() {
     if (MR::isFirstStep(this)) {

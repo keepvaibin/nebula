@@ -4,13 +4,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
-void ClipAreaShape_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)500.0f;
-    (void)0.01f;
-    (void)1000.0f;
-}
-
 ClipAreaShape::ClipAreaShape(const char* pName) : mModelData() {
     mModelData = MR::getJ3DModelData(pName);
 }

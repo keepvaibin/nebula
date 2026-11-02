@@ -35,8 +35,6 @@ void MiniatureGalaxyHolder::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-#pragma push
-#pragma ppc_iro_level 1
 
 bool MiniatureGalaxyHolder::isRegisteredActor(const LiveActor* pActor) {
     for (int i = 0; i < mMiniatureGalaxyGroup->getObjNum(); i++) {
@@ -48,7 +46,6 @@ bool MiniatureGalaxyHolder::isRegisteredActor(const LiveActor* pActor) {
     return false;
 }
 
-#pragma ppc_iro_level 2
 
 MiniatureGalaxy* MiniatureGalaxyHolder::findMiniatureGalaxy(const char* pGalaxyName) const {
     MiniatureGalaxy* miniatureGalaxy;
@@ -96,7 +93,6 @@ s32 MiniatureGalaxyHolder::calcIndex(const LiveActor* pActor) const {
     return index;
 }
 
-#pragma ppc_iro_level 1
 
 void MiniatureGalaxyHolder::updateCometStatus() {
     mCometGalaxy = nullptr;

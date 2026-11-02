@@ -6,12 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
-void KoopaFigureBall_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::pi();
-}
-
 namespace {
     static const f32 sWallJumpSpeed = 15.0f;
 };  // namespace

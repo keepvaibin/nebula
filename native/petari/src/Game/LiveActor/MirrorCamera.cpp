@@ -6,13 +6,6 @@
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <JSystem/JGeometry/TPartition3.hpp>
 
-void MirrorCamera_FORCE_MATCH_SDATA2() {
-    1.0f;
-    0.0f;
-    -1.0f;
-    2.0f;
-}
-
 MirrorCamera::MirrorCamera(const char* pName) : NameObj(pName), _C(0.0f, 0.0f, 0.0f), _18(0.0f, 1.0f, 0.0f), _24() {
     mViewMtx.identity();
     mModelTexMtx.identity();

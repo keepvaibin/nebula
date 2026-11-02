@@ -13,8 +13,6 @@ static inline u32 batWord(const u32* p) {
            bytes[3];
 }
 
-#pragma push
-#pragma optimization_level 3
 JKRUnitHeap* JKRUnitHeap::create(u32 unitSize, u32 size, u32 alignment, JKRHeap* parent, bool errorFlag) {
     if (alignment == 0) {
         alignment = 4;
@@ -62,7 +60,6 @@ JKRUnitHeap* JKRUnitHeap::create(u32 unitSize, u32 size, u32 alignment, JKRHeap*
     }
     return heap;
 }
-#pragma pop
 
 void JKRUnitHeap::do_destroy() {
     JKRHeap* parent = getParent();

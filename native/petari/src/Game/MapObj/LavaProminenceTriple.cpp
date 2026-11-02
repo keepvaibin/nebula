@@ -131,8 +131,6 @@ void LavaProminenceTriple::calcAndSetBaseMtx() {
 void LavaProminenceTriple::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     MR::sendMsgEnemyAttackFireStrong(pReceiver, pSender);
 }
-#pragma push
-#pragma opt_propagation off
 void LavaProminenceTriple::updateHitSensor(HitSensor* pSensor) {
     TVec3f diff = *MR::getPlayerCenterPos();
     diff -= mPosition;
@@ -183,7 +181,6 @@ void LavaProminenceTriple::updateHitSensor(HitSensor* pSensor) {
     pSensor->mPosition.set(*getPosition());
     pSensor->mPosition.add(offset);
 }
-#pragma pop
 void LavaProminenceTriple::updateEffectClipping() {
     updateEffectClippingIndividual(&mIsAppearDrop1, "Drop1", "Head1");
 

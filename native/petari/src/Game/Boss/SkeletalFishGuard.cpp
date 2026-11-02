@@ -548,8 +548,6 @@ bool SkeletalFishGuard::isInScreen() const NO_INLINE {
 
 // this is the only way I could match this
 // TODO fix
-#pragma push
-#pragma opt_propagation off
 bool SkeletalFishGuard::isPlayerInAttackRange() const {
     const TVec3f& rPosition = mPosition;
     TVec3f v7 = *MR::getPlayerCenterPos() - rPosition;
@@ -571,7 +569,6 @@ bool SkeletalFishGuard::isPlayerInAttackRange() const {
 
     return true;
 }
-#pragma pop
 
 bool SkeletalFishGuard::isLineOfSightClear() const {
     TVec3f v12 = *MR::getPlayerCenterPos() - mPosition;
