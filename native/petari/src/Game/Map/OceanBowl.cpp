@@ -450,7 +450,6 @@ void OceanBowl::loadMaterialBloom() const {
     static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
     J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);

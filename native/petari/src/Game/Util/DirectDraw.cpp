@@ -60,8 +60,6 @@ namespace TDDraw {
     }
 
     void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
-        J3DNativeState::setCoPlanar(0);
         J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
 
         Mtx mtx;

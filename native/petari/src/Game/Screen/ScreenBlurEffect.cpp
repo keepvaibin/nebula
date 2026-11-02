@@ -75,7 +75,6 @@ void ScreenBlurEffect::drawBlur() const {
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
     J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     J3DNativeState::setColorUpdate(GPU_TRUE);
     J3DNativeState::setAlphaUpdate(GPU_FALSE);
     sendBlurMaterial(_14, _18, static_cast< u8 >(static_cast< s32 >(get_10() * 220.0f * mIntensity)));
