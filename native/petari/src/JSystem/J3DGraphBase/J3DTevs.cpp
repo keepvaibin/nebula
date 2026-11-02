@@ -215,14 +215,6 @@ bool isTexNoReg(void* pDL) {
     return false;
 }
 
-u16 getTexNoReg(void* pDL) {
-    // The display list is big-endian.
-    u32 var_r31 = *(NEBULA_BE(u32)*)((u8*)pDL + 1);
-    return var_r31 & 0xFFFFFF;
-}
-
-
-
 void loadNBTScale(J3DNBTScale& NBTScale) {
     if (NBTScale.mbHasScale == true) {
         j3dSys.setNBTScale(&NBTScale.mScale);

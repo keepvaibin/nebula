@@ -1,6 +1,5 @@
 #pragma once
 
-#include "nebula_disc.hpp"
 #include "nw4r/lyt/types.h"
 #include "nw4r/math/types.h"
 #include <revolution/gx.h>

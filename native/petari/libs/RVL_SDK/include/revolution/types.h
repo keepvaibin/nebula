@@ -66,7 +66,6 @@ extern "C++" {
 }
 #elif !defined(TARGET_PC)
 #define NEBULA_BE(T) T
-#define NEBULA_OFFSET(T) T*
 #endif
 #else
 typedef signed char s8;
