@@ -1,6 +1,6 @@
 #include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 namespace JASLoad {
     static JASTaskThread* sThread;
@@ -17,7 +17,7 @@ bool JASLoad::createThread(int msgCount, u32 stackSize) {
 
     sThread = new (JASDram, 0) JASTaskThread(msgCount, stackSize);
 
-    JKRHeap* pCurrentHeap = JKRGetSystemHeap();
+    NebulaArena* pCurrentHeap = NebulaArena::getSystemHeap();
 
     sThread->setCurrentHeap(pCurrentHeap);
     sThread->resume();

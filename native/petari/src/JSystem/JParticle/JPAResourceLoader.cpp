@@ -1,6 +1,6 @@
 #include "JSystem/JParticle/JPAResourceLoader.hpp"
 #include <string.h>
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
 #include "JSystem/JParticle/JPAChildShape.hpp"
 #include "JSystem/JParticle/JPADynamicsBlock.hpp"
@@ -30,7 +30,7 @@ struct JPAResourceHeader {
 };
 
 void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
-    JKRHeap* heap = mgr->mpHeap;
+    NebulaArena* heap = mgr->mpHeap;
     mgr->mResMax = *(u16*)(data + 8);
     mgr->mTexMax = *(u16*)(data + 0xA);
     mgr->mpResArr = new (heap, 0) JPAResource*[mgr->mResMax];

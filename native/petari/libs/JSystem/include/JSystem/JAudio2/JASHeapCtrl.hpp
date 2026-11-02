@@ -2,14 +2,14 @@
 
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 
 struct JASDisposer;
-class JKRHeap;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
 
-extern JKRSolidHeap* JASDram;
+extern NebulaArena* JASDram;
 
 class JASHeap {
 public:
@@ -156,7 +156,7 @@ public:
 };
 
 namespace JASKernel {
-    JKRHeap* getSystemHeap();
+    NebulaArena* getSystemHeap();
 };  // namespace JASKernel
 
 template < u32 ChunkSize, template < typename > class T >
@@ -227,7 +227,7 @@ public:
             return true;
         }
 
-        mChunk = new (JKRHeap::getSystemHeap(), 0) MemoryChunk(pMVar4);
+        mChunk = new (NebulaArena::getSystemHeap(), 0) MemoryChunk(pMVar4);
         if (mChunk != nullptr) {
             return true;
         }
@@ -274,8 +274,8 @@ public:
 };
 
 namespace JASKernel {
-    void setupRootHeap(JKRSolidHeap*, u32);
-    JKRHeap* getSystemHeap();
+    void setupRootHeap(NebulaArena*, u32);
+    NebulaArena* getSystemHeap();
     JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* getCommandHeap();
     void setupSoundHeap(u32, u32);
     JASHeap* getSoundHeap();
@@ -283,18 +283,18 @@ namespace JASKernel {
     u32 getSoundSize();
 
     extern JASHeap soundHeap;
-    extern JKRHeap* sSystemHeap;
+    extern NebulaArena* sSystemHeap;
     extern JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* sCommandHeap;
 };  // namespace JASKernel
 
 template < typename T >
 class JASPoolAllocObject {
 public:
-    static void* operator new(JKRNewSize size) {
+    static void* operator new(size_t size) {
         return memPool_.alloc(size);
     }
 
-    static void operator delete(void* addr, JKRNewSize size) {
+    static void operator delete(void* addr, size_t size) {
         memPool_.free(addr, size);
     }
 
@@ -329,11 +329,11 @@ public:
 template < typename T >
 class JASPoolAllocObject_MultiThreaded {
 public:
-    static void* operator new(JKRNewSize size) {
+    static void* operator new(size_t size) {
         return memPool_.alloc(size);
     }
 
-    static void operator delete(void* addr, JKRNewSize size) {
+    static void operator delete(void* addr, size_t size) {
         memPool_.free(addr, size);
     }
 

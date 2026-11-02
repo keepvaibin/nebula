@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASBasicInst.hpp"
 
-struct JKRHeap;
+struct NebulaArena;
 
 const int PERC_MAX = 0x80;
 
@@ -28,7 +28,7 @@ struct JASDrumSet : public JASInst {
             mPan = pan;
         }
 
-        void setVeloRegionCount(u32, JKRHeap*);
+        void setVeloRegionCount(u32, NebulaArena*);
         TVelomap* getVeloRegion(int);
         const TVelomap* getVeloRegion(int) const;
 
@@ -50,7 +50,7 @@ struct JASDrumSet : public JASInst {
 
     JASDrumSet();
     virtual ~JASDrumSet();
-    void newPercArray(u8, JKRHeap*);
+    void newPercArray(u8, NebulaArena*);
     virtual bool getParam(int, int, JASInstParam*) const;
     void setPerc(int, JASDrumSet::TPerc*);
     virtual u32 getType() const {

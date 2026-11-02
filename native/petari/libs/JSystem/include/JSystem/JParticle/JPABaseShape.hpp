@@ -4,7 +4,7 @@
 
 class JPAEmitterWorkData;
 class JPABaseParticle;
-class JKRHeap;
+class NebulaArena;
 
 struct JPABaseShapeData {
     // Common header.
@@ -37,7 +37,7 @@ struct JPABaseShapeData {
 
 struct JPABaseShape {
 public:
-    JPABaseShape(u8 const*, JKRHeap*);
+    JPABaseShape(u8 const*, NebulaArena*);
     void setGX(JPAEmitterWorkData*) const;
 
     static const u8 st_bm[4];

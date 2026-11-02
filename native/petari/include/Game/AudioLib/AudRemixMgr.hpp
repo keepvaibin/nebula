@@ -3,7 +3,7 @@
 #include "Game/AudioLib/AudRemixSequencer.hpp"
 #include "Game/AudioLib/AudSoundObject.hpp"
 
-class JKRHeap;
+class NebulaArena;
 
 // In the remix sequence resource (host order, as the importer cooks it).
 struct RemixNoteData {
@@ -28,13 +28,13 @@ struct RemixNoteGroupData {
 
 class AudRemixMgr {
 public:
-    AudRemixMgr(JKRHeap* pHeap);
+    AudRemixMgr(NebulaArena* pHeap);
     void init();
     void update();
     void setRemixSeqResource(void* ptr);
     RemixNoteGroupData* getRemixNoteGroupDataFromMelodyNo(s32 melodyNo) const;
 
-    /* 0x0  */ JKRHeap* mHeap;
+    /* 0x0  */ NebulaArena* mHeap;
     /* 0x4  */ RemixNoteGroupData* mGroups;
     /* 0x8  */ s32 mGroupCount;
     /* 0xC  */ AudSoundObject* mSoundObj;

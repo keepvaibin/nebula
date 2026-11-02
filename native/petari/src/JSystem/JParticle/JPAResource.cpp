@@ -7,7 +7,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Util/MotionSignal.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
 #include "JSystem/JParticle/JPAChildShape.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
@@ -69,7 +69,7 @@ static u8 jpa_crd[32] ATTRIBUTE_ALIGN(32) = {
     0x00, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x02,
 };
 
-void JPAResource::init(JKRHeap* heap) {
+void JPAResource::init(NebulaArena* heap) {
     u32 is_glbl_clr_anm = mpBaseShape->isGlblClrAnm();
     u32 is_glbl_tex_anm = mpBaseShape->isGlblTexAnm();
     BOOL is_prm_anm = mpBaseShape->isPrmAnm();
@@ -108,7 +108,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcEmitterFuncListNum != 0) {
-        mpCalcEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpCalcEmitterFuncListNum * sizeof(EmitterFunc), 4);
+        mpCalcEmitterFuncList = (EmitterFunc*)NebulaArena::alloc(mpCalcEmitterFuncListNum * sizeof(EmitterFunc), 4, heap);
     }
 
     int func_no = 0;
@@ -204,7 +204,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcParticleFuncListNum != 0) {
-        mpCalcParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleFuncListNum * sizeof(ParticleFunc), 4);
+        mpCalcParticleFuncList = (ParticleFunc*)NebulaArena::alloc(mpCalcParticleFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -322,7 +322,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcParticleChildFuncListNum != 0) {
-        mpCalcParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleChildFuncListNum * sizeof(ParticleFunc), 4);
+        mpCalcParticleChildFuncList = (ParticleFunc*)NebulaArena::alloc(mpCalcParticleChildFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -365,7 +365,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawEmitterFuncListNum != 0) {
-        mpDrawEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterFuncListNum * sizeof(EmitterFunc), 4);
+        mpDrawEmitterFuncList = (EmitterFunc*)NebulaArena::alloc(mpDrawEmitterFuncListNum * sizeof(EmitterFunc), 4, heap);
     }
 
     func_no = 0;
@@ -461,7 +461,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawEmitterChildFuncListNum != 0) {
-        mpDrawEmitterChildFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterChildFuncListNum * sizeof(EmitterFunc), 4);
+        mpDrawEmitterChildFuncList = (EmitterFunc*)NebulaArena::alloc(mpDrawEmitterChildFuncListNum * sizeof(EmitterFunc), 4, heap);
     }
 
     func_no = 0;
@@ -507,7 +507,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawParticleFuncListNum != 0) {
-        mpDrawParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleFuncListNum * sizeof(ParticleFunc), 4);
+        mpDrawParticleFuncList = (ParticleFunc*)NebulaArena::alloc(mpDrawParticleFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -609,7 +609,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawParticleChildFuncListNum != 0) {
-        mpDrawParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleChildFuncListNum * sizeof(ParticleFunc), 4);
+        mpDrawParticleChildFuncList = (ParticleFunc*)NebulaArena::alloc(mpDrawParticleChildFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;

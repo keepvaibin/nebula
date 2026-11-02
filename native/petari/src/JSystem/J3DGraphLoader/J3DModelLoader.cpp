@@ -7,7 +7,7 @@
 #include "JSystem/J3DGraphLoader/J3DJointFactory.hpp"
 #include "JSystem/J3DGraphLoader/J3DMaterialFactory.hpp"
 #include "JSystem/J3DGraphLoader/J3DShapeFactory.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 #include "JSystem/JUtility/JUTNameTab.hpp"
 #include <stdint.h>
@@ -89,7 +89,6 @@ J3DModelData* J3DModelLoaderDataBase::loadBinaryMaterials(const void* data, u32 
 }
 
 J3DModelData* J3DModelLoader::load(void const* i_data, u32 i_flags) {
-    JKRGetCurrentHeap()->getTotalFreeSize();
     mpModelData = new J3DModelData();
     mpModelData->clear();
     mpModelData->mpRawData = i_data;

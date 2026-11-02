@@ -2,7 +2,7 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 #include <stdint.h>
 

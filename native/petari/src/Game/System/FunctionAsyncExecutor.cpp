@@ -4,11 +4,10 @@
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MutexHolder.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JKernel/JKRUnitHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, const char* pName)
-    : mFunc(pFunc), mStarterHeap(JKRHeap::sCurrentHeap), mName(pName), mIsEnd(false) {
+    : mFunc(pFunc), mStarterHeap(NebulaArena::sCurrentHeap), mName(pName), mIsEnd(false) {
     mQueue.init(&mMessage, 1);
 }
 
@@ -17,12 +16,12 @@ FunctionAsyncExecInfo::~FunctionAsyncExecInfo() {
 }
 
 void FunctionAsyncExecInfo::execute() {
-    JKRHeap* const previous = mStarterHeap->becomeCurrentHeap();
+    NebulaArena* const previous = mStarterHeap->becomeCurrentHeap();
     (*mFunc)();
-    JKRHeap::sCurrentHeap = previous;
+    NebulaArena::sCurrentHeap = previous;
 }
 
-FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)
+FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(NebulaArena* pHeap)
     : GameThread(0x10000, 4, pHeap), mIsSuspended(false), mName(nullptr) {
 }
 
@@ -69,10 +68,8 @@ FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHold
     }
 
     mMainThreadExec = new FunctionAsyncExecutorOnMainThread(GameThreads::current());
-    // Units of the native record (0x34 bytes on the console), as many as the console's heap held.
-    _410 = JKRUnitHeap::create(sizeof(FunctionAsyncExecInfo), 0x34A8 / 0x34 * ALIGN_NEXT(sizeof(FunctionAsyncExecInfo), 4), 4,
-                               MR::getCurrentHeap(), false);
-    _414 = JKRExpHeap::create(0x2800, MR::getCurrentHeap(), false);
+    _410 = NebulaArena::create(MR::getCurrentHeap());
+    _414 = NebulaArena::create(MR::getCurrentHeap());
 }
 
 void FunctionAsyncExecutor::update() {

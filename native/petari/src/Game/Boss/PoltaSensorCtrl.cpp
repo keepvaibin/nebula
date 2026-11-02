@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 namespace {
     const PoltaSensorListEntry sCoreSensorList[] = {

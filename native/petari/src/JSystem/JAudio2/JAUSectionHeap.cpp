@@ -13,23 +13,23 @@
 #include "JSystem/JAudio2/JAUSoundTable.hpp"
 #include "JSystem/JAudio2/JAUStreamFileTable.hpp"
 
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include "Game/System/GameAssets.hpp"
 
 namespace {
     class TPushCurrentHeap {
     public:
-        TPushCurrentHeap(JKRHeap* heap) {
-            mHeap = JKRSetCurrentHeap(heap);
+        TPushCurrentHeap(NebulaArena* heap) {
+            mHeap = heap->becomeCurrentHeap();
         }
 
         ~TPushCurrentHeap() {
-            JKRSetCurrentHeap(mHeap);
+            mHeap->becomeCurrentHeap();
         }
 
     private:
-        JKRHeap* mHeap;
+        NebulaArena* mHeap;
     };
 
     class TStreamDataMgr : public JAIStreamDataMgr {
@@ -76,22 +76,12 @@ namespace {
     };
 }  // namespace
 
-namespace {
-    bool JKRSolidHeap_isEmpty(JKRSolidHeap* pHeap) {
-        u32 beforeSize = pHeap->getFreeSize();
-        pHeap->freeAll();
-        return pHeap->getFreeSize() - beforeSize == 0;
-    }
-}  // namespace
-
 JAUSection::TSectionData::TSectionData() {
     resetRegisteredWaveBankTables();
     resetRegisteredBankTables();
     mBstDst = nullptr;
     mBstnDst = nullptr;
     field_0x80 = nullptr;
-    field_0xa0 = 0;
-    field_0x9c = 0;
 }
 
 void JAUSection::TSectionData::resetRegisteredBankTables() {
@@ -109,7 +99,6 @@ void JAUSection::TSectionData::resetRegisteredWaveBankTables() {
 JAUSection::JAUSection(JAUSectionHeap* param_0, u32 param_1, s32 param_2) : JSULink< JAUSection >(this), field_0x28(param_1), sectionHeap_(param_0) {
     buildingBankTable_ = nullptr;
     field_0x2c = 1;
-    data_.field_0x98 = param_2;
 
     if (this != sectionHeap_) {
         data_.field_0x00.setSeqDataArchive(sectionHeap_->sectionHeapData_.seqDataBlocks.getSeqDataArchive());
@@ -121,8 +110,6 @@ void JAUSection::finishBuild() {
         TPushCurrentHeap push(getHeap_());
     }
 
-    data_.field_0x98 -= getHeap_()->getFreeSize();
-    getHeap_()->freeTail();
     field_0x2c = 0;
 }
 
@@ -304,13 +291,11 @@ void* JAUSection::newCopy(void const* param_0, u32 param_1, s32 param_2) {
 JASWaveBank* JAUSection::newWaveBank(u32 bank_no, void const* param_1) {
     {
         TPushCurrentHeap push(getHeap_());
-        s32 r27 = getHeap_()->getFreeSize();
         JASWaveBank* waveBank = JASWSParser::createWaveBank(param_1, getHeap_());
 
         if (waveBank) {
             sectionHeap_->getWaveBankTable().registWaveBank(bank_no, waveBank);
             data_.registeredWaveBankTables.set(bank_no, true);
-            data_.field_0xa0 += r27 - getHeap_()->getFreeSize();
             return waveBank;
         }
     }
@@ -395,7 +380,6 @@ JASBank* JAUSection::newBank(void const* param_0, u32 param_1) {
     {
         TPushCurrentHeap push(getHeap_());
         u32 bank_no = JASBNKParser::getBankNumber(param_0);
-        s32 r25 = getHeap_()->getFreeSize();
         JASBank* bank = JASBNKParser::createBank(param_0, getHeap_());
 
         if (bank) {
@@ -407,7 +391,6 @@ JASBank* JAUSection::newBank(void const* param_0, u32 param_1) {
             }
 
             bank->assignWaveBank(waveBank);
-            data_.field_0x9c += r25 - getHeap_()->getFreeSize();
             return bank;
         }
     }
@@ -492,20 +475,18 @@ u32 JAUSectionHeap::releaseIdleDynamicSeqDataBlock() {
     return sectionHeapData_.seqDataBlocks.releaseIdleDynamicSeqDataBlock(sectionHeapData_.seqDataUser);
 }
 
-static JAUSectionHeap* JAUNewSectionHeap(JKRSolidHeap* heap, bool param_1) {
+static JAUSectionHeap* JAUNewSectionHeap(NebulaArena* heap, bool param_1) {
     TPushCurrentHeap push(heap);
-    s32 r29 = heap->getFreeSize();
-    JAUSectionHeap* sectionHeap = new JAUSectionHeap(heap, param_1, r29);
+    JAUSectionHeap* sectionHeap = new JAUSectionHeap(heap, param_1, 0);
     return sectionHeap;
 }
 
 JAUSectionHeap* JAUNewSectionHeap(bool param_0) {
-    s32 freeSize = JASDram->getFreeSize();
-    JKRSolidHeap* sectionHeap = JKRCreateSolidHeap(freeSize, JASDram, true);
+    NebulaArena* sectionHeap = NebulaArena::create(JASDram);
     return JAUNewSectionHeap(sectionHeap, param_0);
 }
 
-JAUSectionHeap::JAUSectionHeap(JKRSolidHeap* param_0, bool param_1, s32 param_2)
+JAUSectionHeap::JAUSectionHeap(NebulaArena* param_0, bool param_1, s32 param_2)
     : JAUSection(this, 0, param_2), JASGlobalInstance< JAUSectionHeap >(param_1), mHeap(param_0) {
     field_0xe4 = 0;
     mSectionList.append(this);

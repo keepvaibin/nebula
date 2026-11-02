@@ -43,7 +43,7 @@ public:
 
 class AudSoundObject : public JAUSoundObject, JKRDisposer {
 public:
-    AudSoundObject(TVec3f*, u8, JKRHeap*);
+    AudSoundObject(TVec3f*, u8, NebulaArena*);
 
     virtual JAISoundHandle* startSound(JAISoundID);
     virtual JAISoundHandle* startLevelSound(JAISoundID);

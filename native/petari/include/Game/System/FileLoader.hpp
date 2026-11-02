@@ -7,7 +7,7 @@
 #include "Game/System/FileHolder.hpp"
 #include "Game/System/FileLoaderThread.hpp"
 
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -18,17 +18,17 @@ class FileLoader {
 public:
     FileLoader();
 
-    void requestLoadToMainRAM(const char*, u8*, JKRHeap*, GameAssets::AllocDirection, bool);
-    void requestMountArchive(const char*, JKRHeap*, bool);
+    void requestLoadToMainRAM(const char*, u8*, NebulaArena*, GameAssets::AllocDirection, bool);
+    void requestMountArchive(const char*, NebulaArena*, bool);
     bool isLoaded(const char*) const;
     bool isMountedArchive(const char*) const;
     void* receiveFile(const char*);
     JKRMemArchive* receiveArchive(const char*);
     void receiveAllRequestedFile();
-    JKRMemArchive* createAndAddArchive(void*, JKRHeap*, const char*);
-    void getMountedArchiveAndHeap(const char*, JKRArchive**, JKRHeap**) const;
+    JKRMemArchive* createAndAddArchive(void*, NebulaArena*, const char*);
+    void getMountedArchiveAndHeap(const char*, JKRArchive**, NebulaArena**) const;
     void clearRequestFileInfo(bool);
-    void removeHolderIfIsEqualHeap(JKRHeap*);
+    void removeHolderIfIsEqualHeap(NebulaArena*);
     void removeFile(const char*);
     bool isNeedToLoad(const char*) const;
     const RequestFileInfo* getRequestFileInfoConst(const char*) const;

@@ -1,11 +1,11 @@
 #include "Game/System/GameThread.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-GameThread::GameThread(u32 stackSize, int messageCount, JKRHeap* pHeap) {
-    mStartCurrentHeap = JKRHeap::sCurrentHeap;
+GameThread::GameThread(u32 stackSize, int messageCount, NebulaArena* pHeap) {
+    mStartCurrentHeap = NebulaArena::sCurrentHeap;
     if (pHeap == nullptr) {
-        pHeap = JKRHeap::sCurrentHeap;
+        pHeap = NebulaArena::sCurrentHeap;
     }
 
     initHeapSpecified(pHeap, stackSize);
@@ -24,14 +24,14 @@ GameThread::~GameThread() {
     delete[] mMessageArray;
 }
 
-void GameThread::initMessageQueue(JKRHeap* pHeap, int messageCount) {
+void GameThread::initMessageQueue(NebulaArena* pHeap, int messageCount) {
     mMessageCount = messageCount;
     mMessageArray = new (pHeap, 0) void*[mMessageCount];
 
     mQueue.init(mMessageArray, mMessageCount);
 }
 
-void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize) {
+void GameThread::initHeapSpecified(NebulaArena* pHeap, u32 stackSize) {
     mHeap = pHeap;
     mStackSize = stackSize & ~31;  // the host thread's own stack
     mThread = new (mHeap, 32) GameThreadRecord();
@@ -41,7 +41,7 @@ void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize) {
 
 void* GameThread::start(void* pArg) {
     GameThread* self = static_cast< GameThread* >(pArg);
-    JKRHeap::sCurrentHeap = self->mStartCurrentHeap;
+    NebulaArena::sCurrentHeap = self->mStartCurrentHeap;
     return self->run();
 }
 

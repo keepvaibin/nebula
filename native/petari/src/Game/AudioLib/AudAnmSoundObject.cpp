@@ -8,9 +8,9 @@
 #include "Game/Player/Mario.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
 #include <JSystem/JAudio2/JAUSoundAnimator.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-AudAnmSoundObject::AudAnmSoundObject(TVec3f* pPos, u8 numHandles, JKRHeap* pHeap) : AudSoundObject(pPos, numHandles, pHeap), JAUSoundAnimator(this) {
+AudAnmSoundObject::AudAnmSoundObject(TVec3f* pPos, u8 numHandles, NebulaArena* pHeap) : AudSoundObject(pPos, numHandles, pHeap), JAUSoundAnimator(this) {
 }
 
 void AudAnmSoundObject::update(f32 time) {

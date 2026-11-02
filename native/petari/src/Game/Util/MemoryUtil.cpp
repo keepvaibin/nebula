@@ -5,13 +5,12 @@
 #include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <JSystem/JAudio2/JASMutex.hpp>
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
 namespace MR {
-    CurrentHeapRestorer::CurrentHeapRestorer(JKRHeap* pHeap) {
-        _0 = JKRHeap::sCurrentHeap;
+    CurrentHeapRestorer::CurrentHeapRestorer(NebulaArena* pHeap) {
+        _0 = NebulaArena::sCurrentHeap;
         MR::becomeCurrentHeap(pHeap);
     }
 
@@ -19,45 +18,29 @@ namespace MR {
         MR::becomeCurrentHeap(_0);
     }
 
-    JKRHeap* getCurrentHeap() {
-        return JKRHeap::sCurrentHeap;
+    NebulaArena* getCurrentHeap() {
+        return NebulaArena::sCurrentHeap;
     }
 
-    f32 getHeapFreeRatio(JKRHeap* pHeap) {
-        u32 size = pHeap->mSize;
-        return static_cast< f32 >(pHeap->getTotalFreeSize()) / size;
+    NebulaArena* getAproposHeapForSceneArchive(f32 maxFreeSizeRate) {
+        (void)maxFreeSizeRate;
+        return SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap;
     }
 
-    JKRHeap* getAproposHeapForSceneArchive(f32 maxFreeSizeRate) {
-        JKRHeap* pFileCacheHeap = SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap;
-
-        if (pFileCacheHeap != nullptr) {
-            if (getHeapFreeRatio(pFileCacheHeap) < maxFreeSizeRate) {
-                pFileCacheHeap = SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeap;
-            }
-        }
-
-        return pFileCacheHeap;
-    }
-
-    JKRExpHeap* getStationedHeap() {
+    NebulaArena* getStationedHeap() {
         return SingletonHolder< HeapMemoryWatcher >::get()->mStationedHeap;
     }
 
-    JKRSolidHeap* getSceneHeap() {
+    NebulaArena* getSceneHeap() {
         return SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeap;
     }
 
-    void becomeCurrentHeap(JKRHeap* pHeap) {
+    void becomeCurrentHeap(NebulaArena* pHeap) {
         pHeap->becomeCurrentHeap();
     }
 
-    bool isEqualCurrentHeap(JKRHeap* pHeap) {
-        return JKRHeap::sCurrentHeap == pHeap;
-    }
-
-    void adjustHeapSize(JKRExpHeap* pHeap, const char* pParam2) {
-        pHeap->adjustSize();
+    bool isEqualCurrentHeap(NebulaArena* pHeap) {
+        return NebulaArena::sCurrentHeap == pHeap;
     }
 
     void copyMemory(void* pDst, const void* pSrc, u32 size) {

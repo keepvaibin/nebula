@@ -14,7 +14,7 @@
 #include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
 
 JAU_JASInitializer::JAU_JASInitializer() {
@@ -35,10 +35,8 @@ JAU_JAIInitializer::JAU_JAIInitializer() {
 }
 
 void JAU_JAIInitializer::initJAInterface() {
-    s32 r30 = JASDram->getFreeSize();
     JAIStream::newMemPool(mMaxNumStream);
     JAISeq::newMemPool(mMaxNumSeq);
     JAISe::newMemPool(mMaxNumSe);
     JAISoundChild::newMemPool(mMaxNumChildren);
-    s32 r29 = JASDram->getFreeSize();
 }

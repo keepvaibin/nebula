@@ -16,7 +16,7 @@ namespace {
     }
 };  // namespace
 
-FileLoaderThread::FileLoaderThread(int msgCount, JKRHeap* pHeap) : GameThread(0x8000, msgCount, pHeap) {
+FileLoaderThread::FileLoaderThread(int msgCount, NebulaArena* pHeap) : GameThread(0x8000, msgCount, pHeap) {
 }
 
 void* FileLoaderThread::run() {

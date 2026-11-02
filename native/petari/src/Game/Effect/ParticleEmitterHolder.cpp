@@ -3,7 +3,7 @@
 #include "Game/Effect/EffectSystemUtil.hpp"
 #include "Game/Effect/ParticleEmitter.hpp"
 
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JParticle/JPAEmitter.hpp>
 #include <algorithm>
 
@@ -88,8 +88,8 @@ ParticleEmitter* ParticleEmitterHolder::findAvailableParticleEmitter() {
     }
 
     // Full: as many again, in the heap this lies in. Effects keep pointers to the records, so the old ones stay.
-    Chunk* pChunk = new (JKRHeap::findFromRoot(this), 0) Chunk();
-    pChunk->mEmitters.mArr = new (JKRHeap::findFromRoot(this), 0) ParticleEmitter[mFirst.mEmitters.size()];
+    Chunk* pChunk = new (NebulaArena::findFromRoot(this), 0) Chunk();
+    pChunk->mEmitters.mArr = new (NebulaArena::findFromRoot(this), 0) ParticleEmitter[mFirst.mEmitters.size()];
     pChunk->mEmitters.mMaxSize = mFirst.mEmitters.size();
     pChunk->mNext = nullptr;
     pLast->mNext = pChunk;

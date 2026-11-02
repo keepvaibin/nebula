@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 104u
+#define NEBULA_GAME_API_VERSION 105u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -918,8 +918,12 @@ typedef struct NebulaHostServices {
     int (*asset_child)(void* user, int32_t folder, uint32_t child, NebulaAssetEntry* entry);
     /* Reads `size` bytes at `offset` of a file into dst, before it returns: the bytes read, or -1. */
     int32_t (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst);
-    /* The game's memory: a zeroed block, null if it cannot be had. */
-    void* (*memory_block)(void* user, uint64_t size);
+    /* The game's memory (NebulaArena): addresses to itself, null if there are none; memory for part of them, zeroed; given back
+       with the addresses kept; all of it given back. */
+    void* (*memory_reserve)(void* user, uint64_t size);
+    int (*memory_commit)(void* user, void* start, uint64_t size);
+    void (*memory_decommit)(void* user, void* start, uint64_t size);
+    void (*memory_release)(void* user, void* start, uint64_t size);
     /* The game's threads (nebula_threads.h). A new thread sleeps until passed its turn; one that ends sleeps for good: game
        threads end only with the game. */
     NebulaHostThread* (*thread_create)(void* user, void (*entry)(void*), void* arg);

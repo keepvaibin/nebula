@@ -7,7 +7,7 @@
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include "Game/System/NebulaClock.hpp"
 

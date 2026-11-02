@@ -24,7 +24,7 @@ class JAISoundHandle;
 class JAISoundID;
 class JAUSectionHeap;
 class JKRArchive;
-class JKRSolidHeap;
+class NebulaArena;
 class SpkSystem;
 
 extern const char sAudioResFile[];
@@ -153,5 +153,5 @@ public:
     /* 0x132C */ SpkSystem* mSpkSystem;
 };
 
-AudSystem* AudNewAudSystem(JKRSolidHeap*, void*, JKRArchive*, JKRArchive*, JKRArchive*, JKRArchive*);
+AudSystem* AudNewAudSystem(NebulaArena*, void*, JKRArchive*, JKRArchive*, JKRArchive*, JKRArchive*);
 AudSystem* AudNewAudSystem_(JAUSectionHeap*, JKRArchive*, JKRArchive*, JKRArchive*, int);

@@ -1,21 +1,21 @@
 #include "JSystem/JKernel/JKRThread.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JUtility/TColor.hpp"
 
 JKRThread::JKRThread(u32 stack_size, int message_count) : mThreadListLink(this) {
-    JKRHeap* heap = JKRHeap::findFromRoot(this);
+    NebulaArena* heap = NebulaArena::findFromRoot(this);
     if (heap == nullptr) {
-        heap = JKRGetSystemHeap();
+        heap = NebulaArena::getSystemHeap();
     }
 
     setCommon_heapSpecified(heap, stack_size);
     setCommon_mesgQueue(mHeap, message_count);
 }
 
-JKRThread::JKRThread(JKRHeap* pHeap, u32 stack_size, int message_count) : mThreadListLink(this) {
+JKRThread::JKRThread(NebulaArena* pHeap, u32 stack_size, int message_count) : mThreadListLink(this) {
     if (pHeap == nullptr) {
-        pHeap = JKRGetCurrentHeap();
+        pHeap = NebulaArena::getCurrentHeap();
     }
 
     setCommon_heapSpecified(pHeap, stack_size);
@@ -30,35 +30,35 @@ JKRThread::~JKRThread() {
             GameThreads::cancel(mThread);
         }
 
-        JKRHeap::free(mStackMemory, mHeap);
-        JKRHeap::free(mThread, mHeap);
+        NebulaArena::free(mStackMemory, mHeap);
+        NebulaArena::free(mThread, mHeap);
     }
 
-    JKRHeap::free(mMesgBuffer, 0);
+    NebulaArena::free(mMesgBuffer, 0);
 }
 
-void JKRThread::setCommon_mesgQueue(JKRHeap* pHeap, int msgCount) {
+void JKRThread::setCommon_mesgQueue(NebulaArena* pHeap, int msgCount) {
     mMessageCount = msgCount;
     // A message is a pointer: 8 bytes natively.
-    mMesgBuffer = reinterpret_cast< void** >(JKRHeap::alloc(mMessageCount * sizeof(void*), 0, pHeap));
+    mMesgBuffer = reinterpret_cast< void** >(NebulaArena::alloc(mMessageCount * sizeof(void*), 0, pHeap));
     mMessageQueue.init(mMesgBuffer, mMessageCount);
     sThreadList.append(&mThreadListLink);
     mCurrentHeap = nullptr;
     mCurrentHeapError = 0;
 }
 
-void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size) {
-    mStartCurrentHeap = JKRHeap::sCurrentHeap;
+void JKRThread::setCommon_heapSpecified(NebulaArena* pHeap, u32 stack_size) {
+    mStartCurrentHeap = NebulaArena::sCurrentHeap;
     mHeap = pHeap;
     mStackSize = stack_size & 0xffffffe0;
-    mStackMemory = JKRAllocFromHeap(mHeap, mStackSize, 0x20);
-    mThread = reinterpret_cast< GameThreadRecord* >(JKRAllocFromHeap(mHeap, sizeof(GameThreadRecord), 0x20));
+    mStackMemory = NebulaArena::alloc(mStackSize, 0x20, mHeap);
+    mThread = reinterpret_cast< GameThreadRecord* >(NebulaArena::alloc(sizeof(GameThreadRecord), 0x20, mHeap));
     GameThreads::create(mThread, start, this, mStackSize);
 }
 
 void* JKRThread::start(void* pThread) {
     JKRThread* self = static_cast< JKRThread* >(pThread);
-    JKRHeap::sCurrentHeap = self->mStartCurrentHeap;
+    NebulaArena::sCurrentHeap = self->mStartCurrentHeap;
     return self->run();
 }
 

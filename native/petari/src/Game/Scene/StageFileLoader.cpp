@@ -45,7 +45,7 @@ void StageFileLoader::makeStageArchiveName(char* buf, u32 len, const char* pZone
 
 void StageFileLoader::mountFilesInStageMapFile(const char* pName) {
     JKRArchive* archive = 0;
-    JKRHeap* heap = 0;
+    NebulaArena* heap = 0;
     MR::getMountedArchiveAndHeap(pName, &archive, &heap);
     void* res;
     const char* curName;

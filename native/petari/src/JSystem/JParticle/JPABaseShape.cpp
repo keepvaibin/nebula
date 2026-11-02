@@ -3,7 +3,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
@@ -830,8 +830,8 @@ void JPADrawParticleCallBack(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     work->mpEmtr->mpPtclCallBack->draw(work->mpEmtr, ptcl);
 }
 
-static void makeColorTable(NebulaColor8** o_color_table, JPAClrAnmKeyData const* i_data, u8 param_2, s16 i_size, JKRHeap* i_heap) {
-    NebulaColor8* color_table = (NebulaColor8*)JKRAllocFromHeap(i_heap, (i_size + 1) * 4, 4);
+static void makeColorTable(NebulaColor8** o_color_table, JPAClrAnmKeyData const* i_data, u8 param_2, s16 i_size, NebulaArena* i_heap) {
+    NebulaColor8* color_table = (NebulaColor8*)NebulaArena::alloc((i_size + 1) * 4, 4, i_heap);
     f32 next_r, next_g, next_b, next_a;
     f32 r_step, g_step, b_step, a_step, base_step;
     r_step = g_step = b_step = a_step = 0.0f;
@@ -879,7 +879,7 @@ static void makeColorTable(NebulaColor8** o_color_table, JPAClrAnmKeyData const*
     *o_color_table = color_table;
 }
 
-JPABaseShape::JPABaseShape(u8 const* pData, JKRHeap* pHeap) {
+JPABaseShape::JPABaseShape(u8 const* pData, NebulaArena* pHeap) {
     mpData = (const JPABaseShapeData*)pData;
 
     if (isTexCrdAnm()) {

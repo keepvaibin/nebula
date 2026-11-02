@@ -4,7 +4,7 @@
 #include "Game/System/ResourceInfo.hpp"
 #include <JSystem/JKernel/JKRArchive.hpp>
 #include <JSystem/JKernel/JKRFileFinder.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 class MaterialAnmBuffer;
 class J3DModelData;
@@ -88,6 +88,6 @@ public:
     /* 0x3C */ BckCtrl* mBckCtrl;
     /* 0x40 */ Mtx44* mBackupMaterialData;
     /* 0x44 */ JKRArchive* mArchive;
-    /* 0x48 */ JKRHeap* mHeap;
+    /* 0x48 */ NebulaArena* mHeap;
     /* 0x4C */ u32 mTotalResourceSize;
 };

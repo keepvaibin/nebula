@@ -133,9 +133,9 @@ public:
     void panicIfCompressedEntry(const SDIFileEntry* pEntry) const;
 
     static JKRArchive* check_mount_already(s32);
-    static JKRArchive* check_mount_already(s32, JKRHeap*);
-    static JKRArchive* mount(const char*, EMountMode, JKRHeap*, EMountDirection);
-    static JKRArchive* mount(s32, EMountMode, JKRHeap*, EMountDirection);
+    static JKRArchive* check_mount_already(s32, NebulaArena*);
+    static JKRArchive* mount(const char*, EMountMode, NebulaArena*, EMountDirection);
+    static JKRArchive* mount(s32, EMountMode, NebulaArena*, EMountDirection);
     bool getDirEntry(SDirEntry*, u32) const;
     void* getIdxResource(u32);
     void* getResource(u16);
@@ -154,7 +154,7 @@ public:
 
     /* 0x806B7148 */ static u32 sCurrentDirID;
 
-    /* 0x38 */ JKRHeap* mHeap;
+    /* 0x38 */ NebulaArena* mHeap;
     /* 0x3C */ u8 mMountMode;
     /* 0x3D */ u8 _3D[3];
     /* 0x40 */ s32 mEntryNum;

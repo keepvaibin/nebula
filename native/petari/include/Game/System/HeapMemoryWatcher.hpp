@@ -1,19 +1,19 @@
 #pragma once
 
 
-class JKRExpHeap;
-class JKRHeap;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
+class NebulaArena;
 
 class HeapMemoryWatcher {
 public:
     HeapMemoryWatcher();
 
-    JKRSolidHeap* getAudSystemHeap() const {
+    NebulaArena* getAudSystemHeap() const {
         return mAudSystemHeap;
     }
 
-    void createFileCacheHeapOnGameHeap(u32);
+    void createFileCacheHeapOnGameHeap();
     void createSceneHeapOnGameHeap();
     void adjustStationedHeaps();
     void setCurrentHeapToStationedHeap();
@@ -23,19 +23,18 @@ public:
     void destroyGameHeap();
     void createHeaps();
     void createGameHeap();
-    static void memoryErrorCallback(void*, u32, int);
     void checkRestMemory();
 
     // used in GameSystemObjHolder::initAudio()
-    JKRSolidHeap* getAudSystemHeap() {
+    NebulaArena* getAudSystemHeap() {
         return mAudSystemHeap;
     }
 
     void* mSoundMemory;  // the root of the wave archives' places in their sections (JASKernel::setupSoundHeap)
-    JKRExpHeap* mStationedHeap;
-    JKRExpHeap* mGameHeap;
-    JKRHeap* mFileCacheHeap;
-    JKRSolidHeap* mSceneHeap;
-    JKRExpHeap* mHomeButtonLayoutHeap;
-    JKRSolidHeap* mAudSystemHeap;
+    NebulaArena* mStationedHeap;
+    NebulaArena* mGameHeap;
+    NebulaArena* mFileCacheHeap;
+    NebulaArena* mSceneHeap;
+    NebulaArena* mHomeButtonLayoutHeap;
+    NebulaArena* mAudSystemHeap;
 };

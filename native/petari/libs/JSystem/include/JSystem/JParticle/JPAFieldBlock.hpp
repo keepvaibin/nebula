@@ -2,7 +2,7 @@
 
 #include "JSystem/JGeometry/TVec.hpp"
 
-class JKRHeap;
+class NebulaArena;
 class JPAEmitterWorkData;
 class JPABaseParticle;
 class JPAFieldBlock;
@@ -138,8 +138,8 @@ public:
 
 class JPAFieldBlock {
 public:
-    JPAFieldBlock(u8 const*, JKRHeap*);
-    void init(JKRHeap*);
+    JPAFieldBlock(u8 const*, NebulaArena*);
+    void init(NebulaArena*);
 
     u32 getType() {
         return mpData->mFlags & 0xF;
