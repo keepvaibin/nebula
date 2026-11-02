@@ -1,0 +1,243 @@
+name: Build Nebula
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned tool versions matching the docs
+  LLVM_VERSION: '19.1.7'
+  CMAKE_VERSION: '3.30.5'
+  NINJA_VERSION: '1.12.1'
+  RUST_VERSION: 'stable'
+  DOTNET_VERSION: '8.0.x'
+
+jobs:
+  build:
+    name: Build (${{ matrix.config }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: default
+            vulkan: 'OFF'
+            fsr3: 'ON'
+          - name: vulkan
+            vulkan: 'ON'
+            fsr3: 'ON'
+          - name: no-fsr3
+            vulkan: 'OFF'
+            fsr3: 'OFF'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.config.name }}
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Set up LLVM
+        shell: pwsh
+        run: |
+          $url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VERSION/LLVM-$env:LLVM_VERSION-win64.exe"
+          Write-Host "Downloading LLVM from $url"
+          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\llvm.exe"
+          Start-Process -FilePath "$env:RUNNER_TEMP\llvm.exe" `
+            -ArgumentList "/S","/D=C:\Program Files\LLVM" -Wait
+          # Add to PATH for subsequent steps
+          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "C:\Program Files\LLVM\bin\clang.exe" --version
+
+      - name: Set up CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+        with:
+          version: ${{ env.NINJA_VERSION }}
+
+      - name: Cache CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/host/_deps
+            build/host/CMakeCache.txt
+          key: cmake-deps-${{ matrix.config.name }}-${{ hashFiles('CMakeLists.txt', '**/*.cmake') }}
+          restore-keys: |
+            cmake-deps-${{ matrix.config.name }}-
+
+      - name: Enter MSVC environment
+        shell: pwsh
+        run: |
+          # The script is dot-sourced so that env vars persist in this shell;
+          # we also persist them across steps via GITHUB_ENV.
+          . .\tools\enter_msvc_environment.ps1
+          # Persist relevant MSVC vars for subsequent steps
+          Get-ChildItem Env: | Where-Object {
+            $_.Name -match '^(INCLUDE|LIB|LIBPATH|PATH|VCINSTALLDIR|VCToolsInstallDir|WindowsSdkDir|UCRTVersion|VCToolsVersion)$'
+          } | ForEach-Object {
+            "$($_.Name)=$($_.Value)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Build game files (nebula-import)
+        run: |
+          cargo build --release --locked -p nebula-import
+
+      - name: Verify nebula-import binary
+        run: |
+          .\target\release\nebula-import.exe --help
+
+      - name: Configure host
+        shell: pwsh
+        run: |
+          cmake -S . -B build\host -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DNEBULA_VULKAN=${{ matrix.config.vulkan == 'ON' && 'ON' || 'OFF' }} `
+            -DNEBULA_FSR3=${{ matrix.config.fsr3 == 'ON' && 'ON' || 'OFF' }}
+
+      - name: Build host (NebulaNative)
+        run: cmake --build build\host --target NebulaNative --config Release
+
+      - name: Build host (NebulaNativeVk)
+        if: matrix.config.vulkan == 'ON'
+        run: cmake --build build\host --target NebulaNativeVk --config Release
+
+      - name: Build game module (smg_game.dll)
+        shell: pwsh
+        run: |
+          .\native\build.ps1 -Petari native\petari -Build build\game
+
+      - name: Build Setup and launcher (.NET)
+        shell: pwsh
+        run: |
+          # Adjust the project paths to match your repository layout.
+          $projFiles = @()
+          if (Test-Path "setup\Setup.csproj") { $projFiles += "setup\Setup.csproj" }
+          if (Test-Path "launcher\Launcher.csproj") { $projFiles += "launcher\Launcher.csproj" }
+          foreach ($proj in $projFiles) {
+            Write-Host "Building $proj"
+            dotnet build $proj -c Release
+          }
+
+      - name: Assemble runtime folder
+        shell: pwsh
+        run: |
+          $out = "build\dist-${{ matrix.config.name }}"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          Copy-Item build\host\NebulaNative.exe $out
+          if (Test-Path build\host\NebulaNativeVk.exe) {
+            Copy-Item build\host\NebulaNativeVk.exe $out
+          }
+          Copy-Item build\game\smg_game.dll $out
+          Copy-Item target\release\nebula-import.exe $out
+
+          # Copy any DLSS Streamline vendor libs if present
+          if (Test-Path "vendor") {
+            Copy-Item -Recurse vendor $out
+          }
+          # Copy Setup / launcher outputs
+          Get-ChildItem -Recurse -Filter "*.exe" -Path setup,launcher -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\bin\\Release\\' } |
+            ForEach-Object { Copy-Item $_.FullName $out }
+
+          # Sanity check
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebula-${{ matrix.config.name }}-${{ github.sha }}
+          path: build/dist-${{ matrix.config.name }}
+          if-no-files-found: error
+          retention-days: 30
+
+  package:
+    name: Package release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create zip archives
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Get-ChildItem -Directory artifacts | ForEach-Object {
+            $name = $_.Name -replace "-$($env:GITHUB_SHA)", ""
+            $zip = "release\$name.zip"
+            Compress-Archive -Path "$($_.FullName)\*" -DestinationPath $zip -Force
+            Write-Host "Created $zip"
+          }
+          Get-ChildItem release
+
+      - name: Upload release archives
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebula-release-archives
+          path: release/*.zip
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-import:
+    name: Smoke-test nebula-import
+    runs-on: windows-2022
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download default artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nebula-default-${{ github.sha }}
+          path: dist
+
+      - name: Verify identify help
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist\nebula-import.exe)) {
+            throw "nebula-import.exe missing from artifact"
+          }
+          # `identify` requires a disc image; just verify the tool loads.
+          & .\dist\nebula-import.exe --help
+          if ($LASTEXITCODE -ne 0) {
+            throw "nebula-import --help exited with $LASTEXITCODE"
+          }
