@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Player/MarioShadow.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -428,6 +429,11 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         return;
     }
 
+    // Mario's silhouette, a pass into the shadow texture.
+    const ResTIMG* image = _300->getTexInfo();
+    const void* destination = reinterpret_cast< const u8* >(image) + image->mImageDataOffset;
+    J3DNativeTarget::begin(destination, _2FC, _2FE, 0, 0xFFFFFF);
+
     if (!(_308 & 2)) {
         setViewMtx(_24);
         // The model draws with its own materials (the flat alpha pass, list 1 with 14); setup's view only.
@@ -437,9 +443,8 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
         J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
         if (_307) {
-            J3DNativeView::setViewport(608 - (_2FC + 32), -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);
-            s32 left = 608 - _2FC;
-            J3DNativeView::setScissor(left + 1, 1, _2FC - 2, _2FE - 2);
+            J3DNativeView::setViewport(-32.0f, -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);
+            J3DNativeView::setScissor(1, 1, _2FC - 2, _2FE - 2);
             pModel->setDrawView(2);
             pModel->mFlags.clear();
             pModel->mFlags._11 = true;
@@ -447,9 +452,8 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
             pModel->directDraw(nullptr);
         }
 
-        J3DNativeView::setViewport(608 - _2FC, 0.0f, _2FC, _2FE, 0.0f, 1.0f);
-        s32 left = 608 - _2FC;
-        J3DNativeView::setScissor(left + 1, 1, _2FC - 2, _2FE - 2);
+        J3DNativeView::setViewport(0.0f, 0.0f, _2FC, _2FE, 0.0f, 1.0f);
+        J3DNativeView::setScissor(1, 1, _2FC - 2, _2FE - 2);
         pModel->setDrawView(2);
         pModel->mFlags.clear();
         pModel->mFlags._1E = true;
@@ -459,8 +463,8 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
 
     if (!(_308 & 4)) {
         MR::beginWiiScreenWidth();
-        // runtime/src/render/materials/vertex_color.hlsl into the alpha buffer: the captured shadow faded to the
-        // edge of a circle (the alpha times the circle's).
+        // runtime/src/render/materials/vertex_color.hlsl into the alpha: the shadow faded to the edge of a circle (the
+        // alpha times the circle's).
         NebulaNativeMaterial circle;
         TDDraw::setupNative(&circle, 0, 1, 2);
         MR::endWiiScreenWidth();
@@ -470,30 +474,21 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         J3DNativeState::setDstAlpha(GPU_FALSE, 0);
         NativeShader::send(circle);
         f32 y = _2FE / 2;
-        f32 x = 608 - _2FC / 2;
+        f32 x = _2FC / 2;
         TVec3f center(x, y, 0.0f);
         MR::beginWiiScreenWidth();
         TDDraw::fix2Dpos(&center);
         MR::endWiiScreenWidth();
         TDDraw::drawFillCircle(center, _2FC / 2, 0xFFFFFFC0, 0, 16);
-        const ResTIMG* image = _300->getTexInfo();
-        void* destination = const_cast< u8* >(reinterpret_cast< const u8* >(image) + image->mImageDataOffset);
-        JUTTexture::captureDolTexture(destination, _2FC, _2FE, 608 - _2FC, 0, false, GPU_CTF_A8);
     }
+
+    J3DNativeTarget::end(destination, NEBULA_TARGET_ALPHA);
 
     J3DNativeState::setAlphaUpdate(GPU_FALSE);
     J3DNativeState::setColorUpdate(GPU_TRUE);
     MR::setDefaultViewportAndScissor();
     TDDraw::cameraInit3D();
     J3DNativeState::setDstAlpha(GPU_FALSE, 0);
-}
-
-void CollisionShadow::clearAlphaBuffer() {
-    TVec2f position;
-    TVec2f size(static_cast< f32 >(_2FC), static_cast< f32 >(_2FE));
-    position.x = 608.0f - _2FC;
-    position.y = 0.0f;
-    MR::clearAlphaBuffer(0, position, size);
 }
 
 void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDepth) const {
