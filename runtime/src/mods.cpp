@@ -7,7 +7,6 @@
 #include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
-#include "galaxy/cooker_bridge.h"
 #include "galaxy/mod_xml.h"
 
 #include <algorithm>
