@@ -34,10 +34,10 @@ struct JASVoice : NebulaVoice {
     void setWaveInfo(JASWaveInfo const&, const u8*, u32);
     void setOscInfo(u32);
     void initAutoMixer();
-    void setAutoMixer(u16, u8, u8, u8, u8);
-    void setPitch(u16);
-    void setMixerInitVolume(u8, s16);
-    void setMixerVolume(u8, s16);
+    void setAutoMixer(f32, f32, f32, f32);
+    void setPitch(f32);
+    void setMixerInitVolume(u8, f32);
+    void setMixerVolume(u8, f32);
     void setPauseFlag(u8);
     void initFilter();
     void setFilterMode(u16);

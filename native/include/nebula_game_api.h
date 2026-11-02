@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 92u
+#define NEBULA_GAME_API_VERSION 93u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -107,8 +107,8 @@ typedef struct NebulaVoice {
     float iir[4];
     NebulaAudioSend sends[6];
     uint16_t panner;         /* nonzero: the surround panner plays the voice instead of its sends */
-    uint8_t pan;             /* 0 left .. 127 right */
-    uint8_t rear;            /* 0 front .. 127 rear */
+    float pan;               /* 0 left .. 1 right */
+    float rear;              /* 0 front .. 1 rear */
     float panner_send;       /* effect send */
     float panner_volume;     /* gain now (the mixer's) */
     float panner_target;     /* gain reached over the next subframe */

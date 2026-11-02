@@ -6,12 +6,10 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
-#include "JSystem/JAudio2/JASCmdStack.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASVoiceSlot.hpp"
 #include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
-#include "JSystem/JAudio2/JASProbe.hpp"
 
 #include <nebula_game_api.h>
 #include <nebula_threads.h>
@@ -102,8 +100,6 @@ void JASDriver::mixFrame() {
 }
 
 void JASDriver::updateSubFrame() {
-    JASProbe::start(3, "SFR-UPDATE");
-    JASPortCmd::execAllCommand();
     syncCallback();
     JASChannel::receiveBankDisposeMsg();
     JASVoiceSlot::updateAll();
@@ -111,7 +107,6 @@ void JASDriver::updateSubFrame() {
     subframeCallback();
     f32 freeRun = 32028.5f / getSoundRate();
     JASLfo::updateFreeRun(freeRun);
-    JASProbe::stop(3);
     sSubFrameCounter++;
     if (sSubFrameDone.isWaiting()) {
         sSubFrameDone.signal();

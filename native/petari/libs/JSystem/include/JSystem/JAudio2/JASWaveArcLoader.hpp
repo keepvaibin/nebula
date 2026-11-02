@@ -25,14 +25,14 @@ struct JASWaveArcLoader {
     static char* getCurrentDir();
 
     static char sCurrentDir[DIR_MAX];
-    static JASHeap* sAramHeap;
+    static JASHeap* sSoundHeap;
 };
 
 struct JASWaveArc : JASDisposer {
     JASWaveArc();
     bool loadSetup(u32);
     bool eraseSetup();
-    static void loadToAramCallback(void*);
+    static void loadCallback(void*);
     bool sendLoadCmd();
     bool load(JASHeap*) ATTRIBUTE_WEAK; /* overwritten in OverwriteJAudio */
     bool loadTail(JASHeap*);
@@ -57,7 +57,7 @@ struct JASWaveArc : JASDisposer {
         return &mHeap;
     }
 
-    struct loadToAramCallbackParams {
+    struct loadCallbackParams {
         // not official struct name
         /* 0x0 */ JASWaveArc* mWavArc;
         /* 0x4 */ s32 mEntryNum;

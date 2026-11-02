@@ -2,7 +2,6 @@
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JAIAudience.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
-#include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 
 void JAISoundHandle::releaseSound() {
@@ -206,7 +205,5 @@ void JAISound::initTrack_JAISound_(JASTrack* track) {
 }
 
 void JAISound::increasePrepareCount_JAISound_() {
-    if ((++mPrepareCount & 0xFF) == 0) {
-        JASReport("It cost %d steps to prepare Sound(ID:%08x, Address%p).\n", mPrepareCount, *(u32*)&mSoundID, this);
-    }
+    ++mPrepareCount;
 }

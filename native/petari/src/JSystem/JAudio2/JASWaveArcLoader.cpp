@@ -1,6 +1,6 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 
@@ -8,13 +8,13 @@
 #include <stdint.h>
 #include "Game/System/GameAssets.hpp"
 
-JASHeap* JASWaveArcLoader::sAramHeap;
+JASHeap* JASWaveArcLoader::sSoundHeap;
 
 JASHeap* JASWaveArcLoader::getRootHeap() {
-    if (JASWaveArcLoader::sAramHeap) {
-        return JASWaveArcLoader::sAramHeap;
+    if (JASWaveArcLoader::sSoundHeap) {
+        return JASWaveArcLoader::sSoundHeap;
     }
-    return JASKernel::getAramHeap();
+    return JASKernel::getSoundHeap();
 }
 
 char JASWaveArcLoader::sCurrentDir[DIR_MAX] = "/AudioRes/Waves/";
@@ -78,8 +78,8 @@ bool JASWaveArc::eraseSetup() {
     return true;
 }
 
-void JASWaveArc::loadToAramCallback(void* this_) {
-    loadToAramCallbackParams* tmp = (loadToAramCallbackParams*)this_;
+void JASWaveArc::loadCallback(void* this_) {
+    loadCallbackParams* tmp = (loadCallbackParams*)this_;
     JASWaveArc* wavArc = tmp->mWavArc;
     if (GameAssets::load(tmp->mEntryNum, tmp->mBase, wavArc->mFileLength, nullptr, GameAssets::ALLOC_DIRECTION_FORWARD, nullptr) ==
         nullptr) {
@@ -96,7 +96,7 @@ bool JASWaveArc::sendLoadCmd() {
     JASMutexLock mutexLock(&mMutex);
     _48 = 0;
     mStatus = 1;
-    loadToAramCallbackParams commandInfo;
+    loadCallbackParams commandInfo;
     commandInfo.mWavArc = this;
     commandInfo.mEntryNum = mEntryNum;
     commandInfo.mBase = static_cast< u8* >(mHeap.getBase());
@@ -104,7 +104,7 @@ bool JASWaveArc::sendLoadCmd() {
 
     _5A++;
 
-    if (JASDvd::getThreadPointer()->sendCmdMsg(loadToAramCallback, &commandInfo, sizeof(commandInfo)) == 0) {
+    if (JASLoad::getThreadPointer()->sendCmdMsg(loadCallback, &commandInfo, sizeof(commandInfo)) == 0) {
         mHeap.free();
         return false;
     }

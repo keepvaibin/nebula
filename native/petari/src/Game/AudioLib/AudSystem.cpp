@@ -60,7 +60,7 @@ namespace {
     int init_JAS_JAI_(JKRSolidHeap* pHeap) NO_INLINE {
         JAU_JASInitializer initJAS;
         initJAS.audioMemory_ = AudParams::aramAddr;
-        initJAS.audioMemSize_ = AudParams::aramSize;
+        initJAS.audioMemSize_ = AudParams::soundMemorySize;
         initJAS.heapSize_ = AudParams::workAreaSize;
         initJAS.field_0x1c = AudParams::numFreeTracks;
         initJAS.field_0x20 = AudParams::numFreeTrackChannels;

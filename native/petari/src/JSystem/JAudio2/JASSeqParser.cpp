@@ -1,6 +1,5 @@
 #include "JSystem/JAudio2/JASSeqParser.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
-#include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JAudio2/JASSeqCtrl.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JMath/random.hpp"
@@ -716,19 +715,6 @@ s32 JASSeqParser::cmdRegTblLoad(JASTrack* track, u32* args) {
 
 s32 JASSeqParser::cmdDump(JASTrack* track, u32* args) {
     JASSeqCtrl* seqCtrl = track->getSeqCtrl();
-    JASReport("--------------- JASTrack (%p) dump ----------------", track);
-    JASReport(" Base: 0x%p Cur: 0x%p(0x%06llx)", seqCtrl->getBase(), seqCtrl->getCur(), (u8*)seqCtrl->getCur() - (u8*)seqCtrl->getBase());
-    JASReport("");
-    JASReport(" REG_A: 0x%04x REG_B: 0x%04x REG_S: 0x%04x", readReg(track, JASRegisterParam::REG_A), readReg(track, JASRegisterParam::REG_B),
-              readReg(track, JASRegisterParam::REG_S));
-    JASReport(" REG_X: 0x%04x REG_Y: 0x%04x REG_F: 0x%04x", readReg(track, JASRegisterParam::REG_X), readReg(track, JASRegisterParam::REG_Y),
-              readReg(track, JASRegisterParam::REG_F));
-    JASReport("");
-    JASReport(" PORT 0-3: 0x%04x 0x%04x 0x%04x 0x%04x", track->getPort(0x0), track->getPort(0x1), track->getPort(0x2), track->getPort(0x3));
-    JASReport(" PORT 4-7: 0x%04x 0x%04x 0x%04x 0x%04x", track->getPort(0x4), track->getPort(0x5), track->getPort(0x6), track->getPort(0x7));
-    JASReport(" PORT 8-B: 0x%04x 0x%04x 0x%04x 0x%04x", track->getPort(0x8), track->getPort(0x9), track->getPort(0xA), track->getPort(0xB));
-    JASReport(" PORT C-F: 0x%04x 0x%04x 0x%04x 0x%04x", track->getPort(0xC), track->getPort(0xD), track->getPort(0xE), track->getPort(0xF));
-    JASReport("");
 
     return 0;
 }
@@ -798,8 +784,6 @@ s32 JASSeqParser::cmdPrintf(JASTrack* track, u32* args) {
             break;
         }
     }
-
-    JASReport(formatString, values[0], values[1], values[2], values[3]);
     return 0;
 }
 

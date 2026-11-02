@@ -1,7 +1,6 @@
 #include "JSystem/JAudio2/JAISeMgr.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
 #include "JSystem/JAudio2/JAISoundInfo.hpp"
-#include "JSystem/JAudio2/JASReport.hpp"
 
 bool JAISeCategoryMgr::isUsingSeqData(const JAISeqDataRegion& seqDataRegion) {
     for (JSULink< JAISe >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
@@ -301,7 +300,6 @@ bool JAISeMgr::startSound(JAISoundID id, JAISoundHandle* handle, const TVec3f* p
 
     JAISe* se = newSe_(category, priority);
     if (se == nullptr) {
-        JASReport("cannot new Se %08x.", id.mID.mComposite);
         return false;
     }
 
