@@ -51,7 +51,7 @@ void ClipAreaDropLaser::draw() const {
     TDDraw::cameraInit3D();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 0, 2, 0);
-    J3DPass::lineWidth(0x14);
+    J3DPass::lineWidth(20.0f / 6.0f);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
     NativeShader::send(material);
 

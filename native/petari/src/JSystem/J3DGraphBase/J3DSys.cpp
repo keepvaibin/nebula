@@ -103,7 +103,7 @@ void J3DSys::drawInit() {
         J3DPass::constantColor(i, j3dDefaultTevKColor);
 
     for (i = 0; i < GPU_MAX_TEVREG; i++)
-        J3DNativeState::setTevColorS10((GpuTevRegID)i, j3dDefaultTevColor);
+        J3DPass::materialColorWide(i, j3dDefaultTevColor);
 
 
 }

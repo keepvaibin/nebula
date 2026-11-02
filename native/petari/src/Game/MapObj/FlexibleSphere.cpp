@@ -1,4 +1,7 @@
-#include <JSystem/J3DGraphBase/J3DStateList.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include <nebula_cooked_material.h>
 #include "Game/MapObj/FlexibleSphere.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -22,22 +25,15 @@
 #define SHRINK false
 
 f32 scale = 1.0f;
-void FlexibleSphere::fillTexGens(J3DStateList& rList) {
-    rList.setMaterialPass(NEBULA_PASS_FLEXIBLE_COORDINATES);
-    rList.useTextureMatrix(0, 0);
-    rList.useTextureMatrix(1, 0);
-    rList.useTextureMatrix(2, 0);
-}
-
 void shapeCallBack(J3DShape* pShape) {
     Mtx mtx;
     NebulaMtxScale(mtx, scale, scale, 0.0f);
     J3DNativeShape::setTexture(0, mtx, 2);
-    // One list: the material's program changes once, to the program with all three.
-    NebulaStateOp ops[3];
-    J3DStateList list(ops, 3);
-    FlexibleSphere::fillTexGens(list);
-    list.send();
+    J3DNativeShape::flushState();
+    J3DNativeMaterial::applyPass(NEBULA_PASS_FLEXIBLE_COORDINATES);
+    J3DPass::textureMatrix(0, 0);
+    J3DPass::textureMatrix(1, 0);
+    J3DPass::textureMatrix(2, 0);
 }
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {

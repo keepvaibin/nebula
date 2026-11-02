@@ -4,7 +4,6 @@
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
-#include "Game/Player/StateListChanger.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Player/MarioActor.hpp"
@@ -104,11 +103,6 @@ void MarioActor::initDrawAndModel() {
 
     initFace();
 
-    mLists[0].reserve(16);
-    mLists[1].reserve(16);
-    mCurrList = 0;
-
-    mListChanger = new StateListChanger(2, 16);
     _1A4 = 0.0f;
 
     swapTextureInit();
@@ -485,7 +479,7 @@ void MarioActor::drawMarioModel() const {
                 return;
             }
 
-            mListChanger->addList(model);
+            model->setDynamicList(&mAlphaTint);
 
             MR::showJoint(model, "HandR0");
             MR::showJoint(model, "HandL0");
@@ -494,7 +488,7 @@ void MarioActor::drawMarioModel() const {
             if (mCurrModel == 4) {
                 model->setDynamicList(nullptr);
             } else {
-                model->setDynamicList(&mLists[mCurrList]);
+                model->setDynamicList(&mLightTint);
             }
         }
 
@@ -518,7 +512,7 @@ void MarioActor::drawMarioModel() const {
 
     if (!MR::isHiddenModel(_A5C)) {
         J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
-        cool->setDynamicList(&mLists[mCurrList]);
+        cool->setDynamicList(&mLightTint);
         cool->directDraw(nullptr);
     }
 
@@ -809,9 +803,9 @@ void MarioActor::drawIndirectModel() const {
                 return;
             }
 
-            mListChanger->addList(model);
+            model->setDynamicList(&mAlphaTint);
         } else {
-            model->setDynamicList(&mLists[mCurrList]);
+            model->setDynamicList(&mLightTint);
         }
 
         MR::showJoint(model, "Face0");
@@ -856,7 +850,7 @@ void MarioActor::drawReflectModel() const {
 
     if ((_468 == 0 ? nullptr : _428[0]) != nullptr) {
         if (isUseScreenBox()) {
-            mListChanger->addList(static_cast< J3DModelX* >(MR::getJ3DModel(_9A0)));
+            static_cast< J3DModelX* >(MR::getJ3DModel(_9A0))->setDynamicList(&mAlphaTint);
         }
 
         _9A0->drawType0();
@@ -871,10 +865,10 @@ void MarioActor::drawReflectModel() const {
         model->directDraw(nullptr);
         model->mFlags._1A = false;
         model->mFlags._1D = true;
-        mListChanger->addList(model);
+        model->setDynamicList(&mAlphaTint);
     } else {
         if (isUseScreenBox()) {
-            mListChanger->addList(model);
+            model->setDynamicList(&mAlphaTint);
         }
 
         model->mFlags._14 = true;
@@ -933,7 +927,7 @@ void MarioActor::drawModelBlur() const {
         }
 
 
-        _94[idx + ((i - 1) << 3)]->addList(model);
+        model->setDynamicList(&mGhostTints[idx + ((i - 1) << 3)]);
         model->directDraw(nullptr);
     }
 
@@ -1014,11 +1008,6 @@ void J3DModelX::swapDrawBuffer(u32 drawBuffer) {
     _DC = drawBuffer;
 }
 
-void StateListChanger::addList(J3DModelX* pModel) {
-    StateListHolder* buffer = &mBuffers[mCurrentBuffer];
-    pModel->setDynamicList(&buffer->mList);
-}
-
-void J3DModelX::setDynamicList(const J3DStateList* pList) {
-    _1B8 = pList;
+void J3DModelX::setDynamicList(const MarioModelTint* pTint) {
+    _1B8 = pTint;
 }
