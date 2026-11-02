@@ -76,7 +76,6 @@ public:
     // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
     // filter: J3DNativeTarget::capture's flags).
     void capture(int x, int y, GpuTexFmt format, bool half, u8 clear, bool filtered = false);
-    static void captureDolTexture(void*, int, int, int, int, bool, GpuTexFmt);
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;
