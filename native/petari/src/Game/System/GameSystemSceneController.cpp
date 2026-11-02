@@ -109,6 +109,15 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
     }
 
     mSpine->update();
+    // A load's steps follow each other within the frame: the screen is black and nothing waits for them.
+    while (mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank) ||
+           mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene) ||
+           mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInvalidateSystemWipe) ||
+           mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerReadyToStartScene)) {
+        mSpine->setNerve(mNextNerve);
+        mNextNerve = nullptr;
+        mSpine->update();
+    }
 }
 
 void GameSystemSceneController::initializeScene() {
