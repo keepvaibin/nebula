@@ -274,12 +274,12 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
         setTevMode();
         makeMatrix(x, y, 0.0f, 0.0f);
         J3DNativeShape::setPosition(0, mPositionMtx);
-        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+        J3DPass::positionMatrix(0);
 
         JGeometry::TVec2< s16 > coords[4];
         setTexCoord(coords, mTexture[0], BIND15, (J2DMirror)((mirrorX << 1) | mirrorY), rotate90);
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
         J3DNativeDraw::color(color[0]);
         J3DNativeDraw::texCoord(static_cast< s16 >(coords[0].x) / 256.0f, static_cast< s16 >(coords[0].y) / 256.0f);
@@ -318,7 +318,7 @@ void J2DPicture::drawOut(JGeometry::TBox2< f32 > const& posBox, JGeometry::TBox2
         getNewColor(color);
         setTevMode();
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position((s16)(s32)(posBox.i.x), (s16)(s32)(posBox.i.y), 0.0f);
         J3DNativeDraw::color(color[0]);
         J3DNativeDraw::texCoord(s0, t0);
@@ -355,7 +355,7 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
         NebulaMtxConcat((MtxPtr)param_12, mGlobalMtx, outputMtx);
 
         J3DNativeShape::setPosition(0, outputMtx);
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
 
         J3DNativeDraw::position(param_0, param_1, 0.0f);
         J3DNativeDraw::color(black[0]);
@@ -400,9 +400,7 @@ void J2DPicture::setTevMode() {
         }
     }
     NativeShader::send(material);
-    static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                    GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kIdentity);
+    J3DNativeShape::setCurrentIdentity();
 }
 
 void J2DPicture::swap(f32& lhs, f32& rhs) {

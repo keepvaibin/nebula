@@ -173,7 +173,7 @@ namespace nw4r {
 
             LoadTexture(glyph, GPU_TEXMAP0);
 
-            J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {
                 J3DNativeDraw::position(posLeft, posTop, posZ);
                 J3DNativeDraw::color(mVertexColor.lu);

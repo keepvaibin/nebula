@@ -4,6 +4,35 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
+// What the draws that follow do to the target, in the host's values (nebula_game_api.h).
+#ifdef __cplusplus
+namespace J3DPass {
+    void depth(bool test, u8 compare, bool write);  // NEBULA_COMPARE_*
+    void blend(u8 source, u8 destination);          // source * source + target * destination, NEBULA_FACTOR_*
+    void noBlend();
+    void subtractBlend();
+    void cull(u8 faces);  // NEBULA_CULL_*
+    void writeColor(bool write);
+    void writeAlpha(bool write);
+    void constantAlpha(bool on, u8 alpha);  // the picture's alpha takes this value
+    void positionMatrix(u8 index);          // the place vertices without one of their own use
+};  // namespace J3DPass
+
+extern "C" {
+#endif
+void J3DPassDepth(int test, u8 compare, int write);
+void J3DPassBlend(u8 source, u8 destination);
+void J3DPassNoBlend(void);
+void J3DPassSubtractBlend(void);
+void J3DPassCull(u8 faces);
+void J3DPassWriteColor(int write);
+void J3DPassWriteAlpha(int write);
+void J3DPassConstantAlpha(int on, u8 alpha);
+void J3DPassPositionMatrix(u8 index);
+#ifdef __cplusplus
+}
+#endif
+
 // Drawing-state changes the game makes as it draws: kept here and carried by the draws that follow (the pass), or sent
 // as a state record in their place in the stream (nebula_game_api.h state).
 #ifdef __cplusplus

@@ -842,7 +842,7 @@ void SpaceCocoon::drawPlane(f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1, Color
     s32 numPoints = mNumPoints + 2;
     f32 delta = 1.0f / numPoints;
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     {
         ::drawPoints(mCocoonPos, mSide, mFront, ::sWidthBottom, x1, y1, x2, y2, color1, color2, texX1, texX2, 0.0f);
 
@@ -869,7 +869,5 @@ void SpaceCocoon::initDraw() const {
     material.constants[1] = 1.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
 }

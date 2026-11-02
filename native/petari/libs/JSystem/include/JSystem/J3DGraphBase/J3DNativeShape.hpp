@@ -39,6 +39,8 @@ namespace J3DNativeShape {
     // The matrices the next draw's corners take when they carry none: the position matrix's place and texture
     // coordinates 0-7's texture matrix places (the model file's matrix ids, three apart, the identity's at 60).
     void setCurrent(u8 position, const u8* pTexture);
+    // The first position matrix, no texture matrices.
+    void setCurrentIdentity();
     // The position matrix corners without one take (J3DNativeState::setCurrentMtx).
     void setCurrentPosition(u32 index);
     u8 currentPosition();

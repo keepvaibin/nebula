@@ -144,7 +144,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                 }
 
                 for (u16 point = firstParticle; point < lastParticle; point += particleStride) {
-                    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+                    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
                     {
                         TDDraw::sendPoint(mParticlePositions[point] - diagonalDown, alpha);
                         J3DNativeDraw::texCoord(0.0f, 0.0f);

@@ -206,7 +206,7 @@ bool ScenarioSelectScene::isResetEnd() const {
 
 void ScenarioSelectScene::setupCameraMtx() const {
     NebulaMtxCopy(mCameraContext->getViewMtx(), j3dSys.mViewMtx);
-    J3DNativeView::setProjection(mCameraContext->mProjection, GPU_PERSPECTIVE);
+    J3DNativeView::setPerspective(mCameraContext->mProjection);
 }
 
 bool ScenarioSelectScene::trySetCurrentScenarioNo() const {

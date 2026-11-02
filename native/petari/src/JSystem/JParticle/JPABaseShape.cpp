@@ -107,8 +107,7 @@ namespace JPAParticleBatch {
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
-        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        J3DNativeShape::setCurrentIdentity();
         const u32* const pColors[2] = {sBatchPrm, sBatchEnv};
         const f32* const pTexCoords[8] = {sBatchUv0, sBatchUv1, sBatchQ, nullptr, nullptr, nullptr, nullptr, nullptr};
         J3DNativeDraw::drawArrays(sBatchPrimitive, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 | NEBULA_SHAPE_TEXCOORD0 |

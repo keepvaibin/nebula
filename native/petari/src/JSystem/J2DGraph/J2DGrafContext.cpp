@@ -75,8 +75,8 @@ void J2DGrafContext::setPort() {
 // fillBox's vertex_color), so the TEV program the console reset here has no reader.
 void J2DGrafContext::setup2D() {
     J3DNativeState::setAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_GREATER, 0);
-    J3DNativeState::setZMode(GPU_FALSE, GPU_LEQUAL, GPU_FALSE);
-    J3DNativeState::setCullMode(GPU_CULL_NONE);
+    J3DPass::depth(false, NEBULA_COMPARE_LEQUAL, false);
+    J3DPass::cull(NEBULA_CULL_NONE);
     J3DNativeShape::setPosition(0, mPosMtx);
     Mtx mtx;
     NebulaMtxIdentity(mtx);
@@ -122,11 +122,9 @@ void J2DGrafContext::fillBox(JGeometry::TBox2< f32 > const& rBox) {
     }
     material.constants[4] = 0.0f;
     J3DNativeShape::setPosition(0, mPosMtx);
-    static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                    GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kIdentity);
+    J3DNativeShape::setCurrentIdentity();
     NativeShader::send(material);
-    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(rBox.i.x, rBox.i.y, 0);
     J3DNativeDraw::color(mColorTL);
     J3DNativeDraw::position(rBox.f.x, rBox.i.y, 0);

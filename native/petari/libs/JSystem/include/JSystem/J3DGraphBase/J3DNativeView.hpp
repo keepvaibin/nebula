@@ -9,7 +9,8 @@
 // 0 for perspective, then the six terms).
 #ifdef __cplusplus
 namespace J3DNativeView {
-    void setProjection(const f32 (*pMtx)[4], GpuProjectionType type);
+    void setPerspective(const f32 (*pMtx)[4]);
+    void setOrthographic(const f32 (*pMtx)[4]);
     void setProjectionv(const f32* pValues);
     void getProjectionv(f32* pValues);
     // The viewport (GpuSetViewport's values; field 0 of an interlaced pair moves it up half a line), and the depth
@@ -31,7 +32,8 @@ namespace J3DNativeView {
 extern "C" {
 #endif
 // The same for the C sources (RVLFaceLib).
-void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GpuProjectionType type);
+void J3DNativeViewSetPerspective(const f32 (*pMtx)[4]);
+void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]);
 void J3DNativeViewSetProjectionv(const f32* pValues);
 void J3DNativeViewGetProjectionv(f32* pValues);
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);

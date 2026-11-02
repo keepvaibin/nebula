@@ -490,19 +490,19 @@ void Creeper::draw() const {
 
     f32 delta = 1.0f / (mNumPoints - 1);
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 i = 0; i < mNumPoints; i++) {
         ::drawPolygon(mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), ::sDrawWidthX, -::sDrawWidthZ, 0.0f, ::sDrawWidthZ,
                       ::sColorPlusX, ::sColorPlusZ, delta * ((mNumPoints - 1) - i));
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 i = 0; i < mNumPoints; i++) {
         ::drawPolygon(mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), 0.0f, ::sDrawWidthZ, -::sDrawWidthX, -::sDrawWidthZ,
                       ::sColorPlusZ, ::sColorMinusX, delta * ((mNumPoints - 1) - i));
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mNumPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 i = 0; i < mNumPoints; i++) {
         ::drawPolygon(mPoints[i]->getPosition(), mPoints[i]->getSide(), mPoints[i]->getFront(), -::sDrawWidthX, -::sDrawWidthZ, ::sDrawWidthX,
                       -::sDrawWidthZ, ::sColorMinusX, ::sColorPlusX, delta * ((mNumPoints - 1) - i));
@@ -521,9 +521,7 @@ void Creeper::loadMaterial() const {
     material.constants[1] = 0.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
 }
 
 Creeper::~Creeper() {

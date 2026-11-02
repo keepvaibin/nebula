@@ -144,7 +144,7 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
     MR::makeMtxRotate(rotation, 0.0f, 25.0f, 0.0f);
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     const WhirlPoolPoint* pPoint;
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -170,7 +170,7 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
 
 void WhirlPoolAccelerator::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DPass::positionMatrix(0);
     // runtime/src/render/materials/whirlpool_accelerator.hlsl: the two colours mixed by the texture at the vertex
     // alpha; drawn where above zero and blended by it, depth tested and written, no culling.
     NebulaNativeMaterial material;
@@ -182,9 +182,7 @@ void WhirlPoolAccelerator::loadMaterial() const {
     NativeShader::setColor(material, 4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
 }
 
 WhirlPoolAccelerator::~WhirlPoolAccelerator() {

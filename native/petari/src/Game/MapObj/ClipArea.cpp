@@ -33,13 +33,13 @@ void ClipArea::draw() const {
     }
 
     MR::setShadowVolumeColor(::sShapeColor);
-    J3DNativeState::setColorUpdate(GPU_FALSE);
-    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
-    J3DNativeState::setCullMode(GPU_CULL_FRONT);
-    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_COPY);
+    J3DPass::writeColor(false);
+    J3DPass::constantAlpha(false, 0);
+    J3DPass::cull(NEBULA_CULL_FRONT);
+    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
     mShape->drawVolumeShape(mBaseMtx, mScale);
-    J3DNativeState::setCullMode(GPU_CULL_BACK);
-    J3DNativeState::setBlendMode(GPU_BM_SUBTRACT, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_COPY);
+    J3DPass::cull(NEBULA_CULL_BACK);
+    J3DPass::subtractBlend();
     mShape->drawVolumeShape(mBaseMtx, mScale);
 }
 

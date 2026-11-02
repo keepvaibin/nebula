@@ -142,10 +142,10 @@ void HomeButtonLayout::draw() const {
     f32 screenHalfHeight = static_cast< s32 >(NebulaFrameClock::cCanvasHeight) / 2.0f;
     f32 screenHalfWidth = MR::getScreenWidth() / 2.0f;
     NebulaMtxOrtho(projectionMtx, screenHalfHeight, -screenHalfHeight, -screenHalfWidth, screenHalfWidth, 0.0f, 500.0f);
-    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(projectionMtx);
 
-    J3DNativeState::setCullMode(GPU_CULL_NONE);
-    J3DNativeState::setZMode(GPU_FALSE, GPU_NEVER, GPU_FALSE);
+    J3DPass::cull(NEBULA_CULL_NONE);
+    J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
     // The library drew the menu here; the game draws it with its settings menu (NebulaSettingsMenu).
 }
 

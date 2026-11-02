@@ -499,8 +499,8 @@ void MarioActor::drawMarioModel() const {
         }
 
         if (mBeeWallWalk != 0) {
-            J3DNativeState::setAlphaUpdate(GPU_TRUE);
-            J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+            J3DPass::writeAlpha(true);
+            J3DPass::constantAlpha(true, 0);
         }
 
         model->setDrawView(0);
@@ -523,8 +523,8 @@ void MarioActor::drawMarioModel() const {
     }
 
     if (mBeeWallWalk != 0) {
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
-        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+        J3DPass::writeAlpha(false);
+        J3DPass::constantAlpha(false, 0);
     }
 }
 

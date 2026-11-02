@@ -32,5 +32,5 @@ void BloomEffectSimple::draw() const {
                           verticalBits);
     MR::reinitGX();
     ImageEffectLocalUtil::setupDrawTexture();
-    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
+    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
 }
