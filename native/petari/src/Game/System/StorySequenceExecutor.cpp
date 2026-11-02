@@ -1,4 +1,5 @@
 #include "Game/System/StorySequenceExecutor.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Demo/PrologueDirector.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
@@ -750,7 +751,8 @@ void StorySequenceExecutor::exePlayDemoSequence() {
 }
 
 void StorySequenceExecutor::exeWaitTimeKeepDemoEnd() {
-    if (MR::isDemoActive()) {
+    // A stage change can take the scene away while this waits (the sequence runs on between scenes): it waits on for the next.
+    if (!MR::isExistSceneObj(SceneObj_DemoDirector) || MR::isDemoActive()) {
         return;
     }
 

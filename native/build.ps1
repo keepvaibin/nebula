@@ -1,11 +1,13 @@
 # Builds the game module (native/CMakeLists.txt) on Windows with clang++ and Ninja, inside the MSVC environment
 # (for the C runtime and Windows SDK libraries the link needs).
-#   native\build.ps1 -Petari native\petari -Build build\game [-Config Release] [-Target smg_game]
+#   native\build.ps1 -Petari native\petari -Build build\game [-Config Release] [-Target smg_game] [-Pgo]
 param(
     [Parameter(Mandatory = $true)][string]$Petari,
     [Parameter(Mandatory = $true)][string]$Build,
     [string]$Config = "Release",
-    [string]$Target = "smg_game"
+    [string]$Target = "smg_game",
+    [switch]$Pgo,
+    [string]$ProfileFlags = ""
 )
 $ErrorActionPreference = "Stop"
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
@@ -19,7 +21,7 @@ $Petari = $Petari.Replace("\", "/")
 $Build = $Build.Replace("\", "/")
 $configure = "`"$cmake`" -S `"$src`" -B `"$Build`" -G Ninja -DCMAKE_MAKE_PROGRAM=`"$($ninja.Replace("\", "/"))`" " +
     "-DCMAKE_BUILD_TYPE=$Config -DCMAKE_C_COMPILER=`"$llvm/clang.exe`" -DCMAKE_CXX_COMPILER=`"$llvm/clang++.exe`" " +
-    "-DCMAKE_RC_COMPILER=`"$llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Petari`""
+    "-DCMAKE_RC_COMPILER=`"$llvm/llvm-rc.exe`" -DNEBULA_PETARI_DIR=`"$Petari`" -DNEBULA_PGO=$(if ($Pgo) { 'ON' } else { 'OFF' }) -DCMAKE_C_FLAGS=$ProfileFlags -DCMAKE_CXX_FLAGS=$ProfileFlags -DCMAKE_SHARED_LINKER_FLAGS=$ProfileFlags""
 $compile = "`"$cmake`" --build `"$Build`" --target $Target"
 # vcvars64.bat runs vswhere.exe from PATH.
 $env:PATH = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer;$env:PATH"

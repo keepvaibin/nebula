@@ -118,6 +118,16 @@ else()
     endif()
 endif()
 
+# A build for players: ThinLTO with the profile of a tour (native/pgo/game.profdata, tools/verify/pgo_profile.sh): the game's CPU falls about
+# 17 % (docs/NATIVE_PERFORMANCE.md). A profile older than the code still applies to what has not changed.
+option(NEBULA_PGO "Build the game with ThinLTO and its profile" OFF)
+if(NEBULA_PGO)
+    set(game_profile "${CMAKE_CURRENT_SOURCE_DIR}/pgo/game.profdata")
+    target_compile_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}"
+                           -Wno-profile-instr-unprofiled -Wno-profile-instr-out-of-date -Wno-backend-plugin)
+    target_link_options(smg_game PRIVATE -flto=thin "-fprofile-instr-use=${game_profile}")
+endif()
+
 # Sanitizer builds (tests only): e.g. -DNEBULA_SANITIZE=address for the module and the host.
 set(NEBULA_SANITIZE "" CACHE STRING "Sanitizers for a test build (clang -fsanitize=...)")
 if(NEBULA_SANITIZE)
