@@ -4,7 +4,7 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class J3DJointTree;

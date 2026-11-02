@@ -2,7 +2,7 @@
 
 #include <cstring>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 #define JMAP_VALUE_TYPE_LONG 0

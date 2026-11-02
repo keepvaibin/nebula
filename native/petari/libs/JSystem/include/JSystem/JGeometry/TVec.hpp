@@ -5,7 +5,7 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JMath/JMath.hpp"
 #include <math_types.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 namespace JGeometry {
@@ -863,8 +863,7 @@ namespace JGeometry {
                 if (length <= 0.0f) {
                     inverse = length;
                 } else {
-                    f32 estimate = __frsqrte(length);
-                    inverse = (0.5f * estimate) * (3.0f - length * (estimate * estimate));
+                    inverse = 1.0f / sqrtf(length);
                 }
 
                 this->x = rSrc.x * inverse;

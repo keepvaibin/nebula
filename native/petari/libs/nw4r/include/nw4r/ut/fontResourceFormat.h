@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 // BRFNT in the native layout the importer writes (crates/nebula-import cook/native_data.rs font_native): host-order

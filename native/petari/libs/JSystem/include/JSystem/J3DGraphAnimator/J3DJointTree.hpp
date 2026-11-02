@@ -2,7 +2,7 @@
 
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class J3DMtxBuffer;

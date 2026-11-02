@@ -1,7 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 typedef s32 (*AudCallbackFunc)(s32, s32, void*);

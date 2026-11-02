@@ -23,7 +23,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpuEnums.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     static const f32 sStickLength = 120.0f;

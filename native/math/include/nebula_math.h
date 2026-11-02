@@ -1,8 +1,7 @@
 /* The native math library: 3x4 and 4x4 matrices, vectors and quaternions (requirement C-08). The small functions are
    inline here, so the game's ~1,000 call sites pay no call; the rest are in nebula_math.c. Each keeps the console's
    results: the same operations grouped as the console grouped them, every input read before any output is written
-   (an output may be an input). Square roots are exact; reciprocal square roots are the host estimate refined once,
-   as the console refined frsqrte. Uses the Mtx, Mtx44, Vec, Point3d and Quaternion layouts. */
+   (an output may be an input). Square roots and their reciprocals are exact: the same bits on every CPU. */
 #ifndef NEBULA_MATH_H
 #define NEBULA_MATH_H
 
@@ -11,9 +10,36 @@
 #include <emmintrin.h>
 #endif
 
+#include <revolution/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct {
+    f32 x, y, z;
+} Vec, *VecPtr, Point3d;
+
+typedef struct {
+    s16 x;
+    s16 y;
+    s16 z;
+} S16Vec, *S16VecPtr;
+
+typedef struct {
+    f32 x, y, z, w;
+} Quaternion, *QuaternionPtr;
+
+typedef f32 Mtx23[2][3];
+
+typedef f32 Mtx[3][4];
+typedef f32 (*MtxPtr)[4];
+
+typedef f32 Mtx44[4][4];
+typedef f32 (*Mtx44Ptr)[4];
+
+typedef f32 Mtx33[3][3];
+typedef f32 (*Mtx3P)[3];
 
 /* The larger ones (nebula_math.c). */
 u32 NebulaMtxInverse(const Mtx src, Mtx inv);
@@ -31,11 +57,6 @@ void NebulaQuatFromMtx(Quaternion* r, const Mtx m);
 void NebulaQuatSlerp(const Quaternion* p, const Quaternion* q, Quaternion* r, f32 t);
 /* A rotation about the x, y or z axis by the game's own sine and cosine tables (JMath; defined with the game). */
 void NebulaMtxRotRad(Mtx m, char axis, f32 rad);
-
-static inline f32 __NebulaRsqrtRefined(f32 x) {
-    const f32 e = __frsqrte(x);
-    return (3.0f - (e * e) * x) * (e * 0.5f);
-}
 
 static inline void NebulaMtxIdentity(Mtx m) {
     m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = 0.0f;
@@ -198,7 +219,7 @@ static inline f32 NebulaVecSquareDistance(const Vec* a, const Vec* b) {
 /* No zero test, as on the console: a zero vector normalises to NaN. */
 static inline void NebulaVecNormalize(const Vec* src, Vec* dst) {
     const f32 x = src->x, y = src->y, z = src->z;
-    const f32 r = __NebulaRsqrtRefined((x * x + z * z) + y * y);
+    const f32 r = 1.0f / sqrtf((x * x + z * z) + y * y);
     dst->x = x * r;
     dst->y = y * r;
     dst->z = z * r;

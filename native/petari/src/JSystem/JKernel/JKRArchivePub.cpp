@@ -4,7 +4,7 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JKernel/JKRMemArchive.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 #include "Game/System/NebulaDisc.hpp"
 

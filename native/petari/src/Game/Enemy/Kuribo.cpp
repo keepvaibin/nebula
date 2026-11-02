@@ -25,7 +25,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     class KuriboParam {

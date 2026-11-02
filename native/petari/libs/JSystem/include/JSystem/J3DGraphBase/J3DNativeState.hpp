@@ -1,7 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 // Drawing-state changes the game makes as it draws, each sent at once as a state record in its place in the stream

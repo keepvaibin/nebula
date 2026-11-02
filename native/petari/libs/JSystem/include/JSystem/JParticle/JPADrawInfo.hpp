@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 class JPADrawInfo {
 public:

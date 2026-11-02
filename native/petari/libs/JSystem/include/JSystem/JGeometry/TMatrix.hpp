@@ -6,7 +6,7 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JMath/JMath.hpp"
 #include <cmath>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 inline f32 SIN(f32 angle) {
     return sin(angle);

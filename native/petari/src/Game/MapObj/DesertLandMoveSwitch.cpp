@@ -19,7 +19,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 namespace NrvDesertLandMoveSwitch {

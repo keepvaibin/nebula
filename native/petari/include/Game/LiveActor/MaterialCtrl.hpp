@@ -6,7 +6,7 @@
 #include <JSystem/J3DGraphBase/J3DTexture.hpp>
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class J3DTexMtx;

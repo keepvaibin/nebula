@@ -2,7 +2,7 @@
 #include <math.h>
 #include <string.h>
 
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 /* 0 when the 3x3 part is singular (inv untouched), else 1 with inv = src's inverse. The console's reciprocal was
    fres refined once; natively it is exact. */
@@ -88,7 +88,7 @@ void NebulaMtxRotTrig(Mtx m, char axis, f32 sinA, f32 cosA) {
 void NebulaMtxRotAxisRad(Mtx m, const Vec* axis, f32 rad) {
     const f32 s = sinf(rad), c = cosf(rad), t = 1.0f - c;
     const f32 ax = axis->x, ay = axis->y, az = axis->z;
-    const f32 n = __NebulaRsqrtRefined((ax * ax + az * az) + ay * ay);
+    const f32 n = 1.0f / sqrtf((ax * ax + az * az) + ay * ay);
     const f32 x = ax * n, y = ay * n, z = az * n;
     const f32 tx = t * x, ty = t * y, tz = t * z;
     m[0][0] = tx * x + c;     m[0][1] = tx * y - s * z; m[0][2] = tx * z + s * y; m[0][3] = 0.0f;

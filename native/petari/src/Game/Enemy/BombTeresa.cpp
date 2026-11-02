@@ -27,7 +27,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 void BombTeresa_FORCE_MATCH_SDATA2() {

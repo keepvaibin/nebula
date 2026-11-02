@@ -7,7 +7,7 @@
 #include <string.h>
 #include <time.h>
 
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 static int sFailures;
 static unsigned sSeed = 12345;

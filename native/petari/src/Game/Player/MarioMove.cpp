@@ -9,7 +9,7 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 void Mario::mainMove() {

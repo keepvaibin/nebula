@@ -18,7 +18,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 namespace {

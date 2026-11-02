@@ -4,7 +4,7 @@
 #include <NebulaGpuEnums.h>
 #include <JSystem/JGeometry.hpp>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class LiveActor;

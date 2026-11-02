@@ -3,7 +3,7 @@
 // TODO
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 #define NUM_RHYTHM_INFO 6

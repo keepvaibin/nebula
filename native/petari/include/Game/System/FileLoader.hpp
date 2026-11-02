@@ -8,7 +8,7 @@
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <cstdio>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class JKRArchive;

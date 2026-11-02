@@ -29,8 +29,7 @@ namespace JGeometry {
                 return val;
             }
 
-            float outVal = __frsqrte(val);
-            return (val * (0.5f * outVal * (3.0f - (val * (outVal * outVal)))));
+            return sqrtf(val);
         }
 
         static f32 sqrtInline(f32 val) {
@@ -38,8 +37,7 @@ namespace JGeometry {
                 return val;
             }
 
-            float outVal = __frsqrte(val);
-            return (val * (0.5f * outVal * (3.0f - (val * (outVal * outVal)))));
+            return sqrtf(val);
         }
 
         static f32 asin(f32 val) NO_INLINE {
@@ -82,8 +80,7 @@ namespace JGeometry {
             if (val <= 0.0f) {
                 return val;
             }
-            f32 outVal = (f32)__frsqrte(val);
-            return outVal * 0.5f * (3.0f - outVal * outVal * val);
+            return 1.0f / sqrtf(val);
         }
 
         static inline f32 epsilon() {

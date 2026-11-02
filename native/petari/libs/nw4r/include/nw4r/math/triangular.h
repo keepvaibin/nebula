@@ -3,7 +3,7 @@
 #include "nw4r/math/arithmetic.h"
 #include "nw4r/math/constant.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 #define NW4R_MATH_IDX_TO_FIDX(x) ((x) * (1.0f / 256.0f))

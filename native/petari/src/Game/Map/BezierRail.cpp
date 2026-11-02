@@ -5,7 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void BezierRail_FORCE_MATCH_SDATA2() {
     (void)1.0f;

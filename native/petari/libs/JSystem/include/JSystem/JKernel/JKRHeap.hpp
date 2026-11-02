@@ -5,7 +5,7 @@
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 typedef void (*JKRErrorHandler)(void*, u32, int);

@@ -1,7 +1,7 @@
 #include "Game/Util/BezierSurface.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Util/MathUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     // Scaling Coefficients for Control points

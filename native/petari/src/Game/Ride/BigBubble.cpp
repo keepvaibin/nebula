@@ -10,7 +10,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/OctahedronBezierSurface.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 void BigBubble_FORCE_MATCH_SDATA2() {

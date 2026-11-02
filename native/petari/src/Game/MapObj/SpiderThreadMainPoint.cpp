@@ -4,7 +4,7 @@
 #include "Game/MapObj/SpiderThreadRadialLine.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     static const f32 sFrictionRate = 0.9f;

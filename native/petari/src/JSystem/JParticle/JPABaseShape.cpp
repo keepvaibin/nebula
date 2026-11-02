@@ -9,7 +9,7 @@
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
     J3DNativeState::setPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
