@@ -7,7 +7,6 @@ class InputTilt;
 class InputButtons;
 class InputSwing;
 class InputInfoChecker;
-class InputLeaveWatcher;
 class InputPointer;
 class PlayerInputReader;
 class InputRumble;
@@ -21,9 +20,6 @@ public:
 
     void update();
     InputRumble* getRumbleInstance() const;
-    void startLeaveWatcher();
-    void stopLeaveWatcher();
-    void restartLeaveWatcher();
     s32 getBattery() const;
     void resetPad();
     void connected();
@@ -47,9 +43,7 @@ public:
     /* 0x20 */ InputStick* mStick;
     /* 0x24 */ InputTilt* mSubTilt;
     /* 0x28 */ InputSwing* mSubSwing;
-    /* 0x2C */ InputLeaveWatcher* mLeaveWatcher;
     /* 0x30 */ InputInfoChecker* mInfoChecker;
-    /* 0x34 */ bool _34;
     /* 0x35 */ bool mIsConnected;
     /* 0x36 */ bool mHasMoveStick;
 };

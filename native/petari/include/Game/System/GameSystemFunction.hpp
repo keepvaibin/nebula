@@ -30,9 +30,6 @@ namespace GameSystemFunction {
     void requestResetAudioSystem(bool);
     bool isDoneResetAudioSystem();
     void resumeResetAudioSystem();
-    void stopControllerLeaveWatcher();
-    void startControllerLeaveWatcher();
-    void restartControllerLeaveWatcher();
     void resetAllControllerRumble();
     void setInputSleepTime(bool);
     bool setPermissionToCheckInputAndScreenDimming(bool);

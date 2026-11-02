@@ -4,7 +4,6 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
-    static const f32 sMoveJudgeSpeed = 0.0001f;
     static const s32 sIsValidInScreenTime = 5;
     static const s32 sIsInValidOutScreenTime = 10;
     static const s32 sLostSensorTime = 20;
@@ -12,8 +11,7 @@ namespace {
 
 InputPointer::InputPointer(const PlayerInput* pPad)
     : mPad(pPad), mPosPlayRadius(0.03f), mPosSensitivity(0.5f), mHoriPlayRadius(), mHoriSensitivity(1.0f), mDistPlayRadius(), mDistSensitivity(1.0f),
-      mLostSensorTime(), mDistDisplay(0.0f), mDpdValidFg(), mValidInScreenTime(), mInValidOutScreenTime(), mEnablePastCount(), mIsPointInScreen(),
-      mIsPointerMoved() {
+      mLostSensorTime(), mDistDisplay(0.0f), mDpdValidFg(), mValidInScreenTime(), mInValidOutScreenTime(), mEnablePastCount(), mIsPointInScreen() {
     mPointingPosArray = new TVec2f[120];
     mHorizonArray = new TVec2f[120];
     mMaxPastCount = 120;
@@ -32,7 +30,6 @@ void InputPointer::reset() {
     mEnablePastCount = 0;
     mLostSensorTime = 0;
     mIsPointInScreen = false;
-    mIsPointerMoved = false;
 }
 
 void InputPointer::update() {
@@ -43,7 +40,6 @@ void InputPointer::update() {
         return;
     }
 
-    mIsPointerMoved = false;
     mDistDisplay = pSample->mDistance;
     mDpdValidFg = pSample->mIsPointerOn ? 2 : 0;
 
@@ -75,9 +71,6 @@ void InputPointer::update() {
                 mHorizonArray[mEnablePastCount].x = curStatus->mHorizon.x;
                 mHorizonArray[mEnablePastCount].y = curStatus->mHorizon.y;
 
-                if (curStatus->mPointerSpeed > ::sMoveJudgeSpeed) {
-                    mIsPointerMoved = true;
-                }
 
                 mEnablePastCount++;
             }

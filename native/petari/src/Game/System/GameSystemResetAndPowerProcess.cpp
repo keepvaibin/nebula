@@ -175,7 +175,6 @@ void GameSystemResetAndPowerProcess::exeFadein() {
     }
 
     if (mFadeinoutControl->mFrame == mFadeinoutControl->mMaxFrame) {
-        GameSystemFunction::restartControllerLeaveWatcher();
         GameSystemFunction::restartSceneController();
         setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
     }

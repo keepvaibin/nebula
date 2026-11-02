@@ -74,7 +74,6 @@ void HomeButtonLayout::exeActive() {
         MR::setPlayerInputsModeHome();
 
         if (_24) {
-            GameSystemFunction::stopControllerLeaveWatcher();
         }
 
         mFlag.mIsHidden = false;
@@ -125,7 +124,6 @@ void HomeButtonLayout::exeActive() {
     MR::setPlayerInputsModeGame();
 
     if (_24) {
-        GameSystemFunction::startControllerLeaveWatcher();
     }
 
     _25 = false;

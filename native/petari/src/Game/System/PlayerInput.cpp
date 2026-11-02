@@ -5,14 +5,13 @@
 #include "Game/System/InputSwing.hpp"
 #include "Game/System/PlayerInputs.hpp"
 #include "Game/System/InputInfoChecker.hpp"
-#include "Game/System/InputLeaveWatcher.hpp"
 #include "Game/System/InputPointer.hpp"
 #include "Game/System/InputRumble.hpp"
 #include "Game/System/InputStick.hpp"
 
 PlayerInput::PlayerInput(s32 channel, PlayerInputReader* pReadInfo)
     : mChannel(channel), mReadInfo(pReadInfo), mButton(), mPointer(), mMainTilt(), mMainSwing(), _18(), _1C(), mStick(), mSubTilt(), mSubSwing(),
-      mLeaveWatcher(), mInfoChecker(), _34(true), mIsConnected(), mHasMoveStick() {
+      mInfoChecker(), mIsConnected(), mHasMoveStick() {
     mButton = new InputButtons(this);
     mPointer = new InputPointer(this);
     mMainTilt = new InputTilt(this, INPUT_HAND_MAIN);
@@ -23,7 +22,6 @@ PlayerInput::PlayerInput(s32 channel, PlayerInputReader* pReadInfo)
     mSubTilt = new InputTilt(this, INPUT_HAND_SUB);
     mSubSwing = new InputSwing(this, INPUT_HAND_SUB);
     mStick = new InputStick(this);
-    mLeaveWatcher = new InputLeaveWatcher(this);
     mInfoChecker = new InputInfoChecker(this);
     mSubSwing->mDistanceSwingThreshold = 2.0f;
 }
@@ -32,8 +30,6 @@ void PlayerInput::update() {
     if (mChannel == -1) {
         return;
     }
-
-    _34 = false;
 
     mButton->update();
     mMainTilt->update();
@@ -44,26 +40,11 @@ void PlayerInput::update() {
     mSubTilt->update();
     mSubSwing->update();
     mStick->update();
-    mLeaveWatcher->update();
     mInfoChecker->update();
-
-    _34 = true;
 }
 
 InputRumble* PlayerInput::getRumbleInstance() const {
     return _18->getRumbleInstance();
-}
-
-void PlayerInput::startLeaveWatcher() {
-    mLeaveWatcher->start();
-}
-
-void PlayerInput::stopLeaveWatcher() {
-    mLeaveWatcher->stop();
-}
-
-void PlayerInput::restartLeaveWatcher() {
-    mLeaveWatcher->restart();
 }
 
 s32 PlayerInput::getBattery() const {

@@ -214,7 +214,6 @@ bool GameSystemSceneController::isFirstUpdateSceneNerveNormal() const {
 
 void GameSystemSceneController::startScene() {
     mScene->start();
-    GameSystemFunction::restartControllerLeaveWatcher();
     requestChangeNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal));
 }
 

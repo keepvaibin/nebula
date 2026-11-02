@@ -179,24 +179,6 @@ namespace GameSystemFunction {
         ::getAudSystemWrapper()->resumeReset();
     }
 
-    void stopControllerLeaveWatcher() {
-        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->stopLeaveWatcher();
-        }
-    }
-
-    void startControllerLeaveWatcher() {
-        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->startLeaveWatcher();
-        }
-    }
-
-    void restartControllerLeaveWatcher() {
-        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
-            MR::getPlayerInput(chan)->restartLeaveWatcher();
-        }
-    }
-
     void resetAllControllerRumble() {
         for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
             MR::getPlayerInput(chan)->_18->registInstance();
