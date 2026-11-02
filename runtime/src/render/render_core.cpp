@@ -1045,8 +1045,7 @@ void RenderCore::render_frame(
         frame_timing_sample_enabled(
             timing_frame_index_.load(std::memory_order_relaxed));
     // Nothing to render: nothing attached (records, scene markers, captures).
-    const bool empty = producer_shape_records_.empty() && producer_stream_marker_count_ == 0u &&
-        producer_stripe_particles_.empty();
+    const bool empty = producer_shape_records_.empty() && producer_stripe_particles_.empty();
     if (empty) {
         if (present_swap_chain) {
             present_cached_display(black, true);
@@ -1068,7 +1067,6 @@ void RenderCore::render_frame(
         : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
-    take_attached_stream_markers(chunk);
     take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
@@ -1622,6 +1620,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         const std::size_t ops = producer_record_pool_.ops.size();
         const std::size_t natives = producer_record_pool_.natives.size();
         const std::size_t vertices = producer_record_pool_.vertices.size();
+        chunk.record_pool.scenes.swap(producer_record_pool_.scenes);
         chunk.record_pool.vertices.swap(producer_record_pool_.vertices);
         producer_record_pool_.vertices.reserve(vertices);
         chunk.record_pool.probes.swap(producer_record_pool_.probes);
@@ -1641,6 +1640,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     chunk.record_pool.ops.insert(chunk.record_pool.ops.end(), producer_record_pool_.ops.begin(), producer_record_pool_.ops.end());
     const auto first_native = static_cast<std::uint32_t>(chunk.record_pool.natives.size());
     const auto first_vertex = static_cast<std::uint32_t>(chunk.record_pool.vertices.size());
+    const auto first_scene = static_cast<std::uint32_t>(chunk.record_pool.scenes.size());
+    chunk.record_pool.scenes.insert(chunk.record_pool.scenes.end(), producer_record_pool_.scenes.begin(), producer_record_pool_.scenes.end());
+    producer_record_pool_.scenes.clear();
     chunk.record_pool.vertices.insert(chunk.record_pool.vertices.end(), producer_record_pool_.vertices.begin(), producer_record_pool_.vertices.end());
     producer_record_pool_.vertices.clear();
     const auto first_probe = static_cast<std::uint32_t>(chunk.record_pool.probes.size());
@@ -1655,7 +1657,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         record.matrix_first += first_matrix;
         record.op_first += first_op;
         record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe : first_vertex;
-        record.native_index += record.native_index != shapes::kNoNative ? first_native : 0u;
+        record.native_index += record.native_index == shapes::kNoNative ? 0u : record.kind == shapes::Record::Kind::Scene ? first_scene : first_native;
         chunk.shape_records.push_back(std::move(record));
     }
     producer_shape_records_.clear();
@@ -1663,31 +1665,6 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
 
 void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
-}
-
-void RenderCore::take_attached_stream_markers(FrameChunk& chunk) noexcept {
-    chunk.stream_marker_count = 0;
-    chunk.stream_marker_view_mask = 0;
-    chunk.stream_marker_sky_up_mask = 0;
-    for (std::uint8_t i = 0; i < producer_stream_marker_count_; ++i) {
-        if (chunk.stream_marker_count < chunk.stream_markers.size()) {
-            const std::uint8_t index = chunk.stream_marker_count++;
-            chunk.stream_markers[index] = producer_stream_markers_[i];
-            chunk.stream_marker_serials[index] = producer_stream_marker_serials_[i];
-            if ((producer_stream_marker_view_mask_ & (1u << i)) != 0u) {
-                chunk.stream_marker_views[index] = producer_stream_marker_views_[i];
-                chunk.stream_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
-            }
-            if ((producer_stream_marker_sky_up_mask_ & (1u << i)) != 0u) {
-                chunk.stream_marker_sky_up[index] = producer_stream_marker_sky_up_[i];
-                chunk.stream_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
-            }
-            chunk.stream_marker_stages[index] = producer_stream_marker_stages_[i];
-        }
-    }
-    producer_stream_marker_count_ = 0;
-    producer_stream_marker_view_mask_ = 0;
-    producer_stream_marker_sky_up_mask_ = 0;
 }
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
@@ -4028,49 +4005,18 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (!chunk.shape_records.empty() || chunk.stream_marker_count != 0u ||
-        !chunk.stripe_particles.empty()) {
+    if (!chunk.shape_records.empty() || !chunk.stripe_particles.empty()) {
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
         // on workers.
         texture_cache_.set_async_decode_allowed(true);
         try {
-            // The chunk's records and scene markers in the order the game made them.
-            std::vector<StreamSplit>& splits = stream_splits_;
-            splits.clear();
-            for (std::uint8_t i = 0; i < chunk.stream_marker_count; ++i) {
-                splits.push_back({chunk.stream_marker_serials[i], static_cast<int>(chunk.stream_markers[i]),
-                                  static_cast<int>(i)});
-            }
-            for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
-                splits.push_back({chunk.shape_records[i].serial, kSplitShapeRecord, static_cast<int>(i)});
-            }
-            // In the order the game made them (a marker before the records made after it).
-            std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
-                return a.serial != b.serial ? a.serial < b.serial
-                                            : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
-            });
             parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
                                                : std::span<const StripeParticleMark>{};
             parse_stripe_next_ = 0u;
-            for (std::size_t i = 0; i < splits.size(); ++i) {
-                const StreamSplit split = splits[i];
-                if (split.marker == kSplitShapeRecord) {
-                    current_record_pool_ = &chunk.record_pool;
-                    on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
-                } else if (split.marker == static_cast<int>(SceneMarker::Scene2DBegin)) {
-                    on_scene_2d_begin();
-                } else if (split.marker != static_cast<int>(SceneMarker::Scene2DEnd)) {
-                    const auto index = static_cast<std::size_t>(split.view);
-                    const bool sky_up = split.view >= 0 && (chunk.stream_marker_sky_up_mask & (1u << index)) != 0u;
-                    on_scene_marker(static_cast<SceneMarker>(split.marker),
-                        split.view >= 0 &&
-                                (chunk.stream_marker_view_mask & (1u << index)) != 0u
-                            ? &chunk.stream_marker_views[index]
-                            : nullptr,
-                        sky_up ? chunk.stream_marker_sky_up[index] : 0u, sky_up,
-                        split.view >= 0 ? &chunk.stream_marker_stages[index] : nullptr);
-                }
+            current_record_pool_ = &chunk.record_pool;
+            for (const shapes::Record& record : chunk.shape_records) {
+                on_shape_record(record);
             }
             parse_stripes_ = {};
             if (!chunk.stripe_particles.empty()) [[unlikely]] {
@@ -5468,6 +5414,16 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;
+    case shapes::Record::Kind::Scene: {
+        const auto marker = static_cast<SceneMarker>(static_cast<int>(record.key));
+        if (marker == SceneMarker::Scene2DBegin) {
+            on_scene_2d_begin();
+        } else if (marker != SceneMarker::Scene2DEnd) {
+            const shapes::SceneInfo& info = current_record_pool_->scenes[record.native_index];
+            on_scene_marker(marker, info.view_valid ? &info.view : nullptr, info.sky_up, info.sky_up_valid, &info.stage);
+        }
+        return;
+    }
     case shapes::Record::Kind::Immediate:
         apply_record_matrices(record);
         draw_state_.apply_pass(record.pass);
