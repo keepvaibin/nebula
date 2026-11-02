@@ -10,7 +10,7 @@ namespace nw4r {
             Init(texNum);
             mpMaterial = Layout::NewObj< Material >();
             if (mpMaterial) {
-                mpMaterial->ReserveGXMem(texNum, texNum, texNum, 0, false, 0, 0, false, false, false, false);
+                mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
             }
         }
 
@@ -19,7 +19,7 @@ namespace nw4r {
             Init(texNum);
             mpMaterial = Layout::NewObj< Material >();
             if (mpMaterial) {
-                mpMaterial->ReserveGXMem(texNum, texNum, texNum, 0, false, 0, 0, false, false, false, false);
+                mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
                 Append(texMap);
             }
         }

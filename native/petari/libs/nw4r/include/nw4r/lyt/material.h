@@ -10,14 +10,11 @@ namespace nw4r {
         class TexMap;
 
         namespace detail {
-            struct BitGXNums {
+            struct StorageNums {
                 u32 texMap : 4;
                 u32 texSRT : 4;
                 u32 texCoordGen : 4;
                 u32 indSRT : 2;
-                u32 indStage : 3;
-                u32 tevSwap : 1;
-                u32 tevStage : 5;
                 u32 chanCtrl : 1;
                 u32 matCol : 1;
                 u32 alpComp : 1;
@@ -47,16 +44,16 @@ namespace nw4r {
             virtual void SetAnimationEnable(AnimTransform*, bool);
 
             void Init();
-            void InitBitGXNums(detail::BitGXNums*);
-            void ReserveGXMem(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 tevStageNum, bool allocTevSwap, u8 indStageNum, u8 indSRTNum,
+            void InitStorageNums(detail::StorageNums*);
+            void ReserveStorage(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 indSRTNum,
                               bool allocChanCtrl, bool allocMatCol, bool allocAlpComp, bool allocBlendMode);
 
             u8 GetTexSRTCap() const {
-                return u8(mGXMemCap.texSRT);
+                return u8(mCap.texSRT);
             }
 
             u8 GetIndTexSRTCap() const {
-                return u8(mGXMemCap.indSRT);
+                return u8(mCap.indSRT);
             }
             TexMap* GetTexturePtr(u8 idx) {
                 return &GetTexMapAry()[idx];
@@ -73,22 +70,22 @@ namespace nw4r {
             }
 
             u8 GetTextureNum() const {
-                return u8(mGXMemNum.texMap);
+                return u8(mNum.texMap);
             }
 
             void SetTextureNum(u8 num);
 
             u8 GetTextureCap() const {
-                return u8(mGXMemCap.texMap);
+                return u8(mCap.texMap);
             }
 
             u8 GetTexCoordGenCap() const {
-                return u8(mGXMemCap.texCoordGen);
+                return u8(mCap.texCoordGen);
             }
 
             void SetTexCoordGenNum(u8 num);
             void SetTexture(u8 texMapIdx, const TexMap& texMap) {
-                NW4R_ASSERT_AT(135, texMapIdx < mGXMemNum.texMap);
+                NW4R_ASSERT_AT(135, texMapIdx < mNum.texMap);
                 GetTexMapAry()[texMapIdx].Set(texMap);
             }
 
@@ -97,27 +94,23 @@ namespace nw4r {
             }
 
             bool IsAlphaCompareCap() const {
-                return mGXMemCap.alpComp;
-            }
-
-            bool IsTevSwapCap() const {
-                return mGXMemCap.tevSwap;
+                return mCap.alpComp;
             }
 
             bool IsChanCtrlCap() const {
-                return mGXMemCap.chanCtrl;
+                return mCap.chanCtrl;
             }
 
             bool IsMatColorCap() const {
-                return mGXMemCap.matCol;
+                return mCap.matCol;
             }
 
             bool IsBlendModeCap() const {
-                return mGXMemCap.blendMode;
+                return mCap.blendMode;
             }
 
             const TexMap& GetTexture(u8 texMapIdx) const {
-                NW4R_ASSERT_AT(120, texMapIdx < mGXMemNum.texMap);
+                NW4R_ASSERT_AT(120, texMapIdx < mNum.texMap);
                 return GetTexMapAry()[texMapIdx];
             }
 
@@ -131,18 +124,6 @@ namespace nw4r {
 
             void SetTexSRT(u32 texSRTIdx, const TexSRT& value) {
                 GetTexSRTAry()[texSRTIdx] = value;
-            }
-
-            void SetTevStage(u32 idx, const TevStage& value) {
-                GetTevStageAry()[idx] = value;
-            }
-
-            void SetTevSwapMode(u32 idx, TevSwapMode value) {
-                GetTevSwapAry()[idx] = value;
-            }
-
-            void SetIndStage(u32 idx, IndirectStage value) {
-                GetIndirectStageAry()[idx] = value;
             }
 
             void SetIndTexSRT(u32 texSRTIdx, const TexSRT& value) {
@@ -176,27 +157,24 @@ namespace nw4r {
             TexSRT* GetTexSRTAry();
             ChanCtrl* GetChanCtrlAry();
             ut::Color* GetMatColAry();
-            TevSwapMode* GetTevSwapAry();
             AlphaCompare* GetAlphaComparePtr();
             BlendMode* GetBlendModePtr();
-            IndirectStage* GetIndirectStageAry();
             TexSRT* GetIndTexSRTAry();
-            TevStage* GetTevStageAry();
             void SetName(const char*);
-            void SetTevStageNum(u8);
-            void SetIndStageNum(u8);
             void SetColorElement(u32, s16);
             void AddAnimationLink(AnimationLink*);
 
             AnimationList mAnimList;
             NebulaColor16 mTevCols[3];
             ut::Color mTevKCols[4];
-            detail::BitGXNums mGXMemCap;
-            detail::BitGXNums mGXMemNum;
-            void* mpGXMem;
+            detail::StorageNums mCap;
+            detail::StorageNums mNum;
+            void* mpStorage;
             char mName[21];
             u8 mbUserAllocated;
             u32 mNativeShaders[4];
+            u8 mCoordMap[8];  // each texture coordinate's texture (the cook's; its size scales the coordinate)
+            bool mHasStages;  // the shader combines more than the default of a material without its own
         };
     };  // namespace lyt
 };  // namespace nw4r
