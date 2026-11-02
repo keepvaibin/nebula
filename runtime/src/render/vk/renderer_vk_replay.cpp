@@ -1069,7 +1069,7 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
     const bool keep_alpha = copy.params.channels == kCopyLayoutIntensityAlpha;
-    record_conversion_blit(target, copy.width, copy.height, copy.params, copy.depth, copy.params.luma, keep_alpha,
+    record_conversion_blit(target, copy.width, copy.height, copy.params, copy.depth, false, keep_alpha,
                            copy.params.channels, copy.geometry[0], copy.geometry[1], copy.geometry[2],
                            copy.geometry[3], copy.geometry[4]);
 }

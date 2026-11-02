@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 105u
+#define NEBULA_GAME_API_VERSION 106u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -865,16 +865,10 @@ typedef enum NebulaClearChannels {
     NEBULA_CLEAR_DEPTH = 4u
 } NebulaClearChannels;
 
-/* How target_capture takes its picture. */
+/* How frame_read takes its picture. */
 typedef enum NebulaCaptureFlags {
-    NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards: colour and alpha 0, depth far (the
-                                  ones named by the _CLEAR_ flags) */
     NEBULA_CAPTURE_HALF = 2u,  /* half size: each picture texel averages 2x2 of the frame's */
-    NEBULA_CAPTURE_LUMA = 4u,  /* the red channel holds the colour's luminance */
-    NEBULA_CAPTURE_DEPTH = 8u, /* the red channel holds the depth's high byte */
-    NEBULA_CAPTURE_CLEAR_COLOR = 32u,
-    NEBULA_CAPTURE_CLEAR_ALPHA = 64u,
-    NEBULA_CAPTURE_CLEAR_DEPTH = 128u
+    NEBULA_CAPTURE_DEPTH = 8u  /* the red channel holds the depth */
 } NebulaCaptureFlags;
 
 /* A point of the picture the game asks about (NebulaHostServices::screen_probe). */
@@ -1103,11 +1097,9 @@ typedef struct NebulaHostServices {
     void (*target_end)(void* user, uint64_t key, uint32_t channels);
     /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` / `clear_z`. */
     void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels);
-    /* The frame drawn so far, its rectangle at `left`, `top` (`width` x `height`, the viewport's units), becomes
-       texture `key` as target_end's pictures do, carrying `channels` (NebulaTargetChannels); `flags`:
-       NebulaCaptureFlags. */
-    void (*target_capture)(void* user, uint64_t key, uint16_t left, uint16_t top, uint16_t width, uint16_t height,
-                           uint32_t channels, uint32_t flags);
+    /* The whole frame drawn so far becomes texture `key` as target_end's pictures do, carrying `channels`
+       (NebulaTargetChannels); `flags`: NebulaCaptureFlags. */
+    void (*frame_read)(void* user, uint64_t key, uint32_t channels, uint32_t flags);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);
@@ -1125,9 +1117,7 @@ typedef struct NebulaHostServices {
        viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits, far 0xFFFFFF). */
     void (*frame_clear)(void* user, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
                         uint32_t clear_z, uint32_t channels);
-    /* The frame drawn so far is the picture shown: its top left `width` x `height` (the viewport's units); `flags`
-       NEBULA_CAPTURE_FILTERED: through the display's vertical filter (the host's: each line blended with the one
-       above, as the game's television modes asked), else as drawn. */
+    /* The frame drawn so far is the picture shown: its top left `width` x `height` (the viewport's units). */
     void (*frame_show)(void* user, uint16_t width, uint16_t height, uint32_t flags);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */
     void (*frame_end)(void* user);

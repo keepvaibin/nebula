@@ -371,9 +371,9 @@ SceneConversionShaderConstants make_scene_conversion_constants(
     float scale,
     unsigned logical_scene_height,
     unsigned reduction_width) noexcept {
-    const float fw_up = static_cast<float>(capture_filter_upper(params));
-    const float fw_mid = static_cast<float>(capture_filter_middle(params));
-    const float fw_low = static_cast<float>(capture_filter_lower(params));
+    const float fw_up = 0.0f;
+    const float fw_mid = 64.0f;
+    const float fw_low = 0.0f;
 
     const float copy_y0 = static_cast<float>(params.src_y) * scale;
     const float copy_y1 =
@@ -485,10 +485,6 @@ SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTa
 
 std::uint64_t scene_copy_dest_budget_bytes() {
     return UINT64_C(192) << 20;
-}
-
-bool is_effect_copy(unsigned width, unsigned height) noexcept {
-    return width <= 320u && height <= 228u;
 }
 
 PresentPacer::PresentPacer() noexcept : frequency_(galaxy::qpc_frequency()) {}

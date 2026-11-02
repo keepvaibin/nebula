@@ -1420,7 +1420,7 @@ bool RendererD3D12::can_hand_over_display_copy(const CaptureRequest& params, con
     }
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(params.src_width, params.src_height, frame_);
     // The display's vertical filter is applied when the frame is presented (present: filter_display_picture).
-    return !params.luma && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
+    return !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
            dest.width == extent.width && dest.height == extent.height;
 }
@@ -8275,26 +8275,17 @@ bool RendererD3D12::copy_scene_to_texture(
     const CaptureRequest& params, TextureCache& textures, bool is_depth_copy) {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::SceneCopy};
-    // SMG composites its visible frame from scene target-to-texture captures (the scene
-    // is copied out at 640x456 and the final pass samples it). The conversion
-    // blit applies intensity, gamma, the copy filter and half-scale, and serves
-    // depth-source copies from scene_depth_ (SMG's focus/DOF effects).
-    //
-    // half_scale halves BOTH dimensions of the destination (Dolphin
-    // TextureCacheBase scaleByHalf); the 2x step through the linear-filtered
-    // source is the box filter.
+    // half_scale halves both dimensions; the 2x step through the linear-filtered source is the box filter.
     const UINT dw_unscaled = params.half_scale
         ? std::max<UINT>(1u, params.src_width / 2u)
         : params.src_width;
     const UINT dh_unscaled = params.half_scale
         ? std::max<UINT>(1u, params.src_height / 2u)
         : params.src_height;
-    // Effect copies (is_effect_copy) are built at the game's own resolution.
-    const bool native_bloom = frame_.scale() > 1u && is_effect_copy(dw_unscaled, dh_unscaled);
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
         static_cast<std::uint16_t>(dw_unscaled),
         static_cast<std::uint16_t>(dh_unscaled),
-        native_bloom ? FrameMap(1u) : frame_);
+        frame_);
     const UINT w = extent.width;
     const UINT h = extent.height;
     if (w == 0 || h == 0) {
@@ -8302,17 +8293,11 @@ bool RendererD3D12::copy_scene_to_texture(
     }
     ++scene_copy_requests_;
 
-    // Keyed by (addr, format, depth-source): SMG reuses one address with
-    // different copy formats and each needs its own converted texture.
+    // Keyed by the texture, its channels and whether it reads depth.
     const std::uint64_t dest_key =
         static_cast<std::uint64_t>(params.key) |
         (static_cast<std::uint64_t>(params.channels) << 48) |  // addresses stay below 2^48
-        (params.luma ? (1ull << 52) : 0ull) |
         (is_depth_copy ? (1ull << 56) : 0ull) |
-        // One address alternates between early scaled masks and the
-        // final native bloom composite. Cache both resources to avoid
-        // reallocating on every pass/frame; the latest alias still wins.
-        (native_bloom ? (1ull << 57) : 0ull) |
         // Interpolation: consecutive game frames copy into different
         // textures, so a sub-frame replaying one frame's copies never
         // overwrites what the next frame's chunks already copied.
@@ -8373,7 +8358,7 @@ bool RendererD3D12::copy_scene_to_texture(
             dump_device_removal(device_.Get());
             if (device_->GetDeviceRemovedReason() != S_OK) {
                 std::ostringstream message;
-                message << "[efb-copy] device removed while allocating a "
+                message << "[frame-read] device removed while allocating a "
                         << w << 'x' << h << " copy destination";
                 throw std::runtime_error(message.str());
             }
@@ -8385,7 +8370,7 @@ bool RendererD3D12::copy_scene_to_texture(
             scene_copy_dests_.erase(dest_key);
             static std::atomic<unsigned> reported{0u};
             if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
-                std::cerr << "[efb-copy] dest texture allocation failed hr=0x"
+                std::cerr << "[frame-read] dest texture allocation failed hr=0x"
                           << std::hex << static_cast<unsigned long>(create_hr)
                           << " addr=0x" << params.key << std::dec
                           << " size=" << w << 'x' << h << "; copy skipped\n";
@@ -8479,7 +8464,7 @@ bool RendererD3D12::copy_scene_to_texture(
         copy.height = h;
         copy.params = params;
         copy.depth = is_depth_copy;
-        copy.intensity = params.luma;
+        copy.intensity = false;
         copy.keep_alpha = keep_alpha;
         copy.format = params.channels;
         copy.geometry[0] = sampling.src_x;
@@ -8493,7 +8478,7 @@ bool RendererD3D12::copy_scene_to_texture(
     }
     record_conversion_blit(
         dest.texture.Get(), w, h, dest.rtv, params,
-        is_depth_copy, params.luma, keep_alpha,
+        is_depth_copy, false, keep_alpha,
         params.channels,
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
