@@ -6,15 +6,11 @@
 namespace nw4r {
     namespace math {
         inline f32 U16ToF32(u16 x) {
-            f32 rval;
-            OSu16tof32(&x, &rval);
-            return rval;
+            return static_cast< f32 >(x);
         }
 
         inline u16 F32ToU16(f32 x) {
-            u16 rval;
-            OSf32tou16(&x, &rval);
-            return rval;
+            return nebula_f32_to_u16(x);
         }
 
         inline f32 FAbs(f32 x) {

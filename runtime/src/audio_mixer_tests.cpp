@@ -31,8 +31,7 @@ struct Game {
     std::vector<std::byte> sound = std::vector<std::byte>(1u << 20);
 
     void put16(std::uint32_t offset, std::int16_t value) {
-        sound[offset] = static_cast<std::byte>((static_cast<std::uint16_t>(value) >> 8u) & 0xFFu);
-        sound[offset + 1u] = static_cast<std::byte>(static_cast<std::uint16_t>(value) & 0xFFu);
+        std::memcpy(&sound[offset], &value, sizeof(value));
     }
     void attach(AudioMixer& mixer) {
         mixer.setup(voices.data(), 64u, effects.data(), sound.data(), static_cast<std::uint32_t>(sound.size()));

@@ -21,7 +21,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mViWidth(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mWPadHolder(),
@@ -125,7 +125,7 @@ void GameSystemObjHolder::initRenderMode() {
     // The game's frame, 640x456 in either aspect; the picture spans 686 of the television line's 720 in 16:9, 670 in
     // 4:3.
     mViWidth = MR::isAspectRatioFlag16Per9() ? 686 : 670;
-    JUTVideo::createManager(640, 456);
+    NebulaFrameClock::startPicture();
 }
 
 void GameSystemObjHolder::initNameObj() {

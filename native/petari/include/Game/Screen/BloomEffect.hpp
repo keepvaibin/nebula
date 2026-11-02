@@ -33,7 +33,6 @@ public:
     /* 0x18 */ f32 _18;
     /* 0x1C */ f32 _1C;
     /* 0x20 */ u8 _20;
-    /* 0x24 */ JUTTexture* _24;
     /* 0x28 */ JUTTexture* _28;
     /* 0x2C */ JUTTexture* _2C;
     /* 0x30 */ JUTTexture* _30;

@@ -23,7 +23,7 @@ void JPARegistChildPrmEnv(JPAEmitterWorkData* work) {
 
 void JPACalcChildAlphaOut(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     f32 anm = (1.0f - ptcl->mTime) * 255.0f;
-    OSf32tou8(&anm, &ptcl->mPrmColorAlphaAnm);
+    ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(anm);
 }
 
 void JPACalcChildScaleOut(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {

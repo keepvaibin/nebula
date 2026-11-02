@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Screen/BloomEffectSimple.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
@@ -18,18 +19,9 @@ namespace {
 };  // namespace
 
 namespace {
-    class TexSpec {
-    public:
-        TexSpec() {
-        }
-
-        void set(JUTTexture*, s32, s32, GpuTexFmt);
-
-        /* 0x00 */ JUTTexture* _0;
-        /* 0x04 */ s32 _4;
-        /* 0x08 */ s32 _8;
-        /* 0x0C */ GpuTexFmt _C;
-    };
+    void beginPass(JUTTexture* pTexture) {
+        J3DNativeTarget::begin(pTexture->mImage, pTexture->getWidth(), pTexture->getHeight(), 0, 0xFFFFFF);
+    }
 };  // namespace
 
 BloomEffectSimple::BloomEffectSimple()
@@ -68,67 +60,45 @@ void BloomEffectSimple::draw() const {
         MR::reinitGX();
         ImageEffectLocalUtil::setupDrawTexture();
         _28->load(GPU_TEXMAP0);
-        J3DNativeState::setChanMatColor(GPU_COLOR0A0, Color8(alpha, alpha, alpha, 255));
-        J3DNativeState::setChanAmbColor(GPU_COLOR0A0, Color8(0, 0, 0, 255));
         J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
         return;
     }
 
-    ::TexSpec texSpec;
-    texSpec.set(_20, 4, 0, GPU_TF_RGB565);
-
-    // The renderer keeps the scene in the scene target's own format: the corner the chain works in is saved as a texture copy,
-    // which cuts the ray tracer's HDR scene at 1 there.
-    if (route != 0) {
-        NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
-    } else
-    {
-        ImageEffectLocalUtil::capture(texSpec._0, texSpec._4, texSpec._8, texSpec._C, false, 0);
-    }
-    ImageEffectLocalUtil::capture(_18, texSpec._4, texSpec._8, GPU_TF_RGB565, true, 0);
+    // Every step a pass into its own texture: the frame is read once and never drawn on.
+    ImageEffectLocalUtil::capture(_18, 4, 0, GPU_TF_RGB565, true, 0);
     MR::reinitGX();
     ImageEffectLocalUtil::setupDrawTexture();
+    beginPass(_1C);
     ImageEffectLocalUtil::drawTexture(_18, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(_1C, 4, 0, GPU_TF_RGB565, false, 0);
+    J3DNativeTarget::end(_1C->mImage, NEBULA_TARGET_RGB);
 
-    switch (mMaskFilter) {
-    case 0:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_TF_I8, false, 0);
-        break;
-    case 1:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_CTF_R8, false, 0);
-        break;
-    case 2:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_CTF_G8, false, 0);
-        break;
-    case 3:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_CTF_B8, false, 0);
-        break;
+    beginPass(_2C);
+    if (mMaskFilter == 0) {
+        ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Luminance);
     }
+    ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Modulate);
+    J3DNativeTarget::end(_2C->mImage, mMaskFilter == 2   ? NEBULA_TARGET_GREEN
+                                      : mMaskFilter == 3 ? NEBULA_TARGET_BLUE
+                                                         : NEBULA_TARGET_RED);
 
+    beginPass(_20);
+    ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Threshold);
     ImageEffectLocalUtil::drawTexture(_2C, 4, 0, mThreshold, ImageEffectLocalUtil::TexDrawType_3);
     ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Modulate);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GPU_TF_RGB565, true, 0);
+    J3DNativeTarget::end(_20->mImage, NEBULA_TARGET_RGB);
+
+    beginPass(_24);
+    ImageEffectLocalUtil::drawTexture(_20, 8, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    J3DNativeTarget::end(_24->mImage, NEBULA_TARGET_RGB);
+
     J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_CLEAR);
     ImageEffectLocalUtil::setupDrawTexture();
-    texSpec.set(_24, 8, 0, GPU_TF_RGB565);
-    ImageEffectLocalUtil::blurTexture(texSpec._0, texSpec._4, texSpec._8, 8, 0.009f, 1.0f);
-    ImageEffectLocalUtil::capture(_28, texSpec._4, texSpec._8, texSpec._C, false, 0);
-    if (route != 0) {
-        // The kept scene drawn back over the corner the chain worked in (the rest of the frame is unchanged).
-        NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
-    } else
-    {
-        ImageEffectLocalUtil::drawTexture(_20, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    }
+    beginPass(_28);
+    ImageEffectLocalUtil::blurTexture(_24, 8, 0, 8, 0.009f, 1.0f);
+    J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RGB);
+
     const u8 alpha = 255.0f * mIntensity * get_10();
     ImageEffectLocalUtil::drawTexture(_28, 1, 0, alpha, ImageEffectLocalUtil::TexDrawType_1);
-}
-
-void ::TexSpec::set(JUTTexture* pParam1, s32 param2, s32 param3, GpuTexFmt param4) {
-    _0 = pParam1;
-    _4 = param2;
-    _8 = param3;
-    _C = param4;
 }

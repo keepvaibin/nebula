@@ -3,7 +3,7 @@
 #include "Game/Camera/CameraShakeTask.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static const f32 sInfinityIntensity = 1.0f;
@@ -156,7 +156,7 @@ void CameraShaker::addInfinityTaskOffset(TVec2f* pOffset) {
 }
 
 void CameraShaker::adjustOffsetToScreen(TVec2f* pOffset) {
-    pOffset->y *= 30.0f / (s32)JUTVideo::getManager()->getEfbHeight();
+    pOffset->y *= 30.0f / (s32)NebulaFrameClock::cFrameHeight;
     pOffset->x *= 30.0f / MR::getScreenWidth();
 }
 

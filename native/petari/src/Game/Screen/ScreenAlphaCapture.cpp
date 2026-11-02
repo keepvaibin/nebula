@@ -5,7 +5,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     ScreenAlphaCapture* getScreenAlphaCapture() {
@@ -25,8 +25,8 @@ void ScreenAlphaCapture::init(const JMapInfoIter& rIter) {
 void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
 
-    mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(JUTVideo::getManager()->getFbWidth()) * screenScale,
-                                            static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()) * screenScale, GPU_TF_I8);
+    mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(NebulaFrameClock::cFrameWidth) * screenScale,
+                                            static_cast< s32 >(NebulaFrameClock::cFrameHeight) * screenScale, GPU_TF_I8);
     mTexture[textureIndex]->mWrapS = GPU_CLAMP;
     mTexture[textureIndex]->mWrapT = GPU_CLAMP;
     mTexture[textureIndex]->mMinType = GPU_LINEAR;

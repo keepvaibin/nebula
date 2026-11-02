@@ -18,6 +18,7 @@
 #include "galaxy/render/pointer_response.h"
 #include "galaxy/render/render_config.h"
 
+#include <cmath>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,37 @@ namespace galaxy::render {
 // A capture of the frame (shapes::Record TargetCapture) or the frame shown (FrameShow), as the game asks for it: the
 // rectangle in logical pixels, the texture the capture becomes and the picture's channels (NebulaTargetChannels), and
 // NebulaCaptureFlags. Every sample stays inside the rectangle.
+// The game's frame in its units (640x456).
+inline constexpr unsigned kFrameWidth = 640;
+inline constexpr unsigned kFrameHeight = 456;
+
+// A target's map from the game's units to its pixels (E-08): the frame's size in pixels and pixels per unit.
+struct FrameMap {
+    unsigned width = 0;
+    unsigned height = 0;
+    float sx = 0.0f;
+    float sy = 0.0f;
+
+    constexpr FrameMap() noexcept = default;
+    constexpr FrameMap(unsigned scale) noexcept  // NOLINT: an integer scale is a map
+        : width(kFrameWidth * scale), height(kFrameHeight * scale), sx(static_cast<float>(scale)),
+          sy(static_cast<float>(scale)) {}
+    // A frame of exactly `pixels_wide` x `pixels_high`: square pixels at any size.
+    constexpr FrameMap(unsigned pixels_wide, unsigned pixels_high) noexcept
+        : width(pixels_wide), height(pixels_high), sx(static_cast<float>(pixels_wide) / static_cast<float>(kFrameWidth)),
+          sy(static_cast<float>(pixels_high) / static_cast<float>(kFrameHeight)) {}
+    // The smallest whole scale that covers it, for what still works in them.
+    [[nodiscard]] unsigned scale() const noexcept {
+        return static_cast<unsigned>(std::ceil(std::max(sx, sy) - 1e-4f));
+    }
+    // An integer multiple of the game's frame.
+    [[nodiscard]] bool whole() const noexcept {
+        const unsigned s = scale();
+        return width == kFrameWidth * s && height == kFrameHeight * s;
+    }
+    [[nodiscard]] constexpr bool operator==(const FrameMap&) const noexcept = default;
+};
+
 struct CaptureRequest {
     std::uint16_t src_x = 0, src_y = 0;
     std::uint16_t src_width = 0, src_height = 0;
@@ -66,6 +98,8 @@ struct DisplayTexture {
     mutable std::uint64_t last_accounted_present_serial =
         ~std::uint64_t{0};
     gpu::CpuDescriptor rtv{};
+    // A handed-over frame shown through the display's vertical filter: the presentation applies it (E-10).
+    bool display_filter = false;
     bool presentable = false;
     bool rtv_valid = false;
 };
@@ -104,7 +138,7 @@ struct ScaledSceneCopyExtent {
 [[nodiscard]] ScaledSceneCopyExtent compute_scaled_scene_copy_extent(
     std::uint16_t logical_width,
     std::uint16_t logical_height,
-    unsigned scene_target_scale) noexcept;
+    const FrameMap& map) noexcept;
 
 struct SceneCopySamplingGeometry {
     float src_x = 0.0f;
@@ -118,7 +152,7 @@ struct SceneCopySamplingGeometry {
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned scene_target_scale) noexcept;
+    const FrameMap& map) noexcept;
 
 // The frame shown at a high resolution keeps the filter's weights but samples adjacent physical rows; captures
 // keep their logical-row footprint.
@@ -126,7 +160,7 @@ struct SceneCopySamplingGeometry {
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned scene_target_scale) noexcept;
+    const FrameMap& map) noexcept;
 
 // A copy that is an exact colour/alpha identity at `scene_target_scale`: its source rectangle in scaled scene target texels. Rejects
 // filtering, conversion, resampling and any source rectangle that would need the conversion shader's clamp.
@@ -173,31 +207,19 @@ struct ScaledSceneRect {
     std::int32_t logical_bottom,
     unsigned logical_target_width,
     unsigned logical_target_height,
-    unsigned scene_target_scale) noexcept {
-    const std::int64_t scale = static_cast<std::int64_t>(
-        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
-    // Target extents are arbitrary unsigned values; saturate to the signed 32-bit D3D12_RECT range before narrowing.
-    constexpr std::int64_t kRectLimit =
-        std::numeric_limits<std::int32_t>::max();
-    const std::int64_t target_width = std::min(
-        static_cast<std::int64_t>(logical_target_width) * scale,
-        kRectLimit);
-    const std::int64_t target_height = std::min(
-        static_cast<std::int64_t>(logical_target_height) * scale,
-        kRectLimit);
-    const auto scaled_clamped = [scale](
-                                    std::int32_t coordinate,
-                                    std::int64_t maximum) {
-        return static_cast<std::int32_t>(std::clamp<std::int64_t>(
-            static_cast<std::int64_t>(coordinate) * scale,
-            0,
-            maximum));
+    const FrameMap& map) noexcept {
+    // Target extents are arbitrary unsigned values; saturate to the signed 32-bit rectangle range.
+    constexpr std::int64_t kRectLimit = std::numeric_limits<std::int32_t>::max();
+    const auto scaled = [](std::int64_t units, float scale) {
+        return static_cast<std::int64_t>(std::lround(static_cast<double>(units) * scale));
     };
+    const std::int64_t target_width = std::min(scaled(logical_target_width, map.sx), kRectLimit);
+    const std::int64_t target_height = std::min(scaled(logical_target_height, map.sy), kRectLimit);
     return ScaledSceneRect{
-        scaled_clamped(logical_left, target_width),
-        scaled_clamped(logical_top, target_height),
-        scaled_clamped(logical_right, target_width),
-        scaled_clamped(logical_bottom, target_height)};
+        static_cast<std::int32_t>(std::clamp<std::int64_t>(scaled(logical_left, map.sx), 0, target_width)),
+        static_cast<std::int32_t>(std::clamp<std::int64_t>(scaled(logical_top, map.sy), 0, target_height)),
+        static_cast<std::int32_t>(std::clamp<std::int64_t>(scaled(logical_right, map.sx), 0, target_width)),
+        static_cast<std::int32_t>(std::clamp<std::int64_t>(scaled(logical_bottom, map.sy), 0, target_height))};
 }
 
 struct ScaledViewport {
@@ -216,12 +238,10 @@ struct ScaledViewport {
 // The viewport (drawing_state.h: left, top, width, height, near and far depth) at the frame scale, depth reversed.
 [[nodiscard]] inline ScaledViewport compute_scaled_viewport(
     const float viewport[6],
-    unsigned scene_target_scale) noexcept {
+    const FrameMap& map) noexcept {
     if (viewport == nullptr) {
         return {};
     }
-    const float scale = static_cast<float>(
-        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     // Reversed depth: the far depth maps to 0, the near depth to 1.
     float min_depth = std::clamp(1.0f - viewport[5], 0.0f, 1.0f);
     const float max_depth = std::clamp(1.0f - viewport[4], 0.0f, 1.0f);
@@ -229,10 +249,10 @@ struct ScaledViewport {
         min_depth = max_depth;
     }
     return ScaledViewport{
-        viewport[0] * scale,
-        viewport[1] * scale,
-        viewport[2] * scale,
-        viewport[3] * scale,
+        viewport[0] * map.sx,
+        viewport[1] * map.sy,
+        viewport[2] * map.sx,
+        viewport[3] * map.sy,
         min_depth,
         max_depth};
 }
@@ -240,7 +260,7 @@ struct ScaledViewport {
 struct ScenePeekSamplingGeometry {
     float src_x = 0.0f;
     float src_y = 0.0f;
-    float step = 1.0f;
+    float step = 1.0f;  // pixels a game row
     float center_y = 0.5f;
     // A depth peek reads the single physical texel nearest the center of the scaled
     // logical pixel. At even scales the center lies on a texel boundary, so point-sampling
@@ -248,12 +268,13 @@ struct ScenePeekSamplingGeometry {
     std::uint32_t depth_texel_x = 0;
     std::uint32_t depth_texel_y = 0;
     unsigned color_reduction_samples = 1;
+    float step_x = 1.0f;  // pixels a game column
 };
 
 [[nodiscard]] ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
     std::uint16_t x,
     std::uint16_t y,
-    unsigned scene_target_scale) noexcept;
+    const FrameMap& map) noexcept;
 
 class SceneCopyManager {
 public:
@@ -261,8 +282,8 @@ public:
     void shutdown();
     // Live internal-resolution change: later acquisitions re-create any display picture
     // texture whose physical extent no longer matches.
-    void set_scene_target_scale(unsigned scene_target_scale) noexcept;
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    void set_frame_map(const FrameMap& map) noexcept { map_ = map; }
+    [[nodiscard]] const FrameMap& frame_map() const noexcept { return map_; }
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
     // The next picture of the ring, created or resized to match the copy's size. The caller
@@ -303,7 +324,7 @@ private:
     std::vector<std::vector<PooledTexture>> retired_textures_;
     std::vector<PooledTexture> idle_textures_;
     unsigned current_frame_slot_ = 0;
-    unsigned scene_target_scale_ = 1;
+    FrameMap map_ = FrameMap(1u);
 };
 
 }  // namespace galaxy::render

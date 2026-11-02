@@ -352,7 +352,6 @@ void MarioActor::drawShadow() const {
     }
 
     _214->drawAndCaptureTex(pSimple, mPosition);
-    _214->clearAlphaBuffer();
     if (mBeeWallWalk) {
         _214->_307 = 0;
     } else {

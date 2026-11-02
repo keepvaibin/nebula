@@ -19,6 +19,7 @@
 #include <immintrin.h>
 #endif
 #endif
+#include "galaxy/loss_report.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
@@ -1165,9 +1166,9 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
     if (draw_state_.projection_type != 0u) {
         return;
     }
-    const float scale = static_cast<float>(renderer_.scene_target_scale());
-    const float width = std::fabs(draw_state_.viewport[2]) * scale;
-    const float height = std::fabs(draw_state_.viewport[3]) * scale;
+    const FrameMap& map = renderer_.frame_map();
+    const float width = std::fabs(draw_state_.viewport[2]) * map.sx;
+    const float height = std::fabs(draw_state_.viewport[3]) * map.sy;
     if (!(width > 0.0f) || !(height > 0.0f)) {
         return;
     }
@@ -1756,9 +1757,9 @@ void RenderCore::note_interp_rt_projection() {
     for (unsigned i = 0; i < 6u; ++i) {
         scene.rt_projection[i] = draw_state_.projection[i];
     }
-    const float scale = static_cast<float>(renderer_.scene_target_scale());
-    scene.rt_viewport[0] = std::fabs(draw_state_.viewport[2]) * scale;
-    scene.rt_viewport[1] = std::fabs(draw_state_.viewport[3]) * scale;
+    const FrameMap& map = renderer_.frame_map();
+    scene.rt_viewport[0] = std::fabs(draw_state_.viewport[2]) * map.sx;
+    scene.rt_viewport[1] = std::fabs(draw_state_.viewport[3]) * map.sy;
     scene.rt_projection_known = true;
 }
 
@@ -1774,9 +1775,9 @@ RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
     // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
     if (temporal_scene_ && draw_state_.projection_type == 0u) {
-        const float scale = static_cast<float>(renderer_.scene_target_scale());
-        const float width = std::fabs(draw_state_.viewport[2]) * scale;
-        const float height = std::fabs(draw_state_.viewport[3]) * scale;
+        const FrameMap& map = renderer_.frame_map();
+        const float width = std::fabs(draw_state_.viewport[2]) * map.sx;
+        const float height = std::fabs(draw_state_.viewport[3]) * map.sy;
         if (width > 0.0f && height > 0.0f) {
             view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
             view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
@@ -1798,7 +1799,7 @@ void RenderCore::note_scene_ao_view(const DrawCall& call) {
         draw_state_.projection_type != 0u || !call.has_viewport) {
         return;
     }
-    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.scene_target_scale());
+    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.frame_map());
     if (!viewport.valid()) {
         return;
     }
@@ -1957,7 +1958,7 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         switched = true;
     }
     if (switched) {
-        scene_copies_.set_scene_target_scale(renderer_.scene_target_scale());
+        scene_copies_.set_frame_map(renderer_.frame_map());
         frame_bindings_dirty_ = true;
     }
     if (marker == SceneMarker::SceneEnd) {
@@ -4091,8 +4092,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         }
         // begin_frame() applies a pending internal-resolution change, so copies take the scale the scene target
         // has now, not the setting, which can change in between.
-        if (renderer_.scene_target_scale() != scene_copies_.scene_target_scale()) {
-            scene_copies_.set_scene_target_scale(renderer_.scene_target_scale());
+        if (renderer_.frame_map() != scene_copies_.frame_map()) {
+            scene_copies_.set_frame_map(renderer_.frame_map());
         }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
@@ -4674,7 +4675,7 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
     const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
     std::array<std::uint32_t, kMaxTextureMaps> keys{};
     const auto scene_target_scale_log2_x32 = static_cast<std::uint8_t>(std::clamp(
-        std::lround(32.0 * std::log2(static_cast<double>(std::max(1u, renderer_.scene_target_scale())))), 0l, 127l));
+        std::lround(32.0 * std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().sy)))), 0l, 127l));
     for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
         if ((map_mask & (1u << map)) == 0u) {
             continue;
@@ -4878,6 +4879,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // Every draw takes its material's native shader (E-04); one without a native material is not drawn. The count of
     // those in the log every 65,536 (GALAXY_LOG_NATIVE_MATERIALS=1).
     if (native_material_ == nullptr) [[unlikely]] {
+        galaxy::loss::note(galaxy::loss::Kind::DrawNoMaterial);
         static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
         static std::uint64_t dropped = 0u;
         if (log_native && (dropped++ & 0xFFFFu) == 0u) {
@@ -5085,6 +5087,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     if (current_pipeline_ == nullptr) {
         // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged
         // why): the draw is skipped.
+        galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
         return nullptr;
     }
     // An effects-layer draw binds the reactive mask and the layer's targets, uber stand-in or not (its variant writes
@@ -5236,7 +5239,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         {
             // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
             auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
-            native_vs->draw_header[1] = renderer_.scene_target_scale();
+            native_vs->draw_header[1] = static_cast<std::uint32_t>(std::lround(renderer_.frame_map().sy));
             native_vs->draw_header[2] = native_pe;
             native_vs->draw_header[3] = native_texmtx;
             for (unsigned i = 0; i < 8u; ++i) {
@@ -6295,20 +6298,21 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             if (renderer_.can_hand_over_display_copy(params, *display_picture)) {
                 // Native presentation: the display picture takes the scene target's colour target, and the scene target continues on a texture of
                 // its size the display picture pool released.
-                const auto scale = renderer_.scene_target_scale();
+                const FrameMap& map = renderer_.frame_map();
                 scene_copies_.adopt_picture(
                     *display_picture, renderer_.hand_over_scene_color(scene_copies_.take_idle_texture(
-                              static_cast<std::uint16_t>(kFrameWidth * scale),
-                              static_cast<std::uint16_t>(kFrameHeight * scale))));
+                              static_cast<std::uint16_t>(map.width), static_cast<std::uint16_t>(map.height))));
+                display_picture->display_filter = params.filtered;
             } else {
                 renderer_.copy_scene_to_display(params, *display_picture);
+                display_picture->display_filter = false;
             }
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution scene target again.
             display_copy_on_output_ = renderer_.output_scene_active() && !params.clear;
             if (renderer_.output_scene_active()) {
                 renderer_.end_output_scene();
-                scene_copies_.set_scene_target_scale(renderer_.scene_target_scale());
+                scene_copies_.set_frame_map(renderer_.frame_map());
                 frame_bindings_dirty_ = true;
             }
             static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;

@@ -2,7 +2,7 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color.rgb = v.color0.rgb;
+    o.color.rgb = material.mat_color[0].rgb;
     o.color.a = v.color0.a;
     o.color1 = v.color1;
     {  // coordinate 0: kind 0, projective 0, row 5
@@ -33,8 +33,8 @@ float4 material_color(NativeVaryings i) {
         const float4 r0 = material.reg[1];
         const float4 r1 = material.reg[2];
         const float4 r2 = material.reg[3];
-        const float ka = material.kcolor[0].a;
-        return j3d_override(t, i.color, material.kcolor[0].a, saturate((0.0 + lerp(ka, 0.0, ras.a)) * 2.0), i.pos);
+        const float ka = 32.0 / 255.0;
+        return j3d_override(t, i.color, 32.0 / 255.0, saturate((t.a - lerp(ka, j3d_in(r0.a), ras.a)) * 0.5), i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -43,17 +43,17 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = material.kcolor[0].a;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(j3d_in(r1.rgb), j3d_in(r0.rgb), t.rgb)));
-        const float ra = saturate((0.0 + lerp(ka, 0.0, ras.a)) * 2.0);
+        const float ka = 32.0 / 255.0;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), t.rgb, j3d_in(r0.rgb))));
+        const float ra = saturate((t.a - lerp(ka, j3d_in(r0.a), ras.a)) * 0.5);
         prev.rgb = rc;
         prev.a = ra;
     }
     {  // stage 1
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), j3d_in(prev.rgb), ras.rgb)));
-        const float ra = saturate((prev.a + lerp(0.0, 0.0, 0.0)));
+        const float3 rc = saturate((prev.rgb + lerp(j3d_in(r0.rgb), ras.rgb, float3(1.0, 1.0, 1.0))));
+        const float ra = (prev.a + lerp(0.0, ras.a, j3d_in(r0.a))) * 0.5;
         prev.rgb = rc;
         prev.a = ra;
     }

@@ -65,7 +65,7 @@ constexpr std::uint32_t kPictures = 3u;
 
 bool SceneCopyManager::initialize(gpu::Device* device, unsigned scene_target_scale) {
     device_ = device;
-    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
+    map_ = FrameMap(std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     return device_ != nullptr;
 }
 
@@ -77,7 +77,7 @@ void SceneCopyManager::shutdown() {
     latest_slot_ = 0;
     next_slot_ = 0;
     next_copy_serial_ = 1;
-    scene_target_scale_ = 1;
+    map_ = FrameMap(1u);
     device_.Reset();
 }
 
@@ -144,40 +144,25 @@ gpu::TextureRef SceneCopyManager::acquire_idle_texture(
 ScaledSceneCopyExtent compute_scaled_scene_copy_extent(
     std::uint16_t logical_width,
     std::uint16_t logical_height,
-    unsigned scene_target_scale) noexcept {
-    const unsigned scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
-    constexpr unsigned kMaxTextureDimension = gpu::kMaxTexture2DDimension;
-    const unsigned width = std::min(
-        static_cast<unsigned>(logical_width) * scale,
-        kMaxTextureDimension);
-    const unsigned height = std::min(
-        static_cast<unsigned>(logical_height) * scale,
-        kMaxTextureDimension);
+    const FrameMap& map) noexcept {
+    constexpr long kMaxTextureDimension = static_cast<long>(gpu::kMaxTexture2DDimension);
     return ScaledSceneCopyExtent{
-        static_cast<std::uint16_t>(width),
-        static_cast<std::uint16_t>(height)};
+        static_cast<std::uint16_t>(std::min(std::lround(static_cast<double>(logical_width) * map.sx), kMaxTextureDimension)),
+        static_cast<std::uint16_t>(std::min(std::lround(static_cast<double>(logical_height) * map.sy), kMaxTextureDimension))};
 }
 
 SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned scene_target_scale) noexcept {
-    const float scale = static_cast<float>(
-        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
+    const FrameMap& map) noexcept {
     SceneCopySamplingGeometry geometry{};
-    geometry.src_x = static_cast<float>(params.src_x) * scale;
-    geometry.src_y = static_cast<float>(params.src_y) * scale;
-    geometry.step_x = dest_width == 0u
-        ? 0.0f
-        : static_cast<float>(params.src_width) * scale /
-              static_cast<float>(dest_width);
-    geometry.step_y = dest_height == 0u
-        ? 0.0f
-        : static_cast<float>(params.src_height) * scale /
-              static_cast<float>(dest_height);
-    // The filter's taps are one logical row apart: at Nx, N physical rows.
-    geometry.filter_row_offset = scale;
+    geometry.src_x = static_cast<float>(params.src_x) * map.sx;
+    geometry.src_y = static_cast<float>(params.src_y) * map.sy;
+    geometry.step_x = dest_width == 0u ? 0.0f : static_cast<float>(params.src_width) * map.sx / static_cast<float>(dest_width);
+    geometry.step_y = dest_height == 0u ? 0.0f : static_cast<float>(params.src_height) * map.sy / static_cast<float>(dest_height);
+    // The filter's taps are one game row apart.
+    geometry.filter_row_offset = map.sy;
     return geometry;
 }
 
@@ -185,10 +170,9 @@ SceneCopySamplingGeometry compute_display_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned scene_target_scale) noexcept {
-    auto geometry = compute_scene_copy_sampling_geometry(
-        params, dest_width, dest_height, scene_target_scale);
-    // The frame shown filters adjacent physical rows; only the tap spacing differs from captures.
+    const FrameMap& map) noexcept {
+    auto geometry = compute_scene_copy_sampling_geometry(params, dest_width, dest_height, map);
+    // The frame shown filters adjacent pixel rows; only the tap spacing differs from a capture.
     geometry.filter_row_offset = 1.0f;
     return geometry;
 }
@@ -196,26 +180,20 @@ SceneCopySamplingGeometry compute_display_sampling_geometry(
 ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
     std::uint16_t x,
     std::uint16_t y,
-    unsigned scene_target_scale) noexcept {
-    const unsigned integer_scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
-    const float scale = static_cast<float>(integer_scale);
-    const std::uint32_t src_x =
-        static_cast<std::uint32_t>(x) * integer_scale;
-    const std::uint32_t src_y =
-        static_cast<std::uint32_t>(y) * integer_scale;
-    const std::uint32_t center_offset = integer_scale / 2u;
+    const FrameMap& map) noexcept {
+    const std::uint32_t src_x = static_cast<std::uint32_t>(std::lround(static_cast<double>(x) * map.sx));
+    const std::uint32_t src_y = static_cast<std::uint32_t>(std::lround(static_cast<double>(y) * map.sy));
+    const std::uint32_t box_x = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::lround(map.sx)));
+    const std::uint32_t box_y = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::lround(map.sy)));
     return ScenePeekSamplingGeometry{
         static_cast<float>(src_x),
         static_cast<float>(src_y),
-        scale,
-        static_cast<float>(src_y) + 0.5f * scale,
-        src_x + center_offset,
-        src_y + center_offset,
-        integer_scale * integer_scale};
-}
-
-void SceneCopyManager::set_scene_target_scale(unsigned scene_target_scale) noexcept {
-    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
+        map.sy,
+        static_cast<float>(src_y) + 0.5f * map.sy,
+        src_x + box_x / 2u,
+        src_y + box_y / 2u,
+        box_x * box_y,
+        map.sx};
 }
 
 DisplayTexture* SceneCopyManager::acquire_display(
@@ -228,7 +206,7 @@ DisplayTexture* SceneCopyManager::acquire_display(
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
         params.src_width,
         logical_h,
-        scene_target_scale_);
+        map_);
     const std::uint16_t wanted_w = extent.width;
     const std::uint16_t wanted_h = extent.height;
 
