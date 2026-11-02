@@ -4,7 +4,6 @@
 #include "Game/System/GameAssets.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JUtility/JUTException.hpp>
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <cstring>
 
@@ -25,13 +24,13 @@ namespace {
         GameAssets::File file;
         if (!GameAssets::open(path, &file)) {
             if (required) {
-                JUTException::panic_f(__FILE__, __LINE__, "%s is missing: the game content was not cooked by this version", path);
+                NEBULA_PANIC("%s is missing: the game content was not cooked by this version", path);
             }
             return nullptr;
         }
         u8* pData = static_cast< u8* >(JKRHeap::alloc(file.mLength, 32, pHeap));
         if (pData == nullptr || GameAssets::read(&file, pData, file.mLength, 0) < static_cast< s32 >(file.mLength)) {
-            JUTException::panic_f(__FILE__, __LINE__, "%s cannot be read", path);
+            NEBULA_PANIC("%s cannot be read", path);
         }
         return pData;
     }

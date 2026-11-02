@@ -67,7 +67,7 @@ void PlantLeaf::updateGrowUp(const TVec3f& rStalkPos, const TVec3f& rAxisY, f32 
 bool PlantLeaf::updateSpring(const TVec3f& rPos, f32 springPower, f32 growthPercent) {
     if (mPosition.squared(rPos) < ::sDistancePush * ::sDistancePush) {
         if (mSpringCoord == 0.0f && mSpringSpeed == 0.0f) {
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         }
 
         mSpringSpeed += springPower * ::sPlayerPushRate;

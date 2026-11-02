@@ -6,7 +6,7 @@
 #include "Game/RhythmLib/AudMeHandles.hpp"
 #include "Game/RhythmLib/AudMePlayer.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 void AudMeHandle::releaseMe() {
     if (isMeAttached()) {
@@ -35,7 +35,7 @@ bool AudMe::start(void* pData, u32 a1) {
         return false;
     }
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mTrack->setSeqData(pData, a1);
     updateTimedParams(true);
     mTrack->startSeq();
@@ -122,7 +122,7 @@ void AudMe::update() {
     if (mTrack != nullptr) {
         updateTimedParams(false);
         {
-            JASCriticalSection crit;
+            GameAudioExclusion crit;
             mTrack->gframeProc();
         }
 
@@ -191,7 +191,7 @@ void AudMe::updateTimedParams(bool immediate) {
     f32 dolby = mDolbyParam.mValue + _8C;
 
     for (u32 i = 0; i < numChannelMgrs; i++) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         AudMeChannelMgr* pChannelMgr = mTrack->mChannelMgrs[i];
         if (pChannelMgr == nullptr) {
             continue;
@@ -225,7 +225,7 @@ void AudMe::doneStop() {
 
 void AudMe::setPauseFlag(bool pause) {
     if (mTrack != nullptr) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         mTrack->setPauseFlag(pause);
     }
 }
@@ -354,7 +354,7 @@ bool AudMeMgr::isRequestedMe(u32 meId) {
     for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
         track = it->getObject()->mTrack;
         if (track != nullptr) {
-            JASCriticalSection crit;
+            GameAudioExclusion crit;
             if (meId == track->mMeId) {
                 bool requested = track->mStatus == AudMeTrack::STATUS_RUN || track->mStatus == AudMeTrack::STATUS_READY;
                 if (requested) {

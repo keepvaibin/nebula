@@ -254,7 +254,7 @@ void FileSelectItem::onPointing() {
         _A0->onSelectIn();
         _144 = 1;
         mScaleCtrl->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvToBig));
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
     }
 }
 
@@ -288,7 +288,7 @@ void FileSelectItem::exeFormat() {
         emitVanish();
         killAllModels();
         mPlanetMapObj->makeActorAppeared();
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
         MR::shakeCameraNormal();
     }
 
@@ -321,7 +321,7 @@ void FileSelectItem::exeChangeFellow() {
             emitOpen();
         }
 
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
         MR::shakeCameraNormal();
     }
 
@@ -359,7 +359,7 @@ void FileSelectItem::exeChangeMii() {
             emitOpen();
         }
 
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
         MR::shakeCameraNormal();
     }
 

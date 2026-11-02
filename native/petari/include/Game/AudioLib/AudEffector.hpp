@@ -1,6 +1,6 @@
 #pragma once
 
-#include <JSystem/JAudio2/JASDspInterface.hpp>
+#include <JSystem/JAudio2/JASVoice.hpp>
 
 class JKRHeap;
 
@@ -15,9 +15,8 @@ public:
     void setSpecialFx(s32);
     void initParams();
 
-    static JASDsp::FxlineConfig_ mFxLine[];
+    static JASVoice::EffectConfig mFxLine[];
 
-    /* 0x00 */ s16* mFxLines[4];
     /* 0x10 */ f32 mFxSend;
     /* 0x14 */ s32 mCutoff;
     /* 0x18 */ s32 mSpecialFx;

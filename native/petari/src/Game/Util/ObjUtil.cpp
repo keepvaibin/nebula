@@ -30,7 +30,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
-#include "Game/System/WPadRumble.hpp"
+#include "Game/System/GamePadRumble.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
@@ -849,35 +849,35 @@ void MR::stopSceneForDefaultHit(s32 frame) {
 }
 
 bool MR::tryRumblePad(const void* pParam1, const char* pPatternName, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
 }
 
 bool MR::tryRumblePadVeryStrongLong(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
 }
 
 bool MR::tryRumblePadVeryStrong(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
 }
 
 bool MR::tryRumblePadStrong(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
 }
 
 bool MR::tryRumblePadMiddle(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
+    return GamePadFunction::getGamePadRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
 }
 
 bool MR::tryRumblePadWeak(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
 }
 
 bool MR::tryRumblePadVeryWeak(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
 }
 
 bool MR::tryRumbleDefaultHit(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
 }
 
 void MR::shakeCameraVeryStrong() {

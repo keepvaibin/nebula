@@ -13,14 +13,14 @@ PauseButtonCheckerInGame::PauseButtonCheckerInGame()
 }
 
 void PauseButtonCheckerInGame::update() {
-    if (MR::testCorePadButtonPlus(WPAD_CHAN0)) {
+    if (MR::testCorePadButtonPlus(GAMEPAD_CHAN0)) {
         mPlusHoldFrame++;
     } else {
         mPlusHoldFrame = 0;
         mPlusUsed = false;
     }
 
-    if (MR::testCorePadButtonMinus(WPAD_CHAN0)) {
+    if (MR::testCorePadButtonMinus(GAMEPAD_CHAN0)) {
         mMinusHoldFrame++;
     } else {
         mMinusHoldFrame = 0;
@@ -52,5 +52,5 @@ bool PauseButtonCheckerInGame::isPermitToMinusPause() const {
 // Not while A or B is held. The console also waited for the remote to be still, which drops a press made while the
 // controller moves (a gyro pointer, a hand in motion).
 bool PauseButtonCheckerInGame::isPermitToPause() const {
-    return !MR::testCorePadButtonA(WPAD_CHAN0) && !MR::testCorePadButtonB(WPAD_CHAN0);
+    return !MR::testCorePadButtonA(GAMEPAD_CHAN0) && !MR::testCorePadButtonB(GAMEPAD_CHAN0);
 }

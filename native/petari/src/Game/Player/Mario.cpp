@@ -447,7 +447,7 @@ void Mario::checkKeyLock() {
         mMovementStates._22 = false;
     }
 
-    if (MR::testSubPadButtonC(WPAD_CHAN0)) {
+    if (MR::testSubPadButtonC(GAMEPAD_CHAN0)) {
         mDrawStates._7 = true;
     }
 }

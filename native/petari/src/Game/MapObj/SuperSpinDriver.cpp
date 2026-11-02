@@ -442,7 +442,7 @@ bool SuperSpinDriver::tryForceCancel() {
 }
 
 bool SuperSpinDriver::tryShootStart() {
-    bool isSwingOrPointed = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOrPointed = MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOrPointed) {
         MR::deleteEffect(this, "SuperSpinDriverLight");
@@ -665,7 +665,7 @@ void SuperSpinDriver::exeCapture() {
         _134 = rate;
         updateBindActorPoseToShoot((f64)rate);
         _144 += 0.0040f;
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         _178 = 60;
 
         if (!tryEndCapture()) {
@@ -719,7 +719,7 @@ void SuperSpinDriver::exeShootStart() {
     _C4 = mPosition * rate + _118 * (1.0f - rate);
     _144 *= 0.8f;
 
-    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
 
     if (tryShoot()) {
         return;
@@ -751,7 +751,7 @@ void SuperSpinDriver::exeShoot() {
         MR::startBckPlayer("SpaceFlyStart", "SuperSpinDriverFlyStart");
         MR::shakeCameraStrong();
 
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, GAMEPAD_CHAN0);
         mShootPathDirection.set(_100);
         mOperateRing->reset();
         startPathDraw();
@@ -1023,7 +1023,7 @@ bool SuperSpinDriver::isNerveEnableBind() const {
 }
 
 bool SuperSpinDriver::isSwingOr2PTrigger() const {
-    return MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    return MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 }
 
 bool SuperSpinDriver::isFarPlayer() const {

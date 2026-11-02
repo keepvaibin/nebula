@@ -86,10 +86,10 @@ void SpinDriverOperateRing::updatePosition() {
 }
 
 void SpinDriverOperateRing::updateControlPoint(const TVec3f& rVec) {
-    if (MR::isStarPointerInScreen(WPAD_CHAN0) && MR::calcStarPointerPosOnPlane(&_C8, _8C, rVec, WPAD_CHAN0, false)) {
+    if (MR::isStarPointerInScreen(GAMEPAD_CHAN0) && MR::calcStarPointerPosOnPlane(&_C8, _8C, rVec, GAMEPAD_CHAN0, false)) {
         _E0 = 1;
 
-        if (MR::testCorePadButtonB(WPAD_CHAN0)) {
+        if (MR::testCorePadButtonB(GAMEPAD_CHAN0)) {
             _E0 = 2;
         }
     } else {

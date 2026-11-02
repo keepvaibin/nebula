@@ -344,7 +344,7 @@ void GhostPlayer::exePreStartDemo0() {
 }
 
 bool GhostPlayer::isRequestSkipDemo() const {
-    if (MR::hasRetryGalaxySequence() && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::hasRetryGalaxySequence() && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         return true;
     }
     return false;
@@ -383,7 +383,7 @@ void GhostPlayer::exePreStartDemo2() {
     if (MR::getPlayerTriggerZ()) {
         MR::startBckPlayerJ("\203\214\201\133\203\130\203\116\203\211\203\105\203\140\203\223\203\117\212\112\216\156" /* レースクラウチング開始 */);
         MR::startSoundPlayer("SE_PV_SQUAT");
-    } else if (MR::testSubPadReleaseZ(WPAD_CHAN0)) {
+    } else if (MR::testSubPadReleaseZ(GAMEPAD_CHAN0)) {
         MR::startBckPlayerJ("\203\214\201\133\203\130\212\112\216\156" /* レース開始 */);
     }
 

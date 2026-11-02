@@ -2,7 +2,7 @@
 #include "Game/System/GameThreads.hpp"
 #include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 
 JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount) {
@@ -99,7 +99,7 @@ void* JASTaskThread::run() {
 }
 
 void JASTaskThread::pause(bool param_0) {
-    JASCriticalSection aJStack_14;
+    GameAudioExclusion aJStack_14;
     if (param_0) {
         _84 = 1;
     } else {

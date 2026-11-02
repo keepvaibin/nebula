@@ -83,7 +83,7 @@ void SphereSelectorHandle::appear() {
 }
 
 bool SphereSelectorHandle::isPointing() const {
-    return MR::isStarPointerInScreen(WPAD_CHAN0);
+    return MR::isStarPointerInScreen(GAMEPAD_CHAN0);
 }
 
 bool SphereSelectorHandle::isHolding() const {
@@ -178,7 +178,7 @@ void SphereSelectorHandle::stackPointerVelocity() {
         _F4[i].set(_F4[i - 1]);
     }
 
-    _F4[0].set(*MR::getStarPointerScreenVelocity(WPAD_CHAN0));
+    _F4[0].set(*MR::getStarPointerScreenVelocity(GAMEPAD_CHAN0));
 }
 
 TVec2f* SphereSelectorHandle::getPointerVelocity() {
@@ -325,7 +325,7 @@ void SphereSelectorHandle::exeHold() {
 void SphereSelectorHandle::exeSpin() {
     mRotateSpeed *= ::cSpinReduceRate;
     _D4 *= ::cSpinReduceRate;
-    if (MR::isStarPointerInScreen(WPAD_CHAN0)) {
+    if (MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
         SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
     }
 

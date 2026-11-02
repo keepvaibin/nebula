@@ -4,7 +4,7 @@
 #include "Game/RhythmLib/AudRhythmHolder.hpp"
 #include "Game/RhythmLib/AudRhythmSeqParser.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASTrack.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 
@@ -35,7 +35,7 @@ bool AudRhythmMeSystem::setSeq(JAISoundHandle& rHandle, s32 parserNo) {
     }
 
     {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         JASTrack* track = rHandle->getTrack();
         if (track == nullptr) {
             return false;

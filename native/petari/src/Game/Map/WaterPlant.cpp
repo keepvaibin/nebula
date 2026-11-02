@@ -140,7 +140,7 @@ void WaterPlant::movement() {
         }
     }
 
-    if (!MR::isCorePadSwing(WPAD_CHAN0)) {
+    if (!MR::isCorePadSwing(GAMEPAD_CHAN0)) {
         return;
     }
 

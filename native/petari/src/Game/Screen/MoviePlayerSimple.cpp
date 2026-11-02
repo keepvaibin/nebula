@@ -18,7 +18,6 @@
 #include <JSystem/JKernel/JKRDisposer.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include "Game/System/NebulaClock.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 namespace {
     static const s16 sCinemaFrameHeightTop = 44;
@@ -95,7 +94,7 @@ void MoviePlayerSimple::draw() const {
 
 void MoviePlayerSimple::startMovie(const char* pMovieName, bool a2) {
     if (!MR::isFileExist(pMovieName, false)) {
-        JUTException::panic_f(__FILE__, 0xDB, "Moive File NOT found.");
+        NEBULA_PANIC("Moive File NOT found.");
     }
 
     mMovie->mMovieName = pMovieName;

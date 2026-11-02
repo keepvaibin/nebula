@@ -228,27 +228,27 @@ void MarioLauncher::exeAim() {
     }
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    if (MR::isStarPointerInScreen(WPAD_CHAN0)) {
-        mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
+    if (MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
+        mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0));
         MR::requestMarioLauncherGuidance();
     } else {
         mLayout->mLayout->kill();
         MR::requestMarioLauncherGuidance();
     }
 #elif (VERSION == RMGK01)
-    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
+    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0));
     MR::requestMarioLauncherGuidance();
 #endif
     MR::startSystemLevelSE("SE_SY_LV_MARIO_LAUNCHER_AIM");
 
-    if (MR::testSystemTriggerA() || MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::testSystemTriggerA() || MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         if (doEject()) {
             setNerve(GET_NERVE(MarioLauncher, MarioLauncherNrvFlight));
         }
         return;
     }
 
-    if (MR::testSystemTriggerB() || MR::testCorePadTriggerB(WPAD_CHAN0)) {
+    if (MR::testSystemTriggerB() || MR::testCorePadTriggerB(GAMEPAD_CHAN0)) {
         if (doReject()) {
             setNerve(GET_NERVE(MarioLauncher, MarioLauncherNrvReject));
         }
@@ -462,7 +462,7 @@ bool MarioLauncher::doPrep() {
 }
 
 bool MarioLauncher::doAim() {
-    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
+    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0));
     MR::requestMarioLauncherGuidance();
     mLayout->appear();
 
@@ -517,7 +517,7 @@ void MarioLauncherLayout::kill() {
 
 bool MarioLauncher::doEject() {
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+    if (!MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
         return false;
     }
 #endif
@@ -531,9 +531,9 @@ bool MarioLauncher::doEject() {
 
     TVec3f shootDir;
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    MR::calcWorldRayDirectionFromScreen(&shootDir, *MR::getStarPointerScreenPosition(WPAD_CHAN0));
+    MR::calcWorldRayDirectionFromScreen(&shootDir, *MR::getStarPointerScreenPosition(GAMEPAD_CHAN0));
 #elif (VERSION == RMGK01)
-    MR::calcWorldRayDirectionFromScreen(&shootDir, MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
+    MR::calcWorldRayDirectionFromScreen(&shootDir, MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0));
 #endif
     MR::normalize(&shootDir);
 
@@ -549,7 +549,7 @@ bool MarioLauncher::doEject() {
     MR::startBckPlayer("CannonFlyStart");
 
     MR::shakeCameraStrong();
-    MR::tryRumblePadStrong(this, WPAD_CHAN0);
+    MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
 
     MR::setEffectHostMtx(this, "LocusSmoke", mEffectMtxSmoke);
     MR::setEffectHostMtx(this, "Gravity", mEffectMtxGravity);

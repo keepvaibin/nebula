@@ -23,7 +23,7 @@ JAU_JASInitializer::JAU_JASInitializer() {
     audioMemSize_ = 0;
     heapSize_ = 0x1000;
     field_0x1c = 0x80;
-    dspLevel_ = 1.0f;
+    outputLevel_ = 1.0f;
     field_0x20 = 0;
     waveArcDir_ = nullptr;
 }

@@ -1,5 +1,4 @@
 #include "Game/System/MessageHolder.hpp"
-#include <JSystem/JUtility/JUTException.hpp>
 #include "Game/NPC/TalkMessageInfo.hpp"
 #include "Game/NPC/TalkNodeCtrl.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
@@ -146,7 +145,7 @@ MessageData::MessageData(const char* pArchiveName)
     mIDTable->attach(mapData);
 
     if (msgData[cHostOrderMarkOffset] != cHostOrderMark) {
-        JUTException::panic_f(__FILE__, __LINE__, "%s: Message.bmg is not in host order (the importer cooks it)",
+        NEBULA_PANIC("%s: Message.bmg is not in host order (the importer cooks it)",
                               pArchiveName);
     }
     mInfoBlock = (MessageInfoBlock*)::getBlock('INF1', msgData);

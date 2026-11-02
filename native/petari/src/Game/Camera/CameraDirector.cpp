@@ -662,7 +662,7 @@ void CameraDirector::controlCameraSE() {
     }
 
     if (mIsSubjectiveCamera) {
-        if (MR::testCorePadTriggerLeft(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testFpViewStartTrigger()) {
+        if (MR::testCorePadTriggerLeft(GAMEPAD_CHAN0) || MR::testCorePadTriggerRight(GAMEPAD_CHAN0) || MR::testFpViewStartTrigger()) {
             if (isPlayableCameraSE(false)) {
                 MR::startSystemSE("SE_SY_CAMERA_NG");
                 mIsCameraNG = true;
@@ -723,7 +723,7 @@ void CameraDirector::controlCameraSE() {
         }
     }
 
-    if (MR::testCorePadTriggerDown(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerDown(GAMEPAD_CHAN0)) {
         if (isPlayableCameraSE(false)) {
             MR::startSystemSE("SE_SY_CAMERA_NG");
             mIsCameraNG = true;

@@ -3,6 +3,7 @@
 // overlay and HOME Menu (state, keys, drawing through a renderer's UiCanvas) and the host API that reads them.
 
 #include "galaxy/render/host_window_win32.h"
+#include "galaxy/path_text.h"
 #include "galaxy/controller_hid.h"
 
 #include "galaxy/render/display_modes.h"
@@ -2264,7 +2265,7 @@ void open_folder_in_explorer(const std::filesystem::path& folder) {
     if (folder.empty()) {
         return;
     }
-    if (!opens_on_desktop(folder.string().c_str())) {
+    if (!opens_on_desktop(galaxy::path_text(folder).c_str())) {
         return;
     }
     std::thread([folder] {
@@ -2495,7 +2496,7 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
             const galaxy::mods::ImportResult result =
                 folder.empty() ? galaxy::mods::ImportResult{false, {}, false, 0, 0, {}, "NO MODS FOLDER"}
                                : galaxy::mods::import_mod(sources[i], folder, progress);
-            std::cerr << "[mods] import " << sources[i].string() << ": " << result.message << " (" << result.files
+            std::cerr << "[mods] import " << galaxy::path_text(sources[i]) << ": " << result.message << " (" << result.files
                       << " files, " << (result.bytes >> 20u) << " MB)\n";
             (result.ok ? imported : failed) += 1u;
             message = message.empty() ? result.message : message + "; " + result.message;

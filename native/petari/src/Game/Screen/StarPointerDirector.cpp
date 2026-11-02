@@ -49,7 +49,7 @@ void StarPointerDirector::update() {
     mTransHolder->movement();
 
     for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
-        if (MR::isConnectedWPad(channel)) {
+        if (MR::isConnectedGamePad(channel)) {
             getStarPointerController(channel)->movement(mPeekZ->mProjectionParameters, mPeekZ->mViewportParameters);
         }
 

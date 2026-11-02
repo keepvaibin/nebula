@@ -137,7 +137,7 @@ void HammerHeadPackun::exeAttack() {
     if (!tryShiftNumb()) {
         if (MR::isStep(this, 156)) {
             MR::shakeCameraNormalStrong();
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
         }
 
         if (MR::isLessEqualStep(this, 60)) {
@@ -188,7 +188,7 @@ void HammerHeadPackun::exeDamage() {
 
     if (MR::isStep(this, 76)) {
         MR::shakeCameraNormal();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
     }
 
     if (MR::isBckOneTimeAndStopped(this)) {
@@ -213,7 +213,7 @@ void HammerHeadPackun::exeRise() {
     if (!tryShiftNumb()) {
         if (MR::isStep(this, 56)) {
             MR::shakeCameraNormalWeak();
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         }
 
         if (MR::isBckStopped(this)) {
@@ -245,7 +245,7 @@ void HammerHeadPackun::exeCrow() {
     if (!tryShiftNumb()) {
         if (MR::isStep(this, 45)) {
             MR::shakeCameraNormalWeak();
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         }
         MR::setNerveAtBckStopped(this, GET_NERVE_ANON(HammerHeadPackunNrvWait));
     }
@@ -270,7 +270,7 @@ void HammerHeadPackun::exeBlowKill() {
         const char* blowDown = "BlowDown";
         MR::startBck(this, blowDown);
         MR::startBck(mLeafModel, blowDown);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::startSound(this, "SE_EM_HHPACKUN_HIT_PUNCH");
         MR::startSound(this, "SE_EV_HHPACKUN_DEAD");
     }
@@ -340,7 +340,7 @@ void HammerHeadPackun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         f32 sendRadius = pSender->mRadius;
         f32 temp = recvRadius / (sendRadius + recvRadius);
         TVec3f hitMtx = pSender->mPosition * temp + (pReceiver->mPosition) * (1.0f - temp);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::emitEffectHit(this, hitMtx, nullptr);
         MR::stopScene(8);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill));
@@ -356,7 +356,7 @@ void HammerHeadPackun::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         } else if (isAttackSensorValid() && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
             MR::shakeCameraNormal();
-            MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+            MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
             if (isNerve(GET_NERVE_ANON(HammerHeadPackunNrvAttack)) && !MR::isNewNerve(this)) {
                 setNerve(GET_NERVE_ANON(HammerHeadPackunNrvHit));
             } else {
@@ -381,7 +381,7 @@ bool HammerHeadPackun::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSe
         f32 recvRadius = pSender->mRadius;
         f32 temp = recvRadius / (recvRadius + sendRadius);
         TVec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::emitEffectHit(this, hitMtx, nullptr);
         MR::stopScene(8);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill));
@@ -415,7 +415,7 @@ bool HammerHeadPackun::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSen
         f32 recvRadius = pSender->mRadius;
         f32 temp = recvRadius / (recvRadius + sendRadius);
         TVec3f hitMtx = pReceiver->mPosition * temp + (pSender->mPosition) * (1.0f - temp);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::emitEffectHit(this, hitMtx, nullptr);
         MR::stopScene(8);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvBlowKill));
@@ -572,12 +572,12 @@ bool HammerHeadPackun::tryShiftNumb() {
 
 bool HammerHeadPackun::receiveMsgPlayerAttackChance(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerHipDrop(msg)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvSmashKill));
         MR::sendMsgAwayJump(pSender, pReceiver);
         return true;
     } else if (MR::isMsgPlayerTrample(msg)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         setNerve(GET_NERVE_ANON(HammerHeadPackunNrvSmashKill));
         return true;
     } else if (MR::isMsgPlayerSpinAttack(msg)) {

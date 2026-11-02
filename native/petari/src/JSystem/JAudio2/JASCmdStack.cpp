@@ -1,12 +1,12 @@
 #include "JSystem/JAudio2/JASCmdStack.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 
 JASPortCmd::TPortHead JASPortCmd::sCommandListOnce;
 
 JASPortCmd::TPortHead JASPortCmd::sCommandListStay;
 
 bool JASPortCmd::addPortCmdOnce() {
-    JASCriticalSection cs;
+    GameAudioExclusion cs;
     return sCommandListOnce.append(this);
 }
 
@@ -25,7 +25,7 @@ void JASPortCmd::execAllCommand() {
 }
 
 void JASPortCmd::TPortHead::execCommandOnce() {
-    JASCriticalSection cs;
+    GameAudioExclusion cs;
     JSULink< JASPortCmd >* next;
     for (JSULink< JASPortCmd >* link = getFirst(); link != NULL; link = next) {
         next = link->getNext();
@@ -36,7 +36,7 @@ void JASPortCmd::TPortHead::execCommandOnce() {
 }
 
 void JASPortCmd::TPortHead::execCommandStay() {
-    JASCriticalSection cs;
+    GameAudioExclusion cs;
     for (JSULink< JASPortCmd >* link = getFirst(); link != NULL; link = link->getNext()) {
         JASPortCmd* cmd = link->getObject();
         cmd->getFunc()(cmd->getArgs());

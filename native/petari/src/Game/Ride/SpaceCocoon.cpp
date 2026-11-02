@@ -306,7 +306,7 @@ void SpaceCocoon::exeBindAim() {
 
         MR::startSound(this, "SE_OJ_SPACE_COCOON_DRAG_ST");
 
-        if (mPadChannel == WPAD_CHAN1) {
+        if (mPadChannel == GAMEPAD_CHAN1) {
             MR::startCSSound2P("CS_DPD_HIT", nullptr);
         }
     }
@@ -448,8 +448,8 @@ bool SpaceCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
         mCameraTargetMtx->mMatrix.set(mTopMtx);
         mCameraTargetMtx->mMatrix.setTrans(mPosition);
         MR::invalidateHitSensor(this, "Bind");
-        if (MR::isStarPointerInScreen(WPAD_CHAN0)) {
-            MR::calcStarPointerPosOnPlane(&mPointerPos, mPosition, mUp, WPAD_CHAN0, false);
+        if (MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
+            MR::calcStarPointerPosOnPlane(&mPointerPos, mPosition, mUp, GAMEPAD_CHAN0, false);
         }
         setNerve(GET_NERVE(SpaceCocoon, SpaceCocoonNrvBindLand));
         return true;
@@ -475,20 +475,20 @@ bool SpaceCocoon::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRecei
 
 bool SpaceCocoon::updateBindWait() {
     if (MR::getPlayerPos()->distance(mPosition) < ::sDistanceBindCancel && (!isKinopioAttached() || MR::isOnGroundPlayer())) {
-        if (MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+        if (MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */)) {
             MR::requestStarPointerModeBlueStarReady(this);
         }
 
         bool set;
-        if (MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */) && MR::testCorePadTriggerA(WPAD_CHAN0) &&
-            MR::tryStartStarPointerCommandStream(this, &mPosition, WPAD_CHAN0, false)) {
+        if (MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */) && MR::testCorePadTriggerA(GAMEPAD_CHAN0) &&
+            MR::tryStartStarPointerCommandStream(this, &mPosition, GAMEPAD_CHAN0, false)) {
             set = true;
         } else {
             set = false;
         }
 
         if (set) {
-            mPadChannel = WPAD_CHAN0;
+            mPadChannel = GAMEPAD_CHAN0;
         }
 
         if (mPadChannel >= 0) {
@@ -655,10 +655,10 @@ bool SpaceCocoon::tryTouch() {
     }
 
     s32 touchChannel = -1;
-    if (::tryTouchPointer(this, WPAD_CHAN0)) {
-        touchChannel = WPAD_CHAN0;
-    } else if (::tryTouchPointer(this, WPAD_CHAN1)) {
-        touchChannel = WPAD_CHAN1;
+    if (::tryTouchPointer(this, GAMEPAD_CHAN0)) {
+        touchChannel = GAMEPAD_CHAN0;
+    } else if (::tryTouchPointer(this, GAMEPAD_CHAN1)) {
+        touchChannel = GAMEPAD_CHAN1;
     }
 
     if (touchChannel >= 0) {

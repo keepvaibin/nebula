@@ -543,9 +543,9 @@ void Dodoryu::tryRumblePad() {
     f32 playerDistance = MR::calcDistanceToPlayer(this);
 
     if (playerDistance < ::sRumblePadNearDist) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
     } else if (playerDistance < ::sRumblePadFarDist) {
-        MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
     }
 }
 
@@ -792,7 +792,7 @@ void Dodoryu::updateRumblePad() {
 
     _154++;
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
 }
 
 void Dodoryu::updateCameraTarget() {

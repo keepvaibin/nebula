@@ -161,7 +161,7 @@ void CrystalCage::kill() {
 void CrystalCage::forceBreak() {
     if (isNerve(GET_NERVE(CrystalCage, CrystalCageNrvWait))) {
         if (!_104 || !MR::isClipped(this)) {
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
             MR::invalidateClipping(this);
             MR::invalidateCollisionParts(this);
             MR::invalidateHitSensors(this);

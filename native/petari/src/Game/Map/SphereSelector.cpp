@@ -266,7 +266,7 @@ void SphereSelectorFunction::registerTarget(LiveActor* pActor) {
 }
 
 bool SphereSelectorFunction::isPadButton() {
-    return MR::testCorePadButtonA(WPAD_CHAN0) && !MR::isDemoActive();
+    return MR::testCorePadButtonA(GAMEPAD_CHAN0) && !MR::isDemoActive();
 }
 
 s32 SphereSelectorFunction::getSelectStartFrame() {

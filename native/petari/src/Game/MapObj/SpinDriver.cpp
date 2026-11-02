@@ -345,7 +345,7 @@ bool SpinDriver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 }
 
 bool SpinDriver::tryStartShoot() {
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         MR::startSound(_8C, "SE_PM_SPIN_ATTACK");
@@ -439,7 +439,7 @@ void SpinDriver::exeNonActive() {
         MR::startBpk(this, "Wait");
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         _108 += 0.05f;
@@ -479,7 +479,7 @@ void SpinDriver::exeWait() {
         MR::startBpk(this, "Wait");
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         _108 += 0.05f;
@@ -527,7 +527,7 @@ void SpinDriver::exeCapture() {
 
     _108 += 0.008f;
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
 
     _13C = 60;
 
@@ -607,7 +607,7 @@ void SpinDriver::exeShoot() {
         MR::startBckPlayer("SpaceFlyShortStart", "SpinDriverFlyStart");
 
         MR::shakeCameraNormal();
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, GAMEPAD_CHAN0);
     }
 
     if (mShootPath != nullptr) {
@@ -655,7 +655,7 @@ bool SpinDriver::startBind(HitSensor* pSensor) {
         return false;
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         if (MR::hasME()) {
@@ -832,7 +832,7 @@ bool SpinDriver::canBind(HitSensor* pSensor) const {
         return false;
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isPadSwing(GAMEPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         return true;

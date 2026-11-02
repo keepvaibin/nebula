@@ -43,17 +43,17 @@ void CameraManPause::calc() {
     f32 length, angleX, angleY;
     MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
-    if (MR::testSubPadButtonC(WPAD_CHAN0)) {
-        mDistOffset -= MR::getSubPadStickY(WPAD_CHAN0) * 200.0f;
+    if (MR::testSubPadButtonC(GAMEPAD_CHAN0)) {
+        mDistOffset -= MR::getSubPadStickY(GAMEPAD_CHAN0) * 200.0f;
     } else {
-        mAngle.x += MR::getSubPadStickY(WPAD_CHAN0) * 0.1f;
-        mAngle.y += MR::getSubPadStickX(WPAD_CHAN0) * 0.1f;
+        mAngle.x += MR::getSubPadStickY(GAMEPAD_CHAN0) * 0.1f;
+        mAngle.y += MR::getSubPadStickX(GAMEPAD_CHAN0) * 0.1f;
     }
 
     MR::clampBoth(&mDistOffset, -mDistBase * 0.7f, mDistBase * 4.5f);
     MR::clampBoth(&mAngle.x, -1.4959966f, 1.4959966f);  // TODO: result of a const calculation?
 
-    if (MR::testSubPadButtonC(WPAD_CHAN0) && MR::testSubPadTriggerZ(WPAD_CHAN0)) {
+    if (MR::testSubPadButtonC(GAMEPAD_CHAN0) && MR::testSubPadTriggerZ(GAMEPAD_CHAN0)) {
         mDistOffset = mDistBase * 4.5f;
         mAngle.zero();
     }

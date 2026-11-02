@@ -448,15 +448,15 @@ namespace MR {
     }
 
     inline f32 fabs(f64 x) {
-        return fabs(x);
+        return ::fabs(x);
     }
 
     inline f32 abs(f32 x) {
-        return fabsf(x);
+        return ::fabsf(x);
     }
 
     inline s32 abs(s32 x) {
-        return x < 0 ? -x : x;
+        return ::abs(x);
     }
 
     /// @brief Computes the cosine of a number, in radians.

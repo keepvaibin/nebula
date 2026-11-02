@@ -21,7 +21,7 @@ public:
     // The game's audio calls (nebula_game_api.h audio_*), on its audio thread. setup opens the output device, or with `device`
     // false nothing pulls and the game's frames go only to the dump (deterministic mode). start: the device pulls, and when it
     // needs more `tick` has the game make its next frame (mix, frame) on the device's thread.
-    void setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
+    void setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
                const void* sound_memory, std::uint32_t sound_memory_size, bool device);
     void start(std::function<void()> tick);
     void stop();

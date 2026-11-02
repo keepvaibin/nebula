@@ -50,22 +50,22 @@ SphereAccelSensorController::SphereAccelSensorController()
 
 void SphereAccelSensorController::getPadAcceleration(TVec3f* pAccel) const {
     if (mPad == Pad_Core) {
-        MR::getCorePadAcceleration(pAccel, WPAD_CHAN0);
+        MR::getCorePadAcceleration(pAccel, GAMEPAD_CHAN0);
     } else {
-        MR::getSubPadAcceleration(pAccel, WPAD_CHAN0);
+        MR::getSubPadAcceleration(pAccel, GAMEPAD_CHAN0);
     }
 }
 
 bool SphereAccelSensorController::testBrake() const {
     if (mPad == Pad_Core) {
-        return MR::testCorePadButtonA(WPAD_CHAN0);
+        return MR::testCorePadButtonA(GAMEPAD_CHAN0);
     } else {
-        return MR::testSubPadButtonZ(WPAD_CHAN0) || MR::testSubPadButtonC(WPAD_CHAN0);
+        return MR::testSubPadButtonZ(GAMEPAD_CHAN0) || MR::testSubPadButtonC(GAMEPAD_CHAN0);
     }
 }
 
 f32 SphereAccelSensorController::calcJumpPower() const {
-    return MR::testCorePadTriggerA(WPAD_CHAN0);
+    return MR::testCorePadTriggerA(GAMEPAD_CHAN0);
 }
 
 bool SphereAccelSensorController::doBrake() const {

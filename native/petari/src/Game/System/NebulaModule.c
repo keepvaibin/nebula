@@ -92,6 +92,15 @@ static void __attribute__((noreturn)) fatal_text(const char* text) {
     abort();
 }
 
+void nebula_panic(const char* file, int line, const char* format, ...) {
+    char message[1024];
+    va_list args;
+    va_start(args, format);
+    nebula_vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    nebula_fatal("%s:%d: %s", file, line, message);
+}
+
 void nebula_fatal(const char* format, ...) {
     char text[1024];
     va_list args;

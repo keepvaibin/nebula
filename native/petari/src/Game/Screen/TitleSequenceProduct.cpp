@@ -130,14 +130,14 @@ void TitleSequenceProduct::exeLogoDisplay() {
         MR::startAnim(mPressStartLayout, "Wait", 0);
     }
 
-    mAButtonChecker->update(MR::testCorePadButtonA(WPAD_CHAN0));
-    mBButtonChecker->update(MR::testCorePadButtonB(WPAD_CHAN0));
+    mAButtonChecker->update(MR::testCorePadButtonA(GAMEPAD_CHAN0));
+    mBButtonChecker->update(MR::testCorePadButtonB(GAMEPAD_CHAN0));
 
     if (mAButtonChecker->getLevel() && mBButtonChecker->getLevel()) {
         MR::stopStageBGM(75);
         MR::startSystemSE("SE_SY_GAME_START");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         setNerve(GET_NERVE_ANON(TitleSequenceProductDecide));
     } else {
         updateButtonReaction(mAButtonChecker, "ReactionA");

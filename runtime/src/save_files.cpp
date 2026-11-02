@@ -46,7 +46,20 @@ Result write(const std::filesystem::path& folder, std::string_view name, const v
             return kFailed;
         }
         const std::string_view contents(static_cast<const char*>(data), size);
-        return io::write_text_file_atomically(folder / std::filesystem::path(name), contents) ? kDone : kFailed;
+        const std::filesystem::path path = folder / std::filesystem::path(name);
+        // The last two saves stay beside it, for a player whose newest file is damaged.
+        std::error_code error;
+        if (std::filesystem::is_regular_file(path, error)) {
+            std::filesystem::path first = path;
+            first += ".1";
+            std::filesystem::path second = path;
+            second += ".2";
+            if (std::filesystem::is_regular_file(first, error)) {
+                std::filesystem::rename(first, second, error);
+            }
+            std::filesystem::copy_file(path, first, std::filesystem::copy_options::overwrite_existing, error);
+        }
+        return io::write_text_file_atomically(path, contents) ? kDone : kFailed;
     } catch (...) {
         return kFailed;
     }

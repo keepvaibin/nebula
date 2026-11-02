@@ -15,7 +15,6 @@
 // start. The order, on/off state and choices are kept in mods.ini beside the settings.
 #pragma once
 
-#include "galaxy/virtual_disc.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -89,21 +88,6 @@ enum : std::uint32_t {
 [[nodiscard]] std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods);
 [[nodiscard]] std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods);
 
-// What the mods do to this session's game.
-struct ActiveMods {
-    VirtualDisc disc;
-    std::vector<std::uint8_t> fst;        // the disc's file table with the mods' files
-    std::filesystem::path save_folder;    // Riivolution savegame: the game's saves there (empty: the NAND's)
-    bool save_clone = false;              // copy the NAND's saves there when it is empty
-    std::map<std::uint32_t, std::uint32_t> code_patches;  // native equivalents of code patches: NEBULA_PATCH_* -> value
-    std::vector<std::filesystem::path> texture_folders;  // lowest in the list first (the last wins)
-    std::vector<std::filesystem::path> movie_folders;    // the same (movie_replacement.h)
-    std::vector<std::string> active;      // the mods applied
-    unsigned files_changed = 0;
-    unsigned unsupported = 0;             // patches the native game cannot take (code patches)
-    std::string report;                   // what each mod did, for mods-report.txt and the log
-};
-
 // The mods folder, the file of their choices and the game they are for (boot.bin's six characters).
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id);
@@ -122,22 +106,10 @@ bool save_mod_settings(std::span<const ModInfo> mods);
 // orders renumbered.
 void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled);
 
-// The enabled mods applied to the game partition (its file table, main.dol) for game `game_id` (boot.bin's first six
-// characters), revision and disc number. Null when no mod changes anything.
-[[nodiscard]] std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_fst,
-                                                     std::span<const std::uint8_t> partition_dol,
-                                                     std::uint64_t dol_offset, const std::uint8_t* partition,
-                                                     std::uint64_t partition_size, const std::string& game_id,
-                                                     int revision, int disc_number,
-                                                     const std::string& language_folder = {});
 // The disc's folder for a language the game plays in (UsEnglish, EuFrench, JpJapanese, ...), from the disc's region
 // (game_id[3]) and the language (1 English, 2 German, 3 French, 4 Spanish, 5 Italian, 6 Dutch; Japan and Korea have
 // one each). Empty when unknown.
 [[nodiscard]] std::string language_folder(const std::string& game_id, unsigned language);
-// The language folders at the root of a file table, in its order: the region the game names (Us, Eu, Jp, Kr, Cn, Tw)
-// and the language (UsEnglish, EuGerman, ...).
-[[nodiscard]] std::vector<std::string> language_folders(std::span<const std::uint8_t> fst);
-
 // This session's mods (apply_mods records them): the mods and choices it started with, what they changed.
 struct SessionMods {
     std::vector<ModInfo> started_with;
@@ -148,10 +120,5 @@ struct SessionMods {
 [[nodiscard]] SessionMods session_mods();
 // Whether `mods` (the settings' current choices) differ from what this session started with (a restart applies them).
 [[nodiscard]] bool mods_differ_from_session(std::span<const ModInfo> mods);
-
-// Memory patches against main.dol's image (the native game reads only its data tables from it): the bytes at a
-// console address within one of its sections, when `original` (if any) matches. False when the address is in none.
-bool patch_dol(std::vector<std::uint8_t>& dol, std::uint32_t address, std::span<const std::uint8_t> value,
-               std::span<const std::uint8_t> original);
 
 }  // namespace galaxy::mods

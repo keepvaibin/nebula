@@ -6,7 +6,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include <JSystem/JUtility/JUTException.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
@@ -288,7 +287,7 @@ void MovieStream::exeReadHeader() {
 void MovieStream::onHeaderRead() {
     mHeader = sHeaderBuffer;
     if (strncmp(mHeader.mMagic, "NMOV", 4) != 0) {
-        JUTException::panic_f(__FILE__, __LINE__, "%s: a movie not cooked (the importer rewrites THP files)", sMovieName);
+        NEBULA_PANIC("%s: a movie not cooked (the importer rewrites THP files)", sMovieName);
     }
 
     mVideoInfo.mWidth = mHeader.mWidth;

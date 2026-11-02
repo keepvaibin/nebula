@@ -40,7 +40,7 @@ public:
     }
 
     bool isButtonAPressed() {
-        return MR::testCorePadButtonA(WPAD_CHAN0) && !MR::isDemoActive();
+        return MR::testCorePadButtonA(GAMEPAD_CHAN0) && !MR::isDemoActive();
     }
 
     void sendSelectedMsgAndSetTarget(LiveActor* pTarget) {
