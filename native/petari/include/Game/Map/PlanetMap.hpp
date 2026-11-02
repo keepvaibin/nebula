@@ -19,7 +19,6 @@ public:
     virtual void endClipped();
     virtual void control();
     virtual f32 getFarClipDistance() const;
-    virtual s32 getLowMovementType() const;
 
     void initClipping(const JMapInfoIter&);
     void initModel(const char*, const JMapInfoIter&);
@@ -49,15 +48,6 @@ public:
 
     virtual ~RailPlanetMap();
     virtual void init(const JMapInfoIter&);
-};
-
-class PlanetMapAnimLow : public PlanetMap {
-public:
-    PlanetMapAnimLow(const char* p1) : PlanetMap(p1) {
-    }
-
-    virtual ~PlanetMapAnimLow();
-    virtual s32 getLowMovementType() const;
 };
 
 struct PlanetMapClippingInfo {

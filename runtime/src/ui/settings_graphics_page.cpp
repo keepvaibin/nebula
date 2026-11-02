@@ -246,14 +246,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         "SOFT SHADOWS IN CORNERS, CREASES AND WHERE THINGS MEET THE GROUND"});
     }
     {
-        const bool enhanced = render.bloom_mode == kBloomEnhanced;
-        rows.push_back({"BLOOM", enhanced ? "ENHANCED" : "NATIVE",
-                        [&host](RenderConfig& draft, int) {
-                            draft.bloom_mode = draft.bloom_mode == kBloomEnhanced ? kBloomNative : kBloomEnhanced;
-                        },
-                        enhanced ? "THE GAME'S GLOW REBUILT AT THE FULL RESOLUTION"
-                                 : "THE GAME'S OWN GLOW, AS THE CONSOLE DRAWS IT"});
-        if (enhanced) {
+        {
             // In steps of ten percent; 0 off.
             const unsigned value = std::min(render.bloom, kMaxBloom);
             if (value == 0u) {

@@ -46,7 +46,6 @@ namespace NebulaRender {
         kBloomKeep = 1,
         kBloomNormal = 2,
         kBloomSimple = 3,
-        kBloomRestore = 4,
     };
 
     inline void bloomMarker(uint16_t phase, uint32_t a, uint32_t b) {

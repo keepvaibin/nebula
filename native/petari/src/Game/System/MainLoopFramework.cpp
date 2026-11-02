@@ -17,7 +17,6 @@ MainLoopFramework* MainLoopFramework::sManager;
 void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mClearColor = (NebulaColor8){0, 0, 0, 0};
     mUseAlpha = useAlpha;
-    mUseVFilter = true;
     mCombinationRatio = 0.0f;
     mRenderInterval = 1;
     mRenderCounter = 0;
@@ -72,8 +71,7 @@ void MainLoopFramework::endRender() {
             mPreRenderCallback();
         }
         prepareCopyDisp();
-        J3DNativeState::showFrame(NebulaFrameClock::cCanvasWidth,
-                                  NebulaFrameClock::cCanvasHeight, mUseVFilter);
+        J3DNativeState::showFrame(NebulaFrameClock::cCanvasWidth, NebulaFrameClock::cCanvasHeight);
     }
 }
 

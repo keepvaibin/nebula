@@ -1228,6 +1228,31 @@ bool restart_after_gpu_loss(const char* what) {
 #endif
 }
 
+// The card has no memory free at the start: another program holds it for a moment. A new process tries again, up to
+// five times, two seconds apart; after that it is a fault to report.
+bool retry_start_for_gpu_memory(const std::string& reason) {
+#if defined(_WIN32)
+    static const bool test_once = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_START_NO_GPU_MEMORY")) != nullptr;
+    const char* before = std::getenv("NEBULA_GPU_START_RETRIES");
+    const int count = before != nullptr ? std::atoi(before) : 0;
+    const bool wanted = reason.find("0x8007000E") != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
+                        reason.find("VkResult -1") != std::string::npos || reason.find("VkResult -2") != std::string::npos ||
+                        (test_once && count == 0);
+    if (!wanted || count >= 5) {
+        return false;
+    }
+    char text[16];
+    std::snprintf(text, sizeof(text), "%d", count + 1);
+    _putenv_s("NEBULA_GPU_START_RETRIES", text);
+    log_line("host: no graphics memory free at the start, trying again:", reason.c_str());
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    return true;
+#else
+    (void)reason;
+    return false;
+#endif
+}
+
 // The renderer's hard failures end the game with their line and a dump. Caught here: thrown on the game's stacks they
 // could not unwind through its frames.
 void submit_frame(bool present, bool black) {
@@ -2797,12 +2822,6 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
-    case NEBULA_OPTION_LOD_SCALE:
-#if defined(NEBULA_HOST_RENDERER)
-        return galaxy::render::scene_display_scale();
-#else
-        return 1;
-#endif
     case NEBULA_OPTION_BLOOM:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::render::bloom_route();
@@ -2836,13 +2855,6 @@ uint32_t svc_option(void*, uint32_t what) {
                        : 0u;
         }();
         return range;
-    }
-    case NEBULA_OPTION_TEST_LOD: {
-        static const uint32_t lod = [] {
-            const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_LOD"));
-            return value != nullptr && value[0] >= '1' && value[0] <= '3' ? static_cast<uint32_t>(value[0] - '0') : 0u;
-        }();
-        return lod;
     }
     default:
         return 0;
@@ -3555,6 +3567,32 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
             return 1;
         }
     }
+    // GALAXY_TEST_WALK=water|actor[,every[,seed[,forms]]]: from 300 frames into each stop, every `every` frames (default
+    // 300), the player placed in the next body of water or at the next live actor, held 30 frames; with forms 1, each
+    // place in the next power-up form.
+    static const struct {
+        int32_t kind;
+        uint32_t every;
+        uint32_t seed;
+        uint32_t forms;
+    } walk = [] {
+        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_WALK"));
+        unsigned every = 300u, seed = 0u, forms = 0u;
+        if (value == nullptr) {
+            return decltype(walk){0, 0u, 0u, 0u};
+        }
+        if (const char* comma = std::strchr(value, ',')) {
+            (void)std::sscanf(comma + 1, "%u,%u,%u", &every, &seed, &forms);
+        }
+        return decltype(walk){value[0] == 'w' ? NEBULA_TEST_PLACE_PLAYER_WATER : NEBULA_TEST_PLACE_PLAYER_ACTOR,
+                              every != 0u ? every : 300u, seed, forms};
+    }();
+    if (walk.kind != 0 && frame >= 300u && (frame - 300u) % walk.every < 30u) {
+        action->kind = walk.kind;
+        action->scenario = static_cast<int32_t>((frame - 300u) / walk.every + walk.seed);
+        action->position[0] = static_cast<float>(walk.forms);
+        return 1;
+    }
     for (const Teleport& t : teleports) {
         if (frame >= t.frame && frame < t.frame + 30u) {
             action->kind = NEBULA_TEST_PLACE_PLAYER;
@@ -4169,9 +4207,14 @@ int main(int argc, char** argv) {
     galaxy::host::set_env_flag_cache_enabled(true);
     const galaxy::render::RenderConfig render_config = galaxy::render::get_render_config();
     gNative.log = native_log;
-    if (!galaxy::render::initialize(static_cast<int>(render_config.window_width),
-                                static_cast<int>(render_config.window_height))) {
+    if (const bool started = galaxy::render::initialize(static_cast<int>(render_config.window_width),
+                                                        static_cast<int>(render_config.window_height));
+        !started || (std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_START_NO_GPU_MEMORY")) != nullptr &&
+                     std::getenv("NEBULA_GPU_START_RETRIES") == nullptr)) {
         const std::string reason = galaxy::render::startup_failure();
+        if (retry_start_for_gpu_memory(reason)) {
+            finish_and_exit(true);
+        }
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");

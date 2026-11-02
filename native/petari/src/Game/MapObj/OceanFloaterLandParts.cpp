@@ -100,7 +100,7 @@ void OceanFloaterLandParts::initRailMoveFunction(const JMapInfoIter& rIter) {
 }
 
 void OceanFloaterLandParts::initLodCtrl(const JMapInfoIter& rIter) {
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
 }
 
 void OceanFloaterLandParts::control() {

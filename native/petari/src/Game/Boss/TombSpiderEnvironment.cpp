@@ -17,7 +17,6 @@ TombSpiderEnvironment::TombSpiderEnvironment(LiveActor* pActor) : mActor(pActor)
     mPlanet = new PlanetMap("\220\355\217\352[\203\147\203\104\201\133\203\200\203\130\203\160\203\103\203\137\201\133]" /* 戦場[トゥームスパイダー] */, "TombSpiderPlanet");
     mPlanet->mPosition.set(mActor->mPosition);
     mPlanet->initWithoutIter();
-    mPlanet->mLODCtrl->setDistanceToLow(25000.0f);
     MR::registerDemoSimpleCastAll(mPlanet);
     mPlanet->appear();
 

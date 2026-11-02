@@ -761,7 +761,7 @@ void RenderCore::trace_memory() {
         if (shape.geometry != nullptr) {
             geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
         }
-        vertices += shape.resident_units * sizeof(RenderVertex);
+        vertices += shape.resident_vertices * sizeof(RenderVertex);
         split += shape.split_indices.capacity() * sizeof(std::uint16_t);
     }
     const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
@@ -3821,15 +3821,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
-            // How the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM): without the renderer's bloom, not
-            // at all; NATIVE, its own chain over a scene the renderer keeps; ENHANCED, drawn by the renderer.
-            // GALAXY_TEST_BLOOM_ROUTE=0-2 (tests): that route, 0 the console's chain as it is for comparison.
-            static const std::uint64_t test_route = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_BLOOM_ROUTE"), 3u);
-            const unsigned route = !renderer_.game_bloom_ready()                          ? 0u
-                                   : test_route <= 2u                                  ? static_cast<unsigned>(test_route)
-                                   : get_render_config().bloom_mode == kBloomEnhanced ? 2u
-                                                                                       : 1u;
-            bloom_route_.store(route, std::memory_order_relaxed);
+            // Whether the renderer's bloom is built (NEBULA_OPTION_BLOOM): without it, no bloom.
+            bloom_route_.store(renderer_.game_bloom_ready() ? 1u : 0u, std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies take the scale the scene target
@@ -5429,7 +5422,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
         request.luma = (record.target_flags & 4u) != 0u;        // NEBULA_CAPTURE_LUMA
         request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
-        request.filtered = (record.target_flags & 16u) != 0u;   // NEBULA_CAPTURE_FILTERED
         on_scene_copy(request);
         return;
     }
@@ -5438,7 +5430,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.src_width = static_cast<std::uint16_t>(((record.target_width - 1u) & 0x3FFu) + 1u);
         request.src_height = static_cast<std::uint16_t>(((record.target_height - 1u) & 0x3FFu) + 1u);
         request.display = true;
-        request.filtered = (record.target_flags & 16u) != 0u;  // NEBULA_CAPTURE_FILTERED
         on_scene_copy(request);
         return;
     }
@@ -5692,22 +5683,31 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.split_built = false;
             shape.split_indices.clear();
         }
+        // The block holds the vertices and, behind them, the indices: both written once, for every draw of the shape.
         const auto expanded_units = static_cast<std::uint32_t>(expand_scratch_.size());
+        const auto index_bytes = static_cast<std::uint32_t>(geometry.indices.size() * sizeof(std::uint16_t));
+        const std::uint32_t index_units =
+            (index_bytes + static_cast<std::uint32_t>(sizeof(RenderVertex)) - 1u) / static_cast<std::uint32_t>(sizeof(RenderVertex));
+        const std::uint32_t block_units = expanded_units + index_units;
         shape.resident_epoch = 0u;
-        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(expanded_units);
+        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(block_units);
         if (!offset.has_value()) {
             ++frame_native_shape_misses_;
             return;
         }
         // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
-        std::memcpy(renderer_.stage_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
-                                                      static_cast<std::uint64_t>(expanded_units) * sizeof(RenderVertex)),
-                    expand_scratch_.data(), static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex));
+        std::byte* const staged = renderer_.stage_resident_vertices(
+            static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
+            static_cast<std::uint64_t>(block_units) * sizeof(RenderVertex));
+        std::memcpy(staged, expand_scratch_.data(), static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex));
+        std::memcpy(staged + static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex), geometry.indices.data(),
+                    index_bytes);
         shape.resident_epoch = resident_vertices_.epoch();
         shape.resident_offset = *offset;
-        shape.resident_units = expanded_units;
+        shape.resident_units = block_units;
+        shape.resident_vertices = expanded_units;
     }
-    const std::uint32_t units = shape.resident_units;
+    const std::uint32_t units = shape.resident_vertices;
 
     RecordVertexInputs inputs;
     inputs.matrix_bits = ((geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u) |
@@ -5754,9 +5754,11 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     }
     const bool split = curved && !shape.split_indices.empty();
     const std::vector<std::uint16_t>& indices = split ? shape.split_indices : geometry.indices;
-    const UploadRing::Allocation ib = renderer_.index_ring().upload_immutable(
-        indices.data(), indices.size() * sizeof(std::uint16_t), sizeof(std::uint16_t),
-        split ? shape.split_upload_token : shape.index_upload_token);
+    // A split curved surface's indices are their own, a feature's; every other draw reads the shape's block.
+    const UploadRing::Allocation ib = split ? renderer_.index_ring().upload_immutable(
+                                                  indices.data(), indices.size() * sizeof(std::uint16_t),
+                                                  sizeof(std::uint16_t), shape.split_upload_token)
+                                            : UploadRing::Allocation{};
     const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
     const auto index_count = static_cast<std::uint32_t>(indices.size());
     const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(RenderVertex);
@@ -5769,7 +5771,8 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
                                                  units * static_cast<std::uint32_t>(sizeof(RenderVertex)),
                                                  static_cast<std::uint32_t>(sizeof(RenderVertex)));
     const gpu::IndexView ibv = gpu::index_view(
-        renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
+        split ? renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t)
+              : resident_vertex_gpu_ + vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex),
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     DrawCall call = cached_draw_run_state_call_;
     call.vertex_view = vbv;
@@ -5935,10 +5938,8 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                 scene_copies_.adopt_picture(
                     *display_picture, renderer_.hand_over_scene_color(scene_copies_.take_idle_texture(
                               static_cast<std::uint16_t>(map.width), static_cast<std::uint16_t>(map.height))));
-                display_picture->display_filter = params.filtered;
             } else {
                 renderer_.copy_scene_to_display(params, *display_picture);
-                display_picture->display_filter = false;
             }
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution scene target again.

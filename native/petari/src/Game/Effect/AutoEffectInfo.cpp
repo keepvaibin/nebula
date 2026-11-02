@@ -72,9 +72,9 @@ namespace {
 AutoEffectInfo::AutoEffectInfo()
     : mGroupName(), mAnimName(), mUniqueName(), mEffectName(), mParentName(), mJointName(), mFlag(), mOffset(), mStartFrame(), mEndFrame(-1),
       mScaleValue(1.0f), mRateValue(1.0f), mLightAffectValue(), mDrawOrder() {
-    mPrmColor.mColor = 0;
+    mPrmColor.set(0, 0, 0, 0);
     mIsValidPrmColor = false;
-    mEnvColor.mColor = 0;
+    mEnvColor.set(0, 0, 0, 0);
     mIsValidEnvColor = false;
 }
 

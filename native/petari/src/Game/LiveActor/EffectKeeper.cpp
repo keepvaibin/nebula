@@ -1,3 +1,4 @@
+#include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/Effect/AutoEffectInfo.hpp"
 #include "Game/Effect/EffectSystemUtil.hpp"
@@ -129,6 +130,10 @@ void EffectKeeper::registerSyncBckEffect(XanimePlayer* pParam1, const char* pPar
 }
 
 MultiEmitter* EffectKeeper::createEmitter(const char* pParam1) {
+    if (LiveActor::sClipScope == LiveActor::ClipScope_Run) {
+        return getEmitter(pParam1);  // the actor is seen throughout: its effects stay as they are
+    }
+
     MultiEmitter* emitter = getEmitter(pParam1);
 
     emitter->createEmitter();
@@ -137,20 +142,36 @@ MultiEmitter* EffectKeeper::createEmitter(const char* pParam1) {
 }
 
 void EffectKeeper::deleteEmitter(const char* pParam1) {
+    if (LiveActor::sClipScope == LiveActor::ClipScope_Run) {
+        return;
+    }
+
     getEmitter(pParam1)->deleteEmitter();
 }
 
 void EffectKeeper::forceDeleteEmitter(const char* pParam1) {
+    if (LiveActor::sClipScope == LiveActor::ClipScope_Run) {
+        return;
+    }
+
     getEmitter(pParam1)->forceDeleteEmitter();
 }
 
 void EffectKeeper::deleteEmitterAll() {
+    if (LiveActor::sClipScope == LiveActor::ClipScope_Run) {
+        return;
+    }
+
     for (auto& item : _C) {
         item->deleteEmitter();
     }
 }
 
 void EffectKeeper::forceDeleteEmitterAll() {
+    if (LiveActor::sClipScope == LiveActor::ClipScope_Run) {
+        return;
+    }
+
     for (auto& item : _C) {
         item->forceDeleteEmitter();
     }

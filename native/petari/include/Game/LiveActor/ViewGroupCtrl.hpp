@@ -31,4 +31,5 @@ public:
     /* 0x08 */ ViewGroupCtrlDataEntry* mViewGroupData;
     /* 0x0C */ s32 mViewCtrlCount;
     /* 0x10 */ LodCtrl** mLodCtrls;
+    s32 mLodCtrlCapacity;
 };

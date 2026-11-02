@@ -72,12 +72,10 @@ namespace {
 LogoScene::LogoScene()
     : Scene("LogoScene"),
       mStrapLayout(), mLogoFader() {
-    MainLoopFramework::getManager()->mUseVFilter = false;
     MainLoopFramework::getManager()->mUseAlpha = false;
 }
 
 LogoScene::~LogoScene() {
-    MainLoopFramework::getManager()->mUseVFilter = true;
     MainLoopFramework::getManager()->mUseAlpha = true;
 }
 

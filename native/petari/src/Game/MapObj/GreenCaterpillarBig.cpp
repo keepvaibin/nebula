@@ -22,7 +22,7 @@ GreenCaterpillarBigBody::GreenCaterpillarBigBody(LiveActor* pCaterpillar, MtxPtr
 
 void GreenCaterpillarBigBody::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
-    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLOD->validate();
     MR::calcFrontVec(&mFrontVec, mCaterpillar);
     MR::startBck(this, "Wait");
@@ -93,7 +93,7 @@ void GreenCaterpillarBig::init(const JMapInfoIter& rIter) {
     initBodyParts(rIter);
     MR::hideModel(this);
     MR::invalidateClipping(this);
-    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLOD->validate();
     initNerve(GET_NERVE(GreenCaterpillarBig, GreenCaterpillarBigNrvHide));
     makeActorAppeared();

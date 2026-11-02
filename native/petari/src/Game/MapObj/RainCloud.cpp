@@ -76,7 +76,7 @@ void RainCloud::init(const JMapInfoIter& rIter) {
         mRailMover->start();
     }
 
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     MR::initShadowVolumeFlatModel(this, "RainCloudVolume", MR::getJointMtx(this, "Shadow"));
     MR::getJMapInfoArg0NoInit(rIter, &mShadowDropLength);
 
@@ -113,10 +113,8 @@ void RainCloud::init(const JMapInfoIter& rIter) {
 
     if (!mNoRain) {
         MR::startBpk(this, "Rain");
-        MR::startBpk(mLodCtrl->_14, "Rain");
     } else {
         MR::startBpk(this, "Fine");
-        MR::startBpk(mLodCtrl->_14, "Fine");
     }
 
     initNerve(GET_NERVE(RainCloud, RainCloudNrvWait));

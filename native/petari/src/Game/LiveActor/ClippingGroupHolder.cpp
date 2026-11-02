@@ -22,6 +22,16 @@ void ClippingInfoGroup::setGroupNo(const JMapInfoIter& rIter) {
 }
 
 void ClippingInfoGroup::registerInfo(ClippingActorInfo* pInfo) {
+    if (_10 >= _C) {
+        const s32 grown = _C > 0 ? _C * 2 : 16;
+        ClippingActorInfo** pList = new ClippingActorInfo*[grown]();
+        for (s32 i = 0; i < _10; i++) {
+            pList[i] = _14[i];
+        }
+        delete[] _14;
+        _14 = pList;
+        _C = grown;
+    }
     _14[_10] = pInfo;
     _10++;
 }
@@ -47,7 +57,7 @@ void ClippingInfoGroup::startClippedAll() {
 
     for (s32 i = 0; i < _10; i++) {
         if (!MR::isDead(_14[i]->mActor) && !MR::isClipped(_14[i]->mActor)) {
-            _14[i]->mActor->startClipped();
+            _14[i]->startClipped();
         }
     }
 }
@@ -57,7 +67,7 @@ void ClippingInfoGroup::endClippedAll() {
 
     for (s32 i = 0; i < _10; i++) {
         if (!MR::isDead(_14[i]->mActor) && MR::isClipped(_14[i]->mActor)) {
-            _14[i]->mActor->endClipped();
+            _14[i]->endClipped();
         }
     }
 }
@@ -71,6 +81,13 @@ void ClippingGroupHolder::movement() {
             u8 var = group->_1C;
             if (!var) {
                 group->startClippedAll();
+            } else {
+                for (s32 j = 0; j < group->_10; j++) {
+                    ClippingActorInfo* pInfo = group->_14[j];
+                    if (!MR::isDead(pInfo->mActor) && MR::isClipped(pInfo->mActor)) {
+                        pInfo->updateDrawnClipped();
+                    }
+                }
             }
         } else {
             u8 var = group->_1C;

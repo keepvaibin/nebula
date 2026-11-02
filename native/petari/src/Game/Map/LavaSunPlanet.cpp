@@ -43,8 +43,7 @@ void LavaSunPlanet::init(const JMapInfoIter& rIter) {
     MR::initCollisionParts(this, mObjName, MR::addBodyMessageSensorMapObj(this), nullptr);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setClippingFarMax(this);
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
-    ProjmapEffectMtxSetter* lodEffect = MR::initMaterialProjmapEffectMtxSetter(mLodCtrl->_10);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
 
     if (MR::isExistAnim(this, mObjName)) {
         MR::startAllAnim(this, mObjName);
@@ -57,10 +56,8 @@ void LavaSunPlanet::init(const JMapInfoIter& rIter) {
         mRotator = new MapPartsRotator(this);
         mRotator->init(rIter);
         mRotator->start();
-        mLodCtrl->syncJointAnimation();
     }
 
     makeActorAppeared();
     planetEffect->updateMtxUseBaseMtx();
-    lodEffect->updateMtxUseBaseMtx();
 }

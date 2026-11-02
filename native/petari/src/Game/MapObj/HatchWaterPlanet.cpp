@@ -32,7 +32,7 @@ void HatchWaterPlanet::init(const JMapInfoIter& rIter) {
 
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setClippingFarMax(this);
-    mPlanetLODCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mPlanetLODCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLODCtrl->validate();
     initNerve(GET_NERVE(HatchWaterPlanet, HatchWaterPlanetNrvWait));
     makeActorAppeared();
@@ -49,8 +49,6 @@ void HatchWaterPlanet::exeOpen() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "HatchWaterPlanet");
         MR::startBtk(this, "HatchWaterPlanet");
-        MR::startBck(mPlanetLODCtrl->_14, "HatchWaterPlanetLow");
-        MR::setBckFrameAndStop(mPlanetLODCtrl->_14, 1.0f);
         MR::startSound(this, "SE_OJ_HATCH_WATER_PNT_ST");
     }
 

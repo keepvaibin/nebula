@@ -124,15 +124,10 @@ void PlanetMap::initClipping(const JMapInfoIter& rIter) {
     }
 }
 
-s32 PlanetMap::getLowMovementType() const {
-    return -1;
-}
-
 void PlanetMap::initModel(const char* pModelName, const JMapInfoIter& rIter) {
     initModelManagerWithAnm(pModelName, nullptr, false);
-    s32 lowMovementType = getLowMovementType();
     f32 farClippingDistance = getFarClipDistance();
-    mLODCtrl = MR::createLodCtrlPlanet(this, rIter, farClippingDistance, lowMovementType);
+    mLODCtrl = MR::createLodCtrlPlanet(this, rIter, farClippingDistance);
     initBloomModel(pModelName);
     mWaterModel = MR::createWaterModel(this, nullptr);
     mIndirectModel = MR::createIndirectPlanetModel(this, nullptr);
@@ -207,15 +202,9 @@ void RailPlanetMap::init(const JMapInfoIter& rIter) {
     initRailRider(rIter);
 }
 
-s32 PlanetMapAnimLow::getLowMovementType() const {
-    return 29;
-}
-
 FurPlanetMap::~FurPlanetMap() {
 }
 RailPlanetMap::~RailPlanetMap() {
-}
-PlanetMapAnimLow::~PlanetMapAnimLow() {
 }
 
 f32 PlanetMap::getFarClipDistance() const {

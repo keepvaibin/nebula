@@ -258,7 +258,7 @@ galaxy::render::CaptureRequest make_filter_params(bool filtered) {
     params.src_y = 1u;
     params.src_width = 1u;
     params.src_height = 1u;
-    params.filtered = filtered;
+    (void)filtered;
     return params;
 }
 
@@ -739,7 +739,6 @@ V main(uint id : SV_VertexID) {
             case 4u: rejected.src_width = 0u; break;
             case 5u: rejected.src_x = kFrameWidth - 15u; break;
             case 6u: rejected.src_y = kFrameHeight - 15u; break;
-            case 7u: rejected.filtered = true; break;
             }
             passed &= expect(!detail::scene_identity_copy_box(rejected, false,
                 1u, 16u, 16u), "nonidentity copy cannot bypass conversion");

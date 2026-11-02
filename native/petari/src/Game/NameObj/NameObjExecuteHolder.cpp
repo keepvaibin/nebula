@@ -1,3 +1,4 @@
+#include "Game/Scene/SceneFunction.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NameObj/NameObjListExecutor.hpp"
@@ -381,6 +382,26 @@ namespace MR {
 
     bool isConnectToDrawTemporarily(const NameObj* pObj) {
         return ::getNameObjExecuteHolder()->isConnectToDraw(pObj);
+    }
+
+    // No draw code of its own: scenery at any time, the rest (hasRun) once it has run.
+    bool isDrawnFarWhenClipped(const NameObj* pObj, bool hasRun) {
+        const NameObjExecuteInfo* pInfo = ::getNameObjExecuteHolder()->getConnectToSceneInfo(pObj);
+        if (pInfo == nullptr || !pInfo->isDrawBufferOnly()) {
+            return false;
+        }
+        switch (pInfo->getMovementType()) {
+        case MR::MovementType_ClippedMapParts:
+        case MR::MovementType_Planet:
+        case MR::MovementType_CollisionMapObj:
+        case MR::MovementType_Environment:
+        case MR::MovementType_MapObj:
+        case MR::MovementType_MapObjDecoration:
+        case MR::MovementType_Sky:
+            return true;
+        default:
+            return hasRun;
+        }
     }
 
     void executeRequirementConnectMovement() {

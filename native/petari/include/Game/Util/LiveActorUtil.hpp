@@ -46,8 +46,6 @@ namespace MR {
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor*, HitSensor*);
     CollisionParts* tryCreateCollisionWaterSurface(LiveActor*, HitSensor*);
     CollisionParts* tryCreateCollisionSunshade(LiveActor*, HitSensor*);
-    const char* createLowModelObjName(const LiveActor*);
-    const char* createMiddleModelObjName(const LiveActor*);
     PartsModel* createBloomModel(LiveActor*, MtxPtr);
     PartsModel* createWaterModel(LiveActor*, MtxPtr);
     PartsModel* createIndirectPlanetModel(LiveActor*, MtxPtr);
@@ -427,7 +425,7 @@ namespace MR {
     PartsModel* createPartsModelNpcAndFix(LiveActor*, const char*, const char*, const char*);
 
     LodCtrl* createLodCtrlNPC(LiveActor*, const JMapInfoIter&);
-    LodCtrl* createLodCtrlPlanet(LiveActor*, const JMapInfoIter&, f32, s32);
+    LodCtrl* createLodCtrlPlanet(LiveActor*, const JMapInfoIter&, f32);
     LodCtrl* createLodCtrlMapObj(LiveActor*, const JMapInfoIter&, f32);
 
     Flag* createMapFlag(const char*, const char*, const TVec3f*, const TVec3f&, f32, f32, f32, s32, s32, f32);

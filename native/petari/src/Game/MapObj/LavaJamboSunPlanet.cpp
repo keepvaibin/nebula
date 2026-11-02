@@ -40,7 +40,7 @@ void LavaJamboSunPlanet::init(const JMapInfoIter& rIter) {
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
     MR::setClippingFarMax(this);
     MR::startBtk(this, "LavaJamboSunPlanet");
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     MR::tryRegisterDemoCast(this, rIter);
     makeActorAppeared();
 }
