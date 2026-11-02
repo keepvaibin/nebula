@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 100u
+#define NEBULA_GAME_API_VERSION 101u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -921,9 +921,8 @@ typedef struct NebulaHostServices {
     int (*asset_entry)(void* user, int32_t index, NebulaAssetEntry* entry);
     /* The `child`-th entry of the folder `folder`, in the table's order: 0 past the last. */
     int (*asset_child)(void* user, int32_t folder, uint32_t child, NebulaAssetEntry* entry);
-    /* Reads `size` bytes at `offset` of a file into dst; the host calls nebula_game_asset_complete(slot, bytes read or -1)
-       from any thread when done. */
-    void (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
+    /* Reads `size` bytes at `offset` of a file into dst, before it returns: the bytes read, or -1. */
+    int32_t (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst);
     /* A file's bytes in the mapped store, read-only, for the process's life, on their way into memory when this returns
        (call it where a wait for the drive does no harm); null if there is no such file. */
     const void* (*asset_map)(void* user, int32_t file);
@@ -1174,7 +1173,6 @@ NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 /* Runs the game on the calling thread, the simulation thread. Does not return. */
 NEBULA_GAME_API void nebula_game_run(void);
 /* A file read finished: `result` is the bytes read, or -1 on a read error. */
-NEBULA_GAME_API void nebula_game_asset_complete(uint32_t slot, int32_t result);
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);
 /* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would

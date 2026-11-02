@@ -20,7 +20,11 @@ int nebula_memory_init(void) {
 #if defined(_WIN32)
     // A test's address for the block: far from the file views and across a 4 GB line, so an address squeezed through
     // 32 bits fails in every run, not in the one run in ten chance places it so.
+#if defined(NEBULA_RELEASE)
+    const char* at = NULL;
+#else
     const char* at = getenv("GALAXY_TEST_MEMORY_AT");
+#endif
     sMemory = (uint8_t*)VirtualAlloc(at != NULL ? (void*)(uintptr_t)strtoull(at, NULL, 16) : NULL, kSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     return sMemory != NULL;
 #else
