@@ -20,6 +20,9 @@
 #include "galaxy/disc_files.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#include "galaxy/host_env.h"
+#endif
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
@@ -2393,50 +2396,6 @@ void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #endif
 }
 
-void svc_material_program(void*, uint64_t key, const NebulaMaterialProgram* program) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    static_assert(sizeof(NebulaMaterialProgram) == sizeof(galaxy::render::material::Program),
-                  "the renderer's copy of NebulaMaterialProgram");
-    if (program == nullptr) {
-        return;
-    }
-    auto copy = std::make_shared<galaxy::render::material::Program>();
-    std::memcpy(copy.get(), program, sizeof(NebulaMaterialProgram));
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::MaterialProgram;
-    record.key = key;
-    attach_pending_records();
-    record.program = std::move(copy);
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key;
-    (void)program;
-#endif
-}
-
-void svc_material(void*, uint64_t key, const NebulaMaterialValues* values) {
-#if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::render::shapes;
-    static_assert(sizeof(NebulaMaterialValues) == sizeof(galaxy::render::material::Values),
-                  "the renderer's copy of NebulaMaterialValues");
-    if (values == nullptr) {
-        return;
-    }
-    auto copy = std::make_shared<galaxy::render::material::Values>();
-    std::memcpy(copy.get(), values, sizeof(NebulaMaterialValues));
-    shapes::Record record;
-    record.kind = shapes::Record::Kind::Material;
-    record.key = key;
-    attach_pending_records();
-    record.material = std::move(copy);
-    galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)key;
-    (void)values;
-#endif
-}
-
 void svc_native_material(void*, const NebulaNativeMaterial* native) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -2863,13 +2822,6 @@ uint32_t svc_option(void*, uint32_t what) {
                        : 0u;
         }();
         return range;
-    }
-    case NEBULA_OPTION_TEST_MATERIAL_SWEEP: {
-        static const bool sweep = [] {
-            const char* value = std::getenv("GALAXY_DUMP_MATERIAL_PROGRAMS");
-            return value != nullptr && value[0] != '\0';
-        }();
-        return sweep ? 1u : 0u;
     }
     case NEBULA_OPTION_TEST_LOD: {
         static const uint32_t lod = [] {
@@ -3846,6 +3798,12 @@ int run_mods_tool() {
 
 int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    if (const char* error = galaxy::host::test_data_paths_error(argc, argv)) {
+        std::fprintf(stderr, "[test-paths] %s\n", error);
+        return 2;
+    }
+#endif
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
         return show_crash_report_dialog();
     }
@@ -4078,8 +4036,6 @@ int main(int argc, char** argv) {
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
     services.shape_draw = svc_shape_draw;
-    services.material_program = svc_material_program;
-    services.material = svc_material;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.state = svc_state;

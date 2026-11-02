@@ -9,6 +9,12 @@
 #include "galaxy/wiimote_hid.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
+#include "galaxy/input/controls_engine.h"
+#include "galaxy/input/live_controls_engine.h"
+#include "galaxy/input/key_positions.h"
+#include "galaxy/input/key_positions_win32.h"
+#include "galaxy/input/keyboard_state.h"
+#include "galaxy/input/raw_mouse_win32.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
@@ -56,11 +62,12 @@
 #include <vector>
 
 namespace galaxy::host {
+using namespace controls;
 namespace {
 
 bool xinput_requires_focus() {
     static const bool requires_focus =
-        read_env_flag("GALAXY_XINPUT_REQUIRE_FOCUS");
+        read_env_flag("GALAXY_XINPUT_REQUIRE_FOCUS", true);
     return requires_focus;
 }
 
@@ -73,8 +80,7 @@ static std::atomic<NativeKeyboardCaptureProvider>
     g_native_keyboard_capture_provider{nullptr};
 static std::atomic<NativeSettingsVisibleProvider> g_native_settings_visible{nullptr};
 static std::atomic<NativeSettingsKeySink> g_native_settings_key_sink{nullptr};
-static galaxy::input::NativeWindowKeyPressLatch g_window_key_presses;
-static galaxy::input::NativeWindowKeyHeldState g_window_keys_held;
+static galaxy::input::KeyboardEventState g_keyboard_events;
 // Source of the latest window message per key and for the mouse: true when it came from SendInput
 // rather than a device (GetCurrentInputMessageSource).
 static std::array<std::atomic<bool>, 256> g_window_key_injected{};
@@ -88,6 +94,7 @@ static std::atomic<std::uint32_t> g_binding_capture_result{0u};
 // XInput pads (bit per user index) seen by the input path, and when it last looked.
 static std::atomic<std::uint32_t> g_xinput_mask{0u};
 static std::atomic<std::uint64_t> g_xinput_looked_ms{0u};
+static std::atomic<HKL> g_keyboard_layout{nullptr};
 // The device that last gave input, for the CONTROLS page: (scheme << 8) | slot.
 constexpr std::uint32_t kLastInputNone = 0xFFFFFFFFu;
 constexpr std::uint32_t kLastInputKeyboard = 0xFFFFFFFEu;
@@ -194,6 +201,10 @@ input::ButtonIconStyle button_icons_auto_style() noexcept {
 namespace {
 bool current_process_runtime_window(HWND& window);
 }  // namespace
+
+const input::KeyPositionMap& keyboard_position_map(HKL layout) {
+    return key_positions_for_win32_layout(reinterpret_cast<std::uintptr_t>(layout));
+}
 
 // What the layout keys (input::key_icon_layout_key) print on the keyboard the game's window reads: each one's
 // character alone (a dead key's too: a German keyboard's ^ and its acute accent), as a capital; 0 where it prints none.
@@ -310,26 +321,45 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     static ButtonIconStyle s_style = ButtonIconStyle::Wii;
     static ControlScheme s_scheme = ControlScheme::Keyboard;
     static bool s_menu = false;
+    static HKL s_key_layout = nullptr;
     static input::ButtonIconSpec s_spec;
     const std::uint64_t generation = input::controls_config_generation();
-    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu) {
+    const HKL key_layout = g_keyboard_layout.load(std::memory_order_acquire);
+    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu || key_layout != s_key_layout) {
         s_generation = generation;
         s_style = style;
         s_scheme = scheme;
         s_menu = menu;
-        s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu);
+        s_key_layout = key_layout;
+        auto bindings = input::get_controls_config().table(scheme);
+        if (scheme == ControlScheme::Keyboard)
+            bindings = input::key_position_labels(bindings, keyboard_position_map(key_layout));
+        s_spec = input::button_icon_spec(style, bindings, menu);
     }
     if (style == ButtonIconStyle::Keyboard) s_spec.layout = keyboard_layout_labels();
     return s_spec;
 }
 
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept {
-    g_window_keys_held.set(key, down);
+    if (key <= 0xffu) g_keyboard_events.legacy_level(static_cast<std::uint8_t>(key), down);
+}
+
+void publish_native_window_key_event(std::uint32_t key, std::uintptr_t message_bits,
+                                    bool down, bool repeat, bool injected) {
+    if (key > 0xffu) return;
+    const auto scan = static_cast<std::uint8_t>((message_bits >> 16u) & 0xffu);
+    const bool extended = (message_bits & (std::uintptr_t{1} << 24u)) != 0;
+    const std::uint32_t token = scan != 0 ? scan | (extended ? 0x100u : 0u) : 0x10000u | key;
+    g_keyboard_events.event(token, static_cast<std::uint8_t>(key), key_position_from_win32_scan(scan, extended),
+                            down, repeat, injected);
+    g_window_key_injected[key].store(injected, std::memory_order_relaxed);
+    if (down && !injected) note_keyboard_input();
 }
 
 void publish_native_window_input_origin(std::uint32_t key, bool injected) noexcept {
     if (key < g_window_key_injected.size()) {
         g_window_key_injected[key].store(injected, std::memory_order_relaxed);
+        g_keyboard_events.legacy_origin(static_cast<std::uint8_t>(key), injected);
     }
     if (!injected) note_keyboard_input();
 }
@@ -351,12 +381,12 @@ bool native_pointer_input_injected(bool button) noexcept {
 }
 
 void publish_native_window_key_press(std::uint32_t key) noexcept {
-    g_window_key_presses.publish(key);
+    if (key <= 0xffu) g_keyboard_events.legacy_press(static_cast<std::uint8_t>(key));
 }
 
 void clear_native_window_key_presses() noexcept {
-    g_window_key_presses.clear();
-    g_window_keys_held.clear();
+    g_keyboard_events.clear();
+    clear_native_raw_mouse();
 }
 
 struct HostPointerTransitionConsumerState {
@@ -583,10 +613,9 @@ std::size_t poll_native_xinput_pads(
 
 // The remappable controls as the input consumer sees them: a cached copy
 // refreshed when the published generation changes (one atomic load per
-// sample), plus the keyboard keys the active keyboard table reads.
+// sample). The window publishes keyboard events separately.
 struct LiveControls {
     galaxy::input::ControlsConfig config = galaxy::input::default_controls_config();
-    galaxy::input::KeyList keyboard_keys{};
     std::uint64_t generation = 0;
 };
 
@@ -595,8 +624,6 @@ const LiveControls& live_controls() {
     const std::uint64_t generation = galaxy::input::controls_config_generation();
     if (generation != s_live.generation) {
         s_live.config = galaxy::input::get_controls_config();
-        s_live.keyboard_keys = galaxy::input::referenced_keys(
-            s_live.config.table(galaxy::input::ControlScheme::Keyboard));
         s_live.generation = generation;
     }
     return s_live;
@@ -606,25 +633,6 @@ std::int16_t deadzone_counts(float fraction) {
     return static_cast<std::int16_t>(std::clamp(
         std::lround(static_cast<double>(fraction) * 32767.0), 0l, 32767l));
 }
-
-// One controller this sample: unified pad sample plus its motion output.
-struct LivePad {
-    galaxy::input::PadSample sample{};
-    bool shake_remote = false;
-    bool shake_nunchuk = false;
-    bool imu_live = false;
-    float gyro_x = 0.0f;
-    float gyro_y = 0.0f;
-    // The touch surface's finger travel this sample (its width and height 1 each) and whether the controller has one.
-    bool touch_live = false;
-    float touch_dx = 0.0f;
-    float touch_dy = 0.0f;
-    // Controller up (gravity reaction, SDL frame) when the IMU knows it.
-    bool gravity_valid = false;
-    galaxy::input::tilt::Vec3 gravity{0.0f, 1.0f, 0.0f};
-    // XInput user index or Switch worker slot (with the scheme: identity).
-    std::uint8_t device_slot = 0xFF;
-};
 
 // Vibration (controller_hid.h): the controller in use, its strength setting and the window focus. The live input
 // path sets these each sample and the game's motor state reads them when it is published. Game thread only; the
@@ -688,23 +696,6 @@ std::size_t collect_hid_pads(const galaxy::input::ControlsConfig& config,
     return count;
 }
 
-bool pad_has_input(const galaxy::input::PadSample& sample) {
-    if (!sample.connected) {
-        return false;
-    }
-    if (sample.buttons != 0u) {
-        return true;
-    }
-    for (std::size_t i = 0; i < 4u; ++i) {
-        if (std::fabs(sample.axes[i]) > 0.001f) {
-            return true;
-        }
-    }
-    return sample.axes[4] > 30.0f / 255.0f || sample.axes[5] > 30.0f / 255.0f;
-}
-
-// Runs the overlay chord and navigation over every connected pad at once and
-// applies its hidden/neutral decision back to each pad.
 bool route_native_settings_pads(std::span<LivePad> pads, bool capture_finished) {
     static std::uint16_t s_capture_hold = 0u;
     std::uint16_t word = 0u;
@@ -894,107 +885,6 @@ bool current_process_runtime_window(HWND& window) {
     return window != nullptr;
 }
 
-struct NativeInputScriptOverlay {
-    galaxy::input::ButtonState buttons{};
-    bool has_stick = false;
-    float stick_x = 0.0f;
-    float stick_y = 0.0f;
-    bool has_pointer = false;
-    float pointer_x = 0.0f;
-    float pointer_y = 0.0f;
-    bool shake = false;
-};
-
-struct NativeInputReplaySample {
-    std::uint64_t elapsed_ms = 0;
-    bool game_focused = false;
-    int mouse_client_x = 0;
-    int mouse_client_y = 0;
-    int client_w = 0;
-    int client_h = 0;
-    std::uint64_t keys_hold = 0;
-    bool xinput_connected = false;
-    std::uint16_t xinput_buttons = 0;
-    std::uint8_t left_trigger = 0;
-    std::uint8_t right_trigger = 0;
-    std::int16_t thumb_lx = 0;
-    std::int16_t thumb_ly = 0;
-    std::int16_t thumb_rx = 0;
-    std::int16_t thumb_ry = 0;
-};
-
-struct NativeInputReplayLog {
-    std::string path;
-    std::vector<NativeInputReplaySample> samples;
-};
-
-struct NativeInputReplayColumns {
-    std::size_t elapsed_ms = 0;
-    std::size_t game_focused = 0;
-    std::size_t mouse_client_x = 0;
-    std::size_t mouse_client_y = 0;
-    std::size_t client_w = 0;
-    std::size_t client_h = 0;
-    std::size_t keys_hold_hex = 0;
-    std::size_t xinput_connected = 0;
-    std::size_t xinput_buttons_hex = 0;
-    std::size_t left_trigger = 0;
-    std::size_t right_trigger = 0;
-    std::size_t thumb_lx = 0;
-    std::size_t thumb_ly = 0;
-    std::size_t thumb_rx = 0;
-    std::size_t thumb_ry = 0;
-};
-
-std::optional<std::uint64_t> read_env_u64_optional(const char* name) {
-    const std::optional<std::string> value = read_env_string(name);
-    if (!value.has_value()) {
-        return std::nullopt;
-    }
-    std::uint64_t parsed = 0u;
-    if (!galaxy::input::parse_native_input_script_u64(*value, parsed)) {
-        throw std::runtime_error(
-            std::string("invalid unsigned environment value for ") + name);
-    }
-    return parsed;
-}
-
-std::uint64_t parse_script_u64(
-    const std::string& field,
-    const char* script_name) {
-    std::uint64_t parsed = 0u;
-    if (!galaxy::input::parse_native_input_script_u64(field, parsed)) {
-        throw std::runtime_error(
-            std::string("invalid native input script field in ") +
-            script_name);
-    }
-    return parsed;
-}
-
-float parse_script_float(const std::string& field, const char* script_name) {
-    if (field.empty()) {
-        throw std::runtime_error(
-            std::string("invalid native input script field in ") +
-            script_name);
-    }
-    char* end = nullptr;
-    const float parsed = std::strtof(field.c_str(), &end);
-    if (end == field.c_str() || *end != '\0' || !std::isfinite(parsed)) {
-        throw std::runtime_error(
-            std::string("invalid native input script field in ") +
-            script_name);
-    }
-    return std::clamp(parsed, -1.0f, 1.0f);
-}
-
-std::optional<float> read_env_float_optional(const char* name) {
-    const std::optional<std::string> value = read_env_string(name);
-    if (!value.has_value()) {
-        return std::nullopt;
-    }
-    return parse_script_float(*value, name);
-}
-
 galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
     bool window_focused,
     bool absolute_valid,
@@ -1024,676 +914,7 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
         client_width,
         client_height,
         viewport,
-        1.0f,
-        1.0f,
     });
-}
-
-std::vector<std::string> split_script_fields(
-    const std::string& text,
-    char delimiter) {
-    std::vector<std::string> fields;
-    std::stringstream stream(text);
-    std::string field;
-    while (std::getline(stream, field, delimiter)) {
-        fields.push_back(field);
-    }
-    if (!text.empty() && text.back() == delimiter) {
-        fields.emplace_back();
-    }
-    return fields;
-}
-
-constexpr std::string_view kNativeInputReplayKeyOrder =
-    "LButton,RButton,Space,Enter,Shift,LShift,RShift,"
-    "Left,Up,Right,Down,1,2,A,B,C,D,E,I,J,K,L,Q,R,S,W,Z,"
-    "Ctrl,LCtrl,RCtrl";
-
-std::size_t require_replay_column(
-    const std::vector<std::string>& header,
-    const char* name,
-    const std::string& path) {
-    const auto it = std::find(header.begin(), header.end(), name);
-    if (it == header.end()) {
-        throw std::runtime_error(
-            "native input replay log is missing column '" +
-            std::string(name) + "': " + path);
-    }
-    return static_cast<std::size_t>(std::distance(header.begin(), it));
-}
-
-NativeInputReplayColumns parse_replay_columns(
-    const std::vector<std::string>& header,
-    const std::string& path) {
-    NativeInputReplayColumns columns{};
-    columns.elapsed_ms = require_replay_column(header, "elapsed_ms", path);
-    columns.game_focused =
-        require_replay_column(header, "game_focused", path);
-    columns.mouse_client_x =
-        require_replay_column(header, "mouse_client_x", path);
-    columns.mouse_client_y =
-        require_replay_column(header, "mouse_client_y", path);
-    columns.client_w = require_replay_column(header, "client_w", path);
-    columns.client_h = require_replay_column(header, "client_h", path);
-    columns.keys_hold_hex =
-        require_replay_column(header, "keys_hold_hex", path);
-    columns.xinput_connected =
-        require_replay_column(header, "xinput_connected", path);
-    columns.xinput_buttons_hex =
-        require_replay_column(header, "xinput_buttons_hex", path);
-    columns.left_trigger =
-        require_replay_column(header, "left_trigger", path);
-    columns.right_trigger =
-        require_replay_column(header, "right_trigger", path);
-    columns.thumb_lx = require_replay_column(header, "thumb_lx", path);
-    columns.thumb_ly = require_replay_column(header, "thumb_ly", path);
-    columns.thumb_rx = require_replay_column(header, "thumb_rx", path);
-    columns.thumb_ry = require_replay_column(header, "thumb_ry", path);
-    return columns;
-}
-
-void require_replay_field(
-    const std::vector<std::string>& fields,
-    std::size_t index,
-    const std::string& path,
-    std::size_t line_number) {
-    if (index >= fields.size()) {
-        std::ostringstream message;
-        message << "native input replay log row " << line_number
-                << " is missing fields: " << path;
-        throw std::runtime_error(message.str());
-    }
-}
-
-std::uint64_t parse_replay_u64(
-    const std::string& field,
-    const std::string& name,
-    const std::string& path,
-    std::size_t line_number,
-    int base = 10) {
-    if (field.empty() || field.find_first_not_of(" \t\r\n\v\f") == std::string::npos ||
-        field[field.find_first_not_of(" \t\r\n\v\f")] == '-') {
-        std::ostringstream message;
-        message << "invalid native input replay " << name << " at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    char* end = nullptr;
-    errno = 0;
-    const unsigned long long parsed =
-        std::strtoull(field.c_str(), &end, base);
-    if (errno == ERANGE || end == field.c_str() || *end != '\0') {
-        std::ostringstream message;
-        message << "invalid native input replay " << name << " at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    return static_cast<std::uint64_t>(parsed);
-}
-
-std::int64_t parse_replay_i64(
-    const std::string& field,
-    const std::string& name,
-    const std::string& path,
-    std::size_t line_number) {
-    if (field.empty()) {
-        std::ostringstream message;
-        message << "invalid native input replay " << name << " at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    char* end = nullptr;
-    errno = 0;
-    const long long parsed = std::strtoll(field.c_str(), &end, 10);
-    if (errno == ERANGE || end == field.c_str() || *end != '\0') {
-        std::ostringstream message;
-        message << "invalid native input replay " << name << " at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    return static_cast<std::int64_t>(parsed);
-}
-
-int parse_replay_int(
-    const std::string& field, const std::string& name,
-    const std::string& path, std::size_t line_number) {
-    const auto value = parse_replay_i64(field, name, path, line_number);
-    if (value < std::numeric_limits<int>::min() ||
-        value > std::numeric_limits<int>::max()) {
-        throw std::runtime_error("native input replay " + name +
-            " is out of range at " + path + ':' + std::to_string(line_number));
-    }
-    return static_cast<int>(value);
-}
-
-std::uint8_t parse_replay_u8(
-    const std::string& field,
-    const std::string& name,
-    const std::string& path,
-    std::size_t line_number) {
-    const std::uint64_t parsed =
-        parse_replay_u64(field, name, path, line_number);
-    if (parsed > 0xffu) {
-        std::ostringstream message;
-        message << "native input replay " << name << " is out of range at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    return static_cast<std::uint8_t>(parsed);
-}
-
-std::int16_t parse_replay_i16(
-    const std::string& field,
-    const std::string& name,
-    const std::string& path,
-    std::size_t line_number) {
-    const std::int64_t parsed =
-        parse_replay_i64(field, name, path, line_number);
-    if (parsed < std::numeric_limits<std::int16_t>::min() ||
-        parsed > std::numeric_limits<std::int16_t>::max()) {
-        std::ostringstream message;
-        message << "native input replay " << name << " is out of range at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    return static_cast<std::int16_t>(parsed);
-}
-
-bool parse_replay_bool(
-    const std::string& field,
-    const std::string& name,
-    const std::string& path,
-    std::size_t line_number) {
-    const std::uint64_t parsed =
-        parse_replay_u64(field, name, path, line_number);
-    if (parsed > 1u) {
-        std::ostringstream message;
-        message << "native input replay " << name << " must be 0 or 1 at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    return parsed != 0;
-}
-
-std::string replay_field(
-    const std::vector<std::string>& fields,
-    std::size_t index,
-    const std::string& path,
-    std::size_t line_number) {
-    require_replay_field(fields, index, path, line_number);
-    return fields[index];
-}
-
-NativeInputReplaySample parse_replay_sample(
-    const std::vector<std::string>& fields,
-    const NativeInputReplayColumns& columns,
-    const std::string& path,
-    std::size_t line_number) {
-    NativeInputReplaySample sample{};
-    sample.elapsed_ms = parse_replay_u64(
-        replay_field(fields, columns.elapsed_ms, path, line_number),
-        "elapsed_ms",
-        path,
-        line_number);
-    sample.game_focused = parse_replay_bool(
-        replay_field(fields, columns.game_focused, path, line_number),
-        "game_focused",
-        path,
-        line_number);
-    sample.mouse_client_x = parse_replay_int(
-        replay_field(fields, columns.mouse_client_x, path, line_number),
-        "mouse_client_x",
-        path,
-        line_number);
-    sample.mouse_client_y = parse_replay_int(
-        replay_field(fields, columns.mouse_client_y, path, line_number),
-        "mouse_client_y",
-        path,
-        line_number);
-    sample.client_w = parse_replay_int(
-        replay_field(fields, columns.client_w, path, line_number),
-        "client_w",
-        path,
-        line_number);
-    sample.client_h = parse_replay_int(
-        replay_field(fields, columns.client_h, path, line_number),
-        "client_h",
-        path,
-        line_number);
-    sample.keys_hold = parse_replay_u64(
-        replay_field(fields, columns.keys_hold_hex, path, line_number),
-        "keys_hold_hex",
-        path,
-        line_number,
-        0);
-    sample.xinput_connected = parse_replay_bool(
-        replay_field(fields, columns.xinput_connected, path, line_number),
-        "xinput_connected",
-        path,
-        line_number);
-    const std::uint64_t buttons = parse_replay_u64(
-        replay_field(fields, columns.xinput_buttons_hex, path, line_number),
-        "xinput_buttons_hex",
-        path,
-        line_number,
-        0);
-    if (buttons > 0xffffu) {
-        std::ostringstream message;
-        message << "native input replay xinput_buttons_hex is out of range at "
-                << path << ':' << line_number;
-        throw std::runtime_error(message.str());
-    }
-    sample.xinput_buttons = static_cast<std::uint16_t>(buttons);
-    sample.left_trigger = parse_replay_u8(
-        replay_field(fields, columns.left_trigger, path, line_number),
-        "left_trigger",
-        path,
-        line_number);
-    sample.right_trigger = parse_replay_u8(
-        replay_field(fields, columns.right_trigger, path, line_number),
-        "right_trigger",
-        path,
-        line_number);
-    sample.thumb_lx = parse_replay_i16(
-        replay_field(fields, columns.thumb_lx, path, line_number),
-        "thumb_lx",
-        path,
-        line_number);
-    sample.thumb_ly = parse_replay_i16(
-        replay_field(fields, columns.thumb_ly, path, line_number),
-        "thumb_ly",
-        path,
-        line_number);
-    sample.thumb_rx = parse_replay_i16(
-        replay_field(fields, columns.thumb_rx, path, line_number),
-        "thumb_rx",
-        path,
-        line_number);
-    sample.thumb_ry = parse_replay_i16(
-        replay_field(fields, columns.thumb_ry, path, line_number),
-        "thumb_ry",
-        path,
-        line_number);
-    return sample;
-}
-
-NativeInputReplayLog load_native_input_replay_log(const std::string& path) {
-    std::ifstream stream(path);
-    if (!stream) {
-        throw std::runtime_error(
-            "failed to open native input replay log: " + path);
-    }
-
-    NativeInputReplayLog log{};
-    log.path = path;
-    bool saw_key_order = false;
-    bool saw_header = false;
-    NativeInputReplayColumns columns{};
-    std::string line;
-    std::size_t line_number = 0;
-    while (std::getline(stream, line)) {
-        ++line_number;
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        if (line_number == 1 && line.size() >= 3u &&
-            static_cast<unsigned char>(line[0]) == 0xefu &&
-            static_cast<unsigned char>(line[1]) == 0xbbu &&
-            static_cast<unsigned char>(line[2]) == 0xbfu) {
-            line.erase(0, 3);
-        }
-        if (line.empty()) {
-            continue;
-        }
-        const std::vector<std::string> fields = split_script_fields(line, '\t');
-        if (!fields.empty() && fields[0] == "meta") {
-            if (fields.size() >= 3u && fields[1] == "key_order") {
-                if (fields[2] != kNativeInputReplayKeyOrder) {
-                    throw std::runtime_error(
-                        "native input replay log key_order is unsupported: " +
-                        path);
-                }
-                saw_key_order = true;
-            }
-            continue;
-        }
-        if (!saw_header) {
-            columns = parse_replay_columns(fields, path);
-            saw_header = true;
-            continue;
-        }
-        NativeInputReplaySample sample =
-            parse_replay_sample(fields, columns, path, line_number);
-        if (!log.samples.empty() &&
-            sample.elapsed_ms < log.samples.back().elapsed_ms) {
-            std::ostringstream message;
-            message << "native input replay log elapsed_ms regressed at "
-                    << path << ':' << line_number;
-            throw std::runtime_error(message.str());
-        }
-        log.samples.push_back(sample);
-    }
-    if (!saw_key_order) {
-        throw std::runtime_error(
-            "native input replay log is missing key_order metadata: " + path);
-    }
-    if (!saw_header) {
-        throw std::runtime_error(
-            "native input replay log is missing a header row: " + path);
-    }
-    if (log.samples.empty()) {
-        throw std::runtime_error(
-            "native input replay log has no samples: " + path);
-    }
-    return log;
-}
-
-const NativeInputReplayLog* active_native_input_replay_log() {
-    const std::optional<std::string> path =
-        read_env_string("GALAXY_INPUT_REPLAY_LOG");
-    static std::optional<std::string> s_loaded_path;
-    static std::unique_ptr<NativeInputReplayLog> s_log;
-    if (!path.has_value()) {
-        s_loaded_path.reset();
-        s_log.reset();
-        return nullptr;
-    }
-    if (!s_loaded_path.has_value() || *s_loaded_path != *path) {
-        NativeInputReplayLog loaded = load_native_input_replay_log(*path);
-        s_log = std::make_unique<NativeInputReplayLog>(std::move(loaded));
-        s_loaded_path = *path;
-    }
-    return s_log.get();
-}
-
-const NativeInputReplaySample* native_input_replay_sample_for_vi(
-    std::uint64_t current_vi) {
-    const NativeInputReplayLog* log = active_native_input_replay_log();
-    if (log == nullptr) {
-        return nullptr;
-    }
-    const auto seconds = current_vi / 60u;
-    const auto fraction = (current_vi % 60u) * 1000u / 60u;
-    const auto maximum = std::numeric_limits<std::uint64_t>::max();
-    const std::uint64_t target_ms = seconds > (maximum - fraction) / 1000u
-        ? maximum : seconds * 1000u + fraction;
-    const auto it = std::upper_bound(
-        log->samples.begin(),
-        log->samples.end(),
-        target_ms,
-        [](std::uint64_t value, const NativeInputReplaySample& sample) {
-            return value < sample.elapsed_ms;
-        });
-    if (it == log->samples.begin()) {
-        return &log->samples.front();
-    }
-    return &*(it - 1);
-}
-
-bool replay_key_held(const NativeInputReplaySample& sample, int index) {
-    return (sample.keys_hold & (std::uint64_t{1} << index)) != 0;
-}
-
-bool replay_pad_held(
-    const NativeInputReplaySample& sample,
-    std::uint16_t mask) {
-    return sample.xinput_connected && (sample.xinput_buttons & mask) != 0u;
-}
-
-float replay_key_axis(
-    const NativeInputReplaySample& sample,
-    int positive,
-    int negative) {
-    float value = 0.0f;
-    if (sample.game_focused && replay_key_held(sample, positive)) value += 1.0f;
-    if (sample.game_focused && replay_key_held(sample, negative)) value -= 1.0f;
-    return value;
-}
-
-// A replayed XInput pad uses Windows' recommended thumbstick dead zones, a trigger threshold of 96 and the default
-// pointer speeds.
-constexpr std::int16_t kReplayLeftDeadzone = XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE;
-constexpr std::int16_t kReplayPointerDeadzone = XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE;
-constexpr std::uint8_t kXInputTriggerThreshold = 96u;
-constexpr float kReplayStickPointerSpeed = 2.4f;
-constexpr float kReplayKeyboardPointerSpeed = 1.6f;
-
-bool replay_xinput_has_input(const NativeInputReplaySample& sample) {
-    if (!sample.xinput_connected) {
-        return false;
-    }
-    return sample.xinput_buttons != 0u ||
-           sample.left_trigger >= kXInputTriggerThreshold ||
-           sample.right_trigger >= kXInputTriggerThreshold ||
-           std::fabs(galaxy::input::normalize_xinput_axis(
-               sample.thumb_lx, kReplayLeftDeadzone)) >
-               0.001f ||
-           std::fabs(galaxy::input::normalize_xinput_axis(
-               sample.thumb_ly, kReplayLeftDeadzone)) >
-               0.001f ||
-           std::fabs(galaxy::input::normalize_xinput_axis(
-               sample.thumb_rx, kReplayPointerDeadzone)) >
-               0.001f ||
-           std::fabs(galaxy::input::normalize_xinput_axis(
-               sample.thumb_ry, kReplayPointerDeadzone)) >
-               0.001f;
-}
-
-// How long the mouse pointer stays shown through invalid cursor samples after its last sample inside the window.
-constexpr ULONGLONG kMousePointerLossHoldMs = 500;
-
-ULONGLONG script_pointer_live_mouse_grace_ms() {
-    const std::optional<std::uint64_t> override_ms =
-        read_env_u64_optional("GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS");
-    if (!override_ms.has_value()) {
-        return 250;
-    }
-    return static_cast<ULONGLONG>(
-        std::min<std::uint64_t>(*override_ms, 5000u));
-}
-
-bool script_pointer_force_enabled() {
-    return read_env_flag("GALAXY_INPUT_SCRIPT_POINTER_FORCE");
-}
-
-void apply_script_buttons_to_input(
-    galaxy::input::PlayerInput& input,
-    const NativeInputScriptOverlay& script) {
-    galaxy::input::ButtonState& b = input.buttons;
-    const galaxy::input::ButtonState& s = script.buttons;
-    b.left = b.left || s.left;
-    b.right = b.right || s.right;
-    b.down = b.down || s.down;
-    b.up = b.up || s.up;
-    b.plus = b.plus || s.plus;
-    b.minus = b.minus || s.minus;
-    b.one = b.one || s.one;
-    b.two = b.two || s.two;
-    b.home = b.home || s.home;
-    b.a = b.a || s.a;
-    b.b = b.b || s.b;
-    b.c = b.c || s.c;
-    b.z = b.z || s.z;
-}
-
-std::string uppercase_ascii(std::string value) {
-    for (char& ch : value) {
-        ch = static_cast<char>(
-            std::toupper(static_cast<unsigned char>(ch)));
-    }
-    return value;
-}
-
-bool vi_in_script_window(
-    std::uint64_t vi,
-    std::uint64_t start,
-    std::uint64_t duration) {
-    return duration != 0 && vi >= start && vi - start < duration;
-}
-
-void apply_script_button_token(
-    NativeInputScriptOverlay& overlay,
-    const std::string& token,
-    const char* script_name) {
-    const std::string name = uppercase_ascii(token);
-    if (name == "A") {
-        overlay.buttons.a = true;
-    } else if (name == "B") {
-        overlay.buttons.b = true;
-    } else if (name == "PLUS" || name == "START") {
-        overlay.buttons.plus = true;
-    } else if (name == "MINUS" || name == "SELECT" || name == "BACK") {
-        overlay.buttons.minus = true;
-    } else if (name == "ONE" || name == "1") {
-        overlay.buttons.one = true;
-    } else if (name == "TWO" || name == "2") {
-        overlay.buttons.two = true;
-    } else if (name == "HOME") {
-        overlay.buttons.home = true;
-    } else if (name == "LEFT") {
-        overlay.buttons.left = true;
-    } else if (name == "RIGHT") {
-        overlay.buttons.right = true;
-    } else if (name == "UP") {
-        overlay.buttons.up = true;
-    } else if (name == "DOWN") {
-        overlay.buttons.down = true;
-    } else if (name == "C") {
-        overlay.buttons.c = true;
-    } else if (name == "Z") {
-        overlay.buttons.z = true;
-    } else if (name == "SHAKE") {
-        overlay.shake = true;
-    } else {
-        throw std::runtime_error(
-            std::string("unsupported native input script button '") + token +
-            "' in " + script_name);
-    }
-}
-
-void apply_script_buttons(
-    NativeInputScriptOverlay& overlay,
-    const std::string& text,
-    const char* script_name) {
-    const std::vector<std::string> tokens = split_script_fields(text, '+');
-    if (tokens.empty()) {
-        throw std::runtime_error(
-            std::string("empty native input script button list in ") +
-            script_name);
-    }
-    for (const std::string& token : tokens) {
-        if (token.empty()) {
-            throw std::runtime_error(
-                std::string("empty native input script button in ") +
-                script_name);
-        }
-        apply_script_button_token(overlay, token, script_name);
-    }
-}
-
-void apply_autopress_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
-    const char* env_name,
-    const char* buttons,
-    std::uint64_t duration) {
-    const std::optional<std::uint64_t> start = read_env_u64_optional(env_name);
-    if (start.has_value() &&
-        vi_in_script_window(current_vi, *start, duration)) {
-        apply_script_buttons(overlay, buttons, env_name);
-    }
-}
-
-// GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL ends the script at the frame
-// GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI names.
-void apply_button_script_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
-    const char* env_name) {
-    const std::optional<std::string> script = read_env_string(env_name);
-    if (!script.has_value()) {
-        return;
-    }
-    if (read_env_flag(
-            "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL")) {
-        const std::optional<std::uint64_t> fallback_vi =
-            read_env_u64_optional(
-                "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI");
-        if (fallback_vi.has_value() && current_vi >= *fallback_vi) {
-            return;
-        }
-    }
-    for (const std::string& segment :
-         split_script_fields(*script, ';')) {
-        if (segment.empty()) {
-            continue;
-        }
-        const std::vector<std::string> fields =
-            split_script_fields(segment, ':');
-        if (fields.size() != 3u) {
-            throw std::runtime_error(
-                std::string("invalid native input button script segment in ") +
-                env_name);
-        }
-        const std::uint64_t start = parse_script_u64(fields[0], env_name);
-        const std::uint64_t duration = parse_script_u64(fields[1], env_name);
-        if (vi_in_script_window(current_vi, start, duration)) {
-            apply_script_buttons(overlay, fields[2], env_name);
-            // A step's first sample is logged with its time, as a pointer jump is, for input-to-present measurements.
-            static std::string logged;  // under the sample lock (host_main.cpp), as every sample is built
-            const std::string step = fields[0] + ':' + fields[2];
-            if (current_vi == start && logged != step) {
-                logged = step;
-                std::cerr << "[latency] buttons " << fields[2] << " vi=" << current_vi << " qpc=" << galaxy::qpc_now()
-                          << '\n';
-            }
-        }
-    }
-}
-
-// GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL counts the script's times from the frame
-// GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI names.
-void apply_stick_script_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
-    const char* env_name) {
-    const std::optional<std::string> script = read_env_string(env_name);
-    if (!script.has_value()) {
-        return;
-    }
-    std::uint64_t anchor = 0;
-    if (read_env_flag("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL")) {
-        anchor = read_env_u64_optional(
-                     "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI")
-                     .value_or(0);
-    }
-    for (const std::string& segment :
-         split_script_fields(*script, ';')) {
-        if (segment.empty()) {
-            continue;
-        }
-        const std::vector<std::string> fields =
-            split_script_fields(segment, ':');
-        if (fields.size() != 4u) {
-            throw std::runtime_error(
-                std::string("invalid native input stick script segment in ") +
-                env_name);
-        }
-        std::uint64_t start = 0u;
-        if (!galaxy::input::resolve_native_input_script_start_vi(
-                anchor, fields[0], start)) {
-            throw std::runtime_error(
-                std::string(
-                    "invalid or overflowing native input stick script start in ") +
-                env_name);
-        }
-        const std::uint64_t duration = parse_script_u64(fields[1], env_name);
-        if (vi_in_script_window(current_vi, start, duration)) {
-            overlay.has_stick = true;
-            overlay.stick_x = parse_script_float(fields[2], env_name);
-            overlay.stick_y = parse_script_float(fields[3], env_name);
-        }
-    }
 }
 
 // GALAXY_INPUT_STICK_COMMAND_FILE=<file>: a stick (and A) command another process writes while the game runs
@@ -1745,445 +966,67 @@ void apply_diagnostic_stick_command_file(NativeInputScriptOverlay& overlay) {
     }
 }
 
-void apply_shake_script_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
-    const char* env_name) {
-    const std::optional<std::string> script = read_env_string(env_name);
-    if (!script.has_value()) {
-        return;
-    }
-    for (const std::string& segment :
-         split_script_fields(*script, ';')) {
-        if (segment.empty()) {
-            continue;
+class WindowLiveControlsHost final : public LiveControlsHost {
+public:
+    WindowLiveControlsHost(HWND window, bool focused) : window_(window), focused_(focused) {}
+    std::uint64_t now_ms() override { return host_pointer_now_ms(); }
+    std::uint64_t now_us() override { return controller_hid_now_us(); }
+    bool injected(bool button) override { return native_pointer_input_injected(button); }
+    PointerSample pointer(bool buttons_allowed, bool check_hover) override {
+        const auto provider = g_host_pointer_provider.load(std::memory_order_acquire);
+        if (provider == nullptr) return {};
+        auto position = provider();
+        const auto buttons = consume_host_pointer_button_transitions(position, buttons_allowed);
+        position.left_button = buttons.left_button;
+        position.right_button = buttons.right_button;
+        if (buttons.has_transition_coordinates) {
+            position.absolute_valid = buttons.transition_coordinates.absolute_valid;
+            position.inside_client = buttons.transition_coordinates.inside_client;
+            position.client_x = buttons.transition_coordinates.client_x;
+            position.client_y = buttons.transition_coordinates.client_y;
+            position.client_width = buttons.transition_coordinates.client_width;
+            position.client_height = buttons.transition_coordinates.client_height;
         }
-        const std::vector<std::string> fields =
-            split_script_fields(segment, ':');
-        if (fields.size() != 2u) {
-            throw std::runtime_error(
-                std::string("invalid native input shake script segment in ") +
-                env_name);
-        }
-        const std::uint64_t start = parse_script_u64(fields[0], env_name);
-        const std::uint64_t duration = parse_script_u64(fields[1], env_name);
-        if (vi_in_script_window(current_vi, start, duration)) {
-            overlay.shake = true;
-        }
-    }
-}
-
-void apply_pointer_pair_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
-    const char* x_env,
-    const char* y_env,
-    const char* vi_env,
-    const char* duration_env = nullptr) {
-    const std::optional<float> x = read_env_float_optional(x_env);
-    const std::optional<float> y = read_env_float_optional(y_env);
-    if (x.has_value() != y.has_value()) {
-        throw std::runtime_error(
-            std::string("native input pointer env pair is incomplete: ") +
-            x_env + "/" + y_env);
-    }
-    if (!x.has_value()) {
-        return;
-    }
-    if (vi_env != nullptr) {
-        const std::optional<std::uint64_t> vi = read_env_u64_optional(vi_env);
-        if (!vi.has_value()) {
-            throw std::runtime_error(
-                std::string("native input pointer waypoint is missing ") +
-                vi_env);
-        }
-        if (current_vi < *vi) {
-            return;
-        }
-        if (duration_env != nullptr) {
-            const std::optional<std::uint64_t> duration =
-                read_env_u64_optional(duration_env);
-            if (duration.has_value() &&
-                !vi_in_script_window(current_vi, *vi, *duration)) {
-                return;
+        const auto projected = project_client_mouse_pointer(position.window_focused, position.absolute_valid,
+            position.inside_client, position.client_x, position.client_y, position.client_width, position.client_height);
+        bool deliver = false;
+        if (check_hover && (position.left_button || position.right_button)) {
+            POINT cursor{};
+            HWND hovered_window = nullptr;
+            HWND game_window = reinterpret_cast<HWND>(position.debug_window);
+            if (game_window != nullptr) {
+                if (HWND root = GetAncestor(game_window, GA_ROOT); root != nullptr) game_window = root;
             }
+            const bool under_cursor = game_window != nullptr &&
+                current_process_window_under_cursor(cursor, hovered_window) && hovered_window == game_window;
+            deliver = select_host_pointer_mouse_button_delivery(position.window_focused, position.absolute_valid,
+                position.inside_client, projected.visible, under_cursor);
         }
+        const auto raw = sample_native_raw_mouse();
+        return {true, position.window_focused, position.absolute_valid, position.inside_client,
+                position.left_button, position.right_button, deliver, buttons.has_transition_coordinates,
+                position.absolute_sequence, buttons.transition_sequence, projected,
+                position.window_focused && raw.moved};
     }
-    overlay.has_pointer = true;
-    overlay.pointer_x = *x;
-    overlay.pointer_y = *y;
-}
-
-void apply_pointer_sweep_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi) {
-    const std::optional<std::uint64_t> start =
-        read_env_u64_optional("GALAXY_INPUT_POINTER_SWEEP_VI");
-    const std::optional<std::uint64_t> duration =
-        read_env_u64_optional("GALAXY_INPUT_POINTER_SWEEP_DURATION");
-    if (start.has_value() != duration.has_value()) {
-        throw std::runtime_error(
-            "native input pointer sweep requires both VI and duration");
+    galaxy::input::NativeMousePointerProjection cursor() override {
+        POINT position{};
+        HWND window = window_;
+        bool active = focused_ && window != nullptr;
+        if (!active) active = current_process_window_under_cursor(position, window);
+        else if (!GetCursorPos(&position)) active = false;
+        if (!active && current_process_runtime_window(window) && GetCursorPos(&position)) active = true;
+        RECT client{};
+        if (!active || !ScreenToClient(window, &position) || !GetClientRect(window, &client)) return {};
+        const int width = client.right - client.left, height = client.bottom - client.top;
+        if (width > 1 && height > 1 &&
+            (position.x < 0 || position.y < 0 || position.x >= width || position.y >= height)) active = false;
+        return project_client_mouse_pointer(active, active && width > 1 && height > 1, active,
+            static_cast<int>(position.x), static_cast<int>(position.y), width, height);
     }
-    if (!start.has_value()) {
-        return;
-    }
-    if (!vi_in_script_window(current_vi, *start, *duration)) {
-        return;
-    }
-    const float phase =
-        *duration <= 1u
-            ? 0.5f
-            : static_cast<float>(current_vi - *start) /
-                  static_cast<float>(*duration - 1u);
-    overlay.has_pointer = true;
-    overlay.pointer_x = std::clamp(phase * 2.0f - 1.0f, -1.0f, 1.0f);
-    overlay.pointer_y = 0.0f;
-}
-
-struct PointerPathPoint {
-    std::uint64_t vi;
-    float x;
-    float y;
+private:
+    HWND window_;
+    bool focused_;
 };
-
-// GALAXY_INPUT_POINTER_PATH "vi:x:y;vi:x:y;...": the pointer glides between those points (VIs ascending), on screen
-// from the first to the last. Parsed again only when the value changes.
-void apply_pointer_path_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi) {
-    const std::optional<std::string> script = read_env_string("GALAXY_INPUT_POINTER_PATH");
-    if (!script.has_value()) {
-        return;
-    }
-    thread_local std::string parsed;
-    thread_local std::vector<PointerPathPoint> points;
-    if (*script != parsed) {
-        std::vector<PointerPathPoint> next;
-        for (const std::string& segment : split_script_fields(*script, ';')) {
-            if (segment.empty()) {
-                continue;
-            }
-            const std::vector<std::string> fields = split_script_fields(segment, ':');
-            if (fields.size() != 3u) {
-                throw std::runtime_error("invalid native input pointer path segment");
-            }
-            const PointerPathPoint point{parse_script_u64(fields[0], "GALAXY_INPUT_POINTER_PATH"),
-                                         parse_script_float(fields[1], "GALAXY_INPUT_POINTER_PATH"),
-                                         parse_script_float(fields[2], "GALAXY_INPUT_POINTER_PATH")};
-            if (!next.empty() && point.vi < next.back().vi) {
-                throw std::runtime_error("native input pointer path VIs must ascend");
-            }
-            next.push_back(point);
-        }
-        points = std::move(next);
-        parsed = *script;
-    }
-    if (points.empty() || current_vi < points.front().vi || current_vi > points.back().vi) {
-        return;
-    }
-    // The first point at or after this VI, and the one before it.
-    const auto after = std::lower_bound(points.begin(), points.end(), current_vi,
-                                        [](const PointerPathPoint& point, std::uint64_t vi) { return point.vi < vi; });
-    float x = after->x;
-    float y = after->y;
-    if (after != points.begin() && after->vi != current_vi) {
-        const PointerPathPoint& before = *(after - 1);
-        const float t = static_cast<float>(current_vi - before.vi) / static_cast<float>(after->vi - before.vi);
-        x = before.x + (after->x - before.x) * t;
-        y = before.y + (after->y - before.y) * t;
-    }
-    overlay.has_pointer = true;
-    overlay.pointer_x = std::clamp(x, -1.0f, 1.0f);
-    overlay.pointer_y = std::clamp(y, -1.0f, 1.0f);
-    // A jump (a quarter of the picture or more in one step) is logged with its time: the first sample that carries it
-    // is built now, for input-to-present measurements against the present snapshots' times.
-    static float last_x = x;  // under the sample lock, as every sample is built
-    static float last_y = y;
-    if (std::fabs(x - last_x) + std::fabs(y - last_y) >= 0.5f) {
-        std::cerr << "[latency] pointer jump vi=" << current_vi << " x=" << x << " y=" << y << " qpc=" << galaxy::qpc_now()
-                  << '\n';
-    }
-    last_x = x;
-    last_y = y;
-}
-
-void apply_pointer_script_envs(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi) {
-    apply_pointer_pair_env(
-        overlay,
-        current_vi,
-        "GALAXY_INPUT_POINTER_X",
-        "GALAXY_INPUT_POINTER_Y",
-        nullptr);
-    // Values are read at every sample, so a test can change them while the game runs; a later waypoint takes
-    // precedence over an earlier one.
-    static constexpr std::array<std::array<const char*, 4>, 5> kWaypoints{{
-        {"GALAXY_INPUT_POINTER2_X", "GALAXY_INPUT_POINTER2_Y",
-         "GALAXY_INPUT_POINTER2_VI", "GALAXY_INPUT_POINTER2_DURATION"},
-        {"GALAXY_INPUT_POINTER3_X", "GALAXY_INPUT_POINTER3_Y",
-         "GALAXY_INPUT_POINTER3_VI", "GALAXY_INPUT_POINTER3_DURATION"},
-        {"GALAXY_INPUT_POINTER4_X", "GALAXY_INPUT_POINTER4_Y",
-         "GALAXY_INPUT_POINTER4_VI", "GALAXY_INPUT_POINTER4_DURATION"},
-        {"GALAXY_INPUT_POINTER5_X", "GALAXY_INPUT_POINTER5_Y",
-         "GALAXY_INPUT_POINTER5_VI", "GALAXY_INPUT_POINTER5_DURATION"},
-        {"GALAXY_INPUT_POINTER6_X", "GALAXY_INPUT_POINTER6_Y",
-         "GALAXY_INPUT_POINTER6_VI", "GALAXY_INPUT_POINTER6_DURATION"},
-    }};
-    for (const auto& waypoint : kWaypoints) {
-        apply_pointer_pair_env(
-            overlay, current_vi, waypoint[0], waypoint[1],
-            waypoint[2], waypoint[3]);
-    }
-    apply_pointer_sweep_env(overlay, current_vi);
-    apply_pointer_path_env(overlay, current_vi);
-}
-
-NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_vi) {
-    NativeInputScriptOverlay overlay{};
-    const std::uint64_t a_duration =
-        read_env_u64_optional("GALAXY_INPUT_AUTOPRESS_A_DURATION")
-            .value_or(12);
-    apply_autopress_env(
-        overlay, current_vi, "GALAXY_INPUT_AUTOPRESS_AB", "A+B", a_duration);
-    constexpr std::array<const char*, 8> kAWindows{
-        "GALAXY_INPUT_AUTOPRESS_A",
-        "GALAXY_INPUT_AUTOPRESS_A2",
-        "GALAXY_INPUT_AUTOPRESS_A3",
-        "GALAXY_INPUT_AUTOPRESS_A4",
-        "GALAXY_INPUT_AUTOPRESS_A5",
-        "GALAXY_INPUT_AUTOPRESS_A6",
-        "GALAXY_INPUT_AUTOPRESS_A7",
-        "GALAXY_INPUT_AUTOPRESS_A8"};
-    for (const char* name : kAWindows) {
-        apply_autopress_env(overlay, current_vi, name, "A", a_duration);
-    }
-    apply_button_script_env(overlay, current_vi, "GALAXY_INPUT_AUTOPRESS_SCRIPT");
-    apply_stick_script_env(overlay, current_vi, "GALAXY_INPUT_STICK_SCRIPT");
-    apply_diagnostic_stick_command_file(overlay);
-    apply_shake_script_env(
-        overlay, current_vi, "GALAXY_INPUT_SHAKE_SCRIPT");
-    apply_pointer_script_envs(overlay, current_vi);
-    return overlay;
-}
-
-// In a tilt section (tilt.h) the virtual remote's acceleration is the controller's tilt or the stick's; elsewhere it
-// lies still. Pointed up or down it loses the screen (remote_faces_screen).
-void apply_tilt_accel(galaxy::input::PlayerInput& input,
-                      galaxy::input::tilt::Tilt& state,
-                      galaxy::input::tilt::Section section,
-                      const galaxy::input::tilt::Vec3* controller_up,
-                      float stick_x,
-                      float stick_y,
-                      bool recenter) {
-    const galaxy::input::tilt::Tilt::Output tilt =
-        state.update(section, controller_up, stick_x, stick_y, recenter);
-    if (tilt.active) {
-        input.gravity = tilt.game;
-    }
-    input.pointer_on = input.pointer_on && galaxy::input::remote_faces_screen(input.gravity);
-}
-
-// GALAXY_INPUT_REPLAY_LOG: one recorded sample of window, keyboard, mouse and XInput state as the player's input.
-galaxy::input::PlayerInput build_replayed_input(
-    std::uint64_t current_vi,
-    const NativeInputReplaySample& replay,
-    const NativeInputScriptOverlay& script,
-    galaxy::RuntimeInputMode input_mode,
-    galaxy::input::tilt::Section tilt_section) {
-    galaxy::input::PlayerInput snapshot{};
-    const bool replay_controller_active = replay_xinput_has_input(replay);
-    const bool force_controller =
-        input_mode == galaxy::RuntimeInputMode::Controller;
-    const bool use_controller = force_controller ||
-        (input_mode == galaxy::RuntimeInputMode::Auto &&
-         replay_controller_active);
-    const bool allow_absolute_pointer =
-        input_mode != galaxy::RuntimeInputMode::RealWiimote;
-
-    const auto pad = [&](std::uint16_t mask) {
-        return replay_pad_held(replay, mask);
-    };
-    const auto key = [&](int index) {
-        return replay.game_focused && replay_key_held(replay, index);
-    };
-
-    snapshot.buttons.left =
-        use_controller ? pad(XINPUT_GAMEPAD_DPAD_LEFT) : key(7);
-    snapshot.buttons.right =
-        use_controller ? pad(XINPUT_GAMEPAD_DPAD_RIGHT) : key(9);
-    snapshot.buttons.down =
-        use_controller ? pad(XINPUT_GAMEPAD_DPAD_DOWN) : key(10);
-    snapshot.buttons.up =
-        use_controller ? pad(XINPUT_GAMEPAD_DPAD_UP) : key(8);
-    snapshot.buttons.plus =
-        use_controller ? pad(XINPUT_GAMEPAD_START) : false;
-    snapshot.buttons.minus =
-        use_controller ? pad(XINPUT_GAMEPAD_BACK) : false;
-    snapshot.buttons.one = use_controller ? false : key(11);
-    snapshot.buttons.two = use_controller ? false : key(12);
-    snapshot.buttons.home = false;
-    snapshot.buttons.a =
-        use_controller ? pad(XINPUT_GAMEPAD_A) : (key(0) || key(2) || key(3));
-    snapshot.buttons.b =
-        use_controller
-            ? (pad(XINPUT_GAMEPAD_B) ||
-               replay.right_trigger >= kXInputTriggerThreshold)
-            : (key(1) || key(5) || key(6));
-
-    float stick_x =
-        use_controller
-            ? galaxy::input::normalize_xinput_axis(
-                  replay.thumb_lx, kReplayLeftDeadzone)
-            : replay_key_axis(replay, 16, 13);
-    float stick_y =
-        use_controller
-            ? galaxy::input::normalize_xinput_axis(
-                  replay.thumb_ly, kReplayLeftDeadzone)
-            : replay_key_axis(replay, 25, 24);
-    if (script.has_stick) {
-        stick_x = script.stick_x;
-        stick_y = script.stick_y;
-    }
-    const galaxy::input::StickValue nunchuk_stick = galaxy::input::nunchuk_stick(stick_x, stick_y);
-    snapshot.stick_x = nunchuk_stick.x;
-    snapshot.stick_y = nunchuk_stick.y;
-    snapshot.buttons.c =
-        use_controller ? pad(XINPUT_GAMEPAD_LEFT_THUMB) : key(15);
-    snapshot.buttons.z =
-        use_controller
-            ? (pad(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
-               replay.left_trigger >= kXInputTriggerThreshold)
-            : (key(26) || key(27) || key(28) || key(29));
-
-    apply_script_buttons_to_input(snapshot, script);
-
-    // The live pointer model (pointer_control.h) on the replay timeline: the
-    // last moved source owns the pointer and dt comes from the VI clock, so a
-    // recorded stick moves the pointer at the same speed at any sample rate.
-    static float s_replay_pointer_x = 0.0f;
-    static float s_replay_pointer_y = 0.0f;
-    static galaxy::input::PointerOwner s_replay_owner{};
-    static std::uint64_t s_replay_pointer_vi = 0u;
-    static int s_replay_mouse_x = -1;
-    static int s_replay_mouse_y = -1;
-    static galaxy::input::RecenterHold s_replay_recenter{};
-    // Each replay log starts from a fresh pointer.
-    static const void* s_replay_log_identity = nullptr;
-    if (const void* log = active_native_input_replay_log(); log != s_replay_log_identity) {
-        s_replay_log_identity = log;
-        s_replay_pointer_x = s_replay_pointer_y = 0.0f;
-        s_replay_owner = {};
-        s_replay_pointer_vi = 0u;
-        s_replay_mouse_x = s_replay_mouse_y = -1;
-        s_replay_recenter = {};
-    }
-    const float dt = s_replay_pointer_vi == 0u || current_vi <= s_replay_pointer_vi
-        ? 0.0f
-        : std::min(static_cast<float>(current_vi - s_replay_pointer_vi) / 60.0f, 0.05f);
-    s_replay_pointer_vi = current_vi;
-    const std::uint64_t now_us = current_vi * 1'000'000ull / 60u;
-    const bool keys_allowed = !force_controller;
-    const bool pad_allowed = replay.xinput_connected &&
-                             input_mode != galaxy::RuntimeInputMode::KeyboardMouse &&
-                             input_mode != galaxy::RuntimeInputMode::RealWiimote;
-    bool pointer_active = false;
-    const bool replay_inside_client =
-        replay.mouse_client_x >= 0 && replay.mouse_client_y >= 0 &&
-        replay.mouse_client_x < replay.client_w &&
-        replay.mouse_client_y < replay.client_h;
-    const galaxy::input::NativeMousePointerProjection replay_pointer =
-        project_client_mouse_pointer(
-            replay.game_focused,
-            replay.client_w > 1 && replay.client_h > 1,
-            replay_inside_client,
-            replay.mouse_client_x,
-            replay.mouse_client_y,
-            replay.client_w,
-            replay.client_h);
-    // A recorded mouse is replayed in every mode, as recorded.
-    const bool mouse_visible = allow_absolute_pointer && replay_pointer.visible;
-    const bool mouse_moved = mouse_visible &&
-        (replay.mouse_client_x != s_replay_mouse_x || replay.mouse_client_y != s_replay_mouse_y);
-    s_replay_mouse_x = replay.mouse_client_x;
-    s_replay_mouse_y = replay.mouse_client_y;
-    const galaxy::input::StickVector pointer_axes = pad_allowed
-        ? galaxy::input::apply_radial_deadzone(
-              galaxy::input::normalize_xinput_axis(replay.thumb_rx, 0),
-              galaxy::input::normalize_xinput_axis(replay.thumb_ry, 0),
-              static_cast<float>(kReplayPointerDeadzone) / 32767.0f)
-        : galaxy::input::StickVector{};
-    const galaxy::input::StickVector stick_velocity =
-        galaxy::input::stick_pointer_velocity(pointer_axes, kReplayStickPointerSpeed);
-    const float key_x = keys_allowed ? replay_key_axis(replay, 21, 19) : 0.0f;
-    const float key_y = keys_allowed ? replay_key_axis(replay, 18, 20) : 0.0f;
-    galaxy::input::PointerActivity activity{};
-    activity.mouse = mouse_moved;
-    activity.keys = key_x != 0.0f || key_y != 0.0f;
-    activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
-    const bool controller_recenter =
-        pad_allowed && replay_pad_held(replay, XINPUT_GAMEPAD_RIGHT_THUMB);
-    const bool recenter_held = (keys_allowed && key(23)) || controller_recenter;
-    const galaxy::input::RecenterHold::Output recenter = s_replay_recenter.update(recenter_held);
-    if (recenter.pressed) {
-        s_replay_owner.owner = controller_recenter ? galaxy::input::PointerSource::Stick
-                                                   : galaxy::input::PointerSource::Keys;
-    }
-    if (recenter.pinned) {
-        s_replay_owner.last_active_us = now_us;
-    }
-    switch (recenter.pinned ? s_replay_owner.owner : s_replay_owner.update(activity, now_us)) {
-    case galaxy::input::PointerSource::Mouse:
-        if (mouse_visible) {
-            s_replay_pointer_x = replay_pointer.x;
-            s_replay_pointer_y = replay_pointer.y;
-            pointer_active = true;
-        }
-        break;
-    case galaxy::input::PointerSource::Keys:
-        s_replay_pointer_x = std::clamp(s_replay_pointer_x + key_x * kReplayKeyboardPointerSpeed * dt, -1.0f, 1.0f);
-        s_replay_pointer_y = std::clamp(s_replay_pointer_y - key_y * kReplayKeyboardPointerSpeed * dt, -1.0f, 1.0f);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::Stick:
-        s_replay_pointer_x = std::clamp(s_replay_pointer_x + stick_velocity.x * dt, -1.0f, 1.0f);
-        s_replay_pointer_y = std::clamp(s_replay_pointer_y - stick_velocity.y * dt, -1.0f, 1.0f);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::Gyro:
-    case galaxy::input::PointerSource::None:
-        if (pad_allowed) {
-            pointer_active = true;
-        }
-        break;
-    }
-    if (recenter.pinned) {
-        // Held recenter: the pointer stays at the centre (pointer_control.h).
-        s_replay_pointer_x = 0.0f;
-        s_replay_pointer_y = 0.0f;
-        pointer_active = true;
-    }
-    if (script.has_pointer) {
-        s_replay_pointer_x = script.pointer_x;
-        s_replay_pointer_y = script.pointer_y;
-        pointer_active = true;
-    }
-    galaxy::input::set_pointer(snapshot, s_replay_pointer_x, s_replay_pointer_y, pointer_active);
-
-    // Tilt sections steer with the replayed stick (tilt.h).
-    static galaxy::input::tilt::Tilt s_replay_tilt{};
-    apply_tilt_accel(snapshot, s_replay_tilt, tilt_section, nullptr, stick_x, stick_y, recenter.pressed);
-
-    const bool shake_pressed =
-        script.shake ||
-        (use_controller
-             ? (pad(XINPUT_GAMEPAD_X) || pad(XINPUT_GAMEPAD_Y) ||
-                pad(XINPUT_GAMEPAD_RIGHT_SHOULDER))
-             : (key(17) || key(22)));
-    snapshot.shake = shake_pressed;
-    return snapshot;
-}
 
 // The live controls as the player's input: the bindings of every connected controller and of the keyboard and mouse,
 // the pointer from whichever source moved last, tilt, shake and the scripted test input.
@@ -2192,8 +1035,8 @@ galaxy::input::PlayerInput build_live_input(
     const galaxy::RuntimeInputModeState& input_mode_state,
     galaxy::input::PlayContext play_context,
     galaxy::input::tilt::Section tilt_section) {
-    galaxy::input::PlayerInput snapshot{};
-    const NativeInputScriptOverlay script = build_native_input_script_overlay(current_vi);
+    const NativeInputScriptOverlay script = build_native_input_script_overlay(
+        current_vi, {apply_diagnostic_stick_command_file, galaxy::qpc_now});
     if (const NativeInputReplaySample* replay =
             native_input_replay_sample_for_vi(current_vi);
         replay != nullptr) {
@@ -2215,7 +1058,12 @@ galaxy::input::PlayerInput build_live_input(
             routed,
             script,
             input_mode_state.mode,
-            tilt_section);
+            tilt_section,
+            project_client_mouse_pointer(replay->game_focused, replay->client_w > 1 && replay->client_h > 1,
+                replay->mouse_client_x >= 0 && replay->mouse_client_y >= 0 &&
+                replay->mouse_client_x < replay->client_w && replay->mouse_client_y < replay->client_h,
+                replay->mouse_client_x, replay->mouse_client_y, replay->client_w, replay->client_h),
+            active_native_input_replay_log());
     }
 
     // A hidden test window (GALAXY_HIDE_WINDOW) is no keyboard or mouse source: no focus, key or cursor calls are
@@ -2232,23 +1080,17 @@ galaxy::input::PlayerInput build_live_input(
         clear_native_window_key_presses();
     }
     const LiveControls& controls = live_controls();
-    const galaxy::input::BindingTable& keyboard_table =
-        controls.config.table(galaxy::input::ControlScheme::Keyboard);
-    galaxy::input::KeyboardMouseLevels keyboard_levels{};
-    if (window_focused && !native_keyboard_captured) {
-        for (std::size_t index = 0; index < controls.keyboard_keys.count; ++index) {
-            const std::uint8_t vk = controls.keyboard_keys.keys[index];
-            const bool pressed = g_window_key_presses.consume(vk);
-            keyboard_levels.set_key(vk, pressed || g_window_keys_held.held(vk));
-        }
-        // Middle and side mouse buttons arrive as window key levels.
-        const auto mouse_key = [](std::uint32_t vk) {
-            return g_window_key_presses.consume(vk) || g_window_keys_held.held(vk);
-        };
-        if (mouse_key(VK_MBUTTON)) keyboard_levels.mouse |= 1u << 2u;
-        if (mouse_key(VK_XBUTTON1)) keyboard_levels.mouse |= 1u << 3u;
-        if (mouse_key(VK_XBUTTON2)) keyboard_levels.mouse |= 1u << 4u;
+    input::KeyboardSnapshot keyboard_sample;
+    if (window_focused && !native_keyboard_captured) keyboard_sample = g_keyboard_events.sample();
+    if (window_focused) {
+        g_keyboard_layout.store(keyboard_sample.positions_available
+            ? GetKeyboardLayout(GetWindowThreadProcessId(focused_window, nullptr)) : nullptr,
+            std::memory_order_release);
     }
+    auto keyboard_levels = keyboard_sample.all;
+    // Older window dispatchers supply logical keys only; keep their existing behavior until scan events arrive.
+    if (!keyboard_sample.positions_available)
+        keyboard_levels = input::project_key_positions(keyboard_levels, input::KeyPositionMap{});
 
     const galaxy::RuntimeInputMode input_mode = input_mode_state.mode;
     // Auto: keyboard, mouse and controllers together. The two overrides keep
@@ -2323,543 +1165,47 @@ galaxy::input::PlayerInput build_live_input(
     // stick into keys and mouse motion. Only physical keyboard and mouse input counts then.
     const bool drop_injected = use_pads && input_mode == galaxy::RuntimeInputMode::Auto;
     if (drop_injected) {
-        for (std::size_t index = 0; index < controls.keyboard_keys.count; ++index) {
-            const std::uint8_t vk = controls.keyboard_keys.keys[index];
-            if (native_window_key_injected(vk)) keyboard_levels.set_key(vk, false);
-        }
-        for (const std::uint32_t vk : {VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2}) {
-            if (native_window_key_injected(vk)) {
-                keyboard_levels.mouse &= static_cast<std::uint8_t>(
-                    ~(1u << (vk == VK_MBUTTON ? 2u : vk == VK_XBUTTON1 ? 3u : 4u)));
-            }
-        }
+        keyboard_levels = keyboard_sample.physical;
+        if (!keyboard_sample.positions_available)
+            keyboard_levels = input::project_key_positions(keyboard_levels, input::KeyPositionMap{});
     }
+    if (keyboard_levels.key(VK_MBUTTON)) keyboard_levels.mouse |= 1u << 2u;
+    if (keyboard_levels.key(VK_XBUTTON1)) keyboard_levels.mouse |= 1u << 3u;
+    if (keyboard_levels.key(VK_XBUTTON2)) keyboard_levels.mouse |= 1u << 4u;
     const bool allow_absolute_pointer =
         host_window_input_enabled && use_keyboard &&
         input_mode != galaxy::RuntimeInputMode::RealWiimote;
-    const float trigger_threshold =
-        static_cast<float>(kXInputTriggerThreshold) / 255.0f;
 
-    // Each scheme's bindings turn its physical inputs into Wii targets. Pad
-    // and keyboard pointer axes stay apart: they are different pointer
-    // sources (velocity from the stick, keys at the keyboard speed).
-    galaxy::input::LogicalInput logic{};
-    galaxy::input::LogicalInput pad_logic_all{};
-    bool motion_shake_remote = false;
-    bool motion_shake_nunchuk = false;
-    float gyro_x = 0.0f;
-    float gyro_y = 0.0f;
-    float pad_pointer_speed = 0.0f;
-    bool pad_gyro_pointing = false;
-    // The touch pointer's travel this sample (pointer units, 2 = the picture's width and height; y down).
-    float touch_x = 0.0f;
-    float touch_y = 0.0f;
-    bool pad_touch_pointing = false;
-    // Rest-hide tuning of the pad that points (gyro first, then the stick).
-    float pointer_hide_seconds = 0.0f;
-    float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
-    static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxHidPads> s_pad_previous_pressed{};
-    // The controller in use: the last one with any input (buttons, sticks, triggers, a gyro turn, a
-    // shake). A key or mouse button bound to a Wii input hands control to the keyboard. In the tilt
-    // sections (tilt.h) its tilt steers when it has motion sensors (Pro Controller 1/2); otherwise the
-    // stick steers (Xbox, keyboard). Vibration goes to it.
-    constexpr std::uint32_t kDrivingNone = 0xFFFFFFFFu;
-    constexpr std::uint32_t kDrivingKeyboard = 0xFFFFFFFEu;
-    static std::uint32_t s_driving_pad = kDrivingNone;  // (scheme << 8) | device slot
-    const auto pad_key = [](const LivePad& pad) {
-        return (static_cast<std::uint32_t>(pad.sample.scheme) << 8u) | pad.device_slot;
-    };
-    galaxy::input::tilt::Vec3 tilt_up_value{0.0f, 1.0f, 0.0f};
-    const galaxy::input::tilt::Vec3* tilt_up = nullptr;
-    if (use_pads) {
-        const LivePad* driving = nullptr;
-        const LivePad* first_connected = nullptr;
-        for (const LivePad& pad : live_pads) {
-            if (!pad.sample.connected) continue;
-            if (first_connected == nullptr) first_connected = &pad;
-            const bool moved = pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
-                               std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f ||
-                               std::fabs(pad.touch_dx) + std::fabs(pad.touch_dy) > 0.0005f;
-            if (moved) s_driving_pad = pad_key(pad);
-            if (pad_key(pad) == s_driving_pad) driving = &pad;
-        }
-        if (driving == nullptr && s_driving_pad != kDrivingKeyboard) driving = first_connected;
-        if (driving != nullptr && driving->gravity_valid) {
-            tilt_up_value = driving->gravity;
-            tilt_up = &tilt_up_value;
-        }
-        for (std::size_t index = 0; index < live_pads.size(); ++index) {
-            const LivePad& pad = live_pads[index];
-            if (!pad.sample.connected) {
-                s_pad_previous_pressed[index] = 0u;
-                continue;
-            }
-            const galaxy::input::SchemeTuning& tuning = controls.config.tune(pad.sample.scheme);
-            const bool gyro_pointing = tuning.gyro_pointer && pad.imu_live;
-            const bool touch_pointing = tuning.touch_pointer && pad.touch_live;
-            galaxy::input::LogicalInput pad_logic = galaxy::input::evaluate_pad_bindings(
-                controls.config.table(pad.sample.scheme), pad.sample, trigger_threshold,
-                s_pad_previous_pressed[index], gyro_pointing || touch_pointing);
-            s_pad_previous_pressed[index] = pad_logic.pressed;
-            if (tuning.invert_pointer_y) pad_logic.pointer_y = -pad_logic.pointer_y;
-            if (std::fabs(pad_logic.pointer_x) + std::fabs(pad_logic.pointer_y) >
-                std::fabs(pad_logic_all.pointer_x) + std::fabs(pad_logic_all.pointer_y)) {
-                pad_pointer_speed = tuning.pointer_speed;
-            }
-            if (!pad_gyro_pointing) {
-                pointer_hide_seconds = tuning.pointer_hide_seconds;
-                pointer_hide_radius = tuning.pointer_hide_radius;
-            }
-            pad_logic_all = galaxy::input::merge_logical_input(pad_logic_all, pad_logic);
-            motion_shake_remote = motion_shake_remote || pad.shake_remote;
-            motion_shake_nunchuk = motion_shake_nunchuk || pad.shake_nunchuk;
-            if (gyro_pointing) {
-                pad_gyro_pointing = true;
-                pointer_hide_seconds = tuning.pointer_hide_seconds;
-                pointer_hide_radius = tuning.pointer_hide_radius;
-                gyro_x += pad.gyro_x;
-                gyro_y += tuning.invert_pointer_y ? -pad.gyro_y : pad.gyro_y;
-            }
-            if (touch_pointing) {
-                pad_touch_pointing = true;
-                touch_x += pad.touch_dx * 2.0f * tuning.touch_sensitivity;
-                touch_y += (tuning.invert_pointer_y ? -pad.touch_dy : pad.touch_dy) * 2.0f * tuning.touch_sensitivity;
-                if (!pad_gyro_pointing) {
-                    pointer_hide_seconds = tuning.pointer_hide_seconds;
-                    pointer_hide_radius = tuning.pointer_hide_radius;
-                }
-            }
-        }
-    } else {
-        s_pad_previous_pressed = {};
-    }
-    galaxy::input::LogicalInput keyboard_logic{};
-    if (use_keyboard) {
-        keyboard_logic = galaxy::input::evaluate_keyboard_bindings(keyboard_table, keyboard_levels);
-        if (controls.config.tune(galaxy::input::ControlScheme::Keyboard).invert_pointer_y) {
-            keyboard_logic.pointer_y = -keyboard_logic.pointer_y;
-        }
-        if (keyboard_logic.pressed != 0u || keyboard_logic.stick_x != 0.0f || keyboard_logic.stick_y != 0.0f) {
-            s_driving_pad = kDrivingKeyboard;
-        }
-    }
-    // Vibration: target and strength, published with the game's motor bit.
+    LiveControlsFrame frame{controls.config};
+    frame.pads = live_pads;
+    frame.keyboard_levels = keyboard_levels;
+    frame.script = script;
+    frame.vi = current_vi;
+    frame.script_pointer_grace_ms = script_pointer_live_mouse_grace_ms();
+    frame.script_pointer_force = script_pointer_force_enabled();
+    frame.window_focused = window_focused;
+    frame.use_keyboard = use_keyboard;
+    frame.use_pads = use_pads;
+    frame.allow_background_device_input = !xinput_requires_focus();
+    frame.allow_absolute_pointer = allow_absolute_pointer;
+    frame.drop_injected = drop_injected;
+    frame.context = play_context;
+    frame.tilt_section = tilt_section;
+    static LiveControlsEngine engine;
+    WindowLiveControlsHost host(focused_window, window_focused);
+    auto result = engine.sample(frame, host);
     g_rumble_host = {};
-    g_rumble_host.focused = window_focused;
-    if (use_pads && s_driving_pad != kDrivingNone && s_driving_pad != kDrivingKeyboard) {
-        const auto scheme = static_cast<galaxy::input::ControlScheme>((s_driving_pad >> 8u) & 0xFFu);
-        const auto slot = static_cast<std::uint8_t>(s_driving_pad & 0xFFu);
+    g_rumble_host.focused = result.rumble.focused;
+    g_rumble_host.strength = result.rumble.strength;
+    if (result.rumble.device) {
+        const auto [scheme, slot] = *result.rumble.device;
         if (scheme == galaxy::input::ControlScheme::Xbox && slot < XUSER_MAX_COUNT) {
             g_rumble_host.target = {RumbleTarget::Kind::XInput, slot};
         } else if (galaxy::input::scheme_uses_hid(scheme) && slot < kMaxHidPads) {
             g_rumble_host.target = {RumbleTarget::Kind::Hid, slot, scheme};
         }
-        if (static_cast<std::size_t>(scheme) < galaxy::input::kControlSchemeCount) {
-            const galaxy::input::SchemeTuning& tuning = controls.config.tune(scheme);
-            g_rumble_host.strength = tuning.vibration ? tuning.rumble : std::uint8_t{0};
-        }
     }
-    logic = galaxy::input::merge_logical_input(pad_logic_all, keyboard_logic);
-    const float pad_pointer_x = pad_logic_all.pointer_x;
-    const float pad_pointer_y = pad_logic_all.pointer_y;
-    const float keyboard_pointer_x = keyboard_logic.pointer_x;
-    const float keyboard_pointer_y = keyboard_logic.pointer_y;
-    const auto held = [&logic](galaxy::input::WiiTarget target) {
-        return logic.held(target);
-    };
-    using galaxy::input::WiiTarget;
-    snapshot.buttons.left = held(WiiTarget::DpadLeft) || script.buttons.left;
-    snapshot.buttons.right = held(WiiTarget::DpadRight) || script.buttons.right;
-    snapshot.buttons.down = held(WiiTarget::DpadDown) || script.buttons.down;
-    snapshot.buttons.up = held(WiiTarget::DpadUp) || script.buttons.up;
-    snapshot.buttons.plus = held(WiiTarget::Plus) || script.buttons.plus;
-    snapshot.buttons.minus = held(WiiTarget::Minus) || script.buttons.minus;
-    snapshot.buttons.one = held(WiiTarget::One) || script.buttons.one;
-    snapshot.buttons.two = held(WiiTarget::Two) || script.buttons.two;
-    snapshot.buttons.home = held(WiiTarget::Home) || script.buttons.home;
-    // B on the controllers: jump while Mario is under control, back in menus.
-    static galaxy::input::JumpBackLatch s_jump_back{};
-    const galaxy::input::JumpBackLatch::Output jump_back =
-        s_jump_back.update(held(WiiTarget::JumpBack), play_context);
-    snapshot.buttons.a = held(WiiTarget::A) || jump_back.a || script.buttons.a;
-    snapshot.buttons.b = held(WiiTarget::B) || jump_back.b || script.buttons.b;
-
-    float stick_x = logic.stick_x;
-    float stick_y = logic.stick_y;
-    if (script.has_stick) {
-        stick_x = script.stick_x;
-        stick_y = script.stick_y;
-    }
-    const galaxy::input::StickValue nunchuk_stick = galaxy::input::nunchuk_stick(stick_x, stick_y);
-    snapshot.stick_x = nunchuk_stick.x;
-    snapshot.stick_y = nunchuk_stick.y;
-    snapshot.buttons.c = held(WiiTarget::C) || script.buttons.c;
-    snapshot.buttons.z = held(WiiTarget::Z) || script.buttons.z;
-
-    static float s_pointer_x = 0.0f;
-    static float s_pointer_y = 0.0f;
-    static float s_mouse_x = 0.0f;
-    static float s_mouse_y = 0.0f;
-    static ULONGLONG s_last_mouse_inside_tick = 0;
-    static ULONGLONG s_last_live_mouse_tick = 0;
-    static std::uint64_t s_last_host_pointer_absolute_sequence = 0;
-    static std::uint64_t s_last_host_pointer_transition_sequence = 0;
-    static bool s_mouse_pointer_seen_inside = false;
-    const ULONGLONG live_mouse_script_grace_ms =
-        script_pointer_live_mouse_grace_ms();
-    const std::uint64_t now = host_pointer_now_ms();
-
-    bool pointer_active = false;
-    bool live_mouse_recent = false;
-    // The mouse this sample: where it points, whether that is on the picture
-    // and whether it moved (a new physical sample inside the client).
-    bool mouse_visible = false;
-    bool mouse_moved = false;
-    bool mouse_button_held = false;
-    const bool drop_injected_mouse = drop_injected && native_pointer_input_injected(false);
-    bool host_pointer_polled = false;
-    if (allow_absolute_pointer) {
-        const HostPointerProvider pointer_provider =
-            g_host_pointer_provider.load(std::memory_order_acquire);
-        if (pointer_provider != nullptr) {
-            HostPointerState host_pointer = pointer_provider();
-            const HostPointerButtonSample button_sample =
-                consume_host_pointer_button_transitions(
-                    host_pointer,
-                    use_keyboard &&
-                        !(drop_injected && native_pointer_input_injected(true)));
-            host_pointer.left_button = button_sample.left_button;
-            host_pointer.right_button = button_sample.right_button;
-            if (button_sample.has_transition_coordinates) {
-                host_pointer.absolute_valid =
-                    button_sample.transition_coordinates.absolute_valid;
-                host_pointer.inside_client =
-                    button_sample.transition_coordinates.inside_client;
-                host_pointer.client_x =
-                    button_sample.transition_coordinates.client_x;
-                host_pointer.client_y =
-                    button_sample.transition_coordinates.client_y;
-                host_pointer.client_width =
-                    button_sample.transition_coordinates.client_width;
-                host_pointer.client_height =
-                    button_sample.transition_coordinates.client_height;
-            }
-            host_pointer_polled = true;
-            const HostPointerIrAvailabilityDecision pointer_availability =
-                select_host_pointer_ir_availability(
-                    host_pointer.window_focused,
-                    host_pointer.absolute_valid,
-                    host_pointer.inside_client);
-            const galaxy::input::NativeMousePointerProjection
-                projected_host_pointer = project_client_mouse_pointer(
-                    host_pointer.window_focused,
-                    host_pointer.absolute_valid,
-                    host_pointer.inside_client,
-                    host_pointer.client_x,
-                    host_pointer.client_y,
-                    host_pointer.client_width,
-                    host_pointer.client_height);
-            if (use_keyboard &&
-                (host_pointer.left_button || host_pointer.right_button)) {
-                POINT cursor{};
-                HWND hovered_window = nullptr;
-                HWND game_window = reinterpret_cast<HWND>(
-                    host_pointer.debug_window);
-                if (game_window != nullptr) {
-                    if (HWND root = GetAncestor(game_window, GA_ROOT);
-                        root != nullptr) {
-                        game_window = root;
-                    }
-                }
-                const bool game_window_under_cursor =
-                    game_window != nullptr &&
-                    current_process_window_under_cursor(
-                        cursor, hovered_window) &&
-                    hovered_window == game_window;
-                if (select_host_pointer_mouse_button_delivery(
-                        host_pointer.window_focused,
-                        host_pointer.absolute_valid,
-                        host_pointer.inside_client,
-                        projected_host_pointer.visible,
-                        game_window_under_cursor)) {
-                    const std::uint32_t mouse_targets = galaxy::input::mouse_bound_targets(
-                        keyboard_table,
-                        static_cast<std::uint8_t>((host_pointer.left_button ? 1u : 0u) |
-                                                  (host_pointer.right_button ? 2u : 0u)));
-                    const auto mouse = [mouse_targets](WiiTarget target) {
-                        return (mouse_targets & galaxy::input::wii_target_bit(target)) != 0u;
-                    };
-                    snapshot.buttons.a = snapshot.buttons.a || mouse(WiiTarget::A);
-                    snapshot.buttons.b = snapshot.buttons.b || mouse(WiiTarget::B);
-                    snapshot.buttons.one = snapshot.buttons.one || mouse(WiiTarget::One);
-                    snapshot.buttons.two = snapshot.buttons.two || mouse(WiiTarget::Two);
-                    snapshot.buttons.plus = snapshot.buttons.plus || mouse(WiiTarget::Plus);
-                    snapshot.buttons.minus = snapshot.buttons.minus || mouse(WiiTarget::Minus);
-                    snapshot.buttons.home = snapshot.buttons.home || mouse(WiiTarget::Home);
-                    snapshot.buttons.up = snapshot.buttons.up || mouse(WiiTarget::DpadUp);
-                    snapshot.buttons.down = snapshot.buttons.down || mouse(WiiTarget::DpadDown);
-                    snapshot.buttons.left = snapshot.buttons.left || mouse(WiiTarget::DpadLeft);
-                    snapshot.buttons.right = snapshot.buttons.right || mouse(WiiTarget::DpadRight);
-                    snapshot.buttons.c = snapshot.buttons.c || mouse(WiiTarget::C);
-                    snapshot.buttons.z = snapshot.buttons.z || mouse(WiiTarget::Z);
-                    logic.pressed |= mouse_targets;
-                }
-            }
-            const bool host_pointer_inside_client =
-                pointer_availability.acquired_inside_available &&
-                projected_host_pointer.visible;
-            const bool host_pointer_absolute_sequence_changed =
-                host_pointer.absolute_sequence != 0u &&
-                host_pointer.absolute_sequence !=
-                    s_last_host_pointer_absolute_sequence;
-            const bool host_pointer_transition_sequence_changed =
-                button_sample.has_transition_coordinates &&
-                button_sample.transition_sequence != 0u &&
-                button_sample.transition_sequence !=
-                    s_last_host_pointer_transition_sequence;
-            const bool host_pointer_has_fresh_coordinates =
-                button_sample.has_transition_coordinates
-                ? host_pointer_transition_sequence_changed
-                : host_pointer_absolute_sequence_changed;
-            // Fresh physical movement inside the client takes precedence over a non-forced script, even when
-            // the game window is unfocused. Button ownership stays guarded separately by window focus.
-            mouse_button_held = host_pointer.window_focused &&
-                                (host_pointer.left_button || host_pointer.right_button);
-            if ((host_pointer_inside_client &&
-                 host_pointer_has_fresh_coordinates) ||
-                mouse_button_held) {
-                s_last_live_mouse_tick = now;
-            }
-            if (button_sample.has_transition_coordinates &&
-                button_sample.transition_sequence != 0u) {
-                s_last_host_pointer_transition_sequence =
-                    button_sample.transition_sequence;
-            } else if (host_pointer.absolute_sequence != 0u) {
-                s_last_host_pointer_absolute_sequence =
-                    host_pointer.absolute_sequence;
-            }
-            live_mouse_recent =
-                s_last_live_mouse_tick != 0 && now >= s_last_live_mouse_tick &&
-                now - s_last_live_mouse_tick <= live_mouse_script_grace_ms;
-            if (host_pointer_inside_client) {
-                s_mouse_x = projected_host_pointer.x;
-                s_mouse_y = projected_host_pointer.y;
-                // Only a new inside sample, or a queued button edge with its own coordinates, renews the hold
-                // through invalid samples; repeated polls of the same coordinate do not.
-                if (host_pointer_has_fresh_coordinates) {
-                    s_last_mouse_inside_tick = now;
-                    s_mouse_pointer_seen_inside = true;
-                    mouse_moved = !drop_injected_mouse;
-                }
-                mouse_visible = true;
-            } else if (pointer_availability.invalid_sample_hold_allowed &&
-                       s_mouse_pointer_seen_inside &&
-                       now >= s_last_mouse_inside_tick &&
-                       now - s_last_mouse_inside_tick <=
-                           kMousePointerLossHoldMs) {
-                // Remote Desktop can fail absolute cursor sampling for a moment while the pointer is still over the
-                // client: an invalid sample is uncertainty, not a lost sensor bar.
-                mouse_visible = true;
-            }
-        }
-    }
-    if (allow_absolute_pointer && !mouse_visible && !host_pointer_polled) {
-        POINT cursor{};
-        HWND pointer_window = focused_window;
-        bool pointer_window_active =
-            window_focused && pointer_window != nullptr;
-        if (!pointer_window_active) {
-            pointer_window_active =
-                current_process_window_under_cursor(cursor, pointer_window);
-        } else if (!GetCursorPos(&cursor)) {
-            pointer_window_active = false;
-        }
-        if (!pointer_window_active &&
-            current_process_runtime_window(pointer_window) &&
-            GetCursorPos(&cursor)) {
-            pointer_window_active = true;
-        }
-        RECT client{};
-        if (pointer_window_active &&
-            ScreenToClient(pointer_window, &cursor) &&
-            GetClientRect(pointer_window, &client)) {
-            const int width = client.right - client.left;
-            const int height = client.bottom - client.top;
-            if (width > 1 && height > 1) {
-                // The pointer tracks only while the cursor is over the client area (all of the screen in
-                // fullscreen). In a window it drops out when the cursor leaves, as a Wii Remote does when it
-                // loses the sensor bar.
-                const bool inside_client =
-                    cursor.x >= 0 && cursor.y >= 0 &&
-                    cursor.x < width && cursor.y < height;
-                if (!inside_client) {
-                    pointer_window_active = false;
-                }
-            }
-            const galaxy::input::NativeMousePointerProjection
-                projected_cursor = project_client_mouse_pointer(
-                    pointer_window_active,
-                    pointer_window_active && width > 1 && height > 1,
-                    pointer_window_active,
-                    static_cast<int>(cursor.x),
-                    static_cast<int>(cursor.y),
-                    width,
-                    height);
-            if (projected_cursor.visible) {
-                mouse_moved = projected_cursor.x != s_mouse_x || projected_cursor.y != s_mouse_y;
-                s_mouse_x = projected_cursor.x;
-                s_mouse_y = projected_cursor.y;
-                mouse_visible = true;
-            }
-        }
-    }
-
-    // One pointer: the source that moved last owns it (pointer_control.h).
-    static galaxy::input::PointerOwner s_pointer_owner{};
-    static std::uint64_t s_pointer_clock_us = 0u;
-    const std::uint64_t now_us = controller_hid_now_us();
-    const float dt = s_pointer_clock_us == 0u || now_us <= s_pointer_clock_us
-        ? 0.0f
-        : std::min(static_cast<float>(now_us - s_pointer_clock_us) * 1e-6f, 0.05f);
-    s_pointer_clock_us = now_us;
-    const galaxy::input::StickVector stick_velocity = galaxy::input::stick_pointer_velocity(
-        {pad_pointer_x, pad_pointer_y}, pad_pointer_speed);
-    const float keyboard_speed =
-        controls.config.tune(galaxy::input::ControlScheme::Keyboard).pointer_speed;
-    // The gyro counts as moving above about 5 degrees per second, so hand
-    // tremor and rest noise never take the pointer from the mouse or stick.
-    constexpr float kGyroActiveUnitsPerSecond = 0.25f;
-    const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);
-    galaxy::input::PointerActivity activity{};
-    activity.mouse = mouse_moved;
-    activity.keys = std::fabs(keyboard_pointer_x) > 0.001f || std::fabs(keyboard_pointer_y) > 0.001f;
-    activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
-    activity.gyro = pad_gyro_pointing && dt > 0.0f &&
-                    gyro_motion > kGyroActiveUnitsPerSecond * dt;
-    activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
-    // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
-    // at the picture centre. While the button is held, the pointer stays there and that device keeps it.
-    const bool recenter_held = held(WiiTarget::PointerRecenter);
-    static galaxy::input::RecenterHold s_recenter{};
-    const galaxy::input::RecenterHold::Output recenter = s_recenter.update(recenter_held);
-    if (recenter.pressed) {
-        const bool pad_recenter = pad_logic_all.held(WiiTarget::PointerRecenter);
-        s_pointer_owner.owner = pad_recenter
-            ? (pad_gyro_pointing    ? galaxy::input::PointerSource::Gyro
-               : pad_touch_pointing ? galaxy::input::PointerSource::Touch
-                                    : galaxy::input::PointerSource::Stick)
-            : galaxy::input::PointerSource::Keys;
-    }
-    if (recenter.pinned) {
-        s_pointer_owner.last_active_us = now_us;
-    }
-    const galaxy::input::PointerSource owner = recenter.pinned
-        ? s_pointer_owner.owner
-        : s_pointer_owner.update(activity, now_us);
-    switch (owner) {
-    case galaxy::input::PointerSource::Mouse:
-        if (mouse_visible) {
-            s_pointer_x = s_mouse_x;
-            s_pointer_y = s_mouse_y;
-            pointer_active = true;
-        }
-        break;
-    case galaxy::input::PointerSource::Keys:
-        s_pointer_x = std::clamp(s_pointer_x + keyboard_pointer_x * keyboard_speed * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y - keyboard_pointer_y * keyboard_speed * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::Stick:
-        s_pointer_x = std::clamp(s_pointer_x + stick_velocity.x * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y - stick_velocity.y * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::Gyro:
-        s_pointer_x = std::clamp(s_pointer_x + gyro_x,
-                                 -galaxy::input::kGyroPointerLimit, galaxy::input::kGyroPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y - gyro_y,
-                                 -galaxy::input::kGyroPointerLimit, galaxy::input::kGyroPointerLimit);
-        // Pointed past the picture the game hides the pointer, as with a
-        // Wii Remote that loses the sensor bar.
-        pointer_active = std::fabs(s_pointer_x) <= galaxy::input::kPointerVisibleLimit &&
-                         std::fabs(s_pointer_y) <= galaxy::input::kPointerVisibleLimit;
-        break;
-    case galaxy::input::PointerSource::Touch:
-        // The finger moves it as a touchpad moves a cursor; it stays on the picture.
-        s_pointer_x = std::clamp(s_pointer_x + touch_x, -galaxy::input::kStickPointerLimit,
-                                 galaxy::input::kStickPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y + touch_y, -galaxy::input::kStickPointerLimit,
-                                 galaxy::input::kStickPointerLimit);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::None:
-        break;
-    }
-    if (recenter.pinned) {
-        // Gyro and stick motion while the button is held is discarded.
-        s_pointer_x = 0.0f;
-        s_pointer_y = 0.0f;
-        pointer_active = true;
-    }
-    // A connected controller keeps the pointer on screen until the mouse
-    // owns it.
-    if (!pointer_active && use_pads && owner != galaxy::input::PointerSource::Mouse &&
-        owner != galaxy::input::PointerSource::Gyro) {
-        pointer_active = true;
-    }
-    // Still-pointer hiding (pointer_control.h PointerRestHide): a hidden gyro
-    // pointer comes back only with recenter; a stick pointer also with a push
-    // or a move out of the radius.
-    static galaxy::input::PointerRestHide s_rest_hide{};
-    const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
-                                  owner == galaxy::input::PointerSource::Gyro ||
-                                  owner == galaxy::input::PointerSource::Touch ||
-                                  (owner == galaxy::input::PointerSource::None && use_pads);
-    const bool rest_hidden = s_rest_hide.update(
-        s_pointer_x, s_pointer_y, now_us, controller_owned,
-        recenter.pinned || recenter.released ||
-            (owner == galaxy::input::PointerSource::Stick && activity.stick) ||
-            (owner == galaxy::input::PointerSource::Touch && activity.touch),
-        owner == galaxy::input::PointerSource::Gyro,
-        pointer_hide_seconds, pointer_hide_radius);
-    if (rest_hidden) {
-        pointer_active = false;
-    }
-    // In menus a key press acts on the pointer's position, so a resting mouse pointer stays.
-    static galaxy::input::MouseRestHide s_mouse_rest_hide{};
-    if (s_mouse_rest_hide.update(owner == galaxy::input::PointerSource::Mouse && pointer_active && window_focused &&
-                                     play_context == galaxy::input::PlayContext::Play,
-                                 mouse_moved || mouse_button_held, now_us)) {
-        pointer_active = false;
-    }
-    if (script.has_pointer &&
-        (script_pointer_force_enabled() || !live_mouse_recent ||
-         !pointer_active)) {
-        s_pointer_x = script.pointer_x;
-        s_pointer_y = script.pointer_y;
-        pointer_active = true;
-    }
-    galaxy::input::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
-
-    static galaxy::input::tilt::Tilt s_tilt{};
-    apply_tilt_accel(snapshot, s_tilt, tilt_section, tilt_up, stick_x, stick_y, recenter.pressed);
-
-    const bool shake_pressed =
-        script.shake || held(WiiTarget::Shake) || motion_shake_remote;
-    static bool s_previous_shake = false;
-    if (shake_pressed && !s_previous_shake) {
-        std::cerr << "[input-shake] vi=" << current_vi << " source="
-                  << (motion_shake_remote ? "motion" : held(WiiTarget::Shake) ? "binding" : "script")
-                  << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
-    }
-    s_previous_shake = shake_pressed;
-    snapshot.shake = shake_pressed;
-    snapshot.nunchuk_shake = held(WiiTarget::NunchukShake) || motion_shake_nunchuk;
-    return snapshot;
+    return result.input;
 }
 
 }  // namespace

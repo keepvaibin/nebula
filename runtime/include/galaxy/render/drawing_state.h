@@ -74,10 +74,6 @@ struct NativeDrawState {
 
     // A state op (galaxy/render/native_state.h, nebula_game_api.h NEBULA_STATE_*).
     void apply(const state::Op& op);
-    // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
-    // `whole` false: the state already holds this program (the same one, nothing set in between); only the
-    // values apply.
-    void apply(const material::Program& program, const material::Values& values, bool whole = true);
     [[nodiscard]] std::uint32_t consume_dirty() noexcept {
         const std::uint32_t d = dirty;
         dirty = 0u;
@@ -86,7 +82,6 @@ struct NativeDrawState {
 
 private:
     void set_op(const state::Op& op);
-    void set_material(const material::Program& program, const material::Values& values, bool apply_program);
 public:
 };
 

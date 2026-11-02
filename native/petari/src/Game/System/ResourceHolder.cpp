@@ -235,7 +235,6 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         modelData->newSharedDisplayList(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
-        J3DNativeMaterial::sweep(modelData);
         return mModelResTable->add(pName, modelData, true);
     }
 
@@ -245,7 +244,6 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         modelData->newSharedDisplayList(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
-        J3DNativeMaterial::sweep(modelData);
         return mModelResTable->add(pName, modelData, true);
     }
 

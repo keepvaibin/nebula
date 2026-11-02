@@ -66,7 +66,6 @@ namespace {
         }
         draw.matrix_count = J3DNativeShape::positionMatrices(places, &draw.matrices);
         const NebulaHostServices* pHost = nebula_host();
-        J3DNativeMaterial::noteDraw();
         pHost->immediate(pHost->user, &draw);
     }
 

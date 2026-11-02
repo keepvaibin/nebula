@@ -164,13 +164,7 @@ void BloomEffect::postDraw() const {
         NebulaRender::bloomMarker(NebulaRender::kBloomNormal, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
         initDraw();
-        J3DNativeState::setNumTexGens(1);
-        J3DNativeState::setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR0A0);
-        J3DNativeState::setTevOp(GPU_TEVSTAGE0, GPU_MODULATE);
         _3C->load(GPU_TEXMAP0);
-        J3DNativeState::setChanMatColor(GPU_COLOR0A0, Color8(0xFF, 0xFF, 0xFF, 0xFF));
         J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
         return;
     }
