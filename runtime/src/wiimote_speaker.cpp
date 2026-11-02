@@ -78,6 +78,28 @@ void store_le16(std::byte* sample, std::int32_t value) noexcept {
 
 }  // namespace
 
+void Speaker::push(std::span<const std::int16_t> samples, std::uint32_t rate) noexcept {
+    if (!listening_.load(std::memory_order_relaxed) || rate == 0u) {
+        return;
+    }
+    sample_rate_.store(rate, std::memory_order_relaxed);
+    std::uint32_t head = head_.load(std::memory_order_relaxed);
+    const std::uint32_t tail = tail_.load(std::memory_order_acquire);
+    for (const std::int16_t sample : samples) {
+        if (head - tail >= kRingSamples) {
+            break;
+        }
+        ring_[head & kRingMask] = static_cast<float>(sample);
+        ++head;
+    }
+    head_.store(head, std::memory_order_release);
+}
+
+Speaker& game_speaker() noexcept {
+    static Speaker speaker;
+    return speaker;
+}
+
 void Speaker::mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept {
     if (!(gain > 0.0f)) {
         if (listening_.load(std::memory_order_relaxed)) listening_.store(false, std::memory_order_relaxed);
