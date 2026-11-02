@@ -35,8 +35,9 @@ void FileHolderFileEntry::setContext(void* pContext, JKRHeap* pHeap) {
     mContext = pContext;
     mHeap = pHeap;
 
-    mQueue.send(nullptr, false);
+    // In this order: the message wakes a waiter on another thread, which marks the entry done.
     mState = FILE_HOLDER_STATE_READING;
+    mQueue.send(nullptr, false);
 }
 
 FileHolder::FileHolder() {
