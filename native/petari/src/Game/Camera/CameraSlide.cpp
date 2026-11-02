@@ -4,13 +4,6 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraSlide_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)MR::pi();
-}
-
 CameraSlide::CameraSlide(const char* pName)
     : Camera(pName), mAxis(1.0f, 0.0f, 0.0f), mUp(0.0f, 1.0f, 0.0f), mWPoint(0.0f, 0.0f, 0.0f), mAngleA(0.0f), mDist(1000.0f) {
 }

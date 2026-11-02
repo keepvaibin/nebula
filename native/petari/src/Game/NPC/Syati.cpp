@@ -161,8 +161,6 @@ void Syati::exeWaitBlank() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void PlayerPoseSetterInWater::update() {
     _1C++;
     _1C = (_1C + 90) % 90;
@@ -196,7 +194,6 @@ void PlayerPoseSetterInWater::update() {
     MR::makeMtxUpFrontPos(&baseMtx, forward, *MR::getPlayerGravity(), pos);
     MR::setPlayerBaseMtx(baseMtx);
 }
-#pragma pop
 
 void Syati::exeFadeinBeforeTalk() {
     if (MR::isFirstStep(this)) {

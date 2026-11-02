@@ -2,67 +2,6 @@
 #include "Game/Util.hpp"
 #include <cstdio>
 
-void JMapUtil_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("type", "type");
-    MR::isEqualString("name", "name");
-    MR::isEqualString("Obj_arg0", "Obj_arg0");
-    MR::isEqualString("ShapeModelNo", "ShapeModelNo");
-    MR::isEqualString("pos_x", "pos_x");
-    MR::isEqualString("pos_y", "pos_y");
-    MR::isEqualString("pos_z", "pos_z");
-    MR::isEqualString("dir_x", "dir_x");
-    MR::isEqualString("dir_y", "dir_y");
-    MR::isEqualString("dir_z", "dir_z");
-    MR::isEqualString("scale_x", "scale_x");
-    MR::isEqualString("scale_y", "scale_y");
-    MR::isEqualString("scale_z", "scale_z");
-    MR::isEqualString("Obj_arg1", "Obj_arg1");
-    MR::isEqualString("Obj_arg2", "Obj_arg2");
-    MR::isEqualString("Obj_arg3", "Obj_arg3");
-    MR::isEqualString("Obj_arg4", "Obj_arg4");
-    MR::isEqualString("Obj_arg5", "Obj_arg5");
-    MR::isEqualString("Obj_arg6", "Obj_arg6");
-    MR::isEqualString("Obj_arg7", "Obj_arg7");
-    MR::isEqualString("FollowId", "FollowId");
-    MR::isEqualString("GroupId", "GroupId");
-    MR::isEqualString("ClippingGroupId", "ClippingGroupId");
-    MR::isEqualString("DemoGroupId", "DemoGroupId");
-    MR::isEqualString("l_id", "l_id");
-    MR::isEqualString("CommonPath_ID", "CommonPath_ID");
-    MR::isEqualString("SW_A", "SW_A");
-    MR::isEqualString("SW_B", "SW_B");
-    MR::isEqualString("SW_APPEAR", "SW_APPEAR");
-    MR::isEqualString("SW_DEAD", "SW_DEAD");
-    MR::isEqualString("SW_SLEEP", "SW_SLEEP");
-    MR::isEqualString("CameraSetId", "CameraSetId");
-    MR::isEqualString("ViewGroupId", "ViewGroupId");
-    MR::isEqualString("MessageId", "MessageId");
-    MR::isEqualString("CastId", "CastId");
-    MR::isEqualString("DemoName", "DemoName");
-    MR::isEqualString("TimeSheetName", "TimeSheetName");
-    MR::isEqualString("path_arg0", "path_arg0");
-    MR::isEqualString("path_arg1", "path_arg1");
-    MR::isEqualString("path_arg2", "path_arg2");
-    MR::isEqualString("path_arg3", "path_arg3");
-    MR::isEqualString("path_arg4", "path_arg4");
-    MR::isEqualString("path_arg5", "path_arg5");
-    MR::isEqualString("path_arg6", "path_arg6");
-    MR::isEqualString("path_arg7", "path_arg7");
-    MR::isEqualString("Path_ID", "Path_ID");
-    MR::isEqualString("usage", "usage");
-    MR::isEqualString("pnt0_x", "pnt0_x");
-    MR::isEqualString("pnt0_y", "pnt0_y");
-    MR::isEqualString("pnt0_z", "pnt0_z");
-    MR::isEqualString("pnt1_x", "pnt1_x");
-    MR::isEqualString("pnt1_y", "pnt1_y");
-    MR::isEqualString("pnt1_z", "pnt1_z");
-    MR::isEqualString("pnt2_x", "pnt2_x");
-    MR::isEqualString("pnt2_y", "pnt2_y");
-    MR::isEqualString("pnt2_z", "pnt2_z");
-    MR::isEqualString("closed", "closed");
-    MR::isEqualString("CLOSE", "CLOSE");
-}
-
 bool MR::getObjectName(const char** pName, const JMapInfoIter& rIter) {
     if (!rIter.isValid()) {
         return false;

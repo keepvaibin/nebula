@@ -133,12 +133,6 @@ namespace NrvFileSelector {
     NEW_NERVE(FileSelectorNrvManual, FileSelector, Manual);
 };  // namespace NrvFileSelector
 
-void FileSelector_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)PI;
-}
-
 FileSelector::FileSelector(const char* pName)
     : LiveActor(pName), mCameraController(), mSky(), mItems(), mOperationButton(), mBackButton(), mBrosButton(), mInfoMessage(), mSysInfoWindow(),
       _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new MiiCreateID()), mManual(), mIsMiiSelectStartFirst(),
@@ -807,8 +801,6 @@ namespace {
     };
 };  // namespace
 
-#pragma push
-#pragma opt_prelinearize off
 void FileSelector::calcBasePos(f32 offset) {
     f32 thetaStep = 2.0f * PI / USER_FILE_NUM;
     TPos3f translationMtx;
@@ -833,7 +825,6 @@ void FileSelector::calcBasePos(f32 offset) {
         transform.mult(_98[i], _98[i]);
     }
 }
-#pragma pop
 
 namespace {
     inline void initFileItem(FileSelector* pSelector, FileSelectItem* pItem) {
@@ -1013,14 +1004,6 @@ void FileSelector::playSelectedME() {
     default:
         break;
     }
-}
-
-void FileSelector_FORCE_MATCH() {
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL1");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL2");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL3");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL4");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL5");
 }
 
 void FileSelector::updateBgm() {

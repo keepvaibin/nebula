@@ -10,10 +10,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nw4r/lyt/texMap.h>
 
-void MiiSelectIcon_FORCE_MATCH_SDATA2() {
-    (void)5.0f;
-}
-
 namespace {
     static const f32 sCharacterTexFrame[] = {
         0.0f, 4.0f, 3.0f, 2.0f, 1.0f,

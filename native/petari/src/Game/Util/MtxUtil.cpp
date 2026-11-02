@@ -504,8 +504,6 @@ namespace MR {
         MR::makeMtxFrontUpPos(pDst, rFront, support, rPos);
     }
 
-#pragma push
-#pragma opt_propagation off
     void orthogonalize(TPos3f* pMtx) {
         TVec3f axisZ, axisY, axisX;
 
@@ -555,7 +553,6 @@ namespace MR {
         pMtx->mMtx[1][2] = zDir.y;
         pMtx->mMtx[2][2] = zDir.z;
     }
-#pragma pop
 
     void turnMtxToXDirRate(TPos3f* pMtx, const TVec3f& rDir, f32 rate) {
         TQuat4f quat;

@@ -153,8 +153,6 @@ void FireBubble::initMapToolInfo(const JMapInfoIter& rIter) {
     Mtx.getZDir(_9C);
 }
 
-#pragma push
-#pragma opt_propagation off
 void FireBubble::updateChaseFrontVec(f32 flt) {
     TVec3f vec2;
     TVec3f vec3;
@@ -185,7 +183,6 @@ void FireBubble::updateChaseFrontVec(f32 flt) {
         }
     }
 }
-#pragma pop
 
 void FireBubble::updateChaseFrontVecAndVelocity(f32 flt) {
     updateChaseFrontVec(flt);

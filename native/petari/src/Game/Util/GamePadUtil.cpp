@@ -10,11 +10,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 
-void GamePadUtil_FORCE_MATCH_SDATA2() {
-    (void)-2607.59448f;
-    (void)2607.59448f;
-}
-
 namespace MR {
     void getCorePadPointingPosBasedOnScreen(TVec2f* pPos, s32 channel) {
         MR::getGamePad(channel)->mPointer->getPointingPosBasedOnScreen(pPos);

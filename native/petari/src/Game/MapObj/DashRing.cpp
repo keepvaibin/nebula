@@ -13,27 +13,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 
-void DashRing_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)1000.0f;
-    (void)2.5f;
-    (void)100.0f;
-    (void)0.001f;
-    (void)20.0f;
-    (void)200.0f;
-    (void)300.0f;
-    (void)0.03f;
-    (void)2000.0f;
-    (void)15.0f;
-    (void)0.1f;
-    (void)TWO_PI;
-    (void)(1.0f / 64.0f);
-    (void)(TWO_PI / 64.0f);
-    (void)30.0f;
-}
-
 DashRing::~DashRing() {
 }
 

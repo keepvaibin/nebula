@@ -26,13 +26,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMath.hpp>
 
-void Metbo_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 a = MR::epsilon();
-    (void)-1.0f;
-}
-
 namespace {
     // sSpeedMax
     static const f32 sReceivePushPower = 1.5f;

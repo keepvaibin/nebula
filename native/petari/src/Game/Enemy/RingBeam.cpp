@@ -20,12 +20,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void RingBeam_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-}
-
 namespace NrvRingBeam {
     NEW_NERVE(RingBeamNrvSpread, RingBeam, Spread);
 };  // namespace NrvRingBeam

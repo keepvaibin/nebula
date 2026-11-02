@@ -22,44 +22,6 @@ namespace {
     f32 cDropFrontSpeed = 2.0f;
 };  // namespace
 
-void MarioJump_FORCE_MATCH_SDATA2() {
-    (void)0.00100000005f;
-    (void)15.0f;
-    (void)0.300000012f;
-    (void)4.0f;
-    (void)10.0f;
-    (void)0.899999976f;
-    (void)500.0f;
-    (void)0.100000001f;
-    (void)5.0f;
-    (void)100.0f;
-    (void)50.0f;
-    (void)150.0f;
-    (void)0.600000024f;
-    (void)80.0f;
-    (void)20.0f;
-    (void)8.0f;
-    (void)0.200000003f;
-    (void)0.800000012f;
-    (void)0.00390625f;
-    (void)45.0f;
-    (void)160.0f;
-    (void)1.79999995f;
-    (void)0.25f;
-    (void)300.0f;
-    (void)200.0f;
-    (void)-0.100000001f;
-    (void)-0.800000012f;
-    (void)30.0f;
-    (void)-0.200000003f;
-    (void)0.785398185f;
-    (void)0.998000026f;
-    (void)0.00999999978f;
-    (void)6.0f;
-    (void)7.0f;
-    (void)90.0f;
-}
-
 bool Mario::isRising() const {
     if (getPlayerMode() == 4 || getPlayerMode() == 6) {
         if (_16C.dot(*getGravityVec()) < 0.0f) {
@@ -2696,11 +2658,6 @@ bool Mario::taskOnSlide(u32 a1) {
     addVelocity(_A40);
     _A3C--;
     return _A3C != 0;
-}
-
-void MarioJump_FORCE_MATCH_DATA() {
-    Mario::Task task = &Mario::taskOnWallRising;
-    (void)task;
 }
 
 bool Mario::taskOnWallRising(u32 a1) {

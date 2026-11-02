@@ -450,8 +450,6 @@ void ElectricRailMoving::calcPointPos(TVec3f* pOutPos, f32 c) const {
     pOutPos->lerp(_E8[v5], _E8[v5 + 1], (v6 / v7));
 }
 
-#pragma push
-#pragma global_optimizer off
 void ElectricRailMoving::move() {
     _EC = getRepeatedCoord(_EC + mMovementSpeed);
 
@@ -481,7 +479,6 @@ void ElectricRailMoving::move() {
 
     updatePointPosAndModel();
 }
-#pragma pop
 
 void ElectricRailMoving::exeDisappear() {
     if (MR::isFirstStep(this)) {

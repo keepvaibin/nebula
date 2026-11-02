@@ -637,10 +637,6 @@ void MarioActor::initFace() {
     }
 }
 
-void MarioActorDraw_FORCE_MATCH_SDATA2_2() {
-    (void)0.00001f;
-}
-
 void MarioActor::updateFace() {
     switch (mCurrModel) {
     case 1:

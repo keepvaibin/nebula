@@ -7,13 +7,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void DinoPackunStateDamage_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("\203\146\203\102\203\155\203\160\203\142\203\116\203\223\203\137\203\201\201\133\203\127\217\363\221\324" /* ディノパックンダメージ状態 */, "\203\146\203\102\203\155\203\160\203\142\203\116\203\223\203\137\203\201\201\133\203\127\217\363\221\324" /* ディノパックンダメージ状態 */);
-    MR::isEqualString("SE_BV_D_PAKKUN_SPIN_HIT", "SE_BV_D_PAKKUN_SPIN_HIT");
-    MR::isEqualString("SE_BM_D_PAKKUN_SLAVER", "SE_BM_D_PAKKUN_SLAVER");
-    MR::isEqualString("\203\146\203\102\203\155\203\160\203\142\203\116\203\223\203\137\203\201\201\133\203\127" /* ディノパックンダメージ */, "\203\146\203\102\203\155\203\160\203\142\203\116\203\223\203\137\203\201\201\133\203\127" /* ディノパックンダメージ */);
-}
-
 namespace {
     static const TVec3f sOutPosition(0.0f, 100.0f, -300.0f);
     static const TVec3f sEggOutPosition(0.0f, 0.0f, -400.0f);

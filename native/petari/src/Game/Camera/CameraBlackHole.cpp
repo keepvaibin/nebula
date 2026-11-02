@@ -5,12 +5,6 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 
-void CameraBlackHole_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-}
-
 CameraBlackHole::CameraBlackHole(const char* pName) : Camera(pName), mFovy(1.0f), mRoll(), mWPoint(0.0f, 0.0f, 0.0f), mBasePos(0.0f, 0.0f, 0.0f) {
 }
 

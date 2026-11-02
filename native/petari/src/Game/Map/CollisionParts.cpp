@@ -11,17 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
-void CollisionParts_FORCE_MATCH_SDATA2() {
-    1.0f;
-    0.0f;
-    3.0f;
-    -1.0f;
-    2.0f;
-    0.001f;
-    20.0f;
-    1.0f / 35.0f;
-}
-
 void CollisionParts_FORCE_MATCH_GET_SCALE(const TPos3f& rMatrix, TVec3f& rScale) {
     rMatrix.getScale(rScale);
 }

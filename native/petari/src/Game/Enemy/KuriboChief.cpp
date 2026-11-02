@@ -196,10 +196,6 @@ void KuriboChief::makeArchiveList(NameObjArchiveListCollector* pCollector, const
     }
 }
 
-void KuriboChief_FORCE_MATCH_DATA() {
-    JUTNativeLog("head");
-}
-
 void KuriboChief::kill() {
     if (MR::isValidSwitchDead(this)) {
         MR::onSwitchDead(this);

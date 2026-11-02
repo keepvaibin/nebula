@@ -9,10 +9,6 @@
 #include <JSystem/JAudio2/JAISound.hpp>
 #include <JSystem/JGadget/hashcode.hpp>
 
-void AudSoundObject_FORCE_MATCH_SDATA2() {
-    f32 f1 = 1.0f;
-}
-
 AudSoundObject::AudSoundObject(TVec3f* pPos, u8 numHandles, JKRHeap* pHeap)
     : JAUSoundObject(pPos, numHandles, pHeap), JKRDisposer(), mSeVersion(0), mMapCode(0), mMapCodeExtra(0), mHashDatas(nullptr), mNumSounds(0) {
     mNumHandles = numHandles;

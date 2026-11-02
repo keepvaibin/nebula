@@ -7,16 +7,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-void CameraDPD_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    f32 f6 = MR::pi() / 2.0f;
-    (void)2.0f;
-}
-
 namespace {
     static const f32 sMaxDistance = 0.15f;
     static const f32 sFovyBlendRate = 0.05f;

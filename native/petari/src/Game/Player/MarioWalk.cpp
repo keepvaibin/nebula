@@ -557,8 +557,6 @@ void Mario::updateBrakeAnimation() {
     }
 }
 
-#pragma push
-#pragma opt_common_subs off
 void Mario::updateWalkSpeed() {
     f32 targetWalkSpeed = getTargetWalkSpeed();
     f32 f2 = 1.0f;
@@ -664,7 +662,6 @@ void Mario::updateWalkSpeed() {
     targetWalkSpeed = targetWalkSpeed * static_cast< f32 >(256 - mSinkTimer) / 256.0f;
     mWalkSpeed = mWalkSpeed * inertia + targetWalkSpeed * (1.0f - inertia);
 }
-#pragma pop
 
 void Mario::decideOnIceAnimation() {
     if (mTargetWalkSpeedIndex == 0) {

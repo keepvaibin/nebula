@@ -19,11 +19,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include <cstdio>
 
-void MapPartsUtil_FORCE_MATCH_SDATA2() {
-    0.0f;
-    0.5f;
-}
-
 void MapPartsUtil_DUMMY() {
     TVec3f a(0.0f, 0.0f, 0.0f);
     TVec3f b;

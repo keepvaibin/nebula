@@ -34,13 +34,6 @@
 #include "Game/Util/FurMulti.hpp"
 #include <cstdio>
 
-void LiveActorUtil_FORCE_MATCH_SDATA2() {
-    (void)360.0f;
-    (void)0.001f;
-    (void)5000.0f;
-    (void)10000.0f;
-}
-
 namespace {
     CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const TPos3f& rMtx,
                                          MR::CollisionScaleType scaleType, s32 unk) {

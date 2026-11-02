@@ -87,8 +87,6 @@ bool OceanBowl::isInWater(const TVec3f& rPos) const {
 
 // only way I could get it to match.
 // TODO remove me
-#pragma push
-#pragma opt_propagation off
 bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const {
     const TVec3f* pPosition = &mPosition;
     f32 B0 = mRadius;
@@ -141,7 +139,6 @@ bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterI
 
     return true;
 }
-#pragma pop
 
 void OceanBowl::movement() {
     const TVec3f* pPosition = &getPoint(12, 12)->mPosition;

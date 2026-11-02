@@ -659,8 +659,6 @@ bool BegomanBase::incAndCheckTiredCounter() {
     return mTiredCounter == 180;
 }
 
-#pragma push
-#pragma opt_propagation off
 void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
                                     const TVec3f* pVec) {
     TVec3f vec2;
@@ -695,7 +693,6 @@ void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArr
         angle += TWO_PI / (numBegoman);
     }
 }
-#pragma pop
 
 void BegomanBase::launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const TVec3f* pVec) {
     launchBegomanCore(pActor, pBegomanArray, numBegoman, radius, velH, velV, pVec);

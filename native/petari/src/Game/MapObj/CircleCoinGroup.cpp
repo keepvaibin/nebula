@@ -12,8 +12,6 @@ void CircleCoinGroup::initCoinArray(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
 }
 
-#pragma push
-#pragma opt_propagation off
 void CircleCoinGroup::placementCoin() {
     TPos3f mtx;
     MR::makeMtxTR(mtx, this);
@@ -34,7 +32,6 @@ void CircleCoinGroup::placementCoin() {
         angle += interval;
     }
 }
-#pragma pop
 
 namespace MR {
     NameObj* createCircleCoinGroup(const char* pName) {

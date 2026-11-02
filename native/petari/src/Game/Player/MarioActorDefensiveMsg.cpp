@@ -13,16 +13,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <cstring>
 
-void MarioActorDefensiveMsg_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)15.0f;
-    (void)30.0f;
-    (void)10.0f;
-    (void)20.0f;
-    (void)1.1f;
-    (void)100.0f;
-}
-
 bool MarioActor::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     bool carrying = getCarrySensor() != nullptr;
     if (mPlayerMode == PlayerMode_Teresa) {

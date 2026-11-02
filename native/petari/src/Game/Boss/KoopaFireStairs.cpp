@@ -114,8 +114,6 @@ void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const TVec3f* p
 
 // this is the only way I could match this
 // TODO fix
-#pragma push
-#pragma opt_propagation off
 void KoopaFireStairs::exeFly() {
     if (mStair->isBreak()) {
         TVec3f v15(mVelocity);
@@ -157,7 +155,6 @@ void KoopaFireStairs::exeFly() {
         mRotation.x = MR::repeatDegree(mRotation.x);
     }
 }
-#pragma pop
 
 void KoopaFireStairs::exeBreak() {
     if (MR::isFirstStep(this)) {

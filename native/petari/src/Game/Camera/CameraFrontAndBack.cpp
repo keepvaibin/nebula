@@ -5,13 +5,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraFrontAndBack_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-    (void)0.5f;
-}
-
 namespace {
     static const s32 sInterpolation = 120;
     static const f32 sWarpDistance = 500.0f;

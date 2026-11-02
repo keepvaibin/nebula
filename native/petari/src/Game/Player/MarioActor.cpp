@@ -46,58 +46,6 @@
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include "Game/System/NebulaAchievements.hpp"
 
-void MarioActor_FORCE_MATCH_SDATA2() {
-    (void)1000.0f;
-    (void)360.0f;
-    (void)100.0f;
-    (void)40.0f;
-    (void)60.0f;
-    (void)70.0f;
-    (void)0.349999994f;
-    (void)1.79999995f;
-    (void)52.5099983f;
-    (void)39.5800018f;
-    (void)76.3300018f;
-    (void)15.6899996f;
-    (void)88.9899979f;
-    (void)35.0f;
-    (void)-70.0f;
-    (void)-0.99000001f;
-    (void)90.0f;
-    (void)180.0f;
-    (void)57.2957764f;
-    (void)0.00999999978f;
-    (void)0.785398185f;
-    (void)0.00100000005f;
-    (void)0.100000001f;
-    (void)-0.0f;
-    (void)10.0f;
-    (void)20.0f;
-    (void)5.0f;
-    (void)-5.0f;
-    (void)-40.0f;
-    (void)200.0f;
-    (void)6.0f;
-    (void)0.75f;
-    (void)500.0f;
-    (void)700.0f;
-    (void)140.0f;
-    (void)150.0f;
-    (void)0.200000003f;
-    (void)0.800000012f;
-    (void)15.0f;
-    (void)0.0199999996f;
-    (void)80.0f;
-    (void)120.0f;
-    (void)2607.59448f;
-    (void)160.0f;
-    (void)0.150000006f;
-    (void)30.0f;
-    (void)-10.0f;
-    (void)0.899999976f;
-    (void)0.52359879f;
-}
-
 template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]) NO_INLINE;
 
 void MarioActor_DUMMY() {
@@ -2143,8 +2091,6 @@ void MarioActor::calcAnim() {
     updateRasterScroll();
 }
 
-#pragma push
-#pragma opt_propagation off
 void MarioActor::calcAndSetBaseMtx() {
     if (_1C0 == false) {
         _1C1 = true;
@@ -2462,7 +2408,6 @@ void MarioActor::calcAndSetBaseMtx() {
 
     _EA5 = false;
 }
-#pragma pop
 
 void MarioActor::setBlendMtxTimer(u16 a1) {
     if (a1 == 0) {

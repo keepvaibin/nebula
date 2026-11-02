@@ -6,10 +6,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void BeeFlowerHover_FORCE_MATCH_SDATA2() {
-    (void)50.0f;
-}
-
 namespace {
     static const f32 sDefaultRotateSpeed = 50.0f;
     static const s32 sStepToRecoverStart = 60;

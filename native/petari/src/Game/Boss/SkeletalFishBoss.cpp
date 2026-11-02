@@ -41,29 +41,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include <cstdio>
 
-void SkeletalFishBoss_FORCE_MATCH_SDATA2() {
-    (void)1000.0f;
-    (void)1.8325958f;
-    (void)2607.5945f;
-    (void)10.0f;
-    (void)40.0f;
-    (void)5000.0f;
-    (void)7000.0f;
-    (void)60.0f;
-    (void)5.0f;
-    (void)80.0f;
-    (void)400.0f;
-    (void)4000.0f;
-    (void)0.001f;
-    (void)4200.0f;
-    (void)1200.0f;
-    (void)1573.0f;
-    (void)-120.0f;
-    (void)320.0f;
-    (void)0.9f;
-    (void)270.0f;
-}
-
 namespace {
     static const SkeletalFishBoss::SensorToCollider sColInfo[0xE] = {
         {"Joint01", "BackBone01"},        {"Joint02", "BackBone02"},         {"Joint03", "BackBone03"}, {"Joint04", "BackBone04"},

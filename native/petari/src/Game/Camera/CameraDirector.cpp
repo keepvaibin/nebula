@@ -36,14 +36,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <cstring>
 
-void CameraDirector_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)MR::pi();
-}
-
 namespace {
     // static const s32 sDefaultBlendFrame =
     static const s32 sSubjectivePosInterpolateFrame = 0;

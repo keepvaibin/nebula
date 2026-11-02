@@ -28,12 +28,6 @@
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-void MarioLauncher_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)-1.0f;
-    (void)(MR::pi() / 2.0f);
-}
-
 namespace {
     static const f32 sEjectSpeed = 40.0f;
     static const f32 sGravityScale = 0.8f;

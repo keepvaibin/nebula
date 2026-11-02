@@ -50,8 +50,6 @@ void StinkBugBase::init(const JMapInfoIter& rIter) {
     mGravity.negate(upVec);
 }
 
-#pragma push
-#pragma global_optimizer off
 bool StinkBugBase::isPlayerInTerritory(f32 arg1, f32 arg2, f32 arg3, f32 arg4) const {
     if (!MR::isNearPlayer(this, mRadius + arg1)) {
         return false;
@@ -100,7 +98,6 @@ bool StinkBugBase::isPlayerInTerritory(f32 arg1, f32 arg2, f32 arg3, f32 arg4) c
 
     return MR::isNearAngleDegree(v5, _A4, _B0);
 }
-#pragma pop
 
 bool StinkBugBase::tryTurnSearch(f32 angle) {
     if (_B8) {
