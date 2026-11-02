@@ -108,5 +108,6 @@ private:
     galaxy::input::MouseRestHide s_mouse_rest_hide{};
     galaxy::input::tilt::Tilt s_tilt{};
     bool s_previous_shake = false;
+    bool s_device_input_suspended = false;
 };
 }  // namespace galaxy::host::controls
