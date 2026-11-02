@@ -181,7 +181,7 @@ public:
     virtual void control();
 
     bool isOffState() const;
-    void startAnimPosition(u32) NO_INLINE;
+    void startAnimPosition(u32);
 
     /* 0x20 */ StarPointerLayout* mParent;
     /* 0x24 */ s32 mPadChannel;

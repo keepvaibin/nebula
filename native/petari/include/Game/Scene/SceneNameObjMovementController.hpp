@@ -51,5 +51,5 @@ private:
 
 namespace MR {
     SceneNameObjMovementController* getSceneNameObjMovementController();
-    void notifyRequestNameObjMovementOnOff() NO_INLINE;
+    void notifyRequestNameObjMovementOnOff();
 };  // namespace MR

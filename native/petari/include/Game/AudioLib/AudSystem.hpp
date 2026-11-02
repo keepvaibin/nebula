@@ -153,5 +153,5 @@ public:
     /* 0x132C */ SpkSystem* mSpkSystem;
 };
 
-AudSystem* AudNewAudSystem(JKRSolidHeap*, void*, JKRArchive*, JKRArchive*, JKRArchive*, JKRArchive*) NO_INLINE;
-AudSystem* AudNewAudSystem_(JAUSectionHeap*, JKRArchive*, JKRArchive*, JKRArchive*, int) NO_INLINE;
+AudSystem* AudNewAudSystem(JKRSolidHeap*, void*, JKRArchive*, JKRArchive*, JKRArchive*, JKRArchive*);
+AudSystem* AudNewAudSystem_(JAUSectionHeap*, JKRArchive*, JKRArchive*, JKRArchive*, int);

@@ -43,7 +43,7 @@ namespace {
         template < int N >
         class BitFlag : public BitFlagBase {
         public:
-            BitFlag() NO_INLINE {
+            BitFlag() {
                 MR::zeroMemory(mBits, sizeof(mBits));
             }
 

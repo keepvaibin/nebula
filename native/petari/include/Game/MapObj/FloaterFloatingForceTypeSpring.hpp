@@ -31,7 +31,7 @@ public:
 
     void updateVelocity();
     void soundMoveSE();
-    f32 getCurrentSinkSpeed() const NO_INLINE;
+    f32 getCurrentSinkSpeed() const;
     bool tryOn();
     bool tryReturn();
     ;

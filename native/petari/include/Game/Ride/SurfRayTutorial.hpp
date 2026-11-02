@@ -30,9 +30,9 @@ public:
     bool isSuccessStraight() const;
     bool isSuccessTurnLeft() const;
     bool isSuccessTurnRight() const;
-    bool isFailureTwistLeftMore() const NO_INLINE;
-    bool isFailureTwistRightMore() const NO_INLINE;
-    bool isFailureStand() const NO_INLINE;
+    bool isFailureTwistLeftMore() const;
+    bool isFailureTwistRightMore() const;
+    bool isFailureStand() const;
     void omitTutorial() const;
     void nextTutorial();
     void prevTutorial();

@@ -413,17 +413,22 @@ public:
         resident_vertex_base_ = base;
         resident_vertex_bytes_ = bytes;
         if (base == 0u) {
-            resident_staging_.Reset();
+            resident_upload_.Reset();
+            resident_upload_mapped_ = nullptr;
             resident_local_ = nullptr;
             resident_copies_.clear();
+            for (ResidentStaging& staging : resident_staging_) {
+                staging = {};
+            }
         }
     }
-    // The resident decoded vertices (RenderCore): written through the returned mapping, an upload copy; the GPU reads
-    // them from local memory at the returned address (GPU reads of upload memory measured 2.7x slower on an AMD
-    // APU), each range once copy_resident_vertices has queued it: the copies run before the command list being
-    // recorded. Where local memory cannot be had the GPU reads the upload copy.
+    // The resident decoded vertices (RenderCore): the GPU reads them from local memory at the returned address (GPU
+    // reads of upload memory measured 2.7x slower on an AMD APU). Where local memory cannot be had they live in upload
+    // memory instead.
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
-    void copy_resident_vertices(std::uint64_t offset, std::uint64_t bytes);
+    // Where to write the bytes at `offset`: staging memory that lives while this frame does, the copy running before
+    // the command list being recorded.
+    [[nodiscard]] std::byte* stage_resident_vertices(std::uint64_t offset, std::uint64_t bytes);
     // Swap-chain presents per second over the last second (any source).
     [[nodiscard]] double measured_present_hz() const noexcept {
         return measured_present_hz_.load(std::memory_order_relaxed);
@@ -880,9 +885,30 @@ private:
     // The command list run before each main one when it has work: resident vertex copies, then the curve sort.
     bool ensure_pre_list();
     void record_pre_list();
-    Microsoft::WRL::ComPtr<ID3D12Resource> resident_staging_;
+    struct ResidentCopy {
+        ID3D12Resource* source;
+        std::uint64_t source_offset;
+        std::uint64_t offset;
+        std::uint64_t bytes;
+    };
+    // A frame's staging: chunks kept while frames keep staging, gone after a frame that staged nothing (the usual
+    // state: new vertices come with a scene).
+    struct ResidentStagingChunk {
+        UploadBuffer memory;
+        std::uint64_t size = 0;
+    };
+    struct ResidentStaging {
+        std::vector<ResidentStagingChunk> chunks;
+        std::size_t current = 0;
+        std::uint64_t used = 0;
+        bool staged = false;
+    };
+    static constexpr std::uint64_t kResidentStagingChunk = 4ull << 20u;
+    std::array<ResidentStaging, kFramesInFlight> resident_staging_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> resident_upload_;  // only where local memory cannot be had
+    std::byte* resident_upload_mapped_ = nullptr;
     ID3D12Resource* resident_local_ = nullptr;
-    std::vector<std::array<std::uint64_t, 2>> resident_copies_;
+    std::vector<ResidentCopy> resident_copies_;
     bool pre_list_failed_ = false;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> curve_sort_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_sort_pso_;

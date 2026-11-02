@@ -171,7 +171,7 @@ namespace MR {
         u32 hash;
 
         for (hash = 0; *pStr != '\0'; pStr++) {
-            hash = *pStr + hash * 31;
+            hash = static_cast< s8 >(*pStr) + hash * 31;  // cooked tables hold these: a byte above 127 counts negative
         }
 
         return hash;
@@ -181,7 +181,7 @@ namespace MR {
         u32 hash;
 
         for (hash = 0; *pStr != '\0'; pStr++) {
-            hash = lowerCase(*pStr) + hash * 31;
+            hash = lowerCase(static_cast< s8 >(*pStr)) + hash * 31;
         }
 
         return hash;

@@ -209,7 +209,7 @@ namespace MR {
     void setBrkRate(const LiveActor*, f32);
     void setBvaRate(const LiveActor*, f32);
 
-    void setBckFrame(const LiveActor*, f32) NO_INLINE;
+    void setBckFrame(const LiveActor*, f32);
     void setBtkFrame(const LiveActor*, f32);
     void setBrkFrame(const LiveActor*, f32);
     void setBtpFrame(const LiveActor*, f32);
@@ -259,7 +259,7 @@ namespace MR {
     const NebulaColor8* getLightAmbientColor(const LiveActor*);
     ActorLightCtrl* getLightCtrl(const LiveActor*);
 
-    bool isStep(const LiveActor*, s32) NO_INLINE;
+    bool isStep(const LiveActor*, s32);
     bool isFirstStep(const LiveActor*);
     bool isLessStep(const LiveActor*, s32);
     bool isLessEqualStep(const LiveActor*, s32);
@@ -324,7 +324,7 @@ namespace MR {
     void showModel(LiveActor*);
     void hideModel(LiveActor*);
     void hideModelAndOnCalcAnim(LiveActor*);
-    void showModelIfHidden(LiveActor*) NO_INLINE;
+    void showModelIfHidden(LiveActor*);
     void hideModelIfShown(LiveActor*);
     void hideModelAndOnCalcAnimIfShown(LiveActor*);
 

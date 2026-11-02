@@ -21,7 +21,7 @@ public:
 
     void updateDropFlag();
     void resetTeresaMode();
-    bool isTeresaAccel() const NO_INLINE;
+    bool isTeresaAccel() const;
     f32 checkHeight();
     void checkAccel();
     void checkWind();

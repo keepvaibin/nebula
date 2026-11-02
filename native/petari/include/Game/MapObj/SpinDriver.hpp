@@ -48,9 +48,9 @@ public:
     void calcShootMotionTime();
     void startCamera();
     void updateCamera();
-    void cancelCamera() NO_INLINE;
-    void endCamera() NO_INLINE;
-    bool canStartBind() const NO_INLINE;
+    void cancelCamera();
+    void endCamera();
+    bool canStartBind() const;
     bool canBind(HitSensor*) const;
 
     /* 0x08C */ LiveActor* _8C;

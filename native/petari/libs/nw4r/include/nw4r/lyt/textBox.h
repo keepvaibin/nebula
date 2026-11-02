@@ -41,7 +41,7 @@ namespace nw4r {
             void SetFont(const ut::Font*);
             u16 GetStringBufferLength() const;
             #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-            u32 MakeDrawFlag() const NO_INLINE;
+            u32 MakeDrawFlag() const;
             #else
             u32 MakeDrawFlag() const;
             #endif

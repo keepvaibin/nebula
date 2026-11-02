@@ -161,7 +161,7 @@ public:
         return this->mLink != other.mLink;
     }
 
-    JSUListIterator< T > operator++(int) NO_INLINE {
+    JSUListIterator< T > operator++(int) {
         JSUListIterator< T > prev = *this;
         this->mLink = this->mLink->getNext();
         return prev;
@@ -281,7 +281,7 @@ public:
         return prev;
     }
 
-    JSUTreeIterator< T >& operator++() NO_INLINE {
+    JSUTreeIterator< T >& operator++() {
         this->mTree = this->mTree->getNextChild();
         return *this;
     }

@@ -21,7 +21,7 @@ namespace MR {
     JKRHeap* getAproposHeapForSceneArchive(f32 maxFreeSizeRate);
     JKRExpHeap* getStationedHeap();
     JKRSolidHeap* getSceneHeap();
-    void becomeCurrentHeap(JKRHeap* pHeap) NO_INLINE;
+    void becomeCurrentHeap(JKRHeap* pHeap);
     bool isEqualCurrentHeap(JKRHeap* pHeap);
     void adjustHeapSize(JKRExpHeap* pHeap, const char* pParam2);
 

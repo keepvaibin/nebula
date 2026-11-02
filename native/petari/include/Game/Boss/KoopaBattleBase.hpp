@@ -13,7 +13,7 @@ namespace MR {
 };  // namespace MR
 
 namespace MR {
-    void moveAndTurnToPlayer(LiveActor* pActor, TVec3f* pVec, const MR::ActorMoveParam& rMoveParam) NO_INLINE;
+    void moveAndTurnToPlayer(LiveActor* pActor, TVec3f* pVec, const MR::ActorMoveParam& rMoveParam);
 };  // namespace MR
 
 class KoopaBattleBase : public ActorStateBase< Koopa > {

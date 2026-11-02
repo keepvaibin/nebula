@@ -13,7 +13,7 @@ namespace MR {
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[in] considerLanguage Determines if the file is localized.
     /// @return `true` if the file exists within the disc file system, `false` otherwise.
-    bool isFileExist(const char* pFilePath, bool considerLanguage) NO_INLINE;
+    bool isFileExist(const char* pFilePath, bool considerLanguage);
 
     /// @brief Returns the size of a file, in bytes.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
@@ -136,7 +136,7 @@ namespace MR {
     /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
     /// @param[in] unused Unused flag.
     /// @return `true` if a valid archive file exists in the file system, `false` otherwise.
-    bool makeObjectArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool unused) NO_INLINE;
+    bool makeObjectArchiveFileNameFromPrefix(char* pDst, u32 size, const char* pFilePrefix, bool unused);
 
     /// @brief Creates an absolute path to the given layout's archive file.
     /// @param[out] pDst A pointer to the path buffer to initialize.

@@ -5,27 +5,27 @@
 #include <cstdlib>
 
 namespace {
-    u32 str2Color(const char* pStr) NO_INLINE {
+    u32 str2Color(const char* pStr) {
         return strtoul(pStr + 1, nullptr, 16) * 256;
     }
 
-    bool isValueOnR(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    bool isValueOnR(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 
         return strchr(value, 'R') != nullptr;
     }
 
-    bool isValueOnS(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    bool isValueOnS(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 
         return strchr(value, 'S') != nullptr;
     }
 
-    bool isValueOnT(const JMapInfoIter& rIter, const char* pName) NO_INLINE;
+    bool isValueOnT(const JMapInfoIter& rIter, const char* pName);
 
-    const char* getStringValue(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    const char* getStringValue(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 
@@ -168,7 +168,7 @@ const char* AutoEffectInfo::getName() const {
 }
 
 namespace {
-    bool isValueOnT(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    bool isValueOnT(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 

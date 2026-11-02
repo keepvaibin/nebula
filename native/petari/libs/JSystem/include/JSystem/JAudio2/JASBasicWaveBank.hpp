@@ -29,20 +29,21 @@ struct JASBasicWaveBank : public JASWaveBank {
 
     struct TWaveHandle : public JASWaveHandle {
         TWaveHandle() {
-            mHeap = nullptr;
+            mArc = nullptr;
         }
 
         virtual const JASWaveInfo* getWaveInfo() const {
             return &mWaveInfo;
         }
         virtual const u8* getWavePtr() const;
+        virtual const u8* getWaveLimit() const;
 
         bool compareHeap(JASHeap* heap) const {
-            return mHeap == heap;
+            return mArc != nullptr && mArc->getHeap() == heap;
         }
 
         /* 0x04 */ JASWaveInfo mWaveInfo;
-        /* 0x28 */ JASHeap* mHeap;
+        /* 0x28 */ JASWaveArc* mArc;
     };
 
     struct TWaveInfo {

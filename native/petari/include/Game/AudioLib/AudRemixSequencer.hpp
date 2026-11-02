@@ -26,7 +26,7 @@ public:
 
     void initNoteOnBuff();
     void update();
-    void setTempo(f32) NO_INLINE;
+    void setTempo(f32);
     AudRmxSeqNoteOnTimer* newNoteOnTimer();
     void addNoteData(const RemixNoteTrackData*, const RemixNoteData*);
 

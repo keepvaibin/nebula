@@ -134,7 +134,7 @@ void PowerStarEventKeeper::initStarInfoTableAfterPlacement() {
     }
 }
 
-void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const TVec3f* pPos, bool forceAppear, bool a2) NO_INLINE {
+void PowerStarEventKeeper::requestAppearPowerStar(const char* pName, s32 starNum, const TVec3f* pPos, bool forceAppear, bool a2) {
     StageStateKeeper* pStateKeeper = EventFunction::getStageStateKeeper();
     pStateKeeper->mIsPowerStarAppeared = true;
 

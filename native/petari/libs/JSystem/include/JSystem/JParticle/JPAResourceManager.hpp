@@ -19,7 +19,7 @@ public:
     void registTex(JPATexture*);
     u32 getResUserWork(u16) const;
 
-    void load(u16 idx, GpuTexMapID texMapID) NO_INLINE {
+    void load(u16 idx, GpuTexMapID texMapID) {
         CALL_INLINE_FUNC(load, idx, texMapID);
     }
 

@@ -31,7 +31,7 @@
 #endif
 
 namespace {
-    AudSystemWrapper* getAudioSystemWrapper() NO_INLINE {
+    AudSystemWrapper* getAudioSystemWrapper() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mAudioSystem;
     }
 };  // namespace

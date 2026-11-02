@@ -21,7 +21,6 @@ public:
     void initSensor();
     void updatePose();
     void addVelocityBase();
-    // existence is implied by sdata2 ordering
     void addVelocityHitAttacked();
     void addVelocityToRailPoint(f32);
     bool requestTrampled();

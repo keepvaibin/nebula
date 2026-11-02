@@ -78,12 +78,12 @@ public:
     bool isStopAllLeg() const;
     bool isStarted() const;
     bool isDemo() const;
-    bool isStartDemo() const NO_INLINE;
-    bool isDamageDemo() const NO_INLINE;
+    bool isStartDemo() const;
+    bool isDamageDemo() const;
     bool isEndDemo() const;
-    bool isEndPainDemo() const NO_INLINE;
-    bool isEndBreakDownDemo() const NO_INLINE;
-    bool isEndExplosionDemo() const NO_INLINE;
+    bool isEndPainDemo() const;
+    bool isEndBreakDownDemo() const;
+    bool isEndExplosionDemo() const;
     bool isBroken() const;
     bool isRideMario() const;
     bool isLeaveMarioNow() const;

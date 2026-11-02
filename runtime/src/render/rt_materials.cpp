@@ -232,7 +232,7 @@ RtMaterialTable load() {
             continue;
         }
         const std::size_t rows = table.read(file);
-        std::cerr << "[rt-materials] file=" << path << " rows=" << rows << " textures=" << table.size()
+        std::cerr << "[rt-materials] file=" << galaxy::path_text(galaxy::text_path(path).filename()) << " rows=" << rows << " textures=" << table.size()
                   << " skipped=" << table.skipped() << '\n';
     }
     return table;

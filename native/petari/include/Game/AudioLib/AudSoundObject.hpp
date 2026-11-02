@@ -58,7 +58,7 @@ public:
     JAISoundHandle* startLevelSoundParam(JAISoundID, s32, s32);
     JAISoundHandle* startLevelSoundParam(const char*, s32, s32);
     bool modifyLimitedSound(JAISoundID);
-    bool isPlayingID(JAISoundID) NO_INLINE;
+    bool isPlayingID(JAISoundID);
     void releaseHandle(JAISoundID);
     void setMapCode(s32);
     void setMapCodeExtra(s32);

@@ -390,7 +390,7 @@ void Mario::decideWalkAnimation() {
         f32 factor = (mWalkSpeed - ::sWalkTargetTable[5]) / (1.0f - ::sWalkTargetTable[5]);
         diffFromTargetSpeed = (diffFromTargetSpeed * (1.0f - factor)) + (squared * factor);
     } else if (mWalkSpeed < ::sWalkTargetTable[3]) {
-        f32 sqrt = MR::fastSqrtf(diffFromTargetSpeed);
+        f32 sqrt = NebulaSqrt(diffFromTargetSpeed);
         f32 factor = (::sWalkTargetTable[3] - mWalkSpeed) / ::sWalkTargetTable[3];
         diffFromTargetSpeed = (diffFromTargetSpeed * factor) + (sqrt * (1.0f - factor));
     }

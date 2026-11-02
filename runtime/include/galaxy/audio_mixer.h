@@ -78,8 +78,7 @@ public:
     // `rate`: the output rate in Hz (8000..192000).
     explicit AudioMixer(std::uint32_t rate);
 
-    void setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
-               const std::byte* sound_memory, std::uint32_t sound_memory_size);
+    void setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects);
     // The output's rate changed (another device): filters and delays start over at it, the voices play on.
     void set_rate(std::uint32_t rate);
     // One subframe at `gain` into the frame being built.
@@ -187,8 +186,6 @@ private:
     NebulaVoice* voices_{};
     std::uint32_t voice_count_{};
     const NebulaEffectLine* effects_{};
-    const std::byte* sound_{};
-    std::uint32_t sound_size_{};
 
     std::uint64_t subframe_counter_{};
     std::uint32_t samples_{};  // this subframe's output samples

@@ -43,7 +43,7 @@ public:
     virtual void addVelocity(const TVec3f& rVelocity, f32);
 
     bool checkWaterCube(bool);
-    void onSurface() NO_INLINE;
+    void onSurface();
     void doJetJump(u8);
     void updateLifeByTime();
     bool surfacePaddle();
@@ -70,7 +70,7 @@ public:
     f32 calcRingAcc();
     void hitPunch(const TVec3f& rPunchDir);
     f32 getSurface() const;
-    f32 getWaterEdgeDist() const NO_INLINE {
+    f32 getWaterEdgeDist() const {
         if (isOnWaterSurface()) {
             return -1.0f;
         }

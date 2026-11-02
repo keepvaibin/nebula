@@ -34,7 +34,7 @@ public:
     void draw2() const;
     void initDraw() const;
 
-    void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* pSubColor) NO_INLINE {
+    void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* pSubColor) {
         mPadChannel = padChannel;
         mMainColor = pMainColor;
         mSubColor = pSubColor;

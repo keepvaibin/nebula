@@ -133,7 +133,7 @@ BOOL Mii_CheckResource(const void* res, u32 size) {
     return checkArchive_((const u8*)res, size);
 }
 
-static void parseOnmemoryRes_(void) NO_INLINE {
+static void parseOnmemoryRes_(void) {
     Mii_Loader* loader;
     int i;
 

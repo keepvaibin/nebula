@@ -70,11 +70,6 @@ typedef int BOOL;
 
 #define __REGISTER
 
-#if !defined(AT_ADDRESS)
-#define AT_ADDRESS(x)
-#endif
-
-#define ALWAYS_INLINE
 #define NO_INLINE
 
 // Natively too: the GPU addresses textures and display lists in 32-byte units, and the layouts must stay the console's.
@@ -82,18 +77,14 @@ typedef int BOOL;
 
 #define ATTRIBUTE_PACKED __attribute__((packed))
 
-// Natively a function the game replaces (Game/System/Overwrite.cpp) has its original left out of the build, so a missing
-// or doubled definition fails the link instead of the linker picking one; data defined in headers is an inline variable
-// (ATTRIBUTE_WEAK_DEF).
-#define ATTRIBUTE_WEAK
-
 // Natively the compiler checks the game's printf-style calls (an audit build's -Wformat).
 #define ATTRIBUTE_PRINTF(fmt, first) __attribute__((format(printf, fmt, first)))
 
+// Data defined in headers is an inline variable.
 #ifdef __cplusplus
 #define ATTRIBUTE_WEAK_DEF(...) inline __VA_ARGS__
 #else
-#define ATTRIBUTE_WEAK_DEF(...) __VA_ARGS__ ATTRIBUTE_WEAK
+#define ATTRIBUTE_WEAK_DEF(...) __VA_ARGS__
 #endif
 
 #ifndef TRUE

@@ -24,7 +24,7 @@ public:
     virtual const Nerve* getNerveWait();
     void onSwitchB();
     void tearDownPursue();
-    void generateItem() NO_INLINE;
+    void generateItem();
     void exeNoCalcWait();
     void exeWait();
     void exeSignAttack();

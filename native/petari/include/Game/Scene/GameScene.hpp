@@ -48,7 +48,7 @@ public:
     void drawMirror() const;
     void draw3D() const;
     void draw2D() const;
-    bool isValidScenarioOpeningCamera() const NO_INLINE;
+    bool isValidScenarioOpeningCamera() const;
     void startStagePlayFirst();
     void startStagePlayRetry();
     bool isPermitToPauseMenu() const;

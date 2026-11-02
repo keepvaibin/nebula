@@ -8,7 +8,7 @@ public:
     GamePadInfoChecker(GamePad*);
 
     s32 getBattery() const;
-    void startCheck() NO_INLINE;
+    void startCheck();
     void reset();
     void update();
 

@@ -13,7 +13,7 @@ public:
     void pauseOn();
     void pauseOff();
     bool isValid() const;
-    bool isContinuousParticle() const NO_INLINE;
+    bool isContinuousParticle() const;
 
     // In MultiEmitterAccess
     void setGlobalRotation(const TVec3s&);

@@ -15,7 +15,7 @@ public:
     /// @brief Creates a new `CSSoundNameConverter`.
     CSSoundNameConverter();
 
-    void init() NO_INLINE;
+    void init();
     void initDataTable(const SpkTable*);
     void makeDataTable(const SpkTable*);
     u32 getSoundID(const char*) const;

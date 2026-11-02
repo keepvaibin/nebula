@@ -27,14 +27,13 @@ clang 22 on every host, with the same flags everywhere:
 |---|---|
 | `-std=gnu++17`, C `-std=gnu11` | The code is C++03 for CodeWarrior. C++20 adds rewritten comparison candidates that can change which `operator==` runs, and makes clang's builtin `stddef.h` re-enter under `__has_feature(modules)` (M). |
 | The host's C and C++ libraries, force-included `nebula_prelude.h` | `MR::sort` (`SortUtil.hpp`) keeps the order of equal elements the same on every host; the collision binder depends on it (D). Text is UTF-16, `char16_t` (`TextString.hpp`). |
-| `-fsigned-char` | Console `char`. |
 | `-fno-strict-aliasing` | The decompiled code type-puns through pointer casts throughout. |
 | `-fno-math-errno` | No kept code reads `errno` (M). With it, `sqrtf` is one instruction instead of a compare and a library call on the negative path (M, assembly). |
 | `-fno-stack-protector` | Pinned off for every toolchain (some distribution compilers enable it by default), so the module performs the same everywhere. |
 | `-fno-strict-float-cast-overflow` | Float-to-int casts saturate (`llvm.fpto[su]i.sat`, M). Unsigned conversions equal the console's `__cvt_fp2unsigned` (D). Signed ones differ only for NaN (0 here, 0x80000000 there). 8- and 16-bit targets saturate where the console wrapped after an int32 conversion: every such conversion goes through `s32` in the source (`(s16)(s32)(x)`, 205 sites; `native/tools/narrow_float_audit.py`). Degrees to binary angles (x 182.04) leave the 16-bit range past 180 degrees: saturated, every object placed rotated past 180 degrees was turned to 180 (the Observatory's Terrace and Fountain domes, M). |
 | `-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation` | CodeWarrior's model. JKRHeap's `operator new`/`delete` take every allocation; no kept code uses `dynamic_cast` or `typeid` (M). |
 | `-fno-ms-compatibility -fno-delayed-template-parsing`; `-Wno-everything` then, as errors, `return-type`, the pointer/int truncation casts, calls without a prototype, int/pointer conversions, mismatched function pointer types, returned addresses of locals and constant out-of-bounds indexes | Windows reports the errors every other host reports. Strict mode found 15 lookup/goto sites hidden by the MSVC-compatible defaults (M). `-w` would also silence the `-Werror=` checks (M). Each error class is one the audits found silently miscompiled natively (see Audits). No function falls off its end (M). |
-| floating-point contraction on (default) | CodeWarrior contracts to `fmadds`. Results aren't bit-exact with the console in any case. |
+| `-ffp-contract=off` | The same results on every CPU, with or without FMA. |
 
 Status:
 - Without the cast checks, all 1,821 kept units compile at `-O2` for `x86_64-pc-windows-msvc` (M, `native/tools/census.py`).

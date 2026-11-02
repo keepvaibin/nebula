@@ -84,7 +84,6 @@ target_compile_definitions(smg_game PRIVATE $<$<PLATFORM_ID:Linux,Android>:_GNU_
 target_compile_options(smg_game PRIVATE
     -ffp-contract=off  # the same results on every CPU (A-10)
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fms-extensions>
-    -fsigned-char
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fno-plt>
     -fno-ms-compatibility -fno-delayed-template-parsing

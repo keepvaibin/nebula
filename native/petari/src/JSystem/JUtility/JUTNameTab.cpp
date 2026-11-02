@@ -46,7 +46,7 @@ const char* JUTNameTab::getName(u16 index) const {
 u16 JUTNameTab::calcKeyCode(const char* pName) const {
     u32 keyCode = 0;
     while (*pName) {
-        keyCode = (keyCode * 3) + *pName++;
+        keyCode = (keyCode * 3) + static_cast< s8 >(*pName++);
     }
     return keyCode;
 }

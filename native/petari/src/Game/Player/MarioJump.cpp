@@ -1062,7 +1062,7 @@ void Mario::tryDrop() {
     return;
 }
 
-bool Mario::isDigitalJump() const NO_INLINE {
+bool Mario::isDigitalJump() const {
     return mMovementStates._E;
 }
 

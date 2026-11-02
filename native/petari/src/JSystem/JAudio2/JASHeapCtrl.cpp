@@ -274,8 +274,8 @@ JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getC
 
 JASHeap JASKernel::soundHeap;
 
-// The sound memory (wave archives and stream buffers): `size` bytes off the root heap,
-// handed out as pointers the mixer reads.
+// The sound memory: `size` bytes off the root heap. It holds no sound: a wave archive's bytes are in the mapped store, and
+// here is its place in its section, which frees it with the section.
 void JASKernel::setupSoundHeap(u32, u32 size) {
     soundHeap.initRootHeap(SingletonHolder< HeapMemoryWatcher >::get()->mSoundMemory, size);
 }

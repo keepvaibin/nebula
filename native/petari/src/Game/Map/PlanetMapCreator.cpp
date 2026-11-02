@@ -277,7 +277,6 @@ namespace {
     }
 };  // namespace
 
-// FIXME: Scheduling issues
 PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetMapData() {
     JMapInfo* pIter = MR::createCsvParser(::sArcName, ::sFileName);
 

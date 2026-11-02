@@ -5,7 +5,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 
 namespace {
-    GameScene* getGameScene() NO_INLINE {
+    GameScene* getGameScene() {
         return static_cast< GameScene* >(SingletonHolder< GameSystem >::get()->mSceneController->mScene);
     }
 };  // namespace

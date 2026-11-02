@@ -206,5 +206,5 @@ void JumpHole::initParabola(const TVec3f& rPosition) {
     MR::separateScalarAndDirection(&mLaunchDistance, &mLaunchDirection, mLaunchDirection);
     MR::calcParabolicFunctionParam(&mLaunchQuadratic, &mLaunchLinear, startHeight, endHeight);
     mLaunchStart = rPosition;
-    mLaunchDuration = MR::fastSqrtf(MR::abs(2.0f * mLaunchQuadratic / ::sGravityAcc));
+    mLaunchDuration = NebulaSqrt(MR::abs(2.0f * mLaunchQuadratic / ::sGravityAcc));
 }

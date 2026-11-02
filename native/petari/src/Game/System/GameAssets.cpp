@@ -135,6 +135,11 @@ namespace GameAssets {
         host->asset_read(host->user, pFile->mEntry, static_cast< u64 >(offset), static_cast< u32 >(size), pDst, slot);
     }
 
+    const void* map(s32 entryNum) {
+        const NebulaHostServices* const host = nebula_host();
+        return host->asset_map(host->user, entryNum);
+    }
+
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset) {
         GameEvent done;
         done.init();

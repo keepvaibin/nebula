@@ -13,7 +13,7 @@ public:
     void decideNextTargetPos(const LiveActor*);
     bool isReachedTarget(const LiveActor*, f32);
 
-    void setCenter(const TVec3f& rPos) NO_INLINE {
+    void setCenter(const TVec3f& rPos) {
         mCenter.set(rPos);
     }
 

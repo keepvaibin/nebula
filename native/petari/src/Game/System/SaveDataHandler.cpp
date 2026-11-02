@@ -4,7 +4,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/SaveDataFileAccessor.hpp"
-#include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -23,6 +22,13 @@ namespace {
     const SaveFileSpec cSaveFileSpecSystem = {"sysconf", 0x80};
 };  // namespace
 
+// The file table keeps its system entry so a save stays the size every older save is (and that older builds read): nothing lives in it
+// now. What the console kept there (when the PAL60 reminder last showed, mail sent) has no reader. An empty file: its version, no chunks.
+static void emptyFile(u8* pData, u32 size) {
+    MR::zeroMemory(pData, size);
+    pData[0] = 1;
+}
+
 namespace {
     NEW_NERVE(SaveDataHandlerWait, SaveDataHandler, Wait);
     NEW_NERVE(SaveDataHandlerProcessing, SaveDataHandler, Processing);
@@ -30,13 +36,13 @@ namespace {
     NEW_NERVE(SaveDataHandlerRemoveProcessingGameData, SaveDataHandler, RemoveProcessingGameData);
 };  // namespace
 
-SaveDataHandler::SaveDataHandler(const SysConfigFile* pSysConfigFile, const UserFile* pUserFile)
+SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     : NerveExecutor("SaveDataHandler"), mSaveRequest(), _C(), _14(), _18() {
     mSaveRequest = new SaveRequest();
 
     createCommunicationBuffer();
     resetSaveData(_18);
-    initializeAllFileInSaveData(_18, pSysConfigFile, pUserFile);
+    initializeAllFileInSaveData(_18, pUserFile);
 
 
     initNerve(GET_NERVE_ANON(SaveDataHandlerWait));
@@ -122,7 +128,6 @@ void SaveDataHandler::convertFileHeader(u8* pBuffer) {
 void SaveDataHandler::convertUserFiles(u8* pBuffer) {
     SaveDataFileAccessor file(pBuffer);
     UserFile* pUserFile = new UserFile();
-    SysConfigFile* pSysConfigFile = new SysConfigFile();
     const int num = file.getUserFileInfoNum();
 
     for (int i = 0; i < num; i++) {
@@ -144,13 +149,11 @@ void SaveDataHandler::convertUserFiles(u8* pBuffer) {
             gSaveConsoleOrder = false;
             pUserFile->makeConfigDataBinary(info.mData, info.mDataSize);
         } else {
-            pSysConfigFile->loadFromDataBinary(info.mData, info.mDataSize);
             gSaveConsoleOrder = false;
-            pSysConfigFile->makeDataBinary(info.mData, info.mDataSize);
+            emptyFile(info.mData, info.mDataSize);
         }
     }
 
-    delete pSysConfigFile;
     delete pUserFile;
 }
 
@@ -211,14 +214,6 @@ void SaveDataHandler::storeUserFile(const UserFile* pUserFile) {
     SaveDataUserFileInfo configFileInfo;
     fileAccessor.makeUserFileInfo(&configFileInfo, pUserFile->getConfigDataName());
     pUserFile->makeConfigDataBinary(configFileInfo.mData, configFileInfo.mDataSize);
-}
-
-void SaveDataHandler::storeSysConfigFile(const SysConfigFile* pSysConfigFile) {
-    SaveDataFileAccessor fileAccessor = SaveDataFileAccessor(_18);
-
-    SaveDataUserFileInfo userFileInfo;
-    fileAccessor.makeUserFileInfo(&userFileInfo, ::cSaveFileSpecSystem.mName);
-    pSysConfigFile->makeDataBinary(userFileInfo.mData, userFileInfo.mDataSize);
 }
 
 void SaveDataHandler::requestSaveSaveData() {
@@ -331,7 +326,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
     }
 }
 
-void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const SysConfigFile* pSysConfigFile, const UserFile* pUserFile) {
+void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const UserFile* pUserFile) {
     SaveDataFileAccessor fileAccessor = SaveDataFileAccessor(pBuffer);
 
     const int num = fileAccessor.getUserFileInfoNum();
@@ -345,7 +340,7 @@ void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const SysConfigFi
         } else if (userFileInfo.mKind == 1) {
             pUserFile->makeConfigDataBinary(userFileInfo.mData, userFileInfo.mDataSize);
         } else {
-            pSysConfigFile->makeDataBinary(userFileInfo.mData, userFileInfo.mDataSize);
+            emptyFile(userFileInfo.mData, userFileInfo.mDataSize);
         }
     }
 }

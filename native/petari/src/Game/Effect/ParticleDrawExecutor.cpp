@@ -14,7 +14,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
-    void connectToSceneDrawAdaptor(NameObjAdaptor* pAdaptor, const MR::FunctorBase& rFunctor, int drawType) NO_INLINE {
+    void connectToSceneDrawAdaptor(NameObjAdaptor* pAdaptor, const MR::FunctorBase& rFunctor, int drawType) {
         pAdaptor->connectToDraw(rFunctor);
         MR::connectToScene(pAdaptor, -1, -1, -1, drawType);
         MR::registerPreDrawFunction(MR::Functor(&ParticleDrawExecutor::initDraw), drawType);

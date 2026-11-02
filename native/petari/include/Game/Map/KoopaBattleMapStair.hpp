@@ -22,10 +22,10 @@ public:
     f32 calcAndSetTargetPos(TVec3f* pPos, const TVec3f& rReferencePos);
     f32 calcTimeRate() const;
     bool isBreak() const;
-    bool isTypeNormal() const NO_INLINE;
+    bool isTypeNormal() const;
     bool isTypeDemoFar() const;
     bool isTypeDemoNear() const;
-    bool isTypeNoRequestFire() const NO_INLINE;
+    bool isTypeNoRequestFire() const;
 
     void exeWaitSwitch();
     void exeWaitKoopaFire();

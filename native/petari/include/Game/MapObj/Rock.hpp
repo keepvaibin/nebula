@@ -25,7 +25,7 @@ public:
 
     static s32 getAppearFrame();
     static Type getType(const JMapInfoIter&);
-    static s32 getAppearStarPieceNum(Type) NO_INLINE;
+    static s32 getAppearStarPieceNum(Type);
     void initMapToolInfo(const JMapInfoIter&);
     void initModel();
     void initSensor();
@@ -40,10 +40,10 @@ public:
     bool tryFreeze(const Nerve*);
     void setBtkForEnvironmentMap(LiveActor*, const char*);
     void rumblePadAndCamera();
-    void setNerveBreak(bool) NO_INLINE;
+    void setNerveBreak(bool);
     void updateRotateX(f32);
     void appearStarPiece();
-    void moveOnRail(f32, f32, bool) NO_INLINE;
+    void moveOnRail(f32, f32, bool);
     bool isForceInvalidBindSection() const;
     bool tryBreakReachedGoal();
     const char* getTouchEffect() const;  // stripped

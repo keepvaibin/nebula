@@ -188,7 +188,7 @@ void LodCtrl::setDistanceToMiddleAndLow(f32 mid_dist, f32 low_dist) {
 }
 
 namespace {
-    void LodFuntionCall(LodCtrl* pCtrl, void (*pFunc)(LiveActor*)) NO_INLINE {
+    void LodFuntionCall(LodCtrl* pCtrl, void (*pFunc)(LiveActor*)) {
         pFunc(pCtrl->mActor);
 
         if (pCtrl->_10) {
@@ -201,7 +201,7 @@ namespace {
     }
 
     template < typename T >
-    void LodFuntionCall(LodCtrl* pCtrl, void (*pFunc)(LiveActor*, T), T arg) NO_INLINE {
+    void LodFuntionCall(LodCtrl* pCtrl, void (*pFunc)(LiveActor*, T), T arg) {
         pFunc(pCtrl->mActor, arg);
 
         if (pCtrl->_10) {

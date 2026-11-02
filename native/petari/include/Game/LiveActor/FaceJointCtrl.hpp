@@ -14,7 +14,7 @@ public:
     void init();
     void startCtrl(s32);
     void endCtrl(s32);
-    void update() NO_INLINE;
+    void update();
     void setCallBackFunction();
 
     bool updateJointMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo);

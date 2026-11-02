@@ -407,7 +407,7 @@ f32 SphereSelectorFunction::getHandleRotateSpeed() {
     return ::getSphereSelector()->mHandle->mRotateSpeed;
 }
 
-bool SphereSelectorFunction::isHandleHolding() NO_INLINE {
+bool SphereSelectorFunction::isHandleHolding() {
     return ::getSphereSelector()->mHandle->isHolding();
 }
 
@@ -436,7 +436,7 @@ LiveActor* SphereSelectorFunction::getPointingTarget() {
     return ::getSphereSelector()->mPointingTarget;
 }
 
-LiveActor* SphereSelectorFunction::getSelectedTarget() NO_INLINE {
+LiveActor* SphereSelectorFunction::getSelectedTarget() {
     return ::getSphereSelector()->mSelectedTarget;
 }
 

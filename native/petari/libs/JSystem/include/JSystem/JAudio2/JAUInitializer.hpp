@@ -6,7 +6,7 @@ class JKRSolidHeap;
 class JAU_JASInitializer {
 public:
     JAU_JASInitializer();
-    void initJASystem(JKRSolidHeap* pHeap) NO_INLINE;
+    void initJASystem(JKRSolidHeap* pHeap);
 
     /* 0x00 */ u32 audioMemory_;
     /* 0x04 */ u32 audioMemSize_;

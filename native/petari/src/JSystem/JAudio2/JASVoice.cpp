@@ -61,9 +61,8 @@ void JASVoice::initAll() {
     for (u8 i = 0; i < 4; i++) {
         setEffectLine(i, false, nullptr);
     }
-    JASHeap* const sound = JASKernel::getSoundHeap();
     const NebulaHostServices* const host = nebula_host();
-    host->voices_setup(host->user, sVoices, 64, sEffects, sound->getBase(), sound->getSize());
+    host->voices_setup(host->user, sVoices, 64, sEffects);
 }
 
 // Settings change, the line's delay kept; with a buffer the line starts over, silent. Without either the line is off.

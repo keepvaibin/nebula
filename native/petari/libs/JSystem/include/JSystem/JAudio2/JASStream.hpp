@@ -112,7 +112,7 @@ public:
     NebulaAtomic< u32 > mLoopCount;
     GameAssets::File mFile;
     NebulaAtomic< bool > mCanceled;
-    u8* mData;
+    const u8* mData;  // the stream in the mapped store
     Header mHeader;
     StreamCallback mCallback;
     void* mCallbackData;

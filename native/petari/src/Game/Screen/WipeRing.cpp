@@ -207,7 +207,7 @@ f32 WipeRing::calcRadius() const {
 }
 
 f32 WipeRing::calcMaxRadius() const {
-    return MR::fastSqrtf(900160.0f);
+    return NebulaSqrt(900160.0f);
 }
 
 void WipeRing::updatePlayerPos() {

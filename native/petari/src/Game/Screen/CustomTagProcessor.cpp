@@ -31,7 +31,7 @@ namespace {
                                   {120, 255, 255, 255}, {255, 255, 80, 255},  {251, 188, 250, 255}, {190, 190, 200, 255}};
 #endif
 
-    u8 clampU8(s32 value) NO_INLINE;
+    u8 clampU8(s32 value);
 
     NebulaColor8 setGXColor(NebulaColor16 color) {
         NebulaColor8 result;
@@ -51,7 +51,7 @@ namespace {
         return ::sTextColor[index];
     }
 #else
-    const NebulaColor8& getTextColor(s32 index) NO_INLINE {
+    const NebulaColor8& getTextColor(s32 index) {
         return MR::getLanguage() == LANGUAGE_KRKOREAN ? ::sTextColorKorean[index] : ::sTextColor[index];
     }
 #endif

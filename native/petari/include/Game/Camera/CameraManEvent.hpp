@@ -64,7 +64,7 @@ public:
     void setVPanParam();
     void resetCameraIfRequested();
     void setSafePose();
-    CameraParamChunkEvent* findChunk(s32, const char*) const NO_INLINE;
+    CameraParamChunkEvent* findChunk(s32, const char*) const;
     void requestChunk(CameraParamChunkEvent*, EPriority, const CameraTargetArg&, s32);
     bool cleanChunkFIFO(CameraParamChunk*);
     bool isChunkFIFOEmpty() const;

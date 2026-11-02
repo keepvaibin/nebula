@@ -141,7 +141,6 @@ bool JAISeq::prepare_(const JASSoundParams& params, JAISoundActivity activity) {
 }
 
 void JAISeq::JAISeqMgr_calc_() {
-    // FIXME: inline moment
     if (inner_.outputTrack.getStatus() == JASTrack::STATUS_STOPPED ||
         (inner_.outputTrack.getStatus() == JASTrack::STATUS_FREE && mStatus.isStopped())) {
         die_();

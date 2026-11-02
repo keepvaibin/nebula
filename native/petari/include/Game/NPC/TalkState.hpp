@@ -68,7 +68,7 @@ public:
     TalkStateEvent();
 
     virtual bool prep(const TalkMessageCtrl*);
-    virtual bool test() NO_INLINE;
+    virtual bool test();
     virtual void open();
     virtual bool talk(const TalkMessageCtrl*);
     virtual void clos();

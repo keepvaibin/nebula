@@ -43,11 +43,11 @@ public:
     void setNotCaughtable();
     void startJumpSound();
     void setMsgCtrl(TalkMessageCtrl* pMsgCtrl);
-    bool isCaught() const NO_INLINE;
+    bool isCaught() const;
     bool isCaughtable() const;
     bool isRunnaway() const;
     bool isChasing() const;
-    bool isEnableBlow() const NO_INLINE;
+    bool isEnableBlow() const;
     bool isValidFollow(s32 id) const;
     s32 getGroupId() const {
         return mGroupId;

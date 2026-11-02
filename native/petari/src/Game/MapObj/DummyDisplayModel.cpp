@@ -50,7 +50,7 @@ namespace {
         return &cDummyDisplayModelInfoTable[idx];
     }
 
-    DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, int itemIdx) NO_INLINE {
+    DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, int itemIdx) {
         const DummyDisplayModelInfo* pInfo;
         s32 modelId = MR::getDummyDisplayModelId(rIter, a3);
 

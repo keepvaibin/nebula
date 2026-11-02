@@ -756,7 +756,6 @@ bool Karikari::tryDPDRelease(const TVec2f& rVel) {
 }
 
 bool Karikari::tryDPDAttacked() {
-    // FIXME: TVec2 copy operations are done via memregs, not float regs
     // https://decomp.me/scratch/W6YWF
 
     if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {

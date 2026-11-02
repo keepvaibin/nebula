@@ -2,19 +2,10 @@
 
 #include <nebula_math.h>
 
-void JMAMTXApplyScale(const Mtx, Mtx, f32, f32, f32);
-void JMAVECLerp(const Vec*, const Vec*, Vec*, f32);
-void JMAVECScaleAdd(const Vec*, const Vec*, Vec*, f32);
-void JMAQuatLerp(const Quaternion*, const Quaternion*, f32, Quaternion*);
 void JMAEulerToQuat(s16, s16, s16, Quaternion*);
 
-inline f32 JMAFastSqrt(__REGISTER const f32 input) {
-    // The console multiplies the input by frsqrte's estimate of its reciprocal square root; natively the root.
-    return input > 0.0f ? __builtin_sqrtf(input) : input;
-}
-
-inline f32 JMAHermiteInterpolation(__REGISTER f32 p1, __REGISTER f32 p2, __REGISTER f32 p3, __REGISTER f32 p4, __REGISTER f32 p5, __REGISTER f32 p6,
-                                   __REGISTER f32 p7) {
+inline f32 JMAHermiteInterpolation(f32 p1, f32 p2, f32 p3, f32 p4, f32 p5, f32 p6,
+                                   f32 p7) {
     const f32 ff31 = p1 - p2;
     const f32 t = ff31 / (p5 - p2);
     const f32 squared = t * t;
@@ -29,29 +20,34 @@ inline f32 JMAHermiteInterpolation(__REGISTER f32 p1, __REGISTER f32 p2, __REGIS
     return ff26 - ff31 * ff25;
 }
 
+// The J3D files' last names for what nebula_math has.
+inline void JMAMTXApplyScale(const Mtx src, Mtx dst, f32 x, f32 y, f32 z) {
+    NebulaMtxApplyScale(src, dst, x, y, z);
+}
+
 namespace JMath {
-    inline f32 fastReciprocal(__REGISTER f32 value) {
+    inline f32 fastReciprocal(f32 value) {
         return 1.0f / value;
     }
 
     template < typename T >
     inline T fastSqrt(T value) {
-        return JMAFastSqrt(value);
+        return NebulaSqrt(value);
     }
 
-    inline void gekko_ps_copy3(__REGISTER void* dest, __REGISTER const void* src) {
+    inline void gekko_ps_copy3(void* dest, const void* src) {
         memcpy(dest, src, 3 * sizeof(f32));
     }
 
-    inline void gekko_ps_copy6(__REGISTER void* dest, __REGISTER const void* src) {
+    inline void gekko_ps_copy6(void* dest, const void* src) {
         memcpy(dest, src, 6 * sizeof(f32));
     }
 
-    inline void gekko_ps_copy12(__REGISTER void* pDest, __REGISTER const void* pSrc) {
+    inline void gekko_ps_copy12(void* pDest, const void* pSrc) {
         memcpy(pDest, pSrc, 12 * sizeof(f32));
     }
 
-    inline void gekko_ps_copy16(__REGISTER void* pDest, __REGISTER const void* pSrc) {
+    inline void gekko_ps_copy16(void* pDest, const void* pSrc) {
         memcpy(pDest, pSrc, 16 * sizeof(f32));
     }
 };  // namespace JMath
