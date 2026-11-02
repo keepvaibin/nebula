@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include "Game/System/NebulaDisc.hpp"
@@ -137,17 +139,17 @@ public:
     /* 0x0AE */ u8 _0AE;
     /* 0x0B0 */ int _0B0;
     /* 0x0B4 */ int _0B4;
-    /* 0x0B8 */ volatile u32 _0B8;
+    /* 0x0B8 */ NebulaAtomic< u32 > _0B8;
     /* 0x0BC */ int _0BC;
     /* 0x0C0 */ bool _0C0;
-    /* 0x0C4 */ volatile u32 _0C4;
-    /* 0x0C8 */ volatile f32 _0C8;
+    /* 0x0C4 */ NebulaAtomic< u32 > _0C4;
+    /* 0x0C8 */ NebulaAtomic< f32 > _0C8;
     /* 0x0CC */ NebulaDisc::File mDvdFile;
     /* 0x108 */ u32 _108;
     /* 0x10C */ int _10C;
     /* 0x110 */ u32 mBlock;
-    /* 0x114 */ volatile u8 _114;
-    /* 0x118 */ volatile u32 _118;
+    /* 0x114 */ NebulaAtomic< u8 > _114;
+    /* 0x118 */ NebulaAtomic< u32 > _118;
     /* 0x11C */ int _11C;
     /* 0x120 */ int _120;
     /* 0x124 */ int _124;

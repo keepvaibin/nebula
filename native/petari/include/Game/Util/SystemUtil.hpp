@@ -38,9 +38,9 @@ namespace MR {
     void waitForEndFunctionAsyncExecute(const char*);
     bool isEndFunctionAsyncExecute(const char*);
     bool tryEndFunctionAsyncExecute(const char*);
-    void suspendAsyncExecuteThread(const char*);
-    void resumeAsyncExecuteThread(const char*);
-    bool isSuspendedAsyncExecuteThread(const char*);
+    // Scene init waits here for the scenario select; false while it has not got here.
+    void waitSceneInitializeResume();
+    bool tryResumeSceneInitialize();
     bool isScreen16Per9();
     void initSceneMessage();
     void destroySceneMessage();

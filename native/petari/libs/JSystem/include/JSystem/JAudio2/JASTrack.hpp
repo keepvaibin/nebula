@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include <revolution/types.h>
 
 #include "JSystem/JAudio2/JASChannel.hpp"
@@ -393,7 +395,7 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     /* 0x232 */ u8 mReleasePrio;
     /* 0x233 */ u8 mGateRate;
     /* 0x234 */ u16 mMixConfig[6];
-    /* 0x240 */ volatile s32 mStatus;
+    /* 0x240 */ NebulaAtomic< s32 > mStatus;
     /* 0x244 */ union {
         struct {
             bool mPauseFlag : 1;

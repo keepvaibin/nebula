@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include <revolution/types.h>
 
 enum JASOutputRate {
@@ -24,5 +26,5 @@ namespace JASDriver {
     extern f32 sDacRate;
     extern u32 sSubFrames;
     extern u32 sOutputRate;
-    extern volatile u32 sSubFrameCounter;
+    extern NebulaAtomic< u32 > sSubFrameCounter;
 };  // namespace JASDriver

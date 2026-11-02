@@ -32,6 +32,12 @@ char* JASWaveArcLoader::getCurrentDir() {
     return sCurrentDir;
 }
 
+NebulaEvent JASWaveArc::sLoadDone;
+
+void JASWaveArc::waitLoadDone() {
+    sLoadDone.wait();
+}
+
 JASWaveArc::JASWaveArc() : mHeap(this) {
     _48 = 0;
     mStatus = 0;
@@ -82,6 +88,7 @@ void JASWaveArc::loadToAramCallback(void* this_) {
     wavArc->_5A--;
     if (wavArc->loadSetup(tmp->_C)) {
         wavArc->onLoadDone();
+        sLoadDone.signal();
     }
 }
 
