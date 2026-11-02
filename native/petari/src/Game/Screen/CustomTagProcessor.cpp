@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/System/Language.hpp"
@@ -12,7 +13,6 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/TextWriterBase.h>
 
-extern "C" int swprintf(wchar_t*, size_t, const wchar_t*, ...);
 
 void CustomTagProcessor_FORCE_MATCH_SDATA2() {
     (void)1.0f;
@@ -70,7 +70,7 @@ namespace {
     }
 #endif
 
-    void setTextColor(nw4r::ut::TextWriterBase< wchar_t >* writer, s32 index) {
+    void setTextColor(nw4r::ut::TextWriterBase< char16_t >* writer, s32 index) {
         NebulaColor8 color = getTextColor(index);
         color.a = writer->GetTextColor().a;
         writer->SetTextColor(color);
@@ -161,7 +161,7 @@ CustomTagProcessor::Impl::GroupFunctionInfo* CustomTagProcessor::Impl::findGroup
 namespace nw4r {
     namespace ut {
         template <>
-        f32 TextWriterBase< wchar_t >::PrintImpl(StreamType str, int length) {
+        f32 TextWriterBase< char16_t >::PrintImpl(StreamType str, int length) {
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
             NW4R_POINTER_ASSERT_AT(271, this);
             NW4R_POINTER_ASSERT_AT(272, str);
@@ -418,7 +418,7 @@ void CustomTagProcessor::setArgNumber(s32 number, s32 index) {
     }
 }
 
-void CustomTagProcessor::setArgString(const wchar_t* string, s32 index) {
+void CustomTagProcessor::setArgString(const char16_t* string, s32 index) {
     for (s32 i = 0; i < 4; i++) {
         MessageEditorMessageTag tag = getReplaceTag(mTextBox->mTextBuf, 7, index, i);
         if (!tag.mMessage) {
@@ -436,7 +436,7 @@ void CustomTagProcessor::initAlpha(f32 speed, f32 interval, s32 startDelay, s32 
     mColorIndex = 0;
 }
 
-void CustomTagProcessor::reset(const wchar_t* string) {
+void CustomTagProcessor::reset(const char16_t* string) {
     if (mTextBox->mTextBuf != string) {
         return;
     }
@@ -451,7 +451,7 @@ void CustomTagProcessor::reset(const wchar_t* string) {
 #endif
 }
 
-MessageEditorMessageTag CustomTagProcessor::getReplaceTag(const wchar_t* string, s32 group, s32 index, s32 occurrence) const {
+MessageEditorMessageTag CustomTagProcessor::getReplaceTag(const char16_t* string, s32 group, s32 index, s32 occurrence) const {
     while (*string) {
         if (*string == 0x1A) {
             string++;
@@ -470,7 +470,7 @@ MessageEditorMessageTag CustomTagProcessor::getReplaceTag(const wchar_t* string,
         }
     }
 
-    return MessageEditorMessageTag(static_cast< const wchar_t* >(nullptr));
+    return MessageEditorMessageTag(static_cast< const char16_t* >(nullptr));
 }
 
 bool CustomTagProcessor::isIgnoreTag(u16 code, ContextType* context) const {
@@ -482,8 +482,8 @@ bool CustomTagProcessor::isIgnoreTag(u16 code, ContextType* context) const {
     return !Impl::findGroupFunctionInfo(tag.getGroup());
 }
 
-bool CustomTagProcessor::writeString(nw4r::ut::Rect* rect, const wchar_t* string, ContextType* context) {
-    nw4r::ut::TextWriterBase< wchar_t >* writer = context->writer;
+bool CustomTagProcessor::writeString(nw4r::ut::Rect* rect, const char16_t* string, ContextType* context) {
+    nw4r::ut::TextWriterBase< char16_t >* writer = context->writer;
     if (!string) {
         return false;
     }
@@ -493,7 +493,7 @@ bool CustomTagProcessor::writeString(nw4r::ut::Rect* rect, const wchar_t* string
         writer->Print(string, MR::getStringLengthWithMessageTag(string));
         writer->MoveCursorY(writer->GetFontAscent());
     } else {
-        nw4r::ut::TextWriterBase< wchar_t > copy = *writer;
+        nw4r::ut::TextWriterBase< char16_t > copy = *writer;
         f32 x = copy.GetCursorX();
         f32 y = copy.GetCursorY();
         copy.CalcStringRect(rect, string, MR::getStringLengthWithMessageTag(string));
@@ -542,12 +542,12 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(nw4r::ut::Rect* 
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    nw4r::ut::TextWriterBase< wchar_t > writer = *context->writer;
+    nw4r::ut::TextWriterBase< char16_t > writer = *context->writer;
     writer.SetFont(*MR::getPictureFontNW4R());
     // The text writer reads one character past the length it is given (its loop's next read precedes the bound
     // check); a terminator keeps that read inside the buffer.
-    const wchar_t pictureText[2] = {static_cast< wchar_t >(tag.getTag() + L'0'), 0};
-    const wchar_t& picture = pictureText[0];
+    const char16_t pictureText[2] = {static_cast< char16_t >(tag.getTag() + u'0'), 0};
+    const char16_t& picture = pictureText[0];
     f32 width = writer.CalcStringWidth(&picture, 1) + writer.GetCharSpace();
     context->writer->MoveCursorX(width);
 
@@ -585,7 +585,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(nw4r::ut::Rec
     }
 #endif
 
-    nw4r::ut::TextWriterBase< wchar_t >* writer = context->writer;
+    nw4r::ut::TextWriterBase< char16_t >* writer = context->writer;
     switch (tag.getTag()) {
     case 0:
         writer->SetFontSize(0.75f * mFontWidth, 0.75f * mFontHeight);
@@ -623,28 +623,28 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroup(nw4r::ut::Rect*
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeLocalizeGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    wchar_t string[32];
+    char16_t string[32];
     ReplaceTagProcessor::exeLocalizeGroup(string, tag);
     writeString(rect, string, context);
     return OPERATION_DEFAULT;
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    wchar_t string[16];
+    char16_t string[16];
     s32 number = *reinterpret_cast< s32* >(tag.getParamPtr(0));
     switch (tag.getTag()) {
     case 5:
-        swprintf(string, 256, L"%02d", number);
+        MR::formatText(string, 256, u"%02d", number);
     case 6:
-        swprintf(string, 256, L"%03d", number);
+        MR::formatText(string, 256, u"%03d", number);
     case 7:
-        swprintf(string, 256, L"%04d", number);
+        MR::formatText(string, 256, u"%04d", number);
     case 8:
-        swprintf(string, 256, L"%05d", number);
+        MR::formatText(string, 256, u"%05d", number);
     case 9:
-        swprintf(string, 256, L"%06d", number);
+        MR::formatText(string, 256, u"%06d", number);
     default:
-        swprintf(string, 256, L"%d", number);
+        MR::formatText(string, 256, u"%d", number);
     }
 
     writeString(rect, string, context);
@@ -694,19 +694,19 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupRuby(nw4r::ut::R
     }
 
     s32 baseLength = tag.getParam8(0);
-    const wchar_t* rubyText = tag.getParamPtr(1);
-    s32 rubyLength = (tag.getParamLength() - 2) / sizeof(wchar_t);
-    wchar_t ruby[32];
-    MR::copyMemory(ruby, rubyText, rubyLength * sizeof(wchar_t));
-    ruby[rubyLength] = L'\0';
-    wchar_t base[32];
-    MR::copyMemory(base, context->str + tag.getTagLength() / 2, baseLength * sizeof(wchar_t));
-    base[baseLength] = L'\0';
-    nw4r::ut::TextWriterBase< wchar_t >* writer = context->writer;
+    const char16_t* rubyText = tag.getParamPtr(1);
+    s32 rubyLength = (tag.getParamLength() - 2) / sizeof(char16_t);
+    char16_t ruby[32];
+    MR::copyMemory(ruby, rubyText, rubyLength * sizeof(char16_t));
+    ruby[rubyLength] = u'\0';
+    char16_t base[32];
+    MR::copyMemory(base, context->str + tag.getTagLength() / 2, baseLength * sizeof(char16_t));
+    base[baseLength] = u'\0';
+    nw4r::ut::TextWriterBase< char16_t >* writer = context->writer;
     writer->GetDrawFlag();
     writer->GetCharSpace();
-    nw4r::ut::TextWriterBase< wchar_t > rubyWriter = *writer;
-    rubyWriter.SetDrawFlag(nw4r::ut::TextWriterBase< wchar_t >::VERTICAL_ORIGIN_BASELINE);
+    nw4r::ut::TextWriterBase< char16_t > rubyWriter = *writer;
+    rubyWriter.SetDrawFlag(nw4r::ut::TextWriterBase< char16_t >::VERTICAL_ORIGIN_BASELINE);
     rubyWriter.SetLineSpace(0.0f);
     rubyWriter.SetCharSpace(mRubyCharSpace);
     rubyWriter.SetFontSize(mRubyFontWidth, mRubyFontHeight);
@@ -746,8 +746,8 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupWait(nw4r::ut::
 
 CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag,
                                                                         ContextType* context) {
-    nw4r::ut::TextWriterBase< wchar_t >* writer = context->writer;
-    const wchar_t* string = context->str + tag.getSkipLength();
+    nw4r::ut::TextWriterBase< char16_t >* writer = context->writer;
+    const char16_t* string = context->str + tag.getSkipLength();
     nw4r::ut::Rect bounds;
     if (mTextBox->GetTextPositionV() == 0) {
         writer->CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
@@ -759,8 +759,8 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupOffset(nw4r::ut
 
 CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag,
                                                                         ContextType* context) {
-    nw4r::ut::TextWriterBase< wchar_t > writer = *context->writer;
-    const wchar_t* string = context->str + tag.getSkipLength();
+    nw4r::ut::TextWriterBase< char16_t > writer = *context->writer;
+    const char16_t* string = context->str + tag.getSkipLength();
     nw4r::ut::Rect bounds;
     writer.CalcStringRect(&bounds, string, MR::getStringLengthWithMessageTag(string));
     f32 offset = (mTextBox->mSize.width - bounds.GetWidth()) / 2.0f;
@@ -770,9 +770,9 @@ CustomTagProcessor::Operation CustomTagProcessor::exeDisplayGroupCenter(nw4r::ut
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    nw4r::ut::TextWriterBase< wchar_t > writer = *context->writer;
+    nw4r::ut::TextWriterBase< char16_t > writer = *context->writer;
     writer.SetFont(*MR::getNumberFontNW4R());
-    const wchar_t* string = tag.getParamPtr(0);
+    const char16_t* string = tag.getParamPtr(0);
     s32 length = static_cast< s32 >(tag.getParamLength()) / 2;
     f32 width = writer.CalcStringWidth(string, length) + writer.GetCharSpace();
     context->writer->MoveCursorX(width);
@@ -799,11 +799,11 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(nw4r::ut::Rect* r
 
 #if (VERSION == RMGK01)
 CustomTagProcessor::Operation CustomTagProcessor::exePatchimuGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    wchar_t string[16] = {};
-    wchar_t* out = string;
+    char16_t string[16] = {};
+    char16_t* out = string;
     bool hasPatchim = true;
-    if (mPreviousChar >= L'0' && mPreviousChar < L'9') {
-        if (mPreviousChar == L'3' || mPreviousChar == L'6') {
+    if (mPreviousChar >= u'0' && mPreviousChar < u'9') {
+        if (mPreviousChar == u'3' || mPreviousChar == u'6') {
             hasPatchim = true;
         } else {
             hasPatchim = false;
@@ -848,7 +848,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exePatchimuGroup(nw4r::ut::Rec
         break;
     }
 
-    *out = L'\0';
+    *out = u'\0';
     writeString(rect, string, context);
     return OPERATION_DEFAULT;
 }

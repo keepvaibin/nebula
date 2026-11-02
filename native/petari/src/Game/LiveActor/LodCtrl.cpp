@@ -374,14 +374,14 @@ ModelObj* LodCtrl::initLodModel(int drawBufferType, int movementType, int calcAn
     const char* res = MR::getModelResName(mActor);
     const char* type = isLowModel ? "Low" : "Middle";
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "/ObjectData/%s%s.arc", res, type);
+    nebula_snprintf(buf, sizeof(buf), "/ObjectData/%s%s.arc", res, type);
 
     if (!MR::isFileExist(buf, false)) {
         return nullptr;
     }
 
     const char* objName = isLowModel ? MR::createLowModelObjName(mActor) : MR::createMiddleModelObjName(mActor);
-    snprintf(buf, sizeof(buf), "%s%s", res, type);
+    nebula_snprintf(buf, sizeof(buf), "%s%s", res, type);
     ModelObj* obj = new ModelObj(objName, buf, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
     obj->initWithoutIter();
     obj->makeActorDead();
@@ -392,7 +392,7 @@ ModelObj* LodCtrl::initLodModel(int drawBufferType, int movementType, int calcAn
 
 bool LodCtrlFunction::isExistLodLowModel(const char* pName) {
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", pName);
+    nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", pName);
     return MR::isFileExist(buf, false);
 }
 

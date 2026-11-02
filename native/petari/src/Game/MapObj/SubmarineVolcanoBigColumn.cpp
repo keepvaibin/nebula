@@ -105,7 +105,7 @@ bool SubmarineVolcanoBigColumn::receiveMsgEnemyAttack(u32 msg, HitSensor* pSende
 
 void SubmarineVolcanoBigColumn::initBreakModel(const char* pModelName) {
     char modelName[256];
-    snprintf(modelName, sizeof(modelName), "%sBreak", pModelName);
+    nebula_snprintf(modelName, sizeof(modelName), "%sBreak", pModelName);
     mBreakModel = MR::createModelObjMapObj("\212\103\222\352\211\316\216\122\220\316\222\214\211\363\202\352\203\202\203\146\203\213" /* 海底火山石柱壊れモデル */, modelName, getBaseMtx());
     MR::invalidateClipping(mBreakModel);
     mBreakModel->makeActorDead();

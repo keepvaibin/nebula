@@ -58,7 +58,7 @@ static void log_emit(void) {
 
 void nebula_vlog(const char* format, va_list args) {
     char text[1024];
-    const int n = vsnprintf(text, sizeof(text), format, args);
+    const int n = nebula_vsnprintf(text, sizeof(text), format, args);
     const size_t length = n < 0 ? 0 : ((size_t)n < sizeof(text) ? (size_t)n : sizeof(text) - 1);
     while (atomic_flag_test_and_set_explicit(&sLogLock, memory_order_acquire)) {
     }
@@ -96,7 +96,7 @@ void nebula_fatal(const char* format, ...) {
     char text[1024];
     va_list args;
     va_start(args, format);
-    vsnprintf(text, sizeof(text), format, args);
+    nebula_vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     fatal_text(text);
 }

@@ -29,7 +29,7 @@ public:
 
 private:
     void loadTextures();
-    void start(const wchar_t* pName, const NebulaAchievementIcon* pIcon);
+    void start(const char16_t* pName, const NebulaAchievementIcon* pIcon);
     void setIcon(const NebulaAchievementIcon* pIcon, f32* pWidth, f32* pHeight);
     void place(f32 rise, f32 alpha, f32 iconScale);
 

@@ -53,7 +53,7 @@ namespace NebulaAchievements {
 
     // The oldest unlocked achievement not yet shown: its name in the played language and its icon; null when none
     // waits.
-    const wchar_t* getWaiting(const NebulaAchievementIcon** ppIcon);
+    const char16_t* getWaiting(const NebulaAchievementIcon** ppIcon);
     // Its pop-up was on screen: the next one waits.
     void popWaiting();
     bool isMoreWaiting();
@@ -65,7 +65,7 @@ namespace NebulaAchievements {
     s32 getNum();
     const char* getId(s32 index);
     // Its name in the played language: Achievement.<id>, or Achievement.<id>.Luigi on a Luigi file when there is one.
-    s32 getName(wchar_t* pDst, s32 capacity, const char* pId);
+    s32 getName(char16_t* pDst, s32 capacity, const char* pId);
     s32 getGroup(s32 index);
     // Whether the board lists it while locked: a secret never; the 120-star goals once Halfway There is unlocked.
     bool isShownLocked(s32 index);

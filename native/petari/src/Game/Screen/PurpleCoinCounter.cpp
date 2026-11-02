@@ -46,7 +46,7 @@ void PurpleCoinCounter::appear() {
 
     mInvalidCountUpFrame = 0;
 
-    MR::setTextBoxFormatRecursive(this, "Counter", L"%03d", mPurpleCoinDisplayNum);
+    MR::setTextBoxFormatRecursive(this, "Counter", u"%03d", mPurpleCoinDisplayNum);
     setNerve(GET_NERVE(PurpleCoinCounter, PurpleCoinCounterNrvAppear));
     LayoutActor::appear();
     MR::requestMovementOn(this);
@@ -88,7 +88,7 @@ void PurpleCoinCounter::updateCounter() {
         }
     }
 
-    MR::setTextBoxFormatRecursive(this, "Counter", L"%03d", mPurpleCoinDisplayNum);
+    MR::setTextBoxFormatRecursive(this, "Counter", u"%03d", mPurpleCoinDisplayNum);
 }
 
 void PurpleCoinCounter::exeAppear() {

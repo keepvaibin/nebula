@@ -1,10 +1,9 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <locale.h>
 
 // needed here for inlining reasons
-inline int tolower(int c) {
-    return ((c < 0) || (c >= 0x100)) ? c : (int)(_current_locale.ctype_cmpt_ptr->lower_map_ptr[c]);
+static inline int lowerCase(int c) {
+    return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
 }
 
 HashSortTable::HashSortTable(u32 cnt) {
@@ -182,7 +181,7 @@ namespace MR {
         u32 hash;
 
         for (hash = 0; *pStr != '\0'; pStr++) {
-            hash = tolower(*pStr) + hash * 31;
+            hash = lowerCase(*pStr) + hash * 31;
         }
 
         return hash;

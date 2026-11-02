@@ -42,13 +42,13 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
     // its balloon, with its voice and camera) and Nebula's words in the played language.
     static const char cNebula[] = "Nebula_";
     if (strncmp(pMessage, cNebula, sizeof(cNebula) - 1) == 0) {
-        const wchar_t* pText = NebulaText::getTalk(pMessage + sizeof(cNebula) - 1);
+        const char16_t* pText = NebulaText::getTalk(pMessage + sizeof(cNebula) - 1);
         const s32 templateIndex = findMessageIndex("AstroGalaxy_Tico034");
         if (pText == nullptr || templateIndex < 0 || templateIndex >= mInfoBlock->mItemCount) {
             return false;
         }
         getMessage(pMessageInfo, 0, templateIndex);
-        pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< wchar_t* >(pText));
+        pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< char16_t* >(pText));
         return true;
     }
     s32 messageIndex = findMessageIndex(pMessage);

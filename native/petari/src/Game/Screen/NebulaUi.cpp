@@ -65,7 +65,7 @@ namespace NebulaUi {
         pPane->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
     }
 
-    void setText(TextBox* pText, const wchar_t* pString) {
+    void setText(TextBox* pText, const char16_t* pString) {
         if (pText != nullptr) {
             LayoutCoreUtil::setTextBoxMessage(pText, pString);
         }
@@ -128,7 +128,7 @@ namespace NebulaUi {
     // writer's breaks.
     // A unit of text: one character, or a whole tag (0x1A, then its size in bytes in the next unit's low byte; its
     // parameters may be zero).
-    s32 unitLength(const wchar_t* p) {
+    s32 unitLength(const char16_t* p) {
         if (*p == 0x1A && p[1] != 0) {
             const s32 units = (p[1] & 0xFF) / 2;
             return units > 0 ? units : 1;
@@ -136,16 +136,16 @@ namespace NebulaUi {
         return 1;
     }
 
-    void wrapWords(TextBox* pText, const wchar_t* pSource, f32 limit, f32* pWidth, f32* pHeight) {
+    void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight) {
         const s32 cMax = 256;
-        wchar_t out[cMax];
-        wchar_t line[cMax];
+        char16_t out[cMax];
+        char16_t line[cMax];
         s32 length = 0;
         s32 lineStart = 0;
         s32 i = 0;
         while (pSource[i] != 0 && length < cMax - 2) {
             s32 end = i;
-            while (pSource[end] != 0 && pSource[end] != L' ') {
+            while (pSource[end] != 0 && pSource[end] != u' ') {
                 end += unitLength(&pSource[end]);
             }
             // The line so far with the word added.
@@ -154,7 +154,7 @@ namespace NebulaUi {
                 line[n++] = out[k];
             }
             if (length > lineStart && n < cMax - 1) {
-                line[n++] = L' ';
+                line[n++] = u' ';
             }
             for (s32 k = i; k < end && n < cMax - 1; k++) {
                 line[n++] = pSource[k];
@@ -164,16 +164,16 @@ namespace NebulaUi {
             f32 width, height;
             measure(pText, 4000.0f, &width, &height);
             if (width > limit && length > lineStart) {
-                out[length++] = L'\n';
+                out[length++] = u'\n';
                 lineStart = length;
             } else if (length > lineStart) {
-                out[length++] = L' ';
+                out[length++] = u' ';
             }
             for (s32 k = i; k < end && length < cMax - 1; k++) {
                 out[length++] = pSource[k];
             }
             i = end;
-            while (pSource[i] == L' ') {
+            while (pSource[i] == u' ') {
                 i++;
             }
         }
@@ -195,7 +195,7 @@ namespace NebulaUi {
         if (pText == nullptr) {
             return;
         }
-        wchar_t glyph[8] = {0};
+        char16_t glyph[8] = {0};
         MR::addPictureFontTag(glyph, code);
         setText(pText, glyph);
         pText->SetFontSize(glyphFontSize(pText, size));
@@ -270,7 +270,7 @@ namespace NebulaUi {
     }
     bool inkOffset(const TextBox* pText, f32* pX, f32* pY, f32* pWidth, f32* pHeight) {
         const nw4r::ut::Font* pFont = pText->mpFont;
-        const wchar_t* pString = pText->mTextBuf;
+        const char16_t* pString = pText->mTextBuf;
         if (pFont == nullptr || pString == nullptr || pString[0] == 0 || pFont->GetWidth() <= 0 || pFont->GetHeight() <= 0) {
             return false;
         }
@@ -282,7 +282,7 @@ namespace NebulaUi {
             return false;
         }
         s32 aLeft, aTop, aRight, aBottom;
-        if (!glyphInkBox(pFont, L'A', &aLeft, &aTop, &aRight, &aBottom)) {
+        if (!glyphInkBox(pFont, u'A', &aLeft, &aTop, &aRight, &aBottom)) {
             return false;
         }
         *pX = ((left + right) * 0.5f - cursor * 0.5f) * scaleX;
@@ -295,14 +295,14 @@ namespace NebulaUi {
         return true;
     }
 
-    bool stringInkBox(const nw4r::ut::Font* pFont, const wchar_t* pString, f32 space, bool strict, f32* pLeft, f32* pTop,
+    bool stringInkBox(const nw4r::ut::Font* pFont, const char16_t* pString, f32 space, bool strict, f32* pLeft, f32* pTop,
                       f32* pRight, f32* pBottom, f32* pEnd) {
         f32 cursor = 0.0f;
         f32 left = 1e9f;
         f32 right = -1e9f;
         f32 top = 1e9f;
         f32 bottom = -1e9f;
-        for (const wchar_t* p = pString; *p != 0; p++) {
+        for (const char16_t* p = pString; *p != 0; p++) {
             const nw4r::ut::CharWidths widths = pFont->GetCharWidths(static_cast< u16 >(*p));
             if (p != pString) {
                 cursor += space;
@@ -339,7 +339,7 @@ namespace NebulaUi {
         return static_cast< u8 >(clamp(a, 0.0f, 1.0f) * 255.0f + 0.5f);
     }
 
-    wchar_t* append(wchar_t* pDst, wchar_t* pEnd, const wchar_t* pSrc) {
+    char16_t* append(char16_t* pDst, char16_t* pEnd, const char16_t* pSrc) {
         while (pSrc != nullptr && *pSrc != 0 && pDst + 1 < pEnd) {
             *pDst++ = *pSrc++;
         }
@@ -413,7 +413,7 @@ namespace NebulaUi {
     bool makeChip(const Kits& rKits, Pane* pParent, Chip* pChip, const char* pName, bool arrow, f32 textSize, u32 textColor) {
         char name[17];
         pChip->mRoot = makeGroup(pParent, pName);
-        snprintf(name, sizeof(name), "%sA", pName);
+        nebula_snprintf(name, sizeof(name), "%sA", pName);
         pChip->mArt = pChip->mRoot != nullptr ? makeGroup(pChip->mRoot, name) : nullptr;
         if (pChip->mArt == nullptr) {
             return false;
@@ -426,7 +426,7 @@ namespace NebulaUi {
             {"PicLShine", "PicCShine", "PicRShine"},
         };
         for (s32 layer = 0; layer < LayerNum; layer++) {
-            snprintf(name, sizeof(name), "%s%s", pName, cLayerNames[layer]);
+            nebula_snprintf(name, sizeof(name), "%s%s", pName, cLayerNames[layer]);
             Pane* pLayer = makeGroup(pChip->mArt, name);
             if (pLayer == nullptr) {
                 return false;
@@ -439,21 +439,21 @@ namespace NebulaUi {
                 pLayer->mScale = nw4r::math::VEC2(cButtonGroup, cButtonGroup);
             }
             const f32 y = layer == LayerShadow ? -6.0f : 0.0f;
-            snprintf(name, sizeof(name), "%s%sL", pName, cLayerNames[layer]);
+            nebula_snprintf(name, sizeof(name), "%s%sL", pName, cLayerNames[layer]);
             pChip->mLeft[layer] = makePiece(rKits, pLayer, cPieces[layer][0], name, y);
-            snprintf(name, sizeof(name), "%s%sC", pName, cLayerNames[layer]);
+            nebula_snprintf(name, sizeof(name), "%s%sC", pName, cLayerNames[layer]);
             pChip->mMiddle[layer] = makePiece(rKits, pLayer, cPieces[layer][1], name, y);
-            snprintf(name, sizeof(name), "%s%sR", pName, cLayerNames[layer]);
+            nebula_snprintf(name, sizeof(name), "%s%sR", pName, cLayerNames[layer]);
             pChip->mRight[layer] = makePiece(rKits, pLayer, cPieces[layer][2], name, y);
             if (pChip->mLeft[layer] == nullptr || pChip->mMiddle[layer] == nullptr || pChip->mRight[layer] == nullptr) {
                 return false;
             }
             if (layer == LayerFace && arrow) {
-                snprintf(name, sizeof(name), "%sArw", pName);
+                nebula_snprintf(name, sizeof(name), "%sArw", pName);
                 pChip->mArrow = makePiece(rKits, pLayer, "PicArrow", name, 0.0f);
             }
         }
-        snprintf(name, sizeof(name), "%sT", pName);
+        nebula_snprintf(name, sizeof(name), "%sT", pName);
         pChip->mText = makeText(rKits, pChip->mRoot, name, 64);
         if (pChip->mText == nullptr) {
             return false;

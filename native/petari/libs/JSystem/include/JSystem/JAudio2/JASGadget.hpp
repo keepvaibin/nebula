@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mem.h>
+#include <cstring>
 #include <revolution/types.h>
 
 template < typename T >

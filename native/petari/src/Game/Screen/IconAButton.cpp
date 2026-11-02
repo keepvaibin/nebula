@@ -34,7 +34,7 @@ void IconAButton::init(const JMapInfoIter& rIter) {
 void IconAButton::setFollowActorPane(LayoutActor* pActor, const char* pName) {
     mFollowActor = pActor;
 
-    snprintf(mFollowPaneName, sizeof(mFollowPaneName), "%s", pName);
+    nebula_snprintf(mFollowPaneName, sizeof(mFollowPaneName), "%s", pName);
     MR::setFollowPos(&mFollowPos, this, nullptr);
 }
 

@@ -3,7 +3,7 @@
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "nw4r/db/console.h"
 #include "nw4r/db/mapFile.h"
-#include <va_list.h>
+#include <cstdarg>
 #include "Game/System/NebulaFrameClock.hpp"
 
 extern "C" __attribute__((noreturn)) void nebula_fatal(const char* format, ...);

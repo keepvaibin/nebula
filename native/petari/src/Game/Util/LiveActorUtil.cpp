@@ -46,9 +46,9 @@ namespace {
                                          MR::CollisionScaleType scaleType, s32 unk) {
         CollisionParts* parts = new CollisionParts();
         char kcl[0x80];
-        snprintf(kcl, sizeof(kcl), "%s.kcl", pName);
+        nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pName);
         char pa[0x80];
-        snprintf(pa, sizeof(pa), "%s.pa", pName);
+        nebula_snprintf(pa, sizeof(pa), "%s.pa", pName);
         void* kclRes;
         void* paRes = nullptr;
         kclRes = pResHolder->mFileInfoTable->getRes(kcl);
@@ -77,7 +77,7 @@ namespace {
         u32 actorLength = strlen(pActor->mName);
         u32 length = actorLength + subLength + strlen("\201\151\201\152" /* （） */) + 1;
         char* pBuffer = new char[length];
-        snprintf(pBuffer, length, "%s\201\151%s\201\152" /* %s（%s） */, pActor->mName, pSubName);
+        nebula_snprintf(pBuffer, length, "%s\201\151%s\201\152" /* %s（%s） */, pActor->mName, pSubName);
         return pBuffer;
     }
 
@@ -89,7 +89,7 @@ namespace {
         }
 
         char subModelName[0x100];
-        snprintf(subModelName, sizeof(subModelName), "%s%s", modelResName, pSubModelName);
+        nebula_snprintf(subModelName, sizeof(subModelName), "%s%s", modelResName, pSubModelName);
 
         const char* objName = createSubModelObjName(pActor, pSubModelName);
         PartsModel* parts = new PartsModel(pActor, objName, subModelName, pMtx, drawBufferType, false);
@@ -253,7 +253,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "MoveLimit";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -276,7 +276,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "WaterSurface";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -299,7 +299,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "Sunshade";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2246,7 +2246,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "MoveLimit";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2270,7 +2270,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "WaterSurface";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2294,7 +2294,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "Sunshade";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2358,7 +2358,7 @@ namespace MR {
 
     bool isExistKcl(LiveActor* pActor, const char* pName) {
         char kclName[0x80];
-        snprintf(kclName, sizeof(kclName), "%s.kcl", pName);
+        nebula_snprintf(kclName, sizeof(kclName), "%s.kcl", pName);
         return getResourceHolder(pActor)->mFileInfoTable->isExistRes(kclName);
     }
 

@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/System/GalaxyNameSortTable.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
@@ -181,7 +182,7 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mSce
         mScenarioData.mCount = nextCount;
     }
 
-    std::sort(mScenarioData.begin(), mScenarioData.end(), GalaxyNameSortLt());
+    MR::sort(mScenarioData.begin(), mScenarioData.end(), GalaxyNameSortLt());
 }
 #pragma pop
 

@@ -59,11 +59,11 @@ SceneControlInfo::SceneControlInfo() : mStartIdInfo() {
 }
 
 void SceneControlInfo::setScene(const char* pSceneName) {
-    snprintf(mScene, sizeof(mScene), "%s", pSceneName);
+    nebula_snprintf(mScene, sizeof(mScene), "%s", pSceneName);
 }
 
 void SceneControlInfo::setStage(const char* pStageName) {
-    snprintf(mStage, sizeof(mStage), "%s", pStageName);
+    nebula_snprintf(mStage, sizeof(mStage), "%s", pStageName);
 }
 
 void SceneControlInfo::setStartIdInfo(const JMapIdInfo& rInfo) {

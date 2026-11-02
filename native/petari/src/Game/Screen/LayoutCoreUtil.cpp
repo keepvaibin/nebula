@@ -8,7 +8,7 @@
 #include <cstring>
 #include <nebula_math.h>
 
-static const wchar_t sDefaultMsg[] = L"XXXXXXXX";
+static const char16_t sDefaultMsg[] = u"XXXXXXXX";
 
 namespace LayoutCoreUtil {
 
@@ -18,8 +18,8 @@ namespace LayoutCoreUtil {
         return pUserData;
     }
 
-    u16 setTextBoxMessage(nw4r::lyt::TextBox* pTextBox, const wchar_t* pMsg) {
-        wchar_t buffer[512];
+    u16 setTextBoxMessage(nw4r::lyt::TextBox* pTextBox, const char16_t* pMsg) {
+        char16_t buffer[512];
         ReplaceTagProcessor::Replace(buffer, pMsg);
         return pTextBox->SetString(buffer, 0, MR::getStringLengthWithMessageTag(buffer));
     }
@@ -47,7 +47,7 @@ namespace LayoutCoreUtil {
 
         pTextBox->mpTagProcessor = processor;
 
-        const wchar_t* message = nullptr;
+        const char16_t* message = nullptr;
         if (pMessageId != nullptr) {
             message = MR::getLayoutMessageDirect(pMessageId);
         }
@@ -58,13 +58,13 @@ namespace LayoutCoreUtil {
         } else {
             reallocateTextBoxMessage(pTextBox, allocSize - 1);
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-            const wchar_t* message = ::sDefaultMsg;
+            const char16_t* message = ::sDefaultMsg;
 #else
             s32 maxNumChars = pTextBox->mSize.width / pTextBox->mFontSize.width;
-            wchar_t message[] = L"XXXXXXXX";
+            char16_t message[] = u"XXXXXXXX";
 
             s32 end = maxNumChars <= 9 ? maxNumChars : 9;
-            message[end] = L'\0';
+            message[end] = u'\0';
 #endif
             setTextBoxMessage(pTextBox, message);
         }

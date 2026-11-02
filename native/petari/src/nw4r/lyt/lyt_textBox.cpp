@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "nw4r/lyt/drawInfo.h"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "nw4r/lyt/layout.h"
@@ -8,7 +9,6 @@
 #include "nw4r/ut/WideTextWriter.h"
 #include <cstdio>
 extern "C" {
-#include <wstring.h>
 }
 
 namespace {
@@ -32,16 +32,16 @@ namespace nw4r {
         NW4R_UT_RUNTIME_TYPEINFO_DEFINITION(TextBox, Pane);
 
         TextBox::TextBox(const res::TextBox* pBlock, const ResBlockSet& resBlockSet) : Pane(pBlock) {
-            u16 allocStrBufLen = static_cast< u16 >(pBlock->textBufBytes / sizeof(wchar_t));
+            u16 allocStrBufLen = static_cast< u16 >(pBlock->textBufBytes / sizeof(char16_t));
             if (allocStrBufLen > 0) {
                 allocStrBufLen -= 1;
             }
 
             Init(allocStrBufLen);
 
-            if (pBlock->textStrBytes >= sizeof(wchar_t) && mTextBuf) {
-                const wchar_t* const pBlockText = detail::ConvertOffsToPtr< wchar_t >(pBlock, pBlock->textStrOffset);
-                const u16 resStrLen = static_cast< u16 >(pBlock->textStrBytes / sizeof(wchar_t) - 1);
+            if (pBlock->textStrBytes >= sizeof(char16_t) && mTextBuf) {
+                const char16_t* const pBlockText = detail::ConvertOffsToPtr< char16_t >(pBlock, pBlock->textStrOffset);
+                const u16 resStrLen = static_cast< u16 >(pBlock->textStrBytes / sizeof(char16_t) - 1);
                 SetString(pBlockText, 0, resStrLen);
             }
 
@@ -179,7 +179,7 @@ namespace nw4r {
                 return 0;
             }
 
-            return mTextBufBytes / sizeof(wchar_t) - 1;
+            return mTextBufBytes / sizeof(char16_t) - 1;
         }
 
         void TextBox::AllocStringBuffer(u16 len) {
@@ -188,11 +188,11 @@ namespace nw4r {
             }
 
             u16 chars = len + 1;
-            u16 bytes = chars * sizeof(wchar_t);
+            u16 bytes = chars * sizeof(char16_t);
 
             if (bytes > mTextBufBytes) {
                 FreeStringBuffer();
-                mTextBuf = static_cast< wchar_t* >(Layout::AllocMemory(bytes));
+                mTextBuf = static_cast< char16_t* >(Layout::AllocMemory(bytes));
 
                 if (mTextBuf != NULL) {
                     mTextBufBytes = bytes;
@@ -210,11 +210,11 @@ namespace nw4r {
             mTextBufBytes = 0;
         }
 
-        u16 TextBox::SetString(const wchar_t* pStr, u16 pos) {
-            return SetString(pStr, pos, wcslen(pStr));
+        u16 TextBox::SetString(const char16_t* pStr, u16 pos) {
+            return SetString(pStr, pos, MR::textLength(pStr));
         }
 
-        u16 TextBox::SetString(const wchar_t* pStr, u16 pos, u16 len) {
+        u16 TextBox::SetString(const char16_t* pStr, u16 pos, u16 len) {
             if (mTextBuf == NULL) {
                 return 0;
             }
@@ -225,10 +225,10 @@ namespace nw4r {
             }
 
             const u16 chars = ut::Min< u16 >(len, maxlen - pos);
-            memcpy(&mTextBuf[pos], pStr, chars * sizeof(wchar_t));
+            memcpy(&mTextBuf[pos], pStr, chars * sizeof(char16_t));
 
             mTextLen = pos + chars;
-            mTextBuf[mTextLen] = L'\0';
+            mTextBuf[mTextLen] = u'\0';
 
             return chars;
         }

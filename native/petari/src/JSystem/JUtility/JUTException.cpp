@@ -7,8 +7,8 @@ extern "C" const NebulaHostServices* nebula_host(void);
 void JUTException::panic_f_va(const char* file, int line, const char* format, va_list args) {
     char message[256];
     char text[320];
-    vsnprintf(message, sizeof(message), format, args);
-    snprintf(text, sizeof(text), "%s:%d: %s", file, line, message);
+    nebula_vsnprintf(message, sizeof(message), format, args);
+    nebula_snprintf(text, sizeof(text), "%s:%d: %s", file, line, message);
     const NebulaHostServices* pHost = nebula_host();
     pHost->fatal(pHost->user, text);
 }

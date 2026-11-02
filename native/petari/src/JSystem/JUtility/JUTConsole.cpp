@@ -198,7 +198,7 @@ void JUTConsole::print(char const* str) {
 
 extern "C" void JUTConsole_print_f_va_(JUTConsole* console, const char* fmt, va_list args) {
     char buf[1024];
-    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+    int len = nebula_vsnprintf(buf, sizeof(buf), fmt, args);
     console->print(buf);
 }
 
@@ -306,9 +306,9 @@ extern "C" void JUTReportConsole_f_va(const char* fmt, va_list args) {
     int len;
 
     if (JUTGetReportConsole() == nullptr) {
-        len = vsnprintf(buf, sizeof(buf), fmt, args);
+        len = nebula_vsnprintf(buf, sizeof(buf), fmt, args);
     } else if (JUTGetReportConsole()->getOutput() & (JUTConsole::OUTPUT_CONSOLE | JUTConsole::OUTPUT_OSREPORT)) {
-        len = vsnprintf(buf, sizeof(buf), fmt, args);
+        len = nebula_vsnprintf(buf, sizeof(buf), fmt, args);
         JUTGetReportConsole()->print(buf);
     }
 }
@@ -329,9 +329,9 @@ extern "C" void JUTWarningConsole_f_va(const char* fmt, va_list args) {
     int len;
 
     if (JUTGetWarningConsole() == nullptr) {
-        len = vsnprintf(buf, sizeof(buf), fmt, args);
+        len = nebula_vsnprintf(buf, sizeof(buf), fmt, args);
     } else if (JUTGetWarningConsole()->getOutput() & (JUTConsole::OUTPUT_CONSOLE | JUTConsole::OUTPUT_OSREPORT)) {
-        len = vsnprintf(buf, sizeof(buf), fmt, args);
+        len = nebula_vsnprintf(buf, sizeof(buf), fmt, args);
         JUTGetWarningConsole()->print(buf);
     }
 }

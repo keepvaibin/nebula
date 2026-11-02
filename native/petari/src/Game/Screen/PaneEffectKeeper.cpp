@@ -36,7 +36,7 @@ void PaneEffectKeeper::init(const LayoutActor* pActor, const EffectSystem* pSyst
 }
 
 void PaneEffectKeeper::add(const char* pName1, const char* pName2, const char* pName3) {
-    if (mHost->getLayoutManager()->isExistPaneMtxRef(pName1) == nullptr) {
+    if (mHost->getLayoutManager()->isExistPaneMtxRef(pName1) == false) {
         mHost->createPaneMtxRef(pName1);
     }
 
@@ -73,7 +73,9 @@ void PaneEffectKeeper::forceDeleteEmitterAll() {
 }
 
 void PaneEffectKeeper::clear() {
-    std::for_each(mEmitters.begin(), mEmitters.end(), std::mem_func(&MultiEmitter::playCalcAndDeleteForeverEmitter));
+    for (auto& item : mEmitters) {
+        item->playCalcAndDeleteForeverEmitter();
+    }
 }
 
 MultiEmitter* PaneEffectKeeper::getEmitter(const char* pName) const {

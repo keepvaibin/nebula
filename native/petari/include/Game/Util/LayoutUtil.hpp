@@ -41,7 +41,7 @@ public:
 class TextBoxRecursiveSetMessage : public TextBoxRecursiveOperation {
 public:
     /// @brief Creates a new `TextBoxRecursiveSetMessage`.
-    TextBoxRecursiveSetMessage(const wchar_t* pMessage) : mMessage(pMessage) {
+    TextBoxRecursiveSetMessage(const char16_t* pMessage) : mMessage(pMessage) {
     }
 
     virtual void execute(nw4r::lyt::TextBox* pTextBox) const {
@@ -49,7 +49,7 @@ public:
     }
 
 private:
-    /* 0x4 */ const wchar_t* mMessage;
+    /* 0x4 */ const char16_t* mMessage;
 };
 
 class TextBoxRecursiveSetArgNumber : public TextBoxRecursiveOperation {
@@ -70,7 +70,7 @@ private:
 class TextBoxRecursiveSetArgString : public TextBoxRecursiveOperation {
 public:
     /// @brief Creates a new `TextBoxRecursiveSetArgString`.
-    TextBoxRecursiveSetArgString(const wchar_t* pArg, s32 argIndex) : mArg(pArg), mArgIndex(argIndex) {
+    TextBoxRecursiveSetArgString(const char16_t* pArg, s32 argIndex) : mArg(pArg), mArgIndex(argIndex) {
     }
 
     virtual void execute(nw4r::lyt::TextBox* pTextBox) const {
@@ -78,7 +78,7 @@ public:
     }
 
 private:
-    /* 0x4 */ const wchar_t* mArg;
+    /* 0x4 */ const char16_t* mArg;
     /* 0x8 */ s32 mArgIndex;
 };
 
@@ -142,10 +142,10 @@ namespace MR {
     void setTextBoxGameMessageRecursive(LayoutActor*, const char*, const char*);
     void setTextBoxLayoutMessageRecursive(LayoutActor*, const char*, const char*);
     void setTextBoxSystemMessageRecursive(LayoutActor*, const char*, const char*);
-    void setTextBoxMessageRecursive(LayoutActor*, const char*, const wchar_t*);
-    void setTextBoxFormatRecursive(LayoutActor*, const char*, const wchar_t*, ...);
+    void setTextBoxMessageRecursive(LayoutActor*, const char*, const char16_t*);
+    void setTextBoxFormatRecursive(LayoutActor*, const char*, const char16_t*, ...);
     void setTextBoxArgNumberRecursive(LayoutActor*, const char*, s32, s32);
-    void setTextBoxArgStringRecursive(LayoutActor*, const char*, const wchar_t*, s32);
+    void setTextBoxArgStringRecursive(LayoutActor*, const char*, const char16_t*, s32);
     void setTextBoxArgGameMessageRecursive(LayoutActor*, const char*, const char*, s32);
     void setTextBoxVerticalPositionTopRecursive(LayoutActor*, const char*);
     void setTextBoxVerticalPositionCenterRecursive(LayoutActor*, const char*);

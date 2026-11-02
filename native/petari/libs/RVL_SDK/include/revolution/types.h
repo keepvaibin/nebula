@@ -65,20 +65,7 @@ typedef double f64;
 
 typedef int BOOL;
 
-#ifndef NULL
-#ifdef __cplusplus
-#define NULL 0
-#else
-#define NULL ((void*)0)
-#endif
-#endif
 
-// Native builds keep nullptr as 0, as the game was written for; `override` is the C++11 keyword there.
-#ifndef nullptr
-#ifdef __cplusplus
-#define nullptr 0
-#endif
-#endif
 
 
 #define __REGISTER

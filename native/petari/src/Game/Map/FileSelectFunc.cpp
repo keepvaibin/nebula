@@ -20,15 +20,15 @@ namespace FileSelectFunc {
     void copyMiiName(u16* pName, const FileSelectIconID& rIcon) {
         if (rIcon.isFellow()) {
             const char* pMessageId = ::sIconNameMessageID[rIcon.getFellowID()];
-            const wchar_t* pMessage = MR::getGameMessageDirect(pMessageId);
+            const char16_t* pMessage = MR::getGameMessageDirect(pMessageId);
 
-            MR::copyMemory(pName, pMessage, getMiiNameBufferSize() * sizeof(wchar_t));
+            MR::copyMemory(pName, pMessage, getMiiNameBufferSize() * sizeof(char16_t));
         } else if (rIcon.isMii()) {
             MiiAdditionalInfo info;
             MiiErrcode err = MiiGetAdditionalInfo(&info, MiiDataSource_Official, nullptr, rIcon.getMiiIndex());
 
             if (err == MiiErrcode_Success) {
-                MR::copyMemory(pName, info.name, getMiiNameBufferSize() * sizeof(wchar_t));
+                MR::copyMemory(pName, info.name, getMiiNameBufferSize() * sizeof(char16_t));
             }
         }
     }

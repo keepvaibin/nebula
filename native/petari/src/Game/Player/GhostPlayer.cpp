@@ -141,10 +141,10 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     mCurrentPacket = nullptr;
     if (MR::isPlayerLuigi()) {
         const char* currentStageName = MR::getCurrentStageName();
-        sprintf(gstPath, "%sLuigi.gst", currentStageName);
+        nebula_sprintf(gstPath, "%sLuigi.gst", currentStageName);
     } else {
         const char* currentStageName = MR::getCurrentStageName();
-        sprintf(gstPath, "%s.gst", currentStageName);
+        nebula_sprintf(gstPath, "%s.gst", currentStageName);
     }
     strcpy(arcPath, "GhostData");
     strcat(arcPath, MR::getCurrentStageName());

@@ -21,7 +21,7 @@ namespace {
     // disc has none of that name.
     u8* load(const char* pName, bool required, JKRHeap* pHeap) {
         char path[64];
-        snprintf(path, sizeof(path), "/NebulaData/%s", pName);
+        nebula_snprintf(path, sizeof(path), "/NebulaData/%s", pName);
         GameAssets::File file;
         if (!GameAssets::open(path, &file)) {
             if (required) {

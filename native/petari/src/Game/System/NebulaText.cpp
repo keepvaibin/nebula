@@ -26,7 +26,7 @@ namespace {
     };
 
     alignas(32) u8 sFile[cFileMax];
-    wchar_t sText[cTextMax];
+    char16_t sText[cTextMax];
     s32 sTextUsed = 0;
     Override sOverrides[cOverrideMax];
     s32 sOverrideNum = 0;
@@ -80,10 +80,10 @@ namespace {
             }
             if (code >= 0x10000) {
                 code -= 0x10000;
-                sText[sTextUsed++] = static_cast< wchar_t >(0xD800 + (code >> 10));
-                sText[sTextUsed++] = static_cast< wchar_t >(0xDC00 + (code & 0x3FF));
+                sText[sTextUsed++] = static_cast< char16_t >(0xD800 + (code >> 10));
+                sText[sTextUsed++] = static_cast< char16_t >(0xDC00 + (code & 0x3FF));
             } else {
-                sText[sTextUsed++] = static_cast< wchar_t >(code);
+                sText[sTextUsed++] = static_cast< char16_t >(code);
             }
         }
         sText[sTextUsed++] = 0;
@@ -169,7 +169,7 @@ namespace {
         JUTNativeLog("NebulaText: %s\n", pPrefix);
 
         char path[96];
-        snprintf(path, sizeof(path), "/%s/MessageData/NebulaText.txt", pPrefix);
+        nebula_snprintf(path, sizeof(path), "/%s/MessageData/NebulaText.txt", pPrefix);
         GameAssets::File file;
         if (!GameAssets::open(path, &file)) {
             return;
@@ -181,7 +181,7 @@ namespace {
         }
     }
 
-    const wchar_t* find(const char* pId) {
+    const char16_t* find(const char* pId) {
         for (s32 i = sOverrideNum - 1; i >= 0; i--) {
             if (strcmp(sOverrides[i].mId, pId) == 0) {
                 return &sText[sOverrides[i].mText];
@@ -204,8 +204,8 @@ namespace {
         return nullptr;
     }
 
-    // wcsncmp would read 32-bit units on Linux and Android (the game's wchar_t is 16-bit, -fshort-wchar).
-    bool startsWith(const wchar_t* pText, const wchar_t* pPrefix) {
+    // wcsncmp would read 32-bit units on Linux and Android (the game's char16_t is 16-bit, -fshort-wchar).
+    bool startsWith(const char16_t* pText, const char16_t* pPrefix) {
         for (; *pPrefix != 0; pText++, pPrefix++) {
             if (*pText != *pPrefix) {
                 return false;
@@ -214,7 +214,7 @@ namespace {
         return true;
     }
 
-    s32 append(wchar_t* pDst, s32 length, s32 capacity, const wchar_t* pSrc, s32 count) {
+    s32 append(char16_t* pDst, s32 length, s32 capacity, const char16_t* pSrc, s32 count) {
         for (s32 i = 0; (count < 0 || i < count) && pSrc[i] != 0 && length + 1 < capacity; i++) {
             pDst[length++] = pSrc[i];
         }
@@ -230,18 +230,18 @@ namespace NebulaText {
         return find(pId) != nullptr;
     }
 
-    s32 get(wchar_t* pDst, s32 capacity, const char* pId) {
+    s32 get(char16_t* pDst, s32 capacity, const char* pId) {
         if (capacity <= 0) {
             return 0;
         }
         if (!sLoaded) {
             load();
         }
-        const wchar_t* pText = find(pId);
+        const char16_t* pText = find(pId);
         s32 length = 0;
         if (pText == nullptr) {
             for (; pId[length] != 0 && length + 1 < capacity; length++) {
-                pDst[length] = static_cast< wchar_t >(pId[length]);
+                pDst[length] = static_cast< char16_t >(pId[length]);
             }
             pDst[length] = 0;
             return length;
@@ -249,14 +249,14 @@ namespace NebulaText {
 
         // {galaxy:Name}: the galaxy's name in the game's text; {message:Id}: one of the game's messages (a dome's name,
         // Layout_MapGrandGalaxyOne), its tags left out. The id itself when the game has neither.
-        static const wchar_t cGalaxy[] = L"{galaxy:";
-        static const wchar_t cMessage[] = L"{message:";
-        static const wchar_t cPlayer[] = L"{player}";
+        static const char16_t cGalaxy[] = u"{galaxy:";
+        static const char16_t cMessage[] = u"{message:";
+        static const char16_t cPlayer[] = u"{player}";
         while (*pText != 0) {
             // {player}: the game's own tag for the player's name (Mario or Luigi, as the file is played).
             if (startsWith(pText, cPlayer)) {
                 // Copied whole: a tag's parameters may be zero (the game's text is measured tag by tag).
-                static const wchar_t cPlayerTag[] = {0x1A, 0x0508, 0x0000, 0x0000};
+                static const char16_t cPlayerTag[] = {0x1A, 0x0508, 0x0000, 0x0000};
                 const s32 units = sizeof(cPlayerTag) / sizeof(cPlayerTag[0]);
                 if (length + units < capacity) {
                     for (s32 i = 0; i < units; i++) {
@@ -266,7 +266,7 @@ namespace NebulaText {
                 pText += sizeof(cPlayer) / sizeof(cPlayer[0]) - 1;
                 continue;
             }
-            const wchar_t* pClose = nullptr;
+            const char16_t* pClose = nullptr;
             s32 tokenLength = 0;
             if (startsWith(pText, cGalaxy)) {
                 tokenLength = sizeof(cGalaxy) / sizeof(cGalaxy[0]) - 1;
@@ -274,8 +274,8 @@ namespace NebulaText {
                 tokenLength = sizeof(cMessage) / sizeof(cMessage[0]) - 1;
             }
             if (tokenLength > 0) {
-                for (const wchar_t* p = pText + tokenLength; *p != 0; p++) {
-                    if (*p == L'}') {
+                for (const char16_t* p = pText + tokenLength; *p != 0; p++) {
+                    if (*p == u'}') {
                         pClose = p;
                         break;
                     }
@@ -288,15 +288,15 @@ namespace NebulaText {
             }
             char id[cIdMax];
             s32 n = 0;
-            for (const wchar_t* p = pText + tokenLength; p < pClose; p++) {
+            for (const char16_t* p = pText + tokenLength; p < pClose; p++) {
                 id[n++] = static_cast< char >(*p);
             }
             id[n] = 0;
             const bool galaxy = startsWith(pText, cGalaxy);
-            const wchar_t* pName = galaxy ? MR::getGalaxyNameOnCurrentLanguage(id) : MR::getGameMessageDirect(id);
+            const char16_t* pName = galaxy ? MR::getGalaxyNameOnCurrentLanguage(id) : MR::getGameMessageDirect(id);
             if (pName != nullptr) {
                 // The game's text without its tags (0x1A, then the tag's size in bytes in the next unit's low byte).
-                for (const wchar_t* p = pName; *p != 0 && length + 1 < capacity;) {
+                for (const char16_t* p = pName; *p != 0 && length + 1 < capacity;) {
                     if (*p == 0x1A && p[1] != 0) {
                         // Its whole size: a tag's parameters may be zero.
                         const s32 units = (p[1] & 0xFF) / 2;
@@ -307,7 +307,7 @@ namespace NebulaText {
                 }
             } else {
                 for (s32 i = 0; i < n && length + 1 < capacity; i++) {
-                    pDst[length++] = static_cast< wchar_t >(id[i]);
+                    pDst[length++] = static_cast< char16_t >(id[i]);
                 }
             }
             pText = pClose + 1;
@@ -319,12 +319,12 @@ namespace NebulaText {
     // The talk getTalk gives; its lines are fitted to the balloon the first time it shows (fitTalk).
     const s32 cTalkMax = 384;
     const s32 cTalkBreaks = 32;  // room left for the breaks fitTalk puts between Japanese or Chinese characters
-    wchar_t sTalk[cTalkMax];
+    char16_t sTalk[cTalkMax];
     bool sTalkFitted = false;
 
     // Japanese and Chinese lines may break between characters (Korean, as English, at spaces): before a wide character
     // that is not closing punctuation or a small kana, after one that is not an opening bracket.
-    bool breaksBefore(wchar_t c, wchar_t previous) {
+    bool breaksBefore(char16_t c, char16_t previous) {
         static const u16 cNoStart[] = {0x3001, 0x3002, 0xFF0C, 0xFF0E, 0xFF01, 0xFF1F, 0xFF1A, 0xFF1B, 0x300D, 0x300F,
                                        0xFF09, 0x3011, 0x3009, 0x300B, 0x30FC, 0x2026, 0xFF5E, 0x30FB, 0x3041, 0x3043,
                                        0x3045, 0x3047, 0x3049, 0x3063, 0x3083, 0x3085, 0x3087, 0x308E, 0x30A1, 0x30A3,
@@ -351,10 +351,10 @@ namespace NebulaText {
 
     // The width of pText[0, count) as pBox draws it: its font, size and spacing, and its tags, set as the game sets a
     // message (LayoutCoreUtil::setTextBoxMessage: the player's name written out, the length counted tag by tag).
-    f32 measureLine(nw4r::lyt::TextBox* pBox, const wchar_t* pText, s32 count) {
-        wchar_t line[cTalkMax];
+    f32 measureLine(nw4r::lyt::TextBox* pBox, const char16_t* pText, s32 count) {
+        char16_t line[cTalkMax];
         const s32 length = count < cTalkMax - 1 ? count : cTalkMax - 1;
-        memcpy(line, pText, length * sizeof(wchar_t));
+        memcpy(line, pText, length * sizeof(char16_t));
         line[length] = 0;
         LayoutCoreUtil::setTextBoxMessage(pBox, line);
         const nw4r::lyt::Size size = pBox->mSize;
@@ -364,7 +364,7 @@ namespace NebulaText {
         return rect.right - rect.left;
     }
 
-    const wchar_t* getTalk(const char* pId) {
+    const char16_t* getTalk(const char* pId) {
         if (strcmp(pId, "AchievementLuma") != 0) {
             return nullptr;
         }
@@ -381,10 +381,10 @@ namespace NebulaText {
 
     // Where a paragraph may break: at a space (not one French keeps with its punctuation: before ! ? : ; », after «),
     // or before a Japanese or Chinese character. Offsets from the paragraph's start; at most `max`.
-    s32 findBreaks(const wchar_t* pText, s32 length, s32* pBreaks, s32 max) {
+    s32 findBreaks(const char16_t* pText, s32 length, s32* pBreaks, s32 max) {
         s32 count = 0;
         for (s32 i = 0; i < length && count < max; i++) {
-            const wchar_t c = pText[i];
+            const char16_t c = pText[i];
             if (c == 0x1A && i + 1 < length && pText[i + 1] != 0) {
                 // A tag, skipped whole: its parameters are not text.
                 const s32 units = (pText[i + 1] & 0xFF) / 2;
@@ -394,9 +394,9 @@ namespace NebulaText {
             if (i == 0) {
                 continue;
             }
-            if (c == L' ') {
-                const wchar_t next = i + 1 < length ? pText[i + 1] : 0;
-                const bool keptBefore = next == L'!' || next == L'?' || next == L':' || next == L';' || next == 0xBB;
+            if (c == u' ') {
+                const char16_t next = i + 1 < length ? pText[i + 1] : 0;
+                const bool keptBefore = next == u'!' || next == u'?' || next == u':' || next == u';' || next == 0xBB;
                 if (!keptBefore && pText[i - 1] != 0xAB) {
                     pBreaks[count++] = i;
                 }
@@ -408,7 +408,7 @@ namespace NebulaText {
     }
 
     // The breaks a greedy setter takes at `limit`: each line runs to the last break it fits before. Their number.
-    s32 setGreedy(nw4r::lyt::TextBox* pBox, const wchar_t* pText, s32 length, const s32* pBreaks, s32 breakNum, f32 limit, s32* pChosen) {
+    s32 setGreedy(nw4r::lyt::TextBox* pBox, const char16_t* pText, s32 length, const s32* pBreaks, s32 breakNum, f32 limit, s32* pChosen) {
         s32 chosen = 0;
         s32 lineStart = 0;
         s32 last = -1;  // the last break the current line fits before
@@ -416,7 +416,7 @@ namespace NebulaText {
             const s32 at = b < breakNum ? pBreaks[b] : length;
             if (measureLine(pBox, pText + lineStart, at - lineStart) > limit && last >= 0) {
                 pChosen[chosen++] = pBreaks[last];
-                lineStart = pBreaks[last] + (pText[pBreaks[last]] == L' ' ? 1 : 0);
+                lineStart = pBreaks[last] + (pText[pBreaks[last]] == u' ' ? 1 : 0);
                 last = -1;
                 b--;
                 continue;
@@ -426,11 +426,11 @@ namespace NebulaText {
         return chosen;
     }
 
-    bool isTalk(const wchar_t* pMessage) {
+    bool isTalk(const char16_t* pMessage) {
         return pMessage >= sTalk && pMessage < sTalk + cTalkMax;
     }
 
-    void fitTalk(const wchar_t* pMessage, nw4r::lyt::TextBox* pBox) {
+    void fitTalk(const char16_t* pMessage, nw4r::lyt::TextBox* pBox) {
         if (pBox == nullptr || sTalkFitted || !isTalk(pMessage)) {
             return;
         }
@@ -447,7 +447,7 @@ namespace NebulaText {
         s32 paragraph = 0;
         while (paragraph <= length) {
             s32 paragraphEnd = paragraph;
-            while (paragraphEnd < length && sTalk[paragraphEnd] != L'\n' && !(sTalk[paragraphEnd] == 0x1A && sTalk[paragraphEnd + 1] == 0x0106)) {
+            while (paragraphEnd < length && sTalk[paragraphEnd] != u'\n' && !(sTalk[paragraphEnd] == 0x1A && sTalk[paragraphEnd + 1] == 0x0106)) {
                 if (sTalk[paragraphEnd] == 0x1A && sTalk[paragraphEnd + 1] != 0) {
                     // Its whole size: a tag's parameters may be zero.
                     const s32 units = (sTalk[paragraphEnd + 1] & 0xFF) / 2;
@@ -459,7 +459,7 @@ namespace NebulaText {
             if (paragraphEnd > length) {
                 paragraphEnd = length;
             }
-            wchar_t* pText = sTalk + paragraph;
+            char16_t* pText = sTalk + paragraph;
             const s32 textLength = paragraphEnd - paragraph;
             // As many as the text has places: one per unit at most.
             static s32 breaks[cTalkMax];
@@ -484,12 +484,12 @@ namespace NebulaText {
             // Chinese character one is put in.
             s32 added = 0;
             for (s32 i = chosenNum - 1; i >= 0; i--) {
-                wchar_t* pBreak = pText + chosen[i];
-                if (*pBreak == L' ') {
-                    *pBreak = L'\n';
+                char16_t* pBreak = pText + chosen[i];
+                if (*pBreak == u' ') {
+                    *pBreak = u'\n';
                 } else if (length + 1 < cTalkMax) {
-                    memmove(pBreak + 1, pBreak, (length + 1 - (pBreak - sTalk)) * sizeof(wchar_t));
-                    *pBreak = L'\n';
+                    memmove(pBreak + 1, pBreak, (length + 1 - (pBreak - sTalk)) * sizeof(char16_t));
+                    *pBreak = u'\n';
                     length++;
                     added++;
                 }
@@ -498,7 +498,7 @@ namespace NebulaText {
             if (paragraphEnd >= length) {
                 break;
             }
-            if (sTalk[paragraphEnd] == L'\n') {
+            if (sTalk[paragraphEnd] == u'\n') {
                 paragraph = paragraphEnd + 1;
             } else {
                 const s32 units = (sTalk[paragraphEnd + 1] & 0xFF) / 2;

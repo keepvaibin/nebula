@@ -45,17 +45,21 @@ MultiEmitter* MultiSceneEffectKeeper::create(const char* pName, EffectSystem* pS
 }
 
 void MultiSceneEffectKeeper::deleteAll() {
-    std::for_each(mEmitter.begin(), mEmitter.end(), std::mem_func(&MultiEmitter::deleteEmitter));
+    for (auto& item : mEmitter) {
+        item->deleteEmitter();
+    }
 }
 
 void MultiSceneEffectKeeper::forceDeleteAll(EffectSystem* pSystem) {
-    std::for_each(
-        mEmitter.begin(), mEmitter.end(),
-        std::binder2nd< std::mem_fun1_t< void, MultiEmitter, EffectSystem* >, EffectSystem* >(std::mem_func(&MultiEmitter::forceDelete), pSystem));
+    for (auto& item : mEmitter) {
+        item->forceDelete(pSystem);
+    }
 }
 
 void MultiSceneEffectKeeper::clear() {
-    std::for_each(mEmitter.begin(), mEmitter.end(), std::mem_func(&MultiEmitter::playCalcAndDeleteForeverEmitter));
+    for (auto& item : mEmitter) {
+        item->playCalcAndDeleteForeverEmitter();
+    }
 }
 
 MultiEmitter* MultiSceneEffectKeeper::get(const char* pName) const {
@@ -69,8 +73,7 @@ MultiEmitter* MultiSceneEffectKeeper::find(const char* pName) const {
 
     u16 hash = MR::getHashCode(pName);
     MultiEmitter* const* pEmitter =
-        std::find_if(mEmitter.begin(), mEmitter.end(),
-                     std::binder2nd< std::const_mem_fun1_t< bool, MultiEmitter, u16 >, u16 >(std::mem_func(&MultiEmitter::isEqualName), hash));
+        std::find_if(mEmitter.begin(), mEmitter.end(), [&](const auto& item) { return item->isEqualName(hash); });
 
     if (pEmitter != mEmitter.end()) {
         return *pEmitter;

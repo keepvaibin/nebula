@@ -124,7 +124,7 @@ void WarpCube::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0WithInit(rIter, &arg0);
 
     char eventName[0x100];
-    sprintf(eventName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupID, arg0 + 65);
+    nebula_sprintf(eventName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupID, arg0 + 65);
 
     MR::declareEventCamera(mCameraInfo, eventName);
 

@@ -34,7 +34,7 @@ namespace nw4r {
                 mCharStrm = stream;
             }
 
-            void Set(const wchar_t* stream) {
+            void Set(const char16_t* stream) {
                 NW4R_POINTER_ASSERT_AT(60, this);
                 NW4R_ALIGN2_ASSERT_AT(61, stream);
                 NW4R_POINTER_ASSERT_AT(62, stream);

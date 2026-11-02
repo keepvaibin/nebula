@@ -165,7 +165,7 @@ NebulaHostThread* nebula_host_thread_create(void (*entry)(void*), void* arg, uin
     if (handle == NULL) {
         nebula_fatal("could not start a thread");
     }
-    SetThreadDescription(handle, L"Nebula Game Thread");
+    SetThreadDescription(handle, u"Nebula Game Thread");
     CloseHandle(handle);
 #else
     pthread_attr_t attr;

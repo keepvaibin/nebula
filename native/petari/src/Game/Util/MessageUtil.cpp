@@ -11,46 +11,46 @@
 #define MESSAGE_ID_BUFFER_SIZE 256
 
 namespace MR {
-    const wchar_t* getSystemMessageDirect(const char* pMessageId) {
+    const char16_t* getSystemMessageDirect(const char* pMessageId) {
         TalkMessageInfo messageInfo = TalkMessageInfo();
 
         MessageSystem::getSystemMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< wchar_t* >(messageInfo._0);
+        return reinterpret_cast< char16_t* >(messageInfo._0);
     }
 
-    const wchar_t* getGameMessageDirect(const char* pMessageId) {
+    const char16_t* getGameMessageDirect(const char* pMessageId) {
         TalkMessageInfo messageInfo = TalkMessageInfo();
 
         MessageSystem::getGameMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< wchar_t* >(messageInfo._0);
+        return reinterpret_cast< char16_t* >(messageInfo._0);
     }
 
-    const wchar_t* getLayoutMessageDirect(const char* pMessageId) {
+    const char16_t* getLayoutMessageDirect(const char* pMessageId) {
         TalkMessageInfo messageInfo = TalkMessageInfo();
 
         MessageSystem::getLayoutMessageDirect(&messageInfo, pMessageId);
 
-        return reinterpret_cast< wchar_t* >(messageInfo._0);
+        return reinterpret_cast< char16_t* >(messageInfo._0);
     }
 
-    const wchar_t* getCurrentGalaxyNameOnCurrentLanguage() {
+    const char16_t* getCurrentGalaxyNameOnCurrentLanguage() {
         return getGalaxyNameOnCurrentLanguage(getCurrentStageName());
     }
 
-    const wchar_t* getCurrentGalaxyNameShortOnCurrentLanguage() {
+    const char16_t* getCurrentGalaxyNameShortOnCurrentLanguage() {
         return getGalaxyNameShortOnCurrentLanguage(getCurrentStageName());
     }
 
-    const wchar_t* getCurrentScenarioNameOnCurrentLanguage() {
+    const char16_t* getCurrentScenarioNameOnCurrentLanguage() {
         s32 selectedScenarioNo = getCurrentSelectedScenarioNo();
         s32 scenarioNo = selectedScenarioNo != -1 ? selectedScenarioNo : getCurrentScenarioNo();
 
         return getScenarioNameOnCurrentLanguage(getCurrentStageName(), scenarioNo);
     }
 
-    const wchar_t* getRaceNameOnCurrentLanguage(int raceId) {
+    const char16_t* getRaceNameOnCurrentLanguage(int raceId) {
         return getGameMessageDirect(RaceManagerFunction::getRaceMessageId(raceId));
     }
 
@@ -58,10 +58,10 @@ namespace MR {
         TalkMessageInfo messageInfo = TalkMessageInfo();
 
         return MessageSystem::getGameMessageDirect(&messageInfo, pMessageId) &&
-               getStringLengthWithMessageTag(reinterpret_cast< wchar_t* >(messageInfo._0)) != 0;
+               getStringLengthWithMessageTag(reinterpret_cast< char16_t* >(messageInfo._0)) != 0;
     }
 
-    const wchar_t* getMessageLine(wchar_t* pDst, u32 capacity, const wchar_t* pMessage, u32 line) {
+    const char16_t* getMessageLine(char16_t* pDst, u32 capacity, const char16_t* pMessage, u32 line) {
         u32 currentLine = 0;
 
         while (*pMessage != 0) {
@@ -78,7 +78,7 @@ namespace MR {
                     break;
                 }
             } else {
-                if (*pMessage == L'\n') {
+                if (*pMessage == u'\n') {
                     currentLine++;
                 }
 
@@ -98,7 +98,7 @@ namespace MR {
                 }
             }
 
-            if (*pMessage == L'\n' || *pMessage == 0) {
+            if (*pMessage == u'\n' || *pMessage == 0) {
                 break;
             }
 
@@ -114,7 +114,7 @@ namespace MR {
         return pDst;
     }
 
-    s32 countMessageLine(const wchar_t* pMessage) {
+    s32 countMessageLine(const char16_t* pMessage) {
         s32 count = 1;
 
         while (*pMessage != 0) {
@@ -127,7 +127,7 @@ namespace MR {
                     break;
                 }
             } else {
-                if (*pMessage == L'\n') {
+                if (*pMessage == u'\n') {
                     count++;
                 }
 
@@ -138,7 +138,7 @@ namespace MR {
         return count;
     }
 
-    s32 countMessageChar(const wchar_t* pMessage) {
+    s32 countMessageChar(const char16_t* pMessage) {
         if (pMessage == nullptr) {
             return 0;
         }
@@ -188,7 +188,7 @@ namespace MR {
         return count;
     }
 
-    const wchar_t* getNextMessagePage(const wchar_t* pMessage) {
+    const char16_t* getNextMessagePage(const char16_t* pMessage) {
         while (*pMessage != 0) {
             if (*pMessage == 0x1A) {
                 pMessage++;
@@ -196,7 +196,7 @@ namespace MR {
                 pMessage += tag.getSkipLength();
 
                 if (tag.isGroupTagId(1, 1)) {
-                    if (*pMessage == L'\n') {
+                    if (*pMessage == u'\n') {
                         pMessage++;
                     }
 
@@ -210,32 +210,32 @@ namespace MR {
         return nullptr;
     }
 
-    const wchar_t* getGalaxyNameOnCurrentLanguage(const char* pGalaxyName) {
+    const char16_t* getGalaxyNameOnCurrentLanguage(const char* pGalaxyName) {
         char messageId[MESSAGE_ID_BUFFER_SIZE];
-        snprintf(messageId, sizeof(messageId), "GalaxyName_%s", pGalaxyName);
+        nebula_snprintf(messageId, sizeof(messageId), "GalaxyName_%s", pGalaxyName);
 
         return getGameMessageDirect(messageId);
     }
 
-    const wchar_t* getGalaxyNameShortOnCurrentLanguage(const char* pGalaxyName) {
+    const char16_t* getGalaxyNameShortOnCurrentLanguage(const char* pGalaxyName) {
         char messageId[MESSAGE_ID_BUFFER_SIZE];
-        snprintf(messageId, sizeof(messageId), "GalaxyNameShort_%s", pGalaxyName);
+        nebula_snprintf(messageId, sizeof(messageId), "GalaxyNameShort_%s", pGalaxyName);
 
         return getGameMessageDirect(messageId);
     }
 
-    const wchar_t* getScenarioNameOnCurrentLanguage(const char* pGalaxyName, s32 scenarioNo) {
+    const char16_t* getScenarioNameOnCurrentLanguage(const char* pGalaxyName, s32 scenarioNo) {
         char messageId[MESSAGE_ID_BUFFER_SIZE];
-        snprintf(messageId, sizeof(messageId), "ScenarioName_%s%d", pGalaxyName, scenarioNo);
+        nebula_snprintf(messageId, sizeof(messageId), "ScenarioName_%s%d", pGalaxyName, scenarioNo);
 
         return getGameMessageDirect(messageId);
     }
 
     void getLayoutMessageID(char* pDst, const char* pSuperMessageId, const char* pSubMessageId) {
-        snprintf(pDst, MESSAGE_ID_BUFFER_SIZE, "Layout_%s%s", pSuperMessageId, pSubMessageId);
+        nebula_snprintf(pDst, MESSAGE_ID_BUFFER_SIZE, "Layout_%s%s", pSuperMessageId, pSubMessageId);
     }
 
     void makeCometMessageID(char* pDst, u32 bufferSize, const char* pCometName) {
-        snprintf(pDst, bufferSize, "CometName_%s", pCometName);
+        nebula_snprintf(pDst, bufferSize, "CometName_%s", pCometName);
     }
 };  // namespace MR

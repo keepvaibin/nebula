@@ -161,12 +161,12 @@ namespace MR {
         if (shapeId >= 0) {
             getMapPartsObjectName(pBuffer, size, pName, shapeId);
         } else {
-            snprintf(pBuffer, size, "%s", pName);
+            nebula_snprintf(pBuffer, size, "%s", pName);
         }
     }
 
     void getMapPartsObjectName(char* pBuffer, u32 size, const char* pName, s32 shapeId) {
-        snprintf(pBuffer, size, "%s%02d", pName, shapeId);
+        nebula_snprintf(pBuffer, size, "%s%02d", pName, shapeId);
     }
 
     void initMapPartsClipping(LiveActor* pActor, const JMapInfoIter& rIter, TVec3f* pCenter, bool ignoreRail) {

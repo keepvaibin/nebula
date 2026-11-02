@@ -2,7 +2,7 @@
 #include "Game/Util.hpp"
 #include <cstdio>
 #include <cstring>
-#include <size_t.h>
+#include <cstddef>
 
 ResFileInfo::ResFileInfo() {
     mName = 0;
@@ -100,7 +100,7 @@ void ResFileInfo::setName(const char* pName, bool stripExt) {
     size_t len = strlen(pName) + 1;
     mName = new char[len];
 
-    snprintf(mName, len, "%s", pName);
+    nebula_snprintf(mName, len, "%s", pName);
 
     if (stripExt) {
         char* out = strrchr(mName, '.');

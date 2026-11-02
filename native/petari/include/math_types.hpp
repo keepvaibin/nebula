@@ -19,8 +19,3 @@ const f32 FLOAT_ZERO = 0.0f;
 
 extern const Vec gZeroVec;
 
-namespace std {
-    inline f32 atan2(f32 x, f32 y) {
-        return ::atan2(x, y);
-    }
-};  // namespace std

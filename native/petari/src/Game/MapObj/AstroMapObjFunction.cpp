@@ -231,7 +231,7 @@ const char* AstroMapObjFunction::getModelName(const char* pObjName, s32 domeId) 
 
 const JMapInfo* AstroMapObjFunction::createAstroNamePlateParser() {
     char arcName[64];
-    snprintf(arcName, sizeof(arcName), "%s.arc", ::cAstroNamePlateArcName);
+    nebula_snprintf(arcName, sizeof(arcName), "%s.arc", ::cAstroNamePlateArcName);
 
     return MR::createCsvParser(arcName, ::cAstroNamePlateFileName);
 }
@@ -254,11 +254,11 @@ bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, co
 
     char offsetYId[16];
     s32 areaArg = MR::getAreaObjArg(astroOverlookAreaObj, 0);
-    snprintf(offsetYId, sizeof(offsetYId), "OffsetY%d", areaArg);
+    nebula_snprintf(offsetYId, sizeof(offsetYId), "OffsetY%d", areaArg);
 
     char upperFlagId[16];
     areaArg = MR::getAreaObjArg(astroOverlookAreaObj, 0);
-    snprintf(upperFlagId, sizeof(upperFlagId), "UpperFlag%d", areaArg);
+    nebula_snprintf(upperFlagId, sizeof(upperFlagId), "UpperFlag%d", areaArg);
 
     const char* modelName = getModelName(pObjName, domeId);
     s32 i = ::findModelName(pInfo, modelName);
@@ -274,7 +274,7 @@ bool AstroMapObjFunction::trySetAndShowNamePlate(GalaxyNamePlate* pNamePlate, co
 
     pNamePlate->setPos3D(pos);
 
-    const wchar_t* msg;
+    const char16_t* msg;
 
     if (MR::isEqualString(pObjName, "AstroDomeEntrance")) {
         msg = MR::getScenarioNameOnCurrentLanguage("AstroDome", domeId);

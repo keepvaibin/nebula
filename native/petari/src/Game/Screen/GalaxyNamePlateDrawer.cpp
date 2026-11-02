@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include "Game/Screen/GalaxyNamePlateDrawer.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -27,7 +28,7 @@ void GalaxyNamePlateDrawer::init(const JMapInfoIter&) {
 void GalaxyNamePlateDrawer::draw() const {
     const GalaxyNamePlatePrioritied* sortArray[16];
     MR::copyMemory(sortArray, &mPlateArray[0], mPlateArray.size() * sizeof(GalaxyNamePlatePrioritied*));
-    std::sort(sortArray, sortArray + mPlateArray.size(), ::PlatePriorityLt());
+    MR::sort(sortArray, sortArray + mPlateArray.size(), ::PlatePriorityLt());
 
     for(int i = 0; i < mPlateArray.size(); i++) {
         sortArray[i]->mHostActor->draw();

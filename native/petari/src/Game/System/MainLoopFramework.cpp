@@ -11,7 +11,6 @@
 #include <JSystem/JUtility/JUTAssert.hpp>
 #include <JSystem/JUtility/JUTConsole.hpp>
 #include "Game/Util/RenderSignals.hpp"
-#include <runtime.h>
 #include "Game/System/NebulaFrameClock.hpp"
 
 MainLoopFramework* MainLoopFramework::sManager;

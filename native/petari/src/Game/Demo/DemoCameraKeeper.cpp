@@ -144,7 +144,7 @@ DemoCameraKeeper::DemoCameraKeeper(DemoExecutor* pExecutor, const JMapInfoIter& 
 
         char* aninName = new char[animNameLen];
 
-        snprintf(aninName, animNameLen, "%s[%s]", mExecutor->mName, curInfo->mPartName);
+        nebula_snprintf(aninName, animNameLen, "%s[%s]", mExecutor->mName, curInfo->mPartName);
 
         curInfo->_1C = aninName;
         if (curInfo->mCameraTargetName == nullptr || DemoCameraFunction::isCameraTargetMario(curInfo)) {

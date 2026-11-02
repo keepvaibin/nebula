@@ -17,7 +17,7 @@ namespace AudParams {
     const int numFreeSeq = 3;
     const int numFreeStream = 3;
     const int numFreeSoundChild = 160;
-    const int aramAddr = nullptr;
+    const int aramAddr = 0;
     const int aramSize = 0xE00000;
     const int workAreaSize = 0x1000;
     const int numFreeTracks = 200;

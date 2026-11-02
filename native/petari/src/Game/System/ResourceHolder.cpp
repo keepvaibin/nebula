@@ -136,7 +136,7 @@ s32 ResourceHolder::count(JKRArchive* pArchive, const char* pExtName, const char
         if (finder->mFileIsFolder) {
             if (finder->mName[0] != '.') {
                 char path[128];
-                sprintf(path, "%s%s%s", pPath, "/", finder->mName);
+                nebula_sprintf(path, "%s%s%s", pPath, "/", finder->mName);
                 num += count(pArchive, pExtName, path);
             }
         } else {
@@ -158,7 +158,7 @@ void ResourceHolder::mount(JKRArchive* pArchive, char* pPath) {
         if (finder->mFileIsFolder) {
             if (finder->mName[0] != '.') {
                 char path[128];
-                snprintf(path, 128, "%s/%s", pPath, finder->mName);
+                nebula_snprintf(path, 128, "%s/%s", pPath, finder->mName);
                 mount(pArchive, path);
             }
         } else {

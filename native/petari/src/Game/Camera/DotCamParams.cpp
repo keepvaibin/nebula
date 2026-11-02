@@ -59,13 +59,13 @@ bool DotCamReaderInBin::getValueVec(const char* pName, TVec3f* pOut) {
     f32 y;
     f32 x;
 
-    snprintf(pBuffer, sizeof(buffer), "%s.X", pName);
+    nebula_snprintf(pBuffer, sizeof(buffer), "%s.X", pName);
     bool success = mMapIter.getValue< f32 >(pBuffer, &x) & 1;
 
-    snprintf(pBuffer, sizeof(buffer), "%s.Y", pName);
+    nebula_snprintf(pBuffer, sizeof(buffer), "%s.Y", pName);
     success &= mMapIter.getValue< f32 >(pBuffer, &y);
 
-    snprintf(pBuffer, sizeof(buffer), "%s.Z", pName);
+    nebula_snprintf(pBuffer, sizeof(buffer), "%s.Z", pName);
     success &= mMapIter.getValue< f32 >(pBuffer, &z);
 
     if (success) {

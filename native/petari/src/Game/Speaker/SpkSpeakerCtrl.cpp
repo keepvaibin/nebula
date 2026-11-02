@@ -4,7 +4,7 @@
 #include "Game/Speaker/SpkSound.hpp"
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
-#include <mem.h>
+#include <cstring>
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
 

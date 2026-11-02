@@ -250,7 +250,7 @@ namespace GameSequenceFunction {
     }
 
 
-    void reserveUserName(const wchar_t* pUserName) {
+    void reserveUserName(const char16_t* pUserName) {
         ::getSaveDataHandleSequence()->getCurrentUserFile()->setUserName(pUserName);
     }
 

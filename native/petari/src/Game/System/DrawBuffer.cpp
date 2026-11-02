@@ -290,7 +290,7 @@ void DrawBuffer::sortShapeDrawer(s32 matNo1, s32 matNo2) {
     const char* nameA = MR::getMaterialName(mModelData, drawerA->mMaterial->mIndex);
     const char* nameB = MR::getMaterialName(mModelData, drawerB->mMaterial->mIndex);
 
-    if (strcasecmp(nameA, nameB) > 0) {
+    if (nebula_stricmp(nameA, nameB) > 0) {
         drawerA->swap(drawerB);
 
         for (s32 idx = 0; idx < mNumMaterials; idx++) {

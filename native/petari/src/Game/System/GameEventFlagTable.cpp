@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include <nebula_game_api.h>
 #include <revolution/os.h>
 #include "Game/System/GameEventFlagTable.hpp"
@@ -276,7 +277,7 @@ void GameEventFlagTableInstance::initSortTable() {
         mSortTable[i].mHashCode = MR::getHashCode(pFlag->mName);
     }
 
-    std::sort(&mSortTable[0], &mSortTable[mLength], GameEventFlagSortLt());
+    MR::sort(&mSortTable[0], &mSortTable[mLength], GameEventFlagSortLt());
 }
 
 namespace GameEventFlagTable {
@@ -453,7 +454,7 @@ namespace GameEventFlagTable {
 
     s32 getStarPieceNumToOpenExclamationGalaxy(const char* pGalaxyName) {
         char flagName[64];
-        snprintf(flagName, sizeof(flagName), "StarPiece%s", pGalaxyName);
+        nebula_snprintf(flagName, sizeof(flagName), "StarPiece%s", pGalaxyName);
 
         GameEventFlagAccessor accessor = makeAccessor(flagName);
 
@@ -473,7 +474,7 @@ namespace GameEventFlagTable {
         s32 numFlags = 0;
         for (s32 idx = 0; idx < 3; idx++) {
             char key[32];
-            snprintf(key, 32, "OpenCondition%1d", idx);
+            nebula_snprintf(key, 32, "OpenCondition%1d", idx);
             if (info.searchItemInfo(key) < 0) {
                 break;
             }

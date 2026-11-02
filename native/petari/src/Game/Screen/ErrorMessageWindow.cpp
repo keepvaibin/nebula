@@ -58,7 +58,7 @@ void ErrorMessageWindow::exeHide() {
 
 void ErrorMessageWindow::exeAppear() {
     if (MR::isFirstStep(this)) {
-        const wchar_t* pMessage = nullptr;
+        const char16_t* pMessage = nullptr;
 
         switch (mMessageType) {
         case MessageType_System:

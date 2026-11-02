@@ -98,7 +98,7 @@ void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchi
 }
 
 void FileLoader::clearRequestFileInfo(bool) {
-    mRequestedFileCount = nullptr;
+    mRequestedFileCount = 0;
 }
 
 void FileLoader::removeHolderIfIsEqualHeap(JKRHeap* pHeap) {
@@ -139,7 +139,7 @@ RequestFileInfo* FileLoader::addRequest(const char* pName) {
     mRequestedFileCount++;
     info->mFileEntry = nullptr;
     info->_88 = 0;
-    snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
+    nebula_snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
 
     mutex->unlock();
 
