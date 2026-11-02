@@ -620,7 +620,8 @@ public:
         std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    [[nodiscard]] unsigned scene_target_scale() const noexcept { return frame_.scale(); }
+    [[nodiscard]] const FrameMap& frame_map() const noexcept { return frame_; }
     // The scene target's samples per pixel as a power of two (MSAA; 0 for one sample).
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_msaa_.samples));
@@ -962,7 +963,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> scene_depth_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap_;
-    unsigned scene_target_scale_ = 1;
+    FrameMap frame_ = FrameMap(1u);  // the bound scene target's map (E-08)
     D3D12_CPU_DESCRIPTOR_HANDLE scene_rtv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE scene_dsv_{};
     // The inactive scene target target set (the output-resolution one between frames).
@@ -990,7 +991,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
         SceneMsaa msaa;
-        unsigned scale = 0;
+        FrameMap map{};
         bool hdr = false;   // colour kSceneHdrColorFormat (else kSceneColorFormat)
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};

@@ -205,7 +205,7 @@ public:
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
     // The 3D image's scale over the Wii's 640 x 456 as it is shown (no temporal upscaler here: the scene target's).
-    [[nodiscard]] unsigned scene_display_scale() const noexcept { return scene_target_scale_; }
+    [[nodiscard]] unsigned scene_display_scale() const noexcept { return scene_map_.scale(); }
     // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
     [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
 
@@ -332,7 +332,8 @@ public:
     void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_map_.scale(); }
+    [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
     // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the GX pipelines' sample count.
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
@@ -533,7 +534,7 @@ private:
     std::vector<VkDescriptorPool> persistent_overflow_;
 
     // The scene target.
-    unsigned scene_target_scale_ = 1;
+    FrameMap scene_map_ = FrameMap(1u);  // the bound scene target's map (E-08)
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
     bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
     // An scene target: its targets, their framebuffer and the conversion inputs reading them. The live one, and the private
@@ -572,7 +573,7 @@ private:
     gpu::TextureRef display_filter_picture_;
     // The output scene target (begin_output_scene) and its scale; they trade places with scene_ and scene_target_scale_ while it is active.
     SceneSet alt_scene_;
-    unsigned alt_scene_target_scale_ = 0;
+    FrameMap alt_scene_map_{};
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
     // ( its colour shared with its picture), dropped after kTargetIdleFrames frames unused. A picture is sampled
     // through its own view slot (TextureCache::allocate_view) reading the pass's channels.
@@ -606,7 +607,7 @@ private:
     std::uint64_t target_key_ = 0;
     bool target_log_paused_ = false;  // log_paused_ before the pass
     SceneSet target_scene_;
-    unsigned target_scene_target_scale_ = 0;
+    FrameMap target_scene_map_{};
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
     [[nodiscard]] unsigned output_scene_target_scale_for_window() const;
@@ -989,9 +990,9 @@ private:
     void replay_copy(const ReplayCopy& copy, vk::Texture& target);
     std::array<ReplayList, 3> replay_lists_{};
     SceneSet replay_scene_;
-    unsigned replay_scene_target_scale_ = 0;
+    FrameMap replay_scene_map_{};
     SceneSet replay_alt_scene_;  // the replay's output scene target
-    unsigned replay_alt_scale_ = 0;
+    FrameMap replay_alt_scale_{};
     bool create_scene_set(SceneSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kFrameWidth,
                         unsigned height = kFrameHeight);
     void destroy_scene_set(SceneSet& set);
