@@ -474,6 +474,16 @@ void sanitize_settings_draft(RenderConfig& render) {
     }
 }
 
+// A binding as the menu shows it: a key by position shows its letter, not the settings file's "Position." form.
+std::string menu_bindings(galaxy::input::ControlScheme scheme, const galaxy::input::TargetBindings& bindings) {
+    std::string text = galaxy::input::format_target_bindings(scheme, bindings);
+    constexpr std::string_view prefix = "Position.";
+    for (std::size_t at = text.find(prefix); at != std::string::npos; at = text.find(prefix, at)) {
+        text.erase(at, prefix.size());
+    }
+    return text;
+}
+
 unsigned controls_changes();
 
 // The LIGHTING row: 0 per vertex, 1 per pixel, 2 enhanced.
@@ -3031,7 +3041,7 @@ std::string native_settings_row_text(
             if (controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target)) {
                 return line + "PRESS AN INPUT";
             }
-            std::string bound = upper_ascii(galaxy::input::format_target_bindings(
+            std::string bound = upper_ascii(menu_bindings(
                 s_controls_scheme, s_controls_draft.table(s_controls_scheme)[info.target]));
             if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
             return line + bound;
@@ -4390,7 +4400,7 @@ NativeSettingsView build_native_settings_view() {
             }
             const bool capturing = controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target);
             if (info.kind == ControlsRow::Binding && !capturing) {
-                shown.value = galaxy::input::format_target_bindings(s_controls_scheme,
+                shown.value = menu_bindings(s_controls_scheme,
                                                                     s_controls_draft.table(s_controls_scheme)[info.target]);
             }
             shown.inputs = info.kind == ControlsRow::Binding;
