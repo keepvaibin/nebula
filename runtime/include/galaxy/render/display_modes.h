@@ -23,9 +23,9 @@
 
 namespace galaxy::render {
 
-// The internal resolution (EFB scale) whose 640x456 game picture covers a
+// The internal resolution (scene target scale) whose 640x456 game picture covers a
 // width x height output, clamped to 1..max_scale.
-[[nodiscard]] inline unsigned efb_scale_covering(
+[[nodiscard]] inline unsigned scene_target_scale_covering(
     unsigned width, unsigned height, unsigned max_scale) noexcept {
     if (width == 0u || height == 0u || max_scale == 0u) {
         return std::max(max_scale, 1u);

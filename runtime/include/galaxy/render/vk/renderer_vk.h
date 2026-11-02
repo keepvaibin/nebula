@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The GX renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
 //
-// The EFB is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
-// one render pass; an EFB copy, peek or present ends that pass, and the next EFB operation begins it again. Between
-// command buffers the EFB is always in its attachment layouts. kFramesInFlight frames are recorded ahead of the GPU,
+// The scene target is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
+// one render pass; an scene target copy, peek or present ends that pass, and the next scene target operation begins it again. Between
+// command buffers the scene target is always in its attachment layouts. kFramesInFlight frames are recorded ahead of the GPU,
 // each in two command buffers submitted together: the frame's texture uploads, then its draws (TextureCache never
 // writes a texture after a draw of the same frame read it, so the uploads may run first).
 //
@@ -59,17 +59,17 @@ namespace vk {
 struct RenderLayout {
     VkPipelineLayout layout = VK_NULL_HANDLE;
     std::array<VkDescriptorSetLayout, 3> sets{};
-    VkRenderPass efb_pass = VK_NULL_HANDLE;
-    // The same pass clearing both targets as it begins (a whole-EFB copy-clear): nothing loaded from memory, which a
-    // tiled GPU otherwise reads back at the full internal resolution. Compatible with efb_pass (load ops only).
-    VkRenderPass efb_pass_clear = VK_NULL_HANDLE;
-    // MSAA: the EFB passes over multisampled targets (index: log2 of the samples per pixel, 1 to 3), the colour
-    // resolved into the single-sample target as each pass ends. Index 0 is efb_pass / efb_pass_clear.
+    VkRenderPass scene_pass = VK_NULL_HANDLE;
+    // The same pass clearing both targets as it begins (a whole-scene target copy-clear): nothing loaded from memory, which a
+    // tiled GPU otherwise reads back at the full internal resolution. Compatible with scene_pass (load ops only).
+    VkRenderPass scene_pass_clear = VK_NULL_HANDLE;
+    // MSAA: the scene target passes over multisampled targets (index: log2 of the samples per pixel, 1 to 3), the colour
+    // resolved into the single-sample target as each pass ends. Index 0 is scene_pass / scene_pass_clear.
     std::array<VkRenderPass, 4> ms_passes{};
     std::array<VkRenderPass, 4> ms_passes_clear{};
     [[nodiscard]] VkRenderPass pass_for(unsigned samples_log2, bool clear) const noexcept {
         if (samples_log2 == 0u) {
-            return clear ? efb_pass_clear : efb_pass;
+            return clear ? scene_pass_clear : scene_pass;
         }
         return clear ? ms_passes_clear[samples_log2] : ms_passes[samples_log2];
     }
@@ -90,7 +90,7 @@ public:
     static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
     static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
 
-    bool initialize(int window_width, int window_height, unsigned efb_scale);
+    bool initialize(int window_width, int window_height, unsigned scene_target_scale);
     // Why initialize failed, when the device said.
     [[nodiscard]] std::string startup_failure() const { return vk::Context::get().failure(); }
     void create_first_use_resources();
@@ -98,7 +98,7 @@ public:
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
 
     // Interpolated sub-frames (renderer_vk_replay.cpp): each game frame's draws, clears and copies are logged;
-    // a sub-frame replays the log with the constants evaluated at its t (interp_eval.h) into a private EFB and
+    // a sub-frame replays the log with the constants evaluated at its t (interp_eval.h) into a private scene target and
     // presents its display copy. The interface is RendererD3D12's. Scene AA and ray tracing are inert here.
     using ReplaySequence = render::ReplaySequence;
     using SubframeTime = render::SubframeTime;
@@ -107,7 +107,7 @@ public:
     [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_log_.serial; }
     void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
     [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
-    // SMAA or FXAA of the 3D scene in the EFB before the 2D layer draws (PostProcessorVk).
+    // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (PostProcessorVk).
     void record_scene_aa();
     // Ambient occlusion (D3D12's ambient_occlusion.h) is not on Vulkan yet.
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return false; }
@@ -203,10 +203,10 @@ public:
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
-    // The 3D image's scale over the Wii's 640 x 456 as it is shown (no temporal upscaler here: the EFB's).
-    [[nodiscard]] unsigned scene_display_scale() const noexcept { return efb_scale_; }
-    // A copy right after the display copy, from the output EFB the 2D layer drew in (the EFB itself without one).
-    [[nodiscard]] bool copy_output_efb_to_texture(const CaptureRequest& params, TextureCache& textures);
+    // The 3D image's scale over the Wii's 640 x 456 as it is shown (no temporal upscaler here: the scene target's).
+    [[nodiscard]] unsigned scene_display_scale() const noexcept { return scene_target_scale_; }
+    // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
+    [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
 
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
     void attach_texture_uploads(TextureCache& cache);
@@ -223,8 +223,8 @@ public:
     [[nodiscard]] std::uint64_t completed_fence_value() const;
     void wait_for_fence_value(std::uint64_t fence_value);
 
-    void bind_efb();
-    void clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24, bool color_enable,
+    void bind_scene();
+    void clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24, bool color_enable,
                    bool alpha_enable, bool depth_enable, unsigned rect_x = 0, unsigned rect_y = 0, unsigned rect_w = 0,
                    unsigned rect_h = 0, std::uint8_t pixel_format = 0);
     void draw(const DrawCall& call);
@@ -238,30 +238,30 @@ public:
     // device memory where the device maps it (vk::BufferPlace::DeviceMapped).
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
     void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
-    void copy_efb_to_xfb(const CaptureRequest& params, XfbTexture& dest);
+    void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
     // Native presentation (renderer_d3d12.h): not yet on Vulkan, whose display copies stay copies.
-    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest&, const XfbTexture&) const { return false; }
-    [[nodiscard]] gpu::TextureRef hand_over_efb_color(gpu::TextureRef fresh) { return fresh; }
-    [[nodiscard]] bool copy_efb_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy);
-    // `black`: the frame is presented black (the pass clears; the XFB is not drawn).
-    bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
+    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest&, const DisplayTexture&) const { return false; }
+    [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh) { return fresh; }
+    [[nodiscard]] bool copy_scene_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy);
+    // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
+    bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the EFB is resampled into
-    // an EFB at the window's scale, which the 2D layer and the display copy then use, until end_output_efb.
-    [[nodiscard]] bool begin_output_efb();
-    // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the EFB's scale, takes
-    // the EFB's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
-    // between passes (made again only when its size or the EFB's scale changes); the pass is drawn once, never
+    // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the scene target is resampled into
+    // an scene target at the window's scale, which the 2D layer and the display copy then use, until end_output_scene.
+    [[nodiscard]] bool begin_output_scene();
+    // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the scene target's scale, takes
+    // the scene target's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
+    // between passes (made again only when its size or the scene target's scale changes); the pass is drawn once, never
     // replayed by sub-frames. False when the target cannot be made or a pass is open.
     [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height);
-    // Ends it: the EFB comes back and the target's picture is what draws sampling `key` at that size read (at full
+    // Ends it: the scene target comes back and the target's picture is what draws sampling `key` at that size read (at full
     // precision, in any format, through `channels`: NebulaTargetChannels).
     void end_target_pass(std::uint8_t channels, TextureCache& textures);
     // The picture of target `key` when it is `width` x `height`: its texture and view.
     [[nodiscard]] bool target_picture(std::uint64_t key, TextureHandle& out) const;
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
-    void end_output_efb();
-    [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
+    void end_output_scene();
+    [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Not on Vulkan yet: temporal upscaling.
     [[nodiscard]] bool scene_temporal_begin(float&, float&) noexcept { return false; }
     [[nodiscard]] bool begin_motion_scene() noexcept { return false; }
@@ -297,14 +297,14 @@ public:
     }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
-    // GXPeek and the pointer's depth field (separate submissions; they read the EFB as last submitted).
-    [[nodiscard]] bool peek_efb(std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value);
+    // GXPeek and the pointer's depth field (separate submissions; they read the scene target as last submitted).
+    [[nodiscard]] bool peek_scene(std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value);
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
     [[nodiscard]] bool record_pointer_depth_capture_in_frame();
     [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept { return pointer_depth_fence_; }
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(const std::uint8_t*& rgba);
-    // Asynchronous EFB fields, one per channel (RenderCore binds a channel to a peek kind and draw-sync token).
+    // Asynchronous scene target fields, one per channel (RenderCore binds a channel to a peek kind and draw-sync token).
     [[nodiscard]] std::uint64_t submit_async_peek_field(std::size_t channel, ReadbackKind kind, std::size_t slot);
     // The same capture recorded in the open frame where the stream is now (a draw-sync token); fenced at end_frame.
     [[nodiscard]] bool record_async_peek_field_in_frame(std::size_t channel, ReadbackKind kind, std::size_t slot);
@@ -320,21 +320,21 @@ public:
         return false;
     }
 
-    // Test captures: the EFB and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
-    bool debug_copy_efb_to_readback();
+    // Test captures: the scene target and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
+    bool debug_copy_scene_to_readback();
     void debug_log_readback();
     void debug_log_backbuffer_readback();
-    bool debug_copy_selected_xfb_to_readback(const XfbTexture&) noexcept { return false; }
-    void set_debug_capture_paths(std::string efb_ppm_path, std::string backbuffer_ppm_path);
+    bool debug_copy_selected_display_to_readback(const DisplayTexture&) noexcept { return false; }
+    void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
-    [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
-    // log2 of the EFB's samples per pixel (MSAA; the output EFB has one): the GX pipelines' sample count.
-    [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
-        return static_cast<std::uint8_t>(std::countr_zero(efb_.samples));
+    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the GX pipelines' sample count.
+    [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
+        return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
     }
-    // The pipelines' EFB variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene EFB here.
-    [[nodiscard]] std::uint8_t efb_variant() const noexcept { return efb_samples_log2(); }
+    // The pipelines' scene target variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene scene target here.
+    [[nodiscard]] std::uint8_t scene_variant() const noexcept { return scene_samples_log2(); }
     [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &gx_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
@@ -344,8 +344,8 @@ public:
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() noexcept { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const noexcept { return frame_slot_; }
-    [[nodiscard]] std::uint64_t efb_copy_dest_bytes() const noexcept { return efb_copy_dests_bytes_; }
-    [[nodiscard]] static std::uint64_t efb_copy_dest_budget_bytes() { return render::efb_copy_dest_budget_bytes(); }
+    [[nodiscard]] std::uint64_t scene_copy_dest_bytes() const noexcept { return scene_copy_dests_bytes_; }
+    [[nodiscard]] static std::uint64_t scene_copy_dest_budget_bytes() { return render::scene_copy_dest_budget_bytes(); }
     [[nodiscard]] std::uint64_t last_latency_wait_us() const noexcept { return 0u; }
     [[nodiscard]] std::uint64_t last_frame_slot_wait_us() const noexcept { return last_frame_slot_wait_us_; }
     [[nodiscard]] std::uint64_t last_timestamp_read_us() const noexcept { return 0u; }
@@ -387,7 +387,7 @@ private:
         std::vector<VkFramebuffer> framebuffers;
         std::vector<VkSemaphore> rendered;  // per image: the frame's commands finished writing it
     };
-    struct EfbCopyDest {
+    struct SceneCopyDest {
         gpu::TextureRef texture;
         unsigned width = 0;
         unsigned height = 0;
@@ -416,15 +416,15 @@ private:
     [[nodiscard]] bool restore_surface();
     [[nodiscard]] bool surface_changed() const;
     bool create_layouts();
-    bool create_efb_targets(unsigned scale, unsigned samples);
-    // The MSAA sample count the settings ask for and the device has for the EFB's formats (1: none).
+    bool create_scene_targets(unsigned scale, unsigned samples);
+    // The MSAA sample count the settings ask for and the device has for the scene target's formats (1: none).
     [[nodiscard]] unsigned wanted_msaa_samples() const;
-    // Before the EFB's single-sample depth is read: the multisampled depth drawn since the last resolve, resolved
-    // into it (each pixel's sample 0). The colour resolves as each EFB pass ends.
-    void resolve_efb_depth(VkCommandBuffer commands);
-    [[nodiscard]] bool efb_scale_fits_memory(unsigned scale) const;
-    void apply_pending_efb_scale();
-    void carry_over_efb_contents();
+    // Before the scene target's single-sample depth is read: the multisampled depth drawn since the last resolve, resolved
+    // into it (each pixel's sample 0). The colour resolves as each scene target pass ends.
+    void resolve_scene_depth(VkCommandBuffer commands);
+    [[nodiscard]] bool scene_target_scale_fits_memory(unsigned scale) const;
+    void apply_pending_scene_target_scale();
+    void carry_over_scene_contents();
     // Records `record` into a one-time command buffer, submits it and waits (start and resolution changes only).
     void run_one_time(const std::function<void(VkCommandBuffer)>& record);
     bool create_utility_pipelines();
@@ -438,9 +438,9 @@ private:
     [[nodiscard]] VkShaderModule utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion);
 
     // Frame recording.
-    // `clear`: begins with both targets cleared to it (efb_pass_clear).
-    void begin_efb_pass(const EfbClearValues* clear = nullptr);
-    void end_efb_pass();
+    // `clear`: begins with both targets cleared to it (scene_pass_clear).
+    void begin_scene_pass(const SceneClearValues* clear = nullptr);
+    void end_scene_pass();
     void reset_gx_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
     // A post-process draw's set: the replay list's while one is recorded, else the frame's.
@@ -464,10 +464,10 @@ private:
                                 bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
                                 float src_x, float src_y, float step_x, float step_y, float filter_row_offset);
     void record_peek_field(VkCommandBuffer commands, vk::Texture& target, ReadbackKind kind,
-                           const EfbConversionShaderConstants& constants, unsigned width, unsigned height,
+                           const SceneConversionShaderConstants& constants, unsigned width, unsigned height,
                            VkBuffer readback);
-    void transition_efb_for_sampling(VkCommandBuffer commands, bool depth);
-    void transition_efb_to_attachment(VkCommandBuffer commands, bool depth);
+    void transition_scene_for_sampling(VkCommandBuffer commands, bool depth);
+    void transition_scene_to_attachment(VkCommandBuffer commands, bool depth);
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
     void follow_window_and_resize();
@@ -507,20 +507,20 @@ private:
     VkDescriptorPool persistent_pool_ = VK_NULL_HANDLE;
     std::vector<VkDescriptorPool> persistent_overflow_;
 
-    // The EFB.
-    unsigned efb_scale_ = 1;
+    // The scene target.
+    unsigned scene_target_scale_ = 1;
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
     bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
-    // An EFB: its targets, their framebuffer and the conversion inputs reading them. The live one, and the private
+    // An scene target: its targets, their framebuffer and the conversion inputs reading them. The live one, and the private
     // one sub-frames replay into (the chunks of the game frame being drawn keep the live one between them).
-    struct EfbSet {
+    struct SceneSet {
         gpu::TextureRef color;
         gpu::TextureRef depth;  // its sampled view is the depth aspect alone
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet color_source = VK_NULL_HANDLE;
         VkDescriptorSet depth_source = VK_NULL_HANDLE;
-        // MSAA (samples above one): the multisampled targets the EFB pass draws into, color and depth above being
-        // their resolves; resolve_framebuffer (efb_pass) holds color and depth for the depth resolve.
+        // MSAA (samples above one): the multisampled targets the scene target pass draws into, color and depth above being
+        // their resolves; resolve_framebuffer (scene_pass) holds color and depth for the depth resolve.
         unsigned samples = 1u;
         gpu::TextureRef ms_color;
         gpu::TextureRef ms_depth;
@@ -528,15 +528,15 @@ private:
         VkDescriptorSet ms_depth_source = VK_NULL_HANDLE;
         bool depth_dirty = false;
     };
-    EfbSet efb_;
-    // The output EFB (begin_output_efb) and its scale; they trade places with efb_ and efb_scale_ while it is active.
-    EfbSet alt_efb_;
-    unsigned alt_efb_scale_ = 0;
-    // The open target pass's set (begin_target_pass) while the EFB holds it, and each key's set between passes
+    SceneSet scene_;
+    // The output scene target (begin_output_scene) and its scale; they trade places with scene_ and scene_target_scale_ while it is active.
+    SceneSet alt_scene_;
+    unsigned alt_scene_target_scale_ = 0;
+    // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
     // ( its colour shared with its picture), dropped after kTargetIdleFrames frames unused. A picture is sampled
     // through its own view slot (TextureCache::allocate_view) reading the pass's channels.
     struct TargetSlot {
-        EfbSet set;
+        SceneSet set;
         unsigned scale = 0;
         std::uint64_t used = 0;
         std::uint16_t width = 0, height = 0;  // game units
@@ -564,31 +564,31 @@ private:
     std::vector<std::pair<VkDescriptorSet, VkDescriptorSet>> target_free_sources_;  // dropped slots' inputs
     std::uint64_t target_key_ = 0;
     bool target_log_paused_ = false;  // log_paused_ before the pass
-    EfbSet target_efb_;
-    unsigned target_efb_scale_ = 0;
+    SceneSet target_scene_;
+    unsigned target_scene_target_scale_ = 0;
     bool target_pass_active_ = false;
-    bool output_efb_active_ = false;
-    [[nodiscard]] unsigned output_efb_scale_for_window() const;
-    bool enter_output_efb(unsigned scale);
-    void swap_efb_sets();
+    bool output_scene_active_ = false;
+    [[nodiscard]] unsigned output_scene_target_scale_for_window() const;
+    bool enter_output_scene(unsigned scale);
+    void swap_scene_sets();
     void swap_target_set();
-    gpu::TextureRef efb_carry_color_;  // the previous targets, read once after a resolution change
-    gpu::TextureRef efb_carry_depth_;
-    bool efb_carry_clear_ = false;  // the new targets start cleared (MSAA before or after the change)
-    bool efb_pass_open_ = false;
-    bool present_black_ = false;  // present()'s `black`, for present_xfb
-    bool efb_seeded_ = false;
+    gpu::TextureRef scene_carry_color_;  // the previous targets, read once after a resolution change
+    gpu::TextureRef scene_carry_depth_;
+    bool scene_carry_clear_ = false;  // the new targets start cleared (MSAA before or after the change)
+    bool scene_pass_open_ = false;
+    bool present_black_ = false;  // present()'s `black`, for present_display
+    bool scene_seeded_ = false;
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
     VkPipeline grey_conversion_pipeline_ = VK_NULL_HANDLE;  // into one-channel copies (grey_pass_)
     VkPipeline display_filter_pipeline_ = VK_NULL_HANDLE;   // 1:1 display copies without gamma
-    // The renderer's own draws into the EFB pass, per EFB sample count (log2), made at first use: masked clears,
+    // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
-    enum class EfbUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
-    std::array<std::array<VkPipeline, 4>, static_cast<std::size_t>(EfbUtility::Count)> efb_utility_pipelines_{};
-    [[nodiscard]] VkPipeline efb_utility_pipeline(EfbUtility kind);
-    unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the EFB's formats render and sample
+    enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
+    std::array<std::array<VkPipeline, 4>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
+    [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
+    unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_solid_pipeline_ = VK_NULL_HANDLE;
@@ -638,10 +638,10 @@ private:
         bool blend_valid = false;
     } bound_;
 
-    // EFB copies.
-    std::unordered_map<std::uint64_t, EfbCopyDest> efb_copy_dests_;
-    std::uint64_t efb_copy_dests_bytes_ = 0;
-    std::uint64_t efb_copy_dests_tick_ = 0;
+    // scene target copies.
+    std::unordered_map<std::uint64_t, SceneCopyDest> scene_copy_dests_;
+    std::uint64_t scene_copy_dests_bytes_ = 0;
+    std::uint64_t scene_copy_dests_tick_ = 0;
 
     // Peeks.
     gpu::TextureRef peek_target_;  // 1x1, and the 640x528 pointer field below
@@ -664,12 +664,12 @@ private:
     void ensure_async_field(AsyncField& field);
 
     // Captures and telemetry.
-    std::string efb_capture_path_;
+    std::string scene_capture_path_;
     std::string backbuffer_capture_path_;
-    Readback efb_capture_;
-    std::string efb_capture_pending_path_;
-    unsigned efb_capture_width_ = 0;
-    unsigned efb_capture_height_ = 0;
+    Readback scene_capture_;
+    std::string scene_capture_pending_path_;
+    unsigned scene_capture_width_ = 0;
+    unsigned scene_capture_height_ = 0;
     Readback backbuffer_capture_;
     std::string backbuffer_capture_pending_path_;
     unsigned backbuffer_capture_width_ = 0;
@@ -707,10 +707,10 @@ private:
     bool ring_advance_pending_ = false;
 
     // The log: one game frame's GX work in order (a display copy closes it).
-    // OutputEfbBegin: the scene resampled into the output EFB at the op's scale; SwapEfbSets: the EFB and the output
-    // EFB trade places.
+    // OutputSceneBegin: the scene resampled into the output scene target at the op's scale; SwapSceneSets: the scene target and the output
+    // scene target trade places.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets, Bloom
+        Draw, BindScene, Clear, Copy, SceneAa, OutputSceneBegin, SwapSceneSets, Bloom
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
@@ -726,7 +726,7 @@ private:
         CaptureRequest params{};
         bool depth = false;
         bool display = false;            // the display copy (closes the log)
-        std::uint64_t dest_key = 0;      // a texture copy's destination (efb_copy_dests_)
+        std::uint64_t dest_key = 0;      // a texture copy's destination (scene_copy_dests_)
         unsigned width = 0, height = 0;  // the destination's size
         float geometry[5]{};             // sampling: src x, y, step x, y, filter row offset
         bool exact = false;              // an identity copy (vkCmdCopyImage)
@@ -749,7 +749,7 @@ private:
         std::unordered_map<std::uint64_t, std::array<VkImageView, kMaxTextureMaps>> tables;
         unsigned segment = 0;
         std::uint64_t serial = 0;
-        float surround = 0.0f;  // the display copy's XFB: its surround and movie flag (the sub-frame XFB's)
+        float surround = 0.0f;  // the display copy's display picture: its surround and movie flag (the sub-frame display picture's)
         bool movie = false;
         // Copy textures this log read before rewriting them, as they were at its start (the replay reads these).
         std::vector<std::pair<VkImageView, gpu::TextureRef>> snapshots;
@@ -921,7 +921,7 @@ private:
     std::vector<std::pair<std::shared_ptr<vk::Buffer>, std::uint64_t>> interp_retired_;  // with their last fence
 
     // Replay lists: the playing log recorded once per sequence into a reusable command buffer, with its own
-    // descriptor pool, private EFB and stand-ins for its copies' destinations.
+    // descriptor pool, private scene target and stand-ins for its copies' destinations.
     struct StandIn {
         std::uint64_t dest_key = 0;
         gpu::TextureRef texture;
@@ -947,14 +947,14 @@ private:
     std::unordered_map<std::uint64_t, std::uint64_t> patched_;  // texture table -> patched (this replay)
     void replay_copy(const ReplayCopy& copy, vk::Texture& target);
     std::array<ReplayList, 3> replay_lists_{};
-    EfbSet replay_efb_;
-    unsigned replay_efb_scale_ = 0;
-    EfbSet replay_alt_efb_;  // the replay's output EFB
+    SceneSet replay_scene_;
+    unsigned replay_scene_target_scale_ = 0;
+    SceneSet replay_alt_scene_;  // the replay's output scene target
     unsigned replay_alt_scale_ = 0;
-    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kFrameWidth,
+    bool create_scene_set(SceneSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kFrameWidth,
                         unsigned height = kFrameHeight);
-    void destroy_efb_set(EfbSet& set);
-    XfbTexture subframe_xfb_;
+    void destroy_scene_set(SceneSet& set);
+    DisplayTexture subframe_display_;
     bool replaying_ = false;
 
     // Sub-frame submissions: the evaluation and present command buffers, their descriptor pool and acquire
@@ -1008,8 +1008,8 @@ private:
     };
     PresentTiming present_timing_;
     void report_present_timing();
-    // Every 600 frames ([vk-gpu]): the GPU's frame time (timestamps), and how often the EFB pass reopened (each
-    // reopening loads and stores the whole EFB on a tiled GPU) and the EFB was copied.
+    // Every 600 frames ([vk-gpu]): the GPU's frame time (timestamps), and how often the scene target pass reopened (each
+    // reopening loads and stores the whole scene target on a tiled GPU) and the scene target was copied.
     struct GpuWindow {
         double ms = 0.0;
         double max_ms = 0.0;
@@ -1039,7 +1039,7 @@ private:
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, EfbCopy, XfbCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+        Scene, Resolve, SceneCopy, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);

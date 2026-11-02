@@ -644,7 +644,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
           ensure_target(stencil_, width, height, kStencilFormat, 0u, frame_index, frames_in_flight))) {
         pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
-    // The passes read a copy of the scene and write the EFB.
+    // The passes read a copy of the scene and write the scene target.
     if (pass != AaRun::kNone &&
         ((fault_targets_ && frame_index != 0u) ||
          !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight))) {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's bloom on Vulkan: the operator of game_bloom.h (game_bloom.hlsl, compiled on the device on a worker
-// thread) over the RGBA8 EFB. Until it is ready the game draws its own chains (NEBULA_OPTION_BLOOM 0).
+// thread) over the RGBA8 scene target. Until it is ready the game draws its own chains (NEBULA_OPTION_BLOOM 0).
 #pragma once
 
 #include "galaxy/render/vk/vk_context.h"
@@ -30,7 +30,7 @@ public:
     // Starts compiling the passes.
     void initialize();
     void shutdown() noexcept;
-    // Once the worker has finished: builds the compute pipelines (the composite's are made per EFB pass at first use).
+    // Once the worker has finished: builds the compute pipelines (the composite's are made per scene target pass at first use).
     // True when ready.
     bool poll_ready();
     [[nodiscard]] bool ready() const noexcept { return ready_; }
@@ -49,8 +49,8 @@ public:
         float strength = 1.0f;
     };
     struct Inputs {
-        Texture* color = nullptr;   // the EFB's single-sample colour (COLOR_ATTACHMENT_OPTIMAL, no render pass open)
-        unsigned frame_width = 0;   // the game's frame in EFB pixels (its 640 x 456 times the scale)
+        Texture* color = nullptr;   // the scene target's single-sample colour (COLOR_ATTACHMENT_OPTIMAL, no render pass open)
+        unsigned frame_width = 0;   // the game's frame in scene target pixels (its 640 x 456 times the scale)
         unsigned frame_height = 0;
         unsigned logical_width = 640;
         unsigned logical_height = 456;
@@ -60,7 +60,7 @@ public:
     bool keep(VkCommandBuffer commands, const Inputs& in);
     // The chain before its composite, recorded with no render pass open; false when there is nothing to draw.
     bool prepare(VkCommandBuffer commands, const Inputs& in, const Params& params, const SetAllocator& allocate);
-    // The composite prepare() set up, in the open EFB pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
+    // The composite prepare() set up, in the open scene target pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
     // stays).
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
     // The images recorded passes read, for a command buffer submitted again later (the interpolation replay).
@@ -82,7 +82,7 @@ private:
     [[nodiscard]] VkPipeline composite_pipeline(VkRenderPass pass, unsigned samples_log2);
     bool ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format, bool work,
                 const char* name);
-    // The EFB colour's frame into `target` (its format), left shader-readable.
+    // The scene target colour's frame into `target` (its format), left shader-readable.
     bool copy_frame(VkCommandBuffer commands, const Inputs& in, std::shared_ptr<Texture>& target, const char* name);
     // Set 0 for a pass: t0-t2 and u0-u2 (null: the unused slot's image); `first_layout` the first's when given.
     [[nodiscard]] VkDescriptorSet set_of(const SetAllocator& allocate, std::array<const Texture*, 3> sampled,
@@ -104,7 +104,7 @@ private:
     VkDescriptorPool sampler_pool_ = VK_NULL_HANDLE;
     VkDescriptorSet sampler_set_ = VK_NULL_HANDLE;
     std::array<VkPipeline, 3> compute_{};  // down, box, blur
-    // The composite per EFB pass (by log2 of its samples) and the pass it was made for.
+    // The composite per scene target pass (by log2 of its samples) and the pass it was made for.
     std::array<VkPipeline, 4> composite_{};
     std::array<VkRenderPass, 4> composite_pass_{};
 
@@ -116,7 +116,7 @@ private:
     unsigned composite_height_ = 0;
 
     std::shared_ptr<Texture> dummy_;  // unused slots (a 1 x 1 work image)
-    std::shared_ptr<Texture> keep_;   // the scene (the EFB's format)
+    std::shared_ptr<Texture> keep_;   // the scene (the scene target's format)
     std::shared_ptr<Texture> source_; // the simple bloom's scene
     std::shared_ptr<Texture> work_, box_tmp_, mask_, level1_, level2_in_, level2_;
     std::array<std::shared_ptr<Texture>, 3> blur_h_;

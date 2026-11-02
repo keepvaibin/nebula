@@ -198,7 +198,7 @@ bool GameBloomVk::build() {
             return false;
         }
     }
-    // The composite's pipelines are made per EFB pass at first use; its programs must have compiled.
+    // The composite's pipelines are made per scene target pass at first use; its programs must have compiled.
     return !spirv_[kCompositeVs].empty() && !spirv_[kCompositePs].empty();
 }
 
@@ -230,7 +230,7 @@ void GameBloomVk::destroy() noexcept {
     sampler_ = VK_NULL_HANDLE;
 }
 
-// The kept scene plus the bloom over the frame, RGB only, in an EFB pass of 2^samples_log2 samples.
+// The kept scene plus the bloom over the frame, RGB only, in an scene target pass of 2^samples_log2 samples.
 VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_log2) {
     samples_log2 = std::min(samples_log2, 3u);
     if (composite_[samples_log2] != VK_NULL_HANDLE && composite_pass_[samples_log2] == pass) {
@@ -299,7 +299,7 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
     return pipeline;
 }
 
-// A work image (storage and sampled, kept in GENERAL) or a copy target (the EFB's format, transfer destination and
+// A work image (storage and sampled, kept in GENERAL) or a copy target (the scene target's format, transfer destination and
 // sampled), made again when its size or format changes; the old one lives while submissions name it.
 bool GameBloomVk::ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format, bool work,
                          const char* name) {
@@ -357,7 +357,7 @@ VkDescriptorSet GameBloomVk::set_of(const SetAllocator& allocate, std::array<con
     for (unsigned i = 0; i < 6u; ++i) {
         const Texture* const t = i < 3u ? sampled[i] : storage[i - 3u];
         const Texture* const used = t != nullptr ? t : dummy_.get();
-        // Copies are read shader-read-only, work images in GENERAL; the first slot's layout may be given (the EFB).
+        // Copies are read shader-read-only, work images in GENERAL; the first slot's layout may be given (the scene target).
         const VkImageLayout layout = i == 0u && first_layout != VK_IMAGE_LAYOUT_UNDEFINED ? first_layout
                                      : used->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                                          ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -398,7 +398,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     if (restore) {
         // Kind 0: the scene alone, the levels unread.
         composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = keep_.get();
-        composite_constants_.params[3] = 1.0f;  // the RGBA8 EFB
+        composite_constants_.params[3] = 1.0f;  // the RGBA8 scene target
         pending_ = true;
         return true;
     }
@@ -438,7 +438,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
 
     const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, in.logical_width,
                                              in.logical_height, p.ring_x, p.ring_y);
-    // The selection's source: the glowing models drawn over black (normal: the EFB itself), the scene (simple).
+    // The selection's source: the glowing models drawn over black (normal: the scene target itself), the scene (simple).
     if (normal) {
         image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -486,7 +486,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
                  set_of(allocate, {(across ? box_tmp_ : work_).get(), nullptr, nullptr}, {mask_.get(), nullptr, nullptr}),
                  s.w1, s.h1);
     }
-    // Level 1: the rings' Gaussians across, then down, summed at the taps' weight (normal: clamped, as the EFB holds
+    // Level 1: the rings' Gaussians across, then down, summed at the taps' weight (normal: clamped, as the scene target holds
     // it).
     {
         Constants c{};
@@ -540,7 +540,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     c.params[0] = static_cast<float>(std::min(p.intensity, 255u)) / 255.0f;
     c.params[1] = std::max(p.strength, 0.0f);
     c.params[2] = normal ? 1.0f : 2.0f;
-    c.params[3] = 1.0f;  // the RGBA8 EFB: the bloom rounded stochastically
+    c.params[3] = 1.0f;  // the RGBA8 scene target: the bloom rounded stochastically
     c.uv[0] = 1.0f / static_cast<float>(s.f * s.w1);
     c.uv[1] = 1.0f / static_cast<float>(s.f * s.h1);
     c.uv[2] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.w2, 1u));

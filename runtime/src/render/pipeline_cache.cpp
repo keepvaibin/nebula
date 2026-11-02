@@ -119,7 +119,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
 
     D3D12_RENDER_TARGET_BLEND_DESC& rt = pd.BlendState.RenderTarget[0];
     const std::uint32_t bb = rs.blend_bits;
-    // GX EFB write masks (key bits 25/26 = cmode0 color_update/alpha_update).
+    // GX scene target write masks (key bits 25/26 = cmode0 color_update/alpha_update).
     // Z-clear / z-prepass draws disable color update while writing depth.
     rt.RenderTargetWriteMask = static_cast<UINT8>(
         ((bb & (1u << 25)) ? (D3D12_COLOR_WRITE_ENABLE_RED |
@@ -184,7 +184,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     }
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-    // GX screen space is Y-down relative to D3D NDC (the EFB viewport does not flip), so a GX
+    // GX screen space is Y-down relative to D3D NDC (the scene target viewport does not flip), so a GX
     // front face lands as a D3D back face and vice versa, as in Dolphin's D3D backends.
     // CullMode::All (rasterize nothing) has no PSO equivalent and maps to None.
     switch (static_cast<CullMode>(rs.cull)) {
@@ -270,7 +270,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         break;
     }
     pd.NumRenderTargets      = 1;
-    pd.RTVFormats[0]         = (rs.samples_log2 & kEfbVariantHdr) != 0u ? kEfbHdrColorFormat : kEfbColorFormat;
+    pd.RTVFormats[0]         = (rs.samples_log2 & kSceneVariantHdr) != 0u ? kSceneHdrColorFormat : kSceneColorFormat;
     if ((bb & kRenderStateMotionTarget) != 0u) {
         // Opaque motion writer: render target 1 takes the motion vectors
         // with render target 0's write mask (independent blend off).
@@ -290,16 +290,16 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         mask.DestBlendAlpha = D3D12_BLEND_ONE;
         mask.BlendOpAlpha = D3D12_BLEND_OP_MAX;
         mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
-        // The effects layer: target 2 blends the draw's colour as the EFB does (what it adds over what lies behind),
-        // target 3 takes the EFB's destination factor on its own (what of that it lets through: transmittance).
-        // The backend sets the layer only for single-source blends whose factors never read the EFB.
+        // The effects layer: target 2 blends the draw's colour as the scene target does (what it adds over what lies behind),
+        // target 3 takes the scene target's destination factor on its own (what of that it lets through: transmittance).
+        // The backend sets the layer only for single-source blends whose factors never read the scene target.
         if ((bb & kRenderStateLayerTarget) != 0u) {
             pd.NumRenderTargets = 4;
             pd.RTVFormats[2] = kLayerFormat;
             pd.RTVFormats[3] = kLayerFormat;
-            const D3D12_RENDER_TARGET_BLEND_DESC& efb = pd.BlendState.RenderTarget[0];
+            const D3D12_RENDER_TARGET_BLEND_DESC& scene_target = pd.BlendState.RenderTarget[0];
             D3D12_RENDER_TARGET_BLEND_DESC& layer = pd.BlendState.RenderTarget[2];
-            layer = efb;
+            layer = scene_target;
             layer.LogicOpEnable = FALSE;
             layer.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
                                           D3D12_COLOR_WRITE_ENABLE_BLUE;
@@ -307,11 +307,11 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
             trans = layer;
             trans.SrcBlend = D3D12_BLEND_ZERO;
             trans.BlendOp = D3D12_BLEND_OP_ADD;
-            trans.DestBlend = efb.BlendOp == D3D12_BLEND_OP_ADD ? efb.DestBlend : D3D12_BLEND_ONE;
+            trans.DestBlend = scene_target.BlendOp == D3D12_BLEND_OP_ADD ? scene_target.DestBlend : D3D12_BLEND_ONE;
         }
     }
-    pd.DSVFormat             = kEfbDepthFormat;
-    pd.SampleDesc.Count      = 1u << (rs.samples_log2 & kEfbVariantSamplesMask);
+    pd.DSVFormat             = kSceneDepthFormat;
+    pd.SampleDesc.Count      = 1u << (rs.samples_log2 & kSceneVariantSamplesMask);
 
     return pd;
 }

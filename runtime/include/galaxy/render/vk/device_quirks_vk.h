@@ -58,7 +58,7 @@ struct DeviceQuirks {
     // Specialised TEV stages take a zero colour input A or B from a constant instead of a literal (Qualcomm compilers
     // fold the literal wrongly).
     bool tev_zero_from_constant = false;
-    // EFB clears drawn instead of vkCmdClearAttachments (which races with draws on older Qualcomm drivers).
+    // scene target clears drawn instead of vkCmdClearAttachments (which races with draws on older Qualcomm drivers).
     bool clear_with_draw = false;
     // Readback buffers in host-coherent memory (cached memory reads back slower on Mali and Adreno).
     bool coherent_readback = false;

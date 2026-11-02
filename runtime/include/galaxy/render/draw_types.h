@@ -72,16 +72,16 @@ inline constexpr std::uint8_t kLogicCopy = 3u;
 
 // The blend the pixel engine performs, as the draw's result shows it: a blend that writes the fragment's colour unchanged
 // is no blend. The draw blends (or subtracts) where blending is on, else applies the logic op where that is on. A blend of ONE and ZERO, and the logic op COPY, write the source exactly as an unblended draw
-// does; so does DSTALPHA and INVDSTALPHA where the EFB has no alpha (`efb_has_alpha` false: its alpha reads as one). The
+// does; so does DSTALPHA and INVDSTALPHA where the scene target has no alpha (`scene_has_alpha` false: its alpha reads as one). The
 // game draws opaque surfaces with such states (the far side of Bonefin's ocean sphere: BLEND ONE ZERO, depth written),
 // and whatever tells translucent draws from opaque ones (the pipeline's blend key, the motion target, the ray tracer's
 // geometry and its translucent lighting) must take them for the opaque draws they are.
-[[nodiscard]] constexpr BlendMode effective_blend(BlendMode b, bool efb_has_alpha) {
-    const auto factor = [efb_has_alpha](BlendFactor f) {
-        if (!efb_has_alpha && f == BlendFactor::DstAlpha) {
+[[nodiscard]] constexpr BlendMode effective_blend(BlendMode b, bool scene_has_alpha) {
+    const auto factor = [scene_has_alpha](BlendFactor f) {
+        if (!scene_has_alpha && f == BlendFactor::DstAlpha) {
             return BlendFactor::One;
         }
-        if (!efb_has_alpha && f == BlendFactor::InvDstAlpha) {
+        if (!scene_has_alpha && f == BlendFactor::InvDstAlpha) {
             return BlendFactor::Zero;
         }
         return f;
@@ -157,7 +157,7 @@ constexpr BlendMode blend_of(bool blend, bool logic, BlendFactor dst, BlendFacto
 constexpr auto kBlend = blend_of(true, false, BlendFactor::InvSrcAlpha, BlendFactor::SrcAlpha, false, 0u);
 
 // effective_blend: an alpha blend stays a blend; BLEND ONE ZERO and logic COPY write the source (no blend, no logic op);
-// DSTALPHA / INVDSTALPHA write the source only where the EFB has no alpha; a subtract of ONE ZERO still subtracts.
+// DSTALPHA / INVDSTALPHA write the source only where the scene target has no alpha; a subtract of ONE ZERO still subtracts.
 static_assert(effective_blend(kBlend, true).blend_enable);
 static_assert(effective_blend(kBlend, false).blend_enable);
 constexpr auto kBlendOneZero = blend_of(true, false, BlendFactor::Zero, BlendFactor::One, false, 0u);

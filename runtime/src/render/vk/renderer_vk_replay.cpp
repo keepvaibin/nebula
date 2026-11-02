@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Interpolated sub-frames on Vulkan (renderer_vk.h). Each game frame's draws, clears and copies are logged; a
 // sub-frame evaluates the moving constants at its t on the GPU (interp_eval.h), replays the log with them into a
-// private EFB (the chunks of the next game frame keep the live one meanwhile) and presents its display copy. The design
+// private scene target (the chunks of the next game frame keep the live one meanwhile) and presents its display copy. The design
 // is RendererD3D12's (renderer_d3d12.cpp, begin_replay_record to present_replay_subframe): the replay is recorded
 // once per sequence and submitted again for each of its sub-frames.
 #include "galaxy/render/vk/renderer_vk.h"
@@ -152,7 +152,7 @@ void RendererVk::note_feedback_reads(const std::array<VkImageView, kMaxTextureMa
             known->serial = replay_serial_ + 1u;
             continue;
         }
-        for (const auto& [key, dest] : efb_copy_dests_) {
+        for (const auto& [key, dest] : scene_copy_dests_) {
             if (dest.texture && dest.texture->view == view) {
                 feedback_.push_back({view, dest.texture, replay_serial_ + 1u});
                 break;
@@ -1037,12 +1037,12 @@ std::uint64_t RendererVk::patched_table(ReplayList& list, std::uint64_t table) {
     return result;
 }
 
-// A logged copy again, from the private EFB into `target` (a stand-in or the sub-frame's XFB).
+// A logged copy again, from the private scene target into `target` (a stand-in or the sub-frame's display picture).
 void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
     if (copy.exact) {
-        end_efb_pass();
+        end_scene_pass();
         const VkCommandBuffer commands = commands_;
-        image_barrier(commands, efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                       VK_ACCESS_TRANSFER_READ_BIT);
@@ -1054,19 +1054,19 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
         region.srcOffset = {static_cast<std::int32_t>(copy.box_left), static_cast<std::int32_t>(copy.box_top), 0};
         region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
         region.extent = {copy.width, copy.height, 1};
-        vkCmdCopyImage(commands, efb_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
+        vkCmdCopyImage(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, target.image,
                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
         image_barrier(commands, target.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
                       VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                       VK_ACCESS_SHADER_READ_BIT);
-        image_barrier(commands, efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         reset_gx_bindings();
-        bind_efb();
+        bind_scene();
         return;
     }
     if (copy.display) {
@@ -1083,7 +1083,7 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
 }
 
 // The playing log into `list`'s command buffer, with the sequence's constants: draws read the evaluated blocks, copies
-// write stand-ins (later draws of the replay read them), the display copy writes the sub-frame's XFB.
+// write stand-ins (later draws of the replay read them), the display copy writes the sub-frame's display picture.
 bool RendererVk::record_replay_list(ReplayList& list) {
     const ReplaySequence& sequence = sequence_.overrides;
     const interp_gpu::Layout& layout = sequence.layout;
@@ -1103,18 +1103,18 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             create_pool(device, kFrameSets,
                         constants_sets(64u, {.images = kFrameSets * 8u, .storage_images = vk_detail::kPassStorageImages}));
     }
-    // The scene EFB's scale (the output EFB's place while the live frame's 2D layer is in it).
-    const unsigned scene_scale = output_efb_active_ ? alt_efb_scale_ : efb_scale_;
-    const unsigned scene_samples = output_efb_active_ ? alt_efb_.samples : efb_.samples;
-    if (replay_efb_.color && (replay_efb_scale_ != scene_scale || replay_efb_.samples != scene_samples)) {
-        destroy_efb_set(replay_efb_);
+    // The scene scene target's scale (the output scene target's place while the live frame's 2D layer is in it).
+    const unsigned scene_scale = output_scene_active_ ? alt_scene_target_scale_ : scene_target_scale_;
+    const unsigned scene_samples = output_scene_active_ ? alt_scene_.samples : scene_.samples;
+    if (replay_scene_.color && (replay_scene_target_scale_ != scene_scale || replay_scene_.samples != scene_samples)) {
+        destroy_scene_set(replay_scene_);
     }
-    if (!replay_efb_.color) {
-        if (!create_efb_set(replay_efb_, scene_scale, scene_samples)) {
+    if (!replay_scene_.color) {
+        if (!create_scene_set(replay_scene_, scene_scale, scene_samples)) {
             replay_failure_ = 5u;
             return false;
         }
-        replay_efb_scale_ = scene_scale;
+        replay_scene_target_scale_ = scene_scale;
     }
     const ReplayCopy* display = nullptr;
     for (const ReplayCopy& copy : run_log_.copies) {
@@ -1124,24 +1124,24 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         replay_failure_ = 3u;
         return false;
     }
-    if (!subframe_xfb_.texture || subframe_xfb_.width != display->width || subframe_xfb_.height != display->height) {
-        if (subframe_xfb_.texture) {
-            retire(std::move(subframe_xfb_.texture));
+    if (!subframe_display_.texture || subframe_display_.width != display->width || subframe_display_.height != display->height) {
+        if (subframe_display_.texture) {
+            retire(std::move(subframe_display_.texture));
         }
-        subframe_xfb_.texture = context.create_texture(
+        subframe_display_.texture = context.create_texture(
             display->width, display->height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            true, "sub-frame XFB");
-        if (!subframe_xfb_.texture) {
+            true, "sub-frame display picture");
+        if (!subframe_display_.texture) {
             replay_failure_ = 4u;
             return false;
         }
-        subframe_xfb_.width = static_cast<std::uint16_t>(display->width);
-        subframe_xfb_.height = static_cast<std::uint16_t>(display->height);
+        subframe_display_.width = static_cast<std::uint16_t>(display->width);
+        subframe_display_.height = static_cast<std::uint16_t>(display->height);
     }
-    subframe_xfb_.safety_surround = run_log_.surround;
-    subframe_xfb_.prerecorded_movie = run_log_.movie;
+    subframe_display_.safety_surround = run_log_.surround;
+    subframe_display_.prerecorded_movie = run_log_.movie;
 
     const auto record_start = std::chrono::steady_clock::now();
     vk::check(vkResetCommandPool(device, list.pool, 0), "vkResetCommandPool");
@@ -1150,17 +1150,17 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     vk::check(vkBeginCommandBuffer(list.commands, &begin), "vkBeginCommandBuffer");
 
     const VkCommandBuffer saved_commands = commands_;
-    const bool saved_pass = efb_pass_open_;
-    // The live frame's EFB back in place when its 2D layer is in the output EFB (the log starts at the scene's).
-    const bool live_output = output_efb_active_;
+    const bool saved_pass = scene_pass_open_;
+    // The live frame's scene target back in place when its 2D layer is in the output scene target (the log starts at the scene's).
+    const bool live_output = output_scene_active_;
     if (live_output) {
-        swap_efb_sets();
+        swap_scene_sets();
     }
     commands_ = list.commands;
-    efb_pass_open_ = false;
-    std::swap(efb_, replay_efb_);
-    std::swap(alt_efb_, replay_alt_efb_);
-    std::swap(alt_efb_scale_, replay_alt_scale_);
+    scene_pass_open_ = false;
+    std::swap(scene_, replay_scene_);
+    std::swap(alt_scene_, replay_alt_scene_);
+    std::swap(alt_scene_target_scale_, replay_alt_scale_);
     replaying_ = true;
     reset_gx_bindings();
     redirect_.clear();
@@ -1172,7 +1172,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     replay_list_ = &list;
     replay_constant_sets_.clear();
     list.held.clear();
-    bind_efb();
+    bind_scene();
     const gpu::Address output = interp_output_address_;
     // The log before's vertices are gone once its segment came round (a later game frame records there).
     const bool blend = sequence.vertex_blend && prev_valid_ && (!blend_pairs_.empty() || !stripe_gather_.empty()) &&
@@ -1205,12 +1205,12 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             draw(call);
             break;
         }
-        case ReplayKind::BindEfb:
-            bind_efb();
+        case ReplayKind::BindScene:
+            bind_scene();
             break;
         case ReplayKind::Clear: {
             const ReplayClear& c = run_log_.clears[op.index];
-            clear_efb(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+            clear_scene(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
         case ReplayKind::SceneAa:
@@ -1219,21 +1219,21 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         case ReplayKind::Bloom:
             record_game_bloom(run_log_.blooms[op.index]);
             break;
-        case ReplayKind::OutputEfbBegin:
-            if (!output_efb_active_) {
-                (void)enter_output_efb(op.index);
+        case ReplayKind::OutputSceneBegin:
+            if (!output_scene_active_) {
+                (void)enter_output_scene(op.index);
             }
             break;
-        case ReplayKind::SwapEfbSets:
-            if (alt_efb_.color) {
-                swap_efb_sets();
-                bind_efb();
+        case ReplayKind::SwapSceneSets:
+            if (alt_scene_.color) {
+                swap_scene_sets();
+                bind_scene();
             }
             break;
         case ReplayKind::Copy: {
             const ReplayCopy& copy = run_log_.copies[op.index];
             if (copy.display) {
-                replay_copy(copy, *subframe_xfb_.texture);
+                replay_copy(copy, *subframe_display_.texture);
                 break;
             }
             // One stand-in per destination: the game frame's copy texture keeps what the game drew into it.
@@ -1267,20 +1267,20 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         }
         }
     }
-    end_efb_pass();
-    if (output_efb_active_) {
-        swap_efb_sets();
+    end_scene_pass();
+    if (output_scene_active_) {
+        swap_scene_sets();
     }
-    std::swap(alt_efb_, replay_alt_efb_);
-    std::swap(alt_efb_scale_, replay_alt_scale_);
-    std::swap(efb_, replay_efb_);
+    std::swap(alt_scene_, replay_alt_scene_);
+    std::swap(alt_scene_target_scale_, replay_alt_scale_);
+    std::swap(scene_, replay_scene_);
     if (live_output) {
-        swap_efb_sets();
+        swap_scene_sets();
     }
     replaying_ = false;
     replay_list_ = nullptr;
     commands_ = saved_commands;
-    efb_pass_open_ = saved_pass;
+    scene_pass_open_ = saved_pass;
     reset_gx_bindings();
     vk::check(vkEndCommandBuffer(list.commands), "vkEndCommandBuffer");
     list.sequence = sequence_.serial;
@@ -1383,7 +1383,7 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
 
     Frame* const saved_frame = frame_;
     const VkCommandBuffer saved_commands = commands_;
-    const bool saved_pass = efb_pass_open_;
+    const bool saved_pass = scene_pass_open_;
     const std::uint32_t saved_image = swap_image_;
     frame_ = &slot;
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
@@ -1401,9 +1401,9 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     vk::check(vkEndCommandBuffer(slot.uploads), "vkEndCommandBuffer");
     vk::check(vkBeginCommandBuffer(slot.commands, &begin), "vkBeginCommandBuffer");
     commands_ = slot.commands;
-    efb_pass_open_ = false;
+    scene_pass_open_ = false;
     swap_image_ = UINT32_MAX;
-    (void)present(&subframe_xfb_, subframe_capture_);
+    (void)present(&subframe_display_, subframe_capture_);
     if (subframe_timestamps_ != VK_NULL_HANDLE) {
         vkCmdWriteTimestamp(slot.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, subframe_timestamps_, index * 2u + 1u);
         subframe_timestamp_pending_[index] = true;
@@ -1436,7 +1436,7 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     }
     frame_ = saved_frame;
     commands_ = saved_commands;
-    efb_pass_open_ = saved_pass;
+    scene_pass_open_ = saved_pass;
     swap_image_ = saved_image;
     reset_gx_bindings();
     sequence_.first = false;
@@ -1518,14 +1518,14 @@ void RendererVk::release_replay_resources() noexcept {
     interp_retired_.clear();
     eval_frames_.reset();
     eval_readback_.reset();
-    for (EfbSet* set : {&replay_efb_, &replay_alt_efb_}) {
+    for (SceneSet* set : {&replay_scene_, &replay_alt_scene_}) {
         for (VkFramebuffer framebuffer : {set->framebuffer, set->resolve_framebuffer}) {
             if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, framebuffer, nullptr);
         }
-        *set = EfbSet{};
+        *set = SceneSet{};
     }
     replay_alt_scale_ = 0u;
-    subframe_xfb_ = XfbTexture{};
+    subframe_display_ = DisplayTexture{};
 }
 
 }  // namespace galaxy::render

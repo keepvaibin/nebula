@@ -200,7 +200,7 @@ void pump_messages();
 [[nodiscard]] host::HostPointerTransitionPoll poll_host_pointer_transition(
     std::uint64_t after_sequence) noexcept;
 
-// Native settings overlay, drawn after the XFB blit and before Present. F1 toggles it whenever the native window
+// Native settings overlay, drawn after the display picture blit and before Present. F1 toggles it whenever the native window
 // has focus; every change arrives through the window thread's key messages.
 struct NativeSettingsOverlaySnapshot {
     bool visible = false;
@@ -229,7 +229,7 @@ struct NativeSettingsLayout {
 struct DisplayPresentStats {
     std::uint64_t requests = 0;
     std::uint64_t presented = 0;
-    // Game-timed presents of a new XfbTexture::copy_serial, each counted once at its first presentation.
+    // Game-timed presents of a new DisplayTexture::copy_serial, each counted once at its first presentation.
     // Frame-rate-decoupling re-presents and replays of an older copy do not count.
     std::uint64_t first_serial_presentations = 0;
     std::uint64_t repeated_or_stale_serial_requests = 0;
@@ -252,11 +252,11 @@ struct DisplayPresentStats {
 void boot_step(const char* step) noexcept;
 void request_sharp_2d(bool on) noexcept;
 [[nodiscard]] bool sharp_2d_requested() noexcept;
-// The scale the 2D layer was last drawn at (the EFB in use as the scene ended: the output EFB, else the render EFB),
+// The scale the 2D layer was last drawn at (the scene target in use as the scene ended: the output scene target, else the render scene target),
 // over the Wii's 640 x 456; 0 before the first scene ends. Any thread.
 [[nodiscard]] unsigned layer_2d_scale() noexcept;
 // The 3D image's scale over the Wii's 640 x 456 as the last scene showed it (the temporal upscaler's output, else the
-// render EFB's); 0 before the first scene. Any thread.
+// render scene target's); 0 before the first scene. Any thread.
 [[nodiscard]] unsigned scene_display_scale() noexcept;
 // The mouse wheel's turn since the last call, in 120ths of a notch, positive away from the player (host_window's
 // pointer_wheel: the settings menu takes the wheel itself while it shows). Any thread.

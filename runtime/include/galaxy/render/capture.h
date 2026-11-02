@@ -1,6 +1,6 @@
 #pragma once
 
-// EfbCopyManager: the frame pictures (one each time the game ends a frame) and the EFB copies' textures.
+// SceneCopyManager: the frame pictures (one each time the game ends a frame) and the scene target copies' textures.
 //
 // Each frame end takes the next of a few pictures in turn (a ring the renderer owns, so a picture still being shown
 // is not drawn over); RenderCore presents the newest, latest().
@@ -50,12 +50,12 @@ struct CaptureRequest {
 [[nodiscard]] constexpr std::uint32_t capture_filter_middle(const CaptureRequest& r) { return r.filtered ? 32u : 64u; }
 [[nodiscard]] constexpr std::uint32_t capture_filter_lower(const CaptureRequest&) { return 0u; }
 
-struct XfbTexture {
+struct DisplayTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
-    // GPU dimensions after EFB scaling; the copy's rectangle stays in Wii units.
+    // GPU dimensions after scene target scaling; the copy's rectangle stays in Wii units.
     std::uint16_t width = 0;
-    std::uint16_t height = 0;       // after logical y-scale and EFB scale
+    std::uint16_t height = 0;       // after logical y-scale and scene target scale
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
     PointerResponseStamp pointer_response{};
     bool prerecorded_movie{};
@@ -70,16 +70,16 @@ struct XfbTexture {
     bool rtv_valid = false;
 };
 
-// Presentation accounting of EFB -> XFB copy serials. A first presentation is decided by the texture's own
+// Presentation accounting of scene target -> display picture copy serials. A first presentation is decided by the texture's own
 // accounted serial; the high-water mark is diagnostic only.
-struct XfbSerialAccountingState {
+struct DisplaySerialAccountingState {
     bool has_presented = false;
     std::uint64_t highest_presented_serial = 0;
     std::uint64_t last_presented_serial = 0;
     std::uint64_t current_nonfirst_run = 0;
 };
 
-struct XfbSerialAccountingEvent {
+struct DisplaySerialAccountingEvent {
     bool first_presentation = false;
     bool adjacent_repeat = false;
     bool not_first_presentation = false;
@@ -89,24 +89,24 @@ struct XfbSerialAccountingEvent {
     std::uint64_t nonfirst_run = 0;
 };
 
-[[nodiscard]] XfbSerialAccountingEvent account_xfb_present_serial(
-    XfbSerialAccountingState& state,
+[[nodiscard]] DisplaySerialAccountingEvent account_display_present_serial(
+    DisplaySerialAccountingState& state,
     std::uint64_t& texture_accounted_serial,
     std::uint64_t copy_serial) noexcept;
 
 
-// EFB-copy textures are at the internal resolution; addresses, strides and VI selection stay in Wii units.
-struct ScaledEfbCopyExtent {
+// scene target-copy textures are at the internal resolution; addresses, strides and VI selection stay in Wii units.
+struct ScaledSceneCopyExtent {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
 };
 
-[[nodiscard]] ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
+[[nodiscard]] ScaledSceneCopyExtent compute_scaled_scene_copy_extent(
     std::uint16_t logical_width,
     std::uint16_t logical_height,
-    unsigned efb_scale) noexcept;
+    unsigned scene_target_scale) noexcept;
 
-struct EfbCopySamplingGeometry {
+struct SceneCopySamplingGeometry {
     float src_x = 0.0f;
     float src_y = 0.0f;
     float step_x = 0.0f;
@@ -114,23 +114,23 @@ struct EfbCopySamplingGeometry {
     float filter_row_offset = 1.0f;
 };
 
-[[nodiscard]] EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
+[[nodiscard]] SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned efb_scale) noexcept;
+    unsigned scene_target_scale) noexcept;
 
 // The frame shown at a high resolution keeps the filter's weights but samples adjacent physical rows; captures
 // keep their logical-row footprint.
-[[nodiscard]] EfbCopySamplingGeometry compute_xfb_sampling_geometry(
+[[nodiscard]] SceneCopySamplingGeometry compute_display_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned efb_scale) noexcept;
+    unsigned scene_target_scale) noexcept;
 
-// A copy that is an exact colour/alpha identity at `efb_scale`: its source rectangle in scaled EFB texels. Rejects
+// A copy that is an exact colour/alpha identity at `scene_target_scale`: its source rectangle in scaled scene target texels. Rejects
 // filtering, conversion, resampling and any source rectangle that would need the conversion shader's clamp.
-struct EfbCopyRect {
+struct SceneCopyRect {
     std::uint32_t left = 0;
     std::uint32_t top = 0;
     std::uint32_t right = 0;
@@ -146,15 +146,15 @@ inline constexpr std::uint8_t kCopyLayoutIntensityAlpha = 1u;
 inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
 
 // One channel read in every channel (alpha, red, green or blue): an R8 picture.
-[[nodiscard]] constexpr bool efb_copy_single_channel(std::uint8_t channels, bool is_depth_copy) noexcept {
+[[nodiscard]] constexpr bool scene_copy_single_channel(std::uint8_t channels, bool is_depth_copy) noexcept {
     return !is_depth_copy && channels >= 2u && channels <= 5u;
 }
 
-[[nodiscard]] std::optional<EfbCopyRect> efb_identity_copy_rect(
-    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
+[[nodiscard]] std::optional<SceneCopyRect> scene_identity_copy_rect(
+    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
     unsigned dest_width, unsigned dest_height) noexcept;
 
-struct ScaledEfbRect {
+struct ScaledSceneRect {
     std::int32_t left = 0;
     std::int32_t top = 0;
     std::int32_t right = 0;
@@ -166,16 +166,16 @@ struct ScaledEfbRect {
 };
 
 // Inline: this and compute_scaled_viewport run once per draw.
-[[nodiscard]] inline ScaledEfbRect compute_scaled_efb_rect(
+[[nodiscard]] inline ScaledSceneRect compute_scaled_scene_rect(
     std::int32_t logical_left,
     std::int32_t logical_top,
     std::int32_t logical_right,
     std::int32_t logical_bottom,
     unsigned logical_target_width,
     unsigned logical_target_height,
-    unsigned efb_scale) noexcept {
+    unsigned scene_target_scale) noexcept {
     const std::int64_t scale = static_cast<std::int64_t>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
+        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     // Target extents are arbitrary unsigned values; saturate to the signed 32-bit D3D12_RECT range before narrowing.
     constexpr std::int64_t kRectLimit =
         std::numeric_limits<std::int32_t>::max();
@@ -193,7 +193,7 @@ struct ScaledEfbRect {
             0,
             maximum));
     };
-    return ScaledEfbRect{
+    return ScaledSceneRect{
         scaled_clamped(logical_left, target_width),
         scaled_clamped(logical_top, target_height),
         scaled_clamped(logical_right, target_width),
@@ -216,12 +216,12 @@ struct ScaledViewport {
 // The viewport (drawing_state.h: left, top, width, height, near and far depth) at the frame scale, depth reversed.
 [[nodiscard]] inline ScaledViewport compute_scaled_viewport(
     const float viewport[6],
-    unsigned efb_scale) noexcept {
+    unsigned scene_target_scale) noexcept {
     if (viewport == nullptr) {
         return {};
     }
     const float scale = static_cast<float>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
+        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     // Reversed depth: the far depth maps to 0, the near depth to 1.
     float min_depth = std::clamp(1.0f - viewport[5], 0.0f, 1.0f);
     const float max_depth = std::clamp(1.0f - viewport[4], 0.0f, 1.0f);
@@ -237,7 +237,7 @@ struct ScaledViewport {
         max_depth};
 }
 
-struct EfbPeekSamplingGeometry {
+struct ScenePeekSamplingGeometry {
     float src_x = 0.0f;
     float src_y = 0.0f;
     float step = 1.0f;
@@ -250,37 +250,37 @@ struct EfbPeekSamplingGeometry {
     unsigned color_reduction_samples = 1;
 };
 
-[[nodiscard]] EfbPeekSamplingGeometry compute_efb_peek_sampling_geometry(
+[[nodiscard]] ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
     std::uint16_t x,
     std::uint16_t y,
-    unsigned efb_scale) noexcept;
+    unsigned scene_target_scale) noexcept;
 
-class EfbCopyManager {
+class SceneCopyManager {
 public:
-    bool initialize(gpu::Device* device, unsigned efb_scale);
+    bool initialize(gpu::Device* device, unsigned scene_target_scale);
     void shutdown();
-    // Live internal-resolution change: later acquisitions re-create any XFB
+    // Live internal-resolution change: later acquisitions re-create any display picture
     // texture whose physical extent no longer matches.
-    void set_efb_scale(unsigned efb_scale) noexcept;
-    [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
+    void set_scene_target_scale(unsigned scene_target_scale) noexcept;
+    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
     // The next picture of the ring, created or resized to match the copy's size. The caller
-    // (renderer) then records the EFB -> picture blit into it, or hands it the EFB's target (adopt_picture).
-    XfbTexture* acquire_xfb(
+    // (renderer) then records the scene target -> picture blit into it, or hands it the scene target's target (adopt_picture).
+    DisplayTexture* acquire_display(
         const CaptureRequest& params,
         std::uint64_t frame_index);
-    void mark_xfb_copied(XfbTexture& texture, std::uint64_t frame_index);
-    // Native presentation: `texture` (a handed-over EFB colour target, its picture from the top left, taller than the
-    // XFB) becomes the XFB's; the one it had is released as a copied XFB's would be.
-    void adopt_picture(XfbTexture& xfb, gpu::TextureRef texture);
-    // A released texture of this size no frame in flight still reads (a handed-over EFB's replacement), or null.
+    void mark_display_copied(DisplayTexture& texture, std::uint64_t frame_index);
+    // Native presentation: `texture` (a handed-over scene target colour target, its picture from the top left, taller than the
+    // display picture) becomes the display picture's; the one it had is released as a copied display picture's would be.
+    void adopt_picture(DisplayTexture& display_picture, gpu::TextureRef texture);
+    // A released texture of this size no frame in flight still reads (a handed-over scene target's replacement), or null.
     [[nodiscard]] gpu::TextureRef take_idle_texture(std::uint16_t width, std::uint16_t height);
 
     // The newest finished picture; nullptr before the first frame end.
-    [[nodiscard]] const XfbTexture* latest() const;
+    [[nodiscard]] const DisplayTexture* latest() const;
     // The finished picture in `slot`, or nullptr.
-    [[nodiscard]] const XfbTexture* picture(std::uint32_t slot) const;
+    [[nodiscard]] const DisplayTexture* picture(std::uint32_t slot) const;
 
 
 private:
@@ -289,12 +289,12 @@ private:
         std::uint16_t width = 0;
         std::uint16_t height = 0;
     };
-    void retire_texture(XfbTexture& texture);
+    void retire_texture(DisplayTexture& texture);
     void recycle_retired_textures(unsigned frame_slot);
     [[nodiscard]] gpu::TextureRef
         acquire_idle_texture(std::uint16_t width, std::uint16_t height);
 
-    std::unordered_map<std::uint32_t, XfbTexture> registry_;
+    std::unordered_map<std::uint32_t, DisplayTexture> registry_;
     std::uint32_t latest_slot_ = 0;
     std::uint32_t next_slot_ = 0;
     std::uint64_t next_copy_serial_ = 1;
@@ -303,7 +303,7 @@ private:
     std::vector<std::vector<PooledTexture>> retired_textures_;
     std::vector<PooledTexture> idle_textures_;
     unsigned current_frame_slot_ = 0;
-    unsigned efb_scale_ = 1;
+    unsigned scene_target_scale_ = 1;
 };
 
 }  // namespace galaxy::render

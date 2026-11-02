@@ -1,15 +1,15 @@
 #pragma once
 
-// RendererD3D12: device, swap chain, EFB/XFB render targets, per-frame upload
+// RendererD3D12: device, swap chain, scene target/display picture render targets, per-frame upload
 // rings, draw submission, and presentation.
 //
 // Frame pipelining: kFramesInFlight frames are recorded ahead of the GPU;
 // begin_frame() waits only on the fence of frame N - kFramesInFlight. A full
 // CPU/GPU sync happens only in shutdown() and on resize.
 //
-// All GX draws target the offscreen EFB (color RGBA8 + depth
+// All GX draws target the offscreen scene target (color RGBA8 + depth
 // D24_UNORM_S8_UINT, which keeps 24-bit Z parity with the Wii). present()
-// aspect-fits an XFB into the swap-chain backbuffer.
+// aspect-fits an display picture into the swap-chain backbuffer.
 //
 // begin_frame() is the sole PSO-publication point: it drains the
 // PipelineCache completion queue before any command-list recording starts.
@@ -64,8 +64,8 @@ namespace galaxy::render {
 class TextureCache;
 struct TextureHandle;
 
-// Compiles the runtime EFB conversion shader without a device (tests).
-[[nodiscard]] bool validate_efb_conversion_shader(
+// Compiles the runtime scene target conversion shader without a device (tests).
+[[nodiscard]] bool validate_scene_conversion_shader(
     std::string& diagnostics) noexcept;
 namespace detail {
 
@@ -91,21 +91,21 @@ private:
 
 }  // namespace detail
 
-inline constexpr DXGI_FORMAT kEfbColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-// The ray tracer's HDR scene EFB (RendererD3D12::begin_hdr_scene): unclamped traced light, sRGB-encoded above 1 as
-// below, until the camera pass at the scene's end resolves it into the RGBA8 EFB.
-inline constexpr DXGI_FORMAT kEfbHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+inline constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+// The ray tracer's HDR scene scene target (RendererD3D12::begin_hdr_scene): unclamped traced light, sRGB-encoded above 1 as
+// below, until the camera pass at the scene's end resolves it into the RGBA8 scene target.
+inline constexpr DXGI_FORMAT kSceneHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
 // Reactive mask for temporal upscaling: blended draws' alpha, max-blended.
 inline constexpr DXGI_FORMAT kReactiveMaskFormat = DXGI_FORMAT_R8_UNORM;
-// The effects layer (kRenderStateLayerTarget): its colour (what the effects added, as they blended into the EFB) and
-// transmittance (the product of their destination factors), in the EFB's own encoding.
+// The effects layer (kRenderStateLayerTarget): its colour (what the effects added, as they blended into the scene target) and
+// transmittance (the product of their destination factors), in the scene target's own encoding.
 inline constexpr DXGI_FORMAT kLayerFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-inline constexpr DXGI_FORMAT kEfbDepthResourceFormat =
+inline constexpr DXGI_FORMAT kSceneDepthResourceFormat =
     DXGI_FORMAT_R24G8_TYPELESS;
-inline constexpr DXGI_FORMAT kEfbDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-inline constexpr DXGI_FORMAT kEfbDepthSrvFormat =
+inline constexpr DXGI_FORMAT kSceneDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+inline constexpr DXGI_FORMAT kSceneDepthSrvFormat =
     DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
@@ -173,21 +173,21 @@ private:
 
 namespace detail {
 
-// EFB resources and these views share the renderer's initialize/shutdown
+// scene target resources and these views share the renderer's initialize/shutdown
 // lifetime. The source resources must outlive every submitted use of the heap.
 // Returns color then depth; consumes exactly two persistent descriptors.
 [[nodiscard]] std::array<D3D12_GPU_DESCRIPTOR_HANDLE, 2>
-create_efb_conversion_source_views(
+create_scene_conversion_source_views(
     ID3D12Device* device, ID3D12Resource* color, ID3D12Resource* depth,
     DescriptorRing& ring);
 // Exact color/alpha identity only: rejects filtering, conversion, resampling
 // and any source rectangle that would require shader clamp behavior.
-[[nodiscard]] std::optional<D3D12_BOX> efb_identity_copy_box(
-    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
+[[nodiscard]] std::optional<D3D12_BOX> scene_identity_copy_box(
+    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
     unsigned dest_width, unsigned dest_height) noexcept;
 // Source enters/leaves RENDER_TARGET; destination enters/leaves PSR. Neither
 // the copy nor its barriers changes any graphics binding on the command list.
-void record_efb_identity_copy(
+void record_scene_identity_copy(
     ID3D12GraphicsCommandList* commands, ID3D12Resource* source,
     ID3D12Resource* destination, const D3D12_BOX& source_box);
 
@@ -195,12 +195,12 @@ void record_efb_identity_copy(
 
 class RendererD3D12 final : public UiCanvas {
 public:
-    // Creates the Win32 window, device, queue, swap chain, EFB targets at
-    // kFrameWidth x kFrameHeight x efb_scale, the shared GX root signature, the
+    // Creates the Win32 window, device, queue, swap chain, scene target targets at
+    // kFrameWidth x kFrameHeight x scene_target_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
-    bool initialize(int window_width, int window_height, unsigned efb_scale);
+    bool initialize(int window_width, int window_height, unsigned scene_target_scale);
     [[nodiscard]] std::string startup_failure() const { return {}; }
-    // Creates the EFB-peek and pointer-depth resources up front, so the first frame
+    // Creates the scene target-peek and pointer-depth resources up front, so the first frame
     // that shows the pointer does not stall creating them.
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
@@ -216,7 +216,7 @@ public:
     // Advances the frame ring: waits on the fence of frame N-kFramesInFlight
     // only, resets that slot's command allocator, opens the command list,
     // and rewinds the slot's ring segments. Swap-chain latency is waited in
-    // present(), after GX/EFB work is recorded but before the backbuffer is
+    // present(), after GX/scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     void begin_frame(bool present_swap_chain = true);
     // The frame-latency wait begin_frame(true) takes, for a frame begun without a present that presents after all (a
@@ -234,34 +234,34 @@ public:
     // Bounded wait for one queue signal (the synchronous rendering path only).
     void wait_for_fence_value(std::uint64_t fence_value);
 
-    // Binds EFB RTV+DSV and applies the viewport from the XF viewport regs.
-    void bind_efb();
+    // Binds scene target RTV+DSV and applies the viewport from the XF viewport regs.
+    void bind_scene();
 
     // HUD split: from the end of the game's 3D scene to the display copy the
-    // EFB is a second target at the window's integer scale, so the 2D layer
+    // scene target is a second target at the window's integer scale, so the 2D layer
     // renders at display resolution over the resampled scene. The two target
     // sets share layout and resource states and are swapped as a whole, so
-    // every EFB path (draws, clears, copies, peeks) works unchanged on either.
-    // begin_output_efb returns false when the split is off or the EFB already
+    // every scene target path (draws, clears, copies, peeks) works unchanged on either.
+    // begin_output_scene returns false when the split is off or the scene target already
     // covers the window.
-    [[nodiscard]] bool begin_output_efb();
-    // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the EFB's scale, takes
-    // the EFB's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
-    // between passes (made again only when its size or the EFB's scale changes); the pass is drawn once, never
+    [[nodiscard]] bool begin_output_scene();
+    // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the scene target's scale, takes
+    // the scene target's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
+    // between passes (made again only when its size or the scene target's scale changes); the pass is drawn once, never
     // replayed by sub-frames. False when the target cannot be made or a pass is open.
     [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height);
-    // Ends it: the EFB comes back and the target's picture is what draws sampling `key` at that size read (at full
+    // Ends it: the scene target comes back and the target's picture is what draws sampling `key` at that size read (at full
     // precision, in any format, through `channels`: NebulaTargetChannels).
     void end_target_pass(std::uint8_t channels, TextureCache& textures);
     // The picture of target `key` when it is `width` x `height`: its texture and view.
     [[nodiscard]] bool target_picture(std::uint64_t key, TextureHandle& out) const;
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
-    void end_output_efb();
-    // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the
-    // scene with the 2D layer), which the console's single EFB still holds until something draws.
-    [[nodiscard]] bool copy_output_efb_to_texture(const CaptureRequest& params, TextureCache& textures);
-    // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
-    // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
+    void end_output_scene();
+    // An scene target-to-texture copy from the output scene target after end_output_scene: the picture its display copy took (the
+    // scene with the 2D layer), which the console's single scene target still holds until something draws.
+    [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
+    // The scene's anti-aliasing (post_process.h) in the render scene target at the end of the 3D scene,
+    // before the 2D layer and begin_output_scene. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
     // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
     // after the opaque phases, before the translucent ones; sub-frames replay it.
@@ -272,14 +272,14 @@ public:
     // its values); sub-frames replay it.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
     void game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32_t b);
-    [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
+    [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
-    [[nodiscard]] bool efb_scale_fits_memory(unsigned scale) const;
+    [[nodiscard]] bool scene_target_scale_fits_memory(unsigned scale) const;
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
-    // The 3D image's scale over the Wii's 640 x 456 as it is shown: the temporal upscaler's output, else the EFB's.
+    // The 3D image's scale over the Wii's 640 x 456 as it is shown: the temporal upscaler's output, else the scene target's.
     [[nodiscard]] unsigned scene_display_scale() const;
     // At the start of the game's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
@@ -292,10 +292,10 @@ public:
     [[nodiscard]] bool begin_motion_scene();
     // The game's effects begin (the scene's ShadowSurface draw type, after its translucent lists) in a scene whose
     // blended draws write the reactive mask: the effects layer opens (cleared: nothing added, everything let through)
-    // and its draws record what they blend over the EFB until the water's composite (kRenderStateLayerTarget).
+    // and its draws record what they blend over the scene target until the water's composite (kRenderStateLayerTarget).
     void begin_layer_window();
     [[nodiscard]] bool layer_window() const noexcept { return layer_window_; }
-    // GALAXY_MOTION_DEBUG: at the scene's end, replaces the EFB color with
+    // GALAXY_MOTION_DEBUG: at the scene's end, replaces the scene target color with
     // the motion field (grey = still; red/green = +x/+y towards the previous
     // position, 8 pixels to full scale).
     void record_motion_debug_view();
@@ -319,7 +319,7 @@ public:
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
     // Interpolated redraw (present rates above 60). While recording, a render
-    // chunk's EFB operations (draws, EFB bindings, clears, copies, EFB set
+    // chunk's scene target operations (draws, scene target bindings, clears, copies, scene target set
     // swaps) are logged. The completed log is replayed by the sub-frames of
     // its sequence (begin_replay_sequence, present_replay_subframe).
     void begin_replay_record();
@@ -346,7 +346,7 @@ public:
     [[nodiscard]] unsigned replay_hold_segment() const noexcept {
         return ring_mode_ == RingMode::Interp ? ring_segment_ : ~0u;
     }
-    // Completed logs, counted; the guest XFB the latest one copied to.
+    // Completed logs, counted; the guest display picture the latest one copied to.
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_picture_slot() const noexcept { return replay_picture_slot_; }
     // A 3D scene began inside the log being recorded (one is replayable).
@@ -369,7 +369,7 @@ public:
     // once per sequence: draws of moving records read their constants from the
     // evaluation output (interp_gpu.h), draws matched by prepare_vertex_blend
     // blend their vertices with the frame before's, and the display copy lands
-    // in a renderer-owned XFB. present_replay_subframe evaluates the sequence's
+    // in a renderer-owned display picture. present_replay_subframe evaluates the sequence's
     // program at t and executes that replay. False when the log is gone or has
     // no display copy (the sequence then shows its real frame only).
     using ReplaySequence = render::ReplaySequence;  // interp_types.h
@@ -464,7 +464,7 @@ public:
         return std::exchange(subframe_guarded_total_, 0u);
     }
     // A texture table the backend just filled while a log records, naming
-    // EFB-copy textures (`copies[m]`, null for other slots). The log keeps CPU
+    // scene target-copy textures (`copies[m]`, null for other slots). The log keeps CPU
     // copies of its kReplayTableSlots descriptors (`sources`, valid now) so
     // sub-frames can point the copy slots elsewhere.
     static constexpr unsigned kReplayTableSlots = 8u;
@@ -499,10 +499,10 @@ public:
     }
     // GX copy-clear: color from the latched AR/GB regs, depth from z24
     // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
-    // the given rect in unscaled EFB pixels (w==0 -> full target), matching
+    // the given rect in unscaled scene target pixels (w==0 -> full target), matching
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
     // (Dolphin BPStructs ClearScreen(srcRect)).
-    void clear_efb(
+    void clear_scene(
         std::uint32_t clear_rgba,
         std::uint32_t clear_z24,
         bool color_enable,
@@ -527,23 +527,23 @@ public:
     // The command list being recorded (DrawCall::curve_sort_list).
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
-    // EFB copy paths (record into the current command list). Both run the
+    // scene target copy paths (record into the current command list). Both run the
     // conversion blit (intensity / gamma / 3-tap vertical copy filter /
-    // half-scale box / XFB y-scale stretch / depth-source packing) instead
+    // half-scale box / display picture y-scale stretch / depth-source packing) instead
     // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
     // (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY).
-    void copy_efb_to_xfb(const CaptureRequest& params, XfbTexture& dest);
-    // Native presentation: whether this display copy can take the EFB's colour target instead of copying it
-    // (hand_over_efb_color): an exact copy of the EFB's top rows (the identity filter, no gamma or scaling) on the
+    void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
+    // Native presentation: whether this display copy can take the scene target's colour target instead of copying it
+    // (hand_over_scene_color): an exact copy of the scene target's top rows (the identity filter, no gamma or scaling) on the
     // plain path (one sample a pixel, no HDR scene, ray tracing, temporal upscaler, output-resolution 2D layer,
     // interpolation or frame generation, post-processing ready).
-    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest& params, const XfbTexture& dest) const;
-    // Gives the EFB's colour target (the picture of this display copy, as an XFB keeps it) to the caller and continues
-    // the EFB on `fresh` (a released texture of the EFB's description, or null for a new one). The picture is owed to
-    // the EFB until a clear covers it (settle_owed_efb).
-    [[nodiscard]] gpu::TextureRef hand_over_efb_color(gpu::TextureRef fresh);
-    [[nodiscard]] bool copy_efb_to_texture(
+    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const;
+    // Gives the scene target's colour target (the picture of this display copy, as an display picture keeps it) to the caller and continues
+    // the scene target on `fresh` (a released texture of the scene target's description, or null for a new one). The picture is owed to
+    // the scene target until a clear covers it (settle_owed_scene).
+    [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh);
+    [[nodiscard]] bool copy_scene_to_texture(
         const CaptureRequest& params,
         TextureCache& textures,
         bool is_depth_copy);
@@ -555,9 +555,9 @@ public:
     // `capture_backbuffer` records the final post-blit swap-chain image.
     // Returns whether an optional backbuffer capture was recorded. Busy
     // diagnostic buffers never suppress the required blit/presentation.
-    bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
+    bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Reads the EFB's 640x456 depth field into `pixels`.
+    // Reads the scene target's 640x456 depth field into `pixels`.
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     // Render-owner only. Keeps the shared GXPeek resources owned until
     // try_complete_pointer_depth_capture_in_place has taken the field.
@@ -575,7 +575,7 @@ public:
     // could not be mapped).
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(
         const std::uint8_t*& rgba);
-    // Render-owner only. Asynchronous 640x456 EFB fields (depth for GXPeekZ,
+    // Render-owner only. Asynchronous 640x456 scene target fields (depth for GXPeekZ,
     // color for GXPeekARGB) for the simulation thread, one per channel
     // (RenderCore binds a channel to a peek kind and draw-sync token), each on
     // private resources so they never contend with the pointer field above or
@@ -603,34 +603,34 @@ public:
         }
         return false;
     }
-    [[nodiscard]] bool peek_efb(
+    [[nodiscard]] bool peek_scene(
         std::uint16_t x,
         std::uint16_t y,
         ReadbackKind kind,
         std::uint32_t& value);
-    bool debug_copy_efb_to_readback();
+    bool debug_copy_scene_to_readback();
     void debug_log_readback();
     void debug_log_backbuffer_readback();
-    bool debug_copy_selected_xfb_to_readback(const XfbTexture& source);
-    void debug_log_selected_xfb_readback();
+    bool debug_copy_selected_display_to_readback(const DisplayTexture& source);
+    void debug_log_selected_display_readback();
     // The backend binds the exact output paths to the frame before recording
     // its optional readbacks. Paths are retained with the pending readback so
     // a later nonblocking completion cannot write to a subsequent frame's
     // diagnostic file.
     void set_debug_capture_paths(
-        std::string efb_ppm_path,
+        std::string scene_ppm_path,
         std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
-    [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
-    // The EFB's samples per pixel as a power of two (MSAA; 0 for one sample).
-    [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
-        return static_cast<std::uint8_t>(std::countr_zero(efb_msaa_.samples));
+    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    // The scene target's samples per pixel as a power of two (MSAA; 0 for one sample).
+    [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
+        return static_cast<std::uint8_t>(std::countr_zero(scene_msaa_.samples));
     }
-    // The live EFB's variant, which its draws' pipelines share (render_state_key.h RenderStateKey::samples_log2): its
-    // samples, and kEfbVariantHdr while the HDR scene EFB stands in.
-    [[nodiscard]] std::uint8_t efb_variant() const noexcept {
-        return static_cast<std::uint8_t>(efb_samples_log2() | (efb_hdr_ ? kEfbVariantHdr : 0u));
+    // The live scene target's variant, which its draws' pipelines share (render_state_key.h RenderStateKey::samples_log2): its
+    // samples, and kSceneVariantHdr while the HDR scene scene target stands in.
+    [[nodiscard]] std::uint8_t scene_variant() const noexcept {
+        return static_cast<std::uint8_t>(scene_samples_log2() | (scene_hdr_ ? kSceneVariantHdr : 0u));
     }
     [[nodiscard]] ID3D12RootSignature* root_signature() const {
         return root_signature_.Get();
@@ -643,13 +643,13 @@ public:
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
-    // Bytes held by the EFB-copy destination cache. Destinations are allocated at the
-    // internal resolution, so this grows with efb_scale^2 against a fixed budget.
-    [[nodiscard]] std::uint64_t efb_copy_dest_bytes() const {
-        return efb_copy_dests_bytes_;
+    // Bytes held by the scene target-copy destination cache. Destinations are allocated at the
+    // internal resolution, so this grows with scene_target_scale^2 against a fixed budget.
+    [[nodiscard]] std::uint64_t scene_copy_dest_bytes() const {
+        return scene_copy_dests_bytes_;
     }
     // The copy-destination byte budget (192 MiB), reported next to the live bytes.
-    [[nodiscard]] static std::uint64_t efb_copy_dest_budget_bytes();
+    [[nodiscard]] static std::uint64_t scene_copy_dest_budget_bytes();
     [[nodiscard]] std::uint64_t last_latency_wait_us() const {
         return last_latency_wait_us_;
     }
@@ -730,38 +730,38 @@ private:
         unsigned width,
         unsigned height,
         unsigned row_pitch);
-    bool create_efb_targets(unsigned efb_scale);
-    void carry_over_efb_contents();
-    // The MSAA sample count the settings ask for and the device has for the EFB's formats: 1 without MSAA, and
-    // with a temporal upscaler or ray tracing, which read the EFB's single-sample targets directly.
+    bool create_scene_targets(unsigned scene_target_scale);
+    void carry_over_scene_contents();
+    // The MSAA sample count the settings ask for and the device has for the scene target's formats: 1 without MSAA, and
+    // with a temporal upscaler or ray tracing, which read the scene target's single-sample targets directly.
     [[nodiscard]] unsigned wanted_msaa_samples() const;
-    // The most samples per pixel the device has for both EFB formats (1: none), asked once.
+    // The most samples per pixel the device has for both scene target formats (1: none), asked once.
     [[nodiscard]] unsigned msaa_max_samples() const;
-    // Before the EFB's single-sample color (and `depth`) are read: the multisampled targets drawn since the last
+    // Before the scene target's single-sample color (and `depth`) are read: the multisampled targets drawn since the last
     // resolve, resolved into them.
-    void resolve_efb(bool depth, bool color = true);
+    void resolve_scene(bool depth, bool color = true);
     // The resolve itself into `list` (a separately submitted list resolves what was submitted before it). The depth
     // resolve leaves `list` with the blit root signature and the single-sample depth bound.
-    void record_efb_resolve(ID3D12GraphicsCommandList* list, bool color, bool depth);
-    // resolve_efb for a reader recording into `list`: another list resolves (what the frame's list submitted before
+    void record_scene_resolve(ID3D12GraphicsCommandList* list, bool color, bool depth);
+    // resolve_scene for a reader recording into `list`: another list resolves (what the frame's list submitted before
     // it) without clearing the frame's pending resolve, which can hold draws not submitted yet.
-    void resolve_efb_on(ID3D12GraphicsCommandList* list, bool color, bool depth);
-    [[nodiscard]] unsigned output_efb_scale_for_window() const;
+    void resolve_scene_on(ID3D12GraphicsCommandList* list, bool color, bool depth);
+    [[nodiscard]] unsigned output_scene_target_scale_for_window() const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
-    [[nodiscard]] bool ensure_output_efb(unsigned scale);
-    void swap_efb_sets();
+    [[nodiscard]] bool ensure_output_scene(unsigned scale);
+    void swap_scene_sets();
     void swap_target_set();
     // Live internal-resolution change, applied between frames by begin_frame
-    // when get_render_config().efb_scale differs from the live targets.
-    void apply_pending_efb_scale();
+    // when get_render_config().scene_target_scale differs from the live targets.
+    void apply_pending_scene_target_scale();
     // Creates, replaces or releases the temporal upscaler for the live render
     // and output scales, from begin_frame before its command list records.
     void prepare_temporal_upscaler();
-    // The INTERNAL RESOLUTION row's scale, taken by apply_pending_efb_scale: the
+    // The INTERNAL RESOLUTION row's scale, taken by apply_pending_scene_target_scale: the
     // temporal upscaler's output (its quality mode renders below it).
     unsigned upscale_output_scale_ = 0;
-    // With internal_follow_window, re-derive efb_scale from the settled
+    // With internal_follow_window, re-derive scene_target_scale from the settled
     // window size (see RenderConfig::internal_follow_window).
     void follow_window_internal_resolution();
     // Hands changed presentation settings (overlay or config) to the
@@ -780,43 +780,43 @@ private:
     std::chrono::steady_clock::time_point gpu_budget_window_start_{};
     unsigned gpu_budget_over_windows_ = 0;
     unsigned gpu_budget_cap_ = 0;  // 0: none
-    // (Re)creates the EFB color/depth conversion SRVs in their fixed slots.
-    void refresh_efb_conversion_source_views();
-    // The EFB's conversion views (colour and depth) into `table`.
-    void write_efb_conversion_views(const DescriptorRing::Table& table);
-    // The picture a handed-over EFB still owes (hand_over_efb_color): anything but a clear that covers it copies it
-    // back before reading or writing the EFB's colour.
-    Microsoft::WRL::ComPtr<ID3D12Resource> efb_owed_;
-    // Inside the frame's command list; between lists the picture stays owed (create_efb_targets carries from it).
-    void settle_owed_efb() {
-        if (efb_owed_ && pass_list_open_) [[unlikely]] {
-            restore_owed_efb(nullptr);
+    // (Re)creates the scene target color/depth conversion SRVs in their fixed slots.
+    void refresh_scene_conversion_source_views();
+    // The scene target's conversion views (colour and depth) into `table`.
+    void write_scene_conversion_views(const DescriptorRing::Table& table);
+    // The picture a handed-over scene target still owes (hand_over_scene_color): anything but a clear that covers it copies it
+    // back before reading or writing the scene target's colour.
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_owed_;
+    // Inside the frame's command list; between lists the picture stays owed (create_scene_targets carries from it).
+    void settle_owed_scene() {
+        if (scene_owed_ && pass_list_open_) [[unlikely]] {
+            restore_owed_scene(nullptr);
         }
     }
     // Copies the owed picture back, all of it or (`kept`) all but that rect, which a clear is about to cover.
-    void restore_owed_efb(const D3D12_RECT* kept);
+    void restore_owed_scene(const D3D12_RECT* kept);
     // The conversion views after a handover: a table per handover in turn, as the GPU reads views when it runs.
-    std::array<std::optional<DescriptorRing::Table>, kFramesInFlight + 1u> conv_efb_tables_{};
-    unsigned conv_efb_table_next_ = 0;
+    std::array<std::optional<DescriptorRing::Table>, kFramesInFlight + 1u> conv_scene_tables_{};
+    unsigned conv_scene_table_next_ = 0;
     // Presents so far (the native-presentation A/B alternates by them); handovers, and how their pictures were settled:
-    // a clear covered all of it, a clear left bands to copy back, or something read or wrote the EFB first.
+    // a clear covered all of it, a clear left bands to copy back, or something read or wrote the scene target first.
     std::uint64_t presented_frames_ = 0;
-    std::uint64_t efb_handovers_ = 0;
-    std::uint64_t efb_handovers_free_ = 0;
-    std::uint64_t efb_handovers_banded_ = 0;
-    std::uint64_t efb_handovers_restored_ = 0;
+    std::uint64_t scene_handovers_ = 0;
+    std::uint64_t scene_handovers_free_ = 0;
+    std::uint64_t scene_handovers_banded_ = 0;
+    std::uint64_t scene_handovers_restored_ = 0;
     bool create_root_signature();
     bool create_sampler_heap();
     void reset_sampler_frame(); // only after this slot's fence completes
-    bool create_conversion_pipeline();  // EFB-copy conversion blit PSO
+    bool create_conversion_pipeline();  // scene target-copy conversion blit PSO
     bool create_clear_pipeline();
     bool ensure_peek_resources();
 
     // Records the conversion blit: fullscreen triangle into `dest` (RTV),
-    // sampling the EFB color (or depth) SRV.  (src_x, src_y) is the source
+    // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
     // origin and (step_x, step_y) the source texels advanced per dest pixel,
-    // all in scaled EFB texels.  Caller handles dest resource transitions;
-    // EFB transitions happen inside.  Restores GX root signature/EFB
+    // all in scaled scene target texels.  Caller handles dest resource transitions;
+    // scene target transitions happen inside.  Restores GX root signature/scene target
     // binding before returning.
     void record_conversion_blit(
         ID3D12Resource* dest,
@@ -872,7 +872,7 @@ private:
     // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
     // list; the time to the next mark (or the list's end) is that pass's.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, EfbCopy, XfbCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+        Scene, Resolve, SceneCopy, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
@@ -959,18 +959,18 @@ private:
     bool curve_sort_failed_ = false;
     bool pre_list_recorded_ = false;
 
-    // EFB.
-    Microsoft::WRL::ComPtr<ID3D12Resource> efb_color_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> efb_depth_;
+    // scene target.
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_color_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_depth_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap_;
-    unsigned efb_scale_ = 1;
-    D3D12_CPU_DESCRIPTOR_HANDLE efb_rtv_{};
-    D3D12_CPU_DESCRIPTOR_HANDLE efb_dsv_{};
-    // The inactive EFB target set (the output-resolution one between frames).
-    // MSAA: an EFB's draws and clears go to these multisampled targets (the set's rtv and dsv name them); its color
-    // and depth, which copies, peeks and readbacks read, are their resolves (resolve_efb).
-    struct EfbMsaa {
+    unsigned scene_target_scale_ = 1;
+    D3D12_CPU_DESCRIPTOR_HANDLE scene_rtv_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE scene_dsv_{};
+    // The inactive scene target target set (the output-resolution one between frames).
+    // MSAA: an scene target's draws and clears go to these multisampled targets (the set's rtv and dsv name them); its color
+    // and depth, which copies, peeks and readbacks read, are their resolves (resolve_scene).
+    struct SceneMsaa {
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
@@ -981,31 +981,31 @@ private:
         bool depth_dirty = false;
     };
     // The set's multisampled targets for `samples` (none for one), with `rtv` and `dsv` pointed at them.
-    bool create_efb_msaa(EfbMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
+    bool create_scene_msaa(SceneMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
                          D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
-    void write_msaa_depth_view(EfbMsaa& msaa);
+    void write_msaa_depth_view(SceneMsaa& msaa);
     [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
-    EfbMsaa efb_msaa_;
+    SceneMsaa scene_msaa_;
     mutable unsigned msaa_max_samples_ = 0u;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> depth_resolve_pso_;
-    struct EfbTargetSet {
+    struct SceneTargetSet {
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
-        EfbMsaa msaa;
+        SceneMsaa msaa;
         unsigned scale = 0;
-        bool hdr = false;   // colour kEfbHdrColorFormat (else kEfbColorFormat)
+        bool hdr = false;   // colour kSceneHdrColorFormat (else kSceneColorFormat)
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
         std::optional<DescriptorRing::Table> conv_table;
         D3D12_GPU_DESCRIPTOR_HANDLE conv_color_srv{};
         D3D12_GPU_DESCRIPTOR_HANDLE conv_depth_srv{};
     };
-    EfbTargetSet alt_efb_;
-    // The open target pass's set (begin_target_pass) while the EFB holds it, and each key's set between passes
+    SceneTargetSet alt_scene_;
+    // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes
     // ( its colour shared with its picture), dropped after kTargetIdleFrames frames unused. A picture is sampled
     // through its own view slot (TextureCache::allocate_view) reading the pass's channels.
     struct TargetSlot {
-        EfbTargetSet set;
+        SceneTargetSet set;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;
         std::uint64_t used = 0;
@@ -1032,11 +1032,11 @@ private:
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     std::uint64_t target_key_ = 0;
     bool target_recording_ = false;  // replay_recording_ before the pass
-    EfbTargetSet target_efb_;
+    SceneTargetSet target_scene_;
     bool target_pass_active_ = false;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
-    bool output_efb_active_ = false;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_scene_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_scene_dsv_heap_;
+    bool output_scene_active_ = false;
     std::unique_ptr<TemporalUpscaler> temporal_;
     // An FSR 3 context being created off the render thread (its pipelines take seconds on an
     // integrated GPU), for the sizes and mode recorded below.
@@ -1046,20 +1046,20 @@ private:
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).
     bool streamline_frame_open_ = false;
     // DLSS Frame Generation's HUD-less picture: the upscaled scene before the 2D layer (taken at
-    // the output EFB switch), copied as the display copy copies the frame and presented as the
+    // the output scene target switch), copied as the display copy copies the frame and presented as the
     // frame is, into a backbuffer-sized target.
-    EfbTargetSet fg_hudless_efb_;
+    SceneTargetSet fg_hudless_scene_target_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_dsv_heap_;
-    XfbTexture fg_hudless_xfb_{};
+    DisplayTexture fg_hudless_display_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> fg_hudless_target_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_target_rtv_heap_;
     bool fg_hudless_scene_ = false;              // this frame's scene was taken
     bool fg_hudless_taken_ = false;              // a picture's HUD-less copy is waiting
     std::uint32_t fg_hudless_slot_ = 0u;         // the picture it went with
     void take_fg_hudless_scene();
-    void copy_fg_hudless_xfb(const CaptureRequest& params, const XfbTexture& dest);
-    void present_fg_hudless(const XfbTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
+    void copy_fg_hudless_display(const CaptureRequest& params, const DisplayTexture& dest);
+    void present_fg_hudless(const DisplayTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
     unsigned temporal_output_w_ = 0;
@@ -1090,7 +1090,7 @@ private:
         float geometry[5]{};  // src x, y, step x, y, filter row offset
         bool identity = false;
         D3D12_BOX box{};
-        std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-EFB resample
+        std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample
     };
     struct ReplayClear {
         std::uint32_t rgba = 0, z24 = 0;
@@ -1100,7 +1100,7 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
+        Draw, BindScene, Clear, Copy, SwapSceneSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
         HdrBegin, HdrEnd, Bloom, LayerBegin, RtMist
     };
     // RtWater's and RtMist's index: the light slot, kReplayWaterLayer when the effects layer was open.
@@ -1118,7 +1118,7 @@ private:
     void present_to_swap_chain();
     // `target`: write a texture copy (mode 0) there instead of copy.dest.
     void execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target = nullptr);
-    bool ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height);
+    bool ensure_subframe_resources(unsigned display_picture_width, unsigned display_picture_height);
     // The log being recorded; a completed log moves to play_* (swapped), so
     // the next game frame records while the previous one is interpolated.
     std::vector<ReplayOp> replay_ops_;
@@ -1127,7 +1127,7 @@ private:
     std::vector<ReplayCopy> replay_copies_;
     std::vector<ReplayBloom> replay_blooms_;
     // The display copy's clear runs after the copy closed the log; the next
-    // log starts with it so sub-frames begin from the same EFB as the frame.
+    // log starts with it so sub-frames begin from the same scene target as the frame.
     ReplayClear log_start_clear_{};
     bool log_start_clear_valid_ = false;
     // Draws and texture copies between a log's display copy and the next log
@@ -1172,43 +1172,43 @@ private:
     unsigned ring_segment_ = 0;
     std::array<std::uint64_t, kInterpSegments> ring_segment_fence_{};
     bool ring_advance_pending_ = true;
-    // Sub-frames render into their own EFB so a later frame's partial EFB
+    // Sub-frames render into their own scene target so a later frame's partial scene target
     // (its chunks interleave with the sub-frames) stays intact.
-    EfbTargetSet replay_efb_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_rtv_heap_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_dsv_heap_;
-    // The HDR scene EFB (begin_hdr_scene) of the live frames and of the sub-frames (a later frame's scene may be open
+    SceneTargetSet replay_scene_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_scene_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_scene_dsv_heap_;
+    // The HDR scene scene target (begin_hdr_scene) of the live frames and of the sub-frames (a later frame's scene may be open
     // while they play).
-    EfbTargetSet hdr_scene_efb_;
+    SceneTargetSet hdr_scene_scene_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_scene_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_scene_dsv_heap_;
-    EfbTargetSet replay_hdr_efb_;
+    SceneTargetSet replay_hdr_scene_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_dsv_heap_;
-    // The live EFB is an HDR set (swapped with the set that held it).
-    bool efb_hdr_ = false;
+    // The live scene target is an HDR set (swapped with the set that held it).
+    bool scene_hdr_ = false;
     void record_hdr_begin();
     // `slot`: the light slot of the frame the picture shows (the replay's ReplayKind::HdrEnd keeps it, index + 1).
     void record_hdr_end(int slot);
-    // The output-resolution EFB of a sub-frame whose log switches to it.
-    EfbTargetSet replay_output_efb_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_rtv_heap_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_dsv_heap_;
+    // The output-resolution scene target of a sub-frame whose log switches to it.
+    SceneTargetSet replay_output_scene_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_scene_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_scene_dsv_heap_;
     // persistent_views: the conversion-source views live in the descriptor
     // ring's persistent prefix (else the caller writes them per use).
     // unordered_access: the colour target takes compute writes (the temporal
-    // upscaler's output, as the live output EFB).
-    bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
+    // upscaler's output, as the live output scene target).
+    bool create_scene_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
                         bool hdr = false, unsigned width = kFrameWidth, unsigned height = kFrameHeight);
-    void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
-    void swap_efb_with(EfbTargetSet& other);
+    void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Table& table);
+    void swap_scene_with(SceneTargetSet& other);
     bool replay_playing_ = false;
     bool replay_start_output_active_ = false;
     unsigned replay_source_slot_ = 0;
-    XfbTexture subframe_xfb_{};
-    // EFB-copy textures are shared with the live frames: a later game frame's
+    DisplayTexture subframe_display_{};
+    // scene target-copy textures are shared with the live frames: a later game frame's
     // chunks may already have rewritten a texture the sub-frame's log copies
     // to. Such textures are saved to scratch before the sub-frame and restored
     // after it (record_subframe_guard). note_copy_write records a real copy's
@@ -1242,8 +1242,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
     // The last frame's start (the hitch log's intervals, begin to begin).
     std::chrono::steady_clock::time_point frame_begun_{};
-    // The effects layer: its colour (what the effects added, as they blended into the EFB) and transmittance (what of
-    // the EFB behind them they let through), render targets 2 and 3 of a layer draw; whether this scene's is open.
+    // The effects layer: its colour (what the effects added, as they blended into the scene target) and transmittance (what of
+    // the scene target behind them they let through), render targets 2 and 3 of a layer draw; whether this scene's is open.
     Microsoft::WRL::ComPtr<ID3D12Resource> layer_color_;
     Microsoft::WRL::ComPtr<ID3D12Resource> layer_trans_;
     D3D12_CPU_DESCRIPTOR_HANDLE layer_color_rtv_{};
@@ -1376,7 +1376,7 @@ private:
     struct TemporalInterpKey {
         unsigned upscaler = 0;
         unsigned quality = 0;
-        unsigned efb_scale = 0;
+        unsigned scene_target_scale = 0;
         unsigned output_scale = 0;
         float max_fps = 0.0f;
         unsigned vsync = 0;
@@ -1439,7 +1439,7 @@ private:
         std::uint64_t gpu = 0;                      // DrawCall::texture_table
         std::uint32_t store = 0;                    // first CPU copy in the log's store
         bool snapshots_checked = false;             // recording: sources handled
-        std::array<ID3D12Resource*, kReplayTableSlots> copies{};  // EFB-copy texture per slot
+        std::array<ID3D12Resource*, kReplayTableSlots> copies{};  // scene target-copy texture per slot
     };
     struct ReplayTextures {
         std::vector<ReplayTextureTable> tables;
@@ -1514,7 +1514,7 @@ private:
     std::atomic<double> measured_present_hz_{0.0};
     std::int64_t measured_present_window_qpc_ = 0;
     std::uint32_t measured_present_count_ = 0;
-    // Render target 1 bound next to the EFB (DrawCall::aux_target values).
+    // Render target 1 bound next to the scene target (DrawCall::aux_target values).
     std::uint8_t bound_rt_aux_ = 0;
     Microsoft::WRL::ComPtr<ID3D12Resource> reactive_target_;
     D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv_{};
@@ -1534,20 +1534,20 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blit_pipeline_;
     // Targets replaced by an internal-resolution change, until begin_frame
     // has copied their contents into the new ones.
-    Microsoft::WRL::ComPtr<ID3D12Resource> efb_carry_color_;
-    // The carried colour is a handed-over picture, kept as a shader resource (its XFB reads it too).
-    bool efb_carry_color_readable_ = false;
-    Microsoft::WRL::ComPtr<ID3D12Resource> efb_carry_depth_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> efb_carry_depth_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_carry_color_;
+    // The carried colour is a handed-over picture, kept as a shader resource (its display picture reads it too).
+    bool scene_carry_color_readable_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_carry_depth_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_carry_depth_pso_;
     // Presentation image quality; present() keeps the plain blit while it is
     // not ready.
     PostProcessor post_process_;
     AmbientOcclusion ambient_occlusion_;
     GameBloom game_bloom_;
     RtView scene_ao_view_{};
-    // EFB-copy destination textures (render targets) are placed in shared
+    // scene target-copy destination textures (render targets) are placed in shared
     // heaps rather than committed one by one (gpu_placed_textures.h).
-    PlacedTextureAllocator efb_copy_heap_{
+    PlacedTextureAllocator scene_copy_heap_{
         D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
 
     // Settings overlay: the game's window-frame corner texture (read from
@@ -1630,11 +1630,11 @@ private:
     bool bound_scissor_valid_ = false;
     bool bound_viewport_valid_ = false;
 
-    // Debug EFB readback (debug_copy_efb_to_readback / debug_log_readback).
+    // Debug scene target readback (debug_copy_scene_to_readback / debug_log_readback).
     Microsoft::WRL::ComPtr<ID3D12Resource> readback_buf_;
     bool readback_pending_ = false;
     std::uint64_t readback_fence_value_ = 0;
-    std::string next_efb_capture_path_;
+    std::string next_scene_capture_path_;
     std::string readback_capture_path_;
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer_readback_buf_;
     bool backbuffer_readback_pending_ = false;
@@ -1644,14 +1644,14 @@ private:
     UINT backbuffer_readback_row_pitch_ = 0;
     std::string next_backbuffer_capture_path_;
     std::string backbuffer_readback_capture_path_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> selected_xfb_readback_buf_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> selected_xfb_readback_source_;
-    bool selected_xfb_readback_pending_ = false;
-    std::uint64_t selected_xfb_readback_fence_ = 0;
-    UINT selected_xfb_readback_width_ = 0;
-    UINT selected_xfb_readback_height_ = 0;
-    UINT selected_xfb_readback_pitch_ = 0;
-    std::string selected_xfb_readback_path_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> selected_display_readback_buf_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> selected_display_readback_source_;
+    bool selected_display_readback_pending_ = false;
+    std::uint64_t selected_display_readback_fence_ = 0;
+    UINT selected_display_readback_width_ = 0;
+    UINT selected_display_readback_height_ = 0;
+    UINT selected_display_readback_pitch_ = 0;
+    std::string selected_display_readback_path_;
     struct DebugPpmWriter {
         std::string tag;
         std::string path;
@@ -1659,21 +1659,21 @@ private:
     };
     std::vector<DebugPpmWriter> debug_ppm_writers_;
 
-    // Presentation telemetry: successful DXGI submissions, distinct XFB
+    // Presentation telemetry: successful DXGI submissions, distinct display picture
     // updates, frame-latency waits, Present blocking, and GPU timestamps.
     LARGE_INTEGER qpc_frequency_{};
     std::int64_t telemetry_window_start_qpc_ = 0;
     std::int64_t last_present_qpc_ = 0;
     std::int64_t swap_present_qpc_ = 0;   // every present's, telemetry or not (last_present_qpc)
     std::uint64_t telemetry_first_serial_start_ = 0;
-    std::uint64_t telemetry_xfb_copy_start_ = 0;
+    std::uint64_t telemetry_display_copy_start_ = 0;
     PresentPacer present_pacer_;
     bool has_presented_swap_chain_ = false;
     bool window_shown_ = false;
     std::uint64_t telemetry_present_count_ = 0;
     std::uint64_t telemetry_interval_count_ = 0;
     std::uint64_t telemetry_adjacent_serial_transition_count_ = 0;
-    std::uint64_t last_presented_xfb_serial_ = ~std::uint64_t{0};
+    std::uint64_t last_presented_display_serial_ = ~std::uint64_t{0};
     double telemetry_interval_ms_ = 0.0;
     double telemetry_interval_max_ms_ = 0.0;
     double telemetry_present_ms_ = 0.0;
@@ -1691,7 +1691,7 @@ private:
     std::array<double, kGpuListPlaces> telemetry_gpu_by_place_{};
     std::array<unsigned, kGpuListPlaces> telemetry_gpu_by_place_count_{};
     std::uint64_t telemetry_gpu_samples_ = 0;
-    std::uint64_t telemetry_no_xfb_present_count_ = 0;
+    std::uint64_t telemetry_no_display_present_count_ = 0;
     std::uint64_t telemetry_backbuffer_clear_count_ = 0;
     // Refresh rate of the swap chain's output (EnumDisplaySettings) and, per
     // telemetry window, how many refreshes each displayed frame stayed on
@@ -1702,11 +1702,11 @@ private:
     UINT last_stats_present_refresh_count_ = 0;
     std::array<std::uint64_t, 5> telemetry_shown_refreshes_{};
 
-    // EFB->texture copy destinations, keyed by (guest dest address, copy format,
+    // scene target->texture copy destinations, keyed by (guest dest address, copy format,
     // depth-source). SMG reuses one address with different copy formats, and each format
     // needs its own converted texture. The resource is reused across copies and recreated
     // only on size change; the TextureCache alias is refreshed per copy (cheap when unchanged).
-    struct EfbCopyDest {
+    struct SceneCopyDest {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         UINT width = 0;
         UINT height = 0;
@@ -1718,32 +1718,32 @@ private:
         // Resident bytes of `texture`, for the byte budget below.
         std::uint64_t bytes = 0;
     };
-    // One texture per destination key, at the copy's scaled extent in kEfbColorFormat
+    // One texture per destination key, at the copy's scaled extent in kSceneColorFormat
     // (a full 640x456 copy: 1.11 MB at 1x, 17.81 MB at 4x, 40.08 MB at 6x). Bounded in
     // bytes, not entries, since an entry's cost varies with the copy extent and the
     // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
     // is well above a scene's working set (a few XFBs across a couple of formats plus one
     // bloom workspace).
-    std::unordered_map<std::uint64_t, EfbCopyDest> efb_copy_dests_;
-    std::uint64_t efb_copy_dests_tick_ = 0;
-    std::uint64_t efb_copy_dests_bytes_ = 0;
+    std::unordered_map<std::uint64_t, SceneCopyDest> scene_copy_dests_;
+    std::uint64_t scene_copy_dests_tick_ = 0;
+    std::uint64_t scene_copy_dests_bytes_ = 0;
     // Render-owner-only aggregate work counts, reported once at shutdown.
     // Payload bytes are copied pixels, not a device allocation-size estimate.
-    std::uint64_t efb_copy_requests_ = 0;
-    std::uint64_t efb_shader_copies_ = 0;
-    std::uint64_t efb_identity_copies_ = 0;
-    std::uint64_t efb_identity_payload_bytes_ = 0;
+    std::uint64_t scene_copy_requests_ = 0;
+    std::uint64_t scene_shader_copies_ = 0;
+    std::uint64_t scene_identity_copies_ = 0;
+    std::uint64_t scene_identity_payload_bytes_ = 0;
     using RetiredResourceList =
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>
-        retired_efb_copy_textures_;
+        retired_scene_copy_textures_;
     // Interpolation: copy textures retired during a game-frame ring segment.
     std::array<RetiredResourceList, kInterpSegments> retired_segment_textures_;
 
     // Conversion blit pipeline (its root signature is a module static beside the
     // present blit's) and CPU-only descriptors for conversion destinations. RTV
     // descriptors are consumed at record time, so every copy rebinds the same
-    // CPU-only scratch slot. EFB source SRVs occupy an immutable prefix of the
+    // CPU-only scratch slot. scene target source SRVs occupy an immutable prefix of the
     // active shader-visible heap.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_r8_;  // into one-channel copies
@@ -1751,13 +1751,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
     detail::ConversionRtvSlot conv_scratch_rtv_slot_;
-    std::optional<DescriptorRing::Table> conv_efb_source_table_;
-    D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_color_srv_{};
-    D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_depth_srv_{};
-    // The masked EFB clears (color / alpha only): shaders and pipelines, made at first use.
+    std::optional<DescriptorRing::Table> conv_scene_source_table_;
+    D3D12_GPU_DESCRIPTOR_HANDLE conv_scene_color_srv_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE conv_scene_depth_srv_{};
+    // The masked scene target clears (color / alpha only): shaders and pipelines, made at first use.
     Microsoft::WRL::ComPtr<ID3DBlob> clear_vs_;
     Microsoft::WRL::ComPtr<ID3DBlob> clear_ps_;
-    // Per EFB variant (efb_variant: samples, then HDR).
+    // Per scene target variant (scene_variant: samples, then HDR).
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_rgb_pipelines_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_alpha_pipelines_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
@@ -1804,12 +1804,12 @@ private:
     bool ensure_async_peek_field_resources(AsyncPeekField& field, ReadbackKind kind);
     void record_async_peek_field_commands(
         ID3D12GraphicsCommandList* list, AsyncPeekField& field, ReadbackKind kind, std::size_t slot);
-    bool read_efb_pixels(std::uint16_t x, std::uint16_t y, ReadbackKind kind,
+    bool read_scene_pixels(std::uint16_t x, std::uint16_t y, ReadbackKind kind,
         std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
         bool defer_pointer_depth = false);
     static const std::uint8_t* pin_readback_mapping(ID3D12Resource* readback);
     void select_pointer_depth_destination();
-    void copy_efb_readback_pixels(ID3D12Resource* readback, UINT width,
+    void copy_scene_readback_pixels(ID3D12Resource* readback, UINT width,
         UINT height, UINT row_pitch, bool is_depth, std::uint32_t& value,
         std::span<std::uint32_t> depth_pixels);
 

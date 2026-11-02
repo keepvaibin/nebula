@@ -77,7 +77,7 @@ void BloomEffectSimple::draw() const {
     ::TexSpec texSpec;
     texSpec.set(_20, 4, 0, GX_TF_RGB565);
 
-    // The renderer keeps the scene in the EFB's own format: the corner the chain works in is saved as a texture copy,
+    // The renderer keeps the scene in the scene target's own format: the corner the chain works in is saved as a texture copy,
     // which cuts the ray tracer's HDR scene at 1 there.
     if (route != 0) {
         NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);

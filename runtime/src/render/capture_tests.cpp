@@ -1,4 +1,4 @@
-// Picture serial accounting, the EFB conversion shader, and EFB-copy geometry tests.
+// Picture serial accounting, the scene target conversion shader, and scene target-copy geometry tests.
 
 #include "galaxy/render/capture.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -26,42 +26,42 @@ bool expect_near(float actual, float expected, const char* message) {
     return expect(std::abs(actual - expected) < 0.0001f, message);
 }
 
-bool test_scaled_xfb_resource_allocation() {
+bool test_scaled_display_resource_allocation() {
     using Microsoft::WRL::ComPtr;
 
     ComPtr<IDXGIFactory4> factory;
     if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))) {
-        return expect(false, "DXGI factory creation for scaled XFB allocation");
+        return expect(false, "DXGI factory creation for scaled display picture allocation");
     }
     ComPtr<IDXGIAdapter> warp_adapter;
     if (FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&warp_adapter)))) {
-        return expect(false, "DXGI WARP adapter creation for scaled XFB allocation");
+        return expect(false, "DXGI WARP adapter creation for scaled display picture allocation");
     }
     ComPtr<ID3D12Device> device;
     if (FAILED(D3D12CreateDevice(
             warp_adapter.Get(),
             D3D_FEATURE_LEVEL_11_0,
             IID_PPV_ARGS(&device)))) {
-        return expect(false, "D3D12 WARP device creation for scaled XFB allocation");
+        return expect(false, "D3D12 WARP device creation for scaled display picture allocation");
     }
 
-    galaxy::render::EfbCopyManager manager;
+    galaxy::render::SceneCopyManager manager;
     if (!manager.initialize(device.Get(), 3u)) {
-        return expect(false, "3x EFB copy manager initialization");
+        return expect(false, "3x scene target copy manager initialization");
     }
     manager.begin_frame(0u, 2u);
     galaxy::render::CaptureRequest params{};
     params.src_width = 640u;
     params.src_height = 456u;
     params.display = true;
-    galaxy::render::XfbTexture* xfb = manager.acquire_xfb(params, 1u);
-    const bool allocated = xfb != nullptr && xfb->texture != nullptr;
+    galaxy::render::DisplayTexture* display_picture = manager.acquire_display(params, 1u);
+    const bool allocated = display_picture != nullptr && display_picture->texture != nullptr;
     const D3D12_RESOURCE_DESC desc =
-        allocated ? xfb->texture->GetDesc() : D3D12_RESOURCE_DESC{};
+        allocated ? display_picture->texture->GetDesc() : D3D12_RESOURCE_DESC{};
     const bool result = expect(
         allocated &&
-            xfb->slot == 0u &&
-            xfb->width == 1920u && xfb->height == 1368u &&
+            display_picture->slot == 0u &&
+            display_picture->width == 1920u && display_picture->height == 1368u &&
             desc.Width == 1920u && desc.Height == 1368u,
         "a 3x picture keeps its logical size while allocating a 3x GPU resource");
     manager.shutdown();
@@ -76,32 +76,32 @@ int main() {
     {
         std::string diagnostics;
         const bool shader_valid =
-            galaxy::render::validate_efb_conversion_shader(diagnostics);
+            galaxy::render::validate_scene_conversion_shader(diagnostics);
         if (!shader_valid) {
             std::cerr << diagnostics << '\n';
         }
         passed &= expect(
             shader_valid,
-            "runtime EFB copy/peek conversion shader compiles as ps_5_0");
+            "runtime scene target copy/peek conversion shader compiles as ps_5_0");
     }
-    passed &= test_scaled_xfb_resource_allocation();
+    passed &= test_scaled_display_resource_allocation();
 
     {
-        galaxy::render::XfbSerialAccountingState state{};
+        galaxy::render::DisplaySerialAccountingState state{};
         std::uint64_t texture_a = ~std::uint64_t{0};
         std::uint64_t texture_b = ~std::uint64_t{0};
         const auto first_100 =
-            galaxy::render::account_xfb_present_serial(state, texture_a, 100u);
+            galaxy::render::account_display_present_serial(state, texture_a, 100u);
         const auto first_101 =
-            galaxy::render::account_xfb_present_serial(state, texture_b, 101u);
+            galaxy::render::account_display_present_serial(state, texture_b, 101u);
         const auto replay_100 =
-            galaxy::render::account_xfb_present_serial(state, texture_a, 100u);
+            galaxy::render::account_display_present_serial(state, texture_a, 100u);
         const auto replay_101 =
-            galaxy::render::account_xfb_present_serial(state, texture_b, 101u);
+            galaxy::render::account_display_present_serial(state, texture_b, 101u);
         const auto repeat_101 =
-            galaxy::render::account_xfb_present_serial(state, texture_b, 101u);
+            galaxy::render::account_display_present_serial(state, texture_b, 101u);
         const auto first_102 =
-            galaxy::render::account_xfb_present_serial(state, texture_a, 102u);
+            galaxy::render::account_display_present_serial(state, texture_a, 102u);
 
         passed &= expect(
             first_100.first_presentation &&
@@ -123,17 +123,17 @@ int main() {
     }
 
     {
-        galaxy::render::XfbSerialAccountingState state{};
+        galaxy::render::DisplaySerialAccountingState state{};
         std::uint64_t texture_10 = ~std::uint64_t{0};
         std::uint64_t texture_12 = ~std::uint64_t{0};
         std::uint64_t texture_11 = ~std::uint64_t{0};
         static_cast<void>(
-            galaxy::render::account_xfb_present_serial(
+            galaxy::render::account_display_present_serial(
                 state, texture_10, 10u));
         const auto first_12 =
-            galaxy::render::account_xfb_present_serial(state, texture_12, 12u);
+            galaxy::render::account_display_present_serial(state, texture_12, 12u);
         const auto late_11 =
-            galaxy::render::account_xfb_present_serial(state, texture_11, 11u);
+            galaxy::render::account_display_present_serial(state, texture_11, 11u);
         passed &= expect(
             first_12.first_presentation && first_12.delta_multi,
             "a skipped serial is reported as a multi-serial production gap");
@@ -148,39 +148,39 @@ int main() {
         bloom.src_width = 160u;
         bloom.src_height = 114u;
         bloom.half_scale = true;
-        const auto native_bloom = galaxy::render::compute_efb_copy_sampling_geometry(bloom, 80u, 57u, 6u);
+        const auto native_bloom = galaxy::render::compute_scene_copy_sampling_geometry(bloom, 80u, 57u, 6u);
         passed &= expect_near(native_bloom.src_x, 2880.0f,
-            "native bloom samples the genuine scaled EFB origin");
+            "native bloom samples the genuine scaled scene target origin");
         passed &= expect_near(native_bloom.step_x, 12.0f,
             "native bloom downsamples the scaled source instead of lowering the scene");
     }
     {
-        const galaxy::render::ScaledEfbCopyExtent native =
-            galaxy::render::compute_scaled_efb_copy_extent(640u, 456u, 1u);
-        const galaxy::render::ScaledEfbCopyExtent double_res =
-            galaxy::render::compute_scaled_efb_copy_extent(640u, 456u, 2u);
-        const galaxy::render::ScaledEfbCopyExtent quadruple_res =
-            galaxy::render::compute_scaled_efb_copy_extent(640u, 456u, 4u);
-        const galaxy::render::ScaledEfbCopyExtent sixfold_res =
-            galaxy::render::compute_scaled_efb_copy_extent(640u, 456u, 6u);
+        const galaxy::render::ScaledSceneCopyExtent native =
+            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 1u);
+        const galaxy::render::ScaledSceneCopyExtent double_res =
+            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 2u);
+        const galaxy::render::ScaledSceneCopyExtent quadruple_res =
+            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 4u);
+        const galaxy::render::ScaledSceneCopyExtent sixfold_res =
+            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 6u);
         passed &= expect(
             native.width == 640u && native.height == 456u,
-            "1x XFB backing texture preserves logical copy dimensions");
+            "1x display picture backing texture preserves logical copy dimensions");
         passed &= expect(
             double_res.width == 1280u && double_res.height == 912u,
-            "2x XFB backing texture retains 2x EFB resolution");
+            "2x display picture backing texture retains 2x scene target resolution");
         passed &= expect(
             quadruple_res.width == 2560u && quadruple_res.height == 1824u,
-            "4x XFB backing texture retains 4x EFB resolution");
+            "4x display picture backing texture retains 4x scene target resolution");
         passed &= expect(
             sixfold_res.width == 3840u && sixfold_res.height == 2736u,
-            "6x XFB backing texture retains 6x EFB resolution");
+            "6x display picture backing texture retains 6x scene target resolution");
         passed &= expect(
-            galaxy::render::compute_scaled_efb_copy_extent(
+            galaxy::render::compute_scaled_scene_copy_extent(
                 640u, 456u, 0u).width == 640u &&
-                galaxy::render::compute_scaled_efb_copy_extent(
+                galaxy::render::compute_scaled_scene_copy_extent(
                     640u, 4096u, 99u).height == 16384u,
-            "scaled XFB extent clamps scale to 1-6 and D3D12 dimensions");
+            "scaled display picture extent clamps scale to 1-6 and D3D12 dimensions");
     }
     {
         galaxy::render::CaptureRequest params{};
@@ -188,27 +188,27 @@ int main() {
         params.src_y = 20u;
         params.src_width = 640u;
         params.src_height = 456u;
-        const galaxy::render::EfbCopySamplingGeometry display =
-            galaxy::render::compute_efb_copy_sampling_geometry(
+        const galaxy::render::SceneCopySamplingGeometry display =
+            galaxy::render::compute_scene_copy_sampling_geometry(
                 params, 1280u, 912u, 2u);
         passed &= expect_near(
             display.src_x, 20.0f,
-            "2x display copy scales the EFB source X origin");
+            "2x display copy scales the scene target source X origin");
         passed &= expect_near(
             display.src_y, 40.0f,
-            "2x display copy scales the EFB source Y origin");
+            "2x display copy scales the scene target source Y origin");
         passed &= expect_near(
             display.step_x, 1.0f,
-            "2x display copy preserves every scaled EFB column in scaled XFB");
+            "2x display copy preserves every scaled scene target column in scaled display picture");
         passed &= expect_near(
             display.step_y, 1.0f,
-            "2x display copy preserves every scaled EFB row in scaled XFB");
+            "2x display copy preserves every scaled scene target row in scaled display picture");
         passed &= expect_near(
             display.filter_row_offset, 2.0f,
             "2x copy filter samples adjacent logical rows two texels apart");
 
-        const galaxy::render::EfbCopySamplingGeometry half_scale =
-            galaxy::render::compute_efb_copy_sampling_geometry(
+        const galaxy::render::SceneCopySamplingGeometry half_scale =
+            galaxy::render::compute_scene_copy_sampling_geometry(
                 params, 640u, 456u, 2u);
         passed &= expect_near(
             half_scale.step_x, 2.0f,
@@ -217,38 +217,38 @@ int main() {
             half_scale.step_y, 2.0f,
             "2x internal half-scale texture copy keeps proportional Y sampling");
 
-        const galaxy::render::EfbCopySamplingGeometry sixfold =
-            galaxy::render::compute_efb_copy_sampling_geometry(
+        const galaxy::render::SceneCopySamplingGeometry sixfold =
+            galaxy::render::compute_scene_copy_sampling_geometry(
                 params, 3840u, 2736u, 6u);
         passed &= expect_near(
             sixfold.step_x, 1.0f,
-            "6x display copy retains every scaled EFB column");
+            "6x display copy retains every scaled scene target column");
         passed &= expect_near(
             sixfold.step_y, 1.0f,
-            "6x display copy retains every scaled EFB row");
+            "6x display copy retains every scaled scene target row");
     }
     {
-        const galaxy::render::ScaledEfbRect scissor =
-            galaxy::render::compute_scaled_efb_rect(
+        const galaxy::render::ScaledSceneRect scissor =
+            galaxy::render::compute_scaled_scene_rect(
                 -10, 10, 650, 600, 640u, 528u, 3u);
         passed &= expect(
             scissor.left == 0 && scissor.top == 30 &&
                 scissor.right == 1920 && scissor.bottom == 1584,
-            "3x EFB scissor scales and clamps to the physical EFB extent");
+            "3x scene target scissor scales and clamps to the physical scene target extent");
         passed &= expect(
-            galaxy::render::compute_scaled_efb_rect(
+            galaxy::render::compute_scaled_scene_rect(
                 20, 20, 10, 10, 640u, 528u, 4u).empty(),
             "scaled inverted scissor remains an empty raster region");
-        const galaxy::render::ScaledEfbRect sixfold_scissor =
-            galaxy::render::compute_scaled_efb_rect(
+        const galaxy::render::ScaledSceneRect sixfold_scissor =
+            galaxy::render::compute_scaled_scene_rect(
                 -10, 10, 650, 600, 640u, 528u, 6u);
         passed &= expect(
             sixfold_scissor.left == 0 && sixfold_scissor.top == 60 &&
                 sixfold_scissor.right == 3840 &&
                 sixfold_scissor.bottom == 3168,
-            "6x EFB scissor scales and clamps to the physical EFB extent");
-        const galaxy::render::ScaledEfbRect oversized_target =
-            galaxy::render::compute_scaled_efb_rect(
+            "6x scene target scissor scales and clamps to the physical scene target extent");
+        const galaxy::render::ScaledSceneRect oversized_target =
+            galaxy::render::compute_scaled_scene_rect(
                 0, 0,
                 std::numeric_limits<std::int32_t>::max(),
                 std::numeric_limits<std::int32_t>::max(),
@@ -274,7 +274,7 @@ int main() {
             "4x full viewport retains its zero Y origin");
         passed &= expect_near(
             viewport.width, 2560.0f,
-            "4x viewport rasterizes geometry across the scaled EFB width");
+            "4x viewport rasterizes geometry across the scaled scene target width");
         passed &= expect_near(
             viewport.height, 1824.0f,
             "4x viewport rasterizes geometry across the scaled copy height");
@@ -285,15 +285,15 @@ int main() {
             galaxy::render::compute_scaled_viewport(full_viewport, 6u);
         passed &= expect_near(
             sixfold_viewport.width, 3840.0f,
-            "6x viewport spans the scaled EFB width");
+            "6x viewport spans the scaled scene target width");
         passed &= expect_near(
             sixfold_viewport.height, 2736.0f,
             "6x viewport spans the scaled copy height");
     }
     {
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
-            const galaxy::render::EfbPeekSamplingGeometry peek =
-                galaxy::render::compute_efb_peek_sampling_geometry(
+            const galaxy::render::ScenePeekSamplingGeometry peek =
+                galaxy::render::compute_scene_peek_sampling_geometry(
                     123u, 45u, scale);
             const std::uint32_t expected_x = 123u * scale;
             const std::uint32_t expected_y = 45u * scale;
@@ -301,7 +301,7 @@ int main() {
             std::snprintf(
                 label,
                 sizeof(label),
-                "%ux EFB peek addresses the scaled logical-pixel block",
+                "%ux scene target peek addresses the scaled logical-pixel block",
                 scale);
             passed &= expect(
                 peek.src_x == static_cast<float>(expected_x) &&
@@ -312,7 +312,7 @@ int main() {
             std::snprintf(
                 label,
                 sizeof(label),
-                "%ux EFB depth peek uses deterministic center-nearest point semantics",
+                "%ux scene target depth peek uses deterministic center-nearest point semantics",
                 scale);
             passed &= expect(
                 peek.depth_texel_x == expected_x + scale / 2u &&
@@ -322,19 +322,19 @@ int main() {
             std::snprintf(
                 label,
                 sizeof(label),
-                "%ux EFB color peek reduces the complete scaled pixel block",
+                "%ux scene target color peek reduces the complete scaled pixel block",
                 scale);
             passed &= expect(
                 peek.color_reduction_samples == scale * scale,
                 label);
 
-            const galaxy::render::EfbPeekSamplingGeometry bottom_right =
-                galaxy::render::compute_efb_peek_sampling_geometry(
+            const galaxy::render::ScenePeekSamplingGeometry bottom_right =
+                galaxy::render::compute_scene_peek_sampling_geometry(
                     639u, 527u, scale);
             std::snprintf(
                 label,
                 sizeof(label),
-                "%ux EFB depth point remains inside the bottom-right scaled block",
+                "%ux scene target depth point remains inside the bottom-right scaled block",
                 scale);
             passed &= expect(
                 bottom_right.depth_texel_x >= 639u * scale &&
@@ -344,28 +344,28 @@ int main() {
                 label);
         }
 
-        const galaxy::render::EfbPeekSamplingGeometry clamped_low =
-            galaxy::render::compute_efb_peek_sampling_geometry(1u, 1u, 0u);
-        const galaxy::render::EfbPeekSamplingGeometry clamped_high =
-            galaxy::render::compute_efb_peek_sampling_geometry(1u, 1u, 99u);
+        const galaxy::render::ScenePeekSamplingGeometry clamped_low =
+            galaxy::render::compute_scene_peek_sampling_geometry(1u, 1u, 0u);
+        const galaxy::render::ScenePeekSamplingGeometry clamped_high =
+            galaxy::render::compute_scene_peek_sampling_geometry(1u, 1u, 99u);
         passed &= expect(
             clamped_low.depth_texel_x == 1u &&
                 clamped_low.depth_texel_y == 1u &&
                 clamped_high.depth_texel_x ==
-                    galaxy::render::kMaxEfbScale + galaxy::render::kMaxEfbScale / 2u &&
+                    galaxy::render::kMaxSceneScale + galaxy::render::kMaxSceneScale / 2u &&
                 clamped_high.depth_texel_y ==
-                    galaxy::render::kMaxEfbScale + galaxy::render::kMaxEfbScale / 2u,
-            "EFB peek geometry clamps unsupported scales before selecting a texel");
+                    galaxy::render::kMaxSceneScale + galaxy::render::kMaxSceneScale / 2u,
+            "scene target peek geometry clamps unsupported scales before selecting a texel");
     }
     passed &= expect(
-        galaxy::render::efb_copy_single_channel(2u, false) && !galaxy::render::efb_copy_single_channel(2u, true) &&
-            !galaxy::render::efb_copy_single_channel(galaxy::render::kCopyLayoutIntensityAlpha, false),
+        galaxy::render::scene_copy_single_channel(2u, false) && !galaxy::render::scene_copy_single_channel(2u, true) &&
+            !galaxy::render::scene_copy_single_channel(galaxy::render::kCopyLayoutIntensityAlpha, false),
         "alpha captures are one-channel pictures; depth and intensity-alpha ones are not");
 
     if (!passed) {
         return 1;
     }
 
-    std::cout << "EFB copy tests passed\n";
+    std::cout << "scene target copy tests passed\n";
     return 0;
 }

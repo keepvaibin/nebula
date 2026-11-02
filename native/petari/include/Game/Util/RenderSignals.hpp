@@ -1,7 +1,7 @@
 #pragma once
 
 // The renderer's signals from the game (galaxy/motion_signals.h): host markers (the game object whose drawing
-// follows, scene signals), bloom phases, EFB clear quads, scene bounds and JPA stripe particles. Each reaches the
+// follows, scene signals), bloom phases, scene target clear quads, scene bounds and JPA stripe particles. Each reaches the
 // host as a record in the order the game makes them, between its drawing records.
 
 #include <stdint.h>

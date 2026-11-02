@@ -25,7 +25,7 @@ namespace galaxy::render {
 class DescriptorRing;
 
 // Image quality on the render thread.
-//   aa:          SMAA 1x or FXAA of the 3D scene in the EFB, before the 2D layer
+//   aa:          SMAA 1x or FXAA of the 3D scene in the scene target, before the 2D layer
 //                draws (record_scene_aa), so menus and text stay sharp. kAuto
 //                runs SMAA only when the scene is not already supersampled
 //                (less than 1.5 scene pixels per window pixel on either axis).
@@ -53,7 +53,7 @@ public:
     bool initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                     const PostProcessSettings& settings);
     void shutdown() noexcept;
-    // Whether it presents a picture held from the top left of a taller texture (a handed-over EFB).
+    // Whether it presents a picture held from the top left of a taller texture (a handed-over scene target).
     [[nodiscard]] bool reads_held_pictures() const noexcept { return resample_box_ != nullptr; }
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // Capabilities, self-test results, last frame's AA pass and totals.
@@ -63,7 +63,7 @@ public:
     // into the `viewport` rectangle of `target_rtv`. Intermediate targets are
     // kept across frames and replaced only when a size changes; replaced
     // resources are released `frames_in_flight` frames later.
-    // `source` holds its `source_width` x `source_height` picture from its top left (a handed-over EFB is taller).
+    // `source` holds its `source_width` x `source_height` picture from its top left (a handed-over scene target is taller).
     void record(ID3D12GraphicsCommandList* list,
                 DescriptorRing& srv_ring,
                 ID3D12Resource* source,
@@ -156,7 +156,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_weights_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_blend_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> fxaa_;
-    // The scene passes' last step into the EFB: colour only.
+    // The scene passes' last step into the scene target: colour only.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_blend_rgb_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> fxaa_rgb_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_;

@@ -57,7 +57,7 @@ std::string native_settings_content_root;
 std::atomic<std::uintptr_t> settings_window{0};
 std::atomic<bool> borderless_active{false};
 std::atomic<bool> exclusive_fullscreen_active{false};
-std::atomic<unsigned> efb_scale_rejected{0u};
+std::atomic<unsigned> scene_target_scale_rejected{0u};
 std::atomic<std::uintptr_t> pointer_hwnd{0};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
@@ -72,7 +72,7 @@ std::atomic<bool> rtx_adapter{false};
 
 }  // namespace host_window
 
-using host_window::display_efb_scale_cap;
+using host_window::display_scene_target_scale_cap;
 using host_window::flush_native_settings_if_dirty;
 using host_window::poll_render_config_file;
 using host_window::hidden_window_mode_enabled;
@@ -649,7 +649,7 @@ unsigned settings_scale_cap(const RenderConfig& render) {
         width = render.fullscreen_width;
         height = render.fullscreen_height;
     }
-    return efb_scale_covering(width, height, kMaxEfbScale);
+    return scene_target_scale_covering(width, height, kMaxSceneScale);
 }
 
 // Window client sizes that fit the monitor's work area, smallest first: those
@@ -728,7 +728,7 @@ void sanitize_settings_draft(RenderConfig& render) {
             render.window_height = std::min(render.window_height, largest.second);
         }
     }
-    render.efb_scale = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
+    render.scene_target_scale = std::clamp(render.scene_target_scale, 1u, settings_scale_cap(render));
 }
 
 unsigned controls_changes();
@@ -784,7 +784,7 @@ unsigned pending_settings_changes() {
         (d.window_width != live.window_width || d.window_height != live.window_height);
     changes += d.aspect_mode != live.aspect_mode;
     changes += d.internal_follow_window != live.internal_follow_window ||
-        (!d.internal_follow_window && d.efb_scale != live.efb_scale);
+        (!d.internal_follow_window && d.scene_target_scale != live.scene_target_scale);
     changes += d.vsync_interval != live.vsync_interval;
     changes += d.max_fps != live.max_fps;
     changes += d.frame_generation != live.frame_generation;
@@ -1242,7 +1242,7 @@ void apply_native_settings_draft() {
     applied.window_height = next.window_height;
     applied.aspect_mode = next.aspect_mode;
     applied.internal_follow_window = next.internal_follow_window;
-    applied.efb_scale = next.efb_scale;
+    applied.scene_target_scale = next.scene_target_scale;
     applied.vsync_interval = next.vsync_interval;
     applied.max_fps = next.max_fps;
     applied.frame_generation = next.frame_generation;
@@ -1283,11 +1283,11 @@ void apply_native_settings_draft() {
     if (applied.internal_follow_window) {
         // The draft's scale is the one the menu opened with; the live scale
         // may have followed the window since.
-        applied.efb_scale = live.efb_scale;
+        applied.scene_target_scale = live.scene_target_scale;
     }
     set_render_config(applied);
     if (!applied.internal_follow_window) {
-        stage_next_start_efb_scale(applied.efb_scale);
+        stage_next_start_scene_target_scale(applied.scene_target_scale);
     } else {
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
@@ -2559,7 +2559,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                         },
                         "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
     }
-    const unsigned internal = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
+    const unsigned internal = std::clamp(render.scene_target_scale, 1u, settings_scale_cap(render));
     const unsigned render_scale = upscaler_render_scale(render, internal);
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
     const bool rt_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
@@ -2596,13 +2596,13 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                         [](RenderConfig& draft, int delta) {
                             const unsigned cap = settings_scale_cap(draft);
                             const unsigned current = draft.internal_follow_window ? 0u
-                                                                                  : std::clamp(draft.efb_scale, 1u, cap);
+                                                                                  : std::clamp(draft.scene_target_scale, 1u, cap);
                             const unsigned next = settings_step(current, cap + 1u, delta);
                             if (next == 0u) {
                                 draft.internal_follow_window = true;
                             } else {
                                 draft.internal_follow_window = false;
-                                draft.efb_scale = next;
+                                draft.scene_target_scale = next;
                             }
                         },
                         upscaled ? "THE UPSCALER'S OUTPUT. MATCH OUTPUT FOLLOWS THE SCREEN"
@@ -4144,7 +4144,7 @@ namespace host_window {
 // The internal resolution that fills the display: the smallest scale whose 640x456 game picture covers the monitor's
 // current mode, or the swap chain in exclusive fullscreen. Higher scales cost GPU time and memory without adding
 // pixels the display can show.
-unsigned display_efb_scale_cap() {
+unsigned display_scene_target_scale_cap() {
     UINT width = 0u;
     UINT height = 0u;
     if (host_window::exclusive_fullscreen_active.load(std::memory_order_acquire)) {
@@ -4172,10 +4172,10 @@ unsigned display_efb_scale_cap() {
         }
     }
     if (width == 0u || height == 0u) {
-        return kMaxEfbScale;
+        return kMaxSceneScale;
     }
     const double needed = std::max(width / static_cast<double>(kFrameWidth), height / 456.0);
-    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
+    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxSceneScale);
 }
 
 // DXR 1.1 with shader model 6.6 and resource binding tier 3 on an adapter with dedicated memory (the RAY TRACING row).
@@ -4237,7 +4237,7 @@ void poll_render_config_file() {
     RenderConfig after = get_render_config();
     if (after.internal_follow_window) {
         // The window decides the scale, as when the menu turns Match Output on.
-        after.efb_scale = before.efb_scale;
+        after.scene_target_scale = before.scene_target_scale;
         set_render_config(after);
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }

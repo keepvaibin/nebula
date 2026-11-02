@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// What both GX renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the EFB's logical
-// size, one resolved draw, clear values, the EFB conversion shader and its constants, and the sampler-table cache.
+// What both GX renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
+// size, one resolved draw, clear values, the scene target conversion shader and its constants, and the sampler-table cache.
 
 #include "galaxy/render/capture.h"
 #include "galaxy/render/gpu_types.h"
@@ -105,26 +105,26 @@ struct StripeVertex {
     std::uint8_t side = 0;           // the particle's first or second vertex
 };
 
-struct EfbClearValues {
+struct SceneClearValues {
     std::array<float, 4> color{};
     float reversed_depth = 0.0f;
 };
 // A clear's values as given; on a frame without alpha (frame_format 0, 1 with alpha) alpha 255.
-[[nodiscard]] EfbClearValues make_efb_clear_values(
+[[nodiscard]] SceneClearValues make_scene_clear_values(
     std::uint32_t rgba, std::uint32_t z24,
     std::uint8_t frame_format) noexcept;
 
-// The EFB conversion shader's root constants (16 dwords).
-struct EfbConversionShaderConstants {
+// The scene target conversion shader's root constants (16 dwords).
+struct SceneConversionShaderConstants {
     std::array<float, 16> values{};
 };
 
-[[nodiscard]] std::string_view efb_conversion_shader_source() noexcept;
-// The frame shown, one frame pixel to one picture pixel (efb_conversion_shader_source's arithmetic for it).
+[[nodiscard]] std::string_view scene_conversion_shader_source() noexcept;
+// The frame shown, one frame pixel to one picture pixel (scene_conversion_shader_source's arithmetic for it).
 [[nodiscard]] std::string_view display_filter_shader_source() noexcept;
 
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
-// fullscreen-triangle blit, the EFB colour-channel clear, the depth carry after a resolution change, and the
+// fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the
 // overlay's textured and solid quads (root constants / push constants b0).
 [[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
@@ -147,7 +147,7 @@ struct UiSolidQuadConstants {
     std::uint32_t glyph_mode;
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
-[[nodiscard]] EfbConversionShaderConstants make_efb_conversion_constants(
+[[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(
     const CaptureRequest& params,
     bool is_depth_copy,
     bool intensity,
@@ -158,24 +158,24 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
     float step_x,
     float step_y,
     float filter_row_offset,
-    unsigned efb_scale,
-    unsigned logical_efb_height,
+    unsigned scene_target_scale,
+    unsigned logical_scene_height,
     unsigned reduction_width = 0u) noexcept;
 
 // The 1x1 GXPeek conversion constants. Color peeks box-reduce the complete
 // scaled logical-pixel block; depth peeks address the exact point-selected
-// physical texel recorded in EfbPeekSamplingGeometry.
-[[nodiscard]] EfbConversionShaderConstants make_efb_peek_conversion_constants(
-    const EfbPeekSamplingGeometry& sampling,
+// physical texel recorded in ScenePeekSamplingGeometry.
+[[nodiscard]] SceneConversionShaderConstants make_scene_peek_conversion_constants(
+    const ScenePeekSamplingGeometry& sampling,
     ReadbackKind kind) noexcept;
 
-// The EFB-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
+// The scene target-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
 // the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in
 // a recording.
-[[nodiscard]] std::uint64_t efb_copy_dest_budget_bytes();
+[[nodiscard]] std::uint64_t scene_copy_dest_budget_bytes();
 
 // Effect copies (destinations up to 320x228: the bloom pyramid, simple bloom, depth of field, Mario's 160x160
-// shadow capture) are built at the game's own resolution, box-filtered over the scaled EFB. Their low resolution is
+// shadow capture) are built at the game's own resolution, box-filtered over the scaled scene target. Their low resolution is
 // part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
 // copies turn the taps into separate offset images. Full-size captures stay scaled. After Dolphin's Super Mario
 // Galaxy Native Bloom mod (iwubcode, GPL-2.0-or-later).

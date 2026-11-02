@@ -69,7 +69,7 @@ std::uint32_t pack_sampler_key(
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16,
     bool arbitrary,
-    std::uint8_t efb_scale_log2_x32) noexcept {
+    std::uint8_t scene_target_scale_log2_x32) noexcept {
     std::uint32_t min_filter =
         min_filter_code(mode) & 0x7u;
     std::uint32_t min_lod =
@@ -92,7 +92,7 @@ std::uint32_t pack_sampler_key(
         static_cast<std::uint32_t>(static_cast<std::uint8_t>(lod_bias_x32(mode.lod_bias))) & 0xFFu;
     if (arbitrary && source_mips) {
         const int bias = static_cast<int>(static_cast<std::int8_t>(lod_bias_x32(mode.lod_bias))) +
-                         static_cast<int>(efb_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
+                         static_cast<int>(scene_target_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
         lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
             static_cast<std::int8_t>(std::clamp(bias, -128, 127))));
         max_lod = 0xFFu;
@@ -535,17 +535,17 @@ void RenderCore::reset_fifo_session_state() {
     clear_texture_binding_table_cache();
     texture_handle_cache_.clear();
 
-    // Frame stamps, seeding and XFB addresses restart with the new EFB/XFB resources.
+    // Frame stamps, seeding and display picture addresses restart with the new scene target/display picture resources.
     frame_index_ = 0u;
     timing_frame_index_.store(0u, std::memory_order_relaxed);
-    efb_seeded_ = false;
+    scene_seeded_ = false;
     present_epoch_ = 0u;
-    xfb_serial_accounting_ = {};
-    reset_monotonic_cadence(xfb_copy_production_cadence_);
-    reset_monotonic_cadence(xfb_first_serial_present_cadence_);
-    last_presented_xfb_stamp_.store(
+    display_serial_accounting_ = {};
+    reset_monotonic_cadence(display_copy_production_cadence_);
+    reset_monotonic_cadence(display_first_serial_present_cadence_);
+    last_presented_display_stamp_.store(
         ~std::uint64_t{0}, std::memory_order_relaxed);
-    last_presented_xfb_serial_.store(
+    last_presented_display_serial_.store(
         ~std::uint64_t{0}, std::memory_order_relaxed);
     last_presented_slot_.store(0u, std::memory_order_relaxed);
 }
@@ -562,13 +562,13 @@ bool RenderCore::initialize(int w, int h) {
     const RenderConfig cfg = get_render_config();
 
     boot_step("begins");
-    if (!renderer_.initialize(w, h, cfg.efb_scale)) {
+    if (!renderer_.initialize(w, h, cfg.scene_target_scale)) {
         std::cerr << "[RenderCore] RendererD3D12::initialize failed\n";
         return false;
     }
     boot_step("device rest");
 
-    if (!efb_copies_.initialize(renderer_.device(), cfg.efb_scale)) {
+    if (!scene_copies_.initialize(renderer_.device(), cfg.scene_target_scale)) {
         std::cerr << "[RenderCore] EfbCopyManager::initialize failed\n";
         renderer_.shutdown();
         return false;
@@ -576,14 +576,14 @@ bool RenderCore::initialize(int w, int h) {
 
     if (!texture_cache_.initialize(renderer_.device())) {
         std::cerr << "[RenderCore] TextureCache::initialize failed\n";
-        efb_copies_.shutdown();
+        scene_copies_.shutdown();
         renderer_.shutdown();
         return false;
     }
     if (!texture_cache_.preallocate_upload_arenas(kFramesInFlight)) {
         std::cerr << "[RenderCore] TextureCache upload preallocation failed\n";
         texture_cache_.shutdown();
-        efb_copies_.shutdown();
+        scene_copies_.shutdown();
         renderer_.shutdown();
         return false;
     }
@@ -601,7 +601,7 @@ bool RenderCore::initialize(int w, int h) {
 #endif
         std::cerr << "[RenderCore] PipelineCache::initialize failed\n";
         texture_cache_.shutdown();
-        efb_copies_.shutdown();
+        scene_copies_.shutdown();
         renderer_.shutdown();
         return false;
     }
@@ -622,10 +622,10 @@ bool RenderCore::initialize(int w, int h) {
                     display_copy_count(), stats.first_serial_presentations, stats.presented,
                     stats.repeated_or_stale_serial_requests, stats.last_presented_copy_serial,
                     stats.last_presented_frame_stamp, stats.last_presented_slot,
-                    xfb_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
-                    xfb_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
+                    display_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
+                    display_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
             }, static_cast<std::uint64_t>(w), static_cast<std::uint64_t>(h),
-               get_render_config().efb_scale);
+               get_render_config().scene_target_scale);
         } catch (...) { /* Optional startup allocation cannot fail gameplay. */ }
     }
     return true;
@@ -642,29 +642,29 @@ bool RenderCore::quit_requested() const noexcept {
 }
 
 std::uint64_t RenderCore::display_copy_count() const noexcept {
-    return stat_xfb_copies_.load(std::memory_order_relaxed);
+    return stat_display_copies_.load(std::memory_order_relaxed);
 }
 
 DisplayPresentStats RenderCore::display_present_stats() const noexcept {
     const std::uint64_t last_stamp =
-        last_presented_xfb_stamp_.load(std::memory_order_relaxed);
+        last_presented_display_stamp_.load(std::memory_order_relaxed);
     const std::uint64_t last_serial =
-        last_presented_xfb_serial_.load(std::memory_order_relaxed);
+        last_presented_display_serial_.load(std::memory_order_relaxed);
     return DisplayPresentStats{
-        stat_xfb_present_requests_.load(std::memory_order_relaxed),
-        stat_xfb_present_presented_.load(std::memory_order_relaxed),
-        stat_xfb_first_serial_presentations_.load(std::memory_order_relaxed),
-        stat_xfb_repeated_or_stale_serial_requests_.load(
+        stat_display_present_requests_.load(std::memory_order_relaxed),
+        stat_display_present_presented_.load(std::memory_order_relaxed),
+        stat_display_first_serial_presentations_.load(std::memory_order_relaxed),
+        stat_display_repeated_or_stale_serial_requests_.load(
             std::memory_order_relaxed),
-        stat_xfb_present_skipped_duplicate_presents_.load(
+        stat_display_present_skipped_duplicate_presents_.load(
             std::memory_order_relaxed),
-        stat_xfb_present_duplicate_run_max_.load(std::memory_order_relaxed),
-        stat_xfb_out_of_order_serial_requests_.load(
+        stat_display_present_duplicate_run_max_.load(std::memory_order_relaxed),
+        stat_display_out_of_order_serial_requests_.load(
             std::memory_order_relaxed),
-        stat_xfb_present_serial_delta_zero_.load(std::memory_order_relaxed),
-        stat_xfb_present_serial_delta_one_.load(std::memory_order_relaxed),
-        stat_xfb_present_serial_delta_multi_.load(std::memory_order_relaxed),
-        stat_xfb_highest_first_presented_copy_serial_.load(
+        stat_display_present_serial_delta_zero_.load(std::memory_order_relaxed),
+        stat_display_present_serial_delta_one_.load(std::memory_order_relaxed),
+        stat_display_present_serial_delta_multi_.load(std::memory_order_relaxed),
+        stat_display_highest_first_presented_copy_serial_.load(
             std::memory_order_relaxed),
         last_stamp == ~std::uint64_t{0} ? 0u : last_stamp,
         last_serial == ~std::uint64_t{0} ? 0u : last_serial,
@@ -757,13 +757,13 @@ void RenderCore::reset_monotonic_cadence(
 void RenderCore::report_frame_tail_window() noexcept {
     static const bool enabled=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
     if(!enabled) return;
-    const auto now=xfb_first_serial_present_cadence_.last_sample_ns;
+    const auto now=display_first_serial_present_cadence_.last_sample_ns;
     if(!frame_tail_report_ns_) { frame_tail_report_ns_=now; return; }
     if(now-frame_tail_report_ns_<2000000000u) return;
     const auto elapsed=now-frame_tail_report_ns_;frame_tail_report_ns_=now;
     try {
         std::ostringstream row;
-        row<<"[new-frame-tails] boundary=owned-XFB-copy-and-first-Present-return physical-display-time=unmeasured window-ns="<<elapsed;
+        row<<"[new-frame-tails] boundary=owned-display picture-copy-and-first-Present-return physical-display-time=unmeasured window-ns="<<elapsed;
         const auto append=[&](const char* name,MonotonicCadenceAccumulator& a) {
             const auto percentile=[&](unsigned p) {
                 const auto rank=(a.monitor_intervals*p+99u)/100u;
@@ -786,12 +786,12 @@ void RenderCore::report_frame_tail_window() noexcept {
                <<percentile(50u)<<'/'<<percentile(75u)<<'/'<<percentile(90u);
             a.monitor_bins.fill(0u);a.monitor_intervals=a.monitor_total_ns=a.monitor_max_ns=0u;
         };
-        append("production",xfb_copy_production_cadence_);append("first-present",xfb_first_serial_present_cadence_);
+        append("production",display_copy_production_cadence_);append("first-present",display_first_serial_present_cadence_);
         row<<'\n';std::cerr<<row.str();
     } catch (...) { /* Optional monitoring must not unwind rendering. */ }
 }
 
-void RenderCore::record_pointer_response(const XfbTexture& texture) noexcept {
+void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept {
     static const bool enabled=read_env_u64("GALAXY_MONITOR_POINTER_LATENCY",0u)!=0u;
     if (!enabled) return;
     const auto& stamp=texture.pointer_response;
@@ -824,7 +824,7 @@ void RenderCore::record_pointer_response(const XfbTexture& texture) noexcept {
     };
     try {
         std::ostringstream row;
-        row<<"[mouse-response-latency] boundary=selected-KPAD-to-first-marked-XFB-Present-return physical-display-time=unmeasured"
+        row<<"[mouse-response-latency] boundary=selected-KPAD-to-first-marked-display picture-Present-return physical-display-time=unmeasured"
            <<" samples="<<pointer_response_count_<<" mean-us="<<pointer_latency_total_/pointer_response_count_/1000u
            <<" p50-upper-us="<<percentile(50u)<<" p95-upper-us="<<percentile(95u)<<" p99-upper-us="<<percentile(99u)
            <<" max-us="<<pointer_latency_max_/1000u<<" source-serial="<<stamp.serial<<" generation="<<stamp.generation
@@ -851,50 +851,50 @@ bool RenderCore::subframes_shown() const {
     return renderer_.interpolation_mode() && std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_}) > 0u;
 }
 
-void RenderCore::record_presented_xfb_copy(
-    const XfbTexture& texture) noexcept {
-    galaxy::timeline::record(galaxy::timeline::Event::XfbPresented, texture.slot,
+void RenderCore::record_presented_display_copy(
+    const DisplayTexture& texture) noexcept {
+    galaxy::timeline::record(galaxy::timeline::Event::DisplayPresented, texture.slot,
                          texture.copy_serial);
     record_pointer_response(texture);
-    ++stat_xfb_present_presented_;
-    const XfbSerialAccountingEvent event =
-        account_xfb_present_serial(
-            xfb_serial_accounting_,
+    ++stat_display_present_presented_;
+    const DisplaySerialAccountingEvent event =
+        account_display_present_serial(
+            display_serial_accounting_,
             texture.last_accounted_present_serial,
             texture.copy_serial);
-    last_presented_xfb_stamp_.store(
+    last_presented_display_stamp_.store(
         texture.frame_stamp, std::memory_order_relaxed);
-    last_presented_xfb_serial_.store(
+    last_presented_display_serial_.store(
         texture.copy_serial, std::memory_order_relaxed);
 
     if (event.first_presentation) {
-        ++stat_xfb_first_serial_presentations_;
-        stat_xfb_highest_first_presented_copy_serial_.store(
-            xfb_serial_accounting_.highest_presented_serial,
+        ++stat_display_first_serial_presentations_;
+        stat_display_highest_first_presented_copy_serial_.store(
+            display_serial_accounting_.highest_presented_serial,
             std::memory_order_relaxed);
-        record_monotonic_cadence_sample(xfb_first_serial_present_cadence_);
+        record_monotonic_cadence_sample(display_first_serial_present_cadence_);
         report_frame_tail_window();
         if (event.below_high_water) {
-            ++stat_xfb_out_of_order_serial_requests_;
+            ++stat_display_out_of_order_serial_requests_;
         }
         if (event.delta_one) {
-            ++stat_xfb_present_serial_delta_one_;
+            ++stat_display_present_serial_delta_one_;
         } else if (event.delta_multi) {
-            ++stat_xfb_present_serial_delta_multi_;
+            ++stat_display_present_serial_delta_multi_;
         }
         return;
     }
 
-    ++stat_xfb_repeated_or_stale_serial_requests_;
+    ++stat_display_repeated_or_stale_serial_requests_;
     if (event.adjacent_repeat) {
-        ++stat_xfb_present_serial_delta_zero_;
+        ++stat_display_present_serial_delta_zero_;
     } else {
-        ++stat_xfb_out_of_order_serial_requests_;
+        ++stat_display_out_of_order_serial_requests_;
     }
     std::uint64_t observed =
-        stat_xfb_present_duplicate_run_max_.load(std::memory_order_relaxed);
+        stat_display_present_duplicate_run_max_.load(std::memory_order_relaxed);
     while (event.nonfirst_run > observed &&
-           !stat_xfb_present_duplicate_run_max_.compare_exchange_weak(
+           !stat_display_present_duplicate_run_max_.compare_exchange_weak(
                observed,
                event.nonfirst_run,
                std::memory_order_relaxed,
@@ -902,32 +902,32 @@ void RenderCore::record_presented_xfb_copy(
     }
 }
 
-void RenderCore::record_skipped_duplicate_xfb_present(
-    const XfbTexture& texture) noexcept {
+void RenderCore::record_skipped_duplicate_display_present(
+    const DisplayTexture& texture) noexcept {
     if (texture.copy_serial !=
-        last_presented_xfb_serial_.load(std::memory_order_relaxed)) {
+        last_presented_display_serial_.load(std::memory_order_relaxed)) {
         return;
     }
 
-    const XfbSerialAccountingEvent event =
-        account_xfb_present_serial(
-            xfb_serial_accounting_,
+    const DisplaySerialAccountingEvent event =
+        account_display_present_serial(
+            display_serial_accounting_,
             texture.last_accounted_present_serial,
             texture.copy_serial);
     if (!event.not_first_presentation) {
         return;
     }
-    ++stat_xfb_repeated_or_stale_serial_requests_;
-    ++stat_xfb_present_skipped_duplicate_presents_;
+    ++stat_display_repeated_or_stale_serial_requests_;
+    ++stat_display_present_skipped_duplicate_presents_;
     if (event.adjacent_repeat) {
-        ++stat_xfb_present_serial_delta_zero_;
+        ++stat_display_present_serial_delta_zero_;
     } else {
-        ++stat_xfb_out_of_order_serial_requests_;
+        ++stat_display_out_of_order_serial_requests_;
     }
     std::uint64_t observed =
-        stat_xfb_present_duplicate_run_max_.load(std::memory_order_relaxed);
+        stat_display_present_duplicate_run_max_.load(std::memory_order_relaxed);
     while (event.nonfirst_run > observed &&
-           !stat_xfb_present_duplicate_run_max_.compare_exchange_weak(
+           !stat_display_present_duplicate_run_max_.compare_exchange_weak(
                observed,
                event.nonfirst_run,
                std::memory_order_relaxed,
@@ -1003,7 +1003,7 @@ void RenderCore::render_frame(
         producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
     if (empty) {
         if (present_swap_chain) {
-            present_cached_xfb(black, true);
+            present_cached_display(black, true);
         } else {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             if (render_thread_error_ != nullptr) {
@@ -1165,7 +1165,7 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
     if (draw_state_.projection_type != 0u) {
         return;
     }
-    const float scale = static_cast<float>(renderer_.efb_scale());
+    const float scale = static_cast<float>(renderer_.scene_target_scale());
     const float width = std::fabs(draw_state_.viewport[2]) * scale;
     const float height = std::fabs(draw_state_.viewport[3]) * scale;
     if (!(width > 0.0f) || !(height > 0.0f)) {
@@ -1756,7 +1756,7 @@ void RenderCore::note_interp_rt_projection() {
     for (unsigned i = 0; i < 6u; ++i) {
         scene.rt_projection[i] = draw_state_.projection[i];
     }
-    const float scale = static_cast<float>(renderer_.efb_scale());
+    const float scale = static_cast<float>(renderer_.scene_target_scale());
     scene.rt_viewport[0] = std::fabs(draw_state_.viewport[2]) * scale;
     scene.rt_viewport[1] = std::fabs(draw_state_.viewport[3]) * scale;
     scene.rt_projection_known = true;
@@ -1774,7 +1774,7 @@ RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
     // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
     if (temporal_scene_ && draw_state_.projection_type == 0u) {
-        const float scale = static_cast<float>(renderer_.efb_scale());
+        const float scale = static_cast<float>(renderer_.scene_target_scale());
         const float width = std::fabs(draw_state_.viewport[2]) * scale;
         const float height = std::fabs(draw_state_.viewport[3]) * scale;
         if (width > 0.0f && height > 0.0f) {
@@ -1798,7 +1798,7 @@ void RenderCore::note_scene_ao_view(const DrawCall& call) {
         draw_state_.projection_type != 0u || !call.has_viewport) {
         return;
     }
-    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.efb_scale());
+    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.scene_target_scale());
     if (!viewport.valid()) {
         return;
     }
@@ -1945,23 +1945,23 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
     if (was_motion != motion_scene_) {
         current_pipeline_ = nullptr;
     }
-    // Scene end: the 2D layer renders into the output-resolution EFB. A new
-    // scene that begins before a display copy restores the render EFB.
+    // Scene end: the 2D layer renders into the output-resolution scene target. A new
+    // scene that begins before a display copy restores the render scene target.
     bool switched = false;
     display_copy_on_output_ = false;
     if (marker == SceneMarker::SceneEnd) {
         renderer_.record_scene_aa();
-        switched = renderer_.begin_output_efb();
-    } else if (renderer_.output_efb_active()) {
-        renderer_.end_output_efb();
+        switched = renderer_.begin_output_scene();
+    } else if (renderer_.output_scene_active()) {
+        renderer_.end_output_scene();
         switched = true;
     }
     if (switched) {
-        efb_copies_.set_efb_scale(renderer_.efb_scale());
+        scene_copies_.set_scene_target_scale(renderer_.scene_target_scale());
         frame_bindings_dirty_ = true;
     }
     if (marker == SceneMarker::SceneEnd) {
-        s_layer_2d_scale.store(renderer_.efb_scale(), std::memory_order_relaxed);
+        s_layer_2d_scale.store(renderer_.scene_target_scale(), std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
     if (marker == SceneMarker::SceneBegin) {
@@ -2592,7 +2592,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
         interp_snapshot_path_ = interp_snapshot_path("real");
         renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
-        present_cached_xfb_on_thread(false, false, true, sequence.picture_slot);
+        present_cached_display_on_thread(false, false, true, sequence.picture_slot);
         note_present_vblank(slot);
         note_interp_timeline(slot, 1.0, true);
         interp_presenting_real_ = false;
@@ -3255,7 +3255,7 @@ bool RenderCore::skip_for_present_rate() {
     return false;
 }
 
-void RenderCore::present_cached_xfb(
+void RenderCore::present_cached_display(
     bool black,
     bool present_swap_chain) {
     if (!initialized_ || !present_swap_chain) {
@@ -3279,7 +3279,7 @@ void RenderCore::present_cached_xfb(
                 queue_cv_.notify_one();
                 return;
             }
-            if (!back.efb_peek_only &&
+            if (!back.scene_peek_only &&
                 !back.present_only && !back.present_swap_chain) {
                 back.present_swap_chain = true;
                 back.black = black;
@@ -3324,7 +3324,7 @@ void RenderCore::render_thread_main() {
 #endif
         });
     }
-    EfbPeekRequest* active_peek = nullptr;
+    ScenePeekRequest* active_peek = nullptr;
     std::shared_ptr<PointerDepthCapture> active_pointer_depth;
     // Called with queue_mutex_ held. Never leave a stack-owned utility request
     // queued after its worker has failed. Notify while holding its mutex, so a
@@ -3332,7 +3332,7 @@ void RenderCore::render_thread_main() {
     const auto fail_queued_utilities = [&](std::exception_ptr error) {
         render_thread_error_ = error;
         stop_render_thread_ = true;
-        const auto fail_request = [&](EfbPeekRequest* request) {
+        const auto fail_request = [&](ScenePeekRequest* request) {
             if (request != nullptr) {
                 const std::lock_guard<std::mutex> request_lock(request->mutex);
                 request->error = error;
@@ -3357,9 +3357,9 @@ void RenderCore::render_thread_main() {
             capture->publish_complete();
         }
         for (FrameChunk& queued : frame_queue_) {
-            if (queued.efb_peek_only) {
-                EfbPeekRequest* request = queued.efb_peek_request;
-                queued.efb_peek_request = nullptr;
+            if (queued.scene_peek_only) {
+                ScenePeekRequest* request = queued.scene_peek_request;
+                queued.scene_peek_request = nullptr;
                 fail_request(request);
                 if (queued.pointer_depth_capture) {
                     queued.pointer_depth_capture->error=error;
@@ -3475,7 +3475,7 @@ void RenderCore::render_thread_main() {
             } else {
                 chunk = std::move(frame_queue_.front());
                 frame_queue_.pop_front();
-                if (!chunk.efb_peek_only &&
+                if (!chunk.scene_peek_only &&
                     !chunk.present_only && !chunk.present_swap_chain &&
                     !frame_queue_.empty() &&
                     frame_queue_.front().present_only) {
@@ -3484,8 +3484,8 @@ void RenderCore::render_thread_main() {
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.black = present.black;
                 }
-                if (chunk.efb_peek_only) {
-                    active_peek = chunk.efb_peek_request;
+                if (chunk.scene_peek_only) {
+                    active_peek = chunk.scene_peek_request;
                     active_pointer_depth = chunk.pointer_depth_capture;
                     ++utility_chunks_in_flight_;
                 } else if (chunk.present_only) {
@@ -3508,8 +3508,8 @@ void RenderCore::render_thread_main() {
                 poll_completed_pointer_depth_capture();
             } else if (have_chunk) {
                 queue_space_cv_.notify_all();
-                if (chunk.efb_peek_only) {
-                    execute_efb_peek_on_thread(chunk);
+                if (chunk.scene_peek_only) {
+                    execute_scene_peek_on_thread(chunk);
                     active_peek = nullptr;
                     active_pointer_depth.reset();
                 } else if (chunk.present_only) {
@@ -3517,14 +3517,14 @@ void RenderCore::render_thread_main() {
                     if (chunk.black) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
-                        present_cached_xfb_on_thread(true, false);
+                        present_cached_display_on_thread(true, false);
                     } else if (interp_log_waiting_ && renderer_.replay_available()) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
                         start_interp_sequence(interp_log_slot_);
                         advance_interp_sequence(false);
                     } else if (!interp_sequence_.active) {
-                        present_cached_xfb_on_thread(false, false);
+                        present_cached_display_on_thread(false, false);
                     } else {
                         ++interp_present_skipped_;
                     }
@@ -3554,7 +3554,7 @@ void RenderCore::render_thread_main() {
                 const std::int64_t now = galaxy::qpc_now();
                 if (now >= overlay_idle_due_qpc_) {
                     if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
-                        present_cached_xfb_on_thread(false, false, false,
+                        present_cached_display_on_thread(false, false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     }
                     overlay_idle_due_qpc_ += interp_slot_period_qpc_;
@@ -3567,7 +3567,7 @@ void RenderCore::render_thread_main() {
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (have_chunk) {
-                if (chunk.efb_peek_only) {
+                if (chunk.scene_peek_only) {
                     if (utility_chunks_in_flight_ != 0u) {
                         --utility_chunks_in_flight_;
                     }
@@ -3583,7 +3583,7 @@ void RenderCore::render_thread_main() {
             break;
         }
 
-        if (have_chunk && chunk.efb_peek_only) {
+        if (have_chunk && chunk.scene_peek_only) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (utility_chunks_in_flight_ != 0u) {
                 --utility_chunks_in_flight_;
@@ -3793,7 +3793,7 @@ void RenderCore::drain_pending_pointer_depth_capture() {
     }
 }
 
-void RenderCore::execute_efb_peek_on_thread(FrameChunk& chunk) {
+void RenderCore::execute_scene_peek_on_thread(FrameChunk& chunk) {
     drain_pending_pointer_depth_capture();
     if (chunk.pointer_depth_capture) {
         auto& capture=*chunk.pointer_depth_capture;
@@ -3812,7 +3812,7 @@ void RenderCore::execute_efb_peek_on_thread(FrameChunk& chunk) {
         capture.publish_complete();
         return;
     }
-    EfbPeekRequest* request = chunk.efb_peek_request;
+    ScenePeekRequest* request = chunk.scene_peek_request;
     if (request == nullptr) {
         return;
     }
@@ -3821,7 +3821,7 @@ void RenderCore::execute_efb_peek_on_thread(FrameChunk& chunk) {
         std::uint32_t value = 0;
         const bool success =
             request->depth_pixels.empty()
-                ? renderer_.peek_efb(request->x, request->y, request->kind, value)
+                ? renderer_.peek_scene(request->x, request->y, request->kind, value)
                 : renderer_.capture_pointer_depth(request->depth_pixels);
         {
             std::lock_guard<std::mutex> lock(request->mutex);
@@ -3841,7 +3841,7 @@ void RenderCore::execute_efb_peek_on_thread(FrameChunk& chunk) {
 }
 
 void RenderCore::present_vi_black(bool in_frame) {
-    const XfbTexture* layout = efb_copies_.latest();
+    const DisplayTexture* layout = scene_copies_.latest();
     if (layout == nullptr || (vi_black_shown_ && !native_settings_overlay_visible())) {
         return;
     }
@@ -3860,33 +3860,33 @@ void RenderCore::present_vi_black(bool in_frame) {
         renderer_.end_frame();
     }
     vi_black_shown_ = true;
-    // The frame the VI shows next is new to the display, even when it repeats the last XFB.
-    last_presented_xfb_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
+    // The frame the VI shows next is new to the display, even when it repeats the last display picture.
+    last_presented_display_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
 
 void RenderCore::present_latest_frame_on_thread() {
-    present_cached_xfb_on_thread(false, true, false);
+    present_cached_display_on_thread(false, true, false);
 }
 
-void RenderCore::present_cached_xfb_on_thread(
+void RenderCore::present_cached_display_on_thread(
     bool black,
     bool sleep_if_missing,
-    bool count_game_xfb_present,
+    bool count_game_display_present,
     std::optional<std::uint32_t> slot) {
-    if (count_game_xfb_present) {
-        ++stat_xfb_present_requests_;
+    if (count_game_display_present) {
+        ++stat_display_present_requests_;
     }
     const std::uint64_t current_present_epoch =
-        present_epoch_ + (count_game_xfb_present ? 1u : 0u);
+        present_epoch_ + (count_game_display_present ? 1u : 0u);
     if (black) {
-        if (count_game_xfb_present) {
+        if (count_game_display_present) {
             present_epoch_ = current_present_epoch;
             present_vi_black(false);
         }
         return;
     }
     vi_black_shown_ = false;
-    const XfbTexture* selected = slot ? efb_copies_.picture(*slot) : efb_copies_.latest();
+    const DisplayTexture* selected = slot ? scene_copies_.picture(*slot) : scene_copies_.latest();
     if (selected == nullptr) {
         if (sleep_if_missing) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -3895,27 +3895,27 @@ void RenderCore::present_cached_xfb_on_thread(
     }
     const bool duplicate_stamp =
         selected->copy_serial ==
-        last_presented_xfb_serial_.load(std::memory_order_relaxed);
+        last_presented_display_serial_.load(std::memory_order_relaxed);
     const bool skip_duplicate_present =
-        count_game_xfb_present &&
+        count_game_display_present &&
         duplicate_stamp &&
         !native_settings_overlay_visible();
-    if (count_game_xfb_present && !skip_duplicate_present &&
+    if (count_game_display_present && !skip_duplicate_present &&
         !native_settings_overlay_visible() && skip_for_present_rate()) {
         return;
     }
     if (skip_duplicate_present) {
-        record_skipped_duplicate_xfb_present(*selected);
+        record_skipped_duplicate_display_present(*selected);
         return;
     }
     const std::string snapshot_path = !interp_snapshot_path_.empty() ? interp_snapshot_path_
-        : !count_game_xfb_present ? std::string{} : present_snapshot_path();
+        : !count_game_display_present ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
         renderer_.set_capture_waits(snapshot_waits());
     }
     const bool game_frame_only =
-        interp_recording_ && count_game_xfb_present && !interp_presenting_real_ && !duplicate_stamp;
+        interp_recording_ && count_game_display_present && !interp_presenting_real_ && !duplicate_stamp;
     if (game_frame_only) {
         note_interp_real_present();
     }
@@ -3938,7 +3938,7 @@ void RenderCore::present_cached_xfb_on_thread(
     }
     if (!replayed) {
         renderer_.begin_frame(true);
-        // Present-only frames acquire no XFB textures, so EfbCopyManager retirement advances with
+        // Present-only frames acquire no display picture textures, so SceneCopyManager retirement advances with
         // render frames only; otherwise render-then-present would age XFBs twice per VI.
         (void)renderer_.present(selected, !snapshot_path.empty());
     }
@@ -3949,9 +3949,9 @@ void RenderCore::present_cached_xfb_on_thread(
     if (!replayed) {
         renderer_.end_frame();
     }
-    if (count_game_xfb_present) {
+    if (count_game_display_present) {
         present_epoch_ = current_present_epoch;
-        record_presented_xfb_copy(*selected);
+        record_presented_display_copy(*selected);
         last_presented_slot_.store(selected->slot, std::memory_order_relaxed);
     }
     renderer_.debug_log_backbuffer_readback();
@@ -3980,10 +3980,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     frame_draws_issued_ = 0;
     frame_draw_batches_ = 0;
     frame_draws_no_pso_ = 0;
-    frame_xfb_copies_ = 0;
+    frame_display_copies_ = 0;
     frame_tex_copies_ = 0;
-    frame_efb_alias_updates_ = 0;
-    frame_efb_alias_noops_ = 0;
+    frame_scene_alias_updates_ = 0;
+    frame_scene_alias_noops_ = 0;
     frame_texture_binding_cache_hits_ = 0;
     frame_texture_binding_cache_misses_ = 0;
     frame_texture_binding_cache_prunes_ = 0;
@@ -4018,7 +4018,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     frame_cached_vertex_validation_us_ = 0;
     frame_cached_vertex_upload_us_ = 0;
     frame_draw_record_us_ = 0;
-    frame_efb_copy_us_ = 0;
+    frame_scene_copy_us_ = 0;
     frame_resident_vertex_hits_ = 0;
     frame_resident_vertex_bytes_ = 0;
     frame_curved_flat_triangles_ = 0;
@@ -4056,7 +4056,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             }
         }
         renderer_.begin_frame(chunk.present_swap_chain);
-        xfb_copied_in_chunk_ = false;
+        display_copied_in_chunk_ = false;
         {
             // Interpolated redraw: present rate above 60 with the temporal
             // upscaler off. Decided per render chunk.
@@ -4089,10 +4089,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             bloom_route_.store(route, std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
-        // begin_frame() applies a pending internal-resolution change, so copies take the scale the EFB
+        // begin_frame() applies a pending internal-resolution change, so copies take the scale the scene target
         // has now, not the setting, which can change in between.
-        if (renderer_.efb_scale() != efb_copies_.efb_scale()) {
-            efb_copies_.set_efb_scale(renderer_.efb_scale());
+        if (renderer_.scene_target_scale() != scene_copies_.scene_target_scale()) {
+            scene_copies_.set_scene_target_scale(renderer_.scene_target_scale());
         }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
@@ -4117,7 +4117,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 resident_vertices_.advance_frame();
             }
         }
-        efb_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+        scene_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();
         if (retirement_revision != seen_texture_retirement_revision_) {
@@ -4217,15 +4217,15 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     matrix_blocks_valid_ = false;
     scene_chunk_restart_ = true;
 
-    // Bind EFB with default (null) viewport. The XF viewport registers
+    // Bind scene target with default (null) viewport. The XF viewport registers
     // will provide the actual values once processed from the FIFO.
-    renderer_.bind_efb();
+    renderer_.bind_scene();
 
-    // GX keeps the EFB across frames; only an EFB copy with the clear bit set clears it (on_efb_copy,
+    // GX keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
     // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
-    if (!efb_seeded_) {
-        efb_seeded_ = true;
-        renderer_.clear_efb(0u, 0x00FFFFFFu, true, true, true);
+    if (!scene_seeded_) {
+        scene_seeded_ = true;
+        renderer_.clear_scene(0u, 0x00FFFFFFu, true, true, true);
     }
 
     const auto parse_start = frame_timing_enabled
@@ -4328,33 +4328,33 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // The chunk with a game frame's end presents its picture (present_on_copy_enabled); a present between frames
     // shows the newest. Not while the output is black, the settings overlay draws over every present, or presents are paced elsewhere
     // (interpolation, a temporal upscaler, frame generation).
-    const bool copy_present = !chunk.present_swap_chain && xfb_copied_in_chunk_ && present_on_copy_enabled() &&
+    const bool copy_present = !chunk.present_swap_chain && display_copied_in_chunk_ && present_on_copy_enabled() &&
         frame_end_presents_.load(std::memory_order_relaxed) &&
         !interp_recording_ && !vi_black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
         !frame_generation_running();
     const bool presents = chunk.present_swap_chain || copy_present;
     if (presents) {
-        ++stat_xfb_present_requests_;
+        ++stat_display_present_requests_;
     }
     const std::uint64_t current_present_epoch =
         presents ? present_epoch_ + 1u : present_epoch_;
-    const XfbTexture* const selected_xfb = chunk.black ? nullptr : efb_copies_.latest();
-    const bool duplicate_xfb_present =
-        selected_xfb != nullptr &&
-        selected_xfb->copy_serial ==
-            last_presented_xfb_serial_.load(std::memory_order_relaxed);
+    const DisplayTexture* const selected_display = chunk.black ? nullptr : scene_copies_.latest();
+    const bool duplicate_display_present =
+        selected_display != nullptr &&
+        selected_display->copy_serial ==
+            last_presented_display_serial_.load(std::memory_order_relaxed);
     const bool skip_duplicate_present =
         presents &&
-        duplicate_xfb_present &&
+        duplicate_display_present &&
         !native_settings_overlay_visible();
     const bool skip_rate_present =
         presents &&
-        selected_xfb != nullptr &&
+        selected_display != nullptr &&
         !skip_duplicate_present &&
         !native_settings_overlay_visible() &&
         skip_for_present_rate();
     bool present_swap_chain =
-        presents && selected_xfb != nullptr &&
+        presents && selected_display != nullptr &&
         !skip_duplicate_present && !skip_rate_present;
     const bool present_black = chunk.present_swap_chain && chunk.black;
     if (present_black) {
@@ -4369,10 +4369,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         // frame after them (started by the render loop after this chunk).
         // As on the VI-present path, a present while a completed log waits
         // starts that log's sequence, even one the duplicate or rate checks
-        // would drop: the VI may still name the previous XFB (the guest flips
+        // would drop: the VI may still name the previous display picture (the guest flips
         // at the next retrace), and the waiting frame would be skipped when
         // the next one closes first.
-        if (interp_log_waiting_ && chunk.present_swap_chain && selected_xfb != nullptr &&
+        if (interp_log_waiting_ && chunk.present_swap_chain && selected_display != nullptr &&
             renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;
@@ -4380,7 +4380,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // Another frame presents now: the playing one is superseded.
             supersede_interp_sequence();
         }
-        if (present_swap_chain && !duplicate_xfb_present) {
+        if (present_swap_chain && !duplicate_display_present) {
             note_interp_real_present();
         }
     }
@@ -4397,14 +4397,14 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             : std::chrono::steady_clock::time_point{};
         if (copy_present) {
             renderer_.wait_for_frame_latency_before_present();
-            copy_presented_serial_ = selected_xfb->copy_serial;
+            copy_presented_serial_ = selected_display->copy_serial;
         }
         const std::string snapshot_path = present_snapshot_path();
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
             renderer_.set_capture_waits(snapshot_waits());
         }
-        renderer_.present(selected_xfb, !snapshot_path.empty());
+        renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, {});
             renderer_.set_capture_waits(false);
@@ -4417,8 +4417,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         present_vi_black(true);
     }
     // A VI naming the frame its copy already presented skipped nothing.
-    if (skip_duplicate_present && selected_xfb->copy_serial != copy_presented_serial_) {
-        record_skipped_duplicate_xfb_present(*selected_xfb);
+    if (skip_duplicate_present && selected_display->copy_serial != copy_presented_serial_) {
+        record_skipped_duplicate_display_present(*selected_display);
     }
     const auto end_frame_start = frame_timing_enabled
         ? std::chrono::steady_clock::now()
@@ -4447,10 +4447,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         },
         &submission_context);
     if (presents && present_swap_chain &&
-        selected_xfb != nullptr) {
+        selected_display != nullptr) {
         present_epoch_ = current_present_epoch;
-        record_presented_xfb_copy(*selected_xfb);
-        last_presented_slot_.store(selected_xfb->slot, std::memory_order_relaxed);
+        record_presented_display_copy(*selected_display);
+        last_presented_slot_.store(selected_display->slot, std::memory_order_relaxed);
     } else if (present_black) {
         present_epoch_ = current_present_epoch;
     }
@@ -4537,10 +4537,10 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " draws=" << frame_draws_issued_
                   << " draw-batches=" << frame_draw_batches_
                   << " no-pso=" << frame_draws_no_pso_
-                  << " xfb-copies=" << frame_xfb_copies_
+                  << " xfb-copies=" << frame_display_copies_
                   << " tex-copies=" << frame_tex_copies_
-                  << " efb-alias-updates=" << frame_efb_alias_updates_
-                  << " efb-alias-noops=" << frame_efb_alias_noops_
+                  << " efb-alias-updates=" << frame_scene_alias_updates_
+                  << " efb-alias-noops=" << frame_scene_alias_noops_
                   << " texture-binding-cache-hits="
                   << frame_texture_binding_cache_hits_
                   << " texture-binding-cache-misses="
@@ -4600,7 +4600,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " immutable-vertex-copied-bytes=" << renderer_.vertex_ring().copied_bytes()
                   << " immutable-vertex-uploads=" << renderer_.vertex_ring().immutable_upload_calls()
                   << " draw-record-us=" << frame_draw_record_us_
-                  << " efb-copy-us=" << frame_efb_copy_us_
+                  << " efb-copy-us=" << frame_scene_copy_us_
                   << " resident-vtx-hits=" << frame_resident_vertex_hits_
                   << " curved-split-draws=" << frame_curved_split_draws_
                   << " curved-flat-tris=" << frame_curved_flat_triangles_
@@ -4619,11 +4619,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << texture_cache_.decoded_map_stats().evicted_bytes
                   << " decoded-tex-entries="
                   << texture_cache_.decoded_map_stats().entries
-                  // EFB-copy destinations are allocated at the internal resolution (bytes grow with efb_scale^2).
+                  // scene target-copy destinations are allocated at the internal resolution (bytes grow with scene_target_scale^2).
                   << " efb-copy-dest-bytes="
-                  << renderer_.efb_copy_dest_bytes()
+                  << renderer_.scene_copy_dest_bytes()
                   << " efb-copy-dest-budget-bytes="
-                  << renderer_.efb_copy_dest_budget_bytes()
+                  << renderer_.scene_copy_dest_budget_bytes()
                   << '\n';
             std::cerr << timing_message.str();
         }
@@ -4673,8 +4673,8 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
     std::uint8_t map_mask,
     const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
     std::array<std::uint32_t, kMaxTextureMaps> keys{};
-    const auto efb_scale_log2_x32 = static_cast<std::uint8_t>(std::clamp(
-        std::lround(32.0 * std::log2(static_cast<double>(std::max(1u, renderer_.efb_scale())))), 0l, 127l));
+    const auto scene_target_scale_log2_x32 = static_cast<std::uint8_t>(std::clamp(
+        std::lround(32.0 * std::log2(static_cast<double>(std::max(1u, renderer_.scene_target_scale())))), 0l, 127l));
     for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
         if ((map_mask & (1u << map)) == 0u) {
             continue;
@@ -4682,7 +4682,7 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
         const TextureHandle& handle = handles[map];
         keys[map] = pack_sampler_key(
             draw_state_.texture[map].mode, handle.generated_mips, handle.mip_levels,
-            handle.lod_shift_x16, handle.lod_arbitrary, efb_scale_log2_x32);
+            handle.lod_shift_x16, handle.lod_arbitrary, scene_target_scale_log2_x32);
     }
     // Unused slots still get valid zero-key descriptors, but cannot fragment
     // the table cache. map_mask includes both direct and indirect sampling.
@@ -4975,9 +4975,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     if (rs_dirty) {
         render_state_key_ = build_render_state_key(draw_state_);
     }
-    // The EFB's variant (its samples per pixel, MSAA, the output EFB has one; the HDR scene EFB) decides the
+    // The scene target's variant (its samples per pixel, MSAA, the output scene target has one; the HDR scene scene target) decides the
     // pipeline's too.
-    const std::uint8_t samples_log2 = renderer_.efb_variant();
+    const std::uint8_t samples_log2 = renderer_.scene_variant();
     // A curved draw after another keeps its patch topology (its variant is settled below).
     const bool keep_patch =
         curved && (render_state_key_.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
@@ -4989,8 +4989,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
     // Blended triangles (no dual-source alpha) write the reactive mask.
-    // The game's scene runs on an RGBA6 EFB (MainLoopFramework::preGX), where every blend that reads the source alpha
-    // is dual-source (needs_dual_src_alpha): it blends at the TEV's 8-bit alpha, not the EFB's 6-bit one, and under
+    // The game's scene runs on an RGBA6 scene target (MainLoopFramework::preGX), where every blend that reads the source alpha
+    // is dual-source (needs_dual_src_alpha): it blends at the TEV's 8-bit alpha, not the scene target's 6-bit one, and under
     // constant destination alpha (GXSetDstAlpha: the translucent lists, Mario, shadows) writes the constant instead.
     // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the
     // water's and clear surfaces' cover: a fall's spray was painted over). In a temporal scene such a draw blends
@@ -5030,15 +5030,15 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             render_state_key_.blend_bits = bb;
         }
         // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
-        // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
-        const auto reads_efb = [has_alpha = draw_state_.frame_alpha](BlendFactor f, bool source) {
+        // read the scene target (its colour or, on an scene target with alpha, its alpha) blends the same into the layer's targets.
+        const auto reads_scene = [has_alpha = draw_state_.frame_alpha](BlendFactor f, bool source) {
             const auto v = static_cast<std::uint32_t>(f);
             (void)source;
             return v == 8u || v == 9u || (has_alpha && (v == 6u || v == 7u));  // the destination's colour or alpha
         };
         const bool layer = reactive && renderer_.layer_window() &&
                            (blend_mode.subtract ||
-                            (!reads_efb(blend_mode.src_factor, true) && !reads_efb(blend_mode.dst_factor, false)));
+                            (!reads_scene(blend_mode.src_factor, true) && !reads_scene(blend_mode.dst_factor, false)));
         const std::uint32_t rs_bits = (writer ? kRenderStateMotionTarget : 0u) |
                                       (reactive ? kRenderStateReactiveTarget : 0u) |
                                       (layer ? kRenderStateLayerTarget : 0u);
@@ -5226,7 +5226,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         const VertexConstants& vs_c = cpu_vs_constants_.update(
-            matrices_, draw_state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
+            matrices_, draw_state_, dirty, renderer_.scene_target_scale(), frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
@@ -5236,7 +5236,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         {
             // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
             auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
-            native_vs->draw_header[1] = renderer_.efb_scale();
+            native_vs->draw_header[1] = renderer_.scene_target_scale();
             native_vs->draw_header[2] = native_pe;
             native_vs->draw_header[3] = native_texmtx;
             for (unsigned i = 0; i < 8u; ++i) {
@@ -5255,7 +5255,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // Texture tables are refreshed only when a texture input changed. tex_dirty covers every input:
     // the binding key is captured only under kDirtyTex or the two binding flags, so otherwise the
     // result would be the current tables. dirty_texture_aliases_ outlives a flush (cleared by
-    // prune_dirty_texture_binding_tables()) and is honoured even without tex_dirty, or an EFB-alias
+    // prune_dirty_texture_binding_tables()) and is honoured even without tex_dirty, or an scene target-alias
     // copy followed by matrix-only flushes would keep its entries for the rest of the frame. Most
     // flushes carry kDirtyXfMatrices alone (the game loads matrices per object with LOAD_INDX).
     if (tex_dirty || !dirty_texture_aliases_.empty()) {
@@ -5755,7 +5755,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.luma = (record.target_flags & 4u) != 0u;        // NEBULA_CAPTURE_LUMA
         request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
         request.filtered = (record.target_flags & 16u) != 0u;   // NEBULA_CAPTURE_FILTERED
-        on_efb_copy(request);
+        on_scene_copy(request);
         return;
     }
     case shapes::Record::Kind::FrameShow: {
@@ -5764,13 +5764,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.src_height = static_cast<std::uint16_t>(((record.target_height - 1u) & 0x3FFu) + 1u);
         request.display = true;
         request.filtered = (record.target_flags & 16u) != 0u;  // NEBULA_CAPTURE_FILTERED
-        on_efb_copy(request);
+        on_scene_copy(request);
         return;
     }
     case shapes::Record::Kind::FrameClear: {
         // The values as the game gave them (alpha 255 on a frame without alpha).
         flush_pending_draw_batch();
-        renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+        renderer_.clear_scene(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
                             (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
                             record.target_y, record.target_width, record.target_height,
                             frame_format());
@@ -5779,7 +5779,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::TargetClear:
         if (renderer_.target_pass_active()) {
             flush_pending_draw_batch();
-            renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+            renderer_.clear_scene(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
                                 (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u,
                                 target_pass_size_[0], target_pass_size_[1], frame_format());
         }
@@ -5802,7 +5802,7 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
     }
     target_pass_size_ = {record.target_width, record.target_height};
     frame_bindings_dirty_ = true;
-    renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
+    renderer_.clear_scene(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
                         record.target_width, record.target_height, frame_format());
 }
 
@@ -6271,11 +6271,11 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.sealed = false;
 }
 
-void RenderCore::on_efb_copy(const CaptureRequest& params) {
+void RenderCore::on_scene_copy(const CaptureRequest& params) {
     flush_pending_draw_batch();
     if (params.display) {
-        galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, stat_xfb_copies_);
-        xfb_copied_in_chunk_ = true;
+        galaxy::timeline::record(galaxy::timeline::Event::DisplayCopy, stat_display_copies_);
+        display_copied_in_chunk_ = true;
     }
     const bool time_copy = frame_time_detail_;
     const auto copy_start = time_copy
@@ -6284,56 +6284,56 @@ void RenderCore::on_efb_copy(const CaptureRequest& params) {
 
 
     if (params.display) {
-        XfbTexture* xfb = efb_copies_.acquire_xfb(params, frame_index_);
-        if (xfb != nullptr) {
+        DisplayTexture* display_picture = scene_copies_.acquire_display(params, frame_index_);
+        if (display_picture != nullptr) {
             end_side_layer();
             mirror_opened_scene_ = false;
             // The frame ends: the next is recorded as screen-only from its first draw when this one drew no scene.
             screen_run_ = !frame_scene_seen_;
             frame_scene_seen_ = false;
             screen_frame_open_ = false;
-            if (renderer_.can_hand_over_display_copy(params, *xfb)) {
-                // Native presentation: the XFB takes the EFB's colour target, and the EFB continues on a texture of
-                // its size the XFB pool released.
-                const auto scale = renderer_.efb_scale();
-                efb_copies_.adopt_picture(
-                    *xfb, renderer_.hand_over_efb_color(efb_copies_.take_idle_texture(
+            if (renderer_.can_hand_over_display_copy(params, *display_picture)) {
+                // Native presentation: the display picture takes the scene target's colour target, and the scene target continues on a texture of
+                // its size the display picture pool released.
+                const auto scale = renderer_.scene_target_scale();
+                scene_copies_.adopt_picture(
+                    *display_picture, renderer_.hand_over_scene_color(scene_copies_.take_idle_texture(
                               static_cast<std::uint16_t>(kFrameWidth * scale),
                               static_cast<std::uint16_t>(kFrameHeight * scale))));
             } else {
-                renderer_.copy_efb_to_xfb(params, *xfb);
+                renderer_.copy_scene_to_display(params, *display_picture);
             }
             // The display copy ends the 2D layer: later work and the next
-            // frame use the render-resolution EFB again.
-            display_copy_on_output_ = renderer_.output_efb_active() && !params.clear;
-            if (renderer_.output_efb_active()) {
-                renderer_.end_output_efb();
-                efb_copies_.set_efb_scale(renderer_.efb_scale());
+            // frame use the render-resolution scene target again.
+            display_copy_on_output_ = renderer_.output_scene_active() && !params.clear;
+            if (renderer_.output_scene_active()) {
+                renderer_.end_output_scene();
+                scene_copies_.set_scene_target_scale(renderer_.scene_target_scale());
                 frame_bindings_dirty_ = true;
             }
             static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;
             if (trace_layout) {
                 const std::array<unsigned,7> current{params.src_x,params.src_y,params.src_width,params.src_height,
-                    xfb->width,xfb->height,renderer_.efb_scale()};
+                    display_picture->width,display_picture->height,renderer_.scene_target_scale()};
                 static std::array<std::array<unsigned,7>,8> seen{};
                 static unsigned count{};
                 if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
                     seen[count++]=current;
-                    const auto scale=renderer_.efb_scale();
+                    const auto scale=renderer_.scene_target_scale();
                     std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
                         <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
-                        <<" scaled-xfb="<<xfb->width<<'x'<<xfb->height
-                        <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<xfb->copy_serial<<'\n';
+                        <<" scaled-xfb="<<display_picture->width<<'x'<<display_picture->height
+                        <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<display_picture->copy_serial<<'\n';
                 }
             }
-            xfb->pointer_response=render_pointer_response_;
-            xfb->prerecorded_movie=render_movie_content_;
-            xfb->safety_surround=render_safety_surround_;
-            efb_copies_.mark_xfb_copied(*xfb, frame_index_);
-            ++stat_xfb_copies_;
-            ++frame_xfb_copies_;
-            record_monotonic_cadence_sample(xfb_copy_production_cadence_);
+            display_picture->pointer_response=render_pointer_response_;
+            display_picture->prerecorded_movie=render_movie_content_;
+            display_picture->safety_surround=render_safety_surround_;
+            scene_copies_.mark_display_copied(*display_picture, frame_index_);
+            ++stat_display_copies_;
+            ++frame_display_copies_;
+            record_monotonic_cadence_sample(display_copy_production_cadence_);
         }
     } else {
         ++frame_tex_copies_;
@@ -6341,21 +6341,21 @@ void RenderCore::on_efb_copy(const CaptureRequest& params) {
         const bool decoded_evicted = texture_cache_.forget(params.key) != 0u;
         const bool is_depth_copy = params.depth;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
-        // console's single EFB holds it, not the scene the output-resolution 2D layer was drawn over.
+        // console's single scene target holds it, not the scene the output-resolution 2D layer was drawn over.
         const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
         display_copy_on_output_ = display_copy_on_output_ && !params.clear;
         const bool alias_updated = from_display
-            ? renderer_.copy_output_efb_to_texture(params, texture_cache_)
-            : renderer_.copy_efb_to_texture(params, texture_cache_, is_depth_copy);
+            ? renderer_.copy_output_scene_to_texture(params, texture_cache_)
+            : renderer_.copy_scene_to_texture(params, texture_cache_, is_depth_copy);
         if (alias_updated || decoded_evicted) {
-            ++frame_efb_alias_updates_;
+            ++frame_scene_alias_updates_;
             // One address can alternate between format-keyed GPU resources, and the game need not
             // rewrite the BP texture registers after a copy, so the next draw refreshes every frame table
             // that referenced this alias. A reused texture is updated in place; its SRV stays valid.
             mark_texture_binding_alias_dirty(params);
             texture_bindings_dirty_ = true;
         } else {
-            ++frame_efb_alias_noops_;
+            ++frame_scene_alias_noops_;
         }
     }
 
@@ -6365,7 +6365,7 @@ void RenderCore::on_efb_copy(const CaptureRequest& params) {
     // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest. GXCopyTex's
     // own clear settings leave those enables as they were.
     if (params.clear) {
-        renderer_.clear_efb(
+        renderer_.clear_scene(
             0u,
             0x00FFFFFFu,
             draw_state_.blend.color_update, draw_state_.blend.alpha_update, draw_state_.z.update_enable,
@@ -6377,7 +6377,7 @@ void RenderCore::on_efb_copy(const CaptureRequest& params) {
         ? elapsed_us(copy_start, std::chrono::steady_clock::now())
         : 0u;
     if (time_copy) {
-        frame_efb_copy_us_ += copy_us;
+        frame_scene_copy_us_ += copy_us;
     }
     if (trace_gx_stalls_enabled() &&
         copy_us >= trace_gx_stall_threshold_us()) {

@@ -162,14 +162,14 @@ int main() {
     // A page from its first setting row: back one page and forward again.
     const auto page_start = [&] { return key(VK_PRIOR) && key(VK_NEXT); };
     galaxy::render::RenderConfig render{};
-    render.efb_scale = 2u;
+    render.scene_target_scale = 2u;
     render.internal_follow_window = false;
     render.display_mode = galaxy::render::kDisplayWindowed;
     render.aspect_mode = 0u;
     render.vsync_interval = 0u;
     render.hud_output_resolution = true;
     galaxy::render::set_render_config(render);
-    galaxy::render::stage_next_start_efb_scale(render.efb_scale);
+    galaxy::render::stage_next_start_scene_target_scale(render.scene_target_scale);
     passed &= expect(reopen() && page_start(), "reopening takes a fresh draft");
     for (int i = 0; i < 4; ++i) passed &= expect(key(VK_DOWN), "down moves to the aspect ratio");
     passed &= expect(key(VK_RIGHT), "right selects 4:3");
@@ -247,13 +247,13 @@ int main() {
     passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down moves to the internal resolution");
     passed &= expect(key(VK_LEFT), "left lowers the internal resolution in the draft");
     passed &= expect(
-        galaxy::render::native_settings_draft_for_tests().efb_scale == 1u &&
-            galaxy::render::get_render_config().efb_scale == 2u &&
+        galaxy::render::native_settings_draft_for_tests().scene_target_scale == 1u &&
+            galaxy::render::get_render_config().scene_target_scale == 2u &&
             galaxy::render::native_settings_overlay_snapshot().pending_changes == 1u,
         "a change waits in the draft until applied");
     passed &= expect(key(VK_RETURN), "Enter applies");
     passed &= expect(
-        galaxy::render::get_render_config().efb_scale == 1u &&
+        galaxy::render::get_render_config().scene_target_scale == 1u &&
             galaxy::render::native_settings_overlay_snapshot().pending_changes == 0u &&
             !galaxy::render::native_settings_overlay_snapshot().confirming_display,
         "Enter applies the scale live and needs no display confirmation");
@@ -339,10 +339,10 @@ int main() {
     // menu opened.
     render = galaxy::render::get_render_config();
     render.internal_follow_window = true;
-    render.efb_scale = 6u;
+    render.scene_target_scale = 6u;
     galaxy::render::set_render_config(render);
     passed &= expect(reopen(), "reopen on the graphics page");
-    render.efb_scale = 4u;
+    render.scene_target_scale = 4u;
     galaxy::render::set_render_config(render);
     // The cursor is on LIGHTING, at its last value (ENHANCED).
     passed &= expect(key(VK_LEFT) &&
@@ -351,11 +351,11 @@ int main() {
                      "an unrelated change applies");
     passed &= expect(
         galaxy::render::get_render_config().internal_follow_window &&
-            galaxy::render::get_render_config().efb_scale == 4u,
+            galaxy::render::get_render_config().scene_target_scale == 4u,
         "apply keeps the followed internal resolution");
     render = galaxy::render::get_render_config();
     render.internal_follow_window = false;
-    render.efb_scale = 2u;
+    render.scene_target_scale = 2u;
     galaxy::render::set_render_config(render);
     passed &= expect(reopen(), "back on the graphics page");
 

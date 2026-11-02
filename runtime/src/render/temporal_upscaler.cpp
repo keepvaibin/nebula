@@ -46,7 +46,7 @@ public:
             return false;
         }
         FfxFsr3UpscalerContextDescription description{};
-        // The EFB is reversed-Z gamma RGBA8 without an exposure source.
+        // The scene target is reversed-Z gamma RGBA8 without an exposure source.
         description.flags = FFX_FSR3UPSCALER_ENABLE_DEPTH_INVERTED |
                             FFX_FSR3UPSCALER_ENABLE_AUTO_EXPOSURE;
         description.maxRenderSize = {max_render_width, max_render_height};
@@ -89,9 +89,9 @@ public:
         FfxFsr3UpscalerDispatchDescription d{};
         d.commandList = ffxGetCommandListDX12(in.list);
         d.color = ffxGetResourceDX12(in.color, ffxGetResourceDescriptionDX12(in.color),
-                                     L"Nebula EFB color", FFX_RESOURCE_STATE_RENDER_TARGET);
+                                     L"Nebula scene target color", FFX_RESOURCE_STATE_RENDER_TARGET);
         d.depth = ffxGetResourceDX12(in.depth, ffxGetResourceDescriptionDX12(in.depth),
-                                     L"Nebula EFB depth", FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT);
+                                     L"Nebula scene target depth", FFX_RESOURCE_STATE_DEPTH_ATTACHEMENT);
         if (in.motion != nullptr) {
             d.motionVectors = ffxGetResourceDX12(
                 in.motion, ffxGetResourceDescriptionDX12(in.motion),

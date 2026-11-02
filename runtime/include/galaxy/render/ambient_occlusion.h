@@ -23,10 +23,10 @@ namespace galaxy::render {
 class DescriptorRing;
 
 // Ambient occlusion of the 3D scene (RenderConfig::ambient_occlusion; ambient_occlusion.hlsl): ground-truth ambient
-// occlusion from the EFB's depth, multiplied into its colour after the opaque phases, before the translucent ones
+// occlusion from the scene target's depth, multiplied into its colour after the opaque phases, before the translucent ones
 // (glass, water, glows and effects stay as drawn). Every perspective scene gets it, the game's baked map geometry
 // included; ray-traced lighting has its own. Occlusion is computed at the game's own resolution (one occlusion pixel
-// per internal-scale x internal-scale EFB pixels, upsampled by depth), so its cost follows the game's 640x456
+// per internal-scale x internal-scale scene target pixels, upsampled by depth), so its cost follows the game's 640x456
 // picture, not the internal resolution.
 class AmbientOcclusion {
 public:
@@ -42,14 +42,14 @@ public:
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
     struct Inputs {
-        ID3D12Resource* depth = nullptr;  // the EFB's single-sample depth, in a shader-readable state
+        ID3D12Resource* depth = nullptr;  // the scene target's single-sample depth, in a shader-readable state
         unsigned width = 0;               // its size in pixels
         unsigned height = 0;
-        unsigned efb_scale = 1;           // EFB pixels per game pixel
-        D3D12_CPU_DESCRIPTOR_HANDLE color_rtv{};  // the EFB's colour (multisampled with MSAA)
+        unsigned scene_target_scale = 1;           // scene target pixels per game pixel
+        D3D12_CPU_DESCRIPTOR_HANDLE color_rtv{};  // the scene target's colour (multisampled with MSAA)
         unsigned samples = 1;
-        bool hdr = false;                 // the colour is the HDR scene EFB (kEfbHdrColorFormat)
-        RtView view{};                    // the scene's projection, depth range and viewport (EFB pixels)
+        bool hdr = false;                 // the colour is the HDR scene scene target (kSceneHdrColorFormat)
+        RtView view{};                    // the scene's projection, depth range and viewport (scene target pixels)
     };
     // Records the occlusion and multiplies it into `color_rtv`'s RGB. Leaves this pass's root signatures, pipeline
     // and render target bound. Returns false when nothing was recorded.

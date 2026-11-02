@@ -39,7 +39,7 @@ extern std::string native_settings_content_root;
 extern std::atomic<bool> borderless_active;
 extern std::atomic<bool> exclusive_fullscreen_active;
 // The last internal resolution refused for the video-memory budget (0: none).
-extern std::atomic<unsigned> efb_scale_rejected;
+extern std::atomic<unsigned> scene_target_scale_rejected;
 // The window is being moved or sized.
 extern std::atomic<bool> move_size_active;
 // The window was closed.
@@ -59,7 +59,7 @@ extern std::atomic<bool> surface_withdrawn;
 extern std::timed_mutex surface_use;
 
 // The internal resolution that fills the display.
-[[nodiscard]] unsigned display_efb_scale_cap();
+[[nodiscard]] unsigned display_scene_target_scale_cap();
 // Saves changed settings; false (kept dirty for a retry) when a file could not be written.
 bool flush_native_settings_if_dirty();
 // Takes a config.ini that Nebula Settings changed while the game runs.

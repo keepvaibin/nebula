@@ -37,8 +37,8 @@ struct LinePointValues {
     const LinePointValues& values,
     float viewport_width,
     float viewport_height,
-    unsigned efb_scale,
-    unsigned fallback_efb_width = 640u,
-    unsigned fallback_efb_height = 456u) noexcept;
+    unsigned scene_target_scale,
+    unsigned fallback_scene_width = 640u,
+    unsigned fallback_scene_height = 456u) noexcept;
 
 }  // namespace galaxy::render

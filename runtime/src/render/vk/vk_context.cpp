@@ -838,7 +838,7 @@ TextureRef create_render_texture(Device*, std::uint32_t width, std::uint32_t hei
         width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        true, "XFB copy");
+        true, "display picture copy");
 }
 
 }  // namespace galaxy::render::gpu

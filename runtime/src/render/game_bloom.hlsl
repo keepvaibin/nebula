@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's bloom at the internal resolution (game_bloom.h): BloomEffect's and BloomEffectSimple's chains as one
-// operator on the EFB, with the game's own thresholds, blur radii and intensities.
+// operator on the scene target, with the game's own thresholds, blur radii and intensities.
 //
-// DownCS: the source's region in boxes of c_size.z x c_size.z texels (each texel clamped to 1, as the 8-bit EFB keeps
+// DownCS: the source's region in boxes of c_size.z x c_size.z texels (each texel clamped to 1, as the 8-bit scene target keeps
 // it) into u0.
 // BoxCS: a box of c_params.x texels along axis c_size.w (the game's 4 x 4 pixel workspace texel at the internal
 // resolution); with c_params.y >= 0 the selection after it: the colour where its intensity (GX_TF_I8) or channel
@@ -77,7 +77,7 @@ void BoxCS(uint3 id : SV_DispatchThreadID) {
     }
     float3 c = sum / c_params.x;
     if (c_params.y >= 0.0f) {
-        // The 8-bit value the copy would hold: intensity as the EFB copy converts it (BT.601, 16-235), or a channel.
+        // The 8-bit value the copy would hold: intensity as the scene target copy converts it (BT.601, 16-235), or a channel.
         const uint channel = uint(c_params.z);
         const float value = channel == 0u ? dot(c, float3(66.0f, 129.0f, 25.0f)) * (255.0f / 256.0f) + 16.0f
                                           : c[min(channel, 3u) - 1u] * 255.0f;

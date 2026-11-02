@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// AmbientOcclusion: GTAO from the EFB depth, multiplied into the scene colour (ambient_occlusion.h).
+// AmbientOcclusion: GTAO from the scene target depth, multiplied into the scene colour (ambient_occlusion.h).
 #include "galaxy/render/ambient_occlusion.h"
 
 #include "galaxy/render/renderer_d3d12.h"
@@ -117,7 +117,7 @@ void AmbientOcclusion::shutdown() noexcept {
     device_ = nullptr;
 }
 
-// The multiply: the shader's output times the EFB's colour (RGB; the game's alpha stays), no depth. `view`: the
+// The multiply: the shader's output times the scene target's colour (RGB; the game's alpha stays), no depth. `view`: the
 // shader's output replaces the colour (GALAXY_AO_VIEW).
 ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr, bool view) {
     const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) +
@@ -147,7 +147,7 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     pd.DepthStencilState.DepthEnable = FALSE;
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
-    pd.RTVFormats[0] = hdr ? kEfbHdrColorFormat : kEfbColorFormat;
+    pd.RTVFormats[0] = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = 1u << (index & 3u);
     if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&apply_[index])))) {
         std::cerr << "[ambient-occlusion] multiply pipeline failed for " << (1u << (index & 3u)) << " samples\n";
@@ -218,8 +218,8 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         return getenv_s(&length, value, sizeof(value), "GALAXY_AO_VIEW") == 0 && length > 1 && value[0] == '1';
     }();
     ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr, view);
-    // The game's resolution: one occlusion pixel per internal-scale x internal-scale EFB pixels.
-    const unsigned divisor = std::max(in.efb_scale, 1u);
+    // The game's resolution: one occlusion pixel per internal-scale x internal-scale scene target pixels.
+    const unsigned divisor = std::max(in.scene_target_scale, 1u);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
     if (apply == nullptr ||
@@ -230,7 +230,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     }
 
     Constants c{};
-    // An EFB pixel centre's eye ray (z = -1): NDC from the viewport, then through the projection (x' = A x + B z).
+    // An scene target pixel centre's eye ray (z = -1): NDC from the viewport, then through the projection (x' = A x + B z).
     const float a = in.view.projection[0];
     const float b = in.view.projection[1];
     const float cy = in.view.projection[2];
@@ -262,11 +262,11 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     c.size[2] = divisor;
     c.size[3] = view ? 1u : 0u;
 
-    // Two SRV tables (t0 the EFB depth, t1 an occlusion target, t2 the distances: {denoised} for the distance,
+    // Two SRV tables (t0 the scene target depth, t1 an occlusion target, t2 the distances: {denoised} for the distance,
     // occlusion and multiply passes, {raw} for the denoise), then the three targets' UAVs.
     ID3D12Device* const device = device_;
     D3D12_SHADER_RESOURCE_VIEW_DESC depth_view{};
-    depth_view.Format = kEfbDepthSrvFormat;
+    depth_view.Format = kSceneDepthSrvFormat;
     depth_view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     depth_view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     depth_view.Texture2D.MipLevels = 1;

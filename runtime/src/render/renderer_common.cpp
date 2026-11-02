@@ -348,7 +348,7 @@ std::string_view depth_carry_pixel_shader_source() noexcept {
     return {kDepthCarryPs, sizeof(kDepthCarryPs) - 1u};
 }
 
-std::string_view efb_conversion_shader_source() noexcept {
+std::string_view scene_conversion_shader_source() noexcept {
     return std::string_view{kConvPs, sizeof(kConvPs) - 1u};
 }
 
@@ -356,7 +356,7 @@ std::string_view display_filter_shader_source() noexcept {
     return std::string_view{kDisplayFilterPs, sizeof(kDisplayFilterPs) - 1u};
 }
 
-EfbConversionShaderConstants make_efb_conversion_constants(
+SceneConversionShaderConstants make_scene_conversion_constants(
     const CaptureRequest& params,
     bool is_depth_copy,
     bool intensity,
@@ -367,11 +367,11 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     float step_x,
     float step_y,
     float filter_row_offset,
-    unsigned efb_scale,
-    unsigned logical_efb_height,
+    unsigned scene_target_scale,
+    unsigned logical_scene_height,
     unsigned reduction_width) noexcept {
     const float scale = static_cast<float>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
+        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     const float fw_up = static_cast<float>(capture_filter_upper(params));
     const float fw_mid = static_cast<float>(capture_filter_middle(params));
     const float fw_low = static_cast<float>(capture_filter_lower(params));
@@ -380,11 +380,11 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     const float copy_y1 =
         copy_y0 + static_cast<float>(params.src_height) * scale;
     const float full_y1 =
-        static_cast<float>(std::max(logical_efb_height, 1u)) * scale;
+        static_cast<float>(std::max(logical_scene_height, 1u)) * scale;
     const float clamp_y_min = copy_y0 + 0.5f;
     const float clamp_y_max = std::max(clamp_y_min, std::min(copy_y1, full_y1) - 0.5f);
 
-    return EfbConversionShaderConstants{{
+    return SceneConversionShaderConstants{{
         src_x, src_y, step_x, step_y,
         intensity ? 1.0f : 0.0f,
         1.0f,
@@ -398,8 +398,8 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     }};
 }
 
-EfbConversionShaderConstants make_efb_peek_conversion_constants(
-    const EfbPeekSamplingGeometry& sampling,
+SceneConversionShaderConstants make_scene_peek_conversion_constants(
+    const ScenePeekSamplingGeometry& sampling,
     ReadbackKind kind) noexcept {
     const bool is_depth = kind == ReadbackKind::Depth;
     const float src_x = is_depth
@@ -408,7 +408,7 @@ EfbConversionShaderConstants make_efb_peek_conversion_constants(
     const float src_y = is_depth
         ? static_cast<float>(sampling.depth_texel_y)
         : sampling.src_y;
-    return EfbConversionShaderConstants{{
+    return SceneConversionShaderConstants{{
         src_x,
         src_y,
         sampling.step,
@@ -428,7 +428,7 @@ EfbConversionShaderConstants make_efb_peek_conversion_constants(
     }};
 }
 
-EfbClearValues make_efb_clear_values(std::uint32_t rgba,
+SceneClearValues make_scene_clear_values(std::uint32_t rgba,
     std::uint32_t z24, std::uint8_t frame_format) noexcept {
     const std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
     const std::uint32_t b = (rgba >> 8u) & 255u;
@@ -500,7 +500,7 @@ SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTa
     return {it->second, inserted};
 }
 
-std::uint64_t efb_copy_dest_budget_bytes() {
+std::uint64_t scene_copy_dest_budget_bytes() {
     return UINT64_C(192) << 20;
 }
 
