@@ -7,6 +7,7 @@ pub mod archive;
 pub mod audio_data;
 pub mod dol;
 pub mod formats;
+pub mod material;
 pub mod native_data;
 pub mod texture;
 pub mod thp;
