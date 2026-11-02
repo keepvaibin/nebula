@@ -1,4 +1,3 @@
-#include "JSystem/JUtility/JUTException.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <cstring>
@@ -46,13 +45,13 @@ void JKRArchive::freeFileDataTable() {
 
 void JKRArchive::panicIfNotCooked(const void* pHeader) {
     if (pHeader != nullptr && *static_cast< const u32* >(pHeader) == 'CRAR') {  // "RARC" as the disc has it
-        JUTException::panic_f(__FILE__, __LINE__, "JKRArchive: an archive not in host order (the importer cooks it)");
+        NEBULA_PANIC("JKRArchive: an archive not in host order (the importer cooks it)");
     }
 }
 
 void JKRArchive::panicIfCompressedEntry(const SDIFileEntry* pEntry) const {
     if ((pEntry->mFlag & FILE_FLAG_COMPRESSED) != 0) {
-        JUTException::panic_f(__FILE__, __LINE__, "%s: a compressed member, not cooked (the importer expands them)", mStringTable + pEntry->mNameOffset);
+        NEBULA_PANIC("%s: a compressed member, not cooked (the importer expands them)", mStringTable + pEntry->mNameOffset);
     }
 }
 

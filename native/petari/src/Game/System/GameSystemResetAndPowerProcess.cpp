@@ -193,9 +193,13 @@ void GameSystemResetAndPowerProcess::exitApplication() {
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
 
-    // The host starts the game again, or closes it for "leave the game" (the Wii Menu); it does not return.
+    // The host closes the game for "leave the game", or starts it again; it does not return.
     const NebulaHostServices* const host = nebula_host();
-    host->power(host->user, mResetOperation == ResetOperation_ReturnToMenu ? NEBULA_POWER_MENU : NEBULA_POWER_RESTART);
+    if (mResetOperation == ResetOperation_ReturnToMenu) {
+        host->app_exit(host->user);
+    } else {
+        host->app_restart(host->user);
+    }
 }
 
 bool GameSystemResetAndPowerProcess::tryPermitReset() NO_INLINE {

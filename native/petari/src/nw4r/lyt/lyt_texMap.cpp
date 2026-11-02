@@ -3,7 +3,6 @@
 #include "nw4r/lyt/texMap.h"
 #include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
-#include "JSystem/JUtility/JUTException.hpp"
 
 namespace nw4r {
     namespace lyt {
@@ -51,7 +50,7 @@ namespace nw4r {
             const u8* const file = static_cast< const u8* >(pTplFile);
             const u32 cVersion = 2142000;
             if (*reinterpret_cast< const u32* >(file) != cVersion) {
-                JUTException::panic_f(__FILE__, __LINE__, "invalid version number for texture palette (the importer cooks it to host order)");
+                NEBULA_PANIC("invalid version number for texture palette (the importer cooks it to host order)");
             }
             const u32 count = *reinterpret_cast< const u32* >(file + 4);
             const u8* const descriptor = file + *reinterpret_cast< const u32* >(file + 8) + (id % count) * 8;

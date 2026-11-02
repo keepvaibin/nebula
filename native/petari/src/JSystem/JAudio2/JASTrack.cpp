@@ -1,7 +1,6 @@
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASBankTable.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
@@ -541,7 +540,7 @@ void JASTrack::setOscTable(u32 a, const u8* data) {
     JASOscillator::Point* const table = mOscTable[a];
     for (u32 i = 0;; i++) {
         if (i == cOscTablePoints) {
-            JUTException::panic_f(__FILE__, __LINE__, "a sequence's envelope longer than %u points", cOscTablePoints);
+            NEBULA_PANIC("a sequence's envelope longer than %u points", cOscTablePoints);
         }
         table[i]._0 = read();
         table[i]._2 = read();

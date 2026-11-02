@@ -1,5 +1,4 @@
 #include "JSystem/JAudio2/JAUAudioArcInterpreter.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 JAUAudioArcInterpreter::JAUAudioArcInterpreter() {
     mBase = nullptr;
@@ -14,7 +13,7 @@ bool JAUAudioArcInterpreter::parse(void const* mData) {
     mReadPtr = mBase;
     const u32 magic = readU32_();
     if (magic == '<_AA') {  // "AA_<" as the disc has it
-        JUTException::panic_f(__FILE__, __LINE__, "JAUAudioArcInterpreter: an audio archive not in host order (the importer cooks it)");
+        NEBULA_PANIC("JAUAudioArcInterpreter: an audio archive not in host order (the importer cooks it)");
     }
     if (magic != 'AA_<') {
         return false;

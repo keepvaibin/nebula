@@ -1,7 +1,6 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
-#include <JSystem/JUtility/JUTException.hpp>
 
 JMapInfo::JMapInfo() {
     mData = nullptr;
@@ -19,8 +18,7 @@ bool JMapInfo::attach(const void* pData) {
     // A table the importer cooked reads its field count below 64 K; one still big-endian, at least 16 M.
     if (static_cast< u32 >(mData->mNumFields) >= 0x10000) {
         const u8* pHead = static_cast< const u8* >(pData);
-        JUTException::panic_f(__FILE__, __LINE__,
-                              "JMapInfo: a table not in host order (the importer cooks it): %02x%02x%02x%02x %02x%02x%02x%02x "
+        NEBULA_PANIC("JMapInfo: a table not in host order (the importer cooks it): %02x%02x%02x%02x %02x%02x%02x%02x "
                               "%02x%02x%02x%02x %02x%02x%02x%02x",
                               pHead[0], pHead[1], pHead[2], pHead[3], pHead[4], pHead[5], pHead[6], pHead[7], pHead[8],
                               pHead[9], pHead[10], pHead[11], pHead[12], pHead[13], pHead[14], pHead[15]);

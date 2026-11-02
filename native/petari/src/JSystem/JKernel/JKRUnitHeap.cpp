@@ -1,5 +1,5 @@
 #include "JSystem/JKernel/JKRUnitHeap.hpp"
-#include "JSystem/JUtility/JUTConsole.hpp"
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <new>
 
 static const u8 bitTable[] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
@@ -356,7 +356,7 @@ bool JKRUnitHeap::check() {
     }
 
     if (freeSize != mTotalFreeSize) {
-        JUTWarningConsole_f("check: bad total memory block size (%08X, %08X)\n", mTotalFreeSize, freeSize);
+        JUTNativeLog("check: bad total memory block size (%08X, %08X)\n", mTotalFreeSize, freeSize);
     }
     return true;
 }
@@ -365,7 +365,7 @@ bool JKRUnitHeap::dump() {
     bool result = check();
     lock();
     u32 usedSize = mSize - mTotalFreeSize;
-    JUTReportConsole_f("%d / %d bytes (%6.2f%%) used\n", usedSize, mSize, static_cast< f32 >(usedSize) / static_cast< f32 >(mSize) * 100.0f);
+    JUTNativeLog("%d / %d bytes (%6.2f%%) used\n", usedSize, mSize, static_cast< f32 >(usedSize) / static_cast< f32 >(mSize) * 100.0f);
     unlock();
     return result;
 }

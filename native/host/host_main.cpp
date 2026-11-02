@@ -97,6 +97,9 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <mutex>
 #include <optional>
 #include <span>
+#if defined(_WIN32)
+#include <io.h>
+#endif
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -2743,6 +2746,8 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
 
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
 // (gSaveDataPath under the NAND root, or a mod's save folder).
+std::atomic<int> gSavesPending{0};
+
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gFsOps.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each operation takes this long), so the windows that open
@@ -2752,6 +2757,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
     }();
     *request->status = NEBULA_SAVE_PENDING;
+    gSavesPending.fetch_add(1, std::memory_order_acq_rel);
     const NebulaSaveRequest r = *request;
     const std::string name = r.name != nullptr ? r.name : "";
     auto operation = [r, name] {
@@ -2778,6 +2784,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
 #else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same release store.
         __atomic_store_n(const_cast<int32_t*>(r.status), result, __ATOMIC_RELEASE);
 #endif
+        gSavesPending.fetch_sub(1, std::memory_order_acq_rel);
     };
     // Deterministic test mode: done before the call returns, as disc reads are, so the game's poll sees the same
     // status on the same frame every run.
@@ -2790,25 +2797,19 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
 
 // The system settings (SYSCONF) of a new console, as the game reads them. The pointer mapping (native_input's
 // virtual sensor bar) assumes the bar above the screen.
-uint32_t svc_sc_get(void*, uint32_t item) {
+uint32_t svc_system_setting(void*, uint32_t item) {
     switch (item) {
-    case NEBULA_SC_LANGUAGE:
+    case NEBULA_SETTING_LANGUAGE:
 #if defined(NEBULA_HOST_RENDERER)
-        return static_cast<uint32_t>(galaxy::game_language_for_boot());  // the language setting, fixed at boot
+        return static_cast<uint32_t>(galaxy::game_language_for_boot());  // the language setting
 #else
         return 1;  // English
 #endif
-    case NEBULA_SC_SOUND_MODE:
+    case NEBULA_SETTING_SOUND_MODE:
         return 1;  // stereo
-    case NEBULA_SC_ASPECT_RATIO:
-        return 1;  // 16:9
-    case NEBULA_SC_PROGRESSIVE_MODE:
-        return 0;
-    case NEBULA_SC_EURGB60_MODE:
+    case NEBULA_SETTING_WIDESCREEN:
         return 1;
-    case NEBULA_SC_SCREEN_SAVER_MODE:
-        return 1;  // IPL.SSV
-    case NEBULA_SC_MOTOR_MODE:
+    case NEBULA_SETTING_SCREEN_DIMMING:
         return 1;
     default:
         return 0;
@@ -3439,15 +3440,22 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 
 // A restart starts this executable again with the same arguments (the game's boot, as the console's reset); the
 // other power events close the game.
-[[noreturn]] void svc_power(void*, uint32_t what) {
-    log_line("host:", what == NEBULA_POWER_RESTART ? "restart" : "the game ended");
+// Every way out of the game: pending saves written (bounded: a dead drive does not hold the game), counters flushed.
+[[noreturn]] void finish_and_exit(bool restart) {
+    log_line("host:", restart ? "restart" : "the game ended");
+    for (int waited = 0; gSavesPending.load(std::memory_order_acquire) != 0 && waited < 500; waited++) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (gSavesPending.load(std::memory_order_acquire) != 0) {
+        log_line("host:", "a save still pending at exit");
+    }
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::achievements::flush();
     galaxy::stats::flush();
 #endif
     std::fflush(stdout);
 #if defined(_WIN32)
-    if (what == NEBULA_POWER_RESTART) {
+    if (restart) {
         wchar_t path[MAX_PATH];
         if (GetModuleFileNameW(nullptr, path, MAX_PATH) != 0) {
             STARTUPINFOW startup{};
@@ -3460,8 +3468,18 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
             }
         }
     }
+#else
+    (void)restart;
 #endif
     std::_Exit(0);
+}
+
+void svc_app_exit(void*) {
+    finish_and_exit(false);
+}
+
+void svc_app_restart(void*) {
+    finish_and_exit(true);
 }
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -3711,6 +3729,24 @@ int main(int argc, char** argv) {
     apply_shipped_renderer_defaults();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    // A player's start has nowhere to print (a launcher's hidden console, or none): the log goes to logs/latest.log beside the
+    // settings, the last start's to previous.log. A test or a shell capturing the output to a pipe or a file keeps it.
+    {
+        const DWORD output = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+        if (output != FILE_TYPE_PIPE && output != FILE_TYPE_DISK && std::getenv("GALAXY_LOG_TO_CONSOLE") == nullptr) {
+            const fs::path settings = galaxy::runtime_settings_folder();
+            std::error_code error;
+            if (!settings.empty() && fs::create_directories(settings / "logs", error) | fs::is_directory(settings / "logs", error)) {
+                fs::rename(settings / "logs" / "latest.log", settings / "logs" / "previous.log", error);
+                FILE* log = nullptr;
+                if (_wfreopen_s(&log, (settings / "logs" / "latest.log").c_str(), L"w", stdout) == 0) {
+                    _dup2(_fileno(stdout), _fileno(stderr));
+                }
+            }
+        }
+    }
+#endif
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), written at exit.
     galaxy::timeline::initialize_from_environment();
 #endif
@@ -3907,7 +3943,7 @@ int main(int argc, char** argv) {
     services.game_id = svc_game_id;
     services.vi_frame = svc_vi_frame;
     services.save_request = svc_save_request;
-    services.sc_get = svc_sc_get;
+    services.system_setting = svc_system_setting;
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;
     services.speaker_samples = svc_speaker_samples;
@@ -3921,7 +3957,8 @@ int main(int argc, char** argv) {
     services.movie_video_decode = svc_movie_video_decode;
     services.gpu_coherent = svc_gpu_coherent;
     services.game_context = svc_game_context;
-    services.power = svc_power;
+    services.app_exit = svc_app_exit;
+    services.app_restart = svc_app_restart;
     services.test_scene_frame = svc_test_scene_frame;
     services.display_extent = svc_display_extent;
     services.scene_surround = svc_scene_surround;
@@ -4123,10 +4160,5 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     galaxy::timeline::dump();
 #endif
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::achievements::flush();
-    galaxy::stats::flush();
-#endif
-    std::fflush(stdout);
-    std::_Exit(0);
+    finish_and_exit(false);
 }

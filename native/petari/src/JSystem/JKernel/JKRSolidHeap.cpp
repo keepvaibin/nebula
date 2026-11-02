@@ -1,5 +1,5 @@
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
-#include "JSystem/JUtility/JUTConsole.hpp"
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <new>
 #include <stdint.h>
 
@@ -75,7 +75,7 @@ void* JKRSolidHeap::allocFromHead(u32 size, int alignment) {
         mSolidHead += totalSize;
         mFreeSize -= totalSize;
     } else {
-        JUTWarningConsole_f("allocFromHead: cannot alloc memory (0x%x byte).\n", totalSize);
+        JUTNativeLog("allocFromHead: cannot alloc memory (0x%x byte).\n", totalSize);
         if (getErrorFlag() == true) {
             callErrorHandler(this, size, alignment);
         }
@@ -94,7 +94,7 @@ void* JKRSolidHeap::allocFromTail(u32 size, int alignment) {
         mSolidTail -= totalSize;
         mFreeSize -= totalSize;
     } else {
-        JUTWarningConsole_f("allocFromTail: cannot alloc memory (0x%x byte).\n", totalSize);
+        JUTNativeLog("allocFromTail: cannot alloc memory (0x%x byte).\n", totalSize);
         if (getErrorFlag() == true) {
             callErrorHandler(this, size, alignment);
         }
@@ -103,7 +103,7 @@ void* JKRSolidHeap::allocFromTail(u32 size, int alignment) {
 }
 
 static void reportFreeBlock(void* ptr) {
-    JUTWarningConsole_f("free: cannot free memory block (%p)\n", ptr);
+    JUTNativeLog("free: cannot free memory block (%p)\n", ptr);
 }
 
 void JKRSolidHeap::do_freeAll(void) {
@@ -138,12 +138,12 @@ void JKRSolidHeap::do_fillFreeArea() {
 }
 
 s32 JKRSolidHeap::do_resize(void* ptr, u32 newSize) {
-    JUTWarningConsole_f("resize: cannot resize memory block (%p: %d)\n", ptr, newSize);
+    JUTNativeLog("resize: cannot resize memory block (%p: %d)\n", ptr, newSize);
     return -1;
 }
 
 s32 JKRSolidHeap::do_getSize(void* ptr) {
-    JUTWarningConsole_f("getSize: cannot get memory block size (%p)\n", ptr);
+    JUTNativeLog("getSize: cannot get memory block size (%p)\n", ptr);
     return -1;
 }
 
@@ -154,7 +154,7 @@ bool JKRSolidHeap::check(void) {
     u32 calculatedSize = (mSolidHead - mStart) + mFreeSize + (mEnd - mSolidTail);
     if (calculatedSize != mSize) {
         result = false;
-        JUTWarningConsole_f("check: bad total memory block size (%08X, %08X)\n", mSize, calculatedSize);
+        JUTNativeLog("check: bad total memory block size (%08X, %08X)\n", mSize, calculatedSize);
     }
 
     unlock();
@@ -166,9 +166,9 @@ bool JKRSolidHeap::dump(void) {
 
     lock();
     s32 htSize = (mSolidHead - mStart) + (mEnd - mSolidTail);
-    JUTReportConsole_f("head %p: %08llx\n", mStart, (mSolidHead - mStart));
-    JUTReportConsole_f("tail %p: %08llx\n", mSolidTail, (mEnd - mSolidTail));
-    JUTReportConsole_f("%d / %d bytes (%6.2f%%) used\n", htSize, mSize, f32(htSize) / f32(mSize) * 100.0f);
+    JUTNativeLog("head %p: %08llx\n", mStart, (mSolidHead - mStart));
+    JUTNativeLog("tail %p: %08llx\n", mSolidTail, (mEnd - mSolidTail));
+    JUTNativeLog("%d / %d bytes (%6.2f%%) used\n", htSize, mSize, f32(htSize) / f32(mSize) * 100.0f);
     unlock();
 
     return result;

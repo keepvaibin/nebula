@@ -1,7 +1,6 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include "JSystem/JUtility/JUTException.hpp"
 
 JKRHeap* JKRHeap::sSystemHeap;
 thread_local JKRHeap* JKRHeap::sCurrentHeap;
@@ -333,7 +332,7 @@ void JKRHeap::copyMemory(void* pDst, void* pSrc, u32 size) {
 }
 
 void JKRDefaultMemoryErrorRoutine(void* pHeap, u32 size, int alignment) {
-    JUTException::panic(__FILE__, 0x355, "abort\n");
+    NEBULA_PANIC("%s", "abort\n");
 }
 
 JKRErrorHandler JKRHeap::setErrorHandler(JKRErrorHandler errorHandler) {

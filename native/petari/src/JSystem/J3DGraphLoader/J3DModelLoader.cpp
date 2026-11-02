@@ -10,7 +10,6 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 #include "JSystem/JUtility/JUTNameTab.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 #include <stdint.h>
 
 namespace {
@@ -44,7 +43,7 @@ static J3DModelData* withCurvedSurfaces(J3DModelData* pModelData) {
 // A model as the disc has it ("J3D2" read in host order): the importer cooks every one.
 static void panicIfNotCooked(const void* pData) {
     if (*(const u32*)pData == '2D3J') {
-        JUTException::panic_f(__FILE__, __LINE__, "J3DModelLoader: a model not in host order (the importer cooks it)");
+        NEBULA_PANIC("J3DModelLoader: a model not in host order (the importer cooks it)");
     }
 }
 

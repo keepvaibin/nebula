@@ -11,7 +11,6 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemDimmingWatcher.hpp"
 #include "Game/System/GameSystemErrorWatcher.hpp"
-#include "Game/System/GameSystemException.hpp"
 #include "Game/System/GameSystemFontHolder.hpp"
 #include "Game/System/GameSystemFrameControl.hpp"
 #include "Game/System/GameSystemFunction.hpp"
@@ -62,7 +61,6 @@ extern "C" void nebula_game_main(void) {
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();
-    GameSystemException::init();
     MR::initAcosTable();
     SingletonHolder< GameSystem >::init();
     SingletonHolder< GameSystem >::get()->init();

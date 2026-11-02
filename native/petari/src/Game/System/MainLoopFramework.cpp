@@ -7,8 +7,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
-#include <JSystem/JUtility/JUTAssert.hpp>
-#include <JSystem/JUtility/JUTConsole.hpp>
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
@@ -61,13 +60,6 @@ void MainLoopFramework::preGX() {
 }
 
 void MainLoopFramework::endGX() {
-    J2DOrthoGraph ortho(0.0f, 0.0f, NebulaFrameClock::cFrameWidth, NebulaFrameClock::cFrameHeight, -1.0f,
-                        1.0f);
-    if (JUTConsoleManager::sManager) {
-        ortho.setPort();
-        JUTConsoleManager::sManager->draw();
-    }
-    JUTAssertion::flushMessage_dbPrint();
 }
 
 void MainLoopFramework::waitForRetrace() {

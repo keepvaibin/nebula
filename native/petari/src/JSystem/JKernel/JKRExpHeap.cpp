@@ -1,13 +1,10 @@
 #include "JSystem/JKernel/JKRExpHeap.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
-#include "JSystem/JUtility/JUTConsole.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <new>
 #include <stdlib.h>
 
-extern "C" void JUTWarningConsole(const char*);
-extern "C" void JUTReportConsole(const char*);
 
 static u32 DBfoundSize;
 static u32 DBfoundOffset;
@@ -155,7 +152,7 @@ void* JKRExpHeap::do_alloc(u32 size, int align) {
     }
 
     if (ptr == nullptr) {
-        JUTWarningConsole_f(":::cannot alloc memory (0x%x byte).\n", size);
+        JUTNativeLog(":::cannot alloc memory (0x%x byte).\n", size);
 
         if (JKRHeap::mErrorFlag == true) {
             if (JKRHeap::mErrorHandler) {
@@ -554,7 +551,7 @@ bool JKRExpHeap::isEmpty() {
 
 void JKRExpHeap::appendUsedList(JKRExpHeap::CMemBlock* newBlock) {
     if (!newBlock) {
-        JUTException::panic(__FILE__, 1568, "bad appendUsedList\n");
+        NEBULA_PANIC("%s", "bad appendUsedList\n");
     }
 
     CMemBlock* block = mTailUsedList;
@@ -684,11 +681,11 @@ void JKRExpHeap::joinTwoBlocks(CMemBlock* block) {
     CMemBlock* next = block->mNext;
     uintptr_t nextAddr = reinterpret_cast< uintptr_t >(next) - (next->mFlags & 0x7f);
     if (endAddr > nextAddr) {
-        JUTWarningConsole_f(":::Heap may be broken. (block = %p)", block);
+        JUTNativeLog(":::Heap may be broken. (block = %p)", block);
 
         JKRHeap* heap = JKRGetCurrentHeap();
         heap->dump();
-        JUTException::panic(__FILE__, 1820, "Bad Block\n");
+        NEBULA_PANIC("%s", "Bad Block\n");
     }
 
     if (endAddr == nextAddr) {
@@ -705,23 +702,23 @@ bool JKRExpHeap::check() {
     for (CMemBlock* block = mHeadUsedList; block; block = block->mNext) {
         if (block->mMagic != 'HM') {
             ok = false;
-            JUTWarningConsole_f(":::addr %p: bad heap signature. (%c%c)\n", block, (block->mMagic >> 8), (block->mMagic & 0xff));
+            JUTNativeLog(":::addr %p: bad heap signature. (%c%c)\n", block, (block->mMagic >> 8), (block->mMagic & 0xff));
         }
 
         if (block->mNext) {
             if (block->mNext->mMagic != 'HM') {
                 ok = false;
-                JUTWarningConsole_f(":::addr %p: bad next pointer (%p)\nabort\n", block, block->mNext);
+                JUTNativeLog(":::addr %p: bad next pointer (%p)\nabort\n", block, block->mNext);
                 break;
             }
             if (block->mNext->mPrev != block) {
                 ok = false;
-                JUTWarningConsole_f(":::addr %p: bad previous pointer (%p)\n", block->mNext, block->mNext->mPrev);
+                JUTNativeLog(":::addr %p: bad previous pointer (%p)\n", block->mNext, block->mNext->mPrev);
             }
         } else {
             if (mTailUsedList != block) {
                 ok = false;
-                JUTWarningConsole_f(":::addr %p: bad used list(REV) (%p)\n", block, mTailUsedList);
+                JUTNativeLog(":::addr %p: bad used list(REV) (%p)\n", block, mTailUsedList);
             }
         }
         totalBytes += sizeof(CMemBlock) + block->mSize + block->getAlignment();
@@ -732,28 +729,28 @@ bool JKRExpHeap::check() {
         if (block->mNext) {
             if (block->mNext->mPrev != block) {
                 ok = false;
-                JUTWarningConsole_f(":::addr %p: bad previous pointer (%p)\n", block->mNext, block->mNext->mPrev);
+                JUTNativeLog(":::addr %p: bad previous pointer (%p)\n", block->mNext, block->mNext->mPrev);
             }
 
             if (reinterpret_cast< uintptr_t >(block) + block->mSize + sizeof(CMemBlock) > reinterpret_cast< uintptr_t >(block->mNext)) {
                 ok = false;
-                JUTWarningConsole_f(":::addr %p: bad block size (%08x)\n", block, block->mSize);
+                JUTNativeLog(":::addr %p: bad block size (%08x)\n", block, block->mSize);
             }
         } else {
             if (mTailFreeList != block) {
                 ok = false;
-                JUTWarningConsole_f(":::addr %p: bad used list(REV) (%p)\n", block, mTailFreeList);
+                JUTNativeLog(":::addr %p: bad used list(REV) (%p)\n", block, mTailFreeList);
             }
         }
     }
 
     if (totalBytes != mSize) {
         ok = false;
-        JUTWarningConsole_f(":::bad total memory block size (%08X, %08X)\n", mSize, totalBytes);
+        JUTNativeLog(":::bad total memory block size (%08X, %08X)\n", mSize, totalBytes);
     }
 
     if (!ok) {
-        JUTWarningConsole(":::there is some error in this heap!\n");
+        JUTNativeLog(":::there is some error in this heap!\n");
     }
 
     unlock();
@@ -845,36 +842,36 @@ bool JKRExpHeap::dump() {
     u32 usedCount = 0;
     u32 freeCount = 0;
 
-    JUTReportConsole(" attr  address:   size    gid aln   prev_ptr next_ptr\n");
-    JUTReportConsole("(Used Blocks)\n");
+    JUTNativeLog(" attr  address:   size    gid aln   prev_ptr next_ptr\n");
+    JUTNativeLog("(Used Blocks)\n");
     if (!mHeadUsedList) {
-        JUTReportConsole(" NONE\n");
+        JUTNativeLog(" NONE\n");
     }
 
     for (CMemBlock* block = mHeadUsedList; block; block = block->mNext) {
         if (block->mMagic != 'HM') {
-            JUTReportConsole_f("xxxxx %p: --------  --- ---  (-------- --------)\nabort\n", block);
+            JUTNativeLog("xxxxx %p: --------  --- ---  (-------- --------)\nabort\n", block);
             break;
         }
 
-        JUTReportConsole_f("%s %p: %08x  %3d %3d  (%p %p)\n", block->isTempMemBlock() ? " temp" : "alloc", block->getContent(), block->mSize,
+        JUTNativeLog("%s %p: %08x  %3d %3d  (%p %p)\n", block->isTempMemBlock() ? " temp" : "alloc", block->getContent(), block->mSize,
                            block->mGroupId, block->getAlignment(), block->mPrev, block->mNext);
         usedBytes += sizeof(CMemBlock) + block->mSize + block->getAlignment();
         usedCount++;
     }
 
-    JUTReportConsole("(Free Blocks)\n");
+    JUTNativeLog("(Free Blocks)\n");
     if (!mHeadFreeList) {
-        JUTReportConsole(" NONE\n");
+        JUTNativeLog(" NONE\n");
     }
 
     for (CMemBlock* block = mHeadFreeList; block; block = block->mNext) {
-        JUTReportConsole_f("%s %p: %08x  %3d %3d  (%p %p)\n", " free", block->getContent(), block->mSize, block->mGroupId,
+        JUTNativeLog("%s %p: %08x  %3d %3d  (%p %p)\n", " free", block->getContent(), block->mSize, block->mGroupId,
                            block->getAlignment(), block->mPrev, block->mNext);
         freeCount++;
     }
 
-    JUTReportConsole_f("%d / %d bytes (%6.2f%%) used (U:%d F:%d)\n", usedBytes, mSize,
+    JUTNativeLog("%d / %d bytes (%6.2f%%) used (U:%d F:%d)\n", usedBytes, mSize,
                        (static_cast< f32 >(usedBytes) / static_cast< f32 >(mSize)) * 100.0f, usedCount, freeCount);
     unlock();
     return result;
@@ -886,11 +883,11 @@ bool JKRExpHeap::dump_sort() {
     u32 usedBytes = 0;
     u32 usedCount = 0;
     u32 freeCount = 0;
-    JUTReportConsole(" attr  address:   size    gid aln   prev_ptr next_ptr\n");
-    JUTReportConsole("(Used Blocks)\n");
+    JUTNativeLog(" attr  address:   size    gid aln   prev_ptr next_ptr\n");
+    JUTNativeLog("(Used Blocks)\n");
 
     if (mHeadUsedList == nullptr) {
-        JUTReportConsole(" NONE\n");
+        JUTNativeLog(" NONE\n");
     } else {
         CMemBlock* previousBlock = nullptr;
         while (true) {
@@ -907,11 +904,11 @@ bool JKRExpHeap::dump_sort() {
             }
 
             if (block->mMagic != 'HM') {
-                JUTReportConsole_f("xxxxx %p: --------  --- ---  (-------- --------)\nabort\n", previousBlock);
+                JUTNativeLog("xxxxx %p: --------  --- ---  (-------- --------)\nabort\n", previousBlock);
                 break;
             }
 
-            JUTReportConsole_f("%s %p: %08x  %3d %3d  (%p %p)\n", block->isTempMemBlock() ? " temp" : "alloc", block->getContent(),
+            JUTNativeLog("%s %p: %08x  %3d %3d  (%p %p)\n", block->isTempMemBlock() ? " temp" : "alloc", block->getContent(),
                                block->mSize, block->mGroupId, block->getAlignment(), block->mPrev, block->mNext);
             usedBytes += sizeof(CMemBlock) + block->mSize + block->getAlignment();
             usedCount++;
@@ -919,18 +916,18 @@ bool JKRExpHeap::dump_sort() {
         }
     }
 
-    JUTReportConsole("(Free Blocks)\n");
+    JUTNativeLog("(Free Blocks)\n");
     if (mHeadFreeList == nullptr) {
-        JUTReportConsole(" NONE\n");
+        JUTNativeLog(" NONE\n");
     }
 
     for (CMemBlock* block = mHeadFreeList; block; block = block->mNext) {
-        JUTReportConsole_f("%s %p: %08x  %3d %3d  (%p %p)\n", " free", block->getContent(), block->mSize, block->mGroupId,
+        JUTNativeLog("%s %p: %08x  %3d %3d  (%p %p)\n", " free", block->getContent(), block->mSize, block->mGroupId,
                            block->getAlignment(), block->mPrev, block->mNext);
         freeCount++;
     }
 
-    JUTReportConsole_f("%d / %d bytes (%6.2f%%) used (U:%d F:%d)\n", usedBytes, mSize,
+    JUTNativeLog("%d / %d bytes (%6.2f%%) used (U:%d F:%d)\n", usedBytes, mSize,
                        (static_cast< f32 >(usedBytes) / static_cast< f32 >(mSize)) * 100.0f, usedCount, freeCount);
     unlock();
     return result;
@@ -994,15 +991,15 @@ JKRExpHeap::CMemBlock* JKRExpHeap::CMemBlock::getHeapBlock(void* ptr) {
 }
 
 static void dumpDebugInfo() {
-    JUTReportConsole("+---------------JKRExpHeap\n");
-    JUTReportConsole("|         Align Group  size    ( prev , next )\n");
-    JUTReportConsole("| ---- FreeFirst\n");
-    JUTReportConsole("| %08x  ");
-    JUTReportConsole("%2x  %3d  %6x  (%p %p)\n");
-    JUTReportConsole("| ---- FreeLast\n");
-    JUTReportConsole("| ---- UsedFirst\n");
-    JUTReportConsole("| ---- UsedLast\n");
-    JUTReportConsole("+---------------End\n");
+    JUTNativeLog("+---------------JKRExpHeap\n");
+    JUTNativeLog("|         Align Group  size    ( prev , next )\n");
+    JUTNativeLog("| ---- FreeFirst\n");
+    JUTNativeLog("| %08x  ");
+    JUTNativeLog("%2x  %3d  %6x  (%p %p)\n");
+    JUTNativeLog("| ---- FreeLast\n");
+    JUTNativeLog("| ---- UsedFirst\n");
+    JUTNativeLog("| ---- UsedLast\n");
+    JUTNativeLog("+---------------End\n");
 }
 
 void JKRExpHeap::state_register(JKRHeap::TState* p, u32 id) const {
