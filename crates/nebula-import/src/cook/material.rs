@@ -85,7 +85,7 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
     }
     let size = u32::try_from(result.len())?;
     result[8..12].copy_from_slice(&size.to_le_bytes());
-    Ok(result)
+    super::mesh::native(result)
 }
 
 /// Which texture each coordinate samples, for its scale: the last stage order or

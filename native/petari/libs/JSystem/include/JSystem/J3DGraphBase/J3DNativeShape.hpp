@@ -50,7 +50,7 @@ namespace J3DNativeShape {
     // place), in a buffer valid until the next record.
     u32 positionMatrices(u32 mask, const NebulaDrawMatrix** ppMatrices);
     // A position array the game wrote (`count` entries in its model's position format) as values.
-    void sendPositions(const void* pArray, u32 count, GpuCompType type, GpuCompCnt cnt, u8 frac);
+    void sendPositions(const void* pArray, u32 count);
 };  // namespace J3DNativeShape
 
 extern "C" {

@@ -78,6 +78,8 @@ struct J3DVertexBlock : public J3DModelBlock {
     /* 0x14 */ u32 mpVtxNBTArray;
     /* 0x18 */ u32 mpVtxColorArray[2];
     /* 0x20 */ u32 mpVtxTexCoordArray[8];
+    /* 0x40 */ u32 mCounts[13];   // entries of each array above, position first
+    /* 0x74 */ u32 mNormalFloats;  // 3, or 9 where the model's normals are NBT normals
 };
 
 struct J3DEnvelopeBlock : public J3DModelBlock {

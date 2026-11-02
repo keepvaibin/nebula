@@ -62,40 +62,8 @@ public:
         return mVtxNum;
     }
 
-    GpuVtxAttrFmtList* getVtxAttrFmtList() const {
-        return mVtxAttrFmtList;
-    }
-
-    u8 getVtxPosFrac() const {
-        return mVtxPosFrac;
-    }
-
-    u8 getVtxNrmFrac() const {
-        return mVtxNrmFrac;
-    }
-
-    int getVtxPosType() const {
-        return mVtxPosType;
-    }
-
-    int getVtxNrmType() const {
-        return mVtxNrmType;
-    }
-
-    void setVtxPosFrac(u8 frac) {
-        mVtxPosFrac = frac;
-    }
-
-    void setVtxPosType(GpuCompType type) {
-        mVtxPosType = type;
-    }
-
-    void setVtxNrmFrac(u8 frac) {
-        mVtxNrmFrac = frac;
-    }
-
-    void setVtxNrmType(GpuCompType type) {
-        mVtxNrmType = type;
+    u32 getNormalFloats() const {
+        return mNormalFloats;
     }
 
     friend class J3DModelLoader;
@@ -106,19 +74,16 @@ public:
     /* 0x0C */ u32 mTexCoordNum;
     /* 0x10 */ u32 mPacketNum;
     // A native copy on native builds (J3DModelLoader::readVertex); the vertex arrays stay as the file has them.
-    /* 0x14 */ GpuVtxAttrFmtList* mVtxAttrFmtList;
     /* 0x18 */ void* mVtxPosArray;
     /* 0x1C */ void* mVtxNrmArray;
     /* 0x20 */ void* mVtxNBTArray;
     /* 0x24 */ NebulaColor8* mVtxColorArray[2];
     /* 0x2C */ void* mVtxTexCoordArray[8];
-    /* 0x4C */ u8 mVtxPosFrac;
-    /* 0x50 */ GpuCompType mVtxPosType;
-    /* 0x54 */ u8 mVtxNrmFrac;
-    /* 0x58 */ GpuCompType mVtxNrmType;
     // Entries of each array the renderer has as values (J3DNativeShape): position, normal, NBT, colour 0-1,
     // texture coordinates 0-7.
-    u32 mNebulaArrayCount[13];
+    u32 mNebulaArrayCount[13];  // entries of each array, position first
+    u32 mNormalFloats;          // floats per normal entry: 3, or 9 (NBT)
+    bool mNebulaArraysSent;
 };
 
 class J3DVertexBuffer {

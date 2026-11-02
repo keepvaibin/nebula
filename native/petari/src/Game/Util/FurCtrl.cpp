@@ -192,16 +192,7 @@ void FurCtrl::setupFur(J3DModel* pModel, ResTIMG* pLength, ResTIMG* pIndirect, R
     mShader->makeIndexData(pData->getShapeNodePointer(shape));
     mShader->checkBorderVtx(pData, shape);
     mDrawer = new FurDrawer(numLayers, pBody, pIndirect);
-    s32 componentSize;
-
-    switch (mShader->_24) {
-    case GPU_S16:
-        componentSize = sizeof(s16);
-        break;
-    case GPU_F32:
-        componentSize = sizeof(f32);
-        break;
-    }
+    const s32 componentSize = sizeof(f32);
 
     mNumLayers = numLayers;
     mLayerModels = new J3DModel*[numLayers];

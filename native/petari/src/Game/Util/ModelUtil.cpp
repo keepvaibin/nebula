@@ -295,13 +295,10 @@ namespace MR {
 
             for (u32 idx = 0; idx < 8; idx++) {
                 J3DTexCoord* texCoord = material->getTexCoord(idx);
-                GpuAttr attr = static_cast< GpuAttr >(idx + 1);
                 if (texCoord->getTexGenSrc() == 1) {
-                    shape->addTexMtxIndexInDL(attr, 30);
-                    shape->addTexMtxIndexInVcd(attr);
+                    shape->addTexMtxIndex(idx, 30);
                 } else if (texCoord->getTexGenSrc() == 0) {
-                    shape->addTexMtxIndexInDL(attr, 0);
-                    shape->addTexMtxIndexInVcd(attr);
+                    shape->addTexMtxIndex(idx, 0);
                 }
             }
         }
@@ -450,30 +447,6 @@ namespace MR {
         }
 
         return maxNum;
-    }
-
-    void downFracVtx(J3DModelData* pModelData) {
-        u32 vtxNum = pModelData->getVtxNum();
-        GpuVtxAttrFmtList* vtxAttrFmtList = pModelData->getVertexData().getVtxAttrFmtList();
-        while (vtxAttrFmtList->attr != GPU_VA_NULL) {
-            if (vtxAttrFmtList->attr == GPU_VA_POS) {
-                if (vtxAttrFmtList->frac == 0) {
-                    return;
-                }
-
-                vtxAttrFmtList->frac--;
-                break;
-            }
-
-            vtxAttrFmtList++;
-        }
-
-        // The model's positions (host order, as the importer cooks VTX1).
-        s16* vertexPosArray = static_cast< s16* >(pModelData->getVertexData().getVtxPosArray());
-        for (u32 i = 0; i < vtxNum * 3; i++) {
-            vertexPosArray[i] >>= 1;
-        }
-
     }
 
     void calcModelBoundingBox(TBox3f* pOut, const LiveActor* pActor) {

@@ -281,19 +281,12 @@ void J3DModelLoader::readInformation(J3DModelInfoBlock const* i_block, u32 i_fla
 inline J3DMtxCalcNoAnmBase::J3DMtxCalcNoAnmBase() {
 }
 
-static _GpuCompType getFmtType(_GpuVtxAttrFmtList* i_fmtList, _GpuAttr i_attr) {
-    for (; i_fmtList->attr != GPU_VA_NULL; i_fmtList++) {
-        if (i_fmtList->attr == i_attr) {
-            return i_fmtList->type;
-        }
-    }
-    return GPU_F32;
-}
-
 void J3DModelLoader::readVertex(J3DVertexBlock const* i_block) {
     J3DVertexData& vertex_data = mpModelData->getVertexData();
-    // The list in the file (host order, as the importer cooks VTX1).
-    vertex_data.mVtxAttrFmtList = JSUConvertOffsetToPtr< GpuVtxAttrFmtList >(i_block, i_block->mpVtxAttrFmtList);
+    for (int i = 0; i < 13; i++) {
+        vertex_data.mNebulaArrayCount[i] = i_block->mCounts[i];
+    }
+    vertex_data.mNormalFloats = i_block->mNormalFloats;
     vertex_data.mVtxPosArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxPosArray);
     vertex_data.mVtxNrmArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxNrmArray);
     vertex_data.mVtxNBTArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxNBTArray);
@@ -304,8 +297,7 @@ void J3DModelLoader::readVertex(J3DVertexBlock const* i_block) {
         vertex_data.mVtxTexCoordArray[i] = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxTexCoordArray[i]);
     }
 
-    _GpuCompType nrm_type = getFmtType(vertex_data.mVtxAttrFmtList, GPU_VA_NRM);
-    u32 nrm_size = nrm_type == GPU_F32 ? 12 : 6;
+    u32 nrm_size = 12;
 
     void* nrm_end = NULL;
     if (vertex_data.mVtxNBTArray != NULL) {
@@ -432,11 +424,9 @@ void J3DModelLoader::readShape(J3DShapeBlock const* i_block, u32 i_flags) {
     }
     shape_table->mShapeNodePointer = new J3DShape*[shape_table->mShapeNum];
     J3DModelHierarchy const* hierarchy_entry = mpModelData->getHierarchy();
-    GpuVtxDescList* vtx_desc_list = NULL;
     for (; hierarchy_entry->mType != 0; hierarchy_entry++) {
         if (hierarchy_entry->mType == 0x12) {
-            shape_table->mShapeNodePointer[hierarchy_entry->mValue] = factory.create(hierarchy_entry->mValue, i_flags, vtx_desc_list);
-            vtx_desc_list = factory.getVtxDescList(hierarchy_entry->mValue);
+            shape_table->mShapeNodePointer[hierarchy_entry->mValue] = factory.create(hierarchy_entry->mValue, i_flags);
         }
     }
 }
