@@ -2,11 +2,12 @@
 
 #include <revolution/types.h>
 
-// The game's auxiliary memory (the console's ARAM): sound data and archives JKRAram keeps out of the main heaps. It is
+// The game's sound memory (wave archives and stream buffers, outside the main heaps). It is
 // a part of the game's memory the heap watcher sets aside, addressed by offsets from its start; the first cReserved
 // bytes are not handed out (the console's OS kept them). The mixer reads wave data at the same offsets.
 namespace NebulaAuxMemory {
     const u32 cReserved = 0x4000;
+    const u32 cSoundBytes = 0xE00000;
 
     void init(void* pBase, u32 size);
     u8* base();
