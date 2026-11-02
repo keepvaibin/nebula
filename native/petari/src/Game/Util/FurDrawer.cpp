@@ -112,7 +112,7 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     sMaterial.color_write = 1;
     sMaterial.alpha_write = 0;
 
-    // The fog (start, end, near, far; colour; GX type): the fog control's, or TDDraw's mixed fog (linear over the
+    // The fog (start, end, near, far; colour; console type): the fog control's, or TDDraw's mixed fog (linear over the
     // sphere around the fog position, colour 0xFF000080), or none.
     f32* pFog = sMaterial.constants + 32;
     if (pParam->mFogCtrl) {
@@ -200,7 +200,7 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
     f32 alpha = mBrightness.calcValue(layer, mNumLayers);
     f32 brightness = mAlpha.calcValue(mNumLayers - layer - 1, mNumLayers);
     f32 blend = mColorBlend.calcValue(mNumLayers - layer - 1, mNumLayers);
-    // GX's constant colour 3 as the shell's (8-bit channels).
+    // the console's constant colour 3 as the shell's (8-bit channels).
     sMaterial.constants[16] = static_cast< u8 >((s32)(alpha)) / 255.0f;
     sMaterial.constants[17] = static_cast< u8 >((s32)(brightness)) / 255.0f;
     sMaterial.constants[18] = static_cast< u8 >((s32)(blend)) / 255.0f;

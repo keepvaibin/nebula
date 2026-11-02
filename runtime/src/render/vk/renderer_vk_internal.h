@@ -55,7 +55,7 @@ struct PoolSizes {
 };
 // The storage images a frame's (or a replay list's) renderer passes take: the game's bloom (GameBloomVk).
 inline constexpr std::uint32_t kPassStorageImages = 64u;
-// GX constants sets (set 0: b0 and b1, the matrix palette, vertex blending's earlier vertices and verdicts): room for
+// console constants sets (set 0: b0 and b1, the matrix palette, vertex blending's earlier vertices and verdicts): room for
 // `sets` of them.
 constexpr PoolSizes constants_sets(std::uint32_t sets, PoolSizes others = {}) {
     others.dynamic_uniforms += 2u * sets;

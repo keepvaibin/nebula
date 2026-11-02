@@ -464,7 +464,7 @@ void Mii_Setup2DCameraAndParam(void) {
     J3DNativeStateSetAlphaUpdate(TRUE);
 }
 
-// The parts' forms (runtime/src/render/materials/mii_texture.hlsl): GX's stages over the texture's channels as RFL ran
+// The parts' forms (runtime/src/render/materials/mii_texture.hlsl): the console's stages over the texture's channels as RFL ran
 // them, with their colours.
 void Mii_SetTev4Mole(void) {
     Mii_NativeTextureForm(0, MII_I_MOLE_COLOR0, MII_I_MOLE_COLOR0);

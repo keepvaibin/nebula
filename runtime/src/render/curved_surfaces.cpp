@@ -1067,7 +1067,7 @@ void clear_models() {
 }
 
 
-// The curved surfaces' triangle sort, a compute shader the renderer runs before the command list (moved from the GX
+// The curved surfaces' triangle sort, a compute shader the renderer runs before the command list (moved from the console
 // shader generator with E-04 step 4; curved surfaces are a parked addition).
 // Curved surfaces' packed normals (curved_surfaces.h's pack_normal): octahedral, two 16-bit halves, zero for none.
 static constexpr const char* kCurveCodec = R"HLSL(

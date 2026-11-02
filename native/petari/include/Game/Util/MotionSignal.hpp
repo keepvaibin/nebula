@@ -25,7 +25,7 @@ namespace nw4r {
 
 // What the renderer needs to draw between two game frames (frame interpolation, motion vectors, temporal upscaling)
 // and to know the scene (ray tracing): the object each draw belongs to, the draw phase it is in, when an object starts
-// a new life or jumps, and when the camera cuts. The game writes them as host markers into the GX stream
+// a new life or jumps, and when the camera cuts. The game writes them as host markers into the console stream
 // (galaxy/motion_signals.h), only while the renderer asks for them (NebulaRender::sDrawIdentities).
 namespace MotionSignal {
     // SceneFunction's draw phases in GameScene::draw3D (galaxy::motion::ScenePhase).
@@ -124,7 +124,7 @@ namespace MotionSignal {
     void mirror(bool begin);
 
 
-    // GX light loads (LightFunction, MR::loadLightPlayer).
+    // console light loads (LightFunction, MR::loadLightPlayer).
     void actorLight(const ActorLightInfo* pInfo);
     void coinLight(const LightInfoCoin* pInfo);
     void pointLight(const PointLightInfo* pInfo);

@@ -169,7 +169,7 @@ void J3DModelX::directDraw(J3DModel* model) {
 }
 
 namespace {
-    // The flat passes' colours by list (GX's colour register 0 with one stage): `a` marks a flat pass (2: register 0's
+    // The flat passes' colours by list (the console's colour register 0 with one stage): `a` marks a flat pass (2: register 0's
     // colour as the draw's lists left it), `alpha` its
     // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
     struct OverrideColor {
@@ -250,7 +250,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         _1C4[index]->send();
     }
     if (override >= 0) {
-        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (GX's: one
+        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (the console's: one
         // stage of the colour register, no textures), with the blending, depth and culling the lists set.
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,

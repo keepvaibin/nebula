@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan GX renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
+// The Vulkan console renderer's scene target (renderer_vk.h): its targets, draws, clears, copies, screen probes and test captures.
 
 #include "renderer_vk_internal.h"
 #include "galaxy/render/vk/renderer_vk.h"
@@ -568,7 +568,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_z24,
         reset_draw_bindings();
         bind_scene();
     } else if (depth_enable) {
-        // Reversed-Z: GX's farthest (0xFFFFFF) clears to about 0.
+        // Reversed-Z: the console's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
         attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};
@@ -1499,7 +1499,7 @@ void RendererVk::draw(const DrawCall& call) {
         bound_.sampler_table = call.sampler_table.ptr;
     }
 
-    // The GX scissor, scaled and clamped; an empty one rasterises nothing (also CullMode::All).
+    // The console scissor, scaled and clamped; an empty one rasterises nothing (also CullMode::All).
     if (!bound_.scissor_input_valid || call.scissor.left != bound_.scissor_input.left ||
         call.scissor.top != bound_.scissor_input.top || call.scissor.right != bound_.scissor_input.right ||
         call.scissor.bottom != bound_.scissor_input.bottom) {

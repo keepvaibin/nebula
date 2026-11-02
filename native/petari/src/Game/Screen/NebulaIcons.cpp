@@ -1727,7 +1727,7 @@ namespace {
     const f32 cJcBodyWidth = NebulaIcons::cJoyConBody[0];
     const f32 cJcBodyHeight = NebulaIcons::cJoyConBody[1];
     const f32 cJcOutline = 0.12f;
-    const s32 cJcMaxSide = 1024;  // GX's largest texture: past it (or past cJcMaxTexels), a picture is a little magnified
+    const s32 cJcMaxSide = 1024;  // the console's largest texture: past it (or past cJcMaxTexels), a picture is a little magnified
     const s32 cJcMaxTexels = 1024 * 512;
     const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
     const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
@@ -1736,7 +1736,7 @@ namespace {
     const s32 cJcSteady = 3;         // a density asked for this many frames running before a set is painted for it
 
     // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
-    // game's image (GX reads textures only from the game's memory).
+    // game's image (console reads textures only from the game's memory).
     struct JoyConSet {
         u8* mTexels[2][NebulaIcons::JoyConLooks];
         nw4r::lyt::TexMap mMaps[2][NebulaIcons::JoyConLooks];

@@ -15,7 +15,7 @@ namespace {
         return *reinterpret_cast< const J3DNativeTexObj* >(pObj);
     }
 
-    // The format of the palette last loaded into each of GX's 20 palette places.
+    // The format of the palette last loaded into each of the console's 20 palette places.
 
     bool isColorIndexed(GpuTexFmt format) {
         return format == GPU_TF_C4 || format == GPU_TF_C8 || format == GPU_TF_C14X2;
@@ -32,7 +32,7 @@ namespace J3DNativeTexture {
                                               nebula_texture_linear_layout(format));
         }
         // A tile is 32 bytes (RGBA8 and Z24X8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel
-        // (texture and copy formats); an unknown format is a tile per texel, as GX counts it.
+        // (texture and copy formats); an unknown format is a tile per texel, as console counts it.
         u32 shiftX, shiftY;
         switch (format) {
         case GPU_TF_C4:

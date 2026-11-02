@@ -50,7 +50,7 @@ public:
     /* 0x34 */ GpuLightObj mLightObj;
 };  // Size = 0x74
 
-// One TEV stage as GX's functions take it: the colour and alpha inputs (GpuTevColorArg, GpuTevAlphaArg), operations
+// One TEV stage as the console's functions take it: the colour and alpha inputs (GpuTevColorArg, GpuTevAlphaArg), operations
 // (GpuTevOp, compare operations included), bias, scale, clamp and output register, and the swap tables the
 // rasterised colour and the texture read through.
 void makeTexCoordTable();

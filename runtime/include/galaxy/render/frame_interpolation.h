@@ -133,7 +133,7 @@ struct PaletteMotion {
     std::uint32_t snapped = 0;
 };
 // Only the PNMTX slots in `position_mask`, the normal matrices in
-// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: GX
+// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: console
 // light n) are interpolated: the parts its draws can read.
 inline constexpr std::uint16_t kAllPaletteSlots = 0x3FFu;
 void palette_motion(RowView a, RowView b, const CameraMotion& camera,
@@ -145,7 +145,7 @@ void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
 
-// One GX light (16 XF words) at t: color and attenuation lerped; position and
+// One console light (16 XF words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A
 // null `a` (no previous snapshot) is b's light held still in the world.
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,

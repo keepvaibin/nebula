@@ -1,6 +1,6 @@
 #pragma once
 
-// A texture's sampling as the game's material record or lookup op states it (E-02: no GX filter codes or fixed-point
+// A texture's sampling as the game's material record or lookup op states it (E-02: no console filter codes or fixed-point
 // LOD words): wrap per axis, the minified and magnified filters, how levels are used, the LOD range and bias in levels
 // and anisotropy.
 

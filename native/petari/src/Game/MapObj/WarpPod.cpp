@@ -520,7 +520,7 @@ void WarpPod::drawCylinder(u32) const {
     }
 
     // runtime/src/render/materials/tex_alpha_lerp.hlsl: the glow colour to white by the texture's alpha, opaque
-    // (GX's alpha (texA * k + 1/2) * 2 is 1 for every constant alpha k), added; depth tested.
+    // (the console's alpha (texA * k + 1/2) * 2 is 1 for every constant alpha k), added; depth tested.
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 2, 0);
     MR::ddSetVtxFormat(2);

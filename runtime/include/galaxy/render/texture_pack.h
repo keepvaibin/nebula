@@ -4,7 +4,7 @@
 // Texture packs: higher-resolution replacements for the game's textures, found by the community naming convention
 // (a data convention, implemented from its public description):
 //   <pack>/[<GameID or its 3-letter prefix>/]**/tex1_<w>x<h>[_m]_<hash>[_<tlut hash>|_$]_<fmt>[_mip<n>|_arb].png|.dds
-// <w>x<h> and <fmt> are the game texture's size and GX format; <hash> the source bytes of its base level, <tlut hash>
+// <w>x<h> and <fmt> are the game texture's size and console format; <hash> the source bytes of its base level, <tlut hash>
 // the palette entries a C4/C8/C14X2 texture uses ($: any palette). A replacement is sampled with the game texture's
 // normalized coordinates at any size; its sampler LOD range shifts by log2 of the scale (TextureHandle::lod_shift_x16).
 //

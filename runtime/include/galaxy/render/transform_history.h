@@ -22,7 +22,7 @@
 
 namespace galaxy::render {
 
-// Row-major 3x4 affine in GX layout: p' = M * [p, 1].
+// Row-major 3x4 affine in console layout: p' = M * [p, 1].
 using Affine34 = std::array<float, 12>;
 
 [[nodiscard]] Affine34 affine_identity() noexcept;
@@ -30,7 +30,7 @@ using Affine34 = std::array<float, 12>;
 // False (and identity) when the 3x3 part is singular.
 [[nodiscard]] bool affine_inverse(const Affine34& m, Affine34& out) noexcept;
 void affine_transform_point(const Affine34& m, const float p[3], float out[3]) noexcept;
-// |v| without the squares overflowing (a GX light's direction can hold 1e31-scale values) or underflowing.
+// |v| without the squares overflowing (a console light's direction can hold 1e31-scale values) or underflowing.
 [[nodiscard]] float vector_length(const float v[3]) noexcept;
 // The transform between a (t = 0) and b (t = 1): the pair's decomposition
 // once, then any number of t (a sequence of sub-frames evaluates each pair
@@ -68,7 +68,7 @@ struct TransformRecord {
     float translation[3]{};
     // Inline position matrix (meaningful when !palette).
     Affine34 position{};
-    // GX projection registers A..F and type, without the scene jitter.
+    // console projection registers A..F and type, without the scene jitter.
     std::array<float, 7> projection{};
     // Palette snapshot, in float4 elements from the matrix ring base.
     std::uint32_t palette_offset = kNoPaletteOffset;

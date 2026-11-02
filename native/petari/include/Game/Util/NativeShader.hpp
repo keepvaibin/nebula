@@ -39,7 +39,7 @@ namespace NativeShader {
         rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
         rMaterial.alpha_write = 2;
         for (u32 i = 0; i < 8; i++) {
-            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GPU_PTIDENTITY), GX's texgens' default
+            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GPU_PTIDENTITY), the console's texgens' default
         }
     }
 
@@ -96,14 +96,14 @@ namespace NativeShader {
         rMaterial.constants[at + 3] = a / 255.0f;
     }
 
-    // Depth: tested by `func` (NEBULA_COMPARE_*, GX's order) when `test`, written when `write` (GpuSetZMode's terms).
+    // Depth: tested by `func` (NEBULA_COMPARE_*, the console's order) when `test`, written when `write` (GpuSetZMode's terms).
     inline void setDepth(NebulaNativeMaterial& rMaterial, bool test, u8 func, bool write) {
         rMaterial.depth_test = test ? 1 : 0;
         rMaterial.depth_func = test ? func : static_cast< u8 >(NEBULA_COMPARE_ALWAYS);
         rMaterial.depth_write = test && write ? 1 : 0;
     }
 
-    // Blending as GpuSetBlendMode's blend: source and destination factors (NEBULA_FACTOR_*, GX's order).
+    // Blending as GpuSetBlendMode's blend: source and destination factors (NEBULA_FACTOR_*, the console's order).
     inline void setBlend(NebulaNativeMaterial& rMaterial, u8 src, u8 dst) {
         rMaterial.blend_op = NEBULA_BLEND_ADD;
         rMaterial.blend_src = src;

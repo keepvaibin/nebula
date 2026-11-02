@@ -1,6 +1,6 @@
 // The native game's host (docs/NATIVE_PORT.md, "Module layout"): loads the game module (smg_game.dll), gives it
 // Nebula's services (nebula_game_api.h) and runs it. Built three ways:
-//   - nebula_native_host (native/CMakeLists.txt): headless. The GX stream is released as it arrives and PE events
+//   - nebula_native_host (native/CMakeLists.txt): headless. The console stream is released as it arrives and PE events
 //     answered at once; audio is paced but not played; no remotes connect.
 //   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the stream goes to Nebula's D3D12 renderer, which
 //     raises the PE events and presents the frame buffer the game displays.
@@ -321,7 +321,7 @@ struct Module {
 };
 Module gModule;
 
-// The GX command ring's size (sdk/gx/gx_fifo.c), mapped twice in a row: a span past the first mapping's end
+// The console command ring's size (sdk/gx/gx_fifo.c), mapped twice in a row: a span past the first mapping's end
 // continues in the second.
 
 // Progress counters for the host's log.
@@ -1942,7 +1942,7 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
     const bool linear = image->format >= NEBULA_TEXTURE_LINEAR_L8 && image->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
     const std::size_t header = linear ? NEBULA_TEXTURE_HEADER : 0u;
 #if defined(_WIN32)
-    // GALAXY_LOG_GUEST_TEXTURES=1: where each console-format image comes from (E-02: the GX tile decoders go once no
+    // GALAXY_LOG_GUEST_TEXTURES=1: where each console-format image comes from (E-02: the console tile decoders go once no
     // game site hands one over). The game module's return offsets, for llvm-symbolizer against its PDB.
     static const bool log_console = [] {
         const char* value = std::getenv("GALAXY_LOG_GUEST_TEXTURES");

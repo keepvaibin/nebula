@@ -516,7 +516,7 @@ namespace NebulaUi {
         sShown = next;
     }
 
-    // GX's scissor is in the frame buffer's units: the layout's canvas spans the default viewport.
+    // the console's scissor is in the frame buffer's units: the layout's canvas spans the default viewport.
     void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 rise, f32 left, f32 right, f32 top, f32 bottom) {
         f32 scaleX;
         f32 width;

@@ -807,7 +807,7 @@ void RendererD3D12::resolve_scene(bool depth, bool color_wanted) {
     record_scene_resolve(command_list_.Get(), color, depth);
     msaa.color_dirty = msaa.color_dirty && !color;
     if (depth) {
-        // The scene target's own targets and the GX state again, as the next draw expects them.
+        // The scene target's own targets and the console state again, as the next draw expects them.
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
         command_list_->OMSetRenderTargets(1, &scene_rtv_, FALSE, &scene_dsv_);
         bound_rt_aux_ = 0u;
@@ -1021,7 +1021,7 @@ HRESULT create_draw_root_signature(
     }
     *root_signature = nullptr;
 
-    // GX root signature:
+    // console root signature:
     //   [0] Root CBV b0,space0  VS+GS - VertexConstants
     //   [1] Root CBV b1,space0  VS+PS - PixelConstants (a native material's constants: both stages)
     //   [2] Descriptor table   SRV t0..t7,space0  PS - textures
@@ -7664,7 +7664,7 @@ void RendererD3D12::bind_scene() {
     command_list_->RSSetScissorRects(1, &sci);
     bound_viewport_ = vp;
     bound_scissor_ = sci;
-    // Full-scene target binding can overwrite a previously applied GX scissor even
+    // Full-scene target binding can overwrite a previously applied console scissor even
     // though its raw draw input is unchanged on the next draw.
     bound_scissor_input_valid_ = false;
     bound_viewport_valid_ = true;
@@ -7747,7 +7747,7 @@ void RendererD3D12::clear_scene(
         }
     }
     if (depth_enable) {
-        // REVERSED-Z buffer: GX z24 (near=0, far=2^24) inverts into the D3D depth value.
+        // REVERSED-Z buffer: console z24 (near=0, far=2^24) inverts into the D3D depth value.
         // GX_MAX_Z24 (0xFFFFFF = "clear to farthest") becomes about 0.0 here, which the flipped
         // GEQUAL-style funcs pass.
         command_list_->ClearDepthStencilView(
@@ -7835,7 +7835,7 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_rt_aux_ = call.aux_target;
     }
 
-    // Per-draw GX scissor, scaled to the scene target and clamped. An empty scissor
+    // Per-draw console scissor, scaled to the scene target and clamped. An empty scissor
     // rasterizes nothing (also how CullMode::All is expressed). The raw input
     // is cached only after a nonempty one has been applied.
     if (!bound_scissor_valid_ || !bound_scissor_input_valid_ ||
@@ -7878,8 +7878,8 @@ void RendererD3D12::draw(const DrawCall& call) {
     // without reversed-range support):
     //   min_filter = (farZ - zRange) / 2^24,  max_filter = farZ / 2^24
     //   MinDepth = 1 - max_filter,  MaxDepth = 1 - min_filter
-    // Composes with the negated projection z (fill_projection): GX near maps to the depth MaxDepth
-    // side, GX far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
+    // Composes with the negated projection z (fill_projection): console near maps to the depth MaxDepth
+    // side, console far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {
         const ScaledViewport scaled =
             compute_scaled_viewport(call.viewport, frame_);
@@ -8043,7 +8043,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE RendererD3D12::allocate_conversion_rtv(
 
 // Records the conversion blit (see kConvPs).  Handles the scene target source
 // transitions; the caller transitions `dest` to RENDER_TARGET first and back
-// after.  Restores the GX root signature + scene target binding before returning.
+// after.  Restores the console root signature + scene target binding before returning.
 void RendererD3D12::record_conversion_blit(
     ID3D12Resource* dest,
     unsigned dest_w,
@@ -8139,7 +8139,7 @@ void RendererD3D12::record_conversion_blit(
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 
-    // Restore the GX drawing state (root signature changed; scene target RTV/DSV and full
+    // Restore the console drawing state (root signature changed; scene target RTV/DSV and full
     // viewport/scissor re-bound; per-draw viewport/scissor follow).
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
@@ -8391,7 +8391,7 @@ bool RendererD3D12::copy_scene_to_texture(
             }
         }
     }
-    // The HDR scene scene target's copies go through the conversion blit (clamped to the texture's range, as GX's).
+    // The HDR scene scene target's copies go through the conversion blit (clamped to the texture's range, as the console's).
     if (const auto source_box = scene_hdr_ ? std::optional<D3D12_BOX>{} : detail::scene_identity_copy_box(
             params, is_depth_copy, frame_, w, h)) {
         if (replay_recording_) [[unlikely]] {
@@ -9052,7 +9052,7 @@ bool RendererD3D12::present(
         static_cast<LONG>(content_viewport.top + content_viewport.height)};
 
     // Both shader-visible heaps stay bound: the blit uses static samplers, but
-    // the overlays and GX recording expect the sampler heap.
+    // the overlays and console recording expect the sampler heap.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     const GpuPassScope present_pass{*this, GpuPass::Present};
     command_list_->SetDescriptorHeaps(2, heaps);
