@@ -165,6 +165,12 @@ namespace NebulaKernel {
     // sleeps until a host thread raises something.
     void poll();
 
+    // The audio thread (JASDriver, on the host's audio clock) takes no turns. It runs between these, when no thread is in
+    // a section with host events disabled, and none enters one until it leaves: what the console's audio interrupt and
+    // high-priority thread were to the game. A kernel call there that has to wait lets the others run and looks again.
+    void enterAudio();
+    void leaveAudio();
+
     // Host events by number (NEBULA_EVENT_*, nebula_kernel.h): the handler runs with host events and the scheduler
     // disabled, then the kernel reschedules.
     typedef void (*EventHandler)();
