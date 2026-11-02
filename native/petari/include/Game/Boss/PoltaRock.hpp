@@ -31,7 +31,7 @@ public:
 
     inline Polta* getOwner() {
         return mOwner;
-    }  // required to match instruction order in generateKill
+    }
 
     /* 0x8C */ Polta* mOwner;
     TQuat4f _90;

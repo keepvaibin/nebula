@@ -426,7 +426,6 @@ void SkeletalFishGuard::rotateHorizontal(const TVec3f& rA2, f32 scalar) {
     TVec3f v10 = rA2.killElement(mGravity);
     if (!MR::isNearZero(v10)) {
         MR::normalize(&v10);
-        // TODO: this looks like an inline. Possible fakematch.
         TVec3f* v11 = &_D0;
         TVec3f* g = &mGravity;
         TVec3f v9 = _D0.killElement(*g);

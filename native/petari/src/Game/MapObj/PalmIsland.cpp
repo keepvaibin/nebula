@@ -49,8 +49,6 @@ inline void PalmIsland::exeWait() {
     }
 }
 
-// required to match
-// TODO remove
 void PalmIsland::exeFloat() {
     if (MR::isFirstStep(this)) {
         _90 = mPosition;

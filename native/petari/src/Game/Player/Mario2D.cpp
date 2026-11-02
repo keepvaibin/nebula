@@ -5,12 +5,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "math_types.hpp"
 
-void FORCE_ADD() {
-    TVec3f vec;
-    TVec3f vec2;
-    vec + vec2;
-}
-
 void Mario::stick2DadjustGround(f32& rX, f32& rY) {
     if (isStageCameraRotate2D()) {
         return;

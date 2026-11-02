@@ -62,8 +62,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void CameraCalc_DUMMY() {
-    TVec3f d(JMAAcosRadian(0.0f));
-    TVec3f a, b, c;
-    b *= 2.0f;
-}

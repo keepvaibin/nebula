@@ -22,11 +22,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void BombHei_DUMMY() {
-    TVec3f a;
-    a *= 1.0f;
-}
-
 namespace {
     static const s32 hStartBrkTime = 600;
     static const s32 hBrkRateUpTime = 120;

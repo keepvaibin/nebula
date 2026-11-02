@@ -95,23 +95,9 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
 - Motion: a shake also spins; the accelerometer drives the tilt sections, with a stick fallback.
 - Controllers through SDL3 with the PC mapping; the right stick points when no touch does.
 
-## Phases
-
-1. V0: GxBackend's D3D12 sites behind RendererD3D12 methods; frames identical, CPU unchanged (A/B).
-2. V1: RendererVulkan bring-up on Windows (the RTX and the iGPU run Vulkan): device, EFB targets, swapchain, clear and
-   present.
-3. V2: draws with the uber shaders (SPIR-V built offline), vertex/index/constant rings, textures and samplers.
-4. V3: EFB copies to textures and to the XFB, peeks (pointer depth), PE completion through fences, post-process.
-5. V4: specialised shaders through glslang at run time, pipeline cache on disk.
-6. V5: Linux host on SDL3 (window, audio, input), run in WSL on lavapipe for correctness and on real GPUs.
-7. V6: macOS (MoltenVK, arm64 context switch) and Android (NDK, APK, arm64) builds.
-
-Each phase: pictures compared with D3D12 on the same route, CPU and GPU measured, evidence on the dashboard.
-
 ## State
 
-- V0 done: GxBackend, TextureCache and EfbCopyManager are API-neutral; the window, input and settings UI are shared
-  (host_window_win32.cpp, UiCanvas). D3D12 frames identical after each step.
+- The renderer core is API-neutral; the window, input and settings UI are shared (host_window_win32.cpp, UiCanvas).
 - Shader path (M): every shader the Vulkan backend uses compiles through glslang to SPIR-V that passes the validator,
   each descriptor at its layout's binding (`galaxy_vk_shader_tests`): the uber shaders' variants, line/point geometry,
   EFB conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.

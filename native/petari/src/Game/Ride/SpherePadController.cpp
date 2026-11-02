@@ -7,12 +7,6 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include "Game/System/NebulaInput.hpp"
 
-void SpherePadController_DUMMY() {
-    TPos3f m;
-    TVec3f a, b;
-    m.setRotate(a, b);
-}
-
 SpherePadController::SpherePadController() : SphereController() {
 }
 

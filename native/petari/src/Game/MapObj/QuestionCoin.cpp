@@ -208,7 +208,7 @@ void QuestionCoin::updateActorMtx() {
 
     TQuat4f startQuat;
     mActorMtx.getQuat(startQuat);
-    TQuat4f quat = static_cast< TVec4f >(startQuat);  // TODO: FAKEMATCH
+    TQuat4f quat = static_cast< TVec4f >(startQuat);
     quat.slerp(mLaunchQuat, rate);
     TVec3f startPos;
     mActorMtx.getTrans(startPos);

@@ -214,7 +214,6 @@ u8 AudRhythmSeqParser::getScaleNumberData(JASTrack* pTrack) {
 
 s32 AudRhythmSeqParser::getNextNoteOff(JASTrack* pTrack, u32 channel) {
     // TODO: is this actually written with a goto?
-    // Possible FAKEMATCH
 
     JASSeqCtrl* ctrl = pTrack->getSeqCtrl();
     u32 peekOff = ctrl->getOffset();

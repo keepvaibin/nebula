@@ -8,16 +8,10 @@
 #include <nebula_math.h>
 
 inline void getCsvDataStr(const char** pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
-    // This SHOULD NOT be here. This is only here to match BezierRail::BezierRail
-    // This is an exact copy of MR::getCsvDataStr, but that refuses to inline
-    // automatically in BezierRail::BezierRail, so this is used temporarily.
     pMapInfo->getValue(idx, pKey, pOut);
 }
 
 inline s32 getCsvDataElementNum(const JMapInfo* pMapInfo) {
-    // This SHOULD NOT be here. This is only here to match BezierRail::BezierRail
-    // This is an exact copy of MR::getCsvDataElementNum, but that refuses to inline
-    // automatically in BezierRail::BezierRail, so this is used temporarily.
     if (pMapInfo->mData != nullptr) {
         return pMapInfo->mData->mNumEntries;
     }
@@ -365,7 +359,6 @@ int BezierRail::getCurrentCtrlPointIndex(f32 t, bool forward) const {
     if (forward) {
         for (int i = 0; i < mNumRailParts; i++) {
             // this matches but is probably not written like this.
-            // other "simple" configurations dont seem to match
             f32 pointCoord = mPointCoords[i];
             if (!(pointCoord <= pos)) {
                 return i;

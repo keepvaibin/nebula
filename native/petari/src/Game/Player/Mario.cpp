@@ -404,7 +404,6 @@ void Mario::checkKeyLock() {
     }
 }
 
-// Regswap
 void Mario::updateTimers() {
     if (mMovementStates._1) {
         _3CE++;
@@ -2228,10 +2227,6 @@ void Mario::touchWater() {
     if (mActor->isActionOk("\220\205\211\360\217\234" /* 水解除 */) && mMorphResetTimer == 0) {
         mMorphResetTimer = 10;
     }
-}
-
-XjointTransform* (XanimeCore::*Mario_FORCE_MATCH_JOINT_TRANSFORM())(u32) {
-    return &XanimeCore::getJointTransform;
 }
 
 void MarioState::draw3D() const {

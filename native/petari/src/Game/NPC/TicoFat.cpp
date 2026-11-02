@@ -569,10 +569,6 @@ void TicoFat::emitScreenEffect() {
     MR::emitEffect(this, "TicoFatScreenEffectLight")->setHostMtx(_1AC);
 }
 
-void TicoFat_FORCE_EMIT_STRING() {
-    JUTNativeLog("TicoFatScreenEffectFog");
-}
-
 void TicoFat::updateScreenEffect() {
     TVec3f v19 = mPosition - MR::getCamPos();
     MR::normalizeOrZero(&v19);
