@@ -1,10 +1,9 @@
 #include "JSystem/JUtility/JUTPalette.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include "JSystem/JUtility/JUTException.hpp"
 
 void JUTPalette::storeTLUT(_GpuTlut param_0, ResTLUT* tlut) {
     if (tlut == nullptr) {
-        JUTException::panic_f(__FILE__, 35, "JUTTexture: TLUT is NULL\n");
+        NEBULA_PANIC("JUTTexture: TLUT is NULL\n");
     }
     mName = param_0;
     mFormat = tlut->mFormat;

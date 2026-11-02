@@ -3,7 +3,6 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JUtility/JUTException.hpp>
 
 void CameraAnim_FORCE_MATCH_SDATA2() {
     (void)1.0f;
@@ -228,7 +227,7 @@ bool CameraAnim::loadBin(u8* pFile) {
     }
 
     if (pHeader->mType[3] == 'M' || pHeader->mType[3] == 'N') {
-        JUTException::panic_f(__FILE__, __LINE__, "CameraAnim: a camera animation not in host order (the importer cooks it)");
+        NEBULA_PANIC("CameraAnim: a camera animation not in host order (the importer cooks it)");
     }
     if (pHeader->mType[0] == 'C' && pHeader->mType[1] == 'A' && pHeader->mType[2] == 'N' && pHeader->mType[3] == 'm') {
         mIsKey = false;

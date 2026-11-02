@@ -2,7 +2,6 @@
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
-#include "JSystem/JUtility/JUTException.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -121,7 +120,7 @@ namespace J3DNativeView {
 
     void getViewportv(f32* pValues) {
         if (!sViewportSet) {
-            JUTException::panic_f(__FILE__, __LINE__, "J3DNativeView: the viewport read before the game set one");
+            NEBULA_PANIC("J3DNativeView: the viewport read before the game set one");
         }
         for (u32 i = 0; i < 6; i++) {
             pValues[i] = sViewport[i];
@@ -154,7 +153,7 @@ namespace J3DNativeView {
 
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight) {
         if (!sScissorSet) {
-            JUTException::panic_f(__FILE__, __LINE__, "J3DNativeView: the scissor read before the game set one");
+            NEBULA_PANIC("J3DNativeView: the scissor read before the game set one");
         }
         *pLeft = sScissor[0];
         *pTop = sScissor[1];

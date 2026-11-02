@@ -1,7 +1,6 @@
 #include "nw4r/ut/ResFont.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "nw4r/ut/binaryFileFormat.h"
-#include <JSystem/JUtility/JUTException.hpp>
 #include <stdint.h>
 
 namespace nw4r {
@@ -45,7 +44,7 @@ namespace nw4r {
                 }
             } else {
                 if (fileHeader->signature == 'RFNT' || fileHeader->signature == 'TNFR') {
-                    JUTException::panic_f(__FILE__, __LINE__, "ResFont: a font not in the native layout (the importer cooks it)");
+                    NEBULA_PANIC("ResFont: a font not in the native layout (the importer cooks it)");
                 }
                 if (fileHeader->version == 0x104) {
                     if (!IsValidBinaryFile(fileHeader, 'RFNN', 0x104, 2)) {

@@ -1,5 +1,4 @@
 #include "nw4r/lyt/common.h"
-#include <JSystem/JUtility/JUTException.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/lyt/layout.h"
 #include <NebulaGpuEnums.h>
@@ -19,7 +18,7 @@ namespace nw4r {
             bool TestFileHeader(const res::BinaryFileHeader& fileHeader, u32 sig) {
                 // A layout the importer cooked reads its byte-order mark as 0xFEFF; a big-endian one as 0xFFFE.
                 if (fileHeader.byteOrder == 0xFFFE) {
-                    JUTException::panic_f(__FILE__, __LINE__, "lyt: a layout not in host order (the importer cooks it)");
+                    NEBULA_PANIC("lyt: a layout not in host order (the importer cooks it)");
                 }
                 return GetSignatureInt(fileHeader.signature) == sig && fileHeader.byteOrder == 0xFEFF;
             }

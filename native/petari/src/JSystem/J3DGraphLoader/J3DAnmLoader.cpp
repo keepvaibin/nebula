@@ -1,7 +1,6 @@
 #include "JSystem/J3DGraphLoader/J3DAnmLoader.hpp"
 #include "JSystem/J3DGraphAnimator/J3DAnimation.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 J3DAnmBase* J3DAnmLoaderDataBase::load(const void* i_data, J3DAnmLoaderDataBaseFlag flag) {
     if (!i_data) {
@@ -9,7 +8,7 @@ J3DAnmBase* J3DAnmLoaderDataBase::load(const void* i_data, J3DAnmLoaderDataBaseF
     }
     const JUTDataFileHeader* header = (const JUTDataFileHeader*)i_data;
     if (header->mMagic == '1D3J') {  // "J3D1" as the disc has it
-        JUTException::panic_f(__FILE__, __LINE__, "J3DAnmLoader: an animation not in host order (the importer cooks it)");
+        NEBULA_PANIC("J3DAnmLoader: an animation not in host order (the importer cooks it)");
     }
     if (header->mMagic == 'J3D1') {
         switch (header->mType) {

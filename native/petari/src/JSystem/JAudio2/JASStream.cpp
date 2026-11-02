@@ -9,7 +9,6 @@
 
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -121,13 +120,13 @@ void JASStream::load() {
 
     u8* data = static_cast< u8* >(malloc(mFile.mLength));
     if (data == nullptr || GameAssets::read(&mFile, data, mFile.mLength, 0) < 0) {
-        JUTException::panic_f(__FILE__, __LINE__, "a stream of %u bytes cannot be loaded", mFile.mLength);
+        NEBULA_PANIC("a stream of %u bytes cannot be loaded", mFile.mLength);
     }
 
     Header header;
     memcpy(&header, data, sizeof(header));
     if (header.tag != 'NSTR') {
-        JUTException::panic_f(__FILE__, __LINE__, "a stream not cooked by this version of the importer");
+        NEBULA_PANIC("a stream not cooked by this version of the importer");
     }
 
     if (mData != nullptr) {

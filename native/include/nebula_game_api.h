@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 89u
+#define NEBULA_GAME_API_VERSION 90u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -479,15 +479,12 @@ typedef struct NebulaAssetEntry {
     const char* name;  /* valid for the process's life */
 } NebulaAssetEntry;
 
-/* System settings (SCGet*), with the SDK's values (SC_LANGUAGE_*, SC_SOUND_MODE_*, SC_ASPECT_RATIO_*...). */
+/* The settings the game reads from the player's system (system_setting). */
 enum {
-    NEBULA_SC_LANGUAGE = 1,
-    NEBULA_SC_SOUND_MODE,
-    NEBULA_SC_ASPECT_RATIO,
-    NEBULA_SC_PROGRESSIVE_MODE,
-    NEBULA_SC_EURGB60_MODE,
-    NEBULA_SC_MOTOR_MODE,           /* 0 rumble off, 1 on */
-    NEBULA_SC_SCREEN_SAVER_MODE,    /* 0 off, 1 on: the screen dims after 5 idle minutes (the game lowers its volume) */
+    NEBULA_SETTING_LANGUAGE = 1,
+    NEBULA_SETTING_SOUND_MODE,
+    NEBULA_SETTING_WIDESCREEN,
+    NEBULA_SETTING_SCREEN_DIMMING,  /* 0 off, 1 on: the screen dims after 5 idle minutes (the game lowers its volume) */
 };
 
 /* A player's controller as the game reads it (input_read): one sample per moment, oldest first. */
@@ -971,8 +968,8 @@ typedef struct NebulaHostServices {
        its status leaves NEBULA_SAVE_PENDING (the host writes it from its own thread). */
     void (*save_request)(void* user, const NebulaSaveRequest* request);
 
-    /* A system setting (NEBULA_SC_*). */
-    uint32_t (*sc_get)(void* user, uint32_t item);
+    /* A setting of the player's system (NEBULA_SETTING_*). */
+    uint32_t (*system_setting)(void* user, uint32_t item);
 
     /* Input. `device` gets player `player`'s controller; with `max` > 0 `samples` gets its samples since the last
        read, oldest first, one taken now and one every 10 ms before it (at most `max`, the newest kept): the count. */
@@ -1014,8 +1011,9 @@ typedef struct NebulaHostServices {
     /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
     void (*game_context)(void* user, uint32_t what, int32_t value);
 
-    /* The game ends (NEBULA_POWER_*): OSShutdownSystem, OSRestart, OSReturnToMenu, OSRebootSystem. Does not return. */
-    void (*power)(void* user, uint32_t what);
+    /* The game closes, or starts again from its boot, with pending saves written. Do not return. */
+    void (*app_exit)(void* user);
+    void (*app_restart)(void* user);
 
     /* Tests: once per game scene frame (before its 3D), what a hidden run asks of the game (GALAXY_TEST_*): returns 1
        with `action` filled, or 0. */
@@ -1191,13 +1189,6 @@ enum {
     NEBULA_PATCH_MESSENGER_ALWAYS_EX,        /* KinopioAstro (the 1-up messenger) gives its larger supply */
     NEBULA_PATCH_MESSENGER_EX_ONE_UPS,       /* value: that supply's 1-ups (20) */
     NEBULA_PATCH_COUNT
-};
-
-enum {
-    NEBULA_POWER_SHUTDOWN = 1, /* the console turns off: the game closes */
-    NEBULA_POWER_RESTART,      /* the game starts again from its boot */
-    NEBULA_POWER_MENU,         /* back to the Wii Menu: the game closes */
-    NEBULA_POWER_REBOOT,       /* the console restarts: the game closes */
 };
 
 enum {

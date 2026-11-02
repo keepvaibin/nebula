@@ -2,7 +2,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "Game/Util/RenderSignals.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -41,7 +40,7 @@ namespace {
     }
 
     void fail(const char* pWhat) {
-        JUTException::panic_f(__FILE__, __LINE__, "J3DNativeDraw: %s", pWhat);
+        NEBULA_PANIC("J3DNativeDraw: %s", pWhat);
     }
 
     void send() {

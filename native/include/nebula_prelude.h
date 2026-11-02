@@ -60,6 +60,13 @@ static inline int nebula_stricmp(const char* s1, const char* s2) {
 }
 
 #include "nebula_types.h"
+/* A fatal error of the game's: the host's crash report names the file, the line and the message. Does not return. */
+#ifdef __cplusplus
+extern "C"
+#endif
+__attribute__((noreturn)) __attribute__((format(printf, 3, 4))) void nebula_panic(const char* file, int line, const char* format, ...);
+#define NEBULA_PANIC(...) nebula_panic(__FILE__, __LINE__, __VA_ARGS__)
+
 #include "nebula_float_cast.h"
 #include "nebula_format.h"
 

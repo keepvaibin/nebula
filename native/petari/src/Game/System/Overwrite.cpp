@@ -12,7 +12,7 @@
 #include <JSystem/JKernel/JKRThread.hpp>
 #include <JSystem/JKernel/JKRUnitHeap.hpp>
 
-#include <JSystem/JUtility/JUTConsole.hpp>
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 #include <JSystem/JSupport/JSUInputStream.hpp>
@@ -170,17 +170,6 @@ NEBULA_NO_ASAN
 u32 JKRHeap::getMaxAllocatableSize(int alignment) {
     u32 address = (u32)reinterpret_cast< uintptr_t >(getMaxFreeBlock());
     return ~(alignment - 1) & (getFreeSize() - ((alignment - 1) & (alignment - (address & 0xF))));
-}
-
-extern "C" void JUTWarningConsole_f(const char* pFormat, ...) {
-    va_list args;
-    va_start(args, pFormat);
-    JUTWarningConsole_f_va(pFormat, args);
-    va_end(args);
-}
-
-extern "C" void JUTWarningConsole(const char* pMessage) {
-    JUTWarningConsole_f("%s", pMessage);
 }
 
 JSUOutputStream::~JSUOutputStream() {
