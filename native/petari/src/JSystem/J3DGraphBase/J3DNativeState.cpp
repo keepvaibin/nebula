@@ -22,6 +22,85 @@ namespace {
 }  // namespace
 
 namespace J3DNativeState {
+    namespace {
+        NebulaPassState sPass;
+
+        void setBlendOf(const u8* a) {
+            sPass.blend_op = a[0];
+            sPass.blend_src = a[1] <= 9 ? a[1] : 0;
+            sPass.blend_dst = a[2] <= 9 ? a[2] : 0;
+            sPass.logic_op = a[3] & 15;
+        }
+    }  // namespace
+
+    const NebulaPassState* pass() {
+        return &sPass;
+    }
+
+    void passChanges(const NebulaStateOp* pOps, u32 count) {
+        for (u32 i = 0; i < count; i++) {
+            const u8* a = pOps[i].a;
+            switch (pOps[i].kind) {
+            case J3D_STATE_BLEND_ETC:
+                setBlendOf(a);
+                sPass.color_write = a[4] != 0;
+                sPass.alpha_write = a[5] != 0;
+                break;
+            case J3D_STATE_BLEND:
+                setBlendOf(a);
+                break;
+            case J3D_STATE_Z_MODE:
+                sPass.depth_test = a[0] & 1;
+                sPass.depth_func = a[1] & 7;
+                sPass.depth_write = a[2] & 1;
+                break;
+            case J3D_STATE_DST_ALPHA:
+                sPass.constant_alpha = a[0] != 0;
+                sPass.constant_alpha_value = a[1];
+                break;
+            case J3D_STATE_CULL:
+                sPass.cull = a[0] & 3;
+                break;
+            case J3D_STATE_COLOR_UPDATE:
+                sPass.color_write = a[0] != 0;
+                break;
+            case J3D_STATE_ALPHA_UPDATE:
+                sPass.alpha_write = a[0] != 0;
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    void sendMaterial(const NebulaNativeMaterial* pMaterial) {
+        // Its state comes with the material except when only its constants change, or where it keeps what was set.
+        if ((pMaterial->constants_only & 1) == 0 && pMaterial->shader != NEBULA_SHADER_NONE) {
+            if (pMaterial->blend_op != NEBULA_NATIVE_KEPT) {
+                sPass.blend_op = pMaterial->blend_op;
+                sPass.blend_src = pMaterial->blend_src <= 9 ? pMaterial->blend_src : 0;
+                sPass.blend_dst = pMaterial->blend_dst <= 9 ? pMaterial->blend_dst : 0;
+                sPass.logic_op = pMaterial->logic_op & 15;
+            }
+            if (pMaterial->color_write != 2) {
+                sPass.color_write = pMaterial->color_write != 0;
+            }
+            if (pMaterial->alpha_write != 2) {
+                sPass.alpha_write = pMaterial->alpha_write != 0;
+            }
+            if (pMaterial->depth_test != NEBULA_NATIVE_KEPT) {
+                sPass.depth_test = pMaterial->depth_test != 0;
+                sPass.depth_func = pMaterial->depth_func & 7;
+                sPass.depth_write = pMaterial->depth_write != 0;
+            }
+            if (pMaterial->cull != NEBULA_NATIVE_KEPT) {
+                sPass.cull = pMaterial->cull <= 2 ? pMaterial->cull : 0;
+            }
+        }
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->native_material(pHost->user, pMaterial);
+    }
+
     void setZMode(GpuBool compare, GpuCompare func, GpuBool update) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
@@ -75,7 +154,7 @@ namespace J3DNativeState {
     void setIndTexMtx(GpuIndTexMtxID id, const f32 offset[2][3], s8 scaleExp) {
         NebulaStateOp op;
         memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_IND_TEX_MATRIX;
+        op.kind = J3D_STATE_IND_TEX_MATRIX;
         op.a[0] = static_cast< u8 >(id);
         op.a[1] = static_cast< u8 >(scaleExp);
         for (u32 c = 0; c < 3; c++) {

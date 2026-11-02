@@ -5,6 +5,27 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
+// Changes the game keeps for itself (J3DStateList::send folds them into its materials and its pass state; the host never
+// sees them), beside the ones it sends (NEBULA_STATE_*).
+enum {
+    J3D_STATE_BLEND_ETC = 100,      /* type, source, destination, logic op, colour update, alpha update, dither */
+    J3D_STATE_BLEND,                /* type, source, destination, logic op (updates and dither kept) */
+    J3D_STATE_Z_MODE,               /* compare, function, update */
+    J3D_STATE_ALPHA_COMPARE,        /* comparison 0, reference 0, op, comparison 1, reference 1 */
+    J3D_STATE_DST_ALPHA,            /* enable, alpha */
+    J3D_STATE_CULL,                 /* NEBULA_CULL_* */
+    J3D_STATE_TEV_COLOR,            /* register, r, g, b, a */
+    J3D_STATE_MATERIAL_COLOR,       /* channel (0, 1), r, g, b, a */
+    J3D_STATE_AMBIENT_COLOR,        /* as NEBULA_STATE_MATERIAL_COLOR */
+    J3D_STATE_FOG,                  /* type, r, g, b, a; f: start, end, near, far */
+    J3D_STATE_COLOR_UPDATE,         /* enable */
+    J3D_STATE_ALPHA_UPDATE,         /* enable */
+    J3D_STATE_TEV_KCOLOR,           /* konst register, r, g, b, a */
+    J3D_STATE_TEV_COLOR_S10,        /* register; size: r, g; f: b, a (signed 10-bit values) */
+    J3D_STATE_IND_TEX_MATRIX,       /* matrix id (GXIndTexMtxID), scale exponent (s8); f: offset[0][0], [1][0],
+                                       [0][1], [1][1], [0][2], [1][2] */
+};
+
 // A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).
 struct J3DNativeLight {
     u8 mColor[4];

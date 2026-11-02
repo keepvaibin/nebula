@@ -1,3 +1,4 @@
+#include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
@@ -65,6 +66,7 @@ namespace {
         }
         draw.matrix_count = J3DNativeShape::positionMatrices(places, &draw.matrices);
         const NebulaHostServices* pHost = nebula_host();
+        draw.pass = *J3DNativeState::pass();
         pHost->immediate(pHost->user, &draw);
     }
 

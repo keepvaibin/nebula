@@ -70,6 +70,7 @@ struct CaptureRequest {
     std::uint8_t channels = 0;      // NebulaTargetChannels
     bool display = false;           // the frame shown (frame_show), not a texture
     bool clear = false;             // the rectangle cleared afterwards (colour and alpha 0, depth far)
+    bool clear_color = false, clear_alpha = false, clear_depth = false;  // what the clear touches
     bool half_scale = false;        // each texel averages 2x2 of the frame's
     bool luma = false;              // the red channel holds the colour's luminance
     bool depth = false;             // the red channel holds the depth's high byte

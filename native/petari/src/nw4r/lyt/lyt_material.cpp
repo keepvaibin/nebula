@@ -114,44 +114,32 @@ namespace nw4r {
                 }
             }
 
-            u32 CalcOffsetTexSRTAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetTexSRTAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.texMap * ROUND_UP(sizeof(nw4r::lyt::TexMap), 4);
             }
 
-            u32 CalcOffsetTexCoordGenAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetTexCoordGenAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.texSRT * ROUND_UP(sizeof(nw4r::lyt::TexSRT), 4) + CalcOffsetTexSRTAry(rNums);
             }
 
-            u32 CalcOffsetChanCtrlAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetChanCtrlAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.texCoordGen * ROUND_UP(sizeof(nw4r::lyt::TexCoordGen), 4) + CalcOffsetTexCoordGenAry(rNums);
             }
 
-            u32 CalcOffsetMatColAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetMatColAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.chanCtrl * ROUND_UP(sizeof(nw4r::lyt::ChanCtrl), 4) + CalcOffsetChanCtrlAry(rNums);
             }
 
-            u32 CalcOffsetTevSwapAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetGetAlphaCompare(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.matCol * ROUND_UP(sizeof(nw4r::ut::Color), 4) + CalcOffsetMatColAry(rNums);
             }
 
-            u32 CalcOffsetGetAlphaCompare(const nw4r::lyt::detail::BitGXNums& rNums) {
-                return rNums.tevSwap * ROUND_UP(sizeof(nw4r::lyt::TevSwapMode), 4) + CalcOffsetTevSwapAry(rNums);
-            }
-
-            u32 CalcOffsetBlendMode(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetBlendMode(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.alpComp * ROUND_UP(sizeof(nw4r::lyt::AlphaCompare), 4) + CalcOffsetGetAlphaCompare(rNums);
             }
 
-            u32 CalcOffsetIndirectStageAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetIndTexSRTAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.blendMode * ROUND_UP(sizeof(nw4r::lyt::BlendMode), 4) + CalcOffsetBlendMode(rNums);
-            }
-
-            u32 CalcOffsetIndTexSRTAry(const nw4r::lyt::detail::BitGXNums& rNums) {
-                return rNums.indStage * ROUND_UP(sizeof(nw4r::lyt::IndirectStage), 4) + CalcOffsetIndirectStageAry(rNums);
-            }
-
-            u32 CalcOffsetTevStageAry(const nw4r::lyt::detail::BitGXNums& rNums) {
-                return rNums.indSRT * ROUND_UP(sizeof(nw4r::lyt::TexSRT), 4) + CalcOffsetIndTexSRTAry(rNums);
             }
 
             void InitTexSRT(nw4r::lyt::TexSRT* texSRTs, u32 num) {
@@ -198,17 +186,14 @@ namespace nw4r {
             const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(GPU_MAX_TEXCOORD));
             const bool allocChanCtrl = 0 != pRes->resNum.GetChanCtrlNum();
             const bool allocMatCol = 0 != pRes->resNum.GetMatColNum();
-            const bool allocTevSwap = pRes->resNum.HasTevSwapTable();
             const bool allocAlpComp = pRes->resNum.HasAlphaCompare();
             const bool allocBlendMode = pRes->resNum.HasBlendMode();
             u8 indTexSRTNum = ut::Min(pRes->resNum.GetIndTexSRTNum(), u8(3));
-            u8 indStageNum = ut::Min(pRes->resNum.GetIndTexStageNum(), u8(GPU_MAX_INDTEXSTAGE));
-            u8 tevStageNum = ut::Min(pRes->resNum.GetTevStageNum(), u8(GPU_MAX_TEVSTAGE));
 
-            ReserveGXMem(texMapNum, texSRTNum, texCoordGenNum, tevStageNum, allocTevSwap, indStageNum, indTexSRTNum, allocChanCtrl, allocMatCol,
+            ReserveStorage(texMapNum, texSRTNum, texCoordGenNum, indTexSRTNum, allocChanCtrl, allocMatCol,
                          allocAlpComp, allocBlendMode);
 
-            if (mpGXMem) {
+            if (mpStorage) {
                 SetTextureNum(texMapNum);
                 if (texMapNum > 0) {
                     const res::Texture* const textures =
@@ -237,7 +222,7 @@ namespace nw4r {
 
                 TexCoordGen* texCoordGens = GetTexCoordGenAry();
                 SetTexCoordGenNum(texCoordGenNum);
-                for (int i = 0; i < mGXMemNum.texCoordGen; ++i) {
+                for (int i = 0; i < mNum.texCoordGen; ++i) {
                     texCoordGens[i] = resTexCoordGens[i];
                 }
 
@@ -253,15 +238,6 @@ namespace nw4r {
                     resOffs += sizeof(*pResMatCol);
                 }
 
-                if (allocTevSwap) {
-                    const TevSwapMode* const pResTevSwap = detail::ConvertOffsToPtr< TevSwapMode >(pRes, resOffs);
-                    TevSwapMode* const tevSwaps = GetTevSwapAry();
-                    for (int i = 0; i < GPU_MAX_TEVSWAP; ++i) {
-                        tevSwaps[i] = pResTevSwap[i];
-                    }
-                    resOffs += sizeof(*tevSwaps) * GPU_MAX_TEVSWAP;
-                }
-
                 if (indTexSRTNum > 0) {
                     TexSRT* const indTexSRTs = GetIndTexSRTAry();
                     const TexSRT* const pResIndMtx = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
@@ -270,26 +246,6 @@ namespace nw4r {
                     }
                 }
                 resOffs += sizeof(TexSRT) * pRes->resNum.GetIndTexSRTNum();
-
-                if (indStageNum > 0) {
-                    SetIndStageNum(indStageNum);
-                    IndirectStage* indirectStages = GetIndirectStageAry();
-                    const IndirectStage* const pResIndStg = detail::ConvertOffsToPtr< IndirectStage >(pRes, resOffs);
-                    for (int i = 0; i < indStageNum; ++i) {
-                        indirectStages[i] = pResIndStg[i];
-                    }
-                }
-                resOffs += sizeof(IndirectStage) * pRes->resNum.GetIndTexStageNum();
-
-                if (tevStageNum > 0) {
-                    SetTevStageNum(tevStageNum);
-                    TevStage* const tevStages = GetTevStageAry();
-                    const TevStage* const pResTevStg = detail::ConvertOffsToPtr< TevStage >(pRes, resOffs);
-                    for (int i = 0; i < tevStageNum; ++i) {
-                        tevStages[i] = pResTevStg[i];
-                    }
-                }
-                resOffs += sizeof(TevStage) * pRes->resNum.GetTevStageNum();
 
                 if (allocAlpComp) {
                     const AlphaCompare* const pResAlphaCompare = detail::ConvertOffsToPtr< AlphaCompare >(pRes, resOffs);
@@ -306,6 +262,8 @@ namespace nw4r {
             const u8* native = detail::ConvertOffsToPtr<u8>(pRes, resOffs);
             if (memcmp(native, "NSID", 4) == 0) {
                 memcpy(mNativeShaders, native + 4, sizeof(mNativeShaders));
+                memcpy(mCoordMap, native + 4 + sizeof(mNativeShaders), sizeof(mCoordMap));
+                mHasStages = native[4 + sizeof(mNativeShaders) + sizeof(mCoordMap)] != 0;
             }
         }
 
@@ -316,105 +274,93 @@ namespace nw4r {
             mTevCols[1].a = mTevCols[1].b = mTevCols[1].g = mTevCols[1].r = 255;
             mTevCols[2].a = mTevCols[2].b = mTevCols[2].g = mTevCols[2].r = 255;
 
-            InitBitGXNums(&mGXMemCap);
-            InitBitGXNums(&mGXMemNum);
+            InitStorageNums(&mCap);
+            InitStorageNums(&mNum);
 
             mbUserAllocated = false;
 
-            mpGXMem = 0;
+            mpStorage = 0;
             memset(mNativeShaders, 0, sizeof(mNativeShaders));
+            // A material without its own stages: each texture by its own coordinate.
+            for (u32 i = 0; i < 8; i++) {
+                mCoordMap[i] = static_cast< u8 >(i);
+            }
+            mHasStages = false;
         }
 
         Material::~Material() {
             UnbindAllAnimation();
 
-            if (mpGXMem != NULL) {
-                Layout::FreeMemory(mpGXMem);
-                mpGXMem = NULL;
+            if (mpStorage != NULL) {
+                Layout::FreeMemory(mpStorage);
+                mpStorage = NULL;
             }
         }
 
-        void Material::InitBitGXNums(detail::BitGXNums* ptr) {
+        void Material::InitStorageNums(detail::StorageNums* ptr) {
             ptr->texMap = 0;
             ptr->texSRT = 0;
             ptr->texCoordGen = 0;
             ptr->indSRT = 0;
-            ptr->indStage = 0;
-            ptr->tevSwap = 0;
-            ptr->tevStage = 0;
             ptr->chanCtrl = 0;
             ptr->matCol = 0;
             ptr->alpComp = 0;
             ptr->blendMode = 0;
         }
 
-        void Material::ReserveGXMem(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 tevStageNum, bool allocTevSwap, u8 indStageNum, u8 indSRTNum,
+        void Material::ReserveStorage(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 indSRTNum,
                                     bool allocChanCtrl, bool allocMatCol, bool allocAlpComp, bool allocBlendMode) {
-            const int tevSwapNum = allocTevSwap ? 1 : 0;
             const int chanCtrlNum = allocChanCtrl ? 1 : 0;
             const int matColNum = allocMatCol ? 1 : 0;
             const int alpCompNum = allocAlpComp ? 1 : 0;
             const int blendModeNum = allocBlendMode ? 1 : 0;
 
-            if (mGXMemCap.texMap < texMapNum || mGXMemCap.texSRT < texSRTNum || mGXMemCap.texCoordGen < texCoordGenNum ||
-                mGXMemCap.tevStage < tevStageNum || mGXMemCap.tevSwap < tevSwapNum || mGXMemCap.indStage < indStageNum ||
-                mGXMemCap.indSRT < indSRTNum || mGXMemCap.chanCtrl < chanCtrlNum || mGXMemCap.matCol < matColNum || mGXMemCap.alpComp < alpCompNum ||
-                mGXMemCap.blendMode < blendModeNum) {
-                if (mpGXMem) {
-                    Layout::FreeMemory(mpGXMem);
-                    mpGXMem = 0;
+            if (mCap.texMap < texMapNum || mCap.texSRT < texSRTNum || mCap.texCoordGen < texCoordGenNum ||
+                mCap.indSRT < indSRTNum || mCap.chanCtrl < chanCtrlNum || mCap.matCol < matColNum || mCap.alpComp < alpCompNum ||
+                mCap.blendMode < blendModeNum) {
+                if (mpStorage) {
+                    Layout::FreeMemory(mpStorage);
+                    mpStorage = 0;
 
-                    InitBitGXNums(&mGXMemCap);
-                    InitBitGXNums(&mGXMemNum);
+                    InitStorageNums(&mCap);
+                    InitStorageNums(&mNum);
                 }
 
-                mpGXMem = Layout::AllocMemory(sizeof(TexMap) * texMapNum + sizeof(TexSRT) * texSRTNum +
-                                              4 * (texCoordGenNum + chanCtrlNum + matColNum + tevSwapNum + alpCompNum + blendModeNum + indStageNum) +
-                                              sizeof(TexSRT) * indSRTNum + sizeof(TevStage) * tevStageNum);
-                if (mpGXMem) {
-                    mGXMemCap.texMap = texMapNum;
-                    mGXMemCap.texSRT = texSRTNum;
-                    mGXMemCap.texCoordGen = texCoordGenNum;
-                    mGXMemCap.indSRT = indSRTNum;
-                    mGXMemCap.indStage = indStageNum;
-                    mGXMemCap.tevSwap = tevSwapNum;
-                    mGXMemCap.tevStage = tevStageNum;
-                    mGXMemCap.chanCtrl = chanCtrlNum;
-                    mGXMemCap.matCol = matColNum;
-                    mGXMemCap.alpComp = alpCompNum;
-                    mGXMemCap.blendMode = blendModeNum;
+                mpStorage = Layout::AllocMemory(sizeof(TexMap) * texMapNum + sizeof(TexSRT) * texSRTNum +
+                                              4 * (texCoordGenNum + chanCtrlNum + matColNum + alpCompNum + blendModeNum) +
+                                              sizeof(TexSRT) * indSRTNum);
+                if (mpStorage) {
+                    mCap.texMap = texMapNum;
+                    mCap.texSRT = texSRTNum;
+                    mCap.texCoordGen = texCoordGenNum;
+                    mCap.indSRT = indSRTNum;
+                    mCap.chanCtrl = chanCtrlNum;
+                    mCap.matCol = matColNum;
+                    mCap.alpComp = alpCompNum;
+                    mCap.blendMode = blendModeNum;
 
-                    mGXMemNum.texSRT = mGXMemCap.texSRT;
-                    InitTexSRT(GetTexSRTAry(), mGXMemNum.texSRT);
-                    mGXMemNum.indSRT = mGXMemCap.indSRT;
-                    InitTexSRT(GetIndTexSRTAry(), mGXMemNum.indSRT);
+                    mNum.texSRT = mCap.texSRT;
+                    InitTexSRT(GetTexSRTAry(), mNum.texSRT);
+                    mNum.indSRT = mCap.indSRT;
+                    InitTexSRT(GetIndTexSRTAry(), mNum.indSRT);
 
-                    mGXMemNum.chanCtrl = mGXMemCap.chanCtrl;
-                    if (mGXMemNum.chanCtrl) {
+                    mNum.chanCtrl = mCap.chanCtrl;
+                    if (mNum.chanCtrl) {
                         GetChanCtrlAry()[0] = ChanCtrl();
                     }
 
-                    mGXMemNum.matCol = mGXMemCap.matCol;
-                    if (mGXMemNum.matCol) {
+                    mNum.matCol = mCap.matCol;
+                    if (mNum.matCol) {
                         GetMatColAry()[0] = ut::Color::WHITE;
                     }
 
-                    mGXMemNum.tevSwap = mGXMemCap.tevSwap;
-                    if (mGXMemNum.tevSwap) {
-                        TevSwapMode* const tevSwaps = GetTevSwapAry();
-                        tevSwaps[0].Set(GPU_CH_RED, GPU_CH_GREEN, GPU_CH_BLUE, GPU_CH_ALPHA);
-                        tevSwaps[1].Set(GPU_CH_RED, GPU_CH_RED, GPU_CH_RED, GPU_CH_ALPHA);
-                        tevSwaps[2].Set(GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_ALPHA);
-                        tevSwaps[3].Set(GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_ALPHA);
-                    }
-
-                    mGXMemNum.alpComp = mGXMemCap.alpComp;
-                    if (mGXMemNum.alpComp) {
+                    mNum.alpComp = mCap.alpComp;
+                    if (mNum.alpComp) {
                         *GetAlphaComparePtr() = AlphaCompare();
                     }
 
-                    mGXMemNum.blendMode = mGXMemCap.blendMode;
-                    if (mGXMemNum.blendMode) {
+                    mNum.blendMode = mCap.blendMode;
+                    if (mNum.blendMode) {
                         *GetBlendModePtr() = BlendMode();
                     }
                 }
@@ -422,51 +368,39 @@ namespace nw4r {
         }
 
         const TexMap* Material::GetTexMapAry() const {
-            return detail::ConvertOffsToPtr< TexMap >(mpGXMem, 0);
+            return detail::ConvertOffsToPtr< TexMap >(mpStorage, 0);
         }
 
         TexMap* Material::GetTexMapAry() {
-            return detail::ConvertOffsToPtr< TexMap >(mpGXMem, 0);
+            return detail::ConvertOffsToPtr< TexMap >(mpStorage, 0);
         }
 
         TexSRT* Material::GetTexSRTAry() {
-            return detail::ConvertOffsToPtr< TexSRT >(mpGXMem, CalcOffsetTexSRTAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< TexSRT >(mpStorage, CalcOffsetTexSRTAry(mCap));
         }
 
         TexCoordGen* Material::GetTexCoordGenAry() {
-            return detail::ConvertOffsToPtr< TexCoordGen >(mpGXMem, CalcOffsetTexCoordGenAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< TexCoordGen >(mpStorage, CalcOffsetTexCoordGenAry(mCap));
         }
 
         ChanCtrl* Material::GetChanCtrlAry() {
-            return detail::ConvertOffsToPtr< ChanCtrl >(mpGXMem, CalcOffsetChanCtrlAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< ChanCtrl >(mpStorage, CalcOffsetChanCtrlAry(mCap));
         }
 
         ut::Color* Material::GetMatColAry() {
-            return detail::ConvertOffsToPtr< ut::Color >(mpGXMem, CalcOffsetMatColAry(mGXMemCap));
-        }
-
-        TevSwapMode* Material::GetTevSwapAry() {
-            return detail::ConvertOffsToPtr< TevSwapMode >(mpGXMem, CalcOffsetTevSwapAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< ut::Color >(mpStorage, CalcOffsetMatColAry(mCap));
         }
 
         AlphaCompare* Material::GetAlphaComparePtr() {
-            return detail::ConvertOffsToPtr< AlphaCompare >(mpGXMem, CalcOffsetGetAlphaCompare(mGXMemCap));
+            return detail::ConvertOffsToPtr< AlphaCompare >(mpStorage, CalcOffsetGetAlphaCompare(mCap));
         }
 
         BlendMode* Material::GetBlendModePtr() {
-            return detail::ConvertOffsToPtr< BlendMode >(mpGXMem, CalcOffsetBlendMode(mGXMemCap));
-        }
-
-        IndirectStage* Material::GetIndirectStageAry() {
-            return detail::ConvertOffsToPtr< IndirectStage >(mpGXMem, CalcOffsetIndirectStageAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< BlendMode >(mpStorage, CalcOffsetBlendMode(mCap));
         }
 
         TexSRT* Material::GetIndTexSRTAry() {
-            return detail::ConvertOffsToPtr< TexSRT >(mpGXMem, CalcOffsetIndTexSRTAry(mGXMemCap));
-        }
-
-        TevStage* Material::GetTevStageAry() {
-            return detail::ConvertOffsToPtr< TevStage >(mpGXMem, CalcOffsetTevStageAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< TexSRT >(mpStorage, CalcOffsetIndTexSRTAry(mCap));
         }
 
         void Material::SetName(const char* pName) {
@@ -478,48 +412,24 @@ namespace nw4r {
             if (num > 0) {
                 TexMap* const pTexMap = GetTexMapAry();
 
-                for (u32 i = mGXMemNum.texMap; i < num; i++) {
+                for (u32 i = mNum.texMap; i < num; i++) {
                     new (&pTexMap[i]) TexMap();
                 }
             }
 
-            mGXMemNum.texMap = num;
+            mNum.texMap = num;
         }
 
         void Material::SetTexCoordGenNum(u8 num) {
             if (num > 0) {
                 TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
-                for (u32 i = mGXMemNum.texCoordGen; i < num; i++) {
+                for (u32 i = mNum.texCoordGen; i < num; i++) {
                     new (&pTexCoordGen[i]) TexCoordGen();
                 }
             }
 
-            mGXMemNum.texCoordGen = num;
-        }
-
-        void Material::SetTevStageNum(u8 num) {
-            if (num > 0) {
-                TevStage* const pTevStage = GetTevStageAry();
-
-                for (u32 i = mGXMemNum.tevStage; i < num; i++) {
-                    new (&pTevStage[i]) TevStage();
-                }
-            }
-
-            mGXMemNum.tevStage = num;
-        }
-
-        void Material::SetIndStageNum(u8 num) {
-            if (num > 0) {
-                IndirectStage* const pIndStage = GetIndirectStageAry();
-
-                for (u32 i = mGXMemNum.indStage; i < num; i++) {
-                    new (&pIndStage[i]) IndirectStage();
-                }
-            }
-
-            mGXMemNum.indStage = num;
+            mNum.texCoordGen = num;
         }
 
         void Material::SetColorElement(u32 idx, s16 value) {
@@ -528,7 +438,7 @@ namespace nw4r {
             case detail::ANIMTARGET_MATCOLOR_MATCOLOR0_G:
             case detail::ANIMTARGET_MATCOLOR_MATCOLOR0_B:
             case detail::ANIMTARGET_MATCOLOR_MATCOLOR0_A:
-                if (mGXMemNum.matCol >= 1) {
+                if (mNum.matCol >= 1) {
                     ut::Color* matCols = GetMatColAry();
                     SetColorComponentValue(&matCols[0], (idx - detail::ANIMTARGET_MATCOLOR_MATCOLOR0_R) % 4, value);
                 }
@@ -641,11 +551,11 @@ namespace nw4r {
 
             u8 places[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
                             GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-            rSetup.tex_gens = mGXMemNum.texCoordGen;
-            if (mGXMemNum.texCoordGen > 0) {
+            rSetup.tex_gens = mNum.texCoordGen;
+            if (mNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
-                for (int i = 0; i < mGXMemNum.texCoordGen; i++) {
+                for (int i = 0; i < mNum.texCoordGen; i++) {
                     u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
                     if (pTexCoordGen[i].GetTexGenType() == GX_TG_MTX2x4 && texMtx != GPU_IDENTITY) {
@@ -665,7 +575,7 @@ namespace nw4r {
             if (setTexMtx) {
                 const TexSRT* const pTexSrt = GetTexSRTAry();
 
-                for (u8 i = 0; i < mGXMemNum.texSRT; i++) {
+                for (u8 i = 0; i < mNum.texSRT; i++) {
                     if (!useTexMtx[i]) {
                         continue;
                     }
@@ -676,10 +586,10 @@ namespace nw4r {
                 }
             }
 
-            if (mGXMemNum.texMap > 0) {
+            if (mNum.texMap > 0) {
                 const TexMap* const pTexMap = GetTexMapAry();
 
-                for (int i = 0; i < mGXMemNum.texMap && i < 8; i++) {
+                for (int i = 0; i < mNum.texMap && i < 8; i++) {
                     GpuTexObj texObj;
                     pTexMap[i].Get(&texObj);
                     void* pImage;
@@ -724,51 +634,22 @@ namespace nw4r {
                 rValues.konst_color[k][3] = mTevKCols[k].a;
             }
 
-            bool setIndTexMtx = false;
-            bool useIndTexMtx[3];
-
-            for (int i = 0; i < 3; i++) {
-                useIndTexMtx[i] = false;
-            }
-
-            // Each coordinate's scale: the size of the texture its stage samples.
-            const auto coordScale = [&rValues](u32 coord, u32 map) {
-                if (coord < 8 && map < 8 && rValues.texture[map].image != 0) {
+            // Each coordinate's scale: the size of the texture the cook found it samples.
+            for (u32 coord = 0; coord < 8; coord++) {
+                const u32 map = mCoordMap[coord];
+                if (map < 8 && rValues.texture[map].image != 0) {
                     rValues.tex_coord_scale[coord].scale_s = rValues.texture[map].width;
                     rValues.tex_coord_scale[coord].scale_t = rValues.texture[map].height;
                 }
-            };
-            if (mGXMemNum.tevStage > 0) {
-                const TevStage* const pTevStage = GetTevStageAry();
-
-                for (int i = 0; i < mGXMemNum.tevStage && i < 16; i++) {
-                    const TevStage& rSrc = pTevStage[i];
-                    coordScale(rSrc.GetTexCoordGen(), rSrc.GetTexMap());
-                    GpuIndTexMtxID indMtx = rSrc.GetIndMtxSel();
-                    if (GPU_ITM_0 <= indMtx && indMtx <= GPU_ITM_2) {
-                        useIndTexMtx[indMtx - 1] = true;
-                        setIndTexMtx = true;
-                    }
-                }
-
+            }
+            if (mHasStages || mNum.texMap == 0) {
                 useRasStage = true;
-            } else if (mGXMemNum.texMap == 0) {
-                useRasStage = true;
-            } else {
-                // nw4r's stages for a material without its own: each texture by its own coordinate.
-                for (int i = 0; i < mGXMemNum.texMap; i++) {
-                    coordScale(i, i);
-                }
             }
 
-            if (setIndTexMtx) {
+            {
                 const TexSRT* const pIndTexSrt = GetIndTexSRTAry();
 
-                for (int i = 0; i < mGXMemNum.indSRT && i < 3; i++) {
-                    if (!useIndTexMtx[i]) {
-                        continue;
-                    }
-
+                for (int i = 0; i < mNum.indSRT && i < 3; i++) {
                     f32 mtx[2][3];
                     CalcIndTexMtx(mtx, pIndTexSrt[i]);
                     for (u32 row = 0; row < 2; row++) {
@@ -776,14 +657,6 @@ namespace nw4r {
                             rValues.ind_matrix[i].m[row][c] = mtx[row][c];
                         }
                     }
-                }
-            }
-
-            if (mGXMemNum.indStage > 0) {
-                const IndirectStage* const pIndStage = GetIndirectStageAry();
-
-                for (int i = 0; i < mGXMemNum.indStage && i < 4; i++) {
-                    coordScale(pIndStage[i].GetTexCoordGen(), pIndStage[i].GetTexMap());
                 }
             }
 

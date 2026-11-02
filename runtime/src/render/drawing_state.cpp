@@ -104,10 +104,6 @@ constexpr std::uint32_t bit(unsigned group) {
 // The groups an op can change (the scissor, copy settings and palettes have their own paths).
 std::uint32_t op_groups(std::uint8_t kind) {
     switch (kind) {
-    case state::kBlendEtc: case state::kBlend: case state::kDstAlpha: case state::kColorUpdate:
-    case state::kAlphaUpdate: return bit(kBlend);
-    case state::kZMode: return bit(kZ);
-    case state::kCull: return bit(kGen);
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
     case state::kTexLookup: case state::kTexImage:
         return bit(kTexture);
@@ -141,6 +137,18 @@ void tracked(NativeDrawState& s, std::uint32_t groups, Change&& change) {
 
 }  // namespace
 
+void NativeDrawState::apply_pass(const shapes::PassState& pass) {
+    tracked(*this, bit(kBlend) | bit(kZ) | bit(kGen), [&] {
+        set_blend(blend, pass.blend_op, pass.blend_src, pass.blend_dst, pass.logic_op);
+        blend.color_update = pass.color_write != 0u;
+        blend.alpha_update = pass.alpha_write != 0u;
+        blend.const_alpha_enable = pass.constant_alpha != 0u;
+        blend.const_alpha = pass.constant_alpha_value;
+        set_z(z, pass.depth_test, pass.depth_func, pass.depth_write);
+        gen.cull = kCull[pass.cull & 3u];
+    });
+}
+
 void NativeDrawState::apply(const state::Op& op) {
     std::uint32_t groups = op_groups(op.kind);
     tracked(*this, groups, [&] { set_op(op); });
@@ -149,31 +157,6 @@ void NativeDrawState::apply(const state::Op& op) {
 void NativeDrawState::set_op(const state::Op& op) {
     const std::uint8_t* a = op.a;
     switch (op.kind) {
-    case state::kBlendEtc:
-        set_blend(blend, a[0], a[1], a[2], a[3]);
-        blend.color_update = a[4] != 0u;
-        blend.alpha_update = a[5] != 0u;
-        blend.dither = a[6] != 0u;
-        break;
-    case state::kBlend:
-        set_blend(blend, a[0], a[1], a[2], a[3]);
-        break;
-    case state::kZMode:
-        set_z(z, a[0], a[1], a[2]);
-        break;
-    case state::kDstAlpha:
-        blend.const_alpha_enable = a[0] != 0u;
-        blend.const_alpha = a[1];
-        break;
-    case state::kCull:
-        gen.cull = kCull[a[0] & 3u];
-        break;
-    case state::kColorUpdate:
-        blend.color_update = a[0] != 0u;
-        break;
-    case state::kAlphaUpdate:
-        blend.alpha_update = a[0] != 0u;
-        break;
     case state::kFrameAlpha:
         if (a[0] != 0u) {
             frame_alpha = a[1] != 0u;

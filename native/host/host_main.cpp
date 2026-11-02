@@ -1907,12 +1907,13 @@ void copy_draw_matrices(const NebulaDrawMatrix* matrices, uint32_t count, galaxy
 
 void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, uint64_t color,
                     const NebulaDrawMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
-                    const NebulaShapeTexGen* texgens, uint32_t texgen_count) {
+                    const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     attach_pending_records();
     shapes::Record record;
     record.kind = shapes::Record::Kind::Draw;
+    std::memcpy(&record.pass, pass, sizeof(record.pass));
     record.key = shape;
     record.position = position;
     record.normal = normal;
@@ -1932,7 +1933,7 @@ void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, u
     galaxy::render::attach_shape_record(std::move(record));
 #else
     (void)shape, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
-        (void)current, (void)texgens, (void)texgen_count;
+        (void)current, (void)texgens, (void)texgen_count, (void)pass;
 #endif
 }
 
@@ -2116,6 +2117,8 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
                   shapes::kTriangleFan == NEBULA_PRIMITIVE_TRIANGLE_FAN && shapes::kLineStrip == NEBULA_PRIMITIVE_LINE_STRIP);
     shapes::Record record;
     record.kind = shapes::Record::Kind::Immediate;
+    static_assert(sizeof(record.pass) == sizeof(draw->pass));
+    std::memcpy(&record.pass, &draw->pass, sizeof(record.pass));
     record.primitive = draw->primitive;
     copy_draw_matrices(draw->matrices, draw->matrix_count, record);
     attach_pending_records();
