@@ -41,6 +41,7 @@ struct PointerSample {
     std::uint64_t absolute_sequence = 0;
     std::uint64_t transition_sequence = 0;
     galaxy::input::NativeMousePointerProjection projected{};
+    bool raw_motion = false;
 };
 class LiveControlsHost {
 public:

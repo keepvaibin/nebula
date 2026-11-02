@@ -256,9 +256,9 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                 button_sample.transition_sequence !=
                     s_last_host_pointer_transition_sequence;
             const bool host_pointer_has_fresh_coordinates =
-                button_sample.has_transition_coordinates
+                host_pointer.raw_motion || (button_sample.has_transition_coordinates
                 ? host_pointer_transition_sequence_changed
-                : host_pointer_absolute_sequence_changed;
+                : host_pointer_absolute_sequence_changed);
             // Fresh physical movement inside the client takes precedence over a non-forced script, even when
             // the game window is unfocused. Button ownership stays guarded separately by window focus.
             mouse_button_held = host_pointer.window_focused &&
