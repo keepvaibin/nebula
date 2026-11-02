@@ -22,10 +22,10 @@ struct MaterialConstants {
 
 // GX's colour combiner takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
 // unclamped stage left past 1 or below 0 wraps.
-float j3d_in(float x) { const float v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
-float3 j3d_in(float3 x) { const float3 v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
-// The final result as the pixel engine takes it: its low 8 bits (the uber shader's wrap).
-float4 j3d_out(float4 x) { const float4 v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
+float j3d_in(float x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
+float3 j3d_in(float3 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
+// The final result the same way (materials whose last stage does not clamp).
+float4 j3d_out(float4 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 
 // GX fog over the colour (native_material.hlsli native_fog) with the material's fog values.
 float3 j3d_fog(float3 c, float4 pos) {
