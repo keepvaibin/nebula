@@ -53,9 +53,11 @@ void SaveDataHandler::requestCheckEnableToCreate() {
     setNerve(GET_NERVE_ANON(SaveDataHandlerProcessing));
 }
 
-void SaveDataHandler::requestLoadSaveData() {
+// `copy` 0 is the save; 1 and 2 are the host's copies of the last two (save_files.cpp).
+void SaveDataHandler::requestLoadSaveData(int copy) {
+    static const char* const cNames[] = {"GameData.bin", "GameData.bin.1", "GameData.bin.2"};
     MR::zeroMemory(_14, 0x10000);
-    mSaveRequest->setReadSeq(::cSaveFileName, _14, 0x10000, &_C);
+    mSaveRequest->setReadSeq(cNames[copy], _14, 0x10000, &_C);
     mSaveRequest->start();
 
     setNerve(GET_NERVE_ANON(SaveDataHandlerProcessing));

@@ -12,7 +12,7 @@ public:
 
     void update();
     void requestCheckEnableToCreate();
-    void requestLoadSaveData();
+    void requestLoadSaveData(int copy = 0);
     bool requestVerifyAfterLoadGameDataFile();
     void initializeUserFileMemory(int, const UserFile*);
     void copyUserFileMemory(int, int);
