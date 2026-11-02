@@ -13,7 +13,7 @@ namespace nw4r {
 #define NW4R_ASSERTMSG_AT(line, exp, ...) ((void)0)
 #endif
 
-// The console's test is a cached or uncached MEM1/MEM2 address; natively any non-null pointer.
+// Any non-null pointer.
 #define NW4R_POINTER_ASSERT_AT(line, exp)                                                                                                            \
     NW4R_ASSERTMSG_AT(line, reinterpret_cast< const void* >(exp) != NULL, "NW4R:Pointer Error\n" #exp "(=%p) is not valid pointer.", (exp))
 

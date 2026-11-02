@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan console renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
+// The Vulkan renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
 // copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"

@@ -3943,7 +3943,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
     // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
-    // is written again in this frame slot even when the console state did not change.
+    // is written again in this frame slot even when the state did not change.
     frame_bindings_dirty_ = true;
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
@@ -4898,7 +4898,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
     // native_tex_matrix reads the vertex's index for those texgens).
     const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
-    // The header word as the last upload wrote it (a console draw's from its key): any change uploads again, or a native
+    // The header word as the last upload wrote it (a draw's from its key): any change uploads again, or a native
     // draw after a console one would read that draw's mask.
     // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
     // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
@@ -5513,7 +5513,7 @@ void RenderCore::apply_native_material(const material::Native* native) {
         out.bias_clamp = false;
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
-    // Its texgens' post-transform matrices, as a console material's texgens set them (a draw's own texgens replace them:
+    // Its texgens' post-transform matrices, as a material's texgens set them (a draw's own texgens replace them:
     // apply_record_matrices).
     for (unsigned i = 0; i < 8u; ++i) {
         if (m.texgen_post[i] == material::kNativeKept) {
@@ -5542,7 +5542,7 @@ void RenderCore::end_native_material() {
         return;
     }
     native_material_ = nullptr;
-    // The console state's pipeline, constants and textures are rebuilt at the next draw, and the next console material loads
+    // The state's pipeline, constants and textures are rebuilt at the next draw, and the next material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     current_pso_key_valid_ = false;

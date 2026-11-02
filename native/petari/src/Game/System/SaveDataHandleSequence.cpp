@@ -710,7 +710,7 @@ bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerve
 }
 
 void SaveDataHandleSequence::syncNoSaveFlagsFromErrorSequence() {
-    // The console's "no room to create the save" answer, which a host's disk never gives.
+    // "No room to create the save", which a host's disk never gives.
     _2C = false;
 
     bool isResultFileCorrupted = mSaveErrorSequence->isResultFileCorrupted();

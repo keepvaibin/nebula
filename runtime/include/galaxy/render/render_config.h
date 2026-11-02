@@ -49,13 +49,13 @@ struct RenderConfig {
     // Frames per second presented (0: the display's rate, at least 60; see present_frame_rate).
     float    max_fps             = 60.0f;
 
-    // Submits the game's console FIFO at its own 60 Hz cadence instead of one present per game frame.
+    // Submits the game's FIFO at its own 60 Hz cadence instead of one present per game frame.
     bool     frame_rate_decouple = false;
 
     // Mip LOD bias in units of 0.5 LOD levels (0 full detail, 2 quarter), applied to every sampler.
     unsigned texture_lod_bias    = 0;
 
-    // Anisotropic filtering for mipmapped console samplers: 1 off, 2/4/8/16 D3D12_SAMPLER_DESC::MaxAnisotropy.
+    // Anisotropic filtering for mipmapped samplers: 1 off, 2/4/8/16 D3D12_SAMPLER_DESC::MaxAnisotropy.
     unsigned anisotropic_filtering = 1;
 
     // Generates mip chains for color textures the game samples with linear filtering but without authored mips.
@@ -64,7 +64,7 @@ struct RenderConfig {
     // Curved models rounded on the GPU where the renderer tessellates (curved_surfaces.h).
     bool     curved_surfaces     = true;
 
-    // Lit console color channels evaluated per pixel instead of per vertex (the XF light formulas on the interpolated
+    // Lit color channels evaluated per pixel instead of per vertex (the XF light formulas on the interpolated
     // eye-space position and normal), in specialized triangle pipelines.
     bool     per_pixel_lighting  = false;
 
@@ -171,7 +171,7 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
 
 // The most interpolated frames one game frame needs at a present rate: ceil(rate / 60) - 1 (75 Hz shows one between
 // most pairs of game frames, 144 Hz two between some), none at 60 and below, at most 7.
-// The ray tracer is parked (E-02): it shaded hits by evaluating the console material from the old path's shader keys, which native
+// The ray tracer is parked (E-02): it shaded hits by evaluating the material from the old path's shader keys, which native
 // draws no longer have. It returns when it is rebuilt on native materials (the additions' F/G phase); until then the
 // RAY TRACING row is not offered and no tracer starts, on any adapter.
 inline constexpr bool kRayTracingParked = true;
@@ -212,7 +212,7 @@ inline std::vector<std::pair<unsigned, unsigned>> aspect_window_sizes(
     return sizes;
 }
 
-// The console backend's timing policy (get_frame_timing_config), the same for every subsystem.
+// The backend's timing policy (get_frame_timing_config), the same for every subsystem.
 struct RenderTimingConfig {
     // Non-present render chunks the game thread may have outstanding before render_frame() waits for the render
     // thread.

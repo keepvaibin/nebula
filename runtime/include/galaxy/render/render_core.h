@@ -152,7 +152,7 @@ public:
             producer_scene_sky_up_ = producer_scene_sky_up_known_ ? encode_octahedral(eye) : 0u;
         }
     }
-    // One particle of a JPA stripe at `stream_offset` of the live console stream
+    // One particle of a JPA stripe at `stream_offset` of the live stream
     // (its two strip vertices follow); carried by the next submission.
     struct StripeParticleMark {
         std::size_t offset = 0;
@@ -324,7 +324,7 @@ private:
         const RenderServices* services = nullptr;
     };
 
-    // Starts one fresh console command-stream session. Every parser, state and tail mirror resets
+    // Starts one fresh command-stream session. Every parser, state and tail mirror resets
     // together. Resetting only some of them can classify a receipt as event-free after shutdown
     // or reinitialize.
     void reset_session_state();
@@ -472,7 +472,7 @@ private:
     [[nodiscard]] RtView scene_depth_view(const ScaledViewport& viewport) const;
     // The scene's occlusion, once, before its first translucent phase (or at its end).
     void apply_scene_ao();
-    // The open scene's candidate key lights: the world-fixed console light 0 of its lit draws, by world
+    // The open scene's candidate key lights: the world-fixed light 0 of its lit draws, by world
     // direction and colour, with the draws using each and the sum of their ambient registers (0-1)
     // over those taking it from the register (traced).
     struct RtWorldKey {
@@ -641,7 +641,7 @@ private:
         std::int32_t next = -1;           // next entry of the same shadow
         std::uint16_t position_mask = 0;  // PNMTX slots its records read
         std::uint16_t normal_mask = 0;    // normal matrices its records read
-        std::uint8_t light_mask = 0;      // console lights its records evaluate
+        std::uint8_t light_mask = 0;      // lights its records evaluate
         bool orthographic = false;
         std::uint8_t layer = 0;           // of the records that read it
         PaletteMotion motion{};
@@ -982,7 +982,7 @@ private:
     // Gives back a group's resident block.
     void release_record_shape(RecordShape& shape) noexcept;
     // The vertex inputs of the draw being made when a native shape record draws (its corners' matrix slots, its
-    // model's arrays), in place of the console vertex description the stream's draws carry.
+    // model's arrays), in place of the vertex description the stream's draws carry.
     struct RecordVertexInputs {
         std::uint32_t matrix_bits = 0;  // bit 0 position matrix per corner, bits 1-8 texture matrices 0-7
         std::uint64_t positions = 0;    // the position array's key
@@ -1013,7 +1013,7 @@ private:
     [[nodiscard]] bool skip_for_present_rate();
     std::int64_t next_rate_present_qpc_ = 0;
 
-    // console texture base registers store physical addresses (MEM1 0x00000000 and
+    // texture base registers store physical addresses (MEM1 0x00000000 and
     // MEM2 0x10000000), while the CPU can write through cached/uncached
     // aliases. Dirty notifications are normalized to this physical window.
     static constexpr std::uint32_t kMem1PhysicalBase = 0x00000000u;
@@ -1026,11 +1026,11 @@ private:
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};
-    // The native material the draws use (null: the console state's), whether its constants are not yet uploaded, and the
+    // The native material the draws use (null: the state's), whether its constants are not yet uploaded, and the
     // texture maps it binds.
     material::Native native_material_storage_{};
     const material::Native* native_material_ = nullptr;
-    std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a console draw's)
+    std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a draw's)
     bool native_constants_dirty_ = false;
     std::uint8_t native_texture_mask_ = 0u;
     std::uint64_t current_ps_hash_{};
@@ -1092,7 +1092,7 @@ private:
     std::uint64_t matrix_blocks_epoch_ = 0;  // the matrix ring's epoch() the blocks were appended in
     bool matrix_blocks_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
-    // the first draw after begin_frame(), even when console register state did not
+    // the first draw after begin_frame(), even when register state did not
     // change. scene target copies can also replace a game-address texture alias
     // without rewriting its texture state.
     bool frame_bindings_dirty_ = true;
@@ -1282,7 +1282,7 @@ private:
     // render_start of the last emitted [render-frame-timing] line, for frame-interval-us.
     std::chrono::steady_clock::time_point last_frame_timing_emit_{};
     bool last_frame_timing_emit_valid_ = false;
-    // One-time scene target seed clear; console clears only through the copy command's clear bit (on_scene_copy).
+    // One-time scene target seed clear; clears only through the copy command's clear bit (on_scene_copy).
     bool scene_seeded_ = false;
 
     // The last display copy came from the output scene target and nothing has drawn or cleared since: an scene target-to-texture

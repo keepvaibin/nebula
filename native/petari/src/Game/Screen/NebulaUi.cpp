@@ -204,7 +204,7 @@ namespace NebulaUi {
     }
 
     // A glyph picture's coverage at (x, y) of its sheet, 0-15: its alpha where it has one, else its intensity. The
-    // sheets are the console's tiled formats.
+    // sheets are records.
     s32 glyphCoverage(const nw4r::ut::Glyph& rGlyph, s32 x, s32 y) {
         const u8* pData = static_cast< const u8* >(rGlyph.pTexture);
         // A cooked sheet (nebula_cooked_texture.h): texels in rows; the same 4-bit coverage as the tiles gave.
@@ -502,7 +502,7 @@ namespace NebulaUi {
         sShown = next;
     }
 
-    // the console's scissor is in the frame buffer's units: the layout's canvas spans the default viewport.
+    // the scissor is in the frame's units: the layout's canvas spans the default viewport.
     void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 rise, f32 left, f32 right, f32 top, f32 bottom) {
         f32 scaleX;
         f32 width;

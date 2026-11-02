@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// What both console renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
+// What both renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
 // size, one resolved draw, clear values, the scene target conversion shader and its constants, and the sampler-table cache.
 
 #include "galaxy/render/capture.h"

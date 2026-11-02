@@ -145,7 +145,7 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
         cur++;
     }
 
-    // The console read past the list's end here; natively a missing name is reported.
+    // A missing name is reported.
     if (cur == lst) {
         for (FunctionAsyncExecInfo* const* p = mHolders.begin(); p != lst; p++) {
             JUTNativeLog("  async function %p \"%s\" end %d\n", (*p)->mName, (*p)->mName, (*p)->mIsEnd);
