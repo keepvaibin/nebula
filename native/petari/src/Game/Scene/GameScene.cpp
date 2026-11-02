@@ -1,4 +1,5 @@
 #include "Game/Scene/GameScene.hpp"
+#include "Game/System/NebulaLoadTrace.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
@@ -221,6 +222,7 @@ void GameScene::start() {
 void GameScene::update() {
     mPauseCtrl->updateNerve();
     updateNerve();
+    NebulaLoadTrace::gameScene();
     NebulaAchievements::update();
     if (sTestBoard && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
         sTestBoard = false;

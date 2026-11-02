@@ -1,0 +1,63 @@
+// GALAXY_TRACE_LOADS=1: a line at each press and each change of who has the screen, the times the load measurements read
+// (tools/verify/loads.py). Not in a release.
+#include "Game/System/NebulaLoadTrace.hpp"
+
+#if !defined(NEBULA_RELEASE)
+#include <JSystem/JUtility/JUTNativeLog.hpp>
+#include <cstdlib>
+
+#include "Game/Player/MarioAccess.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
+
+namespace {
+    bool enabled() {
+        static const bool sEnabled = getenv("GALAXY_TRACE_LOADS") != nullptr;
+        return sEnabled;
+    }
+
+    void change(const char* pName, bool value, bool& rLast) {
+        if (value != rLast) {
+            rLast = value;
+            JUTNativeLog("load: %s %d (%s)\n", pName, value ? 1 : 0, MR::getCurrentStageName());
+        }
+    }
+}  // namespace
+
+namespace NebulaLoadTrace {
+    void frame() {
+        if (enabled() && (MR::testCorePadTriggerA(0) || MR::testCorePadTriggerB(0))) {
+            JUTNativeLog("load: press\n");
+        }
+    }
+
+    void gameScene() {
+        if (!enabled() || !MR::isInitializeStateEnd() || !MR::isExistSceneObj(SceneObj_DemoDirector)) {
+            return;
+        }
+        static bool sDemo, sWipe, sSystemWipe, sOpening, sControl;
+        const bool demo = MR::isDemoActive();
+        const bool wipe = MR::isWipeActive();
+        const bool systemWipe = MR::isSystemWipeActive();
+        const bool opening = MR::isStageStateScenarioOpeningCamera();
+        change("demo", demo, sDemo);
+        change("wipe", wipe, sWipe);
+        change("systemwipe", systemWipe, sSystemWipe);
+        change("opening", opening, sOpening);
+        change("control", !demo && !wipe && !systemWipe && !opening && !MR::isPlayerDead() && !MR::isPlayerHidden(), sControl);
+    }
+}  // namespace NebulaLoadTrace
+#else
+namespace NebulaLoadTrace {
+    void frame() {
+    }
+
+    void gameScene() {
+    }
+}  // namespace NebulaLoadTrace
+#endif

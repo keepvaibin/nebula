@@ -1,4 +1,5 @@
 #include "Game/System/GameSystem.hpp"
+#include "Game/System/NebulaLoadTrace.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -175,6 +176,7 @@ void GameSystem::initAfterStationedResourceLoaded() {
 }
 
 void GameSystem::frameLoop() {
+    NebulaLoadTrace::frame();
     MainLoopFramework::sManager->beginRender();
     draw();
     MainLoopFramework::sManager->endRender();
