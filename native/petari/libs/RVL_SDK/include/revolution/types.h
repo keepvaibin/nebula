@@ -57,14 +57,6 @@ struct NebulaLongCall
 }
 #endif
 
-// Fields whose layout a file defines (nebula_be.hpp): big-endian. C units get none, so a converted header used from C
-// does not compile.
-#ifdef __cplusplus
-extern "C++" {
-#include <nebula_be.hpp>
-}
-#endif
-
 typedef volatile u32 vu32;
 typedef volatile s32 vs32;
 
