@@ -168,6 +168,10 @@ void attach_stripe_particle(std::size_t stream_offset, std::uint64_t particle, s
                             std::uint8_t strip);
 // Simulation thread: a native shape record (native_shapes.h) at its offset into the next submitted FIFO.
 void attach_shape_record(shapes::Record&& record);
+[[nodiscard]] shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t count);
+[[nodiscard]] state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count);
+[[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record);
+[[nodiscard]] std::uint32_t reserve_record_native(const void* native, std::size_t bytes);
 // Simulation thread: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
 // until the movie closes (frame -1).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint64_t y, std::uint64_t u,
