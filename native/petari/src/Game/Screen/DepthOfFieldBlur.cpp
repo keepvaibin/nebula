@@ -87,13 +87,13 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    ImageEffectLocalUtil::capture(_1C, 1, 0, GPU_TF_RGB565, true, 0);
+    _1C->frameColor(true);
     J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0, 0xFFFFFF);
     drawZAlphaTex();
     J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
-    ImageEffectLocalUtil::capture(_20, 1, 0, GPU_TF_Z8, true, 0);
+    _20->frameDepth(true);
     drawFinal();
     MR::loadProjectionMtx();
     MR::loadViewMtx();

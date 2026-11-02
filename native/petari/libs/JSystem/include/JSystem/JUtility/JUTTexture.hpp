@@ -68,9 +68,11 @@ public:
     }
 
     void initTexObj();
-    // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
-    // filter: J3DNativeTarget::capture's flags).
-    void capture(int x, int y, GpuTexFmt format, bool half, u8 clear);
+    // The frame as drawn so far as this texture: its colour, alpha or depth; half: each texel averages 2x2.
+    void frameColor(bool half);
+    void frameColorAlpha();
+    void frameAlpha(bool half);
+    void frameDepth(bool half);
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;

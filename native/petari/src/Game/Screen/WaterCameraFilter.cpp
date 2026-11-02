@@ -135,7 +135,7 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    mScreenTex->capture(0, 0, GPU_TF_RGB565, false, 0);
+    mScreenTex->frameColor(false);
     loadMaterial();
     TVec2f pos;
     pos.x = 0.0f;

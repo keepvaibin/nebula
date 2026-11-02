@@ -99,6 +99,6 @@ void ScreenBlurEffect::drawBlur() const {
 }
 
 void ScreenBlurEffect::captureBlur() const {
-    _14->capture(0, 0, GPU_TF_RGBA8, false, 0);
-    _18->capture(0, 0, GPU_TF_Z8, true, 0);
+    _14->frameColorAlpha();
+    _18->frameDepth(true);
 }
