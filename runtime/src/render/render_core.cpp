@@ -5435,6 +5435,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         for (const std::uint64_t key : texture_cache_.forget_range(record.key, record.position)) {
             invalidate_texture_binding_cache_key(key);
         }
+        // A map still set to an image of that memory (the state outlives the scene, and a first draw may set no texture) holds nothing now.
+        for (TextureMap& map : draw_state_.texture) {
+            if (map.texture >= record.key && map.texture < record.position) {
+                map.texture = 0u;
+            }
+        }
+        apply_native_material(nullptr);
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;

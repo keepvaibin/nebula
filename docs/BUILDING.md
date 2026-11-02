@@ -18,11 +18,11 @@ Vulkan-Headers, volk, VulkanMemoryAllocator, glslang, SPIRV-Tools and SPIRV-Head
 
 ```powershell
 cargo build --release --locked -p nebula-import
-.\target\release\nebula-import.exe identify D:\Games\SMG.rvz      # must report RMGE01, RMGP01 or RMGJ01
-.\target\release\nebula-import.exe import D:\Games\SMG.rvz --output D:\nebula\content
+.\target\release\nebula-import.exe --key common.key identify D:\Games\SMG.rvz      # must report RMGE01, RMGP01 or RMGJ01
+.\target\release\nebula-import.exe --key common.key import D:\Games\SMG.rvz --output D:\nebula\content
 ```
 
-An extracted folder works in place of the disc image. The content folder holds `game.pak` and
+Nebula holds no Wii key: a disc image needs the common key (`--key`, a file or its 32 hexadecimal digits). An extracted folder works in place of the disc image and needs none; `--features folders-only` builds an importer that takes folders only. The content folder holds `game.pak` and
 `files\LayoutData\FileSelect.arc`.
 
 ## 2. Host
@@ -42,6 +42,8 @@ signed Streamline libraries, which the host loads at run time from the vendor fo
 ```
 
 Builds `build\game\smg_game.dll` with clang and Ninja.
+
+A build for players adds `-Pgo`: ThinLTO with the profile in `native/pgo` (`tools/verify/pgo_profile.sh` makes it). It takes longer to link and spends about 17 % less CPU on the game.
 
 ## 4. Run
 

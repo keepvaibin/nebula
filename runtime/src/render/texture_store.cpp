@@ -1356,7 +1356,8 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     const std::uint32_t w = image.width;
     const std::uint32_t h = image.height;
 
-    if (record == nullptr) {
+    // A map holding nothing (its image went with its scene, drawing_state) draws blank and has lost nothing.
+    if (record == nullptr && image.key != 0u) {
         ++missing_images_;
         if (blank_images_.insert(image.key).second) {
             galaxy::loss::note(galaxy::loss::Kind::BlankTexture);
