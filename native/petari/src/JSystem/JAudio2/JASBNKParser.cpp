@@ -58,7 +58,7 @@ JASBNKParser::Ver1::TChunk* JASBNKParser::Ver1::findChunk(void const* stream, u3
 }
 
 JASInstEffect* JASBNKParser::Ver1::createEffector(void const* stream, JKRHeap* heap) {
-    NEBULA_BE(u32)* data = (NEBULA_BE(u32)*)(intptr_t)stream;
+    u32* data = (u32*)(intptr_t)stream;
     switch (*data++) {
     case 'Rand': {
         TRandData* randData = (TRandData*)data;
@@ -97,7 +97,7 @@ JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, JKRHeap* h
     u8* envt = new (heap, 2) u8[envt_chunk->mSize];
     JASCalc::bcopy(envt_chunk->mData, envt, envt_chunk->mSize);
 
-    NEBULA_BE(u32)* ptr = &osc_chunk->mCount;
+    u32* ptr = &osc_chunk->mCount;
     u32 count = *ptr++;
     JASOscillator::Data* osc_data = new (heap, 0) JASOscillator::Data[count];
     for (int i = 0; i < count; i++, ptr += sizeof(TOsc) >> 2) {
@@ -114,7 +114,7 @@ JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, JKRHeap* h
     TListChunk* list = list_chunk;
     for (int i = 0; i < list->count; i++) {
         if (list->mOffsets[i] != 0) {
-            NEBULA_BE(u32)* data = (NEBULA_BE(u32)*)((intptr_t)stream + list->mOffsets[i]);
+            u32* data = (u32*)((intptr_t)stream + list->mOffsets[i]);
             switch (*data++) {
             case 'Inst': {
                 JASBasicInst* instp = new (heap, 0) JASBasicInst();
@@ -163,7 +163,7 @@ JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, JKRHeap* h
                     u32 offset = *data++;
                     if (offset != 0) {
                         JASDrumSet::TPerc* percp = new (heap, 0) JASDrumSet::TPerc();
-                        NEBULA_BE(u32)* ptr = (NEBULA_BE(u32)*)((intptr_t)stream + offset);
+                        u32* ptr = (u32*)((intptr_t)stream + offset);
                         TPercData* perc_data = (TPercData*)(ptr + 1);
                         percp->setVolume(perc_data->mVolume);
                         percp->setPitch(perc_data->mPitch);
