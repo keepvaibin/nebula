@@ -45,11 +45,7 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     };
 
     struct TList {
-#ifdef TARGET_PC
         typedef JGadget::TLinkList< JASTrack, JGadget::NEBULA_NODE_OFFSET_OF_T > TrackList;
-#else
-        typedef JGadget::TLinkList< JASTrack, -0x248 > TrackList;
-#endif
         typedef TrackList::iterator iterator;
         TList() : mCallbackRegistered() {
         }
@@ -327,19 +323,6 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     /* 0x000 */ JASSeqCtrl mSeqCtrl;
     /* 0x05C */ JASTrackPort mTrackPort;
     /* 0x080 */ JASRegisterParam mRegisterParam;
-#ifdef __MWERKS__
-    /* 0x09C */ union {
-        struct {
-            MoveParam_ volume;
-            MoveParam_ pitch;
-            MoveParam_ fxmix;
-            MoveParam_ pan;
-            MoveParam_ dolby;
-            MoveParam_ distFilter;
-        } params;
-        MoveParam_ array[TIMED_PARAMS];
-    } mMoveParam;
-#else
     /* 0x09C */ union MoveParam_u {
         struct {
             MoveParam_ volume;
@@ -353,7 +336,6 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
         MoveParam_u() {
         }
     } mMoveParam;
-#endif
     /* 0x0E4 */ JASOscillator::Data mOscParam[OSC_NUM];
     /* 0x114 */ JASOscillator::Point mOscPoint[4];
     static const u32 cOscTablePoints = 32;
@@ -406,7 +388,6 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     };
     /* 0x248 */ JGadget::TLinkListNode mNode;
 
-#ifdef TARGET_PC
     // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's code uses the literal -0x248.
     static int nebulaListNodeOffset() {
         return -(int)offsetof(JASTrack, mNode);
@@ -416,5 +397,4 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     // volume categories (nebula_game_audio_channel_owner); none on a sequence's child tracks.
     const class JAISound* mNebulaOwner = nullptr;
     u8 mNebulaOwnerRoute = 0;
-#endif
 };

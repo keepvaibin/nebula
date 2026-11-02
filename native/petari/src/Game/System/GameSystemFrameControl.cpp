@@ -10,5 +10,5 @@ void GameSystemFrameControl::setMovement60fps() {
 
     // The output runs at 60 Hz (never a 50 Hz PAL television).
     MainLoopFramework* pFramework = MainLoopFramework::sManager;
-    pFramework->mRetraceCount = 1;
+    pFramework->mFramesPerStep = 1;
 }

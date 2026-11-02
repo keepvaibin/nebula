@@ -640,7 +640,11 @@ void StorySequenceExecutor::exeWaitToSceneStart() {
 void StorySequenceExecutor::exePlayDemoSequence() {
     const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo = getCurrentDemoInfo();
 
-    if (MR::isFirstStep(this)) {
+    // A scene change emptied the list while this ran: nothing is left to play.
+    if (pDemoInfo == nullptr) {
+        _B0 = false;
+        setNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
+        return;
     }
 
     switch (pDemoInfo->_0) {
@@ -1216,7 +1220,7 @@ const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::getCur
 }
 
 bool StorySequenceExecutor::tryNextDemoInfo() {
-    if (_48.size() == 1) {
+    if (_48.size() <= 1) {
         return false;
     }
 

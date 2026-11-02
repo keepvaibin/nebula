@@ -188,7 +188,7 @@ void GameSystem::frameLoop() {
     }
     mObjHolder->captureIfAllowForScreenPreserver();
     MainLoopFramework::sManager->endFrame();
-    MainLoopFramework::sManager->waitForRetrace();
+    MainLoopFramework::sManager->waitForFrame();
 }
 
 void GameSystem::draw() {
