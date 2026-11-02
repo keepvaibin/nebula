@@ -158,14 +158,6 @@ enum {
     NEBULA_STATE_ALPHA_COMPARE,     /* comparison 0, reference 0, op, comparison 1, reference 1 */
     NEBULA_STATE_DST_ALPHA,         /* enable, alpha */
     NEBULA_STATE_CULL,              /* NEBULA_CULL_* */
-    NEBULA_STATE_GEN_MODE,          /* texgens, channels, TEV stages */
-    NEBULA_STATE_GEN_MODE2,         /* texgens, channels, TEV stages, indirect stages, cull mode */
-    NEBULA_STATE_CHANNEL,           /* channel (0, 1), enable, ambient source, material source, light mask, diffuse,
-                                       attenuation, what it sets (1 the colour, 2 the alpha, 3 both) */
-    NEBULA_STATE_TEV_COLOR_CALC,    /* stage, a, b, c, d, op, bias, scale, clamp, output */
-    NEBULA_STATE_TEV_ALPHA_CALC,    /* stage, a, b, c, d, op, bias, scale, clamp, output, raster swap, texture swap */
-    NEBULA_STATE_TEV_DIRECT,        /* stage */
-    NEBULA_STATE_TEV_ORDER,         /* even stage, coord 0, map 0, channel 0, coord 1, map 1, channel 1 */
     NEBULA_STATE_TEV_COLOR,         /* register, r, g, b, a */
     NEBULA_STATE_MATERIAL_COLOR,    /* channel (0, 1), r, g, b, a */
     NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
@@ -178,45 +170,21 @@ enum {
     NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
     NEBULA_STATE_FOG,               /* type, r, g, b, a; f: start, end, near, far */
     /* Changes of some fields of a register, the others as they are (GX's partial setters): */
-    NEBULA_STATE_TEV_COLOR_IN,      /* stage, a, b, c, d */
-    NEBULA_STATE_TEV_ALPHA_IN,      /* stage, a, b, c, d */
-    NEBULA_STATE_TEV_COLOR_OP,      /* stage, op, bias, scale, clamp, output */
-    NEBULA_STATE_TEV_ALPHA_OP,      /* stage, op, bias, scale, clamp, output */
-    NEBULA_STATE_TEV_KCOLOR_SEL,    /* stage, selection */
-    NEBULA_STATE_TEV_KALPHA_SEL,    /* stage, selection */
-    NEBULA_STATE_TEV_SWAP_MODE,     /* stage, raster swap, texture swap */
-    NEBULA_STATE_TEV_STAGE_ORDER,   /* stage, coord, map, channel */
     NEBULA_STATE_COLOR_UPDATE,      /* enable */
     NEBULA_STATE_ALPHA_UPDATE,      /* enable */
-    NEBULA_STATE_DITHER,            /* enable */
     NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
     NEBULA_STATE_VIEWPORT,          /* f: left, top, width, height (pixels), near depth, far depth (0-1) */
     NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
     NEBULA_STATE_TEV_KCOLOR,        /* konst register, r, g, b, a */
     NEBULA_STATE_TEV_COLOR_S10,     /* register; size: r, g; f: b, a (signed 10-bit values) */
-    NEBULA_STATE_CLIP_MODE,         /* mode (GXClipMode) */
     NEBULA_STATE_IND_TEX_MATRIX,    /* matrix id (GXIndTexMtxID), scale exponent (s8); f: offset[0][0], [1][0],
                                        [0][1], [1][1], [0][2], [1][2] */
-    NEBULA_STATE_TEV_SWAP_TABLE,    /* table (GXTevSwapSel), red, green, blue, alpha (GXTevColorChan) */
-    NEBULA_STATE_NUM_TEX_GENS,      /* count */
-    NEBULA_STATE_NUM_CHANS,         /* count */
-    NEBULA_STATE_NUM_TEV_STAGES,    /* count */
-    NEBULA_STATE_NUM_IND_STAGES,    /* count */
-    NEBULA_STATE_CO_PLANAR,         /* enable */
     NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix (0-9) */
-    NEBULA_STATE_TEV_INDIRECT,      /* TEV stage, indirect stage, format, bias, matrix, wrap s, wrap t, add previous,
-                                       unmodified LOD, alpha (GXSetTevIndirect's arguments) */
-    NEBULA_STATE_IND_TEX_SCALE,     /* indirect stage, scale s, scale t */
     NEBULA_STATE_LINE_WIDTH,        /* f: width (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     NEBULA_STATE_POINT_SIZE,        /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     NEBULA_STATE_LIGHT_ATTENUATION, /* light (0-7), r, g, b, a; f: angle attenuation a0-a2, distance k0-k2 */
     NEBULA_STATE_LIGHT_POSITION,    /* light (0-7); f: position x, y, z, direction x, y, z */
     NEBULA_STATE_FRAME_ALPHA,       /* changed (differs from the last one), the frame keeps alpha (1) or not (0) */
-    NEBULA_STATE_Z_TEXTURE,         /* operation (GXZTexOp), format (GXTexFmt), bias (24 bits, a[2..4] low first) */
-    NEBULA_STATE_FOG_RANGE,         /* enable; size[0]: centre (screen x); a[1]: with its table, then f: none and the
-                                       table's ten 12-bit entries in NEBULA_STATE_FOG_RANGE_TABLE ops before it */
-    NEBULA_STATE_FOG_RANGE_TABLE,   /* pair index (0-4); size: the pair's two entries */
-    NEBULA_STATE_IND_TEX_ORDER,     /* indirect stage, texture coordinate, map (GXSetIndTexOrder's) */
     NEBULA_STATE_TEX_OFFSETS,       /* texture coordinate, lines offset it, points offset it */
 };
 
