@@ -322,6 +322,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/render_config.cpp
     runtime/src/render/host_window_win32.cpp
     runtime/src/ui/settings_model.cpp
+    runtime/src/ui/settings_graphics_page.cpp
     runtime/src/ui/settings_save_model.cpp
     runtime/src/render/vblank_clock_win32.cpp
     runtime/src/render/renderer_d3d12.cpp
@@ -494,6 +495,9 @@ galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp
 galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 
 galaxy_test(galaxy_settings_save_model_tests SOURCES ${rt}/ui/settings_save_model_tests.cpp ${rt}/ui/settings_save_model.cpp)
+
+galaxy_test(galaxy_settings_graphics_page_tests SOURCES ${rt}/ui/settings_graphics_page_tests.cpp
+    ${rt}/ui/settings_graphics_page.cpp ${rt}/ui/settings_model.cpp)
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
 
 set(gxs runtime/src/render)
@@ -584,6 +588,7 @@ if(NEBULA_VULKAN)
             runtime/src/render/render_config.cpp
         runtime/src/render/host_window_win32.cpp
     runtime/src/ui/settings_model.cpp
+    runtime/src/ui/settings_graphics_page.cpp
     runtime/src/ui/settings_save_model.cpp
         runtime/src/render/vblank_clock_win32.cpp
         runtime/src/render/renderer_common.cpp
