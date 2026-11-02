@@ -30,6 +30,12 @@ static_assert(sizeof(RenderVertex) == 144, "fixed 144-byte vertex stride");
 // tracing shades its face flat (ray_tracing.hlsl kVertexFlatCorner). Bits 0-7 hold texture matrix 7's index, bits
 // 16-31 the second crease neighbour.
 inline constexpr std::uint32_t kVertexFlatCorner = 0x8000u;
+// mtx_indices[2] bits 8-11: a corner of a widened line or point (native_shapes.h widen_lines_points). A line's corner holds
+// its other end's position in tangent and that end's position row in curve[0].
+inline constexpr std::uint32_t kVertexWidenPoint = 0x100u;
+inline constexpr std::uint32_t kVertexWidenLine = 0x200u;
+inline constexpr std::uint32_t kVertexWidenRight = 0x400u;
+inline constexpr std::uint32_t kVertexWidenBottom = 0x800u;
 static_assert(offsetof(RenderVertex, mtx_indices) + 8u == 128u, "ray_tracing.hlsl reads mtx_indices[2] at byte 128");
 static_assert(sizeof(RenderVertex) % 16u == 0u,
               "vertex upload batching requires 16-byte stride alignment");

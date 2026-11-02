@@ -88,10 +88,14 @@ struct Matrix {
 };
 
 // How immediate vertices group: nebula_game_api.h NebulaPrimitive's values.
-enum PrimitiveKind : std::uint8_t { kQuads = 0, kTriangles, kTriangleStrip, kTriangleFan, kLines, kLineStrip, kPoints };
+enum PrimitiveKind : std::uint8_t { kQuads = 0, kTriangles, kTriangleStrip, kTriangleFan, kLines, kLineStrip, kPoints, kWideQuads };
 
 // The indices a primitive (NebulaPrimitive) of `count` vertices draws with: quads as (0 1 2)(0 2 3), strips with their
 // odd triangles turned, fans around vertex 0, line strips as line lists, triangles, lines and points as they are.
+// Lines and points as triangles (kWideQuads, four corners each); the vertex stage moves the corners out by the draw's line
+// width and point size. widened_count: how many corners `count` vertices make; 0 when the primitive is not a line or point.
+[[nodiscard]] std::uint32_t widened_count(std::uint8_t primitive, std::uint32_t count) noexcept;
+void widen_lines_points(std::uint8_t primitive, std::uint32_t count, const RenderVertex* in, RenderVertex* out) noexcept;
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
 
 inline constexpr std::uint32_t kNoNative = 0xFFFFFFFFu;

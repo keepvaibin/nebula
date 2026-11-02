@@ -33,7 +33,6 @@ const char* compat_name(std::uint32_t bit) {
     case 1u << 1u: return "logic ops";
     case 1u << 2u: return "dual-source blending";
     case 1u << 3u: return "depth clamp";
-    case 1u << 4u: return "geometry shaders";
     default: return "several features";
     }
 }
@@ -46,14 +45,13 @@ std::string describe_render_state(const RenderStateKey& rs) {
 }
 
 // GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (dual-source, depth-clip,
-// depth-clamp, logic-op, geometry), or every native pipeline (native), are refused as a driver would, so the
+// depth-clamp, logic-op), or every native pipeline (native), are refused as a driver would, so the
 // fallbacks run on any GPU.
 struct TestRefusals {
     bool dual_source = false;
     bool depth_clip = false;
     bool depth_clamp = false;
     bool logic_op = false;
-    bool geometry = false;
     bool native = false;
 };
 
@@ -67,7 +65,6 @@ const TestRefusals& test_refusals() {
         r.depth_clip = has("depth-clip");
         r.depth_clamp = has("depth-clamp");
         r.logic_op = has("logic-op");
-        r.geometry = has("geometry");
         r.native = has("native");
         return r;
     }();
@@ -227,19 +224,12 @@ VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStat
         hs = native_module(hull.data, hull.size, vk::ShaderStage::Hull);
         ds = native_module(domain.data, domain.size, vk::ShaderStage::Domain);
     }
-    // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
-    VkShaderModule gs = VK_NULL_HANDLE;
-    const bool point = rs.primitive_topology == gpu::kTopologyTypePointValue;
-    if (point || rs.primitive_topology == gpu::kTopologyTypeLineValue) {
-        const NativeShaderBytes widen = native_line_point_bytes(variant == kNativeVariantMotion, point);
-        gs = native_module(widen.data, widen.size, vk::ShaderStage::Geometry);
-    }
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         // The dual variant's second output is the 8-bit combiner alpha the colour blends against (render state bit 27),
         // as the old path's dual-source pipelines.
         const bool dual = variant == kNativeVariantDual;
         const auto make = [&](std::uint32_t compat, VkResult& result) {
-            return create_pipeline(rs, vs, ps, dual, false, compat, result, hs, ds, gs);
+            return create_pipeline(rs, vs, ps, dual, false, compat, result, hs, ds);
         };
         pipeline = with_fallbacks(make, applicable_compat(rs, dual, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
@@ -348,13 +338,11 @@ void PipelineCacheVk::merge_prepared() {
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,
                                             bool dual_source, bool export_depth, std::uint32_t compat,
-                                            VkResult& result, VkShaderModule hs, VkShaderModule ds,
-                                            VkShaderModule gs) const {
+                                            VkResult& result, VkShaderModule hs, VkShaderModule ds) const {
     result = VK_ERROR_INITIALIZATION_FAILED;
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;
     }
-    const bool geometry = (compat & kCompatNoGeometry) == 0u;
     VkPipelineShaderStageCreateInfo stages[4]{};
     std::uint32_t stage_count = 0;
     const auto add_stage = [&](VkShaderStageFlagBits stage, VkShaderModule module) {
@@ -365,25 +353,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         info.pName = "main";
     };
     add_stage(VK_SHADER_STAGE_VERTEX_BIT, vs);
-    // Lines and points are expanded to quads in the geometry stage (console widths), as on D3D12. A device without
-    // geometry shaders draws them one pixel wide.
     VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    bool expanded = false;
-    if (rs.primitive_topology == gpu::kTopologyTypePointValue) {
-        topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-        const VkShaderModule widen = gs;
-        if (widen != VK_NULL_HANDLE && geometry) {
-            add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, widen);
-            expanded = true;
-        }
-    } else if (rs.primitive_topology == gpu::kTopologyTypeLineValue) {
-        topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-        const VkShaderModule widen = gs;
-        if (widen != VK_NULL_HANDLE && geometry) {
-            add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, widen);
-            expanded = true;
-        }
-    }
     // A curved surface's patches (kVsKeyCurved): its vertex output variant's hull and domain stages. In the default
     // domain origin (upper left) the hull stage's triangle_cw, VertexOrderCw as glslang writes it, winds each patch's
     // triangles as the patch is wound, as on D3D12, so they cull as the triangles they replace.
@@ -454,9 +424,6 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     case CullMode::Front: raster.cullMode = VK_CULL_MODE_BACK_BIT; break;
     case CullMode::Back: raster.cullMode = VK_CULL_MODE_FRONT_BIT; break;
     default: raster.cullMode = VK_CULL_MODE_NONE; break;
-    }
-    if ((topology != VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST && topology != VK_PRIMITIVE_TOPOLOGY_PATCH_LIST) || expanded) {
-        raster.cullMode = VK_CULL_MODE_NONE;  // console culls polygons (a curved surface's patches too), not lines or points
     }
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << rs.samples_log2);
@@ -555,7 +522,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     const TestRefusals& refuse = test_refusals();
     if ((refuse.dual_source && dual_source && layout_->dual_source_blend) || (refuse.depth_clip && raster.pNext) ||
         (refuse.depth_clamp && raster.depthClampEnable) || (refuse.logic_op && blend.logicOpEnable) ||
-        (refuse.geometry && expanded) || refuse.native) {
+        refuse.native) {
         result = VK_ERROR_INITIALIZATION_FAILED;
         return VK_NULL_HANDLE;
     }
@@ -577,9 +544,6 @@ std::uint32_t PipelineCacheVk::applicable_compat(const RenderStateKey& rs, bool 
     }
     if (dual_source && layout_->dual_source_blend) {
         bits |= kCompatNoDualSource;
-    }
-    if (rs.primitive_topology == gpu::kTopologyTypePointValue || rs.primitive_topology == gpu::kTopologyTypeLineValue) {
-        bits |= kCompatNoGeometry;
     }
     return bits;
 }

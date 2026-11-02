@@ -111,8 +111,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     const RenderStateKey& rs,
     D3D12_SHADER_BYTECODE vs,
     D3D12_SHADER_BYTECODE ps,
-    D3D12_SHADER_BYTECODE line_geometry_shader,
-    D3D12_SHADER_BYTECODE point_geometry_shader,
     D3D12_SHADER_BYTECODE hull_shader,
     D3D12_SHADER_BYTECODE domain_shader) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
@@ -233,26 +231,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     pd.SampleMask            = UINT_MAX;
     switch (static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(
         rs.primitive_topology & kTopologyTypeMask)) {
-    case D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT:
-        if (point_geometry_shader.pShaderBytecode == nullptr) {
-            throw std::invalid_argument(
-                "point PSO requires the GX point geometry shader");
-        }
-        pd.GS = point_geometry_shader;
-        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-        // console culling applies to polygons, not points expanded by the host.
-        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        break;
-    case D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE:
-        if (line_geometry_shader.pShaderBytecode == nullptr) {
-            throw std::invalid_argument(
-                "line PSO requires the GX line geometry shader");
-        }
-        pd.GS = line_geometry_shader;
-        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-        // console culling applies to polygons, not lines expanded by the host.
-        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        break;
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE:
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         break;
@@ -325,8 +303,6 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> create_pso(
     const RenderStateKey& rs,
     D3D12_SHADER_BYTECODE vs,
     D3D12_SHADER_BYTECODE ps,
-    D3D12_SHADER_BYTECODE line_geometry_shader,
-    D3D12_SHADER_BYTECODE point_geometry_shader,
     D3D12_SHADER_BYTECODE hull_shader,
     D3D12_SHADER_BYTECODE domain_shader) {
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd =
@@ -335,8 +311,6 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> create_pso(
             rs,
             vs,
             ps,
-            line_geometry_shader,
-            point_geometry_shader,
             hull_shader,
             domain_shader);
 
@@ -363,8 +337,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc(
     const RenderStateKey& render_state,
     D3D12_SHADER_BYTECODE vertex_shader,
     D3D12_SHADER_BYTECODE pixel_shader,
-    D3D12_SHADER_BYTECODE line_geometry_shader,
-    D3D12_SHADER_BYTECODE point_geometry_shader,
     D3D12_SHADER_BYTECODE hull_shader,
     D3D12_SHADER_BYTECODE domain_shader) {
     return make_pso_desc_impl(
@@ -372,8 +344,6 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc(
         render_state,
         vertex_shader,
         pixel_shader,
-        line_geometry_shader,
-        point_geometry_shader,
         hull_shader,
         domain_shader);
 }
@@ -390,16 +360,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_native(std::ui
     const bool motion = variant == kNativeVariantMotion;
     const D3D12_SHADER_BYTECODE hs = curved ? code(native_curved_bytes(motion, false)) : D3D12_SHADER_BYTECODE{};
     const D3D12_SHADER_BYTECODE ds = curved ? code(native_curved_bytes(motion, true)) : D3D12_SHADER_BYTECODE{};
-    // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
-    const auto topology = static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(rs.primitive_topology & kTopologyTypeMask);
-    const bool line = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-    const bool point = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-    const D3D12_SHADER_BYTECODE gs = line || point ? code(native_line_point_bytes(motion, point)) : D3D12_SHADER_BYTECODE{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
-    if (vs.pShaderBytecode && ps.pShaderBytecode && (!curved || (hs.pShaderBytecode && ds.pShaderBytecode)) &&
-        (!(line || point) || gs.pShaderBytecode)) {
-        pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs, ps, line ? gs : D3D12_SHADER_BYTECODE{},
-                         point ? gs : D3D12_SHADER_BYTECODE{}, hs, ds);
+    if (vs.pShaderBytecode && ps.pShaderBytecode && (!curved || (hs.pShaderBytecode && ds.pShaderBytecode))) {
+        pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs, ps, hs, ds);
     }
     return pso;
 }

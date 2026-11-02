@@ -18,6 +18,49 @@ const float* entry(const Array* array, ArrayKind kind, std::uint32_t index, std:
 
 }  // namespace
 
+std::uint32_t widened_count(std::uint8_t primitive, std::uint32_t count) noexcept {
+    switch (primitive) {
+    case kLines: return count / 2u * 4u;
+    case kLineStrip: return count > 1u ? (count - 1u) * 4u : 0u;
+    case kPoints: return count * 4u;
+    default: return 0u;
+    }
+}
+
+void widen_lines_points(std::uint8_t primitive, std::uint32_t count, const RenderVertex* in, RenderVertex* out) noexcept {
+    const auto corner = [&out](const RenderVertex& self, const RenderVertex* other, std::uint32_t flags) {
+        *out = self;
+        out->mtx_indices[2] |= flags;
+        if (other != nullptr) {
+            std::memcpy(out->tangent, other->position, sizeof(out->tangent));
+            out->curve[0] = other->mtx_indices[0] & 0xFFu;
+        }
+        ++out;
+    };
+    const auto line = [&corner](const RenderVertex& a, const RenderVertex& b) {
+        corner(a, &b, kVertexWidenLine);
+        corner(a, &b, kVertexWidenLine | kVertexWidenRight);
+        corner(b, &a, kVertexWidenLine);
+        corner(b, &a, kVertexWidenLine | kVertexWidenRight);
+    };
+    if (primitive == kPoints) {
+        for (std::uint32_t i = 0; i < count; ++i) {
+            corner(in[i], nullptr, kVertexWidenPoint);
+            corner(in[i], nullptr, kVertexWidenPoint | kVertexWidenRight);
+            corner(in[i], nullptr, kVertexWidenPoint | kVertexWidenBottom);
+            corner(in[i], nullptr, kVertexWidenPoint | kVertexWidenRight | kVertexWidenBottom);
+        }
+    } else if (primitive == kLines) {
+        for (std::uint32_t i = 0; i + 1u < count; i += 2u) {
+            line(in[i], in[i + 1u]);
+        }
+    } else if (primitive == kLineStrip) {
+        for (std::uint32_t i = 0; i + 1u < count; ++i) {
+            line(in[i], in[i + 1u]);
+        }
+    }
+}
+
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out) {
     out.clear();
     auto add = [&](std::uint32_t i) { out.push_back(static_cast<std::uint16_t>(i)); };
@@ -26,6 +69,13 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
         for (std::uint32_t i = 0; i + 3u < count; i += 4u) {
             add(i), add(i + 1u), add(i + 2u);
             add(i), add(i + 2u), add(i + 3u);
+        }
+        break;
+    case kWideQuads:
+        // Each corner four is a strip: the diagonal joins its second and third.
+        for (std::uint32_t i = 0; i + 3u < count; i += 4u) {
+            add(i), add(i + 1u), add(i + 2u);
+            add(i + 2u), add(i + 1u), add(i + 3u);
         }
         break;
     case kTriangles:
@@ -42,15 +92,6 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
         break;
     case kTriangleFan:
         for (std::uint32_t i = 1u; i + 1u < count; ++i) add(0u), add(i), add(i + 1u);
-        break;
-    case kLines:
-        for (std::uint32_t i = 0; i + 1u < count; i += 2u) add(i), add(i + 1u);
-        break;
-    case kLineStrip:
-        for (std::uint32_t i = 0; i + 1u < count; ++i) add(i), add(i + 1u);
-        break;
-    case kPoints:
-        for (std::uint32_t i = 0; i < count; ++i) add(i);
         break;
     default:
         break;

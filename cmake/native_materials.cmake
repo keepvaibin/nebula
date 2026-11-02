@@ -137,42 +137,6 @@ function(galaxy_native_material_sources out_var backend)
         endforeach()
         string(APPEND curved_rows "    {${entries}},\n")
     endforeach()
-    # Lines and points (native_lines.hlsl): the geometry stages that widen them, once per output layout.
-    set(line_rows "")
-    foreach(layout 0 1)
-        set(entries "")
-        foreach(stage gs_line gs_point)
-            set(name "g_native_${stage}_${layout}")
-            set(header "${dir}/${stage}_${layout}.h")
-            set(source "${galaxy_native_material_dir}/native_lines.hlsl")
-            if(backend STREQUAL "dxil")
-                set(defines "")
-                if(layout STREQUAL "1")
-                    set(defines "-DNATIVE_MOTION=1")
-                endif()
-                add_custom_command(OUTPUT "${header}"
-                    COMMAND "${GALAXY_DXC}" -nologo -T gs_6_0 -E native_${stage} -O3 -WX -Qstrip_debug
-                        -Qstrip_reflect ${defines} -I "${galaxy_native_material_dir}" -Vn ${name} -Fh "${header}"
-                        "${source}"
-                    DEPENDS "${source}" ${frameworks}
-                    VERBATIM)
-            else()
-                set(defines "")
-                if(layout STREQUAL "1")
-                    set(defines "NATIVE_MOTION")
-                endif()
-                add_custom_command(OUTPUT "${header}"
-                    COMMAND galaxy_native_spirv "${source}" "${galaxy_native_material_dir}" ${stage} ${name} "${header}"
-                        ${defines}
-                    DEPENDS "${source}" ${frameworks} galaxy_native_spirv
-                    VERBATIM)
-            endif()
-            list(APPEND outputs "${header}")
-            string(APPEND includes "#include \"${stage}_${layout}.h\"\n")
-            string(APPEND entries "${name}, sizeof(${name}), ")
-        endforeach()
-        string(APPEND line_rows "    {${entries}},\n")
-    endforeach()
     set(table "${dir}/native_shader_table.cpp")
     # Identical read-only shader blobs can share one linker COMDAT.
     if(MSVC)
@@ -197,14 +161,7 @@ ${rows}};
 constexpr std::uint32_t kJ3DCount = ${j3d_count}u;
 const Pair kCurved[2] = {
 ${curved_rows}};
-const Pair kLinePoint[2] = {
-${line_rows}};
 }  // namespace
-
-NativeShaderBytes native_line_point_bytes(bool motion, bool point) noexcept {
-    const Pair& p = kLinePoint[motion ? 1 : 0];
-    return point ? NativeShaderBytes{p.ps, p.ps_size} : NativeShaderBytes{p.vs, p.vs_size};
-}
 
 NativeShaderBytes native_curved_bytes(bool motion, bool domain) noexcept {
     const Pair& p = kCurved[motion ? 1 : 0];
