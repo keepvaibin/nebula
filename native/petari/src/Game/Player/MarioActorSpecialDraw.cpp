@@ -263,21 +263,25 @@ void MarioActor::resetFog() {
     _1AA = 0;
 }
 
+void MarioActor::fillAlphaDL(J3DStateList& rList, u8 alpha) {
+    NebulaColor8 color = {0, 0, 0, 255};
+    color.a = alpha;
+    rList.setTevColor(GPU_TEVREG2, color);
+    rList.setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
+    rList.setGenMode2(1, 0, 1, 0, GPU_CULL_BACK);
+    rList.setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
+    rList.setChanCtrl(GPU_COLOR1A1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
+    rList.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
+    rList.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
+                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    rList.setTevColorCalc(GPU_TEVSTAGE0, GPU_CC_TEXC, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV);
+    rList.setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL, GPU_TEXCOORD1, GPU_TEXMAP1, GPU_COLOR_NULL);
+}
+
 void MarioActor::updateAlphaDL(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    NebulaColor8 color = {0, 0, 0, 255};
-    color.a = alpha;
-    list.setTevColor(GPU_TEVREG2, color);
-    list.setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
-    list.setGenMode2(1, 0, 1, 0, GPU_CULL_BACK);
-    list.setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
-    list.setChanCtrl(GPU_COLOR1A1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
-    list.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
-    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
-                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
-    list.setTevColorCalc(GPU_TEVSTAGE0, GPU_CC_TEXC, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV);
-    list.setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL, GPU_TEXCOORD1, GPU_TEXMAP1, GPU_COLOR_NULL);
+    fillAlphaDL(list, alpha);
     mDLchanger->swap()->mList.copy(list);
 }
 
@@ -288,25 +292,31 @@ void MarioActor::updateSimpleAlphaDL(u8 alpha) {
     mDLchanger->swap()->mList.copy(list);
 }
 
+void MarioActor::fillReflectAlphaDL(J3DStateList& rList, u8 alpha) {
+    NebulaColor8 color = {0, 0, 0, 255};
+    color.a = alpha;
+    rList.setTevColor(GPU_TEVREG2, color);
+    rList.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
+                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+}
+
 void MarioActor::updateReflectAlphaDL(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    NebulaColor8 color = {0, 0, 0, 255};
-    color.a = alpha;
-    list.setTevColor(GPU_TEVREG2, color);
-    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
-                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    fillReflectAlphaDL(list, alpha);
     mDLchanger->swap()->mList.copy(list);
+}
+
+void MarioActor::fillLightDL(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial) {
+    rList.setChanAmbColor(GPU_COLOR0A0, rAmbient);
+    rList.setChanMatColor(GPU_COLOR0A0, rMaterial);
+    rList.setChanCtrl(GPU_COLOR1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
 }
 
 void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    NebulaColor8 ambientColor = rAmbient.mGXColor;
-    list.setChanAmbColor(GPU_COLOR0A0, ambientColor);
-    NebulaColor8 materialColor = rMaterial.mGXColor;
-    list.setChanMatColor(GPU_COLOR0A0, materialColor);
-    list.setChanCtrl(GPU_COLOR1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
+    fillLightDL(list, rAmbient.mGXColor, rMaterial.mGXColor);
 
     if (!MR::isNearZero(strength)) {
         f32 nearZ = MR::getNearZ();

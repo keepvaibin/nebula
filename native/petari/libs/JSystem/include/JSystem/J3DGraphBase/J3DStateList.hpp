@@ -30,6 +30,8 @@ public:
     // The first `count` changes of its storage, written there directly.
     void adopt(u16 count) { mCount = count; }
     bool isEmpty() const { return mCount == 0; }
+    const NebulaStateOp* ops() const { return mOps; }
+    u16 count() const { return mCount; }
     // The changes, as a record after every command written before it.
     void send() const;
 

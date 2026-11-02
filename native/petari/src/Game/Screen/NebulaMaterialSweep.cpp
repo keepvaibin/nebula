@@ -1,9 +1,15 @@
 #include "Game/Screen/NebulaMaterialSweep.hpp"
+#include "Game/Player/J3DModelX.hpp"
+#include "Game/MapObj/FlexibleSphere.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioShadow.hpp"
 #include "Game/System/FileRipper.hpp"
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/System/NebulaDisc.hpp"
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/ResourceHolder.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include <JSystem/J3DGraphBase/J3DStateList.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <JSystem/JUtility/JUTNativeLog.hpp>
@@ -18,7 +24,8 @@
 // Tests only (GALAXY_DUMP_MATERIAL_PROGRAMS): the generated material set needs every material on the disc, not the ones a
 // tour happens to draw. A material's program depends on its data, whether the pane's vertices tint it and whether its colour is
 // white: each layout's materials are set up in all of those, through the game's own Material::SetupGX, which registers what the
-// set lacks. Models register theirs when they load (J3DNativeMaterial::sweep).
+// set lacks. Models register theirs when they load (J3DNativeMaterial::sweep), and the models drawn as J3DModelX theirs
+// under every state list those draw with.
 namespace {
     u32 sLayouts;
     u32 sMaterials;
@@ -65,6 +72,46 @@ namespace {
         return true;
     }
 
+    // The models J3DModelX draws (ModelUtil's list).
+    bool isDrawnWithLists(const char* pPath) {
+        static const char* const cNames[] = {"Mario", "Luigi", "SearchLightCone", "FlexibleS", "ScaleDownRelayPlanet", "Koura"};
+        for (u32 i = 0; i < sizeof(cNames) / sizeof(cNames[0]); i++) {
+            if (strstr(pPath, cNames[i]) != nullptr) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Every J3DModelX list, alone and followed by each dynamic list a shape or the player sends over it.
+    const J3DStateList* sChains[17 * 6][2];
+    u32 sChainCount;
+
+    void buildChains() {
+        static J3DStateList sLists[16];
+        J3DModelX::buildStateLists(sLists);
+        static NebulaStateOp sOps[5][16];
+        static J3DStateList sAlpha(sOps[0], 16);
+        static J3DStateList sReflect(sOps[1], 16);
+        static J3DStateList sLight(sOps[2], 16);
+        MarioActor::fillAlphaDL(sAlpha, 128);
+        MarioActor::fillReflectAlphaDL(sReflect, 128);
+        const NebulaColor8 white = {255, 255, 255, 255};
+        MarioActor::fillLightDL(sLight, white, white);
+        static J3DStateList sVolume(sOps[3], 16);
+        static J3DStateList sTexGens(sOps[4], 16);
+        CollisionShadow::fillVolumeList(sVolume);
+        FlexibleSphere::fillTexGens(sTexGens);
+        const J3DStateList* const dynamic[6] = {nullptr, &sAlpha, &sReflect, &sLight, &sVolume, &sTexGens};
+        for (u32 list = 0; list <= 16; list++) {
+            for (u32 i = 0; i < 6; i++) {
+                sChains[sChainCount][0] = list < 16 ? &sLists[list] : nullptr;
+                sChains[sChainCount][1] = dynamic[i];
+                sChainCount++;
+            }
+        }
+    }
+
     // One archive on a heap of its own, gone afterwards.
     void sweepArchive(const char* pPath, bool layouts) {
         JUTNativeLog("material sweep: %s\n", pPath);
@@ -97,7 +144,9 @@ namespace {
                 }
             } else {
                 // Its models load as the game loads them: each registers its materials (ResourceHolder, J3DNativeMaterial::sweep).
+                J3DNativeMaterial::setSweepChains(isDrawnWithLists(pPath) ? sChains : nullptr, isDrawnWithLists(pPath) ? sChainCount : 0);
                 new (pHeap, 4) ResourceHolder(*pArchive);
+                J3DNativeMaterial::setSweepChains(nullptr, 0);
                 sModels++;
             }
         }
@@ -135,6 +184,7 @@ namespace NebulaMaterialSweep {
                 }
             }
         }
+        buildChains();
         sweepFolder("/ObjectData", false);
         JUTNativeLog("material sweep: %u layouts, %u materials, %u model archives, %u archives skipped\n", sLayouts, sMaterials, sModels, sSkipped);
     }

@@ -395,9 +395,12 @@ public:
     void hideBeeFur();
     void calcFogLighting();
     void resetFog();
+    static void fillAlphaDL(J3DStateList& rList, u8 alpha);
+    static void fillReflectAlphaDL(J3DStateList& rList, u8 alpha);
     void updateAlphaDL(u8);
     void updateSimpleAlphaDL(u8);
     void updateReflectAlphaDL(u8);
+    static void fillLightDL(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial);
     void updateLightDL(const Color8&, const Color8&, const Color8&, f32);
     void createRainbowDL();
     void drawScreenBlend() const;

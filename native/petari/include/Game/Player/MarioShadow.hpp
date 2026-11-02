@@ -30,6 +30,7 @@ public:
     void draw2() const;
     void draw3() const;
     void createDL();
+    static void fillVolumeList(J3DStateList& rList);
     void drawVolume() const;
     void doSortPolygons();
     const TVec3f& getDrawPos(u32) const;
