@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/NebulaCalendar.hpp"
 #include <revolution/os.h>
 
 class GameDataHolder;
@@ -69,10 +70,10 @@ namespace GameDataFunction {
     void resetGameDataGoToGalaxyRetry();
     void onCompleteEndingCurrentPlayer();
     bool isOnCompleteEndingMarioAndLuigi();
-    OSTime getSysConfigFileTimeAnnounced();
+    NebulaCalendar::SaveTime getSysConfigFileTimeAnnounced();
     void updateSysConfigFileTimeAnnounced();
-    OSTime getSysConfigFileTimeSent();
-    void setSysConfigFileTimeSent(OSTime);
+    NebulaCalendar::SaveTime getSysConfigFileTimeSent();
+    void setSysConfigFileTimeSent(NebulaCalendar::SaveTime);
     u32 getSysConfigFileSentBytes();
     void setSysConfigFileSentBytes(u32);
     bool isLuigiLeftSupply();

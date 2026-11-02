@@ -1,3 +1,4 @@
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/ConfigDataMii.hpp"
 #include "Game/System/ConfigDataMisc.hpp"
@@ -78,7 +79,7 @@ void ConfigDataHolder::updateLastModified() {
     mMisc->updateLastModified();
 }
 
-OSTime ConfigDataHolder::getLastModified() const {
+NebulaCalendar::SaveTime ConfigDataHolder::getLastModified() const {
     return mMisc->getLastModified();
 }
 

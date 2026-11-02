@@ -5,11 +5,17 @@
 #include <stdint.h>
 
 namespace NebulaCalendar {
-    // A time as the saves store it: ticks of the console's 60.75 MHz timer from 2000-01-01 00:00 local time, so
-    // saves written here and on a Wii (or in Dolphin) read the same.
+    // A time: seconds from 2000-01-01 00:00 local.
     typedef int64_t SaveTime;
 
-    const int64_t cTicksPerSecond = 60750000;
+    // As the save files hold it: ticks of the console's 60.75 MHz timer, so saves written here and on a Wii (or in Dolphin) read the same.
+    inline int64_t toFileTime(SaveTime time) {
+        return time * 60750000;
+    }
+
+    inline SaveTime fromFileTime(int64_t ticks) {
+        return ticks / 60750000;
+    }
 
     struct Date {
         int32_t mYear;
@@ -23,7 +29,4 @@ namespace NebulaCalendar {
     SaveTime now();
     Date toDate(SaveTime time);
 
-    inline int64_t toSeconds(SaveTime time) {
-        return time / cTicksPerSecond;
-    }
 }  // namespace NebulaCalendar

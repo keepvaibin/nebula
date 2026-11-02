@@ -9,21 +9,6 @@ extern "C" {
 #endif
 
 
-// The console reads its bus clock from low memory; natively it is the Wii's constant (243 MHz).
-#ifndef OS_CORE_CLOCK
-#define OS_CORE_CLOCK 729000000u
-#endif
-#ifndef OS_BUS_CLOCK
-#define OS_BUS_CLOCK 243000000u
-#endif
-#ifndef OS_TIMER_CLOCK
-#define OS_TIMER_CLOCK (OS_BUS_CLOCK / 4)
-#endif
-
-#define OSTicksToMilliseconds(ticks) ((ticks) / (OS_TIMER_CLOCK / 1000))
-#define OSMillisecondsToTicks(msec) ((msec) * (OS_TIMER_CLOCK / 1000))
-#define OSMicrosecondsToTicks(usec) (((usec) * (OS_TIMER_CLOCK / 125000)) / 8)
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -50,7 +35,6 @@ typedef struct OSIOSRev {
 extern void __RAS_OSDisableInterrupts_begin(void);
 extern void __RAS_OSDisableInterrupts_end(void);
 
-extern s64 __OSStartTime;
 
 #ifndef ASSERT
 #define ASSERT(exp) ((void)0)
@@ -62,8 +46,6 @@ extern s64 __OSStartTime;
 
 #include <NebulaGpu.h>
 #include "revolution/os/OSContext.h"
-#include "revolution/os/OSThread.h"
-#include "revolution/os/OSTime.h"
 
 #ifdef __cplusplus
 }
