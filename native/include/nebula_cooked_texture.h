@@ -44,6 +44,8 @@ enum {
     /* The renderer runs its dither-checker filters on each level as it uploads it (the game's own images: the filters
        ran on every image before textures were cooked, and the cooker has already run them on the disc's). */
     NEBULA_TEXTURE_FILTER_AT_UPLOAD = 1u << 0,
+    /* NEBULA_TEXTURE_BLOCK4 whose blocks use no transparent colour, whose size is whole blocks. */
+    NEBULA_TEXTURE_OPAQUE_BLOCKS = 1u << 1,
 };
 
 /* The layout of texels handed over as NEBULA_TEXTURE_LINEAR_L8 / _LA8 / _RGBA8. */
