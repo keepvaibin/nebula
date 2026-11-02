@@ -46,10 +46,10 @@ void StarPointerController::movement(const f32* pProjectionParams, const f32* pV
 }
 
 void StarPointerController::storeDataFromCallback(const f32* pProjectionParams, const f32* pViewportParams) {
-    TVec3f v1(mInfo.mPos.x, mInfo.mPos.y, static_cast< f32 >(mInfo.mZDepth));
+    TVec3f v1(mInfo.mPos.x, mInfo.mPos.y, mInfo.mZDepth);
 
     if (mInfo.mDrawReady == true) {
-        TDDraw::invProject(&mWorldPos, v1, MR::getStarPointerViewMtx(), pProjectionParams, pViewportParams, false);
+        TDDraw::invProject(&mWorldPos, v1, MR::getStarPointerViewMtx(), pProjectionParams, pViewportParams, true);
         mInfo.mViewDistZ = calcViewDistanceZ(mWorldPos, MR::getStarPointerViewMtx());
     }
 

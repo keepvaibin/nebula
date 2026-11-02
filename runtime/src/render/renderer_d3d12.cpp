@@ -2494,19 +2494,9 @@ void RendererD3D12::shutdown() {
     conv_scene_depth_srv_ = {};
     conv_scene_source_table_.reset();
     next_fence_value_ = 0;
-    peek_command_list_.Reset();
-    peek_allocator_.Reset();
-    pointer_depth_capture_fence_ = 0;
-    peek_target_.Reset();
-    pointer_depth_target_.Reset();
-    pointer_depth_readback_.Reset();
-    for (auto& readback : pointer_depth_ring_) readback.Reset();
-    pointer_depth_ring_rgba_.fill(nullptr);
-    pointer_depth_pending_rgba_ = nullptr;
-    peek_readback_.Reset();
-    peek_rtv_heap_.Reset();
-    peek_rtv_ = {};
-    peek_readback_row_pitch_ = 0;
+    probe_target_.Reset();
+    probe_rtv_heap_.Reset();
+    probe_slots_ = {};
     s_clear_root_sig.Reset();
     clear_rgb_pipelines_ = {};
     clear_alpha_pipelines_ = {};
@@ -3875,7 +3865,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     } else {
         // Temporal mode: a frame that wrote no palette keeps appending to the
         // current segment, so the previous scene's palettes stay addressable
-        // across present, peek and utility frames.
+        // across present and utility frames.
         if (matrix_segment_used_ || !matrix_segment_started_) {
             matrix_segment_ = (matrix_segment_ + 1u) % matrix_segments_;
             if (matrix_segment_fence_[matrix_segment_] != 0u) {
@@ -4425,13 +4415,9 @@ std::uint64_t RendererD3D12::end_frame(
         matrix_segment_used_ = matrix_ring_.cursor() != matrix_begin_cursor_;
         matrix_segment_fence_[matrix_segment_] = submitted_fence;
     }
-    if (pointer_depth_in_frame_pending_) {
-        pointer_depth_capture_fence_ = submitted_fence;
-        pointer_depth_in_frame_pending_ = false;
-    }
-    for (AsyncPeekField& field : async_peek_fields_) {
-        if (field.fence == kAsyncPeekInFrame) {
-            field.fence = submitted_fence;
+    for (ScreenProbeSlot& slot : probe_slots_) {
+        if (slot.fence == kProbesInFrame) {
+            slot.fence = submitted_fence;
         }
     }
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), submitted_fence);
@@ -8482,38 +8468,19 @@ bool RendererD3D12::copy_scene_to_texture(
     return publish_capture(params, dest.texture, is_depth_copy, textures);
 }
 
-bool RendererD3D12::ensure_peek_resources() {
-    if (peek_target_ && peek_readback_ && peek_rtv_heap_ &&
-        peek_allocator_ && peek_command_list_) {
+void RendererD3D12::create_first_use_resources() {
+    (void)ensure_screen_probe_resources();
+}
+
+bool RendererD3D12::ensure_screen_probe_resources() {
+    if (probe_target_) {
         return true;
     }
-    if (!device_ || !queue_ || !fence_ || !scene_color_ || !scene_depth_ ||
-        !conv_pipeline_ || !s_conv_root_sig || !srv_ring_.heap() ||
-        conv_scene_color_srv_.ptr == 0u || conv_scene_depth_srv_.ptr == 0u) {
-        return false;
-    }
-
-    d3d_check(
-        device_->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            IID_PPV_ARGS(&peek_allocator_)),
-        "GXPeek command allocator");
-    d3d_check(
-        device_->CreateCommandList(
-            0,
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            peek_allocator_.Get(),
-            nullptr,
-            IID_PPV_ARGS(&peek_command_list_)),
-        "GXPeek command list");
-    d3d_check(peek_command_list_->Close(), "GXPeek command list close");
-    peek_command_list_->SetName(L"PeekList");
-
     D3D12_HEAP_PROPERTIES default_heap{};
     default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC target_desc{};
     target_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    target_desc.Width = 1;
+    target_desc.Width = kScreenProbesMax;
     target_desc.Height = 1;
     target_desc.DepthOrArraySize = 1;
     target_desc.MipLevels = 1;
@@ -8521,565 +8488,114 @@ bool RendererD3D12::ensure_peek_resources() {
     target_desc.SampleDesc.Count = 1;
     target_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     target_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    D3D12_CLEAR_VALUE target_clear{};
-    target_clear.Format = kSceneColorFormat;
-    target_clear.Color[3] = 1.0f;
     d3d_check(
-        device_->CreateCommittedResource(
-            &default_heap,
-            D3D12_HEAP_FLAG_NONE,
-            &target_desc,
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            &target_clear,
-            IID_PPV_ARGS(&peek_target_)),
-        "GXPeek target");
-
-    peek_readback_row_pitch_ = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+        device_->CreateCommittedResource(&default_heap, D3D12_HEAP_FLAG_NONE, &target_desc,
+                                         D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, IID_PPV_ARGS(&probe_target_)),
+        "screen probe target");
     D3D12_HEAP_PROPERTIES readback_heap{};
     readback_heap.Type = D3D12_HEAP_TYPE_READBACK;
     D3D12_RESOURCE_DESC readback_desc{};
     readback_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    readback_desc.Width = peek_readback_row_pitch_;
+    readback_desc.Width = static_cast<UINT64>(kScreenProbesMax) * 4u;
     readback_desc.Height = 1;
     readback_desc.DepthOrArraySize = 1;
     readback_desc.MipLevels = 1;
     readback_desc.SampleDesc.Count = 1;
     readback_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    d3d_check(
-        device_->CreateCommittedResource(
-            &readback_heap,
-            D3D12_HEAP_FLAG_NONE,
-            &readback_desc,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&peek_readback_)),
-        "GXPeek readback");
-
-    D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
-    rtv_heap_desc.NumDescriptors = 1;
-    rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    d3d_check(
-        device_->CreateDescriptorHeap(
-            &rtv_heap_desc,
-            IID_PPV_ARGS(&peek_rtv_heap_)),
-        "GXPeek RTV heap");
-    peek_rtv_ = peek_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
-    device_->CreateRenderTargetView(peek_target_.Get(), nullptr, peek_rtv_);
-
-    return true;
-}
-
-bool RendererD3D12::peek_scene(
-    std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value) {
-    return read_scene_pixels(x, y, kind, value, {});
-}
-
-void RendererD3D12::create_first_use_resources() {
-    (void)ensure_peek_resources();
-    (void)ensure_pointer_depth_resources();
-}
-
-bool RendererD3D12::ensure_pointer_depth_resources() {
-    if (pointer_depth_target_ && pointer_depth_readback_) {
-        return true;
-    }
-    if (!ensure_peek_resources()) {
-        return false;
-    }
-    constexpr UINT width = kFrameWidth;
-    constexpr UINT height = kFrameHeight;
-    constexpr UINT row_pitch = kFrameWidth * 4u;
-    ComPtr<ID3D12Resource> target_candidate;
-    ComPtr<ID3D12Resource> readback_candidate;
-    D3D12_HEAP_PROPERTIES hp{};
-    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
-    D3D12_RESOURCE_DESC td = peek_target_->GetDesc();
-    td.Width = width; td.Height = height;
-    d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
-        &td, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr,
-        IID_PPV_ARGS(&target_candidate)), "pointer depth target");
-    hp.Type = D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC rd = peek_readback_->GetDesc();
-    rd.Width = static_cast<UINT64>(row_pitch) * height;
-    std::array<ComPtr<ID3D12Resource>, kPointerDepthRing> ring;
-    for (auto& readback : ring) {
-        d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
-            &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-            IID_PPV_ARGS(&readback)), "pointer depth readback");
-    }
-    readback_candidate = ring[0];
-    for (std::size_t i = 0; i < kPointerDepthRing; ++i) {
-        pointer_depth_ring_rgba_[i] = pin_readback_mapping(ring[i].Get());
-    }
-    pointer_depth_ring_ = std::move(ring);
-    pointer_depth_ring_next_ = 0;
-    pointer_depth_target_ = std::move(target_candidate);
-    pointer_depth_readback_ = std::move(readback_candidate);
-    return true;
-}
-
-void RendererD3D12::select_pointer_depth_destination() {
-    pointer_depth_readback_ = pointer_depth_ring_[pointer_depth_ring_next_];
-    pointer_depth_pending_rgba_ = pointer_depth_ring_rgba_[pointer_depth_ring_next_];
-    pointer_depth_ring_next_ = (pointer_depth_ring_next_ + 1u) % kPointerDepthRing;
-}
-
-// Mid-stream pointer depth field: the same conversion draw and readback copy
-// as the utility path, recorded into the frame's command list so the frame's
-// own submission carries it; nothing waits for it.
-bool RendererD3D12::record_pointer_depth_capture_in_frame() {
-    if (pointer_depth_in_frame_pending_ || pointer_depth_capture_fence_ != 0u) {
-        return false;
-    }
-    if (!ensure_pointer_depth_resources()) {
-        return false;
-    }
-    constexpr UINT width = kFrameWidth;
-    constexpr UINT height = kFrameHeight;
-    constexpr UINT row_pitch = kFrameWidth * 4u;
-    select_pointer_depth_destination();
-    resolve_scene(true);
-    ID3D12Resource* const target = pointer_depth_target_.Get();
-    ID3D12Resource* const readback = pointer_depth_readback_.Get();
-    ID3D12Resource* const src = scene_depth_.Get();
-
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.pResource = src;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[1].Transition.pResource = target;
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    command_list_->ResourceBarrier(2, barriers);
-
-    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = allocate_conversion_rtv(target);
-    command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
-    bound_rt_aux_ = 0u;
-    const D3D12_VIEWPORT viewport{
-        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    command_list_->RSSetViewports(1, &viewport);
-    command_list_->RSSetScissorRects(1, &scissor);
-    command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
-    command_list_->SetPipelineState(conv_pipeline_.Get());
-    const ScenePeekSamplingGeometry sampling =
-        compute_scene_peek_sampling_geometry(0u, 0u, frame_);
-    SceneConversionShaderConstants constants =
-        make_scene_peek_conversion_constants(sampling, ReadbackKind::Depth);
-    constants.values[15] = -1.0f;
-    command_list_->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
-    command_list_->SetGraphicsRootDescriptorTable(1, conv_scene_depth_srv_);
-    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list_->DrawInstanced(3, 1, 0, 0);
-
-    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
-    std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
-    command_list_->ResourceBarrier(2, barriers);
-
-    D3D12_TEXTURE_COPY_LOCATION src_copy{};
-    src_copy.pResource = target;
-    src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    D3D12_TEXTURE_COPY_LOCATION dst_copy{};
-    dst_copy.pResource = readback;
-    dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst_copy.PlacedFootprint.Footprint.Format = kSceneColorFormat;
-    dst_copy.PlacedFootprint.Footprint.Width = width;
-    dst_copy.PlacedFootprint.Footprint.Height = height;
-    dst_copy.PlacedFootprint.Footprint.Depth = 1;
-    dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
-    command_list_->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
-
-    // Restore the GX drawing state exactly as record_conversion_blit does.
-    command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_draw_bindings();
-    bind_scene();
-    pointer_depth_in_frame_pending_ = true;
-    return true;
-}
-
-bool RendererD3D12::capture_pointer_depth(std::span<std::uint32_t> pixels) {
-    if (pixels.size() != kFrameWidth * kFrameHeight) {
-        throw std::invalid_argument("pointer depth field requires 640x456 pixels");
-    }
-    std::uint32_t unused{};
-    return read_scene_pixels(0u, 0u, ReadbackKind::Depth, unused, pixels);
-}
-
-std::uint64_t RendererD3D12::submit_pointer_depth_capture() {
-    std::uint32_t unused{};
-    if (!read_scene_pixels(0u, 0u, ReadbackKind::Depth, unused, {}, true)) {
-        return 0u;
-    }
-    return pointer_depth_capture_fence_;
-}
-
-bool RendererD3D12::try_complete_pointer_depth_capture_in_place(
-    const std::uint8_t*& rgba) {
-    rgba = nullptr;
-    if (pointer_depth_capture_fence_ == 0u) {
-        if (pointer_depth_in_frame_pending_) {
-            return false;  // recorded in the open frame; fenced at end_frame
-        }
-        throw std::logic_error("pointer depth completion has no owned fence");
-    }
-    if (completed_fence_value() < pointer_depth_capture_fence_) {
-        return false;
-    }
-    rgba = pointer_depth_pending_rgba_;
-    pointer_depth_capture_fence_ = 0u;
-    return true;
-}
-
-bool RendererD3D12::ensure_async_peek_field_resources(
-    AsyncPeekField& field, ReadbackKind kind) {
-    if (field.allocator && field.command_list && field.target &&
-        field.readbacks[0] && field.rtv_heap) {
-        return true;
-    }
-    // The conversion pipeline, root signature and scene target views are shared with
-    // the synchronous peek path; everything else here is private.
-    if (!ensure_peek_resources()) {
-        return false;
-    }
-    const bool is_depth = kind == ReadbackKind::Depth;
-    d3d_check(
-        device_->CreateCommandAllocator(
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            IID_PPV_ARGS(&field.allocator)),
-        "async peek field command allocator");
-    d3d_check(
-        device_->CreateCommandList(
-            0,
-            D3D12_COMMAND_LIST_TYPE_DIRECT,
-            field.allocator.Get(),
-            nullptr,
-            IID_PPV_ARGS(&field.command_list)),
-        "async peek field command list");
-    d3d_check(field.command_list->Close(), "async peek field list close");
-    field.command_list->SetName(
-        is_depth ? L"AsyncDepthFieldList" : L"AsyncColorFieldList");
-
-    D3D12_HEAP_PROPERTIES default_heap{};
-    default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
-    D3D12_RESOURCE_DESC target_desc{};
-    target_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    target_desc.Width = kFrameWidth;
-    target_desc.Height = kFrameHeight;
-    target_desc.DepthOrArraySize = 1;
-    target_desc.MipLevels = 1;
-    target_desc.Format = kSceneColorFormat;
-    target_desc.SampleDesc.Count = 1;
-    target_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    target_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    D3D12_CLEAR_VALUE target_clear{};
-    target_clear.Format = kSceneColorFormat;
-    target_clear.Color[3] = 1.0f;
-    d3d_check(
-        device_->CreateCommittedResource(
-            &default_heap,
-            D3D12_HEAP_FLAG_NONE,
-            &target_desc,
-            D3D12_RESOURCE_STATE_COPY_SOURCE,
-            &target_clear,
-            IID_PPV_ARGS(&field.target)),
-        "async peek field target");
-
-    D3D12_HEAP_PROPERTIES readback_heap{};
-    readback_heap.Type = D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC readback_desc{};
-    readback_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    readback_desc.Width = static_cast<UINT64>(kFrameWidth) * 4u * kFrameHeight;
-    readback_desc.Height = 1;
-    readback_desc.DepthOrArraySize = 1;
-    readback_desc.MipLevels = 1;
-    readback_desc.SampleDesc.Count = 1;
-    readback_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    for (std::size_t slot = 0; slot < kAsyncPeekFieldSlots; ++slot) {
+    for (ScreenProbeSlot& slot : probe_slots_) {
         d3d_check(
-            device_->CreateCommittedResource(
-                &readback_heap,
-                D3D12_HEAP_FLAG_NONE,
-                &readback_desc,
-                D3D12_RESOURCE_STATE_COPY_DEST,
-                nullptr,
-                IID_PPV_ARGS(&field.readbacks[slot])),
-            "async peek field readback");
-        field.rgba[slot] = pin_readback_mapping(field.readbacks[slot].Get());
-        if (field.rgba[slot] == nullptr) {
-            throw std::runtime_error("async peek field readback could not be mapped");
+            device_->CreateCommittedResource(&readback_heap, D3D12_HEAP_FLAG_NONE, &readback_desc,
+                                             D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&slot.readback)),
+            "screen probe readback");
+        slot.rgba = pin_readback_mapping(slot.readback.Get());
+        if (slot.rgba == nullptr) {
+            throw std::runtime_error("screen probe readback could not be mapped");
         }
     }
-
     D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
     rtv_heap_desc.NumDescriptors = 1;
     rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-    d3d_check(
-        device_->CreateDescriptorHeap(
-            &rtv_heap_desc, IID_PPV_ARGS(&field.rtv_heap)),
-        "async peek field RTV heap");
-    field.rtv = field.rtv_heap->GetCPUDescriptorHandleForHeapStart();
-    device_->CreateRenderTargetView(field.target.Get(), nullptr, field.rtv);
+    d3d_check(device_->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&probe_rtv_heap_)), "screen probe RTV heap");
+    probe_rtv_ = probe_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    device_->CreateRenderTargetView(probe_target_.Get(), nullptr, probe_rtv_);
     return true;
 }
 
-std::uint64_t RendererD3D12::submit_async_peek_field(
-    std::size_t channel, ReadbackKind kind, std::size_t slot) {
-    AsyncPeekField& field = async_peek_fields_[channel];
-    if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
-        return 0u;
-    }
-    if (!ensure_async_peek_field_resources(field, kind)) {
-        return 0u;
-    }
-    ID3D12GraphicsCommandList* const list = field.command_list.Get();
-    d3d_check(field.allocator->Reset(), "async peek field allocator reset");
-    d3d_check(
-        list->Reset(field.allocator.Get(), nullptr),
-        "async peek field command list reset");
-    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap()};
-    list->SetDescriptorHeaps(1, heaps);
-    record_async_peek_field_commands(list, field, kind, slot);
-    d3d_check(list->Close(), "async peek field command list close");
-    ID3D12CommandList* lists[] = {list};
-    queue_->ExecuteCommandLists(1, lists);
-    const std::uint64_t fence_value = ++next_fence_value_;
-    const HRESULT signal_hr = queue_->Signal(fence_.Get(), fence_value);
-    if (FAILED(signal_hr)) {
-        dump_device_removal(device_.Get());
-        d3d_check(signal_hr, "async peek field queue signal");
-    }
-    field.fence = fence_value;
-    return fence_value;
-}
-
-bool RendererD3D12::record_async_peek_field_in_frame(
-    std::size_t channel, ReadbackKind kind, std::size_t slot) {
-    AsyncPeekField& field = async_peek_fields_[channel];
-    if (field.fence != 0u || slot >= kAsyncPeekFieldSlots ||
-        !ensure_async_peek_field_resources(field, kind)) {
+bool RendererD3D12::record_screen_probes(std::size_t slot, ScreenProbeKind kind, std::span<const ScreenProbe> probes) {
+    ScreenProbeSlot& out = probe_slots_[slot];
+    if (out.fence != 0u || probes.size() > kScreenProbesMax || !ensure_screen_probe_resources()) {
         return false;
     }
-    record_async_peek_field_commands(command_list_.Get(), field, kind, slot);
-    // Restore the GX drawing state exactly as record_conversion_blit does.
-    command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_draw_bindings();
-    bind_scene();
-    field.fence = kAsyncPeekInFrame;  // fenced at end_frame
-    return true;
-}
-
-void RendererD3D12::record_async_peek_field_commands(
-    ID3D12GraphicsCommandList* list, AsyncPeekField& field, ReadbackKind kind, std::size_t slot) {
+    ID3D12GraphicsCommandList* const list = command_list_.Get();
     settle_owed_scene();
-    const bool is_depth = kind == ReadbackKind::Depth;
+    const bool is_depth = kind == ScreenProbeKind::Depth;
     resolve_scene_on(list, !is_depth, is_depth);
-    constexpr UINT width = kFrameWidth;
-    constexpr UINT height = kFrameHeight;
-    constexpr UINT row_pitch = kFrameWidth * 4u;
-    static_assert(row_pitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
-    ID3D12Resource* const target = field.target.Get();
-    ID3D12Resource* const readback = field.readbacks[slot].Get();
     ID3D12Resource* const src = is_depth ? scene_depth_.Get() : scene_color_.Get();
 
     D3D12_RESOURCE_BARRIER barriers[2]{};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Transition.pResource = src;
-    barriers[0].Transition.StateBefore =
-        is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE
-                 : D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateBefore = is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[1].Transition.pResource = target;
+    barriers[1].Transition.pResource = probe_target_.Get();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     list->ResourceBarrier(2, barriers);
 
-    list->OMSetRenderTargets(1, &field.rtv, FALSE, nullptr);
-    const D3D12_VIEWPORT viewport{
-        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    list->RSSetViewports(1, &viewport);
-    list->RSSetScissorRects(1, &scissor);
+    list->OMSetRenderTargets(1, &probe_rtv_, FALSE, nullptr);
     list->SetGraphicsRootSignature(s_conv_root_sig.Get());
     list->SetPipelineState(conv_pipeline_.Get());
-    const ScenePeekSamplingGeometry sampling =
-        compute_scene_peek_sampling_geometry(0u, 0u, frame_);
-    SceneConversionShaderConstants constants =
-        make_scene_peek_conversion_constants(sampling, kind);
-    constants.values[15] = -1.0f;
-    list->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
-    list->SetGraphicsRootDescriptorTable(
-        1, is_depth ? conv_scene_depth_srv_ : conv_scene_color_srv_);
+    list->SetGraphicsRootDescriptorTable(1, is_depth ? conv_scene_depth_srv_ : conv_scene_color_srv_);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    list->DrawInstanced(3, 1, 0, 0);
+    for (std::size_t i = 0; i < probes.size(); ++i) {
+        if (probes[i].x < 0.0f || probes[i].y < 0.0f) {
+            continue;
+        }
+        const D3D12_VIEWPORT viewport{static_cast<float>(i), 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
+        const D3D12_RECT scissor{static_cast<LONG>(i), 0, static_cast<LONG>(i) + 1, 1};
+        list->RSSetViewports(1, &viewport);
+        list->RSSetScissorRects(1, &scissor);
+        const SceneConversionShaderConstants constants = make_screen_probe_constants(probes[i].x, probes[i].y, frame_, is_depth);
+        list->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
+        list->DrawInstanced(3, 1, 0, 0);
+    }
 
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
     std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
     list->ResourceBarrier(2, barriers);
 
     D3D12_TEXTURE_COPY_LOCATION src_copy{};
-    src_copy.pResource = target;
+    src_copy.pResource = probe_target_.Get();
     src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     D3D12_TEXTURE_COPY_LOCATION dst_copy{};
-    dst_copy.pResource = readback;
+    dst_copy.pResource = out.readback.Get();
     dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     dst_copy.PlacedFootprint.Footprint.Format = kSceneColorFormat;
-    dst_copy.PlacedFootprint.Footprint.Width = width;
-    dst_copy.PlacedFootprint.Footprint.Height = height;
+    dst_copy.PlacedFootprint.Footprint.Width = kScreenProbesMax;
+    dst_copy.PlacedFootprint.Footprint.Height = 1;
     dst_copy.PlacedFootprint.Footprint.Depth = 1;
-    dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
+    dst_copy.PlacedFootprint.Footprint.RowPitch = kScreenProbesMax * 4u;
+    static_assert(kScreenProbesMax * 4u % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
     list->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
-}
 
-bool RendererD3D12::try_complete_async_peek_field(std::size_t channel) {
-    AsyncPeekField& field = async_peek_fields_[channel];
-    if (field.fence == 0u) {
-        return false;
-    }
-    if (completed_fence_value() < field.fence) {
-        return false;
-    }
-    field.fence = 0u;
+    // The drawing state as record_conversion_blit restores it.
+    list->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_draw_bindings();
+    bind_scene();
+    out.fence = kProbesInFrame;  // fenced at end_frame
     return true;
 }
 
-const std::uint8_t* RendererD3D12::async_peek_field_rgba(
-    std::size_t channel, std::size_t slot) const noexcept {
-    return slot < kAsyncPeekFieldSlots
-        ? async_peek_fields_[channel].rgba[slot] : nullptr;
-}
-
-bool RendererD3D12::read_scene_pixels(
-    std::uint16_t x, std::uint16_t y, ReadbackKind kind,
-    std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
-    bool defer_pointer_depth) {
-    settle_owed_scene();
-    value = 0;
-    if (pointer_depth_capture_fence_ != 0u) {
-        throw std::logic_error("GXPeek resources still own an unpublished pointer field");
+const std::uint8_t* RendererD3D12::screen_probes_finished(std::size_t slot) noexcept {
+    ScreenProbeSlot& out = probe_slots_[slot];
+    if (out.fence == 0u || out.fence == kProbesInFrame || completed_fence_value() < out.fence) {
+        return nullptr;
     }
-    if (x >= kFrameWidth || y >= kFrameHeight || !ensure_peek_resources()) {
-        return false;
-    }
-
-    const bool field = defer_pointer_depth || !depth_pixels.empty();
-    const UINT width = field ? kFrameWidth : 1u;
-    const UINT height = field ? kFrameHeight : 1u;
-    const UINT row_pitch = field ? kFrameWidth * 4u : peek_readback_row_pitch_;
-    if (field && !ensure_pointer_depth_resources()) {
-        return false;
-    }
-    if (field) {
-        select_pointer_depth_destination();
-    }
-    ID3D12Resource* target = field ? pointer_depth_target_.Get() : peek_target_.Get();
-    ID3D12Resource* readback = field ? pointer_depth_readback_.Get() : peek_readback_.Get();
-    // Every earlier peek completed at its fence before this one could start,
-    // so the descriptor can be rewritten.
-    device_->CreateRenderTargetView(target, nullptr, peek_rtv_);
-    const bool is_depth = kind == ReadbackKind::Depth;
-    ID3D12Resource* src = is_depth ? scene_depth_.Get() : scene_color_.Get();
-
-    d3d_check(peek_allocator_->Reset(), "GXPeek allocator reset");
-    d3d_check(
-        peek_command_list_->Reset(peek_allocator_.Get(), nullptr),
-        "GXPeek command list reset");
-    if (scene_msaa_.samples > 1u) {
-        ID3D12DescriptorHeap* resolve_heaps[] = {srv_ring_.heap()};
-        peek_command_list_->SetDescriptorHeaps(1, resolve_heaps);
-        resolve_scene_on(peek_command_list_.Get(), !is_depth, is_depth);
-    }
-
-    D3D12_RESOURCE_BARRIER barriers[2]{};
-    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.pResource = src;
-    barriers[0].Transition.StateBefore =
-        is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE
-                 : D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[0].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    barriers[0].Transition.Subresource =
-        D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[1].Transition.pResource = target;
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[1].Transition.Subresource =
-        D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    peek_command_list_->ResourceBarrier(2, barriers);
-
-    // Utility and GX lists use the same heap and immutable scene target source views.
-    // Frame-ring resets cannot touch them, including during a deferred field.
-    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap()};
-    peek_command_list_->SetDescriptorHeaps(1, heaps);
-    peek_command_list_->OMSetRenderTargets(1, &peek_rtv_, FALSE, nullptr);
-    const D3D12_VIEWPORT kViewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const D3D12_RECT kScissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    peek_command_list_->RSSetViewports(1, &kViewport);
-    peek_command_list_->RSSetScissorRects(1, &kScissor);
-    peek_command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
-    peek_command_list_->SetPipelineState(conv_pipeline_.Get());
-
-    const ScenePeekSamplingGeometry sampling =
-        compute_scene_peek_sampling_geometry(x, y, frame_);
-    SceneConversionShaderConstants constants =
-        make_scene_peek_conversion_constants(sampling, kind);
-    if (field) constants.values[15] = -1.0f;
-    peek_command_list_->SetGraphicsRoot32BitConstants(
-        0, 16, constants.values.data(), 0);
-    peek_command_list_->SetGraphicsRootDescriptorTable(1,
-        is_depth ? conv_scene_depth_srv_ : conv_scene_color_srv_);
-    peek_command_list_->IASetPrimitiveTopology(
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    peek_command_list_->DrawInstanced(3, 1, 0, 0);
-
-    std::swap(
-        barriers[0].Transition.StateBefore,
-        barriers[0].Transition.StateAfter);
-    std::swap(
-        barriers[1].Transition.StateBefore,
-        barriers[1].Transition.StateAfter);
-    peek_command_list_->ResourceBarrier(2, barriers);
-
-    D3D12_TEXTURE_COPY_LOCATION src_copy{};
-    src_copy.pResource = target;
-    src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    D3D12_TEXTURE_COPY_LOCATION dst_copy{};
-    dst_copy.pResource = readback;
-    dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    dst_copy.PlacedFootprint.Footprint.Format = kSceneColorFormat;
-    dst_copy.PlacedFootprint.Footprint.Width = width;
-    dst_copy.PlacedFootprint.Footprint.Height = height;
-    dst_copy.PlacedFootprint.Footprint.Depth = 1;
-    dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
-    peek_command_list_->CopyTextureRegion(
-        &dst_copy, 0, 0, 0, &src_copy, nullptr);
-
-    d3d_check(peek_command_list_->Close(), "GXPeek command list close");
-    ID3D12CommandList* lists[] = {peek_command_list_.Get()};
-    queue_->ExecuteCommandLists(1, lists);
-
-    const std::uint64_t fence_value = ++next_fence_value_;
-    const HRESULT signal_hr = queue_->Signal(fence_.Get(), fence_value);
-    if (FAILED(signal_hr)) {
-        dump_device_removal(device_.Get());
-        d3d_check(signal_hr, "GXPeek queue signal");
-    }
-    if (defer_pointer_depth) {
-        pointer_depth_capture_fence_ = fence_value;
-        return true;
-    }
-    wait_for_fence_value(fence_value);
-
-    copy_scene_readback_pixels(readback, width, height, row_pitch, is_depth,
-        value, depth_pixels);
-    return true;
+    out.fence = 0u;
+    return out.rgba;
 }
 
 // A readback heap may stay mapped while the GPU writes it (D3D12 leaves the
@@ -9091,57 +8607,6 @@ const std::uint8_t* RendererD3D12::pin_readback_mapping(ID3D12Resource* readback
     const D3D12_RANGE no_read{0, 0};
     if (FAILED(readback->Map(0, &no_read, &mapped))) return nullptr;
     return static_cast<const std::uint8_t*>(mapped);
-}
-
-void RendererD3D12::copy_scene_readback_pixels(
-    ID3D12Resource* readback, UINT width, UINT height, UINT row_pitch,
-    bool is_depth, std::uint32_t& value,
-    std::span<std::uint32_t> depth_pixels) {
-    void* mapped = nullptr;
-    const D3D12_RANGE read_range{
-        0, static_cast<SIZE_T>(row_pitch) * height};
-    d3d_check(
-        readback->Map(0, &read_range, &mapped),
-        "GXPeek readback map");
-    const auto* rgba = static_cast<const std::uint8_t*>(mapped);
-    if (!depth_pixels.empty()) {
-        // RGBA8 bytes to 0x00RRGGBB (depth) or 0xAARRGGBB (colour): a byte shuffle per four pixels.
-        // The full 640x456 field is converted for every published peek field and pointer-depth capture.
-        const __m128i order = is_depth
-            ? _mm_setr_epi8(2, 1, 0, -128, 6, 5, 4, -128, 10, 9, 8, -128, 14, 13, 12, -128)
-            : _mm_setr_epi8(2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
-        for (std::size_t row = 0; row < height; ++row) {
-            const std::uint8_t* source = rgba + row * row_pitch;
-            std::uint32_t* destination = depth_pixels.data() + row * width;
-            std::size_t col = 0;
-            for (; col + 4u <= width; col += 4u) {
-                const __m128i quad = _mm_loadu_si128(
-                    reinterpret_cast<const __m128i*>(source + col * 4u));
-                _mm_storeu_si128(reinterpret_cast<__m128i*>(destination + col),
-                                 _mm_shuffle_epi8(quad, order));
-            }
-            for (; col < width; ++col) {
-                const std::uint8_t* pixel = source + col * 4u;
-                const std::uint32_t rgb =
-                    (static_cast<std::uint32_t>(pixel[0]) << 16u) |
-                    (static_cast<std::uint32_t>(pixel[1]) << 8u) | pixel[2];
-                destination[col] = is_depth
-                    ? rgb
-                    : (static_cast<std::uint32_t>(pixel[3]) << 24u) | rgb;
-            }
-        }
-    }
-    const std::uint32_t r = rgba[0];
-    const std::uint32_t g = rgba[1];
-    const std::uint32_t b = rgba[2];
-    const std::uint32_t a = rgba[3];
-    if (is_depth) {
-        value = (r << 16) | (g << 8) | b;
-    } else {
-        value = (a << 24) | (r << 16) | (g << 8) | b;
-    }
-    const D3D12_RANGE no_write{0, 0};
-    readback->Unmap(0, &no_write);
 }
 
 void RendererD3D12::set_debug_capture_paths(

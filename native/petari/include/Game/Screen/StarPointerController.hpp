@@ -9,7 +9,7 @@ public:
     /* 0x00 */ TVec2f mPos;
     /* 0x08 */ bool mInScreen;
     /* 0x09 */ bool mDrawReady;
-    /* 0x0C */ u32 mZDepth;
+    /* 0x0C */ f32 mZDepth;  // 0 near to 1 far
     /* 0x10 */ f32 mViewDistZ;
 };
 

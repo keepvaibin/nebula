@@ -62,10 +62,6 @@ enum class SceneMarker : std::uint8_t {
     Scene2DEnd,
 };
 
-enum class ReadbackKind : std::uint8_t {
-    Color,
-    Depth,
-};
 
 // Creates the window and the renderer (device, swap chain, queues, root signature, pipelines, upload buffers).
 // Returns false on failure.
@@ -173,6 +169,7 @@ void attach_shape_record(shapes::Record&& record);
 [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record);
 [[nodiscard]] std::uint32_t reserve_record_native(const void* native, std::size_t bytes);
 [[nodiscard]] RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t count);
+[[nodiscard]] ScreenProbe* reserve_record_probes(shapes::Record& record, std::uint32_t count);
 // Simulation thread: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
 // until the movie closes (frame -1).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint64_t y, std::uint64_t u,
@@ -183,17 +180,8 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 // screen's white backing as it fades.
 void set_safety_scene_surround(float intensity) noexcept;
 
-// A peek made in draw-sync token `token`'s callback: the field captured where the stream reached that
-// token (RenderCore::readback_published).
-[[nodiscard]] bool readback_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    ReadbackKind kind,
-    std::uint16_t token,
-    std::uint32_t& value);
-
-// How many captures of readback channel `token`'s colour have finished (RenderCore::readback_serial).
-[[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) noexcept;
+// Channel `channel`'s latest finished probes (nebula_game_api.h NebulaHostServices::screen_probe_results).
+[[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);
 
 
 // Pumps window messages; the host's main loop calls it periodically.

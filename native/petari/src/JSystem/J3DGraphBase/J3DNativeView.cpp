@@ -54,24 +54,14 @@ namespace {
 }  // namespace
 
 namespace J3DNativeView {
-    void captureReadback(u32 channel) {
+    void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count) {
         const NebulaHostServices* pHost = nebula_host();
-        pHost->readback_capture(pHost->user, channel);
+        pHost->screen_probe(pHost->user, channel, what, pProbes, count);
     }
 
-    u32 readbackColor(u32 channel, s32 x, s32 y) {
+    u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity) {
         const NebulaHostServices* pHost = nebula_host();
-        return pHost->readback_pixel(pHost->user, channel, 0, static_cast< u32 >(x), static_cast< u32 >(y));
-    }
-
-    u32 readbackDepth(u32 channel, s32 x, s32 y) {
-        const NebulaHostServices* pHost = nebula_host();
-        return pHost->readback_pixel(pHost->user, channel, 1, static_cast< u32 >(x), static_cast< u32 >(y));
-    }
-
-    u32 readbackSerial(u32 channel) {
-        const NebulaHostServices* pHost = nebula_host();
-        return pHost->readback_serial(pHost->user, channel);
+        return pHost->screen_probe_results(pHost->user, channel, pProbes, capacity);
     }
 
     void setProjection(const f32 (*pMtx)[4], GpuProjectionType type) {

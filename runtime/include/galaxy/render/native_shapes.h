@@ -102,6 +102,7 @@ struct RecordPool {
     std::vector<state::Op> ops;
     std::vector<material::Native> natives;
     std::vector<RenderVertex> vertices;
+    std::vector<ScreenProbe> probes;
 };
 
 // The game's records, in the order it made them (render_core.h attach_shape_record).
@@ -123,6 +124,7 @@ struct Record {
     std::uint32_t op_first = 0, op_count = 0;
     // Immediate: its vertices in the frame's pool; their position matrix slot is the current one unless the attributes
     // (Geometry::attributes' bits) say each has its own. `primitive` a NebulaPrimitive.
+    // Readback: its probes in the frame's pool, the same way.
     std::uint32_t vertex_first = 0, vertex_count = 0, attributes = 0;
     std::uint8_t primitive = 0;
     // An image's bytes (TextureImage), at `key`: its physical address.

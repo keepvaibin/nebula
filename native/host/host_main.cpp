@@ -2204,16 +2204,21 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
 #endif
 }
 
-void svc_readback_capture(void*, uint32_t channel) {
+void svc_screen_probe(void*, uint32_t channel, uint32_t what, const NebulaScreenProbe* probes, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
+    static_assert(sizeof(NebulaScreenProbe) == sizeof(galaxy::render::ScreenProbe) &&
+                  NEBULA_SCREEN_PROBES_MAX == galaxy::render::kScreenProbesMax);
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::Readback;
     attach_pending_records();
     record.key = channel;
+    record.marker_aux = what;
+    std::memcpy(galaxy::render::reserve_record_probes(record, std::min(count, NEBULA_SCREEN_PROBES_MAX)), probes,
+                std::min(count, NEBULA_SCREEN_PROBES_MAX) * sizeof(NebulaScreenProbe));
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)channel;
+    (void)channel, (void)what, (void)probes, (void)count;
 #endif
 }
 
@@ -2239,26 +2244,11 @@ void svc_frame_end(void*) {
 #endif
 }
 
-uint32_t svc_readback_pixel(void*, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y) {
+uint32_t svc_screen_probe_results(void*, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity) {
 #if defined(NEBULA_HOST_RENDERER)
-    uint32_t value = 0;
-    const auto kind = depth != 0u ? galaxy::render::ReadbackKind::Depth : galaxy::render::ReadbackKind::Color;
-    if (!galaxy::render::readback_published(static_cast<uint16_t>(x), static_cast<uint16_t>(y), kind,
-                                        static_cast<uint16_t>(channel), value)) {
-        return 0;
-    }
-    return value;
+    return galaxy::render::screen_probe_results(channel, reinterpret_cast<galaxy::render::ScreenProbe*>(probes), capacity);
 #else
-    (void)channel, (void)depth, (void)x, (void)y;
-    return 0;
-#endif
-}
-
-uint32_t svc_readback_serial(void*, uint32_t channel) {
-#if defined(NEBULA_HOST_RENDERER)
-    return galaxy::render::readback_serial(static_cast<uint16_t>(channel));
-#else
-    (void)channel;
+    (void)channel, (void)probes, (void)capacity;
     return 0;
 #endif
 }
@@ -3946,13 +3936,12 @@ int main(int argc, char** argv) {
     services.target_capture = svc_target_capture;
     services.texture_image = svc_texture_image;
     services.mii_record = svc_mii_record;
-    services.readback_capture = svc_readback_capture;
-    services.readback_pixel = svc_readback_pixel;
+    services.screen_probe = svc_screen_probe;
+    services.screen_probe_results = svc_screen_probe_results;
     services.frame_clear = svc_frame_clear;
     services.frame_show = svc_frame_show;
     services.frame_end = svc_frame_end;
     services.marker = svc_marker;
-    services.readback_serial = svc_readback_serial;
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;
     services.stripe_particle = svc_stripe_particle;

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 87u
+#define NEBULA_GAME_API_VERSION 88u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -888,6 +888,18 @@ typedef enum NebulaCaptureFlags {
     NEBULA_CAPTURE_FILTERED = 16u /* through the display's vertical filter (frame_show's NEBULA_CAPTURE_FILTERED) */
 } NebulaCaptureFlags;
 
+/* A point of the picture the game asks about (NebulaHostServices::screen_probe). */
+#define NEBULA_SCREEN_PROBES_MAX 256u
+typedef enum NebulaScreenProbeKind {
+    NEBULA_SCREEN_PROBE_ALPHA = 0, /* value: the picture's alpha, 0-1 */
+    NEBULA_SCREEN_PROBE_DEPTH = 1  /* value: the depth, 0 near to 1 far */
+} NebulaScreenProbeKind;
+typedef struct NebulaScreenProbe {
+    float x, y;
+    float user_x, user_y;
+    float value;
+} NebulaScreenProbe;
+
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -1092,11 +1104,13 @@ typedef struct NebulaHostServices {
     /* The Mii in a slot of the console's Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
        an empty slot. */
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
-    /* The picture's colour and depth where the drawing has reached, kept as `channel`'s. */
-    void (*readback_capture)(void* user, uint32_t channel);
-    /* A pixel of `channel`'s latest finished capture, in the frame's coordinates (640x456): `depth` 0 its colour
-       (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
-    uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
+    /* What the picture holds at `count` points where the drawing has reached (at most NEBULA_SCREEN_PROBES_MAX; `what` a
+       NebulaScreenProbeKind). x and y the frame's coordinates, negative: no point, its value 0; user_x and user_y come
+       back with the answer. */
+    void (*screen_probe)(void* user, uint32_t channel, uint32_t what, const NebulaScreenProbe* probes, uint32_t count);
+    /* `channel`'s latest finished probes with their values, at most `capacity`; how many (0 before any has finished).
+       Never waits for the GPU. */
+    uint32_t (*screen_probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the
        viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits, far 0xFFFFFF). */
     void (*frame_clear)(void* user, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
@@ -1110,9 +1124,6 @@ typedef struct NebulaHostServices {
     /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). A draw identity names its
        objects by address. */
     void (*marker)(void* user, uint32_t kind, uint32_t aux, uint64_t a, uint64_t b);
-    /* How many captures of `channel`'s colour have finished since the game first read it (0: none): a capture made
-       when the count was n is readable once it passes n. */
-    uint32_t (*readback_serial)(void* user, uint32_t channel);
     /* Nanoseconds on a steady clock from an arbitrary start (never 0): the game's durations and pacing. */
     uint64_t (*clock_ns)(void* user);
     /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the console's clock counted from

@@ -257,25 +257,6 @@ struct ScaledViewport {
         max_depth};
 }
 
-struct ScenePeekSamplingGeometry {
-    float src_x = 0.0f;
-    float src_y = 0.0f;
-    float step = 1.0f;  // pixels a game row
-    float center_y = 0.5f;
-    // A depth peek reads the single physical texel nearest the center of the scaled
-    // logical pixel. At even scales the center lies on a texel boundary, so point-sampling
-    // semantics select the positive X/Y texel: physical = logical * scale + floor(scale / 2).
-    std::uint32_t depth_texel_x = 0;
-    std::uint32_t depth_texel_y = 0;
-    unsigned color_reduction_samples = 1;
-    float step_x = 1.0f;  // pixels a game column
-};
-
-[[nodiscard]] ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
-    std::uint16_t x,
-    std::uint16_t y,
-    const FrameMap& map) noexcept;
-
 class SceneCopyManager {
 public:
     bool initialize(gpu::Device* device, const FrameMap& map);

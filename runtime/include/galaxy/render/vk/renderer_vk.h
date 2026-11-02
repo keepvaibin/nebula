@@ -2,7 +2,7 @@
 // The GX renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
 //
 // The scene target is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
-// one render pass; an scene target copy, peek or present ends that pass, and the next scene target operation begins it again. Between
+// one render pass; a scene target copy, screen probe or present ends that pass, and the next scene target operation begins it again. Between
 // command buffers the scene target is always in its attachment layouts. kFramesInFlight frames are recorded ahead of the GPU,
 // each in two command buffers submitted together: the frame's texture uploads, then its draws (TextureCache never
 // writes a texture after a draw of the same frame read it, so the uploads may run first).
@@ -88,8 +88,6 @@ struct RenderLayout {
 class RendererVk final : public UiCanvas {
 public:
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);
-    static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
-    static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
 
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     // Why initialize failed, when the device said.
@@ -301,28 +299,11 @@ public:
     }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
-    // GXPeek and the pointer's depth field (separate submissions; they read the scene target as last submitted).
-    [[nodiscard]] bool peek_scene(std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value);
-    [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
-    [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
-    [[nodiscard]] bool record_pointer_depth_capture_in_frame();
-    [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept { return pointer_depth_fence_; }
-    [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(const std::uint8_t*& rgba);
-    // Asynchronous scene target fields, one per channel (RenderCore binds a channel to a peek kind and draw-sync token).
-    [[nodiscard]] std::uint64_t submit_async_peek_field(std::size_t channel, ReadbackKind kind, std::size_t slot);
-    // The same capture recorded in the open frame where the stream is now (a draw-sync token); fenced at end_frame.
-    [[nodiscard]] bool record_async_peek_field_in_frame(std::size_t channel, ReadbackKind kind, std::size_t slot);
-    [[nodiscard]] bool try_complete_async_peek_field(std::size_t channel);
-    [[nodiscard]] const std::uint8_t* async_peek_field_rgba(std::size_t channel, std::size_t slot) const noexcept;
-    [[nodiscard]] bool async_peek_field_pending(std::size_t channel) const noexcept {
-        return async_fields_[channel].fence != 0u;
-    }
-    [[nodiscard]] bool any_async_peek_field_pending() const noexcept {
-        for (const AsyncField& field : async_fields_) {
-            if (field.fence != 0u) return true;
-        }
-        return false;
-    }
+    // The picture's value at each point into slot `slot`'s readback, in the open frame where the stream is now;
+    // screen_probes_finished names its bytes (RGBA8 per point) once that frame's fence has passed.
+    static constexpr std::size_t kScreenProbeSlots = 12u;
+    [[nodiscard]] bool record_screen_probes(std::size_t slot, ScreenProbeKind kind, std::span<const ScreenProbe> probes);
+    [[nodiscard]] const std::uint8_t* screen_probes_finished(std::size_t slot);
 
     // Test captures: the scene target and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
     bool debug_copy_scene_to_readback();
@@ -403,16 +384,6 @@ private:
         std::shared_ptr<vk::Buffer> buffer;  // host-visible, mapped
         std::uint64_t fence = 0;             // 0: idle
     };
-    struct AsyncField {
-        gpu::TextureRef target;
-        VkDescriptorSet color_source = VK_NULL_HANDLE;  // its colour input (separate_peek_color)
-        std::array<Readback, kAsyncPeekFieldSlots> readbacks;
-        VkCommandPool pool = VK_NULL_HANDLE;
-        VkCommandBuffer commands = VK_NULL_HANDLE;
-        std::uint64_t fence = 0;
-        std::size_t pending_slot = 0;
-    };
-
     // Device objects.
     bool create_surface_and_device();
     bool create_swapchain();
@@ -469,11 +440,6 @@ private:
     void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const CaptureRequest& params,
                                 bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
                                 float src_x, float src_y, float step_x, float step_y, float filter_row_offset);
-    // `color_source`: the colour input of a separate submission (separate_peek_color); none: the scene target's.
-    void record_peek_field(VkCommandBuffer commands, vk::Texture& target, ReadbackKind kind,
-                           const SceneConversionShaderConstants& constants, unsigned width, unsigned height,
-                           VkBuffer readback, VkDescriptorSet color_source = VK_NULL_HANDLE,
-                           VkImage color_image = VK_NULL_HANDLE);
     // `color_image`: the colour image read (none: the scene target's).
     void transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
     void transition_scene_to_attachment(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
@@ -482,9 +448,6 @@ private:
     // in the frame's descriptors.
     [[nodiscard]] VkFramebuffer scene_framebuffer();
     [[nodiscard]] VkDescriptorSet scene_color_source();
-    // A separate submission's scene colour (it runs before the open frame's commands): the image the scene target had
-    // when the last frame was submitted, through `set` (the caller's own, idle since its last submission completed).
-    [[nodiscard]] VkImage separate_peek_color(VkDescriptorSet& set);
     // The owed picture copied back into the scene target, all of it or the bands around `kept` (a clear covers `kept`).
     void restore_owed_scene(const VkRect2D* kept);
     void settle_owed_scene() {
@@ -560,7 +523,7 @@ private:
     std::uint64_t scene_depth_serial_ = 0;
     // E-10: the picture the scene target owes (hand_over_scene_color), the image the scene target had at the last frame submission while a
     // hand-over in the open frame replaced it, the open frame's input set for a turned scene target colour, the separate
-    // submissions' colour input (peek_scene's; the async fields have their own) and the present's filtered picture.
+    // submissions' colour input and the present's filtered picture.
     gpu::TextureRef scene_owed_;
     std::weak_ptr<vk::Texture> scene_submitted_color_;
     VkImage scene_shown_image_ = VK_NULL_HANDLE;  // that picture while it stays owed across a submission
@@ -568,7 +531,6 @@ private:
     VkDescriptorSet turn_source_ = VK_NULL_HANDLE;
     const vk::Texture* turn_source_image_ = nullptr;
     std::uint64_t turn_source_frame_ = ~std::uint64_t{0};
-    VkDescriptorSet peek_color_source_ = VK_NULL_HANDLE;
     gpu::TextureRef display_filter_picture_;
     // The output scene target (begin_output_scene) and its scale; they trade places with scene_ and scene_target_scale_ while it is active.
     SceneSet alt_scene_;
@@ -684,25 +646,14 @@ private:
     std::uint64_t scene_copy_dests_bytes_ = 0;
     std::uint64_t scene_copy_dests_tick_ = 0;
 
-    // Peeks.
-    gpu::TextureRef peek_target_;  // 1x1, and the 640x528 pointer field below
-    gpu::TextureRef field_target_;
-    // Each peek target's linear twin (DeviceQuirks::linear_readback), made on first use.
-    std::unordered_map<const vk::Texture*, gpu::TextureRef> linear_twins_;
-    Readback peek_readback_;
-    static constexpr std::size_t kPointerDepthRing = 3u;
-    std::array<Readback, kPointerDepthRing> pointer_depth_ring_;
-    std::size_t pointer_depth_next_ = 0;
-    const std::uint8_t* pointer_depth_rgba_ = nullptr;
-    const vk::Buffer* pointer_depth_readback_ = nullptr;
-    std::uint64_t pointer_depth_fence_ = 0;
-    bool pointer_depth_in_frame_ = false;
-    VkCommandPool utility_pool_ = VK_NULL_HANDLE;
-    VkCommandBuffer utility_commands_ = VK_NULL_HANDLE;
-    std::array<AsyncField, kAsyncPeekFieldChannels> async_fields_{};
-    // AsyncField::fence of a field recorded in the open frame.
-    static constexpr std::uint64_t kAsyncPeekInFrame = ~std::uint64_t{0};
-    void ensure_async_field(AsyncField& field);
+    // Screen probes: one pixel of the target per point, each slot's readback fenced with its frame.
+    gpu::TextureRef probe_target_;
+    gpu::TextureRef probe_target_linear_;  // its linear twin (DeviceQuirks::linear_readback), made on first use
+    std::array<Readback, kScreenProbeSlots> probe_slots_;
+    // Readback::fence of probes recorded in the open frame.
+    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
+
+    VkCommandPool utility_pool_ = VK_NULL_HANDLE;  // one-time submissions (run_one_time)
 
     // Captures and telemetry.
     std::string scene_capture_path_;
