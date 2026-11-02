@@ -1,4 +1,8 @@
 #include "Game/Screen/MoviePlayingSequence.hpp"
+#include <nebula_game_api.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/Demo/DemoPadRumbler.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -264,7 +268,8 @@ void MoviePlayingSequence::exePlayWait() {
     if (MR::isFirstStep(this)) {
         // An HD replacement's decoder starts here, the play wait before the THP opens, so its first frames are ready
         // with the game's.
-        __NebulaMovieFrame(::getMovieName(mInfo), -2, 0.0f, nullptr, nullptr, nullptr, 0, 0);
+        const NebulaHostServices* const host = nebula_host();
+        host->movie_frame(host->user, ::getMovieName(mInfo), NEBULA_MOVIE_OPENING, 0.0f, nullptr, nullptr, nullptr, 0, 0);
         MR::startStarPointerModeDemo(this);
         MR::stopSubBGM(60);
         MR::stopStageBGM(60);

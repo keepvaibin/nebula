@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 84u
+#define NEBULA_GAME_API_VERSION 85u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -1055,7 +1055,7 @@ typedef struct NebulaHostServices {
                         const void* sound_memory, uint32_t sound_memory_size);
     void (*audio_mix)(void* user, float gain);
     void (*audio_frame)(void* user);
-    /* The movie player's sound (THP), on the game's threads: movie_audio queues one frame's audio record (its
+    /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its
        big-endian header, then the ADPCM data of the track played) for the host to decode and play with the game's
        sound at 32 kHz; 0 when 20 frames already wait (nothing taken). A null record only asks for room.
        movie_audio_control: NEBULA_MOVIE_AUDIO_*. */
@@ -1066,10 +1066,10 @@ typedef struct NebulaHostServices {
     /* The HOME Menu (NEBULA_HBM_*). */
     int (*hbm)(void* user, uint32_t what, uint32_t value);
 
-    /* THP: one movie frame's video component (`size` bytes, one JPEG whose entropy data is not byte-stuffed, so only
-       the size bounds it) into its Y, U and V planes in game memory, which must hold the result before the renderer
-       reads them; 0 on success, as THPVideoDecode returns. */
-    int32_t (*thp_video_decode)(void* user, const void* frame, uint32_t size, void* y, void* u, void* v);
+    /* One movie frame's video (`size` bytes, one JPEG whose entropy data is not byte-stuffed, so only the size bounds
+       it) into its Y, U and V planes (`width` x `height` for Y, half each way for U and V, rows of 8-bit texels from the
+       top) in game memory, which must hold the result before the renderer reads them; 0 on success. */
+    int32_t (*movie_video_decode)(void* user, const void* frame, uint32_t size, uint32_t width, uint32_t height, void* y, void* u, void* v);
 
     /* The game wrote [address, address + size) for the GPU: the console's cache flushes (DCFlushRange,
        DCStoreRange) and DMA copies. An image handed over there must be handed over again. Called on the simulation
@@ -1102,8 +1102,8 @@ typedef struct NebulaHostServices {
     /* A game object's name (NameObj::mName, Shift-JIS as the game spells it) when it is made or renamed; `id` is the
        object's address, as the host markers name it. */
     void (*object_name)(void* user, uint64_t id, const char* name);
-    /* A THP movie (THPSimplePlayerWrapper): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
-       (the frame within the movie, its frame rate and the physical addresses of its I8 Y, U and V planes, `width` x
+    /* A movie (MovieStream): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
+       (the frame within the movie, its frame rate and its Y, U and V planes, `width` x
        `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement
        video's frame of the same time in place of the planes. Called on the simulation thread. */
     void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, const void* y, const void* u,

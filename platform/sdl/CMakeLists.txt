@@ -158,7 +158,7 @@ add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
 # activity calls its SDL_main), an executable elsewhere.
 set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
-    "${nebula_root}/runtime/src/native_thp_video.cpp"
+    "${nebula_root}/runtime/src/movie_video.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"

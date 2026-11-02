@@ -2,12 +2,12 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
-#include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/Screen/MovieStream.hpp"
 class JKRExpHeap;
 
 struct Movie {
     /* 0x00 */ const char* mMovieName;
-    /* 0x04 */ THPVideoInfo mVideoInfo;
+    /* 0x04 */ MovieVideoInfo mVideoInfo;
     /* 0x10 */ u8* mBuffer;
     /* 0x14 */ u32 mCurrentFrame;
     /* 0x18 */ bool _18;
@@ -51,7 +51,7 @@ public:
 private:
     /* 0x38 */ Movie* mMovie;
     /* 0x3C */ JKRExpHeap* mHeap;
-    /* 0x40 */ THPSimplePlayerWrapper* mPlayerWrapper;
+    /* 0x40 */ MovieStream* mStream;
     /* 0x44 */ bool _44;
     /* 0x44 */ bool _45;
 };
