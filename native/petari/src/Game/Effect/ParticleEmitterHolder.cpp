@@ -3,15 +3,18 @@
 #include "Game/Effect/EffectSystemUtil.hpp"
 #include "Game/Effect/ParticleEmitter.hpp"
 
+#include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JParticle/JPAEmitter.hpp>
 #include <algorithm>
 
 ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, int numEmitters) : mEffectSystem(pEffectSystem) {
-    mEmitters.init(numEmitters);
+    mFirst.mEmitters.init(numEmitters);
+    mFirst.mNext = nullptr;
 }
 
 void ParticleEmitterHolder::update(bool param1) {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         JPABaseEmitter* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
             continue;
@@ -36,7 +39,8 @@ void ParticleEmitterHolder::update(bool param1) {
 }
 
 void ParticleEmitterHolder::forceDeleteAllOneTimeEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         if (pEmitter->mEmitter == nullptr) {
             continue;
         }
@@ -50,13 +54,15 @@ void ParticleEmitterHolder::forceDeleteAllOneTimeEmitters() {
 }
 
 void ParticleEmitterHolder::forceDeleteAllEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         mEffectSystem->forceDeleteEmitter(pEmitter);
     }
 }
 
 void ParticleEmitterHolder::requestMovementOnAllEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         JPABaseEmitter* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
             continue;
@@ -71,17 +77,28 @@ void ParticleEmitterHolder::requestMovementOnAllEmitters() {
 }
 
 ParticleEmitter* ParticleEmitterHolder::findAvailableParticleEmitter() {
-    for (auto& item : mEmitters) {
-        if (!item.isValid()) {
-            return &item;
+    Chunk* pLast = nullptr;
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext) {
+        for (auto& item : pChunk->mEmitters) {
+            if (!item.isValid()) {
+                return &item;
+            }
         }
+        pLast = pChunk;
     }
 
-    return nullptr;
+    // Full: as many again, in the heap this lies in. Effects keep pointers to the records, so the old ones stay.
+    Chunk* pChunk = new (JKRHeap::findFromRoot(this), 0) Chunk();
+    pChunk->mEmitters.mArr = new (JKRHeap::findFromRoot(this), 0) ParticleEmitter[mFirst.mEmitters.size()];
+    pChunk->mEmitters.mMaxSize = mFirst.mEmitters.size();
+    pChunk->mNext = nullptr;
+    pLast->mNext = pChunk;
+    return &pChunk->mEmitters[0];
 }
 
 void ParticleEmitterHolder::requestMovementOffAllLoopEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         if (pEmitter->mEmitter == nullptr) {
             continue;
         }

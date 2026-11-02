@@ -54,15 +54,15 @@ JASVoice* JASVoice::getVoice(int index) {
 }
 
 void JASVoice::initAll() {
-    sVoices = new (JASDram, 0x20) JASVoice[64];
+    sVoices = new (JASDram, 0x20) JASVoice[cVoices];
     sEffects = new (JASDram, 0x20) JASEffectLine[4];
-    JASCalc::bzero(sVoices, sizeof(JASVoice) * 64);
+    JASCalc::bzero(sVoices, sizeof(JASVoice) * cVoices);
     JASCalc::bzero(sEffects, sizeof(JASEffectLine) * 4);
     for (u8 i = 0; i < 4; i++) {
         setEffectLine(i, false, nullptr);
     }
     const NebulaHostServices* const host = nebula_host();
-    host->voices_setup(host->user, sVoices, 64, sEffects);
+    host->voices_setup(host->user, sVoices, cVoices, sEffects);
 }
 
 // Settings change, the line's delay kept; with a buffer the line starts over, silent. Without either the line is off.

@@ -8,7 +8,7 @@
 
 #include <nebula_game_api.h>
 
-static const s32 MAX_DSP_CHANNELS = 64;
+static const s32 MAX_DSP_CHANNELS = JASVoice::cVoices;
 
 JASVoiceSlot* JASVoiceSlot::sSlots;
 

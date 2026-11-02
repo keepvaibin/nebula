@@ -23,6 +23,9 @@ void SingleEmitter::scanParticleEmitter(EffectSystem* pSystem) {
     ParticleEmitter* emitter;
     if (mSpawn == SINGLE_EMITTER_UNDEF_SPAWN) {
         emitter = pSystem->createEmitter(_4, mGroupId, 0);
+        if (emitter == nullptr) {
+            return;
+        }
         mSpawn = emitter->isContinuousParticle() ? SINGLE_EMITTER_CONTINUOUS_SPAWN : SINGLE_EMITTER_ONE_TIME_SPAWN;
         pSystem->forceDeleteEmitter(emitter);
     }

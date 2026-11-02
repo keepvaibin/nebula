@@ -1,4 +1,5 @@
 #include "Game/LiveActor/SensorHitChecker.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -18,6 +19,11 @@ SensorGroup::SensorGroup(int maxSensors, const char* pName) {
 }
 
 void SensorGroup::add(HitSensor* pSensor) {
+    if (mSensorCount >= mMaxSensors) {
+        mSensors = MR::growArray(mSensors, mMaxSensors);
+        mMaxSensors *= 2;
+    }
+
     mSensors[mSensorCount] = pSensor;
     mSensorCount++;
     pSensor->mSensorGroup = this;

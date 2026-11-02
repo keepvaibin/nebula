@@ -734,15 +734,8 @@ void GameScene::initSequences() {
 }
 
 void GameScene::initEffect() {
-    if (MR::isEqualStageName("CosmosGardenGalaxy")) {
-        SceneFunction::initEffectSystem(5120, 384);
-    } else if (MR::isEqualStageName("KoopaBattleVs1Galaxy")) {
-        SceneFunction::initEffectSystem(6144, 512);
-    } else if (MR::isEqualStageName("AstroGalaxy")) {
-        SceneFunction::initEffectSystem(3072, 512);
-    } else {
-        SceneFunction::initEffectSystem(3072, 256);
-    }
+    // The pools grow past this when a scene asks for more.
+    SceneFunction::initEffectSystem(6144, 512);
 }
 
 void GameScene::drawMirror() const {
