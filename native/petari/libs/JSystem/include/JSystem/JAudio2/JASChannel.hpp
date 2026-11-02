@@ -7,7 +7,7 @@
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 struct JASDSPChannel;

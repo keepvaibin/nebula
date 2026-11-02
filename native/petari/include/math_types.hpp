@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 const f32 HALF_PI = 1.5707964f;

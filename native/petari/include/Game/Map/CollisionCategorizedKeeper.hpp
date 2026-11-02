@@ -4,7 +4,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class CollisionZone;

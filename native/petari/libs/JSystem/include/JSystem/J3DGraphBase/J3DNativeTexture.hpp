@@ -3,7 +3,7 @@
 #include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 // A texture as the game sets it up (GpuTexObj's values, held in a GpuTexObj): GpuInitTexObj*'s settings, loaded as state

@@ -1,7 +1,7 @@
 #include "JSystem/JKernel/JKRFileLoader.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 JKRFileLoader* JKRFileLoader::sCurrentVolume;

@@ -3,7 +3,7 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 static const f32 sOne = 1.0f;

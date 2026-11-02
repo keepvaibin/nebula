@@ -14,7 +14,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "math_types.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void StarPieceFollowGroup_DUMMY() {
     TVec3f a;

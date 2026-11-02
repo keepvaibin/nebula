@@ -33,6 +33,7 @@ public:
         return mAudSystemHeap;
     }
 
+    void* mSoundMemory;  // wave archives and stream buffers (JASKernel::setupAramHeap)
     JKRExpHeap* mStationedHeap;
     JKRExpHeap* mGameHeap;
     JKRHeap* mFileCacheHeap;

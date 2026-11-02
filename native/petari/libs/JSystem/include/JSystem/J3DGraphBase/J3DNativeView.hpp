@@ -1,7 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 // The projection the game draws with: its values kept here (the game reads them back) and each change sent as a

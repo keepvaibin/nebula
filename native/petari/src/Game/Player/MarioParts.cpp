@@ -5,7 +5,7 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, bool a4, MtxPtr mtx1, MtxPtr mtx2)

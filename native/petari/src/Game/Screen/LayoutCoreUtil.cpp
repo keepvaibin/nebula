@@ -6,7 +6,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 static const wchar_t sDefaultMsg[] = L"XXXXXXXX";
 

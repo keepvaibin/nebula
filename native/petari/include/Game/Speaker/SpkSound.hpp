@@ -4,7 +4,7 @@
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JSupport/JSUList.hpp>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 class SpkSound;

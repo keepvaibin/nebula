@@ -1,5 +1,5 @@
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 #include "Game/LiveActor/HitSensor.hpp"

@@ -3,7 +3,7 @@
 #include "nw4r/ut/CharStrmReader.h"
 #include "nw4r/ut/fontResourceFormat.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 namespace nw4r {

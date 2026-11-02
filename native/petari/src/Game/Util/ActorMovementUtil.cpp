@@ -19,7 +19,7 @@
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
 #include <cmath>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void ActorMovementUtil_FORCE_MATCH_SDATA2() {
     (void)1.0f;

@@ -3,7 +3,7 @@
 #include "RFL_Model.h"
 #include "RFLi_Types.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {

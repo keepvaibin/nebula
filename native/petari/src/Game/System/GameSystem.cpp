@@ -33,7 +33,7 @@
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"

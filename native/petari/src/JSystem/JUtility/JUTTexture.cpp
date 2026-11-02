@@ -1,3 +1,4 @@
+#include <string.h>
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
@@ -33,6 +34,9 @@ JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
     texBuf->mImageDataOffset = sizeof(ResTIMG);
     mEmbPalette = nullptr;
     storeTIMG(texBuf, static_cast< u8 >(0));
+    // Black until its first capture or until the game writes it.
+    memset(mImage, 0, bufSize);
+    J3DNativeTexture::registerImage(mImage, NEBULA_TEXTURE_LINEAR_L8, width, height, 1);
 }
 
 JUTTexture::~JUTTexture() {

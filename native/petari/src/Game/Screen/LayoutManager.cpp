@@ -26,7 +26,7 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/Rect.h>
 #include <nw4r/ut/RuntimeTypeInfo.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/types.h>
 
 namespace {

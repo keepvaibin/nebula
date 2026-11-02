@@ -5,7 +5,7 @@
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include "JSystem/JUtility/JUTNameTab.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <revolution/os.h>
 
 // J3D animations as the importer cooks them (crates/nebula-import cook/native_data.rs j3d_animation): host-order

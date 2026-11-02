@@ -142,21 +142,8 @@ typedef int BOOL;
 
 // The game follows the reciprocal square root estimate with a Newton step wherever it uses it, so natively it is the
 // host's estimate (docs/NATIVE_PERFORMANCE.md: half the latency of 1/sqrtf, the same accuracy after the step): SSE's
-// 12-bit rsqrtss, or AArch64's 8-bit frsqrte with one step of its own to reach the console's precision.
 #include <math.h>
 #include <string.h>
-#if defined(__SSE__)
-#include <xmmintrin.h>
-static inline f32 __frsqrte(f32 x) { return _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set_ss(x))); }
-#elif defined(__aarch64__)
-#include <arm_neon.h>
-static inline f32 __frsqrte(f32 x) {
-    const f32 e = vrsqrtes_f32(x);
-    return e * vrsqrtss_f32(x * e, e);
-}
-#else
-static inline f32 __frsqrte(f32 x) { return 1.0f / sqrtf(x); }
-#endif
 static inline u32 __cntlzw(u32 x) { return x != 0u ? (u32)__builtin_clz(x) : 32u; }
 static inline s32 __abs(s32 x) { return x < 0 ? -x : x; }
 // glibc declares its own __fabsf and __fabs (math.h, included above): the console's intrinsics take other names.

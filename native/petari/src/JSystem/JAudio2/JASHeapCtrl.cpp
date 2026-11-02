@@ -1,3 +1,5 @@
+#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
@@ -275,7 +277,7 @@ JASHeap JASKernel::audioAramHeap;
 // The sound memory (wave archives and stream buffers): `size` bytes off the root heap,
 // handed out as pointers the mixer reads.
 void JASKernel::setupAramHeap(u32, u32 size) {
-    audioAramHeap.initRootHeap(JKRHeap::alloc(size, 32, JKRHeap::sRootHeap), size);
+    audioAramHeap.initRootHeap(SingletonHolder< HeapMemoryWatcher >::get()->mSoundMemory, size);
 }
 
 JASHeap* JASKernel::getAramHeap() {

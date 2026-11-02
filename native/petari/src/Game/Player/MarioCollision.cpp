@@ -18,7 +18,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <cstring>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void MarioCollision_FORCE_MATCH_SDATA2() {
     (void)0.001f;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Player/MarioState.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 class MarioActor;
 

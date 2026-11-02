@@ -18,7 +18,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
