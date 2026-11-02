@@ -46,7 +46,7 @@ struct TexturePackName {
     std::uint8_t level = 0;   // _mip<n>
     bool mipmapped = false;   // _m
     bool any_tlut = false;    // _$
-    bool arbitrary = false;   // _arb: levels with their own content, each shown where the guest shows that level
+    bool arbitrary = false;   // _arb: levels with their own content, each shown where the game shows that level
     std::uint64_t hash = 0;
     std::uint64_t tlut = 0;
 };
@@ -109,8 +109,8 @@ struct TextureReplacement {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::uint32_t levels = 0;
-    std::uint8_t lod_shift_x16 = 0;  // 16 x log2(replacement width / guest width)
-    bool arbitrary = false;          // _arb: its level n shows where the guest shows its level n
+    std::uint8_t lod_shift_x16 = 0;  // 16 x log2(replacement width / game width)
+    bool arbitrary = false;          // _arb: its level n shows where the game shows its level n
     std::uint64_t bytes = 0;
 };
 

@@ -572,7 +572,7 @@ void RendererD3D12::wait_for_gpu() {
 }
 
 bool RendererD3D12::create_scene_targets(const FrameMap& map) {
-    // The physical targets scale; guest scene target/display picture addresses and dimensions keep the
+    // The physical targets scale; game scene target/display picture addresses and dimensions keep the
     // Wii's logical size (as Aurora's lib/window.cpp and lib/gx/gx.cpp do).
     //
     // Both resources are created before anything is replaced: a failure

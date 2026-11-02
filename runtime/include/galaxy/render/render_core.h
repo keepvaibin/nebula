@@ -66,9 +66,9 @@
 namespace galaxy::render {
 
 // lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the source size. The game's LOD
-// range moves by the shift (its base level is the replacement's level `shift`), except that a guest
-// range starting at its base level starts at the replacement's (close up, the guest magnifies its
-// base level: the replacement shows its own); a guest sampler without mips uses the replacement's
+// range moves by the shift (its base level is the replacement's level `shift`), except that a game
+// range starting at its base level starts at the replacement's (close up, the game magnifies its
+// base level: the replacement shows its own); a game sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
 // by index, as Dolphin does: the bias moves its LOD back to the game's at the console's resolution
 // (scene_target_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
@@ -1094,7 +1094,7 @@ private:
     bool matrix_blocks_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when console register state did not
-    // change. scene target copies can also replace a guest-address texture alias
+    // change. scene target copies can also replace a game-address texture alias
     // without rewriting its BP texture registers.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;

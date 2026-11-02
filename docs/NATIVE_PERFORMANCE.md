@@ -10,7 +10,7 @@ and the evidence.
 Measurements:
 - Machine: Ryzen 9 9950X3D, 4.3 GHz, Windows 11, clang 22, `-O3` with the module's flags, pinned to one core.
 - Older and low-power CPUs forward stores and divide more slowly, so the ratios below are lower bounds there (H).
-- Reproduce with `native/bench/hotpath_bench.c` and the `perf:` lines of `native/sdk/os/tests/run_tests.sh`.
+- The benchmark that measured these was removed with the SDK it compared against; the numbers stand as that record.
 
 ## The start
 

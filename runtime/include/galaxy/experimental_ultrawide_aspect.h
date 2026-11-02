@@ -23,7 +23,7 @@ namespace galaxy {
 // m_Do_graphic.cpp::updateRenderSize/setTvSize.
 struct ExperimentalUltrawideAspect {
     double content_aspect = kWiiContentAspect;
-    unsigned guest_screen_width = 832;
+    unsigned game_screen_width = 832;
 };
 
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
@@ -96,7 +96,7 @@ make_experimental_ultrawide_aspect(double content_aspect) noexcept {
     if (!shape) {
         return 1u;
     }
-    const double wide = shape->guest_screen_width / 832.0;
+    const double wide = shape->game_screen_width / 832.0;
     const double tall = (4.0 / 3.0) / std::min(shape->content_aspect, 4.0 / 3.0);
     return static_cast<unsigned>(std::ceil(std::max({1.0, wide, tall}) - 1e-6));
 }
