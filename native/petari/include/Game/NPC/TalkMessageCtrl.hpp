@@ -115,7 +115,7 @@ public:
     void readMessage();
     bool isSelectYesNo() const;
 
-    void setMessageArg(const CustomTagArg& rArg) NO_INLINE {
+    void setMessageArg(const CustomTagArg& rArg) {
         mTagArg = rArg;
     }
 

@@ -24,7 +24,7 @@ public:
     void crumble();
     void destroy();
     void setSize(f32 size);
-    bool isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiver) const NO_INLINE;
+    bool isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiver) const;
 
     void exeAppear();
     void exeWait();
@@ -66,7 +66,7 @@ public:
     void appearPiece();
     void killPieceOverAppear();
     void killPieceIfAlive();
-    f32 getDistanceFromReserveMtx() const NO_INLINE;
+    f32 getDistanceFromReserveMtx() const;
     void reserveCurrentMtx();
 
     void exeMove();

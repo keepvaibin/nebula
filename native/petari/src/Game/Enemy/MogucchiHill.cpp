@@ -263,7 +263,7 @@ bool MogucchiHillPiece::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSe
     return true;
 }
 
-bool MogucchiHillPiece::isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiver) const NO_INLINE {
+bool MogucchiHillPiece::isTargetGoingAway(HitSensor* pSender, HitSensor* pReceiver) const {
     TVec3f toReceiver = pReceiver->mPosition - pSender->mPosition;
 
     return toReceiver.dot(pReceiver->mHost->mVelocity) >= 0.0f;
@@ -450,7 +450,7 @@ void MogucchiHill::killPieceIfAlive() {
     _90[_98].kill();
 }
 
-f32 MogucchiHill::getDistanceFromReserveMtx() const NO_INLINE {
+f32 MogucchiHill::getDistanceFromReserveMtx() const {
     TVec3f trans;
     mReserveMtx.getTrans(trans);
 

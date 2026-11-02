@@ -239,7 +239,7 @@ namespace MR {
 
     bool isDigitStringTail(const char* pStr, int digitNum) {
         for (int i = 1; i <= digitNum; i++) {
-            int ch = pStr[strlen(pStr) - i];
+            int ch = static_cast< unsigned char >(pStr[strlen(pStr) - i]);
 
             if (isdigit(ch) == 0) {
                 return false;

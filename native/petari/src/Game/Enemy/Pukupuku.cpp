@@ -311,7 +311,7 @@ void Pukupuku::calcGroundHitMtx(TPos3f* pMtx) const {
     MR::calcMtxFromGravityAndZAxis(pMtx, this, mGravity, zDir);
 }
 
-bool Pukupuku::isReadyToJumpFromLand() const NO_INLINE {
+bool Pukupuku::isReadyToJumpFromLand() const {
     s32 arg0 = -1;
     MR::getRailPointArg0NoInit(this, MR::getCurrentRailPointNo(this), &arg0);
     return arg0 == 1;

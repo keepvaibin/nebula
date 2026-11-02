@@ -499,11 +499,9 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
     return Table{cpu, gpu};
 }
 
-// Upload rings are committed UPLOAD-heap resources mapped for the life of the process, so
-// bytes_per_frame * frames_in_flight stays reserved: (64+16+8+32) MiB * 2 slots = 240 MiB, plus a
-// shader-visible descriptor heap. An UPLOAD heap's untouched pages are never backed, so unused
-// reservation costs address space and commit, not memory; [gpu-rings] logs the reservation and
-// UploadRing tracks each ring's peak use. On an integrated adapter the memory is system memory;
+// Upload rings are committed UPLOAD-heap resources mapped for the life of the process. Their whole size is in the
+// working set from the start (memws.py: every page of them resident on NVIDIA's driver), so they start at what the
+// game needs and grow on demand; [gpu-rings] logs the sizes and UploadRing tracks each ring's peak use. On an integrated adapter the memory is system memory;
 // DXGI's DedicatedVideoMemory there is a fixed compatibility value, not VRAM (Intel support article
 // 000020962: 128 MB), and the graphics share is capped at half of installed RAM. Exhaustion is
 // fatal: UploadRing::allocate throws rather than dropping geometry.
@@ -537,13 +535,11 @@ std::uint64_t RendererD3D12::scene_copy_dest_budget_bytes() {
 
 // The upload rings' first buffers. A segmentation gives each frame an equal share and keeps one more share as
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
-// boundary. Worst observed frame without the whole stage drawn: 117,361 vertices x 144 B = 16.1 MiB.
-static constexpr std::size_t kVertexRingBytes = 192u * 1024u * 1024u;
-static constexpr std::size_t kIndexRingBytes = 48u * 1024u * 1024u;
-// Interpolated sub-frames add one VS constant block per scene record each.
-static constexpr std::size_t kConstantRingBytes = 96u * 1024u * 1024u;
-// A busy frame reloads the XF palette many times (per-object and skinned matrices via LOAD_INDX).
-static constexpr std::size_t kMatrixRingBytes = 128u * 1024u * 1024u;
+// boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
+static constexpr std::size_t kVertexRingBytes = 32u * 1024u * 1024u;
+static constexpr std::size_t kIndexRingBytes = 12u * 1024u * 1024u;
+static constexpr std::size_t kConstantRingBytes = 12u * 1024u * 1024u;
+static constexpr std::size_t kMatrixRingBytes = 8u * 1024u * 1024u;
 static constexpr unsigned    kSrvPerFrame = 32768u;
 // The descriptor ring's persistent prefix, outside the rewound frame segments: the scene target
 // conversion sources (the scene target's views, the output scene target's, the MSAA depth's, then the HDR scene
@@ -3236,9 +3232,14 @@ bool RendererD3D12::ensure_pre_list() {
 }
 
 UploadBuffer RendererD3D12::create_resident_vertices(std::size_t bytes, const char* name) {
-    UploadBuffer staging = gpu::create_upload_memory(device_.Get(), bytes, name);
-    if (!staging || !ensure_pre_list()) {
-        return staging;
+    const auto upload_only = [&] {
+        UploadBuffer upload = gpu::create_upload_memory(device_.Get(), bytes, name);
+        resident_upload_ = upload.buffer;
+        resident_upload_mapped_ = upload.cpu;
+        return upload;
+    };
+    if (!ensure_pre_list()) {
+        return upload_only();
     }
     D3D12_HEAP_PROPERTIES heap{};
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -3253,28 +3254,49 @@ UploadBuffer RendererD3D12::create_resident_vertices(std::size_t bytes, const ch
     ComPtr<ID3D12Resource> local;
     if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COMMON,
                                                 nullptr, IID_PPV_ARGS(&local)))) {
-        return staging;
+        return upload_only();
     }
     local->SetName(L"GX resident decoded vertices (local)");
-    resident_staging_ = staging.buffer;
+    resident_upload_.Reset();
+    resident_upload_mapped_ = nullptr;
     resident_local_ = local.Get();
     resident_copies_.clear();
     UploadBuffer resident;
     resident.gpu = local->GetGPUVirtualAddress();
-    resident.cpu = staging.cpu;
     resident.buffer = std::move(local);
     return resident;
 }
 
-void RendererD3D12::copy_resident_vertices(std::uint64_t offset, std::uint64_t bytes) {
-    if (!resident_staging_ || bytes == 0u) {
-        return;
+std::byte* RendererD3D12::stage_resident_vertices(std::uint64_t offset, std::uint64_t bytes) {
+    if (resident_upload_mapped_ != nullptr) {
+        return resident_upload_mapped_ + offset;
     }
-    if (!resident_copies_.empty() && resident_copies_.back()[0] + resident_copies_.back()[1] == offset) {
-        resident_copies_.back()[1] += bytes;
+    ResidentStaging& staging = resident_staging_[frame_slot_];
+    staging.staged = true;
+    while (staging.current < staging.chunks.size() && staging.used + bytes > staging.chunks[staging.current].size) {
+        ++staging.current;
+        staging.used = 0u;
+    }
+    if (staging.current == staging.chunks.size()) {
+        const std::uint64_t size = std::max<std::uint64_t>(bytes, kResidentStagingChunk);
+        UploadBuffer memory = gpu::create_upload_memory(device_.Get(), static_cast<std::size_t>(size), "GX resident vertices staging");
+        if (!memory) {
+            throw std::runtime_error("no memory for resident vertices");
+        }
+        staging.chunks.push_back({std::move(memory), size});
+    }
+    const UploadBuffer& chunk = staging.chunks[staging.current].memory;
+    ID3D12Resource* const source = gpu::raw(chunk.buffer);
+    if (!resident_copies_.empty() && resident_copies_.back().source == source &&
+        resident_copies_.back().source_offset + resident_copies_.back().bytes == staging.used &&
+        resident_copies_.back().offset + resident_copies_.back().bytes == offset) {
+        resident_copies_.back().bytes += bytes;
     } else {
-        resident_copies_.push_back({offset, bytes});
+        resident_copies_.push_back({source, staging.used, offset, bytes});
     }
+    std::byte* const out = chunk.cpu + staging.used;
+    staging.used += bytes;
+    return out;
 }
 
 bool RendererD3D12::ensure_curve_sort() {
@@ -3426,8 +3448,8 @@ void RendererD3D12::record_pre_list() {
         to_copy.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
         to_copy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
         pre_list_->ResourceBarrier(1, &to_copy);
-        for (const auto& copy : resident_copies_) {
-            pre_list_->CopyBufferRegion(resident_local_, copy[0], resident_staging_.Get(), copy[0], copy[1]);
+        for (const ResidentCopy& copy : resident_copies_) {
+            pre_list_->CopyBufferRegion(resident_local_, copy.offset, copy.source, copy.source_offset, copy.bytes);
         }
         std::swap(to_copy.Transition.StateBefore, to_copy.Transition.StateAfter);
         pre_list_->ResourceBarrier(1, &to_copy);
@@ -3769,6 +3791,15 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     curve_sort_draws_[frame_slot_].clear();
     curve_sorted_bytes_[frame_slot_] = 0u;
     curve_sort_vertices_[frame_slot_] = 0u;
+    {
+        ResidentStaging& staging = resident_staging_[frame_slot_];
+        if (!staging.staged) {
+            staging.chunks.clear();
+        }
+        staging.staged = false;
+        staging.current = 0u;
+        staging.used = 0u;
+    }
     if (stats_pending_[frame_slot_]) {
         const SIZE_T offset = static_cast<SIZE_T>(frame_slot_) * sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS);
         const D3D12_RANGE read_range{offset, offset + sizeof(D3D12_QUERY_DATA_PIPELINE_STATISTICS)};

@@ -23,7 +23,7 @@ public:
 
 class StarPointerTransformHolder {
 public:
-    StarPointerTransformHolder() NO_INLINE;
+    StarPointerTransformHolder();
 
     void movement();
 
@@ -88,7 +88,7 @@ namespace StarPointerFunction {
     bool isOnScreenEdge(const TVec2f&, f32, f32);
     bool isOnScreenEdge(s32);
     bool forceInsideScreenEdge(TVec2f*);
-    StarPointerDirector* getStarPointerDirector() NO_INLINE;
+    StarPointerDirector* getStarPointerDirector();
     s32 getNumStarPointer();
     s32 getPastPointNum(s32);
     const TVec2f& getPastPosition(s32, s32);

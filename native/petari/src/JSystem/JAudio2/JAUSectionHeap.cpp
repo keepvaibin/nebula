@@ -492,7 +492,7 @@ u32 JAUSectionHeap::releaseIdleDynamicSeqDataBlock() {
     return sectionHeapData_.seqDataBlocks.releaseIdleDynamicSeqDataBlock(sectionHeapData_.seqDataUser);
 }
 
-static JAUSectionHeap* JAUNewSectionHeap(JKRSolidHeap* heap, bool param_1) NO_INLINE {
+static JAUSectionHeap* JAUNewSectionHeap(JKRSolidHeap* heap, bool param_1) {
     TPushCurrentHeap push(heap);
     s32 r29 = heap->getFreeSize();
     JAUSectionHeap* sectionHeap = new JAUSectionHeap(heap, param_1, r29);

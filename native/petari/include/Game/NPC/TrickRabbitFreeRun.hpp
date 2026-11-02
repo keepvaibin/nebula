@@ -31,7 +31,7 @@ public:
     bool receiveMsgBlowDamage(HitSensor* pSender, HitSensor* pReceiver);
     bool requestCaught();
     bool isEnableCaught() const;
-    bool isEnableBlowDamage() const NO_INLINE;
+    bool isEnableBlowDamage() const;
     void startJumpSound();
 
     void exeWaitStart();

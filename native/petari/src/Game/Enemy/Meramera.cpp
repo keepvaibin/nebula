@@ -1489,7 +1489,6 @@ bool Meramera::isHitRecover() const {
 }
 
 bool Meramera::findDivingPoint(TVec3f vec, const TVec3f& rVec) {
-    // FIXME: there is some inline here
     // https://decomp.me/scratch/uajQ5
     Triangle triangle = Triangle();
     TVec3f vec84;

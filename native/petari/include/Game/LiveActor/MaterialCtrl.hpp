@@ -80,7 +80,7 @@ class MirrorReflectionMtxSetter : public MaterialCtrl {
 public:
     MirrorReflectionMtxSetter(J3DModel*, const ResourceHolder*);
 
-    void addUpdatingTexMtxFromName(J3DModelData* pModelData) NO_INLINE {
+    void addUpdatingTexMtxFromName(J3DModelData* pModelData) {
         u16 textureNum = pModelData->getTexture()->getNum();
         for (u16 i = 0; i < textureNum; i++) {
             if (MR::isEqualString(pModelData->getTextureName()->getName(i), sMirrorTextureName)) {

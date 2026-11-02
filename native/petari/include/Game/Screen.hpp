@@ -18,7 +18,6 @@
 #include "Game/Screen/CounterLayoutController.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/Screen/DepthOfFieldBlur.hpp"
-#include "Game/Screen/EncouragePal60Window.hpp"
 #include "Game/Screen/ErrorMessageWindow.hpp"
 #include "Game/Screen/FileSelectButton.hpp"
 #include "Game/Screen/FileSelectInfo.hpp"

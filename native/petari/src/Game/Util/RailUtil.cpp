@@ -617,7 +617,7 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    bool getRailPointArgF32WithInit(const LiveActor* pActor, s32 argNum, s32 index, f32* pArg) NO_INLINE {
+    bool getRailPointArgF32WithInit(const LiveActor* pActor, s32 argNum, s32 index, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
         bool b = railRider->getPointArgS32WithInit(getRailPointArgName(argNum), &arg, index);
@@ -625,7 +625,7 @@ namespace {
         return b;
     }
 
-    bool getRailPointArgF32NoInit(const LiveActor* pActor, s32 argNum, s32 index, f32* pArg) NO_INLINE {
+    bool getRailPointArgF32NoInit(const LiveActor* pActor, s32 argNum, s32 index, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
         bool b = railRider->getPointArgS32NoInit(getRailPointArgName(argNum), &arg, index);
@@ -633,7 +633,7 @@ namespace {
         return b;
     }
 
-    bool getRailCurrentPointArgF32WithInit(const LiveActor* pActor, s32 argNum, f32* pArg) NO_INLINE {
+    bool getRailCurrentPointArgF32WithInit(const LiveActor* pActor, s32 argNum, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
         bool b = railRider->getCurrentPointArgS32WithInit(getRailPointArgName(argNum), &arg);
@@ -641,7 +641,7 @@ namespace {
         return b;
     }
 
-    bool getRailCurrentPointArgF32NoInit(const LiveActor* pActor, s32 argNum, f32* pArg) NO_INLINE {
+    bool getRailCurrentPointArgF32NoInit(const LiveActor* pActor, s32 argNum, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
         bool b = railRider->getCurrentPointArgS32NoInit(getRailPointArgName(argNum), &arg);
@@ -649,7 +649,7 @@ namespace {
         return b;
     }
 
-    bool getRailNextPointArgF32NoInit(const LiveActor* pActor, s32 argNum, f32* pArg) NO_INLINE {
+    bool getRailNextPointArgF32NoInit(const LiveActor* pActor, s32 argNum, f32* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = *pArg;
         bool b = railRider->getNextPointArgS32NoInit(getRailPointArgName(argNum), &arg);
@@ -657,7 +657,7 @@ namespace {
         return b;
     }
 
-    bool getRailNextPointArgBoolNoInit(const LiveActor* pActor, s32 argNum, bool* pArg) NO_INLINE {
+    bool getRailNextPointArgBoolNoInit(const LiveActor* pActor, s32 argNum, bool* pArg) {
         RailRider* railRider = pActor->mRailRider;
         s32 arg = -1;
         bool b = railRider->getNextPointArgS32NoInit(getRailPointArgName(argNum), &arg);

@@ -213,11 +213,11 @@ namespace JGadget {
             return iterator(TNodeLinkList::begin());
         }
 
-        iterator end() NO_INLINE {
+        iterator end() {
             return iterator(TNodeLinkList::end());
         }
 
-        void Push_back(T* element) NO_INLINE {
+        void Push_back(T* element) {
             Insert(end(), element);
         }
 

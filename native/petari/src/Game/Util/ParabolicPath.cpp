@@ -85,7 +85,7 @@ f32 ParabolicPath::getLength(f32 startParam, f32 endParam, s32 numSegments) cons
         f32 endSegmentParam = startParam + parameterLengthSegment * (i + 1);
         f32 f4 = endSegmentParam * (_24 * endSegmentParam + _28);
 
-        length += MR::fastSqrtf((f4 - f2) * (f4 - f2) + f6);
+        length += NebulaSqrt((f4 - f2) * (f4 - f2) + f6);
         f2 = f4;
     }
 

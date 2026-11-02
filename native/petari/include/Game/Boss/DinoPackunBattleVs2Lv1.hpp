@@ -32,12 +32,12 @@ public:
 
     void exeTurn();
     void exeWalk();
-    void endWalk() NO_INLINE;
+    void endWalk();
     void exeFindCrazy();
     void exeCrazy();
-    void endCrazy() NO_INLINE;
+    void endCrazy();
     void exeChase();
-    void endChase() NO_INLINE;
+    void endChase();
     void exeAwake();
     void endAwake();
     void exeAttackHit();

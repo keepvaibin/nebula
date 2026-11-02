@@ -13,7 +13,7 @@
 #include <algorithm>
 #include "Game/System/GameAssets.hpp"
 
-template const bool JMapInfo::getValue< s32 >(int, const char*, s32*) const NO_INLINE;
+template const bool JMapInfo::getValue< s32 >(int, const char*, s32*) const;
 
 namespace {
     inline const char* getGalaxyName(const ScenarioData* pData) {
@@ -204,7 +204,7 @@ GalaxyStatusAccessor ScenarioDataParser::makeAccessor(const char* pGalaxyName) c
 }
 
 namespace ScenarioDataFunction {
-    ScenarioDataParser* getScenarioDataParser() NO_INLINE {
+    ScenarioDataParser* getScenarioDataParser() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mScenarioParser;
     }
 

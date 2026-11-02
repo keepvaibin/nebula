@@ -121,7 +121,7 @@ s32 IKJoint::updateByUpVector(const TVec3f& rRootPosition, const TVec3f& rTarget
 s32 IKJoint::updateByDistanceOnly(f32 distance) {
     s32 result = checkReachIKTarget(distance, mRootBoneLength, mMiddleBoneLength);
     f32 cosine = calcIKRootAngleCosign(distance, mRootBoneLength, mMiddleBoneLength);
-    f32 sine = MR::fastSqrtf(1.0f - cosine * cosine);
+    f32 sine = NebulaSqrt(1.0f - cosine * cosine);
     TVec3f rootSide(cosine, sine, 0.0f);
     TVec3f rootUp(-sine, cosine, 0.0f);
     _30.identity();

@@ -11,6 +11,7 @@
 #include <windows.h>
 #else
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #endif
 
@@ -34,11 +35,17 @@ AssetStore::~AssetStore() {
 
 void AssetStore::close() {
 #if defined(_WIN32)
+    if (view_ != nullptr) {
+        UnmapViewOfFile(view_);
+    }
     if (file_ != nullptr) {
         CloseHandle(file_);
         file_ = nullptr;
     }
 #else
+    if (view_ != nullptr) {
+        munmap(const_cast<std::uint8_t*>(view_), static_cast<std::size_t>(size_));
+    }
     if (file_ >= 0) {
         ::close(file_);
         file_ = -1;
@@ -46,6 +53,7 @@ void AssetStore::close() {
 #endif
     index_.clear();
     image_ = nullptr;
+    view_ = nullptr;
     size_ = 0;
     nodes_ = nullptr;
     hashes_ = nullptr;
@@ -134,7 +142,43 @@ bool AssetStore::open(const std::filesystem::path& path) {
         close();
         return false;
     }
+    // Address space only: pages come in as they are used and are the file's, so they cost no commit and the system can drop them.
+#if defined(_WIN32)
+    const HANDLE mapping = CreateFileMappingW(file_, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    view_ = mapping != nullptr ? static_cast<const std::uint8_t*>(MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0)) : nullptr;
+    if (mapping != nullptr) {
+        CloseHandle(mapping);
+    }
+#else
+    void* const mapped = mmap(nullptr, static_cast<std::size_t>(size_), PROT_READ, MAP_PRIVATE, file_, 0);
+    view_ = mapped != MAP_FAILED ? static_cast<const std::uint8_t*>(mapped) : nullptr;
+#endif
+    if (view_ == nullptr) {
+        close();
+        return false;
+    }
     return true;
+}
+
+const std::uint8_t* AssetStore::map(std::uint64_t position, std::size_t size) const {
+    if (position > size_ || size_ - position < size) {
+        return nullptr;
+    }
+    if (image_ != nullptr) {
+        return image_ + position;
+    }
+    if (view_ == nullptr) {
+        return nullptr;
+    }
+    const std::uint8_t* const data = view_ + position;
+#if defined(_WIN32)
+    WIN32_MEMORY_RANGE_ENTRY range{const_cast<std::uint8_t*>(data), size};
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0);
+#else
+    const std::uintptr_t page = reinterpret_cast<std::uintptr_t>(data) & ~std::uintptr_t{4095};
+    madvise(reinterpret_cast<void*>(page), size + (reinterpret_cast<std::uintptr_t>(data) - page), MADV_WILLNEED);
+#endif
+    return data;
 }
 
 bool AssetStore::read(std::uint64_t position, std::size_t size, void* dst) const {

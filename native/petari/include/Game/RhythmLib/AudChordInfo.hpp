@@ -63,19 +63,19 @@ public:
     bool setCurScale(s32 index);
 
     u8 getBassNote() const;
-    u8 getRoot() const NO_INLINE {
+    u8 getRoot() const {
         return mCurChord->mChordTone[0];
     }
-    u8 getChordTone(int idx) const NO_INLINE {
+    u8 getChordTone(int idx) const {
         return mCurChord->mChordTone[idx];
     }
-    u8 getAddNote(int idx) const NO_INLINE {
+    u8 getAddNote(int idx) const {
         return mCurChord->mAddNote[idx];
     }
-    s32 getScaleNoteUp(s32 idx) NO_INLINE {
+    s32 getScaleNoteUp(s32 idx) {
         return mCurScaleUp[idx];
     }
-    s32 getScaleNoteDown(s32 idx) NO_INLINE {
+    s32 getScaleNoteDown(s32 idx) {
         return mCurScaleDown[idx];
     }
 

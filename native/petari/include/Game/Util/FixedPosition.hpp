@@ -19,7 +19,7 @@ public:
         mMtx.getTrans(*pTrans);
     }
 
-    void copyRotate(TVec3f* pRotate) const NO_INLINE {
+    void copyRotate(TVec3f* pRotate) const {
         mMtx.getEuler(*pRotate);
         *pRotate = *pRotate * _180_PI;
     }

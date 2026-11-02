@@ -19,7 +19,7 @@ public:
     void stop(u32 fadeTime);
     void stopSoundID(JAISoundID id);
     void mixOut();
-    JAISeq* beginStartSeq_() NO_INLINE;
+    JAISeq* beginStartSeq_();
 
     void initParams() {
         mMove.init();

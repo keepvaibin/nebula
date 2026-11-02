@@ -49,7 +49,7 @@ namespace MR {
 
     /// @brief Computes the next pseudorandom Boolean.
     /// @return `true` if the pseudorandom number is less than one half, `false` otherwise.
-    bool isHalfProbability() NO_INLINE;
+    bool isHalfProbability();
 
     /// @brief Computes the sign of the next pseudorandom Boolean.
     /// @retval `-1.0f` if the pseudorandom number is less than one half.
@@ -622,7 +622,7 @@ namespace MR {
         *pValue = clamp(*pValue, min, max);
     }
 
-    inline void clampMax(f32* pValue, f32 max) NO_INLINE {
+    inline void clampMax(f32* pValue, f32 max) {
         f32 ret;
         if (*pValue >= max) {
             ret = max;
@@ -650,17 +650,11 @@ namespace MR {
         return repeat(value, 0.0f, 360.0f);
     }
 
-    // The console refines frsqrte's estimate once; natively the root.
-    inline f32 fastSqrtf(f32 x) {
-        return x > 0.0f ? __builtin_sqrtf(x) : x;
-    }
-
     template < typename T >
     T sqrt(T x) {
-        return fastSqrtf(x);
+        return NebulaSqrt(x);
     }
 
 };  // namespace MR
 
 f32 VecKillElement(const Vec*, const Vec*, const Vec*);
-f32 JMASqrt(f32);

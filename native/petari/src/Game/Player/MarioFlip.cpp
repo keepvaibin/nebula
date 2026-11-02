@@ -7,7 +7,6 @@
 #include "Game/Util/MathUtil.hpp"
 
 bool Mario::doFlipJump(const TVec3f& rVec) {
-    // FIXME: regswap
     if (isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
         return false;
     }

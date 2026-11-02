@@ -6,15 +6,16 @@
 
 struct JASSimpleWaveBank : JASWaveBank, JASWaveArc {
     struct TWaveHandle : JASWaveHandle {
-        TWaveHandle() : mHeap(){};
+        TWaveHandle() : mArc(){};
 
         const u8* getWavePtr() const;
+        const u8* getWaveLimit() const;
         const JASWaveInfo* getWaveInfo() const {
             return &mWaveInfo;
         }
 
         /* 0x04 */ JASWaveInfo mWaveInfo;
-        /* 0x28 */ JASHeap* mHeap;
+        /* 0x28 */ JASWaveArc* mArc;
     };
 
     JASSimpleWaveBank();

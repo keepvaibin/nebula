@@ -29,7 +29,7 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    FunctionAsyncExecutor* getFunctionAsyncExecutor() NO_INLINE {
+    FunctionAsyncExecutor* getFunctionAsyncExecutor() {
         return MR::getGameSystemObjHolder()->mFunctionAsyncExecutor;
     }
 
@@ -37,7 +37,7 @@ namespace {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameDataTemporaryInGalaxy;
     }
 
-    NameObjHolder* getSceneNameObjHolder() NO_INLINE {
+    NameObjHolder* getSceneNameObjHolder() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mObjHolder;
     }
 };  // namespace
@@ -168,10 +168,6 @@ namespace MR {
     }
 
     // The output is 60 Hz: no PAL television to suggest PAL60 for.
-    bool isDisplayEncouragePal60Window() {
-        return false;
-    }
-
     JMapIdInfo* getPlayerRestartIdInfo() {
         return ::getGameDataTemporaryInGalaxy()->mPlayerRestartIdInfo;
     }

@@ -274,7 +274,6 @@ void HomingKiller::control() {
 }
 
 void HomingKiller::calcAndSetBaseMtx() {
-    // FIXME: Regswap in inline
     // https://decomp.me/scratch/5jw7T
 
     TPos3f mtx2;

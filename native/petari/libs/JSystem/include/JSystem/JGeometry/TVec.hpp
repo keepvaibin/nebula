@@ -61,7 +61,7 @@ namespace JGeometry {
 
         /* General operations */
         template < typename A >
-        void set(const JGeometry::TVec2< A >& rSrc) NO_INLINE {
+        void set(const JGeometry::TVec2< A >& rSrc) {
             x = rSrc.x;
             y = rSrc.y;
         }
@@ -373,7 +373,7 @@ namespace JGeometry {
         }
 
         template < typename T >
-        void set(T _x, T _y, T _z) NO_INLINE {
+        void set(T _x, T _y, T _z) {
             x = _x;
             y = _y;
             z = _z;
@@ -398,7 +398,7 @@ namespace JGeometry {
         }
 
         template < typename T >
-        void setAll(f32 value) NO_INLINE {
+        void setAll(f32 value) {
             x = value;
             y = value;
             z = value;
@@ -479,7 +479,7 @@ namespace JGeometry {
             this->z = this->z * scalar;
         }
 
-        void scale(f32 scalar, const TVec3& rVec) NO_INLINE {
+        void scale(f32 scalar, const TVec3& rVec) {
             this->x = rVec.x * scalar;
             this->y = rVec.y * scalar;
             this->z = rVec.z * scalar;
@@ -527,7 +527,7 @@ namespace JGeometry {
         }
 
         inline void lerp(const TVec3& a, const TVec3& b, f32 t) {
-            JMAVECLerp(&a, &b, this, t);
+            NebulaVecLerp(&a, &b, this, t);
         }
 
         bool operator==(const TVec3& rVec) const {
@@ -555,7 +555,7 @@ namespace JGeometry {
         }
 
 #ifdef JGEOMETRY_VEC3_ZERO_NOINLINE
-        void zero() NO_INLINE {
+        void zero() {
 #else
         void zero() {
 #endif
@@ -567,7 +567,7 @@ namespace JGeometry {
             y = gZeroVec.y;
             z = gZeroVec.z;
         }
-        f32 dot(const TVec3& rOther) const NO_INLINE {
+        f32 dot(const TVec3& rOther) const {
             // TODO: this is *never* uninlined except in the specific
             // case of TQuat4f::setRotate(const TVec3f&, const TVec3f&)
             return (x * rOther.x + y * rOther.y) + z * rOther.z;
@@ -594,7 +594,7 @@ namespace JGeometry {
         }
 
         void scaleAdd(f32 sc, const TVec3& a, const TVec3& b) {
-            JMAVECScaleAdd(a, b, this, sc);
+            NebulaVecScaleAdd(a, b, this, sc);
         }
 
         TVec3 killElement(const TVec3& rKillDir) const {
@@ -605,24 +605,24 @@ namespace JGeometry {
 
         void killElement(const TVec3& rVec, const TVec3& rKillDir) {
             const TVec3& kill = rKillDir;
-            JMAVECScaleAdd(kill, rVec, this, -kill.dot(rVec));
+            NebulaVecScaleAdd(kill, rVec, this, -kill.dot(rVec));
         }
 
         void killElement2(const TVec3& rVec, const TVec3& rKillDir) {
             // TODO: sometimes this pattern specifically is used?
             // is this just written directly instead?
-            JMAVECScaleAdd(rKillDir, rVec, this, -rKillDir.dot(rVec));
+            NebulaVecScaleAdd(rKillDir, rVec, this, -rKillDir.dot(rVec));
         }
 
         void orthogonalize(const TVec3& rKillDir) {
             const TVec3& kill = rKillDir;
-            JMAVECScaleAdd(kill, this, this, -kill.dot(*this));
+            NebulaVecScaleAdd(kill, this, this, -kill.dot(*this));
         }
 
         void orthogonalize2(const TVec3& rKillDir) {
             // TODO: sometimes this pattern specifically is used?
             // is this just written directly instead?
-            JMAVECScaleAdd(rKillDir, this, this, -rKillDir.dot(*this));
+            NebulaVecScaleAdd(rKillDir, this, this, -rKillDir.dot(*this));
         }
 
         TVec3 getOrthogonal(const TVec3& rVec) const {
@@ -778,14 +778,14 @@ namespace JGeometry {
         }
 
         template < typename A >
-        void set(A _x, A _y, A _z, A _w) NO_INLINE {
+        void set(A _x, A _y, A _z, A _w) {
             x = _x;
             y = _y;
             z = _z;
             w = _w;
         }
 
-        void scale(T val) NO_INLINE {
+        void scale(T val) {
             x *= val;
             y *= val;
             z *= val;
@@ -851,7 +851,7 @@ namespace JGeometry {
             TVec4< T >::scale(lengthinv);
         }
 
-        void normalize(const TQuat4< T >& rSrc) NO_INLINE {
+        void normalize(const TQuat4< T >& rSrc) {
             f32 length = rSrc.squared();
 
             if (length <= TUtil< f32 >::epsilon()) {
@@ -887,7 +887,7 @@ namespace JGeometry {
                                     1.0f - this->x * this->x * 2.0f - this->y * this->y * 2.0f);
         }
 
-        void getEuler(TVec3< T >& rDest) const NO_INLINE {
+        void getEuler(TVec3< T >& rDest) const {
             f32 m20 = 2.0f * (this->x * this->z - this->w * this->y);
 
             if (m20 - 1.0f >= -TUtil< f32 >::epsilon()) {
@@ -911,7 +911,7 @@ namespace JGeometry {
             }
         }
 
-        void setEuler(T _x, T _y, T _z) NO_INLINE {
+        void setEuler(T _x, T _y, T _z) {
             f32 cx = cos(0.5f * _x);
             f32 cy = cos(0.5f * _y);
             f32 cz = cos(0.5f * _z);
@@ -993,7 +993,7 @@ namespace JGeometry {
             }
         }
 
-        void setRotate(const TVec3< T >& rA, const TVec3< T >& rB) NO_INLINE {
+        void setRotate(const TVec3< T >& rA, const TVec3< T >& rB) {
             TVec3< T > dir = rA.cross(rB);
             f32 crossPart = dir.length();
 
@@ -1038,7 +1038,7 @@ namespace JGeometry {
             TVec3< T >::scale(scalar, rVec);
         }
 
-        void slerp(const TQuat4< T >& rOther, T ratio) NO_INLINE {
+        void slerp(const TQuat4< T >& rOther, T ratio) {
             TQuat4< T > a;
             TQuat4< T > b;
             a.normalize(*this);

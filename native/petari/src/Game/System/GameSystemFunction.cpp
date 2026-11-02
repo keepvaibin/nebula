@@ -31,11 +31,11 @@ namespace {
         return pLogoScene;
     }
 
-    AudSystemWrapper* getAudSystemWrapper() NO_INLINE {
+    AudSystemWrapper* getAudSystemWrapper() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mAudioSystem;
     }
 
-    SaveDataHandleSequence* getSaveDataHandleSequence() NO_INLINE {
+    SaveDataHandleSequence* getSaveDataHandleSequence() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
     }
 };  // namespace

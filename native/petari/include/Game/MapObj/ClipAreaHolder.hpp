@@ -33,7 +33,7 @@ namespace MR {
     void createClipAreaHolder();
     bool isExistClipAreaHolder();
     void addClipArea(ClipArea*);
-    bool isInClipArea(const TVec3f&, f32) NO_INLINE;
+    bool isInClipArea(const TVec3f&, f32);
     bool isActiveClipArea();
     void activateClipArea();
     void deactivateClipArea();

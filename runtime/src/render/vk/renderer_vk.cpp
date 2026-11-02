@@ -197,8 +197,8 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             return target.initialize(device, name, UploadRing::budget(bytes, kFramesInFlight), kFramesInFlight,
                                      bytes);
         };
-        if (!ring(vertex_ring_, "vertex", 192u << 20u) || !ring(index_ring_, "index", 48u << 20u) ||
-            !ring(constant_ring_, "constant", 96u << 20u) || !ring(matrix_ring_, "matrix", 128u << 20u)) {
+        if (!ring(vertex_ring_, "vertex", 32u << 20u) || !ring(index_ring_, "index", 12u << 20u) ||
+            !ring(constant_ring_, "constant", 12u << 20u) || !ring(matrix_ring_, "matrix", 8u << 20u)) {
             std::cerr << "[Renderer] upload rings unavailable\n";
             shutdown();
             return false;
@@ -1013,6 +1013,7 @@ UploadBuffer RendererVk::create_resident_vertices(std::size_t bytes, const char*
     }
     UploadBuffer out;
     out.cpu = buffer->mapped;
+    resident_mapped_ = out.cpu;
     out.gpu = buffer->address;
     out.buffer = std::move(buffer);
     return out;

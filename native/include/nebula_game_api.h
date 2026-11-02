@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 97u
+#define NEBULA_GAME_API_VERSION 98u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -90,8 +90,8 @@ typedef struct NebulaVoice {
     float rate;              /* source samples played a second */
     uint16_t format;         /* NEBULA_AUDIO_SILENT..OSCILLATOR */
     uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
-    const uint8_t* wave;     /* the source's first byte, in the sound memory (voices_setup) or before wave_end */
-    const uint8_t* wave_end; /* the end of a source outside the sound memory; else null */
+    const uint8_t* wave;     /* the source's first byte */
+    const uint8_t* wave_end; /* the end of its bytes */
     uint32_t restart;        /* the sample it starts at */
     uint32_t loop_start;     /* samples */
     uint32_t end;            /* samples: the end, or the loop's end when loop is set */
@@ -926,6 +926,9 @@ typedef struct NebulaHostServices {
     /* Reads `size` bytes at `offset` of a file into dst; the host calls nebula_game_asset_complete(slot, bytes read or -1)
        from any thread when done. */
     void (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
+    /* A file's bytes in the mapped store, read-only, for the process's life, on their way into memory when this returns
+       (call it where a wait for the drive does no harm); null if there is no such file. */
+    const void* (*asset_map)(void* user, int32_t file);
     /* The game's id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
        whose few differences the module follows (NebulaRegion.hpp) and whose folder holds its saves. */
     const char* (*game_id)(void* user);
@@ -952,11 +955,10 @@ typedef struct NebulaHostServices {
     void (*speaker_samples)(void* user, uint32_t player, const int16_t* samples, uint32_t count);
 
     /* Audio, on the game's audio thread. voices_setup hands over the voices and the four effect lines (they stay the
-       game's; the mixer reads and advances them in voices_mix) and the sound memory the voices' waves lie in.
+       game's; the mixer reads and advances them in voices_mix).
        voices_mix mixes one subframe at `gain`; voices_frame ends a frame: the subframes mixed since the last call, with
        the movie's sound for them, go to the output. */
-    void (*voices_setup)(void* user, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects,
-                        const void* sound_memory, uint32_t sound_memory_size);
+    void (*voices_setup)(void* user, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects);
     void (*voices_mix)(void* user, float gain);
     void (*voices_frame)(void* user);
     /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,

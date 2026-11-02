@@ -82,7 +82,7 @@ namespace MR {
     bool isActorOnPlayer(const LiveActor*);
     bool isOnPlayerShadow(const LiveActor*);
     f32 getPlayerShadowHeight();
-    void setPlayerPos(const char*) NO_INLINE;
+    void setPlayerPos(const char*);
     void setPlayerPosAndWait(const TVec3f&);
     void setPlayerPosAndWait(const char*);
     void setPlayerLinkPosAndWait(const NameObj*, const char*);

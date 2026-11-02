@@ -17,7 +17,7 @@ public:
     void copy(const ActorLightCtrl*);
     bool isSameLight(const ActorLightCtrl*) const;
     const ActorLightInfo* getActorLight() const;
-    void initActorLightInfo() NO_INLINE;
+    void initActorLightInfo();
     void tryFindNewAreaLight(bool);
     void updateLightBlend();
     void resetCurrentLightInfo();

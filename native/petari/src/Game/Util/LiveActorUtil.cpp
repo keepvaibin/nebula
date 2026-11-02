@@ -74,7 +74,7 @@ namespace {
         return pBuffer;
     }
 
-    PartsModel* createSubModel(LiveActor* pActor, const char* pSubModelName, MtxPtr pMtx, int drawBufferType) NO_INLINE {
+    PartsModel* createSubModel(LiveActor* pActor, const char* pSubModelName, MtxPtr pMtx, int drawBufferType) {
         const char* modelResName = MR::getModelResourceHolder(pActor)->mModelResTable->getResName(0UL);
 
         if (!MR::isExistSubModel(modelResName, pSubModelName)) {
@@ -91,7 +91,7 @@ namespace {
         return parts;
     }
 
-    void changeBckForEffectKeeper(const LiveActor* pActor) NO_INLINE {
+    void changeBckForEffectKeeper(const LiveActor* pActor) {
         EffectKeeper* keeper = pActor->mEffectKeeper;
 
         if (keeper != nullptr) {
@@ -99,7 +99,7 @@ namespace {
         }
     }
 
-    void calcCollisionMtx(TPos3f* pMtx, const LiveActor* pActor) NO_INLINE {
+    void calcCollisionMtx(TPos3f* pMtx, const LiveActor* pActor) {
         pMtx->set(pActor->getBaseMtx());
 
         f32 scale = pActor->mScale.x;
@@ -114,11 +114,11 @@ namespace {
         pMtx->mMtx[2][2] *= scale;
     }
 
-    bool isShowModel(LiveActor* pActor) NO_INLINE {
+    bool isShowModel(LiveActor* pActor) {
         return !pActor->mFlag.mIsHiddenModel;
     }
 
-    void callFuncAllGroupMember(const NameObj* pActor, void (*pFunc)(NameObj*)) NO_INLINE {
+    void callFuncAllGroupMember(const NameObj* pActor, void (*pFunc)(NameObj*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(static_cast<const LiveActor*>(pActor));
 
@@ -137,7 +137,7 @@ namespace {
         }
     }
 
-    void callFuncAllGroupMember(const LiveActor* pActor, void (*pFunc)(LiveActor*)) NO_INLINE {
+    void callFuncAllGroupMember(const LiveActor* pActor, void (*pFunc)(LiveActor*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
 
@@ -156,7 +156,7 @@ namespace {
         }
     }
 
-    void callMethodAllGroupMember(const LiveActor* pActor, void (LiveActor::*pMethod)()) NO_INLINE {
+    void callMethodAllGroupMember(const LiveActor* pActor, void (LiveActor::*pMethod)()) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
 
@@ -176,10 +176,10 @@ namespace {
     }
 
     template < typename T >
-    s32 countGroupMember(const LiveActor* pActor, T pPred) NO_INLINE;
+    s32 countGroupMember(const LiveActor* pActor, T pPred);
 
     template <>
-    s32 countGroupMember< bool (*)(LiveActor*) >(const LiveActor* pActor, bool (*pPred)(LiveActor*)) NO_INLINE {
+    s32 countGroupMember< bool (*)(LiveActor*) >(const LiveActor* pActor, bool (*pPred)(LiveActor*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
         s32 count = 0;
@@ -204,7 +204,7 @@ namespace {
     }
 
     template <>
-    s32 countGroupMember< bool (*)(const LiveActor*) >(const LiveActor* pActor, bool (*pPred)(const LiveActor*)) NO_INLINE {
+    s32 countGroupMember< bool (*)(const LiveActor*) >(const LiveActor* pActor, bool (*pPred)(const LiveActor*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
         s32 count = 0;

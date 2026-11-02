@@ -51,7 +51,7 @@ void GameSystemResetAndPowerProcess::draw() const {
     graph.fillBox(TBox2f(0.0f, 0.0f, width, height));
 }
 
-bool GameSystemResetAndPowerProcess::isActive() const NO_INLINE {
+bool GameSystemResetAndPowerProcess::isActive() const {
     return !isNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
 }
 
@@ -202,7 +202,7 @@ void GameSystemResetAndPowerProcess::exitApplication() {
     }
 }
 
-bool GameSystemResetAndPowerProcess::tryPermitReset() NO_INLINE {
+bool GameSystemResetAndPowerProcess::tryPermitReset() {
     return !isActive();
 }
 

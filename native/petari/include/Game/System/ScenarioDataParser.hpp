@@ -54,7 +54,7 @@ public:
 };
 
 namespace ScenarioDataFunction {
-    ScenarioDataParser* getScenarioDataParser() NO_INLINE;
+    ScenarioDataParser* getScenarioDataParser();
     u32 getCurrentCommonLayers(const char*);
     u32 getCurrentScenarioLayers(const char*, s32);
 };  // namespace ScenarioDataFunction

@@ -215,9 +215,9 @@ void FirePressureRadiate::updateHitSensor(HitSensor* pSensor) {
     TVec3f position;
     mRadiateMtx.getTrans(position);
     TVec3f start;
-    JMAVECScaleAdd(&direction, &position, &start, 50.0f);
+    NebulaVecScaleAdd(&direction, &position, &start, 50.0f);
     TVec3f end;
-    JMAVECScaleAdd(&direction, &start, &end, _D0 - 50.0f);
+    NebulaVecScaleAdd(&direction, &start, &end, _D0 - 50.0f);
     MR::calcPerpendicFootToLineInside(&pSensor->mPosition, *MR::getPlayerPos(), start, end);
 }
 

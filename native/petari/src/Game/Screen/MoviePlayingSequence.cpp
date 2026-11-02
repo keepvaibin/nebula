@@ -177,7 +177,7 @@ namespace {
         }
     }
 
-    const char* getMovieName(const MoviePlayingInfo* pInfo) NO_INLINE {
+    const char* getMovieName(const MoviePlayingInfo* pInfo) {
         if (MR::isPlayerLuigi() && pInfo->mMovieNameLuigi != nullptr) {
             return pInfo->mMovieNameLuigi;
         } else {

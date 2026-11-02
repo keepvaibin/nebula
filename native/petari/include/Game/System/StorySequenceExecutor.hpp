@@ -47,7 +47,7 @@ public:
     void exeStaffRollSequence();
     void decideNextEventForClearGalaxy(GalaxyMoveArgument*);
     void decideNextEventForMoveGalaxy(GalaxyMoveArgument*);
-    void decideNextEventForAfterLoading(GalaxyMoveArgument*) NO_INLINE;
+    void decideNextEventForAfterLoading(GalaxyMoveArgument*);
     void decideNextStageForGalaxyOut(GalaxyMoveArgument*);
     void overwriteGalaxyNameAfterLoading(GalaxyMoveArgument*);
     void setNextStageToAstroGalaxyOrDome(GalaxyMoveArgument*);
@@ -57,10 +57,10 @@ public:
     void getOptionalDemoForClearGalaxy(MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >*,
                                        const GalaxyMoveArgument*) const;
     static bool isEqualStageStopCometScheduler(const char*);
-    void prepareDemoSequence(const StorySequenceExecutorType::DemoSequenceInfo*) NO_INLINE;
+    void prepareDemoSequence(const StorySequenceExecutorType::DemoSequenceInfo*);
     void prepareDemoSequence(const MR::Vector< MR::FixedArray< const StorySequenceExecutorType::DemoSequenceInfo*, 8 > >&);
     void prepareDemoSequenceButlerFortressDiscover(const GalaxyMoveArgument*, const DemoFortressDiscoverCheckList&);
-    bool tryStartDemo(const char*) NO_INLINE;
+    bool tryStartDemo(const char*);
     bool tryStartSave();
     bool tryWaitSaveEnd();
     bool tryStartFadein();

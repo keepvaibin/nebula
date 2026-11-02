@@ -51,7 +51,7 @@ namespace {
         return getStarPointerDirector()->getStarPointerLayout(channel);
     }
 
-    StarPointerOnOffController* getStarPointerOnOffController() NO_INLINE {
+    StarPointerOnOffController* getStarPointerOnOffController() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameSequenceProgress->mStarPointerOnOffController;
     }
 

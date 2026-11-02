@@ -26,7 +26,7 @@ public:
     void playRotateSE();
     void resetRotateParam();
     void clearPointerVelocity();
-    void setStateConfirmStartAtFirstStep() NO_INLINE;
+    void setStateConfirmStartAtFirstStep();
     bool tryRelease();
     void stackPointerVelocity();
     TVec2f* getPointerVelocity();
@@ -41,7 +41,7 @@ public:
     void exeGalaxyConfirmWait();
     void exeGalaxyConfirmCancel();
     void exeIdleForFileSelect();
-    void exeIdleEndForFileSelect() NO_INLINE;
+    void exeIdleEndForFileSelect();
 
     inline bool isWaitOrSpinOrDemoRotate();
 

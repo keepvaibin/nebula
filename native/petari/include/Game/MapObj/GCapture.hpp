@@ -56,7 +56,7 @@ public:
     void endBindByFireDamage();
     void calcBindActorPose();
     void updateBindActorMatrix();
-    bool canRequestTarget() const NO_INLINE;
+    bool canRequestTarget() const;
     bool canCancelBind() const;
     void upTractPower();
     void downTractPower();

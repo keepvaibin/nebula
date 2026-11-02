@@ -26,7 +26,7 @@ public:
     void exeSign();
     void exeMove();
     void generateKill();
-    bool isEnableAttack() const NO_INLINE;
+    bool isEnableAttack() const;
     bool isEnableExplosion() const;
 
     inline Polta* getOwner() {

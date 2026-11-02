@@ -287,8 +287,8 @@ void JPACalcClrIdxMerge(JPAEmitterWorkData*, JPABaseParticle*);
 void JPACalcClrIdxRandom(JPAEmitterWorkData*, JPABaseParticle*);
 void JPACalcColorCopy(JPAEmitterWorkData*, JPABaseParticle*);
 
-void JPADrawStripe(JPAEmitterWorkData*) ATTRIBUTE_WEAK;
-void JPADrawStripeX(JPAEmitterWorkData*) ATTRIBUTE_WEAK;
+void JPADrawStripe(JPAEmitterWorkData*);
+void JPADrawStripeX(JPAEmitterWorkData*);
 void JPADrawEmitterCallBackB(JPAEmitterWorkData*);
 void JPALoadTex(JPAEmitterWorkData*);
 void JPALoadTexAnm(JPAEmitterWorkData*);
@@ -304,7 +304,7 @@ void JPARegistEnv(JPAEmitterWorkData*);
 void JPARegistPrmEnv(JPAEmitterWorkData*);
 
 void JPADrawPoint(JPAEmitterWorkData*, JPABaseParticle*);
-void JPADrawLine(JPAEmitterWorkData*, JPABaseParticle*) ATTRIBUTE_WEAK;
+void JPADrawLine(JPAEmitterWorkData*, JPABaseParticle*);
 void JPADrawRotBillboard(JPAEmitterWorkData*, JPABaseParticle*);
 void JPADrawBillboard(JPAEmitterWorkData*, JPABaseParticle*);
 void JPADrawRotDirection(JPAEmitterWorkData*, JPABaseParticle*);

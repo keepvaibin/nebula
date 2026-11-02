@@ -28,7 +28,7 @@ public:
     void initElementType(const JMapInfoIter&);
     void initEffect();
     void initSensor();
-    void initBind() NO_INLINE;
+    void initBind();
     void initShadow();
     void initAppearState(const JMapInfoIter&);
     bool requestDamage(HitSensor*, HitSensor*);
@@ -90,7 +90,7 @@ public:
     bool isPushMoved() const;
     bool isEnableFireball() const;
     bool isEnableChase() const;
-    void addToTargetMovingAccel(const TVec3f&, f32, f32) NO_INLINE;
+    void addToTargetMovingAccel(const TVec3f&, f32, f32);
     void addMovingAccel(const TVec3f&, f32, f32);
     void addRunawayJumpPower();
     void addOverWallAccel(const TVec3f&);

@@ -34,6 +34,9 @@ public:
     bool load(const std::uint8_t* data, std::size_t size);
     // `size` bytes at `position` of the store.
     bool read(std::uint64_t position, std::size_t size, void* dst) const;
+    // `size` bytes at `position` where they are mapped, read-only, while the store is open; the pages are on their
+    // way in when this returns, so the first use does not wait for the drive. Null if out of range.
+    [[nodiscard]] const std::uint8_t* map(std::uint64_t position, std::size_t size) const;
 
     [[nodiscard]] std::optional<Entry> entry(std::int32_t index) const;
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;
@@ -64,6 +67,7 @@ private:
 
     std::vector<std::uint8_t> index_;
     const std::uint8_t* image_ = nullptr;
+    const std::uint8_t* view_ = nullptr;
     std::uint64_t size_ = 0;
 #if defined(_WIN32)
     void* file_ = nullptr;

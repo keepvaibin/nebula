@@ -19,7 +19,7 @@ public:
     virtual void start(const char*);
     virtual void stop();
 
-    bool isStop() const NO_INLINE {
+    bool isStop() const {
         return mAnimTransform == nullptr || static_cast< s32 >(mFrameCtrl.checkState(1)) == 1 || mFrameCtrl.getRate() == 0.0f;
     }
 

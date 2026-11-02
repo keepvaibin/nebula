@@ -19,7 +19,7 @@ public:
     void start(const char*);
     void stop();
     bool isPlaying(const char*) const;
-    bool isStop() const NO_INLINE {
+    bool isStop() const {
         return mAnmRes == nullptr || static_cast< s32 >(mFrameCtrl.checkState(1)) == 1 || mFrameCtrl.getRate() == 0.0f;
     }
 

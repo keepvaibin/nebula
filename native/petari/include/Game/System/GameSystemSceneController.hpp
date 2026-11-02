@@ -90,7 +90,7 @@ public:
     void updateSceneControlInfo();
     Scene* getCurrentSceneForExecute() const;
     const Nerve* getNextNerveOnResetProcessing() const;
-    bool tryDestroyFileCacheHeap(bool) NO_INLINE;
+    bool tryDestroyFileCacheHeap(bool);
     void requestChangeNerve(const Nerve*);
 
     bool isCurrentNerve(const Nerve*) const;

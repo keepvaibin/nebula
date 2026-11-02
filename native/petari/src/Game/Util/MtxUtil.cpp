@@ -297,7 +297,7 @@ namespace MR {
         Quaternion quatA, quatB, quatR;
         NebulaQuatFromMtx(&quatA, pMtxA);
         NebulaQuatFromMtx(&quatB, pMtxB);
-        JMAQuatLerp(&quatA, &quatB, blend, &quatR);
+        NebulaQuatLerp(&quatA, &quatB, blend, &quatR);
         NebulaMtxQuat(pDst, &quatR);
     }
 

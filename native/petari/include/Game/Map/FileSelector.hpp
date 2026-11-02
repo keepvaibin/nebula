@@ -92,7 +92,7 @@ public:
     bool isUserFileCorrupted(s32 id) const;
     bool isUserFileAppearLuigi(s32 id) const;
     bool isUserFileLuigi(s32 id) const;
-    void setUserFileMario(s32 id, bool isMario) NO_INLINE;
+    void setUserFileMario(s32 id, bool isMario);
     void storeSetMiiIdUserFile(s32 id, const FileSelectIconID& rIconId);
     void getMiiId(MiiCreateID* pCreateId, const FileSelectIconID& rIconId) const;
     void getIconId(FileSelectIconID* pIconId, s32 id) const;

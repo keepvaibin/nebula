@@ -26,7 +26,7 @@ public:
         mWaveBank = param_0;
     }
 
-    static JASChannel* noteOn(JASBank const*, int, u8, u8, u16, void (*)(u32, JASChannel*, JASVoice*, void*), void*) ATTRIBUTE_WEAK;
+    static JASChannel* noteOn(JASBank const*, int, u8, u8, u16, void (*)(u32, JASChannel*, JASVoice*, void*), void*);
     static JASChannel* noteOnOsc(int, u8, u8, u16, void (*)(u32, JASChannel*, JASVoice*, void*), void*);
 
 private:

@@ -27,7 +27,7 @@ public:
     void calcAndSetVelocity(f32, f32, f32);
     void calcAndSetUpVecTarget(f32, f32, f32);
     bool isMarioUp() const;
-    bool isMarioLeft() const NO_INLINE;
+    bool isMarioLeft() const;
     bool tryChangeHighSpeedMode();
     bool tryDPDSwoon();
 
