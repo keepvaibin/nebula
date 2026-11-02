@@ -5,41 +5,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 ImageEffectResource::ImageEffectResource()
-    : _0(nullptr), _4(nullptr), _8(nullptr), _C(nullptr), _10(nullptr), _14(nullptr), _18(nullptr), _1C(nullptr), _20(nullptr) {
-}
-
-void ImageEffectResource::createBloomTexture() {
-    if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GPU_TF_RGBA8);
-    }
-
-    if (_4 == nullptr) {
-        _4 = createTexture(0.5f, GPU_TF_RGB565);
-    }
-
-    if (_C == nullptr) {
-        _C = createTexture(0.25f, GPU_TF_RGB565);
-    }
-
-    if (_10 == nullptr) {
-        _10 = createTexture(0.25f, GPU_TF_RGB565);
-    }
-
-    if (_14 == nullptr) {
-        _14 = createTexture(0.125f, GPU_TF_RGB565);
-    }
-
-    if (_18 == nullptr) {
-        _18 = createTexture(0.125f, GPU_TF_RGB565);
-    }
-
-    if (_1C == nullptr) {
-        _1C = createTexture(0.25f, GPU_TF_I8);
-    }
-
-    if (_20 == nullptr) {
-        _20 = createTexture(0.25f, GPU_TF_RGB565);
-    }
+    : _0(nullptr), _4(nullptr), _8(nullptr), _C(nullptr) {
 }
 
 void ImageEffectResource::createBlurTexture() {

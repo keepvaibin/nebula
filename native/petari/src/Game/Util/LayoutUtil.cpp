@@ -17,7 +17,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J2DGraph/J2DPicture.hpp>
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nw4r/lyt/layout.h>
@@ -629,8 +628,8 @@ void MR::calcAnimLayoutWithDrawInfo(const LayoutActor* pActor, const nw4r::lyt::
 
 void MR::drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor* pActor, const nw4r::lyt::DrawInfo& rDrawInfo) {
     if (isExecuteDrawLayout(pActor)) {
-        J3DNativeState::setCullMode(GPU_CULL_NONE);
-        J3DNativeState::setZMode(GPU_FALSE, GPU_NEVER, GPU_FALSE);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         pActor->getLayoutManager()->mLayout->Draw(rDrawInfo);
     }
 }

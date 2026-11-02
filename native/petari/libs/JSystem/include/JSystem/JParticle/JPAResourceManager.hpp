@@ -18,8 +18,8 @@ public:
     void registTex(JPATexture*);
     u32 getResUserWork(u16) const;
 
-    void load(u16 idx, GpuTexMapID texMapID) {
-        mpTexArr[idx]->load(texMapID);
+    void use(u16 idx, u32 slot) {
+        mpTexArr[idx]->use(slot);
     }
 
 public:

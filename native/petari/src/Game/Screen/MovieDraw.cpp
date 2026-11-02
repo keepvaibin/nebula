@@ -32,15 +32,15 @@ namespace MovieDraw {
         J3DNativeState::setFrameAlpha(false);
         Mtx44 projection;
         NebulaMtxOrtho(projection, 0.0f, screenHeight, 0.0f, screenWidth, 0.0f, -1.0f);
-        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projection);
         J3DNativeView::setViewport(0.0f, 0.0f, screenWidth, screenHeight, 0.0f, 1.0f);
         J3DNativeView::setScissor(0, 0, screenWidth, screenHeight);
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
-        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
-        J3DNativeState::setColorUpdate(GPU_TRUE);
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
+        J3DPass::positionMatrix(0);
+        J3DPass::writeColor(true);
+        J3DPass::writeAlpha(false);
 
         // The frame's planes, decoded into these buffers since the last frame as rows of texels (nebula_cooked_texture.h).
         const u16 chromaWidth = static_cast< u16 >(textureWidth >> 1);
@@ -57,11 +57,9 @@ namespace MovieDraw {
         setPlane(material, 2, pV);
         NativeShader::send(material);
         // The coordinates' texture matrices: the identity's place.
-        static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                        GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kIdentity);
+        J3DNativeShape::setCurrentIdentity();
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(static_cast< f32 >(x), static_cast< f32 >(y), 0.0f);
         J3DNativeDraw::texCoord(0.0f, 0.0f);
         J3DNativeDraw::position(static_cast< f32 >(static_cast< s16 >(x + width)), static_cast< f32 >(y), 0.0f);

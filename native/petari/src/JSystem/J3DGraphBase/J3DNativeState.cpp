@@ -1,5 +1,5 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
-#include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
@@ -10,79 +10,27 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // GpuInit's cull mode and frame (no alpha).
-    GpuCullMode sCullMode = GPU_CULL_BACK;
+    NebulaPassState sPass;
     bool sFrameAlpha = false;
+
+    NebulaStateOp hostOp(u8 kind) {
+        NebulaStateOp op;
+        memset(&op, 0, sizeof(op));
+        op.kind = kind;
+        return op;
+    }
+
+    void sendHost(const NebulaStateOp* pOps, u32 count) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->state(pHost->user, pOps, count);
+    }
 }  // namespace
 
 namespace J3DNativeState {
-    namespace {
-        NebulaPassState sPass;
-
-        void setBlendOf(const u8* a) {
-            sPass.blend_op = a[0];
-            sPass.blend_src = a[1] <= 9 ? a[1] : 0;
-            sPass.blend_dst = a[2] <= 9 ? a[2] : 0;
-            sPass.logic_op = a[3] & 15;
-        }
-    }  // namespace
-
     const NebulaPassState* pass() {
         sPass.position_matrix = J3DNativeShape::currentPosition();
         return &sPass;
-    }
-
-    void passChanges(const NebulaStateOp* pOps, u32 count) {
-        for (u32 i = 0; i < count; i++) {
-            const u8* a = pOps[i].a;
-            switch (pOps[i].kind) {
-            case J3D_STATE_BLEND_ETC:
-                setBlendOf(a);
-                sPass.color_write = a[4] != 0;
-                sPass.alpha_write = a[5] != 0;
-                break;
-            case J3D_STATE_BLEND:
-                setBlendOf(a);
-                break;
-            case J3D_STATE_Z_MODE:
-                sPass.depth_test = a[0] & 1;
-                sPass.depth_func = a[1] & 7;
-                sPass.depth_write = a[2] & 1;
-                break;
-            case J3D_STATE_DST_ALPHA:
-                sPass.constant_alpha = a[0] != 0;
-                sPass.constant_alpha_value = a[1];
-                break;
-            case J3D_STATE_CULL:
-                sPass.cull = a[0] & 3;
-                break;
-            case J3D_STATE_COLOR_UPDATE:
-                sPass.color_write = a[0] != 0;
-                break;
-            case J3D_STATE_ALPHA_UPDATE:
-                sPass.alpha_write = a[0] != 0;
-                break;
-            case J3D_STATE_CURRENT_MATRIX:
-                J3DNativeShape::setCurrentPosition(a[0] % 10);
-                break;
-            case J3D_STATE_LINE_WIDTH:
-                sPass.line_width = pOps[i].f[0];
-                sPass.line_divisor = a[1];
-                break;
-            case J3D_STATE_POINT_SIZE:
-                sPass.point_size = pOps[i].f[0];
-                sPass.point_divisor = a[1];
-                break;
-            case J3D_STATE_TEX_OFFSETS: {
-                const u8 bit = static_cast< u8 >(1u << (a[0] & 7));
-                sPass.line_offsets = static_cast< u8 >((a[1] & 1) != 0 ? sPass.line_offsets | bit : sPass.line_offsets & ~bit);
-                sPass.point_offsets = static_cast< u8 >((a[2] & 1) != 0 ? sPass.point_offsets | bit : sPass.point_offsets & ~bit);
-                break;
-            }
-            default:
-                break;
-            }
-        }
     }
 
     void sendMaterial(const NebulaNativeMaterial* pMaterial) {
@@ -112,136 +60,6 @@ namespace J3DNativeState {
         }
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, pMaterial);
-    }
-
-    void setZMode(GpuBool compare, GpuCompare func, GpuBool update) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setZMode(compare, func, update);
-        list.send();
-    }
-
-    void setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp alphaOp, GpuCompare comp1, u8 ref1) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setAlphaCompare(comp0, ref0, alphaOp, comp1, ref1);
-        list.send();
-    }
-
-    void setDstAlpha(GpuBool enable, u8 alpha) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setDstAlpha(enable, alpha);
-        list.send();
-    }
-
-    void setTevColor(GpuTevRegID id, NebulaColor8 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevColor(id, color);
-        list.send();
-    }
-
-    void setTevKColor(GpuTevKColorID id, NebulaColor8 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevKColor(id, color);
-        list.send();
-    }
-
-    void setTevColorS10(GpuTevRegID id, NebulaColor16 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevColorS10(id, color);
-        list.send();
-    }
-
-    void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setFog(type, start, end, nearZ, farZ, color);
-        op.a[5] = 1;
-        list.send();
-    }
-
-    void setIndTexMtx(GpuIndTexMtxID id, const f32 offset[2][3], s8 scaleExp) {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = J3D_STATE_IND_TEX_MATRIX;
-        op.a[0] = static_cast< u8 >(id);
-        op.a[1] = static_cast< u8 >(scaleExp);
-        for (u32 c = 0; c < 3; c++) {
-            op.f[2 * c] = offset[0][c];
-            op.f[2 * c + 1] = offset[1][c];
-        }
-        J3DStateList list(&op, 1);
-        list.adopt(1);
-        list.send();
-    }
-
-    void setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setBlendMode(type, src, dst, op);
-        list.send();
-    }
-
-    void setColorUpdate(GpuBool enable) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setColorUpdate(enable);
-        list.send();
-    }
-
-    void setAlphaUpdate(GpuBool enable) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setAlphaUpdate(enable);
-        list.send();
-    }
-
-    void setChanMatColor(GpuChannelID chan, NebulaColor8 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setChanMatColor(chan, color);
-        op.a[5] = 1;
-        list.send();
-    }
-
-    void setChanAmbColor(GpuChannelID chan, NebulaColor8 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setChanAmbColor(chan, color);
-        op.a[5] = 1;
-        list.send();
-    }
-
-    void setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, u32 mtx, GpuBool normalize, u32 postMtx) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTexCoordGen2(coord, type, src, mtx, normalize, postMtx);
-        list.send();
-    }
-
-    void setCurrentMtx(u32 id) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCurrentMtx(id);
-        list.send();
-    }
-
-    void setLineWidth(u8 width, GpuTexOffset texOffsets) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setLineWidth(width, texOffsets);
-        list.send();
-    }
-
-    void setPointSize(u8 size, GpuTexOffset texOffsets) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setPointSize(size, texOffsets);
-        list.send();
     }
 
     void initLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
@@ -300,72 +118,26 @@ namespace J3DNativeState {
         rLight.mDistance[2] = k2;
     }
 
-    void initLightSpot(J3DNativeLight* pObj, f32 cutoff, GpuSpotFn spotFn) {
-        if (cutoff <= 0.0f || cutoff > 90.0f) {
-            spotFn = GPU_SP_OFF;
-        }
-        const f32 cr = cos(cutoff * 3.14159265358979323846f / 180.0f);
-        f32 a0, a1, a2, d;
-        switch (spotFn) {
-        case GPU_SP_FLAT:
-            a0 = -1000.0f * cr;
-            a1 = 1000.0f;
-            a2 = 0.0f;
-            break;
-        case GPU_SP_COS:
-            a1 = 1.0f / (1.0f - cr);
-            a0 = -cr * a1;
-            a2 = 0.0f;
-            break;
-        case GPU_SP_COS2:
-            a2 = 1.0f / (1.0f - cr);
-            a0 = 0.0f;
-            a1 = -cr * a2;
-            break;
-        case GPU_SP_SHARP:
-            d = 1.0f / ((1.0f - cr) * (1.0f - cr));
-            a0 = cr * (cr - 2.0f) * d;
-            a1 = 2.0f * d;
-            a2 = -d;
-            break;
-        case GPU_SP_RING1:
-            d = 1.0f / ((1.0f - cr) * (1.0f - cr));
-            a2 = -4.0f * d;
-            a0 = a2 * cr;
-            a1 = 4.0f * (1.0f + cr) * d;
-            break;
-        case GPU_SP_RING2:
-            d = 1.0f / ((1.0f - cr) * (1.0f - cr));
-            a0 = 1.0f - 2.0f * cr * cr * d;
-            a1 = 4.0f * cr * d;
-            a2 = -2.0f * d;
-            break;
-        default:
-            a0 = 1.0f;
-            a1 = 0.0f;
-            a2 = 0.0f;
-            break;
-        }
-        J3DNativeLight& rLight = *pObj;
-        rLight.mAngle[0] = a0;
-        rLight.mAngle[1] = a1;
-        rLight.mAngle[2] = a2;
+    void initLightNoSpot(J3DNativeLight* pObj) {
+        pObj->mAngle[0] = 1.0f;
+        pObj->mAngle[1] = 0.0f;
+        pObj->mAngle[2] = 0.0f;
     }
 
-    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, GpuDistAttnFn distFn) {
+    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, J3DLightFalloff falloff) {
         if (refDistance < 0.0f || refBrightness <= 0.0f || refBrightness >= 1.0f) {
-            distFn = GPU_DA_OFF;
+            falloff = J3D_FALLOFF_NONE;
         }
         f32 k0 = 1.0f, k1 = 0.0f, k2 = 0.0f;
-        switch (distFn) {
-        case GPU_DA_GENTLE:
+        switch (falloff) {
+        case J3D_FALLOFF_GENTLE:
             k1 = (1.0f - refBrightness) / (refBrightness * refDistance);
             break;
-        case GPU_DA_MEDIUM:
+        case J3D_FALLOFF_MEDIUM:
             k1 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance);
             k2 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
             break;
-        case GPU_DA_STEEP:
+        case J3D_FALLOFF_STEEP:
             k2 = (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
             break;
         default:
@@ -377,20 +149,26 @@ namespace J3DNativeState {
         rLight.mDistance[2] = k2;
     }
 
-    void loadLightObjImm(const J3DNativeLight* pObj, GpuLightID id) {
-        NebulaStateOp ops[2];
-        J3DStateList list(ops, 2);
-        list.setLight(id, *reinterpret_cast< const J3DNativeLight* >(pObj));
-        list.send();
+    void sendLight(const J3DNativeLight* pLight, u8 index) {
+        NebulaStateOp ops[2] = {hostOp(NEBULA_STATE_LIGHT_ATTENUATION), hostOp(NEBULA_STATE_LIGHT_POSITION)};
+        ops[0].a[0] = index & 7;
+        memcpy(ops[0].a + 1, pLight->mColor, 4);
+        ops[1].a[0] = index & 7;
+        for (u32 i = 0; i < 3; i++) {
+            ops[0].f[i] = pLight->mAngle[i];
+            ops[0].f[3 + i] = pLight->mDistance[i];
+            ops[1].f[i] = pLight->mPosition[i];
+            ops[1].f[3 + i] = pLight->mDirection[i];
+        }
+        sendHost(ops, 2);
     }
 
     void setFrameAlpha(bool keepAlpha) {
-        const bool changed = keepAlpha != sFrameAlpha;
+        NebulaStateOp op = hostOp(NEBULA_STATE_FRAME_ALPHA);
+        op.a[0] = keepAlpha != sFrameAlpha;
+        op.a[1] = keepAlpha;
         sFrameAlpha = keepAlpha;
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setFrameAlpha(keepAlpha, changed);
-        list.send();
+        sendHost(&op, 1);
     }
 
     // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
@@ -404,7 +182,7 @@ namespace J3DNativeState {
                                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};
     // The projection before the game sets its own (orthographic, -1..1 depth).
     static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
-    // The frame GpuInit assumed (its NTSC 480-line mode): 640x480.
+    // Until the game sets its own view.
     const u16 cDefaultWidth = 640;
     const u16 cDefaultHeight = 480;
 
@@ -412,48 +190,40 @@ namespace J3DNativeState {
         const NebulaColor8 black = {0, 0, 0, 0};
         const NebulaColor8 white = {255, 255, 255, 255};
 
-        for (u32 i = 0; i < 8; i++) {
-            setTexCoordGen2(static_cast< GpuTexCoordID >(i), GPU_TG_MTX2x4, static_cast< GpuTexGenSrc >(GPU_TG_TEX0 + i),
-                            GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
+        for (u8 i = 0; i < 8; i++) {
+            J3DPass::textureIdentity(i);
         }
-        setLineWidth(6, GPU_TO_ZERO);
-        setPointSize(6, GPU_TO_ZERO);
-        for (u32 i = 0; i < 8; i++) {
-            enableTexOffsets(static_cast< GpuTexCoordID >(i), GPU_FALSE, GPU_FALSE);
-        }
+        J3DPass::lineWidth(1.0f);
+        J3DPass::pointSize(1.0f);
 
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DNativeShape::setNormal(0, identity);
-        setCurrentMtx(GPU_PNMTX0);
+        J3DPass::positionMatrix(0);
         J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, identity, 3);
         J3DNativeShape::setPostTexture(J3DNativeShape::kIdentityPost, identity);
         J3DNativeView::setViewport(0.0f, 0.0f, cDefaultWidth, cDefaultHeight, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
-        setCullMode(GPU_CULL_BACK);
+        J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeView::setScissor(0, 0, cDefaultWidth, cDefaultHeight);
-        setChanAmbColor(GPU_COLOR0A0, black);
-        setChanMatColor(GPU_COLOR0A0, white);
-        setChanAmbColor(GPU_COLOR1A1, black);
-        setChanMatColor(GPU_COLOR1A1, white);
+        for (u8 channel = 0; channel < 2; channel++) {
+            J3DPass::lightAmbient(channel, black);
+            J3DPass::lightMaterial(channel, white);
+        }
 
         static J3DNativeTexObj sDefaultTexture;
         J3DNativeTexture::registerImage(&sDefaultTexData, GPU_TF_IA8, 4, 4, 1);
         J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
-        for (u32 i = 0; i < 8; i++) {
-            J3DNativeTexture::load(&sDefaultTexture, static_cast< GpuTexMapID >(i));
-        }
 
-        setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
-
-        setFog(GPU_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, black);
-        setBlendMode(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR);
-        setColorUpdate(GPU_TRUE);
-        setAlphaUpdate(GPU_TRUE);
-        setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-        setDstAlpha(GPU_FALSE, 0);
+        J3DPass::noAlphaTest();
+        J3DPass::noFog();
+        J3DPass::noBlend();
+        J3DPass::writeColor(true);
+        J3DPass::writeAlpha(true);
+        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
+        J3DPass::constantAlpha(false, 0);
         setFrameAlpha(false);
     }
 
@@ -468,42 +238,7 @@ namespace J3DNativeState {
         const NebulaHostServices* pHost = nebula_host();
         pHost->frame_end(pHost->user);
     }
-
-    void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.enableTexOffsets(coord, lines, points);
-        list.send();
-    }
-
-    void setCullMode(GpuCullMode mode) {
-        sCullMode = mode;
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCullMode(mode);
-        list.send();
-    }
-
-    void getCullMode(GpuCullMode* pMode) {
-        *pMode = sCullMode;
-    }
 };  // namespace J3DNativeState
-void J3DNativeStateSetTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, u32 mtx, GpuBool normalize, u32 postMtx) {
-    J3DNativeState::setTexCoordGen2(coord, type, src, mtx, normalize, postMtx);
-}
-
-void J3DNativeStateSetCurrentMtx(u32 id) {
-    J3DNativeState::setCurrentMtx(id);
-}
-
-void J3DNativeStateSetLineWidth(u8 width, GpuTexOffset texOffsets) {
-    J3DNativeState::setLineWidth(width, texOffsets);
-}
-
-void J3DNativeStateSetPointSize(u8 size, GpuTexOffset texOffsets) {
-    J3DNativeState::setPointSize(size, texOffsets);
-}
-
 void J3DNativeStateInitLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
     J3DNativeState::initLightColor(pObj, color);
 }
@@ -512,63 +247,205 @@ void J3DNativeStateInitLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z) {
     J3DNativeState::initLightPos(pObj, x, y, z);
 }
 
-void J3DNativeStateLoadLightObjImm(const J3DNativeLight* pObj, GpuLightID id) {
-    J3DNativeState::loadLightObjImm(pObj, id);
+void J3DNativeStateSendLight(const J3DNativeLight* pLight, u8 index) {
+    J3DNativeState::sendLight(pLight, index);
 }
 
-void J3DNativeStateEnableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points) {
-    J3DNativeState::enableTexOffsets(coord, lines, points);
-}
+namespace J3DPass {
+    namespace {
+        // The numbers of j3d_material.hlsli j3d_fog.
+        const u32 cFogNone = 0;
+        const u32 cFogLinear = 2;
+        // Host texture coordinate source: bits 0-3 the row (5 + n texture coordinate n), bits 4-6 no emboss.
+        u8 coordinateSource(u8 coordinate) {
+            return static_cast< u8 >((5 + coordinate) | 5 << 4);
+        }
+        // The host's row of the identity post-transform (nebula_game_api.h NEBULA_STATE_TEX_COORD_GEN).
+        const u8 cIdentityPost = 61;
+        const u8 cFirstTextureSlot = 10;
+        const u8 cIdentitySlot = 20;
 
-void J3DNativeStateSetCullMode(GpuCullMode mode) {
-    J3DNativeState::setCullMode(mode);
-}
+        void sendCoordinate(u8 coord, u8 fromCoordinate, u8 matrixSlot) {
+            NebulaStateOp op = hostOp(NEBULA_STATE_TEX_COORD_GEN);
+            op.a[0] = coord;
+            op.a[2] = coordinateSource(fromCoordinate);
+            op.a[4] = cIdentityPost;
+            op.a[5] = 1;
+            op.a[6] = matrixSlot;
+            sendHost(&op, 1);
+        }
+    }  // namespace
 
-void J3DNativeStateGetCullMode(GpuCullMode* pMode) {
-    J3DNativeState::getCullMode(pMode);
-}
+    void depth(bool test, u8 compare, bool write) {
+        J3DNativeShape::flushState();
+        sPass.depth_test = test;
+        sPass.depth_func = compare & 7;
+        sPass.depth_write = write;
+    }
 
-void J3DNativeStateSetChanMatColor(GpuChannelID chan, NebulaColor8 color) {
-    J3DNativeState::setChanMatColor(chan, color);
-}
+    void blendState(u8 op, u8 source, u8 destination, u8 logicOp) {
+        J3DNativeShape::flushState();
+        sPass.blend_op = op;
+        sPass.blend_src = source <= 9 ? source : 0;
+        sPass.blend_dst = destination <= 9 ? destination : 0;
+        sPass.logic_op = logicOp & 15;
+    }
 
-void J3DNativeStateSetChanAmbColor(GpuChannelID chan, NebulaColor8 color) {
-    J3DNativeState::setChanAmbColor(chan, color);
-}
+    void blend(u8 source, u8 destination) {
+        blendState(NEBULA_BLEND_ADD, source, destination, 0);
+    }
 
-void J3DNativeStateSetZMode(GpuBool compare, GpuCompare func, GpuBool update) {
-    J3DNativeState::setZMode(compare, func, update);
-}
+    void noBlend() {
+        blendState(NEBULA_BLEND_REPLACE, 0, 0, 0);
+    }
 
-void J3DNativeStateSetAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1) {
-    J3DNativeState::setAlphaCompare(comp0, ref0, op, comp1, ref1);
-}
+    void subtractBlend() {
+        blendState(NEBULA_BLEND_SUBTRACT, 0, 0, 0);
+    }
 
-void J3DNativeStateSetDstAlpha(GpuBool enable, u8 alpha) {
-    J3DNativeState::setDstAlpha(enable, alpha);
-}
+    void cull(u8 faces) {
+        J3DNativeShape::flushState();
+        sPass.cull = faces & 3;
+    }
 
-void J3DNativeStateSetTevColor(GpuTevRegID id, NebulaColor8 color) {
-    J3DNativeState::setTevColor(id, color);
-}
+    void writeColor(bool write) {
+        J3DNativeShape::flushState();
+        sPass.color_write = write;
+    }
 
-void J3DNativeStateSetTevKColor(GpuTevKColorID id, NebulaColor8 color) {
-    J3DNativeState::setTevKColor(id, color);
-}
+    void writeAlpha(bool write) {
+        J3DNativeShape::flushState();
+        sPass.alpha_write = write;
+    }
 
-void J3DNativeStateSetFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
-    J3DNativeState::setFog(type, start, end, nearZ, farZ, color);
-}
+    void constantAlpha(bool on, u8 alpha) {
+        J3DNativeShape::flushState();
+        sPass.constant_alpha = on;
+        sPass.constant_alpha_value = alpha;
+    }
 
-void J3DNativeStateSetBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op) {
-    J3DNativeState::setBlendMode(type, src, dst, op);
-}
+    void positionMatrix(u8 index) {
+        J3DNativeShape::flushState();
+        J3DNativeShape::setCurrentPosition(index % 10);
+    }
 
-void J3DNativeStateSetColorUpdate(GpuBool enable) {
-    J3DNativeState::setColorUpdate(enable);
-}
+    void alphaCompare(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setAlphaTest(compare0, reference0, op, compare1, reference1);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetAlphaUpdate(GpuBool enable) {
-    J3DNativeState::setAlphaUpdate(enable);
-}
+    void noAlphaTest() {
+        alphaCompare(NEBULA_COMPARE_ALWAYS, 0, cAlphaOr, NEBULA_COMPARE_ALWAYS, 0);
+    }
 
+    void alphaTest(u8 compare, u8 reference) {
+        alphaCompare(compare, reference, cAlphaOr, NEBULA_COMPARE_NEVER, 0);
+    }
+
+    void noFog() {
+        const NebulaColor8 none = {0, 0, 0, 0};
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setFog(cFogNone, 0.0f, 0.0f, 0.0f, 0.0f, none);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setFog(cFogLinear, start, end, nearZ, farZ, color);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void lineWidth(f32 pixels) {
+        J3DNativeShape::flushState();
+        sPass.line_width = pixels;
+    }
+
+    void pointSize(f32 pixels) {
+        J3DNativeShape::flushState();
+        sPass.point_size = pixels;
+    }
+
+    void materialColor(u8 index, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setColorRegister(index, color);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void materialColorWide(u8 index, const NebulaColor16& rColor) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setColorRegisterWide(index, rColor);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void constantColor(u8 index, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setConstantColor(index, color);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void lightMaterial(u8 channel, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setLightMaterial(channel, color);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void lightAmbient(u8 channel, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setLightAmbient(channel, color);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setIndirectMatrix(index, offset, scaleExp);
+        J3DNativeMaterial::sendRegisters();
+    }
+
+    void textureMatrix(u8 coord, u8 matrix) {
+        sendCoordinate(coord, 0, static_cast< u8 >(cFirstTextureSlot + matrix));
+    }
+
+    void textureIdentity(u8 coord) {
+        sendCoordinate(coord, coord, cIdentitySlot);
+    }
+};  // namespace J3DPass
+
+extern "C" {
+void J3DPassDepth(int test, u8 compare, int write) {
+    J3DPass::depth(test != 0, compare, write != 0);
+}
+void J3DPassBlend(u8 source, u8 destination) {
+    J3DPass::blend(source, destination);
+}
+void J3DPassNoBlend(void) {
+    J3DPass::noBlend();
+}
+void J3DPassSubtractBlend(void) {
+    J3DPass::subtractBlend();
+}
+void J3DPassCull(u8 faces) {
+    J3DPass::cull(faces);
+}
+void J3DPassWriteColor(int write) {
+    J3DPass::writeColor(write != 0);
+}
+void J3DPassWriteAlpha(int write) {
+    J3DPass::writeAlpha(write != 0);
+}
+void J3DPassConstantAlpha(int on, u8 alpha) {
+    J3DPass::constantAlpha(on != 0, alpha);
+}
+void J3DPassPositionMatrix(u8 index) {
+    J3DPass::positionMatrix(index);
+}
+void J3DPassNoAlphaTest(void) {
+    J3DPass::noAlphaTest();
+}
+void J3DPassAlphaTest(u8 compare, u8 reference) {
+    J3DPass::alphaTest(compare, reference);
+}
+void J3DPassNoFog(void) {
+    J3DPass::noFog();
+}
+}

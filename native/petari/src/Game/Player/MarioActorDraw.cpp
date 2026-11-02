@@ -4,7 +4,6 @@
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
-#include "Game/Player/StateListChanger.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Player/MarioActor.hpp"
@@ -104,11 +103,6 @@ void MarioActor::initDrawAndModel() {
 
     initFace();
 
-    mLists[0].reserve(16);
-    mLists[1].reserve(16);
-    mCurrList = 0;
-
-    mListChanger = new StateListChanger(2, 16);
     _1A4 = 0.0f;
 
     swapTextureInit();
@@ -485,7 +479,7 @@ void MarioActor::drawMarioModel() const {
                 return;
             }
 
-            mListChanger->addList(model);
+            model->setDynamicList(&mAlphaTint);
 
             MR::showJoint(model, "HandR0");
             MR::showJoint(model, "HandL0");
@@ -494,13 +488,13 @@ void MarioActor::drawMarioModel() const {
             if (mCurrModel == 4) {
                 model->setDynamicList(nullptr);
             } else {
-                model->setDynamicList(&mLists[mCurrList]);
+                model->setDynamicList(&mLightTint);
             }
         }
 
         if (mBeeWallWalk != 0) {
-            J3DNativeState::setAlphaUpdate(GPU_TRUE);
-            J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+            J3DPass::writeAlpha(true);
+            J3DPass::constantAlpha(true, 0);
         }
 
         model->setDrawView(0);
@@ -518,13 +512,13 @@ void MarioActor::drawMarioModel() const {
 
     if (!MR::isHiddenModel(_A5C)) {
         J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
-        cool->setDynamicList(&mLists[mCurrList]);
+        cool->setDynamicList(&mLightTint);
         cool->directDraw(nullptr);
     }
 
     if (mBeeWallWalk != 0) {
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
-        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+        J3DPass::writeAlpha(false);
+        J3DPass::constantAlpha(false, 0);
     }
 }
 
@@ -548,7 +542,7 @@ void MarioActor::swapTextureInit() {
         _B64[i] = MR::getResTIMG(this, i);
     }
 
-    _B6C = new StateListHolder[12];
+    _B6C = new const void*[12]();
 
     u16 texNo = 0;
     for (u16 i = 0; i < textureCount; i++) {
@@ -561,10 +555,10 @@ void MarioActor::swapTextureInit() {
     }
 
     _B70 = texNo;
-    createTextureList(&_B6C[0], 0, texNo);
-    createTextureList(&_B6C[1], 0, texNo + 1);
-    createTextureList(&_B6C[2], 0, texNo + 2);
-    createTextureList(&_B6C[3], 0, texNo + 3);
+    _B6C[0] = _B64[texNo]->image();
+    _B6C[1] = _B64[texNo + 1]->image();
+    _B6C[2] = _B64[texNo + 2]->image();
+    _B6C[3] = _B64[texNo + 3]->image();
 
     if (_9E4 != nullptr) {
         J3DModelData* beeData = MR::getJ3DModelData(_9E4);
@@ -583,10 +577,10 @@ void MarioActor::swapTextureInit() {
             _B64[i] = MR::getResTIMG(_9E4, i);
         }
 
-        createTextureList(&_B6C[4], 0, texNo);
-        createTextureList(&_B6C[5], 0, texNo + 1);
-        createTextureList(&_B6C[6], 0, texNo + 2);
-        createTextureList(&_B6C[7], 0, texNo + 3);
+        _B6C[4] = _B64[texNo]->image();
+        _B6C[5] = _B64[texNo + 1]->image();
+        _B6C[6] = _B64[texNo + 2]->image();
+        _B6C[7] = _B64[texNo + 3]->image();
     }
 
     if (_A00 != nullptr) {
@@ -606,10 +600,10 @@ void MarioActor::swapTextureInit() {
             _B64[i] = MR::getResTIMG(_A00, i);
         }
 
-        createTextureList(&_B6C[8], 0, texNo);
-        createTextureList(&_B6C[9], 0, texNo + 1);
-        createTextureList(&_B6C[10], 0, texNo + 2);
-        createTextureList(&_B6C[11], 0, texNo + 3);
+        _B6C[8] = _B64[texNo]->image();
+        _B6C[9] = _B64[texNo + 1]->image();
+        _B6C[10] = _B64[texNo + 2]->image();
+        _B6C[11] = _B64[texNo + 3]->image();
     }
 
     initBlink();
@@ -809,9 +803,9 @@ void MarioActor::drawIndirectModel() const {
                 return;
             }
 
-            mListChanger->addList(model);
+            model->setDynamicList(&mAlphaTint);
         } else {
-            model->setDynamicList(&mLists[mCurrList]);
+            model->setDynamicList(&mLightTint);
         }
 
         MR::showJoint(model, "Face0");
@@ -856,7 +850,7 @@ void MarioActor::drawReflectModel() const {
 
     if ((_468 == 0 ? nullptr : _428[0]) != nullptr) {
         if (isUseScreenBox()) {
-            mListChanger->addList(static_cast< J3DModelX* >(MR::getJ3DModel(_9A0)));
+            static_cast< J3DModelX* >(MR::getJ3DModel(_9A0))->setDynamicList(&mAlphaTint);
         }
 
         _9A0->drawType0();
@@ -871,10 +865,10 @@ void MarioActor::drawReflectModel() const {
         model->directDraw(nullptr);
         model->mFlags._1A = false;
         model->mFlags._1D = true;
-        mListChanger->addList(model);
+        model->setDynamicList(&mAlphaTint);
     } else {
         if (isUseScreenBox()) {
-            mListChanger->addList(model);
+            model->setDynamicList(&mAlphaTint);
         }
 
         model->mFlags._14 = true;
@@ -933,17 +927,11 @@ void MarioActor::drawModelBlur() const {
         }
 
 
-        _94[idx + ((i - 1) << 3)]->addList(model);
+        model->setDynamicList(&mGhostTints[idx + ((i - 1) << 3)]);
         model->directDraw(nullptr);
     }
 
     model->mFlags._13 = false;
-}
-
-void MarioActor::createTextureList(StateListHolder* pHolder, u16 texMapID, u16 texIndex) {
-    ResTIMG* texture = _B64[texIndex];
-    pHolder->mList.reserve(1);
-    pHolder->mList.setTexImgPtr(static_cast< GpuTexMapID >(texMapID), const_cast< u8* >(texture->image()));
 }
 
 void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
@@ -969,12 +957,7 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
     J3DModelData* modelData = MR::getJ3DModelData(this);
     u16 materialNo = MR::getMaterialNo(modelData, pMaterialName);
 
-    const StateListHolder* holder = _B6C;
-    const u8 modelIdx = mCurrModel;
-    const J3DStateList* dl = holder[texNo].mList.isEmpty() ? nullptr : &holder[texNo].mList;
-    J3DModelX* model = mModels[modelIdx];
-
-    model->_1C8[materialNo] = dl;
+    mModels[mCurrModel]->_1C8[materialNo] = _B6C[texNo];
 }
 
 void MarioActor::copyMaterial(J3DModel* pModel, u16 materialNo, s32 packetIndex) {
@@ -1025,11 +1008,6 @@ void J3DModelX::swapDrawBuffer(u32 drawBuffer) {
     _DC = drawBuffer;
 }
 
-void StateListChanger::addList(J3DModelX* pModel) {
-    StateListHolder* buffer = &mBuffers[mCurrentBuffer];
-    pModel->setDynamicList(&buffer->mList);
-}
-
-void J3DModelX::setDynamicList(const J3DStateList* pList) {
-    _1B8 = pList;
+void J3DModelX::setDynamicList(const MarioModelTint* pTint) {
+    _1B8 = pTint;
 }

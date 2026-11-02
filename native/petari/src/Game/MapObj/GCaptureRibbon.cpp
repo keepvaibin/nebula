@@ -25,7 +25,7 @@ void GCaptureRibbon::draw() const {
         NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
         NativeShader::send(material);
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
         {
             for (s32 i = 0; i < _990; i++) {
                 f32 v2 = i / (_990 - 1.0f);
@@ -39,7 +39,7 @@ void GCaptureRibbon::draw() const {
             }
         }
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
         {
             for (s32 j = 0; j < _990; j++) {
                 f32 v2 = j / (_990 - 1.0f);

@@ -81,46 +81,33 @@ void JUTTexture::initTexObj() {
                     mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GpuAnisotropy >(mTIMG->mMaxAnisotropy));
 }
 
-void JUTTexture::load(GpuTexMapID texMapID) {
-    J3DNativeTexture::load(&mObj, texMapID);
+void JUTTexture::frameColor(bool half) {
+    if (mFlag & 0x1) {
+        const int scale = half ? 2 : 1;
+        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth * scale, mTIMG->mHeight * scale, NEBULA_TARGET_RGB,
+                                 half ? NEBULA_CAPTURE_HALF : 0u);
+    }
 }
 
-namespace {
-    // A capture read as a texture of `format`: the picture's channels it reads, and what its intensity holds.
-    NebulaTargetChannels captureChannels(GpuTexFmt format, u32* pFlags) {
-        switch (format) {
-        case GPU_TF_RGBA8:
-            return NEBULA_TARGET_RGBA;
-        case GPU_TF_RGB565:
-            return NEBULA_TARGET_RGB;
-        case GPU_TF_I8:
-            *pFlags |= NEBULA_CAPTURE_LUMA;
-            return NEBULA_TARGET_RED;
-        case GPU_TF_Z8:
-            *pFlags |= NEBULA_CAPTURE_DEPTH;
-            return NEBULA_TARGET_RED;
-        case GPU_CTF_A8:
-            return NEBULA_TARGET_ALPHA;
-        case GPU_CTF_G8:
-            return NEBULA_TARGET_GREEN;
-        case GPU_CTF_B8:
-            return NEBULA_TARGET_BLUE;
-        default:
-            return NEBULA_TARGET_RED;
-        }
-    }
-
-    void captureInto(void* pBuffer, int width, int height, int x, int y, bool half, GpuTexFmt format, GpuBool clear) {
-        u32 flags = (half ? NEBULA_CAPTURE_HALF : 0u) | (clear ? NEBULA_CAPTURE_CLEAR : 0u);
-        const NebulaTargetChannels channels = captureChannels(format, &flags);
-        const int scale = half ? 2 : 1;
-        J3DNativeTarget::capture(pBuffer, x, y, width * scale, height * scale, channels, flags);
-    }
-}  // namespace
-
-void JUTTexture::capture(int x, int y, GpuTexFmt format, bool half, u8 clear) {
+void JUTTexture::frameColorAlpha() {
     if (mFlag & 0x1) {
-        captureInto(mImage, mTIMG->mWidth, mTIMG->mHeight, x, y, half, format, clear);
+        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth, mTIMG->mHeight, NEBULA_TARGET_RGBA, 0u);
+    }
+}
+
+void JUTTexture::frameAlpha(bool half) {
+    if (mFlag & 0x1) {
+        const int scale = half ? 2 : 1;
+        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth * scale, mTIMG->mHeight * scale, NEBULA_TARGET_ALPHA,
+                                 half ? NEBULA_CAPTURE_HALF : 0u);
+    }
+}
+
+void JUTTexture::frameDepth(bool half) {
+    if (mFlag & 0x1) {
+        const int scale = half ? 2 : 1;
+        J3DNativeTarget::capture(mImage, 0, 0, mTIMG->mWidth * scale, mTIMG->mHeight * scale, NEBULA_TARGET_RED,
+                                 NEBULA_CAPTURE_DEPTH | (half ? NEBULA_CAPTURE_HALF : 0u));
     }
 }
 

@@ -653,7 +653,7 @@ void SnowFloor::drawLayer(s32 layer) const {
 
         p1 = center + tangent * halfWidth + cross * halfLength;
         p2 = center + tangent * halfWidth - cross * halfLength;
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         TDDraw::sendPoint(p0);
         J3DNativeDraw::texCoord(mTexCoords[i], 0.0f);
         TDDraw::sendPoint(p1);

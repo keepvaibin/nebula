@@ -65,7 +65,7 @@ void SpinDriverPathDrawInit::initDraw() {
     TDDraw::cameraInit3D();
 
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
     sendPathMaterial(mOrangeTexture, mMaskTexture);
 }
 
@@ -333,7 +333,7 @@ void SpinDriverPathDrawer::draw() const {
         f32 prevVal = _9C[i - 1];
         f32 val = _9C[i];
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6, NEBULA_SHAPE_TEXCOORD0);
 
         sendPoint(prev90 - prev98, 0.0f, prevVal);
         sendPoint(curr90 - curr98, 0.0f, val);
@@ -342,7 +342,7 @@ void SpinDriverPathDrawer::draw() const {
         sendPoint(prev90 + prev98, 1.0f, prevVal);
         sendPoint(curr90 + curr98, 1.0f, val);
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 6, NEBULA_SHAPE_TEXCOORD0);
 
         sendPoint(prev90 - prev94, 0.0f, prevVal);
         sendPoint(curr90 - curr94, 0.0f, val);

@@ -63,7 +63,7 @@ void ShadowSurfaceBox::draw() const {
     upDot = upDot >= 0.0f ? 1.0f : -1.0f;
     frontDot = frontDot >= 0.0f ? 1.0f : -1.0f;
 
-    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(sideDot, -sideDot, -1.0f);
     J3DNativeDraw::color(0x80);
     J3DNativeDraw::position(sideDot, -sideDot, 1.0f);
@@ -73,7 +73,7 @@ void ShadowSurfaceBox::draw() const {
     J3DNativeDraw::position(sideDot, sideDot, -1.0f);
     J3DNativeDraw::color(0x80);
 
-    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(-1.0f, upDot, -upDot);
     J3DNativeDraw::color(0x80);
     J3DNativeDraw::position(1.0f, upDot, -upDot);
@@ -83,7 +83,7 @@ void ShadowSurfaceBox::draw() const {
     J3DNativeDraw::position(-1.0f, upDot, upDot);
     J3DNativeDraw::color(0x80);
 
-    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(-frontDot, -1.0f, frontDot);
     J3DNativeDraw::color(0x80);
     J3DNativeDraw::position(-frontDot, 1.0f, frontDot);

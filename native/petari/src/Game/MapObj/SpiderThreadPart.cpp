@@ -557,21 +557,21 @@ namespace {
 };  // namespace
 
 void SpiderThreadPart::drawLine() const {
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsUpper(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         ::sendPointsUpper(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                           mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsRightLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         ::sendPointsRightLower(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                                mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsLeftLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         ::sendPointsLeftLower(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
@@ -584,7 +584,7 @@ void SpiderThreadPart::drawPoints() const {
     f32 delta1 = (mDistBetweenMainPoints * ::sTexRateV) / (mNumPoints + 1);
     f32 delta2 = (mDistBetweenMainPoints * ::sIndirectTexRateV) / (mNumPoints + 1);
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsUpper(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
 
@@ -600,7 +600,7 @@ void SpiderThreadPart::drawPoints() const {
                           mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsRightLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         offset1 = delta1;
@@ -615,7 +615,7 @@ void SpiderThreadPart::drawPoints() const {
                                mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsLeftLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         offset1 = delta1;

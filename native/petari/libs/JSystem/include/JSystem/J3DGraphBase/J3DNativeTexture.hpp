@@ -15,7 +15,6 @@ namespace J3DNativeTexture {
     void initLOD(J3DNativeTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias,
                  GpuBool biasClamp, GpuBool edgeLod, GpuAnisotropy maxAniso);
     // The texture bound to `map`.
-    void load(const J3DNativeTexObj* pObj, GpuTexMapID map);
     // GpuGetTexObj*'s read-backs.
     void getAll(const J3DNativeTexObj* pObj, void** ppImage, u16* pWidth, u16* pHeight, GpuTexFmt* pFormat,
                 GpuTexWrapMode* pWrapS, GpuTexWrapMode* pWrapT, GpuBool* pMipmap);
@@ -36,7 +35,6 @@ void J3DNativeTextureInit(J3DNativeTexObj* pObj, void* pImage, u16 width, u16 he
                           GpuTexWrapMode wrapT, GpuBool mipmap);
 void J3DNativeTextureInitLOD(J3DNativeTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod,
                              f32 lodBias, GpuBool biasClamp, GpuBool edgeLod, GpuAnisotropy maxAniso);
-void J3DNativeTextureLoad(const J3DNativeTexObj* pObj, GpuTexMapID map);
 void J3DNativeTextureRegisterImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);
 #ifdef __cplusplus
 }

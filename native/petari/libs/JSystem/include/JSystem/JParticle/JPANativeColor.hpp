@@ -18,6 +18,8 @@ namespace JPAParticleBatch {
 }  // namespace JPAParticleBatch
 
 namespace JPANativeColor {
+    // The texture in the particle material's slot: 0 the shape, 1 a child's, 2 the indirect map, 3 the second.
+    void texture(u32 slot, const J3DNativeTexObj* pTexture);
     // The colours as R << 24 | G << 16 | B << 8 | A: they travel on the particle's vertices.
     u32 prmWord();
     u32 envWord();

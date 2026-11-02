@@ -12,7 +12,7 @@ namespace {
 
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
         static const nw4r::ut::Color fog = 0;
-        J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fog);
+        J3DPass::noFog();
         NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         sMaterial.depth_test = NEBULA_NATIVE_KEPT;
@@ -173,7 +173,7 @@ namespace nw4r {
 
             LoadTexture(glyph, GPU_TEXMAP0);
 
-            J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {
                 J3DNativeDraw::position(posLeft, posTop, posZ);
                 J3DNativeDraw::color(mVertexColor.lu);

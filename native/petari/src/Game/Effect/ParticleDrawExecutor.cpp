@@ -29,7 +29,7 @@ ParticleDrawExecutor::ParticleDrawExecutor(const EffectSystem* pSystem, bool cre
 }
 
 void ParticleDrawExecutor::initDraw() {
-    J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
+    J3DPass::noFog();
 }
 
 void ParticleDrawExecutor::draw3D() const {
@@ -50,9 +50,9 @@ void ParticleDrawExecutor::draw2D() const {
 
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
-        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
-        J3DNativeState::setCullMode(GPU_CULL_NONE);
-        J3DNativeState::setZMode(GPU_FALSE, GPU_NEVER, GPU_FALSE);
+        J3DNativeView::setOrthographic(projection);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
         mHost->mEmitterManager->draw(&drawInfo, 6);
         mHost->mEmitterManager->draw(&drawInfo, 7);

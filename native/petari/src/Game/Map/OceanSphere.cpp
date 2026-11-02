@@ -52,9 +52,9 @@ namespace {
     void beginDrawPolygon(int idx, s32 pointCount, NativeMesh* pMesh, u32 attributes) {
         const u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
         if (pMesh != nullptr) {
-            pMesh->begin(GPU_TRIANGLESTRIP, vtxCount);
+            pMesh->begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, vtxCount);
         } else {
-            J3DNativeDraw::begin(GPU_TRIANGLESTRIP, vtxCount, attributes);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, vtxCount, attributes);
         }
     }
 };  // namespace
@@ -614,9 +614,7 @@ const NebulaColor8 sOceanSphereFogBack = {0xFF, 0xFF, 0xFF, 0};
 void OceanSphere::loadMaterialFace() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
     sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face, sOceanSphereKColor0Face,
                      NEBULA_CULL_BACK);
 }

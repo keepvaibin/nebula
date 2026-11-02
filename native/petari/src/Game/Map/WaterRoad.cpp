@@ -206,7 +206,7 @@ void WaterRoadModelInfo::sendGD() {
         }
 
         u16 numPoints = mNumLinePoints * 2;
-        mMesh.begin(GPU_TRIANGLESTRIP, numPoints);
+        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints);
 
         for (s32 lineIdx = 0; lineIdx < mNumLinePoints; lineIdx++) {
             f32 texV0 = mRailCoords[lineIdx] * ::sTexRateV0;
@@ -276,7 +276,7 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             nextLoopIdx = 0;
         }
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
 
         for (s32 lineIdx = 0; lineIdx < pointNum; lineIdx++) {
             f32 texV0 = mRailCoords[lineIdx] * ::sTexRateV0;

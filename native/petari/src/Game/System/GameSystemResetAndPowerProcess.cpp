@@ -40,15 +40,10 @@ void GameSystemResetAndPowerProcess::draw() const {
         return;
     }
 
-    J2DOrthoGraphSimple graph;
-    graph.setPort();
+    MR::setupScreen2D();
 
     u8 alpha = MR::lerp(255, 0, mFadeinoutControl->getValue());
-    graph.setColor(static_cast< const NebulaColor8& >(NebulaColor8(Color8(0, 0, 0, alpha))));
-
-    f32 height = static_cast< s32 >(NebulaFrameClock::cCanvasHeight);
-    f32 width = MR::getScreenWidth();
-    graph.fillBox(TBox2f(0.0f, 0.0f, width, height));
+    MR::drawScreenColor(Color8(0, 0, 0, alpha));
 }
 
 bool GameSystemResetAndPowerProcess::isActive() const {

@@ -726,7 +726,7 @@ void BezierSurface::drawTrianglePatchPos() const {
         vertices = vertexBuffer;
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, 0);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
@@ -755,7 +755,7 @@ void BezierSurface::drawTrianglePatchPosNorm() const {
         normal = normalBuffer;
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_NORMAL);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_NORMAL);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
@@ -779,7 +779,7 @@ void BezierSurface::drawTrianglePatchPosST() const {
     }
 
     const Vec* vec;
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_TEXCOORD0);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];
@@ -812,7 +812,7 @@ void BezierSurface::drawTrianglePatchPosNormST() const {
         normal = normalBuffer;
     }
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0);
 
     for (s32 idx = 0; idx < numPoints; idx++) {
         u16 vertexIndex = vertexOrder[idx];

@@ -43,11 +43,11 @@ namespace TDDraw {
     void close() {
         MR::loadProjectionMtx();
         MR::loadViewMtx();
-        J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
+        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
     }
 
     void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
-        J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
+        J3DPass::lineWidth(1.0f);
 
         Mtx mtx;
         NebulaMtxIdentity(mtx);
@@ -71,9 +71,7 @@ namespace TDDraw {
         }
 
         J3DNativeShape::setNormal(0, mtx);
-        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        J3DNativeShape::setCurrentIdentity();
 
         static const NebulaShaderId kShaders[3] = {NEBULA_SHADER_VERTEX_COLOR, NEBULA_SHADER_DD_TEXTURE,
                                                    NEBULA_SHADER_DD_TEXTURE_COLOR};
@@ -96,7 +94,7 @@ namespace TDDraw {
     }
 
     void drawLine(const TVec3f& rStart, const TVec3f& rEnd, u32 color) {
-        J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINES, 2, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rStart.x, rStart.y, rStart.z);
             J3DNativeDraw::color(color);
@@ -123,7 +121,7 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rNormal, 6.2831855f / segments);
 
-        J3DNativeDraw::begin(GPU_LINESTRIP, segments + 1, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINE_STRIP, segments + 1, NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f point(rCenter + axis * radius);
             J3DNativeDraw::position(point.x, point.y, point.z);
@@ -135,7 +133,7 @@ namespace TDDraw {
     void drawFillCircle(const TVec3f& rCenter, f32 radius, u32 centerColor, u32 edgeColor, u32 segments) {
         TVec3f point;
         point.z = rCenter.z;
-        J3DNativeDraw::begin(GPU_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2, NEBULA_SHAPE_COLOR0);
         J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
         J3DNativeDraw::color(centerColor);
 
@@ -159,7 +157,7 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rNormal, (6.2831855f / segments));
 
-        J3DNativeDraw::begin(GPU_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
             J3DNativeDraw::color(color);
@@ -181,7 +179,7 @@ namespace TDDraw {
         TVec3f axis;
         NebulaMtxMultVec(startRotation, rAxis, axis);
 
-        J3DNativeDraw::begin(GPU_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
             J3DNativeDraw::color(color);
@@ -215,7 +213,7 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rHeight, (TWO_PI / segments));
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f basePoint(rBase + axis * radius);
             TVec3f topPoint(top + axis * radius);
@@ -248,7 +246,7 @@ namespace TDDraw {
             azimuthCos = MR::cos(azimuth);
             TVec3f radial((side * azimuthCos + up * azimuthSin) * radius);
 
-            J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * (polarSegments + 1), NEBULA_SHAPE_COLOR0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * (polarSegments + 1), NEBULA_SHAPE_COLOR0);
             for (u32 j = 0; j <= polarSegments; j++) {
                 f32 polar = (startPolar + (static_cast< f32 >(j) / polarSegments) * (endPolar - startPolar));
                 f32 polarSin = MR::sin(polar);
@@ -287,7 +285,7 @@ namespace TDDraw {
     // The site's native material holds the texture (`pTexture` as it set it).
     void drawTexture(const TVec2f& rPosition, JUTTexture* pTexture, const TVec2f& rSize) {
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         {
             J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
             J3DNativeDraw::texCoord(0.0f, 0.0f);
@@ -322,7 +320,7 @@ namespace TDDraw {
         f32 rightTex = flipX ? 0.0f : 1.0f;
         f32 top = flipY ? 1.0f : 0.0f;
         f32 bottom = flipY ? 0.0f : 1.0f;
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::texCoord(left, top);
         sendPoint(p1);
@@ -334,7 +332,7 @@ namespace TDDraw {
     }
 
     void drawFillBox(const TVec3f& rMin, const TVec3f& rMax, u32 color) {
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rMin.x, rMin.y, rMin.z);
             J3DNativeDraw::color(color);
@@ -348,7 +346,7 @@ namespace TDDraw {
     }
 
     void drawFillBox(const TVec2f& rMin, const TVec2f& rMax, u32 color) {
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rMin.x, rMin.y, 0.0f);
             J3DNativeDraw::color(color);
@@ -372,40 +370,40 @@ namespace TDDraw {
         p6 = p2 + rHeight;
         p7 = p3 + rHeight;
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::color(color);
         sendPoint(p1, color);
         sendPoint(p2, color);
         sendPoint(p3, color);
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p7, color);
         sendPoint(p4, color);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::color(color);
         sendPoint(p3, color);
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p2, color);
         sendPoint(p1, color);
         sendPoint(p5, color);
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::color(color);
         sendPoint(p4, color);
         sendPoint(p5, color);
         sendPoint(p1, color);
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p7, color);
         sendPoint(p3, color);
         sendPoint(p2, color);
 
-        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p5, color);
         sendPoint(p4, color);
@@ -428,7 +426,7 @@ namespace TDDraw {
         height = MR::getScreenHeight() / 2;
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, nearZ, -farZ);
-        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projection);
         MR::setDefaultViewportAndScissor();
     }
 
@@ -440,7 +438,7 @@ namespace TDDraw {
         f32 start;
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);
-        J3DNativeState::setFog(GPU_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
+        J3DPass::linearFog(start, end, nearZ, farZ, color);
     }
 
     u32 getTexel32(const JUTTexture* pTexture, u32 x, u32 y) {

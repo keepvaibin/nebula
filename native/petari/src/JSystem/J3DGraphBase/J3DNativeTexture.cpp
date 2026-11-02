@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
-#include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
 
@@ -161,17 +160,6 @@ namespace J3DNativeTexture {
         rTex.mMaxAniso = static_cast< u8 >(maxAniso);
     }
 
-    void load(const J3DNativeTexObj* pObj, GpuTexMapID map) {
-        const J3DNativeTexObj& rTex = *pObj;
-        NebulaStateOp ops[2];
-        J3DStateList list(ops, 2);
-        list.setTexLookupMode(map, static_cast< GpuTexWrapMode >(rTex.mWrapS), static_cast< GpuTexWrapMode >(rTex.mWrapT),
-                              static_cast< GpuTexFilter >(rTex.mMinFilter), static_cast< GpuTexFilter >(rTex.mMagFilter),
-                              rTex.mMinLod, rTex.mMaxLod, rTex.mLodBias, rTex.mBiasClamp, rTex.mEdgeLod,
-                              static_cast< GpuAnisotropy >(rTex.mMaxAniso));
-        list.setTexImgPtr(map, rTex.mImage);
-        list.send();
-    }
 
     void getAll(const J3DNativeTexObj* pObj, void** ppImage, u16* pWidth, u16* pHeight, GpuTexFmt* pFormat,
                 GpuTexWrapMode* pWrapS, GpuTexWrapMode* pWrapT, GpuBool* pMipmap) {
@@ -208,10 +196,6 @@ void J3DNativeTextureInit(J3DNativeTexObj* pObj, void* pImage, u16 width, u16 he
 void J3DNativeTextureInitLOD(J3DNativeTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod,
                              f32 lodBias, GpuBool biasClamp, GpuBool edgeLod, GpuAnisotropy maxAniso) {
     J3DNativeTexture::initLOD(pObj, minFilter, magFilter, minLod, maxLod, lodBias, biasClamp, edgeLod, maxAniso);
-}
-
-void J3DNativeTextureLoad(const J3DNativeTexObj* pObj, GpuTexMapID map) {
-    J3DNativeTexture::load(pObj, map);
 }
 
 void J3DNativeTextureRegisterImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels) {

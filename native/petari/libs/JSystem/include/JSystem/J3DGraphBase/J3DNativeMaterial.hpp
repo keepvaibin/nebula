@@ -55,7 +55,6 @@ struct J3DMaterialValues {
 
 // A J3D material as the renderer takes it: every
 // block's settings as values.
-class J3DStateList;
 
 namespace J3DNativeMaterial {
     // `pTexture`: the texture table the material's texture numbers index (its packet's; j3dSys's for shared lists).
@@ -71,10 +70,17 @@ namespace J3DNativeMaterial {
     // An instance's differed list (a shape packet's: the material with that instance's animated values), when it has
     // been made.
     void sendDiffered(J3DMaterialSnapshot* pList);
-    // State changes the game makes (J3DStateList::send), before they go to the host: the register file the J3D
-    // materials' constants take, a value change folded into the current native J3D material, and a change of what
-    // its shader computes handing its draws back to the drawing state.
-    void state(const NebulaStateOp* pOps, u32 count);
+    // The values every material takes (the register file): each setter changes it, sendRegisters gives the current
+    // material the new values.
+    void setColorRegister(u32 index, NebulaColor8 color);
+    void setColorRegisterWide(u32 index, const NebulaColor16& rColor);
+    void setConstantColor(u32 index, NebulaColor8 color);
+    void setLightMaterial(u32 channel, NebulaColor8 color);
+    void setLightAmbient(u32 channel, NebulaColor8 color);
+    void setIndirectMatrix(u32 index, const f32 offset[2][3], s8 scaleExp);
+    void setFog(u32 type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
+    void setAlphaTest(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1);
+    void sendRegisters();
     void applyPass(u8 pass);
     // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: colour registers, constant colours, material and
     // ambient colours, indirect matrices, fog, alpha references) as the materials and state changes left it.
@@ -92,6 +98,8 @@ namespace J3DNativeMaterial {
     void sendWhole(u32 shader, const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues);
     // The current J3D material with coordinate 0 its vertices' normals and texture 0 `pImage` (a `width` x `height`
     // RGB565 image, repeated, linear): J3DModelX list 6. False when the current material is not a native J3D one.
+    // The current material with another image in a map (a character\'s swapped eyes or hands).
+    void swapImage(u32 map, const void* pImage);
     bool overrideCoordinate(const void* pImage, u16 width, u16 height);
     // A pass over the current J3D material's draws that replaces its stages (j3d_material.hlsli j3d_override: `mode`
     // 1-4, alphas A0 and A1, drawn above `ref`, -1 always): whether the material draws natively and took it (else the

@@ -43,9 +43,7 @@ void ShapePacketUserData::init(J3DMaterial* pMaterial) {
 
 void ShapePacketUserData::load() const {
     if (mEnvMap) {
-        static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                        GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(0, kIdentity);
+        J3DNativeShape::setCurrentIdentity();
     }
     for (u32 i = 0; i < mTexGenNum; i++) {
         if (mTexMtxInfo[i].mType != 0) {

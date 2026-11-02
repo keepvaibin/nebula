@@ -64,7 +64,7 @@ void BloomEffect::postDraw() const {
     NebulaRender::bloomMarker(NebulaRender::kBloomNormal, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
     initDraw();
-    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
+    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
 }
 
 u8 BloomEffect::getIntensity1Default() const {
@@ -81,21 +81,21 @@ bool BloomEffect::isForEachModel() const {
 
 void BloomEffect::initDraw() const {
     MR::reinitGX();
-    J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
+    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getCanvasHeight(), 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DPass::positionMatrix(0);
 
-    J3DNativeState::setCullMode(GPU_CULL_NONE);
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_FALSE);
-    J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
+    J3DPass::cull(NEBULA_CULL_NONE);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
+    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 }

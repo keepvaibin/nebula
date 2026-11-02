@@ -135,7 +135,7 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    mScreenTex->capture(0, 0, GPU_TF_RGB565, false, 0);
+    mScreenTex->frameColor(false);
     loadMaterial();
     TVec2f pos;
     pos.x = 0.0f;
@@ -149,7 +149,7 @@ void WaterCameraFilter::draw() const {
     f32 centerU = 1.0f - pos.x;
     f32 centerV = 1.0f - pos.y;
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
         J3DNativeDraw::texCoord(centerU - halfSize, centerV - halfSize);
@@ -178,11 +178,11 @@ void WaterCameraFilter::loadMaterial() const {
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
     NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(projection);
     TMtx34f modelView;
     modelView.identity();
     J3DNativeShape::setPosition(0, modelView);
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
     TVec2f screenPos;
     screenPos.x = 0.0f;
     screenPos.y = 0.0f;

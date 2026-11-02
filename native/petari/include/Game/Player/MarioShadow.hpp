@@ -1,6 +1,5 @@
 #pragma once
 
-#include <JSystem/J3DGraphBase/J3DStateList.hpp>
 #include "Game/NameObj/NameObj.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 
@@ -29,7 +28,6 @@ public:
     void draw2() const;
     void draw3() const;
     void createMesh();
-    static void fillVolumeList(J3DStateList& rList);
     void drawVolume() const;
     void doSortPolygons();
     const TVec3f& getDrawPos(u32) const;
@@ -79,5 +77,4 @@ public:
     /* 0x33C */ u16 _33C;
     /* 0x340 */ J3DModelX* _340;
     // The volume's drawing state (built; nothing in the game draws with it).
-    J3DStateList _344;
 };

@@ -40,50 +40,50 @@ public:
     JPABaseShape(u8 const*, JKRHeap*);
     void setGX(JPAEmitterWorkData*) const;
 
-    static GpuBlendMode st_bm[3];
-    static GpuBlendFactor st_bf[10];
-    static GpuLogicOp st_lo[16];
-    static GpuCompare st_c[8];
-    static GpuAlphaOp st_ao[4];
+    static const u8 st_bm[4];
+    static const u8 st_lo[16];
+    static const u8 st_c[8];
+    static u8 blendFactor(u32 code, bool source);
     static GpuTevColorArg st_ca[6][4];
     static GpuTevAlphaArg st_aa[2][4];
 
-    GpuBlendMode getBlendMode() const {
+    u8 getBlendMode() const {
         return st_bm[mpData->mBlendModeCfg & 0x03];
     }
-    GpuBlendFactor getBlendSrc() const {
-        return st_bf[(mpData->mBlendModeCfg >> 2) & 0x0F];
+    u8 getBlendSrc() const {
+        return blendFactor((mpData->mBlendModeCfg >> 2) & 0x0F, true);
     }
-    GpuBlendFactor getBlendDst() const {
-        return st_bf[(mpData->mBlendModeCfg >> 6) & 0x0F];
+    u8 getBlendDst() const {
+        return blendFactor((mpData->mBlendModeCfg >> 6) & 0x0F, false);
     }
-    GpuLogicOp getLogicOp() const {
+    u8 getLogicOp() const {
         return st_lo[(mpData->mBlendModeCfg >> 10) & 0x0F];
     }
     GpuBool getZCompLoc() const {
         return (GpuBool)((mpData->mZModeCfg >> 5) & 0x01);
     }
 
-    GpuBool getZEnable() const {
-        return (GpuBool)(mpData->mZModeCfg & 0x01);
+    bool getZEnable() const {
+        return (mpData->mZModeCfg & 0x01) != 0;
     }
-    GpuCompare getZCmp() const {
+    u8 getZCmp() const {
         return st_c[(mpData->mZModeCfg >> 1) & 0x07];
     }
-    GpuBool getZUpd() const {
-        return (GpuBool)((mpData->mZModeCfg >> 4) & 0x01);
+    bool getZUpd() const {
+        return ((mpData->mZModeCfg >> 4) & 0x01) != 0;
     }
 
-    GpuCompare getAlphaCmp0() const {
+    u8 getAlphaCmp0() const {
         return st_c[mpData->mAlphaCompareCfg & 0x07];
     }
     u8 getAlphaRef0() const {
         return mpData->mAlphaRef0;
     }
-    GpuAlphaOp getAlphaOp() const {
-        return st_ao[(mpData->mAlphaCompareCfg >> 3) & 0x03];
+    // 0 and, 1 or, 2 exclusive or, 3 equal.
+    u8 getAlphaOp() const {
+        return (mpData->mAlphaCompareCfg >> 3) & 0x03;
     }
-    GpuCompare getAlphaCmp1() const {
+    u8 getAlphaCmp1() const {
         return st_c[(mpData->mAlphaCompareCfg >> 5) & 0x07];
     }
     u8 getAlphaRef1() const {

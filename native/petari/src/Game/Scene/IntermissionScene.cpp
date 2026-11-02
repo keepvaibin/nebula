@@ -18,13 +18,8 @@ void IntermissionScene::update() {
 }
 
 void IntermissionScene::draw() const {
-    J2DOrthoGraphSimple graph;
-    graph.setPort();
-    graph.setColor(static_cast< const NebulaColor8& >(NebulaColor8(Color8(0, 0, 0, 255))));
-
-    f32 height = static_cast< s32 >(NebulaFrameClock::cCanvasHeight);
-    f32 width = MR::getScreenWidth();
-    graph.fillBox(0.0f, 0.0f, width, height);
+    MR::setupScreen2D();
+    MR::drawScreenColor(Color8(0, 0, 0, 255));
 }
 
 void IntermissionScene::setCurrentSceneControllerState(const char* pState, ...) {

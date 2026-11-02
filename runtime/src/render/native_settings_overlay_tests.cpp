@@ -924,6 +924,8 @@ int main() {
         // A text without an entry of its own is named piece by piece, as the game's menu does: the words before a
         // closing "(...)" and those inside it, then its sentences, the words before ": " and after it, a list's items.
         const std::function<bool(std::string_view)> covered = [&](std::string_view text) {
+            // A key by position is shown as its letter (host_window_win32.cpp); the view keeps the settings file's form.
+            if (text.starts_with("Position.")) text.remove_prefix(9);
             if (text.empty() || ids.count(settings_text_id(text)) != 0u) return true;
             std::size_t at = std::string_view::npos;
             std::size_t second_end = text.size();
