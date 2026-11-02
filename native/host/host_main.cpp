@@ -20,6 +20,9 @@
 #include "galaxy/disc_files.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#include "galaxy/host_env.h"
+#endif
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
@@ -3834,6 +3837,12 @@ int run_mods_tool() {
 #endif
 
 int main(int argc, char** argv) {
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    if (const char* error = galaxy::host::test_data_paths_error(argc, argv)) {
+        std::fprintf(stderr, "[test-paths] %s\n", error);
+        return 2;
+    }
+#endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
         return show_crash_report_dialog();
