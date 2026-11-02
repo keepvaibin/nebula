@@ -31,6 +31,6 @@ public:
     virtual ~JASTaskThread();
     virtual void* run();
 
-    /* 0x7C */ NebulaThreadQueue threadQueue_;
+    /* 0x7C */ NebulaEvent threadQueue_;
     /* 0x84 */ bool _84;
 };

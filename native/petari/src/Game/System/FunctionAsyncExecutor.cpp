@@ -18,12 +18,7 @@ FunctionAsyncExecInfo::~FunctionAsyncExecInfo() {
 }
 
 void FunctionAsyncExecInfo::execute() {
-    NebulaThread* pThread = NebulaKernel::current();
-    OSPriority priorityPrev = NebulaKernel::priority(pThread);
-
-    NebulaKernel::setPriority(pThread, mPriority);
     (*mFunc)();
-    NebulaKernel::setPriority(pThread, priorityPrev);
 }
 
 FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)
@@ -60,7 +55,6 @@ void FunctionAsyncExecutorOnMainThread::update() {
         _0 = true;
 
         info = static_cast< FunctionAsyncExecInfo* >(msg);
-        info->mPriority = NebulaKernel::priority(NebulaKernel::current());
         info->execute();
 
         info->mQueue.send(nullptr, false);

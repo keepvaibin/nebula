@@ -29,7 +29,6 @@ void DisplayListMaker::update() {
 void DisplayListMaker::diff() {
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         if (mCurFlag[i]) {
-            MR::ProhibitSchedulerAndInterrupts prohibit(false);
             j3dSys.setMatPacket(mModel->getMatPacket(i));
             mModel->getModelData()->getMaterialNodePointer(i)->diff(getDiffFlag(i));
         }

@@ -11,51 +11,26 @@
 extern "C" {
 #endif
 
-/* Host events, delivered in this order when several are pending: the frame clock, the controllers, the disc, what
-   the audio thread woke. */
-enum {
-    NEBULA_EVENT_FRAME = 0,
-    NEBULA_EVENT_CONTROLLER = 1,
-    NEBULA_EVENT_DISC = 2,
-    NEBULA_EVENT_AUDIO = 3,
-    NEBULA_EVENT_COUNT = 4,
-};
-
-/* From any host thread: the event's handler runs on the simulation thread at the next scheduling point. */
-void nebula_raise_event(int event);
-/* On the simulation thread, at no cost beyond the store: noted for the next scheduling point. */
-void nebula_note_event(int event);
-
-/* The C callers' event handlers (NebulaKernel::setEventHandler, enableEvent). */
-void nebula_set_event_handler(int event, void (*handler)(void));
-void nebula_enable_event(int event);
-
-int nebula_interrupts_disable(void);
-int nebula_interrupts_restore(int enabled);
-int32_t nebula_scheduler_disable(void);
-int32_t nebula_scheduler_enable(void);
-void nebula_kernel_poll(void);
-
 /* The platform layer calls these: the kernel's start on the host thread that runs the game, and the thread diagnostic. */
 void nebula_kernel_init(void);
 void nebula_kernel_dump(void);
 
 /* The platform layer provides these (os_native.c). */
-void nebula_sleep_for_work(void);
-void nebula_wake_simulation(void);
-/* A game thread is a host thread. The kernel runs one at a time: each waits for its turn here, and passes it on. */
+/* A game thread is a host thread, which sleeps here until something wakes it. */
 typedef struct NebulaHostThread NebulaHostThread;
-/* A new host thread, waiting for its first turn; then `entry(arg)`, which never returns. */
+/* A new host thread, asleep; once woken `entry(arg)`, which never returns. */
 NebulaHostThread* nebula_host_thread_create(void (*entry)(void*), void* arg, uint32_t stackSize);
 /* The calling host thread. */
 NebulaHostThread* nebula_host_thread_adopt(void);
 void nebula_host_thread_pass(NebulaHostThread* pTo);
 void nebula_host_thread_wait(NebulaHostThread* pSelf);
-/* The end of the calling thread, whose turn has been passed on. */
+/* The end of the calling thread. */
 void nebula_host_thread_exit(NebulaHostThread* pSelf);
-/* Lets another host thread run. */
-void nebula_host_thread_yield(void);
-/* The end of a thread waiting for its turn. */
+/* The kernel's two locks: its own state, and the section the audio thread stays out of. A lock can be left by the thread that took it. */
+enum { NEBULA_HOST_LOCK_STATE = 0, NEBULA_HOST_LOCK_INTERRUPTS = 1 };
+void nebula_host_lock(int which);
+void nebula_host_unlock(int which);
+/* The end of a sleeping thread. */
 void nebula_host_thread_cancel(NebulaHostThread* pThread);
 
 #ifdef __cplusplus

@@ -1,7 +1,5 @@
-/* The platform under the game's thread kernel (Game/System/NebulaKernel): the time base, the calendar, the timer thread that
-   raises the kernel's timer event, the simulation thread's sleep and wake, the game threads' native stacks, the log
-   and fatal errors, and the boot onto the boot thread. The kernel schedules; this layer provides what is
-   platform-specific. */
+/* The platform under the game's threads (Game/System/NebulaKernel): host threads and their sleep, the kernel's two locks, the log
+   and fatal errors, and the boot. */
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdatomic.h>
@@ -22,7 +20,6 @@
 #else
 #include <errno.h>
 #include <pthread.h>
-#include <sched.h>
 #include <time.h>
 #endif
 
@@ -88,39 +85,6 @@ void nebula_fatal(const char* format, ...) {
     vsnprintf(text, sizeof(text), format, args);
     va_end(args);
     fatal_text(text);
-}
-
-/* The simulation thread's sleep for want of work and a host thread's wake of it (the kernel decides when). */
-#if defined(_WIN32)
-static HANDLE sWake;
-#else
-static pthread_mutex_t sWakeLock = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t sWakeCond = PTHREAD_COND_INITIALIZER;
-static int sWakePending;
-#endif
-
-void nebula_wake_simulation(void) {
-#if defined(_WIN32)
-    SetEvent(sWake);
-#else
-    pthread_mutex_lock(&sWakeLock);
-    sWakePending = 1;
-    pthread_cond_signal(&sWakeCond);
-    pthread_mutex_unlock(&sWakeLock);
-#endif
-}
-
-void nebula_sleep_for_work(void) {
-#if defined(_WIN32)
-    WaitForSingleObject(sWake, INFINITE);
-#else
-    pthread_mutex_lock(&sWakeLock);
-    while (!sWakePending) {
-        pthread_cond_wait(&sWakeCond, &sWakeLock);
-    }
-    sWakePending = 0;
-    pthread_mutex_unlock(&sWakeLock);
-#endif
 }
 
 NEBULA_GAME_API void nebula_game_debug_dump(void) {
@@ -210,13 +174,27 @@ void nebula_host_thread_wait(NebulaHostThread* pSelf) {
     }
 }
 
-void nebula_host_thread_yield(void) {
 #if defined(_WIN32)
-    SwitchToThread();
-#else
-    sched_yield();
-#endif
+static SRWLOCK sLocks[2] = {SRWLOCK_INIT, SRWLOCK_INIT};
+
+void nebula_host_lock(int which) {
+    AcquireSRWLockExclusive(&sLocks[which]);
 }
+
+void nebula_host_unlock(int which) {
+    ReleaseSRWLockExclusive(&sLocks[which]);
+}
+#else
+static pthread_mutex_t sLocks[2] = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_MUTEX_INITIALIZER};
+
+void nebula_host_lock(int which) {
+    pthread_mutex_lock(&sLocks[which]);
+}
+
+void nebula_host_unlock(int which) {
+    pthread_mutex_unlock(&sLocks[which]);
+}
+#endif
 
 void nebula_host_thread_cancel(NebulaHostThread* pThread) {
     pThread->cancelled = true;
@@ -270,14 +248,10 @@ NebulaHostThread* nebula_host_thread_create(void (*entry)(void*), void* arg, uin
 }
 
 void nebula_os_boot(void (*gameMain)(void)) {
-#if defined(_WIN32)
-    sWake = CreateEventW(NULL, FALSE, FALSE, NULL);
-#endif
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
     }
     nebula_kernel_init();
-    nebula_interrupts_restore(1);
     gameMain();
     nebula_fatal("the game's main returned");
 }

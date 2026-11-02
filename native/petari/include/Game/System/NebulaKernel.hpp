@@ -1,34 +1,23 @@
 #pragma once
 
-// The game's threads and their synchronisation (docs/NATIVE_PORT.md, "Platform boundary", Threads). Every game
-// thread is a host thread and they run one at a time: the highest-priority ready thread runs
-// (0 is the highest), equal priorities in the order they became ready, and a running thread keeps running until it
-// blocks, yields, or a higher-priority thread becomes ready. Host events (a finished disc read, the frame clock)
-// reach the game only at the kernel's scheduling points: entering or leaving an interrupt
-// guard, a block, a wake, a yield and NebulaKernel::poll. So code that makes no kernel call cannot be interrupted, and
-// a section guarded against host events only needs a guard when it makes one.
+// The game's threads and their synchronisation (docs/NATIVE_PORT.md, "Platform boundary", Threads). Every game thread is a host
+// thread. One at a time changes the game world (the world lock, the main thread first): a thread lets go of it when it blocks, and
+// lets main have it at each kernel call. A section with host events disabled keeps the audio thread out.
 
 #include <stdint.h>
 
 struct NebulaThread;
-struct NebulaMutex;
 struct NebulaHostThread;
 
-// Threads waiting for something (a wake-up, a message, a mutex), highest priority first.
-struct NebulaThreadQueue {
+// Threads asleep until something happens.
+struct NebulaWaitList {
     NebulaThread* head;
     NebulaThread* tail;
-
-    void init();
-    // The running thread waits here until wakeup().
-    void sleep();
-    // Every waiting thread becomes ready.
-    void wakeup();
 };
 
 // One thread waits until another says so. A signal with nobody waiting is kept for the next wait; each wait takes it.
 struct NebulaEvent {
-    NebulaThreadQueue waiters;
+    NebulaWaitList waiters;
     bool signalled;
 
     void init();
@@ -38,27 +27,21 @@ struct NebulaEvent {
     bool isWaiting() const { return waiters.head != nullptr; }
 };
 
-struct NebulaThreadLink {
-    NebulaThread* next;
-    NebulaThread* prev;
+// Threads waiting for the next frame.
+struct NebulaFrameGate {
+    NebulaWaitList waiters;
+    uint32_t frames;
+
+    void init();
+    void advance();
+    void waitNext();
 };
 
-struct NebulaMutexQueue {
-    NebulaMutex* head;
-    NebulaMutex* tail;
-};
-
-struct NebulaMutexLink {
-    NebulaMutex* next;
-    NebulaMutex* prev;
-};
-
-// A recursive mutex. A thread waiting for it lends its priority to the owner until the owner unlocks.
+// A recursive mutex.
 struct NebulaMutex {
-    NebulaThreadQueue waiters;
+    NebulaWaitList waiters;
     NebulaThread* owner;
     int32_t count;
-    NebulaMutexLink link;
 
     void init();
     void lock();
@@ -68,8 +51,8 @@ struct NebulaMutex {
 // A fixed ring of messages: send appends, jam prepends, receive takes the first; a full or empty queue blocks the
 // caller or fails, as asked.
 struct NebulaMessageQueue {
-    NebulaThreadQueue senders;
-    NebulaThreadQueue receivers;
+    NebulaWaitList senders;
+    NebulaWaitList receivers;
     void** slots;
     int32_t capacity;
     int32_t first;
@@ -82,70 +65,38 @@ struct NebulaMessageQueue {
     bool isFull() const { return used >= capacity; }
 };
 
-enum NebulaThreadState {
-    NebulaThreadState_Free = 0,
-    NebulaThreadState_Ready = 1,
-    NebulaThreadState_Running = 2,
-    NebulaThreadState_Waiting = 4,
-    NebulaThreadState_Exited = 8,
-};
-
 struct NebulaThread {
     NebulaHostThread* host;
-    uint16_t state;
-    uint16_t detached;
-    int32_t suspend;
-    int32_t priority;  // effective: base, or a waiter's on a mutex it owns
-    int32_t base;
-    void* value;  // the exit value
-    NebulaThreadQueue* queue;
-    NebulaThreadLink link;
-    NebulaThreadQueue joinQueue;
-    NebulaMutex* mutex;  // the mutex it waits for
-    NebulaMutexQueue mutexes;  // the mutexes it owns
-    NebulaThreadLink linkActive;
     void* (*entry)(void*);
     void* arg;
+    void* value;  // the exit value
+    bool world;   // under the world lock
+    bool started;
+    bool ended;
+    NebulaWaitList* list;  // the list it sleeps on or waits for the world on
+    NebulaThread* next;
+    NebulaThread* prev;
+    NebulaThread* all;
+    NebulaThread* outer;  // the audio thread's: the record it stands in for
 };
 
 namespace NebulaKernel {
-    bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize, int32_t priority,
-                bool detached);
+    bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize);
     NebulaThread* current();
     void exit(void* pValue);
     void cancel(NebulaThread* pThread);
-    void detach(NebulaThread* pThread);
-    // The previous suspend count.
-    int32_t resume(NebulaThread* pThread);
-    int32_t suspend(NebulaThread* pThread);
-    void yield();
-    bool setPriority(NebulaThread* pThread, int32_t priority);
-    int32_t priority(const NebulaThread* pThread);
-    bool isSuspended(const NebulaThread* pThread);
+    // A new thread starts.
+    void resume(NebulaThread* pThread);
     bool isTerminated(const NebulaThread* pThread);
-    // While disabled (a count), the running thread keeps running whatever becomes ready.
-    int32_t disableScheduler();
-    int32_t enableScheduler();
 
-    // Host events wait while disabled. disableInterrupts returns the previous state for restoreInterrupts.
+    // disableInterrupts returns the previous state for restoreInterrupts.
     bool disableInterrupts();
-    bool enableInterrupts();
     bool restoreInterrupts(bool enabled);
-    // A spin on work another thread finishes: delivers what is pending (which may switch to the thread it wakes), or
-    // sleeps until a host thread raises something.
-    void poll();
 
-    // The audio thread (JASDriver, on the host's audio clock) takes no turns. It runs between these, when no thread is in
-    // a section with host events disabled, and none enters one until it leaves: what the console's audio interrupt and
-    // high-priority thread were to the game. A kernel call there that has to wait lets the others run and looks again.
+    // The audio thread (JASDriver, on the host's audio clock) runs between these, when no thread is in a section with host events
+    // disabled, and none enters one until it leaves: what the console's audio interrupt and high-priority thread were to the game.
     void enterAudio();
     void leaveAudio();
-
-    // Host events by number (NEBULA_EVENT_*, nebula_kernel.h): the handler runs with host events and the scheduler
-    // disabled, then the kernel reschedules.
-    typedef void (*EventHandler)();
-    void setEventHandler(int32_t event, EventHandler pHandler);
-    void enableEvent(int32_t event);
 }  // namespace NebulaKernel
 
 class NebulaInterruptGuard {

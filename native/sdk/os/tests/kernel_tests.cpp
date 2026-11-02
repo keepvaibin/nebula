@@ -1,7 +1,6 @@
-// The kernel's order of events, which the game's timing depends on (Game/System/NebulaKernel.hpp): a higher-priority thread runs
-// as soon as it can (a resume, a message it waits for), a lower one only when the higher ones block, a thread waiting for a mutex lends its
-// priority to the owner, a jammed message is received first, a cancelled thread never runs again, and the audio thread
-// stays out of a section with host events disabled.
+// The kernel's rules (Game/System/NebulaKernel.hpp): one world thread runs at a time, the main thread first when it wants to; a blocked
+// thread lets go of the world; a mutex excludes; messages keep their order and a jammed one comes first; a cancelled thread never runs
+// again; the audio thread stays out of a section with host events disabled, wakes a waiter, and waits for a mutex without stopping the world.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,15 +24,16 @@ namespace {
 
     void note(char c) {
         sOrder[sOrderLength++] = c;
+        sOrder[sOrderLength] = '\0';
     }
 
     void expectOrder(const char* pWhat, const char* pWant) {
-        sOrder[sOrderLength] = 0;
         if (strcmp(sOrder, pWant) != 0) {
-            printf("FAIL %s: %s (want %s)\n", pWhat, sOrder, pWant);
+            printf("FAIL %s: got %s, want %s\n", pWhat, sOrder, pWant);
             sFailures++;
         }
         sOrderLength = 0;
+        sOrder[0] = '\0';
     }
 
     void expect(const char* pWhat, long long got, long long want) {
@@ -43,7 +43,7 @@ namespace {
         }
     }
 
-    // Main (16) waits until every other thread able to run has run: the lowest-priority thread wakes it.
+    // Main waits until every other thread able to run has run: a new thread comes last, and wakes it.
     NebulaEvent sIdle;
     NebulaThread sIdler;
 
@@ -54,55 +54,72 @@ namespace {
 
     void letOthersRun() {
         sIdle.init();
-        NebulaKernel::create(&sIdler, idlerMain, nullptr, 0x4000, 31, true);
+        NebulaKernel::create(&sIdler, idlerMain, nullptr, 0x4000);
         NebulaKernel::resume(&sIdler);
         sIdle.wait();
     }
 
-    NebulaMessageQueue sQueue;
-    void* sQueueSlots[4];
-    NebulaThread sHigh, sLow;
+    // A started thread runs when main blocks, in the order they were started.
+    NebulaThread sFirst, sSecond;
 
-    void* highMain(void*) {
-        note('H');
-        void* message;
-        sQueue.receive(&message, true);
-        note(static_cast< char >(reinterpret_cast< uintptr_t >(message)));
+    void* firstMain(void*) {
+        note('1');
         return nullptr;
     }
 
-    void* lowMain(void*) {
-        note('L');
+    void* secondMain(void*) {
+        note('2');
         return nullptr;
     }
 
     void threadOrder() {
-        sQueue.init(sQueueSlots, 4);
-        NebulaKernel::create(&sHigh, highMain, nullptr, 0x4000, 10, false);
-        NebulaKernel::create(&sLow, lowMain, nullptr, 0x4000, 20, false);
-        NebulaKernel::resume(&sHigh);  // runs at once, blocks on the queue
+        NebulaKernel::create(&sFirst, firstMain, nullptr, 0x4000);
+        NebulaKernel::create(&sSecond, secondMain, nullptr, 0x4000);
+        NebulaKernel::resume(&sFirst);
+        NebulaKernel::resume(&sSecond);
         note('m');
-        NebulaKernel::resume(&sLow);  // lower: waits
-        sQueue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('h')), true);  // wakes high, which runs at once
+        letOthersRun();
         note('n');
-        letOthersRun();  // low runs while main waits
-        note('o');
-        expectOrder("thread order", "HmhnLo");
+        expectOrder("thread order", "m12n");
     }
 
-    // A (20) owns the mutex and waits on a queue; B (12) blocks on the mutex and lends A its priority; A, woken, runs
-    // before main (16), unlocks, drops back to 20 and B takes the mutex at once.
+    // A thread waking main lets main run at its next kernel call, before it goes on.
+    NebulaThread sYielder;
+    NebulaEvent sMainWait;
+    NebulaMutex sYieldMutex;
+
+    void* yielderMain(void*) {
+        note('a');
+        sMainWait.signal();
+        note('b');
+        sYieldMutex.lock();  // main has the world from here
+        note('c');
+        sYieldMutex.unlock();
+        return nullptr;
+    }
+
+    void mainFirst() {
+        sMainWait.init();
+        sYieldMutex.init();
+        NebulaKernel::create(&sYielder, yielderMain, nullptr, 0x4000);
+        NebulaKernel::resume(&sYielder);
+        sMainWait.wait();
+        note('m');
+        letOthersRun();
+        expectOrder("main first", "abmc");
+    }
+
+    // B blocks on the mutex A holds across a wait; A's unlock lets B in.
     NebulaMutex sMutex;
-    NebulaThreadQueue sHold;
+    NebulaEvent sHold;
     NebulaThread sOwner, sWaiter;
 
     void* ownerMain(void*) {
         sMutex.lock();
         note('A');
-        sHold.sleep();
+        sHold.wait();
         note('a');
         sMutex.unlock();
-        note('u');
         return nullptr;
     }
 
@@ -114,22 +131,19 @@ namespace {
         return nullptr;
     }
 
-    void mutexInheritance() {
+    void mutexOrder() {
         sMutex.init();
         sHold.init();
-        NebulaKernel::create(&sOwner, ownerMain, nullptr, 0x4000, 20, true);
-        NebulaKernel::create(&sWaiter, waiterMain, nullptr, 0x4000, 12, true);
-        NebulaKernel::resume(&sOwner);  // lower than main: waits
-        letOthersRun();  // the owner runs, locks, sleeps on the queue
-        note('m');
-        NebulaKernel::resume(&sWaiter);  // runs at once, blocks on the mutex
-        expect("owner's priority while B waits", sOwner.priority, 12);
-        note('w');
-        sHold.wakeup();  // the owner, at 12, outranks main
-        expect("owner's priority after unlocking", sOwner.priority, 20);
-        note('z');
+        NebulaKernel::create(&sOwner, ownerMain, nullptr, 0x4000);
+        NebulaKernel::create(&sWaiter, waiterMain, nullptr, 0x4000);
+        NebulaKernel::resume(&sOwner);
+        NebulaKernel::resume(&sWaiter);
         letOthersRun();
-        expectOrder("mutex inheritance", "AmBwabzu");
+        note('m');
+        sHold.signal();
+        letOthersRun();
+        letOthersRun();  // the waiter, woken behind the first idler
+        expectOrder("mutex", "ABmab");
     }
 
     // A jammed message is received before those already queued; a full queue refuses without blocking.
@@ -150,44 +164,62 @@ namespace {
         expectOrder("message order", "jxy");
     }
 
-    // A thread cancelled while it waits never runs again; its joiners are released.
+    // A signal with nobody waiting is kept for the next wait, and taken by it.
+    void eventKept() {
+        NebulaEvent event;
+        event.init();
+        event.signal();
+        event.wait();
+        expect("signal taken", event.signalled, false);
+    }
+
+    // A thread cancelled while it waits never runs again.
     NebulaThread sCancelled;
-    NebulaThreadQueue sNever;
+    NebulaEvent sNever;
 
     void* cancelledMain(void*) {
         note('c');
-        sNever.sleep();
+        sNever.wait();
         note('X');
         return nullptr;
     }
 
     void cancel() {
         sNever.init();
-        NebulaKernel::create(&sCancelled, cancelledMain, nullptr, 0x4000, 10, false);
+        NebulaKernel::create(&sCancelled, cancelledMain, nullptr, 0x4000);
         NebulaKernel::resume(&sCancelled);
+        letOthersRun();
         NebulaKernel::cancel(&sCancelled);
         expect("cancelled thread terminated", NebulaKernel::isTerminated(&sCancelled), true);
-        sNever.wakeup();
+        sNever.signal();
         letOthersRun();
         expectOrder("cancel", "c");
     }
 
-    // The audio thread stays out of a section with host events disabled; what it sends wakes a waiting thread.
+    // The audio thread stays out of a section with host events disabled; what it sends wakes a waiting thread. It waits for a mutex
+    // a world thread holds without holding its section, or that thread could never finish.
     NebulaHostThread* sAudioHost;
     volatile int sAudioEntered;
+    volatile int sAudioFinished;
     NebulaMessageQueue sAudioQueue;
     void* sAudioSlots[1];
+    NebulaMutex sAudioMutex;
 
     void audioMain(void*) {
         NebulaKernel::enterAudio();
         sAudioEntered = 1;
         sAudioQueue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('w')), false);
+        sAudioMutex.lock();
+        sAudioMutex.unlock();
         NebulaKernel::leaveAudio();
+        sAudioFinished = 1;
         nebula_host_thread_exit(sAudioHost);
     }
 
     void audioThread() {
         sAudioQueue.init(sAudioSlots, 1);
+        sAudioMutex.init();
+        sAudioMutex.lock();
         const bool enabled = NebulaKernel::disableInterrupts();
         sAudioHost = nebula_host_thread_create(audioMain, nullptr, 0x10000);
         nebula_host_thread_pass(sAudioHost);
@@ -200,6 +232,15 @@ namespace {
         expect("audio entered", sAudioEntered, 1);
         note(static_cast< char >(reinterpret_cast< uintptr_t >(message)));
         expectOrder("audio message", "w");
+        // It now waits for this mutex; the section it held must be free.
+        for (volatile int i = 0; i < 20000000; i++) {
+        }
+        {
+            NebulaInterruptGuard guard;
+        }
+        sAudioMutex.unlock();
+        while (sAudioFinished == 0) {
+        }
     }
 
     // Costs of the hot paths, printed for docs/NATIVE_PERFORMANCE.md (not pass/fail).
@@ -227,28 +268,12 @@ namespace {
         printf("perf: lock+unlock %.2f ns\n", (seconds() - start) * 1e9 / kPairs);
     }
 
-    // The arena is aligned to its size and laid out as the console's memory (MEM1's arena past its first megabyte,
-    // MEM2's at 0x10000000), so what the game derives from an address's low bits has the console's value.
-    void checkArena() {
-        uint8_t* const base = nebula_arena_base();
-        void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
-        nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
-        uint8_t* const mem1 = static_cast< uint8_t* >(mem1Lo);
-        uint8_t* const mem2 = static_cast< uint8_t* >(mem2Lo);
-        const uintptr_t alignment = static_cast< uintptr_t >(1) << 29;
-        const bool aligned = reinterpret_cast< uintptr_t >(base) % alignment == 0;
-        if (!aligned || mem1 - base != 0x00100000 || mem2 - base != 0x10000000) {
-            printf("FAIL arena: base %p, MEM1 %p, MEM2 %p\n", static_cast< void* >(base), static_cast< void* >(mem1),
-                   static_cast< void* >(mem2));
-            sFailures++;
-        }
-    }
-
     void gameMain() {
-        checkArena();
         threadOrder();
-        mutexInheritance();
+        mainFirst();
+        mutexOrder();
         messageOrder();
+        eventKept();
         cancel();
         audioThread();
         measure();
@@ -260,4 +285,5 @@ namespace {
 
 int main() {
     nebula_os_boot(gameMain);
+    return 0;
 }

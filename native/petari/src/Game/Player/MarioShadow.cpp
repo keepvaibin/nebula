@@ -13,7 +13,6 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>

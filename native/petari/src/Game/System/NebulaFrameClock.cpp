@@ -13,7 +13,9 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     NebulaAtomic< u32 > sFrames;
-    NebulaThreadQueue sSleepers;
+    NebulaFrameGate sGate;
+    NebulaEvent sRetrace;
+    NebulaThread sThread;
     NebulaFrameClock::Hook sPreHook;
     NebulaFrameClock::Hook sPostHook;
     // show() sets the next state; it is what the screen shows from the next frame on.
@@ -78,12 +80,20 @@ namespace {
         if (sPostHook != nullptr) {
             sPostHook(sFrames);
         }
-        sSleepers.wakeup();
+        sGate.advance();
+    }
+
+    // The frame's work runs here: never in the middle of another thread's work on the game world.
+    void* frameThread(void*) {
+        while (true) {
+            sRetrace.wait();
+            onFrame();
+        }
     }
 }  // namespace
 
 extern "C" NEBULA_GAME_API void nebula_game_vi_retrace(void) {
-    nebula_raise_event(NEBULA_EVENT_FRAME);
+    sRetrace.signal();
 }
 
 namespace NebulaFrameClock {
@@ -93,31 +103,23 @@ namespace NebulaFrameClock {
             return;
         }
         sStarted = true;
-        sSleepers.init();
-        NebulaKernel::setEventHandler(NEBULA_EVENT_FRAME, onFrame);
-        NebulaKernel::enableEvent(NEBULA_EVENT_FRAME);
+        sGate.init();
+        NebulaKernel::create(&sThread, frameThread, nullptr, 0x10000);
+        NebulaKernel::resume(&sThread);
     }
 
     u32 count() {
         return sFrames;
     }
 
-    // Interrupts off from reading the count to sleeping: a frame delivered in between would wake no one.
     void waitFrame() {
-        const BOOL enabled = NebulaKernel::disableInterrupts();
-        const u32 frames = sFrames;
-        do {
-            sSleepers.sleep();
-        } while (frames == sFrames);
-        NebulaKernel::restoreInterrupts(enabled);
+        sGate.waitNext();
     }
 
     void show(bool picture) {
         sNextPicture = picture;
     }
 
-    // The frame arrives as a host event, which the kernel delivers only at its scheduling points: a plain store cannot
-    // be interrupted halfway.
     Hook setPreHook(Hook hook) {
         const Hook previous = sPreHook;
         sPreHook = hook;
