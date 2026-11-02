@@ -4,6 +4,7 @@
 // JPEG's YCbCr of that picture.
 
 #include "galaxy/render/movie_replacement.h"
+#include "galaxy/path_text.h"
 
 #include "galaxy/crash_report.h"
 
@@ -424,7 +425,7 @@ private:
     void decode(bool mf) {
         using Microsoft::WRL::ComPtr;
         const auto fail = [&](const char* what, HRESULT hr) {
-            std::cerr << "[movie] " << file_.filename().string() << ": " << what << " (0x" << std::hex
+            std::cerr << "[movie] " << galaxy::path_text(file_.filename()) << ": " << what << " (0x" << std::hex
                       << static_cast<std::uint32_t>(hr) << std::dec << ")\n";
             std::lock_guard<std::mutex> lock(mutex_);
             failed_ = true;
@@ -524,7 +525,7 @@ private:
             std::lock_guard<std::mutex> lock(mutex_);
             file_rate_ = file_rate;
         }
-        std::cerr << "[movie] " << file_.filename().string() << " " << width << "x" << height
+        std::cerr << "[movie] " << galaxy::path_text(file_.filename()) << " " << width << "x" << height
                   << (nv12 ? " nv12" : " rgb32") << " at " << file_rate << " fps\n";
         std::array<std::uint64_t, 3> offsets{};
         std::array<std::uint32_t, 3> pitches{};
@@ -734,8 +735,8 @@ std::filesystem::path MovieReplacements::find(const char* disc_path) const {
         std::error_code error;
         for (std::filesystem::directory_iterator it(*folder, error), end; !error && it != end; it.increment(error)) {
             if (!it->is_regular_file(error)) continue;
-            const std::string name = ascii_lower(it->path().stem().string());
-            const std::string extension = ascii_lower(it->path().extension().string());
+            const std::string name = ascii_lower(galaxy::path_text(it->path().stem()));
+            const std::string extension = ascii_lower(galaxy::path_text(it->path().extension()));
             if (name != stem) continue;
             for (const char* known : kExtensions) {
                 if (extension == known) return it->path();
@@ -762,7 +763,7 @@ const MovieReplacementFrame* MovieReplacements::frame(const MovieFrameMark& mark
         if (!current_missing_) {
             decoder_ = std::make_unique<Decoder>(file, mark.frame_rate, stager_);
             ++opened_;
-            std::cerr << "[movie] " << name << " -> " << file.string() << "\n";
+            std::cerr << "[movie] " << name << " -> " << galaxy::path_text(file) << "\n";
         }
     }
     if (current_missing_ || decoder_ == nullptr || mark.frame < 0) {

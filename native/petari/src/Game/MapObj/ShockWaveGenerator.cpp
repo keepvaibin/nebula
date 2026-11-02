@@ -70,7 +70,7 @@ void ShockWaveGenerator::exeDemoEcho() {
         MR::startActorCameraTargetSelf(this, mCameraInfo);
     }
 
-    MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
 
     if (MR::isStep(this, ::sStepForDemoEcho)) {
         MR::endDemo(this, ::cDemoCameraName);
@@ -84,7 +84,7 @@ void ShockWaveGenerator::exeGenerate() {
         sendMsgShockWaveToNearEnemy();
         MR::emitEffect(this, "ShockWave");
         MR::shakeCameraWeak();
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
     }
 
     if (MR::isStep(this, ::sStepForGenerate)) {

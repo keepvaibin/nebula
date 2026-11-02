@@ -91,7 +91,7 @@ void RosettaPictureBook::exeWait() {
         return;
     }
 
-    if (!MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (!MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         return;
     }
 

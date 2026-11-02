@@ -2,16 +2,16 @@
 
 #include <JSystem/JGeometry/TVec.hpp>
 
-class WPad;
+class GamePad;
 
-class WPadStick {
+class GamePadStick {
 public:
-    WPadStick(const WPad*);
+    GamePadStick(const GamePad*);
 
     void update();
     bool isChanged() const;
 
-    /* 0x00 */ const WPad* mPad;
+    /* 0x00 */ const GamePad* mPad;
     /* 0x04 */ TVec2f mStick;
     /* 0x0C */ f32 mSpeed;
     /* 0x10 */ u32 mHold;

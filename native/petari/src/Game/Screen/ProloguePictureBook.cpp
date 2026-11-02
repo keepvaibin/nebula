@@ -84,7 +84,7 @@ void ProloguePictureBook::exeKeyWait() {
         animCtrl->setRate(0.0f);
     }
 
-    if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
         mIconAButton->term();
 

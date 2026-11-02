@@ -45,7 +45,7 @@ void CameraDPD::reset() {
         mMtx.setZDir(front);
     } else if (mCameraType == CameraType_FollowWorldPos) {
         TVec3f worldPos;
-        worldPos.set(*MR::getStarPointerWorldPosUsingDepth(WPAD_CHAN0));
+        worldPos.set(*MR::getStarPointerWorldPosUsingDepth(GAMEPAD_CHAN0));
         TVec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * mDist;
         TVec3f front = worldPos - basePos;
         if (MR::isNearZero(front)) {
@@ -73,7 +73,7 @@ void CameraDPD::reset() {
         mMtx.setZDir(front);
     }
 
-    MR::getCorePadPointingPos(&mRealPointPos, WPAD_CHAN0);
+    MR::getCorePadPointingPos(&mRealPointPos, GAMEPAD_CHAN0);
     mResetPointingPos = true;
     mBlendPointPos.set(0.0f, 0.0f);
     mRealPointPos.set(0.0f, 0.0f);
@@ -91,7 +91,7 @@ CameraTargetObj* CameraDPD::calc() {
     }
 
     TVec2f pointPos;
-    MR::getCorePadPointingPos(&pointPos, WPAD_CHAN0);
+    MR::getCorePadPointingPos(&pointPos, GAMEPAD_CHAN0);
 
     if (mResetPointingPos) {
         pointPos.set(0.0f, 0.0f);
@@ -100,14 +100,14 @@ CameraTargetObj* CameraDPD::calc() {
         }
     }
 
-    if (MR::isCorePadPointInScreen(WPAD_CHAN0)) {
+    if (MR::isCorePadPointInScreen(GAMEPAD_CHAN0)) {
         mRealPointPos = mRealPointPos * 0.9f + pointPos * 0.1f;
         if (mCameraType != CameraType_FollowWorldPos) {
-            if (MR::testSubPadTriggerZ(WPAD_CHAN0)) {
-                mCorePadDistToDisplay = MR::getCorePadDistanceToDisplay(WPAD_CHAN0);
+            if (MR::testSubPadTriggerZ(GAMEPAD_CHAN0)) {
+                mCorePadDistToDisplay = MR::getCorePadDistanceToDisplay(GAMEPAD_CHAN0);
             }
-            if (MR::testSubPadButtonZ(WPAD_CHAN0)) {
-                f32 updateDist = MR::clamp(mCorePadDistToDisplay - MR::getCorePadDistanceToDisplay(WPAD_CHAN0), -::sMaxDistance, ::sMaxDistance);
+            if (MR::testSubPadButtonZ(GAMEPAD_CHAN0)) {
+                f32 updateDist = MR::clamp(mCorePadDistToDisplay - MR::getCorePadDistanceToDisplay(GAMEPAD_CHAN0), -::sMaxDistance, ::sMaxDistance);
                 mFovy =
                     (40.0f - ((updateDist * 30.0f) / ::sMaxDistance)) * (1.0f - ::sFovyBlendRate) + CameraLocalUtil::getFovy(this) * ::sFovyBlendRate;
             }
@@ -124,7 +124,7 @@ CameraTargetObj* CameraDPD::calc() {
     mBlendPointPos = mBlendPointPos * t + pointPos * (1.0f - t);
 
     if (mCameraType != CameraType_FollowWorldPos) {
-        if (!MR::testSubPadButtonZ(WPAD_CHAN0)) {
+        if (!MR::testSubPadButtonZ(GAMEPAD_CHAN0)) {
             mFovy = CameraLocalUtil::getFovy(this) * ::sFovyBlendRate + 38.0f;
         }
         CameraLocalUtil::setFovy(this, mFovy);

@@ -104,8 +104,8 @@ void SpiderThread::movement() {
     mWindCtrl->update();
     updatePointerInfo();
     updateHangedPoint();
-    tryTouchPoint(WPAD_CHAN0);
-    tryTouchPoint(WPAD_CHAN1);
+    tryTouchPoint(GAMEPAD_CHAN0);
+    tryTouchPoint(GAMEPAD_CHAN1);
 
     mMainPoint->updateVelocity();
     for (s32 idx = 0; idx < mNumRadialLines; idx++) {

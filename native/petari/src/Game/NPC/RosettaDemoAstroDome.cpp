@@ -97,7 +97,7 @@ void RosettaMonologue::control() {
     MR::setLayoutPosAtPaneTrans(mIconAButton, this, "AButtonPosition");
 
     // A skipped reading turns each page as soon as it is up.
-    if (!MR::testCorePadTriggerA(WPAD_CHAN0) && !NebulaCutsceneSkip::isSkipping()) {
+    if (!MR::testCorePadTriggerA(GAMEPAD_CHAN0) && !NebulaCutsceneSkip::isSkipping()) {
         return;
     }
 
@@ -112,7 +112,7 @@ void RosettaMonologue::control() {
 
     if (mMessageNo == 4) {
         MR::startSystemSE("SE_SY_TALK_OK");
-        MR::startCSSound("CS_CLICK_CLOSE", nullptr, WPAD_CHAN0);
+        MR::startCSSound("CS_CLICK_CLOSE", nullptr, GAMEPAD_CHAN0);
     } else {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
 

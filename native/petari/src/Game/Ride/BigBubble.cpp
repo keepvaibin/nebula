@@ -592,7 +592,7 @@ bool BigBubble::tryBreakEnd() {
 }
 
 bool BigBubble::tryEscape() {
-    if (MR::testSubPadTriggerZ(WPAD_CHAN0)) {
+    if (MR::testSubPadTriggerZ(GAMEPAD_CHAN0)) {
         setNerve(GET_NERVE(BigBubble, BigBubbleNrvEscape));
         return true;
     }
@@ -700,14 +700,14 @@ void BigBubble::exeCapture() {
     }
 
     if (mIsAttached) {
-        if (addAccelPointing(WPAD_CHAN0)) {
+        if (addAccelPointing(GAMEPAD_CHAN0)) {
             MR::makeMtxUpNoSupportPos(&mEffectMtx, mPosition - mPointerPos, mPointerPos);
             MR::emitEffect(this, "PushWind");
         } else {
             MR::deleteEffect(this, "PushWind");
         }
 
-        addAccelMoment(WPAD_CHAN0);
+        addAccelMoment(GAMEPAD_CHAN0);
     } else {
         addCoriolisAccel();
     }

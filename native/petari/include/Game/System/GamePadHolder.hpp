@@ -5,18 +5,18 @@
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
-class WPad;
+class GamePad;
 
-// One moment of a player's controller as the game's WPad classes read it (WPadReadDataInfo::read): the buttons of the
+// One moment of a player's controller as the game's GamePad classes read it (GamePadReadDataInfo::read): the buttons of the
 // read (every sample of one read has them), the filtered accelerations, the pointer and the Nunchuk stick.
-struct WPadSample {
+struct GamePadSample {
     u32 mHold;      // NEBULA_BUTTON_*
     u32 mTrigger;
     u32 mRelease;
-    bool mRepeat;   // a held button repeats this read (WPadButton's delay and pulse)
+    bool mRepeat;   // a held button repeats this read (GamePadButton's delay and pulse)
     bool mIsSubPadConnected;
     bool mIsPointerOn;
-    TVec3f mAccel;  // the remote's, filtered (WPadAcceleration's parameters), in g
+    TVec3f mAccel;  // the remote's, filtered (GamePadAcceleration's parameters), in g
     TVec3f mSubAccel;
     TVec2f mStick;
     TVec2f mPointerPos;
@@ -26,19 +26,19 @@ struct WPadSample {
 };
 
 // A player's samples since the last read (input_read), newest first, and the state they are made from.
-class WPadReadDataInfo {
+class GamePadReadDataInfo {
 public:
-    WPadReadDataInfo();
+    GamePadReadDataInfo();
 
     void read(s32 chan);
     void requestReset();
     void setButtonRepeat(f32 delaySec, f32 pulseSec);
     void setAccelParam(f32 playRadius, f32 sensitivity);
     u32 takeShakePresses(s32 device);
-    WPadSample* getSample(u32) const;
+    GamePadSample* getSample(u32) const;
     u32 getValidStatusCount() const;
 
-    /* 0x00 */ WPadSample* mStatusArray;
+    /* 0x00 */ GamePadSample* mStatusArray;
     /* 0x04 */ u32 mValidStatusCount;
     NebulaInputDevice mDevice;
 
@@ -47,12 +47,12 @@ private:
     void updateConnection(s32 chan, const NebulaInputDevice& rDevice);
     void watchActivity(const NebulaInputSample& rSample, bool subPad);
 
-    WPadSample mState;        // the newest sample's state, carried into the next read
+    GamePadSample mState;        // the newest sample's state, carried into the next read
     bool mResetRequested;
     bool mStateSubPad;        // mState's Nunchuk: a change restarts its filter and stick
     bool mSubResetRequested;
     u8 mShakeHeld;
-    u32 mShakePresses[2];     // the remote's and the Nunchuk's, not yet taken (WPadHVSwing)
+    u32 mShakePresses[2];     // the remote's and the Nunchuk's, not yet taken (GamePadHVSwing)
     u16 mRepeatTime;          // in 200ths of a second of the setting, one per sample
     u16 mRepeatNext;
     u16 mRepeatDelay;
@@ -64,28 +64,28 @@ private:
     u16 mStickSettle;
 };
 
-class WPadHolder {
+class GamePadHolder {
 public:
-    WPadHolder();
+    GamePadHolder();
 
     void updateReadDataOnly();
     void updateProjectPadData();
     void updateInGame();
     void update();
     void resetPad();
-    WPad* getWPad(s32);
+    GamePad* getGamePad(s32);
 
-    /* 0x00 */ WPad* mPad[2];
-    /* 0x08 */ WPadReadDataInfo* mReadDataInfoArray;
+    /* 0x00 */ GamePad* mPad[2];
+    /* 0x08 */ GamePadReadDataInfo* mReadDataInfoArray;
     /* 0x0C */ u32 mMode;
 };
 
 namespace MR {
-    WPad* getWPad(s32);
-    void resetWPad();
-    void setWPadHolderModeHomeButton();
-    void setWPadHolderModeGame();
+    GamePad* getGamePad(s32);
+    void resetGamePad();
+    void setGamePadHolderModeHomeButton();
+    void setGamePadHolderModeGame();
     void setAutoSleepTimeWiiRemote(bool);
     // The controller's rumble motor.
-    void setWPadMotor(s32, bool);
+    void setGamePadMotor(s32, bool);
 };  // namespace MR

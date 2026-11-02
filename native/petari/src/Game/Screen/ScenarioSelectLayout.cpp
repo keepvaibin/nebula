@@ -411,7 +411,7 @@ bool ScenarioSelectLayout::trySelect() {
             return true;
         }
 
-        if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+        if (!MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
             for (s32 i = 0; i < 7; i++) {
                 if (mStar[i]->_30) {
                     continue;
@@ -571,7 +571,7 @@ bool ScenarioSelectLayout::tryCancel() {
         return true;
     }
 
-    if (MR::testCorePadTriggerB(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerB(GAMEPAD_CHAN0)) {
         MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         mBackButton->disappear();
         setNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvCancel));

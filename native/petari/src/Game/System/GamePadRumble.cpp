@@ -1,12 +1,12 @@
-#include "Game/System/WPadRumble.hpp"
-#include "Game/System/WPadHolder.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadRumbleData.hpp"
+#include "Game/System/GamePadRumble.hpp"
+#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadRumbleData.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 
-WPadRumble** WPadRumble::sInstanceForCallback;
+GamePadRumble** GamePadRumble::sInstanceForCallback;
 
 void RumbleChannel::clear() {
     _0 = nullptr;
@@ -43,11 +43,11 @@ void RumbleChannel::setPattern(const void* pParam1, const RumblePattern& rParam2
     _4 = param4;
 }
 
-WPadRumble::WPadRumble(WPad* pPad) : mPad(pPad), _8(), _C(1), _B0(), _B4(), _B8(), _BC() {
+GamePadRumble::GamePadRumble(GamePad* pPad) : mPad(pPad), _8(), _C(1), _B0(), _B4(), _B8(), _BC() {
     if (sInstanceForCallback == nullptr) {
-        sInstanceForCallback = new WPadRumble*[MR::getWPadMaxCount()];
+        sInstanceForCallback = new GamePadRumble*[MR::getGamePadMaxCount()];
 
-        for (u32 i = 0; i < MR::getWPadMaxCount(); i++) {
+        for (u32 i = 0; i < MR::getGamePadMaxCount(); i++) {
             sInstanceForCallback[i] = nullptr;
         }
 
@@ -60,33 +60,33 @@ WPadRumble::WPadRumble(WPad* pPad) : mPad(pPad), _8(), _C(1), _B0(), _B4(), _B8(
     }
 }
 
-WPadRumble::~WPadRumble() {
+GamePadRumble::~GamePadRumble() {
     s32 chan = mPad->mChannel;
 
     if (_8) {
         _8 = false;
 
-        MR::setWPadMotor(chan, false);
+        MR::setGamePadMotor(chan, false);
     }
 
     sInstanceForCallback[chan] = nullptr;
 }
 
-void WPadRumble::registInstance() {
+void GamePadRumble::registInstance() {
     s32 chan = mPad->mChannel;
 
     sInstanceForCallback[chan] = this;
 
     if (_8) {
-        MR::setWPadMotor(chan, true);
+        MR::setGamePadMotor(chan, true);
     }
 }
 
-void WPadRumble::pause() {
-    MR::setWPadMotor(mPad->mChannel, false);
+void GamePadRumble::pause() {
+    MR::setGamePadMotor(mPad->mChannel, false);
 }
 
-void WPadRumble::stop() {
+void GamePadRumble::stop() {
     _8 = false;
 
     pause();
@@ -96,7 +96,7 @@ void WPadRumble::stop() {
     }
 }
 
-void WPadRumble::update() {
+void GamePadRumble::update() {
     // A cutscene running unseen (NebulaCutsceneSkip) does not rumble.
     if (NebulaCutsceneSkip::isSkipping()) {
         bool isActive = _8;
@@ -114,7 +114,7 @@ void WPadRumble::update() {
 
         stop();
     } else {
-        WPadRumble* pRumble = getRumbleInstance();
+        GamePadRumble* pRumble = getRumbleInstance();
 
         if (pRumble != nullptr) {
             pRumble->updateRumble();
@@ -122,7 +122,7 @@ void WPadRumble::update() {
     }
 }
 
-void WPadRumble::updateRumble() {
+void GamePadRumble::updateRumble() {
     bool b = false;
 
     for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
@@ -145,7 +145,7 @@ void WPadRumble::updateRumble() {
             if (!_8) {
                 _8 = true;
 
-                MR::setWPadMotor(mPad->mChannel, true);
+                MR::setGamePadMotor(mPad->mChannel, true);
             }
         } else if (_8) {
             _8 = false;
@@ -173,15 +173,15 @@ void WPadRumble::updateRumble() {
     }
 }
 
-WPadRumble* WPadRumble::getRumbleInstance() const {
+GamePadRumble* GamePadRumble::getRumbleInstance() const {
     return sInstanceForCallback[mPad->mChannel];
 }
 
-bool WPadRumble::vibratePatternIfNotExist(const void* pParam1, const char* pPatternName) {
+bool GamePadRumble::vibratePatternIfNotExist(const void* pParam1, const char* pPatternName) {
     return setRumblePatternIfNotExist(pParam1, *RumbleData::getPattern(pPatternName), false);
 }
 
-bool WPadRumble::setRumblePatternIfNotExist(const void* pParam1, const RumblePattern& rParam2, bool param3) {
+bool GamePadRumble::setRumblePatternIfNotExist(const void* pParam1, const RumblePattern& rParam2, bool param3) {
     s32 v1 = -1;
     s32 v2 = -1;
     s32 v3 = -1;
@@ -207,7 +207,7 @@ bool WPadRumble::setRumblePatternIfNotExist(const void* pParam1, const RumblePat
     return true;
 }
 
-bool WPadRumble::findRubmlePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern& rPattern) {
+bool GamePadRumble::findRubmlePattern(const void* pOwner, s32* pExisting, s32* pEmpty, s32* pOldest, const RumblePattern& rPattern) {
     u32 oldest = -1;
     u8 oldestIndex = 0xFF;
     u8 emptyIndex = 0xFF;

@@ -9,6 +9,7 @@
 #endif
 
 #include "galaxy/render/texture_store.h"
+#include "galaxy/path_text.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/render/rt_materials.h"
 #include "nebula_cooked_texture.h"
@@ -1100,7 +1101,7 @@ void TextureCache::apply_texture_packs() {
                       << (replacement.texture && pixels.levels.empty() ? " staged" : "")
                       << " ms=" << std::chrono::duration<double, std::milli>(
                                        std::chrono::steady_clock::now() - upload_start).count()
-                      << ' ' << file.filename().string() << '\n';
+                      << ' ' << galaxy::path_text(file.filename()) << '\n';
         }
         pixels = {};
         packs_.make_resident(slot, std::move(replacement));
@@ -1125,7 +1126,7 @@ void TextureCache::apply_texture_packs() {
             ++pack_swapped_;
             if (trace_texture_packs_enabled()) {
                 std::cerr << "[texture-pack] swap addr=" << std::hex << key.address << std::dec << ' '
-                          << file.filename().string() << '\n';
+                          << galaxy::path_text(file.filename()) << '\n';
             }
         }
         pack_waiters_.erase(waiting);
@@ -1379,7 +1380,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                 ++pack_bound_;
                 if (trace_texture_packs_enabled()) {
                     std::cerr << "[texture-pack] bind addr=" << std::hex << image.key << std::dec << ' '
-                              << packs_.file(pack_slot).filename().string() << '\n';
+                              << galaxy::path_text(packs_.file(pack_slot).filename()) << '\n';
                 }
                 return handle;
             }

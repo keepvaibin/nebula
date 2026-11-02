@@ -552,7 +552,7 @@ bool GalaxyMapController::tryChangeMode() {
         return true;
     }
 
-    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         switch (mMode) {
         case Mode_AstroMap:
             MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
@@ -602,7 +602,7 @@ bool GalaxyMapController::tryDisplayAndKeyWait() {
     }
 #endif
 
-    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeout));
 
         return true;

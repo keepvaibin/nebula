@@ -1,15 +1,15 @@
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadPointer.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadPointer.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <math.h>
 #include "Game/System/NebulaInput.hpp"
 
-#define WPAD_SAMPLE_MAX 120
+#define GAMEPAD_SAMPLE_MAX 120
 
 namespace {
     // Button repeat in 200ths of a second of its setting, counted one per sample: past the longest pulse the count
@@ -20,9 +20,9 @@ namespace {
     const f32 cAccelMax = 3.4f;
     const f32 cSubAccelMax = 2.1f;
 
-    NebulaInputSample sSamples[WPAD_SAMPLE_MAX];
+    NebulaInputSample sSamples[GAMEPAD_SAMPLE_MAX];
 
-    // Activity that keeps the screen from dimming, as the console's controller layer judged it (WPADiCheckContInputs'
+    // Activity that keeps the screen from dimming, as the console's controller layer judged it (isAnyInputHeld'
     // IsControllerDataChanged): a button at once; the accelerometer moving more than 12 counts (of about 104 per g)
     // or the Nunchuk stick more than 2 counts (of 128) once the change has held for four samples.
     const f32 cActivityAccel = 12.0f / 104.0f;
@@ -45,17 +45,17 @@ namespace {
     }
 };  // namespace
 
-WPadReadDataInfo::WPadReadDataInfo()
+GamePadReadDataInfo::GamePadReadDataInfo()
     : mStatusArray(), mValidStatusCount(), mDevice(), mState(), mResetRequested(true), mStateSubPad(false),
       mSubResetRequested(true), mShakeHeld(0), mRepeatTime(0), mRepeatNext(cNoRepeatDelay), mRepeatDelay(cNoRepeatDelay),
       mRepeatPulse(0), mAccelPlayRadius(0.0f), mAccelSensitivity(1.0f), mActivitySample(), mAccelSettle(0), mStickSettle(0) {
-    mStatusArray = new WPadSample[WPAD_SAMPLE_MAX];
-    MR::zeroMemory(mStatusArray, sizeof(WPadSample) * WPAD_SAMPLE_MAX);
+    mStatusArray = new GamePadSample[GAMEPAD_SAMPLE_MAX];
+    MR::zeroMemory(mStatusArray, sizeof(GamePadSample) * GAMEPAD_SAMPLE_MAX);
     mShakePresses[0] = mShakePresses[1] = 0;
     resetState();
 }
 
-WPadSample* WPadReadDataInfo::getSample(u32 index) const {
+GamePadSample* GamePadReadDataInfo::getSample(u32 index) const {
     if (index >= mValidStatusCount) {
         return nullptr;
     }
@@ -63,15 +63,15 @@ WPadSample* WPadReadDataInfo::getSample(u32 index) const {
     return &mStatusArray[index];
 }
 
-u32 WPadReadDataInfo::getValidStatusCount() const {
+u32 GamePadReadDataInfo::getValidStatusCount() const {
     return mValidStatusCount;
 }
 
-void WPadReadDataInfo::requestReset() {
+void GamePadReadDataInfo::requestReset() {
     mResetRequested = true;
 }
 
-void WPadReadDataInfo::setButtonRepeat(f32 delaySec, f32 pulseSec) {
+void GamePadReadDataInfo::setButtonRepeat(f32 delaySec, f32 pulseSec) {
     if (pulseSec != 0.0f) {
         mRepeatDelay = static_cast< u16 >(static_cast< s32 >(delaySec * 200.0f + 0.5f));
         mRepeatPulse = static_cast< u16 >(static_cast< s32 >(pulseSec * 200.0f + 0.5f));
@@ -84,19 +84,19 @@ void WPadReadDataInfo::setButtonRepeat(f32 delaySec, f32 pulseSec) {
     mRepeatNext = mRepeatDelay;
 }
 
-void WPadReadDataInfo::setAccelParam(f32 playRadius, f32 sensitivity) {
+void GamePadReadDataInfo::setAccelParam(f32 playRadius, f32 sensitivity) {
     mAccelPlayRadius = playRadius;
     mAccelSensitivity = sensitivity;
 }
 
-u32 WPadReadDataInfo::takeShakePresses(s32 device) {
+u32 GamePadReadDataInfo::takeShakePresses(s32 device) {
     const u32 presses = mShakePresses[device];
     mShakePresses[device] = 0;
     return presses;
 }
 
 // The state a reset leaves (a scene change): nothing held, at rest with 1 g down, the pointer off at distance 1.
-void WPadReadDataInfo::resetState() {
+void GamePadReadDataInfo::resetState() {
     mState.mHold = mState.mTrigger = mState.mRelease = 0;
     mState.mRepeat = false;
     mState.mIsPointerOn = false;
@@ -110,15 +110,15 @@ void WPadReadDataInfo::resetState() {
     mSubResetRequested = true;
 }
 
-// A connection or a Nunchuk change, told to WPad as the console's connect and extension callbacks told it.
-void WPadReadDataInfo::updateConnection(s32 chan, const NebulaInputDevice& rDevice) {
+// A connection or a Nunchuk change, told to GamePad as the console's connect and extension callbacks told it.
+void GamePadReadDataInfo::updateConnection(s32 chan, const NebulaInputDevice& rDevice) {
     const bool wasConnected = mDevice.connected != 0;
     const bool hadSubPad = wasConnected && mDevice.nunchuk != 0;
     mDevice = rDevice;
 
     if (rDevice.connected == 0) {
         if (wasConnected) {
-            WPad::connectCallback(chan, WPAD_ERR_NO_CONTROLLER);
+            GamePad::connectCallback(chan, GAMEPAD_ERR_NO_CONTROLLER);
         }
 
         return;
@@ -128,19 +128,19 @@ void WPadReadDataInfo::updateConnection(s32 chan, const NebulaInputDevice& rDevi
 
     if (!wasConnected) {
         NebulaFrameClock::resetIdle();
-        WPad::connectCallback(chan, WPAD_ERR_NONE);
+        GamePad::connectCallback(chan, GAMEPAD_ERR_NONE);
     } else if (subPad == hadSubPad) {
         return;
     }
 
     if (subPad) {
-        WPad::extensionCallback(chan, WPAD_DEV_UNKNOWN);
+        GamePad::extensionCallback(chan, GAMEPAD_DEV_UNKNOWN);
     }
 
-    WPad::extensionCallback(chan, subPad ? WPAD_DEV_FREESTYLE : WPAD_DEV_CORE);
+    GamePad::extensionCallback(chan, subPad ? GAMEPAD_DEV_FREESTYLE : GAMEPAD_DEV_CORE);
 }
 
-void WPadReadDataInfo::watchActivity(const NebulaInputSample& rSample, bool subPad) {
+void GamePadReadDataInfo::watchActivity(const NebulaInputSample& rSample, bool subPad) {
     const NebulaInputSample& rPrevious = mActivitySample;
     bool active = rSample.buttons != rPrevious.buttons;
 
@@ -169,10 +169,10 @@ void WPadReadDataInfo::watchActivity(const NebulaInputSample& rSample, bool subP
 // sample's accelerations through the filter (acc += sensitivity * (reading - acc), full weight past the play radius
 // and a fourth power of the distance inside it), its pointer (held through samples without one) and stick; shake
 // presses counted. The read after a reset request returns none.
-void WPadReadDataInfo::read(s32 chan) {
+void GamePadReadDataInfo::read(s32 chan) {
     const NebulaHostServices* host = nebula_host();
     NebulaInputDevice device = {};
-    const u32 count = host->input_read(host->user, static_cast< u32 >(chan), &device, sSamples, WPAD_SAMPLE_MAX);
+    const u32 count = host->input_read(host->user, static_cast< u32 >(chan), &device, sSamples, GAMEPAD_SAMPLE_MAX);
     updateConnection(chan, device);
 
     for (u32 i = 0; i < count; i++) {
@@ -297,29 +297,29 @@ void WPadReadDataInfo::read(s32 chan) {
     }
 }
 
-WPadHolder::WPadHolder() : mReadDataInfoArray(), mMode(WPAD_SENSOR_BAR_POS_TOP) {
-    mReadDataInfoArray = new WPadReadDataInfo[WPAD_MAX_CONTROLLERS];
+GamePadHolder::GamePadHolder() : mReadDataInfoArray(), mMode(GAMEPAD_SENSOR_BAR_POS_TOP) {
+    mReadDataInfoArray = new GamePadReadDataInfo[GAMEPAD_MAX_CONTROLLERS];
 
     for (u32 i = 0; i < ARRAY_SIZE(mPad); i++) {
-        mPad[i] = new WPad(i, &mReadDataInfoArray[i]);
+        mPad[i] = new GamePad(i, &mReadDataInfoArray[i]);
     }
 }
 
-void WPadHolder::updateReadDataOnly() {
-    for (s32 chan = WPAD_CHAN0; chan < WPAD_MAX_CONTROLLERS; chan++) {
+void GamePadHolder::updateReadDataOnly() {
+    for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_MAX_CONTROLLERS; chan++) {
         mReadDataInfoArray[chan].read(chan);
     }
 }
 
-void WPadHolder::updateProjectPadData() {
+void GamePadHolder::updateProjectPadData() {
     for (u32 i = 0; i < ARRAY_SIZE(mPad); i++) {
         mPad[i]->update();
     }
 }
 
 // In play, a third or fourth controller is let go.
-void WPadHolder::updateInGame() {
-    for (s32 chan = WPAD_CHAN2; chan < WPAD_MAX_CONTROLLERS; chan++) {
+void GamePadHolder::updateInGame() {
+    for (s32 chan = GAMEPAD_CHAN2; chan < GAMEPAD_MAX_CONTROLLERS; chan++) {
         if (mReadDataInfoArray[chan].getSample(0) == nullptr) {
             continue;
         }
@@ -329,23 +329,23 @@ void WPadHolder::updateInGame() {
     }
 }
 
-void WPadHolder::update() {
+void GamePadHolder::update() {
     updateReadDataOnly();
     updateProjectPadData();
 
     switch (mMode) {
-    case WPAD_SENSOR_BAR_POS_TOP:
+    case GAMEPAD_SENSOR_BAR_POS_TOP:
         updateInGame();
         break;
-    case WPAD_SENSOR_BAR_POS_BOTTOM:
+    case GAMEPAD_SENSOR_BAR_POS_BOTTOM:
         break;
     }
 }
 
 // A scene change: each controller's motor stops, and its next read starts from rest.
-void WPadHolder::resetPad() {
-    for (s32 chan = WPAD_MAX_CONTROLLERS - 1; chan >= 0; chan--) {
-        MR::setWPadMotor(chan, false);
+void GamePadHolder::resetPad() {
+    for (s32 chan = GAMEPAD_MAX_CONTROLLERS - 1; chan >= 0; chan--) {
+        MR::setGamePadMotor(chan, false);
         mReadDataInfoArray[chan].requestReset();
     }
 
@@ -354,7 +354,7 @@ void WPadHolder::resetPad() {
     }
 }
 
-WPad* WPadHolder::getWPad(s32 channel) {
+GamePad* GamePadHolder::getGamePad(s32 channel) {
     u32 channelMax = ARRAY_SIZE(mPad);
 
     if (channel < channelMax) {
@@ -365,35 +365,35 @@ WPad* WPadHolder::getWPad(s32 channel) {
 }
 
 namespace {
-    WPadHolder* getWPadHolder() NO_INLINE {
-        return SingletonHolder< GameSystem >::get()->mObjHolder->mWPadHolder;
+    GamePadHolder* getGamePadHolder() NO_INLINE {
+        return SingletonHolder< GameSystem >::get()->mObjHolder->mGamePadHolder;
     }
 };  // namespace
 
 namespace MR {
-    WPad* getWPad(s32 channel) {
-        return ::getWPadHolder()->getWPad(channel);
+    GamePad* getGamePad(s32 channel) {
+        return ::getGamePadHolder()->getGamePad(channel);
     }
 
-    void resetWPad() {
-        WPadHolder* pWPadHolder;
+    void resetGamePad() {
+        GamePadHolder* pGamePadHolder;
 
-        pWPadHolder = ::getWPadHolder();
-        pWPadHolder->resetPad();
+        pGamePadHolder = ::getGamePadHolder();
+        pGamePadHolder->resetPad();
     }
 
-    void setWPadHolderModeHomeButton() {
-        WPadHolder* pWPadHolder;
+    void setGamePadHolderModeHomeButton() {
+        GamePadHolder* pGamePadHolder;
 
-        pWPadHolder = ::getWPadHolder();
-        pWPadHolder->mMode = WPAD_SENSOR_BAR_POS_BOTTOM;
+        pGamePadHolder = ::getGamePadHolder();
+        pGamePadHolder->mMode = GAMEPAD_SENSOR_BAR_POS_BOTTOM;
     }
 
-    void setWPadHolderModeGame() {
-        WPadHolder* pWPadHolder;
+    void setGamePadHolderModeGame() {
+        GamePadHolder* pGamePadHolder;
 
-        pWPadHolder = ::getWPadHolder();
-        pWPadHolder->mMode = WPAD_SENSOR_BAR_POS_TOP;
+        pGamePadHolder = ::getGamePadHolder();
+        pGamePadHolder->mMode = GAMEPAD_SENSOR_BAR_POS_TOP;
     }
 
 
@@ -402,7 +402,7 @@ namespace MR {
         (void)isLongAutoSleep;
     }
 
-    void setWPadMotor(s32 channel, bool on) {
+    void setGamePadMotor(s32 channel, bool on) {
         const NebulaHostServices* host = nebula_host();
         host->input_control(host->user, static_cast< u32 >(channel), NEBULA_INPUT_RUMBLE, on ? 1u : 0u);
     }

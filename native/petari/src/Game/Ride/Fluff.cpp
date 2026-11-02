@@ -226,7 +226,7 @@ void Fluff::exeRideFlyOnWind() {
     if (!updateRide()) {
         mWindSpinTimer = ::sWindRemainTime;
         if (!trySpinUp(0)) {
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
             if (mWindDistance > ::sWindDistanceMax + 100.0f) {
                 setNerve(GET_NERVE(Fluff, FluffNrvRideFly));
             }
@@ -242,7 +242,7 @@ void Fluff::exeRideSpinUp() {
             MR::startSound(mRider, "SE_PV_TWIST_START");
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::startBckPlayer("FluffSpin");
         MR::tryPlayerCoinPull();
         if (mSpinsRemaining > 0) {
@@ -277,7 +277,7 @@ void Fluff::exeRideSpinUp() {
             lift.scale(::sSpinUpAccelY);
         }
         mVelocity.add(lift);
-        MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
     }
 
     if (mWindDistance > ::sWindDistanceMin && mWindDistance < ::sWindDistanceMax) {
@@ -305,14 +305,14 @@ bool Fluff::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRece
     if (MR::isMsgPlayerSpinAttack(msg)) {
         if (isNerve(GET_NERVE(Fluff, FluffNrvFreeBloom)) && MR::isGreaterStep(this, ::sFreeBloomFlyUpStep) ||
             isNerve(GET_NERVE(Fluff, FluffNrvFreeWaitOnGround))) {
-            MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+            MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
             mVelocity.set(mGravity * -::sSpeedWaitAir);
             setNerve(GET_NERVE(Fluff, FluffNrvFreeWaitAir));
             return false;
         }
 
         if (isNerve(GET_NERVE(Fluff, FluffNrvFreeWaitAir)) && MR::isGreaterStep(this, ::sStepToFreeWaitAir2nd)) {
-            MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+            MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
             mVelocity.set(mGravity * -::sSpeedWaitAir2nd);
             setNerve(GET_NERVE(Fluff, FluffNrvFreeWaitAir));
             return false;
@@ -363,7 +363,7 @@ bool Fluff::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         MR::emitEffect(this, "Blur");
         mCameraTargetMtx->setMtx(getBaseMtx());
         MR::setGameCameraTarget(CameraTargetArg(nullptr, mCameraTargetMtx, nullptr, nullptr));
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         MR::startSound(mRider, "SE_PV_CATCH");
         MR::startSound(mRider, "SE_PM_GRAB_OBJ");
         MR::invalidateHitSensors(this);
@@ -437,7 +437,7 @@ void Fluff::endBind(f32 jumpY) {
 }
 
 bool Fluff::updateRide() {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testSystemTriggerA()) {
         Fluff::endBind(::sJumpSpeedY);
         return true;
     }
@@ -453,7 +453,7 @@ bool Fluff::updateRide() {
     MR::normalize(&mUp);
 
     TVec3f front(0.0f, 0.0f, 0.0f);
-    MR::calcWorldStickDirectionXZ(&front, WPAD_CHAN0);
+    MR::calcWorldStickDirectionXZ(&front, GAMEPAD_CHAN0);
     MR::vecKillElement(front, mUp, &front);
     if (!MR::isNearZero(front)) {
         MR::normalize(&front);
@@ -502,7 +502,7 @@ void Fluff::updateWind() {
     }
 
     if (mSpinsRemaining > 0) {
-        if (MR::getSubPadStickX(WPAD_CHAN0) == 0.0f || MR::getSubPadStickY(WPAD_CHAN0) == 0.0f) {
+        if (MR::getSubPadStickX(GAMEPAD_CHAN0) == 0.0f || MR::getSubPadStickY(GAMEPAD_CHAN0) == 0.0f) {
             MR::vecBlend(mFront, windFront, &mFront, ::sBlendRateToWind);
         }
         MR::startLevelSound(this, "SE_OJ_LV_FLUFF_FLY");
@@ -548,7 +548,7 @@ void Fluff::updateWind() {
 bool Fluff::trySpinUp(s32 step) {
     mWindSpinTimer--;
 
-    if (mSpinsRemaining > 0 && MR::isPadSwing(WPAD_CHAN0) && MR::isGreaterStep(this, step)) {
+    if (mSpinsRemaining > 0 && MR::isPadSwing(GAMEPAD_CHAN0) && MR::isGreaterStep(this, step)) {
         if (mWindSpinTimer > 0) {
             setNerve(GET_NERVE(Fluff, FluffNrvRideSpinUpOnWind));
         } else {

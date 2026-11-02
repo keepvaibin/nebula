@@ -195,7 +195,7 @@ void Creeper::exeHangStart() {
         MR::startBckPlayer("GrowPlantCatch", ::sAnimInterpoleFrame);
     }
 
-    if (!updateHangUp(::sHangStartRotateSpeed) && MR::isPadSwing(WPAD_CHAN0)) {
+    if (!updateHangUp(::sHangStartRotateSpeed) && MR::isPadSwing(GAMEPAD_CHAN0)) {
         setNerve(GET_NERVE(Creeper, CreeperNrvHangUp));
     }
 }
@@ -205,9 +205,9 @@ void Creeper::exeHangUp() {
         MR::startBckPlayer("GrowPlantHangUp", ::sAnimInterpoleFrame);
     }
 
-    if (!updateHangUp(mHangSpeed * ::sHangRotateSpeedRate) && MR::isPadSwing(WPAD_CHAN0)) {
+    if (!updateHangUp(mHangSpeed * ::sHangRotateSpeedRate) && MR::isPadSwing(GAMEPAD_CHAN0)) {
         mHangSpeed += ::sHangUpAccel;
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
     }
 }
 
@@ -309,7 +309,7 @@ bool Creeper::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
             setNerve(GET_NERVE(Creeper, CreeperNrvHangDown));
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
 
         MR::startMultiActorCameraNoTarget(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
         return true;
@@ -361,16 +361,16 @@ void Creeper::bendPoints() {
 }
 
 bool Creeper::tryHangUp() {
-    if (MR::isPadSwing(WPAD_CHAN0)) {
-        // BUG: doubly-reversed logic: should be checking WPAD_CHAN1 and accel are swapped
-        if (MR::isPadSwing(WPAD_CHAN0)) {
+    if (MR::isPadSwing(GAMEPAD_CHAN0)) {
+        // BUG: doubly-reversed logic: should be checking GAMEPAD_CHAN1 and accel are swapped
+        if (MR::isPadSwing(GAMEPAD_CHAN0)) {
             mHangSpeed = ::sHangUpAccel;
         } else {
             mHangSpeed = ::sHangUpAccel2P;
         }
 
         MR::reverseRailDirection(this);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         setNerve(GET_NERVE(Creeper, CreeperNrvHangUp));
         return true;
     }
@@ -418,9 +418,9 @@ bool Creeper::tryJump() {
 }
 
 bool Creeper::updateHangUp(f32 rotateSpeed) {
-    if (MR::isPadSwing(WPAD_CHAN0)) {
+    if (MR::isPadSwing(GAMEPAD_CHAN0)) {
         mHangSpeed += ::sHangUpAccel;
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
     }
 
     if (MR::isFirstStep(this) && mHangSpeed >= 5.0f) {

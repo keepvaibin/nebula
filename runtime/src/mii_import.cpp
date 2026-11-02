@@ -2,6 +2,7 @@
 // The Mii library and Mii import (mii_import.h).
 
 #include "galaxy/mii_import.h"
+#include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/mii_formats.h"
@@ -146,7 +147,7 @@ std::vector<std::byte> read_file(const std::filesystem::path& path) {
 }
 
 std::string lower_extension(const std::filesystem::path& path) {
-    std::string ext = path.extension().string();
+    std::string ext = galaxy::path_text(path.extension());
     if (!ext.empty() && ext.front() == '.') ext.erase(0, 1);
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext;

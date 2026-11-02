@@ -431,16 +431,16 @@ TVec3f& MarioModule::getCamDirZ() const {
 void MarioModule::startPadVib(u32 strength) {
     switch (strength) {
     case 1:
-        MR::tryRumblePadVeryWeak(mActor, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(mActor, GAMEPAD_CHAN0);
         return;
     case 0:
-        MR::tryRumblePadWeak(mActor, WPAD_CHAN0);
+        MR::tryRumblePadWeak(mActor, GAMEPAD_CHAN0);
         return;
     case 2:
-        MR::tryRumblePadMiddle(mActor, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(mActor, GAMEPAD_CHAN0);
         return;
     case 3:
-        MR::tryRumblePadStrong(mActor, WPAD_CHAN0);
+        MR::tryRumblePadStrong(mActor, GAMEPAD_CHAN0);
         return;
     default:
         return;
@@ -448,7 +448,7 @@ void MarioModule::startPadVib(u32 strength) {
 }
 
 void MarioModule::startPadVib(const char* pStrength) {
-    MR::tryRumblePad(mActor, pStrength, WPAD_CHAN0);
+    MR::tryRumblePad(mActor, pStrength, GAMEPAD_CHAN0);
 }
 
 f32 MarioModule::getStickX() const {

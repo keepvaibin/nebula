@@ -1,9 +1,9 @@
-#include "Game/System/WPadPointer.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadPointer.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
-void WPadPointer_FORCE_MATCH_SDATA2() {
+void GamePadPointer_FORCE_MATCH_SDATA2() {
     (void)0.03f;
     (void)0.0001f;
 }
@@ -15,7 +15,7 @@ namespace {
     static const s32 sLostSensorTime = 20;
 };  // namespace
 
-WPadPointer::WPadPointer(const WPad* pPad)
+GamePadPointer::GamePadPointer(const GamePad* pPad)
     : mPad(pPad), mPosPlayRadius(0.03f), mPosSensitivity(0.5f), mHoriPlayRadius(), mHoriSensitivity(1.0f), mDistPlayRadius(), mDistSensitivity(1.0f),
       mLostSensorTime(), mDistDisplay(0.0f), mDpdValidFg(), mValidInScreenTime(), mInValidOutScreenTime(), mEnablePastCount(), mIsPointInScreen(),
       mIsPointerMoved() {
@@ -25,7 +25,7 @@ WPadPointer::WPadPointer(const WPad* pPad)
     reset();
 }
 
-void WPadPointer::reset() {
+void GamePadPointer::reset() {
     for (s32 i = 0; i < mMaxPastCount; i++) {
         mPointingPosArray[i].set(0.0f);
         mHorizonArray[i].set(0.0f);
@@ -40,8 +40,8 @@ void WPadPointer::reset() {
     mIsPointerMoved = false;
 }
 
-void WPadPointer::update() {
-    WPadSample* pSample = mPad->getSample(0);
+void GamePadPointer::update() {
+    GamePadSample* pSample = mPad->getSample(0);
 
     if (pSample == nullptr) {
         reset();
@@ -62,7 +62,7 @@ void WPadPointer::update() {
     bool isAnyDpdValid = false;
 
     for (s32 i = validCount - 1; i >= 0; i--) {
-        WPadSample* curStatus = mPad->getSample(i);
+        GamePadSample* curStatus = mPad->getSample(i);
         s8 dpdValidFg = curStatus->mIsPointerOn ? 2 : 0;
 
         if (dpdValidFg > 0) {
@@ -101,7 +101,7 @@ void WPadPointer::update() {
     }
 }
 
-void WPadPointer::getPointingPos(TVec2f* pOut) const {
+void GamePadPointer::getPointingPos(TVec2f* pOut) const {
     if (mIsPointInScreen) {
         pOut->set(mPointingPosArray[mEnablePastCount - 1]);
     } else {
@@ -109,7 +109,7 @@ void WPadPointer::getPointingPos(TVec2f* pOut) const {
     }
 }
 
-void WPadPointer::getHorizonVec(TVec2f* pOut) const {
+void GamePadPointer::getHorizonVec(TVec2f* pOut) const {
     if (mIsPointInScreen) {
         pOut->set(mHorizonArray[mEnablePastCount - 1]);
     } else {
@@ -117,15 +117,15 @@ void WPadPointer::getHorizonVec(TVec2f* pOut) const {
     }
 }
 
-void WPadPointer::getPastPointingPos(TVec2f* pOut, s32 idx) const {
+void GamePadPointer::getPastPointingPos(TVec2f* pOut, s32 idx) const {
     pOut->set(mPointingPosArray[mEnablePastCount - 1 - idx]);
 }
 
-s32 WPadPointer::getEnablePastCount() const {
+s32 GamePadPointer::getEnablePastCount() const {
     return mEnablePastCount;
 }
 
-void WPadPointer::getPointingPosBasedOnScreen(TVec2f* pOut) const {
+void GamePadPointer::getPointingPosBasedOnScreen(TVec2f* pOut) const {
     pOut->x = (0.5f + (0.5f * mPointingPosArray->x)) * static_cast< s32 >(MR::getScreenWidth());
     pOut->y = (0.5f + (0.5f * mPointingPosArray->y)) * static_cast< s32 >(NebulaFrameClock::cFrameHeight);
 }

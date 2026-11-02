@@ -1,9 +1,9 @@
-#include "Game/System/WPadLeaveWatcher.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadAcceleration.hpp"
-#include "Game/System/WPadButton.hpp"
-#include "Game/System/WPadPointer.hpp"
-#include "Game/System/WPadStick.hpp"
+#include "Game/System/GamePadLeaveWatcher.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadAcceleration.hpp"
+#include "Game/System/GamePadButton.hpp"
+#include "Game/System/GamePadPointer.hpp"
+#include "Game/System/GamePadStick.hpp"
 
 namespace {
     static bool sIsCheckPointerMoved = false;
@@ -14,10 +14,10 @@ namespace {
     static const s32 sLeaveLongTime = 3600;
 };  // namespace
 
-WPadLeaveWatcher::WPadLeaveWatcher(WPad* pPad) : mPad(pPad), mStep(), mIsSuspend() {
+GamePadLeaveWatcher::GamePadLeaveWatcher(GamePad* pPad) : mPad(pPad), mStep(), mIsSuspend() {
 }
 
-void WPadLeaveWatcher::update() {
+void GamePadLeaveWatcher::update() {
     if (mIsSuspend) {
         return;
     }
@@ -31,15 +31,15 @@ void WPadLeaveWatcher::update() {
     }
 }
 
-void WPadLeaveWatcher::start() {
+void GamePadLeaveWatcher::start() {
     mIsSuspend = false;
 }
 
-void WPadLeaveWatcher::stop() {
+void GamePadLeaveWatcher::stop() {
     mIsSuspend = true;
 }
 
-void WPadLeaveWatcher::restart() {
+void GamePadLeaveWatcher::restart() {
     mStep = 0;
     mIsSuspend = false;
 }

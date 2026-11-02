@@ -702,7 +702,7 @@ void PictureBookLayout::exeWaitWithText() {
         setNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeOutText));
     } else {
         bool isTriggerNextPage =
-            MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testSubPadStickTriggerRight(WPAD_CHAN0);
+            MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testCorePadTriggerRight(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerRight(GAMEPAD_CHAN0);
         // A skipped reading (Rosalina's, a cutscene) turns each page as soon as it is up.
         isTriggerNextPage = isTriggerNextPage || NebulaCutsceneSkip::isSkipping();
 
@@ -723,7 +723,7 @@ void PictureBookLayout::exeWaitWithText() {
 
             setNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeOutText));
         } else {
-            bool isTriggerPrevPage = MR::testCorePadTriggerLeft(WPAD_CHAN0) || MR::testSubPadStickTriggerLeft(WPAD_CHAN0);
+            bool isTriggerPrevPage = MR::testCorePadTriggerLeft(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerLeft(GAMEPAD_CHAN0);
 
             if (isTriggerPrevPage) {
                 if (mChapterMin < mChapterNo || mPageNo > 0 || mTextIndex > 0) {

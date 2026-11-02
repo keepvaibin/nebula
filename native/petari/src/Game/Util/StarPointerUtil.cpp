@@ -12,7 +12,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/StarPointerOnOffController.hpp"
-#include "Game/System/WPadRumble.hpp"
+#include "Game/System/GamePadRumble.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
@@ -88,15 +88,15 @@ namespace {
             return false;
         }
 
-        if (!MR::isConnectedWPad(channel)) {
+        if (!MR::isConnectedGamePad(channel)) {
             return false;
         }
 
-        if (channel == WPAD_CHAN1 && MR::isStarPointer2PTransparencyMode()) {
+        if (channel == GAMEPAD_CHAN1 && MR::isStarPointer2PTransparencyMode()) {
             return false;
         }
 
-        if (channel == WPAD_CHAN0 && getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
+        if (channel == GAMEPAD_CHAN0 && getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
             return false;
         }
 
@@ -144,12 +144,12 @@ namespace MR {
     }
 
     void onStarPointerSceneOut() {
-        ::getStarPointerLayout(WPAD_CHAN0)->forceEndCommandStream();
-        ::getStarPointerLayout(WPAD_CHAN1)->forceEndCommandStream();
+        ::getStarPointerLayout(GAMEPAD_CHAN0)->forceEndCommandStream();
+        ::getStarPointerLayout(GAMEPAD_CHAN1)->forceEndCommandStream();
         ::getStarPointerDirector()->invalidate();
         setStarPointerModeBase();
-        WPadFunction::getWPadRumble(WPAD_CHAN0)->stop();
-        WPadFunction::getWPadRumble(WPAD_CHAN1)->stop();
+        GamePadFunction::getGamePadRumble(GAMEPAD_CHAN0)->stop();
+        GamePadFunction::getGamePadRumble(GAMEPAD_CHAN1)->stop();
     }
 
     void setStarPointerModeBase() {
@@ -182,11 +182,11 @@ namespace MR {
     }
 
     bool isStarPointerValid(s32 channel) {
-        return ::getStarPointerLayout(channel)->mIsPointerValid && MR::isConnectedWPad(channel);
+        return ::getStarPointerLayout(channel)->mIsPointerValid && MR::isConnectedGamePad(channel);
     }
 
     bool isStarPointerPointing(const LiveActor* pActor, s32 channel, bool enableTouch, const char* pStrength) {
-        if (channel == WPAD_CHAN0) {
+        if (channel == GAMEPAD_CHAN0) {
             return MR::isStarPointerPointing1P(pActor, pStrength, enableTouch, false);
         } else {
             return MR::isStarPointerPointing2P(pActor, pStrength, enableTouch, false);
@@ -210,15 +210,15 @@ namespace MR {
 
     bool isStarPointerPointingPaneForMeterLayout(const LayoutActor* pActor, const char* pLayoutName, s32 channel, bool enableTouch,
                                                  const char* pStrength) {
-        if (!MR::isConnectedWPad(channel)) {
+        if (!MR::isConnectedGamePad(channel)) {
             return false;
         }
 
-        if (channel == WPAD_CHAN1 && isStarPointer2PTransparencyMode()) {
+        if (channel == GAMEPAD_CHAN1 && isStarPointer2PTransparencyMode()) {
             return false;
         }
 
-        if (channel == WPAD_CHAN0 && ::getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
+        if (channel == GAMEPAD_CHAN0 && ::getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
             return false;
         }
 
@@ -242,7 +242,7 @@ namespace MR {
     }
 
     bool isStarPointerPointingTarget(const LayoutActor* pActor, const char* pLayoutName, s32 channel, bool enableTouch, const char* pStrength) {
-        if (!MR::isConnectedWPad(channel)) {
+        if (!MR::isConnectedGamePad(channel)) {
             return false;
         }
 
@@ -250,11 +250,11 @@ namespace MR {
             return false;
         }
 
-        if (channel == WPAD_CHAN1 && isStarPointer2PTransparencyMode()) {
+        if (channel == GAMEPAD_CHAN1 && isStarPointer2PTransparencyMode()) {
             return false;
         }
 
-        if (channel == WPAD_CHAN0 && ::getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
+        if (channel == GAMEPAD_CHAN0 && ::getStarPointerOnOffController()->compareMode(StarPointerMode_1PInvalid2PValid)) {
             return false;
         }
 
@@ -281,9 +281,9 @@ namespace MR {
     bool isStarPointerPointing1P(const LiveActor* pActor, const char* pStrength, bool enableTouch, bool disableShoot) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
 
-        if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN0, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
-            if (pStrength != nullptr && ::getStarPointerLayout(WPAD_CHAN0)->isChanceToRumble()) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN0);
+        if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN0, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
+            if (pStrength != nullptr && ::getStarPointerLayout(GAMEPAD_CHAN0)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN0);
             }
             return true;
         }
@@ -293,9 +293,9 @@ namespace MR {
     bool isStarPointerPointing1PWithoutCheckZ(const LiveActor* pActor, const char* pStrength, bool enableTouch, bool disableShoot) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
 
-        if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN0, ::checkPointingWithoutCheckZ, ::always, enableTouch, disableShoot, false)) {
-            if (pStrength != nullptr && ::getStarPointerLayout(WPAD_CHAN0)->isChanceToRumble()) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN0);
+        if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN0, ::checkPointingWithoutCheckZ, ::always, enableTouch, disableShoot, false)) {
+            if (pStrength != nullptr && ::getStarPointerLayout(GAMEPAD_CHAN0)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN0);
             }
             return true;
         }
@@ -305,9 +305,9 @@ namespace MR {
     bool isStarPointerPointing2P(const LiveActor* pActor, const char* pStrength, bool enableTouch, bool disableShoot) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
 
-        if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN1, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
-            if (pStrength != nullptr && ::getStarPointerLayout(WPAD_CHAN1)->isChanceToRumble()) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN1);
+        if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN1, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
+            if (pStrength != nullptr && ::getStarPointerLayout(GAMEPAD_CHAN1)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN1);
             }
             return true;
         }
@@ -317,9 +317,9 @@ namespace MR {
     bool isStarPointerPointing2POnPressButton(const LiveActor* pActor, const char* pStrength, bool enableTouch, bool disableShoot) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
 
-        if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN1, ::checkPointingTarget, MR::testCorePadButtonA, enableTouch, disableShoot, false)) {
-            if (pStrength != nullptr && ::getStarPointerLayout(WPAD_CHAN1)->isChanceToRumble()) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN1);
+        if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN1, ::checkPointingTarget, MR::testCorePadButtonA, enableTouch, disableShoot, false)) {
+            if (pStrength != nullptr && ::getStarPointerLayout(GAMEPAD_CHAN1)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN1);
             }
             return true;
         }
@@ -329,10 +329,10 @@ namespace MR {
     bool isStarPointerPointing2POnTriggerButton(const LiveActor* pActor, const char* pStrength, bool enableTouch, bool disableShoot) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
 
-        if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN1, ::checkPointingTarget, MR::testCorePadTriggerA, enableTouch, disableShoot,
+        if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN1, ::checkPointingTarget, MR::testCorePadTriggerA, enableTouch, disableShoot,
                                         false)) {
             if (pStrength != nullptr) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN1);
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN1);
             }
             return true;
         }
@@ -342,21 +342,21 @@ namespace MR {
 
     bool isStarPointerPointingFileSelect(const LiveActor* pActor) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
-        return ::isStarPointerPointingCore(&info, pActor, WPAD_CHAN0, ::checkPointingWithoutCheckZ, ::always, true, false, false);
+        return ::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN0, ::checkPointingWithoutCheckZ, ::always, true, false, false);
     }
 
     bool isStarPointerPointing1Por2P(const LiveActor* pActor, const char* pStrength, bool enableTouch, bool disableShoot) {
         StarPointerTargetInfo info(pActor->mStarPointerTarget, nullptr, nullptr);
 
-        if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN0, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
-            if (pStrength != nullptr && ::getStarPointerLayout(WPAD_CHAN0)->isChanceToRumble()) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN0);
+        if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN0, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
+            if (pStrength != nullptr && ::getStarPointerLayout(GAMEPAD_CHAN0)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN0);
             }
             return true;
 
-        } else if (::isStarPointerPointingCore(&info, pActor, WPAD_CHAN1, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
-            if (pStrength != nullptr && ::getStarPointerLayout(WPAD_CHAN1)->isChanceToRumble()) {
-                MR::tryRumblePad(pActor, pStrength, WPAD_CHAN1);
+        } else if (::isStarPointerPointingCore(&info, pActor, GAMEPAD_CHAN1, ::checkPointingTarget, ::always, enableTouch, disableShoot, false)) {
+            if (pStrength != nullptr && ::getStarPointerLayout(GAMEPAD_CHAN1)->isChanceToRumble()) {
+                MR::tryRumblePad(pActor, pStrength, GAMEPAD_CHAN1);
             }
             return true;
         }
@@ -898,7 +898,7 @@ namespace MR {
 
     bool isEnableStarPointerShootStarPiece(s32 channel) {
         StarPointerDirector* director = ::getStarPointerDirector();
-        if (channel == WPAD_CHAN0) {
+        if (channel == GAMEPAD_CHAN0) {
             return director->mIsAllowP1StarPieceShot;
         } else {
             return director->isEnableStarPointerShootStarPiece();
@@ -924,7 +924,7 @@ namespace MR {
 
     void setStarPointerDrawSyncToken() {
         StarPointerDirector* director = ::getStarPointerDirector();
-        if (director->getStarPointerLayout(WPAD_CHAN0)->mIsPointerValid || director->getStarPointerLayout(WPAD_CHAN1)->mIsPointerValid) {
+        if (director->getStarPointerLayout(GAMEPAD_CHAN0)->mIsPointerValid || director->getStarPointerLayout(GAMEPAD_CHAN1)->mIsPointerValid) {
             ::getStarPointerDirector()->mPeekZ->setDrawSyncToken();
         }
     }

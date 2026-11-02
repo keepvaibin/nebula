@@ -222,7 +222,7 @@ bool MogucchiHillPiece::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     }
 
     if (MR::isMsgPlayerHipDrop(msg)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         MR::startSound(this, "SE_EM_MOGHILL_BREAK");
         destroy();
 
@@ -230,7 +230,7 @@ bool MogucchiHillPiece::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     }
 
     if (MR::isMsgPlayerTrample(msg)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         MR::startSound(this, "SE_EM_MOGHILL_BREAK");
         destroy();
 
@@ -244,7 +244,7 @@ bool MogucchiHillPiece::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitS
     }
 
     if (isHitAll) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::startSound(this, "SE_EM_MOGHILL_BREAK");
         mHost->killPieces(this);
 
@@ -267,7 +267,7 @@ bool MogucchiHillPiece::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSe
         return false;
     }
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
     MR::startSound(this, "SE_EM_MOGHILL_BREAK_SOFT");
     destroy();
 

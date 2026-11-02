@@ -16,6 +16,8 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+
+#include "galaxy/path_text.h"
 #include <vector>
 
 namespace galaxy::render {
@@ -219,13 +221,13 @@ std::vector<std::string> table_paths() {
         return paths;
     }
     const std::filesystem::path dir = program_directory();
-    return {(dir / "rt-materials.tsv").string(), (dir / "rt-materials-lights.tsv").string()};
+    return {galaxy::path_text(dir / "rt-materials.tsv"), galaxy::path_text(dir / "rt-materials-lights.tsv")};
 }
 
 RtMaterialTable load() {
     RtMaterialTable table;
     for (const std::string& path : table_paths()) {
-        std::ifstream file(path);
+        std::ifstream file(galaxy::text_path(path));
         if (!file) {
             continue;
         }
@@ -250,9 +252,9 @@ const RtStageSunTable& suns() {
         if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_SUNS_FILE") == 0 && length > 1u) {
             path = value;
         } else {
-            path = (program_directory() / "rt-suns.tsv").string();
+            path = galaxy::path_text(program_directory() / "rt-suns.tsv");
         }
-        std::ifstream file(path);
+        std::ifstream file(galaxy::text_path(path));
         if (file) {
             const std::size_t rows = t.read(file);
             std::cerr << "[rt-suns] file=" << path << " rows=" << rows << '\n';

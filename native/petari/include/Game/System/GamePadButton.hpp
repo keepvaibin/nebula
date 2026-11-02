@@ -1,14 +1,14 @@
 #pragma once
 
 
-class WPad;
+class GamePad;
 
 /// @brief The wrapper around the state of a Wii Remote's buttons.
-class WPadButton {
+class GamePadButton {
 public:
-    /// @brief Creates a new `WPadButton`.
+    /// @brief Creates a new `GamePadButton`.
     /// @param pPad The pointer to the state of the owning Wii Remote.
-    WPadButton(const WPad* pPad);
+    GamePadButton(const GamePad* pPad);
 
     /// @brief Updates the state of the Wii Remote's buttons.
     void update();
@@ -123,7 +123,7 @@ public:
 
 private:
     /// @brief The pointer to the state of the owning Wii Remote.
-    /* 0x00 */ const WPad* mPad;
+    /* 0x00 */ const GamePad* mPad;
 
     /// @brief The combination of buttons pressed.
     /* 0x04 */ u32 mHold;

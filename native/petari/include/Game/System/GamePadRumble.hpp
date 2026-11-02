@@ -1,7 +1,7 @@
 #pragma once
 
 
-class WPad;
+class GamePad;
 struct RumblePattern;
 
 class RumbleChannel {
@@ -18,23 +18,23 @@ public:
     /* 0x10 */ const void* _10;
 };
 
-class WPadRumble {
+class GamePadRumble {
 public:
-    WPadRumble(WPad*);
+    GamePadRumble(GamePad*);
 
-    virtual ~WPadRumble();
+    virtual ~GamePadRumble();
 
     void registInstance();
     void pause();
     void stop();
     void update();
     void updateRumble();
-    WPadRumble* getRumbleInstance() const;
+    GamePadRumble* getRumbleInstance() const;
     bool vibratePatternIfNotExist(const void*, const char*);
     bool setRumblePatternIfNotExist(const void*, const RumblePattern&, bool);
     bool findRubmlePattern(const void*, s32*, s32*, s32*, const RumblePattern&);
 
-    /* 0x04 */ WPad* mPad;
+    /* 0x04 */ GamePad* mPad;
     /* 0x08 */ bool _8;
     /* 0x0C */ u32 _C;
     /* 0x10 */ RumbleChannel mChannel[8];
@@ -44,5 +44,5 @@ public:
     /* 0xBC */ s32 _BC;
 
 private:
-    static WPadRumble** sInstanceForCallback;
+    static GamePadRumble** sInstanceForCallback;
 };

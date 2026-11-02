@@ -105,7 +105,7 @@ void TamakoroTutorial::requestEnd() {
 }
 
 void TamakoroTutorial::control() {
-    MR::getCorePadAcceleration(&mPadAccel, WPAD_CHAN0);
+    MR::getCorePadAcceleration(&mPadAccel, GAMEPAD_CHAN0);
     MR::normalizeOrZero(&mPadAccel);
 }
 

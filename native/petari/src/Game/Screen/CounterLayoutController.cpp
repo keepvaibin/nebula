@@ -124,8 +124,8 @@ bool CounterLayoutController::isPlayerMoving() const {
         return true;
     }
 
-    if (!MR::isNearZero(MR::getSubPadStickX(WPAD_CHAN0)) || !MR::isNearZero(MR::getSubPadStickY(WPAD_CHAN0)) ||
-        MR::testPadButtonAnyWithoutHome(WPAD_CHAN0) || MR::isCorePadSwing(WPAD_CHAN0) || MR::isSubPadSwing(WPAD_CHAN0)) {
+    if (!MR::isNearZero(MR::getSubPadStickX(GAMEPAD_CHAN0)) || !MR::isNearZero(MR::getSubPadStickY(GAMEPAD_CHAN0)) ||
+        MR::testPadButtonAnyWithoutHome(GAMEPAD_CHAN0) || MR::isCorePadSwing(GAMEPAD_CHAN0) || MR::isSubPadSwing(GAMEPAD_CHAN0)) {
         return true;
     }
 

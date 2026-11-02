@@ -45,7 +45,7 @@ bool PictureBookCloseButton::trySelect() {
         return true;
     }
 
-    if (!mPaneCtrl->isAppearing() && MR::testCorePadTriggerB(WPAD_CHAN0) && mCanCloseWithPad) {
+    if (!mPaneCtrl->isAppearing() && MR::testCorePadTriggerB(GAMEPAD_CHAN0) && mCanCloseWithPad) {
         mPaneCtrl->disappear();
         MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);

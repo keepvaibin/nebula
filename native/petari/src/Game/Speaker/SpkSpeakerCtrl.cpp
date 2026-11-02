@@ -8,8 +8,8 @@
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-SpeakerInfo sSpeakerInfo[WPAD_MAX_CONTROLLERS];
-SpkSoundHandle sAdjustSoundHandle[WPAD_MAX_CONTROLLERS];
+SpeakerInfo sSpeakerInfo[GAMEPAD_MAX_CONTROLLERS];
+SpkSoundHandle sAdjustSoundHandle[GAMEPAD_MAX_CONTROLLERS];
 SpkMixingBuffer* sMixingBuffer;
 
 namespace {
@@ -37,7 +37,7 @@ void SpkSpeakerCtrl::setMixingBuffer(SpkMixingBuffer* pMixingBuffer) {
 }
 
 void SpkSpeakerCtrl::setup() {
-    for (int i = 0; i < WPAD_MAX_CONTROLLERS; i++) {
+    for (int i = 0; i < GAMEPAD_MAX_CONTROLLERS; i++) {
         // A controller can connect before this runs (on the audio init's thread): it stays connected.
         const bool connected = sSpeakerInfo[i].mIsConnected;
         sSpeakerInfo[i].mIsConnected = false;
@@ -120,7 +120,7 @@ void SpkSpeakerCtrl::reconnect(s32 padChannel) {
 }
 
 void SpkSpeakerCtrl::framework() {
-    for (s32 i = 0; i < WPAD_MAX_CONTROLLERS; i++) {
+    for (s32 i = 0; i < GAMEPAD_MAX_CONTROLLERS; i++) {
         SpkSpeakerCtrl::continuousUsingProcess(i);
         SpkSpeakerCtrl::reconnectProcess(i);
         SpkSpeakerCtrl::retryConnection(i);
@@ -169,7 +169,7 @@ void SpkSpeakerCtrl::continuousUsingProcess(s32 padChannel) {
 }
 
 void SpkSpeakerCtrl::updateSpeaker() {
-    for (s32 i = 0; i < WPAD_MAX_CONTROLLERS; i++) {
+    for (s32 i = 0; i < GAMEPAD_MAX_CONTROLLERS; i++) {
         if (sMixingBuffer == nullptr) {
             continue;
         }
@@ -200,7 +200,7 @@ void SpkSpeakerCtrl::extensionProcess(s32, s32) {
 }
 
 f32 SpkSpeakerCtrl::getDeviceVolume(s32 padChannel) {
-    if (padChannel >= WPAD_CHAN0 && !sSpeakerInfo[padChannel].mIsPlaying) {
+    if (padChannel >= GAMEPAD_CHAN0 && !sSpeakerInfo[padChannel].mIsPlaying) {
         return 0.0f;
     }
 

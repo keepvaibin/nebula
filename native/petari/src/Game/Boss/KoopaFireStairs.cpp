@@ -127,7 +127,7 @@ void KoopaFireStairs::exeFly() {
         MR::emitEffect(this, "MeteorStrikeBreak");
         mVelocity.zero();
         MR::startSound(this, "SE_OJ_KOOPA_FIRE_EXPLODE");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
         MR::shakeCameraWeak();
         MR::hideModel(this);
         setNerve(GET_NERVE(KoopaFireStairs, KoopaFireStairsNrvBreak));
