@@ -11,6 +11,9 @@
 #include "galaxy/native_input.h"
 #include "galaxy/input/controls_engine.h"
 #include "galaxy/input/live_controls_engine.h"
+#include "galaxy/input/key_positions.h"
+#include "galaxy/input/key_positions_win32.h"
+#include "galaxy/input/keyboard_state.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
@@ -76,8 +79,7 @@ static std::atomic<NativeKeyboardCaptureProvider>
     g_native_keyboard_capture_provider{nullptr};
 static std::atomic<NativeSettingsVisibleProvider> g_native_settings_visible{nullptr};
 static std::atomic<NativeSettingsKeySink> g_native_settings_key_sink{nullptr};
-static galaxy::input::NativeWindowKeyPressLatch g_window_key_presses;
-static galaxy::input::NativeWindowKeyHeldState g_window_keys_held;
+static galaxy::input::KeyboardEventState g_keyboard_events;
 // Source of the latest window message per key and for the mouse: true when it came from SendInput
 // rather than a device (GetCurrentInputMessageSource).
 static std::array<std::atomic<bool>, 256> g_window_key_injected{};
@@ -91,6 +93,7 @@ static std::atomic<std::uint32_t> g_binding_capture_result{0u};
 // XInput pads (bit per user index) seen by the input path, and when it last looked.
 static std::atomic<std::uint32_t> g_xinput_mask{0u};
 static std::atomic<std::uint64_t> g_xinput_looked_ms{0u};
+static std::atomic<HKL> g_keyboard_layout{nullptr};
 // The device that last gave input, for the CONTROLS page: (scheme << 8) | slot.
 constexpr std::uint32_t kLastInputNone = 0xFFFFFFFFu;
 constexpr std::uint32_t kLastInputKeyboard = 0xFFFFFFFEu;
@@ -197,6 +200,10 @@ input::ButtonIconStyle button_icons_auto_style() noexcept {
 namespace {
 bool current_process_runtime_window(HWND& window);
 }  // namespace
+
+const input::KeyPositionMap& keyboard_position_map(HKL layout) {
+    return key_positions_for_win32_layout(reinterpret_cast<std::uintptr_t>(layout));
+}
 
 // What the layout keys (input::key_icon_layout_key) print on the keyboard the game's window reads: each one's
 // character alone (a dead key's too: a German keyboard's ^ and its acute accent), as a capital; 0 where it prints none.
@@ -313,26 +320,44 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     static ButtonIconStyle s_style = ButtonIconStyle::Wii;
     static ControlScheme s_scheme = ControlScheme::Keyboard;
     static bool s_menu = false;
+    static HKL s_key_layout = nullptr;
     static input::ButtonIconSpec s_spec;
     const std::uint64_t generation = input::controls_config_generation();
-    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu) {
+    const HKL key_layout = g_keyboard_layout.load(std::memory_order_acquire);
+    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu || key_layout != s_key_layout) {
         s_generation = generation;
         s_style = style;
         s_scheme = scheme;
         s_menu = menu;
-        s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu);
+        s_key_layout = key_layout;
+        auto bindings = input::get_controls_config().table(scheme);
+        if (scheme == ControlScheme::Keyboard)
+            bindings = input::key_position_labels(bindings, keyboard_position_map(key_layout));
+        s_spec = input::button_icon_spec(style, bindings, menu);
     }
     if (style == ButtonIconStyle::Keyboard) s_spec.layout = keyboard_layout_labels();
     return s_spec;
 }
 
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept {
-    g_window_keys_held.set(key, down);
+    if (key <= 0xffu) g_keyboard_events.legacy_level(static_cast<std::uint8_t>(key), down);
+}
+
+void publish_native_window_key_event(std::uint32_t key, std::uintptr_t message_bits,
+                                    bool down, bool repeat, bool injected) {
+    if (key > 0xffu) return;
+    const auto scan = static_cast<std::uint8_t>((message_bits >> 16u) & 0xffu);
+    const bool extended = (message_bits & (std::uintptr_t{1} << 24u)) != 0;
+    const std::uint32_t token = scan != 0 ? scan | (extended ? 0x100u : 0u) : 0x10000u | key;
+    g_keyboard_events.event(token, static_cast<std::uint8_t>(key), key_position_from_win32_scan(scan, extended),
+                            down, repeat, injected);
+    g_window_key_injected[key].store(injected, std::memory_order_relaxed);
 }
 
 void publish_native_window_input_origin(std::uint32_t key, bool injected) noexcept {
     if (key < g_window_key_injected.size()) {
         g_window_key_injected[key].store(injected, std::memory_order_relaxed);
+        g_keyboard_events.legacy_origin(static_cast<std::uint8_t>(key), injected);
     }
     if (!injected) note_keyboard_input();
 }
@@ -354,12 +379,11 @@ bool native_pointer_input_injected(bool button) noexcept {
 }
 
 void publish_native_window_key_press(std::uint32_t key) noexcept {
-    g_window_key_presses.publish(key);
+    if (key <= 0xffu) g_keyboard_events.legacy_press(static_cast<std::uint8_t>(key));
 }
 
 void clear_native_window_key_presses() noexcept {
-    g_window_key_presses.clear();
-    g_window_keys_held.clear();
+    g_keyboard_events.clear();
 }
 
 struct HostPointerTransitionConsumerState {
@@ -586,10 +610,9 @@ std::size_t poll_native_xinput_pads(
 
 // The remappable controls as the input consumer sees them: a cached copy
 // refreshed when the published generation changes (one atomic load per
-// sample), plus the keyboard keys the active keyboard table reads.
+// sample). The window publishes keyboard events separately.
 struct LiveControls {
     galaxy::input::ControlsConfig config = galaxy::input::default_controls_config();
-    galaxy::input::KeyList keyboard_keys{};
     std::uint64_t generation = 0;
 };
 
@@ -598,8 +621,6 @@ const LiveControls& live_controls() {
     const std::uint64_t generation = galaxy::input::controls_config_generation();
     if (generation != s_live.generation) {
         s_live.config = galaxy::input::get_controls_config();
-        s_live.keyboard_keys = galaxy::input::referenced_keys(
-            s_live.config.table(galaxy::input::ControlScheme::Keyboard));
         s_live.generation = generation;
     }
     return s_live;
@@ -1056,21 +1077,17 @@ galaxy::input::PlayerInput build_live_input(
         clear_native_window_key_presses();
     }
     const LiveControls& controls = live_controls();
-    galaxy::input::KeyboardMouseLevels keyboard_levels{};
-    if (window_focused && !native_keyboard_captured) {
-        for (std::size_t index = 0; index < controls.keyboard_keys.count; ++index) {
-            const std::uint8_t vk = controls.keyboard_keys.keys[index];
-            const bool pressed = g_window_key_presses.consume(vk);
-            keyboard_levels.set_key(vk, pressed || g_window_keys_held.held(vk));
-        }
-        // Middle and side mouse buttons arrive as window key levels.
-        const auto mouse_key = [](std::uint32_t vk) {
-            return g_window_key_presses.consume(vk) || g_window_keys_held.held(vk);
-        };
-        if (mouse_key(VK_MBUTTON)) keyboard_levels.mouse |= 1u << 2u;
-        if (mouse_key(VK_XBUTTON1)) keyboard_levels.mouse |= 1u << 3u;
-        if (mouse_key(VK_XBUTTON2)) keyboard_levels.mouse |= 1u << 4u;
+    input::KeyboardSnapshot keyboard_sample;
+    if (window_focused && !native_keyboard_captured) keyboard_sample = g_keyboard_events.sample();
+    if (window_focused) {
+        g_keyboard_layout.store(keyboard_sample.positions_available
+            ? GetKeyboardLayout(GetWindowThreadProcessId(focused_window, nullptr)) : nullptr,
+            std::memory_order_release);
     }
+    auto keyboard_levels = keyboard_sample.all;
+    // Older window dispatchers supply logical keys only; keep their existing behavior until scan events arrive.
+    if (!keyboard_sample.positions_available)
+        keyboard_levels = input::project_key_positions(keyboard_levels, input::KeyPositionMap{});
 
     const galaxy::RuntimeInputMode input_mode = input_mode_state.mode;
     // Auto: keyboard, mouse and controllers together. The two overrides keep
@@ -1145,17 +1162,13 @@ galaxy::input::PlayerInput build_live_input(
     // stick into keys and mouse motion. Only physical keyboard and mouse input counts then.
     const bool drop_injected = use_pads && input_mode == galaxy::RuntimeInputMode::Auto;
     if (drop_injected) {
-        for (std::size_t index = 0; index < controls.keyboard_keys.count; ++index) {
-            const std::uint8_t vk = controls.keyboard_keys.keys[index];
-            if (native_window_key_injected(vk)) keyboard_levels.set_key(vk, false);
-        }
-        for (const std::uint32_t vk : {VK_MBUTTON, VK_XBUTTON1, VK_XBUTTON2}) {
-            if (native_window_key_injected(vk)) {
-                keyboard_levels.mouse &= static_cast<std::uint8_t>(
-                    ~(1u << (vk == VK_MBUTTON ? 2u : vk == VK_XBUTTON1 ? 3u : 4u)));
-            }
-        }
+        keyboard_levels = keyboard_sample.physical;
+        if (!keyboard_sample.positions_available)
+            keyboard_levels = input::project_key_positions(keyboard_levels, input::KeyPositionMap{});
     }
+    if (keyboard_levels.key(VK_MBUTTON)) keyboard_levels.mouse |= 1u << 2u;
+    if (keyboard_levels.key(VK_XBUTTON1)) keyboard_levels.mouse |= 1u << 3u;
+    if (keyboard_levels.key(VK_XBUTTON2)) keyboard_levels.mouse |= 1u << 4u;
     const bool allow_absolute_pointer =
         host_window_input_enabled && use_keyboard &&
         input_mode != galaxy::RuntimeInputMode::RealWiimote;

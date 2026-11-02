@@ -46,7 +46,7 @@ void families_and_keyboard() {
         auto result = engine.sample(frame, host);
         check(result.input.buttons.a && result.input.stick_x == nunchuk_stick(0.6f, 0).x, "family buttons and stick");
         check(result.rumble.device == DeviceKey{scheme, 2} && result.rumble.focused, "rumble follows active family/slot");
-        frame.use_keyboard = true; frame.keyboard_levels.set_key('D', true);
+        frame.use_keyboard = true; frame.keyboard_levels.set_position('D', true);
         frame.keyboard_levels.set_key(0x20, true);
         host.advance(); result = engine.sample(frame, host);
         check(result.input.buttons.a && result.input.stick_x == 1.0f && !result.rumble.device,

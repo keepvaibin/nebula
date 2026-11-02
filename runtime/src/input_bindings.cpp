@@ -103,9 +103,9 @@ constexpr std::array<const char*, 4> kStickAxisNames{"LX", "LY", "RX", "RY"};
 
 bool iequals(std::string_view a, std::string_view b) noexcept {
     if (a.size() != b.size()) return false;
+    const auto lower = [](unsigned char c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; };
     for (std::size_t i = 0; i < a.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(a[i])) !=
-            std::tolower(static_cast<unsigned char>(b[i]))) {
+        if (lower(static_cast<unsigned char>(a[i])) != lower(static_cast<unsigned char>(b[i]))) {
             return false;
         }
     }
@@ -429,6 +429,18 @@ BindingTable version3_binding_table(ControlScheme scheme) {
 // Xbox: the pointer).
 BindingTable default_binding_table(ControlScheme scheme) {
     BindingTable table = version3_binding_table(scheme);
+    if (scheme == ControlScheme::Keyboard) {
+        for (const auto target : {WiiTarget::StickUp, WiiTarget::StickDown, WiiTarget::StickLeft, WiiTarget::StickRight,
+                                 WiiTarget::C, WiiTarget::Z, WiiTarget::Shake, WiiTarget::PointerUp,
+                                 WiiTarget::PointerDown, WiiTarget::PointerLeft, WiiTarget::PointerRight,
+                                 WiiTarget::PointerRecenter}) {
+            for (auto& source : table[target]) {
+                if (source.kind == SourceKind::Key && source.code >= 'A' && source.code <= 'Z')
+                    source.kind = SourceKind::KeyPosition;
+            }
+        }
+        return table;
+    }
     if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
@@ -496,6 +508,7 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
 }
 
 unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept {
+    if (version >= kControlsVersion) return 0u;
     unsigned changed = 0u;
     for (std::size_t s = 0; s < kControlSchemeCount; ++s) {
         const auto scheme = static_cast<ControlScheme>(s);
@@ -520,7 +533,7 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
             tuning.gyro_pointer = current_tuning.gyro_pointer;
             ++changed;
         }
-        if (version < kControlsVersion && scheme_is_gamepad(scheme)) {
+        if (version < 5u && scheme_is_gamepad(scheme)) {
             const bool old_seconds =
                 (version < 4u && tuning.pointer_hide_seconds == kVersion3PointerHideSeconds) ||
                 tuning.pointer_hide_seconds == kVersion4PointerHideSeconds;
@@ -583,6 +596,8 @@ std::string format_input_source(ControlScheme scheme, InputSource source) {
         return "None";
     case SourceKind::Key:
         return format_key(source.code);
+    case SourceKind::KeyPosition:
+        return source.code >= 'A' && source.code <= 'Z' ? "Position." + format_key(source.code) : "None";
     case SourceKind::Mouse:
         return source.code < kMouseNames.size() ? kMouseNames[source.code] : "None";
     case SourceKind::Button:
@@ -605,6 +620,13 @@ std::optional<InputSource> parse_input_source(ControlScheme scheme, std::string_
     text = trim(text);
     if (text.empty()) return std::nullopt;
     if (scheme == ControlScheme::Keyboard) {
+        constexpr std::string_view prefix = "Position.";
+        if (text.size() == prefix.size() + 1u && iequals(text.substr(0, prefix.size()), prefix)) {
+            auto letter = static_cast<std::uint8_t>(text.back());
+            if (letter >= 'a' && letter <= 'z') letter = static_cast<std::uint8_t>(letter - 'a' + 'A');
+            if (letter >= 'A' && letter <= 'Z') return InputSource{SourceKind::KeyPosition, letter};
+            return std::nullopt;
+        }
         for (std::size_t i = 0; i < kMouseNames.size(); ++i) {
             if (iequals(text, kMouseNames[i])) return mouse(static_cast<MouseButton>(i));
         }
@@ -672,6 +694,8 @@ bool binding_source_allowed(ControlScheme scheme, WiiTarget target, InputSource 
         return false;
     case SourceKind::Key:
         return scheme == ControlScheme::Keyboard && source.code != 0u;
+    case SourceKind::KeyPosition:
+        return scheme == ControlScheme::Keyboard && source.code >= 'A' && source.code <= 'Z';
     case SourceKind::Mouse:
         return scheme == ControlScheme::Keyboard && source.code < kMouseButtonCount &&
                !wii_target_is_analog(target);
@@ -842,6 +866,8 @@ float source_value_keyboard(InputSource source, const KeyboardMouseLevels& level
     switch (source.kind) {
     case SourceKind::Key:
         return levels.key(source.code) ? 1.0f : 0.0f;
+    case SourceKind::KeyPosition:
+        return levels.position(source.code) ? 1.0f : 0.0f;
     case SourceKind::Mouse:
         return source.code < kMouseButtonCount &&
                        levels.mouse_button(static_cast<MouseButton>(source.code))
@@ -1022,6 +1048,21 @@ KeyList referenced_keys(const BindingTable& table) noexcept {
     return list;
 }
 
+KeyList referenced_key_positions(const BindingTable& table) noexcept {
+    std::array<bool, 26> seen{};
+    for (const auto& bindings : table.targets) {
+        for (const auto& source : bindings) {
+            if (source.kind == SourceKind::KeyPosition && source.code >= 'A' && source.code <= 'Z')
+                seen[source.code - 'A'] = true;
+        }
+    }
+    KeyList list;
+    for (std::size_t i = 0; i < seen.size(); ++i) {
+        if (seen[i]) list.keys[list.count++] = static_cast<std::uint8_t>('A' + i);
+    }
+    return list;
+}
+
 std::optional<InputSource> detect_pad_capture(const PadSample& baseline, const PadSample& now) noexcept {
     if (!now.connected) return std::nullopt;
     const std::uint32_t pressed = now.buttons & ~(baseline.connected ? baseline.buttons : 0u);
@@ -1127,7 +1168,7 @@ std::optional<std::uint8_t> key_icon(InputSource source) noexcept {
         if (source.code >= kMouseButtonCount) return std::nullopt;
         return static_cast<Icon>(kKeyIconMouseLeft + source.code);
     }
-    if (source.kind != SourceKind::Key) return std::nullopt;
+    if (source.kind != SourceKind::Key && source.kind != SourceKind::KeyPosition) return std::nullopt;
     const std::uint8_t vk = source.code;
     if (vk >= 'A' && vk <= 'Z') return static_cast<Icon>(vk - 'A');
     if (vk >= '0' && vk <= '9') return static_cast<Icon>(26 + vk - '0');
@@ -1196,7 +1237,8 @@ ButtonIconSpec keyboard_icon_spec(const BindingTable& table, bool menu) noexcept
         for (const SourceKind kind : {mouse_first ? SourceKind::Mouse : SourceKind::Key,
                                       mouse_first ? SourceKind::Key : SourceKind::Mouse}) {
             for (const InputSource source : table[target]) {
-                if (source.kind == kind && key_icon(source).has_value()) return source;
+                const bool matches = source.kind == kind || (kind == SourceKind::Key && source.kind == SourceKind::KeyPosition);
+                if (matches && key_icon(source).has_value()) return source;
             }
         }
         return std::nullopt;
