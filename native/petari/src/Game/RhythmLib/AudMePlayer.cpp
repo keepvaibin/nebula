@@ -341,7 +341,7 @@ s32 AudMeMgr::getSeqStartPos(u32 meId) {
         return -1;
     }
 
-    NEBULA_BE(s32)* pStartPos = mMeSeq->mSeqStartPos;
+    s32* pStartPos = mMeSeq->mSeqStartPos;
     if (meId >= mMeSeq->mNumEntries) {
         return -1;
     }
@@ -377,32 +377,14 @@ void AudMeMgr::setOuterPlayingParam(s32 meId, AudMe* pMe) {
 }
 
 void AudMePlayingParamsHolder::setResource(void* pRes) {
-    NEBULA_BE(s32)* cursor = (NEBULA_BE(s32)*)pRes;
-
-    s32 numEntries = *cursor++;
-    s32 entryOff = *cursor++;
-    s32 namesOff = *cursor++;
+    // The ME table as the importer cooks it (host order): entry count, entry and name table offsets; nothing written.
+    const s32* cursor = static_cast< const s32* >(pRes);
+    const s32 numEntries = cursor[0];
+    const s32 entryOff = cursor[1];
+    const s32 namesOff = cursor[2];
 
     mNumEntries = numEntries;
-
-#ifdef TARGET_PC
-    // The name offsets are relocated in place, as on the console (which keeps no relocated state either).
-    NEBULA_SELFREL(const char)* offsets = (NEBULA_SELFREL(const char)*)((u8*)pRes + namesOff);
-    mParams = (AudMePlayingParams*)((u8*)pRes + entryOff);
-
-    for (u32 i = 0; i < numEntries; i++) {
-        offsets[i].relocateFrom(pRes);
-    }
-
-    mNames = offsets;
-#else
-    const char** offsets = (const char**)((s32)pRes + namesOff);
-    mParams = (AudMePlayingParams*)((s32)pRes + entryOff);
-
-    for (u32 i = 0; i < numEntries; i++) {
-        offsets[i] += (s32)pRes;
-    }
-
-    mNames = (const char**)offsets;
-#endif
+    mBase = static_cast< const u8* >(pRes);
+    mParams = reinterpret_cast< AudMePlayingParams* >(static_cast< u8* >(pRes) + entryOff);
+    mNameOffsets = reinterpret_cast< const u32* >(mBase + namesOff);
 }

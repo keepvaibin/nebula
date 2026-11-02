@@ -38,6 +38,7 @@
 //!   tables (its console command lists stay: the game does not read them), TEX1's image headers.
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 //! - BAS (sound animations): counts, ids, times, pitches, flags (bas).
+//! - BRS/BME/BMT (rhythm library remix and ME files): words, tables, parameters (rhythm).
 //! - RARC (archives, after cook::archive::rebuild): header, info block, directory nodes, file entries (rarc_host).
 //! - CIT (chord tables, "CITS"): size, counts, offset tables, scale note offsets (cit).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
@@ -2021,6 +2022,42 @@ pub fn cit(bytes: &[u8]) -> Result<Vec<u8>> {
             host32(bytes, &mut out, scale)?;
             host32(bytes, &mut out, scale + 4)?;
         }
+    }
+    Ok(out)
+}
+
+/// The rhythm library's files (AudioRes/Info JaiMe.arc, JaiRemixSeq.arc) in host order: a remix sequence (BRS) is all
+/// 32-bit words; an ME sequence (BME) starts with its count and start positions (the sequence bytecode after them stays
+/// bytes); an ME table (BMT) has the entry count, entry and name table offsets, a word, 8-byte playing parameters (a
+/// 16-bit field at 4) and the name offsets.
+pub fn rhythm(bytes: &[u8], extension: &str) -> Result<Vec<u8>> {
+    let mut out = bytes.to_vec();
+    match extension {
+        "brs" => {
+            if bytes.len() % 4 != 0 {
+                bail!("a remix sequence of {} bytes (not whole words)", bytes.len());
+            }
+            for at in (0..bytes.len()).step_by(4) {
+                host32(bytes, &mut out, at)?;
+            }
+        }
+        "bme" => {
+            let count = host32(bytes, &mut out, 0)? as usize;
+            for i in 0..count {
+                host32(bytes, &mut out, 4 + 4 * i)?;
+            }
+        }
+        "bmt" => {
+            let count = host32(bytes, &mut out, 0)? as usize;
+            let entries = host32(bytes, &mut out, 4)? as usize;
+            let names = host32(bytes, &mut out, 8)? as usize;
+            host32(bytes, &mut out, 0xC)?;
+            for i in 0..count {
+                host16(bytes, &mut out, entries + 8 * i + 4)?;
+                host32(bytes, &mut out, names + 4 * i)?;
+            }
+        }
+        _ => bail!("not a rhythm library file"),
     }
     Ok(out)
 }

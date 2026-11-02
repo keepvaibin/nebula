@@ -18,7 +18,7 @@ void AudRemixMgr::update() {
 }
 
 void AudRemixMgr::setRemixSeqResource(void* ptr) {
-    NEBULA_BE(u32)* newPtr = (NEBULA_BE(u32)*)ptr;
+    u32* newPtr = (u32*)ptr;
     int groupCount = *(newPtr);
     newPtr++;
     mGroupCount = groupCount;
