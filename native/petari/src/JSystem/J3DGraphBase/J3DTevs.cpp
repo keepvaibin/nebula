@@ -258,73 +258,6 @@ const J3DColorChanInfo j3dDefaultColorChanInfo = {
     0x00, 0x00, 0x00, 0x02, 0x02, 0x00, 0xFF, 0xFF,
 };
 
-static u8 j3dTexCoordTable[7623];
-
-void makeTexCoordTable() {
-    u8 texMtx[] = {
-        J3D_TEXMTX0, J3D_TEXMTX1, J3D_TEXMTX2, J3D_TEXMTX3, J3D_TEXMTX4, J3D_TEXMTX5, J3D_TEXMTX6, J3D_TEXMTX7, J3D_TEXMTX8, J3D_TEXMTX9, J3D_IDENTITY,
-    };
-
-    u8* table = j3dTexCoordTable;
-    for (u32 i = 0; i < 11; i++) {
-        for (u32 j = 0; j < 21; j++) {
-            for (int k = 0; k < 0xB; k++) {
-                u32 idx = j * 11 + i * 0xe7 + k;
-                table[idx * 3 + 0] = i;
-                table[idx * 3 + 1] = j;
-                table[idx * 3 + 2] = texMtx[k];
-            }
-        }
-    }
-}
-
-u8 j3dTevSwapTableTable[1024];
-
-u8 j3dAlphaCmpTable[768];
-
-void makeAlphaCmpTable() {
-    u8* table = j3dAlphaCmpTable;
-    for (u32 i = 0; i < 8; i++) {
-        for (int j = 0; j < 4; j++) {
-            for (u32 k = 0; k < 8; k++) {
-                u32 idx = i * 32 + j * 8 + k;
-                table[idx * 3] = i;
-                table[idx * 3 + 1] = j;
-                table[idx * 3 + 2] = k;
-            }
-        }
-    }
-}
-
-u8 j3dZModeTable[96];
-
-void makeZModeTable() {
-    u8* table = j3dZModeTable;
-    for (int i = 0; i < 2; i++) {
-        for (u32 j = 0; j < 8; j++) {
-            for (int k = 0; k < 2; k++) {
-                u32 idx = j * 2 + i * 16 + k;
-                table[idx * 3 + 0] = i;
-                table[idx * 3 + 1] = j;
-                table[idx * 3 + 2] = k;
-            }
-        }
-    }
-}
-
-void makeTevSwapTable() {
-    u8* table = j3dTevSwapTableTable;
-    int i = 0;
-    do {
-        table[0] = i >> 6;
-        table[1] = (i >> 4) & 3;
-        table[2] = (i >> 2) & 3;
-        table[3] = i & 3;
-        i++;
-        table += 4;
-    } while (i < 256);
-}
-
 
 
 
@@ -339,7 +272,5 @@ const NebulaColor8 j3dDefaultTevKColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
 const J3DBlendInfo j3dDefaultBlendInfo = {J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, J3D_LO_NOOP};
 
-const u16 j3dDefaultAlphaCmpID = 0x00E7;
 
-const u16 j3dDefaultZModeID = 0x0017;
 

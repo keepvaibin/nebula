@@ -19,7 +19,6 @@ extern const NebulaColor8 j3dDefaultColInfo;
 extern const NebulaColor8 j3dDefaultAmbInfo;
 extern const NebulaColor16 j3dDefaultTevColor;
 extern const NebulaColor8 j3dDefaultTevKColor;
-extern u8 j3dAlphaCmpTable[768];
 extern const u8 j3dDefaultNumChans;
 
 
@@ -27,8 +26,6 @@ extern const u8 j3dDefaultNumChans;
 extern const J3DBlendInfo j3dDefaultBlendInfo;
 extern const J3DColorChanInfo j3dDefaultColorChanInfo;
 
-extern const u16 j3dDefaultAlphaCmpID;
-extern const u16 j3dDefaultZModeID;
 
 class J3DLightObj {
 public:
@@ -49,13 +46,6 @@ public:
     /* 0x34 */ J3DNativeLight mLightObj;
 };  // Size = 0x74
 
-// One TEV stage: the colour and alpha inputs (GpuTevColorArg, GpuTevAlphaArg), operations
-// (u8, compare operations included), bias, scale, clamp and output register, and the swap tables the
-// rasterised colour and the texture read through.
-void makeTexCoordTable();
-void makeAlphaCmpTable();
-void makeZModeTable();
-void makeTevSwapTable();
 
 extern const J3DNBTScaleInfo j3dDefaultNBTScaleInfo;
 
@@ -80,15 +70,9 @@ struct J3DNBTScale : public J3DNBTScaleInfo {
 };
 
 
-extern u8 j3dTevSwapTableTable[1024];
-
-inline u8 calcTevSwapTableID(u8 param_0, u8 param_1, u8 param_2, u8 param_3) {
-    return 0x40 * (u8)param_0 + 0x10 * (u8)param_1 + 4 * (u8)param_2 + param_3;
-}
 
   // Size: 0x1
 
-// One indirect stage.
 struct J3DNBTScale;
 struct J3DTexCoord;
 void loadNBTScale(J3DNBTScale& param_0);
@@ -214,77 +198,43 @@ struct J3DFog : public J3DFogInfo {
     }
 };
 
-inline u16 calcAlphaCmpID(u8 comp0, u8 op, u8 comp1) {
-    return (comp0 << 5) + (op << 3) + (comp1);
-}
-
 struct J3DAlphaComp {
-    J3DAlphaComp() : mID(j3dDefaultAlphaCmpID), mRef0(), mRef1() {
+    J3DAlphaComp() : mComp0(NEBULA_COMPARE_ALWAYS), mOp(0), mComp1(NEBULA_COMPARE_ALWAYS), mRef0(), mRef1() {
     }
-
-    J3DAlphaComp(u16 id) : mID(id), mRef0(), mRef1() {
-    }
-
     explicit J3DAlphaComp(const J3DAlphaCompInfo& info) {
-        mID = calcAlphaCmpID(info.mComp0, info.mOp, info.mComp1);
-        mRef0 = info.mRef0;
-        mRef1 = info.mRef1;
-    }
-
-    J3DAlphaComp& operator=(u16 id) {
-        mID = id;
-        return *this;
-    }
-
-    J3DAlphaComp& operator=(const J3DAlphaComp& rhs) {
-        mID = rhs.mID;
-        mRef0 = rhs.mRef0;
-        mRef1 = rhs.mRef1;
-        return *this;
-    }
-
-    J3DAlphaComp& operator=(J3DAlphaComp& rhs) {
-        mID = rhs.mID;
-        mRef0 = rhs.mRef0;
-        mRef1 = rhs.mRef1;
-        return *this;
+        setAlphaCompInfo(info);
     }
 
     void setAlphaCompInfo(const J3DAlphaCompInfo& info) {
+        mComp0 = info.mComp0;
+        mOp = info.mOp;
+        mComp1 = info.mComp1;
         mRef0 = info.mRef0;
         mRef1 = info.mRef1;
-        mID = calcAlphaCmpID(info.mComp0, info.mOp, info.mComp1);
     }
-
     u8 getComp0() const {
-        return *(&j3dAlphaCmpTable[mID * 3] + 0);
+        return mComp0;
     }
-
     u8 getOp() const {
-        return *(&j3dAlphaCmpTable[mID * 3] + 1);
+        return mOp;
     }
-
     u8 getComp1() const {
-        return *(&j3dAlphaCmpTable[mID * 3] + 2);
+        return mComp1;
     }
-
     u8 getRef0() const {
         return mRef0;
     }
-
     u8 getRef1() const {
         return mRef1;
     }
 
-    /* 0x00 */ u16 mID;
-    /* 0x02 */ u8 mRef0;
-    /* 0x03 */ u8 mRef1;
-};  // Size: 0x4
+    u8 mComp0;
+    u8 mOp;
+    u8 mComp1;
+    u8 mRef0;
+    u8 mRef1;
+};
 
-static inline u32 setChanCtrlMacro(u8 enable, u8 ambSrc, u8 matSrc, u32 lightMask, u8 diffuseFn, u8 attnFn) {
-    return matSrc << 0 | enable << 1 | (lightMask & 0x0F) << 2 | ambSrc << 6 | ((attnFn == J3D_AF_SPEC) ? J3D_DF_NONE : diffuseFn) << 7 |
-           (attnFn != J3D_AF_NONE) << 9 | (attnFn != J3D_AF_SPEC) << 10 | (lightMask >> 4 & 0x0F) << 11;
-}
 
 // One colour channel (a specular channel has no diffuse function).
 class J3DColorChan {
@@ -364,57 +314,39 @@ public:
     u8 mAttnFn;
 };
 
-inline u16 calcZModeID(u8 param_0, u8 param_1, u8 param_2) {
-    return param_1 * 2 + param_0 * 0x10 + param_2;
-}
-
-extern u8 j3dZModeTable[96];
-
 struct J3DZMode {
-    J3DZMode() : mZModeID(j3dDefaultZModeID) {
+    J3DZMode() : mCompare(1), mFunc(NEBULA_COMPARE_LEQUAL), mUpdate(1) {
     }
-
-    J3DZMode(J3DZModeInfo const& info) : mZModeID(calcZModeID(info.field_0x0, info.field_0x1, info.field_0x2)) {
-    }
-
-    J3DZMode& operator=(u16 zModeID) {
-        mZModeID = zModeID;
-        return *this;
-    }
-
-    J3DZMode& operator=(const J3DZMode& other) {
-        mZModeID = other.mZModeID;
-        return *this;
+    J3DZMode(J3DZModeInfo const& info) {
+        setZModeInfo(info);
     }
 
     void setZModeInfo(const J3DZModeInfo& info) {
-        mZModeID = calcZModeID(info.field_0x0, info.field_0x1, info.field_0x2);
+        mCompare = info.field_0x0;
+        mFunc = info.field_0x1;
+        mUpdate = info.field_0x2;
     }
-
     void setCompareEnable(u8 i_compare) {
-        mZModeID = calcZModeID(i_compare, j3dZModeTable[mZModeID * 3 + 1], j3dZModeTable[mZModeID * 3 + 2]);
+        mCompare = i_compare;
     }
-
     void setFunc(u8 i_func) {
-        mZModeID = calcZModeID(j3dZModeTable[mZModeID * 3], i_func, j3dZModeTable[mZModeID * 3 + 2]);
+        mFunc = i_func;
     }
-
     void setUpdateEnable(u8 i_enable) {
-        mZModeID = calcZModeID(j3dZModeTable[mZModeID * 3], j3dZModeTable[mZModeID * 3 + 1], i_enable);
+        mUpdate = i_enable;
     }
-
     u8 getCompareEnable() const {
-        return *(&j3dZModeTable[mZModeID * 3] + 0);
+        return mCompare;
     }
-
     u8 getFunc() const {
-        return *(&j3dZModeTable[mZModeID * 3] + 1);
+        return mFunc;
     }
-
     u8 getUpdateEnable() const {
-        return *(&j3dZModeTable[mZModeID * 3] + 2);
+        return mUpdate;
     }
 
-    /* 0x0 */ u16 mZModeID;
+    u8 mCompare;
+    u8 mFunc;
+    u8 mUpdate;
 };
 

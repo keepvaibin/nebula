@@ -146,19 +146,12 @@ struct UiSolidQuadConstants {
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 [[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(
-    const CaptureRequest& params,
     bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
-    std::uint8_t copy_format,
+    std::uint8_t channels,
     float src_x,
     float src_y,
     float step_x,
-    float step_y,
-    float filter_row_offset,
-    float rows_per_unit,
-    unsigned logical_scene_height,
-    unsigned reduction_width = 0u) noexcept;
+    float step_y) noexcept;
 
 // A screen probe's constants: the capture shader reads the one pixel of the frame the point names (`depth`: as the
 // 24-bit value in three bytes, otherwise as it is).

@@ -42,337 +42,70 @@ void J3DIndBlock::reset(J3DIndBlock* pBlock) {
     }
 }
 
-void J3DColorBlockLightOff::initialize() {
-    mColorChanNum = 0;
-
+J3DColorBlock::J3DColorBlock(Kind kind) : mKind(kind), mColorChanNum(0), mCullMode(0) {
     for (s32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
         mMatColor[i] = j3dDefaultColInfo;
     }
-
-    mMatColorOffset = 0;
-    mColorChanOffset = 0;
-}
-
-void J3DColorBlockAmbientOn::initialize() {
-    mColorChanNum = 0;
-
-    for (s32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
-        mMatColor[i] = j3dDefaultColInfo;
-    }
-
     for (s32 i = 0; i < ARRAY_SIZE(mAmbColor); i++) {
         mAmbColor[i] = j3dDefaultAmbInfo;
     }
-
-    mMatColorOffset = 0;
-    mColorChanOffset = 0;
-}
-
-void J3DColorBlockLightOn::initialize() {
-    mColorChanNum = 0;
-
-    for (s32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
-        mMatColor[i] = j3dDefaultColInfo;
-    }
-
-    for (s32 i = 0; i < ARRAY_SIZE(mAmbColor); i++) {
-        mAmbColor[i] = j3dDefaultAmbInfo;
-    }
-
     for (s32 i = 0; i < ARRAY_SIZE(mLight); i++) {
         mLight[i] = NULL;
     }
-
-    mMatColorOffset = 0;
-    mColorChanOffset = 0;
 }
 
-void J3DTexGenBlockPatched::initialize() {
-    mTexGenNum = 0;
+void J3DColorBlock::reset(J3DColorBlock* pBlock) {
+    mColorChanNum = pBlock->getColorChanNum();
+    for (u32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
+        mMatColor[i] = *pBlock->getMatColor(i);
+    }
+    for (u32 i = 0; i < ARRAY_SIZE(mColorChan); i++) {
+        mColorChan[i] = *pBlock->getColorChan(i);
+    }
+    if (mKind != Kind_LightOff && pBlock->mKind != Kind_LightOff) {
+        for (u32 i = 0; i < ARRAY_SIZE(mAmbColor); i++) {
+            mAmbColor[i] = pBlock->mAmbColor[i];
+        }
+    }
+}
 
+J3DTexGenBlock::J3DTexGenBlock(u32 capacity, bool hasScale)
+    : mCapacity(capacity), mHasScale(hasScale), mTexGenNum(0), mNBTScale() {
     for (s32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
         mTexMtx[i] = NULL;
     }
-
-    mTexMtxOffset = 0;
 }
 
-void J3DTexGenBlock4::initialize() {
-    mTexGenNum = 0;
-
-    for (s32 i = 0; i < 4; i++) {
-        mTexMtx[i] = NULL;
+void J3DTexGenBlock::reset(J3DTexGenBlock* pBlock) {
+    mTexGenNum = pBlock->getTexGenNum();
+    for (u32 i = 0; i < mCapacity; i++) {
+        mTexCoord[i] = *pBlock->getTexCoord(i);
+        if (pBlock->getTexMtx(i) != NULL && mTexMtx[i] != NULL) {
+            memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
+        }
     }
-
-    mTexMtxOffset = 0;
-}
-
-void J3DTexGenBlockBasic::initialize() {
-    mTexGenNum = 0;
-
-    for (s32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
-        mTexMtx[i] = NULL;
+    if (mHasScale && pBlock->mHasScale) {
+        mNBTScale = pBlock->mNBTScale;
     }
-
-    mTexMtxOffset = 0;
 }
 
-void J3DPEBlockFogOff::initialize() {
-    mAlphaComp = 0xFFFF;
-    mZMode = 0xFFFF;
+J3DPEBlock::J3DPEBlock(Kind kind) : mKind(kind) {
     mZCompLoc = 0xFF;
 }
 
-void J3DPEBlockFull::initialize() {
-    mAlphaComp = 0xFFFF;
-    mZMode = 0xFFFF;
-    mZCompLoc = 0xFF;
-    mFogOffset = 0;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-static u32 SizeOfLoadMatColors = 13;
-
-static u32 SizeOfLoadAmbColors = 13;
-
-static u32 SizeOfLoadColorChans = 21;
-
-static u32 SizeOfJ3DColorBlockLightOffLoad = SizeOfLoadMatColors + SizeOfLoadColorChans;
-
-
-static u32 SizeOfJ3DColorBlockAmbientOnLoad = SizeOfLoadMatColors + SizeOfLoadAmbColors + SizeOfLoadColorChans;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-void J3DColorBlockLightOff::reset(J3DColorBlock* pBlock) {
-    mColorChanNum = pBlock->getColorChanNum();
-
-    for (u32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
-        mMatColor[i] = *pBlock->getMatColor(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mColorChan); i++) {
-        mColorChan[i] = *pBlock->getColorChan(i);
-    }
-}
-
-void J3DColorBlockAmbientOn::reset(J3DColorBlock* pBlock) {
-    mColorChanNum = pBlock->getColorChanNum();
-
-    for (u32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
-        mMatColor[i] = *pBlock->getMatColor(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mColorChan); i++) {
-        mColorChan[i] = *pBlock->getColorChan(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mAmbColor); i++) {
-        if (pBlock->getAmbColor(i) != NULL) {
-            mAmbColor[i] = *pBlock->getAmbColor(i);
-        }
-    }
-}
-
-void J3DColorBlockLightOn::reset(J3DColorBlock* pBlock) {
-    mColorChanNum = pBlock->getColorChanNum();
-
-    for (u32 i = 0; i < ARRAY_SIZE(mMatColor); i++) {
-        mMatColor[i] = *pBlock->getMatColor(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mColorChan); i++) {
-        mColorChan[i] = *pBlock->getColorChan(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mAmbColor); i++) {
-        if (pBlock->getAmbColor(i) != NULL) {
-            mAmbColor[i] = *pBlock->getAmbColor(i);
-        }
-    }
-}
-
-void J3DTexGenBlockPatched::reset(J3DTexGenBlock* pBlock) {
-    mTexGenNum = pBlock->getTexGenNum();
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTexCoord); i++) {
-        mTexCoord[i] = *pBlock->getTexCoord(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
-        if (pBlock->getTexMtx(i) != NULL) {
-            if (mTexMtx[i] != NULL) {
-                memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
-            }
-        }
-    }
-}
-
-void J3DTexGenBlock4::reset(J3DTexGenBlock* pBlock) {
-    mTexGenNum = pBlock->getTexGenNum();
-
-    for (u32 i = 0; i < 4; i++) {
-        mTexCoord[i] = *pBlock->getTexCoord(i);
-    }
-
-    for (u32 i = 0; i < 4; i++) {
-        if (pBlock->getTexMtx(i) != NULL) {
-            if (mTexMtx[i] != NULL) {
-                memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
-            }
-        }
-    }
-
-    mNBTScale = *pBlock->getNBTScale();
-}
-
-void J3DTexGenBlockBasic::reset(J3DTexGenBlock* pBlock) {
-    mTexGenNum = pBlock->getTexGenNum();
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTexCoord); i++) {
-        mTexCoord[i] = *pBlock->getTexCoord(i);
-    }
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
-        if (pBlock->getTexMtx(i) != NULL) {
-            if (mTexMtx[i] != NULL) {
-                memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
-            }
-        }
-    }
-
-    mNBTScale = *pBlock->getNBTScale();
-}
-
-void J3DPEBlockFogOff::reset(J3DPEBlock* pBlock) {
-    switch (pBlock->getType()) {
-    case 'PEFL':
-    case 'PEFG':
-        mAlphaComp = *pBlock->getAlphaComp();
-        mBlend = *pBlock->getBlend();
-        mZMode = *pBlock->getZMode();
-        mZCompLoc = pBlock->getZCompLoc();
-        break;
-    }
-}
-
-void J3DPEBlockFull::reset(J3DPEBlock* pBlock) {
-    if (pBlock->getFog() != NULL) {
+void J3DPEBlock::reset(J3DPEBlock* pBlock) {
+    if (mKind == Kind_Full && pBlock->getFog() != NULL) {
         mFog.setFogInfo(pBlock->getFog()->getFogInfo());
     }
-
-    switch (pBlock->getType()) {
-    case 'PEFL':
-    case 'PEFG':
-        mAlphaComp = *pBlock->getAlphaComp();
-        mBlend = *pBlock->getBlend();
-        mZMode = *pBlock->getZMode();
-        mZCompLoc = pBlock->getZCompLoc();
-        break;
+    if (!isPreset() && !pBlock->isPreset()) {
+        mAlphaComp = pBlock->mAlphaComp;
+        mBlend = pBlock->mBlend;
+        mZMode = pBlock->mZMode;
+        mZCompLoc = pBlock->mZCompLoc;
     }
 }
 
-void J3DTexGenBlockPatched::calc(const Mtx modelMtx) {
+void J3DTexGenBlock::calc(const Mtx modelMtx) {
     Mtx viewMtx;
 
     for (s32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
@@ -433,7 +166,7 @@ void J3DTexGenBlockPatched::calc(const Mtx modelMtx) {
     }
 }
 
-void J3DTexGenBlockPatched::calcWithoutViewMtx(const Mtx modelMtx) {
+void J3DTexGenBlock::calcWithoutViewMtx(const Mtx modelMtx) {
     Mtx mtx;
 
     for (s32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
@@ -479,7 +212,7 @@ void J3DTexGenBlockPatched::calcWithoutViewMtx(const Mtx modelMtx) {
     }
 }
 
-void J3DTexGenBlockPatched::calcPostTexMtx(const Mtx modelMtx) {
+void J3DTexGenBlock::calcPostTexMtx(const Mtx modelMtx) {
     Mtx mtx1, mtx2;
 
     for (s32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
@@ -523,7 +256,7 @@ void J3DTexGenBlockPatched::calcPostTexMtx(const Mtx modelMtx) {
     }
 }
 
-void J3DTexGenBlockPatched::calcPostTexMtxWithoutViewMtx(f32 const (*param_0)[4]) {
+void J3DTexGenBlock::calcPostTexMtxWithoutViewMtx(f32 const (*param_0)[4]) {
     for (s32 i = 0; i < ARRAY_SIZE(mTexMtx); i++) {
         if (mTexMtx[i] != NULL) {
             int texMtxMode = mTexMtx[i]->getTexMtxInfo().mInfo & 0x3f;

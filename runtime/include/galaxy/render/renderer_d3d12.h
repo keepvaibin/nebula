@@ -535,7 +535,7 @@ public:
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
     // scene target copy paths (record into the current command list). Both run the
-    // conversion blit (intensity / gamma / 3-tap vertical copy filter /
+    // conversion blit (
     // half-scale box / display picture y-scale stretch / depth-source packing) instead
     // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
@@ -773,16 +773,12 @@ private:
         unsigned dest_w,
         unsigned dest_h,
         D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-        const CaptureRequest& params,
         bool is_depth_copy,
-        bool intensity,
-        bool keep_alpha,
         std::uint8_t copy_format,
         float src_x,
         float src_y,
         float step_x,
-        float step_y,
-        float filter_row_offset);
+        float step_y);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE allocate_conversion_rtv(
         ID3D12Resource* resource);
 
@@ -1055,10 +1051,8 @@ private:
         unsigned height = 0;
         CaptureRequest params{};
         bool depth = false;
-        bool intensity = false;
-        bool keep_alpha = false;
         std::uint8_t format = 0;
-        float geometry[5]{};  // src x, y, step x, y, filter row offset
+        float geometry[4]{};  // src x, y, step x, y
         bool identity = false;
         D3D12_BOX box{};
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample

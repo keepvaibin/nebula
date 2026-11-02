@@ -478,7 +478,7 @@ namespace J3DNativeMaterial {
             }
         }
         // Lights only from the blocks that load them (J3DColorBlockLightOn).
-        for (u32 i = 0; i < 8 && pColor->getType() == 'CLON'; i++) {
+        for (u32 i = 0; i < 8 && pColor->getKind() == J3DColorBlock::Kind_LightOn; i++) {
             pOut->loads |= J3D_LOADS_LIGHTS;
             const J3DLightObj* pLight = pColor->getLight(i);
             if (pLight == NULL) {
@@ -503,10 +503,10 @@ namespace J3DNativeMaterial {
         }
 
         // The preset blocks write fixed modes and no fog (J3DPEBlockOpa, TexEdge, Xlu load).
-        const u32 peType = pPE->getType();
-        if (peType == 'PEOP' || peType == 'PEED' || peType == 'PEXL') {
-            const bool edge = peType == 'PEED';
-            const bool xlu = peType == 'PEXL';
+        const J3DPEBlock::Kind peKind = pPE->getKind();
+        if (pPE->isPreset()) {
+            const bool edge = peKind == J3DPEBlock::Kind_TexEdge;
+            const bool xlu = peKind == J3DPEBlock::Kind_Translucent;
             pOut->alpha_compare.comp0 = edge ? NEBULA_COMPARE_GEQUAL : NEBULA_COMPARE_ALWAYS;
             pVal->alpha_ref[0] = edge ? 0x80 : 0;
             pOut->alpha_compare.op = J3D_AOP_AND;

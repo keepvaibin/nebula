@@ -5353,10 +5353,7 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* 
         return;
     }
     if (copy.mode == 2u) {
-        record_conversion_blit(
-            alt_scene_.color.Get(), copy.width, copy.height, {}, copy.params,
-            false, false, true, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1],
-            copy.geometry[2], copy.geometry[3], copy.geometry[4]);
+        record_conversion_blit(alt_scene_.color.Get(), copy.width, copy.height, {}, false, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
         return;
     }
     ID3D12Resource* const dest = copy.mode == 1u ? subframe_display_.texture.Get()
@@ -5368,11 +5365,7 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* 
     b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
-    record_conversion_blit(
-        dest, copy.width, copy.height, allocate_conversion_rtv(dest), copy.params,
-        copy.depth, copy.intensity, copy.keep_alpha, copy.format,
-        copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3],
-        copy.geometry[4]);
+    record_conversion_blit(dest, copy.width, copy.height, allocate_conversion_rtv(dest), copy.depth, copy.format, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 }
@@ -7348,12 +7341,9 @@ void RendererD3D12::copy_fg_hudless_display(const CaptureRequest& params, const 
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
     const SceneCopySamplingGeometry sampling =
-        compute_display_sampling_geometry(params, dest.width, dest.height, frame_);
+        compute_scene_copy_sampling_geometry(params, dest.width, dest.height, frame_);
     swap_scene_with(fg_hudless_scene_target_);
-    record_conversion_blit(fg_hudless_display_.texture.Get(), dest.width, dest.height, fg_hudless_display_.rtv, params,
-                           /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-                           /*layout=*/kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-                           sampling.filter_row_offset);
+    record_conversion_blit(fg_hudless_display_.texture.Get(), dest.width, dest.height, fg_hudless_display_.rtv, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     swap_scene_with(fg_hudless_scene_target_);
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
@@ -7635,40 +7625,28 @@ bool RendererD3D12::begin_output_scene() {
     const unsigned w = kFrameWidth * scale;
     const unsigned h = kFrameHeight * scale;
     const SceneCopySamplingGeometry sampling =
-        compute_display_sampling_geometry(params, w, h, frame_);
+        compute_scene_copy_sampling_geometry(params, w, h, frame_);
     if (replay_recording_) [[unlikely]] {
         ReplayCopy copy{};
         copy.width = w;
         copy.height = h;
         copy.params = params;
-        copy.keep_alpha = true;
         copy.format = kCopyLayoutDisplay;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.geometry[4] = sampling.filter_row_offset;
         copy.mode = 2u;
         replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
         replay_copies_.push_back(copy);
         const bool recording = replay_recording_;
         replay_recording_ = false;  // the blit's own scene target rebinding is part of the copy
-        record_conversion_blit(
-            alt_scene_.color.Get(), w, h, {}, params,
-            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-            /*layout=*/kCopyLayoutDisplay,
-            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-            sampling.filter_row_offset);
+        record_conversion_blit(alt_scene_.color.Get(), w, h, {}, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
         replay_recording_ = recording;
         swap_scene_sets();
         replay_ops_.push_back({ReplayKind::ClearDepth, 0u});
     } else {
-        record_conversion_blit(
-            alt_scene_.color.Get(), w, h, {}, params,
-            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-            /*layout=*/kCopyLayoutDisplay,
-            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-            sampling.filter_row_offset);
+        record_conversion_blit(alt_scene_.color.Get(), w, h, {}, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
         swap_scene_sets();
     }
     const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
@@ -8096,16 +8074,12 @@ void RendererD3D12::record_conversion_blit(
     unsigned dest_w,
     unsigned dest_h,
     D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-    const CaptureRequest& params,
     bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
     std::uint8_t copy_format,
     float src_x,
     float src_y,
     float step_x,
-    float step_y,
-    float filter_row_offset) {
+    float step_y) {
     settle_owed_scene();
     resolve_scene(is_depth_copy);
     ID3D12Resource* src =
@@ -8146,8 +8120,7 @@ void RendererD3D12::record_conversion_blit(
     command_list_->RSSetScissorRects(1, &sci);
     command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
     // A display copy one scene target pixel to one display picture pixel without gamma: its filter alone (display_filter_shader_source).
-    const bool display_filter = copy_format == kCopyLayoutDisplay && keep_alpha &&
-                                !intensity && !is_depth_copy && step_x == 1.0f &&
+    const bool display_filter = copy_format == kCopyLayoutDisplay && !is_depth_copy && step_x == 1.0f &&
                                 step_y == 1.0f &&
                                 display_filter_pipeline_ != nullptr && dest->GetDesc().Format == kSceneColorFormat;
     command_list_->SetPipelineState(display_filter ? display_filter_pipeline_.Get()
@@ -8155,19 +8128,7 @@ void RendererD3D12::record_conversion_blit(
                                                                                      : conv_pipeline_.Get());
 
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(
-            params,
-            is_depth_copy,
-            intensity,
-            keep_alpha,
-            copy_format,
-            src_x,
-            src_y,
-            step_x,
-            step_y,
-            filter_row_offset,
-            frame_.sy,
-            kFrameHeight);
+        make_scene_conversion_constants(is_depth_copy, copy_format, src_x, src_y, step_x, step_y);
     command_list_->SetGraphicsRoot32BitConstants(
         0, 16, constants.values.data(), 0);
     command_list_->SetGraphicsRootDescriptorTable(1, src_srv);
@@ -8210,7 +8171,7 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
     command_list_->ResourceBarrier(1, &b);
 
     const SceneCopySamplingGeometry sampling =
-        compute_display_sampling_geometry(
+        compute_scene_copy_sampling_geometry(
             params, dest.width, dest.height, frame_);
     const bool recording = replay_recording_;
     if (recording) [[unlikely]] {
@@ -8218,28 +8179,18 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
         copy.width = dest.width;
         copy.height = dest.height;
         copy.params = params;
-        copy.keep_alpha = true;
         copy.format = kCopyLayoutDisplay;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.geometry[4] = sampling.filter_row_offset;
         copy.mode = 1u;
         replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
         replay_copies_.push_back(copy);
         replay_recording_ = false;
     }
 
-    // Display copies never convert to intensity (Dolphin passes false on the
-    // display picture path); gamma + copy filter (deflicker) do apply.
-    record_conversion_blit(
-        dest.texture.Get(), dest.width, dest.height, dest.rtv, params,
-        /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-        /*layout=*/kCopyLayoutDisplay,
-        sampling.src_x, sampling.src_y,
-        sampling.step_x, sampling.step_y,
-        sampling.filter_row_offset);
+    record_conversion_blit(dest.texture.Get(), dest.width, dest.height, dest.rtv, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     replay_recording_ = recording;
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
@@ -8453,8 +8404,6 @@ bool RendererD3D12::copy_scene_to_texture(
     const SceneCopySamplingGeometry sampling =
         compute_scene_copy_sampling_geometry(params, w, h, frame_);
 
-    // The intensity-and-alpha layout keeps the source alpha; the one-channel layouts read their channel in alpha too.
-    const bool keep_alpha = params.channels == kCopyLayoutIntensityAlpha;
 
     const bool recording = replay_recording_;
     if (recording) [[unlikely]] {
@@ -8464,25 +8413,16 @@ bool RendererD3D12::copy_scene_to_texture(
         copy.height = h;
         copy.params = params;
         copy.depth = is_depth_copy;
-        copy.intensity = false;
-        copy.keep_alpha = keep_alpha;
         copy.format = params.channels;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.geometry[4] = sampling.filter_row_offset;
         replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
         replay_copies_.push_back(copy);
         replay_recording_ = false;
     }
-    record_conversion_blit(
-        dest.texture.Get(), w, h, dest.rtv, params,
-        is_depth_copy, false, keep_alpha,
-        params.channels,
-        sampling.src_x, sampling.src_y,
-        sampling.step_x, sampling.step_y,
-        sampling.filter_row_offset);
+    record_conversion_blit(dest.texture.Get(), w, h, dest.rtv, is_depth_copy, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     replay_recording_ = recording;
     if (ring_mode_ == RingMode::Interp) note_copy_write(dest.texture.Get());
 

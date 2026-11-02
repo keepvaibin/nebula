@@ -441,9 +441,8 @@ private:
     [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
                                                 VkDeviceSize palette_range, VkBuffer earlier);
     [[nodiscard]] VkSampler sampler_for(std::uint32_t key, const RenderConfig& cfg);
-    void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const CaptureRequest& params,
-                                bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
-                                float src_x, float src_y, float step_x, float step_y, float filter_row_offset);
+    void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, bool is_depth_copy,
+                                std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y);
     // `color_image`: the colour image read (none: the scene target's).
     void transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
     void transition_scene_to_attachment(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
@@ -723,7 +722,7 @@ private:
         bool display = false;            // the display copy (closes the log)
         std::uint64_t dest_key = 0;      // a texture copy's destination (scene_copy_dests_)
         unsigned width = 0, height = 0;  // the destination's size
-        float geometry[5]{};             // sampling: src x, y, step x, y, filter row offset
+        float geometry[4]{};  // sampling: src x, y, step x, y
         bool exact = false;              // an identity copy (vkCmdCopyImage)
         unsigned box_left = 0, box_top = 0;
         VkImageView dest_view = VK_NULL_HANDLE;  // the destination's view as the log's tables name it

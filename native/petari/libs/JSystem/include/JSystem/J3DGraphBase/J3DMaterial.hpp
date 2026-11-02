@@ -9,8 +9,6 @@
 
 class J3DShape;
 class J3DJoint;
-class J3DColorBlockLightOn;
-class J3DTexGenBlockPatched;
 class J3DTevBlockPatched;
 class J3DPEBlock;
 class J3DMaterialAnm;
