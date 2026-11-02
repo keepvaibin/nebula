@@ -11,7 +11,7 @@ root = sys.argv[1]
 full = "--full" in sys.argv
 dirs = ["src/Game", "src/JSystem", "src/nw4r", "src/RVLFaceLib", "src/RVL_SDK/gx", "src/RVL_SDK/gd", "src/RVL_SDK/mem",
         "src/RVL_SDK/kpad", "src/RVL_SDK/os", "include", "libs/JSystem/include", "libs/nw4r/include",
-        "libs/RVLFaceLib/include", "libs/RVL_SDK/include", "libs/MSL_C++/include"]
+        "libs/RVLFaceLib/include", "libs/RVL_SDK/include"]
 names = re.compile(r"__MWERKS__|TARGET_PC|__clang__|__GNUC__|__INTELLISENSE__|NON_MATCHING|__ppc__|__PPC__|__CWCC__")
 directive = re.compile(r"\s*#\s*(ifdef|ifndef|if|elif|else|endif)\b(.*)")
 
