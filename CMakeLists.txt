@@ -140,6 +140,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/input/live_controls_engine.cpp
     runtime/src/input/key_positions_win32.cpp
     runtime/src/input/raw_mouse_win32.cpp
+    runtime/src/input/rumble_route.cpp
     runtime/src/native_audio.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
@@ -482,6 +483,7 @@ galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.c
 galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests.cpp)
 galaxy_test(galaxy_raw_mouse_tests SOURCES ${rt}/input/raw_mouse_tests.cpp)
+galaxy_test(galaxy_rumble_route_tests SOURCES ${rt}/input/rumble_route_tests.cpp ${rt}/input/rumble_route.cpp)
 galaxy_test(galaxy_mouse_projection_tests SOURCES ${rt}/input/mouse_projection_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
