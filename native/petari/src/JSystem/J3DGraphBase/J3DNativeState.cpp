@@ -11,20 +11,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     NebulaPassState sPass;
-    bool sFrameAlpha = false;
 
-    NebulaStateOp hostOp(u8 kind) {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = kind;
-        return op;
-    }
-
-    void sendHost(const NebulaStateOp* pOps, u32 count) {
-        J3DNativeShape::flushState();
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->state(pHost->user, pOps, count);
-    }
 }  // namespace
 
 namespace J3DNativeState {
@@ -64,24 +51,24 @@ namespace J3DNativeState {
 
     void initLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
         J3DNativeLight& rLight = *pObj;
-        rLight.mColor[0] = color.r;
-        rLight.mColor[1] = color.g;
-        rLight.mColor[2] = color.b;
-        rLight.mColor[3] = color.a;
+        rLight.color[0] = color.r;
+        rLight.color[1] = color.g;
+        rLight.color[2] = color.b;
+        rLight.color[3] = color.a;
     }
 
     void initLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z) {
         J3DNativeLight& rLight = *pObj;
-        rLight.mPosition[0] = x;
-        rLight.mPosition[1] = y;
-        rLight.mPosition[2] = z;
+        rLight.position[0] = x;
+        rLight.position[1] = y;
+        rLight.position[2] = z;
     }
 
     void initLightDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz) {
         J3DNativeLight& rLight = *pObj;
-        rLight.mDirection[0] = -nx;
-        rLight.mDirection[1] = -ny;
-        rLight.mDirection[2] = -nz;
+        rLight.direction[0] = -nx;
+        rLight.direction[1] = -ny;
+        rLight.direction[2] = -nz;
     }
 
     // the console's distance for a light at infinity.
@@ -100,28 +87,28 @@ namespace J3DNativeState {
 
     void initSpecularDirHA(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
         J3DNativeLight& rLight = *pObj;
-        rLight.mDirection[0] = hx;
-        rLight.mDirection[1] = hy;
-        rLight.mDirection[2] = hz;
-        rLight.mPosition[0] = nx * -cInfiniteLightDistance;
-        rLight.mPosition[1] = ny * -cInfiniteLightDistance;
-        rLight.mPosition[2] = nz * -cInfiniteLightDistance;
+        rLight.direction[0] = hx;
+        rLight.direction[1] = hy;
+        rLight.direction[2] = hz;
+        rLight.position[0] = nx * -cInfiniteLightDistance;
+        rLight.position[1] = ny * -cInfiniteLightDistance;
+        rLight.position[2] = nz * -cInfiniteLightDistance;
     }
 
     void initLightAttn(J3DNativeLight* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2) {
         J3DNativeLight& rLight = *pObj;
-        rLight.mAngle[0] = a0;
-        rLight.mAngle[1] = a1;
-        rLight.mAngle[2] = a2;
-        rLight.mDistance[0] = k0;
-        rLight.mDistance[1] = k1;
-        rLight.mDistance[2] = k2;
+        rLight.angle[0] = a0;
+        rLight.angle[1] = a1;
+        rLight.angle[2] = a2;
+        rLight.distance[0] = k0;
+        rLight.distance[1] = k1;
+        rLight.distance[2] = k2;
     }
 
     void initLightNoSpot(J3DNativeLight* pObj) {
-        pObj->mAngle[0] = 1.0f;
-        pObj->mAngle[1] = 0.0f;
-        pObj->mAngle[2] = 0.0f;
+        pObj->angle[0] = 1.0f;
+        pObj->angle[1] = 0.0f;
+        pObj->angle[2] = 0.0f;
     }
 
     void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, J3DLightFalloff falloff) {
@@ -144,31 +131,21 @@ namespace J3DNativeState {
             break;
         }
         J3DNativeLight& rLight = *pObj;
-        rLight.mDistance[0] = k0;
-        rLight.mDistance[1] = k1;
-        rLight.mDistance[2] = k2;
+        rLight.distance[0] = k0;
+        rLight.distance[1] = k1;
+        rLight.distance[2] = k2;
     }
 
     void sendLight(const J3DNativeLight* pLight, u8 index) {
-        NebulaStateOp ops[2] = {hostOp(NEBULA_STATE_LIGHT_ATTENUATION), hostOp(NEBULA_STATE_LIGHT_POSITION)};
-        ops[0].a[0] = index & 7;
-        memcpy(ops[0].a + 1, pLight->mColor, 4);
-        ops[1].a[0] = index & 7;
-        for (u32 i = 0; i < 3; i++) {
-            ops[0].f[i] = pLight->mAngle[i];
-            ops[0].f[3 + i] = pLight->mDistance[i];
-            ops[1].f[i] = pLight->mPosition[i];
-            ops[1].f[3 + i] = pLight->mDirection[i];
-        }
-        sendHost(ops, 2);
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->light(pHost->user, index, pLight);
     }
 
     void setFrameAlpha(bool keepAlpha) {
-        NebulaStateOp op = hostOp(NEBULA_STATE_FRAME_ALPHA);
-        op.a[0] = keepAlpha != sFrameAlpha;
-        op.a[1] = keepAlpha;
-        sFrameAlpha = keepAlpha;
-        sendHost(&op, 1);
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->frame_alpha(pHost->user, keepAlpha);
     }
 
     // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
@@ -254,23 +231,13 @@ namespace J3DPass {
         // The numbers of j3d_material.hlsli j3d_fog.
         const u32 cFogNone = 0;
         const u32 cFogLinear = 2;
-        // Host texture coordinate source: bits 0-3 the row (5 + n texture coordinate n), bits 4-6 no emboss.
-        u8 coordinateSource(u8 coordinate) {
-            return static_cast< u8 >((5 + coordinate) | 5 << 4);
-        }
-        // The host's row of the identity post-transform (nebula_game_api.h NEBULA_STATE_TEX_COORD_GEN).
-        const u8 cIdentityPost = 61;
         const u8 cFirstTextureSlot = 10;
         const u8 cIdentitySlot = 20;
 
         void sendCoordinate(u8 coord, u8 fromCoordinate, u8 matrixSlot) {
-            NebulaStateOp op = hostOp(NEBULA_STATE_TEX_COORD_GEN);
-            op.a[0] = coord;
-            op.a[2] = coordinateSource(fromCoordinate);
-            op.a[4] = cIdentityPost;
-            op.a[5] = 1;
-            op.a[6] = matrixSlot;
-            sendHost(&op, 1);
+            J3DNativeShape::flushState();
+            const NebulaHostServices* pHost = nebula_host();
+            pHost->texture_coordinate(pHost->user, coord, fromCoordinate, matrixSlot);
         }
     }  // namespace
 

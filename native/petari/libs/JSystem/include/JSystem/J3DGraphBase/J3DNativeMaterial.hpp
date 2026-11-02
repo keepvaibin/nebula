@@ -10,7 +10,6 @@ class J3DTexture;
 class J3DMaterialSnapshot;
 struct NebulaMaterialParts;
 struct NebulaNativeMaterial;
-struct NebulaStateOp;
 
 // The parts a material loads (the others keep what was set before).
 enum {
