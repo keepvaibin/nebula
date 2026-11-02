@@ -321,6 +321,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/render_api.cpp
     runtime/src/render/render_config.cpp
     runtime/src/render/host_window_win32.cpp
+    runtime/src/ui/settings_model.cpp
     runtime/src/render/vblank_clock_win32.cpp
     runtime/src/render/renderer_d3d12.cpp
     runtime/src/render/renderer_common.cpp
@@ -488,6 +489,8 @@ galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}
 galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp LIBS shell32)
 
 galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
+
+galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
 
 set(gxs runtime/src/render)
@@ -577,6 +580,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/render_api.cpp
             runtime/src/render/render_config.cpp
         runtime/src/render/host_window_win32.cpp
+    runtime/src/ui/settings_model.cpp
         runtime/src/render/vblank_clock_win32.cpp
         runtime/src/render/renderer_common.cpp
         runtime/src/render/gpu_upload_ring.cpp
