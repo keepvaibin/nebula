@@ -343,7 +343,7 @@ void TreasureBoxCracked::initItem(const JMapInfoIter& rIter) {
 }
 
 void TreasureBoxCracked::initItemTrans() {
-    const Vec* offset;
+    const Vec* offset = nullptr;
 
     if (mItemType == 1) {
         offset = &::sCoinOffset;

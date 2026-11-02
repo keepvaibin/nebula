@@ -21,12 +21,6 @@ template JMapInfoIter JMapInfo::findElement< const char* >(const char*, const ch
 
 // for some reason these two strings only emit here
 // shrug
-void StageDataHolder_FORCE_MATCH_JMAP(const JMapInfo* pInfo) {
-    pInfo->findElement< s32 >("", 0, 0);
-    pInfo->findElement< const char* >("", "", 0);
-    pInfo->end() == pInfo->end();
-}
-
 namespace {
     static const char* cLayerDirName[0x11] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH",
                                               "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP"};
@@ -189,14 +183,6 @@ JMapInfoIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const JMap
     nebula_snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
     *ppInfo = findJmpInfoFromArray(&mPathObjs, buf);
     return JMapInfoIter(pInfo, idx);
-}
-
-void StageDataHolder_FORCE_MATCH_DATA(const char* pName) {
-    MR::isEqualStringCase(pName, "StageInfo");
-    MR::isEqualStringCase(pName, "MultiFileName");
-    MR::isEqualStringCase(pName, "All_mul");
-    MR::isEqualStringCase(pName, "ChangeSceneListInfo");
-    MR::isEqualStringCase(pName, "SceneNo");
 }
 
 s32 StageDataHolder::getCommonPathInfoElementNum() const {

@@ -9,6 +9,10 @@ rust-version.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# A build that takes extracted game folders only: no disc image is read, and no key is asked for.
+folders-only = []
+
 [dependencies]
 anyhow.workspace = true
 jni-sys = "0.4"

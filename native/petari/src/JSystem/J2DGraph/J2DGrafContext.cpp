@@ -144,9 +144,3 @@ J2DGrafType J2DGrafContext::getGrafType() const {
     return J2DGraf_Base;
 }
 
-void J2DGrafContext_FORCE_MATCH(J2DGrafContext* pContext, JUtility::TColor color) {
-    pContext->setColor(color);
-    pContext->setColor(color);
-    pContext->setColor(color);
-    pContext->setColor(color);
-}

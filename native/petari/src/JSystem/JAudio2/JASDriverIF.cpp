@@ -7,10 +7,9 @@ void JASDriver::setOutputLevel(f32 param_0) {
     JASVoice::setOutputLevel(param_0);
 }
 
-u16 JASDriver::MAX_MIXERLEVEL = 0x2EE0;
-
-u16 JASDriver::getChannelLevel_dsp() {
-    return JASDriver::MAX_MIXERLEVEL;
+// A full channel's gain on its way to the mix.
+f32 JASDriver::getChannelGain() {
+    return 0.18310547f;
 }
 
 f32 JASDriver::getOutputLevel() {

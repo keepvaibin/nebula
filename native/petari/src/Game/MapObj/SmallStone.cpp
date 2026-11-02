@@ -19,24 +19,6 @@ namespace {
     const f32 hRandomScaleMax = 1.25f;
 };  // namespace
 
-void SmallStone_FORCE_MATCH_STRINGS(const char** pStrings) {
-    pStrings[0] = "CircleShell";
-    pStrings[1] = "CircleStrawberry";
-    pStrings[2] = "SmallStone";
-    pStrings[3] = "Kind";
-    pStrings[4] = "Break2";
-    pStrings[5] = "Break1";
-    pStrings[6] = "Break3";
-    pStrings[7] = "Break";
-    pStrings[8] = "Range";
-    pStrings[9] = "SmallStoneMember";
-    pStrings[10] = "WindLoop";
-    pStrings[11] = "WindEnd";
-    pStrings[12] = "SE_OJ_STRAWBERRY_BREAK";
-    pStrings[13] = "SE_OJ_SMALL_STONE_BREAK";
-    pStrings[14] = "SE_OJ_STAR_PIECE_BURST";
-}
-
 SmallStone::SmallStone(const char* pName) : LiveActor(pName), mMembers(), mMemberCount(), mPlacementOffset(), mStoneType(), mUseGravity(true) {
 }
 

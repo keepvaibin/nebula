@@ -114,6 +114,8 @@ void note_keyboard_input() noexcept;
     std::uint64_t current_vi,
     std::int32_t star_pointer_mode,
     std::uint8_t tilt_section);
+// Player 2 (co-star mode), as of the last native_game_input: false while nobody plays it.
+[[nodiscard]] bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept;
 // The game's motor bit to the controller in use, held off in menus (the HOME Menu, pause, error). Renew it with every
 // input sample: a motor whose state goes stale stops.
 void native_game_rumble(bool motor_on, std::int32_t star_pointer_mode) noexcept;

@@ -223,10 +223,10 @@ pub fn write_cooked_pak(
     if !progress(0, total) {
         bail!("the import was cancelled");
     }
-    // AW files have no header: the audio archive's wave systems say which of their ranges hold PCM16.
-    let mut pcm16 = std::collections::BTreeMap::new();
+    // AW files have no header: the audio archive's wave systems say where their waves lie.
+    let mut waves = std::collections::BTreeMap::new();
     for file in files.iter().filter(|f| f.path.ends_with("AudioRes/SMR.szs")) {
-        pcm16 = audio_data::pcm16_ranges(&read(file)?).context("the audio archive's wave systems")?;
+        waves = audio_data::wave_layout(&read(file)?).context("the audio archive's wave systems")?;
     }
     // In disc order, so a reader of the source reads forwards.
     let mut order: Vec<&PakFile> = files.iter().collect();
@@ -240,9 +240,9 @@ pub fn write_cooked_pak(
         // Whatever its name, a compressed file is expanded here: the game has no decompressor.
         let out = if cooks(&file.path) || archive::is_compressed(&bytes) {
             cook_file(&file.path, bytes.clone(), stats)?.unwrap_or(bytes)
-        } else if let Some(ranges) = pcm16.get(&audio_data::wave_archive_key(&file.path)) {
+        } else if let Some(places) = waves.get(&audio_data::wave_archive_key(&file.path)) {
             stats.cooked_files += 1;
-            audio_data::wave_archive(&bytes, ranges).with_context(|| format!("{}: wave archive", file.path))?
+            audio_data::wave_archive(&bytes, places).with_context(|| format!("{}: wave archive", file.path))?
         } else {
             bytes
         };
@@ -407,8 +407,8 @@ pub unsafe extern "C" fn nebula_cook_wave_archive(
 ) -> i32 {
     let result = std::panic::catch_unwind(|| -> Result<Option<Vec<u8>>> {
         let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
-        let ranges = audio_data::pcm16_ranges(std::slice::from_raw_parts(archive, archive_size))?;
-        match ranges.get(&audio_data::wave_archive_key(&name)) {
+        let layout = audio_data::wave_layout(std::slice::from_raw_parts(archive, archive_size))?;
+        match layout.get(&audio_data::wave_archive_key(&name)) {
             Some(list) => Ok(Some(audio_data::wave_archive(std::slice::from_raw_parts(data, size), list)?)),
             None => Ok(None),
         }

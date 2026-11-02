@@ -113,7 +113,7 @@ void LavaStrangeRock::exeWait() {
     MR::calcUpVec(&upVec, this);
 
     TVec3f hitOffset = upVec;
-    f32 radius;
+    f32 radius = 0.0f;
 
     switch (mRockType) {
     case Type_0:

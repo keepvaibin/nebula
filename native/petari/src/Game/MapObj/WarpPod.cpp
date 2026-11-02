@@ -258,7 +258,7 @@ void WarpPod::glowEffect() {
 void WarpPod::initPair() {
     mPairPod = MR::getWarpPodManager()->getPairPod(this);
 
-    bool someBool;
+    bool someBool = false;
 
     if (mPairPod->mPosition.x > mPosition.x) {
         someBool = true;

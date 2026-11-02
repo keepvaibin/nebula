@@ -12,7 +12,7 @@
 
 #include "JSystem/JAudio2/JASStream.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"

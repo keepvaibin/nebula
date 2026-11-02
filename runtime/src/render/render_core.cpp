@@ -20,6 +20,7 @@
 #endif
 #endif
 #include "galaxy/loss_report.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
@@ -142,15 +143,15 @@ std::string present_snapshot_path() {
         return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
-    static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
-    static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
+    static const std::uint64_t every = read_u64(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_EVERY"), 0u);
+    static const std::uint64_t first = read_u64(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_FIRST"), 0u);
     static const std::uint64_t last = read_u64(
-        "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
+        NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_LAST"), std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
         return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_PRESENT_SNAPSHOT_DIR") == 0 && length > 1u
+                        NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_DIR")) == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
@@ -177,7 +178,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
 // A present snapshot waits for the last one's readback instead of being skipped (a run of snapshots holds every
 // present); GALAXY_TEST_CAPTURE_NO_WAIT=1 skips instead.
 bool snapshot_waits() {
-    static const bool waits = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) == 0u;
+    static const bool waits = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CAPTURE_NO_WAIT"), 0u) == 0u;
     return waits;
 }
 
@@ -213,7 +214,7 @@ const RenderStallInjection& render_stall_injection() {
         RenderStallInjection result{};
         char value[32]{};
         std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RENDER_STALL_MS") != 0 || length <= 1) {
+        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_RENDER_STALL_MS")) != 0 || length <= 1) {
             return result;
         }
         const char* end = value + length - 1;
@@ -762,6 +763,42 @@ void RenderCore::reset_monotonic_cadence(
     accumulator.published_last_sample_ns.store(0, std::memory_order_relaxed);
 }
 
+// GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
+void RenderCore::trace_memory() {
+    static const bool enabled = read_env_u64("GALAXY_TRACE_MEMORY", 0u) != 0u;
+    static std::uint64_t frames = 0u;
+    if (!enabled || ++frames % 600u != 0u) {
+        return;
+    }
+    std::uint64_t arrays = 0u;
+    for (const auto& [key, entry] : shape_arrays_) {
+        arrays += entry.array->floats.capacity() * sizeof(float) + entry.array->colors.capacity() * sizeof(std::uint32_t);
+    }
+    std::uint64_t geometry = 0u;
+    std::uint64_t vertices = 0u;
+    std::uint64_t split = 0u;
+    for (const auto& [key, shape] : record_shapes_) {
+        if (shape.geometry != nullptr) {
+            geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
+        }
+        vertices += shape.vertices.capacity() * sizeof(RenderVertex);
+        split += shape.split_indices.capacity() * sizeof(std::uint16_t);
+    }
+    const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
+    std::fprintf(stderr,
+                 "[memory] shape arrays %.1f (%zu), groups %.1f, expanded vertices %.1f, split indices %.1f (%zu shapes), images %.1f, decoded %.1f, "
+                 "upload arenas %.1f, texture pool %.1f, curved %.1f, record pool %.1f\n",
+                 mb(arrays), shape_arrays_.size(), mb(geometry), mb(vertices), mb(split), record_shapes_.size(), mb(texture_cache_.image_bytes()),
+                 mb(texture_cache_.decoded_map_stats().resident_bytes), mb(texture_cache_.upload_arena_bytes()), mb(texture_cache_.pool_bytes()),
+                 mb(curved::memory_bytes()),
+                 mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
+    [](auto& renderer) {
+        if constexpr (requires { renderer.trace_rings(); }) {
+            renderer.trace_rings();
+        }
+    }(renderer_);
+}
+
 void RenderCore::report_frame_tail_window() noexcept {
     static const bool enabled=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
     if(!enabled) return;
@@ -882,6 +919,7 @@ void RenderCore::record_presented_display_copy(
             std::memory_order_relaxed);
         record_monotonic_cadence_sample(display_first_serial_present_cadence_);
         report_frame_tail_window();
+        trace_memory();
         if (event.below_high_water) {
             ++stat_display_out_of_order_serial_requests_;
         }
@@ -2194,7 +2232,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     }
     // GALAXY_TEST_INTERP_SUBFRAMES=<k>: every sequence takes k sub-frames (at most the configured count), whatever the
     // GPU's and the cadence's governors would allow: what a capped rate shows, held for a test.
-    static const std::uint64_t forced = read_env_u64("GALAXY_TEST_INTERP_SUBFRAMES", 0u);
+    static const std::uint64_t forced = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_INTERP_SUBFRAMES"), 0u);
     if (forced != 0u) [[unlikely]] {
         const auto subframes = static_cast<unsigned>(std::min<std::uint64_t>(forced, configured));
         if (subframes < configured) {
@@ -2463,12 +2501,12 @@ std::string RenderCore::interp_snapshot_path(const char* suffix) const {
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_SNAPSHOT_DIR") == 0 &&
+        return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_DIR")) == 0 &&
                        length > 1u
             ? std::string(value) : std::string{};
     }();
-    static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
-    static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
+    static const std::uint64_t first = read_env_u64(NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_FIRST"), 0u);
+    static const std::uint64_t last = read_env_u64(NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_LAST"), 0u);
     if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
         return {};
     }
@@ -2553,7 +2591,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
             }
             // GALAXY_TEST_CAPTURE_NO_WAIT=1: a sub-frame is saved only when the last save's readback is done (else
             // skipped), never waited for: waiting holds the CPU behind the GPU and hides what a race between them shows.
-            static const bool capture_no_wait = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) != 0u;
+            static const bool capture_no_wait = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CAPTURE_NO_WAIT"), 0u) != 0u;
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
@@ -3796,11 +3834,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             const bool enhanced = render.enhanced_lighting;
             const bool per_pixel = render.per_pixel_lighting;
             // GALAXY_TEST_CURVED_AB=1: curved surfaces off in frames that end in an odd present (same-run pictures).
-            static const bool curved_ab = read_env_u64("GALAXY_TEST_CURVED_AB", 0u) != 0u;
+            static const bool curved_ab = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CURVED_AB"), 0u) != 0u;
             curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
                                !(curved_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
-            static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
+            static const bool split_ab = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CURVED_SPLIT_AB"), 0u) != 0u;
             curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             ambient_occlusion_ =
                 render.ambient_occlusion && renderer_.ambient_occlusion_ready();
@@ -3838,7 +3876,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // How the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM): without the renderer's bloom, not
             // at all; NATIVE, its own chain over a scene the renderer keeps; ENHANCED, drawn by the renderer.
             // GALAXY_TEST_BLOOM_ROUTE=0-2 (tests): that route, 0 the console's chain as it is for comparison.
-            static const std::uint64_t test_route = read_env_u64("GALAXY_TEST_BLOOM_ROUTE", 3u);
+            static const std::uint64_t test_route = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_BLOOM_ROUTE"), 3u);
             const unsigned route = !renderer_.game_bloom_ready()                          ? 0u
                                    : test_route <= 2u                                  ? static_cast<unsigned>(test_route)
                                    : get_render_config().bloom_mode == kBloomEnhanced ? 2u
@@ -5393,6 +5431,12 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             }
         }
         curved::forget_models(record.key, record.position);
+        flush_pending_draw_batch();
+        for (const std::uint64_t key : texture_cache_.forget_range(record.key, record.position)) {
+            invalidate_texture_binding_cache_key(key);
+        }
+        texture_bindings_dirty_ = true;
+        current_texture_binding_key_valid_ = false;
         return;
     case shapes::Record::Kind::Draw:
         draw_state_.apply_pass(record.pass);
@@ -5878,15 +5922,8 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     cached_draw_run_batch_compatible_known_ = false;
     const UploadRing::Allocation vb =
         renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertex), 16u);
-    auto* const vertices = reinterpret_cast<RenderVertex*>(vb.cpu);
-    std::memcpy(vertices, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
-    // Vertices without a position matrix of their own take the current one.
-    if ((record.attributes & shapes::kPositionMatrix) == 0u) {
-        const std::uint32_t row = 3u * draw_state_.position_matrix;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            vertices[i].mtx_indices[0] = (vertices[i].mtx_indices[0] & ~0xFFu) | row;
-        }
-    }
+    // The rings are write-combined: this copy is the only touch, never a read.
+    std::memcpy(vb.cpu, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(
         static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));

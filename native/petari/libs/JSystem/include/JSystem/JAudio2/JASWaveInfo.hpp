@@ -19,8 +19,6 @@ struct JASWaveInfo {
         mSampleLoopStart = other.mSampleLoopStart;
         mSampleLoopEnd = other.mSampleLoopEnd;
         mSampleCount = other.mSampleCount;
-        mpLastSample = other.mpLastSample;
-        mpPenultSample = other.mpPenultSample;
         _24 = other._24;
     }
 
@@ -33,8 +31,6 @@ struct JASWaveInfo {
     /* 0x14 */ int mSampleLoopStart;
     /* 0x18 */ int mSampleLoopEnd;
     /* 0x1C */ int mSampleCount;
-    /* 0x20 */ s16 mpLastSample;
-    /* 0x22 */ s16 mpPenultSample;
     /* 0x24 */ const u32* _24;
 
     static u32 one;

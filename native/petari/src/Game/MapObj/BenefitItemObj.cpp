@@ -31,10 +31,6 @@ namespace {
     static u16 sVal = 0x0258;
 };  // namespace
 
-const char* BenefitItemObj_FORCE_MATCH() {
-    return "\211\145\203\116\203\212\203\142\203\166\224\273\222\350" /* 影クリップ判定 */;
-}
-
 void ShadowClipActor::endClipped() {
     LiveActor::endClipped();
 

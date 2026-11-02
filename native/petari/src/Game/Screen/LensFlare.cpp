@@ -328,6 +328,3 @@ namespace MR {
 
 };  // namespace MR
 
-TVec2f LensFlare_FORCE_MATCH(const TVec2f& rA, const TVec2f& rB) {
-    return rA - rB;
-}

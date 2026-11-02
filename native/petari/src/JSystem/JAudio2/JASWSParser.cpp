@@ -55,8 +55,6 @@ JASBasicWaveBank* JASWSParser::createBasicWaveBank(void const* stream, JKRHeap* 
             wave_info.mSampleLoopStart = wave->mSampleLoopStart;
             wave_info.mSampleLoopEnd = wave->mSampleLoopEnd;
             wave_info.mSampleCount = wave->mSampleCount;
-            wave_info.mpLastSample = wave->mpLastSample;
-            wave_info.mpPenultSample = wave->mpPenultSample;
             TCtrlWave* ctrl_wave = ctrl->mCtrlWaveOffsets[j].ptr(header);
             u16 waveId = JSULoHalf(ctrl_wave->mData);
             wave_bank->setWaveInfo(wave_group, j, waveId, wave_info);
@@ -114,8 +112,6 @@ JASSimpleWaveBank* JASWSParser::createSimpleWaveBank(void const* stream, JKRHeap
         wave_info.mSampleLoopStart = wave->mSampleLoopStart;
         wave_info.mSampleLoopEnd = wave->mSampleLoopEnd;
         wave_info.mSampleCount = wave->mSampleCount;
-        wave_info.mpLastSample = wave->mpLastSample;
-        wave_info.mpPenultSample = wave->mpPenultSample;
         TCtrlWave* ctrl_wave = ctrl->mCtrlWaveOffsets[i].ptr(header);
         u32 tmp = JSULoHalf(ctrl_wave->mData);
         wave_bank->setWaveInfo(tmp, wave_info);

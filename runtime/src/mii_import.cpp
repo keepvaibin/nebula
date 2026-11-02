@@ -205,7 +205,7 @@ void load(Library& lib) {
     for (const auto& [slot, record] : console) {
         lib.miis.slots[slot] = decode_wii_mii(record);
     }
-    (void)io::write_text_file_atomically(lib.file, write_mii_library(lib.miis));
+    (void)io::write_file_atomically(lib.file, write_mii_library(lib.miis));
 }
 
 // A copy of a file Miis came from, kept in the library folder that every start imports again: none for a file already
@@ -228,7 +228,7 @@ bool keep_in_library(const std::filesystem::path& folder, const std::filesystem:
         name += file.extension();
         const std::filesystem::path target = folder / name;
         if (!std::filesystem::exists(target, error)) {
-            return io::write_text_file_atomically(
+            return io::write_file_atomically(
                 target, std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
         }
         const std::vector<std::byte> kept = read_file(target);
@@ -464,7 +464,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         total.converted += contents.converted;
     }
     if (!placed.empty()) {
-        if (!io::write_text_file_atomically(lib.file, write_mii_library(miis))) {
+        if (!io::write_file_atomically(lib.file, write_mii_library(miis))) {
             if (message != nullptr) *message = "COULD NOT WRITE THE MII LIBRARY";
             return MiiMergeResult{};
         }

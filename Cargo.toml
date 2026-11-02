@@ -2,6 +2,10 @@
 members = ["crates/nebula-import"]
 resolver = "2"
 
+# The disc library without its keys (third_party/nod/NEBULA.md).
+[patch.crates-io]
+nod = { path = "third_party/nod" }
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"

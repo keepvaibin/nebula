@@ -6,17 +6,6 @@
 
 char MirrorReflectionMtxSetter::sMirrorTextureName[] = "MirrorTex";
 
-void MaterialCtrl_FORCE_MATCH_J3D(J3DMaterial* pMaterial, const J3DGXColorS10* pTevColor, const J3DGXColor* pColor, const J3DZMode* pZMode,
-                                  const J3DBlend* pBlend, J3DTexMtx* pTexMtx) {
-    pMaterial->mTevBlock->setTevColor(0, pTevColor);
-    pMaterial->mPEBlock->getFog();
-    pMaterial->mColorBlock->setMatColor(0, pColor);
-    pMaterial->mPEBlock->setZMode(pZMode);
-    pMaterial->mPEBlock->setBlend(pBlend);
-    pMaterial->mTexGenBlock->setTexMtx(0, pTexMtx);
-    pMaterial->mTevBlock->setTevKColor(0, pColor);
-}
-
 MaterialCtrl::MaterialCtrl(J3DModelData* pModelData, const char* pMaterialName) : mModelData(pModelData), mMaterial() {
     if (pMaterialName) {
         mMaterial = MR::getMaterial(pModelData, pMaterialName);

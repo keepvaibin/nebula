@@ -276,7 +276,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         _120(_128, _1C0);
     }
 
-    J3DShape* original;
+    J3DShape* original = nullptr;
     if (_12C) {
         J3DShapePacket* replacement = _12C->getShapePacket(material->getShape()->getIndex());
         original = packet->getShape();

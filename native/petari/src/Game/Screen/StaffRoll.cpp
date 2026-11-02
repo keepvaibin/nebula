@@ -198,7 +198,7 @@ void StaffRollPicture::initReplaceTexture() {
 
 void StaffRollPicture::startPictureAction(s32 replaceTextureId, const char* pPaneName, const char* pAnimName) {
     if (replaceTextureId >= 0) {
-        const char* pChildPaneName;
+        const char* pChildPaneName = nullptr;
 
         if (MR::isEqualString(pPaneName, "PictureLU")) {
             pChildPaneName = "PicLU";
@@ -435,7 +435,7 @@ void StaffRoll::exePrepareInfo() {
 }
 
 void StaffRoll::exeInfoAppear() {
-    const char* pMessageId;
+    const char* pMessageId = nullptr;
 
     if (MR::isFirstStep(this)) {
         if (isNerve(GET_NERVE(StaffRoll, StaffRollNrvInfoPictureBookAppear))) {
@@ -713,8 +713,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void StaffRoll_FORCE_MATCH(StaffRollLine* pLine, StaffRollPicture* pPicture, StaffRoll* pRoll) {
-    pLine->StaffRollLine::~StaffRollLine();
-    pPicture->StaffRollPicture::~StaffRollPicture();
-    pRoll->StaffRoll::~StaffRoll();
-}

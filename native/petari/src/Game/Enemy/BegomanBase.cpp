@@ -27,15 +27,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
- void BegomanBase_FORCE_MATCH_SDATA2() {
-    (void) 1.0f;
-    (void) 0.0f;
-    (void) 0.5f;
-    (void) 3.0f;
-    (void) -1.0f;
-    (void) 2.0f;
- }
-
 namespace {
     const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
     const MR::ActorMoveParam hReturnMoveParam = {0.2f, 1.0f, 0.95f, 3.0f};
@@ -97,6 +88,8 @@ BegomanBase::BegomanBase(const char* pName)
     : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), _A8(0.0f, 0.0f, -1.0f), _B4(1.0f, 1.0f, 1.0f),
       _C0(0, 0, 0, 1), _D0(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
       mCanTrySetReturn() {
+    mIsTouchElectricRail = false;
+    mInvertSideVec = false;
 }
 
 // needed to get a string to show up in .data, should be deadstripped.

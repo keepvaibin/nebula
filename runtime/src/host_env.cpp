@@ -1,5 +1,6 @@
 // Environment variables for the host's switches and test hooks (host_env.h).
 #include "galaxy/host_env.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/test_data_paths.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -22,7 +23,7 @@ const char* test_data_paths_error(int argc, char** argv) {
     wchar_t* environment = GetEnvironmentStringsW();
     if (!environment) return "cannot inspect the test environment";
     for (const wchar_t* entry = environment; *entry; entry += std::wcslen(entry) + 1) {
-        if (_wcsnicmp(entry, L"GALAXY_TEST_", 12) == 0) test = true;
+        if (_wcsnicmp(entry, NEBULA_TEST_ENV_W("GALAXY_TEST_"), 12) == 0) test = true;
     }
     FreeEnvironmentStringsW(environment);
     if (!test) return nullptr;

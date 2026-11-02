@@ -8,7 +8,7 @@
 namespace {
     inline void addRailToGraph(RailGraph* pGraph, JMapInfoIter currentRail, const JMapInfo* pPoints) {
         s32 pointCount = pPoints->getNumEntries();
-        s32 firstNode;
+        s32 firstNode = 0;
         s32 previousNode = -1;
         RailGraphEdge edge;
 

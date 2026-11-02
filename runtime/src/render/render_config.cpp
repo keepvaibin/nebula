@@ -1,6 +1,7 @@
 // The rendering settings: config.ini loading and saving, the GALAXY_<KEY> overrides, and the data folders beside
 // config.ini.
 #include "galaxy/render/render_config.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/platform_paths.h"
 
@@ -486,7 +487,7 @@ int rt_effect_ab() {
     static const int effect = [] {
         char value[16]{};
         std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RT_EFFECT_AB") != 0 || length <= 1u) return -1;
+        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_RT_EFFECT_AB")) != 0 || length <= 1u) return -1;
         static constexpr const char* kNames[] = {"reflections", "water", "sun_rays", "lens_bloom"};
         for (int i = 0; i < 4; ++i) {
             if (std::strcmp(value, kNames[i]) == 0) return i;
@@ -690,7 +691,7 @@ bool save_render_config_to_file() {
     if (!contents) {
         return false;
     }
-    if (!io::write_text_file_atomically(path, contents.str())) {
+    if (!io::write_file_atomically(path, contents.str())) {
         return false;
     }
     // This process's own write is not a change to take back in.
@@ -736,7 +737,7 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
                  << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
                  << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
                  << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
-        static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
+        static_cast<void>(io::write_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
     }
 }

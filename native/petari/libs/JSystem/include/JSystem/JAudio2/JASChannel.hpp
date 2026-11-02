@@ -93,12 +93,12 @@ public:
     static f32 calcPan(JASChannel::PanVector const*);
     void effectOsc(u32, JASOscillator::EffectParams*);
     void setKeySweepTarget(s32, u32);
-    void updateEffectorParam(JASVoice*, u16*, JASOscillator::EffectParams const&);
+    void updateEffectorParam(JASVoice*, f32*, JASOscillator::EffectParams const&);
     static s32 voiceUpdateCallback(u32, JASVoice*, void*);
     s32 initialUpdateVoice(JASVoice*);
     s32 updateVoice(JASVoice*);
     void updateAutoMixer(JASVoice*, f32, f32, f32, f32);
-    void updateMixer(f32, f32, f32, f32, u16*);
+    void updateMixer(f32, f32, f32, f32, f32*);
     void free();
     static void initBankDisposeMsgQueue();
     static void receiveBankDisposeMsg();

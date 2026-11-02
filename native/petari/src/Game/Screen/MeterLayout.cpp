@@ -245,10 +245,6 @@ void MeterLayout::exeWait() {
 }
 
 // ! minus operator gets inlined - https://decomp.me/scratch/wWkjw
-void MeterLayout_FORCE_MATCH(TVec2f& rA, const TVec2f& rB) {
-    rA - rB;
-}
-
 void MeterLayout::exePowerUp() {
     TVec2f basePos;
 
@@ -420,10 +416,6 @@ void MeterLayout::calcMarioHeadPosition(TVec2f* pHeadPosition) const {
 
     pHeadPosition->x = screenPos.x;
     pHeadPosition->y = screenPos.y;
-}
-
-void MeterLayout_FORCE_MATCH_STRINGS(LayoutActor* pActor) {
-    MR::startAnim(pActor, "MoveMeter", 0);
 }
 
 void MeterLayout::calcPowerUpMeterBasePosition(TVec2f* pBasePosition) const {

@@ -12,13 +12,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-void AreaObjUtil_FORCE_MATCH(TVec3f* pVec, const TVec3f& rOther) {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    *pVec += rOther;
-}
-
 namespace MR {
     inline AreaObj* getAreaIn(const char* pName, const TVec3f& rPos) {
         return getAreaObjContainer()->getAreaObj(pName, rPos);

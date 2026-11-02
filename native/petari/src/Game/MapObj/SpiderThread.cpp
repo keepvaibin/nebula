@@ -233,7 +233,7 @@ void SpiderThread::initMainThreads() {
 
         // connect points
         SpiderThreadMainPoint* point = getMainRadialLine(radialIdx)->getPoint(0);
-        SpiderThreadMainPoint* nextPoint;
+        SpiderThreadMainPoint* nextPoint = nullptr;
         connectMainPoint(point, mMainPoint, true);
         for (s32 idx = 0; idx < ::sMainRadialLinePointNum - 1; idx++) {
             nextPoint = getMainRadialLine(radialIdx)->getPoint(idx + 1);

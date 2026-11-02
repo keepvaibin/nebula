@@ -1,5 +1,6 @@
-//! Sound data in host order (C-05): AST streams (header, block headers, PCM16 samples) and the PCM16 waves of AW wave
-//! archives. An AW file has no header: which ranges hold PCM16 comes from the wave systems of the audio archive.
+//! Sound data in host order (C-05): AST streams (header, block headers, PCM16 samples) and AW wave archives, every wave
+//! PCM16 (H-01: the disc's ADPCM and 8-bit waves are decoded here, so the mixer has one source form). An AW file has no
+//! header: where its waves lie comes from the wave systems of the audio archive, which name their new places.
 
 use super::archive;
 use anyhow::{bail, Context, Result};
@@ -9,8 +10,30 @@ const AST_HEADER: usize = 0x40;
 const AST_BLOCK_HEADER: usize = 0x20;
 const STREAM_HEADER: usize = 32;
 const FORMAT_PCM16: u8 = 1;
-/// A wave's format in a wave system.
+/// A wave's format in a wave system, on the disc.
+const WAVE_ADPCM4: u8 = 0;
+const WAVE_ADPCM2: u8 = 1;
+const WAVE_PCM8: u8 = 2;
 const WAVE_PCM16: u8 = 3;
+/// The AFC ADPCM format's predictor pairs, by the block header's low nibble (11-bit fractions).
+const ADPCM_PREDICTORS: [[i64; 2]; 16] = [
+    [0, 0],
+    [2048, 0],
+    [0, 2048],
+    [1024, 1024],
+    [4096, -2048],
+    [3584, -1536],
+    [3072, -1024],
+    [4608, -2560],
+    [4200, -2248],
+    [4800, -2300],
+    [5120, -3072],
+    [2048, -2048],
+    [1024, -1024],
+    [-1024, 1024],
+    [-1024, 0],
+    [-2048, 0],
+];
 
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_be_bytes(bytes.get(at..at + 4).context("a field past the data's end")?.try_into().unwrap()))
@@ -93,8 +116,30 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// Each AW file's PCM16 ranges (offset, bytes) from an audio archive's wave systems, the disc's or a cooked one.
-pub fn pcm16_ranges(archive_file: &[u8]) -> Result<BTreeMap<String, Vec<(usize, usize)>>> {
+/// A wave's bytes in an AW file: where the disc has them, and where the cooked file has them as PCM16.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WavePlace {
+    pub offset: usize,
+    pub length: usize,
+    pub format: u8,
+    pub samples: usize,
+    pub new_offset: usize,
+    pub new_length: usize,
+}
+
+/// The samples a wave's bytes hold.
+fn samples_in(length: usize, format: u8, sample_count: usize) -> usize {
+    match format {
+        WAVE_ADPCM4 => (length / 9).max(sample_count.div_ceil(16)) * 16,
+        WAVE_ADPCM2 => (length / 5).max(sample_count.div_ceil(16)) * 16,
+        WAVE_PCM8 => length,
+        _ => length / 2,
+    }
+}
+
+/// Each AW file's waves from an audio archive's wave systems, the disc's or a cooked one, laid out one after the other.
+/// The same data gives the same layout, so the archive's cook and each AW file's agree.
+pub fn wave_layout(archive_file: &[u8]) -> Result<BTreeMap<String, Vec<WavePlace>>> {
     let expanded;
     let bytes = if archive::is_compressed(archive_file) {
         expanded = archive::expand(archive_file)?;
@@ -102,7 +147,7 @@ pub fn pcm16_ranges(archive_file: &[u8]) -> Result<BTreeMap<String, Vec<(usize, 
     } else {
         archive_file
     };
-    let mut ranges: BTreeMap<String, Vec<(usize, usize)>> = BTreeMap::new();
+    let mut layout: BTreeMap<String, Vec<WavePlace>> = BTreeMap::new();
     let mut search = 0usize;
     while let Some(found) = bytes[search..].windows(4).position(|w| w == b"WSYS") {
         let base = search + found;
@@ -124,30 +169,94 @@ pub fn pcm16_ranges(archive_file: &[u8]) -> Result<BTreeMap<String, Vec<(usize, 
                 continue;
             }
             let name_at = base + entry;
-            let name_bytes = bytes.get(name_at..name_at + 0x70).context("a wave archive's name")?;
-            let name_end = name_bytes.iter().position(|b| *b == 0).unwrap_or(name_bytes.len());
-            let name = String::from_utf8_lossy(&name_bytes[..name_end]).into_owned();
+            let name = archive_name(bytes.get(name_at..name_at + 0x70).context("a wave archive's name")?);
             for w in 0..word(name_at + 0x70)? {
                 let wave = word(name_at + 0x74 + 4 * w)?;
-                if wave != 0 && bytes.get(base + wave + 1).copied() == Some(WAVE_PCM16) {
-                    ranges.entry(name.to_ascii_lowercase()).or_default().push((word(base + wave + 8)?, word(base + wave + 0xC)?));
+                let format = *bytes.get(base + wave + 1).context("a wave past the end")?;
+                if wave != 0 && format <= WAVE_PCM16 {
+                    let length = word(base + wave + 0xC)?;
+                    layout.entry(name.clone()).or_default().push(WavePlace {
+                        offset: word(base + wave + 8)?,
+                        length,
+                        format,
+                        samples: samples_in(length, format, word(base + wave + 0x1C)?),
+                        new_offset: 0,
+                        new_length: 0,
+                    });
                 }
             }
         }
     }
-    for list in ranges.values_mut() {
+    for list in layout.values_mut() {
         list.sort_unstable();
-        list.dedup();
+        list.dedup_by_key(|w| (w.offset, w.length, w.format));
+        let mut at = 0usize;
+        for wave in list.iter_mut() {
+            wave.new_offset = at;
+            wave.new_length = wave.samples * 2;
+            at += wave.new_length;
+        }
     }
-    Ok(ranges)
+    Ok(layout)
 }
 
-/// An AW file with the given PCM16 ranges in host order (ranges past its end are refused).
-pub fn wave_archive(bytes: &[u8], ranges: &[(usize, usize)]) -> Result<Vec<u8>> {
-    let mut out = bytes.to_vec();
-    for &(start, length) in ranges {
-        let samples = out.get_mut(start..start + length).with_context(|| format!("PCM16 wave at {start:#x} past the file's end"))?;
-        turn_samples(samples);
+/// A wave archive's name in its wave system, as wave_archive_key gives it.
+pub fn archive_name(field: &[u8]) -> String {
+    let end = field.iter().position(|b| *b == 0).unwrap_or(field.len());
+    String::from_utf8_lossy(&field[..end]).to_ascii_lowercase()
+}
+
+/// The place of a wave of a wave system (its disc offset, length and format).
+pub fn place_of(layout: &BTreeMap<String, Vec<WavePlace>>, name: &str, offset: usize, length: usize, format: u8) -> Option<WavePlace> {
+    layout.get(name)?.iter().find(|w| w.offset == offset && w.length == length && w.format == format).copied()
+}
+
+/// ADPCM blocks to host-order PCM16. The decoder's history runs through the wave from zero, so a loop's start holds what
+/// the wave's own samples lead to.
+fn decode_adpcm(data: &[u8], block_bytes: usize, samples: usize, out: &mut [u8]) {
+    let (mut s1, mut s2) = (0i64, 0i64);
+    for (b, block) in out[..samples * 2].chunks_exact_mut(32).enumerate() {
+        let source = data.get(b * block_bytes..b * block_bytes + block_bytes);
+        let header = source.map_or(0, |s| s[0]);
+        let scale = (header >> 4) as u32;
+        let [c1, c2] = ADPCM_PREDICTORS[(header & 15) as usize];
+        for k in 0..16 {
+            let delta = match source {
+                None => 0,
+                Some(s) if block_bytes == 5 => (((s[1 + k / 4] << ((k & 3) * 2)) as i8 >> 6) as i64) << (scale + 2),
+                Some(s) => {
+                    let byte = s[1 + k / 2];
+                    (((if k & 1 != 0 { byte << 4 } else { byte }) as i8 >> 4) as i64) << scale
+                }
+            };
+            let sample = (((delta << 11) + c1 * s1 + c2 * s2) >> 11).clamp(-32768, 32767);
+            s2 = s1;
+            s1 = sample;
+            block[k * 2..k * 2 + 2].copy_from_slice(&(sample as i16).to_le_bytes());
+        }
+    }
+}
+
+/// An AW file with every wave PCM16 in host order, at the places of its layout (a wave's range past the file is refused).
+pub fn wave_archive(bytes: &[u8], places: &[WavePlace]) -> Result<Vec<u8>> {
+    let size = places.iter().map(|w| w.new_offset + w.new_length).max().unwrap_or(0);
+    let mut out = vec![0u8; size];
+    for w in places {
+        let data = bytes.get(w.offset..w.offset + w.length).with_context(|| format!("a wave at {:#x} past the file's end", w.offset))?;
+        let target = &mut out[w.new_offset..w.new_offset + w.new_length];
+        match w.format {
+            WAVE_ADPCM4 => decode_adpcm(data, 9, w.samples, target),
+            WAVE_ADPCM2 => decode_adpcm(data, 5, w.samples, target),
+            WAVE_PCM8 => {
+                for (s, d) in data.iter().zip(target.chunks_exact_mut(2)) {
+                    d.copy_from_slice(&(((*s as i8) as i16) << 8).to_le_bytes());
+                }
+            }
+            _ => {
+                target.copy_from_slice(&data[..w.new_length]);
+                turn_samples(target);
+            }
+        }
     }
     Ok(out)
 }
@@ -193,10 +302,44 @@ mod tests {
         assert!(ast(&s).is_err());
     }
 
+    fn place(offset: usize, length: usize, format: u8, samples: usize, new_offset: usize) -> WavePlace {
+        WavePlace { offset, length, format, samples, new_offset, new_length: samples * 2 }
+    }
+
     #[test]
-    fn wave_ranges_turn_only_their_bytes() {
-        let cooked = wave_archive(&[1, 2, 3, 4, 5, 6], &[(2, 2)]).unwrap();
-        assert_eq!(cooked, vec![1, 2, 4, 3, 5, 6]);
-        assert!(wave_archive(&[1, 2], &[(2, 2)]).is_err());
+    fn pcm16_waves_turn() {
+        let cooked = wave_archive(&[1, 2, 3, 4, 5, 6], &[place(2, 2, WAVE_PCM16, 1, 0)]).unwrap();
+        assert_eq!(cooked, vec![4, 3]);
+        assert!(wave_archive(&[1, 2], &[place(2, 2, WAVE_PCM16, 1, 0)]).is_err());
+    }
+
+    #[test]
+    fn pcm8_waves_widen() {
+        let cooked = wave_archive(&[0x7F, 0x80], &[place(0, 2, WAVE_PCM8, 2, 0)]).unwrap();
+        assert_eq!(cooked, vec![0x00, 0x7F, 0x00, 0x80]);
+    }
+
+    #[test]
+    fn adpcm_blocks_decode() {
+        // Predictor 0 at scale 11: a nibble of 1 is 2048, then -1 is -2048, the rest 0.
+        let mut block = [0u8; 9];
+        block[0] = 0xB0;
+        block[1] = 0x1F;
+        let cooked = wave_archive(&block, &[place(0, 9, WAVE_ADPCM4, 16, 0)]).unwrap();
+        assert_eq!(i16::from_le_bytes([cooked[0], cooked[1]]), 2048);
+        assert_eq!(i16::from_le_bytes([cooked[2], cooked[3]]), -2048);
+        assert_eq!(cooked.len(), 32);
+        assert_eq!(cooked[4..], [0u8; 28]);
+    }
+
+    #[test]
+    fn a_two_bit_block_decodes() {
+        // Predictor 0 at scale 9 (9 + 2 = 11 bits): 01 is 2048.
+        let mut block = [0u8; 5];
+        block[0] = 0x90;
+        block[1] = 0b0100_0000;
+        let cooked = wave_archive(&block, &[place(0, 5, WAVE_ADPCM2, 16, 0)]).unwrap();
+        assert_eq!(i16::from_le_bytes([cooked[0], cooked[1]]), 2048);
+        assert_eq!(cooked[2..], [0u8; 30]);
     }
 }

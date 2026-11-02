@@ -283,11 +283,22 @@ the game's 60):
   staged in group memory (every iteration slower, 0.45 -> 0.54 ms at step 1: the 16 KB a group lowers occupancy), its
   rows looped instead of unrolled (0.445 -> 0.465).
 
+## ThinLTO and profile-guided optimisation (M)
+
+A player's build is `native/build.ps1 -Pgo`: ThinLTO with the profile of the 102-stop tour (`native/pgo/game.profdata`, made by
+`tools/verify/pgo_profile.sh`). Battlerock, 60 fps, the game's and the audio frame's CPU, 10th percentile, in the two rounds with an undisturbed
+render thread (83-85 ms/s in every build), four rounds interleaved:
+
+| build | game + audio, ms/s | module |
+|---|---|---|
+| plain | 33.9, 35.9 | 6.9 MB |
+| ThinLTO | 31.8, 33.1 | 9.1 MB |
+| ThinLTO + profile | 29.1, 28.2 (the disturbed rounds too: 30.2, 30.1) | 7.3 MB |
+
+Pictures 399 of 399 and audio identical to the plain build in deterministic mode (run pcp). Development builds stay plain: they link in a fraction of the time.
+
 ## Planned, measured before adopted (H)
 
-- **ThinLTO with whole-program devirtualisation.** Inlines across units (`OSRestoreInterrupts`, `GXBegin`, the `MR::`
-  helpers) and devirtualises `LiveActor` calls. Measure the frame time on the galaxy tour route.
-- **Profile-guided optimisation.** Train on the galaxy tour harness.
 - **Two module builds:** x86-64 baseline and x86-64-v3 (AVX2, FMA, MOVBE: the byte swap folds into the load). The host
   loads the best one the CPU runs.
 - **MTX/VEC library.** Native SSE/NEON code where the console's was paired-single assembly.

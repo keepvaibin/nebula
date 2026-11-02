@@ -61,13 +61,25 @@ bool AssetStore::parse(const std::uint8_t* header, const std::uint8_t* index, st
     std::memcpy(&count, header + 12, 4);
     const std::uint64_t nodes = word(header + 16), hashes = word(header + 24), names = word(header + 32),
                         names_size = word(header + 40);
-    if (version != 1u || count == 0u || nodes < index_at || nodes > size || (size - nodes) / sizeof(Node) < count ||
+    if (version != kStoreVersion || count == 0u || nodes < index_at || nodes > size || (size - nodes) / sizeof(Node) < count ||
         hashes < index_at || hashes > size || (size - hashes) / sizeof(Hash) < count || names < index_at || names > size ||
         size - names < names_size || names_size == 0u || index[names - index_at + names_size - 1u] != 0u) {
         return false;
     }
-    nodes_ = reinterpret_cast<const Node*>(index + (nodes - index_at));
-    hashes_ = reinterpret_cast<const Hash*>(index + (hashes - index_at));
+    const auto* const node_table = reinterpret_cast<const Node*>(index + (nodes - index_at));
+    const auto* const hash_table = reinterpret_cast<const Hash*>(index + (hashes - index_at));
+    // Every index the table holds is inside it, so a damaged file is refused here and nothing below checks again (read checks each
+    // read against the store's size).
+    for (std::uint32_t i = 0u; i < count; ++i) {
+        const Node& node = node_table[i];
+        const bool folder = (node.flags & 1u) != 0u;
+        if (node.name >= names_size || node.parent >= count || hash_table[i].node >= count ||
+            (folder && (node.position > count || node.size > count - node.position))) {
+            return false;
+        }
+    }
+    nodes_ = node_table;
+    hashes_ = hash_table;
     names_ = reinterpret_cast<const char*>(index + (names - index_at));
     count_ = count;
     game_id_.assign(reinterpret_cast<const char*>(header + 48), strnlen(reinterpret_cast<const char*>(header + 48), 6));

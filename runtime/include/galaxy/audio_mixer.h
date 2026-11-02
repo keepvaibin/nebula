@@ -2,7 +2,7 @@
 // float at the output device's rate. Each voices_mix call is one subframe (1/400 s); voices_frame ends a frame and
 // hands it to the output.
 //
-// Per voice: the source (ADPCM blocks, PCM8/PCM16, or an oscillator) is read at its own rate with the record's
+// Per voice: the source (PCM16 or an oscillator) is read at its own rate with the record's
 // position bookkeeping (the stream player reads and moves it), resampled to the output rate with a 4-tap
 // Kaiser-windowed sinc (cutoff 0.753 of the source's Nyquist, beta 7.05: the response the game's sound was made
 // with), through its FIR and IIR filters (their 32 kHz responses carried to the output rate), then into the buses with
@@ -30,7 +30,6 @@ struct AudioMixerStats {
     std::uint64_t frames{};
     std::uint64_t subframes{};
     std::uint64_t voice_renders{};
-    std::uint64_t adpcm_blocks{};
     std::uint64_t pcm_renders{};
     std::uint64_t oscillator_renders{};
     std::uint64_t noise_renders{};
@@ -101,7 +100,9 @@ public:
 private:
     static constexpr std::size_t kMaxSubframe = 512u;  // output samples of one subframe at 192 kHz, rounded up
     static constexpr std::size_t kVoices = 64u;
-    static constexpr std::uint32_t kMaxSourceSamples = 4u + 0x7FFFu * 80u / 4096u + 1u;
+    // At most 16 source samples per 32 kHz sample, the history before them and the last taps' reach.
+    static constexpr std::uint32_t kMaxSourceSpan = 1280u;
+    static constexpr std::uint32_t kMaxSourceSamples = 4u + kMaxSourceSpan + 4u;
 
     struct Biquad {
         float b0{1.0f}, b1{}, b2{}, a1{}, a2{};
@@ -109,10 +110,9 @@ private:
     };
 
     struct VoiceState {
-        std::uint32_t phase{};            // 12-bit position between source samples
+        double phase{};                   // the position between source samples
         std::array<float, 4> history{};   // the previous subframe's last source samples
-        std::array<std::int16_t, 16> block{};  // the decoded ADPCM block; [14], [15] the predictor's history
-        bool loop_pending{};              // PCM: the end was reached exactly; loop or finish at the next read
+            bool loop_pending{};              // PCM: the end was reached exactly; loop or finish at the next read
         float last{};                     // the last resampled sample, held while paused
         double cycle{};                   // oscillators: position in the waveform's cycle
         float noise{};                    // noise oscillators: the held value and its step
@@ -120,11 +120,11 @@ private:
         std::uint32_t noise_seed{0x9E3779B9u};
         // FIR at the output rate, rebuilt when the game's taps or coefficients change.
         std::uint16_t fir_key_mode{0xFFFFu};
-        std::array<std::int16_t, 8> fir_key{};
+        std::array<float, 8> fir_key{};
         std::vector<float> fir;           // weights by delay in output samples (index 0: one sample back)
         std::vector<float> fir_history;   // newest at the back
         // IIR at the output rate, rebuilt when the coefficients change.
-        std::array<std::int16_t, 4> iir_key{};
+        std::array<float, 4> iir_key{};
         bool iir_valid{};
         Biquad iir;
         // Volume category gain.
@@ -143,7 +143,7 @@ private:
         std::vector<float> history_a;      // the FIR's input history (before the sends)
         std::vector<float> history_b;      // (after the sends)
         std::vector<float> fir;            // weights by delay in output samples
-        std::array<std::int16_t, 8> fir_key{};
+        std::array<float, 8> fir_key{};
         std::array<float, kMaxSubframe> input{};  // what goes into the delay at the end of the subframe
     };
 
@@ -164,9 +164,7 @@ private:
     [[nodiscard]] float* bus(std::uint32_t index) noexcept;
     void render_voice(std::uint32_t index, NebulaVoice& voice);
     void render_source(VoiceState& state, NebulaVoice& voice, float* out);
-    void decode_adpcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count);
-    void decode_adpcm_blocks(VoiceState& state, NebulaVoice& voice, std::int16_t* out, std::uint32_t blocks);
-    void read_pcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count, std::uint32_t bytes);
+    void read_pcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count);
     void render_oscillator(VoiceState& state, const NebulaVoice& voice, float* out);
     void apply_fir(VoiceState& state, const NebulaVoice& voice, float* samples);
     void apply_iir(VoiceState& state, const NebulaVoice& voice, float* samples);

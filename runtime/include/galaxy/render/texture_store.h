@@ -140,6 +140,12 @@ public:
     std::size_t forget(std::uint64_t key);
     // Images and palettes sampled without having been handed over (each logged).
     [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
+    // The images handed over from [start, end) go (their memory is going), with what was decoded from them; the keys, for the caller's bindings.
+    [[nodiscard]] std::vector<std::uint64_t> forget_range(std::uint64_t start, std::uint64_t end);
+    // Memory, for GALAXY_TRACE_MEMORY: the images handed over, the upload arenas and the recycled textures, in bytes.
+    [[nodiscard]] std::uint64_t image_bytes() const noexcept;
+    [[nodiscard]] std::uint64_t upload_arena_bytes() const noexcept;
+    [[nodiscard]] std::uint64_t pool_bytes() const noexcept { return texture_pool_bytes_; }
 
 
     // The GPU side: views by srv_index, upload staging, textures (gpu_texture_backend.h).
@@ -330,6 +336,7 @@ private:
         std::uint32_t width, std::uint32_t height, unsigned levels,
         gpu::TextureRef& texture, std::uint64_t& allocation_bytes);
     std::vector<UploadArenaFrame> upload_arenas_;
+    std::uint64_t upload_arena_chunks_ = 0;
     // Render-thread decode scratch, kept between misses to avoid reallocating.
     std::vector<std::vector<RGBA8>> level_pixels_scratch_;
     std::unique_ptr<TextureDecodePool> decode_pool_;

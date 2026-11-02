@@ -3,7 +3,7 @@
 
 class JASTaskThread;
 
-namespace JASDvd {
+namespace JASLoad {
     JASTaskThread* getThreadPointer();
     bool createThread(int msgCount, u32 stackSize);
-};  // namespace JASDvd
+};  // namespace JASLoad

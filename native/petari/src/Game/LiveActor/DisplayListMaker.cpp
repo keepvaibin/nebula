@@ -9,10 +9,6 @@
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <algorithm>
 
-void DisplayListMaker_FORCE_MATCH_INLINE(J3DTexture* pTexture, const ResTIMG& rTexture) {
-    pTexture->setResTIMG(0, rTexture);
-}
-
 DisplayListMaker::DisplayListMaker(J3DModel* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
     u16 materialNum = mModel->getModelData()->getMaterialNum();
     mPrgFlag = new u32[materialNum];

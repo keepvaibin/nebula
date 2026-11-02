@@ -30,6 +30,7 @@ void FootPrint::initMember(s32 amount, s32 drawType) {
     mPrintMaxNum = 0;
     mPrintNum = 0;
     mRotatingPrintIndex = 0;
+    _3C = false;
 
     _2C = 20.0f;
     _30 = 20.0f;

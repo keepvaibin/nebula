@@ -3,6 +3,7 @@
 // overlay and HOME Menu (state, keys, drawing through a renderer's UiCanvas) and the host API that reads them.
 
 #include "galaxy/render/host_window_win32.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/path_text.h"
 #include "galaxy/controller_hid.h"
 
@@ -17,7 +18,7 @@
 #include "galaxy/mii_import.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/mods.h"
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
@@ -473,6 +474,16 @@ void sanitize_settings_draft(RenderConfig& render) {
     }
 }
 
+// A binding as the menu shows it: a key by position shows its letter, not the settings file's "Position." form.
+std::string menu_bindings(galaxy::input::ControlScheme scheme, const galaxy::input::TargetBindings& bindings) {
+    std::string text = galaxy::input::format_target_bindings(scheme, bindings);
+    constexpr std::string_view prefix = "Position.";
+    for (std::size_t at = text.find(prefix); at != std::string::npos; at = text.find(prefix, at)) {
+        text.erase(at, prefix.size());
+    }
+    return text;
+}
+
 unsigned controls_changes();
 
 // The LIGHTING row: 0 per vertex, 1 per pixel, 2 enhanced.
@@ -482,7 +493,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     const RuntimeSettings& d = s_runtime_draft;
     const RuntimeSettings& b = s_runtime_base;
     // A setting added to RuntimeSettings is drafted here too: these bindings stop compiling until it is.
-    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons] = d;
+    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons, co_star] = d;
     [[maybe_unused]] const auto& [master, music, sfx, voice, ambience, cutscene, wiimote_speaker] = d.audio;
     RuntimeSettings scratch{};
     RuntimeSettings& out = live != nullptr ? *live : scratch;
@@ -504,6 +515,7 @@ unsigned runtime_draft_changes(RuntimeSettings* live) {
     take(d.language, b.language, out.language);
     take(d.discord_status, b.discord_status, out.discord_status);
     take(d.button_icons, b.button_icons, out.button_icons);
+    take(d.co_star, b.co_star, out.co_star);
     return changes;
 }
 
@@ -600,7 +612,7 @@ galaxy::host::JoyConStatus joycon_status_now() {
         std::vector<Step> steps;
         char value[128]{};
         std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_JOYCON") != 0 || length <= 1u) return steps;
+        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_JOYCON")) != 0 || length <= 1u) return steps;
         for (const char* p = value; *p != '\0';) {
             Step step;
             step.bits = std::atoi(p);
@@ -3029,7 +3041,7 @@ std::string native_settings_row_text(
             if (controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target)) {
                 return line + "PRESS AN INPUT";
             }
-            std::string bound = upper_ascii(galaxy::input::format_target_bindings(
+            std::string bound = upper_ascii(menu_bindings(
                 s_controls_scheme, s_controls_draft.table(s_controls_scheme)[info.target]));
             if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
             return line + bound;
@@ -3418,7 +3430,7 @@ unsigned shown_test_window_mode() {
         char value[16]{};
         std::size_t length = 0;
         if (!hidden_window_mode_enabled() ||
-            getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SHOWN_WINDOW") != 0 || length <= 1) {
+            getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_SHOWN_WINDOW")) != 0 || length <= 1) {
             return 0u;
         }
         return std::strcmp(value, "corner") == 0 ? 2u : std::strcmp(value, "edge") == 0 ? 1u : 0u;
@@ -3984,7 +3996,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         static const bool test_read = [] {
             char value[32]{};
             std::size_t length = 0u;
-            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_OPEN") == 0 && length > 1u) {
+            if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_SETTINGS_OPEN")) == 0 && length > 1u) {
                 char* end = nullptr;
                 test_page = static_cast<int>(std::strtol(value, &end, 10));
                 if (end != nullptr && *end == ':') test_present = std::strtoul(end + 1, nullptr, 10);
@@ -4008,7 +4020,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             std::vector<std::pair<unsigned long, WPARAM>> keys;
             static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
             std::size_t length = 0u;
-            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_KEYS") != 0 || length <= 1u) return keys;
+            if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_SETTINGS_KEYS")) != 0 || length <= 1u) return keys;
             static constexpr std::pair<std::string_view, WPARAM> kNames[] = {
                 {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
                 {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
@@ -4044,7 +4056,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             std::vector<TestSize> sizes;
             char value[512]{};
             std::size_t length = 0u;
-            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_WINDOW_SIZES") != 0 || length <= 1u) return sizes;
+            if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_WINDOW_SIZES")) != 0 || length <= 1u) return sizes;
             for (char* item = value; item != nullptr && *item != '\0';) {
                 char* end = nullptr;
                 TestSize size{std::strtoul(item, &end, 10), 0u, 0u};
@@ -4388,7 +4400,7 @@ NativeSettingsView build_native_settings_view() {
             }
             const bool capturing = controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target);
             if (info.kind == ControlsRow::Binding && !capturing) {
-                shown.value = galaxy::input::format_target_bindings(s_controls_scheme,
+                shown.value = menu_bindings(s_controls_scheme,
                                                                     s_controls_draft.table(s_controls_scheme)[info.target]);
             }
             shown.inputs = info.kind == ControlsRow::Binding;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/controls_engine.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/host_env.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/pointer_control.h"
@@ -667,10 +668,10 @@ void apply_button_script_env(
         return;
     }
     if (read_env_flag(
-            "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL")) {
+            NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL"))) {
         const std::optional<std::uint64_t> fallback_vi =
             read_env_u64_optional(
-                "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI");
+                NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI"));
         if (fallback_vi.has_value() && current_vi >= *fallback_vi) {
             return;
         }
@@ -948,23 +949,23 @@ void apply_pointer_script_envs(
 NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_vi, const ScriptServices& services) {
     NativeInputScriptOverlay overlay{};
     const std::uint64_t a_duration =
-        read_env_u64_optional("GALAXY_INPUT_AUTOPRESS_A_DURATION")
+        read_env_u64_optional(NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A_DURATION"))
             .value_or(12);
     apply_autopress_env(
-        overlay, current_vi, "GALAXY_INPUT_AUTOPRESS_AB", "A+B", a_duration);
+        overlay, current_vi, NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_AB"), "A+B", a_duration);
     constexpr std::array<const char*, 8> kAWindows{
-        "GALAXY_INPUT_AUTOPRESS_A",
-        "GALAXY_INPUT_AUTOPRESS_A2",
-        "GALAXY_INPUT_AUTOPRESS_A3",
-        "GALAXY_INPUT_AUTOPRESS_A4",
-        "GALAXY_INPUT_AUTOPRESS_A5",
-        "GALAXY_INPUT_AUTOPRESS_A6",
-        "GALAXY_INPUT_AUTOPRESS_A7",
-        "GALAXY_INPUT_AUTOPRESS_A8"};
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A2"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A3"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A4"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A5"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A6"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A7"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_A8")};
     for (const char* name : kAWindows) {
         apply_autopress_env(overlay, current_vi, name, "A", a_duration);
     }
-    apply_button_script_env(overlay, current_vi, "GALAXY_INPUT_AUTOPRESS_SCRIPT", services.clock_ticks);
+    apply_button_script_env(overlay, current_vi, NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_SCRIPT"), services.clock_ticks);
     apply_stick_script_env(overlay, current_vi, "GALAXY_INPUT_STICK_SCRIPT");
     if (services.diagnostic_command) services.diagnostic_command(overlay);
     apply_shake_script_env(

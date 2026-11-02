@@ -59,7 +59,7 @@ Result write(const std::filesystem::path& folder, std::string_view name, const v
             }
             std::filesystem::copy_file(path, first, std::filesystem::copy_options::overwrite_existing, error);
         }
-        return io::write_text_file_atomically(path, contents) ? kDone : kFailed;
+        return io::write_file_atomically(path, contents) ? kDone : kFailed;
     } catch (...) {
         return kFailed;
     }

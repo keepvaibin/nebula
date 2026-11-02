@@ -808,7 +808,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
 }
 
 void Mii_InitTexRes(GpuTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buffer) {
-    u32 texSize;
+    u32 texSize = 0;
     Mii_Texture* tex;
 
     tex = (Mii_Texture*)Mii_Alloc32(Mii_GetShpTexSize(part, file));

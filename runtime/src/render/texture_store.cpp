@@ -487,6 +487,29 @@ void TextureCache::register_image(std::uint64_t address, std::shared_ptr<const s
     slot = std::move(bytes);
 }
 
+std::uint64_t TextureCache::image_bytes() const noexcept {
+    std::uint64_t bytes = 0u;
+    for (const auto& [address, image] : registered_images_) {
+        bytes += image->size();
+    }
+    return bytes;
+}
+
+std::uint64_t TextureCache::upload_arena_bytes() const noexcept {
+    return upload_arena_chunks_ * kUploadArenaChunkBytes;
+}
+
+std::vector<std::uint64_t> TextureCache::forget_range(std::uint64_t start, std::uint64_t end) {
+    std::vector<std::uint64_t> keys;
+    for (auto it = registered_images_.lower_bound(start); it != registered_images_.end() && it->first < end; ++it) {
+        keys.push_back(it->first);
+    }
+    for (const std::uint64_t key : keys) {
+        (void)forget(key);
+    }
+    return keys;
+}
+
 std::size_t TextureCache::forget(std::uint64_t key) {
     if (const auto it = registered_images_.find(key); it != registered_images_.end()) {
         static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
@@ -873,6 +896,7 @@ void TextureCache::shutdown() {
 void TextureCache::append_upload_arena_chunk(
     UploadArenaFrame& frame,
     std::uint64_t min_size) {
+    ++upload_arena_chunks_;
     const std::uint64_t chunk_size = align_up(
         std::max<std::uint64_t>(kUploadArenaChunkBytes, min_size),
         TextureBackend::kPlacementAlignment);

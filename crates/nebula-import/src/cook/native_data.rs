@@ -1566,6 +1566,7 @@ pub fn rfl_res_host(bytes: &[u8]) -> Result<Vec<u8>> {
 /// wave systems (WSYS: header, wave archive bank, archives, waves, control groups, scenes, controls and their wave
 /// entries) and the instrument banks (IBNK version 1: bank).
 pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
+    let waves = super::audio_data::wave_layout(bytes).context("the wave systems")?;
     if bytes.len() >= 4 && &bytes[0..4] == b"<_AA" {
         return Ok(bytes.to_vec()); // cooked already
     }
@@ -1611,7 +1612,7 @@ pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
                     host32(bytes, &mut out, v[0] + 8 + 4 * f)?;
                 }
             }
-            b"ws  " => wave_system(bytes, &mut out, v[1], &mut turned).with_context(|| format!("wave system {}", v[0]))?,
+            b"ws  " => wave_system(bytes, &mut out, v[1], &mut turned, &waves).with_context(|| format!("wave system {}", v[0]))?,
             b"bnk " => bank(bytes, &mut out, v[1], &mut turned).with_context(|| format!("bank {}", v[0]))?,
             _ => {}
         }
@@ -1717,7 +1718,13 @@ fn sound_name_table(src: &[u8], out: &mut [u8], base: usize, _end: usize) -> Res
 /// format and key bytes stay), the control group (count, scene offsets), each scene's three control offsets, each
 /// control (count, wave entry offsets) and its wave entries (32-bit: group and wave id halves). Magics stay
 /// characters (the game compares none).
-fn wave_system(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usize>) -> Result<()> {
+fn wave_system(
+    src: &[u8],
+    out: &mut [u8],
+    base: usize,
+    turned: &mut HashSet<usize>,
+    waves: &std::collections::BTreeMap<String, Vec<super::audio_data::WavePlace>>,
+) -> Result<()> {
     if src.get(base..base + 4) != Some(b"WSYS".as_slice()) {
         bail!("no WSYS magic");
     }
@@ -1736,8 +1743,9 @@ fn wave_system(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usi
             if archive == 0 || !turned.insert(base + archive) {
                 continue;
             }
-            let waves = host32(src, out, base + archive + 0x70)? as usize;
-            for w in 0..waves {
+            let name = super::audio_data::archive_name(src.get(base + archive..base + archive + 0x70).context("a wave archive's name")?);
+            let count = host32(src, out, base + archive + 0x70)? as usize;
+            for w in 0..count {
                 let wave = host32(src, out, base + archive + 0x74 + 4 * w)? as usize;
                 if wave == 0 || !turned.insert(base + wave) {
                     continue;
@@ -1748,6 +1756,13 @@ fn wave_system(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usi
                 }
                 host16(src, out, at + 0x20)?;
                 host16(src, out, at + 0x22)?;
+                // The wave's place in the cooked AW file, PCM16 whatever the format byte says (it stays: the game takes a
+                // voice nobody names as music when its wave was PCM16 on the disc).
+                let word = |o: usize| u32::from_be_bytes(src[at + o..at + o + 4].try_into().unwrap()) as usize;
+                if let Some(place) = super::audio_data::place_of(waves, &name, word(8), word(0xC), src[at + 1]) {
+                    out[at + 8..at + 0xC].copy_from_slice(&(place.new_offset as u32).to_le_bytes());
+                    out[at + 0xC..at + 0x10].copy_from_slice(&(place.new_length as u32).to_le_bytes());
+                }
             }
         }
     }

@@ -171,7 +171,7 @@ void* JKRExpHeap::allocFromHead(u32 size, int align) {
     u32 foundOffset;
     int foundSize;
 
-    size = ALIGN_NEXT(size, 4);
+    size = ALIGN_NEXT(size, 16);
     foundSize = -1;
     foundOffset = 0;
     CMemBlock* foundBlock = nullptr;
@@ -264,7 +264,7 @@ void* JKRExpHeap::allocFromHead(u32 size, int align) {
 }
 
 void* JKRExpHeap::allocFromHead(u32 size) {
-    size = ALIGN_NEXT(size, 4);
+    size = ALIGN_NEXT(size, 16);
     s32 foundSize = -1;
     CMemBlock* foundBlock = nullptr;
     CMemBlock* newBlock = nullptr;
@@ -305,7 +305,7 @@ void* JKRExpHeap::allocFromTail(u32 size, int align) {
     u32 offset = 0;
     CMemBlock* foundBlock = nullptr;
     CMemBlock* newBlock = nullptr;
-    u32 usedSize;
+    u32 usedSize = 0;
     uintptr_t start;
 
     for (CMemBlock* block = mTailFreeList; block; block = block->mPrev) {
@@ -344,7 +344,7 @@ void* JKRExpHeap::allocFromTail(u32 size, int align) {
 }
 
 void* JKRExpHeap::allocFromTail(u32 size) {
-    size = ALIGN_NEXT(size, 4);
+    size = ALIGN_NEXT(size, 16);
     CMemBlock* foundBlock = nullptr;
     CMemBlock* freeBlock = nullptr;
     CMemBlock* usedBlock = nullptr;
@@ -433,7 +433,7 @@ s32 JKRExpHeap::do_resize(void* ptr, u32 size) {
         return -1;
     }
 
-    size = ALIGN_NEXT(size, 4);
+    size = ALIGN_NEXT(size, 16);
     if (size == block->mSize) {
         unlock();
         return size;

@@ -198,6 +198,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void JointUtil_FORCE_MATCH(TMtx34f* pMtx, const Mtx pSrc) {
-    pMtx->set(pSrc);
-}
