@@ -60,8 +60,6 @@ void BloomEffectSimple::draw() const {
         MR::reinitGX();
         ImageEffectLocalUtil::setupDrawTexture();
         _28->load(GPU_TEXMAP0);
-        J3DNativeState::setChanMatColor(GPU_COLOR0A0, Color8(alpha, alpha, alpha, 255));
-        J3DNativeState::setChanAmbColor(GPU_COLOR0A0, Color8(0, 0, 0, 255));
         J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
         return;
     }
