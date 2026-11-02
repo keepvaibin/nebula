@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DStateList.hpp>
 #include "Game/MapObj/FlexibleSphere.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -21,13 +22,21 @@
 #define SHRINK false
 
 f32 scale = 1.0f;
+void FlexibleSphere::fillTexGens(J3DStateList& rList) {
+    rList.setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
+    rList.setTexCoordGen2(GPU_TEXCOORD1, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
+    rList.setTexCoordGen2(GPU_TEXCOORD2, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
+}
+
 void shapeCallBack(J3DShape* pShape) {
     Mtx mtx;
     NebulaMtxScale(mtx, scale, scale, 0.0f);
     J3DNativeShape::setTexture(0, mtx, 2);
-    J3DNativeState::setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
-    J3DNativeState::setTexCoordGen2(GPU_TEXCOORD1, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
-    J3DNativeState::setTexCoordGen2(GPU_TEXCOORD2, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
+    // One list: the material's program changes once, to the program with all three.
+    NebulaStateOp ops[3];
+    J3DStateList list(ops, 3);
+    FlexibleSphere::fillTexGens(list);
+    list.send();
 }
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {

@@ -319,9 +319,113 @@ void J3DModelX::simpleDrawShape(J3DMaterial* material) {
     getShapePacket(material->getShape()->getIndex())->drawFast();
 }
 
-void J3DModelX::storeStateList(J3DStateList& rBuilder, u32 index) {
-    mStateLists[index].copy(rBuilder);
-    rBuilder.clear();
+void J3DModelX::buildStateLists(J3DStateList* pLists) {
+    NebulaStateOp storage[16];
+    J3DStateList list(storage, 16);
+
+    list.setCullMode(GPU_CULL_FRONT);
+    pLists[0].copy(list);
+    list.clear();
+
+    // Lists 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by
+    // drawIn as a native material); they hold the pass's fixed state.
+    list.setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
+    list.setCullMode(GPU_CULL_BACK);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setDstAlpha(GPU_TRUE, 0xFF);
+    pLists[1].copy(list);
+    list.clear();
+
+    // List 2: texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
+    list.setCullMode(GPU_CULL_FRONT);
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    pLists[2].copy(list);
+    list.clear();
+    list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
+    list.setCullMode(GPU_CULL_BACK);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setDstAlpha(GPU_TRUE, 0x90);
+    pLists[3].copy(list);
+    list.clear();
+
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+    list.setCullMode(GPU_CULL_FRONT);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    pLists[4].copy(list);
+    list.clear();
+
+    list.setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
+    list.setCullMode(GPU_CULL_FRONT);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_FALSE, GPU_FALSE, GPU_FALSE);
+    pLists[5].copy(list);
+    list.clear();
+
+    list.setTexLookupMode(GPU_TEXMAP0, GPU_REPEAT, GPU_REPEAT, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
+    list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
+    list.setTexCoordGen(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
+    pLists[6].copy(list);
+    list.clear();
+
+    NebulaColor8 ambientColor = {0, 0, 0, 0};
+    NebulaColor8 materialColor = {0, 0, 0, 255};
+    list.setChanAmbColor(GPU_ALPHA0, ambientColor);
+    list.setChanMatColor(GPU_ALPHA0, materialColor);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
+    list.setChanCtrl(GPU_COLOR0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, 0, GPU_DF_CLAMP, GPU_AF_NONE);
+    list.setChanCtrl(GPU_ALPHA0, GPU_TRUE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT0, GPU_DF_CLAMP, GPU_AF_NONE);
+    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_KONST, GPU_CA_ZERO, GPU_CA_RASA, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE,
+                             GPU_TEVPREV, GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    pLists[7].copy(list);
+    list.clear();
+
+    list.setCullMode(GPU_CULL_FRONT);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+    pLists[8].copy(list);
+    list.clear();
+
+    list.setCullMode(GPU_CULL_BACK);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+    pLists[9].copy(list);
+    list.clear();
+
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_DSTALPHA, GPU_BL_INVDSTALPHA, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE, GPU_FALSE);
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+    list.setDstAlpha(GPU_TRUE, 0);
+    pLists[10].copy(list);
+    list.clear();
+
+    // List 11 (the reflection model): its fixed state here; its program (one stage: texture 0 halved, stage 0's alpha
+    // above 0x20, no channels) is J3DNativeMaterial::override mode 5.
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
+    list.setCullMode(GPU_CULL_FRONT);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE, GPU_FALSE);
+    pLists[11].copy(list);
+    list.clear();
+
+    // List 12: the blur ghosts in register 0's colour (the ghost's dynamic list sets it).
+    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+    list.setCullMode(GPU_CULL_BACK);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_NOOP, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    pLists[12].copy(list);
+    list.clear();
+
+    list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
+    list.setCullMode(GPU_CULL_BACK);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_SRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    pLists[13].copy(list);
+    list.clear();
+
+    list.setDstAlpha(GPU_TRUE, 0x40);
+    pLists[14].copy(list);
+    list.clear();
+
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_INVDSTALPHA, GPU_BL_DSTALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    pLists[15].copy(list);
+    list.clear();
 }
 
 J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(data, flags, bufferFlags) {
@@ -334,96 +438,7 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     _1E4 = 0;
     _1E5 = 0;
 
-    NebulaStateOp storage[16];
-    J3DStateList list(storage, 16);
-
-    list.setCullMode(GPU_CULL_FRONT);
-    storeStateList(list, 0);
-
-    // Lists 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by
-    // drawIn as a native material); they hold the pass's fixed state.
-    list.setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE, GPU_FALSE);
-    list.setDstAlpha(GPU_TRUE, 0xFF);
-    storeStateList(list, 1);
-
-    // List 2: texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
-    storeStateList(list, 2);
-    list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE, GPU_FALSE);
-    list.setDstAlpha(GPU_TRUE, 0x90);
-    storeStateList(list, 3);
-
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
-    storeStateList(list, 4);
-
-    list.setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_FALSE, GPU_FALSE, GPU_FALSE);
-    storeStateList(list, 5);
-
-    list.setTexLookupMode(GPU_TEXMAP0, GPU_REPEAT, GPU_REPEAT, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
-    list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
-    list.setTexCoordGen(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
-    storeStateList(list, 6);
-
-    NebulaColor8 ambientColor = {0, 0, 0, 0};
-    NebulaColor8 materialColor = {0, 0, 0, 255};
-    list.setChanAmbColor(GPU_ALPHA0, ambientColor);
-    list.setChanMatColor(GPU_ALPHA0, materialColor);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
-    list.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
-    list.setChanCtrl(GPU_COLOR0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, 0, GPU_DF_CLAMP, GPU_AF_NONE);
-    list.setChanCtrl(GPU_ALPHA0, GPU_TRUE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT0, GPU_DF_CLAMP, GPU_AF_NONE);
-    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_KONST, GPU_CA_ZERO, GPU_CA_RASA, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE,
-                             GPU_TEVPREV, GPU_TEV_SWAP0, GPU_TEV_SWAP0);
-    storeStateList(list, 7);
-
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    storeStateList(list, 8);
-
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    storeStateList(list, 9);
-
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_DSTALPHA, GPU_BL_INVDSTALPHA, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE, GPU_FALSE);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    list.setDstAlpha(GPU_TRUE, 0);
-    storeStateList(list, 10);
-
-    // List 11 (the reflection model): its fixed state here; its program (one stage: texture 0 halved, stage 0's alpha
-    // above 0x20, no channels) is J3DNativeMaterial::override mode 5.
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE, GPU_FALSE);
-    storeStateList(list, 11);
-
-    // List 12: the blur ghosts in register 0's colour (the ghost's dynamic list sets it).
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_NOOP, GPU_TRUE, GPU_FALSE, GPU_FALSE);
-    storeStateList(list, 12);
-
-    list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_SRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
-    storeStateList(list, 13);
-
-    list.setDstAlpha(GPU_TRUE, 0x40);
-    storeStateList(list, 14);
-
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_INVDSTALPHA, GPU_BL_DSTALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
-    storeStateList(list, 15);
+    buildStateLists(mStateLists);
 
     _1E0 = -1;
     _1DC = 0x32323232;
