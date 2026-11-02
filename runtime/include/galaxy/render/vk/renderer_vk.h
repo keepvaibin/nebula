@@ -91,7 +91,7 @@ public:
     static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
     static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
 
-    bool initialize(int window_width, int window_height, unsigned scene_target_scale);
+    bool initialize(int window_width, int window_height, const FrameMap& frame);
     // Why initialize failed, when the device said.
     [[nodiscard]] std::string startup_failure() const { return vk::Context::get().failure(); }
     void create_first_use_resources();
@@ -332,7 +332,7 @@ public:
     void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_map_.scale(); }
+    [[nodiscard]] unsigned covering_scale() const noexcept { return scene_map_.scale(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
     // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the GX pipelines' sample count.
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
@@ -428,8 +428,8 @@ private:
     // Before the scene target's single-sample depth is read: the multisampled depth drawn since the last resolve, resolved
     // into it (each pixel's sample 0). The colour resolves as each scene target pass ends.
     void resolve_scene_depth(VkCommandBuffer commands);
-    [[nodiscard]] bool scene_target_scale_fits_memory(unsigned scale) const;
-    void apply_pending_scene_target_scale();
+    [[nodiscard]] bool scene_fits_memory(const FrameMap& map) const;
+    void apply_window_size();
     void carry_over_scene_contents();
     // Records `record` into a one-time command buffer, submits it and waits (start and resolution changes only).
     void run_one_time(const std::function<void(VkCommandBuffer)>& record);
@@ -497,7 +497,6 @@ private:
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
     void follow_window_and_resize();
-    void update_gpu_budget();
     void report_present_stats();
     [[nodiscard]] std::uint64_t submit_one_time(VkCommandBuffer commands);
 
@@ -1019,16 +1018,7 @@ private:
     void release_replay_resources() noexcept;
     // Presents the acquired image (swap_image_) after its submission: end_frame's and a sub-frame's.
     void present_swapchain_image();
-    // Match Output: the window and picture shape the scale was last derived for, and the GPU-time cap
-    // (RenderConfig::gpu_budget).
-    std::uint32_t follow_window_width_ = 0;
-    std::uint32_t follow_window_height_ = 0;
-    double follow_window_aspect_ = 0.0;
-    std::uint64_t follow_window_retry_ms_ = 0;
-    unsigned gpu_budget_cap_ = 0;  // 0: none
-    double gpu_budget_ms_ = 0.0;
-    std::int64_t gpu_budget_window_qpc_ = 0;
-    unsigned gpu_budget_over_windows_ = 0;
+    std::uint64_t window_size_refused_ms_ = 0;
     PresentPacer present_pacer_;
     // VK_GOOGLE_display_timing (Android), as Swappy paces: each frame gets the retrace slot after the previous
     // frame's on the display's vsync grid (host_window::present_grid), two retraces after the latest retrace at

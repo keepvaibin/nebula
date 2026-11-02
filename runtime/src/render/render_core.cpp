@@ -33,6 +33,8 @@
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/draw_constants.h"
+#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/content_viewport.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -562,13 +564,20 @@ bool RenderCore::initialize(int w, int h) {
     const RenderConfig cfg = get_render_config();
 
     boot_step("begins");
-    if (!renderer_.initialize(w, h, cfg.scene_target_scale)) {
+    // The scene at the window's picture: its exact size, square pixels.
+    const auto start_aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport start_content =
+        galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kWiiContentAspect);
+    const FrameMap start_frame = start_content.width > 0 && start_content.height > 0
+                                     ? FrameMap(static_cast<unsigned>(start_content.width), static_cast<unsigned>(start_content.height))
+                                     : FrameMap(1u);
+    if (!renderer_.initialize(w, h, start_frame)) {
         std::cerr << "[RenderCore] RendererD3D12::initialize failed\n";
         return false;
     }
     boot_step("device rest");
 
-    if (!scene_copies_.initialize(renderer_.device(), cfg.scene_target_scale)) {
+    if (!scene_copies_.initialize(renderer_.device(), start_frame)) {
         std::cerr << "[RenderCore] EfbCopyManager::initialize failed\n";
         renderer_.shutdown();
         return false;
@@ -625,7 +634,7 @@ bool RenderCore::initialize(int w, int h) {
                     display_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
                     display_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
             }, static_cast<std::uint64_t>(w), static_cast<std::uint64_t>(h),
-               get_render_config().scene_target_scale);
+               renderer_.covering_scale());
         } catch (...) { /* Optional startup allocation cannot fail gameplay. */ }
     }
     return true;
@@ -1961,7 +1970,7 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         frame_bindings_dirty_ = true;
     }
     if (marker == SceneMarker::SceneEnd) {
-        s_layer_2d_scale.store(renderer_.scene_target_scale(), std::memory_order_relaxed);
+        s_layer_2d_scale.store(renderer_.covering_scale(), std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
     if (marker == SceneMarker::SceneBegin) {
@@ -6243,12 +6252,12 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;
             if (trace_layout) {
                 const std::array<unsigned,7> current{params.src_x,params.src_y,params.src_width,params.src_height,
-                    display_picture->width,display_picture->height,renderer_.scene_target_scale()};
+                    display_picture->width,display_picture->height,renderer_.covering_scale()};
                 static std::array<std::array<unsigned,7>,8> seen{};
                 static unsigned count{};
                 if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
                     seen[count++]=current;
-                    const auto scale=renderer_.scene_target_scale();
+                    const auto scale=renderer_.covering_scale();
                     std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
                         <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale

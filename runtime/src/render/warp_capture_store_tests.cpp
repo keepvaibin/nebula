@@ -891,7 +891,7 @@ V main(uint id : SV_VertexID) {
                 const auto constants = make_scene_conversion_constants(params,
                     false, false, false, 0u, sampling.src_x, sampling.src_y,
                     sampling.step_x, sampling.step_y, sampling.filter_row_offset,
-                    scale, kFrameHeight);
+                    static_cast<float>(scale), kFrameHeight);
                 const auto reference = run_bytes(kSceneColorFormat, bytes,
                     source_width, source_height, size, constants,
                     false, nullptr, &upload_box);
@@ -1071,7 +1071,7 @@ V main(uint id : SV_VertexID) {
         // 4 MiB on the device, so 18 of them exceed the 64 MiB budget while their record bytes stay far below it.
         const auto record_of = [](std::uint16_t w, std::uint16_t h, std::uint8_t levels, std::uint8_t layout) {
             std::vector<std::byte> r(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(w, h, levels, layout));
-            nebula_texture_init(r.data(), w, h, levels, layout, 0u);
+            nebula_texture_init(r.data(), w, h, levels, layout, NEBULA_TEXTURE_FILTER_AT_UPLOAD);
             return r;
         };
         constexpr std::uint32_t address = 0x10000000u;
@@ -1165,7 +1165,7 @@ V main(uint id : SV_VertexID) {
         for (const Case& test : cases) {
             std::vector<std::byte> record(NEBULA_TEXTURE_HEADER +
                                           nebula_texture_level_bytes(test.width, test.height, 1u, test.layout));
-            nebula_texture_init(record.data(), test.width, test.height, 1u, test.layout, 0u);
+            nebula_texture_init(record.data(), test.width, test.height, 1u, test.layout, NEBULA_TEXTURE_FILTER_AT_UPLOAD);
             for (std::size_t i = NEBULA_TEXTURE_HEADER; i < record.size(); ++i) {
                 record[i] = static_cast<std::byte>((i * 2654435761u + records.size() * 97u) >> 13u);
             }
@@ -1393,7 +1393,7 @@ V main(uint id : SV_VertexID) {
         // authored levels, an 8x8 L8 one with one, a 64x4 L8 one for generated levels.
         const auto record_of = [](std::uint16_t w, std::uint16_t h, std::uint8_t levels, std::uint8_t layout) {
             std::vector<std::byte> r(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(w, h, levels, layout));
-            nebula_texture_init(r.data(), w, h, levels, layout, 0u);
+            nebula_texture_init(r.data(), w, h, levels, layout, NEBULA_TEXTURE_FILTER_AT_UPLOAD);
             return r;
         };
         const std::vector<std::byte> authored = record_of(8u, 8u, 3u, NEBULA_TEXTURE_RGBA8);
@@ -1846,7 +1846,7 @@ galaxy::render::SceneConversionShaderConstants constants_for_case(
         sampling.step_x,
         sampling.step_y,
         sampling.filter_row_offset,
-        scale,
+        static_cast<float>(scale),
         3u);
 }
 
@@ -1886,7 +1886,7 @@ bool test_scaled_display_filter() {
             "display filter footprint leaves source mapping and texture copies intact");
         const auto constants = galaxy::render::make_scene_conversion_constants(
             params, false, false, true, 7u, sampling.src_x, sampling.src_y,
-            sampling.step_x, sampling.step_y, sampling.filter_row_offset, scale, 3u);
+            sampling.step_x, sampling.step_y, sampling.filter_row_offset, static_cast<float>(scale), 3u);
         const auto result = harness.run_color(rows, scale, constants);
         for (unsigned y = 0; y < scale; ++y) {
             // The rectangle starts at logical row 1: its first physical row reads itself as the row above.

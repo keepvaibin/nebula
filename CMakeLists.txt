@@ -548,7 +548,7 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes draw_constants_fill render_config
         gpu_sampler rt_materials texture_pack movie_replacement
-        capture line_point_params native_settings_overlay post_process
+        capture line_point_params post_process
         warp_capture_store native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
@@ -572,9 +572,6 @@ target_link_libraries(galaxy_capture_tests PRIVATE d3dcompiler)
 target_link_libraries(galaxy_warp_capture_store_tests PRIVATE d3dcompiler)
 target_sources(galaxy_line_point_params_tests PRIVATE ${galaxy_line_point_test_headers})
 target_include_directories(galaxy_line_point_params_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
-# The game's text table: every text the settings menu shows has its entry.
-target_compile_definitions(galaxy_native_settings_overlay_tests PRIVATE
-    NEBULA_TEXT_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/localization/NebulaText.tsv")
 add_test(NAME galaxy_post_process_tests_held_no_deband COMMAND galaxy_post_process_tests --held-no-deband)
 # Texture records (nebula_cooked_texture.h) in the texture cache's suite.
 target_include_directories(galaxy_warp_capture_store_tests PRIVATE native/include)

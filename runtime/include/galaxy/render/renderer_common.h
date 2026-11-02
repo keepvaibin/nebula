@@ -156,7 +156,7 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
     float step_x,
     float step_y,
     float filter_row_offset,
-    unsigned scene_target_scale,
+    float rows_per_unit,
     unsigned logical_scene_height,
     unsigned reduction_width = 0u) noexcept;
 

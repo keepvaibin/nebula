@@ -41,12 +41,10 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         },
                         "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
     }
-    const unsigned internal = std::clamp(render.scene_target_scale, 1u, state.scale_cap);
     const unsigned render_scale = state.render_scale;
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
     const bool rt_offered = state.ray_tracing_offered;
     const bool rt_on = rt_offered && render.ray_tracing_enabled;
-    const bool upscaled = state.temporal_upscaling || state.spatial_upscaling;
     {
         static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
         static constexpr const char* kDlss[] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
@@ -66,29 +64,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                             }
                         },
                         "THE RENDER RESOLUTION BELOW THE INTERNAL ONE. QUALITY RENDERS THE MOST PIXELS"});
-    }
-    {
-        std::string value = "MATCH OUTPUT";
-        if (!render.internal_follow_window) {
-            std::snprintf(text, sizeof(text), "%uX %uX%u%s", internal, state.logical_width * internal, state.logical_height * internal,
-                          internal >= state.scale_cap ? " MAX" : "");
-            value = text;
-        }
-        rows.push_back({"INTERNAL RESOLUTION", value,
-                        [&host](RenderConfig& draft, int delta) {
-                            const unsigned cap = host.query(draft).scale_cap;
-                            const unsigned current = draft.internal_follow_window ? 0u
-                                                                                  : std::clamp(draft.scene_target_scale, 1u, cap);
-                            const unsigned next = settings_step(current, cap + 1u, delta);
-                            if (next == 0u) {
-                                draft.internal_follow_window = true;
-                            } else {
-                                draft.internal_follow_window = false;
-                                draft.scene_target_scale = next;
-                            }
-                        },
-                        upscaled ? "THE UPSCALER'S OUTPUT. MATCH OUTPUT FOLLOWS THE SCREEN"
-                                 : "MATCH OUTPUT RENDERS AT THE SCREEN RESOLUTION"});
     }
     std::snprintf(text, sizeof(text), "%u%%", std::min(render.sharpness, 100u));
     rows.push_back({"SHARPENING", text,

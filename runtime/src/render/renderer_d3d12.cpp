@@ -1535,90 +1535,6 @@ void RendererD3D12::restore_owed_scene(const D3D12_RECT* kept) {
 // headroom for heavier frames than the window's average, the compositor and other processes.
 constexpr double kGpuBudgetBusy = 0.80;
 
-void RendererD3D12::update_gpu_budget() {
-    const auto now = std::chrono::steady_clock::now();
-    if (gpu_budget_window_start_ == std::chrono::steady_clock::time_point{}) {
-        gpu_budget_window_start_ = now;
-        gpu_budget_ms_ = 0.0;
-        return;
-    }
-    const double window_ms = std::chrono::duration<double, std::milli>(now - gpu_budget_window_start_).count();
-    if (window_ms < 2000.0) {
-        return;
-    }
-    const double busy = gpu_budget_ms_ / window_ms;
-    gpu_budget_window_start_ = now;
-    gpu_budget_ms_ = 0.0;
-    const RenderConfig cfg = get_render_config();
-    if (!cfg.gpu_budget || !cfg.internal_follow_window || frame_.scale() <= 1u || output_scene_active_) {
-        gpu_budget_over_windows_ = 0u;
-        return;
-    }
-    if (busy <= kGpuBudgetBusy) {
-        gpu_budget_over_windows_ = 0u;
-        return;
-    }
-    if (++gpu_budget_over_windows_ < 2u) {
-        return;
-    }
-    gpu_budget_over_windows_ = 0u;
-    gpu_budget_cap_ = frame_.scale() - 1u;
-    follow_window_width_ = 0u;  // re-derive the scale under the cap at this frame boundary
-    std::cerr << "[Renderer] GPU busy " << static_cast<int>(busy * 100.0 + 0.5) << "% at internal resolution "
-              << frame_.scale() << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
-}
-
-void RendererD3D12::follow_window_internal_resolution() {
-    // Dynamic aspect latches a new window shape at a later VI boundary than
-    // the swap-chain resize, so the content aspect is part of the key.
-    const auto aspect = galaxy::experimental_effective_host_aspect();
-    const double content_aspect =
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
-    if (host_window::follow_window_rearm.load(std::memory_order_relaxed) &&
-        host_window::follow_window_rearm.exchange(false, std::memory_order_acq_rel)) {
-        follow_window_width_ = 0u;
-    }
-    if (follow_window_retry_ms_ != 0u && GetTickCount64() >= follow_window_retry_ms_) {
-        follow_window_retry_ms_ = 0u;
-        follow_window_width_ = 0u;
-    }
-    if (host_window::backbuffer_width == follow_window_width_ &&
-        host_window::backbuffer_height == follow_window_height_ &&
-        content_aspect == follow_window_aspect_) {
-        return;
-    }
-    // An edge drag resizes every frame; settle first, then re-create once.
-    if (host_window::move_size_active.load(std::memory_order_acquire)) {
-        return;
-    }
-    follow_window_width_ = host_window::backbuffer_width;
-    follow_window_height_ = host_window::backbuffer_height;
-    follow_window_aspect_ = content_aspect;
-    RenderConfig render = get_render_config();
-    if (!render.internal_follow_window) {
-        return;
-    }
-    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
-        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        content_aspect);
-    if (content.width <= 0 || content.height <= 0) {
-        return;
-    }
-    // The launcher's Match Output rule: cover the picture on both axes.
-    const double needed = std::max(content.width / static_cast<double>(kFrameWidth),
-                                   content.height / 456.0);
-    unsigned scale = std::clamp(
-        static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxSceneScale);
-    if (gpu_budget_cap_ != 0u) {
-        scale = std::min(scale, gpu_budget_cap_);
-    }
-    if (scale != render.scene_target_scale) {
-        render.scene_target_scale = scale;
-        set_render_config(render);
-        stage_next_start_scene_target_scale(scale);
-    }
-}
-
 void RendererD3D12::sync_post_process_settings() {
     if (!post_process_.ready()) {
         return;
@@ -1631,49 +1547,39 @@ void RendererD3D12::sync_post_process_settings() {
     }
 }
 
-void RendererD3D12::apply_pending_scene_target_scale() {
+void RendererD3D12::apply_window_size() {
     if (!device_ || !scene_color_ || output_scene_active_ || scene_hdr_) {
         return;
     }
-    const RenderConfig render = get_render_config();
-    // The INTERNAL RESOLUTION row sets the frame's resolution: the upscaler's
-    // output, else the render resolution. A quality mode renders below it.
-    const unsigned internal =
-        std::min(std::clamp(render.scene_target_scale, 1u, kMaxSceneScale), host_window::display_scene_target_scale_cap());
-    const unsigned wanted_scale = host_window::upscaler_render_scale(render, internal);
-    // Following the window: its picture's exact size, square pixels. A temporal upscaler still takes whole scales.
-    FrameMap wanted(wanted_scale);
-    if (render.internal_follow_window && gpu_budget_cap_ == 0u && wanted_scale == internal) {
-        const auto aspect = galaxy::experimental_effective_host_aspect();
-        const galaxy::ContentViewport content = galaxy::fit_content_viewport(
-            static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-            aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
-        if (content.width > 0 && content.height > 0) {
-            wanted = FrameMap(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
-        }
+    // An edge drag resizes every frame: settle first, then re-create once.
+    if (host_window::move_size_active.load(std::memory_order_acquire)) {
+        return;
     }
-    const unsigned live_internal = upscale_output_scale_ != 0u ? upscale_output_scale_ : frame_.scale();
-    upscale_output_scale_ = internal;
+    const RenderConfig render = get_render_config();
+    // The picture's exact size on the screen, square pixels. A quality upscaler renders a whole scale below it.
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return;
+    }
+    FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
+    const unsigned covering = wanted.scale();
+    const unsigned render_scale = host_window::upscaler_render_scale(render, covering);
+    if (render_scale != covering) {
+        wanted = FrameMap(render_scale);
+    }
+    upscale_output_scale_ = covering;
     const unsigned samples = wanted_msaa_samples();
     if (wanted == frame_ && samples == scene_msaa_.samples) {
         return;
     }
-    // Keeps the current targets; the setting returns to the live internal resolution.
-    const auto refuse = [&] {
-        upscale_output_scale_ = live_internal;
-        RenderConfig restored = get_render_config();
-        restored.scene_target_scale = live_internal;
-        set_render_config(restored);
-        stage_next_start_scene_target_scale(live_internal);
-        host_window::scene_target_scale_rejected.store(wanted.scale(), std::memory_order_release);
-        return restored.internal_follow_window;
-    };
-    if (wanted.scale() > frame_.scale() && !scene_target_scale_fits_memory(wanted.scale())) {
-        std::cerr << "[Renderer] internal resolution " << wanted.scale()
-                  << "x exceeds the video-memory budget; staying at "
-                  << frame_.scale() << "x\n";
-        if (refuse()) {
-            follow_window_retry_ms_ = GetTickCount64() + 10'000u;
+    if (wanted.width * wanted.height > frame_.width * frame_.height && !scene_fits_memory(wanted)) {
+        if (GetTickCount64() >= window_size_refused_ms_) {
+            window_size_refused_ms_ = GetTickCount64() + 10'000u;
+            std::cerr << "[Renderer] " << wanted.width << "x" << wanted.height
+                      << " exceeds the video-memory budget; staying at " << frame_.width << "x" << frame_.height << '\n';
         }
         return;
     }
@@ -1694,7 +1600,6 @@ void RendererD3D12::apply_pending_scene_target_scale() {
     readback_fence_value_ = 0u;
     const FrameMap previous = frame_;
     if (!create_scene_targets(wanted)) {
-        (void)refuse();
         return;
     }
     frame_ = wanted;
@@ -1709,7 +1614,7 @@ void RendererD3D12::apply_pending_scene_target_scale() {
     std::cout << '\n';
 }
 
-bool RendererD3D12::scene_target_scale_fits_memory(unsigned scale) const {
+bool RendererD3D12::scene_fits_memory(const FrameMap& map) const {
     if (!adapter3_) {
         return true;
     }
@@ -1718,17 +1623,10 @@ bool RendererD3D12::scene_target_scale_fits_memory(unsigned scale) const {
             0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
         return true;
     }
-    // Scale-dependent residency: scene target color + depth (8 bytes per pixel; with ray
-    // tracing the HDR scene scene target's 12 more) and, at most, the display picture pair plus one
-    // full-picture copy (12 bytes per pixel of the 640x456 picture). Everything
-    // else is independent of the scale.
-    const double scene_bytes = 8.0;
-    const auto scaled_bytes = [scene_bytes](unsigned s) {
-        const double area = static_cast<double>(s) * s;
-        return area * (static_cast<double>(kFrameWidth) * kFrameHeight * scene_bytes +
-                       static_cast<double>(kFrameWidth) * 456.0 * 12.0);
-    };
-    const double needed = scaled_bytes(scale) - scaled_bytes(frame_.scale());
+    // Size-dependent residency: scene colour and depth (8 bytes per pixel) and at most the display picture pair plus
+    // one full-picture copy (12 bytes per pixel).
+    const auto bytes = [](const FrameMap& m) { return (8.0 + 12.0) * m.width * m.height; };
+    const double needed = bytes(map) - bytes(frame_);
     return static_cast<double>(info.CurrentUsage) + needed <=
            0.9 * static_cast<double>(info.Budget);
 }
@@ -1812,8 +1710,8 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     return pipeline.Get();
 }
 
-bool RendererD3D12::initialize(int window_width, int window_height, unsigned scene_target_scale) {
-    frame_   = FrameMap(std::clamp(scene_target_scale, 1u, kMaxSceneScale));
+bool RendererD3D12::initialize(int window_width, int window_height, const FrameMap& frame) {
+    frame_   = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
     next_fence_value_ = 0;
@@ -2336,9 +2234,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned sce
         fence_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         if (!fence_event_) throw std::runtime_error("CreateEvent failed");
 
-        // A saved scale above what this display can show is clamped here.
         boot_step("queue and swap chain");
-        frame_ = FrameMap(std::min(frame_.scale(), host_window::display_scene_target_scale_cap()));
         if (!create_scene_targets(frame_)) return false;
 
         if (!create_root_signature()) return false;
@@ -3633,8 +3529,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     host_window::poll_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
-    update_gpu_budget();
-    follow_window_internal_resolution();
     if (!streamline_frame_open_) {
         // Frame generation runs with DLSS on a GPU that runs it, while it is chosen.
         const RenderConfig fg_cfg = get_render_config();
@@ -3646,7 +3540,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         streamline::marker(streamline::Marker::kSimulationStart);
         streamline_frame_open_ = true;
     }
-    apply_pending_scene_target_scale();
+    apply_window_size();
     prepare_temporal_upscaler();
     sync_post_process_settings();
     {
@@ -3809,7 +3703,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                     static_cast<double>(timestamps[1] - timestamps[0]) *
                     1000.0 / static_cast<double>(timestamp_frequency_);
                 telemetry_gpu_ms_ += gpu_ms;
-                gpu_budget_ms_ += gpu_ms;
                 telemetry_gpu_by_place_[timestamp_list_place_[frame_slot_]] += gpu_ms;
                 ++telemetry_gpu_by_place_count_[timestamp_list_place_[frame_slot_]];
                 ++telemetry_gpu_samples_;
@@ -3855,7 +3748,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                     const double ms =
                         static_cast<double>(ticks[1] - ticks[0]) * 1000.0 / static_cast<double>(timestamp_frequency_);
                     telemetry_gpu_ms_ += ms;
-                    gpu_budget_ms_ += ms;
                     telemetry_pass_ms_[static_cast<std::size_t>(GpuPass::CurveSort)] += ms;
                 }
                 const D3D12_RANGE no_write{0, 0};
@@ -8113,10 +8005,10 @@ void RendererD3D12::draw(const DrawCall& call) {
 }
 
 std::optional<D3D12_BOX> detail::scene_identity_copy_box(
-    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
+    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
     unsigned dest_width, unsigned dest_height) noexcept {
     const std::optional<SceneCopyRect> rect =
-        scene_identity_copy_rect(params, is_depth_copy, scene_target_scale, dest_width, dest_height);
+        scene_identity_copy_rect(params, is_depth_copy, map, dest_width, dest_height);
     if (!rect) {
         return std::nullopt;
     }
@@ -8248,7 +8140,7 @@ void RendererD3D12::record_conversion_blit(
             step_x,
             step_y,
             filter_row_offset,
-            frame_.scale(),
+            frame_.sy,
             kFrameHeight);
     command_list_->SetGraphicsRoot32BitConstants(
         0, 16, constants.values.data(), 0);
@@ -8376,7 +8268,7 @@ bool RendererD3D12::copy_scene_to_texture(
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
         static_cast<std::uint16_t>(dw_unscaled),
         static_cast<std::uint16_t>(dh_unscaled),
-        native_bloom ? 1u : frame_.scale());
+        native_bloom ? FrameMap(1u) : frame_);
     const UINT w = extent.width;
     const UINT h = extent.height;
     if (w == 0 || h == 0) {
@@ -8515,7 +8407,7 @@ bool RendererD3D12::copy_scene_to_texture(
     }
     // The HDR scene scene target's copies go through the conversion blit (clamped to the texture's range, as GX's).
     if (const auto source_box = scene_hdr_ ? std::optional<D3D12_BOX>{} : detail::scene_identity_copy_box(
-            params, is_depth_copy, frame_.scale(), w, h)) {
+            params, is_depth_copy, frame_, w, h)) {
         if (replay_recording_) [[unlikely]] {
             ReplayCopy copy{};
             copy.dest = dest.texture.Get();
@@ -9564,7 +9456,7 @@ gpu::TextureRef RendererD3D12::filter_display_picture(const DisplayTexture& sour
     params.src_height = static_cast<std::uint16_t>(source.height);
     params.filtered = true;
     const SceneConversionShaderConstants constants = make_scene_conversion_constants(
-        params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1u, source.height);
+        params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, source.height);
     command_list_->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
     command_list_->SetGraphicsRootDescriptorTable(1, table.gpu);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

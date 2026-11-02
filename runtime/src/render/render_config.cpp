@@ -35,7 +35,6 @@ namespace {
 
 // Guarded by s_lock.
 static RenderConfig s_config{};
-static unsigned s_next_start_scene_target_scale = 1u;
 static RenderFeatureCaps s_feature_caps{};
 static std::shared_mutex s_lock;
 // Last-write time of config.ini when this process last read or wrote it.
@@ -133,8 +132,7 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
 }
 
 static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
-    if (std::strcmp(key, "efb_scale")           == 0) cfg.scene_target_scale           = std::clamp(parse_uint(val, 1), 1u, kMaxSceneScale);
-    else if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
+    if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
     else if (std::strcmp(key, "wait_for_frame_latency") == 0) cfg.wait_for_frame_latency = parse_bool(val, cfg.wait_for_frame_latency);
     else if (std::strcmp(key, "swap_chain_frame_latency") == 0) cfg.swap_chain_frame_latency = std::clamp(parse_uint(val, cfg.swap_chain_frame_latency), 1u, 2u);
     else if (std::strcmp(key, "allow_tearing") == 0) cfg.allow_tearing = parse_bool(val, cfg.allow_tearing);
@@ -153,8 +151,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "bloom_mode") == 0) cfg.bloom_mode = std::min(parse_uint(val, cfg.bloom_mode), kBloomEnhanced);
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
-    else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
-    else if (std::strcmp(key, "gpu_budget") == 0) cfg.gpu_budget = parse_bool(val, cfg.gpu_budget);
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
     else if (std::strcmp(key, "aa") == 0) {
         static constexpr const char* kNames[] = {"off", "smaa", "auto", "fxaa"};
@@ -247,7 +243,6 @@ static void apply_env(RenderConfig& cfg, const char* env_name, const char* key) 
 }
 
 static void apply_env_overrides(RenderConfig& cfg) {
-    apply_env(cfg, "GALAXY_EFB_SCALE", "efb_scale");
     apply_env(cfg, "GALAXY_VSYNC_INTERVAL", "vsync_interval");
     apply_env(cfg, "GALAXY_WAIT_FOR_FRAME_LATENCY", "wait_for_frame_latency");
     apply_env(cfg, "GALAXY_SWAP_CHAIN_FRAME_LATENCY", "swap_chain_frame_latency");
@@ -267,8 +262,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_BLOOM_MODE", "bloom_mode");
     apply_env(cfg, "GALAXY_BLOOM", "bloom");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
-    apply_env(cfg, "GALAXY_INTERNAL_FOLLOW_WINDOW", "internal_follow_window");
-    apply_env(cfg, "GALAXY_GPU_BUDGET", "gpu_budget");
     apply_env(cfg, "GALAXY_HUD_OUTPUT_RESOLUTION", "hud_output_resolution");
     apply_env(cfg, "GALAXY_AA", "aa");
     apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
@@ -300,7 +293,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
     // Clamps every value into its range; settings the renderer does not implement stay parseable but off.
-    cfg.scene_target_scale = std::clamp(cfg.scene_target_scale, 1u, kMaxSceneScale);
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
         std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
@@ -539,13 +531,6 @@ void set_render_config(const RenderConfig& cfg) {
     s_lock.unlock();
 }
 
-void stage_next_start_scene_target_scale(unsigned scene_target_scale) {
-    const unsigned sanitized = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
-    s_lock.lock();
-    s_next_start_scene_target_scale = sanitized;
-    s_lock.unlock();
-}
-
 RenderFeatureCaps get_render_feature_caps() {
     s_lock.lock_shared();
     const RenderFeatureCaps copy = s_feature_caps;
@@ -585,7 +570,6 @@ void load_render_config_from_file() {
 
     s_lock.lock();
     s_config = cfg;
-    s_next_start_scene_target_scale = cfg.scene_target_scale;
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -619,7 +603,6 @@ bool reload_render_config_if_changed() {
 
     s_lock.lock();
     s_config = cfg;
-    s_next_start_scene_target_scale = cfg.scene_target_scale;
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -629,7 +612,6 @@ bool reload_render_config_if_changed() {
 bool save_render_config_to_file() {
     s_lock.lock_shared();
     RenderConfig cfg = s_config;
-    const unsigned next_start_scene_target_scale = s_next_start_scene_target_scale;
     std::array<char, 32> gpu = s_file_gpu;
     s_lock.unlock_shared();
     clamp_unimplemented_features(cfg);
@@ -651,9 +633,7 @@ bool save_render_config_to_file() {
 
     std::ostringstream contents;
     contents.imbue(std::locale::classic());
-    contents << "efb_scale="
-             << std::clamp(next_start_scene_target_scale, 1u, kMaxSceneScale) << '\n'
-             << "vsync_interval=" << cfg.vsync_interval << '\n'
+    contents << "vsync_interval=" << cfg.vsync_interval << '\n'
              << "wait_for_frame_latency="
              << (cfg.wait_for_frame_latency ? 1u : 0u) << '\n'
              << "swap_chain_frame_latency="
@@ -685,9 +665,6 @@ bool save_render_config_to_file() {
              << "temporal_quality=" << cfg.temporal_quality << '\n'
              << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
-             << "internal_follow_window="
-             << (cfg.internal_follow_window ? 1u : 0u) << '\n'
-             << "gpu_budget=" << (cfg.gpu_budget ? 1u : 0u) << '\n'
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "ray_tracing_enabled="

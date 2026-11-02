@@ -162,7 +162,7 @@ struct SceneCopySamplingGeometry {
     unsigned dest_height,
     const FrameMap& map) noexcept;
 
-// A copy that is an exact colour/alpha identity at `scene_target_scale`: its source rectangle in scaled scene target texels. Rejects
+// A copy that is an exact colour/alpha identity at `map`: its source rectangle in scaled scene target texels. Rejects
 // filtering, conversion, resampling and any source rectangle that would need the conversion shader's clamp.
 struct SceneCopyRect {
     std::uint32_t left = 0;
@@ -185,7 +185,7 @@ inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
 }
 
 [[nodiscard]] std::optional<SceneCopyRect> scene_identity_copy_rect(
-    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
+    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
     unsigned dest_width, unsigned dest_height) noexcept;
 
 struct ScaledSceneRect {
@@ -278,7 +278,7 @@ struct ScenePeekSamplingGeometry {
 
 class SceneCopyManager {
 public:
-    bool initialize(gpu::Device* device, unsigned scene_target_scale);
+    bool initialize(gpu::Device* device, const FrameMap& map);
     void shutdown();
     // Live internal-resolution change: later acquisitions re-create any display picture
     // texture whose physical extent no longer matches.

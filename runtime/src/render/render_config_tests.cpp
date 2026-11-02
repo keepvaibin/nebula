@@ -371,7 +371,6 @@ int main() {
     config.rt_ao_enabled = true;
     config.rt_reflections = false;
     config.swap_chain_frame_latency = 99;
-    config.scene_target_scale = 99;
     galaxy::render::set_render_config(config);
 
     const galaxy::render::RenderConfig sanitized =
@@ -391,14 +390,6 @@ int main() {
     passed &= expect(
         sanitized.swap_chain_frame_latency == 2,
         "set_render_config clamps swap-chain latency to the frame ring");
-    passed &= expect(
-        sanitized.scene_target_scale == galaxy::render::kMaxSceneScale,
-        "set_render_config clamps scene target scale to the implemented maximum");
-
-    galaxy::render::stage_next_start_scene_target_scale(0u);
-    passed &= expect(
-        galaxy::render::get_render_config().scene_target_scale == galaxy::render::kMaxSceneScale,
-        "staging the next-start scene target scale leaves the live scale");
 
     {
         const std::filesystem::path root =
@@ -410,21 +401,22 @@ int main() {
         const ScopedEnv config_path(
             "GALAXY_RENDER_CONFIG_PATH",
             path.string().c_str());
-        const ScopedEnv scene_target_scale("GALAXY_EFB_SCALE", "");
+        const auto stage_bloom = [](unsigned bloom) {
+            galaxy::render::RenderConfig staged = galaxy::render::get_render_config();
+            staged.bloom = bloom;
+            galaxy::render::set_render_config(staged);
+        };
 
-        galaxy::render::stage_next_start_scene_target_scale(2u);
+        stage_bloom(20u);
         passed &= expect(
             galaxy::render::save_render_config_to_file(),
-            "staged next-start scene target scale saves to an isolated config file");
+            "a setting saves to an isolated config file");
         std::ifstream file(path, std::ios::binary);
         const std::string contents{
             std::istreambuf_iterator<char>(file),
             std::istreambuf_iterator<char>()};
         file.close();
-        passed &= expect(
-            contents.find("efb_scale=2") != std::string::npos &&
-                galaxy::render::get_render_config().scene_target_scale == galaxy::render::kMaxSceneScale,
-            "saved config contains the staged scale while the live scale remains unchanged");
+        passed &= expect(contents.find("bloom=20") != std::string::npos, "the saved config holds the setting");
 
         HANDLE locked = CreateFileW(
             path.c_str(),
@@ -437,7 +429,7 @@ int main() {
         passed &= expect(
             locked != INVALID_HANDLE_VALUE,
             "render settings destination can be locked for failure injection");
-        galaxy::render::stage_next_start_scene_target_scale(3u);
+        stage_bloom(30u);
         const bool locked_save = galaxy::render::save_render_config_to_file();
         std::ifstream unchanged_file(path, std::ios::binary);
         const std::string unchanged{
@@ -446,21 +438,21 @@ int main() {
         unchanged_file.close();
         passed &= expect(
             !locked_save &&
-                unchanged.find("efb_scale=2") != std::string::npos &&
-                unchanged.find("efb_scale=3") == std::string::npos,
+                unchanged.find("bloom=20") != std::string::npos &&
+                unchanged.find("bloom=30") == std::string::npos,
             "render settings replace failure preserves the complete old file");
         if (locked != INVALID_HANDLE_VALUE) {
             (void)CloseHandle(locked);
         }
-        galaxy::render::stage_next_start_scene_target_scale(2u);
+        stage_bloom(20u);
         passed &= expect(
             galaxy::render::save_render_config_to_file(),
             "render settings atomically recover after the destination unlocks");
 
         galaxy::render::load_render_config_from_file();
         passed &= expect(
-            galaxy::render::get_render_config().scene_target_scale == 2u,
-            "a new startup promotes the persisted staged scale to the active scale");
+            galaxy::render::get_render_config().bloom == 20u,
+            "a new startup reads the persisted setting");
         std::filesystem::remove_all(root);
     }
 
@@ -601,28 +593,6 @@ int main() {
     passed &= expect(
         !quality.enhanced_mipmaps,
         "enhanced mipmaps env override is applied");
-
-    {
-        ScopedEnv scene_target_scale("GALAXY_EFB_SCALE", "4");
-        galaxy::render::load_render_config_from_file();
-        passed &= expect(
-            galaxy::render::get_render_config().scene_target_scale == 4u,
-            "scene target scale 4x is accepted from the release environment");
-    }
-    {
-        ScopedEnv scene_target_scale("GALAXY_EFB_SCALE", "6");
-        galaxy::render::load_render_config_from_file();
-        passed &= expect(
-            galaxy::render::get_render_config().scene_target_scale == 6u,
-            "opt-in scene target scale 6x is accepted from the release environment");
-    }
-    {
-        ScopedEnv scene_target_scale("GALAXY_EFB_SCALE", "0");
-        galaxy::render::load_render_config_from_file();
-        passed &= expect(
-            galaxy::render::get_render_config().scene_target_scale == 1u,
-            "unsupported low scene target scale clamps to native 1x");
-    }
 
     {
         ScopedEnv wait("GALAXY_WAIT_FOR_FRAME_LATENCY", "0");

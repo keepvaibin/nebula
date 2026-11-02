@@ -285,52 +285,42 @@ void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
 // rule): scene target colour and depth (8 bytes per pixel) and, at most, the display picture pair plus one full-picture copy (12 bytes per
 // pixel of the 640x456 picture).
-bool RendererVk::scene_target_scale_fits_memory(unsigned scale) const {
+bool RendererVk::scene_fits_memory(const FrameMap& map) const {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
     if (!vk::Context::get().device_memory_budget(usage, budget)) {
         return true;
     }
-    const auto scaled_bytes = [](unsigned s) {
-        const double area = static_cast<double>(s) * s;
-        return area *
-            (static_cast<double>(kFrameWidth) * kFrameHeight * 8.0 + static_cast<double>(kFrameWidth) * 456.0 * 12.0);
-    };
-    const double needed = scaled_bytes(scale) - scaled_bytes(scene_map_.scale());
+    const auto bytes = [](const FrameMap& m) { return (8.0 + 12.0) * m.width * m.height; };
+    const double needed = bytes(map) - bytes(scene_map_);
     return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
 }
 
 // A changed internal resolution, between frames: the GPU finishes with the old targets and every scaled copy.
-void RendererVk::apply_pending_scene_target_scale() {
-    const unsigned wanted_scale = std::min(std::clamp(get_render_config().scene_target_scale, 1u, kMaxSceneScale),
-                                           host_window::display_scene_target_scale_cap());
-    // Following the window: its picture's exact size, square pixels.
-    FrameMap wanted(wanted_scale);
-    if (get_render_config().internal_follow_window && gpu_budget_cap_ == 0u) {
-        const auto aspect = galaxy::experimental_effective_host_aspect();
-        const galaxy::ContentViewport content = galaxy::fit_content_viewport(
-            static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-            aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
-        if (content.width > 0 && content.height > 0) {
-            wanted = FrameMap(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
-        }
+void RendererVk::apply_window_size() {
+    // An edge drag resizes every frame: settle first, then re-create once.
+    if (host_window::move_size_active.load(std::memory_order_acquire)) {
+        return;
     }
+    // The picture's exact size on the screen, square pixels.
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return;
+    }
+    const FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
     const unsigned samples = wanted_msaa_samples();
     // Not while the output scene target holds the scene target's place (its scale is the window's).
     if ((wanted == scene_map_ && samples == scene_.samples) || !scene_.color || output_scene_active_) {
         return;
     }
-    if (wanted.scale() > scene_map_.scale() && !scene_target_scale_fits_memory(wanted.scale())) {
-        // Keep the current targets; the setting returns to what is live.
-        std::cerr << "[Renderer] internal resolution " << wanted.scale() << "x exceeds the video-memory budget; staying at "
-                  << scene_map_.scale() << "x\n";
-        RenderConfig render = get_render_config();
-        render.scene_target_scale = scene_map_.scale();
-        set_render_config(render);
-        stage_next_start_scene_target_scale(scene_map_.scale());
-        host_window::scene_target_scale_rejected.store(wanted.scale(), std::memory_order_release);
-        if (render.internal_follow_window) {
-            follow_window_retry_ms_ = galaxy::steady_ms() + 10'000u;
+    if (wanted.width * wanted.height > scene_map_.width * scene_map_.height && !scene_fits_memory(wanted)) {
+        if (galaxy::steady_ms() >= window_size_refused_ms_) {
+            window_size_refused_ms_ = galaxy::steady_ms() + 10'000u;
+            std::cerr << "[Renderer] " << wanted.width << "x" << wanted.height << " exceeds the video-memory budget; staying at "
+                      << scene_map_.width << "x" << scene_map_.height << '\n';
         }
         return;
     }
@@ -343,11 +333,6 @@ void RendererVk::apply_pending_scene_target_scale() {
     }
     const FrameMap previous = scene_map_;
     if (!create_scene_targets(wanted, samples)) {
-        RenderConfig render = get_render_config();
-        render.scene_target_scale = previous.scale();
-        set_render_config(render);
-        stage_next_start_scene_target_scale(previous.scale());
-        host_window::scene_target_scale_rejected.store(wanted.scale(), std::memory_order_release);
         return;
     }
     reset_gx_bindings();
@@ -1694,7 +1679,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     const SceneConversionShaderConstants constants =
         make_scene_conversion_constants(params, is_depth_copy, intensity, keep_alpha, copy_format, src_x, src_y,
-                                      step_x, step_y, filter_row_offset, scene_map_.scale(), kFrameHeight);
+                                      step_x, step_y, filter_row_offset, scene_map_.sy, kFrameHeight);
     vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
                        constants.values.data());
     vkCmdDraw(commands, 3, 1, 0, 0);
@@ -1985,7 +1970,7 @@ vk::Texture* RendererVk::filter_display_picture(const DisplayTexture& source) {
     params.src_height = static_cast<std::uint16_t>(frame.height);
     params.filtered = true;
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1u, frame.height);
+        make_scene_conversion_constants(params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, frame.height);
     vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
                        constants.values.data());
     vkCmdDraw(commands, 3, 1, 0, 0);
@@ -2003,7 +1988,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     const unsigned dh_unscaled = params.half_scale ? std::max(1u, params.src_height / 2u) : params.src_height;
     const bool native = scene_map_.scale() > 1u && is_effect_copy(dw_unscaled, dh_unscaled);
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
-        static_cast<std::uint16_t>(dw_unscaled), static_cast<std::uint16_t>(dh_unscaled), native ? 1u : scene_map_.scale());
+        static_cast<std::uint16_t>(dw_unscaled), static_cast<std::uint16_t>(dh_unscaled), native ? FrameMap(1u) : scene_map_);
     const unsigned w = extent.width;
     const unsigned h = extent.height;
     if (w == 0u || h == 0u) {
@@ -2064,7 +2049,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     }
     SceneCopyDest& current = scene_copy_dests_[dest_key];
     vk::Texture& texture = *current.texture;
-    const auto identity = scene_identity_copy_rect(params, is_depth_copy, scene_map_.scale(), w, h);
+    const auto identity = scene_identity_copy_rect(params, is_depth_copy, scene_map_, w, h);
     const SceneCopySamplingGeometry sampling = compute_scene_copy_sampling_geometry(params, w, h, scene_map_);
     if (logging()) {
         ReplayCopy copy{};

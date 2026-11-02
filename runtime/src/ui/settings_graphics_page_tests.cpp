@@ -13,11 +13,10 @@ class Host final : public galaxy::ui::GraphicsPageHost {
 public:
     bool rt = false;
     mutable int opened = -1;
-    galaxy::ui::GraphicsPageState query(const galaxy::ui::RenderConfig& render) const override {
+    galaxy::ui::GraphicsPageState query(const galaxy::ui::RenderConfig&) const override {
         galaxy::ui::GraphicsPageState state;
         state.upscalers = {0, 1};
-        state.scale_cap = 8;
-        state.render_scale = render.scene_target_scale;
+        state.render_scale = 2;
         state.frame_rates.refresh_hz = 144;
         state.ray_tracing_offered = rt;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";

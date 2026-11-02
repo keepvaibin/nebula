@@ -114,8 +114,8 @@ std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& k
     return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.palette)));
 }
 
-bool RendererVk::initialize(int window_width, int window_height, unsigned scene_target_scale) {
-    scene_map_ = FrameMap(std::clamp(scene_target_scale, 1u, kMaxSceneScale));
+bool RendererVk::initialize(int window_width, int window_height, const FrameMap& frame) {
+    scene_map_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
     const host_window::OpenedWindow opened = host_window::open_game_window(window_owner_, window_width, window_height);
@@ -129,7 +129,6 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned scene_
             shutdown();
             return false;
         }
-        scene_map_ = FrameMap(std::min(scene_map_.scale(), host_window::display_scene_target_scale_cap()));
         const VkDevice device = vk::Context::get().device();
         {
             VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
@@ -1074,7 +1073,7 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
 void RendererVk::begin_frame(bool) {
     host_window::poll_render_config_file();
     follow_window_and_resize();
-    apply_pending_scene_target_scale();
+    apply_window_size();
     update_ring_mode();
     sync_post_process();
     bloom_.poll_ready();
@@ -1104,7 +1103,6 @@ void RendererVk::begin_frame(bool) {
             const double gpu_ms = static_cast<double>(ticks[1] - ticks[0]) * timestamp_period_ns_ / 1'000'000.0;
             stats_.gpu_ms += gpu_ms;
             ++stats_.gpu_samples;
-            gpu_budget_ms_ += gpu_ms;
             gpu_window_.ms += gpu_ms;
             gpu_window_.max_ms = std::max(gpu_window_.max_ms, gpu_ms);
             ++gpu_window_.frames;
@@ -1574,36 +1572,6 @@ void RendererVk::read_gpu_passes() {
 // The share of wall time the GPU may spend on the frame before Match Output steps down (RendererD3D12's rule).
 constexpr double kGpuBudgetBusy = 0.80;
 
-void RendererVk::update_gpu_budget() {
-    const std::int64_t now = galaxy::qpc_now();
-    if (gpu_budget_window_qpc_ == 0) {
-        gpu_budget_window_qpc_ = now;
-        gpu_budget_ms_ = 0.0;
-        return;
-    }
-    const double window_ms = static_cast<double>(now - gpu_budget_window_qpc_) * 1000.0 /
-        static_cast<double>(galaxy::qpc_frequency());
-    if (window_ms < 2000.0) {
-        return;
-    }
-    const double busy = gpu_budget_ms_ / window_ms;
-    gpu_budget_window_qpc_ = now;
-    gpu_budget_ms_ = 0.0;
-    const RenderConfig cfg = get_render_config();
-    if (!cfg.gpu_budget || !cfg.internal_follow_window || scene_map_.scale() <= 1u || busy <= kGpuBudgetBusy) {
-        gpu_budget_over_windows_ = 0u;
-        return;
-    }
-    if (++gpu_budget_over_windows_ < 2u) {
-        return;
-    }
-    gpu_budget_over_windows_ = 0u;
-    gpu_budget_cap_ = scene_map_.scale() - 1u;
-    follow_window_width_ = 0u;  // re-derive the scale under the cap at this frame boundary
-    std::cerr << "[Renderer] GPU busy " << static_cast<int>(busy * 100.0 + 0.5) << "% at internal resolution "
-              << scene_map_.scale() << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
-}
-
 void RendererVk::sync_post_process() {
     const bool was_ready = post_.ready();
     if (!post_.poll_ready()) {
@@ -1665,49 +1633,6 @@ void RendererVk::follow_window_and_resize() {
     }
     if (display_refresh_checks_++ % 120u == 0u) {
         refresh_display_rate();
-    }
-
-    update_gpu_budget();
-    // Match Output: the smallest scale covering the picture on both axes (the launcher's rule, as RendererD3D12).
-    const auto aspect = galaxy::experimental_effective_host_aspect();
-    const double content_aspect = aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
-    if (host_window::follow_window_rearm.load(std::memory_order_relaxed) &&
-        host_window::follow_window_rearm.exchange(false, std::memory_order_acq_rel)) {
-        follow_window_width_ = 0u;
-    }
-    if (follow_window_retry_ms_ != 0u && galaxy::steady_ms() >= follow_window_retry_ms_) {
-        follow_window_retry_ms_ = 0u;
-        follow_window_width_ = 0u;
-    }
-    if (host_window::backbuffer_width == follow_window_width_ &&
-        host_window::backbuffer_height == follow_window_height_ && content_aspect == follow_window_aspect_) {
-        return;
-    }
-    if (host_window::move_size_active.load(std::memory_order_acquire)) {
-        return;  // an edge drag resizes every frame: settle first
-    }
-    follow_window_width_ = host_window::backbuffer_width;
-    follow_window_height_ = host_window::backbuffer_height;
-    follow_window_aspect_ = content_aspect;
-    RenderConfig render = get_render_config();
-    if (!render.internal_follow_window) {
-        return;
-    }
-    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
-        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        content_aspect);
-    if (content.width <= 0 || content.height <= 0) {
-        return;
-    }
-    const double needed = std::max(content.width / static_cast<double>(kFrameWidth), content.height / 456.0);
-    unsigned scale = std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxSceneScale);
-    if (gpu_budget_cap_ != 0u) {
-        scale = std::min(scale, gpu_budget_cap_);
-    }
-    if (scale != render.scene_target_scale) {
-        render.scene_target_scale = scale;
-        set_render_config(render);
-        stage_next_start_scene_target_scale(scale);
     }
 }
 
