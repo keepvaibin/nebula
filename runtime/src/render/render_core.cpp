@@ -3681,6 +3681,13 @@ void RenderCore::present_cached_display_on_thread(
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
+    // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1, processes): the card is lost at frame n.
+    static const std::uint64_t lose_at = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_GPU_LOST_FRAME"), 0u);
+    if (lose_at != 0u && frame_index_ == lose_at) [[unlikely]] {
+        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_GPU_LOST_TIMES"), 1u)) {
+            renderer_.test_lose_device();
+        }
+    }
     pipeline_cache_.merge_prepared();
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
