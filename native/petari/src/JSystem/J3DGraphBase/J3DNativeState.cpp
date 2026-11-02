@@ -445,7 +445,7 @@ namespace J3DNativeState {
         setChanAmbColor(GPU_COLOR1A1, black);
         setChanMatColor(GPU_COLOR1A1, white);
 
-        static GpuTexObj sDefaultTexture;
+        static J3DNativeTexObj sDefaultTexture;
         J3DNativeTexture::registerImage(&sDefaultTexData, GPU_TF_IA8, 4, 4, 1);
         J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
         for (u32 i = 0; i < 8; i++) {

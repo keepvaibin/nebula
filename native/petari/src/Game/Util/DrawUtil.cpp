@@ -26,7 +26,7 @@
 #include "Game/Util/RenderSignals.hpp"
 
 namespace {
-    GpuTexObj clear_z_tobj;
+    J3DNativeTexObj clear_z_tobj;
 
     const f32 cNearZ = -10000.0f;
     const f32 cFarZ = 10000.0f;

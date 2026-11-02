@@ -496,8 +496,8 @@ void WarpPod::initDraw() {
         _C4[i] = position + up * 200.0f;
     }
 
-    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"), 0);
-    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"), 0);
+    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
+    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"));
 }
 
 void WarpPod::drawCylinder(u32) const {

@@ -20,7 +20,7 @@ MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new (32) TVec3
 
     mFadeStep = 0;
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("MarineSnow"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("MarineSnow"));
 }
 
 void MarineSnow::view() {

@@ -179,7 +179,7 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\221\137\202\242\222\206" /* 狙い中 */);    // "aim"
     MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\215\125\214\202\222\206" /* 攻撃中 */);    // "attack"
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("SpaceCocoon.arc", "SpaceCocoon.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("SpaceCocoon.arc", "SpaceCocoon.bti"));
     makeActorAppeared();
 }
 

@@ -662,7 +662,7 @@ void LayoutManager::replaceIndDummyTexture() {
         return;
     }
 
-    JUTTexture screenTex(MR::getScreenResTIMG(), static_cast< u8 >(0));
+    JUTTexture screenTex(MR::getScreenResTIMG());
 
     mIndDummyTexMap = new nw4r::lyt::TexMap(screenTex.getTexObj());
 

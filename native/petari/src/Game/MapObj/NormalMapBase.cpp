@@ -120,16 +120,16 @@ void NormalMapBase::setupTexture() {
             strcpy(fileName, pName + 6);
             strcat(fileName, ".bti");
             pImage = MR::getTexFromArc(fileName, this);
-            mNormalTex = new JUTTexture(pImage, 0);
+            mNormalTex = new JUTTexture(pImage);
             mTextures[i] = mNormalTex;
             mTextures[i]->mMinType = GPU_LINEAR;
             mTextures[i]->mMagType = GPU_LINEAR;
             mTextures[i]->init();
         } else if (strstr(pName, "ormal") && !mNormalTex) {
-            mNormalTex = new JUTTexture(pImage, 0);
+            mNormalTex = new JUTTexture(pImage);
             mTextures[i] = mNormalTex;
         } else {
-            _90 = new JUTTexture(pImage, 0);
+            _90 = new JUTTexture(pImage);
             mTextures[i] = _90;
         }
 
@@ -366,7 +366,7 @@ void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
 }
 
 void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
-    GpuTexObj obj;
+    J3DNativeTexObj obj;
     J3DNativeTexture::init(&obj, mImagePtr, width, height, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
 
     if (_13A & 1) {
@@ -379,7 +379,7 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
 }
 
 void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
-    GpuTexObj obj;
+    J3DNativeTexObj obj;
     J3DNativeTexture::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, GPU_TF_RGBA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
     if ((_13A & 2) != 0 && (_13A & 0x4) != 0) {
         J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_NEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);

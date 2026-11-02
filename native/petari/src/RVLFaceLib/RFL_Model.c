@@ -107,7 +107,7 @@ u32 MiiGetModelBufferSize(MiiResolution res, u32 exprFlags) {
     const u32 exprNum = Mii_GetExpressionNum(exprFlags);
     const s32 texSize = Mii_GetMaskBufSize(res);
 
-    return ROUND_UP(exprNum * sizeof(GpuTexObj), 32) + ROUND_UP(sizeof(Mii_CharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
+    return ROUND_UP(exprNum * sizeof(J3DNativeTexObj), 32) + ROUND_UP(sizeof(Mii_CharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
 }
 
 MiiErrcode MiiInitCharModel(MiiCharModel* model, MiiDataSource src, MiiMiddleDB* db, u16 id, void* work, MiiResolution res, u32 exprFlags) {
@@ -126,7 +126,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
     u32 maskSize;
     u8* maskImages[MiiExp_Max];
     u32 maskRes;
-    GpuTexObj* exprTexObj;
+    J3DNativeTexObj* exprTexObj;
     u8* image;
     BOOL setExpr;
     f32 maxLod;
@@ -141,7 +141,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
     imodel->res = work;
 
     // Expression texobjs
-    exprTexObj = (GpuTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 32);
+    exprTexObj = (J3DNativeTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 32);
     for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             imodel->maskTexObj[i] = exprTexObj;
@@ -807,7 +807,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
     Mii_Free(res);
 }
 
-void Mii_InitTexRes(GpuTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buffer) {
+void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buffer) {
     u32 texSize = 0;
     Mii_Texture* tex;
 

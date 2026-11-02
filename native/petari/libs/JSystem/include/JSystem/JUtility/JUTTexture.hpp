@@ -3,8 +3,6 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JUTPalette;
-
 // In host order, as the importer cooks model TEX1 blocks, particle textures and BTI files (native_data.rs host_timg).
 struct ResTIMG {
     /* 0x00 */ u8 mFormat;
@@ -13,12 +11,12 @@ struct ResTIMG {
     /* 0x04 */ u16 mHeight;
     /* 0x06 */ u8 mWrapS;
     /* 0x07 */ u8 mWrapT;
-    /* 0x08 */ u8 mPaletteName;
-    /* 0x09 */ u8 mPaletteFormat;
-    /* 0x0A */ u16 mPaletteNum;
+    /* 0x08 */ u8 mCookedPaletteName;  // cooked images have their palettes applied: these eight bytes are unused
+    /* 0x09 */ u8 mCookedPaletteFormat;
+    /* 0x0A */ u16 mCookedPaletteNum;
     // Signed, as the console's 32-bit address arithmetic wrapped: J3DTexture::setResTIMG can point a copied header back
     // at another header's data.
-    /* 0x0C */ s32 mPaletteDataOffset;
+    /* 0x0C */ s32 mCookedPaletteOffset;
     /* 0x10 */ bool mMipmap;
     /* 0x11 */ bool mDoEdgeLod;
     /* 0x12 */ bool mBiasClamp;
@@ -30,7 +28,7 @@ struct ResTIMG {
     /* 0x18 */ u8 mImageNum;
     /* 0x19 */ u8 _19;
     /* 0x1A */ s16 mLodBias;
-    /* 0x1C */ s32 mImageDataOffset;  // signed, as mPaletteDataOffset
+    /* 0x1C */ s32 mImageDataOffset;  // signed
 };
 
 class JUTTexture {
@@ -38,7 +36,6 @@ public:
     /// @brief Creates a new `JUTTexture`.
     JUTTexture() {
         mFlag = 0;
-        mEmbPalette = NULL;
         mTIMG = NULL;
     }
 
@@ -49,29 +46,23 @@ public:
     JUTTexture(int width, int height, GpuTexFmt format);
 
     /// @brief Creates a new `JUTTexture`.
-    /// @param pTIMG TODO.
-    /// @param param2 TODO.
-    JUTTexture(const ResTIMG* p_timg, u8 param_1) {
+    /// @param pTIMG The image.
+    explicit JUTTexture(const ResTIMG* pTIMG) {
         // storeTIMG hands the record to the renderer unless the capture bit says the buffer is its own.
         mFlag = 0;
-        mEmbPalette = NULL;
-        storeTIMG(p_timg, param_1);
+        storeTIMG(pTIMG);
     }
 
     /// @brief Destroys the `JUTTexture`.
     ~JUTTexture();
 
-    void storeTIMG(const ResTIMG*, u8);
-    void storeTIMG(const ResTIMG*, JUTPalette*);
-    void storeTIMG(const ResTIMG*, JUTPalette*, GpuTlut);
-    void attachPalette(JUTPalette*);
+    void storeTIMG(const ResTIMG*);
     void init();
-    GpuTexObj getTexObj() const {
+    J3DNativeTexObj getTexObj() const {
         return mObj;
     }
 
     void initTexObj();
-    void initTexObj(_GpuTlut);
     void load(_GpuTexMapID);
     // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
     // filter: J3DNativeTarget::capture's flags).
@@ -93,26 +84,15 @@ public:
         return mTIMG->mHeight;
     }
     void setCaptureFlag(bool flag) {
-        mFlag = (mFlag & 2) | flag;
+        mFlag = flag;
     }
     bool getCaptureFlag() const {
         return mFlag & 1;
     }
-    bool getEmbPaletteDelFlag() const {
-        return mFlag & 2;
-    }
-    void setEmbPaletteDelFlag(bool flag) {
-        mFlag = (mFlag & 1) | (flag << 1);
-    }
-    int getTlutName() const {
-        return mTlutName;
-    }
 
-    /* 0x00 */ GpuTexObj mObj;
+    J3DNativeTexObj mObj;
     /* 0x20 */ const ResTIMG* mTIMG;
     /* 0x24 */ u8* mImage;
-    /* 0x28 */ JUTPalette* mEmbPalette;
-    /* 0x2C */ JUTPalette* mPalette;
     /* 0x30 */ u8 mWrapS;
     /* 0x31 */ u8 mWrapT;
     /* 0x32 */ u8 mMinType;
@@ -120,7 +100,6 @@ public:
     /* 0x34 */ u16 mMinLod;
     /* 0x36 */ u16 mMaxLod;
     /* 0x38 */ s16 mLodBias;
-    /* 0x3A */ u8 mTlutName;
     /* 0x3B */ u8 mFlag;
     /* 0x3C */ ResTIMG* _3C;
 };

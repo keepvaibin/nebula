@@ -77,10 +77,10 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
         pDensity->mHeight = 32;
         pDensity->mWrapS = GPU_REPEAT;
         pDensity->mWrapT = GPU_REPEAT;
-        pDensity->mPaletteName = GPU_TLUT0;
-        pDensity->mPaletteFormat = GPU_TL_IA8;
-        pDensity->mPaletteNum = 0;
-        pDensity->mPaletteDataOffset = 0;
+        pDensity->mCookedPaletteName = 0;
+        pDensity->mCookedPaletteFormat = 0;
+        pDensity->mCookedPaletteNum = 0;
+        pDensity->mCookedPaletteOffset = 0;
         pDensity->mMipmap = false;
         pDensity->mDoEdgeLod = false;
         pDensity->mBiasClamp = false;
@@ -92,7 +92,7 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
         pDensity->mImageNum = 1;
         pDensity->mLodBias = 0;
         pDensity->mImageDataOffset = sizeof(ResTIMG);
-        JUTTexture* pTexture = new JUTTexture(pDensity, 0);
+        JUTTexture* pTexture = new JUTTexture(pDensity);
         FurDrawer* pDrawer = mFurCtrls[layer]->mDrawer;
         pDrawer->mFurTexture = pTexture;
         pDrawer->mUseDensityMap = 1;

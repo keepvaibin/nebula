@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J2DGraph/J2DScreen.hpp"
-#include "JSystem/JUtility/JUTPalette.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>
 #include <string.h>
@@ -18,12 +17,11 @@ J2DPicture::J2DPicture(JUTTexture* texture) {
     if (texture != NULL) {
         append(texture, 1.0f);
     }
-    mPalette = NULL;
     initinfo();
 }
 
-void J2DPicture::initiate(const ResTIMG* img, const ResTLUT* lut) {
-    private_initiate(img, lut);
+void J2DPicture::initiate(const ResTIMG* img) {
+    private_initiate(img);
     if (mTexture[0] == NULL) {
         return;
     }
@@ -31,34 +29,27 @@ void J2DPicture::initiate(const ResTIMG* img, const ResTLUT* lut) {
     place(JGeometry::TBox2< f32 >(0.0f, 0.0f, mTexture[0]->getWidth(), mTexture[0]->getHeight()));
 }
 
-void J2DPicture::private_initiate(const ResTIMG* timg, const ResTLUT* tlut) {
+void J2DPicture::private_initiate(const ResTIMG* timg) {
     if (mTextureNum != 0) {
         return;
     }
 
     if (timg != NULL) {
         if (mTexture[0] == NULL) {
-            mTexture[0] = new JUTTexture(timg, 0);
+            mTexture[0] = new JUTTexture(timg);
             if (mTexture[0] != NULL) {
                 mTextureNum++;
                 // SMG1 change -- mask of 2 to 0xE
                 field_0x109 = (field_0x109 & 0xE) | 1;
             }
         } else {
-            mTexture[0]->storeTIMG(timg, (u8)0);
+            mTexture[0]->storeTIMG(timg);
             mTextureNum++;
             // SMG1 change -- mask of 2 to 0xE
             field_0x109 = (field_0x109 & 0xE) | 1;
         }
     }
 
-    mPalette = NULL;
-    if (tlut && mPalette == NULL) {
-        mPalette = new JUTPalette(GPU_TLUT0, const_cast< ResTLUT* >(tlut));
-        if (mTexture[0] != NULL) {
-            mTexture[0]->attachPalette(mPalette);
-        }
-    }
 }
 
 void J2DPicture::initinfo() {
@@ -77,8 +68,6 @@ J2DPicture::~J2DPicture() {
             delete mTexture[i];
         }
     }
-
-    delete mPalette;
 }
 
 bool J2DPicture::prepareTexture(u8 param_0) {
@@ -100,23 +89,14 @@ bool J2DPicture::prepareTexture(u8 param_0) {
     return 1;
 }
 
-bool J2DPicture::insert(ResTIMG const* img, JUTPalette* palette, u8 param_2, f32 param_3) {
+bool J2DPicture::insert(ResTIMG const* img, u8 param_2, f32 param_3) {
     if (img == NULL || mTextureNum >= 4 || param_2 >= 4 || param_2 > mTextureNum) {
         return false;
     }
 
-    u8 var_r26 = 0;
-    if (img->mPaletteName != 0 && palette == NULL) {
-        var_r26 = getUsableTlut(mTextureNum);
-    }
-
     JUTTexture* var_r31;
     if (mTexture[mTextureNum] == NULL) {
-        var_r31 = new JUTTexture(img, var_r26);
-
-        if (palette != NULL) {
-            var_r31->storeTIMG(img, palette);
-        }
+        var_r31 = new JUTTexture(img);
 
         for (u8 i = 3; i > param_2; i--) {
             mTexture[i] = mTexture[i - 1];
@@ -128,11 +108,7 @@ bool J2DPicture::insert(ResTIMG const* img, JUTPalette* palette, u8 param_2, f32
         field_0x109 |= (1 << param_2);
     } else {
         var_r31 = mTexture[mTextureNum];
-        if (palette == NULL) {
-            mTexture[mTextureNum]->storeTIMG(img, var_r26);
-        } else {
-            mTexture[mTextureNum]->storeTIMG(img, palette);
-        }
+        mTexture[mTextureNum]->storeTIMG(img);
 
         u8 sp8[4];
         for (u8 i = 0; i < 4; i++) {
@@ -172,9 +148,9 @@ bool J2DPicture::insert(ResTIMG const* img, JUTPalette* palette, u8 param_2, f32
     return true;
 }
 
-bool J2DPicture::insert(char const* resName, JUTPalette* palette, u8 param_2, f32 param_3) {
+bool J2DPicture::insert(char const* resName, u8 param_2, f32 param_3) {
     void* resource = J2DScreen::getNameResource(resName);
-    return insert((ResTIMG*)resource, palette, param_2, param_3);
+    return insert((ResTIMG*)resource, param_2, param_3);
 }
 
 bool J2DPicture::insert(JUTTexture* texture, u8 param_1, f32 param_2) {
@@ -255,11 +231,7 @@ const ResTIMG* J2DPicture::changeTexture(ResTIMG const* img, u8 texIndex) {
         JUTTexture* tex = getTexture(texIndex);
         result = tex->getTexInfo();
 
-        u8 var_r30 = 0;
-        if (img->mPaletteName != 0) {
-            var_r30 = getUsableTlut(texIndex);
-        }
-        getTexture(texIndex)->storeTIMG(img, var_r30);
+        getTexture(texIndex)->storeTIMG(img);
         return result;
     }
 
@@ -270,33 +242,6 @@ const ResTIMG* J2DPicture::changeTexture(ResTIMG const* img, u8 texIndex) {
 const ResTIMG* J2DPicture::changeTexture(char const* resName, u8 param_1) {
     void* resource = J2DScreen::getNameResource(resName);
     return changeTexture((ResTIMG*)resource, param_1);
-}
-
-const ResTIMG* J2DPicture::changeTexture(ResTIMG const* img, u8 texIndex, JUTPalette* palette) {
-    if (texIndex > mTextureNum || 4 <= texIndex || img == NULL) {
-        return NULL;
-    }
-
-    const ResTIMG* result;
-    if (texIndex < mTextureNum) {
-        JUTTexture* tex = getTexture(texIndex);
-        result = tex->getTexInfo();
-
-        GpuTlut var_r30 = GPU_TLUT0;
-        if (img->mPaletteName != 0) {
-            var_r30 = getTlutID(img, getUsableTlut(texIndex));
-        }
-        getTexture(texIndex)->storeTIMG(img, palette, var_r30);
-        return result;
-    }
-
-    append(img, palette, 1.0f);
-    return NULL;
-}
-
-const ResTIMG* J2DPicture::changeTexture(char const* param_0, u8 param_1, JUTPalette* param_2) {
-    void* resource = J2DScreen::getNameResource(param_0);
-    return changeTexture((ResTIMG*)resource, param_1, param_2);
 }
 
 void J2DPicture::drawSelf(f32 param_0, f32 param_1) {
@@ -654,44 +599,6 @@ bool J2DPicture::isUsed(ResTIMG const* param_0) {
     }
 
     return J2DPane::isUsed(param_0);
-}
-
-u8 J2DPicture::getUsableTlut(u8 param_0) {
-    u8 var_r8 = 0;
-
-    for (u8 i = 0; i < mTextureNum; i++) {
-        if (i != param_0 && mTexture[i] != NULL) {
-            const ResTIMG* img = mTexture[i]->getTexInfo();
-
-            if (img != NULL && img->mPaletteName != 0) {
-                int name = mTexture[i]->getTlutName();
-                int var_r0 = name >= GPU_BIGTLUT0 ? GPU_BIGTLUT0 : GPU_TLUT0;
-
-                u8 temp_r0 = name - var_r0;
-                if (temp_r0 < 4) {
-                    var_r8 |= (1 << temp_r0);
-                }
-            }
-        }
-    }
-
-    u8 var_r26 = 0;
-    for (u8 i = 0; i < 4; i++) {
-        if (!(var_r8 & (1 << i))) {
-            var_r26 = i;
-            break;
-        }
-    }
-
-    return var_r26;
-}
-
-GpuTlut J2DPicture::getTlutID(ResTIMG const* img, u8 param_1) {
-    if (img->mPaletteNum > 256) {
-        return (GpuTlut)((param_1 % 4) + 0x10);
-    }
-
-    return (GpuTlut)param_1;
 }
 
 void J2DPicture::setCornerColor(JUtility::TColor c0, JUtility::TColor c1, JUtility::TColor c2, JUtility::TColor c3) {

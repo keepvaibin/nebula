@@ -389,13 +389,13 @@ void MR::setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(LayoutActor* pActor, co
 }
 
 nw4r::lyt::TexMap* MR::createLytTexMap(const char* pArcName, const char* pTextureName) {
-    JUTTexture texture(loadTexFromArc(pArcName, pTextureName), 0);
+    JUTTexture texture(loadTexFromArc(pArcName, pTextureName));
 
     return new nw4r::lyt::TexMap(texture.getTexObj());
 }
 
 nw4r::lyt::TexMap* MR::createLytTexMap(ResTIMG* pImage) {
-    JUTTexture texture(pImage, 0);
+    JUTTexture texture(pImage);
 
     return new nw4r::lyt::TexMap(texture.getTexObj());
 }

@@ -45,7 +45,7 @@ namespace nw4r {
             loadInfo.filter = mFilter;
 
             if (loadInfo != mLoadingTexture) {
-                GpuTexObj tobj;
+                J3DNativeTexObj tobj;
 
                 J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GPU_CLAMP, GPU_CLAMP,
                              GPU_FALSE);
