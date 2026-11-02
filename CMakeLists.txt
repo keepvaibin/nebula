@@ -169,9 +169,7 @@ target_link_libraries(galaxy_native_host
         xaudio2
 )
 # Only takes effect when the compiler is Clang/Clang-cl
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(galaxy_gx PRIVATE /clang:-mssse3)
-endif()
+
 
 galaxy_host_options(galaxy_native_host)
 
@@ -546,6 +544,9 @@ add_library(galaxy_gx STATIC
     runtime/src/render/game_asset_extract.cpp
     ${galaxy_native_dxil}
 )
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_options(galaxy_gx PRIVATE -mssse3)
+endif()
 target_include_directories(galaxy_gx PRIVATE "${galaxy_native_include_dir_dxil}")
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
