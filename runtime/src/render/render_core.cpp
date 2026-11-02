@@ -20,6 +20,7 @@
 #endif
 #endif
 #include "galaxy/loss_report.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
@@ -142,15 +143,15 @@ std::string present_snapshot_path() {
         return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
-    static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
-    static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
+    static const std::uint64_t every = read_u64(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_EVERY"), 0u);
+    static const std::uint64_t first = read_u64(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_FIRST"), 0u);
     static const std::uint64_t last = read_u64(
-        "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
+        NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_LAST"), std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
         return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_PRESENT_SNAPSHOT_DIR") == 0 && length > 1u
+                        NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_DIR")) == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
@@ -177,7 +178,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
 // A present snapshot waits for the last one's readback instead of being skipped (a run of snapshots holds every
 // present); GALAXY_TEST_CAPTURE_NO_WAIT=1 skips instead.
 bool snapshot_waits() {
-    static const bool waits = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) == 0u;
+    static const bool waits = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CAPTURE_NO_WAIT"), 0u) == 0u;
     return waits;
 }
 
@@ -213,7 +214,7 @@ const RenderStallInjection& render_stall_injection() {
         RenderStallInjection result{};
         char value[32]{};
         std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RENDER_STALL_MS") != 0 || length <= 1) {
+        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_RENDER_STALL_MS")) != 0 || length <= 1) {
             return result;
         }
         const char* end = value + length - 1;
@@ -2223,7 +2224,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     }
     // GALAXY_TEST_INTERP_SUBFRAMES=<k>: every sequence takes k sub-frames (at most the configured count), whatever the
     // GPU's and the cadence's governors would allow: what a capped rate shows, held for a test.
-    static const std::uint64_t forced = read_env_u64("GALAXY_TEST_INTERP_SUBFRAMES", 0u);
+    static const std::uint64_t forced = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_INTERP_SUBFRAMES"), 0u);
     if (forced != 0u) [[unlikely]] {
         const auto subframes = static_cast<unsigned>(std::min<std::uint64_t>(forced, configured));
         if (subframes < configured) {
@@ -2492,12 +2493,12 @@ std::string RenderCore::interp_snapshot_path(const char* suffix) const {
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_SNAPSHOT_DIR") == 0 &&
+        return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_DIR")) == 0 &&
                        length > 1u
             ? std::string(value) : std::string{};
     }();
-    static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
-    static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
+    static const std::uint64_t first = read_env_u64(NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_FIRST"), 0u);
+    static const std::uint64_t last = read_env_u64(NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_LAST"), 0u);
     if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
         return {};
     }
@@ -2582,7 +2583,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
             }
             // GALAXY_TEST_CAPTURE_NO_WAIT=1: a sub-frame is saved only when the last save's readback is done (else
             // skipped), never waited for: waiting holds the CPU behind the GPU and hides what a race between them shows.
-            static const bool capture_no_wait = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) != 0u;
+            static const bool capture_no_wait = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CAPTURE_NO_WAIT"), 0u) != 0u;
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
@@ -4070,11 +4071,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             const bool enhanced = render.enhanced_lighting;
             const bool per_pixel = render.per_pixel_lighting;
             // GALAXY_TEST_CURVED_AB=1: curved surfaces off in frames that end in an odd present (same-run pictures).
-            static const bool curved_ab = read_env_u64("GALAXY_TEST_CURVED_AB", 0u) != 0u;
+            static const bool curved_ab = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CURVED_AB"), 0u) != 0u;
             curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
                                !(curved_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
-            static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
+            static const bool split_ab = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CURVED_SPLIT_AB"), 0u) != 0u;
             curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             ambient_occlusion_ =
                 render.ambient_occlusion && renderer_.ambient_occlusion_ready();
@@ -4112,7 +4113,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // How the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM): without the renderer's bloom, not
             // at all; NATIVE, its own chain over a scene the renderer keeps; ENHANCED, drawn by the renderer.
             // GALAXY_TEST_BLOOM_ROUTE=0-2 (tests): that route, 0 the console's chain as it is for comparison.
-            static const std::uint64_t test_route = read_env_u64("GALAXY_TEST_BLOOM_ROUTE", 3u);
+            static const std::uint64_t test_route = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_BLOOM_ROUTE"), 3u);
             const unsigned route = !renderer_.game_bloom_ready()                          ? 0u
                                    : test_route <= 2u                                  ? static_cast<unsigned>(test_route)
                                    : get_render_config().bloom_mode == kBloomEnhanced ? 2u

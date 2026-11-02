@@ -2,6 +2,7 @@
 // The game's sound on every host (native_audio.h): the native mixer's frames at the master volume with the remote speaker
 // added, pulled by the output device (audio_device.h), and the WAV dump the tests record.
 #include "galaxy/native_audio.h"
+#include "galaxy/test_hooks.h"
 
 #include "galaxy/audio_device.h"
 #include "galaxy/audio_mixer.h"
@@ -60,7 +61,7 @@ private:
     static std::uint32_t max_seconds() {
         static const std::uint32_t seconds = [] {
             unsigned long value = 15ul;
-            if (const char* const text = std::getenv("GALAXY_AUDIO_WAV_DUMP_SECONDS")) {
+            if (const char* const text = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP_SECONDS"))) {
                 const unsigned long parsed = std::strtoul(text, nullptr, 10);
                 if (parsed > 0ul && parsed <= 3600ul) value = parsed;
             }
@@ -164,10 +165,10 @@ private:
         open_attempted_ = true;
 
 #if defined(_WIN32)
-        const wchar_t* const path = _wgetenv(L"GALAXY_AUDIO_WAV_DUMP");
+        const wchar_t* const path = _wgetenv(NEBULA_TEST_ENV_W("GALAXY_AUDIO_WAV_DUMP"));
         if (path == nullptr || path[0] == L'\0') {
 #else
-        const char* const path = std::getenv("GALAXY_AUDIO_WAV_DUMP");
+        const char* const path = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP"));
         if (path == nullptr || path[0] == '\0') {
 #endif
             disabled_ = true;
@@ -333,7 +334,7 @@ void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const Nebu
     std::uint32_t rate = 48000u;
     if (device) {
         // GALAXY_AUDIO_WAV_DUMP_ONLY: the clock pulls, nothing reaches a device.
-        s.device = read_env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY") ? open_null_audio_device(rate) : open_audio_device();
+        s.device = read_env_flag(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP_ONLY")) ? open_null_audio_device(rate) : open_audio_device();
         rate = s.device->rate();
     }
     s.mixer = std::make_unique<galaxy::audio::AudioMixer>(rate);
@@ -388,7 +389,7 @@ void NativeGameAudio::frame() {
         out[i * 2u + 1u] = samples[i * 2u + 1u] * gain;
     }
     galaxy::input::speaker::game_speaker().mix(out, s.mixer->rate(), audio.wiimote_speaker);
-    static const bool dump = std::getenv("GALAXY_AUDIO_WAV_DUMP") != nullptr;
+    static const bool dump = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP")) != nullptr;
     if (dump) {
         s.wav_block.resize(frames * 4u);
         for (std::size_t i = 0; i < frames * 2u; ++i) {

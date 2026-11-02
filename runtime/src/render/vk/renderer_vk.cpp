@@ -11,7 +11,7 @@
 #include "galaxy/render/game_asset_extract.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/texture_store.h"
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
 
 #include <vk_mem_alloc.h>
 

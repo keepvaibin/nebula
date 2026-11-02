@@ -11,7 +11,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render_api.h"
 #include "galaxy/input_bindings.h"
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"

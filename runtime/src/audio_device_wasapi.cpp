@@ -2,6 +2,7 @@
 // Windows' sound output (audio_device.h): WASAPI shared mode, event driven, on one MMCSS thread that also runs the game's
 // sound (the render callback). The default endpoint is followed; with none, the thread paces itself and retries.
 #include "galaxy/audio_device.h"
+#include "galaxy/test_hooks.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -159,7 +160,7 @@ private:
         const std::uint32_t period_frames = static_cast<std::uint32_t>(period * rate / 10000000);
         fill_frames_ = std::min<std::uint32_t>(period_frames * kFillPeriods, buffer_frames_);
         // GALAXY_TEST_AUDIO_DEVICE_MUTED=1: the real output path, this session muted (a test heard by nobody).
-        const char* const muted = std::getenv("GALAXY_TEST_AUDIO_DEVICE_MUTED");
+        const char* const muted = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_AUDIO_DEVICE_MUTED"));
         if (muted != nullptr && muted[0] == '1') {
             ComPtr<ISimpleAudioVolume> volume;
             if (SUCCEEDED(client_->GetService(__uuidof(ISimpleAudioVolume), reinterpret_cast<void**>(volume.GetAddressOf())))) {

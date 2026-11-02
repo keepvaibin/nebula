@@ -1,6 +1,7 @@
 // The host's controls: keyboard and mouse, controllers, the pointer and its sources, binding capture, button
 // icons, vibration, and the scripted and replayed test input, as the input the game reads.
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/host_env.h"
 
 #include "galaxy/platform_time.h"
@@ -166,7 +167,7 @@ namespace {
 // runs show the menus' buttons for each controller); -1 without it.
 int test_last_input_scheme() noexcept {
     static const int s_test_scheme = [] {
-        const std::optional<std::string> scheme = read_env_string_uncached("GALAXY_TEST_LAST_INPUT");
+        const std::optional<std::string> scheme = read_env_string_uncached(NEBULA_TEST_ENV("GALAXY_TEST_LAST_INPUT"));
         const int value = scheme.has_value() ? std::atoi(scheme->c_str()) : -1;
         return value >= 0 && value < static_cast<int>(input::kControlSchemeCount) ? value : -1;
     }();
@@ -213,7 +214,7 @@ std::array<std::uint16_t, input::kKeyIconLayoutCount> keyboard_layout_labels() n
     static std::array<std::uint16_t, input::kKeyIconLayoutCount> s_labels{};
     static std::uint64_t s_checked_ms = 0u;
     static const std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>> s_test = [] {
-        const std::optional<std::string> value = read_env_string_uncached("GALAXY_TEST_KEY_LAYOUT");
+        const std::optional<std::string> value = read_env_string_uncached(NEBULA_TEST_ENV("GALAXY_TEST_KEY_LAYOUT"));
         if (!value.has_value()) return std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>>{};
         std::array<std::uint16_t, input::kKeyIconLayoutCount> labels{};
         const char* p = value->c_str();
@@ -1029,6 +1030,60 @@ private:
 
 // The live controls as the player's input: the bindings of every connected controller and of the keyboard and mouse,
 // the pointer from whichever source moved last, tilt, shake and the scripted test input.
+// Co-star mode: player 2 is the last controller attached when two or more are; player 1 no longer hears it. It points with whichever stick its
+// bindings aim the pointer with, moving the pointer at the pointer speed.
+std::mutex g_co_star_lock;
+bool g_co_star_on = false;
+galaxy::input::PlayerInput g_co_star_input{};
+
+double dt_seconds_since_co_star() noexcept {
+    static auto last = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    const double seconds = std::chrono::duration<double>(now - last).count();
+    last = now;
+    return std::min(seconds, 0.1);
+}
+
+void update_co_star(std::span<LivePad> pads, const galaxy::input::ControlsConfig& config, float seconds) {
+    namespace in = galaxy::input;
+    using in::WiiTarget;
+    in::PlayerInput player{};
+    bool on = false;
+    if (galaxy::get_runtime_settings().co_star) {
+        std::size_t connected = 0u;
+        LivePad* last = nullptr;
+        for (LivePad& pad : pads) {
+            if (pad.sample.connected) {
+                ++connected;
+                last = &pad;
+            }
+        }
+        if (connected >= 2u) {
+            static float s_x = 0.0f, s_y = 0.0f;
+            const in::LogicalInput logic = in::evaluate_pad_bindings(config.table(last->sample.scheme), last->sample, 0.5f);
+            const auto held = [&logic](WiiTarget target) { return logic.held(target); };
+            s_x = std::clamp(s_x + logic.pointer_x * seconds * 1.5f, -1.0f, 1.0f);
+            s_y = std::clamp(s_y - logic.pointer_y * seconds * 1.5f, -1.0f, 1.0f);
+            in::set_pointer(player, s_x, s_y, true);
+            player.buttons.a = held(WiiTarget::A);
+            player.buttons.b = held(WiiTarget::B);
+            player.buttons.one = held(WiiTarget::One);
+            player.buttons.two = held(WiiTarget::Two);
+            player.buttons.plus = held(WiiTarget::Plus);
+            player.buttons.minus = held(WiiTarget::Minus);
+            player.buttons.up = held(WiiTarget::DpadUp);
+            player.buttons.down = held(WiiTarget::DpadDown);
+            player.buttons.left = held(WiiTarget::DpadLeft);
+            player.buttons.right = held(WiiTarget::DpadRight);
+            *last = {};
+            on = true;
+        }
+    }
+    const std::lock_guard<std::mutex> lock(g_co_star_lock);
+    g_co_star_on = on;
+    g_co_star_input = player;
+}
+
 galaxy::input::PlayerInput build_live_input(
     std::uint64_t current_vi,
     const galaxy::RuntimeInputModeState& input_mode_state,
@@ -1139,6 +1194,7 @@ galaxy::input::PlayerInput build_live_input(
         }
     }
     const std::span<LivePad> live_pads(pads.data(), pad_count);
+    update_co_star(live_pads, controls.config, static_cast<float>(dt_seconds_since_co_star()));
     // Before the overlay takes the pads: the controller the player is using, for the CONTROLS page.
     for (const LivePad& pad : live_pads) {
         if (!pad.sample.connected) continue;
@@ -1208,6 +1264,29 @@ galaxy::input::PlayerInput build_live_input(
 }
 
 }  // namespace
+
+bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept {
+    // GALAXY_TEST_P2=x,y[,buttons]: a player 2 who holds still there.
+    static const std::optional<std::string> test = read_env_string_uncached(NEBULA_TEST_ENV("GALAXY_TEST_P2"));
+    if (test.has_value()) {
+        char* end = nullptr;
+        const float x = std::strtof(test->c_str(), &end);
+        if (*end == ',') {
+            const float y = std::strtof(end + 1, &end);
+            const unsigned long buttons = *end == ',' ? std::strtoul(end + 1, nullptr, 10) : 0ul;
+            galaxy::input::set_pointer(*input, x, y, true);
+            input->buttons.a = (buttons & galaxy::input::kButtonA) != 0u;
+            input->buttons.b = (buttons & galaxy::input::kButtonB) != 0u;
+            return true;
+        }
+    }
+    const std::lock_guard<std::mutex> lock(g_co_star_lock);
+    if (!g_co_star_on) {
+        return false;
+    }
+    *input = g_co_star_input;
+    return true;
+}
 
 galaxy::input::PlayerInput native_game_input(
     std::uint64_t current_vi,
