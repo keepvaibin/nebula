@@ -74,7 +74,6 @@ class PlayerHeapHolder {
 public:
     PlayerHeapHolder();
 
-    void adjust();
     void dispose();
     void setIsDataMario(bool isDataMario);
 
