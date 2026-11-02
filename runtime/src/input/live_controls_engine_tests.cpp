@@ -92,6 +92,20 @@ void mouse_samples() {
     frame.script_pointer_force = true;
     host.advance(); result = priority.sample(frame, host);
     check(result.input.pointer_x == -0.8f, "forced script takes pointer");
+
+    LiveControlsEngine raw_priority;
+    frame.script_pointer_force = false;
+    host.state.raw_motion = false;
+    (void)raw_priority.sample(frame, host);
+    host.advance(500'000); result = raw_priority.sample(frame, host);
+    check(result.input.pointer_x == -0.8f, "stationary absolute sample expires script grace");
+    host.state.raw_motion = true;
+    host.advance(); result = raw_priority.sample(frame, host);
+    check(result.input.pointer_x == 0.3f && result.input.pointer_y == -0.4f,
+          "opposing raw movement renews activity without integrating pointer coordinates");
+    host.state.raw_motion = false;
+    host.advance(500'000); result = raw_priority.sample(frame, host);
+    check(result.input.pointer_x == -0.8f, "consumed raw activity cannot latch permanently");
 }
 
 void motion_context_and_instances() {
