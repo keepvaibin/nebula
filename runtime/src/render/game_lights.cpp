@@ -51,7 +51,7 @@ std::array<GameAreaLight, 2> g_area_lights{};
 std::array<std::chrono::steady_clock::time_point, 2> g_area_time{};
 std::array<bool, 2> g_area_known{};
 
-// A light is matched by its guest info (id) when it has one, else by position.
+// A light is matched by its game info (id) when it has one, else by position.
 template <std::size_t N>
 void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
                 const std::array<float, 3>& color, float half_distance = 0.0f, std::uint64_t id = 0u) {

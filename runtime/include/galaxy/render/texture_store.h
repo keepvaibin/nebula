@@ -162,7 +162,7 @@ public:
         return index >= kSrvHeapCapacity || retired_srv_indices_[index];
     }
 
-    // Guest source bytes of the decoded entries (a diagnostic; the budget counts allocations).
+    // Game source bytes of the decoded entries (a diagnostic; the budget counts allocations).
     [[nodiscard]] std::uint64_t decoded_entry_source_bytes() const noexcept {
         return decoded_source_bytes_;
     }

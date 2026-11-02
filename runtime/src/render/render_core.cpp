@@ -4043,7 +4043,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         // frame after them (started by the render loop after this chunk).
         // As on the VI-present path, a present while a completed log waits
         // starts that log's sequence, even one the duplicate or rate checks
-        // would drop: the VI may still name the previous display picture (the guest flips
+        // would drop: the VI may still name the previous display picture (the game flips
         // at the next retrace), and the waiting frame would be skipped when
         // the next one closes first.
         if (interp_log_waiting_ && chunk.present_swap_chain && selected_display != nullptr &&
@@ -5916,7 +5916,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                     seen[count++]=current;
                     const auto scale=renderer_.covering_scale();
                     std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
-                        <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
+                        <<" copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
                         <<" scaled-xfb="<<display_picture->width<<'x'<<display_picture->height
                         <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<display_picture->copy_serial<<'\n';
