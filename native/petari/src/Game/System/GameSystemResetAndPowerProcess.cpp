@@ -1,7 +1,5 @@
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaAchievements.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemFunction.hpp"
@@ -190,10 +188,8 @@ void GameSystemResetAndPowerProcess::exeFadein() {
 }
 
 void GameSystemResetAndPowerProcess::exitApplication() {
-#ifdef TARGET_PC
     // The counts Nebula's achievements hold for the host (jumps, coins, play time), before the game ends.
     NebulaAchievements::flushStats();
-#endif
     MainLoopFramework::setForOSResetSystem();
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();

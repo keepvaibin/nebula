@@ -1,7 +1,5 @@
 #include "Game/Camera/CameraViewInterpolator.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/AreaObj/AreaObj.hpp"
 #include "Game/AreaObj/CameraRepulsiveArea.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
@@ -215,11 +213,9 @@ bool CameraViewInterpolator::calcBinder(TVec3f* pBindDir, const TVec3f& rTargetP
 }
 
 void CameraViewInterpolator::reduceOscillation() {
-#ifdef TARGET_PC
     if (mIsForceCameraChange) {
         MotionSignal::cameraCut();
     }
-#endif
     if (!mIsAntiOscillation || mIsForceCameraChange) {
         mIsForceCameraChange = false;
         mMtx.set(mTargetMtx);

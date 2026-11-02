@@ -11,30 +11,7 @@ class J3DMatPacket;
 class J3DShapePacket;
 
 inline f32 J3DCalcZValue(__REGISTER MtxPtr m, __REGISTER Vec v) {
-#ifdef TARGET_PC
     return (v.z * m[2][2] + v.x * m[2][0]) + (m[2][3] + v.y * m[2][1]);
-#elif defined(__MWERKS__)
-    __REGISTER f32 temp_f4;
-    __REGISTER f32 out;
-    __REGISTER f32 temp_f0;
-    __REGISTER f32 temp_f2;
-    __REGISTER f32 temp_f1 = 1.0f;
-
-    // clang-format off
-    asm {
-        psq_l temp_f0, 0(v), 0, 0 /* qr0 */
-        lfs temp_f2, 8(v)
-        psq_l temp_f4, 32(m), 0, 0 /* qr0 */
-        psq_l out, 40(m), 0, 0 /* qr0 */
-        ps_merge00 temp_f2, temp_f2, temp_f1
-        ps_mul temp_f4, temp_f0, temp_f4
-        ps_madd out, temp_f2, out, temp_f4
-        ps_sum0 out, out, out, out
-    }
-    // clang-format on
-
-    return out;
-#endif
 }
 
 enum J3DDrawBufDrawMode {

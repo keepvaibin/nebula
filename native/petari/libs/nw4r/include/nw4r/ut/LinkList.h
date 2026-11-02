@@ -337,11 +337,7 @@ namespace nw4r {
 
                 TItC_base_ it_;
 
-#ifdef TARGET_PC
                 friend Self;
-#else
-                friend class Self;
-#endif
             };
             explicit LinkList() {
             }

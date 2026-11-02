@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 
 class ButtonPaneController;
@@ -33,4 +32,3 @@ private:
     /* 0x24 */ s32 mShownFrames;
     /* 0x28 */ bool mIsDecided;
 };
-#endif

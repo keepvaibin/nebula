@@ -9,10 +9,8 @@
 #define FLAG_RESUME 4u
 
 NameObj::NameObj(const char* pName) : mName(pName), mFlag(), mExecutorIdx(-1) {
-#ifdef TARGET_PC
     mMotionEpoch = 0;
     NebulaHost::objectName(this, pName);
-#endif
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
 
@@ -43,9 +41,7 @@ void NameObj::initWithoutIter() {
 
 void NameObj::setName(const char* pName) {
     mName = pName;
-#ifdef TARGET_PC
     NebulaHost::objectName(this, pName);
-#endif
 }
 
 void NameObj::executeMovement() {

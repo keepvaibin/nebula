@@ -4,11 +4,7 @@
 // Example: void someFunction(int someArg) const NO_INLINE;
 // Natively the compiler decides: the original's out-of-line copies were a code-size choice of CodeWarrior's, kept
 // only for matching.
-#ifdef TARGET_PC
 #define NO_INLINE
-#else
-#define NO_INLINE __attribute__((noinline))
-#endif
 
 // Macros which should be used when a function is both inlined and not inlined (so it's auto-inlined by the compiler).
 // This is used to declare the inline version of the function. If not a constructor, the non-inline version

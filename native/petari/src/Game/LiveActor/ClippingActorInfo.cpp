@@ -2,10 +2,8 @@
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
-#ifdef TARGET_PC
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include <revolution/os.h>
-#endif
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
 

@@ -1,7 +1,6 @@
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/GalaxyMapBackground.hpp"
@@ -1724,4 +1723,3 @@ void NebulaAchievementBoard::exeDisappear() {
     NebulaAchievements::flushStats();
     MR::openSystemWipeFade(cFadeFrames);
 }
-#endif

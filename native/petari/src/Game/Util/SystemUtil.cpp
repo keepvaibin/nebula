@@ -2,9 +2,7 @@
 #include "Game/System/NebulaKernel.hpp"
 #include <revolution/os.h>
 #include "Game/NameObj/NameObjHolder.hpp"
-#ifdef TARGET_PC
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
-#endif
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/FunctionAsyncExecutor.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -76,9 +74,7 @@ namespace MR {
 
     void waitEndChangeArchivePlayer() {
         while (!GameSystemFunction::isEndChangeArchivePlayer()) {
-#ifdef TARGET_PC
             NebulaKernel::poll();
-#endif
         }
     }
 

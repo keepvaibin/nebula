@@ -1,7 +1,6 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-#ifdef TARGET_PC
 // Native builds: the console's widths as the same fundamental types on every host, so overloads resolve alike
 // everywhere. `long` is never one of them (64-bit on LP64 hosts).
 #include <stddef.h>
@@ -58,24 +57,12 @@ struct NebulaLongCall
 }
 #endif
 
-// Fields whose layout a file or the hardware defines (Nebula's nebula_be.hpp): big-endian natively, the plain types
-// for CodeWarrior. C units of the native build get neither, so a converted header used from C does not compile.
-#if defined(TARGET_PC) && defined(__cplusplus)
+// Fields whose layout a file defines (nebula_be.hpp): big-endian. C units get none, so a converted header used from C
+// does not compile.
+#ifdef __cplusplus
 extern "C++" {
 #include <nebula_be.hpp>
 }
-#elif !defined(TARGET_PC)
-#define NEBULA_BE(T) T
-#endif
-#else
-typedef signed char s8;
-typedef signed short s16;
-typedef signed long s32;
-typedef signed long long s64;
-typedef unsigned char u8;
-typedef unsigned short u16;
-typedef unsigned long u32;
-typedef unsigned long long u64;
 #endif
 
 typedef volatile u32 vu32;
@@ -101,71 +88,30 @@ typedef int BOOL;
 #endif
 #endif
 
-#ifndef TARGET_PC
-#ifndef override
-#ifdef __cplusplus
-#define override
-#endif
-#endif
-#endif
 
-#ifdef __MWERKS__
-#define __REGISTER register
-#else
 #define __REGISTER
-#endif
 
 #if !defined(AT_ADDRESS)
-#if defined(__MWERKS__)
-#define AT_ADDRESS(x)							: x
-#else
 #define AT_ADDRESS(x)
 #endif
-#endif
 
-#if __MWERKS__
-#if !defined(METRO_TRK) && __MWERKS__ >= 0x3000
-#define ALWAYS_INLINE __attribute__((always_inline))
-#define NO_INLINE __attribute__((noinline))
-#else
 #define ALWAYS_INLINE
 #define NO_INLINE
-#endif
-#else
-#define ALWAYS_INLINE
-#define NO_INLINE
-#endif
 
 // Natively too: the GPU addresses textures and display lists in 32-byte units, and the layouts must stay the console's.
-#if __MWERKS__ || defined(TARGET_PC)
 #define ATTRIBUTE_ALIGN(num) __attribute__((aligned(num)))
-#else
-#define ATTRIBUTE_ALIGN(num)
-#endif
 
-#if __MWERKS__ || defined(TARGET_PC)
 #define ATTRIBUTE_PACKED __attribute__((packed))
-#else
-#define ATTRIBUTE_PACKED
-#endif
 
 // Natively a function the game replaces (Game/System/Overwrite.cpp) has its original left out of the build, so a missing
 // or doubled definition fails the link instead of the linker picking one; data defined in headers is an inline variable
 // (ATTRIBUTE_WEAK_DEF).
-#if __MWERKS__
-#define ATTRIBUTE_WEAK __attribute__((weak))
-#else
 #define ATTRIBUTE_WEAK
-#endif
 
 // Natively the compiler checks the game's printf-style calls (an audit build's -Wformat).
-#if defined(TARGET_PC)
 #define ATTRIBUTE_PRINTF(fmt, first) __attribute__((format(printf, fmt, first)))
-#else
-#define ATTRIBUTE_PRINTF(fmt, first)
-#endif
 
-#if defined(TARGET_PC) && defined(__cplusplus)
+#ifdef __cplusplus
 #define ATTRIBUTE_WEAK_DEF(...) inline __VA_ARGS__
 #else
 #define ATTRIBUTE_WEAK_DEF(...) __VA_ARGS__ ATTRIBUTE_WEAK
@@ -180,18 +126,10 @@ typedef int BOOL;
 #endif
 
 #define ROUND_UP(x, align) (((x) + (align) - 1) & (-(align)))
-#ifdef TARGET_PC
 #define ROUND_UP_PTR(x, align) ((void*)((((uintptr_t)(x)) + (align) - 1) & (~((uintptr_t)(align) - 1))))
-#else
-#define ROUND_UP_PTR(x, align) ((void*)((((u32)(x)) + (align) - 1) & (~((align) - 1))))
-#endif
 
-#ifdef TARGET_PC
 // The mask in X's (promoted) type: with a u32 N, ~(N - 1) would clear the upper half of a 64-bit X.
 #define ALIGN_PREV(X, N) ((X) & ~((__typeof__((X) + 0))(N) - 1))
-#else
-#define ALIGN_PREV(X, N) ((X) & ~((N) - 1))
-#endif
 #define ALIGN_NEXT(X, N) ALIGN_PREV(((X) + (N) - 1), N)
 
 #define ARRAY_SIZE(o) (s32)(sizeof(o) / sizeof(o[0]))
@@ -205,17 +143,11 @@ typedef int BOOL;
 // Comparing a non-volatile reference type to NULL is tautological
 // and triggers a warning on modern compilers, but in some cases is
 // required to match the original assembly.
-#if defined(__MWERKS__) || defined(DECOMPCTX)
-#define IS_REF_NULL(r) (&(r) == NULL)
-#define IS_REF_NONNULL(r) (&(r) != NULL)
-#else
 #define IS_REF_NULL(r) (0)
 #define IS_REF_NONNULL(r) (1)
-#endif
 
 /* just some common intrinsics */
 
-#if defined(TARGET_PC)
 // The game follows the reciprocal square root estimate with a Newton step wherever it uses it, so natively it is the
 // host's estimate (docs/NATIVE_PERFORMANCE.md: half the latency of 1/sqrtf, the same accuracy after the step): SSE's
 // 12-bit rsqrtss, or AArch64's 8-bit frsqrte with one step of its own to reach the console's precision.
@@ -241,13 +173,5 @@ static inline s32 __abs(s32 x) { return x < 0 ? -x : x; }
 static inline f32 __fabsf(f32 x) { return fabsf(x); }
 static inline f64 __fabs(f64 x) { return fabs(x); }
 static inline void* __memcpy(void* d, const void* s, int n) { return memcpy(d, s, (size_t)n); }
-#elif !defined(__MWERKS__)
-f32 __frsqrte(f32);
-u32 __cntlzw(u32);
-s32 __abs(s32);
-f32 __fabsf(f32);
-f64 __fabs(f64);
-void* __memcpy(void*, const void*, int);
-#endif
 
 #endif  // TYPES_H

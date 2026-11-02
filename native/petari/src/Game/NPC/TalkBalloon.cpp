@@ -1,7 +1,5 @@
 #include "Game/NPC/TalkBalloon.hpp"
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
@@ -135,11 +133,7 @@ void TalkBalloon::updateBalloon() {
 
 void TalkBalloon::updateTalking() {
     updateBalloon();
-#ifdef TARGET_PC
     mTextFormer->updateTalkingAtTextSpeed();
-#else
-    mTextFormer->updateTalking();
-#endif
 }
 
 bool TalkBalloon::isTextAppearedAll() {

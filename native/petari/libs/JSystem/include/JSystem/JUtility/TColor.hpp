@@ -28,7 +28,6 @@ namespace JUtility {
             a = cA;
         }
 
-#ifdef TARGET_PC
         // The u32 form is the console's: 0xRRGGBBAA.
         void set(u32 u32Color) {
             r = u8(u32Color >> 24);
@@ -36,25 +35,14 @@ namespace JUtility {
             b = u8(u32Color >> 8);
             a = u8(u32Color);
         }
-#else
-        void set(u32 u32Color) {
-            *reinterpret_cast< u32* >(&r) = u32Color;
-        }
-#endif
 
         operator u32() const {
             return toUInt32();
         }
 
-#ifdef TARGET_PC
         u32 toUInt32() const {
             return (u32)r << 24 | (u32)g << 16 | (u32)b << 8 | a;
         }
-#else
-        u32 toUInt32() const {
-            return *reinterpret_cast< const u32* >(&r);
-        }
-#endif
 
         void set(NebulaColor8 gxColor) {
             NebulaColor8* temp = this;

@@ -1,6 +1,5 @@
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
 
-#ifdef TARGET_PC
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -69,4 +68,3 @@ void NebulaPauseSettingsButton::hide() {
         mButton->disappear();
     }
 }
-#endif

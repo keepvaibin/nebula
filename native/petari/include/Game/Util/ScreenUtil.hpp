@@ -3,10 +3,8 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/types.h>
-#ifdef TARGET_PC
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#endif
 
 struct ResTIMG;
 
@@ -14,7 +12,6 @@ namespace MR {
     u32 getViWidth();
     f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
-#ifdef TARGET_PC
     // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
     // aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
     inline const NebulaDisplay& getDisplay() {
@@ -24,7 +21,6 @@ namespace MR {
     // draws it into a fixed 160x160 region.
     void beginWiiScreenWidth();
     void endWiiScreenWidth();
-#endif
     inline s32 getScreenHeight() NO_INLINE {
         return JUTVideo::getManager()->getEfbHeight();
     }

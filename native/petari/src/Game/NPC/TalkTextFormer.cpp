@@ -24,7 +24,6 @@ namespace {
         return pTextBox;
     }
 
-#ifdef TARGET_PC
     // The first text box at or under the pane (a balloon's Text00 holds its text and the text's shadow).
     nw4r::lyt::TextBox* findTextBox(LayoutActor* pActor, const char* pPaneName) {
         nw4r::lyt::TextBox* pTextBox = getTextBoxPane(pActor, pPaneName);
@@ -40,7 +39,6 @@ namespace {
         }
         return nullptr;
     }
-#endif
 };  // namespace
 
 namespace MR {
@@ -129,11 +127,9 @@ TalkTextFormer::TalkTextFormer(LayoutActor* pActor, const char* pPaneName) : mHo
 void TalkTextFormer::formMessage(const wchar_t* pMessage, s32 mode) {
     mMsg = pMessage;
     _8 = mode;
-#ifdef TARGET_PC
     if (NebulaText::isTalk(pMessage)) {
         NebulaText::fitTalk(pMessage, ::findTextBox(mHostActor, mPaneName));
     }
-#endif
 
     MR::setTextBoxMessageRecursive(mHostActor, mPaneName, mMsg);
     MR::initTagProcessorRecursive(mHostActor, mPaneName, _8);
@@ -172,7 +168,6 @@ void TalkTextFormer::updateTalking() {
     MR::nextStepTagProcessorRecursive(mHostActor, mPaneName);
 }
 
-#ifdef TARGET_PC
 // Nebula's text speed (NEBULA_OPTION_TEXT_SPEED): 1 to 3 steps a frame, 4 the whole page at once, its pauses included.
 // A skipped cutscene's pages come whole.
 void TalkTextFormer::updateTalkingAtTextSpeed() {
@@ -182,7 +177,6 @@ void TalkTextFormer::updateTalkingAtTextSpeed() {
         updateTalking();
     }
 }
-#endif
 
 bool TalkTextFormer::isTextAppearedAll() const {
     if (_8 == 2) {

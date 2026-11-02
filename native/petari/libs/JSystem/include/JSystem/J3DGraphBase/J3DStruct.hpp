@@ -67,33 +67,11 @@ struct J3DTextureSRTInfo {
     /* 0x10 */ f32 mTranslationY;
 
     inline void operator=(J3DTextureSRTInfo const& other) {
-#ifdef TARGET_PC
         mScaleX = other.mScaleX;
         mScaleY = other.mScaleY;
         mRotation = other.mRotation;
         mTranslationX = other.mTranslationX;
         mTranslationY = other.mTranslationY;
-#elif defined(__MWERKS__)
-        __REGISTER const f32* src = &other.mScaleX;
-        __REGISTER f32* dst = &mScaleX;
-        __REGISTER f32 xy;
-        asm {
-            psq_l xy, 0(src), 0, 0
-            psq_st xy, 0(dst), 0, 0
-        }
-        ;
-
-        // Unclear why there's a 4 byte copy here.
-        *(u32*)&mRotation = *(u32*)&other.mRotation;
-        src = &other.mTranslationX;
-        dst = &mTranslationX;
-
-        asm {
-            psq_l xy, 0(src), 0, 0
-            psq_st xy, 0(dst), 0, 0
-        }
-        ;
-#endif
     }
 };  // Size: 0x14
 
@@ -151,11 +129,7 @@ struct J3DTexCoordInfo {
     /* 0x3 */ u8 pad;
 
     J3DTexCoordInfo& operator=(const J3DTexCoordInfo& other) {
-#ifdef TARGET_PC
         memcpy(this, &other, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&other);
-#endif
         return *this;
     }
 } ATTRIBUTE_ALIGN(2);

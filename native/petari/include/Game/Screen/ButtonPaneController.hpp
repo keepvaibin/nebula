@@ -27,9 +27,7 @@ public:
     bool isFirstStepWait() const;
     bool isWait() const;
     bool isDecidedWait() const;
-#ifdef TARGET_PC
     bool isNotPointing() const;
-#endif
     bool onPointing();
     void decide();
     bool isPointingPaneDirect() const;
@@ -67,7 +65,5 @@ public:
     /* 0x34 */ const char* mPointingAnimName;
     /* 0x38 */ const char* mNotPointingAnimName;
     /* 0x3C */ const char* mDisappearAnimName;
-#ifdef TARGET_PC
     bool mIsNebulaFocusable;  // the D-pad and stick may highlight it (NebulaMenuFocus); off where they page the menu
-#endif
 };

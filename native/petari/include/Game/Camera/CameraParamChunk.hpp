@@ -23,10 +23,8 @@ public:
     /* 0x28 */ f32 mAngleA;
     /* 0x2C */ f32 mAngleB;
     /* 0x30 */ s32 mNum1;
-#ifdef TARGET_PC
     // CAM_TYPE_ANIM's animation data, which the console kept in mNum1.
     u8* mAnimData;
-#endif
     /* 0x34 */ s32 mNum2;
     /* 0x38 */ CameraParamString mString;
 };

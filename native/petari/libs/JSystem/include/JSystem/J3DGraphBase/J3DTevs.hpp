@@ -16,21 +16,12 @@ extern const J3DTevStageInfo j3dDefaultTevStageInfo;
 extern const J3DIndTevStageInfo j3dDefaultIndTevStageInfo;
 extern const J3DTevSwapModeInfo j3dDefaultTevSwapMode;
 
-#ifdef TARGET_PC
 // The same objects: CodeWarrior gave C and C++ variables one symbol, native ABIs do not.
 namespace J3DTevsDefault {
     using ::j3dDefaultIndTevStageInfo;
     using ::j3dDefaultTevStageInfo;
     using ::j3dDefaultTevSwapMode;
 }  // namespace J3DTevsDefault
-#else
-// doing this matches. figure out why
-namespace J3DTevsDefault {
-    extern "C" J3DIndTevStageInfo j3dDefaultIndTevStageInfo;
-    extern "C" J3DTevStageInfo j3dDefaultTevStageInfo;
-    extern "C" J3DTevSwapModeInfo j3dDefaultTevSwapMode;
-}  // namespace J3DTevsDefault
-#endif
 extern const J3DFogInfo j3dDefaultFogInfo;
 extern const J3DNBTScaleInfo j3dDefaultNBTScaleInfo;
 
@@ -241,21 +232,13 @@ extern const J3DTevOrderInfo j3dDefaultTevOrderInfoNull;
 
 struct J3DTevOrder : public J3DTevOrderInfo {
     J3DTevOrder() {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &j3dDefaultTevOrderInfoNull, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&j3dDefaultTevOrderInfoNull);
-#endif
     }
 
     J3DTevOrder(const J3DTevOrderInfo& info) {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &info, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&info);
-#endif
     }
 
     J3DTevOrder& operator=(const J3DTevOrder& other) NO_INLINE;
@@ -444,21 +427,13 @@ struct J3DTexCoord {
 
 struct J3DBlend : public J3DBlendInfo {
     J3DBlend() {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &j3dDefaultBlendInfo, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&j3dDefaultBlendInfo);
-#endif
     }
 
     J3DBlend(J3DBlendInfo const& info) {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &info, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&info);
-#endif
     }
 
     void setType(u8 i_type) {

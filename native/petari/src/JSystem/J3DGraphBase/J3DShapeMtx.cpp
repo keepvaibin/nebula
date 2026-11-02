@@ -525,58 +525,17 @@ J3DTexGenBlock* J3DDifferedTexMtx::sTexGenBlock;
 J3DTexMtxObj* J3DDifferedTexMtx::sTexMtxObj;
 
 void J3DPSMtx33Copy(Mtx3P src, Mtx3P dst) {
-#ifdef TARGET_PC
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
             dst[i][j] = src[i][j];
         }
     }
-#elif defined(__MWERKS__)
-    __REGISTER const void* source = src;
-    __REGISTER void* destination = dst;
-    __REGISTER f32 fr4;
-    __REGISTER f32 fr3;
-    __REGISTER f32 fr2;
-    __REGISTER f32 fr1;
-    __REGISTER f32 fr0;
-
-    asm {
-        psq_l fr4, 0(source), 0, 0
-        psq_l fr3, 8(source), 0, 0
-        psq_l fr2, 0x10(source), 0, 0
-        psq_l fr1, 0x18(source), 0, 0
-        lfs fr0, 0x20(source)
-        psq_st fr4, 0(destination), 0, 0
-        psq_st fr3, 8(destination), 0, 0
-        psq_st fr2, 0x10(destination), 0, 0
-        psq_st fr1, 0x18(destination), 0, 0
-        stfs fr0, 0x20(destination)
-    }
-#endif
 }
 
 void J3DPSMtx33CopyFrom34(__REGISTER MtxPtr src, __REGISTER Mtx3P dst) {
-#ifdef TARGET_PC
     for (int i = 0; i < 3; i++) {
         for (int j = 0; j < 3; j++) {
             dst[i][j] = src[i][j];
         }
     }
-#elif defined(__MWERKS__)
-    __REGISTER f32 x, y, z, w, u, v;
-    asm {
-        psq_l x, 0(src), 0, 0
-        lfs y, 8(src)
-        psq_l z, 16(src), 0, 0
-        lfs w, 24(src)
-        psq_l u, 32(src), 0, 0
-        lfs v, 40(src)
-        psq_st x, 0(dst), 0, 0
-        stfs y, 8(dst)
-        psq_st z, 12(dst), 0, 0
-        stfs w, 20(dst)
-        psq_st u, 24(dst), 0, 0
-        stfs v, 32(dst)
-    }
-#endif
 }

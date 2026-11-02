@@ -4,7 +4,6 @@
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/Color.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
@@ -12,7 +11,6 @@
 #include "Game/Util/RenderSignals.hpp"
 #include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
-#endif
 
 namespace {
     // static const s32 sLen = _;
@@ -54,7 +52,6 @@ void BloomEffectSimple::draw() const {
         return;
     }
 
-#ifdef TARGET_PC
     const u32 route = NebulaHost::option(NEBULA_OPTION_BLOOM);
     if (route == 2) {
         // The chain below, drawn by the renderer at the internal resolution (galaxy/gx/game_bloom.h): the threshold,
@@ -76,18 +73,15 @@ void BloomEffectSimple::draw() const {
         J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
         return;
     }
-#endif
 
     ::TexSpec texSpec;
     texSpec.set(_20, 4, 0, GX_TF_RGB565);
 
-#ifdef TARGET_PC
     // The renderer keeps the scene in the EFB's own format: the corner the chain works in is saved as a texture copy,
     // which cuts the ray tracer's HDR scene at 1 there.
     if (route != 0) {
         NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
     } else
-#endif
     {
         ImageEffectLocalUtil::capture(texSpec._0, texSpec._4, texSpec._8, texSpec._C, false, 0);
     }
@@ -121,12 +115,10 @@ void BloomEffectSimple::draw() const {
     texSpec.set(_24, 8, 0, GX_TF_RGB565);
     ImageEffectLocalUtil::blurTexture(texSpec._0, texSpec._4, texSpec._8, 8, 0.009f, 1.0f);
     ImageEffectLocalUtil::capture(_28, texSpec._4, texSpec._8, texSpec._C, false, 0);
-#ifdef TARGET_PC
     if (route != 0) {
         // The kept scene drawn back over the corner the chain worked in (the rest of the frame is unchanged).
         NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
     } else
-#endif
     {
         ImageEffectLocalUtil::drawTexture(_20, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     }

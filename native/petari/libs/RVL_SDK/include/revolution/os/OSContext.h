@@ -23,21 +23,15 @@ typedef struct OSContext {
     u32 gqr[8];
     u32 psf_pad;
     f64 psf[32];
-#ifdef TARGET_PC
     // The thread's native stack pointer while it is switched out (the platform layer's stack switch).
     void* nativeSp;
-#endif
 } OSContext;
 
 void OSSetCurrentContext(OSContext *);
 OSContext* OSGetCurrentContext(void);
 u32 OSSaveContext(OSContext *);
 void OSLoadContext(OSContext *);
-#ifdef TARGET_PC
 uintptr_t OSGetStackPointer(void);
-#else
-u32 OSGetStackPointer(void);
-#endif
 int OSSwitchFiber(u32, u32);
 int OSSwitchFiberEx(u32, u32, u32, u32, u32, u32);
 void OSClearContext(OSContext *);
@@ -49,11 +43,7 @@ void OSSaveFPUContext(OSContext *);
 
 void __OSContextInit(void);
 
-#ifdef __MWERKS__
-void OSFillFPUContext(register OSContext* context);
-#else
 void OSFillFPUContext(OSContext* context);
-#endif
 
 #ifdef __cplusplus
 }

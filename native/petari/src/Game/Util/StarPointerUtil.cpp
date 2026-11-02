@@ -436,11 +436,9 @@ namespace MR {
         }
     }
 
-#ifdef TARGET_PC
     bool isActiveStarPointerGuidance() {
         return ::getStarPointerDirector()->mGuidance != nullptr && ::getStarPointerDirector()->mGuidance->mIsActive;
     }
-#endif
 
     void tryShowTimeoutedStarPointerGuidance() {
         if (::getStarPointerDirector()->mGuidance != nullptr) {
@@ -498,7 +496,6 @@ namespace MR {
         return ::getStarPointerLayout(channel)->mRadius;
     }
 
-#ifdef TARGET_PC
     // The 2D position menus and layouts test is this frame's, where the pointer is drawn (StarPointerLayout).
     TVec2f* getStarPointerScreenPosition(s32 channel) {
         return &::getStarPointerController(channel)->mInfo.mPos;
@@ -506,14 +503,6 @@ namespace MR {
 
     TVec2f getStarPointerScreenPositionOrEdge(s32 channel) {
         TVec2f pos(::getStarPointerController(channel)->mInfo.mPos);
-#else
-    TVec2f* getStarPointerScreenPosition(s32 channel) {
-        return &::getStarPointerController(channel)->mPastInfo.mPos;
-    }
-
-    TVec2f getStarPointerScreenPositionOrEdge(s32 channel) {
-        TVec2f pos(::getStarPointerController(channel)->mPastInfo.mPos);
-#endif
         StarPointerFunction::forceInsideScreenEdge(&pos);
         return pos;
     }
@@ -854,11 +843,9 @@ namespace MR {
         ::getStarPointerOnOffController()->requestMode(pRequester, StarPointerMode_SaveLoad);
     }
 
-#ifdef TARGET_PC
     void updateStarPointerModeWhileSceneHeld() {
         ::getStarPointerOnOffController()->update();
     }
-#endif
 
     void requestStarPointerModePictureBook(void* pRequester) {
         ::getStarPointerOnOffController()->requestMode(pRequester, StarPointerMode_PictureBook);

@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include <revolution/types.h>
 
 class LayoutActor;
@@ -49,4 +48,3 @@ namespace NebulaIcons {
     nw4r::lyt::TexMap* joyConPicture(s32 half, s32 look);
     void joyConPictureSize(f32* pWidth, f32* pHeight);
 };  // namespace NebulaIcons
-#endif

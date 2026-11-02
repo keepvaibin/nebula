@@ -31,12 +31,9 @@ JKRArchive::JKRArchive(s32 entryNum, EMountMode mountMode) {
 }
 
 JKRArchive::~JKRArchive() {
-#ifdef TARGET_PC
     freeFileDataTable();
-#endif
 }
 
-#ifdef TARGET_PC
 void JKRArchive::allocFileDataTable() const {
     // Host memory: the console spent no game heap on these pointers.
     mFileDataTable = static_cast< void** >(::calloc(mInfoBlock->mNrFiles, sizeof(void*)));
@@ -46,7 +43,6 @@ void JKRArchive::freeFileDataTable() {
     ::free(mFileDataTable);
     mFileDataTable = nullptr;
 }
-#endif
 
 void JKRArchive::panicIfNotCooked(const void* pHeader) {
     if (pHeader != nullptr && *static_cast< const u32* >(pHeader) == 'CRAR') {  // "RARC" as the disc has it

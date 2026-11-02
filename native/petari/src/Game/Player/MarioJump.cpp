@@ -16,9 +16,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaAchievements.hpp"
-#endif
 
 namespace {
     f32 cDropFrontSpeed = 2.0f;
@@ -331,10 +329,8 @@ void Mario::tryJump() {
 
     procJump(true);
     mMovementStates.jumping = true;
-#ifdef TARGET_PC
     // Nebula's all-time jump count: the ground jumps (one, two, three), the somersaults, the long jump, the wall kick.
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
 
     if (_42A == 1 && _430 == 1) {
         _430 = 2;
@@ -476,9 +472,7 @@ void Mario::tryTurnJump() {
     mMovementStates._5 = false;
     mWalkSpeed = 0.0f;
     _10._A = false;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     return;
 }
 
@@ -547,9 +541,7 @@ void Mario::trySquatJump() {
     _3D0 = 0;
     mMovementStates._5 = false;
     mMovementStates._4 = false;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     return;
 }
 
@@ -586,9 +578,7 @@ void Mario::tryBackJump() {
 
     mWalkSpeed = 0.0f;
     mMovementStates.jumping = true;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     _3D0 = 0;
     mMovementStates._1 = false;
     mMovementStates._4 = false;
@@ -857,9 +847,7 @@ void Mario::tryWallJump(const TVec3f& rVec, bool a2) {
     _430 = 0x7;
 
     mMovementStates.jumping = true;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     mMovementStates._5 = false;
     mMovementStates._E = true;
     mMovementStates._B = false;

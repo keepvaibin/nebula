@@ -16,13 +16,11 @@
 #include "revolution/gx/GXEnum.h"
 #include "revolution/gx/GXStruct.h"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
 #include <cstring>
 #include "Game/Util/RenderSignals.hpp"
 #include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
-#endif
 
 namespace {
     struct RadAndOfs {
@@ -89,7 +87,6 @@ namespace {
     // static const ... sBlurType = _;
     // static const s32 sFadeCounterMax = _;
 
-#ifdef TARGET_PC
     // How the bloom goes through the renderer (NEBULA_OPTION_BLOOM; galaxy/gx/game_bloom.h): decided at preDraw for
     // the frame's pair of passes, so a change in between never restores a scene that was not kept.
     u32 sBloomRoute;
@@ -99,7 +96,6 @@ namespace {
         __builtin_memcpy(&bits, &value, sizeof(bits));
         return bits;
     }
-#endif
 };  // namespace
 
 BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), _14(255), _18(1.0f / ::sL1RoundPoints), _1C(1.0f / ::sL2RoundPoints), _20(128) {
@@ -133,14 +129,12 @@ void BloomEffect::preDraw() const {
         return;
     }
 
-#ifdef TARGET_PC
     // The renderer keeps the scene in the EFB's own format: the console's copy below is 8 bits, which cuts the ray
     // tracer's HDR scene at 1.
     sBloomRoute = NebulaHost::option(NEBULA_OPTION_BLOOM);
     if (sBloomRoute != 0) {
         NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
     } else
-#endif
     {
         ImageEffectLocalUtil::capture(_24, 1, 0, GX_TF_RGBA8, false, 0);
     }
@@ -156,7 +150,6 @@ void BloomEffect::postDraw() const {
         return;
     }
 
-#ifdef TARGET_PC
     if (sBloomRoute == 2) {
         // The chain below, drawn by the renderer at the internal resolution: the threshold, both blurs' tap weights (as
         // initBlur loads them), the intensity and the rings' horizontal radius per unit; then the GX state the chain
@@ -177,7 +170,6 @@ void BloomEffect::postDraw() const {
         J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
         return;
     }
-#endif
 
     ImageEffectLocalUtil::capture(_28, 1, 0, GX_TF_RGB565, true, 0);
     initDraw();
@@ -205,12 +197,10 @@ void BloomEffect::postDraw() const {
 
     ImageEffectLocalUtil::capture(_3C, 4, 7, GX_TF_RGB565, false, 0);
 
-#ifdef TARGET_PC
     if (sBloomRoute != 0) {
         // The scene the renderer kept, drawn back as _24 would be (its RGB; the alpha update is off).
         NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
     } else
-#endif
     {
         drawTexture(_24, 1, 0, 0xFF, DrawType_0);
     }

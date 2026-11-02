@@ -7,10 +7,8 @@ namespace {
 
 PauseButtonCheckerInGame::PauseButtonCheckerInGame()
     : mPlusHoldFrame(0), mMinusHoldFrame(0)
-#ifdef TARGET_PC
       ,
       mPlusUsed(false), mMinusUsed(false)
-#endif
 {
 }
 
@@ -19,22 +17,17 @@ void PauseButtonCheckerInGame::update() {
         mPlusHoldFrame++;
     } else {
         mPlusHoldFrame = 0;
-#ifdef TARGET_PC
         mPlusUsed = false;
-#endif
     }
 
     if (MR::testCorePadButtonMinus(WPAD_CHAN0)) {
         mMinusHoldFrame++;
     } else {
         mMinusHoldFrame = 0;
-#ifdef TARGET_PC
         mMinusUsed = false;
-#endif
     }
 }
 
-#ifdef TARGET_PC
 // A press pauses the first frame it is permitted: a tap is enough (the console waited for 12 frames of holding, longer
 // than a quick press), and a press made while A or B is held pauses once they are let go.
 bool PauseButtonCheckerInGame::isPermitToPlusPause() const {
@@ -61,16 +54,3 @@ bool PauseButtonCheckerInGame::isPermitToMinusPause() const {
 bool PauseButtonCheckerInGame::isPermitToPause() const {
     return !MR::testCorePadButtonA(WPAD_CHAN0) && !MR::testCorePadButtonB(WPAD_CHAN0);
 }
-#else
-bool PauseButtonCheckerInGame::isPermitToPlusPause() const {
-    return isPermitToPause() && mPlusHoldFrame == ::sHoldCounterMax;
-}
-
-bool PauseButtonCheckerInGame::isPermitToMinusPause() const {
-    return isPermitToPause() && mMinusHoldFrame == ::sHoldCounterMax;
-}
-
-bool PauseButtonCheckerInGame::isPermitToPause() const {
-    return !MR::isOperatingWPad(WPAD_CHAN0);
-}
-#endif

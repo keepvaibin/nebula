@@ -23,9 +23,7 @@ class InformationMessage;
 class Manual2P;
 class MiiConfirmIcon;
 class MiiSelect;
-#ifdef TARGET_PC
 class NebulaQuitButton;
-#endif
 class TitleSequenceProduct;
 class UserFile;
 class SysInfoWindow;
@@ -147,12 +145,10 @@ public:
     void exeFileBroken();
     void exeManualStart();
     void exeManual();
-#ifdef TARGET_PC
     void createQuitButton();
     void updateQuitButton();
     bool updateQuitQuestion();
     void offerFilesToMenuFocus();
-#endif
 
     /* 0x8C */ FileSelectCameraController* mCameraController;
     /* 0x90 */ FileSelectSky* mSky;
@@ -182,11 +178,9 @@ public:
 #if (VERSION == RMGK01)
     /* 0xF0 */ nw4r::ut::ResFont* mFont;
 #endif
-#ifdef TARGET_PC
     NebulaQuitButton* mQuitButton;
     SysInfoWindow* mQuitWindow;  // its own: the file select's window keeps its messages' text positions
     bool mIsAskingQuit;
     s32 mQuitFrames;  // from Yes: the fade to black, then the game's own way out
     bool mIsQuitFocusWanted;  // Up from the top files: the highlight goes to Quit to desktop once it shows
-#endif
 };

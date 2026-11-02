@@ -1,7 +1,5 @@
 #include "Game/Screen/PictureBookLayout.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaFrameGen.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
@@ -13,9 +11,7 @@
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -115,10 +111,8 @@ void PictureBookLayout::init(const JMapInfoIter& rIter) {
 
         mCloseButton = new PictureBookCloseButton(true);
         mCloseButton->initWithoutIter();
-#ifdef TARGET_PC
         // While a page shows, A and the D-pad turn the pages: NebulaMenuFocus leaves the close button to the pointer.
         mCloseButton->getPaneCtrl()->mIsNebulaFocusable = false;
-#endif
     }
 
     initNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeIn));
@@ -190,9 +184,7 @@ s32 PictureBookLayout::getChapterMax() {
 }
 
 void PictureBookLayout::control() {
-#ifdef TARGET_PC
     NebulaFrameGen::noteFullscreenUi();
-#endif
     if (mContentsButtonPaneController == nullptr) {
         return;
     }
@@ -711,10 +703,8 @@ void PictureBookLayout::exeWaitWithText() {
     } else {
         bool isTriggerNextPage =
             MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testSubPadStickTriggerRight(WPAD_CHAN0);
-#ifdef TARGET_PC
         // A skipped reading (Rosalina's, a cutscene) turns each page as soon as it is up.
         isTriggerNextPage = isTriggerNextPage || NebulaCutsceneSkip::isSkipping();
-#endif
 
         if (isTriggerNextPage) {
             MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");

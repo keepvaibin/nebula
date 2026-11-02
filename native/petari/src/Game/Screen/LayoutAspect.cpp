@@ -1,4 +1,3 @@
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutAspect.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Screen/LayoutManager.hpp"
@@ -392,4 +391,3 @@ namespace LayoutAspect {
         }
     }
 };  // namespace LayoutAspect
-#endif

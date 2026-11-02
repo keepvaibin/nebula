@@ -38,9 +38,7 @@ J3DModelLoader::J3DModelLoader()
 
 // Nebula: each model the renderer may round (NebulaCurvedSurfaces).
 static J3DModelData* withCurvedSurfaces(J3DModelData* pModelData) {
-#ifdef TARGET_PC
     NebulaCurvedSurfaces::registerModel(pModelData);
-#endif
     return pModelData;
 }
 

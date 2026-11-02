@@ -206,27 +206,19 @@ public:
 };
 
 // operator new's size parameter: size_t on native hosts, u32 (the same type) on the console.
-#ifdef TARGET_PC
 typedef size_t JKRNewSize;
-#else
-typedef u32 JKRNewSize;
-#endif
 
-#if defined(__MWERKS__) || defined(TARGET_PC)
 void* operator new(JKRNewSize, int);
 void* operator new(JKRNewSize, JKRHeap*);
 void* operator new(JKRNewSize, JKRHeap*, int);
 void* operator new[](JKRNewSize, int);
 
 void* operator new[](JKRNewSize, JKRHeap*, int);
-#endif
 
-#ifdef TARGET_PC
 // A heap size the game fixed for the console's objects. Natively an object with pointer members is larger, at most
 // twice the size, so a fixed size gets twice the room when the parent has it, else the size asked
 // (docs/NATIVE_PORT.md, "Memory and the GPU's addresses").
 u32 JKRNativeHeapSize(u32 size, JKRHeap* pParent, int alignment);
-#endif
 
 inline void* JKRAllocFromHeap(JKRHeap* pHeap, u32 size, int alignment) {
     return JKRHeap::alloc(size, alignment, pHeap);

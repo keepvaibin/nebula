@@ -46,44 +46,13 @@ namespace nw4r {
         }
 
         static void ShowStack_(u32 sp) {
-#ifdef TARGET_PC
             // The PowerPC back chain has no native counterpart.
             (void)sp;
             return;
-#else
-            Assertion_Printf_("-------------------------------- TRACE\n");
-            u32 i;
-            u32* p;
-
-            Assertion_Printf_("Address:   BackChain   LR save\n");
-            p = (u32*)sp;
-
-            for (i = 0; i < 16; i++) {
-                if (p == NULL || (u32)p == 0xffffffff || ((u32)p & 0x80000000) == 0) {
-                    break;
-                }
-                Assertion_Printf_("%08X:  %08X    %08X ", p, p[0], p[1]);
-                if (!ShowMapInfoSubroutine_(p[1], false)) {
-                    Assertion_Printf_("\n");
-                }
-
-                p = (u32*)*p;
-            }
-
-            return;
-#endif
         }
 
         __declspec(weak) void VPanic(const char* file, int line, const char* fmt, va_list vlist, bool halt) {
-#ifdef TARGET_PC
             u32 stackPointer = 0;
-#else
-            register u32 stackPointer;
-            asm {
-        mr  stackPointer, r1
-            }
-            stackPointer = *((u32*)stackPointer);
-#endif
             (void)NebulaKernel::disableInterrupts();
             (void)NebulaKernel::disableScheduler();
 

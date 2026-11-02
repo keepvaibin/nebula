@@ -13,7 +13,6 @@ public:
 
     s32 write(const void*, s32);
 
-#ifdef TARGET_PC
     // Big-endian scalars (JSUBigEndianScalar); a size that is not a whole number of elements writes the bytes as they are.
     template < typename T >
     typename JSUBigEndianScalar< T >::Result write(const T* pData, s32 size) {
@@ -28,7 +27,6 @@ public:
         }
         return written;
     }
-#endif
 
     inline void writeU8(u8 val) {
         write(&val, sizeof(u8));

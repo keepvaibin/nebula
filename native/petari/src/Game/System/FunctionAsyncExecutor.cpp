@@ -77,13 +77,9 @@ FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHold
     }
 
     mMainThreadExec = new FunctionAsyncExecutorOnMainThread(NebulaKernel::current());
-#ifdef TARGET_PC
     // Units of the native record (0x34 bytes on the console), as many as the console's heap held.
     _410 = JKRUnitHeap::create(sizeof(FunctionAsyncExecInfo), 0x34A8 / 0x34 * ALIGN_NEXT(sizeof(FunctionAsyncExecInfo), 4), 4,
                                MR::getCurrentHeap(), false);
-#else
-    _410 = JKRUnitHeap::create(0x34, 0x34A8, 4, MR::getCurrentHeap(), false);
-#endif
     _414 = JKRExpHeap::create(0x2800, MR::getCurrentHeap(), false);
 }
 
@@ -120,7 +116,6 @@ void FunctionAsyncExecutor::waitForEnd(const char* pName) {
         cur++;
     }
 
-#ifdef TARGET_PC
     // A function startOnMainThread ran at once (its caller was the main thread) has no entry: it has ended. The console
     // reads past the list's end here and waits on whatever entry lies there; natively that can be a stale entry that
     // never ends (ResourceHolderManager::createAndAddInner on the main thread would hang).
@@ -128,7 +123,6 @@ void FunctionAsyncExecutor::waitForEnd(const char* pName) {
         (MR::MutexHolder< 2 >::sMutex).unlock();
         return;
     }
-#endif
     FunctionAsyncExecInfo* info = *cur;
     (MR::MutexHolder< 2 >::sMutex).unlock();
     info->mQueue.receive(&info->mMessage, true);
@@ -162,7 +156,6 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
         cur++;
     }
 
-#ifdef TARGET_PC
     // The console read past the list's end here; natively a missing name is reported.
     if (cur == lst) {
         for (FunctionAsyncExecInfo* const* p = mHolders.begin(); p != lst; p++) {
@@ -170,7 +163,6 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
         }
         JUTException::panic_f(__FILE__, __LINE__, "isEnd: no async function %p \"%s\" among %d", pName, pName, (int)mHolders.size());
     }
-#endif
     FunctionAsyncExecInfo* info = *cur;
     (MR::MutexHolder< 2 >::sMutex).unlock();
     return info->mIsEnd;

@@ -64,11 +64,9 @@ public:
     void initArc(const char*, const char*);
     void initDrawInfo();
     void initPaneInfo();
-#ifdef TARGET_PC
     // The pane list again after code changed the layout's tree (moved or added panes); before any pane or group
     // control exists.
     void rebuildPaneInfo();
-#endif
     void initPaneInfoRecursive(u32&, nw4r::lyt::Pane*);
     u32 countPanes(nw4r::lyt::Pane*);
     void initGroupCtrlList();
@@ -98,10 +96,8 @@ public:
     /* 0x70 */ u32 mGroupCtrlCount;
     /* 0x74 */ LayoutGroupCtrl** mGroupCtrlList;
     /* 0x78 */ char* mLayoutName;
-#ifdef TARGET_PC
     // LayoutAspect::fit's rules for this layout and their panes (count -1 until looked up).
     const void* mFitRules;
     s32 mFitRuleCount;
     nw4r::lyt::Pane* mFitPanes[8];
-#endif
 };

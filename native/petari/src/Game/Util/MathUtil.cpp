@@ -1155,7 +1155,6 @@ namespace MR {
 };  // namespace MR
 
 f32 VecKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __REGISTER const Vec* pDst) {
-#ifdef TARGET_PC
     const f32 sx = pSrc->x, sy = pSrc->y, sz = pSrc->z;
     const f32 kx = pKill->x, ky = pKill->y, kz = pKill->z;
     const f32 dot = (sx * kx + sy * ky) + sz * kz;
@@ -1165,25 +1164,6 @@ f32 VecKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __RE
     dst->y = sy - dot * ky;
     dst->z = sz - dot * kz;
     return dot;
-#elif defined(__MWERKS__)
-    __REGISTER f32 dot;
-    // clang-format off
-    asm volatile {
-        psq_l      f2, 4(pSrc),  0, 0
-        psq_l      f3, 4(pKill), 0, 0
-        psq_l      f5, 0(pSrc),  1, 0
-        psq_l      f4, 0(pKill), 1, 0
-        ps_mul     f6, f2, f3
-        ps_madd    f7, f5, f4, f6
-        ps_sum0    dot, f7, f6, f6
-        ps_merge00 dot, dot, dot
-        ps_nmsub   f5, dot, f4, f5
-        ps_nmsub   f2, dot, f3, f2
-        psq_st     f5, 0(pDst),  1, 0
-        psq_st     f2, 4(pDst),  0, 0
-    }  // clang-format on
-    return dot;
-#endif
 }
 
 namespace MR {
@@ -1198,50 +1178,20 @@ namespace MR {
     }
 
     void vecScaleAdd(const register TVec3f* pA1, const register TVec3f* pA2, register f32 a3) {
-#ifdef TARGET_PC
         // The original stores through pA1, declared const.
         TVec3f* dst = const_cast< TVec3f* >(pA1);
         dst->x = pA2->x * a3 + pA1->x;
         dst->y = pA2->y * a3 + pA1->y;
         dst->z = pA2->z * a3 + pA1->z;
-#elif defined(__MWERKS__)
-        __asm {
-            psq_l f0, 0(pA1), 0, 0
-            psq_l f3, 0(pA2), 0, 0
-            psq_l f2, 8(pA1), 1, 0
-            psq_l f4, 8(pA2), 1, 0
-            ps_madds0 f0, f3, a3, f0
-            ps_madds0 f2, f4, a3, f2
-            psq_st f0, 0(pA1), 0, 0
-            psq_st f2, 8(pA1), 1, 0
-        }
-
-#endif
     }
 
     void PSvecBlend(const register TVec3f* pA1, const register TVec3f* pA2, register TVec3f* pA3, register f32 a4, register f32 a5) {
-#ifdef TARGET_PC
         const f32 x = pA2->x * a5 + pA1->x * a4;
         const f32 y = pA2->y * a5 + pA1->y * a4;
         const f32 z = pA2->z * a5 + pA1->z * a4;
         pA3->x = x;
         pA3->y = y;
         pA3->z = z;
-#elif defined(__MWERKS__)
-        __asm {
-            psq_l     f0, 0(pA1), 0, 0
-            psq_l     f3, 8(pA1), 1, 0
-            ps_muls0  f4, f0, a4
-            psq_l     f0, 0(pA2), 0, 0
-            ps_muls0  f3, f3, a4
-            psq_l     f1, 8(pA2), 1, 0
-            ps_madds0 f4, f0, f2, f4
-            ps_madds0 f3, f1, f2, f3
-            psq_st    f4, 0(pA3), 0, 0
-            psq_st    f3, 8(pA3), 1, 0
-        }
-
-#endif
     }
 
     void vecBlend(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pDst, f32 rate) {
@@ -1651,16 +1601,6 @@ f32 JMASqrt(__REGISTER f32 value) {
         return value;
     }
 
-#ifdef TARGET_PC
     // The console refines frsqrte's estimate once; natively the root.
     return __builtin_sqrtf(value);
-#else
-    __REGISTER f32 inverse;
-    __asm { frsqrte inverse, value }
-    f32 estimate = inverse * value;
-    inverse = -(estimate * inverse - 3.0f);
-    inverse *= estimate;
-    inverse *= 0.5f;
-    return inverse;
-#endif
 }

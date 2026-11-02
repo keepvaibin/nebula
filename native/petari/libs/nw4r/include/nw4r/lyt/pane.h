@@ -31,11 +31,7 @@ namespace nw4r {
         class DrawInfo;
         class Pane;
 
-#if defined(__MWERKS__) || defined(TARGET_PC)
         typedef ut::LinkList< Pane, offsetof(detail::PaneBase, mLink) > PaneList;
-#else
-        typedef ut::LinkList< Pane, 0 > PaneList;
-#endif
 
         class Pane : public detail::PaneBase {
         public:

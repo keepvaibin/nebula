@@ -10,7 +10,6 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"
 #include <cstring>
@@ -45,7 +44,6 @@ namespace {
         return (pBacking->mGlbAlpha / 255.0f) * ((255 - fade) / 255.0f);
     }
 };  // namespace
-#endif
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
@@ -66,9 +64,7 @@ namespace {
     NEW_NERVE(LogoSceneStrapDisplay, LogoScene, StrapDisplay);
     NEW_NERVE(LogoSceneStrapFadeout, LogoScene, StrapFadeout);
     NEW_NERVE(LogoSceneMountGameData, LogoScene, MountGameData);
-#ifdef TARGET_PC
     NEW_NERVE(LogoSceneWaitRayTracing, LogoScene, WaitRayTracing);
-#endif
     NEW_NERVE(LogoSceneWaitReadDoneSystemArchive, LogoScene, WaitReadDoneSystemArchive);
     NEW_NERVE(LogoSceneDeactive, LogoScene, Deactive);
 };  // namespace
@@ -86,13 +82,9 @@ LogoScene::~LogoScene() {
 }
 
 void LogoScene::init() {
-#ifdef TARGET_PC
         // The console's strap screen covers the system archive's load and asks for a button press. Natively the load
         // runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
         initNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
-#else
-        initNerve(GET_NERVE_ANON(LogoSceneStrapFadein));
-#endif
 
     SceneFunction::createHioBasicNode(this);
     SceneFunction::initForNameObj();
@@ -113,9 +105,7 @@ void LogoScene::calcAnim() {
 }
 
 void LogoScene::draw() const {
-#ifdef TARGET_PC
     NebulaHost::sceneSurround(getStrapSurround(mStrapLayout, mLogoFader));
-#endif
     MR::drawInit();
 
     NebulaColor8 color;
@@ -194,21 +184,15 @@ void LogoScene::exeMountGameData() {
         return;
     }
 
-#ifdef TARGET_PC
     setNerve(GET_NERVE_ANON(LogoSceneWaitRayTracing));
-#else
-    setNerve(GET_NERVE_ANON(LogoSceneDeactive));
-#endif
 }
 
-#ifdef TARGET_PC
 // Ray tracing's shaders compile before the title (NebulaRtPrepare): the title waits for them and their screen.
 void LogoScene::exeWaitRayTracing() {
     if (!NebulaRtPrepare::isHolding()) {
         setNerve(GET_NERVE_ANON(LogoSceneDeactive));
     }
 }
-#endif
 
 void LogoScene::exeWaitReadDoneSystemArchive() {
     if (GameSystemFunction::isDoneLoadSystemArchive()) {

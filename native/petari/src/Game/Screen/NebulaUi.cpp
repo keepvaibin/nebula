@@ -2,7 +2,6 @@
 #include <nebula_cooked_texture.h>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -543,4 +542,3 @@ namespace NebulaUi {
         J3DNativeView::setScissor(0, 0, static_cast< u32 >(frameWidth), static_cast< u32 >(frameHeight));
     }
 };  // namespace NebulaUi
-#endif

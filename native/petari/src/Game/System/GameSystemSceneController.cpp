@@ -251,24 +251,20 @@ void GameSystemSceneController::drawScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
-#ifdef TARGET_PC
         // Black borders around a fitted picture unless the scene says otherwise (LogoScene's strap screen).
         NebulaHost::sceneSurround(0.0f);
-#endif
         pScene->draw();
         mPlayTimerScene->draw();
         mScenarioSelectScene->draw();
     }
 }
 
-#ifdef TARGET_PC
 void GameSystemSceneController::drawSceneOverlay() {
     Scene* pScene = getCurrentSceneForExecute();
     if (pScene != nullptr && MR::isEqualSceneName("Game")) {
         static_cast< GameScene* >(pScene)->drawOverlay();
     }
 }
-#endif
 
 NameObjListExecutor* GameSystemSceneController::getNameObjListExecutor() const {
     return mScene->mListExecutor;

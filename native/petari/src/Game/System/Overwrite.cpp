@@ -5,9 +5,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/System/WPad.hpp"
 #include "Game/Util/MathUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 
 #include <JSystem/JKernel/JKRAram.hpp>
 #include <JSystem/JKernel/JKRAramPiece.hpp>
@@ -59,9 +57,7 @@ namespace {
     const u8 sUnitMask[] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 };  // namespace
 
-#ifdef TARGET_PC
 NEBULA_NO_ASAN
-#endif
 void* JKRUnitHeap::do_alloc(u32 size, int alignment) {
     u32 bit;
     u8* pBat;
@@ -99,9 +95,7 @@ void* JKRUnitHeap::do_alloc(u32 size, int alignment) {
     return pResult;
 }
 
-#ifdef TARGET_PC
 NEBULA_NO_ASAN
-#endif
 void JKRUnitHeap::do_free(void* pMemory) {
     lock();
     s32 index = addressToIndex(pMemory);
@@ -120,9 +114,7 @@ void JKRUnitHeap::do_free(void* pMemory) {
 void JKRSolidHeap::do_free(void* pMemory) {
 }
 
-#ifdef TARGET_PC
 NEBULA_NO_ASAN
-#endif
 s32 JKRExpHeap::adjustSize() {
     CMemBlock* pNext;
     JKRHeap* pParent = mChildTree.getParent()->getObject();
@@ -176,9 +168,7 @@ s32 JKRExpHeap::adjustSize() {
     return size;
 }
 
-#ifdef TARGET_PC
 NEBULA_NO_ASAN
-#endif
 u32 JKRHeap::getMaxAllocatableSize(int alignment) {
     u32 address = (u32)reinterpret_cast< uintptr_t >(getMaxFreeBlock());
     return ~(alignment - 1) & (getFreeSize() - ((alignment - 1) & (alignment - (address & 0xF))));
@@ -423,9 +413,7 @@ namespace {
 };  // namespace
 
 void JPABaseEmitter::init(JPAEmitterManager* pManager, JPAResource* pResource) {
-#ifdef TARGET_PC
     MotionSignal::emitterInit(this);
-#endif
     mpEmtrMgr = pManager;
     mpRes = pResource;
     const JPADynamicsBlockData* pData = mpRes->getDyn()->mpData;
@@ -663,9 +651,7 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
-#ifdef TARGET_PC
         MotionSignal::stripeParticle(pParticle, 0);
-#endif
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -756,9 +742,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
-#ifdef TARGET_PC
         MotionSignal::stripeParticle(pParticle, 1);
-#endif
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -812,9 +796,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
-#ifdef TARGET_PC
         MotionSignal::stripeParticle(pParticle, 2);
-#endif
         position.set(pParticle->mPosition);
         f32 sin = -JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -1014,13 +996,9 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
 }
 
 void JKRAramPiece::startDMA(JKRAMCommand* pCommand) {
-#ifdef TARGET_PC
     // The console required a cached main-memory source (0x80000000 and up): natively, a main-to-ARAM transfer
     // from a non-null pointer.
     if (pCommand->mTransferDirection != 0 || pCommand->mSrc == 0) {
-#else
-    if (pCommand->mSrc < 0x80000000) {
-#endif
         doneDMA(reinterpret_cast< uintptr_t >(pCommand));
         return;
     }

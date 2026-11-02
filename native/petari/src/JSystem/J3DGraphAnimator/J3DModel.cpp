@@ -6,9 +6,7 @@
 
 void J3DModel::initialize() {
     mModelData = NULL;
-#ifdef TARGET_PC
     mMotionEpoch = 0;
-#endif
     mFlags = 0;
     mDiffFlag = 0;
     mCalcCallBack = NULL;

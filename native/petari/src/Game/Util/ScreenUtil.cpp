@@ -106,7 +106,6 @@ namespace MR {
         }
     }
 
-#ifdef TARGET_PC
     static bool sWiiScreenWidth;
 
     void beginWiiScreenWidth() {
@@ -116,14 +115,11 @@ namespace MR {
     void endWiiScreenWidth() {
         sWiiScreenWidth = false;
     }
-#endif
 
     s32 getScreenWidth() {
-#ifdef TARGET_PC
         if (isScreen16Per9() && getDisplay().wide && !sWiiScreenWidth) {
             return getDisplay().screen_width;
         }
-#endif
         return isScreen16Per9() ? 832 : 608;
     }
 

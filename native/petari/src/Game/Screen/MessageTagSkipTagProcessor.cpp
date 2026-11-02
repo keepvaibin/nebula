@@ -63,7 +63,6 @@ s32 MessageEditorMessageTag::getParamLength() const {
     return reinterpret_cast< const u8* >(mMessage)[0] - 6;
 }
 
-#ifdef TARGET_PC
 // Natively the parameters are host-order 16-bit units (MessageData converts the file's text that way, and the game
 // builds its own tags so): byte i is the high byte of unit i / 2 for even i, the low byte for odd i, and a 32-bit
 // parameter is two units, high first.
@@ -81,22 +80,6 @@ u32 MessageEditorMessageTag::getParam32(int index) const {
     const u16* pParam = reinterpret_cast< const u16* >(mMessage) + index * 2;
     return ((u32)pParam[2] << 16) | pParam[3];
 }
-#else
-u8 MessageEditorMessageTag::getParam8(int index) const {
-    const u8* pParam = reinterpret_cast< const u8* >(mMessage) + index;
-    return pParam[4];
-}
-
-u16 MessageEditorMessageTag::getParam16(int index) const {
-    const u16* pParam = reinterpret_cast< const u16* >(mMessage) + index;
-    return pParam[2];
-}
-
-u32 MessageEditorMessageTag::getParam32(int index) const {
-    const u32* pParam = reinterpret_cast< const u32* >(mMessage) + index;
-    return pParam[1];
-}
-#endif
 
 wchar_t* MessageEditorMessageTag::getParamPtr(int index) const {
     const u8* pParam = reinterpret_cast< const u8* >(mMessage) + index + 4;

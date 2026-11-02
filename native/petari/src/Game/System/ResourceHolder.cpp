@@ -13,11 +13,9 @@
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
-#endif
 
 namespace {
     static const ArchiveName sModelExt[] = {".bdl", ".bmd", nullptr};
@@ -235,11 +233,9 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         }
         // Lists for its materials, made from their MAT3 data as a .bmd model's are (J3DModelLoader skips the file's).
         modelData->newSharedDisplayList(0);
-#ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         J3DNativeMaterial::sweep(modelData);
-#endif
         return mModelResTable->add(pName, modelData, true);
     }
 
@@ -247,11 +243,9 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         J3DModelData* modelData =
             J3DModelLoaderDataBase::load(pData, J3DMLF_Material_PE_Full | J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials | J3DMLF_21);
         modelData->newSharedDisplayList(0);
-#ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         J3DNativeMaterial::sweep(modelData);
-#endif
         return mModelResTable->add(pName, modelData, true);
     }
 

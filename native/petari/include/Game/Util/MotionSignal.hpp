@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include <JSystem/JGeometry/TVec.hpp>
 #include "Game/Util/RenderSignals.hpp"
 #include <revolution/types.h>
@@ -158,4 +157,3 @@ namespace MotionSignal {
     // CameraViewInterpolator::reduceOscillation took its target without blending: a camera cut.
     void cameraCut();
 };  // namespace MotionSignal
-#endif

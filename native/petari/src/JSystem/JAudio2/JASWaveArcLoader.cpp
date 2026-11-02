@@ -104,25 +104,6 @@ bool JASWaveArc::sendLoadCmd() {
     return true;
 }
 
-#ifndef TARGET_PC
-// Replaced by Game's Overwrite file; only that copy is in the game.
-bool JASWaveArc::load(JASHeap* heap) {
-    if (mEntryNum < 0) {
-        return false;
-    }
-    JASMutexLock mutexLock(&mMutex);
-    if (mStatus != 0) {
-        return false;
-    }
-    if (heap == nullptr) {
-        heap = JASWaveArcLoader::getRootHeap();
-    }
-    if (mHeap.alloc(heap, mFileLength) == false) {
-        return false;
-    }
-    return sendLoadCmd();
-}
-#endif
 
 bool JASWaveArc::loadTail(JASHeap* heap) {
     if (mEntryNum < 0) {

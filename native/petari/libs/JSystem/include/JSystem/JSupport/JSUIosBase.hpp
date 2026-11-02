@@ -6,7 +6,6 @@
 
 enum JSUStreamSeekFrom { SEEK_FROM_START, SEEK_FROM_POSITION, SEEK_FROM_END };
 
-#ifdef TARGET_PC
 // Natively a scalar a stream reads or writes through its own type (read(&u16Value, 2), writeU32) travels big-endian,
 // as on the console: the streams carry save data and other console-format files. These are the element types swapped;
 // anything else (bytes, structs, void*) passes through unchanged.
@@ -26,7 +25,6 @@ JSU_BIG_ENDIAN_SCALAR(s64)
 JSU_BIG_ENDIAN_SCALAR(f32)
 JSU_BIG_ENDIAN_SCALAR(f64)
 #undef JSU_BIG_ENDIAN_SCALAR
-#endif
 
 class JSUIosBase {
 public:

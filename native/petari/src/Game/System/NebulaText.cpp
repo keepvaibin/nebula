@@ -1,7 +1,6 @@
 #include "Game/System/NebulaText.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/NebulaDisc.hpp"
@@ -509,4 +508,3 @@ namespace NebulaText {
         }
     }
 };  // namespace NebulaText
-#endif

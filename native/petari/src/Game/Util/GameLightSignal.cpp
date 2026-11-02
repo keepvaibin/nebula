@@ -1,4 +1,3 @@
-#ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/ActorLightCtrl.hpp"
@@ -196,4 +195,3 @@ namespace GameLightSignal {
         worldLight(pInfo->mInfo1);
     }
 };  // namespace GameLightSignal
-#endif

@@ -32,9 +32,7 @@ void JASDriver::waitSubFrame() {
     u32 r31 = getSubFrameCounter();
     do {
         NebulaKernel::yield();
-#ifdef TARGET_PC
         NebulaKernel::poll();
-#endif
     } while (r31 == getSubFrameCounter());
 }
 

@@ -1,7 +1,6 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Demo/DemoDirector.hpp"
@@ -382,4 +381,3 @@ namespace NebulaCutsceneSkip {
         }
     }
 };  // namespace NebulaCutsceneSkip
-#endif
