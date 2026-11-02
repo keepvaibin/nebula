@@ -354,6 +354,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/capture.cpp
     runtime/src/render/line_point_params.cpp
     runtime/src/render/pipeline_cache.cpp
+    runtime/src/render/pipeline_seed.cpp
     runtime/src/render/post_process.cpp
     runtime/src/render/post_process_settings.cpp
     ${galaxy_post_headers}
@@ -664,6 +665,7 @@ if(NEBULA_VULKAN)
         "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
         runtime/src/render/vk/texture_backend_vk.cpp
         runtime/src/render/vk/pipeline_cache_vk.cpp
+        runtime/src/render/pipeline_seed.cpp
         runtime/src/render/vk/compile_journal.cpp
         runtime/src/render/vk/renderer_vk.cpp
         runtime/src/render/vk/renderer_vk_scene.cpp
