@@ -10,11 +10,9 @@
 #include "galaxy/render/vk/vk_context.h"
 
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <thread>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -77,11 +75,12 @@ public:
                         const SetAllocator& allocate);
 
 private:
-    // The pipelines' SPIR-V, compiled by the worker: vertex and pixel shader per pass.
+    // The passes' vertex and pixel shaders, compiled at build.
     enum Program : unsigned {
-        kFullscreenVs, kResamplePs, kFxaaPs, kEasuPs, kRcasPs, kRcasScaledPs, kSmaaEdgesVs, kSmaaEdgesPs,
-        kSmaaWeightsVs, kSmaaWeightsPs, kSmaaBlendVs, kSmaaBlendPs, kSmaaBlendKeepPs, kDebandPs, kDebandReducePs, kDebandSmoothPs,
-        kDebandApplyPs, kProgramCount
+#define POST(name, pass, library, quality, stage) name,
+#include "galaxy/render/vk/post_programs_vk.inc"
+#undef POST
+        kProgramCount
     };
     struct Target {
         std::shared_ptr<Texture> texture;  // its framebuffer is the pass's (with the stencil for edges and weights)
@@ -98,8 +97,6 @@ private:
         VkPipeline deband_apply = VK_NULL_HANDLE;
     };
 
-    // Every program, or only the three that depend on the SMAA quality.
-    void compile_programs(unsigned smaa_quality, bool quality_only);
     VkShaderModule module(Program program) const;
     VkPipeline create_pipeline(Program vs, Program ps, VkRenderPass pass, VkColorComponentFlags write_mask,
                                int stencil) const;
@@ -126,17 +123,14 @@ private:
     PostProcessStatus status_{};
     bool ready_ = false;
     bool built_ = false;
+    bool to_build_ = false;  // initialized: poll_ready makes the pipelines
+    unsigned spirv_quality_ = 0;  // the SMAA quality module() takes the quality-dependent programs at
     bool easu_ = false;  // the device has EASU's single-channel gathers
     VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
     VkRenderPass present_pass_ = VK_NULL_HANDLE;
     VkFormat stencil_format_ = VK_FORMAT_UNDEFINED;
 
-    // The worker: SPIR-V for every program, done when `compiled_`.
-    std::thread worker_;
-    std::atomic<bool> compiled_{false};
-    std::array<std::vector<std::uint32_t>, kProgramCount> spirv_{};
-    std::array<char, 160> compile_error_{};
 
     VkDescriptorSetLayout image_layout_ = VK_NULL_HANDLE;    // set 0: t0-t2
     VkDescriptorSetLayout sampler_layout_ = VK_NULL_HANDLE;  // set 1: s0 linear, s1 point (immutable)

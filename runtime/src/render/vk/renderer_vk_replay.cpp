@@ -13,6 +13,8 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/texture_store.h"
 
+#include <span>
+#include <tuple>
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -552,16 +554,11 @@ bool RendererVk::ensure_blend_pipelines() {
     pool_info.poolSizeCount = 1;
     pool_info.pPoolSizes = &size;
     vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &blend_pool_), "blend descriptor pool");
-    for (const auto& [source, pipeline] : {std::pair{kBlendValidateCs, &blend_validate_pipeline_},
-                                           std::pair{kStripeGatherCs, &stripe_gather_pipeline_}}) {
-        std::string error;
-        const std::vector<std::uint32_t> spirv = vk::compile_hlsl(source, vk::ShaderStage::Compute, "main", {}, error);
-        if (spirv.empty()) {
-            std::cerr << "[interp-blend] " << error << '\n';
-            return false;
-        }
+    for (const auto& [shader, pipeline] : {std::pair{vk::UtilitySpirv::BlendValidateCs, &blend_validate_pipeline_},
+                                           std::pair{vk::UtilitySpirv::StripeGatherCs, &stripe_gather_pipeline_}}) {
+        const std::span<const std::uint32_t> spirv = vk::utility_spirv(shader);
         VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        module_info.codeSize = spirv.size() * sizeof(std::uint32_t);
+        module_info.codeSize = spirv.size_bytes();
         module_info.pCode = spirv.data();
         VkShaderModule module = VK_NULL_HANDLE;
         vk::check(vkCreateShaderModule(device, &module_info, nullptr, &module), "blend shader module");
@@ -703,17 +700,12 @@ bool RendererVk::ensure_interp_eval() {
     pool_info.poolSizeCount = 2;
     pool_info.pPoolSizes = sizes;
     vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &eval_pool_), "eval descriptor pool");
-    for (const auto& [entry, pipeline] : {std::pair{"copy_main", &eval_copy_pipeline_},
-                                          std::pair{"eval_main", &eval_pipeline_}}) {
-        std::string error;
-        const std::vector<std::uint32_t> spirv =
-            vk::compile_hlsl(kInterpEvalCs, vk::ShaderStage::Compute, entry, {}, error);
-        if (spirv.empty()) {
-            std::cerr << "[interp-eval] " << entry << ": " << error << '\n';
-            return false;
-        }
+    for (const auto& [shader, entry, pipeline] :
+         {std::tuple{vk::UtilitySpirv::InterpCopyCs, "copy_main", &eval_copy_pipeline_},
+          std::tuple{vk::UtilitySpirv::InterpEvalCs, "eval_main", &eval_pipeline_}}) {
+        const std::span<const std::uint32_t> spirv = vk::utility_spirv(shader);
         VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        module_info.codeSize = spirv.size() * sizeof(std::uint32_t);
+        module_info.codeSize = spirv.size_bytes();
         module_info.pCode = spirv.data();
         VkShaderModule module = VK_NULL_HANDLE;
         vk::check(vkCreateShaderModule(device, &module_info, nullptr, &module), "eval shader module");

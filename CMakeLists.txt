@@ -552,8 +552,20 @@ if(NEBULA_VULKAN)
     add_executable(galaxy_native_spirv tools/dev/native_spirv.cpp runtime/src/render/vk/shader_compile_vk.cpp)
     target_include_directories(galaxy_native_spirv PRIVATE runtime/include)
     target_compile_features(galaxy_native_spirv PRIVATE cxx_std_20)
-    target_link_libraries(galaxy_native_spirv PRIVATE nebula_vulkan_deps)
+    target_link_libraries(galaxy_native_spirv PRIVATE nebula_vulkan_deps nebula_shader_compiler)
     galaxy_native_material_sources(galaxy_native_spirv_sources spirv)
+
+    # The renderer's other shaders' SPIR-V (E-19; tools/dev/utility_spirv.cpp).
+    add_executable(galaxy_utility_spirv tools/dev/utility_spirv.cpp runtime/src/render/vk/shader_compile_vk.cpp
+        runtime/src/render/renderer_common.cpp runtime/src/render/curved_surfaces.cpp ${galaxy_post_embed_cpp})
+    target_include_directories(galaxy_utility_spirv PRIVATE runtime/include)
+    target_compile_features(galaxy_utility_spirv PRIVATE cxx_std_20)
+    target_link_libraries(galaxy_utility_spirv PRIVATE nebula_vulkan_deps nebula_shader_compiler)
+    set(galaxy_utility_spirv_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/utility_spirv")
+    file(MAKE_DIRECTORY "${galaxy_utility_spirv_dir}")
+    add_custom_command(OUTPUT "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
+        COMMAND galaxy_utility_spirv "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
+        DEPENDS galaxy_utility_spirv VERBATIM)
 
 
     # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
@@ -595,7 +607,8 @@ if(NEBULA_VULKAN)
         runtime/src/render/vk/vk_context.cpp
         runtime/src/render/vk/device_quirks_vk.cpp
         runtime/src/render/vk/vk_libraries.cpp
-        runtime/src/render/vk/shader_compile_vk.cpp
+        runtime/src/render/vk/utility_spirv.cpp
+        "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
         runtime/src/render/vk/texture_backend_vk.cpp
         runtime/src/render/vk/pipeline_cache_vk.cpp
         runtime/src/render/vk/compile_journal.cpp
@@ -604,11 +617,10 @@ if(NEBULA_VULKAN)
         runtime/src/render/vk/renderer_vk_replay.cpp
         runtime/src/render/vk/post_process_vk.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
-        ${galaxy_post_embed_cpp}
         ${galaxy_native_spirv_sources}
         runtime/src/render/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
-    target_include_directories(galaxy_gx_vk PRIVATE "${galaxy_native_include_dir_spirv}")
+    target_include_directories(galaxy_gx_vk PRIVATE "${galaxy_native_include_dir_spirv}" "${galaxy_utility_spirv_dir}")
     target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
@@ -635,10 +647,5 @@ if(NEBULA_VULKAN)
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
-
-    # The shared utility shaders through the Vulkan HLSL front end (compiled at start by RendererVk).
-    add_executable(galaxy_vk_utility_shader_tests runtime/src/render/vk/utility_shader_tests.cpp)
-    target_link_libraries(galaxy_vk_utility_shader_tests PRIVATE galaxy_gx_vk)
-    add_test(NAME galaxy_vk_utility_shader_tests COMMAND galaxy_vk_utility_shader_tests)
 
 endif()
