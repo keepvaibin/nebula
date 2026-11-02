@@ -33,7 +33,7 @@ public:
     f32 calcCurrentFlowSpeedRate(f32) const;
     void calcClippingBox();
     WaterPoint* getPoint(int) const;
-    WaterPoint* getPoint(int, int) const NO_INLINE;
+    WaterPoint* getPoint(int, int) const;
 
     /* 0x08C */ s32 mWaterPointNum;
     /* 0x090 */ s32 mSegCount;

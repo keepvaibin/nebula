@@ -215,7 +215,7 @@ void MarioActor::flushCoinPull() {
     }
 }
 
-bool MarioActor::tryCoinPullOne(HitSensor* pSensor) NO_INLINE {
+bool MarioActor::tryCoinPullOne(HitSensor* pSensor) {
     tryPullTrans(&pSensor->mHost->mVelocity, pSensor->mPosition);
 
     return pSensor->receiveMessage(ACTMES_ITEM_PULL, getSensor("body"));

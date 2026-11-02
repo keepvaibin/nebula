@@ -29,7 +29,7 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    FunctionAsyncExecutor* getFunctionAsyncExecutor() NO_INLINE {
+    FunctionAsyncExecutor* getFunctionAsyncExecutor() {
         return MR::getGameSystemObjHolder()->mFunctionAsyncExecutor;
     }
 
@@ -37,7 +37,7 @@ namespace {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameDataTemporaryInGalaxy;
     }
 
-    NameObjHolder* getSceneNameObjHolder() NO_INLINE {
+    NameObjHolder* getSceneNameObjHolder() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mObjHolder;
     }
 };  // namespace

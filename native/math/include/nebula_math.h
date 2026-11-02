@@ -95,6 +95,25 @@ static inline void NebulaMtxConcat(const Mtx a, const Mtx b, Mtx ab) {
 #endif
 }
 
+/* dst = src * a scale about the origin: the columns scaled, translation kept. */
+static inline void NebulaMtxApplyScale(const Mtx src, Mtx dst, f32 x, f32 y, f32 z) {
+#if defined(__SSE2__)
+    const __m128 s = _mm_set_ps(1.0f, z, y, x);
+    const __m128 r0 = _mm_mul_ps(_mm_loadu_ps(src[0]), s), r1 = _mm_mul_ps(_mm_loadu_ps(src[1]), s), r2 = _mm_mul_ps(_mm_loadu_ps(src[2]), s);
+    _mm_storeu_ps(dst[0], r0);
+    _mm_storeu_ps(dst[1], r1);
+    _mm_storeu_ps(dst[2], r2);
+#else
+    for (int i = 0; i < 3; i++) {
+        const f32 r0 = src[i][0] * x, r1 = src[i][1] * y, r2 = src[i][2] * z, r3 = src[i][3];
+        dst[i][0] = r0;
+        dst[i][1] = r1;
+        dst[i][2] = r2;
+        dst[i][3] = r3;
+    }
+#endif
+}
+
 /* dst = m * (src, 1). */
 static inline void NebulaMtxMultVec(const Mtx m, const Vec* src, Vec* dst) {
     const f32 x = src->x, y = src->y, z = src->z;
@@ -251,6 +270,45 @@ static inline f32 NebulaVecDistance(const Vec* a, const Vec* b) {
 }
 
 /* pq = p * q (Hamilton product). */
+/* dst = a + (b - a) * t. */
+static inline void NebulaVecLerp(const Vec* a, const Vec* b, Vec* dst, f32 t) {
+    const f32 x = (b->x - a->x) * t + a->x;
+    const f32 y = (b->y - a->y) * t + a->y;
+    const f32 z = (b->z - a->z) * t + a->z;
+    dst->x = x;
+    dst->y = y;
+    dst->z = z;
+}
+
+/* dst = a * scale + b. */
+static inline void NebulaVecScaleAdd(const Vec* a, const Vec* b, Vec* dst, f32 scale) {
+    const f32 x = a->x * scale + b->x;
+    const f32 y = a->y * scale + b->y;
+    const f32 z = a->z * scale + b->z;
+    dst->x = x;
+    dst->y = y;
+    dst->z = z;
+}
+
+/* The root of a positive value; zero, negatives and NaN come back as they are. */
+static inline f32 NebulaSqrt(f32 value) {
+    return value > 0.0f ? __builtin_sqrtf(value) : value;
+}
+
+/* Along the shorter way round: q is flipped when the two lie on opposite sides. */
+static inline void NebulaQuatLerp(const Quaternion* p, const Quaternion* q, f32 t, Quaternion* dst) {
+    const f32 dot = (p->z * q->z + p->x * q->x) + (p->w * q->w + p->y * q->y);
+    const f32 sign = dot < 0.0f ? -1.0f : 1.0f;
+    const f32 x = -t * (p->x - sign * q->x) + p->x;
+    const f32 y = -t * (p->y - sign * q->y) + p->y;
+    const f32 z = -t * (p->z - sign * q->z) + p->z;
+    const f32 w = -t * (p->w - sign * q->w) + p->w;
+    dst->x = x;
+    dst->y = y;
+    dst->z = z;
+    dst->w = w;
+}
+
 static inline void NebulaQuatMultiply(const Quaternion* p, const Quaternion* q, Quaternion* pq) {
     const f32 px = p->x, py = p->y, pz = p->z, pw = p->w;
     const f32 qx = q->x, qy = q->y, qz = q->z, qw = q->w;

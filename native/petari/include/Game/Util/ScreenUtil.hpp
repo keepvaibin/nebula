@@ -19,14 +19,14 @@ namespace MR {
     // draws it into a fixed 160x160 region.
     void beginWiiScreenWidth();
     void endWiiScreenWidth();
-    inline s32 getScreenHeight() NO_INLINE {
+    inline s32 getScreenHeight() {
         return NebulaFrameClock::cFrameHeight;
     }
     s32 getSafetyFrameWidth();
     s32 getSafetyFrameLeft();
     s32 getSafetyFrameRight();
-    s32 getFrameBufferWidth() NO_INLINE;
-    inline s32 getFrameBufferHeight() NO_INLINE {
+    s32 getFrameBufferWidth();
+    inline s32 getFrameBufferHeight() {
         return NebulaFrameClock::cFrameHeight;
     }
     void convertFrameBufferPosToScreenPos(TVec2f*, const TVec2f&);
@@ -108,8 +108,8 @@ namespace MR {
     void disappearInformationMessage();
     bool isDeadInformationMessage();
     void appearYesNoSelector(const char*, const char*, const char*);
-    bool isYesNoSelected() NO_INLINE;
-    bool isYesNoSelectedYes() NO_INLINE;
+    bool isYesNoSelected();
+    bool isYesNoSelectedYes();
     void setYesNoSelectorSE(const char*, const char*, const char*);
     void resetYesNoSelectorSE();
     void startMoviePlayer(const char*);

@@ -18,8 +18,8 @@ static HitInfo mSortBuffer[32];
 static u32 mSortCount;
 
 namespace {
-    u32 getStrikeInfoNumCategory(s32 category) NO_INLINE;
-    bool getFirstPolyOnLineCategoryExceptActor(TVec3f*, Triangle*, const TVec3f&, const TVec3f&, const LiveActor*, s32) NO_INLINE;
+    u32 getStrikeInfoNumCategory(s32 category);
+    bool getFirstPolyOnLineCategoryExceptActor(TVec3f*, Triangle*, const TVec3f&, const TVec3f&, const LiveActor*, s32);
 
     u32 getStrikeInfoNumCategory(s32 category) {
         return MR::getCollisionDirector()->getCategoryKeeper(category)->_10;

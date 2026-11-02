@@ -20,7 +20,7 @@ namespace MR {
     bool isWatchedPrevEdge(const RailGraphIter* pRailGraphIter);
     TVec3f* getCurrentNodePosition(const RailGraphIter* pRailGraphIter);
     TVec3f* getNextNodePosition(const RailGraphIter* pRailGraphIter);
-    void calcWatchEdgeVector(const RailGraphIter* pIter, TVec3f* pEdge) NO_INLINE;
+    void calcWatchEdgeVector(const RailGraphIter* pIter, TVec3f* pEdge);
     void calcWatchEdgeDirection(const RailGraphIter* pRailGraphIter, TVec3f* pVec);
     s32 getNearNodeIndex(const RailGraph* pGraph, const TVec3f& rPosition, f32 maxDistance, RailGraphNodeSelecter* pSelector);
     s32 getSelectEdgeArg0(const RailGraphIter* pRailGraphIter);

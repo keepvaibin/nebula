@@ -360,7 +360,7 @@ namespace MR {
             return;
         }
 
-        f32 discRoot = JMASqrt(discrim);
+        f32 discRoot = NebulaSqrt(discrim);
 
         f32 t1 = (max + discRoot) / end;
         f32 t2 = (max - discRoot) / end;
@@ -830,7 +830,7 @@ namespace MR {
             return true;
         }
 
-        f32 sinAngle = JMASqrt(1.0f - cosAngle * cosAngle);
+        f32 sinAngle = NebulaSqrt(1.0f - cosAngle * cosAngle);
         TVec3f rejectFrom = rTo.killElement(rFrom);
 
         if (isNearZero(rejectFrom)) {
@@ -1135,7 +1135,7 @@ namespace MR {
     };
 };  // namespace MR
 
-f32 VecKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __REGISTER const Vec* pDst) {
+f32 VecKillElement(const Vec* pSrc, const Vec* pKill, const Vec* pDst) {
     const f32 sx = pSrc->x, sy = pSrc->y, sz = pSrc->z;
     const f32 kx = pKill->x, ky = pKill->y, kz = pKill->z;
     const f32 dot = (sx * kx + sy * ky) + sz * kz;
@@ -1576,12 +1576,3 @@ namespace MR {
         NebulaMtxMultVec(mtx, &vec, pDst);
     }
 };  // namespace MR
-
-f32 JMASqrt(__REGISTER f32 value) {
-    if (!(value > 0.0f)) {
-        return value;
-    }
-
-    // The console refines frsqrte's estimate once; natively the root.
-    return __builtin_sqrtf(value);
-}

@@ -73,7 +73,7 @@ public:
     void updateTimers();
     void updateMorphResetTimer();
     void doExtraServices();
-    bool isEnableCheckGround() NO_INLINE;
+    bool isEnableCheckGround();
     void setGroundNorm(const TVec3f&);
     void checkForceGrounding();
     void updateGroundInfo();
@@ -237,12 +237,12 @@ public:
     void trySlipUpJump();
     void tryHangSlipUp();
     void tryDrop();
-    bool isDigitalJump() const NO_INLINE;
+    bool isDigitalJump() const;
     void initActiveJumpVec();
     void initJumpParam();
     bool isEnableFutureJump() const;
     void procJump(bool);
-    void checkWallRising() NO_INLINE;
+    void checkWallRising();
     void checkWallJumpHit();
     void decideSlipUp();
     void moveWallSlide(f32);
@@ -407,7 +407,7 @@ public:
 
     bool doRecovery();
 
-    bool isSliderFloor() const NO_INLINE;
+    bool isSliderFloor() const;
     bool checkSliderMode() const;
     void startSlider();
 

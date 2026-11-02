@@ -221,13 +221,13 @@ namespace MR {
     void copyLayoutDrawInfoWithAspect(nw4r::lyt::DrawInfo*, const LayoutActor*, bool);
     void calcAnimLayoutWithDrawInfo(const LayoutActor*, const nw4r::lyt::DrawInfo&);
     void drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor*, const nw4r::lyt::DrawInfo&);
-    bool isStep(const LayoutActor*, s32) NO_INLINE;
+    bool isStep(const LayoutActor*, s32);
     bool isFirstStep(const LayoutActor*);
     bool isLessStep(const LayoutActor*, s32);
     bool isGreaterStep(const LayoutActor*, s32);
     bool isGreaterEqualStep(const LayoutActor*, s32);
     bool isIntervalStep(const LayoutActor*, s32);
-    bool isNewNerve(const LayoutActor*) NO_INLINE;
+    bool isNewNerve(const LayoutActor*);
     f32 calcNerveRate(const LayoutActor*, s32);
     f32 calcNerveRate(const LayoutActor*, s32, s32);
     f32 calcNerveEaseInRate(const LayoutActor*, s32);

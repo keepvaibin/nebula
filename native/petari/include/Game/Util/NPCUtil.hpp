@@ -16,7 +16,7 @@ namespace MR {
     bool isNPCItemFileExist(const char*);
     void initDefaultPose(NPCActor*, const JMapInfoIter&);
     void turnPlayerToActor(const LiveActor*, f32);
-    void decidePose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32) NO_INLINE;
+    void decidePose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32);
     void setNPCActorPos(NPCActor*, const char*);
     void setNPCActorPos(NPCActor*, const TVec3f&);
     void setNPCActorPose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&);

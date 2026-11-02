@@ -86,12 +86,12 @@ namespace TDDraw {
         pMaterial->constants[4] = -1.0f;
     }
 
-    void sendPoint(const TVec3f& rPoint, u32 color) NO_INLINE {
+    void sendPoint(const TVec3f& rPoint, u32 color) {
         J3DNativeDraw::position(rPoint.x, rPoint.y, rPoint.z);
         J3DNativeDraw::color(color);
     }
 
-    void sendPoint(const TVec3f& rVec) NO_INLINE {
+    void sendPoint(const TVec3f& rVec) {
         J3DNativeDraw::position(rVec.x, rVec.y, rVec.z);
     }
 

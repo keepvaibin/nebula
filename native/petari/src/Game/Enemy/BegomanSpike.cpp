@@ -479,7 +479,7 @@ void BegomanSpike::endBindStarPointer() {
     BegomanBase::finishBindStarPointer();
 }
 
-void BegomanSpike::generateItem() NO_INLINE {
+void BegomanSpike::generateItem() {
     MR::appearCoinPop(this, mPosition - mGravity * ::sCoinTransY, ::sCoinGenerateNum);
 }
 

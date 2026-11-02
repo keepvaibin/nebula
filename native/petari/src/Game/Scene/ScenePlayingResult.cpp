@@ -14,7 +14,7 @@
 #define STAR_PIECE_STEP_NUM 50
 
 namespace {
-    void requestOneUpIfNeed(int prevNum, int currNum, int stepNum) NO_INLINE {
+    void requestOneUpIfNeed(int prevNum, int currNum, int stepNum) {
         if (prevNum / stepNum < currNum / stepNum) {
             MR::incPlayerLeft();
             MR::requestOneUp();

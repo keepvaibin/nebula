@@ -11,7 +11,7 @@
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
-    nw4r::lyt::TextBox* getTextBoxPane(LayoutActor* pActor, const char* pPaneName) NO_INLINE {
+    nw4r::lyt::TextBox* getTextBoxPane(LayoutActor* pActor, const char* pPaneName) {
         nw4r::lyt::Pane* pPane = MR::getPane(pActor, pPaneName);
         const nw4r::ut::detail::RuntimeTypeInfo* pTypeInfo = &nw4r::lyt::TextBox::typeInfo;
         nw4r::lyt::TextBox* pTextBox;

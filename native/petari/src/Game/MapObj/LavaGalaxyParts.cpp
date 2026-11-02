@@ -65,7 +65,6 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     const char* objectName;
     MR::getObjectName(&objectName, rIter);
 
-    // FIXME: this is an inline
     const char* pName = objectName;
     bool isLavaStep;
     if (MR::isEqualString("LavaStepA", pName)) {
@@ -95,7 +94,6 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     f32 arg0 = -1.0f;
     MR::getJMapInfoArg0NoInit(rIter, &arg0);
 
-    // FIXME: this is an inline
     pName = objectName;
     bool isNonFloatingOrLavaStep;
     if (MR::isEqualString(pName, "LavaNonFloatingStepA")) {

@@ -46,7 +46,7 @@ public:
     f32 getNearestRailPosCoord(const TVec3f&) const;
     f32 getRailPosCoord(int) const;
     void calcCurrentRailCtrlPointIter(JMapInfoIter*, f32, bool) const;
-    void calcRailCtrlPointIter(JMapInfoIter*, int) const NO_INLINE;
+    void calcRailCtrlPointIter(JMapInfoIter*, int) const;
     void getIncludedSection(const RailPart**, f32*, f32, int) const;
     int getCurrentCtrlPointIndex(f32, bool) const;
 

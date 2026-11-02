@@ -224,47 +224,47 @@ namespace nw4r {
             };
 
             struct MaterialResourceNum {
-                u8 GetTexMapNum() const NO_INLINE {
+                u8 GetTexMapNum() const {
                     return u8(detail::GetBits(u32(bits), 0, 4));
                 }
 
-                u8 GetTexSRTNum() const NO_INLINE {
+                u8 GetTexSRTNum() const {
                     return u8(detail::GetBits(u32(bits), 4, 4));
                 }
 
-                u8 GetTexCoordGenNum() const NO_INLINE {
+                u8 GetTexCoordGenNum() const {
                     return u8(detail::GetBits(u32(bits), 8, 4));
                 }
 
-                bool HasTevSwapTable() const NO_INLINE {
+                bool HasTevSwapTable() const {
                     return detail::TestBit(u32(bits), 12);
                 }
 
-                u8 GetIndTexSRTNum() const NO_INLINE {
+                u8 GetIndTexSRTNum() const {
                     return u8(detail::GetBits(u32(bits), 13, 2));
                 }
 
-                u8 GetIndTexStageNum() const NO_INLINE {
+                u8 GetIndTexStageNum() const {
                     return u8(detail::GetBits(u32(bits), 15, 3));
                 }
 
-                u8 GetTevStageNum() const NO_INLINE {
+                u8 GetTevStageNum() const {
                     return u8(detail::GetBits(u32(bits), 18, 5));
                 }
 
-                bool HasAlphaCompare() const NO_INLINE {
+                bool HasAlphaCompare() const {
                     return detail::TestBit(u32(bits), 23);
                 }
 
-                bool HasBlendMode() const NO_INLINE {
+                bool HasBlendMode() const {
                     return detail::TestBit(u32(bits), 24);
                 }
 
-                u8 GetChanCtrlNum() const NO_INLINE {
+                u8 GetChanCtrlNum() const {
                     return u8(detail::GetBits(u32(bits), 25, 1));
                 }
 
-                u8 GetMatColNum() const NO_INLINE {
+                u8 GetMatColNum() const {
                     return u8(detail::GetBits(u32(bits), 27, 1));
                 }
 

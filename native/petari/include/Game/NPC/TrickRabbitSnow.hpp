@@ -41,7 +41,7 @@ public:
     bool isGiveUp() const;
     bool isHideSnow() const;
     bool isEnableCaught() const;
-    bool isEnableBlowDamage() const NO_INLINE;
+    bool isEnableBlowDamage() const;
     void startJumpSound();
 
     void exeWaitSnow();

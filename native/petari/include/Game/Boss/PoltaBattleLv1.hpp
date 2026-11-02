@@ -18,7 +18,7 @@ public:
 
     bool isEnableSensor(const HitSensor*) const;
     bool isEnableDamage() const;
-    bool isEnableScream() const NO_INLINE;
+    bool isEnableScream() const;
 
     void exeWait();
     void exeBreakBody();

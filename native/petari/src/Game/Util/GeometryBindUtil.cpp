@@ -33,7 +33,7 @@ void BindCone::calcVertexPosition() {
 }
 
 void BindCone::calcGeneratrixLength() {
-    mGeneratrixLength = MR::fastSqrtf(mHeight * mHeight + mRadius * mRadius);
+    mGeneratrixLength = NebulaSqrt(mHeight * mHeight + mRadius * mRadius);
 }
 
 void BindCone::setPosition(const TVec3f& rPosition) {

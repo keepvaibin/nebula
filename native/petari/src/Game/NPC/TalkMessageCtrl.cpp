@@ -82,7 +82,7 @@ void TalkMessageCtrl::createMessage(const JMapInfoIter& rIter, const char* pName
 }
 
 namespace {
-    bool isNodeEventContinue(const MessageSystem::FlowNodeEvent* pArg) NO_INLINE {
+    bool isNodeEventContinue(const MessageSystem::FlowNodeEvent* pArg) {
         return pArg->mEventType <= 4 && (1 << pArg->mEventType & 0x15);
     }
 };  // namespace

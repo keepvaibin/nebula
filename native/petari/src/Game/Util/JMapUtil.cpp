@@ -79,7 +79,7 @@ bool MR::isObjectName(const JMapInfoIter& rIter, const char* pName) {
 }
 
 namespace {
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, s32* pOut) NO_INLINE {
+    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, s32* pOut) {
         s32 arg;
 
         if (!rIter.getValue(pName, &arg)) {
@@ -95,7 +95,7 @@ namespace {
         return false;
     }
 
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, f32* pOut) NO_INLINE {
+    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, f32* pOut) {
         s32 arg;
 
         if (!getJMapInfoArgNoInit(rIter, pName, &arg)) {
@@ -107,7 +107,7 @@ namespace {
         return true;
     }
 
-    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, bool* pOut) NO_INLINE {
+    bool getJMapInfoArgNoInit(const JMapInfoIter& rIter, const char* pName, bool* pOut) {
         s32 arg;
 
         if (!getJMapInfoArgNoInit(rIter, pName, &arg)) {
@@ -363,7 +363,7 @@ s32 MR::getDemoGroupLinkID(const JMapInfoIter& rIter) {
 }
 
 namespace {
-    bool getJMapInfoRailArg(const JMapInfoIter& rIter, const char* pName, s32* pOut) NO_INLINE {
+    bool getJMapInfoRailArg(const JMapInfoIter& rIter, const char* pName, s32* pOut) {
         s32 arg;
 
         if (!rIter.getValue< s32 >(pName, &arg)) {
@@ -446,7 +446,7 @@ bool MR::getJMapInfoGroupID(const JMapInfoIter& rIter, s32* pOut) {
     return MR::getJMapInfoClippingGroupID(rIter, pOut);
 }
 
-bool MR::getJMapInfoClippingGroupID(const JMapInfoIter& rIter, s32* pOut) NO_INLINE {
+bool MR::getJMapInfoClippingGroupID(const JMapInfoIter& rIter, s32* pOut) {
     return ::getJMapInfoArgWithInit(rIter, "ClippingGroupId", pOut);
 }
 

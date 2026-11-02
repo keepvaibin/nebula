@@ -27,7 +27,7 @@ public:
         return mMessage[1];
     }
 
-    bool isGroupTagId(int group, int tag) const NO_INLINE {
+    bool isGroupTagId(int group, int tag) const {
         return reinterpret_cast< const u8* >(mMessage)[1] == group && mMessage[1] == tag;
     }
 

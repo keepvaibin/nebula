@@ -16,8 +16,8 @@ namespace TDDraw {
     // none, 1 by alpha, 2 added by alpha) as a native material: depth off, no culling, colour written and alpha not,
     // passing every alpha. The site adjusts it, sets its textures and colour, then sends it (NativeShader::send).
     void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode);
-    void sendPoint(const TVec3f&, u32) NO_INLINE;
-    void sendPoint(const TVec3f&) NO_INLINE;
+    void sendPoint(const TVec3f&, u32);
+    void sendPoint(const TVec3f&);
     void drawLine(const TVec3f&, const TVec3f&, u32);
     void drawCircle(const TVec3f&, const TVec3f&, f32, u32, u32);
     void drawCircle(const TVec3f&, const TVec3f&, const TVec3f&, f32, u32, u32);
@@ -45,7 +45,7 @@ namespace TDDraw {
     void project2D(TVec2f*, const TVec3f&);
     void fix2Dpos(TVec3f*);
 
-    inline void setGXColor(u32 color, NebulaColor8* pColor) NO_INLINE {
+    inline void setGXColor(u32 color, NebulaColor8* pColor) {
         pColor->r = (color >> 24) & 0xFF;
         pColor->g = (color >> 16) & 0xFF;
         pColor->b = (color >> 8) & 0xFF;

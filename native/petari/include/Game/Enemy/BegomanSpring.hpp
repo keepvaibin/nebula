@@ -55,10 +55,10 @@ public:
     void endPursue();
     void endHide();
     void endBindStarPointer();
-    void generateItem() NO_INLINE;
-    void startCamera() NO_INLINE;
+    void generateItem();
+    void startCamera();
     void updateCamera();
-    void endCamera() NO_INLINE;
+    void endCamera();
 
     /* 0x100 */ MultiEventCamera* mEventCamera;
     /* 0x104 */ BegomanSpringHead* mHead;

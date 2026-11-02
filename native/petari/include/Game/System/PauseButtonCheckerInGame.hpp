@@ -10,7 +10,7 @@ public:
     void update();
     bool isPermitToPlusPause() const;
     bool isPermitToMinusPause() const;
-    bool isPermitToPause() const NO_INLINE;
+    bool isPermitToPause() const;
 
 private:
     /* 0x0 */ s32 mPlusHoldFrame;

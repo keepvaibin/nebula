@@ -1213,7 +1213,6 @@ void Mario::forceSetHeadVecKeepSide(const TVec3f& rVec) {
     _750 = 0;
 }
 
-// float regswap + bad stack ordering
 void Mario::draw() const {
     if (mDrawStates._1) {
         TDDraw::cameraInit3D();

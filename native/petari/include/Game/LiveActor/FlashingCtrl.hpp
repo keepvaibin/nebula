@@ -12,8 +12,8 @@ public:
     void start(int);
     void end();
     s32 getCurrentInterval() const;
-    bool isNowFlashing() const NO_INLINE;
-    bool isNowOn() const NO_INLINE;
+    bool isNowFlashing() const;
+    bool isNowOn() const;
     void updateFlashing();
 
     /* 0x0C */ LiveActor* mActor;

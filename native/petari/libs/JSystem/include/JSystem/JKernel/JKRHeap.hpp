@@ -64,7 +64,7 @@ public:
     virtual bool state_compare(const TState&, const TState&) const;
     virtual void state_dump(const TState&) const;
 
-    void* alloc(u32, int) NO_INLINE;
+    void* alloc(u32, int);
     JKRHeap* becomeSystemHeap();
     JKRHeap* becomeCurrentHeap();
     void destroy();
@@ -138,7 +138,7 @@ public:
     static bool initArena(char** pMemory, u32* pSize, int maxHeaps);
     static bool initArena2(char** pMemory, u32* pSize, int maxHeaps);
     static void* alloc(u32 size, int alignment, JKRHeap* pHeap);
-    static void free(void* pPtr, JKRHeap* pHeap) NO_INLINE;
+    static void free(void* pPtr, JKRHeap* pHeap);
     static s32 resize(void* pPtr, u32 size, JKRHeap* pHeap);
     static s32 getSize(void* pPtr, JKRHeap* pHeap);
     static JKRHeap* findFromRoot(void* pPtr);

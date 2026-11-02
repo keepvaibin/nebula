@@ -33,7 +33,7 @@ public:
     void exeResetProcessing();
 
     inline static bool isCometStar(GalaxyMoveArgument);
-    static bool isScenePermittedIsUpdateWiiRemoteStatus() NO_INLINE;
+    static bool isScenePermittedIsUpdateWiiRemoteStatus();
     static bool isSceneLongAutoSleepWiiRemote();
     void updateGameDataBeforeChangeScene();
     void resetGameDataAfterChangeScene(const GalaxyMoveArgument&);

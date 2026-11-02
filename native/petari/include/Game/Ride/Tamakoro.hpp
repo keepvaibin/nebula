@@ -69,14 +69,14 @@ public:
     void updateMarioOffset();
     void updateMoveBckBlend(f32);
     void updateSquatBckBlend(f32);
-    bool isEnablePushPlayer() const NO_INLINE;
-    bool isEnableEnemyAttack() const NO_INLINE;
-    bool isEnableBallBind() const NO_INLINE;
-    bool isEnebleHitCollisionMessage() const NO_INLINE;
-    bool isUseMarioOffset() const NO_INLINE;
-    bool isGroundMomentBall() const NO_INLINE;
-    bool isRideRail() const NO_INLINE;
-    bool isNeedTutorial() const NO_INLINE;
+    bool isEnablePushPlayer() const;
+    bool isEnableEnemyAttack() const;
+    bool isEnableBallBind() const;
+    bool isEnebleHitCollisionMessage() const;
+    bool isUseMarioOffset() const;
+    bool isGroundMomentBall() const;
+    bool isRideRail() const;
+    bool isNeedTutorial() const;
     void startRotateLevelSound();
 
     inline void setTutorial() {

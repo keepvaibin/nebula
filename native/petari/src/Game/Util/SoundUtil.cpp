@@ -332,7 +332,7 @@ namespace MR {
         return AudWrap::getRemixMgr()->getRemixNoteGroupDataFromMelodyNo(melodyNo)->mNoteCount;
     }
 
-    void limitedSound(const char* pName, s32 param2) NO_INLINE {
+    void limitedSound(const char* pName, s32 param2) {
         JAISoundID id = AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(pName);
 
         AudWrap::getSystem()->registerLimitedSound(id, param2);

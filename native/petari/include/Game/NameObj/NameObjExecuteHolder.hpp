@@ -14,11 +14,11 @@ public:
     void initConnectting();
     void requestConnect(u8*);
     void requestDisconnect(u8*, bool);
-    void executeRequirementConnectMovement() NO_INLINE;
-    void executeRequirementDisconnectMovement() NO_INLINE;
-    void executeRequirementConnectDraw() NO_INLINE;
-    void executeRequirementDisconnectDraw() NO_INLINE;
-    void executeRequirementDisconnectDrawDelay() NO_INLINE;
+    void executeRequirementConnectMovement();
+    void executeRequirementDisconnectMovement();
+    void executeRequirementConnectDraw();
+    void executeRequirementDisconnectDraw();
+    void executeRequirementDisconnectDrawDelay();
     void requestMovementOn(int);
     void requestMovementOff(int);
     void findLightInfo() const;

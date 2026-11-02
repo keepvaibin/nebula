@@ -54,7 +54,7 @@ public:
     void killBreakModel();
     void rotateToPlayer();
     f32 calcToPlayerRotateSpeed() const;
-    void updateAction() NO_INLINE;
+    void updateAction();
     void updatePose(f32, f32);
     void start();
     void setStartPose();

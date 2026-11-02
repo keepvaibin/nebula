@@ -15,7 +15,7 @@
 #include <cstdio>
 
 namespace {
-    SaveDataHandleSequence* getSaveDataHandleSequence() NO_INLINE {
+    SaveDataHandleSequence* getSaveDataHandleSequence() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
     }
 
@@ -23,7 +23,7 @@ namespace {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameDataTemporaryInGalaxy;
     }
 
-    GameSequenceProgress* getGameSequenceProgress() NO_INLINE {
+    GameSequenceProgress* getGameSequenceProgress() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameSequenceProgress;
     }
 };  // namespace

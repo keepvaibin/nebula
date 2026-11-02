@@ -104,7 +104,7 @@ public:
         return (mStatus & status);
     }
     /* SMG1 change -- returns u32 instead of bool */
-    u32 checkFlag(u32 flag) const NO_INLINE {
+    u32 checkFlag(u32 flag) const {
         return (mpRes->getDyn()->getFlag() & flag);
     }
     u8 getResourceManagerID() const {
@@ -257,13 +257,13 @@ public:
     f32 get_r_f() {
         return mRndm.get_rndm_f();
     }
-    f32 get_r_zp() NO_INLINE {
+    f32 get_r_zp() {
         return mRndm.get_rndm_zp();
     }
-    f32 get_r_zh() NO_INLINE {
+    f32 get_r_zh() {
         return mRndm.get_rndm_zh();
     }
-    s16 get_r_ss() NO_INLINE {
+    s16 get_r_ss() {
         return mRndm.get_rndm_ss();
     }
 

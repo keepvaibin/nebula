@@ -81,7 +81,7 @@ public:
     void incModeCounter(void*, s32);
     void decModeCounter(void*);
 
-    bool isMode(StarPointerModeEnum mode) NO_INLINE {
+    bool isMode(StarPointerModeEnum mode) {
         return mModeCounter[mode] != 0 || mRequested[mode];
     }
 

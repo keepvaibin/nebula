@@ -20,7 +20,7 @@ public:
 
     JAISoundID getSoundID(const char*) const;
     JAISoundID getSoundID(const char*, u32) const;
-    void init() NO_INLINE;
+    void init();
     void initDataTable(const JAUSoundNameTable*);
     void addGroupInfo(const JAUSoundNameTable*, u8, u8);
     void addSectionInfo(const JAUSoundNameTable*, u8);

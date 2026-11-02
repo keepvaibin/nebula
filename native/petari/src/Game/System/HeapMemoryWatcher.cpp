@@ -11,7 +11,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 
 namespace {
-    JKRExpHeap* createExpHeap(u32 size, JKRHeap* pHeap, bool a3) NO_INLINE {
+    JKRExpHeap* createExpHeap(u32 size, JKRHeap* pHeap, bool a3) {
         JKRExpHeap* heap;
 
         if (a3) {

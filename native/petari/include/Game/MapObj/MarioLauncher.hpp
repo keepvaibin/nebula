@@ -42,7 +42,7 @@ public:
     bool doFlight();
     bool doLanding(s32);
 
-    bool testHitCollision() NO_INLINE;
+    bool testHitCollision();
     bool isBreak(const Triangle*);
 
     void onSwitchA();

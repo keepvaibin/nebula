@@ -42,14 +42,13 @@ public:
 
     bool ballMtxCallBack(TPos3f*, const JointControllerInfo&);
 
-    // some callers will only match if these are marked NO_INLINE, even though they aren't being inlined (???)
     bool isEnablePunched() const;
-    bool isEnableHitPlayer() const NO_INLINE;
+    bool isEnableHitPlayer() const;
     bool isEnableEnemyAttack() const;
     bool isEnableCrushed() const;
     bool isEnableTrample() const;
-    bool isEnableBlowed() const NO_INLINE;
-    bool isCrushed() const NO_INLINE;
+    bool isEnableBlowed() const;
+    bool isCrushed() const;
 
     void addVelocityKeepHeight();
 

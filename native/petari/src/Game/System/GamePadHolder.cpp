@@ -365,7 +365,7 @@ GamePad* GamePadHolder::getGamePad(s32 channel) {
 }
 
 namespace {
-    GamePadHolder* getGamePadHolder() NO_INLINE {
+    GamePadHolder* getGamePadHolder() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mGamePadHolder;
     }
 };  // namespace

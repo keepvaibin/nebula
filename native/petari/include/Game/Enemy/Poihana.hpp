@@ -33,7 +33,7 @@ public:
     void exeChasePlayer();
     void exeShootUpCharge();
     void exeShootUp();
-    void endShootUp() NO_INLINE;
+    void endShootUp();
     void exeGoBack();
     void exeShock();
     void exeSwoonLand();
@@ -44,10 +44,10 @@ public:
     void exeHide();
     void exeAppear();
     void exeDPDSwoon();
-    void endDPDSwoon() NO_INLINE;
+    void endDPDSwoon();
 
     bool tryToStartBind(HitSensor* pSender);
-    void updateBindActorMtx() NO_INLINE;
+    void updateBindActorMtx();
     void endBind();
     void startBound();
     void calcBound();
@@ -62,7 +62,7 @@ public:
     bool isNerveTypeWalkOrWait() const;
     bool isNeedForBackHome() const;
     bool isNeedForGetUp() const;
-    bool isBackAttack(HitSensor* pMySensor) const NO_INLINE;
+    bool isBackAttack(HitSensor* pMySensor) const;
 
     /* 0x8C */ AnimScaleController* mAnimScaleCtrl;
     /* 0x90 */ WalkerStateBindStarPointer* mBindStarPointer;

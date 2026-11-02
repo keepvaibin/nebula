@@ -93,7 +93,7 @@ void PlayerHeapHolder::dispose() {
     }
 }
 
-void PlayerHeapHolder::setIsDataMario(bool isDataMario) NO_INLINE {
+void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
     mIsDataMario = isDataMario;
     mCondition->mIsDataMario = isDataMario;
 }

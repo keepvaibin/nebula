@@ -20,8 +20,8 @@ public:
     void initBreakModel();
     void start(LiveActor*, const TVec3f&);
     void requestBreak();
-    bool isEnableAttack() const NO_INLINE;
-    bool isEnableBreak() const NO_INLINE;
+    bool isEnableAttack() const;
+    bool isEnableBreak() const;
 
     void exeSign();
     void exeJut();

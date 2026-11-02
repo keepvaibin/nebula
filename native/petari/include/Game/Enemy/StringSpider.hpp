@@ -31,7 +31,7 @@ public:
     void reactDPD();
     void reactStringForce();
     bool isOverStringLength(TVec3f*, f32*);
-    TVec3f calcToRootVector() NO_INLINE;
+    TVec3f calcToRootVector();
     void calcPosture(f32, bool);
     void tearDownDpdGripped();
     void extendString();

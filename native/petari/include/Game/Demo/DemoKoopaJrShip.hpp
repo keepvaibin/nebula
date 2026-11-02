@@ -19,7 +19,7 @@ public:
     void exeFlyAway();
     void initAnimID(const JMapInfoIter& rIter);
     void createKoopaJrObj(const JMapInfoIter& rIter);
-    bool tryDemoEnd() NO_INLINE;
+    bool tryDemoEnd();
     void startEntryAnim();
     void startLeaveAnim();
 

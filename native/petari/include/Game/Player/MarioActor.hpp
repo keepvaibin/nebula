@@ -134,7 +134,7 @@ public:
     bool doStun();
     void scaleMtx(MtxPtr);
     void updateBaseScaleMtx();
-    void getRealMtx(MtxPtr, const char*) const NO_INLINE;
+    void getRealMtx(MtxPtr, const char*) const;
     void getRealPos(const char*, TVec3f*) const;
     MtxPtr getGlobalJointMtx(const char*);
     void calcAnimInMovement();
@@ -219,8 +219,8 @@ public:
     void stopEffect(const char*);
     void stopMaterialEffect(const char*);
     void stopCommonEffect(const char*);
-    bool isCommonEffect(const char*) const NO_INLINE;
-    bool isMaterialEffect(const char*) const NO_INLINE;
+    bool isCommonEffect(const char*) const;
+    bool isMaterialEffect(const char*) const;
     s32 getFloorMaterialIndex(u32) const;
 
     void updateSearchLight();
@@ -267,7 +267,7 @@ public:
     bool isEnableSpinPunch();
     void reactionPunch(HitSensor*);
     bool sendPunch(HitSensor*, bool);
-    bool doFreezeAttack(HitSensor*) NO_INLINE;
+    bool doFreezeAttack(HitSensor*);
     bool trySpinPunch();
     void printHitMark(HitSensor*);
     bool tryPunchAirAfter(HitSensor*);
@@ -506,7 +506,7 @@ public:
     void tryCoinPull();
     void tryCoinPullInRush();
     void flushCoinPull();
-    bool tryCoinPullOne(HitSensor*) NO_INLINE;
+    bool tryCoinPullOne(HitSensor*);
     void tryPullTrans(TVec3f*, const TVec3f&);
     bool releaseThrowMemoSensor();
     void tryReleaseWithMsg(u32);

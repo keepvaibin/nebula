@@ -20,7 +20,7 @@ public:
     static void makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter);
     bool show(const char*, u32, bool, int);
     void exeWait();
-    void exeDisappear() NO_INLINE;
+    void exeDisappear();
 
     /* 0x20 */ bool _20;
     /* 0x24 */ const char* _24;
