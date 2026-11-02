@@ -18,7 +18,10 @@ namespace JUtility {
             set(color);
         }
 
-        TColor& operator=(const TColor& rColor);
+        TColor& operator=(const TColor& rColor) {
+            static_cast< NebulaColor8& >(*this) = rColor;
+            return *this;
+        }
 
         void set(u8 cR, u8 cG, u8 cB, u8 cA) {
             r = cR;
