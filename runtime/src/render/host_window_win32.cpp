@@ -23,6 +23,7 @@
 #include "galaxy/ui/home_menu_model.h"
 #include "galaxy/ui/settings_model.h"
 #include "galaxy/ui/settings_graphics_page.h"
+#include "galaxy/ui/settings_general_page.h"
 #include "galaxy/ui/settings_save_model.h"
 
 #include <algorithm>
@@ -314,7 +315,7 @@ std::uint32_t s_handled_key_normalized = 0u;
 
 constexpr unsigned kNativeSettingsTabCount = 8;
 
-// Each language in its own name (UTF-8: Ãƒâ€¡, Ãƒâ€˜, Ã¦â€”Â¥Ã¦Å“Â¬Ã¨ÂªÅ¾); a disc offers only its own, whose letters its font has.
+// Each language in its own name (UTF-8: Ç, Ñ, 日本語); a disc offers only its own, whose letters its font has.
 using ui::game_language_name;
 using ui::native_settings_first_row;
 using ui::kNativeSettingsVisibleRows;
@@ -2051,7 +2052,7 @@ void ui_text(
             cursor_x += 4 * scale;
             continue;
         }
-        // UTF-8 Ãƒâ€¡/ÃƒÂ§ and Ãƒâ€˜/ÃƒÂ± (C3 87/A7, C3 91/B1); any other letter of several bytes draws as one blank cell.
+        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other letter of several bytes draws as one blank cell.
         if (static_cast<unsigned char>(ch) == 0xC3u && i + 1u < text.size()) {
             const auto next = static_cast<unsigned char>(text[++i]);
             ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
@@ -3018,95 +3019,47 @@ bool mods_page_key(WPARAM key, bool accept, bool was_down) {
     return true;
 }
 
-std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
-    std::vector<SettingsRow> rows;
-    char text[32]{};
-    std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 4u));
-    rows.push_back({"TEXT SPEED", runtime.text_speed >= 4u ? std::string("INSTANT") : std::string(text),
-                    [](RenderConfig&, int delta) {
-                        RuntimeSettings& settings = s_runtime_draft;
-                        settings.text_speed = settings_step(std::clamp(settings.text_speed, 1u, 4u) - 1u, 4u, delta) + 1u;
-                    },
-                    "HOW FAST DIALOGUE TEXT APPEARS. INSTANT: EACH PAGE AT ONCE"});
-    {
-        static constexpr const char* kIcons[] = {"AUTO", "WII", "XBOX", "NINTENDO SWITCH", "PLAYSTATION",
-                                                 "KEYBOARD AND MOUSE"};
-        // Auto names the icons it shows now.
-        std::string icons = kIcons[std::min<std::size_t>(static_cast<std::size_t>(runtime.button_icons), 5u)];
-        if (runtime.button_icons == ButtonIcons::Auto) {
-            using galaxy::input::ButtonIconStyle;
-            const ButtonIconStyle shown = galaxy::host::button_icons_auto_style();
-            icons += shown == ButtonIconStyle::Xbox          ? " (XBOX)"
-                     : shown == ButtonIconStyle::Nintendo    ? " (NINTENDO SWITCH)"
-                     : shown == ButtonIconStyle::PlayStation ? " (PLAYSTATION)"
-                     : shown == ButtonIconStyle::Keyboard    ? " (KEYBOARD AND MOUSE)"
-                                                             : " (WII)";
+class WindowGeneralPageHost final : public ui::GeneralPageHost {
+public:
+    ui::GeneralPageState query(const RuntimeSettings& settings) const override {
+        ui::GeneralPageState state;
+        if (settings.button_icons == ButtonIcons::Auto) {
+            using input::ButtonIconStyle;
+            switch (galaxy::host::button_icons_auto_style()) {
+            case ButtonIconStyle::Xbox: state.auto_icons = ButtonIcons::Xbox; break;
+            case ButtonIconStyle::Nintendo: state.auto_icons = ButtonIcons::Nintendo; break;
+            case ButtonIconStyle::PlayStation: state.auto_icons = ButtonIcons::PlayStation; break;
+            case ButtonIconStyle::Keyboard: state.auto_icons = ButtonIcons::Keyboard; break;
+            default: state.auto_icons = ButtonIcons::Wii; break;
+            }
         }
-        rows.push_back({"BUTTON ICONS", icons,
-                        [](RenderConfig&, int delta) {
-                            RuntimeSettings& settings = s_runtime_draft;
-                            settings.button_icons = static_cast<ButtonIcons>(
-                                settings_step(static_cast<unsigned>(settings.button_icons), 6u, delta));
-                        },
-                        "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
-    }
-    rows.push_back({"LANGUAGE", game_language_name(galaxy::game_language_resolved(runtime.language)),
-                    [](RenderConfig&, int delta) {
-                        // Saved when applied; the game switches at the next start (game_language_for_boot).
-                        // The languages on the disc as it is read (galaxy::set_disc_languages); Auto shows the one
-                        // it plays in, and a step chooses from there.
-                        if (delta == 0) return;
-                        RuntimeSettings& settings = s_runtime_draft;
-                        std::vector<GameLanguage> offered;
-                        for (const GameLanguage language : galaxy::kGameLanguages) {
-                            if (galaxy::game_language_on_disc(language)) offered.push_back(language);
-                        }
-                        const GameLanguage current = galaxy::game_language_resolved(settings.language);
-                        std::size_t index = 0u;
-                        for (std::size_t i = 0; i < offered.size(); ++i) {
-                            if (offered[i] == current) index = i;
-                        }
-                        const GameLanguage chosen = offered[settings_step(static_cast<unsigned>(index),
-                                                                         static_cast<unsigned>(offered.size()), delta)];
-                        // Back on the language Auto plays in: Auto again, so nothing is left to apply.
-                        const GameLanguage saved = galaxy::get_runtime_settings().language;
-                        settings.language =
-                            saved == GameLanguage::Auto && chosen == galaxy::game_language_resolved(saved) ? saved
-                                                                                                         : chosen;
-                    },
-                    "THE GAME'S TEXT AND MENUS"});
-    rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),
-                    [](RenderConfig&, int delta) {
-                        if (delta == 0) return;
-                        s_runtime_draft.discord_status = !s_runtime_draft.discord_status;
-                    },
-                    "SHOWS YOUR CURRENT GALAXY AND MISSION IN DISCORD"});
-    {
-        rows.push_back({"MIIS", {}, nullptr, {}, true});
-        std::string status;
+        state.display_language = game_language_resolved(settings.language);
+        for (const GameLanguage language : kGameLanguages) {
+            if (game_language_on_disc(language)) state.languages.push_back(language);
+        }
+        state.saved_language = get_runtime_settings().language;
+        state.resolved_saved_language = game_language_resolved(state.saved_language);
         {
             const std::lock_guard<std::mutex> lock(s_mii_mutex);
-            status = s_mii_status;
+            state.mii_status = s_mii_status;
         }
-        if (s_mii_dialog_open.load(std::memory_order_acquire)) {
-            status = "CHOOSING FILES";
+        state.choosing_miis = s_mii_dialog_open.load(std::memory_order_acquire);
+        state.mii_count = s_mii_count.load(std::memory_order_acquire);
+        if (state.mii_count < 0) {
+            state.mii_count = static_cast<int>(galaxy::host::mii_library_count());
+            s_mii_count.store(state.mii_count, std::memory_order_release);
         }
-        rows.push_back(button_row("IMPORT MIIS", {"IMPORT"}, [](RenderConfig&, unsigned) { start_mii_import_dialog(); },
-                                  status.empty() ? std::string("MIIS FROM A WII, DS, 3DS, WII U, SWITCH, MII STUDIO OR MII "
-                                                               "CREATOR, FOR THE MII ICONS")
-                                                 : status));
-        int count = s_mii_count.load(std::memory_order_acquire);
-        if (count < 0) {
-            count = static_cast<int>(galaxy::host::mii_library_count());
-            s_mii_count.store(count, std::memory_order_release);
-        }
-        char mii_text[32]{};
-        std::snprintf(mii_text, sizeof(mii_text), "%d OF 100", count);
-        rows.push_back({"MIIS ON THIS CONSOLE", mii_text, nullptr, "THE MII ICON PICKER ON THE FILE SELECT SHOWS THEM"});
-        rows.push_back(button_row("MIIS FOLDER", {"OPEN"}, [](RenderConfig&, unsigned) { open_mii_folder(); },
-                                  "FILES PUT HERE ARE IMPORTED AT EVERY START"));
+        return state;
     }
-    return rows;
+    void act(ui::GeneralPageAction action) const override {
+        if (action == ui::GeneralPageAction::ImportMiis) start_mii_import_dialog();
+        else open_mii_folder();
+    }
+};
+
+std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
+    static const WindowGeneralPageHost host;
+    return ui::general_page(runtime, s_runtime_draft, host);
 }
 
 // ADVANCED: any galaxy and star, entered with the game's own stage change (names in its own words), and the Grand
