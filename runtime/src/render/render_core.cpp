@@ -3996,6 +3996,7 @@ void RenderCore::present_cached_display_on_thread(
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
+    pipeline_cache_.merge_prepared();
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;

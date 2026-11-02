@@ -4,6 +4,12 @@
 // optional features a driver refuses left out (learned per driver build in vk_compat.txt).
 
 #include "galaxy/render/vk/pipeline_cache_vk.h"
+#include "galaxy/render/pipeline_seed.h"
+#include "galaxy/windows_power.h"
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/vk/vk_context.h"
@@ -205,17 +211,7 @@ VkShaderModule PipelineCacheVk::native_module(const void* words, std::size_t byt
     return module;
 }
 
-VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
-    const RenderStateKey rs = native_render_state(render_state);
-    const unsigned variant = native_shader_variant(rs.blend_bits);
-    const std::uint32_t id = shader * kNativeVariants + variant;
-    const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
-    auto& bucket = native_pipelines_[hash];
-    for (const auto& entry : bucket) {
-        if (entry.first.first == id && entry.first.second == rs) {
-            return entry.second;
-        }
-    }
+VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStateKey& rs, unsigned variant) {
     const NativeShaderBytes vs_bytes = native_shader_bytes(shader, variant, false);
     const NativeShaderBytes ps_bytes = native_shader_bytes(shader, variant, true);
     const VkShaderModule vs = native_module(vs_bytes.data, vs_bytes.size, vk::ShaderStage::Vertex);
@@ -248,12 +244,106 @@ VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKe
         pipeline = with_fallbacks(make, applicable_compat(rs, dual, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
     }
+    return pipeline;
+}
+
+VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
+    const RenderStateKey rs = native_render_state(render_state);
+    const unsigned variant = native_shader_variant(rs.blend_bits);
+    const std::uint32_t id = shader * kNativeVariants + variant;
+    const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
+    auto& bucket = native_pipelines_[hash];
+    for (const auto& entry : bucket) {
+        if (entry.first.first == id && entry.first.second == rs) {
+            return entry.second;
+        }
+    }
+    note_pipeline_for_seed(shader, render_state);
+    const VkPipeline pipeline = create_native(shader, rs, variant);
     bucket.emplace_back(std::make_pair(id, rs), pipeline);
     // The driver's cache data on disk every 64 new pipelines (the next launch builds them from it).
     if (pipeline != VK_NULL_HANDLE && (++created_ & 63u) == 0u) {
         save_driver_cache();
     }
     return pipeline;
+}
+
+void PipelineCacheVk::stop_prepare() noexcept {
+    prepare_stop_.store(true, std::memory_order_relaxed);
+    for (std::thread& t : prepare_threads_) {
+        t.join();
+    }
+    prepare_threads_.clear();
+    for (const Prepared& p : prepared_) {
+        if (p.pipeline != VK_NULL_HANDLE) {
+            vkDestroyPipeline(device_, p.pipeline, nullptr);
+        }
+    }
+    prepared_.clear();
+}
+
+void PipelineCacheVk::start_prepare() {
+    std::size_t env_length = 0;
+    char env_value[8] = {};
+    (void)getenv_s(&env_length, env_value, sizeof(env_value), "GALAXY_NO_PIPELINE_PREPARE");
+    if (pipeline_seeds().empty() || env_length != 0u) {
+        return;
+    }
+    const auto prepare_started_at = std::chrono::steady_clock::now();
+    for (unsigned t = 0; t < 2u; ++t) {
+        prepare_threads_.emplace_back([this, prepare_started_at] {
+            galaxy::host::name_current_thread(L"Nebula Pipeline Prepare");
+            const auto seeds = pipeline_seeds();
+            while (!prepare_stop_.load(std::memory_order_relaxed)) {
+                const std::size_t i = prepare_next_.fetch_add(1u, std::memory_order_relaxed);
+                if (i >= seeds.size()) {
+                    if (i == seeds.size()) {
+                        std::fprintf(stderr, "[pipelines] %zu prepared at %llu ms\n", seeds.size(),
+                                     static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                         std::chrono::steady_clock::now() - prepare_started_at).count()));
+                    }
+                    return;
+                }
+                const RenderStateKey rs = native_render_state(seed_render_state(seeds[i]));
+                const VkPipeline pipeline = create_native(seeds[i].shader, rs, native_shader_variant(rs.blend_bits));
+                const std::lock_guard guard(prepared_lock_);
+                prepared_.push_back({seeds[i].shader, rs, pipeline});
+                prepare_ready_.store(true, std::memory_order_release);
+            }
+        });
+    }
+}
+
+void PipelineCacheVk::merge_prepared() {
+    if (!prepare_started_) {
+        prepare_started_ = true;
+        start_prepare();
+    }
+    if (!prepare_ready_.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::vector<Prepared> done;
+    {
+        const std::lock_guard guard(prepared_lock_);
+        done.swap(prepared_);
+        prepare_ready_.store(false, std::memory_order_relaxed);
+    }
+    for (const Prepared& p : done) {
+        const unsigned variant = native_shader_variant(p.rs.blend_bits);
+        const std::uint32_t id = p.shader * kNativeVariants + variant;
+        auto& bucket = native_pipelines_[combine64(hash_key_words(&p.rs, sizeof(p.rs)), id)];
+        bool have = false;
+        for (const auto& entry : bucket) {
+            have = have || (entry.first.first == id && entry.first.second == p.rs);
+        }
+        if (have) {
+            if (p.pipeline != VK_NULL_HANDLE) {
+                vkDestroyPipeline(device_, p.pipeline, nullptr);
+            }
+        } else {
+            bucket.emplace_back(std::make_pair(id, p.rs), p.pipeline);
+        }
+    }
 }
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,
