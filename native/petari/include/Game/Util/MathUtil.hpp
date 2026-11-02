@@ -456,7 +456,7 @@ namespace MR {
     }
 
     inline s32 abs(s32 x) {
-        return abs(x);
+        return x < 0 ? -x : x;
     }
 
     /// @brief Computes the cosine of a number, in radians.
