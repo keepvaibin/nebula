@@ -387,13 +387,20 @@ static void expand_record_levels(
     }
 }
 
-// The format a record is sampled in without expanding it. Filters at upload need texels; a CMPR record's weights and
-// transparent blocks wait for the next step.
+// The format a record is sampled in without expanding it. Upload filters need texels; a block with a transparent colour
+// is expanded, BC1 making that colour black where the record's blocks keep it for filtering.
 static TexelFormat sampled_format(const NebulaTexture& record) {
     if ((record.flags & NEBULA_TEXTURE_FILTER_AT_UPLOAD) != 0u) {
         return TexelFormat::Rgba8;
     }
-    return record.layout == NEBULA_TEXTURE_L8 ? TexelFormat::R8 : record.layout == NEBULA_TEXTURE_LA8 ? TexelFormat::Rg8 : TexelFormat::Rgba8;
+    switch (record.layout) {
+    case NEBULA_TEXTURE_L8: return TexelFormat::R8;
+    case NEBULA_TEXTURE_LA8: return TexelFormat::Rg8;
+    case NEBULA_TEXTURE_BLOCK4:
+        return (record.flags & NEBULA_TEXTURE_OPAQUE_BLOCKS) != 0u && TextureBackend::supports_bc1() ? TexelFormat::Bc1
+                                                                                                    : TexelFormat::Rgba8;
+    default: return TexelFormat::Rgba8;
+    }
 }
 
 // A record's levels, as they are, into their placed footprints in mapped staging memory.
