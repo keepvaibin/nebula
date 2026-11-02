@@ -303,7 +303,21 @@ endif()
 include(cmake/native_materials.cmake)
 galaxy_native_material_sources(galaxy_native_dxil dxil)
 
+# The renderer's utility shaders, compiled at build (E-19): the player's machine compiles nothing.
+add_executable(galaxy_utility_shaders tools/dev/utility_shaders.cpp runtime/src/render/renderer_common.cpp
+    runtime/src/render/curved_surfaces.cpp)
+target_include_directories(galaxy_utility_shaders PRIVATE runtime/include)
+target_compile_features(galaxy_utility_shaders PRIVATE cxx_std_20)
+target_link_libraries(galaxy_utility_shaders PRIVATE d3dcompiler)
+set(galaxy_utility_shader_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/utility_shaders")
+file(MAKE_DIRECTORY "${galaxy_utility_shader_dir}")
+add_custom_command(OUTPUT "${galaxy_utility_shader_dir}/utility_shaders_dxbc.h"
+    COMMAND galaxy_utility_shaders "${galaxy_utility_shader_dir}/utility_shaders_dxbc.h"
+    DEPENDS galaxy_utility_shaders VERBATIM)
+
 add_library(galaxy_gx STATIC
+    runtime/src/render/utility_shaders.cpp
+    "${galaxy_utility_shader_dir}/utility_shaders_dxbc.h"
     runtime/src/render/render_api.cpp
     runtime/src/render/render_config.cpp
     runtime/src/render/host_window_win32.cpp
@@ -352,6 +366,7 @@ add_library(galaxy_gx STATIC
     ${galaxy_native_dxil}
 )
 target_include_directories(galaxy_gx PRIVATE "${galaxy_native_include_dir_dxil}")
+target_include_directories(galaxy_gx PRIVATE "${galaxy_utility_shader_dir}" runtime/src/render)
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
 target_link_libraries(galaxy_gx PRIVATE nebula_fidelityfx)
@@ -374,7 +389,6 @@ target_link_libraries(galaxy_gx
         galaxy_host_pointer_events
         d3d12
         dxgi
-        d3dcompiler
 )
 target_compile_definitions(
     galaxy_gx
@@ -504,6 +518,9 @@ foreach(galaxy_lp_stage vs ps)
         VERBATIM)
     list(APPEND galaxy_line_point_test_headers "${galaxy_lp_out}")
 endforeach()
+# The tests compile their own small shaders; the program itself never compiles any.
+target_link_libraries(galaxy_capture_tests PRIVATE d3dcompiler)
+target_link_libraries(galaxy_warp_capture_store_tests PRIVATE d3dcompiler)
 target_sources(galaxy_line_point_params_tests PRIVATE ${galaxy_line_point_test_headers})
 target_include_directories(galaxy_line_point_params_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # The game's text table: every text the settings menu shows has its entry.

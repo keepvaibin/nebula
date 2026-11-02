@@ -6,7 +6,6 @@
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/render/renderer_d3d12.h"
 
-#include <d3dcompiler.h>
 
 #include <cstring>
 #include <iostream>
@@ -104,16 +103,16 @@ D3D12_LOGIC_OP gx_logic_op(std::uint32_t m) {
 D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     ID3D12RootSignature* root_signature,
     const RenderStateKey& rs,
-    ID3DBlob* vs,
-    ID3DBlob* ps,
-    ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader,
-    ID3DBlob* hull_shader,
-    ID3DBlob* domain_shader) {
+    D3D12_SHADER_BYTECODE vs,
+    D3D12_SHADER_BYTECODE ps,
+    D3D12_SHADER_BYTECODE line_geometry_shader,
+    D3D12_SHADER_BYTECODE point_geometry_shader,
+    D3D12_SHADER_BYTECODE hull_shader,
+    D3D12_SHADER_BYTECODE domain_shader) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature;
-    pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-    pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    pd.VS = vs;
+    pd.PS = ps;
     pd.InputLayout = {kInputLayout,
                       static_cast<UINT>(std::size(kInputLayout))};
 
@@ -229,25 +228,21 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     switch (static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(
         rs.primitive_topology & kTopologyTypeMask)) {
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT:
-        if (point_geometry_shader == nullptr) {
+        if (point_geometry_shader.pShaderBytecode == nullptr) {
             throw std::invalid_argument(
                 "point PSO requires the GX point geometry shader");
         }
-        pd.GS = {
-            point_geometry_shader->GetBufferPointer(),
-            point_geometry_shader->GetBufferSize()};
+        pd.GS = point_geometry_shader;
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
         // GX culling applies to polygons, not points expanded by the host.
         pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         break;
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE:
-        if (line_geometry_shader == nullptr) {
+        if (line_geometry_shader.pShaderBytecode == nullptr) {
             throw std::invalid_argument(
                 "line PSO requires the GX line geometry shader");
         }
-        pd.GS = {
-            line_geometry_shader->GetBufferPointer(),
-            line_geometry_shader->GetBufferSize()};
+        pd.GS = line_geometry_shader;
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
         // GX culling applies to polygons, not lines expanded by the host.
         pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -257,12 +252,12 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         break;
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH:
         // A curved surface's patches (kVsKeyCurved): the hull and domain shaders of its vertex output's variant.
-        if (hull_shader == nullptr || domain_shader == nullptr) {
+        if (hull_shader.pShaderBytecode == nullptr || domain_shader.pShaderBytecode == nullptr) {
             throw std::invalid_argument(
                 "curved PSO requires the curved hull and domain shaders");
         }
-        pd.HS = {hull_shader->GetBufferPointer(), hull_shader->GetBufferSize()};
-        pd.DS = {domain_shader->GetBufferPointer(), domain_shader->GetBufferSize()};
+        pd.HS = hull_shader;
+        pd.DS = domain_shader;
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
         break;
     default:
@@ -322,12 +317,12 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> create_pso(
     ID3D12Device* device,
     ID3D12RootSignature* root_signature,
     const RenderStateKey& rs,
-    ID3DBlob* vs,
-    ID3DBlob* ps,
-    ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader,
-    ID3DBlob* hull_shader,
-    ID3DBlob* domain_shader) {
+    D3D12_SHADER_BYTECODE vs,
+    D3D12_SHADER_BYTECODE ps,
+    D3D12_SHADER_BYTECODE line_geometry_shader,
+    D3D12_SHADER_BYTECODE point_geometry_shader,
+    D3D12_SHADER_BYTECODE hull_shader,
+    D3D12_SHADER_BYTECODE domain_shader) {
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd =
         make_pso_desc_impl(
             root_signature,
@@ -360,12 +355,12 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> create_pso(
 D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc(
     ID3D12RootSignature* root_signature,
     const RenderStateKey& render_state,
-    ID3DBlob* vertex_shader,
-    ID3DBlob* pixel_shader,
-    ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader,
-    ID3DBlob* hull_shader,
-    ID3DBlob* domain_shader) {
+    D3D12_SHADER_BYTECODE vertex_shader,
+    D3D12_SHADER_BYTECODE pixel_shader,
+    D3D12_SHADER_BYTECODE line_geometry_shader,
+    D3D12_SHADER_BYTECODE point_geometry_shader,
+    D3D12_SHADER_BYTECODE hull_shader,
+    D3D12_SHADER_BYTECODE domain_shader) {
     return make_pso_desc_impl(
         root_signature,
         render_state,
@@ -391,32 +386,26 @@ ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const Rende
             return entry.second.Get();
         }
     }
-    const NativeShaderBytes vs_bytes = native_shader_bytes(shader, variant, false);
-    const NativeShaderBytes ps_bytes = native_shader_bytes(shader, variant, true);
-    const auto blob = [](const NativeShaderBytes& bytes) {
-        Microsoft::WRL::ComPtr<ID3DBlob> b;
-        if (bytes.size != 0u && SUCCEEDED(D3DCreateBlob(bytes.size, &b))) {
-            std::memcpy(b->GetBufferPointer(), bytes.data, bytes.size);
-        }
-        return b;
+    const auto code = [](const NativeShaderBytes& bytes) {
+        return bytes.size != 0u ? D3D12_SHADER_BYTECODE{bytes.data, bytes.size} : D3D12_SHADER_BYTECODE{};
     };
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
-    const Microsoft::WRL::ComPtr<ID3DBlob> vs = blob(vs_bytes);
-    const Microsoft::WRL::ComPtr<ID3DBlob> ps = blob(ps_bytes);
+    const D3D12_SHADER_BYTECODE vs = code(native_shader_bytes(shader, variant, false));
+    const D3D12_SHADER_BYTECODE ps = code(native_shader_bytes(shader, variant, true));
     // A curved surface's patches: the native patch stages for the output layout.
     const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
     const bool motion = variant == kNativeVariantMotion;
-    const Microsoft::WRL::ComPtr<ID3DBlob> hs = curved ? blob(native_curved_bytes(motion, false)) : nullptr;
-    const Microsoft::WRL::ComPtr<ID3DBlob> ds = curved ? blob(native_curved_bytes(motion, true)) : nullptr;
+    const D3D12_SHADER_BYTECODE hs = curved ? code(native_curved_bytes(motion, false)) : D3D12_SHADER_BYTECODE{};
+    const D3D12_SHADER_BYTECODE ds = curved ? code(native_curved_bytes(motion, true)) : D3D12_SHADER_BYTECODE{};
     // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
     const auto topology = static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(rs.primitive_topology & kTopologyTypeMask);
     const bool line = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
     const bool point = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-    const Microsoft::WRL::ComPtr<ID3DBlob> gs =
-        line || point ? blob(native_line_point_bytes(motion, point)) : nullptr;
-    if (vs && ps && (!curved || (hs && ds)) && (!(line || point) || gs)) {
-        pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs.Get(), ps.Get(), line ? gs.Get() : nullptr,
-                            point ? gs.Get() : nullptr, hs.Get(), ds.Get());
+    const D3D12_SHADER_BYTECODE gs = line || point ? code(native_line_point_bytes(motion, point)) : D3D12_SHADER_BYTECODE{};
+    if (vs.pShaderBytecode && ps.pShaderBytecode && (!curved || (hs.pShaderBytecode && ds.pShaderBytecode)) &&
+        (!(line || point) || gs.pShaderBytecode)) {
+        pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs, ps, line ? gs : D3D12_SHADER_BYTECODE{},
+                         point ? gs : D3D12_SHADER_BYTECODE{}, hs, ds);
     }
     bucket.emplace_back(std::make_pair(id, rs), pso);
     return pso.Get();

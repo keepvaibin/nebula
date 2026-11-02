@@ -4,7 +4,9 @@
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/texture_store.h"
 
+#include <d3dcompiler.h>
 #include <dxgi1_4.h>
+#include <wrl/client.h>
 
 #include <cmath>
 #include <cstdio>
@@ -68,6 +70,19 @@ bool test_scaled_display_resource_allocation() {
     return result;
 }
 
+// The scene conversion shader compiles at shader model 5.0 too.
+bool compiles_scene_conversion_shader(std::string& diagnostics) {
+    const std::string_view source = galaxy::render::scene_conversion_shader_source();
+    Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
+    const HRESULT hr = D3DCompile(source.data(), source.size(), nullptr, nullptr, nullptr, "main", "ps_5_0",
+                                  D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3, 0, &code, &errors);
+    if (FAILED(hr)) {
+        diagnostics = errors ? static_cast<const char*>(errors->GetBufferPointer()) : "D3DCompile failed";
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -76,7 +91,7 @@ int main() {
     {
         std::string diagnostics;
         const bool shader_valid =
-            galaxy::render::validate_scene_conversion_shader(diagnostics);
+            compiles_scene_conversion_shader(diagnostics);
         if (!shader_valid) {
             std::cerr << diagnostics << '\n';
         }

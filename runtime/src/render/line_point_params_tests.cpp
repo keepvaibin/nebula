@@ -58,6 +58,10 @@ void check_hr(HRESULT hr, const char* operation) {
     }
 }
 
+D3D12_SHADER_BYTECODE bytecode(const ComPtr<ID3DBlob>& blob) {
+    return {blob->GetBufferPointer(), blob->GetBufferSize()};
+}
+
 ComPtr<ID3DBlob> compile_shader(
     std::string_view source,
     const char* target,
@@ -512,10 +516,10 @@ private:
             galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 line_state,
-                vertex_shader.Get(),
-                pixel_shader.Get(),
-                line_geometry_shader_.Get(),
-                point_geometry_shader_.Get());
+                bytecode(vertex_shader),
+                bytecode(pixel_shader),
+                bytecode(line_geometry_shader_),
+                bytecode(point_geometry_shader_));
         descriptor_selection_valid_ =
             line_desc.GS.pShaderBytecode ==
                 line_geometry_shader_->GetBufferPointer() &&
@@ -532,10 +536,10 @@ private:
             galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 point_state,
-                vertex_shader.Get(),
-                pixel_shader.Get(),
-                line_geometry_shader_.Get(),
-                point_geometry_shader_.Get());
+                bytecode(vertex_shader),
+                bytecode(pixel_shader),
+                bytecode(line_geometry_shader_),
+                bytecode(point_geometry_shader_));
         descriptor_selection_valid_ = descriptor_selection_valid_ &&
             point_desc.GS.pShaderBytecode ==
                 point_geometry_shader_->GetBufferPointer() &&
@@ -552,10 +556,10 @@ private:
             galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 triangle_state,
-                vertex_shader.Get(),
-                pixel_shader.Get(),
-                line_geometry_shader_.Get(),
-                point_geometry_shader_.Get());
+                bytecode(vertex_shader),
+                bytecode(pixel_shader),
+                bytecode(line_geometry_shader_),
+                bytecode(point_geometry_shader_));
         descriptor_selection_valid_ = descriptor_selection_valid_ &&
             triangle_desc.GS.pShaderBytecode == nullptr;
 
@@ -564,10 +568,10 @@ private:
             (void)galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 line_state,
-                vertex_shader.Get(),
-                pixel_shader.Get(),
-                nullptr,
-                point_geometry_shader_.Get());
+                bytecode(vertex_shader),
+                bytecode(pixel_shader),
+                D3D12_SHADER_BYTECODE{},
+                bytecode(point_geometry_shader_));
         } catch (const std::invalid_argument&) {
             line_missing_hard_fails = true;
         }
@@ -576,10 +580,10 @@ private:
             (void)galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 point_state,
-                vertex_shader.Get(),
-                pixel_shader.Get(),
-                line_geometry_shader_.Get(),
-                nullptr);
+                bytecode(vertex_shader),
+                bytecode(pixel_shader),
+                bytecode(line_geometry_shader_),
+                D3D12_SHADER_BYTECODE{});
         } catch (const std::invalid_argument&) {
             point_missing_hard_fails = true;
         }

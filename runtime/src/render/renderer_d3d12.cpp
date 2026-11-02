@@ -1,5 +1,6 @@
 // RendererD3D12: device and swap chain, scene target targets and copies, draws, presentation, and the
 // replayed sub-frames of frame interpolation.
+#include "galaxy/render/utility_shaders.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/interp_eval.h"
 #include "galaxy/render/host_window_win32.h"
@@ -26,7 +27,6 @@
 
 #pragma warning(push, 0)
 #include <d3d12sdklayers.h>
-#include <d3dcompiler.h>
 #include <dxgi1_6.h>
 #include <dwmapi.h>
 #include <immintrin.h>
@@ -57,7 +57,6 @@
 #include <string>
 #include <vector>
 
-#pragma comment(lib, "d3dcompiler.lib")
 
 using Microsoft::WRL::ComPtr;
 
@@ -408,38 +407,7 @@ static void dump_device_removal(ID3D12Device* dev) {
     }
 }
 
-static ComPtr<ID3DBlob> compile_hlsl(
-    const char* src, std::size_t len, const char* target, const char* entry) {
-    ComPtr<ID3DBlob> code, errors;
-    const HRESULT hr = D3DCompile(
-        src, len, nullptr, nullptr, nullptr, entry, target,
-        D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_OPTIMIZATION_LEVEL3,
-        0, &code, &errors);
-    if (FAILED(hr)) {
-        const char* msg = errors
-            ? static_cast<const char*>(errors->GetBufferPointer())
-            : "(no error blob)";
-        throw std::runtime_error(std::string("D3DCompile(") + target + "): " + msg);
-    }
-    return code;
-}
-
 }  // namespace
-
-bool validate_scene_conversion_shader(std::string& diagnostics) noexcept {
-    try {
-        const ComPtr<ID3DBlob> code = compile_hlsl(
-            scene_conversion_shader_source().data(), scene_conversion_shader_source().size(), "ps_5_0", "main");
-        diagnostics.clear();
-        return code != nullptr;
-    } catch (const std::exception& error) {
-        diagnostics = error.what();
-        return false;
-    } catch (...) {
-        diagnostics = "unknown D3DCompile failure";
-        return false;
-    }
-}
 
 void DescriptorRing::reset() noexcept {
     *this = DescriptorRing{};
@@ -826,13 +794,6 @@ void RendererD3D12::write_msaa_depth_view(SceneMsaa& msaa) {
 
 namespace {
 
-// The depth resolve: each pixel's first sample (the console's single sample sits at the pixel centre).
-constexpr char kDepthResolvePs[] = R"HLSL(
-Texture2DMS<float> depth_samples : register(t0);
-float main(float4 pos : SV_Position) : SV_Depth {
-    return depth_samples.Load(int2(pos.xy), 0);
-}
-)HLSL";
 
 }  // namespace
 
@@ -897,9 +858,8 @@ void RendererD3D12::record_scene_resolve(ID3D12GraphicsCommandList* list, bool c
     }
     if (depth) {
         if (!depth_resolve_pso_) {
-            const ComPtr<ID3DBlob> vs =
-                compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
-            const ComPtr<ID3DBlob> ps = compile_hlsl(kDepthResolvePs, sizeof(kDepthResolvePs) - 1u, "ps_5_1", "main");
+            const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+            const UtilityShaderBytes ps = utility_shader(UtilityShader::DepthResolvePs);
             D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
             pd.pRootSignature = s_blit_root_sig.Get();
             pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
@@ -969,9 +929,8 @@ void RendererD3D12::carry_over_scene_contents() {
         return;
     }
     if (!scene_carry_depth_pso_) {
-        const ComPtr<ID3DBlob> vs = compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
-        const ComPtr<ID3DBlob> ps =
-            compile_hlsl(depth_carry_pixel_shader_source().data(), depth_carry_pixel_shader_source().size(), "ps_5_1", "main");
+        const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+        const UtilityShaderBytes ps = utility_shader(UtilityShader::DepthCarryPs);
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = s_blit_root_sig.Get();
         pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
@@ -1371,10 +1330,8 @@ bool RendererD3D12::create_conversion_pipeline() {
 
     // PSO (fullscreen triangle, no depth, RGBA8 target).
     {
-        const ComPtr<ID3DBlob> vs =
-            compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
-        const ComPtr<ID3DBlob> ps =
-            compile_hlsl(scene_conversion_shader_source().data(), scene_conversion_shader_source().size(), "ps_5_1", "main");
+        const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+        const UtilityShaderBytes ps = utility_shader(UtilityShader::SceneConversionPs);
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = s_conv_root_sig.Get();
@@ -1396,8 +1353,7 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.RTVFormats[0] = DXGI_FORMAT_R8_UNORM;
         d3d_check(device_->CreateGraphicsPipelineState(
             &pd, IID_PPV_ARGS(&conv_pipeline_r8_)), "CreateConvPSO R8");
-        const ComPtr<ID3DBlob> filter =
-            compile_hlsl(display_filter_shader_source().data(), display_filter_shader_source().size(), "ps_5_1", "main");
+        const UtilityShaderBytes filter = utility_shader(UtilityShader::DisplayFilterPs);
         pd.PS = {filter->GetBufferPointer(), filter->GetBufferSize()};
         pd.RTVFormats[0] = kSceneColorFormat;
         d3d_check(device_->CreateGraphicsPipelineState(
@@ -1826,9 +1782,9 @@ bool RendererD3D12::create_clear_pipeline() {
         0, blob->GetBufferPointer(), blob->GetBufferSize(),
         IID_PPV_ARGS(&s_clear_root_sig)), "CreateClearRS");
 
-    clear_vs_ = compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
+    clear_vs_ = utility_shader(UtilityShader::BlitVs);
     clear_ps_ =
-        compile_hlsl(clear_pixel_shader_source().data(), clear_pixel_shader_source().size(), "ps_5_1", "main");
+        utility_shader(UtilityShader::ClearPs);
     return clear_pipeline(true) != nullptr && clear_pipeline(false) != nullptr;
 }
 
@@ -2423,8 +2379,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned sce
         }
 
         {
-            const ComPtr<ID3DBlob> vs = compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
-            const ComPtr<ID3DBlob> ps = compile_hlsl(blit_pixel_shader_source().data(), blit_pixel_shader_source().size(), "ps_5_1", "main");
+            const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+            const UtilityShaderBytes ps = utility_shader(UtilityShader::BlitPs);
 
             D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
             pd.pRootSignature = s_blit_root_sig.Get();
@@ -2662,8 +2618,8 @@ void RendererD3D12::shutdown() {
     s_clear_root_sig.Reset();
     clear_rgb_pipelines_ = {};
     clear_alpha_pipelines_ = {};
-    clear_vs_.Reset();
-    clear_ps_.Reset();
+    clear_vs_ = {};
+    clear_ps_ = {};
     timestamp_query_heap_.Reset();
     timestamp_readback_.Reset();
     timestamp_pending_.fill(false);
@@ -3131,10 +3087,8 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
                 IID_PPV_ARGS(&ui_texture_root_sig_)),
             "create UI texture root signature");
 
-        const ComPtr<ID3DBlob> vs = compile_hlsl(
-            ui_textured_quad_vertex_shader_source().data(), ui_textured_quad_vertex_shader_source().size(), "vs_5_1", "main");
-        const ComPtr<ID3DBlob> ps = compile_hlsl(
-            ui_textured_quad_pixel_shader_source().data(), ui_textured_quad_pixel_shader_source().size(), "ps_5_1", "main");
+        const UtilityShaderBytes vs = utility_shader(UtilityShader::UiTexturedVs);
+        const UtilityShaderBytes ps = utility_shader(UtilityShader::UiTexturedPs);
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = ui_texture_root_sig_.Get();
@@ -3238,10 +3192,8 @@ void RendererD3D12::ensure_native_settings_solid_pipeline_loaded() {
                 IID_PPV_ARGS(&ui_solid_root_sig_)),
             "create UI solid root signature");
 
-        const ComPtr<ID3DBlob> vs = compile_hlsl(
-            ui_solid_quad_vertex_shader_source().data(), ui_solid_quad_vertex_shader_source().size(), "vs_5_1", "main");
-        const ComPtr<ID3DBlob> ps = compile_hlsl(
-            ui_solid_quad_pixel_shader_source().data(), ui_solid_quad_pixel_shader_source().size(), "ps_5_1", "main");
+        const UtilityShaderBytes vs = utility_shader(UtilityShader::UiSolidVs);
+        const UtilityShaderBytes ps = utility_shader(UtilityShader::UiSolidPs);
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = ui_solid_root_sig_.Get();
@@ -3458,10 +3410,9 @@ bool RendererD3D12::ensure_curve_sort() {
         return false;
     }
     try {
-        const std::string source = curved::curve_sort_source();
-        const ComPtr<ID3DBlob> classify = compile_hlsl(source.data(), source.size(), "cs_5_1", "classify");
-        const ComPtr<ID3DBlob> offsets = compile_hlsl(source.data(), source.size(), "cs_5_1", "offsets");
-        const ComPtr<ID3DBlob> scatter = compile_hlsl(source.data(), source.size(), "cs_5_1", "scatter");
+        const UtilityShaderBytes classify = utility_shader(UtilityShader::CurveClassifyCs);
+        const UtilityShaderBytes offsets = utility_shader(UtilityShader::CurveOffsetsCs);
+        const UtilityShaderBytes scatter = utility_shader(UtilityShader::CurveScatterCs);
         D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};
         pso.pRootSignature = curve_sort_root_.Get();
         pso.CS = {offsets->GetBufferPointer(), offsets->GetBufferSize()};
@@ -4785,12 +4736,6 @@ bool RendererD3D12::ensure_motion_target() {
     return true;
 }
 
-static constexpr char kMotionDebugPs[] =
-    "Texture2D<float2> mv:register(t0);"
-    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
-    "float4 main(V v):SV_Target{"
-    " float2 m=mv.Load(int3(int2(v.p.xy),0));"
-    " return float4(saturate(0.5+m.x/16.0),saturate(0.5+m.y/16.0),0.5,1.0);}";
 
 void RendererD3D12::record_motion_debug_view() {
     settle_owed_scene();
@@ -4816,9 +4761,8 @@ void RendererD3D12::record_motion_debug_view() {
         d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
                                                IID_PPV_ARGS(&motion_debug_root_)),
                   "CreateMotionDebugRS");
-        const ComPtr<ID3DBlob> vs = compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
-        const ComPtr<ID3DBlob> ps =
-            compile_hlsl(kMotionDebugPs, sizeof(kMotionDebugPs) - 1, "ps_5_1", "main");
+        const UtilityShaderBytes vs = utility_shader(UtilityShader::BlitVs);
+        const UtilityShaderBytes ps = utility_shader(UtilityShader::MotionDebugPs);
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = motion_debug_root_.Get();
         pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
@@ -5022,8 +4966,7 @@ bool RendererD3D12::ensure_blend_validation() {
         return false;
     }
     try {
-        const ComPtr<ID3DBlob> cs =
-            compile_hlsl(kBlendValidateCs, sizeof(kBlendValidateCs) - 1u, "cs_5_1", "main");
+        const UtilityShaderBytes cs = utility_shader(UtilityShader::BlendValidateCs);
         D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};
         pso.pRootSignature = blend_validate_root_.Get();
         pso.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
@@ -5065,7 +5008,7 @@ bool RendererD3D12::ensure_stripe_gather(std::uint64_t bytes) {
             return false;
         }
         try {
-            const ComPtr<ID3DBlob> cs = compile_hlsl(kStripeGatherCs, sizeof(kStripeGatherCs) - 1u, "cs_5_1", "main");
+            const UtilityShaderBytes cs = utility_shader(UtilityShader::StripeGatherCs);
             D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
             desc.pRootSignature = stripe_gather_root_.Get();
             desc.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
@@ -5850,9 +5793,9 @@ bool RendererD3D12::ensure_interp_eval() {
         return false;
     }
     try {
-        for (const auto& [entry, pso] : {std::pair{"copy_main", std::addressof(interp_copy_pso_)},
-                                          std::pair{"eval_main", std::addressof(interp_eval_pso_)}}) {
-            const ComPtr<ID3DBlob> cs = compile_hlsl(kInterpEvalCs, sizeof(kInterpEvalCs) - 1u, "cs_5_1", entry);
+        for (const auto& [entry, pso] : {std::pair{UtilityShader::InterpCopyCs, std::addressof(interp_copy_pso_)},
+                                          std::pair{UtilityShader::InterpEvalCs, std::addressof(interp_eval_pso_)}}) {
+            const UtilityShaderBytes cs = utility_shader(entry);
             D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
             desc.pRootSignature = interp_eval_root_.Get();
             desc.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
