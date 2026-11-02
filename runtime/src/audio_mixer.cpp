@@ -568,8 +568,8 @@ void AudioMixer::read_pcm(VoiceState& state, NebulaAudioVoice& voice, float* out
             std::fill_n(out, samples, 0.0f);
         } else if (bytes == 2u) {
             for (std::uint32_t k = 0; k < samples; ++k) {
-                const auto value = static_cast<std::int16_t>((std::to_integer<std::uint16_t>(data[k * 2u]) << 8u) |
-                                                             std::to_integer<std::uint16_t>(data[k * 2u + 1u]));
+                std::int16_t value;
+                std::memcpy(&value, data + k * 2u, sizeof(value));
                 out[k] = value / 32768.0f;
             }
         } else {
