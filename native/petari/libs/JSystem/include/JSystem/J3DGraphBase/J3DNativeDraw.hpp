@@ -8,6 +8,10 @@
 // Vertices the game draws as it sends them, as typed values (nebula_game_api.h immediate): a primitive (GpuBegin's)
 // and each vertex's values, one record per primitive after every command written before it.
 namespace J3DNativeDraw {
+    // `count` vertices of `primitive` (NebulaPrimitive) from arrays the caller keeps until it returns; `attributes`
+    // NEBULA_SHAPE_*: colours and coordinates 0-7 it gives. Without position matrices they take the current one.
+    void drawArrays(u8 primitive, u32 attributes, u32 count, const f32* pPositions, const u32* const pColors[2],
+                    const f32* const pTexCoords[8]);
     // A primitive of `count` vertices, each giving the values `attributes` names (NEBULA_SHAPE_POSITION_MATRIX,
     // _NORMAL, _COLOR0, _COLOR1, _TEXCOORD0 << n; every vertex has a position) in GX's order: position matrix,
     // position, normal, colour 0, colour 1, texture coordinates. The record goes when the last vertex is complete.
