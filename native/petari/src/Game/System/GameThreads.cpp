@@ -26,6 +26,7 @@ namespace {
     // Deterministic test mode (the host's test_frame_step): every thread is under the world lock, the sound runs on the thread
     // stepping the clock, and the next frame comes only when no thread can run. Two runs of a build take the same steps.
     bool sTestMode;
+    GameWaitList sFrameWaiters;  // test mode: the main thread until the step
 
     void lockState() {
         nebula_host_lock(NEBULA_HOST_LOCK_STATE);
@@ -147,6 +148,11 @@ namespace {
             const NebulaHostServices* host = nebula_host();
             host->test_frame_step(host->user);
             lockState();
+            while (sFrameWaiters.head != nullptr) {
+                GameThreadRecord* waiter = sFrameWaiters.head;
+                unlink(waiter);
+                append(&sWorldWaiters, waiter);
+            }
             if (passWorld(pSelf)) {
                 return true;
             }
@@ -220,27 +226,6 @@ void GameEvent::signal() {
     lockState();
     signalled = true;
     wakeAll(&waiters);
-    unlockState();
-}
-
-void GameFrameGate::init() {
-    waiters.head = waiters.tail = nullptr;
-    frames = 0;
-}
-
-void GameFrameGate::advance() {
-    lockState();
-    frames++;
-    wakeAll(&waiters);
-    unlockState();
-}
-
-void GameFrameGate::waitNext() {
-    lockState();
-    const uint32_t seen = frames;
-    while (frames == seen) {
-        block(&waiters);
-    }
     unlockState();
 }
 
@@ -396,6 +381,31 @@ namespace GameThreads {
         if (!pThread->started) {
             pThread->started = true;
             wake(pThread);
+        }
+        unlockState();
+    }
+
+    void waitFrame() {
+        lockState();
+        if (sTestMode) {
+            block(&sFrameWaiters);
+            unlockState();
+            return;
+        }
+        GameThreadRecord* self = tSelf;
+        passWorld(self);
+        unlockState();
+        const NebulaHostServices* host = nebula_host();
+        host->frame_wait(host->user);
+        lockState();
+        if (sWorldOwner == nullptr) {
+            sWorldOwner = self;
+        } else {
+            sMainWants = true;
+            prepend(&sWorldWaiters, self);
+            unlockState();
+            nebula_host_thread_wait(self->host);
+            lockState();
         }
         unlockState();
     }

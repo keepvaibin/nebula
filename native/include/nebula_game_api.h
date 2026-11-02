@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 91u
+#define NEBULA_GAME_API_VERSION 92u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -934,9 +934,11 @@ typedef struct NebulaHostServices {
        whose few differences the module follows (NebulaRegion.hpp) and whose save folder the NAND holds. */
     const char* (*game_id)(void* user);
 
-    /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
-       whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */
-    void (*vi_frame)(void* user, uint32_t display_picture, int black, uint32_t retrace);
+    /* Blocks the game's main loop until its next frame is due: 60 a second, on the display's own refresh where the host
+       has one; a frame that ran long starts at once. */
+    void (*frame_wait)(void* user);
+    /* The next frame has begun: whether the output is black, and the frames so far. The newest picture goes to the screen. */
+    void (*frame_begun)(void* user, int black, uint32_t frames);
 
     /* Starts a save file operation without blocking; the request's name, buffer, length and status stay valid until
        its status leaves NEBULA_SAVE_PENDING (the host writes it from its own thread). */
@@ -993,7 +995,7 @@ typedef struct NebulaHostServices {
        with `action` filled, or 0. */
     int (*test_scene_frame)(void* user, NebulaTestAction* action);
 
-    /* The output's shape latched at this retrace, after vi_frame: width << 16 | height (only the ratio counts), or 0
+    /* The output's shape latched at this frame, after frame_begun: width << 16 | height (only the ratio counts), or 0
        for the Wii's 16:9. */
     uint32_t (*display_extent)(void* user);
     /* The borders around a fitted picture take this grey (0 black to 1 white) for the scene being drawn: the Wii Remote
@@ -1134,8 +1136,7 @@ typedef struct NebulaHostServices {
        fixed-function state and textures), until the next material or one whose shader is NEBULA_SHADER_NONE. */
     void (*native_material)(void* user, const NebulaNativeMaterial* material);
     /* Deterministic test mode only (NULL otherwise; GALAXY_TEST_DETERMINISTIC): the game's time is its frames. No game
-       thread can run: the host takes the next retrace (nebula_game_vi_retrace, with that retrace's audio ticks) and
-       returns, so frames follow the game's own pace and every run of a build is the same. The game's clock then
+       thread can run: the host takes one frame's audio ticks and clock and returns, so frames follow the game's own pace and every run of a build is the same. The game's clock then
        advances one retrace per call and its alarms fire when that clock passes them. */
     void (*test_frame_step)(void* user);
 } NebulaHostServices;
@@ -1180,7 +1181,6 @@ NEBULA_GAME_API void nebula_game_run(void);
 /* A file read finished: `result` is the bytes read, or -1 on a read error. */
 NEBULA_GAME_API void nebula_game_asset_complete(uint32_t slot, int32_t result);
 /* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
-NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);
