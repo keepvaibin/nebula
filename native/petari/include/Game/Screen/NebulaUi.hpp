@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/picture.h>
 #include <nw4r/lyt/textBox.h>
@@ -144,4 +143,3 @@ namespace NebulaUi {
     // so that a list scrolled past its window never covers what is around it. After its layout's own draw.
     void drawClipped(Pane* pPane, const nw4r::lyt::DrawInfo& rDrawInfo, f32 rise, f32 left, f32 right, f32 top, f32 bottom);
 };  // namespace NebulaUi
-#endif

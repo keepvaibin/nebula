@@ -1,7 +1,6 @@
 #include "Game/System/NebulaAchievements.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -645,4 +644,3 @@ namespace NebulaAchievements {
         return NebulaHost::statGet(cStatNames[stat]) + sStatWaiting[stat];
     }
 };  // namespace NebulaAchievements
-#endif

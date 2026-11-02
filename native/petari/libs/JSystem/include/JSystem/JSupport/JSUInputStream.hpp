@@ -14,7 +14,6 @@ public:
 
     s32 read(void*, s32);
 
-#ifdef TARGET_PC
     // Big-endian scalars (JSUBigEndianScalar); a size that is not a whole number of elements reads the bytes as they are.
     template < typename T >
     typename JSUBigEndianScalar< T >::Result read(T* pData, s32 size) {
@@ -28,7 +27,6 @@ public:
         }
         return got;
     }
-#endif
 
     inline u8 readU8() {
         u8 ret;

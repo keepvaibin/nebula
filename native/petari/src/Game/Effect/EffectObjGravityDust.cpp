@@ -23,13 +23,9 @@ f32 EffectObjGravityDust::getClippingRadius() const {
 }
 
 TVec3f* EffectObjGravityDust::getClippingCenterOffset() const {
-#ifdef TARGET_PC
     static TVec3f sOffset;
     sOffset.set(0.0f, 500.0f * mScale.y, 0.0f);
     return &sOffset;
-#else
-    return &(TVec3f(0.0f, 500.0f * mScale.y, 0.0f));
-#endif
 }
 
 EffectObjGravityDust::~EffectObjGravityDust() {

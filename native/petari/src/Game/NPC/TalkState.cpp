@@ -1,7 +1,5 @@
 #include "Game/NPC/TalkState.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkBalloon.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
@@ -115,7 +113,6 @@ void TalkStateEvent::clos() {
 }
 
 bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
-#ifdef TARGET_PC
     // A skipped cutscene (NebulaCutsceneSkip): each page, shown whole, turns as soon as it is up; a question ends
     // the skip with the question on screen.
     if (NebulaCutsceneSkip::isSkipping()) {
@@ -129,7 +126,6 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
         mPageCount++;
         return !mBalloon->turnPage();
     }
-#endif
 
     if (MR::testCorePadButtonA(0)) {
         if (_10++ > 10) {
@@ -155,9 +151,7 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
     }
 
     if (TalkFunction::isSelectTalk(_04) && !mBalloon->hasNextPage()) {
-#ifdef TARGET_PC
         NebulaCutsceneSkip::endForQuestion();
-#endif
         return true;
     }
 

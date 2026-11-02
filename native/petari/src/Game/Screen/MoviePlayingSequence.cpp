@@ -1,7 +1,5 @@
 #include "Game/Screen/MoviePlayingSequence.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 #include "Game/Demo/DemoPadRumbler.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/MarioAccess.hpp"
@@ -264,11 +262,9 @@ void MoviePlayingSequence::exeWait() {
 
 void MoviePlayingSequence::exePlayWait() {
     if (MR::isFirstStep(this)) {
-#ifdef TARGET_PC
         // An HD replacement's decoder starts here, the play wait before the THP opens, so its first frames are ready
         // with the game's.
         __NebulaMovieFrame(::getMovieName(mInfo), -2, 0.0f, nullptr, nullptr, nullptr, 0, 0);
-#endif
         MR::startStarPointerModeDemo(this);
         MR::stopSubBGM(60);
         MR::stopStageBGM(60);
@@ -374,14 +370,12 @@ bool MoviePlayingSequence::trySkip() {
         return false;
     }
 
-#ifdef TARGET_PC
     if (NebulaCutsceneSkip::takeMovieSkip()) {
         MR::stopMoviePlayer();
         MR::forceCloseWipeFade();
         setNerve(GET_NERVE(MoviePlayingSequence, HostTypeEndWait));
         return true;
     }
-#endif
 
     if (!MR::isEqualStringCase(mInfo->mMovieName, "/MovieData/FinalBattle.thp")) {
         return false;

@@ -9,11 +9,9 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include <cstdio>
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
 #include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
-#endif
 
 namespace {
     const f32 sDefaultDistanceToMiddle = 2000.0f;
@@ -116,17 +114,14 @@ void LodCtrl::update() {
         }
 
         f32 distance = calcDistanceToCamera();
-#ifdef TARGET_PC
         // The console drew its 3D image in 456 lines and switched to the middle and low models where they show that
         // few pixels; the same switch at an image of more lines comes as many times further away.
         const u32 scale = NebulaHost::option(NEBULA_OPTION_LOD_SCALE);
         if (scale > 1) {
             distance /= static_cast< f32 >(scale);
         }
-#endif
         f32 lowDistance = _4;
         f32 middleDistance = _0;
-#ifdef TARGET_PC
         // Tests (GALAXY_TEST_LOD): a model chosen for every actor, or the high and middle models in turn.
         static const u32 sTestLod = NebulaHost::option(NEBULA_OPTION_TEST_LOD);
         if (sTestLod != 0 && !*_28) {
@@ -144,7 +139,6 @@ void LodCtrl::update() {
             }
             return;
         }
-#endif
         if (*_28) {
             hideAllModel();
         } else if (*_1C) {

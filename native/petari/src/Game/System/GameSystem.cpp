@@ -35,7 +35,6 @@
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
@@ -43,7 +42,6 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaDisc.hpp"
-#endif
 
 #define GX_FIFO_SIZE 0x80000
 
@@ -57,12 +55,8 @@ namespace NrvGameSystem {
     NEW_NERVE(GameSystemNormal, GameSystem, Normal);
 };  // namespace NrvGameSystem
 
-#ifdef TARGET_PC
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
-#else
-void main(void) {
-#endif
     NebulaDisc::init();
     NebulaFrameClock::init();
     HeapMemoryWatcher::createRootHeap();
@@ -181,12 +175,10 @@ void GameSystem::initAfterStationedResourceLoaded() {
     mHomeButtonLayout->initWithoutIter();
     mErrorWatcher->initAfterResourceLoaded();
     mSystemWipeHolder = MR::createSystemWipeHolder();
-#ifdef TARGET_PC
     NebulaIcons::init();
     NebulaCutsceneSkip::init();
     NebulaSettingsMenu::init();
     NebulaRtPrepare::init();
-#endif
     mSceneController->initAfterStationedResourceLoaded();
     mSequenceDirector->initAfterResourceLoaded();
 }
@@ -213,13 +205,11 @@ void GameSystem::frameLoop() {
     MainLoopFramework::sManager->endRender();
     update();
     calcAnim();
-#ifdef TARGET_PC
     // A skipped cutscene runs on unseen: more of the game's steps while they fit in this frame.
     while (NebulaCutsceneSkip::tryExtraStep()) {
         update();
         calcAnim();
     }
-#endif
     mObjHolder->captureIfAllowForScreenPreserver();
     MainLoopFramework::sManager->endFrame();
     MainLoopFramework::sManager->waitForRetrace();
@@ -228,16 +218,12 @@ void GameSystem::frameLoop() {
 void GameSystem::draw() {
     mSceneController->drawScene();
     mSequenceDirector->draw();
-#ifdef TARGET_PC
     NebulaCutsceneSkip::draw();
     // The settings menu covers everything, the wipes too; the pointer is drawn over it.
     const bool isSettingsShown = NebulaSettingsMenu::isShown();
     if (!isSettingsShown) {
         mObjHolder->drawStarPointer();
     }
-#else
-    mObjHolder->drawStarPointer();
-#endif
     mObjHolder->drawBeforeEndRender();
 
     if (mSystemWipeHolder != nullptr) {
@@ -245,14 +231,12 @@ void GameSystem::draw() {
     }
 
     mErrorWatcher->draw();
-#ifdef TARGET_PC
     mSceneController->drawSceneOverlay();
     NebulaRtPrepare::draw();
     if (isSettingsShown) {
         NebulaSettingsMenu::draw();
         mObjHolder->drawStarPointer();
     }
-#endif
     mHomeButtonLayout->draw();
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->draw();
 }
@@ -261,7 +245,6 @@ void GameSystem::update() {
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->movement();
     mSceneController->checkRequestAndChangeScene();
     mObjHolder->update();
-#ifdef TARGET_PC
     NebulaMenuFocus::update();
     NebulaRtPrepare::update();
     NebulaSettingsMenu::update();
@@ -270,7 +253,6 @@ void GameSystem::update() {
     if (!NebulaSettingsMenu::isFreezingScene()) {
         NebulaCutsceneSkip::update();
     }
-#endif
     mHomeButtonLayout->movement();
 
     if (!mHomeButtonLayout->isActive()) {
@@ -300,7 +282,6 @@ void GameSystem::updateSceneController() {
         isSceneUpdate = false;
     }
 
-#ifdef TARGET_PC
     // The cutscene skip's question and its fade out, and the settings menu, hold the scene still as the HOME Menu does
     // (a movie resumes in step after them).
     const bool isSkipPrompt = NebulaCutsceneSkip::isFreezingScene();
@@ -310,9 +291,6 @@ void GameSystem::updateSceneController() {
     }
     mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning() ||
                                      isSkipPrompt || isSettingsMenu);
-#else
-    mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning());
-#endif
 
     if (isSceneUpdate || isResetProcessing) {
         mSequenceDirector->update();
@@ -325,12 +303,10 @@ void GameSystem::updateSceneController() {
 
         mSceneController->updateScene();
     }
-#ifdef TARGET_PC
     else if (isSkipPrompt && !isSettingsMenu && mSystemWipeHolder != nullptr) {
         // The skip's fade to black runs over the held scene.
         mSystemWipeHolder->movement();
     }
-#endif
 
     if (isResetProcessing) {
         mSceneController->updateSceneDuringResetProcessing();

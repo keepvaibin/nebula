@@ -6,16 +6,10 @@ static const u8 bitTable[] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
 
 // The allocation table is bytes, unit 0 in the first byte's top bit, scanned a word at a time: natively the word as the
 // console's big-endian load read it, so a word's top bit stays the first unit.
-#ifdef TARGET_PC
 #include <nebula_endian.h>
 static inline u32 batWord(const u32* p) {
     return nebula_load_be32(p);
 }
-#else
-static inline u32 batWord(const u32* p) {
-    return *p;
-}
-#endif
 
 #pragma push
 #pragma optimization_level 3
@@ -23,12 +17,10 @@ JKRUnitHeap* JKRUnitHeap::create(u32 unitSize, u32 size, u32 alignment, JKRHeap*
     if (alignment == 0) {
         alignment = 4;
     }
-#ifdef TARGET_PC
     // Units 16-byte aligned natively (JKRHeap::alloc).
     if (alignment < 16) {
         alignment = 16;
     }
-#endif
     if (alignment > unitSize) {
         unitSize = alignment;
     }
@@ -40,11 +32,9 @@ JKRUnitHeap* JKRUnitHeap::create(u32 unitSize, u32 size, u32 alignment, JKRHeap*
     if (size == 0xFFFFFFFF) {
         size = parent->getMaxAllocatableSize(8);
     }
-#ifdef TARGET_PC
     else {
         size = JKRNativeHeapSize(size, parent, 8);
     }
-#endif
     if (size < sizeof(JKRUnitHeap)) {
         return nullptr;
     }

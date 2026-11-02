@@ -1,7 +1,5 @@
 #include "Game/Screen/StarPointerLayout.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerBlur.hpp"
@@ -542,9 +540,7 @@ void StarPointerLayout::draw() const {
         return;
     }
 
-#ifdef TARGET_PC
     MotionSignal::starPointerLayout(this);
-#endif
     drawDecoration();
     LayoutActor::draw();
     mNumber->draw();
@@ -674,13 +670,9 @@ void StarPointerLayout::control() {
 
 void StarPointerLayout::setPosition() {
     StarPointerController* controller = StarPointerFunction::getStarPointerDirector()->getStarPointerController(mPadChannel);
-#ifdef TARGET_PC
     // This frame's position (StarPointerController::updateDpdInfo has run): the console drew the previous frame's,
     // a frame behind the remote. The 3D targeting keeps the previous frame's, which its depth peek belongs to.
     TVec2f pos = controller->mInfo.mPos;
-#else
-    TVec2f pos = controller->mPastInfo.mPos;
-#endif
     setTrans(pos);
     mNumber->setTrans(pos);
 }

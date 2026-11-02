@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 
 struct NebulaAchievementIcon;
@@ -47,4 +46,3 @@ private:
     /* 0x48 */ f32 mWidth;
     /* 0x4C */ f32 mHeight;
 };
-#endif

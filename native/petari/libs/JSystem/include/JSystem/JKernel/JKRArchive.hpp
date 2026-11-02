@@ -71,13 +71,9 @@ public:
             /* 0x08 */ u32 mDirIndex;
         };
         /* 0x0C */ u32 mDataSize;
-#ifdef TARGET_PC
         // A host pointer does not fit the 4-byte slot (and entries are stepped by their 20-byte size): the archive keeps
         // each entry's loaded data in its own table (JKRArchive::fileData).
         /* 0x10 */ u32 mFileDataSlot;
-#else
-        /* 0x10 */ void* mFileData;
-#endif
     };
 
     struct SDIDirEntry {
@@ -171,7 +167,6 @@ public:
     /* 0x5C */ int _5C;
     /* 0x60 */ EMountDirection mMountDir;
 
-#ifdef TARGET_PC
     // Each file entry's loaded data (the console kept it in SDIFileEntry::mFileData), indexed like mFiles.
     mutable void** mFileDataTable = nullptr;
 
@@ -183,8 +178,4 @@ public:
     }
     void allocFileDataTable() const;
     void freeFileDataTable();
-#else
-    void*& fileData(SDIFileEntry* pEntry) const { return pEntry->mFileData; }
-    void* fileData(const SDIFileEntry* pEntry) const { return pEntry->mFileData; }
-#endif
 };

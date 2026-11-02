@@ -3,9 +3,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaIcons.hpp"
-#endif
 
 namespace NrvIconAButton {
     NEW_NERVE(IconAButtonNrvOpen, IconAButton, Open);
@@ -127,11 +125,9 @@ void IconAButton::control() {
     updateFollowPos();
 }
 
-#ifdef TARGET_PC
 void IconAButton::draw() const {
     NebulaIcons::drawWithIcons(this);
 }
-#endif
 
 void IconAButton::updateFollowPos() {
     if (mFollowActor != nullptr) {

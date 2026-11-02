@@ -14,9 +14,6 @@ class HomeButtonLayout;
 class HomeButtonStateNotifier;
 class SystemWipeHolder;
 
-#ifdef __MWERKS__
-void main(void);
-#endif
 
 class GameSystem : public NerveExecutor {
 public:

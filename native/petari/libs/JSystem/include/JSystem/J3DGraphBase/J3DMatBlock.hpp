@@ -5,12 +5,8 @@
 
 struct J3DIndTexOrder : public J3DIndTexOrderInfo {
     J3DIndTexOrder() {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &j3dDefaultIndTexOrderNull, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&j3dDefaultIndTexOrderNull);
-#endif
     }
 
     J3DIndTexOrder& operator=(J3DIndTexOrder const& other) NO_INLINE {
@@ -19,12 +15,8 @@ struct J3DIndTexOrder : public J3DIndTexOrderInfo {
     }
 
     J3DIndTexOrder(J3DIndTexOrderInfo const& info) {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &info, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&info);
-#endif
     }
 
     u8 getMap() const {
@@ -38,21 +30,13 @@ struct J3DIndTexOrder : public J3DIndTexOrderInfo {
 
 struct J3DIndTexCoordScale : public J3DIndTexCoordScaleInfo {
     J3DIndTexCoordScale() {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &j3dDefaultIndTexCoordScaleInfo, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&j3dDefaultIndTexCoordScaleInfo);
-#endif
     }
 
     J3DIndTexCoordScale(const J3DIndTexCoordScaleInfo& info) {
-#ifdef TARGET_PC
         // The four bytes as they are (a u32 read and store, on the console).
         memcpy(this, &info, sizeof(u32));
-#else
-        *reinterpret_cast< u32* >(this) = *reinterpret_cast< const u32* >(&info);
-#endif
     }
 
     J3DIndTexCoordScale(const J3DIndTexCoordScale& other) : J3DIndTexCoordScaleInfo(other) {

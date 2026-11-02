@@ -25,16 +25,12 @@ void MiiFaceIcon::drawIcon() {
         return;
     }
 
-#ifdef TARGET_PC
     // Into the image, after its ResTIMG header (createImageBuffer: mImageDataOffset). The console's code copies the
     // face to the header's address (802775F0 passes mImageBuffer); on the console the GPU's copy overwrites the
     // header, already read into the layout's TexMap, and the icon shows 32 bytes (one 4x4 block) out of place.
     // Natively the copy stays on the GPU at the address it was made to, so the TexMap's image (the header plus 32)
     // must be where the face goes.
     u8* const image = mImageBuffer + sizeof(ResTIMG);
-#else
-    u8* const image = mImageBuffer;
-#endif
     if (mIsFavoriteColorBG) {
         mMakeIconResult = mRecipe->makeIconWithFavoriteColor(image, mWidth, mHeight);
     } else {

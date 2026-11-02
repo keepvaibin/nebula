@@ -80,7 +80,6 @@ JKRHeap::~JKRHeap() {
         sSystemHeap = !nextRootHeap ? sRootHeap : nextRootHeap->getObject();
 }
 
-#ifdef TARGET_PC
 u32 JKRNativeHeapSize(u32 size, JKRHeap* pParent, int alignment) {
     if (size == 0xFFFFFFFF || size > 0x7FFFFFFF) {
         return size;
@@ -88,7 +87,6 @@ u32 JKRNativeHeapSize(u32 size, JKRHeap* pParent, int alignment) {
     const u32 room = pParent->getMaxAllocatableSize(alignment);
     return size * 2 <= room ? size * 2 : size;
 }
-#endif
 
 extern "C" void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
 
@@ -142,7 +140,6 @@ void* JKRHeap::alloc(u32 size, int align, JKRHeap* pHeap) {
     return nullptr;
 }
 
-#ifdef TARGET_PC
 // At least 16-byte aligned natively, as a native allocator's memory is: the compiler takes operator new's memory to be
 // (aligned SSE stores zero new objects), and 8-byte members never straddle cache lines. Negative alignments allocate
 // from a heap's tail.
@@ -165,11 +162,6 @@ void* JKRHeap::alloc(u32 size, int align) {
     return do_alloc(size, nativeAlignment(align));
 #endif
 }
-#else
-void* JKRHeap::alloc(u32 size, int align) {
-    return do_alloc(size, align);
-}
-#endif
 
 void JKRHeap::free(void* pData, JKRHeap* pHeap) {
     if (!pHeap) {

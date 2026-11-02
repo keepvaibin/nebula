@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 
 class GalaxyMapBackground;
@@ -35,4 +34,3 @@ private:
     /* 0x24 */ GalaxyMapBackground* mBackground;
     /* 0x28 */ bool mIsOpen;
 };
-#endif

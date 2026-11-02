@@ -15,23 +15,11 @@ void J3DTexMtxInfo::operator=(J3DTexMtxInfo const& param_0) {
 }
 
 void J3DTexMtxInfo::setEffectMtx(Mtx param_0) {
-#ifdef TARGET_PC
     JMath::gekko_ps_copy12(&mEffectMtx, param_0);
     mEffectMtx[3][0] = kIdentityZero;
     mEffectMtx[3][1] = kIdentityZero;
     mEffectMtx[3][2] = kIdentityZero;
     mEffectMtx[3][3] = kIdentityW;
-#elif defined(__MWERKS__)
-    JMath::gekko_ps_copy12(&mEffectMtx, param_0);
-    register f32 zero = kIdentityZero;
-    register f32* mtx = &mEffectMtx[0][0];
-    asm {
-        psq_st zero, 0x30(mtx), 0, 0
-    }
-    ;
-    mEffectMtx[3][2] = kIdentityZero;
-    mEffectMtx[3][3] = kIdentityW;
-#endif
 }
 
 J3DIndTexMtxInfo& J3DIndTexMtxInfo::operator=(J3DIndTexMtxInfo const& param_0) {

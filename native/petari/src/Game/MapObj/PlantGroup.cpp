@@ -179,20 +179,12 @@ s32 PlantGroup::placeOnCollisionFormCircle(TVec3f* pCenter, const TVec3f& rGravi
         offset.scale(radius);
         TVec3f start(mPosition);
         start += offset;
-#ifdef TARGET_PC
         const TVec3f up = rGravity * 100.0f;
         const TVec3f* pUp = &up;
-#else
-        const TVec3f* pUp = &(rGravity * 100.0f);
-#endif
         start -= *pUp;
 
-#ifdef TARGET_PC
         const TVec3f ray = rGravity * ::sCheckLineLength;
         const TVec3f* pRay = &ray;
-#else
-        const TVec3f* pRay = &(rGravity * ::sCheckLineLength);
-#endif
 
         if (MR::getFirstPolyOnLineToMap(&mMembers[i]->mPosition, nullptr, start, *pRay)) {
             *pCenter += mMembers[i]->mPosition;

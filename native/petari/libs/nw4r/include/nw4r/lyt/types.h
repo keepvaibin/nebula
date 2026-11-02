@@ -637,11 +637,7 @@ namespace nw4r {
             bool mbDisable;
         };
 
-#if defined(__MWERKS__) || defined(TARGET_PC)
         typedef ut::LinkList< AnimationLink, offsetof(AnimationLink, mLink) > AnimationList;
-#else
-        typedef ut::LinkList< AnimationLink, 0 > AnimationList;
-#endif
 
         struct AnimationGroupRef {
             AnimationGroupRef() : flag(0) {

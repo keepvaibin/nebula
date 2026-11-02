@@ -1,9 +1,7 @@
 #include "Game/Map/FileSelector.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/FileSelectCameraController.hpp"
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
-#endif
 #include "Game/Map/FileSelectEffect.hpp"
 #include "Game/Map/FileSelectFunc.hpp"
 #include "Game/Map/FIleSelectItem.hpp"
@@ -42,14 +40,12 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <nw4r/ut/ResFont.h>
-#ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Screen/NebulaQuitButton.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
-#endif
 
 #define USER_FILE_NUM 6
 
@@ -147,10 +143,8 @@ FileSelector::FileSelector(const char* pName)
     : LiveActor(pName), mCameraController(), mSky(), mItems(), mOperationButton(), mBackButton(), mBrosButton(), mInfoMessage(), mSysInfoWindow(),
       _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new MiiCreateID()), mManual(), mIsMiiSelectStartFirst(),
       mBgmState(), mSelectEffect()
-#ifdef TARGET_PC
       ,
       mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mIsQuitFocusWanted(false)
-#endif
 {
 }
 
@@ -168,9 +162,7 @@ void FileSelector::init(const JMapInfoIter& rIter) {
     createBrosButton();
     createInfoMessage();
     createSysInfoWindow();
-#ifdef TARGET_PC
     createQuitButton();
-#endif
     createFileInfo();
     createTitle();
     createMiiSelect();
@@ -256,9 +248,7 @@ void FileSelector::control() {
     }
 
     updateBgm();
-#ifdef TARGET_PC
     updateQuitButton();
-#endif
 }
 
 bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -354,16 +344,13 @@ void FileSelector::createInfoMessage() {
 void FileSelector::createSysInfoWindow() {
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayout(mSysInfoWindow);
-#ifdef TARGET_PC
     // Its questions (create, copy, delete) come from choosing a file: B goes back, as the Back button does.
     mSysInfoWindow->setBackAnswersNo(true);
-#endif
 
     mSysInfoWindowMini = MR::createSysInfoWindowMiniExecuteWithChildren();
     MR::connectToSceneLayout(mSysInfoWindowMini);
 }
 
-#ifdef TARGET_PC
 void FileSelector::createQuitButton() {
     mQuitButton = new NebulaQuitButton("NebulaQuitButton");
     mQuitButton->initWithoutIter();
@@ -469,7 +456,6 @@ bool FileSelector::updateQuitQuestion() {
     MR::activeStarPointerGuidance();
     return false;
 }
-#endif
 
 void FileSelector::createFileInfo() {
     mFileInfo = new FileSelectInfo(MII_NAME_LEN + 1, "\203\164\203\100\203\103\203\213\217\356\225\361" /* ファイル情報 */);
@@ -644,11 +630,9 @@ void FileSelector::onPoint(FileSelectItem* pItem) {
         return;
     }
 
-#ifdef TARGET_PC
     if (mQuitButton->isPointing()) {
         return;
     }
-#endif
 
     if (_C0 != nullptr) {
         if (_C0->_140 > pItem->_140) {
@@ -1160,19 +1144,15 @@ void FileSelector::exeFileSelectStart() {
 
 void FileSelector::exeFileSelect() {
     if (MR::isFirstStep(this)) {
-#ifdef TARGET_PC
         NebulaHost::presence(nullptr, nullptr, -1);  // Discord: choosing a file
-#endif
         validateSelectAll();
         appearAllIndex();
         MR::activeStarPointerGuidance();
     } else {
-#ifdef TARGET_PC
         if (updateQuitQuestion()) {
             return;
         }
         offerFilesToMenuFocus();
-#endif
         updateFileInfo();
     }
 
@@ -1348,10 +1328,8 @@ void FileSelector::exeCreateConfirm() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->appear("System_FileSelect001", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_NEW_FILE", "SE_SY_TALK_SELECT_NO");
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
@@ -1416,9 +1394,7 @@ void FileSelector::exeCopySelect() {
     }
 
     MR::requestFileSelectCopyGuidance();
-#ifdef TARGET_PC
     offerFilesToMenuFocus();
-#endif
     updateFileInfo();
 
     if (mBackButton->isPointing()) {
@@ -1470,10 +1446,8 @@ void FileSelector::exeCopyConfirm() {
 
         mSysInfoWindow->setTextBoxArgNumber(_B8->_140, 0);
         mSysInfoWindow->setTextBoxArgNumber(_B4->_140, 1);
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
@@ -1715,10 +1689,8 @@ void FileSelector::exeMiiConfirm() {
         FileSelectFunc::copyMiiName(name, iconId);
         mMiiConfirmIcon->appear(mMiiSelect->getSelectedMiiTexMap(), reinterpret_cast< wchar_t* >(name));
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_MII_CHANGE", "SE_SY_TALK_SELECT_NO");
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!mMiiConfirmIcon->isDisappear() && mSysInfoWindow->isDisappear()) {
@@ -1837,10 +1809,8 @@ void FileSelector::exeDeleteConfirm() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_DELETE", "SE_SY_TALK_SELECT_NO");
         mSysInfoWindow->appear("System_FileSelect007", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {

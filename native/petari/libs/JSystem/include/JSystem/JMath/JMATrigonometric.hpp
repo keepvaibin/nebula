@@ -164,11 +164,9 @@ namespace JMath {
     };
 
     extern TSinCosTable< 14, f32 > sSinCosTable;
-#ifdef TARGET_PC
     // Defined in JMATrigonometric.cpp; declared before the inline users below instantiate it.
     template <>
     f32 TAtanTable< 1024, f32 >::atan2_(f32, f32) const;
-#endif
     extern TAtanTable< 1024, f32 > sAtanTable;
     extern TAsinAcosTable< 1024, f32 > sAsinAcosTable;
 

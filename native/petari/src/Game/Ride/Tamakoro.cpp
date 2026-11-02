@@ -1,7 +1,5 @@
 #include "Game/Ride/Tamakoro.hpp"
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#endif
 #include "Game/GameAudio/AudTamakoroBgmCtrl.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -280,9 +278,7 @@ bool Tamakoro::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
 bool Tamakoro::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgAutoRushBegin(msg) && requestBind(pSender)) {
-#ifdef TARGET_PC
         NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 1);
-#endif
         return true;
     }
 
@@ -921,18 +917,12 @@ void Tamakoro::updateMoment() {
         TVec3f moment;
         const TVec3f* up;
         // TVec3f tmpVec;
-#ifdef TARGET_PC
         // Read through up past the else block, so it lives for the whole branch.
         TVec3f tmpVec;
-#endif
         if (MR::isBindedGround(this)) {
             up = MR::getGroundNormal(this);
         } else {
-#ifdef TARGET_PC
             tmpVec = -mGravity;
-#else
-            TVec3f tmpVec(-mGravity);
-#endif
             up = &tmpVec;
         }
 

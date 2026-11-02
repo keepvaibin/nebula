@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/NPC/Tico.hpp"
 
 // Nebula's Achievement Luma: a Luma on the Observatory's walkway, a little ahead of where Mario arrives and to the
@@ -21,4 +20,3 @@ public:
     void exeNebulaWait();
     void exeNebulaOpen();
 };
-#endif

@@ -28,13 +28,7 @@ public:
     }
 
     JAISoundID(u32 sectionID, u32 groupID, u32 waveID) {
-#ifdef TARGET_PC
         mID.mComposite = (u32)(u8)sectionID << 24 | (u32)(u8)groupID << 16 | (u16)waveID;
-#else
-        mID.info.type.parts.sectionID = sectionID;
-        mID.info.type.parts.groupID = groupID;
-        mID.info.waveID = waveID;
-#endif
     }
 
     operator u32() const {
@@ -49,7 +43,6 @@ public:
         mID.mComposite = -1;
     }
 
-#ifdef TARGET_PC
     // The id is the console's word 0xSSGGWWWW (section, group, wave): natively its parts come from the value, not
     // from the bytes the union overlays on it.
     u8 getSectionID() const {
@@ -75,31 +68,6 @@ public:
     void setWaveID(u16 id) {
         mID.mComposite = (mID.mComposite & 0xFFFF0000) | id;
     }
-#else
-    u8 getSectionID() const {
-        return mID.info.type.parts.sectionID;
-    }
-
-    void setSectionID(u8 id) {
-        mID.info.type.parts.sectionID = id;
-    }
-
-    u8 getGroupID() const {
-        return mID.info.type.parts.groupID;
-    }
-
-    void setGroupID(u8 id) {
-        mID.info.type.parts.groupID = id;
-    }
-
-    u16 getWaveID() const {
-        return mID.info.waveID;
-    }
-
-    void setWaveID(u16 id) {
-        mID.info.waveID = id;
-    }
-#endif
 
     void set(u8 sectionID, u8 groupID, u16 waveID) {
         setSectionID(sectionID);

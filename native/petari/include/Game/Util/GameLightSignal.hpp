@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Util/Color.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <revolution/gx.h>
@@ -30,4 +29,3 @@ namespace GameLightSignal {
     // LightFunction::loadActorLightInfo: world-fixed lights far out (key lights of areas).
     void actorLight(const ActorLightInfo* pInfo);
 };  // namespace GameLightSignal
-#endif

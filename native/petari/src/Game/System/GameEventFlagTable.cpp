@@ -1,7 +1,5 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
 #include <revolution/os.h>
-#endif
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/Util/HashUtil.hpp"
@@ -292,12 +290,8 @@ namespace GameEventFlagTable {
 
     // The flags (main.dol's when a mod changed them there).
     const GameEventFlag* flags() {
-#ifdef TARGET_PC
         static const GameEventFlag* sFlags = NebulaDiscTables::getEventFlags(::sGameEventFlagStatic);
         return sFlags;
-#else
-        return ::sGameEventFlagStatic;
-#endif
     }
 
     s32 getTableSize() {

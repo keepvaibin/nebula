@@ -3,9 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/Util/Array.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 
 namespace MR {
     class FunctorBase;
@@ -29,14 +27,12 @@ namespace {
         (pNameObj->*mNameObjFunc)();
     }
 
-#ifdef TARGET_PC
     // The draw list is the only one of const methods: each NameObj's draws are named after it.
     template <>
     inline void NameObjRealDelegator< NameObjMethodConst >::operator()(NameObj* pNameObj) {
         MotionSignal::drawNameObj(pNameObj);
         (pNameObj->*mNameObjFunc)();
     }
-#endif
 };  // namespace
 
 struct CategoryListInitialTable {

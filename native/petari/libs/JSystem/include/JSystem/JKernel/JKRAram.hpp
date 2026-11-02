@@ -8,11 +8,7 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
-#ifdef TARGET_PC
 #include "JSystem/JKernel/JKRDecomp.hpp"
-#else
-u32 JKRDecompExpandSize(u8*);
-#endif
 
 class JKRAMCommand;
 

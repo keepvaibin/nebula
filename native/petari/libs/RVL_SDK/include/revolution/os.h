@@ -8,18 +8,8 @@
 extern "C" {
 #endif
 
-#ifdef __MWERKS__
-u32 __OSBusClock : (0x8000 << 16 | 0x00F8);
-u32 __MEM2End : (0x8000 << 16 | 0x3128);
-#elif !defined(TARGET_PC)
-u32 __OSBusClock = 0x800000F8;
-u32 __MEM2End = 0x80003128;
-#endif
 
 // The console reads its bus clock from low memory; natively it is the Wii's constant (243 MHz).
-#ifndef TARGET_PC
-#define OS_BUS_CLOCK __OSBusClock
-#endif
 #ifndef OS_CORE_CLOCK
 #define OS_CORE_CLOCK 729000000u
 #endif
@@ -34,7 +24,6 @@ u32 __MEM2End = 0x80003128;
 #define OSMillisecondsToTicks(msec) ((msec) * (OS_TIMER_CLOCK / 1000))
 #define OSMicrosecondsToTicks(usec) (((usec) * (OS_TIMER_CLOCK / 125000)) / 8)
 
-#ifdef TARGET_PC
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,7 +36,6 @@ void __NebulaPoll(void);
 // A stable 32-bit name for a game object: its offset in the game's memory.
 #ifdef __cplusplus
 }
-#endif
 #endif
 
 void* OSGetMEM1ArenaLo(void);
@@ -80,7 +68,6 @@ inline s16 __OSf32tos16(__REGISTER f32 inF) {
     u32 tmp;
     __REGISTER u32* tmpPtr = &tmp;
     // clang-format off
-#ifdef TARGET_PC
     if (inF != inF || inF >= 32767.0f) {
         out = 32767;
     } else if (inF <= -32768.0f) {
@@ -88,12 +75,6 @@ inline s16 __OSf32tos16(__REGISTER f32 inF) {
     } else {
         out = (s16)inF;
     }
-#elif defined(__MWERKS__)
-    asm {
-        psq_st inF, 0(tmpPtr), 0x1, 5
-        lha out, 0(tmpPtr)
-    }
-#endif
     // clang-format on
 
     return out;
@@ -108,7 +89,6 @@ inline u8 __OSf32tou8(__REGISTER f32 inF) {
     u32 tmp;
     __REGISTER u32* tmpPtr = &tmp;
     // clang-format off
-#ifdef TARGET_PC
     if (inF != inF || inF >= 255.0f) {
         out = 255;
     } else if (inF > 0.0f) {
@@ -116,12 +96,6 @@ inline u8 __OSf32tou8(__REGISTER f32 inF) {
     } else {
         out = 0;
     }
-#elif defined(__MWERKS__)
-    asm {
-        psq_st inF, 0(tmpPtr), 0x1, 2
-        lbz out, 0(tmpPtr)
-    }
-#endif
     // clang-format on
 
     return out;

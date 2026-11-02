@@ -5,13 +5,9 @@
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include <cstdio>
 
-#ifdef TARGET_PC
 // The XF colour word, r in the top byte (the console read the four bytes as a u32).
 
 
-#else
-
-#endif
 
 
 

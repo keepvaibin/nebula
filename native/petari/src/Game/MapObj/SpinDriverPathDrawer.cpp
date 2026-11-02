@@ -35,18 +35,9 @@ namespace {
 
 namespace {
     inline u32 packPathColor(const TVec3f& rColor, const f32& rAlpha) {
-#ifdef TARGET_PC
         // The console's 0xRRGGBBAA word (its bytes stored r, g, b, a).
         return (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.x)) << 24 | (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.y)) << 16 |
                (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.z)) << 8 | (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rAlpha));
-#else
-        u32 result = 0;
-        reinterpret_cast< u8* >(&result)[0] = static_cast< s32 >(255.0f * MR::abs(rColor.x));
-        reinterpret_cast< u8* >(&result)[1] = static_cast< s32 >(255.0f * MR::abs(rColor.y));
-        reinterpret_cast< u8* >(&result)[2] = static_cast< s32 >(255.0f * MR::abs(rColor.z));
-        reinterpret_cast< u8* >(&result)[3] = static_cast< s32 >(255.0f * MR::abs(rAlpha));
-        return result;
-#endif
     }
 
     static const f32 sDrawMinInterval = 0.0f;

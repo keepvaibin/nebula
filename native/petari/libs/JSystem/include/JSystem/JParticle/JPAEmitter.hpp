@@ -365,11 +365,7 @@ public:
     /* 0xB0 */ JGeometry::TVec2< f32 > mGlobalPScl;
     /* 0xB8 */ NebulaColor8 mGlobalPrmClr;
     /* 0xBC */ NebulaColor8 mGlobalEnvClr;
-#ifdef TARGET_PC
     /* 0xC0 */ uintptr_t mpUserWork;  // a pointer natively too (EffectSystemUtil's SingleEmitter)
-#else
-    /* 0xC0 */ s32 mpUserWork;
-#endif
     /* 0xC4 */ JPARandom mRndm;
     /* 0xC8 */ JPAList< JPABaseParticle > mAlivePtclBase;
     /* 0xD4 */ JPAList< JPABaseParticle > mAlivePtclChld;
@@ -390,9 +386,7 @@ public:
     /* 0x111 */ u8 mTexAnmIdx;
     /* 0x112 */ u8 mGroupID;
     /* 0x113 */ u8 mResMgrID;
-#ifdef TARGET_PC
     u16 mMotionEpoch;  // counts the pooled emitter's effects (MotionSignal)
-#endif
 };
 
 enum {

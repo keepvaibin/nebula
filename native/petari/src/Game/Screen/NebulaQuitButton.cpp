@@ -1,6 +1,5 @@
 #include "Game/Screen/NebulaQuitButton.hpp"
 
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
@@ -204,4 +203,3 @@ const wchar_t* NebulaQuitButton::getQuestion() {
     NebulaText::get(question, 128, "QuitQuestion");
     return question;
 }
-#endif

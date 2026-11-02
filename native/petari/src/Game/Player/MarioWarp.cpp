@@ -8,11 +8,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-#ifndef TARGET_PC
-namespace JGeometry {
-    TVec3< f32 > TVec3< f32 >::operator*(f32) const NO_INLINE;
-};  // namespace JGeometry
-#endif
 
 bool Mario::doObjWarp(LiveActor* pActor) {
     if (getPlayer()->getMovementStates().debugMode) {

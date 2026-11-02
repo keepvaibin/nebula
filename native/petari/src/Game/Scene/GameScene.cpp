@@ -2,11 +2,8 @@
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
-#endif
-#ifdef TARGET_PC
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -27,7 +24,6 @@
 #include "Game/System/NebulaFrameGen.hpp"
 #include <nebula_game_api.h>
 #include <revolution/os.h>
-#endif
 #include "Game/AudioLib/AudSceneMgr.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
@@ -62,7 +58,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/NPC/NebulaAchievementLuma.hpp"
@@ -70,7 +65,6 @@
 #include "Game/Screen/NebulaAchievementToast.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
-#endif
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -100,9 +94,7 @@ namespace NrvGameScene {
     NEW_NERVE(GameSceneTimeUp, GameScene, TimeUp);
     NEW_NERVE(GameSceneGalaxyMap, GameScene, GalaxyMap);
     NEW_NERVE(GameSceneStaffRoll, GameScene, StaffRoll);
-#ifdef TARGET_PC
     NEW_NERVE(GameSceneNebulaBoard, GameScene, NebulaBoard);
-#endif
 };  // namespace NrvGameScene
 
 GameScene::GameScene()
@@ -175,10 +167,8 @@ void GameScene::init() {
         LightFunction::initLightData();
         initSequences();
         SceneFunction::startActorPlacement();
-#ifdef TARGET_PC
         // Nebula's Achievement Luma joins the Observatory's own actors.
         NebulaAchievementLuma::tryCreate();
-#endif
         GameSceneFunction::loadScenarioWaveData();
         MR::createStarPiece();
         MR::completeCameraParameters();
@@ -190,14 +180,11 @@ void GameScene::init() {
         SleepControlFunc::initSyncSleepController();
 
         while (!GameSceneFunction::isLoadDoneScenarioWaveData()) {
-#ifdef TARGET_PC
             NebulaKernel::poll();
-#endif
         }
     }
 }
 
-#ifdef TARGET_PC
 namespace {
     // The achievement board asked for by the Achievement Luma: it opens once the scene is in plain play, not paused,
     // in a demo or behind a wipe; a scene that starts drops the request.
@@ -215,15 +202,12 @@ namespace {
         NebulaHost::presence(reinterpret_cast< const u16* >(pGalaxy), reinterpret_cast< const u16* >(pStar), MR::getPowerStarNum());
     }
 };  // namespace
-#endif
 
 void GameScene::start() {
     AudWrap::getSceneMgr()->startScene();
-#ifdef TARGET_PC
     sBoardRequested = false;
     reportPresence();
     NebulaAchievements::evaluate();
-#endif
 
     if (MR::isGlobalTimerEnd()) {
         MR::forceCloseWipeCircle();
@@ -237,7 +221,6 @@ void GameScene::start() {
 void GameScene::update() {
     mPauseCtrl->updateNerve();
     updateNerve();
-#ifdef TARGET_PC
     NebulaAchievements::update();
     if (sTestBoard && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
         sTestBoard = false;
@@ -253,7 +236,6 @@ void GameScene::update() {
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->update();
     }
-#endif
 
     bool isTimeUp = MR::isGlobalTimerEnd() && !isNerve(GET_NERVE(GameScene, GameSceneTimeUp)) && MR::isGreaterEqualStep(this, 2);
 
@@ -263,7 +245,6 @@ void GameScene::update() {
 }
 
 void GameScene::draw() const {
-#ifdef TARGET_PC
     // DLSS Frame Generation while the scene shows play: its own play, its openings and star demos, and no menu,
     // map, staff roll, movie or settings over it, nor the title and file select.
     NebulaFrameGen::report(!MR::isStageFileSelect() && !MR::isActiveMoviePlayer() && !NebulaSettingsMenu::isShown() &&
@@ -407,7 +388,6 @@ void GameScene::draw() const {
             }
         }
     }
-#endif
     MR::drawInit();
     LightFunction::initLightRegisterAll();
     CategoryList::execute(MR::DrawType_MiiFaceIcon);
@@ -463,9 +443,7 @@ void GameScene::requestPowerStarGetDemo() {
 }
 
 void GameScene::requestGrandStarGetDemo() {
-#ifdef TARGET_PC
     NebulaAchievements::onGrandStarGet();
-#endif
     setNerve(GET_NERVE(GameScene, GameSceneGrandStarGet));
 }
 
@@ -581,9 +559,7 @@ void GameScene::initEffect() {
 
 void GameScene::drawMirror() const {
     if (isDrawMirror()) {
-#ifdef TARGET_PC
         MotionSignal::mirror(true);
-#endif
         NebulaMtxCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
@@ -592,9 +568,7 @@ void GameScene::drawMirror() const {
         CategoryList::drawOpa(MR::DrawBufferType_MirrorMapObj);
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
-#ifdef TARGET_PC
         MotionSignal::mirror(false);
-#endif
         MR::clearZBuffer();
         NebulaColor8 c = {0, 0, 255, 0};
         MR::fillScreen(c);
@@ -674,9 +648,7 @@ void GameScene::draw3D() const {
 }
 
 void GameScene::draw2D() const {
-#ifdef TARGET_PC
     MotionSignal::scene2D(true);
-#endif
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
     } else {
@@ -690,22 +662,18 @@ void GameScene::draw2D() const {
     CategoryList::drawOpa(MR::DrawBufferType_0x26);
     CategoryList::drawXlu(MR::DrawBufferType_0x26);
     CategoryList::execute(MR::DrawType_WipeLayout);
-#ifdef TARGET_PC
     // Nebula's achievement board over everything while it is open (its pop-up: drawOverlay).
     if (isNerve(GET_NERVE(GameScene, GameSceneNebulaBoard))) {
         MR::getGameSceneLayoutHolder()->mAchievementBoard->drawOnTop();
     }
     MotionSignal::scene2D(false);
-#endif
 }
 
-#ifdef TARGET_PC
 void GameScene::drawOverlay() const {
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
     }
 }
-#endif
 
 bool GameScene::isValidScenarioOpeningCamera() const {
     return MR::hasStartAnimCamera() != false;
@@ -771,7 +739,6 @@ void GameScene::requestShowGalaxyMap() {
     setNerve(GET_NERVE(GameScene, GameSceneGalaxyMap));
 }
 
-#ifdef TARGET_PC
 void GameScene::requestShowNebulaBoard() {
     if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
         sBoardRequested = true;
@@ -793,7 +760,6 @@ void GameScene::exeNebulaBoard() {
         CategoryList::execute(MR::MovementType_LayoutOnPause);
     }
 }
-#endif
 
 void GameScene::requestStaffRoll() {
     setNerve(GET_NERVE(GameScene, GameSceneStaffRoll));
@@ -813,11 +779,9 @@ bool GameScene::isDrawMirror() const {
 
 void GameScene::stageClear() {
     if (MR::isFirstStep(this)) {
-#ifdef TARGET_PC
         // The star just collected (PowerStar sent it with the get sequence's request) unlocks what it completes now,
         // while its get sequence plays, not when the hub records it.
         NebulaAchievements::evaluate();
-#endif
         if (isNerve(GET_NERVE(GameScene, GameScenePowerStarGet))) {
             mStageClearSeq->startPowerStarGetDemo();
         } else if (isNerve(GET_NERVE(GameScene, GameSceneGrandStarGet))) {

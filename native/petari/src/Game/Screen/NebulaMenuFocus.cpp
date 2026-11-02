@@ -1,6 +1,5 @@
 #include "Game/Screen/NebulaMenuFocus.hpp"
 
-#ifdef TARGET_PC
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
@@ -316,4 +315,3 @@ namespace NebulaMenuFocus {
         sPointerAnchor = *MR::getStarPointerScreenPosition(WPAD_CHAN0);
     }
 };  // namespace NebulaMenuFocus
-#endif

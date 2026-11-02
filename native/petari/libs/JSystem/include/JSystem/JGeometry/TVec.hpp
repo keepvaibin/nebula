@@ -9,44 +9,12 @@
 #include <revolution/types.h>
 
 namespace JGeometry {
-#ifdef __MWERKS__
-    inline void negateInternal(register const f32* rSrc, register f32* rDest) {
-        register f32 xy;
-        __asm {
-            psq_l xy, 0(rSrc), 0, 0
-            ps_neg xy, xy
-            psq_st xy, 0(rDest), 0, 0
-        }
-
-        rDest[2] = -rSrc[2];
-    }
-
-#elif defined(TARGET_PC)
     inline void negateInternal(const f32* rSrc, f32* rDest) {
         rDest[0] = -rSrc[0];
         rDest[1] = -rSrc[1];
         rDest[2] = -rSrc[2];
     }
-#else
-    inline void negateInternal(const f32* rSrc, f32* rDest);
-#endif
 
-#ifdef __MWERKS__
-    inline static void subInternal(register const f32* vec1, register const f32* vec2, register f32* dst) {
-        register f32 xy2, z1, xy1, z2;
-        __asm {
-            psq_l xy1, 0(vec1), 0, 0
-            psq_l xy2, 0(vec2), 0, 0
-            psq_l z1, 8(vec1), 1, 0
-            ps_sub xy1, xy1, xy2
-            psq_st xy1, 0(dst), 0, 0
-            psq_l z2, 8(vec2), 1, 0
-            ps_sub z1, z2, z1
-            psq_st z1, 8(dst), 1, 0
-        }
-    }
-
-#elif defined(TARGET_PC)
     // As the original: x and y are vec1 - vec2, z is vec2 - vec1.
     inline static void subInternal(const f32* vec1, const f32* vec2, f32* dst) {
         const f32 z = vec2[2] - vec1[2];
@@ -54,32 +22,12 @@ namespace JGeometry {
         dst[1] = vec1[1] - vec2[1];
         dst[2] = z;
     }
-#else
-    static void subInternal(const f32* vec1, const f32* vec2, f32* dst);
-#endif
 
-#ifdef __MWERKS__
-    ALWAYS_INLINE inline void mulInternal(register const f32* vec1, register const f32* vec2, register f32* dst) {
-        register f32 xy1, xy2, res;
-        __asm {
-                psq_l xy1, 0(vec1), 0, 0
-                psq_l xy2, 0(vec2), 0, 0
-                ps_mul res, xy1, xy2
-                psq_st res, 0(dst), 0, 0
-        }
-
-        dst[2] = vec1[2] * vec2[2];
-    }
-
-#elif defined(TARGET_PC)
     inline void mulInternal(const f32* vec1, const f32* vec2, f32* dst) {
         dst[0] = vec1[0] * vec2[0];
         dst[1] = vec1[1] * vec2[1];
         dst[2] = vec1[2] * vec2[2];
     }
-#else
-    void mulInternal(const f32* vec1, const f32* vec2, f32* dst);
-#endif
 
     template < typename T >
     struct TVec2 {
@@ -280,7 +228,6 @@ namespace JGeometry {
     inline TVec2< f32 >::TVec2() {
     }
 
-#ifdef TARGET_PC
     template < typename T >
     struct TVec3IntArg {
         typedef int Type;
@@ -290,7 +237,6 @@ namespace JGeometry {
     struct TVec3IntArg< int > {
         struct Type {};
     };
-#endif
 
     template < typename T >
     struct TVec3 {
@@ -307,7 +253,6 @@ namespace JGeometry {
             z = _z;
         }
 
-#ifdef TARGET_PC
         // The game's member template TVec3<f32>::TVec3<int>(int, int, int): each component converted. TVec3<int>
         // has it as (T, T, T), where s32 is int.
         TVec3< T >(typename TVec3IntArg< T >::Type _x, typename TVec3IntArg< T >::Type _y, typename TVec3IntArg< T >::Type _z) {
@@ -315,9 +260,6 @@ namespace JGeometry {
             y = _y;
             z = _z;
         }
-#else
-        TVec3< T >(int x, int y, int Z);
-#endif
 
         inline TVec3(T val) {
             x = val;
@@ -368,59 +310,16 @@ namespace JGeometry {
 
     template <>
     struct TVec3< f32 > : public Vec {
-#ifdef __MWERKS__
-        TVec3(const Vec& vec) {
-            const register Vec* v_a = &vec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-                psq_l a_x, 0(v_a), 0, 0
-                lfs b_x, 8(v_a)
-                psq_st a_x, 0(v_b), 0, 0
-                stfs b_x, 8(v_b)
-            }
-            ;
-        }
-
-#elif defined(TARGET_PC)
         TVec3(const Vec& vec) {
             x = vec.x;
             y = vec.y;
             z = vec.z;
         }
-#else
-        TVec3(const Vec& vec);
-#endif
-#ifdef __MWERKS__
-        // Used inlined and non-inlined?
-        TVec3(const TVec3< f32 >& vec) {
-            const register Vec* v_a = &vec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-                psq_l a_x, 0(v_a), 0, 0
-                lfs b_x, 8(v_a)
-                psq_st a_x, 0(v_b), 0, 0
-                stfs b_x, 8(v_b)
-            }
-            ;
-        }
-
-#elif defined(TARGET_PC)
         TVec3(const TVec3< f32 >& vec) {
             x = vec.x;
             y = vec.y;
             z = vec.z;
         }
-#else
-        TVec3(const TVec3< f32 >& vec);
-#endif
 
         template < typename T >
         TVec3(T _x, T _y, T _z) {
@@ -462,25 +361,9 @@ namespace JGeometry {
         }
 
         void operator=(const TVec3& vec) {
-#ifdef TARGET_PC
             x = vec.x;
             y = vec.y;
             z = vec.z;
-#elif defined(__MWERKS__)
-            const register Vec* v_a = &vec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-            psq_l a_x, 0(v_a), 0, 0
-            lfs b_x, 8(v_a)
-            psq_st a_x, 0(v_b), 0, 0
-            stfs b_x, 8(v_b)
-            }
-            ;
-#endif
         }
 
         template < typename T >
@@ -680,59 +563,15 @@ namespace JGeometry {
             x = y = z = 0;
         }
 
-#ifdef __MWERKS__
-        inline void setPSZeroVec() {
-            const register Vec* v_a = &gZeroVec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-                psq_l a_x, 0(v_a), 0, 0
-                lfs b_x, 8(v_a)
-                psq_st a_x, 0(v_b), 0, 0
-                stfs b_x, 8(v_b)
-            }
-            ;
-        }
-
-#elif defined(TARGET_PC)
         inline void setPSZeroVec() {
             x = gZeroVec.x;
             y = gZeroVec.y;
             z = gZeroVec.z;
         }
-#else
-        void setPSZeroVec();
-#endif
         f32 dot(const TVec3& rOther) const NO_INLINE {
             // TODO: this is *never* uninlined except in the specific
             // case of TQuat4f::setRotate(const TVec3f&, const TVec3f&)
-#ifdef TARGET_PC
             return (x * rOther.x + y * rOther.y) + z * rOther.z;
-#elif defined(__MWERKS__)
-            const register Vec* b = &rOther;
-            const register Vec* a = this;
-
-            register f32 _fp5, _fp4, _fp3, _fp2, _fp1;
-
-            asm {
-
-                psq_l    _fp2, 4(a), 0, 0;
-                psq_l    _fp3, 4(b), 0, 0;
-
-                ps_mul   _fp2, _fp2, _fp3;
-
-                psq_l    _fp5, 0(a), 0, 0;
-                psq_l    _fp4, 0(b), 0, 0;
-
-                ps_madd  _fp3, _fp5, _fp4, _fp2;
-                ps_sum0  _fp1, _fp3, _fp2, _fp2;
-            }
-
-            return _fp1;
-#endif
         }
 
         bool epsilonEquals(const TVec3< f32 >& a1, f32 a2) const {
@@ -750,27 +589,9 @@ namespace JGeometry {
         }
 
         void scaleAdd(register f32 scale, const TVec3& src) {
-#ifdef __MWERKS__
-            register TVec3* dest = this;
-            register const TVec3* source = &src;
-            register f32 srcXY, destXY, srcZ, destZ;
-
-            asm {
-                psq_l srcXY, 0(source), 0, 0
-                psq_l srcZ, 8(source), 1, 0
-                psq_l destXY, 0(dest), 0, 0
-                psq_l destZ, 8(dest), 1, 0
-                ps_madds0 destXY, srcXY, scale, destXY
-                ps_madds0 destZ, srcZ, scale, destZ
-                psq_st destXY, 0(dest), 0, 0
-                psq_st destZ, 8(dest), 1, 0
-            }
-
-#else
             x += src.x * scale;
             y += src.y * scale;
             z += src.z * scale;
-#endif
         }
 
         void scaleAdd(f32 sc, const TVec3& a, const TVec3& b) {
@@ -844,43 +665,10 @@ namespace JGeometry {
             return reinterpret_cast< const f32* >(this);
         }
 
-#ifdef __MWERKS__
-        // this theoretically should just forward NebulaVecSquareDistance,
-        // however using the exact same asm causes mismatches. Keeping it here instead
-        // keeps the exact matches, and even allows for more use cases that match.
-        f32 squared(const TVec3& rB) const {
-            const register Vec* a = this;
-            const register Vec* b = &rB;
-
-            register f32 sqdist, dxy, dyz;
-            register f32 v1xy, v0xy, v1yz, v0yz;
-
-            asm
-            {
-                psq_l    v0yz, 4(a), 0, 0 
-                psq_l    v1yz, 4(b), 0, 0
-                ps_sub   dyz, v0yz, v1yz
-            
-                psq_l    v0xy, 0(a), 0, 0
-                psq_l    v1xy, 0(b), 0, 0
-                
-                ps_mul   dyz, dyz, dyz
-                ps_sub   dxy, v0xy, v1xy
-            
-                ps_madd  sqdist, dxy, dxy, dyz
-                ps_sum0  sqdist, sqdist, dyz, dyz
-            }
-
-            return sqdist;
-        };
-#elif defined(TARGET_PC)
         f32 squared(const TVec3& rB) const {
             const f32 dx = x - rB.x, dy = y - rB.y, dz = z - rB.z;
             return (dx * dx + dy * dy) + dz * dz;
         }
-#else
-        f32 squared(const TVec3& rB) const;
-#endif
 
         bool isZero() const {
             return squared() <= JGeometry::TUtil< f32 >::epsilon();

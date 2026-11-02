@@ -1,7 +1,5 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaRegion.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/EncouragePal60Window.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -68,24 +66,16 @@ void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
 
         if (timeAnnounced == 0 || ticks < timeAnnounced || dayAnnounced < day) {
             mEncouragePal60Window->appear();
-#ifdef TARGET_PC
             if (NebulaRegion::isPal()) {
                 GameDataFunction::updateSysConfigFileTimeAnnounced();
             }
-#elif (VERSION == RMGP01 || VERSION == RMGK01)
-            GameDataFunction::updateSysConfigFileTimeAnnounced();
-#endif
         }
     }
 
     if (MR::isDead(mEncouragePal60Window)) {
-#ifdef TARGET_PC
         if (!NebulaRegion::isPal()) {
             GameDataFunction::updateSysConfigFileTimeAnnounced();
         }
-#elif (VERSION == RMGJ01 || VERSION == RMGE01)
-        GameDataFunction::updateSysConfigFileTimeAnnounced();
-#endif
         setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
     }
 }

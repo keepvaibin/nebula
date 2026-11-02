@@ -1,7 +1,5 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
 #include <revolution/os.h>
-#endif
 #include "Game/NPC/KinopioAstro.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/DemoFunction.hpp"
@@ -32,13 +30,9 @@ namespace {
 
     // The larger supply's 1-ups (a mod may change them: NEBULA_PATCH_MESSENGER_EX_ONE_UPS).
     s32 messengerOneUpExNum() {
-#ifdef TARGET_PC
         u32 count = ::sMessangerOneUpExNum;
         NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
         return static_cast< s32 >(count);
-#else
-        return ::sMessangerOneUpExNum;
-#endif
     }
     const f32 sMessangerTalkDistance = 3000.0f;
     const f32 sGotMailSePlayAreaRadius = 1500.0f;
@@ -205,11 +199,9 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
             if (MR::isLuigiLeftSupply()) {
                 mIsPlayerLuigi = true;
             }
-#ifdef TARGET_PC
             if (NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_ALWAYS_EX, nullptr)) {
                 mIsPlayerLuigi = true;
             }
-#endif
 
             if (mIsPlayerLuigi) {
                 MR::setMessageArg(mMsgCtrl, messengerOneUpExNum());

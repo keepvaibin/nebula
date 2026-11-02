@@ -10,9 +10,7 @@ public:
     SpiderCoin(const char*);
 
     virtual void init(const JMapInfoIter& rIter);
-#ifdef TARGET_PC
     virtual void initAfterPlacement();
-#endif
     virtual void kill();
     virtual void calcAndSetBaseMtx();
 

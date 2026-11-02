@@ -2,9 +2,7 @@
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
-#endif
 #include "Game/MapObj/Sun.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/LensFlare.hpp"
@@ -342,9 +340,7 @@ void BrightSun::control() {
 
     mtxTR.concat(mtx);
     mtxTR.getTrans(mPosition);
-#ifdef TARGET_PC
     GameLightSignal::sun(mPosition);
-#endif
 
     controlSunModel();
 

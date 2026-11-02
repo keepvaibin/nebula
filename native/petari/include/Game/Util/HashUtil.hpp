@@ -3,11 +3,7 @@
 #include <revolution/types.h>
 
 // The table's values: object pointers as often as numbers.
-#ifdef TARGET_PC
 typedef uintptr_t HashSortValue;
-#else
-typedef u32 HashSortValue;
-#endif
 
 namespace MR {
     u32 getHashCode(const char*);
@@ -24,7 +20,6 @@ public:
     bool search(u32, HashSortValue*);
     bool search(const char*, HashSortValue*);
     bool search(const char*, const char*, HashSortValue*);
-#ifdef TARGET_PC
     // Lookups of numeric values (indices) into u32, as on the console.
     bool search(u32 hash, u32* pValue) {
         HashSortValue value;
@@ -40,7 +35,6 @@ public:
     bool search(const char* pName1, const char* pName2, u32* pValue) {
         return search(MR::getHashCode(pName1) + MR::getHashCode(pName2), pValue);
     }
-#endif
     void swap(const char*, const char*);
 
     /* 0x00 */ bool mHasBeenSorted;

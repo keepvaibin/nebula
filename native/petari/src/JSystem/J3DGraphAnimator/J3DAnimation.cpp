@@ -514,7 +514,6 @@ inline f32 J3DHermiteInterpolation(f32 p1, f32 const* p2, f32 const* p3, f32 con
     return JMAHermiteInterpolation(p1, *p2, *p3, *p4, *p5, *p6, *p7);
 }
 
-#ifdef TARGET_PC
 // Keys are s16 (GQR5): time, value, out tangent of the first key, then time, value, in tangent of the second.
 inline f32 J3DHermiteInterpolationS16Keys(f32 pp1, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
     const f32 duration = d - a;
@@ -528,46 +527,10 @@ inline f32 J3DHermiteInterpolationS16Keys(f32 pp1, f32 a, f32 b, f32 c, f32 d, f
     value = delta * squared + value;
     return value - end;
 }
-#endif
 
 inline f32 J3DHermiteInterpolation(__REGISTER f32 pp1, __REGISTER s16 const* pp2, __REGISTER s16 const* pp3, __REGISTER s16 const* pp4,
                                    __REGISTER s16 const* pp5, __REGISTER s16 const* pp6, __REGISTER s16 const* pp7) {
-#ifdef TARGET_PC
     return J3DHermiteInterpolationS16Keys(pp1, *pp2, *pp3, *pp4, *pp5, *pp6, *pp7);
-#elif defined(__MWERKS__)
-    register f32 value = pp1;
-    register f32 time;
-    register f32 start;
-    register f32 end;
-    register f32 duration;
-    register f32 delta;
-    register f32 t;
-    register f32 squared;
-    asm {
-        psq_l time, 0(pp2), 1, 5
-        psq_l end, 0(pp5), 1, 5
-        psq_l start, 0(pp3), 1, 5
-        fsubs duration, end, time
-        psq_l end, 0(pp6), 1, 5
-        fsubs t, value, time
-        psq_l value, 0(pp7), 1, 5
-        fsubs delta, end, start
-        fdivs t, t, duration
-        psq_l time, 0(pp4), 1, 5
-        fmadds value, value, duration, start
-        fnmsubs delta, duration, time, delta
-        fmuls squared, t, t
-        fsubs value, value, end
-        fsubs value, value, delta
-        fmuls end, squared, value
-        fmadds value, duration, time, end
-        fmadds value, value, t, start
-        fmadds value, delta, squared, value
-        fsubs value, value, end
-    }
-
-    return value;
-#endif
 }
 
 template < typename T >

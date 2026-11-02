@@ -1,7 +1,6 @@
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Screen/LayoutActor.hpp"
@@ -2697,4 +2696,3 @@ namespace NebulaSettingsMenu {
         NebulaHost::settingsInput(NEBULA_SETTINGS_OPEN, 0);
     }
 };  // namespace NebulaSettingsMenu
-#endif

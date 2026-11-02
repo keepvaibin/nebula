@@ -60,8 +60,6 @@ namespace GameSequenceFunction {
     void storeSceneStartGameDataHolder();
     void updateGameDataAndSequenceAfterStageResultSequence();
     void startGameDataSaveSequence(bool, bool);
-#ifdef TARGET_PC
     // After startGameDataSaveSequence: the caller opens a system window once the save is done (SaveDataHandleSequence).
     void setGameDataSaveWindowFollows();
-#endif
 };  // namespace GameSequenceFunction

@@ -1,4 +1,3 @@
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
@@ -358,4 +357,3 @@ namespace MotionSignal {
         sCameraCutPending = true;
     }
 };  // namespace MotionSignal
-#endif

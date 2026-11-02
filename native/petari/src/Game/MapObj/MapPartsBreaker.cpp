@@ -55,9 +55,7 @@ void MapPartsBreaker::exeBreak() {
 
 // TODO: this SHOULD NOT be here, however moving this to its proper place causes linkage issues since
 // TVec2f::squared is not used in this file... at all.
-#ifdef TARGET_PC
 template <>
-#endif
 f32 TVec2f::squared(const TVec2f& rOther) const {
     return (x - rOther.x) * (x - rOther.x) + (y - rOther.y) * (y - rOther.y);
 }

@@ -1,6 +1,5 @@
 #include "Game/System/NebulaCurvedSurfaces.hpp"
 
-#ifdef TARGET_PC
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
@@ -283,4 +282,3 @@ namespace NebulaCurvedSurfaces {
         free(pDecoded);
     }
 };  // namespace NebulaCurvedSurfaces
-#endif

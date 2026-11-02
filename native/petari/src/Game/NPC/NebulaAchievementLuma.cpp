@@ -1,7 +1,6 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -91,4 +90,3 @@ void NebulaAchievementLuma::exeNebulaOpen() {
         setNerve(&NrvNebulaAchievementLuma::NebulaAchievementLumaNrvWait::sInstance);
     }
 }
-#endif

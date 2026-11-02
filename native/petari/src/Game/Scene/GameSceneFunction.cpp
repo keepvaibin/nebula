@@ -43,11 +43,9 @@ namespace GameSceneFunction {
         ::getGameScene()->requestShowGalaxyMap();
     }
 
-#ifdef TARGET_PC
     void requestShowNebulaBoard() {
         ::getGameScene()->requestShowNebulaBoard();
     }
-#endif
 
     void requestStaffRoll() {
         ::getGameScene()->requestStaffRoll();

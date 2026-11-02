@@ -1,7 +1,6 @@
 #include "Game/Screen/NebulaRtPrepare.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
@@ -282,4 +281,3 @@ namespace NebulaRtPrepare {
         return sPhase != PhaseNone || (sScreen != nullptr && sScreen->isGoing());
     }
 };  // namespace NebulaRtPrepare
-#endif

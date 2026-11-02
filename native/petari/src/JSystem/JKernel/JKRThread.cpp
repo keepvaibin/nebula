@@ -40,12 +40,8 @@ JKRThread::~JKRThread() {
 
 void JKRThread::setCommon_mesgQueue(JKRHeap* pHeap, int msgCount) {
     mMessageCount = msgCount;
-#ifdef TARGET_PC
     // A message is a pointer: 8 bytes natively.
     mMesgBuffer = reinterpret_cast< void** >(JKRHeap::alloc(mMessageCount * sizeof(void*), 0, pHeap));
-#else
-    mMesgBuffer = reinterpret_cast< void** >(JKRHeap::alloc(mMessageCount * 4, 0, pHeap));
-#endif
     mMessageQueue.init(mMesgBuffer, mMessageCount);
     sThreadList.append(&mThreadListLink);
     mCurrentHeap = nullptr;

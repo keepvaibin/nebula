@@ -26,9 +26,7 @@ public:
     void exeStrapDisplay();
     void exeStrapFadeout();
     void exeMountGameData();
-#ifdef TARGET_PC
     void exeWaitRayTracing();
-#endif
     void exeWaitReadDoneSystemArchive();
     void exeDeactive();
     void initLayout();

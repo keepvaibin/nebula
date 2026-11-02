@@ -173,12 +173,8 @@ public:
         }
 
         bool checkArea(const void* ptr) const {
-#ifdef TARGET_PC
             // The buffer follows the header: 0xC on the console, larger natively (a pointer member).
             return mBuffer <= (const u8*)ptr && (const u8*)ptr < mBuffer + ChunkSize;
-#else
-            return (u8*)this + 0xc <= (u8*)ptr && (u8*)ptr < (u8*)this + (0xc + ChunkSize);
-#endif
         }
 
         MemoryChunk* getNextChunk() {

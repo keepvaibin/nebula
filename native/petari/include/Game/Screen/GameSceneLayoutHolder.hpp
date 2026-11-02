@@ -8,10 +8,8 @@ class InformationMessage;
 class MarioMeter;
 class MarioSubMeter;
 class MissLayout;
-#ifdef TARGET_PC
 class NebulaAchievementBoard;
 class NebulaAchievementToast;
-#endif
 class NoteCounter;
 class OneUpBoard;
 class PurpleCoinCounter;
@@ -55,12 +53,10 @@ public:
     /* 0x31 */ bool _31;
     /* 0x34 */ CounterLayoutController* mCounterLayoutCtrl;
     /* 0x38 */ bool mIsActiveDefaultGameLayout;
-#ifdef TARGET_PC
     // Nebula's achievement pop-up: GameScene runs and draws it (only in play, above everything else in 2D).
     NebulaAchievementToast* mAchievementToast;
     // Nebula's achievement board, in the Observatory (its Luma opens it); null elsewhere.
     NebulaAchievementBoard* mAchievementBoard;
-#endif
 };
 
 namespace MR {

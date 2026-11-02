@@ -8,9 +8,7 @@ public:
 
     virtual void init(const JMapInfoIter&);
     virtual void control();
-#ifdef TARGET_PC
     virtual void draw() const;
-#endif
 
     void setFollowActorPane(LayoutActor*, const char*);
     bool isOpen();

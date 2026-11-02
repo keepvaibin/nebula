@@ -339,11 +339,7 @@ namespace MR {
         if (chunk != nullptr) {
             chunk->setCameraType("CAM_TYPE_ANIM", getCameraDirector()->mHolder);
             CameraGeneralParam* param = chunk->mGeneralParam;
-#ifdef TARGET_PC
             chunk->mGeneralParam->mAnimData = reinterpret_cast< u8* >(pAnimData);
-#else
-            chunk->mGeneralParam->mNum1 = reinterpret_cast< s32 >(pAnimData);
-#endif
             chunk->mGeneralParam->mDist = 1.0f;
             chunk->getGeneralParam()->mNum2 = CameraAnim::getAnimFrame(reinterpret_cast< u8* >(pAnimData));
             chunk->_64 = true;

@@ -16,18 +16,14 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 
 namespace {
     // A skipped star return (NebulaCutsceneSkip) closes each panel as soon as it is up.
     bool isTriggerDecide() {
-#ifdef TARGET_PC
         if (NebulaCutsceneSkip::isSkipping()) {
             return true;
         }
-#endif
         return MR::testSystemPadTriggerDecide();
     }
 };  // namespace

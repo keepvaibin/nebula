@@ -5,15 +5,11 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
-#ifdef TARGET_PC
 // Android's C library defines bcopy and bzero as macros (<strings.h>); JASCalc has functions of those names.
 #undef bcopy
 #undef bzero
 // One row past the 128 the game indexes: JASTrack::setIIR copies 8 values, two rows (JASCalc.cpp).
 extern const s16 sIIRCutoff[129][4];
-#else
-extern const s16 sIIRCutoff[128][4];
-#endif
 
 namespace JASCalc {
     void imixcopy(const s16*, const s16*, s16*, u32);

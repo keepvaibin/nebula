@@ -2,7 +2,6 @@
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaUi.hpp"
@@ -2181,4 +2180,3 @@ namespace NebulaIcons {
         }
     }
 };  // namespace NebulaIcons
-#endif

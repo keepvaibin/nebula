@@ -1,8 +1,6 @@
 #include "Game/Scene/MultiSceneActor.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/ScreenUtil.hpp"
 #include <cstring>
-#endif
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/LiveActor/Spine.hpp"
 #include "Game/Scene/MultiSceneEffectKeeper.hpp"
@@ -55,7 +53,6 @@ void MultiSceneActor::calcAnim() {
     pModel->mBaseScale.x = mScale.x;
     pModel->mBaseScale.y = mScale.y;
     pModel->mBaseScale.z = mScale.z;
-#ifdef TARGET_PC
     // The star-select sky (ScenarioSelectLayout) is one quad at z = -1000 sized for 16:9: a wider picture scales it
     // about its centre so it still covers the screen. The base matrix is rotation and translation only.
     if (MR::isScreen16Per9() && MR::getDisplay().wide &&
@@ -71,7 +68,6 @@ void MultiSceneActor::calcAnim() {
             }
         }
     }
-#endif
 
     mModelManager->calcAnim();
 }

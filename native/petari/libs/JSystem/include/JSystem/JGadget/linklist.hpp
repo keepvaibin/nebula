@@ -164,16 +164,13 @@ namespace JGadget {
         TLinkListNode mEnd;
     };
 
-#ifdef TARGET_PC
     // NODE_OFFSET for a list named inside its element's own class: the offset (minus the node's offset in T) is then
     // T::nebulaListNodeOffset(), taken where the list's functions are compiled and T is complete.
     enum { NEBULA_NODE_OFFSET_OF_T = -0x7FFFFFFF - 1 };
-#endif
 
     template < typename T, int NODE_OFFSET >
     class TLinkList : public TNodeLinkList {
     public:
-#ifdef TARGET_PC
         static int nodeOffset() {
             if constexpr (NODE_OFFSET == NEBULA_NODE_OFFSET_OF_T) {
                 return T::nebulaListNodeOffset();
@@ -181,11 +178,6 @@ namespace JGadget {
                 return NODE_OFFSET;
             }
         }
-#else
-        static int nodeOffset() {
-            return NODE_OFFSET;
-        }
-#endif
 
         struct iterator : public TIterator< std::bidirectional_iterator_tag, T >, public TNodeLinkList::iterator {
             iterator() {};

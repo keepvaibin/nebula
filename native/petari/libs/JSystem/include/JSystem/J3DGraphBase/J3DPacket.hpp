@@ -102,12 +102,8 @@ public:
     }
 
     virtual int entry(J3DDrawBuffer*);
-#ifdef TARGET_PC
     // Pure, as on the console (the DOL has no vtable of this base; every packet defines it).
     virtual void draw() = 0;
-#else
-    virtual void draw();
-#endif
     virtual ~J3DPacket() {
     }
 

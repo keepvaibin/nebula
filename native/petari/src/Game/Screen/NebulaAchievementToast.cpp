@@ -1,7 +1,6 @@
 #include "Game/Screen/NebulaAchievementToast.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/System/NebulaAchievements.hpp"
@@ -382,4 +381,3 @@ void NebulaAchievementToast::place(f32 rise, f32 alpha, f32 iconScale) {
     mToast->mAlpha = static_cast< u8 >(255.0f * clamp01(alpha) + 0.5f);
     mIcon->mScale = nw4r::math::VEC2(iconScale, iconScale);
 }
-#endif

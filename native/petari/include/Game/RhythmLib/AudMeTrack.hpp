@@ -65,11 +65,7 @@ public:
         /* 0x12 */ u8 mNoteRangeStart;
     };
 
-#ifdef TARGET_PC
     struct TList : JGadget::TLinkList< AudMeTrack, JGadget::NEBULA_NODE_OFFSET_OF_T > {
-#else
-    struct TList : JGadget::TLinkList< AudMeTrack, -384 > {
-#endif
         TList() : mCallbackRegistered(false) {
         }
 
@@ -303,10 +299,8 @@ public:
     /* 0x16C */ TTrackInfo mTrackInfo;
     /* 0x180 */ JGadget::TLinkListNode mNode;
 
-#ifdef TARGET_PC
     // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's code uses the literal -384.
     static int nebulaListNodeOffset() {
         return -(int)offsetof(AudMeTrack, mNode);
     }
-#endif
 };

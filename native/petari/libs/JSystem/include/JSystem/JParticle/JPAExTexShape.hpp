@@ -20,7 +20,6 @@ class JPAExTexShape {
 public:
     JPAExTexShape(u8 const*);
 
-#ifdef TARGET_PC
     // A native copy of the resource's big-endian matrix, for GXSetIndTexMtx.
     void getIndTexMtx(f32 (*pMtx)[3]) const {
         for (int i = 0; i < 2; i++) {
@@ -29,11 +28,6 @@ public:
             }
         }
     }
-#else
-    const f32* getIndTexMtx() const {
-        return &mpData->mIndTexMtx[0][0];
-    }
-#endif
     s8 getExpScale() const {
         return mpData->mExpScale;
     }
