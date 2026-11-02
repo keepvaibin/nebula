@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
@@ -137,7 +136,7 @@ struct J3DTexCoord {
         mTexMtxReg = reg;
     }
 
-    J3DTexCoord& operator=(const J3DTexCoord& other) NO_INLINE {
+    J3DTexCoord& operator=(const J3DTexCoord& other) {
         memcpy(this, &other, sizeof(J3DTexCoordInfo));
         return *this;
     }

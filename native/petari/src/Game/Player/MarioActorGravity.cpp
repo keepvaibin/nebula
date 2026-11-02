@@ -54,7 +54,7 @@ bool MarioActor::checkBeeWallStick(TVec3f& rVec) {
         _240 = rVec;
         mMario->setGravityVec(rVec);
         mMario->setHeadVec(-rVec);
-        mMario->setFrontVecKeepUp(head, 1UL);
+        mMario->setFrontVecKeepUp(head, 1u);
         setBlendMtxTimer(2);
 
         _38C = 5;

@@ -2958,8 +2958,6 @@ uint32_t svc_system_setting(void*, uint32_t item) {
         return 1;  // stereo
     case NEBULA_SETTING_WIDESCREEN:
         return 1;
-    case NEBULA_SETTING_SCREEN_DIMMING:
-        return 1;
     default:
         return 0;
     }

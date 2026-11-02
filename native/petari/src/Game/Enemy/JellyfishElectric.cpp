@@ -327,7 +327,7 @@ bool JellyfishElectric::selectNerveAfterWait() {
         s32 rand;
 
         if (isNerve(GET_NERVE(JellyfishElectric, JellyfishElectricNrvWait))) {
-            rand = MR::getRandom(0l, 3l);
+            rand = MR::getRandom(0, 3);
         } else {
             rand = 0;
         }

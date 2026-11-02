@@ -54,11 +54,6 @@ namespace MR {
     void startBckPlayer(const char*, const char* pBrkName = nullptr);
     void startBckPlayer(const char*, const BckCtrlData&);
     void startBckPlayer(const char*, s32);
-    // A call with a long argument (NebulaLongCall).
-    template < typename L >
-    inline typename NebulaLongCall< void, L >::Type startBckPlayer(const char* pName, L frame) {
-        startBckPlayer(pName, (s32)frame);
-    }
     bool isBckStoppedPlayer();
     bool isBckOneTimeAndStoppedPlayer();
     f32 getBckFrameMaxPlayer();

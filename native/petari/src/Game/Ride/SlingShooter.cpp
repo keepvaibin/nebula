@@ -139,7 +139,7 @@ void SlingShooter::exeFreeInvalid() {
 void SlingShooter::exeLand() {
     if (MR::isFirstStep(this)) {
         if (!mIsKinopioAttached) {
-            MR::startBckPlayer("SpiderCocoonLand", 1L);
+            MR::startBckPlayer("SpiderCocoonLand", 1);
             MR::startEventCamera(mCameraInfo, "\203\166\203\214\201\133\203\204\201\133\216\313\217\157\216\322[\203\105\203\106\203\103\203\147]" /* プレーヤー射出者[ウェイト] */, CameraTargetArg(mCameraTargetMtx));
         } else {
             MR::startBckWithInterpole(mRider, "CocoonLand", 1);

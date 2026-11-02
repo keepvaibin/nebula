@@ -634,7 +634,7 @@ void FileSelectItem::updateRotate() {
 }
 
 void FileSelectItem::playPointedME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY1");
 
@@ -659,7 +659,7 @@ void FileSelectItem::playPointedME() {
 }
 
 void FileSelectItem::playPointedNotUsingME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY_N1");
 
@@ -804,7 +804,7 @@ namespace FileSelectItemSub {
 
     void BlinkController::exeOpen() {
         if (MR::isFirstStep(this)) {
-            _C = MR::getRandom(180l, 300l);
+            _C = MR::getRandom(180, 300);
             _10 = 0;
         }
 

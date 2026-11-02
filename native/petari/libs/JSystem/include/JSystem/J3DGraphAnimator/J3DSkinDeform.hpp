@@ -9,7 +9,7 @@ class J3DClusterVertex;
 class JUTNameTab;
 class J3DModelData;
 
-extern void J3DPSMtx33CopyFrom34(__REGISTER MtxPtr src, __REGISTER Mtx3P dst);
+extern void J3DPSMtx33CopyFrom34(MtxPtr src, Mtx3P dst);
 
 struct J3DSkinNList {
     J3DSkinNList();

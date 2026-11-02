@@ -194,7 +194,7 @@ inline void SwingRope::exeFreeInvalid() {
 
 void SwingRope::exeBindSlideDownStart() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayer("SwingRopeSlideDownStart", 0L);
+        MR::startBckPlayer("SwingRopeSlideDownStart", 0);
         mSlideSpeed = 0.0f;
     }
 
@@ -454,7 +454,7 @@ bool SwingRope::tryJump() {
         MR::endActorCameraAtLanding(this, mCameraInfo);
         MR::startSound(mRider, "SE_PV_JUMP_S");
         MR::startSound(mRider, "SE_PM_JUMP_M");
-        MR::startBckPlayer("SwingRopeSpin", 0L);
+        MR::startBckPlayer("SwingRopeSpin", 0);
 
         MR::setPlayerFrontTargetVec(front, 1);
         MR::endBindAndPlayerWeakGravityJump(this, jumpVec);

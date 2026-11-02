@@ -53,11 +53,6 @@ public:
     void stopAnimationUpperForce();
     f32 getAnimationFrame() const;
     void changeAnimation(const char*, u32);
-    // A call with a long argument (NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< void, L >::Type changeAnimation(const char* pName, L n) {
-        changeAnimation(pName, (u32)n);
-    }
     bool isAnimationRun(const char*, u32);
     void stopAnimation(const char*, u32);
     void setJointGlobalMtx(u16, MtxPtr);
@@ -90,11 +85,6 @@ public:
     TVec3f& getCamDirY() const;
     TVec3f& getCamDirZ() const;
     void startPadVib(u32);
-    // A call with a long argument (NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< void, L >::Type startPadVib(L n) {
-        startPadVib((u32)n);
-    }
     void startPadVib(const char*);
     f32 getStickX() const;
     f32 getStickP() const;

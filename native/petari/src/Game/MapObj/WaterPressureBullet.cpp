@@ -47,7 +47,7 @@ void WaterPressureBullet::init(const JMapInfoIter& rIter) {
 
 void WaterPressureBullet::kill() {
     if (MR::isPlayerInRush() && mHostActor != nullptr) {
-        MR::startBckPlayer("GCaptureBreak", 0L);
+        MR::startBckPlayer("GCaptureBreak", 0);
         MR::endBindAndPlayerJumpWithRollLanding(this, mVelocity, 0);
         mHostActor = nullptr;
         endHostCamera();
@@ -157,7 +157,7 @@ void WaterPressureBullet::exeFly() {
 
 void WaterPressureBullet::exeSpinKill() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayer("Spin2nd", 0L);
+        MR::startBckPlayer("Spin2nd", 0);
         mVelocity.zero();
         MR::invalidateHitSensors(this);
 
@@ -257,7 +257,7 @@ bool WaterPressureBullet::inviteMario(HitSensor* pSensor) {
 
     mHostActor = pSensor->mHost;
     MR::startBckWithInterpole(this, "Touch", 0);
-    MR::startBckPlayer("WaterBulletStart", 2L);
+    MR::startBckPlayer("WaterBulletStart", 2);
     startHostCamera();
     MR::setShadowDropLength(this, nullptr, 2000.0f);
 

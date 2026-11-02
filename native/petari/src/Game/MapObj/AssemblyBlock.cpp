@@ -103,7 +103,7 @@ void AssemblyBlock::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg1NoInit(rIter, &mTimer);
     MR::getJMapInfoArg7NoInit(rIter, &mObjArg7);
 
-    if (MR::getRandom(0l, 2l)) {
+    if (MR::getRandom(0, 2)) {
         mFloatRotateSpeed = ::sFloatRotSpeedNoSign;
     } else {
         mFloatRotateSpeed = -::sFloatRotSpeedNoSign;

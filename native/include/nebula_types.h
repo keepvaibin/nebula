@@ -1,8 +1,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 
-// Native builds: the console's widths as the same fundamental types on every host, so overloads resolve alike
-// everywhere. `long` is never one of them (64-bit on LP64 hosts).
+// The same fundamental types on every host, so overloads resolve alike everywhere. `long` is never one of them.
 #include <stddef.h>
 #include <stdint.h>
 typedef signed char s8;
@@ -15,48 +14,6 @@ typedef unsigned int u32;
 typedef unsigned long long u64;
 typedef char NebulaTypesCheck[(sizeof(s16) == 2 && sizeof(s32) == 4 && sizeof(s64) == 8) ? 1 : -1];
 
-#ifdef __cplusplus
-extern "C++" {
-// The console's s32 and u32 are long and unsigned long, so the game's long literals (0L, 1UL) match its s32 and
-// u32 overloads exactly. NebulaLongCall<R, A, B, C>::Type is R when every argument is an integer and one is a long;
-// the overloads that use it forward such calls to the s32/u32 version.
-template < typename T >
-struct NebulaInt {
-    enum { integer = 0, wide = 0 };
-};
-#define NEBULA_INT(T, W)                                                                                                                             \
-    template <>                                                                                                                                      \
-    struct NebulaInt< T > {                                                                                                                          \
-        enum { integer = 1, wide = W };                                                                                                              \
-    };
-NEBULA_INT(char, 0)
-NEBULA_INT(signed char, 0)
-NEBULA_INT(unsigned char, 0)
-NEBULA_INT(short, 0)
-NEBULA_INT(unsigned short, 0)
-NEBULA_INT(int, 0)
-NEBULA_INT(unsigned int, 0)
-NEBULA_INT(long long, 0)
-NEBULA_INT(unsigned long long, 0)
-NEBULA_INT(long, 1)
-NEBULA_INT(unsigned long, 1)
-#undef NEBULA_INT
-
-template < bool B, typename R >
-struct NebulaEnableIf {};
-template < typename R >
-struct NebulaEnableIf< true, R > {
-    typedef R Type;
-};
-
-template < typename R, typename A, typename B = int, typename C = int >
-struct NebulaLongCall
-    : NebulaEnableIf< NebulaInt< A >::integer && NebulaInt< B >::integer && NebulaInt< C >::integer &&
-                          (NebulaInt< A >::wide || NebulaInt< B >::wide || NebulaInt< C >::wide),
-                      R > {};
-}
-#endif
-
 typedef volatile u32 vu32;
 typedef volatile s32 vs32;
 
@@ -66,13 +23,6 @@ typedef double f64;
 typedef int BOOL;
 
 
-
-
-#define __REGISTER
-
-#define NO_INLINE
-
-// Natively too: the GPU addresses textures and display lists in 32-byte units, and the layouts must stay the console's.
 #define ATTRIBUTE_ALIGN(num) __attribute__((aligned(num)))
 
 #define ATTRIBUTE_PACKED __attribute__((packed))

@@ -22,24 +22,6 @@ namespace {
 
     NebulaInputSample sSamples[GAMEPAD_SAMPLE_MAX];
 
-    // Activity that keeps the screen from dimming, as the console's controller layer judged it (isAnyInputHeld'
-    // IsControllerDataChanged): a button at once; the accelerometer moving more than 12 counts (of about 104 per g)
-    // or the Nunchuk stick more than 2 counts (of 128) once the change has held for four samples.
-    const f32 cActivityAccel = 12.0f / 104.0f;
-    const f32 cActivityStick = 2.0f / 128.0f;
-    const u16 cActivitySettle = 3;
-
-    bool exceeds(const f32* pA, const f32* pB, s32 count, f32 limit) {
-        for (s32 i = 0; i < count; i++) {
-            const f32 diff = pA[i] - pB[i];
-            if (diff > limit || diff < -limit) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     f32 clampAccel(f32 value, f32 limit) {
         return value < -limit ? -limit : value > limit ? limit : value;
     }
@@ -48,7 +30,7 @@ namespace {
 GamePadReadDataInfo::GamePadReadDataInfo()
     : mStatusArray(), mValidStatusCount(), mDevice(), mState(), mResetRequested(true), mStateSubPad(false),
       mSubResetRequested(true), mShakeHeld(0), mRepeatTime(0), mRepeatNext(cNoRepeatDelay), mRepeatDelay(cNoRepeatDelay),
-      mRepeatPulse(0), mAccelPlayRadius(0.0f), mAccelSensitivity(1.0f), mActivitySample(), mAccelSettle(0), mStickSettle(0) {
+      mRepeatPulse(0), mAccelPlayRadius(0.0f), mAccelSensitivity(1.0f) {
     mStatusArray = new GamePadSample[GAMEPAD_SAMPLE_MAX];
     MR::zeroMemory(mStatusArray, sizeof(GamePadSample) * GAMEPAD_SAMPLE_MAX);
     mShakePresses[0] = mShakePresses[1] = 0;
@@ -127,7 +109,6 @@ void GamePadReadDataInfo::updateConnection(s32 chan, const NebulaInputDevice& rD
     const bool subPad = rDevice.nunchuk != 0;
 
     if (!wasConnected) {
-        NebulaFrameClock::resetIdle();
         GamePad::connectCallback(chan, GAMEPAD_ERR_NONE);
     } else if (subPad == hadSubPad) {
         return;
@@ -138,31 +119,6 @@ void GamePadReadDataInfo::updateConnection(s32 chan, const NebulaInputDevice& rD
     }
 
     GamePad::extensionCallback(chan, subPad ? GAMEPAD_DEV_FREESTYLE : GAMEPAD_DEV_CORE);
-}
-
-void GamePadReadDataInfo::watchActivity(const NebulaInputSample& rSample, bool subPad) {
-    const NebulaInputSample& rPrevious = mActivitySample;
-    bool active = rSample.buttons != rPrevious.buttons;
-
-    if (exceeds(rSample.gravity, rPrevious.gravity, 3, cActivityAccel)) {
-        active |= ++mAccelSettle > cActivitySettle;
-    } else {
-        mAccelSettle = 0;
-    }
-
-    if (subPad && exceeds(rSample.stick, rPrevious.stick, 2, cActivityStick)) {
-        active |= ++mStickSettle > cActivitySettle;
-    } else {
-        mStickSettle = 0;
-    }
-
-    if (active) {
-        mAccelSettle = 0;
-        mStickSettle = 0;
-        NebulaFrameClock::resetIdle();
-    }
-
-    mActivitySample = rSample;
 }
 
 // The samples since the last read as the game's own: the buttons of the newest with their edges and repeat; each
@@ -185,7 +141,6 @@ void GamePadReadDataInfo::read(s32 chan) {
         }
 
         mShakeHeld = shake;
-        watchActivity(sSamples[i], device.nunchuk != 0);
     }
 
     if (mResetRequested) {

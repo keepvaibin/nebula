@@ -563,7 +563,7 @@ namespace MR {
             return false;
         }
 
-        switch (getRandom(0L, 3L)) {
+        switch (getRandom(0, 3)) {
         case 0:
             if (pAction0) {
                 pActor->mParam._1C = pAction0;

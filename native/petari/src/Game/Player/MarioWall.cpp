@@ -391,7 +391,7 @@ bool MarioWall::start() {
     _18 = 0;
     _20 = 0.0f;
     changeAnimation("\225\307\202\255\202\301\202\302\202\253" /* 壁くっつき */);
-    startPadVib(0UL);
+    startPadVib(0u);
     getPlayer()->mMovementStates._28 = false;
     getPlayer()->_20._28 = false;
     _1D = 0;

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include "JSystem/JUtility/JUTNameTab.hpp"

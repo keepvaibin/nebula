@@ -264,7 +264,7 @@ struct J3DGXColorS10 : public NebulaColor16 {
     J3DGXColorS10(const NebulaColor16& color) : NebulaColor16(color) {
     }
 
-    J3DGXColorS10& operator=(const NebulaColor16& color) NO_INLINE {
+    J3DGXColorS10& operator=(const NebulaColor16& color) {
         memcpy(this, &color, sizeof(NebulaColor16));
         return *this;
     }

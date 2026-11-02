@@ -9,7 +9,7 @@ class J3DDrawPacket;
 class J3DMatPacket;
 class J3DShapePacket;
 
-inline f32 J3DCalcZValue(__REGISTER MtxPtr m, __REGISTER Vec v) {
+inline f32 J3DCalcZValue(MtxPtr m, Vec v) {
     return (v.z * m[2][2] + v.x * m[2][0]) + (m[2][3] + v.y * m[2][1]);
 }
 

@@ -45,7 +45,6 @@ public:
 private:
     void resetState();
     void updateConnection(s32 chan, const NebulaInputDevice& rDevice);
-    void watchActivity(const NebulaInputSample& rSample, bool subPad);
 
     GamePadSample mState;        // the newest sample's state, carried into the next read
     bool mResetRequested;
@@ -59,9 +58,6 @@ private:
     u16 mRepeatPulse;
     f32 mAccelPlayRadius;
     f32 mAccelSensitivity;
-    NebulaInputSample mActivitySample;  // the previous sample, which activity is measured against
-    u16 mAccelSettle;                   // samples the accelerometer's change has held
-    u16 mStickSettle;
 };
 
 class GamePadHolder {

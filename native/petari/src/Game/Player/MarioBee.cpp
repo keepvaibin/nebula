@@ -32,7 +32,7 @@ void MarioActor::entryWallWalkMode(const TVec3f& position, const TVec3f& normal)
         TVec3f front(mMario->mHeadVec);
         mMario->setGravityVec(gravity);
         mMario->setHeadVec(-gravity);
-        mMario->setFrontVecKeepUp(front, 1UL);
+        mMario->setFrontVecKeepUp(front, 1u);
         setBlendMtxTimer(2);
         _38C = 5;
         mMario->mMovementStates._38 = false;

@@ -49,7 +49,7 @@ void PunchBox::init(const JMapInfoIter& rIter) {
     mCoinCount = arg0;
     _94 = 1;
     _90 = 0;
-    _92 = MR::getRandom(0l, 31l);
+    _92 = MR::getRandom(0, 31);
     _8C = 0;
 
     setNerve(GET_NERVE(PunchBox, PunchBoxNrvWait));

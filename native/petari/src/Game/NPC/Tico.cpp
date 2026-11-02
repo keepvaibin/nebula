@@ -305,7 +305,7 @@ void Tico::exeReaction() {
 void Tico::exeDelight() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, _13C);
-        MR::resetAndForwardNode(_174, MR::getRandom(0l, 5l));
+        MR::resetAndForwardNode(_174, MR::getRandom(0, 5));
     }
 
     MR::tryTalkForce(_174);

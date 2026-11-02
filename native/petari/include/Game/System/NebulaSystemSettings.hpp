@@ -15,5 +15,4 @@ namespace NebulaSystemSettings {
     SoundMode soundMode();
     bool isWidescreen();
     // Whether the screen saver may dim the screen after the controllers go idle.
-    bool screenSaver();
 }  // namespace NebulaSystemSettings

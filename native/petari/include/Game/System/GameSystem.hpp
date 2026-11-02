@@ -3,7 +3,6 @@
 #include "Game/System/NerveExecutor.hpp"
 
 class GameSequenceDirector;
-class GameSystemDimmingWatcher;
 class GameSystemErrorWatcher;
 class GameSystemFontHolder;
 class GameSystemFrameControl;
@@ -40,7 +39,6 @@ public:
     void calcAnim();
 
     /* 0x0C */ GameSequenceDirector* mSequenceDirector;
-    /* 0x10 */ GameSystemDimmingWatcher* mDimmingWatcher;
     /* 0x14 */ GameSystemErrorWatcher* mErrorWatcher;
     /* 0x18 */ GameSystemFontHolder* mFontHolder;
     /* 0x1C */ GameSystemFrameControl* mFrameControl;
