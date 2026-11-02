@@ -84,7 +84,7 @@ struct RenderConfig {
     // Match Output: after a resize settles (not during an edge drag), scene_target_scale becomes the smallest scale whose game
     // picture covers the window; the renderer re-creates its targets once, at a frame boundary. Off by default: the
     // internal resolution is the player's setting.
-    bool     internal_follow_window = false;
+    bool     internal_follow_window = true;
     // Match Output may step its scale down while the GPU stays above 80% busy (RendererD3D12::update_gpu_budget).
     // Off by default: it would change what the player chose.
     bool     gpu_budget = false;

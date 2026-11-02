@@ -1981,15 +1981,11 @@ vk::Texture* RendererVk::filter_display_picture(const DisplayTexture& source) {
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &input, 0, nullptr);
     // The display copy's own constants for the whole frame (copy_scene_to_display): the frame is the scene target it was.
     CaptureRequest params{};
-    params.src_width = static_cast<std::uint16_t>(kFrameWidth);
-    params.src_height = static_cast<std::uint16_t>(kFrameHeight);
+    params.src_width = static_cast<std::uint16_t>(frame.width);
+    params.src_height = static_cast<std::uint16_t>(frame.height);
     params.filtered = true;
-    const FrameMap frame_map(frame.width, frame.height);
-    const SceneCopySamplingGeometry sampling = compute_display_sampling_geometry(params, frame.width, frame.height, frame_map);
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(params, false, false, true, 15u, sampling.src_x, sampling.src_y,
-                                      sampling.step_x, sampling.step_y, sampling.filter_row_offset, 1u,
-                                      frame.height);
+        make_scene_conversion_constants(params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1u, frame.height);
     vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
                        constants.values.data());
     vkCmdDraw(commands, 3, 1, 0, 0);
