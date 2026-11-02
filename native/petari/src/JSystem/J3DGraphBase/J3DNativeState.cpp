@@ -457,10 +457,10 @@ namespace J3DNativeState {
         setFrameAlpha(false);
     }
 
-    void showFrame(u16 width, u16 height, bool filtered) {
+    void showFrame(u16 width, u16 height) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_show(pHost->user, width, height, filtered ? NEBULA_CAPTURE_FILTERED : 0u);
+        pHost->frame_show(pHost->user, width, height, 0u);
     }
 
     void endFrame() {

@@ -59,7 +59,7 @@ void LavaFloater::init(const JMapInfoIter& rIter) {
     MR::connectToSceneCollisionMapObj(this);
 
     if (MR::isEqualString("LavaFloatingStepA", mObjectName)) {
-        mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+        mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     }
 
     initNerve(GET_NERVE(LavaFloater, HostTypeFloat));

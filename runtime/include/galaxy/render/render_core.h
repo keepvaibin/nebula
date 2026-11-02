@@ -948,10 +948,10 @@ private:
         std::uint8_t position_matrix = 0;
         std::shared_ptr<const curved::Model> curved;
         bool expanded = false;
-        ImmutableUploadToken index_upload_token;
         std::uint64_t resident_epoch = 0;
         std::uint32_t resident_offset = 0;
-        std::uint32_t resident_units = 0;
+        std::uint32_t resident_units = 0;     // the block: its vertices, then its indices
+        std::uint32_t resident_vertices = 0;  // the vertices alone
         std::vector<std::uint16_t> split_indices;
         std::uint32_t split_flat_indices = 0;
         bool split_built = false;

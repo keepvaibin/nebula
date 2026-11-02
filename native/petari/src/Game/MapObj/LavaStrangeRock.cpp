@@ -53,7 +53,7 @@ void LavaStrangeRock::init(const JMapInfoIter& rIter) {
     initModelAndClipping(rIter);
 
     if (mRockType == 1) {
-        mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1, -1);
+        mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1);
     }
 
     MR::connectToSceneMapObj(this);

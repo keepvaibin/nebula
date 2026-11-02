@@ -227,6 +227,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         }
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Vulkan initialize failed: " << error.what() << '\n';
+        init_error_ = error.what();
         shutdown();
         return false;
     }
@@ -907,7 +908,6 @@ void RendererVk::shutdown() {
         scene_owed_.reset();
         scene_submitted_color_.reset();
         scene_shown_image_ = VK_NULL_HANDLE;
-        display_filter_picture_.reset();
         turn_source_ = VK_NULL_HANDLE;
         release_replay_resources();
         scene_copy_dests_.clear();
@@ -1653,13 +1653,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
                              nullptr, 0, nullptr, 1, &barrier);
         display_picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
-    // The picture shown: a handed-over frame owed the display's vertical filter is shown filtered (E-10).
     vk::Texture* shown = &display_picture;
-    if (source->display_filter && !present_black_ && display_filter_pipeline_ != VK_NULL_HANDLE) {
-        if (vk::Texture* filtered = filter_display_picture(*source)) {
-            shown = filtered;
-        }
-    }
 
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(

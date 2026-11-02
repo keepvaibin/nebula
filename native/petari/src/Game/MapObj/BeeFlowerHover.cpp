@@ -73,7 +73,7 @@ void BeeFlowerHover::init(const JMapInfoIter& rIter) {
 
     MR::getJMapInfoArg0NoInit(rIter, &_BC);
     _BC /= 100.0f;
-    mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f, -1);
+    mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f);
     mLodCtrlPlanet->validate();
     initNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvWait));
     makeActorAppeared();
@@ -143,10 +143,6 @@ void BeeFlowerHover::exeRecover() {
 void BeeFlowerHover::control() {
     if (!isNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvRecover))) {
         mLodCtrlPlanet->update();
-
-        if (mLodCtrlPlanet->isShowLowModel()) {
-            return;
-        }
     }
 
     TPos3f mtx;

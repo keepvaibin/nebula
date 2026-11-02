@@ -9,6 +9,8 @@ class NameObjExecuteInfo {
 
 public:
     NameObjExecuteInfo();
+    bool isDrawBufferOnly() const { return mDrawType == -1 && mDrawBufferType != -1; }
+    s32 getMovementType() const { return mMovementType; }
 
     void setConnectInfo(NameObj*, int, int, int, int);
     void initConnectting();
@@ -77,6 +79,7 @@ namespace MR {
     void connectToDrawTemporarily(NameObj*);
     void disconnectToDrawTemporarily(NameObj*);
     bool isConnectToDrawTemporarily(const NameObj*);
+    bool isDrawnFarWhenClipped(const NameObj*, bool hasRun);
     void executeRequirementConnectMovement();
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();

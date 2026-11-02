@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 102u
+#define NEBULA_GAME_API_VERSION 103u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -311,6 +311,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_NORMAL_MAP = 37,           /* NormalMapBase: a normal-mapped shape lit through a light gradient */
     NEBULA_SHADER_MOVIE = 38,      /* MovieDraw (THPDraw): a movie frame's Y, U and V planes to RGB */
     NEBULA_SHADER_WATER_CAMERA = 39, /* WaterCameraFilter: the screen warped and darkened under water */
+    NEBULA_SHADER_FRAME_RIPPLE = 40, /* MarioActor's heat and cold ripples: the frame, each row moved by a wave */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256
@@ -523,6 +524,8 @@ enum {
     NEBULA_TEST_LIST_ACTORS,      /* the scene's live actors with a model, their model name and position, logged */
     NEBULA_TEST_SET_EVENT_FLAG,   /* the save's event flag named `stage` on (GameDataFunction::onGameEventFlag) */
     NEBULA_TEST_SHAKE_CAMERA,     /* the screen shakes until the scene ends (MR::shakeCameraInfinity, Dodoryu's quake) */
+    NEBULA_TEST_PLACE_PLAYER_WATER, /* the player placed in water body `scenario` of the scene's, in turn */
+    NEBULA_TEST_PLACE_PLAYER_ACTOR, /* the player placed at live actor `scenario` of the scene's, in turn */
     NEBULA_TEST_KILL_ACTOR,       /* the live actors whose model is `stage` killed (their kill(): what they leave behind) */
 };
 
@@ -541,14 +544,8 @@ enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
-    NEBULA_OPTION_LOD_SCALE,         /* the 3D image's lines over the console's 456 as shown (1 at its resolution, 0
-                                        before the first scene): LodCtrl's switch distances grow by it */
-    NEBULA_OPTION_TEST_LOD,          /* tests (GALAXY_TEST_LOD): 1 every LodCtrl shows its middle model, 2 its low
-                                        model, 3 its high and middle models in turn each frame (the switch itself) */
-    NEBULA_OPTION_BLOOM,             /* how BloomEffect and BloomEffectSimple go through the renderer
-                                        (NebulaRender::bloomMarker): 0 not at all (their copy chains, as the console's), 1
-                                        their own chains with the scene they work over kept and restored by it (in the
-                                        scene target's own format), 2 it draws the bloom from their values */
+    NEBULA_OPTION_BLOOM,             /* 1 when the renderer's bloom is built: BloomEffect and BloomEffectSimple give it
+                                        their values (NebulaRender::bloomMarker); 0 no bloom */
     NEBULA_OPTION_RT_PREPARATION,    /* ray tracing's shader preparation, which the title waits for (NebulaRtPrepare):
                                         0 none, 1 the renderer opens its pipeline library, 2 it compiles the pipelines
                                         (the preparation screen shows) */
@@ -882,8 +879,7 @@ typedef enum NebulaCaptureFlags {
     NEBULA_CAPTURE_DEPTH = 8u, /* the red channel holds the depth's high byte */
     NEBULA_CAPTURE_CLEAR_COLOR = 32u,
     NEBULA_CAPTURE_CLEAR_ALPHA = 64u,
-    NEBULA_CAPTURE_CLEAR_DEPTH = 128u,
-    NEBULA_CAPTURE_FILTERED = 16u /* through the display's vertical filter (frame_show's NEBULA_CAPTURE_FILTERED) */
+    NEBULA_CAPTURE_CLEAR_DEPTH = 128u
 } NebulaCaptureFlags;
 
 /* A point of the picture the game asks about (NebulaHostServices::screen_probe). */

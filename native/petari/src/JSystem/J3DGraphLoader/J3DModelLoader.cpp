@@ -11,6 +11,7 @@
 #include "JSystem/JSupport/JSupport.hpp"
 #include "JSystem/JUtility/JUTNameTab.hpp"
 #include <stdint.h>
+#include <cstring>
 
 namespace {
     // A material's ID (mDiffFlag): packets with the same ID share their material state (J3DMatPacket::isSame). The
@@ -341,7 +342,18 @@ void J3DModelLoader::readVertex(J3DVertexBlock const* i_block) {
 void J3DModelLoader::readEnvelop(J3DEnvelopeBlock const* i_block) {
     mpModelData->getJointTree().mWEvlpMtxNum = i_block->mWEvlpMtxNum;
     mpModelData->getJointTree().mWEvlpMixMtxNum = JSUConvertOffsetToPtr< u8 >(i_block, i_block->mpWEvlpMixMtxNum);
-    mpModelData->getJointTree().mWEvlpMixMtxIndex = JSUConvertOffsetToPtr< u16 >(i_block, i_block->mpWEvlpMixIndex);
+    // The file stores the indices right after a table of bytes, at any address: a copy holds them aligned.
+    u16* mixIndex = JSUConvertOffsetToPtr< u16 >(i_block, i_block->mpWEvlpMixIndex);
+    if (mixIndex != nullptr && (reinterpret_cast< uintptr_t >(mixIndex) & 1u) != 0u) {
+        u32 total = 0;
+        for (u16 i = 0; i < i_block->mWEvlpMtxNum; i++) {
+            total += mpModelData->getJointTree().mWEvlpMixMtxNum[i];
+        }
+        u16* aligned = new u16[total];
+        memcpy(aligned, mixIndex, total * sizeof(u16));
+        mixIndex = aligned;
+    }
+    mpModelData->getJointTree().mWEvlpMixMtxIndex = mixIndex;
     mpModelData->getJointTree().mWEvlpMixWeight = JSUConvertOffsetToPtr< f32 >(i_block, i_block->mpWEvlpMixWeight);
     mpModelData->getJointTree().mInvJointMtx = JSUConvertOffsetToPtr< Mtx >(i_block, i_block->mpInvJointMtx);
 }

@@ -60,7 +60,7 @@ void OceanHomeMapCtrl::movement() {
             MR::hideModel(mOceanRingPlanet);
             mOceanRingPlanet->mLODCtrl->invalidate();
         }
-    } else if (!mOceanRingPlanet->mLODCtrl->isShowLowModel() && MR::isHiddenModel(mOceanRingPlanet)) {
+    } else if (MR::isHiddenModel(mOceanRingPlanet)) {
         MR::showModel(mOceanRingPlanet);
         mOceanRingPlanet->mLODCtrl->validate();
     } else if (!MR::isDead(mOceanRingPlanetLowInWater)) {
