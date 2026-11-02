@@ -5,14 +5,13 @@
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaArena.hpp"
 
-JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount) {
+JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : GameThread(stackSize, msgCount, JASDram) {
 }
 
 JASTaskThread::~JASTaskThread() {
     void* msg;
-    BOOL received;
     while (true) {
-        msg = waitMessage(&received);
+        const BOOL received = mQueue.receive(&msg, false);
         if (!received) {
             return;
         }
@@ -55,7 +54,7 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, const void* msg, u32 m
         return 0;
     }
 
-    BOOL iVar2 = sendMessage(callstack);
+    BOOL iVar2 = mQueue.send(callstack, false);
     if (!iVar2) {
         JASKernel::getCommandHeap()->free(callstack);
     }
@@ -70,7 +69,7 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
         return 0;
     }
 
-    BOOL iVar2 = sendMessage(callstack);
+    BOOL iVar2 = mQueue.send(callstack, false);
     if (!iVar2) {
         JASKernel::getCommandHeap()->free(callstack);
     }
@@ -81,7 +80,9 @@ void* JASTaskThread::run() {
     GameThreads::leaveWorld();
     JASThreadCallStack* callstack;
     do {
-        callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
+        void* msg;
+        mQueue.receive(&msg, true);
+        callstack = static_cast< JASThreadCallStack* >(msg);
 
         if (callstack->msgType_) {
             callstack->callback_(callstack->msg.buffer);

@@ -2,11 +2,11 @@
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRThread.hpp"
+#include "Game/System/GameThread.hpp"
 
 typedef void (*JASThreadCallback)(void*);
 
-class JASTaskThread : public JKRThread {
+class JASTaskThread : public GameThread {
 private:
     struct JASThreadCallStack {
         /* 0x00 */ JASThreadCallback callback_;

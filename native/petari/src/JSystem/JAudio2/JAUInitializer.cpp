@@ -15,7 +15,6 @@
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/System/NebulaArena.hpp"
-#include "JSystem/JKernel/JKRThread.hpp"
 
 JAU_JASInitializer::JAU_JASInitializer() {
     audioMemory_ = 0;

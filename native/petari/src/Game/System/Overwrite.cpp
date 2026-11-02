@@ -9,7 +9,6 @@
 #include "Game/Util/MotionSignal.hpp"
 
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JKernel/JKRThread.hpp>
 
 #include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>

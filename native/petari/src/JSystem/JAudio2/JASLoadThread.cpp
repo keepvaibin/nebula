@@ -17,9 +17,7 @@ bool JASLoad::createThread(int msgCount, u32 stackSize) {
 
     sThread = new (JASDram, 0) JASTaskThread(msgCount, stackSize);
 
-    NebulaArena* pCurrentHeap = NebulaArena::getSystemHeap();
 
-    sThread->setCurrentHeap(pCurrentHeap);
-    sThread->resume();
+    GameThreads::resume(sThread->mThread);
     return true;
 }
