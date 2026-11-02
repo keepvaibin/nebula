@@ -19,18 +19,18 @@ env:
 
 jobs:
   build:
-    name: Build (${{ matrix.config }})
+    name: Build1 (${{ matrix.config }})
     runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
         config:
           - name: default
-            vulkan: 'OFF'
-            fsr3: 'ON'
-          - name: vulkan
             vulkan: 'ON'
-            fsr3: 'ON'
+            fsr3: 'OFF'
+          - name: vulkan
+            vulkan: 'OFF'
+            fsr3: 'OFF'
           - name: no-fsr3
             vulkan: 'OFF'
             fsr3: 'OFF'
