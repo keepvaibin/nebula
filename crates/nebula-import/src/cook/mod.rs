@@ -58,7 +58,7 @@ fn placement_table_name(name: &str) -> bool {
 
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
+    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -105,6 +105,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::cit(&bytes).with_context(|| format!("{name}: chord table"))?)
     } else if matches!(extension(name).as_str(), "brs" | "bme") || (extension(name) == "bmt" && !bytes.starts_with(b"J3D")) {
         Some(native_data::rhythm(&bytes, &extension(name)).with_context(|| format!("{name}: rhythm library file"))?)
+    } else if matches!(extension(name).as_str(), "bct" | "csw") {
+        Some(native_data::speaker(&bytes, &extension(name)).with_context(|| format!("{name}: speaker file"))?)
     } else if extension(name) == "kcl" {
         Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {

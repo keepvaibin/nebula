@@ -10,7 +10,7 @@ SpkMixingBuffer::SpkMixingBuffer(JKRHeap* pHeap) {
     }
 }
 
-void SpkMixingBuffer::mix(s32 padChannel, NEBULA_BE(s16)* pWaveData, s32 readSize, f32 volume, s32 offset) {
+void SpkMixingBuffer::mix(s32 padChannel, s16* pWaveData, s32 readSize, f32 volume, s32 offset) {
     for (s32 i = 0; i < readSize; i++) {
         s32 sample = mSamples[padChannel][i + offset];
         s16 wav = pWaveData[i];

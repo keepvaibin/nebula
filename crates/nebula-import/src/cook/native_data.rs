@@ -39,6 +39,7 @@
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 //! - BAS (sound animations): counts, ids, times, pitches, flags (bas).
 //! - BRS/BME/BMT (rhythm library remix and ME files): words, tables, parameters (rhythm).
+//! - BCT/CSW (Wii Remote speaker table and waves): headers, parameters, samples (speaker).
 //! - RARC (archives, after cook::archive::rebuild): header, info block, directory nodes, file entries (rarc_host).
 //! - CIT (chord tables, "CITS"): size, counts, offset tables, scale note offsets (cit).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
@@ -2058,6 +2059,56 @@ pub fn rhythm(bytes: &[u8], extension: &str) -> Result<Vec<u8>> {
             }
         }
         _ => bail!("not a rhythm library file"),
+    }
+    Ok(out)
+}
+
+/// The Wii Remote speaker's files (AudioRes/SpkRes/SpkRes.arc) in host order. BCT (the sound table): count, parameter
+/// and name table offsets, a word, 8-byte parameters (wave id, release time, a spare: 16-bit; two bytes stay) and the
+/// name offsets. CSW (the waves): the size word, the wave count, the offsets, and each wave's size, loop start, loop end
+/// and 16-bit samples up to the next wave.
+pub fn speaker(bytes: &[u8], extension: &str) -> Result<Vec<u8>> {
+    let mut out = bytes.to_vec();
+    match extension {
+        "bct" => {
+            let count = host32(bytes, &mut out, 0)? as usize;
+            let parameters = host32(bytes, &mut out, 4)? as usize;
+            let names = host32(bytes, &mut out, 8)? as usize;
+            host32(bytes, &mut out, 0xC)?;
+            for i in 0..count {
+                let p = parameters + 8 * i;
+                host16(bytes, &mut out, p)?;
+                host16(bytes, &mut out, p + 4)?;
+                host16(bytes, &mut out, p + 6)?;
+                host32(bytes, &mut out, names + 4 * i)?;
+            }
+        }
+        "csw" => {
+            host32(bytes, &mut out, 0)?;
+            let count = host32(bytes, &mut out, 4)? as usize;
+            let mut starts: Vec<usize> = Vec::with_capacity(count);
+            for i in 0..count {
+                starts.push(host32(bytes, &mut out, 8 + 4 * i)? as usize);
+            }
+            let mut sorted = starts.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
+            for (k, &at) in sorted.iter().enumerate() {
+                let end = sorted.get(k + 1).copied().unwrap_or(bytes.len());
+                if at + 12 > end {
+                    bail!("a speaker wave at {at:#x} shorter than its header");
+                }
+                for o in [0, 4, 8] {
+                    host32(bytes, &mut out, at + o)?;
+                }
+                let mut p = at + 12;
+                while p + 2 <= end {
+                    host16(bytes, &mut out, p)?;
+                    p += 2;
+                }
+            }
+        }
+        _ => bail!("not a speaker file"),
     }
     Ok(out)
 }

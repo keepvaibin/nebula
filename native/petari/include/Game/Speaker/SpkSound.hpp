@@ -72,7 +72,7 @@ public:
 
     /* 0x10 */ SpkSoundHandle* mSoundHandle;
     /* 0x14 */ s32 mWaveID;
-    /* 0x18 */ NEBULA_BE(s16)* mWave;
+    /* 0x18 */ s16* mWave;
     /* 0x1C */ s32 mWavePtr;
     /* 0x20 */ s32 mPadChannel;
     /* 0x24 */ u32 _24;

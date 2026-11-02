@@ -41,7 +41,7 @@ void CSSoundNameConverter::makeDataTable(const SpkTable* pTable) {
     for (int idx = 0; idx < pTable->mResourceCount; idx++) {
         CSSoundNameHashData* data = &mSoundHashes[idx];
         data->mSoundID = idx;
-        data->mName = pTable->mNames[idx];
+        data->mName = pTable->getName(idx);
         data->mHash = JGadget::getHashCode(data->mName);
     }
 }
