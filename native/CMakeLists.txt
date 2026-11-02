@@ -47,8 +47,10 @@ string(REGEX MATCH "${NEBULA_GAME_VERSION}=([0-9])" _ "${version_ids}")
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     target_compile_options(smg_game PRIVATE -mssse3)
 endif()
-target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} TARGET_PC=1 NEBULA_GAME_MODULE=1)
-
+target_compile_definitions(smg_game PRIVATE
+    VERSION=1
+    RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3
+    TARGET_PC=1 NEBULA_GAME_MODULE=1)
 set_target_properties(smg_game PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON
     CXX_STANDARD 17 CXX_EXTENSIONS ON
