@@ -27,7 +27,7 @@ extern "C" {
 
 typedef struct NebulaHostThread NebulaHostThread;
 
-/* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
+/* Audio (the host's mixer): the game's voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
    its filters into mix buses or the surround panner; the game writes its settings, the mixer advances its playback.
    Volumes are gains (a send of 0.5 adds half the voice to its bus; voices_mix's gain scales the output). */

@@ -66,9 +66,10 @@ public:
     void waitForEnd(const char*);
     bool isEnd(const char*) const;
     FunctionAsyncExecInfo* createAndAddExecInfo(const MR::FunctorBase&, const char*);
+    FunctionAsyncExecutorThread* addThread();
     FunctionAsyncExecutorThread* getSuspendThread();
 
-    /* 0x000 */ FunctionAsyncExecutorThread* mThreads[2];
+    MR::Vector< MR::AssignableArray< FunctionAsyncExecutorThread* > > mThreads;
     /* 0x008 */ FunctionAsyncExecutorOnMainThread* mMainThreadExec;
     /* 0x00C */ MR::Vector< MR::FixedArray< FunctionAsyncExecInfo*, 256 > > mHolders;
     /* 0x410 */ JKRUnitHeap* _410;

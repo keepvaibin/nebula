@@ -11,6 +11,9 @@ struct JASEffectLine : NebulaEffectLine {};
 // A voice of the host's mixer (nebula_game_api.h voices_*): the game sets its source, pitch, volumes and filters here. There are 64;
 // four effect lines take what the voices send them.
 struct JASVoice : NebulaVoice {
+    // Room for every note the game asks for: stealing a voice then only happens past this.
+    static const int cVoices = 256;
+
     // An effect line's settings as the game's sound system keeps them (AudEffector::mFxLine).
     struct EffectConfig {
         u8 _0;       // filter: FIR before (1) or after (2) the sends

@@ -98,7 +98,7 @@ public:
 
 private:
     static constexpr std::size_t kMaxSubframe = 512u;  // output samples of one subframe at 192 kHz, rounded up
-    static constexpr std::size_t kVoices = 64u;
+    static constexpr std::size_t kVoices = 256u;
     // At most 16 source samples per 32 kHz sample, the history before them and the last taps' reach.
     static constexpr std::uint32_t kMaxSourceSpan = 1280u;
     static constexpr std::uint32_t kMaxSourceSamples = 4u + kMaxSourceSpan + 4u;
