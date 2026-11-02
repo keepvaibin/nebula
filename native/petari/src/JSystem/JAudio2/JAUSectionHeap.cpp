@@ -284,11 +284,11 @@ bool JAUSection::newStaticSeqData(JAISoundID param_0) {
     return false;
 }
 
-void* JAUSection::loadDVDFile(const char* pFileName, bool direction, JKRExpandSwitch expandSwitch) {
+void* JAUSection::loadDVDFile(const char* pFileName, bool direction) {
     {
         TPushCurrentHeap push(getHeap_());
-        return JKRDvdToMainRam(pFileName, nullptr, expandSwitch, 0, getHeap_(),
-                               direction ? JKRDvdRipper::ALLOC_DIRECTION_BACKWARD : JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, nullptr, nullptr);
+        return JKRDvdToMainRam(pFileName, nullptr, 0, getHeap_(), direction ? JKRDvdRipper::ALLOC_DIRECTION_BACKWARD : JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0,
+                               nullptr);
     }
 }
 

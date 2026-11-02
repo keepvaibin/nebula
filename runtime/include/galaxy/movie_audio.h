@@ -1,4 +1,4 @@
-// The movie player's sound (nebula_game_api.h movie_audio*): each THP frame's audio record decoded on arrival (its
+// The movie player's sound (nebula_game_api.h movie_audio*): each movie frame's audio record decoded on arrival (its
 // DSP-ADPCM channels) and queued, up to 20 frames ahead; the mixer takes it at 32 kHz each audio frame with the
 // player's volume (a square law over 0-127, ramped per sample), its fade-in after a pause and, in mono output, the
 // mean of the two sides at -3 dB. Playback starts once the frame after the current one is decoded too, and falls

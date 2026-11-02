@@ -27,7 +27,7 @@ JAISoundHandle* JAISoundHandles::getFreeHandle() {
 JAISoundHandle* JAISoundHandles::getHandleUserData(uintptr_t addr) {
     for (int i = 0; i < mNumHandles; i++) {
         if (mHandles[i].isSoundAttached()) {
-            if ((u32)mHandles[i]->getUserData() == addr) {
+            if (mHandles[i]->getUserData() == addr) {
                 return &mHandles[i];
             }
         }

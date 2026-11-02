@@ -29,7 +29,6 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRDecomp.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
 #include <revolution/gx.h>
@@ -66,7 +65,6 @@ extern "C" void nebula_game_main(void) {
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();
-    FileRipper::setup(0x20000, MR::getStationedHeapNapa());
     GameSystemException::init();
     MR::initAcosTable();
     SingletonHolder< GameSystem >::init();
@@ -86,7 +84,6 @@ GameSystem::GameSystem()
 }
 
 void GameSystem::init() {
-    JKRCreateDecompManager(7);
     mObjHolder = new GameSystemObjHolder();
     mFontHolder = new GameSystemFontHolder();
     mFontHolder->createFontFromEmbeddedData();

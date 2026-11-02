@@ -65,7 +65,7 @@ namespace nw4r {
             mImage = image;
             J3DNativeTexture::registerImage(image, static_cast< u8 >(format), width, height, static_cast< u8 >(maxLOD + 1));
             SetSize(width, height);
-            SetTexelFormat(GXTexFmt(format));
+            mBits.textureFormat = format;
         }
     };  // namespace lyt
 };  // namespace nw4r

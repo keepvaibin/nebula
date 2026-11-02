@@ -8,6 +8,7 @@ pub mod dol;
 pub mod formats;
 pub mod native_data;
 pub mod texture;
+pub mod thp;
 
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -58,7 +59,7 @@ fn placement_table_name(name: &str) -> bool {
 
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
+    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -88,6 +89,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
     } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
         Some(native_data::layout(&bytes).with_context(|| format!("{name}: layout"))?)
+    } else if bytes.starts_with(b"THP\0") {
+        Some(thp::movie(&bytes).with_context(|| format!("{name}: movie"))?)
     } else if bytes.starts_with(b"AA_<") {
         Some(native_data::baa(&bytes).with_context(|| format!("{name}: audio archive"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
@@ -223,7 +226,8 @@ pub fn write_cooked_pak(
             bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
         }
         stats.bytes_in += file.length;
-        let out = if cooks(&file.path) {
+        // Whatever its name, a compressed file is expanded here: the game has no decompressor.
+        let out = if cooks(&file.path) || archive::is_compressed(&bytes) {
             cook_file(&file.path, bytes.clone(), stats)?.unwrap_or(bytes)
         } else {
             bytes

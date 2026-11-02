@@ -32,7 +32,7 @@ void GameSystemFontHolder::createFontFromEmbeddedData() {
     snprintf(embeddedFontPath, sizeof(embeddedFontPath), "/%s/LayoutData/EmbeddedFont.arc", languagePrefix);
 #endif
 
-    _0 = static_cast< u8* >(MR::decompressFileFromArchive(pArchive, embeddedFontPath, pHeap, -32));
+    _0 = static_cast< u8* >(MR::copyFileFromArchive(pArchive, embeddedFontPath, pHeap, -32));
     _4 = new (pHeap, 0) JKRMemArchive();
     _4->mountFixed(_0, JKR_MEM_BREAK_FLAG_0);
     mEmbeddedMessageFont = new (pHeap, -4) nw4r::ut::ResFont();

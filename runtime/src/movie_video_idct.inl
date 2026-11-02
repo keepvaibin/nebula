@@ -1,5 +1,5 @@
-// The inverse DCT and scan loop of native_thp_video.cpp, which includes this file once per fused multiply-add:
-// the including namespace declares `madd`; every other name comes from native_thp_video.cpp.
+// The inverse DCT and scan loop of movie_video.cpp, which includes this file once per fused multiply-add:
+// the including namespace declares `madd`; every other name comes from movie_video.cpp.
 
 using FloatRow = std::array<float, 8>;
 
@@ -114,6 +114,9 @@ std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
   }
 
   std::array<u8, 64> output{};
+#if defined(MOVIE_VIDEO_COLUMNS_SIMD)
+  columns_simd(workspace.data(), output.data());
+#else
   for (size_t column = 0; column < 8; ++column) {
     FloatRow input{};
     for (size_t row = 0; row < 8; ++row) {
@@ -125,6 +128,7 @@ std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
       output[row * 8 + column] = scaled <= 0.0f ? 0 : scaled >= 255.0f ? 255 : static_cast<u8>(scaled);
     }
   }
+#endif
   return output;
 }
 
@@ -142,7 +146,7 @@ bool decode_and_write_block(BitReader& reader, DecodeContext& context, size_t co
   return true;
 }
 
-s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* tileY, u8* tileU, u8* tileV) noexcept {
+s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* planeY, u8* planeU, u8* planeV) noexcept {
   const u16 chromaWidth = static_cast<u16>((context.width + 1) / 2);
   const u16 chromaHeight = static_cast<u16>((context.height + 1) / 2);
   BitReader bits{file, context.scanOffset};
@@ -152,16 +156,16 @@ s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* tileY, u8*
     for (u16 mcuX = 0; mcuX < mcuColumns; ++mcuX) {
       const u16 lumaX = static_cast<u16>(mcuX * 16);
       const u16 lumaY = static_cast<u16>(mcuY * 16);
-      if (!decode_and_write_block(bits, context, 0, tileY, context.width, context.height, lumaX, lumaY) ||
-          !decode_and_write_block(bits, context, 0, tileY, context.width, context.height,
+      if (!decode_and_write_block(bits, context, 0, planeY, context.width, context.height, lumaX, lumaY) ||
+          !decode_and_write_block(bits, context, 0, planeY, context.width, context.height,
                                   static_cast<u16>(lumaX + 8), lumaY) ||
-          !decode_and_write_block(bits, context, 0, tileY, context.width, context.height, lumaX,
+          !decode_and_write_block(bits, context, 0, planeY, context.width, context.height, lumaX,
                                   static_cast<u16>(lumaY + 8)) ||
-          !decode_and_write_block(bits, context, 0, tileY, context.width, context.height,
+          !decode_and_write_block(bits, context, 0, planeY, context.width, context.height,
                                   static_cast<u16>(lumaX + 8), static_cast<u16>(lumaY + 8)) ||
-          !decode_and_write_block(bits, context, 1, tileU, chromaWidth, chromaHeight,
+          !decode_and_write_block(bits, context, 1, planeU, chromaWidth, chromaHeight,
                                   static_cast<u16>(mcuX * 8), static_cast<u16>(mcuY * 8)) ||
-          !decode_and_write_block(bits, context, 2, tileV, chromaWidth, chromaHeight,
+          !decode_and_write_block(bits, context, 2, planeV, chromaWidth, chromaHeight,
                                   static_cast<u16>(mcuX * 8), static_cast<u16>(mcuY * 8))) {
         return kBadSyntax;
       }

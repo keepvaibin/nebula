@@ -26,8 +26,3 @@ NEBULA_GAME_API void nebula_game_run(void) {
     nebula_os_boot(nebula_game_main);
 }
 
-void __NebulaMovieFrame(const char* name, s32 frame, f32 frame_rate, const void* y, const void* u, const void* v,
-                        u32 width, u32 height) {
-    sHost->movie_frame(sHost->user, name, frame, frame_rate, y, u, v, width, height);
-}
-
