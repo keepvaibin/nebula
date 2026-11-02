@@ -13,14 +13,12 @@ struct PlayerInputSample {
     u32 mHold;      // NEBULA_BUTTON_*
     u32 mTrigger;
     u32 mRelease;
-    bool mRepeat;   // a held button repeats this read (InputButtons's delay and pulse)
     bool mHasMoveStick;
     bool mIsPointerOn;
     TVec3f mAccel;  // the main hand's, filtered (InputTilt's parameters), in g
     TVec3f mSubTilt;
     TVec2f mStick;
     TVec2f mPointerPos;
-    f32 mPointerSpeed;
     TVec2f mHorizon;
     f32 mDistance;
 };
@@ -32,8 +30,6 @@ public:
 
     void read(s32 chan);
     void requestReset();
-    void setButtonRepeat(f32 delaySec, f32 pulseSec);
-    void setAccelParam(f32 playRadius, f32 sensitivity);
     u32 takeShakePresses(s32 device);
     PlayerInputSample* getSample(u32) const;
     u32 getValidStatusCount() const;
@@ -53,12 +49,6 @@ private:
     bool mSubHandResetRequested;
     u8 mShakeHeld;
     u32 mShakePresses[2];     // the main hand's and the sub hand's, not yet taken (InputSwing)
-    u16 mRepeatTime;          // in 200ths of a second of the setting, one per sample
-    u16 mRepeatNext;
-    u16 mRepeatDelay;
-    u16 mRepeatPulse;
-    f32 mAccelPlayRadius;
-    f32 mAccelSensitivity;
     NebulaInputSample mActivitySample;  // the previous sample, which activity is measured against
     u16 mAccelSettle;                   // samples the accelerometer's change has held
     u16 mStickSettle;

@@ -128,7 +128,6 @@ namespace MR {
 
     bool isConnectedInput(s32 channel);
 
-    bool isOperatingInput(s32 channel);
 };  // namespace MR
 
 namespace PlayerInputFunction {

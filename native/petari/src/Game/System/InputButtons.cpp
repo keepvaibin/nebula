@@ -2,8 +2,7 @@
 #include "Game/System/PlayerInput.hpp"
 #include "Game/System/PlayerInputs.hpp"
 
-InputButtons::InputButtons(const PlayerInput* pPad) : mPad(pPad), mHold(), mTrigger(), mRelease(), mRepeat(), mDelaySec(1.0f / 2.4f), mPulseSec(1.0f / 6.0f) {
-    mPad->mReadInfo->setButtonRepeat(mDelaySec, mPulseSec);
+InputButtons::InputButtons(const PlayerInput* pPad) : mPad(pPad), mHold(), mTrigger(), mRelease() {
 }
 
 void InputButtons::update() {
@@ -21,11 +20,6 @@ void InputButtons::update() {
 
     mHold = pSample->mHold;
     mRelease = pSample->mRelease;
-    mRepeat = mTrigger;
-
-    if (pSample->mRepeat) {
-        mRepeat |= mHold;
-    }
 }
 
 bool InputButtons::testButtonUp() const {
@@ -132,6 +126,3 @@ bool InputButtons::testReleaseZ() const {
     return (mRelease & NEBULA_BUTTON_Z) != 0;
 }
 
-bool InputButtons::isChangeAnyState() const {
-    return mTrigger != 0 || mRelease != 0;
-}

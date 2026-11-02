@@ -12,12 +12,9 @@
 #define INPUT_SAMPLE_MAX 120
 
 namespace {
-    // Button repeat in 200ths of a second of its setting, counted one per sample: past the longest pulse the count
-    // wraps; without a pulse a held button never repeats.
-    const u16 cRepeatTimeMax = 20000;
-    const u16 cNoRepeatDelay = 40000;
     // The largest acceleration the main hand's and the sub hand's sensors read, in g.
     const f32 cAccelMax = 3.4f;
+    const f32 cTiltFollow = 0.15f;  // of the difference, each sample
     const f32 cSubAccelMax = 2.1f;
 
     NebulaInputSample sSamples[INPUT_SAMPLE_MAX];
@@ -47,8 +44,7 @@ namespace {
 
 PlayerInputReader::PlayerInputReader()
     : mStatusArray(), mValidStatusCount(), mDevice(), mState(), mResetRequested(true), mStateMoveStick(false),
-      mSubHandResetRequested(true), mShakeHeld(0), mRepeatTime(0), mRepeatNext(cNoRepeatDelay), mRepeatDelay(cNoRepeatDelay),
-      mRepeatPulse(0), mAccelPlayRadius(0.0f), mAccelSensitivity(1.0f), mActivitySample(), mAccelSettle(0), mStickSettle(0) {
+      mSubHandResetRequested(true), mShakeHeld(0), mActivitySample(), mAccelSettle(0), mStickSettle(0) {
     mStatusArray = new PlayerInputSample[INPUT_SAMPLE_MAX];
     MR::zeroMemory(mStatusArray, sizeof(PlayerInputSample) * INPUT_SAMPLE_MAX);
     mShakePresses[0] = mShakePresses[1] = 0;
@@ -71,24 +67,6 @@ void PlayerInputReader::requestReset() {
     mResetRequested = true;
 }
 
-void PlayerInputReader::setButtonRepeat(f32 delaySec, f32 pulseSec) {
-    if (pulseSec != 0.0f) {
-        mRepeatDelay = static_cast< u16 >(static_cast< s32 >(delaySec * 200.0f + 0.5f));
-        mRepeatPulse = static_cast< u16 >(static_cast< s32 >(pulseSec * 200.0f + 0.5f));
-    } else {
-        mRepeatDelay = cNoRepeatDelay;
-        mRepeatPulse = 0;
-    }
-
-    mRepeatTime = 0;
-    mRepeatNext = mRepeatDelay;
-}
-
-void PlayerInputReader::setAccelParam(f32 playRadius, f32 sensitivity) {
-    mAccelPlayRadius = playRadius;
-    mAccelSensitivity = sensitivity;
-}
-
 u32 PlayerInputReader::takeShakePresses(s32 device) {
     const u32 presses = mShakePresses[device];
     mShakePresses[device] = 0;
@@ -98,15 +76,11 @@ u32 PlayerInputReader::takeShakePresses(s32 device) {
 // The state a reset leaves (a scene change): nothing held, at rest with 1 g down, the pointer off at distance 1.
 void PlayerInputReader::resetState() {
     mState.mHold = mState.mTrigger = mState.mRelease = 0;
-    mState.mRepeat = false;
     mState.mIsPointerOn = false;
     mState.mPointerPos.set(0.0f, 0.0f);
-    mState.mPointerSpeed = 0.0f;
     mState.mHorizon.set(1.0f, 0.0f);
     mState.mDistance = 1.0f;
     mState.mAccel.set(0.0f, 0.0f, 1.0f);
-    mRepeatTime = 0;
-    mRepeatNext = mRepeatDelay;
     mSubHandResetRequested = true;
 }
 
@@ -209,29 +183,6 @@ void PlayerInputReader::read(s32 chan) {
     mState.mHold = hold;
     mState.mTrigger = change & hold;
     mState.mRelease = change & previous;
-    mState.mRepeat = false;
-
-    if (mState.mTrigger != 0 || mState.mRelease != 0) {
-        mRepeatTime = 0;
-        mRepeatNext = mRepeatDelay;
-        mState.mRepeat = mState.mTrigger != 0 && mRepeatPulse != 0;
-    } else if (mState.mHold != 0) {
-        mRepeatTime = static_cast< u16 >(mRepeatTime + count);
-
-        if (mRepeatTime >= cNoRepeatDelay) {
-            mRepeatTime = static_cast< u16 >(mRepeatTime - cNoRepeatDelay);
-        }
-
-        if (mRepeatTime >= mRepeatNext) {
-            mState.mRepeat = true;
-            mRepeatNext = static_cast< u16 >(mRepeatNext + mRepeatPulse);
-
-            if (mRepeatTime >= cRepeatTimeMax) {
-                mRepeatTime = static_cast< u16 >(mRepeatTime - cRepeatTimeMax);
-                mRepeatNext = static_cast< u16 >(mRepeatNext - cRepeatTimeMax);
-            }
-        }
-    }
 
     if (subPad != mStateMoveStick) {
         mStateMoveStick = subPad;
@@ -262,31 +213,11 @@ void PlayerInputReader::read(s32 chan) {
 
             for (s32 f = 0; f < filters; f++) {
                 f32* pValue = f == 0 ? pAccel : pSubAccel;
-                const f32 diff = (f == 0 ? accel : subAccel) - *pValue;
-                f32 weight = diff < 0.0f ? -diff : diff;
-
-                if (weight >= mAccelPlayRadius) {
-                    weight = 1.0f;
-                } else {
-                    weight /= mAccelPlayRadius;
-                    weight *= weight;
-                    weight *= weight;
-                }
-
-                weight *= mAccelSensitivity;
-                *pValue += weight * diff;
+                *pValue += cTiltFollow * ((f == 0 ? accel : subAccel) - *pValue);
             }
         }
 
         if (rSample.pointer_on != 0) {
-            if (mState.mIsPointerOn) {
-                const f32 dx = rSample.pointer[0] - mState.mPointerPos.x;
-                const f32 dy = rSample.pointer[1] - mState.mPointerPos.y;
-                mState.mPointerSpeed = sqrtf(dx * dx + dy * dy);
-            } else {
-                mState.mPointerSpeed = 0.0f;
-            }
-
             mState.mPointerPos.set(rSample.pointer[0], rSample.pointer[1]);
             mState.mHorizon.set(rSample.roll[0], rSample.roll[1]);
             mState.mDistance = rSample.distance;

@@ -87,7 +87,6 @@ void LogoScene::init() {
 }
 
 void LogoScene::update() {
-    GameSystemFunction::restartControllerLeaveWatcher();
     updateNerve();
     SceneFunction::executeMovementList();
 }

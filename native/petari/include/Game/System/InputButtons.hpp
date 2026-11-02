@@ -119,7 +119,6 @@ public:
 
     /// @brief Determines if any button was just pressed or released.
     /// @return `true` if any button was just pressed or released, `false` otherwise.
-    bool isChangeAnyState() const;
 
 private:
     /// @brief The owning player's input.
@@ -134,12 +133,6 @@ private:
     /// @brief The combination of buttons just released.
     /* 0x0C */ u32 mRelease;
 
-    /// @brief The combination of buttons pressed during the repeat period.
-    /* 0x10 */ u32 mRepeat;
 
-    /// @brief The number of seconds to hold down any button before the button repeats.
-    /* 0x14 */ f32 mDelaySec;
 
-    /// @brief The number of seconds to hold down any button after @ref mDelaySec before the button repeats.
-    /* 0x18 */ f32 mPulseSec;
 };

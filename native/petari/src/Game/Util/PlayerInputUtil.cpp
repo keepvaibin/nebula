@@ -329,19 +329,6 @@ namespace MR {
         return MR::getPlayerInput(channel)->mIsConnected;
     }
 
-    bool isOperatingInput(s32 channel) {
-        PlayerInput* pGamePad = MR::getPlayerInput(channel);
-
-        if (!pGamePad->mMainTilt->isBalanced()) {
-            return true;
-        }
-
-        if (pGamePad->mButton->testButtonA()) {
-            return true;
-        }
-
-        return pGamePad->mButton->testButtonB();
-    }
 };  // namespace MR
 
 namespace PlayerInputFunction {

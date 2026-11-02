@@ -33,5 +33,4 @@ public:
     /* 0x3C */ s32 mInValidOutScreenTime;
     /* 0x40 */ s32 mEnablePastCount;
     /* 0x44 */ bool mIsPointInScreen;
-    /* 0x45 */ bool mIsPointerMoved;
 };
