@@ -68,6 +68,8 @@ struct Report {
 
 // The code, title, detail and advice for these facts.
 Report classify(const Facts& facts) noexcept;
+// A failure's text says the graphics card was reset or lost (NEB-G01).
+bool is_gpu_lost(const char* text) noexcept;
 
 // The report as the text file and dialog show it: "NEB-xxx: title", the detail, the advice, then `technical`
 // (the exception line, the dump's path) and the session's mods. Returns the length written (without the terminator).

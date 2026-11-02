@@ -3507,6 +3507,13 @@ void RendererD3D12::gpu_pass(GpuPass pass) {
     pass_marks_[frame_slot_][marks++] = pass;
 }
 
+void RendererD3D12::test_lose_device() {
+    ComPtr<ID3D12Device5> device;
+    if (SUCCEEDED(device_.As(&device))) {
+        device->RemoveDevice();
+    }
+}
+
 void RendererD3D12::begin_frame(bool present_swap_chain) {
     // How long the frames a started tracer took over lasted (the hitch a tracer's first frames could cause).
     {

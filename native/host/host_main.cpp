@@ -1251,12 +1251,40 @@ void submit_frame_unchecked(bool present, bool black) {
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 
+[[noreturn]] void finish_and_exit(bool restart);
+
+// The graphics driver reset the card (E-18): a new process starts the game again from its save, twice in a row at most;
+// the third time is a fault to report.
+bool restart_after_gpu_loss(const char* what) {
+#if defined(_WIN32)
+    if (!galaxy::crash::is_gpu_lost(what)) {
+        return false;
+    }
+    const char* before = std::getenv("NEBULA_GPU_RESTARTS");
+    const int count = before != nullptr ? std::atoi(before) : 0;
+    if (count >= 2) {
+        return false;
+    }
+    char text[16];
+    std::snprintf(text, sizeof(text), "%d", count + 1);
+    _putenv_s("NEBULA_GPU_RESTARTS", text);
+    log_line("host: the graphics card was reset:", what);
+    return true;
+#else
+    (void)what;
+    return false;
+#endif
+}
+
 // The renderer's hard failures end the game with their line and a dump. Caught here: thrown on the game's stacks they
 // could not unwind through its frames.
 void submit_frame(bool present, bool black) {
     try {
         submit_frame_unchecked(present, black);
     } catch (const std::exception& error) {
+        if (restart_after_gpu_loss(error.what())) {
+            finish_and_exit(true);
+        }
         char text[1024];
         std::snprintf(text, sizeof(text), "the renderer stopped: %s", error.what());
         svc_fatal(nullptr, text);
