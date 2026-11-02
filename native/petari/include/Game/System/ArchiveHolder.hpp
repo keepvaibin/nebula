@@ -7,13 +7,13 @@
 class ArchiveHolderArchiveEntry {
 public:
     /// @brief Creates a new `ArchiveHolderArchiveEntry`.
-    ArchiveHolderArchiveEntry(void*, JKRHeap*, const char*);
+    ArchiveHolderArchiveEntry(void*, NebulaArena*, const char*);
 
     /// @brief Destroys the `ArchiveHolderArchiveEntry`.
     ~ArchiveHolderArchiveEntry();
 
     /* 0x0 */ JKRMemArchive* mArchive;
-    /* 0x4 */ JKRHeap* mHeap;
+    /* 0x4 */ NebulaArena* mHeap;
     /* 0x8 */ char* mArchiveName;
 };
 
@@ -27,7 +27,7 @@ public:
     /// @param pHeap The heap to allocate the archive in.
     /// @param pArchiveName The name of the archive.
     /// @return The pointer to the created entry.
-    ArchiveHolderArchiveEntry* createAndAdd(void*, JKRHeap*, const char*);
+    ArchiveHolderArchiveEntry* createAndAdd(void*, NebulaArena*, const char*);
 
     /// @brief Gets the archive for the given archive name.
     /// @param pArchiveName The name of the archive.
@@ -38,11 +38,11 @@ public:
     /// @param pArchiveName The name of the archive.
     /// @param pArchive The output pointer for the archive.
     /// @param pHeap The output pointer for the heap.
-    void getArchiveAndHeap(const char*, JKRArchive**, JKRHeap**) const;
+    void getArchiveAndHeap(const char*, JKRArchive**, NebulaArena**) const;
 
     /// @brief Removes entries that match the given heap.
     /// @param pHeap The heap to compare.
-    void removeIfIsEqualHeap(JKRHeap*);
+    void removeIfIsEqualHeap(NebulaArena*);
 
     /// @brief Finds the entry with the given archive name.
     /// @param pArchiveName The name of the archive.

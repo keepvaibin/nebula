@@ -1,7 +1,7 @@
 #include "Game/System/GameAssets.hpp"
 #include "Game/System/NebulaAtomic.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 #include <cstring>
 
@@ -82,7 +82,7 @@ namespace GameAssets {
         struct Mapped {
             void* mData;
             u32 mSize;
-            JKRHeap* mHeap;
+            NebulaArena* mHeap;
         };
 
         Mapped sMapped[cMappedMax];
@@ -96,7 +96,7 @@ namespace GameAssets {
             host->asset_unmap(host->user, rMapped.mData, rMapped.mSize);
         }
 
-        void* loadMapped(s32 entry, u32 size, JKRHeap* pHeap) {
+        void* loadMapped(s32 entry, u32 size, NebulaArena* pHeap) {
             const NebulaHostServices* const host = nebula_host();
             sMappedLock.lock();
             void* pData = sMappedCount < cMappedMax ? host->asset_map_private(host->user, entry) : nullptr;
@@ -104,28 +104,17 @@ namespace GameAssets {
                 Mapped& rMapped = sMapped[sMappedCount++];
                 rMapped.mData = pData;
                 rMapped.mSize = size;
-                rMapped.mHeap = pHeap != nullptr ? pHeap : JKRHeap::getCurrentHeap();
+                rMapped.mHeap = pHeap != nullptr ? pHeap : NebulaArena::getCurrentHeap();
             }
             sMappedLock.unlock();
             return pData;
         }
     }  // namespace
 
-    bool unload(void* pData) {
-        if (pData == nullptr) {
-            return false;
-        }
-        // Heap memory is the usual case. Anything else is a view: it stays until its heap goes, as a freed block's bytes
-        // and the renderer's copies of them always did.
-        const JKRHeap* const pRoot = JKRHeap::getRootHeap();
-        return pData < pRoot->getStartAddr() || pData >= pRoot->getEndAddr();
-    }
-
-    void unloadHeap(const JKRHeap* pHeap, const void* pStart, const void* pEnd) {
+    void unloadHeap(const NebulaArena* pHeap) {
         sMappedLock.lock();
         for (u32 i = 0; i < sMappedCount;) {
-            const void* const pOwner = sMapped[i].mHeap;
-            if (pOwner == pHeap || (pOwner >= pStart && pOwner < pEnd)) {
+            if (sMapped[i].mHeap == pHeap) {
                 release(sMapped[i]);
                 sMapped[i] = sMapped[--sMappedCount];
             } else {
@@ -135,7 +124,7 @@ namespace GameAssets {
         sMappedLock.unlock();
     }
 
-    void* load(s32 entry, u8* pDst, u32 maxLength, JKRHeap* pHeap, AllocDirection direction, u32* pSize) {
+    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize) {
         File file;
         if (!open(entry, &file)) {
             return nullptr;
@@ -155,7 +144,7 @@ namespace GameAssets {
         const u32 blockSize = (size + 31) & ~31u;
         const bool allocated = pDst == nullptr;
         if (allocated) {
-            pDst = static_cast< u8* >(JKRHeap::alloc(blockSize, direction == ALLOC_DIRECTION_FORWARD ? 64 : -64, pHeap));
+            pDst = static_cast< u8* >(NebulaArena::alloc(blockSize, direction == ALLOC_DIRECTION_FORWARD ? 64 : -64, pHeap));
             if (pDst == nullptr) {
                 return nullptr;
             }
@@ -173,7 +162,7 @@ namespace GameAssets {
         return pDst;
     }
 
-    void* load(const char* pPath, u8* pDst, u32 maxLength, JKRHeap* pHeap, AllocDirection direction, u32* pSize) {
+    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize) {
         const s32 entry = find(pPath);
         return entry >= 0 ? load(entry, pDst, maxLength, pHeap, direction, pSize) : nullptr;
     }

@@ -5,8 +5,8 @@
 #include "Game/System/StationedArchiveLoader.hpp"
 #include "Game/System/StationedFileInfo.hpp"
 
-class JKRExpHeap;
-class JKRHeap;
+class NebulaArena;
+class NebulaArena;
 class PlayerHeapHolder;
 
 namespace MR {
@@ -63,10 +63,10 @@ public:
     ConditionUsePlayerHeap();
 
     virtual bool isExecute(const MR::StationedFileInfo*) const;
-    virtual JKRHeap* getProperHeap(const MR::StationedFileInfo*) const;
+    virtual NebulaArena* getProperHeap(const MR::StationedFileInfo*) const;
 
-    /* 0x4 */ JKRExpHeap* mNapaHeap;
-    /* 0x8 */ JKRExpHeap* mGDDRHeap;
+    /* 0x4 */ NebulaArena* mNapaHeap;
+    /* 0x8 */ NebulaArena* mGDDRHeap;
     /* 0xC */ bool mIsDataMario;
 };
 
@@ -77,10 +77,9 @@ public:
     void dispose();
     void setIsDataMario(bool isDataMario);
 
-    static JKRExpHeap* createHeap(u32, JKRHeap*);
 
     /* 0x0 */ ConditionUsePlayerHeap* mCondition;
-    /* 0x4 */ JKRExpHeap* mNapaHeap;
-    /* 0x8 */ JKRExpHeap* mGDDRHeap;
+    /* 0x4 */ NebulaArena* mNapaHeap;
+    /* 0x8 */ NebulaArena* mGDDRHeap;
     /* 0xC */ bool mIsDataMario;
 };

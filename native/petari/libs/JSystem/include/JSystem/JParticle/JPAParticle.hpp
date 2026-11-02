@@ -3,7 +3,7 @@
 #include "JSystem/JGeometry/TVec.hpp"
 #include <NebulaGpu.h>
 
-class JKRHeap;
+class NebulaArena;
 class JPABaseEmitter;
 class JPABaseParticle;
 class JPAEmitterCallBack;

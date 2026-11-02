@@ -23,7 +23,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
@@ -124,7 +124,7 @@ void GameSystemSceneController::initializeScene() {
     mSceneInitializeState = SceneInitializeState_Init;
 
     if (SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap == nullptr || !isSameAtNextSceneAndStage()) {
-        SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap(0x1040400);
+        SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap();
     }
 
     SingletonHolder< HeapMemoryWatcher >::get()->createSceneHeapOnGameHeap();

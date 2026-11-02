@@ -13,7 +13,7 @@
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DShapeMtx.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 class J3DMtxBuffer2 : public J3DMtxBuffer {

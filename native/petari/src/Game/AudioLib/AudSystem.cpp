@@ -34,8 +34,7 @@
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JKernel/JKRArchive.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/GameAssets.hpp"
@@ -57,7 +56,7 @@ AudSystem* AudNewAudSystem_(JAUSectionHeap* pHeap, JKRArchive* pChordArchive, JK
 }
 
 namespace {
-    int init_JAS_JAI_(JKRSolidHeap* pHeap) {
+    int init_JAS_JAI_(NebulaArena* pHeap) {
         JAU_JASInitializer initJAS;
         initJAS.audioMemory_ = AudParams::aramAddr;
         initJAS.audioMemSize_ = AudParams::soundMemorySize;
@@ -84,9 +83,9 @@ namespace {
     }
 };  // namespace
 
-AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchive, JKRArchive* pChordArchive, JKRArchive* pMeArchive,
+AudSystem* AudNewAudSystem(NebulaArena* pHeap, void* pV, JKRArchive* pSeqArchive, JKRArchive* pChordArchive, JKRArchive* pMeArchive,
                            JKRArchive* pRemixArchive) {
-    JKRHeap* currHeap = JKRGetCurrentHeap();
+    NebulaArena* currHeap = NebulaArena::getCurrentHeap();
     int maxNumSeq = ::init_JAS_JAI_(pHeap);
     JAUSectionHeap* newHeap = JAUNewSectionHeap(true);
     newHeap->getHeap()->becomeCurrentHeap();
@@ -95,12 +94,10 @@ AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchiv
         if (GameAssets::find(sAudioResFile) >= 0) {
             JAUAudioArcLoader loader(newHeap);
             loader.load(sAudioResFile);
-            newHeap->getHeap()->freeTail();
         }
     } else {
         JAUAudioArcLoader loader(newHeap);
         loader.load(pV);
-        newHeap->getHeap()->freeTail();
     }
 
     u32 maxSeqDataSize = 0;
@@ -138,7 +135,7 @@ AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchiv
 
 static JAUStdSoundInfo* newSoundInfo(JAUSection* pSection) {
     JAUSection* heap = pSection;
-    JKRHeap* prevHeap = heap->getHeap_()->becomeCurrentHeap();
+    NebulaArena* prevHeap = heap->getHeap_()->becomeCurrentHeap();
 
     JAUDisposerObject_< JAUStdSoundInfo >* soundInfo = new JAUDisposerObject_< JAUStdSoundInfo >(true);
 

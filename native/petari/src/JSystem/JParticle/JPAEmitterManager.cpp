@@ -3,7 +3,7 @@
 #define JSU_LIST_DEFER_INLINE
 #include "JSystem/JParticle/JPAEmitterManager.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
@@ -32,7 +32,7 @@ void JPAEmitterManager::growParticles() {
     ptclNum *= 2;
 }
 
-JPAEmitterManager::JPAEmitterManager(u32 i_ptclNum, u32 i_emtrNum, JKRHeap* pHeap, u8 i_gidMax, u8 i_ridMax) {
+JPAEmitterManager::JPAEmitterManager(u32 i_ptclNum, u32 i_emtrNum, NebulaArena* pHeap, u8 i_gidMax, u8 i_ridMax) {
     emtrNum = i_emtrNum;
     ptclNum = i_ptclNum;
     gidMax = i_gidMax;

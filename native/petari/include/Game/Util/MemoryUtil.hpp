@@ -1,29 +1,27 @@
 #pragma once
 
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-class JKRExpHeap;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
 
 namespace MR {
     class CurrentHeapRestorer {
     public:
-        CurrentHeapRestorer(JKRHeap* pHeap);
+        CurrentHeapRestorer(NebulaArena* pHeap);
 
         ~CurrentHeapRestorer();
 
     private:
-        /* 0x00 */ JKRHeap* _0;
+        /* 0x00 */ NebulaArena* _0;
     };
 
-    JKRHeap* getCurrentHeap();
-    f32 getHeapFreeRatio(JKRHeap* pHeap);
-    JKRHeap* getAproposHeapForSceneArchive(f32 maxFreeSizeRate);
-    JKRExpHeap* getStationedHeap();
-    JKRSolidHeap* getSceneHeap();
-    void becomeCurrentHeap(JKRHeap* pHeap);
-    bool isEqualCurrentHeap(JKRHeap* pHeap);
-    void adjustHeapSize(JKRExpHeap* pHeap, const char* pParam2);
+    NebulaArena* getCurrentHeap();
+    NebulaArena* getAproposHeapForSceneArchive(f32 maxFreeSizeRate);
+    NebulaArena* getStationedHeap();
+    NebulaArena* getSceneHeap();
+    void becomeCurrentHeap(NebulaArena* pHeap);
+    bool isEqualCurrentHeap(NebulaArena* pHeap);
 
     /// @brief Copies `size` bytes from `pSrc` to `pDst`.
     /// @param pDst The pointer to the memory to copy to.

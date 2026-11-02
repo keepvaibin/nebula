@@ -5,8 +5,7 @@
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
-#include "JSystem/JKernel/JKRExpHeap.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mBase(), mSize(), mHeap() {
@@ -214,7 +213,7 @@ JASGenericMemPool::~JASGenericMemPool() {
     }
 }
 
-JKRSolidHeap* JASDram;
+NebulaArena* JASDram;
 
 void JASGenericMemPool::newMemPool(u32 size, int n) {
     void* pChunk;
@@ -233,7 +232,7 @@ void* JASGenericMemPool::alloc(u32 size) {
     if (_0 == nullptr) {
         const int num = mTotalMemCount != 0 ? mTotalMemCount : 16;
         for (int i = 0; i < num; i++) {
-            void* pChunk = new (JKRHeap::sRootHeap, 0) u8[size];
+            void* pChunk = new (NebulaArena::sRootHeap, 0) u8[size];
             *(void**)pChunk = _0;
             _0 = pChunk;
         }
@@ -263,17 +262,17 @@ void JASGenericMemPool::free(void* pMemory, u32 size) {
     mFreeMemCount++;
 }
 
-JKRHeap* JASKernel::sSystemHeap;
+NebulaArena* JASKernel::sSystemHeap;
 
 JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::sCommandHeap;
 
-void JASKernel::setupRootHeap(JKRSolidHeap* pHeap, u32 size) {
-    sSystemHeap = JKRExpHeap::create(size, pHeap, false);
+void JASKernel::setupRootHeap(NebulaArena* pHeap, u32 size) {
+    sSystemHeap = NebulaArena::create(pHeap);
     sCommandHeap = new (pHeap, 0) JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >();
     JASDram = pHeap;
 }
 
-JKRHeap* JASKernel::getSystemHeap() {
+NebulaArena* JASKernel::getSystemHeap() {
     return JASKernel::sSystemHeap;
 }
 

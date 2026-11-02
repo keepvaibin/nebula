@@ -7,7 +7,7 @@ struct JPAResourceLoader {
     JPAResourceLoader(u8 const*, JPAResourceManager*);
 };
 
-JPAResourceManager::JPAResourceManager(void const* pData, JKRHeap* pHeap) {
+JPAResourceManager::JPAResourceManager(void const* pData, NebulaArena* pHeap) {
     mpResArr = NULL;
     mpTexArr = NULL;
     mResMax = 0;

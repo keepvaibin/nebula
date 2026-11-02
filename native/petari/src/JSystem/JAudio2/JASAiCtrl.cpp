@@ -14,7 +14,7 @@
 #include <nebula_game_api.h>
 #include <nebula_threads.h>
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 
 // The host's audio clock asks for each frame (nebula_game_sound_frame, raised on the audio thread as its event): the
@@ -33,11 +33,11 @@ namespace {
 extern "C" NEBULA_GAME_API void nebula_game_sound_frame(void) {
     __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
     GameThreads::enterAudio();
-    JKRHeap* const previous = JKRHeap::sCurrentHeap;
-    JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
+    NebulaArena* const previous = NebulaArena::sCurrentHeap;
+    NebulaArena::sCurrentHeap = NebulaArena::sSystemHeap;
     JASDriver::updateFrame();
     JASDriver::updateFrameCallback();
-    JKRHeap::sCurrentHeap = previous;
+    NebulaArena::sCurrentHeap = previous;
     GameThreads::leaveAudio();
 }
 

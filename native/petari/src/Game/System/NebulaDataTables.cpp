@@ -3,7 +3,7 @@
 #include "Game/System/GameEventFlag.hpp"
 #include "Game/System/GameAssets.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <cstring>
 
@@ -18,7 +18,7 @@ namespace {
 
     // A file of the folder read into `pHeap` (straight from the store: the file loader may not run yet); null when the
     // disc has none of that name.
-    u8* load(const char* pName, bool required, JKRHeap* pHeap) {
+    u8* load(const char* pName, bool required, NebulaArena* pHeap) {
         char path[64];
         nebula_snprintf(path, sizeof(path), "/NebulaData/%s", pName);
         GameAssets::File file;
@@ -28,7 +28,7 @@ namespace {
             }
             return nullptr;
         }
-        u8* pData = static_cast< u8* >(JKRHeap::alloc(file.mLength, 32, pHeap));
+        u8* pData = static_cast< u8* >(NebulaArena::alloc(file.mLength, 32, pHeap));
         if (pData == nullptr || GameAssets::read(&file, pData, file.mLength, 0) < static_cast< s32 >(file.mLength)) {
             NEBULA_PANIC("%s cannot be read", path);
         }
@@ -65,7 +65,7 @@ namespace NebulaDataTables {
         return sTable;
     }
 
-    void* loadErrorMessageArchive(JKRHeap* pHeap) {
+    void* loadErrorMessageArchive(NebulaArena* pHeap) {
         return load("ErrorMessageArchive.arc", true, pHeap);
     }
 

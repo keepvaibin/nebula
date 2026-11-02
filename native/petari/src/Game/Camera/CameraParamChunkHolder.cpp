@@ -6,7 +6,7 @@
 #include "Game/Camera/DotCamParams.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
 #define CHUNK_CAPACITY 0x400
@@ -19,7 +19,7 @@ CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, cons
 CameraParamChunkHolder::~CameraParamChunkHolder() {
 }
 
-CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, JKRHeap* pHeap) {
+CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, NebulaArena* pHeap) {
     if (isNewAttribute(rID)) {
         char firstChar = rID.mName[0];
         CameraParamChunk* chunk;

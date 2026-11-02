@@ -9,7 +9,7 @@ class JAUSoundAnimationSound;
 
 class AudAnmSoundObject : public AudSoundObject, public JAUSoundAnimator {
 public:
-    AudAnmSoundObject(TVec3f*, u8, JKRHeap*);
+    AudAnmSoundObject(TVec3f*, u8, NebulaArena*);
 
     void update(f32);
     void modifySoundParams(JASSoundParams*, const JAUSoundAnimationSound*, f32);

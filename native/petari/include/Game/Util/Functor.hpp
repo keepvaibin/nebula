@@ -1,12 +1,12 @@
 #pragma once
 
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 namespace MR {
     class FunctorBase {
     public:
         virtual void operator()() const = 0;
-        virtual FunctorBase* clone(JKRHeap*) const = 0;
+        virtual FunctorBase* clone(NebulaArena*) const = 0;
     };
 
     template < typename T, typename U >
@@ -22,7 +22,7 @@ namespace MR {
             (mCaller->*mCallee)();
         }
 
-        virtual FunctorBase* clone(JKRHeap* pHeap) const {
+        virtual FunctorBase* clone(NebulaArena* pHeap) const {
             return new (pHeap, 0) FunctorV0M(*this);
         };
 
@@ -46,7 +46,7 @@ namespace MR {
             (mCaller->*mCallee)(mArg0);
         }
 
-        virtual FunctorBase* clone(JKRHeap* pHeap) const {
+        virtual FunctorBase* clone(NebulaArena* pHeap) const {
             return new (pHeap, 0) FunctorV1M(*this);
         };
 
@@ -72,7 +72,7 @@ namespace MR {
             (mCaller->*mCallee)(mArg0, mArg1);
         }
 
-        virtual FunctorBase* clone(JKRHeap* pHeap) const {
+        virtual FunctorBase* clone(NebulaArena* pHeap) const {
             return new (pHeap, 0) FunctorV2M(*this);
         };
 
@@ -124,7 +124,7 @@ namespace MR {
         virtual void operator()() const {
             (*mFunc)();
         }
-        virtual FunctorBase* clone(JKRHeap* pHeap) const {
+        virtual FunctorBase* clone(NebulaArena* pHeap) const {
             return new (pHeap, 0) FunctorV0F(*this);
         }
 

@@ -3,7 +3,7 @@
 #include <JSystem/JAudio2/JASCalc.hpp>
 #include <JSystem/JAudio2/JASGlobal.hpp>
 
-SpkMixingBuffer::SpkMixingBuffer(JKRHeap* pHeap) {
+SpkMixingBuffer::SpkMixingBuffer(NebulaArena* pHeap) {
     for (int i = 0; i < 4; i++) {
         mSamples[i] = new (pHeap, 0) s16[40];
         JASCalc::bzero((void*)mSamples[i], sizeof(s16) * 40);

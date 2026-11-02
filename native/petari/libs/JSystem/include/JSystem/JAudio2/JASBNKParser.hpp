@@ -6,7 +6,7 @@
 
 class JASBank;
 class JASBasicBank;
-class JKRHeap;
+class NebulaArena;
 
 // Banks (IBNK version 1) in host order, as the importer cooks the audio archive (native_data.rs bank).
 namespace JASBNKParser {
@@ -82,8 +82,8 @@ namespace JASBNKParser {
         };
 
         TChunk* findChunk(void const*, u32);
-        JASInstEffect* createEffector(void const*, JKRHeap*);
-        JASBasicBank* createBasicBank(void const*, JKRHeap*);
+        JASInstEffect* createEffector(void const*, NebulaArena*);
+        JASBasicBank* createBasicBank(void const*, NebulaArena*);
     };  // namespace Ver1
 
     namespace Ver0 {
@@ -170,18 +170,17 @@ namespace JASBNKParser {
             /* 0x20 */ TOffsetData mOffsets;
         };
 
-        JASBasicBank* createBasicBank(void const*, JKRHeap*);
+        JASBasicBank* createBasicBank(void const*, NebulaArena*);
         inline JASOscillator::Data* findOscPtr(JASBasicBank*, THeader const*, TOsc const*);
         JASOscillator::Point const* getOscTableEndPtr(JASOscillator::Point const*);
     };  // namespace Ver0
 
-    JASBank* createBank(void const*, JKRHeap*);
-    JASBasicBank* createBasicBank(void const*, JKRHeap*);
+    JASBank* createBank(void const*, NebulaArena*);
+    JASBasicBank* createBasicBank(void const*, NebulaArena*);
 
     inline u32 getBankNumber(const void* param_0) {
         u32* ptr = (u32*)param_0;
         return ptr[2];
     }
 
-    extern u32 sUsedHeapSize;
 };  // namespace JASBNKParser

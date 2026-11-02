@@ -4,7 +4,7 @@
 // ("/StageData/EggStarGalaxy.arc"); a file's entry names it as the game's tables do.
 
 
-class JKRHeap;
+class NebulaArena;
 
 namespace GameAssets {
     struct File {
@@ -35,13 +35,11 @@ namespace GameAssets {
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset);
     // The file's bytes in the mapped store, read-only, for the process's life; may wait for the drive.
     const void* map(s32 entryNum);
-    // Whether `pData` is a file load() mapped: a free of it does nothing, it goes with its heap.
-    bool unload(void* pData);
-    // Every file mapped for a heap or a heap inside it (the memory it had, `pStart` to `pEnd`): a scene-level heap has gone.
-    void unloadHeap(const JKRHeap* pHeap, const void* pStart, const void* pEnd);
+    // Every file mapped for this arena: its views go with it.
+    void unloadHeap(const NebulaArena* pHeap);
 
     // A whole file, or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
     // current heap when null): null when there is no such file. A block ends at a 32-byte boundary, zeroed past the file.
-    void* load(const char* pPath, u8* pDst, u32 maxLength, JKRHeap* pHeap, AllocDirection direction, u32* pSize);
-    void* load(s32 entry, u8* pDst, u32 maxLength, JKRHeap* pHeap, AllocDirection direction, u32* pSize);
+    void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize);
+    void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize);
 }  // namespace GameAssets

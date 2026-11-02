@@ -6,9 +6,9 @@
 #include <JSystem/JAudio2/JAISound.hpp>
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASTrack.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-AudRhythmMeSystem::AudRhythmMeSystem(JKRHeap* pHeap, u32 numSeqParsers, bool hasMgr)
+AudRhythmMeSystem::AudRhythmMeSystem(NebulaArena* pHeap, u32 numSeqParsers, bool hasMgr)
     : JASGlobalInstance< AudRhythmMeSystem >(true), mBgmIdx(), _C(), mMeMgr() {
     mSeqParsers = new (pHeap, 0) AudRhythmSeqParser*[numSeqParsers];
     mRhythmHolders = new (pHeap, 0) AudRhythmHolder[numSeqParsers];

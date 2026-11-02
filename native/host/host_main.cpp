@@ -2474,16 +2474,48 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
     return disc_entry_out(disc_table().child(folder, child), out);
 }
 
-// The game's memory. GALAXY_TEST_MEMORY_AT places it, far from the file views and across a 4 GB line, so an address squeezed
-// through 32 bits fails in every run.
-void* svc_memory_block(void*, uint64_t size) {
+// The game's memory. GALAXY_TEST_MEMORY_AT places the first arena (the next follow), far from the file views and across a 4 GB
+// line, so an address squeezed through 32 bits fails in every run.
+void* svc_memory_reserve(void*, uint64_t size) {
 #if defined(_WIN32)
-    const char* at = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_MEMORY_AT"));
-    return VirtualAlloc(at != nullptr ? reinterpret_cast<void*>(static_cast<uintptr_t>(std::strtoull(at, nullptr, 16))) : nullptr,
-                        static_cast<SIZE_T>(size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    static uintptr_t at = [] {
+        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_MEMORY_AT"));
+        return value != nullptr ? static_cast<uintptr_t>(std::strtoull(value, nullptr, 16)) : uintptr_t{0};
+    }();
+    void* const block = VirtualAlloc(reinterpret_cast<void*>(at), static_cast<SIZE_T>(size), MEM_RESERVE, PAGE_NOACCESS);
+    if (at != 0u) {
+        at += static_cast<uintptr_t>(size);
+    }
+    return block;
 #else
     void* const block = mmap(nullptr, static_cast<size_t>(size), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     return block != MAP_FAILED ? block : nullptr;
+#endif
+}
+
+int svc_memory_commit(void*, void* start, uint64_t size) {
+#if defined(_WIN32)
+    return VirtualAlloc(start, static_cast<SIZE_T>(size), MEM_COMMIT, PAGE_READWRITE) != nullptr ? 1 : 0;
+#else
+    (void)start, (void)size;
+    return 1;
+#endif
+}
+
+void svc_memory_decommit(void*, void* start, uint64_t size) {
+#if defined(_WIN32)
+    VirtualFree(start, static_cast<SIZE_T>(size), MEM_DECOMMIT);
+#else
+    madvise(start, static_cast<size_t>(size), MADV_DONTNEED);
+#endif
+}
+
+void svc_memory_release(void*, void* start, uint64_t size) {
+#if defined(_WIN32)
+    (void)size;
+    VirtualFree(start, 0, MEM_RELEASE);
+#else
+    munmap(start, static_cast<size_t>(size));
 #endif
 }
 
@@ -4148,7 +4180,10 @@ int main(int argc, char** argv) {
     services.asset_entry = svc_asset_entry;
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
-    services.memory_block = svc_memory_block;
+    services.memory_reserve = svc_memory_reserve;
+    services.memory_commit = svc_memory_commit;
+    services.memory_decommit = svc_memory_decommit;
+    services.memory_release = svc_memory_release;
     services.thread_create = svc_thread_create;
     services.thread_adopt = svc_thread_adopt;
     services.thread_pass = svc_thread_pass;

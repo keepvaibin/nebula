@@ -9,7 +9,7 @@
 #include "Game/System/GameSystemFontHolder.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1387,15 +1387,7 @@ namespace {
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
         const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 7u) & ~7u;
         const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
-        JKRHeap* pHeap = MR::getStationedHeap();
-        u8* pBlock = bytes <= NebulaIcons::cStationedBytes && pHeap != nullptr && pHeap->getFreeSize() >= static_cast< s32 >(bytes + 64u)
-                         ? static_cast< u8* >(JKRHeap::alloc(bytes, 32, pHeap))
-                         : nullptr;
-        if (pBlock == nullptr) {
-            JUTNativeLog("NebulaIcons: no room for the icons (%u bytes, the stationed heap has %d); they stay the Wii's\n", bytes,
-                     pHeap != nullptr ? pHeap->getFreeSize() : -1);
-            return FontUnusable;
-        }
+        u8* pBlock = static_cast< u8* >(NebulaArena::alloc(bytes, 32, MR::getStationedHeap()));
         memcpy(pBlock, pGlyph->sheetImage, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {

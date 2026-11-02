@@ -5,8 +5,8 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "Game/System/GameThreads.hpp"
 
-class JKRHeap;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
 
 struct JASDisposer {
     JASDisposer() {

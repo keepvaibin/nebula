@@ -1,7 +1,7 @@
 #include "JSystem/JKernel/JKRArchive.hpp"
 
 #include "JSystem/JKernel/JKRFileFinder.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JKernel/JKRMemArchive.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -27,9 +27,9 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {
     return nullptr;
 }
 
-JKRArchive* JKRArchive::check_mount_already(s32 entryNum, JKRHeap* pHeap) {
+JKRArchive* JKRArchive::check_mount_already(s32 entryNum, NebulaArena* pHeap) {
     if (pHeap == nullptr) {
-        pHeap = JKRHeap::sCurrentHeap;
+        pHeap = NebulaArena::sCurrentHeap;
     }
 
     JKRFileLoader::sVolumeListMutex.lock();
@@ -51,7 +51,7 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum, JKRHeap* pHeap) {
     return nullptr;
 }
 
-JKRArchive* JKRArchive::mount(const char* pName, EMountMode mountMode, JKRHeap* pHeap, EMountDirection mountDir) {
+JKRArchive* JKRArchive::mount(const char* pName, EMountMode mountMode, NebulaArena* pHeap, EMountDirection mountDir) {
     s32 entryNum = GameAssets::find(pName);
 
     if (entryNum < 0) {
@@ -61,7 +61,7 @@ JKRArchive* JKRArchive::mount(const char* pName, EMountMode mountMode, JKRHeap* 
     return mount(entryNum, mountMode, pHeap, mountDir);
 }
 
-JKRArchive* JKRArchive::mount(s32 entryNum, EMountMode mountMode, JKRHeap* pHeap, EMountDirection mountDir) {
+JKRArchive* JKRArchive::mount(s32 entryNum, EMountMode mountMode, NebulaArena* pHeap, EMountDirection mountDir) {
     JKRArchive* archive = check_mount_already(entryNum, pHeap);
 
     if (archive != nullptr) {
@@ -235,7 +235,7 @@ void JKRArchive::removeResourceAll() {
         SDIFileEntry* current = mFiles;
         for (u32 i = 0; i < mInfoBlock->mNrFiles; i++) {
             if (fileData(current) != nullptr) {
-                JKRHeap::free(fileData(current), mHeap);
+                NebulaArena::free(fileData(current), mHeap);
                 fileData(current) = nullptr;
             }
 
@@ -252,7 +252,7 @@ bool JKRArchive::removeResource(void* pResource) {
     }
 
     fileData(file) = nullptr;
-    JKRHeap::free(pResource, mHeap);
+    NebulaArena::free(pResource, mHeap);
 
     return true;
 }
@@ -329,7 +329,7 @@ JKRArcFinder* JKRArchive::getFirstFile(const char* pName) const {
     }
 
     if (dir != nullptr) {
-        return new (JKRHeap::sSystemHeap, 0) JKRArcFinder(const_cast< JKRArchive* >(this), dir->mFirstFileIndex, dir->mNrFiles);
+        return new (NebulaArena::sSystemHeap, 0) JKRArcFinder(const_cast< JKRArchive* >(this), dir->mFirstFileIndex, dir->mNrFiles);
     }
 
     return nullptr;

@@ -1,6 +1,6 @@
 #include "Game/RhythmLib/AudMeObject.hpp"
 
-AudMeObject::AudMeObject(TVec3f* pPos, u8 numHandles, JKRHeap* pHeap)
+AudMeObject::AudMeObject(TVec3f* pPos, u8 numHandles, NebulaArena* pHeap)
     : AudMeHandles(new(pHeap, 0) AudMeHandle[numHandles], numHandles), mPos(pPos), mIsAllocated(true) {
 }
 

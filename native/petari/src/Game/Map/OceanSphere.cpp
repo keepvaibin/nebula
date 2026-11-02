@@ -16,7 +16,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/NativeMesh.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 NebulaColor8 sOceanSphereTevReg0Face = {0x48, 0x80, 0xBE, 0x1C};
