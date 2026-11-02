@@ -138,10 +138,6 @@ void set_game_area_light(GameAreaLightKind kind, const GameAreaLight& light) noe
 // The latest of `kind` when reported within `max_age_ms`.
 [[nodiscard]] bool game_area_light(GameAreaLightKind kind, GameAreaLight& out, std::uint64_t max_age_ms) noexcept;
 
-// Simulation thread (native game): a game object's name (NameObj::mName) by the id its host markers carry.
-void note_object_name(std::uint64_t id, const char* name) noexcept;
-// Any thread: that name into `out` (NUL-terminated, cut to `size`); false when the game never named `id`.
-bool game_object_name(std::uint64_t id, char* out, std::size_t size) noexcept;
 // Simulation thread: an actor asking for the game's one point light this frame (MR::requestPointLight: Lumas,
 // Power Stars, item blocks, fireballs, Boos), as its own light. While requests arrive, the one light the game hands
 // to the requester nearest the player (note_game_point_light) is not noted again.

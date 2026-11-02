@@ -1,6 +1,5 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
-#include "Inline.hpp"
 #include <JSystem/JMath.hpp>
 
 ParallelGravity::ParallelGravity()

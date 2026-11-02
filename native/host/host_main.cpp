@@ -949,6 +949,8 @@ void report_thread_cpu(double tsc_hz) {
 }
 #endif
 
+std::string gSceneStage;
+
 #if defined(_WIN32)
 // Crash reports. A fatal exception in the game module or the host, or the game's own fatal call, writes a minidump and
 // the report (report_crash_facts) to the crash folder from a thread kept for it (the failing thread's stack may be what
@@ -1024,6 +1026,7 @@ void report_crash(EXCEPTION_POINTERS* info) {
                                                       ? info->ExceptionRecord->ExceptionInformation[1]
                                                       : 0));
     log_line("crash:", text);
+    log_line("crash: stage", gSceneStage.c_str());
     gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == GetModuleHandleW(L"smg_game.dll"),
                        code == EXCEPTION_STACK_OVERFLOW);
     report_crash(info);
@@ -1293,21 +1296,11 @@ void submit_frame(bool present, bool black) {
 #endif
 
 // The stage the game reports before each 3D scene (game_stage); the scene's begin marker carries it.
-std::string gSceneStage;
 
 void svc_game_stage(void*, const char* name) {
     if (name != nullptr && gSceneStage != name) {
         gSceneStage = name;
     }
-}
-
-void svc_object_name(void*, uint64_t id, const char* name) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::note_object_name(id, name);
-#else
-    (void)id;
-    (void)name;
-#endif
 }
 
 // The Discord application Nebula's status shows under ("Super Mario Galaxy"; GALAXY_DISCORD_CLIENT_ID replaces it).
@@ -2544,6 +2537,28 @@ const void* svc_asset_map(void*, int32_t file) {
         return nullptr;
     }
     return gPak.store.map(entry->position, static_cast<std::size_t>(entry->length));
+}
+
+void* svc_asset_map_private(void*, int32_t file) {
+    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    if (!entry || entry->folder) {
+        return nullptr;
+    }
+    void* const data = gPak.store.map_private(entry->position, static_cast<std::size_t>(entry->length));
+    static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    if (trace_reads) {
+        std::fprintf(stderr, "[read] retrace %llu entry %d mapped size %llu %s at %p\n", static_cast<unsigned long long>(gDeterministicRetraces.load()), file,
+                     static_cast<unsigned long long>(entry->length), entry->name != nullptr ? entry->name : "?", data);
+    }
+    return data;
+}
+
+void svc_asset_unmap(void*, void* data, uint64_t size) {
+    static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    if (trace_reads) {
+        std::fprintf(stderr, "[read] retrace %llu unmapped %p size %llu\n", static_cast<unsigned long long>(gDeterministicRetraces.load()), data, static_cast<unsigned long long>(size));
+    }
+    gPak.store.unmap_private(data, static_cast<std::size_t>(size));
 }
 
 void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst, uint32_t slot) {
@@ -4057,6 +4072,8 @@ int main(int argc, char** argv) {
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
     services.asset_map = svc_asset_map;
+    services.asset_map_private = svc_asset_map_private;
+    services.asset_unmap = svc_asset_unmap;
     services.game_id = svc_game_id;
     services.frame_wait = svc_frame_wait;
     services.frame_begun = svc_frame_begun;
@@ -4083,7 +4100,6 @@ int main(int argc, char** argv) {
     services.option = svc_option;
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
-    services.object_name = svc_object_name;
 #if defined(NEBULA_HOST_RENDERER)
     // The display configuration (GALAXY_RENDER_CONFIG_PATH in tests), loaded before the window; the settings overlay
     // reads its frame art from the game files.

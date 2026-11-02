@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 98u
+#define NEBULA_GAME_API_VERSION 100u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -929,6 +929,10 @@ typedef struct NebulaHostServices {
     /* A file's bytes in the mapped store, read-only, for the process's life, on their way into memory when this returns
        (call it where a wait for the drive does no harm); null if there is no such file. */
     const void* (*asset_map)(void* user, int32_t file);
+    /* A file's bytes as the game's own memory: writes stay in this process. Null if it cannot be had (read the file then).
+       Each ends with asset_unmap. */
+    void* (*asset_map_private)(void* user, int32_t file);
+    void (*asset_unmap)(void* user, void* data, uint64_t size);
     /* The game's id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
        whose few differences the module follows (NebulaRegion.hpp) and whose folder holds its saves. */
     const char* (*game_id)(void* user);
@@ -1004,9 +1008,6 @@ typedef struct NebulaHostServices {
     void (*game_light)(void* user, uint32_t kind, uint64_t id, const float* values);
     /* The stage being played (MR::getCurrentStageName), before each 3D scene's begin marker. */
     void (*game_stage)(void* user, const char* name);
-    /* A game object's name (NameObj::mName, Shift-JIS as the game spells it) when it is made or renamed; `id` is the
-       object's address, as the host markers name it. */
-    void (*object_name)(void* user, uint64_t id, const char* name);
     /* A movie (MovieStream): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
        (the frame within the movie, its frame rate and its Y, U and V planes, `width` x
        `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement

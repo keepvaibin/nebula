@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 
 class JKRExpHeap;
 class JKRHeap;

@@ -288,6 +288,7 @@ it (`asset_map`), and its pages are the file's: no commit, and the system can dr
 | wave archives | 48 MB and more in the sound memory | none: mapped |
 | streams | a whole file in the heap each (29 MB for one) | none: mapped |
 | images of dead scenes | grew to 404 MB over a tour | gone with their scene's heap |
+| archives | read into the heaps | private views of the store: only written pages are the game's |
 | game block | 512 MB committed | 385 MB committed, about 80 MB in memory |
 
 ## Planned, measured before adopted (H)

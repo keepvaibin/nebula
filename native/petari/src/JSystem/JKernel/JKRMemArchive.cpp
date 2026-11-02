@@ -138,7 +138,10 @@ bool JKRMemArchive::open(void* pData, u32 a2, JKRMemBreakFlag breakFlag) {
     mStringTable = reinterpret_cast< char* >(&reinterpret_cast< u8* >(mInfoBlock)[mInfoBlock->mStringTableOffset]);
     mFileDataStart = reinterpret_cast< u8* >(mHeader->mFileDataOffset + (reinterpret_cast< uintptr_t >(mHeader) + mHeader->mHeaderSize));
     _6C = breakFlag == JKR_MEM_BREAK_FLAG_1;
-    mHeap = JKRHeap::findFromRoot(pData);
+    // A file mapped from the store is in no heap: the archive keeps the one it lives in.
+    if (JKRHeap* const pHeap = JKRHeap::findFromRoot(pData)) {
+        mHeap = pHeap;
+    }
 
     return true;
 }

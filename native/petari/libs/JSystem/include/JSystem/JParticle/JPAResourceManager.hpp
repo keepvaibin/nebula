@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 #include "JSystem/JParticle/JPATexture.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -20,10 +19,6 @@ public:
     u32 getResUserWork(u16) const;
 
     void load(u16 idx, GpuTexMapID texMapID) {
-        CALL_INLINE_FUNC(load, idx, texMapID);
-    }
-
-    inline void INLINE_FUNC_DECL(load, u16 idx, GpuTexMapID texMapID) {
         mpTexArr[idx]->load(texMapID);
     }
 
