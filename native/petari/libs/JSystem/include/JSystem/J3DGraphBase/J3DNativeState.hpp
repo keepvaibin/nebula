@@ -29,18 +29,18 @@ namespace J3DNativeState {
     void setCurrentMtx(u32 id);
     void setLineWidth(u8 width, GpuTexOffset texOffsets);
     void setPointSize(u8 size, GpuTexOffset texOffsets);
-    // Lights: a GpuLightObj holds a J3DNativeLight; the GpuInitLight* functions' arithmetic, then the light sent.
-    void initLightColor(GpuLightObj* pObj, NebulaColor8 color);
-    void initLightPos(GpuLightObj* pObj, f32 x, f32 y, f32 z);
-    void initLightDir(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz);
+    // Lights:
+    void initLightColor(J3DNativeLight* pObj, NebulaColor8 color);
+    void initLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z);
+    void initLightDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz);
     // A specular light: its direction as a light at infinity, with the half-angle vector (computed for a viewer down
     // -Z, or given).
-    void initSpecularDir(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz);
-    void initSpecularDirHA(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz);
-    void initLightAttn(GpuLightObj* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2);
-    void initLightSpot(GpuLightObj* pObj, f32 cutoff, GpuSpotFn spotFn);
-    void initLightDistAttn(GpuLightObj* pObj, f32 refDistance, f32 refBrightness, GpuDistAttnFn distFn);
-    void loadLightObjImm(const GpuLightObj* pObj, GpuLightID id);
+    void initSpecularDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz);
+    void initSpecularDirHA(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz);
+    void initLightAttn(J3DNativeLight* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2);
+    void initLightSpot(J3DNativeLight* pObj, f32 cutoff, GpuSpotFn spotFn);
+    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, GpuDistAttnFn distFn);
+    void loadLightObjImm(const J3DNativeLight* pObj, GpuLightID id);
     // Whether the frame keeps alpha (the last value kept here: the host changes only when it differs).
     void setFrameAlpha(bool keepAlpha);
     // The drawing state the game starts from (what GpuInit set on the console), sent before anything is drawn.
@@ -68,9 +68,9 @@ void J3DNativeStateSetTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuT
 void J3DNativeStateSetCurrentMtx(u32 id);
 void J3DNativeStateSetLineWidth(u8 width, GpuTexOffset texOffsets);
 void J3DNativeStateSetPointSize(u8 size, GpuTexOffset texOffsets);
-void J3DNativeStateInitLightColor(GpuLightObj* pObj, NebulaColor8 color);
-void J3DNativeStateInitLightPos(GpuLightObj* pObj, f32 x, f32 y, f32 z);
-void J3DNativeStateLoadLightObjImm(const GpuLightObj* pObj, GpuLightID id);
+void J3DNativeStateInitLightColor(J3DNativeLight* pObj, NebulaColor8 color);
+void J3DNativeStateInitLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z);
+void J3DNativeStateLoadLightObjImm(const J3DNativeLight* pObj, GpuLightID id);
 void J3DNativeStateEnableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
 void J3DNativeStateSetCullMode(GpuCullMode mode);
 void J3DNativeStateGetCullMode(GpuCullMode* pMode);

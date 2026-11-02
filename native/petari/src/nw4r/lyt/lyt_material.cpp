@@ -556,7 +556,7 @@ namespace nw4r {
                 for (int i = 0; i < mNum.texCoordGen; i++) {
                     u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
-                    if (pTexCoordGen[i].GetTexGenType() == GX_TG_MTX2x4 && texMtx != GPU_IDENTITY) {
+                    if (pTexCoordGen[i].GetTexGenType() == GPU_TG_MTX2x4 && texMtx != GPU_IDENTITY) {
                         useTexMtx[GetTexMtxIdx(texMtx)] = true;
                         setTexMtx = true;
                     }

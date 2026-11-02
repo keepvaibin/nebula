@@ -532,7 +532,7 @@ namespace J3DNativeMaterial {
             pOut->texture_matrix[i].present = 1;
             pOut->texture_matrix[i].listed = i < pOut->tex_gens && pTexGen->getTexCoord(i)->getTexGenMtx() != GPU_IDENTITY;
             pOut->texture_matrix[i].id = static_cast< u8 >(post ? i * 3 + 0x40 : i * 3 + 30);
-            pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != GX_MTX2x4 ? 3 : 2;
+            pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != GPU_MTX2x4 ? 3 : 2;
             memcpy(pVal->texture_matrix[i], pMtx->getMtx(), sizeof(pVal->texture_matrix[i]));
         }
         for (u32 i = 0; i < 2; i++) {

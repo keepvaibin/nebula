@@ -53,18 +53,6 @@ typedef enum _GpuCopyClamp {
 } GpuCopyClamp;
 */
 
-typedef enum _GpuVtxFmt {
-  GPU_VTXFMT0 = 0,
-  GPU_VTXFMT1,
-  GPU_VTXFMT2,
-  GPU_VTXFMT3,
-  GPU_VTXFMT4,
-  GPU_VTXFMT5,
-  GPU_VTXFMT6,
-  GPU_VTXFMT7,
-  GPU_MAX_VTXFMT
-} GpuVtxFmt;
-
 typedef enum _GpuAttrType {
   GPU_NONE = 0,
   GPU_DIRECT,
@@ -87,8 +75,8 @@ typedef enum _GpuTexCoordID {
 } GpuTexCoordID;
 
 typedef enum _GpuTexGenType {
-  GX_TG_MTX3x4 = 0,
-  GX_TG_MTX2x4,
+  GPU_TG_MTX3x4 = 0,
+  GPU_TG_MTX2x4,
   GPU_TG_BUMP0,
   GPU_TG_BUMP1,
   GPU_TG_BUMP2,
@@ -169,34 +157,6 @@ typedef enum _GpuTexMapID {
   GPU_TEX_DISABLE = 0x100
 } GpuTexMapID;
 
-typedef enum _GpuIndTexFormat {
-  GPU_ITF_8,
-  GPU_ITF_5,
-  GPU_ITF_4,
-  GPU_ITF_3,
-  GPU_MAX_ITFORMAT
-} GpuIndTexFormat;
-
-typedef enum _GpuIndTexBiasSel {
-  GPU_ITB_NONE,
-  GPU_ITB_S,
-  GPU_ITB_T,
-  GPU_ITB_ST,
-  GPU_ITB_U,
-  GPU_ITB_SU,
-  GPU_ITB_TU,
-  GPU_ITB_STU,
-  GPU_MAX_ITBIAS
-} GpuIndTexBiasSel;
-
-typedef enum _GpuIndTexAlphaSel {
-  GPU_ITBA_OFF,
-  GPU_ITBA_S,
-  GPU_ITBA_T,
-  GPU_ITBA_U,
-  GPU_MAX_ITBALPHA
-} GpuIndTexAlphaSel;
-
 typedef enum _GpuIndTexMtxID {
   GPU_ITM_OFF,
   GPU_ITM_0,
@@ -210,59 +170,7 @@ typedef enum _GpuIndTexMtxID {
   GPU_ITM_T2
 } GpuIndTexMtxID;
 
-typedef enum _GpuIndTexWrap {
-  GPU_ITW_OFF,
-  GPU_ITW_256,
-  GPU_ITW_128,
-  GPU_ITW_64,
-  GPU_ITW_32,
-  GPU_ITW_16,
-  GPU_ITW_0,
-  GPU_MAX_ITWRAP
-} GpuIndTexWrap;
-
 /********************************/
-typedef enum _GpuIndTexScale {
-  GPU_ITS_1,
-  GPU_ITS_2,
-  GPU_ITS_4,
-  GPU_ITS_8,
-  GPU_ITS_16,
-  GPU_ITS_32,
-  GPU_ITS_64,
-  GPU_ITS_128,
-  GPU_ITS_256,
-  GPU_MAX_ITSCALE
-} GpuIndTexScale;
-
-typedef enum _GpuIndTexStageID {
-  GPU_INDTEXSTAGE0,
-  GPU_INDTEXSTAGE1,
-  GPU_INDTEXSTAGE2,
-  GPU_INDTEXSTAGE3,
-  GPU_MAX_INDTEXSTAGE
-} GpuIndTexStageID;
-
-typedef enum _GpuTevStageID {
-  GPU_TEVSTAGE0,
-  GPU_TEVSTAGE1,
-  GPU_TEVSTAGE2,
-  GPU_TEVSTAGE3,
-  GPU_TEVSTAGE4,
-  GPU_TEVSTAGE5,
-  GPU_TEVSTAGE6,
-  GPU_TEVSTAGE7,
-  GPU_TEVSTAGE8,
-  GPU_TEVSTAGE9,
-  GPU_TEVSTAGE10,
-  GPU_TEVSTAGE11,
-  GPU_TEVSTAGE12,
-  GPU_TEVSTAGE13,
-  GPU_TEVSTAGE14,
-  GPU_TEVSTAGE15,
-  GPU_MAX_TEVSTAGE
-} GpuTevStageID;
-
 typedef enum _GpuTexFmt {
 #define _GX_TF_CTF 0x20 /* copy-texture-format only */
 #define _GX_TF_ZTF 0x10 /* Z-texture-format */
@@ -305,8 +213,6 @@ typedef enum _GpuCullMode {
   GPU_CULL_BACK,
   GPU_CULL_ALL
 } GpuCullMode;
-
-typedef enum _GpuClipMode { GPU_CLIP_ENABLE = 0, GPU_CLIP_DISABLE = 1 } GpuClipMode;
 
 typedef enum _GpuTexWrapMode {
   GPU_CLAMP,
@@ -412,13 +318,6 @@ typedef enum _GpuTevAlphaArg {
   GPU_CA_ZERO
 } GpuTevAlphaArg;
 
-typedef enum _GpuTevBias {
-  GPU_TB_ZERO,
-  GPU_TB_ADDHALF,
-  GPU_TB_SUBHALF,
-  GPU_MAX_TEVBIAS
-} GpuTevBias;
-
 typedef enum _GpuTevKColorID {
   GPU_KCOLOR0 = 0,
   GPU_KCOLOR1,
@@ -427,76 +326,6 @@ typedef enum _GpuTevKColorID {
   GPU_MAX_KCOLOR
 } GpuTevKColorID;
 
-typedef enum _GpuTevKColorSel {
-  GPU_TEV_KCSEL_8_8 = 0x00,
-  GPU_TEV_KCSEL_7_8 = 0x01,
-  GPU_TEV_KCSEL_6_8 = 0x02,
-  GPU_TEV_KCSEL_5_8 = 0x03,
-  GPU_TEV_KCSEL_4_8 = 0x04,
-  GPU_TEV_KCSEL_3_8 = 0x05,
-  GPU_TEV_KCSEL_2_8 = 0x06,
-  GPU_TEV_KCSEL_1_8 = 0x07,
-
-  GPU_TEV_KCSEL_1 = GPU_TEV_KCSEL_8_8,
-  GPU_TEV_KCSEL_3_4 = GPU_TEV_KCSEL_6_8,
-  GPU_TEV_KCSEL_1_2 = GPU_TEV_KCSEL_4_8,
-  GPU_TEV_KCSEL_1_4 = GPU_TEV_KCSEL_2_8,
-
-  GPU_TEV_KCSEL_K0 = 0x0C,
-  GPU_TEV_KCSEL_K1 = 0x0D,
-  GPU_TEV_KCSEL_K2 = 0x0E,
-  GPU_TEV_KCSEL_K3 = 0x0F,
-  GPU_TEV_KCSEL_K0_R = 0x10,
-  GPU_TEV_KCSEL_K1_R = 0x11,
-  GPU_TEV_KCSEL_K2_R = 0x12,
-  GPU_TEV_KCSEL_K3_R = 0x13,
-  GPU_TEV_KCSEL_K0_G = 0x14,
-  GPU_TEV_KCSEL_K1_G = 0x15,
-  GPU_TEV_KCSEL_K2_G = 0x16,
-  GPU_TEV_KCSEL_K3_G = 0x17,
-  GPU_TEV_KCSEL_K0_B = 0x18,
-  GPU_TEV_KCSEL_K1_B = 0x19,
-  GPU_TEV_KCSEL_K2_B = 0x1A,
-  GPU_TEV_KCSEL_K3_B = 0x1B,
-  GPU_TEV_KCSEL_K0_A = 0x1C,
-  GPU_TEV_KCSEL_K1_A = 0x1D,
-  GPU_TEV_KCSEL_K2_A = 0x1E,
-  GPU_TEV_KCSEL_K3_A = 0x1F
-} GpuTevKColorSel;
-
-typedef enum _GpuTevKAlphaSel {
-  GPU_TEV_KASEL_8_8 = 0x00,
-  GPU_TEV_KASEL_7_8 = 0x01,
-  GPU_TEV_KASEL_6_8 = 0x02,
-  GPU_TEV_KASEL_5_8 = 0x03,
-  GPU_TEV_KASEL_4_8 = 0x04,
-  GPU_TEV_KASEL_3_8 = 0x05,
-  GPU_TEV_KASEL_2_8 = 0x06,
-  GPU_TEV_KASEL_1_8 = 0x07,
-
-  GPU_TEV_KASEL_1 = GPU_TEV_KASEL_8_8,
-  GPU_TEV_KASEL_3_4 = GPU_TEV_KASEL_6_8,
-  GPU_TEV_KASEL_1_2 = GPU_TEV_KASEL_4_8,
-  GPU_TEV_KASEL_1_4 = GPU_TEV_KASEL_2_8,
-
-  GPU_TEV_KASEL_K0_R = 0x10,
-  GPU_TEV_KASEL_K1_R = 0x11,
-  GPU_TEV_KASEL_K2_R = 0x12,
-  GPU_TEV_KASEL_K3_R = 0x13,
-  GPU_TEV_KASEL_K0_G = 0x14,
-  GPU_TEV_KASEL_K1_G = 0x15,
-  GPU_TEV_KASEL_K2_G = 0x16,
-  GPU_TEV_KASEL_K3_G = 0x17,
-  GPU_TEV_KASEL_K0_B = 0x18,
-  GPU_TEV_KASEL_K1_B = 0x19,
-  GPU_TEV_KASEL_K2_B = 0x1A,
-  GPU_TEV_KASEL_K3_B = 0x1B,
-  GPU_TEV_KASEL_K0_A = 0x1C,
-  GPU_TEV_KASEL_K1_A = 0x1D,
-  GPU_TEV_KASEL_K2_A = 0x1E,
-  GPU_TEV_KASEL_K3_A = 0x1F
-} GpuTevKAlphaSel;
-
 typedef enum _GpuAlphaOp {
   GPU_AOP_AND,
   GPU_AOP_OR,
@@ -504,14 +333,6 @@ typedef enum _GpuAlphaOp {
   GPU_AOP_XNOR,
   GPU_MAX_ALPHAOP
 } GpuAlphaOp;
-
-typedef enum _GpuTevScale {
-  GPU_CS_SCALE_1,
-  GPU_CS_SCALE_2,
-  GPU_CS_SCALE_4,
-  GPU_CS_DIVIDE_2,
-  GPU_MAX_TEVSCALE
-} GpuTevScale;
 
 typedef enum _GpuFogType {
   GPU_FOG_NONE = 0x00,
@@ -584,34 +405,6 @@ typedef enum _GpuLogicOp {
   GPU_LO_SET
 } GpuLogicOp;
 
-typedef enum _GpuPixelFmt {
-  GPU_PF_RGB8_Z24,
-  GPU_PF_RGBA6_Z24,
-  GPU_PF_RGB565_Z16,
-  GPU_PF_Z24,
-  GPU_PF_Y8,
-  GPU_PF_U8,
-  GPU_PF_V8,
-  GPU_PF_YUV420
-} GpuPixelFmt;
-
-typedef enum _GpuZFmt16 {
-  GPU_ZC_LINEAR,
-  GPU_ZC_NEAR,
-  GPU_ZC_MID,
-  GPU_ZC_FAR
-} GpuZFmt16;
-
-typedef enum _GpuTevMode {
-  GPU_MODULATE,
-  GPU_DECAL,
-  GPU_BLEND,
-  GPU_REPLACE,
-  GPU_PASSCLR
-} GpuTevMode;
-
-typedef enum _GpuGamma { GPU_GM_1_0, GPU_GM_1_7, GPU_GM_2_2 } GpuGamma;
-
 typedef enum _GpuProjectionType {
   GPU_PERSPECTIVE,
   GPU_ORTHOGRAPHIC
@@ -630,15 +423,7 @@ typedef enum _GpuAnisotropy {
   GPU_MAX_ANISOTROPY
 } GpuAnisotropy;
 
-typedef enum _GpuZTexOp {
-  GPU_ZT_DISABLE,
-  GPU_ZT_ADD,
-  GPU_ZT_REPLACE,
-  GPU_MAX_ZTEXOP
-
-} GpuZTexOp;
-
-typedef enum _GpuTexMtxType { GX_MTX3x4 = 0, GX_MTX2x4 } GpuTexMtxType;
+typedef enum _GpuTexMtxType { GPU_MTX3x4 = 0, GPU_MTX2x4 } GpuTexMtxType;
 
 typedef enum _GpuPrimitive {
   GPU_POINTS = 0xb8,
@@ -660,21 +445,6 @@ typedef enum _GpuTexOffset {
     GPU_MAX_TEXOFFSET
 } GpuTexOffset;
 
-typedef enum _GpuCopyMode {
-  GPU_COPY_PROGRESSIVE = 0,
-  GPU_COPY_INTLC_EVEN = 2,
-  GPU_COPY_INTLC_ODD = 3
-} GpuCopyMode;
-
-
-typedef enum _GpuTevSwapSel {
-  GPU_TEV_SWAP0 = 0,
-  GPU_TEV_SWAP1,
-  GPU_TEV_SWAP2,
-  GPU_TEV_SWAP3,
-  GPU_MAX_TEVSWAP
-
-} GpuTevSwapSel;
 
 typedef enum _GpuPosNrmMtx {
   GPU_PNMTX0 = 0,
@@ -727,14 +497,6 @@ typedef enum _GpuPTTexMtx {
     GPU_PTTEXMTX19 = 121,
     GPU_PTIDENTITY = 125
 } GpuPTTexMtx;
-
-typedef enum _GpuTevColorChan {
-  GPU_CH_RED = 0,
-  GPU_CH_GREEN,
-  GPU_CH_BLUE,
-  GPU_CH_ALPHA
-
-} GpuTevColorChan;
 
 
 typedef enum _GpuSpotFn {
