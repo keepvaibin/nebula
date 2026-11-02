@@ -234,7 +234,8 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
         multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
         VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
         VkPipelineColorBlendAttachmentState target{};
-        target.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        target.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+                                VK_COLOR_COMPONENT_A_BIT;
         VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
         blend.attachmentCount = 1;
         blend.pAttachments = &target;
@@ -309,6 +310,15 @@ bool GameBloomVk::copy_frame(VkCommandBuffer commands, const Inputs& in, std::sh
                   VK_ACCESS_SHADER_READ_BIT);
     target->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     return true;
+}
+
+std::shared_ptr<Texture> GameBloomVk::take_kept_image() {
+    return std::move(keep_);
+}
+
+void GameBloomVk::keep_picture(std::shared_ptr<Texture> picture) {
+    keep_ = std::move(picture);
+    kept_ = true;
 }
 
 bool GameBloomVk::keep(VkCommandBuffer commands, const Inputs& in) {

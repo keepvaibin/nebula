@@ -1,8 +1,8 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "JSystem/JUtility/JUTConsole.hpp"
 #include "JSystem/J2DGraph/J2DOrthoGraph.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/JUTFont.hpp"
-#include "JSystem/JUtility/JUTVideo.hpp"
 #include <cerrno>
 #include <cstdarg>
 #include <new>
@@ -83,13 +83,8 @@ void JUTConsole::doDraw(JUTConsole::EConsoleType consoleType) const {
             bool spA = consoleType == CONSOLE_TYPE_0 ? true : false;
             font_yOffset = 2.0f + mFontSizeY;
 
-            if (JUTGetVideoManager() == nullptr) {
-                J2DOrthoGraph ortho(0.0f, 0.0f, 640.0f, 480.0f, -1.0f, 1.0f);
-                ortho.setPort();
-            } else {
-                J2DOrthoGraph ortho(0.0f, 0.0f, JUTGetVideoManager()->getFbWidth(), JUTGetVideoManager()->getEfbHeight(), -1.0f, 1.0f);
-                ortho.setPort();
-            }
+            J2DOrthoGraph ortho(0.0f, 0.0f, NebulaFrameClock::cFrameWidth, NebulaFrameClock::cFrameHeight, -1.0f, 1.0f);
+            ortho.setPort();
 
             J2DFillBox(mPositionX - 2, static_cast< int >(mPositionY - font_yOffset), static_cast< int >((mFontSizeX * field_0x20) + 4.0f),
                        static_cast< int >(font_yOffset * mHeight), spA ? field_0x60 : field_0x5c);

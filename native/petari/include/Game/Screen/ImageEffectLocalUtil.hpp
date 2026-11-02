@@ -20,6 +20,7 @@ namespace ImageEffectLocalUtil {
     enum EStage {
         Stage_Modulate,
         Stage_Threshold,
+        Stage_Luminance,
     };
 
     // `filtered`: through the display's vertical filter (NEBULA_CAPTURE_FILTERED).

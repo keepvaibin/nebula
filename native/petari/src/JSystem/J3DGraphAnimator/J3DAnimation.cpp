@@ -872,7 +872,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) co
         if (col <= 0.0f) {
             pColor->r = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->r);
+            pColor->r = nebula_f32_to_u8(col);
         } else {
             pColor->r = 255;
         }
@@ -890,7 +890,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) co
         if (col <= 0.0f) {
             pColor->g = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->g);
+            pColor->g = nebula_f32_to_u8(col);
         } else {
             pColor->g = 255;
         }
@@ -908,7 +908,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) co
         if (col <= 0.0f) {
             pColor->b = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->b);
+            pColor->b = nebula_f32_to_u8(col);
         } else {
             pColor->b = 255;
         }
@@ -926,7 +926,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) co
         if (col <= 0.0f) {
             pColor->a = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->a);
+            pColor->a = nebula_f32_to_u8(col);
         } else {
             pColor->a = 255;
         }
@@ -1027,7 +1027,7 @@ void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
         } else if (col > 255.0f) {
             pColor->r = 255;
         } else {
-            OSf32tou8(&col, &pColor->r);
+            pColor->r = nebula_f32_to_u8(col);
         }
     }
 
@@ -1045,7 +1045,7 @@ void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
         } else if (col > 255.0f) {
             pColor->g = 255;
         } else {
-            OSf32tou8(&col, &pColor->g);
+            pColor->g = nebula_f32_to_u8(col);
         }
     }
 
@@ -1063,7 +1063,7 @@ void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
         } else if (col > 255.0f) {
             pColor->b = 255;
         } else {
-            OSf32tou8(&col, &pColor->b);
+            pColor->b = nebula_f32_to_u8(col);
         }
     }
 
@@ -1081,7 +1081,7 @@ void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
         } else if (col > 255.0f) {
             pColor->a = 255;
         } else {
-            OSf32tou8(&col, &pColor->a);
+            pColor->a = nebula_f32_to_u8(col);
         }
     }
 }
@@ -1184,7 +1184,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
         } else if (col > 0x3FF) {
             pColor->r = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->r);
+            pColor->r = nebula_f32_to_s16(col);
         }
     }
 
@@ -1202,7 +1202,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
         } else if (col > 0x3FF) {
             pColor->g = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->g);
+            pColor->g = nebula_f32_to_s16(col);
         }
     }
 
@@ -1220,7 +1220,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
         } else if (col > 0x3FF) {
             pColor->b = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->b);
+            pColor->b = nebula_f32_to_s16(col);
         }
     }
 
@@ -1238,7 +1238,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
         } else if (col > 0x3FF) {
             pColor->a = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->a);
+            pColor->a = nebula_f32_to_s16(col);
         }
     }
 }
@@ -1261,7 +1261,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
         } else if (col > 0xFF) {
             pColor->r = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->r);
+            pColor->r = nebula_f32_to_u8(col);
         }
     }
 
@@ -1279,7 +1279,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
         } else if (col > 0xFF) {
             pColor->g = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->g);
+            pColor->g = nebula_f32_to_u8(col);
         }
     }
 
@@ -1297,7 +1297,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
         } else if (col > 0xFF) {
             pColor->b = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->b);
+            pColor->b = nebula_f32_to_u8(col);
         }
     }
 
@@ -1315,7 +1315,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
         } else if (col > 0xFF) {
             pColor->a = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->a);
+            pColor->a = nebula_f32_to_u8(col);
         }
     }
 }

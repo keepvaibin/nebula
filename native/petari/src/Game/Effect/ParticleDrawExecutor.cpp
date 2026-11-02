@@ -11,7 +11,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JParticle/JPAEmitterManager.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     void connectToSceneDrawAdaptor(NameObjAdaptor* pAdaptor, const MR::FunctorBase& rFunctor, int drawType) NO_INLINE {
@@ -43,7 +43,7 @@ void ParticleDrawExecutor::draw2D() const {
         JPADrawInfo drawInfo(cameraMtx.toMtxPtr());
 
         f32 width;
-        f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+        f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
         width = MR::isScreen16Per9() ? MR::getScreenWidth() : 608.0f;
         width *= 0.5f;
         height *= 0.5f;

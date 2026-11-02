@@ -68,6 +68,10 @@ SIGNALS = [
     ("fifo", r"\bfifo\b|\bFIFO\b|\bFifo[A-Z]\w*|\bon_fifo\w*|\bgx_submit\b|\bcommand ring\b|\bBP register\b|"
              r"\bCP register\b|\bXF register\b|\bkBp[A-Z]\w*|\bkCp[A-Z]\w*|\bkXf[A-Z]\w*|\bGxState\b",
      "command stream/register state"),
+    ("frame_capture", r"\bImageEffectLocalUtil::capture\(|\bJ3DNativeTarget::capture\(|->capture\(0|\bbloomMarker\(NebulaRender::kBloom(?:Keep|Restore)\b",
+     "the game reads the frame through a copy (E-07)"),
+    ("frame_grid", r"\bscene_target_scale\w*|\bkFrameWidth\b|\bkFrameHeight\b|\bcompute_scaled_\w+|\bkMaxSceneScale\b",
+     "the fixed 640x456 grid at an integer scale in the renderer (E-08)"),
     ("efb_xfb", r"\bEFB\b|\befb_\w+|\bXFB\b|\bxfb_\w+|\bkEfb\w+|\bcopy_efb\w*|\bpeek_efb\w*|\bgx_peek_efb\b",
      "EFB/XFB emulation"),
     ("tev", r"\bTEV\b|\btev_\w+|\bTev[A-Z]\w*|\bkTev\w*|\bswap table\b|\bkonst\b|\bindirect stage\b",

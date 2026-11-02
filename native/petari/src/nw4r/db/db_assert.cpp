@@ -56,8 +56,6 @@ namespace nw4r {
             (void)NebulaKernel::disableInterrupts();
             (void)NebulaKernel::disableScheduler();
 
-            (void)NebulaFrameClock::setPreHook(NULL);
-            (void)NebulaFrameClock::setPostHook(NULL);
 
             ShowStack_(stackPointer);
 

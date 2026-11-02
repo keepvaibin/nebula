@@ -1,4 +1,3 @@
-#define OS_F32_TO_U8_DEFER_INLINE
 #include "JSystem/JParticle/JPAExtraShape.hpp"
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
@@ -74,7 +73,7 @@ void JPACalcAlphaAnm(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     } else {
         alpha = 255.0f * esp->getAlphaBaseValue();
     }
-    OSf32tou8(&alpha, &ptcl->mPrmColorAlphaAnm);
+    ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(alpha);
 }
 
 void JPACalcAlphaFlickAnm(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
@@ -90,7 +89,7 @@ void JPACalcAlphaFlickAnm(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     s32 theta = ptcl->mAlphaWaveRandom * ptcl->mAge * 16384.0f * (1.0f - esp->getAlphaFreq());
     f32 wave = JMASSin(theta);
     alpha *= (1.0f + esp->getAlphaAmp() * (wave - 1.0f) * 0.5f) * 255.0f;
-    OSf32tou8(&alpha, &ptcl->mPrmColorAlphaAnm);
+    ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(alpha);
 }
 
 JPAExtraShape::JPAExtraShape(u8 const* data) {
@@ -117,6 +116,3 @@ void JPAExtraShape::init() {
     }
 }
 
-static void OSf32tou8(f32* f, u8* out) {
-    *out = __OSf32tou8(*f);
-}

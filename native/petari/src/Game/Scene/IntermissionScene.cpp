@@ -3,7 +3,7 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <cstdio>
 #include <va_list.h>
 
@@ -21,7 +21,7 @@ void IntermissionScene::draw() const {
     graph.setPort();
     graph.setColor(static_cast< const NebulaColor8& >(NebulaColor8(Color8(0, 0, 0, 255))));
 
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+    f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
     f32 width = MR::getScreenWidth();
     graph.fillBox(0.0f, 0.0f, width, height);
 }

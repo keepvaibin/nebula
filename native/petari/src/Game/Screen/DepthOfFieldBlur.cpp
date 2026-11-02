@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Screen/DepthOfFieldBlur.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
@@ -12,7 +13,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include <cstring>
 
@@ -61,12 +62,11 @@ namespace {
 };  // namespace
 
 DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
-    : ImageEffectBase(pName), _14(), _18(), _1C(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
+    : ImageEffectBase(pName), _14(), _1C(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createDOFTexture();
     _14 = MR::getImageEffectResource()->_0;
-    _18 = MR::getImageEffectResource()->_10;
     _1C = MR::getImageEffectResource()->_4;
     _20 = MR::getImageEffectResource()->_8;
     _24 = MR::getImageEffectResource()->_C;
@@ -75,6 +75,11 @@ DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     _28->mWrapT = GPU_CLAMP;
     _28->mMinType = GPU_LINEAR;
     _28->mMagType = GPU_LINEAR;
+    mQuarter = new JUTTexture(_24->getWidth(), _24->getHeight(), GPU_TF_RGB565);
+    mQuarter->mWrapS = GPU_CLAMP;
+    mQuarter->mWrapT = GPU_CLAMP;
+    mQuarter->mMinType = GPU_LINEAR;
+    mQuarter->mMagType = GPU_LINEAR;
 }
 
 void DepthOfFieldBlur::draw() const {
@@ -82,10 +87,10 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    ImageEffectLocalUtil::capture(_18, 4, 0, GPU_TF_RGB565, false, 0);
     ImageEffectLocalUtil::capture(_1C, 1, 0, GPU_TF_RGB565, true, 0);
+    J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0, 0xFFFFFF);
     drawZAlphaTex();
-    ImageEffectLocalUtil::capture(_28, 1, 0, GPU_CTF_R8, false, 0);
+    J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
     ImageEffectLocalUtil::capture(_20, 1, 0, GPU_TF_Z8, true, 0);
@@ -96,8 +101,8 @@ void DepthOfFieldBlur::draw() const {
 
 void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()), 0.0f,
-               static_cast< s32 >(JUTVideo::getManager()->getFbWidth()), -::sViewDistance, ::sViewDistance);
+    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(NebulaFrameClock::cFrameHeight), 0.0f,
+               static_cast< s32 >(NebulaFrameClock::cFrameWidth), -::sViewDistance, ::sViewDistance);
     J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
     MR::loadViewMtxFor2DModel();
 
@@ -149,14 +154,15 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 }
 
 void DepthOfFieldBlur::createBlurTexture() const {
+    J3DNativeTarget::begin(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, 0xFFFFFF);
     ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GPU_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::blurTexture(_24, 4, 0, 4, mIntensity * get_10() * 0.005f, 1.0f);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GPU_TF_RGB565, false, 0);
+    J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);
+    J3DNativeTarget::begin(_24->mImage, _24->getWidth(), _24->getHeight(), 0, 0xFFFFFF);
+    ImageEffectLocalUtil::blurTexture(mQuarter, 4, 0, 4, mIntensity * get_10() * 0.005f, 1.0f);
+    J3DNativeTarget::end(_24->mImage, NEBULA_TARGET_RGB);
 }
 
 void DepthOfFieldBlur::drawFinal() const {
-    ImageEffectLocalUtil::drawTexture(_18, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     sendFinalMaterial(_24, _28, _20, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f)));
     ImageEffectLocalUtil::sendTextureVertex(1, 0);
     ImageEffectLocalUtil::setupDrawTexture();

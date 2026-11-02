@@ -19,7 +19,6 @@ public:
     void create(const TVec3f&, const TVec3f&, const TVec3f&);
     void calcView(J3DModelX*, u32, J3DModelX*);
     void drawAndCaptureTex(J3DModelX*, const TVec3f&);
-    void clearAlphaBuffer();
     void setUpdateFlag();
     void draw1() const;
     void sendVtx() const;

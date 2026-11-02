@@ -13,7 +13,7 @@
 #include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DShapeMtx.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 class J3DMtxBuffer2 : public J3DMtxBuffer {
 public:
@@ -218,7 +218,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
             if (i == 6 && J3DNativeMaterial::overrideCoordinate(
                               reinterpret_cast< const u8* >(MR::getScreenResTIMG()) + MR::getScreenResTIMG()->mImageDataOffset,
-                              MR::getScreenWidth(), JUTVideo::getManager()->getEfbHeight())) {
+                              MR::getScreenWidth(), NebulaFrameClock::cFrameHeight)) {
                 continue;
             }
             mStateLists[i].send();

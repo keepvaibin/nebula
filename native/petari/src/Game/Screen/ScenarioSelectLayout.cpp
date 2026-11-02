@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/ScenarioSelectLayout.hpp"
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/Camera/CameraContext.hpp"
@@ -448,7 +449,7 @@ ScenarioSelectStar* ScenarioSelectLayout::getSelectedStar() const {
 
 void ScenarioSelectLayout::calcWorldPositionFromScreenPos(TVec3f* pWorldPos, const TVec2f& rScreenPos, f32 depth) const {
     f32 fovy = mCameraContext->getFovy() * (PI / 180.0f);
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+    f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
     f32 focalLength = (height * 0.5f) / MR::tan(fovy * 0.5f);
     f32 distance;
 

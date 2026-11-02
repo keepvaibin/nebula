@@ -86,7 +86,7 @@ namespace {
 }  // namespace
 
 void ImageEffectLocalUtil::setStage(EStage stage) {
-    sMode = stage == Stage_Threshold ? 1 : 0;
+    sMode = stage == Stage_Threshold ? 1 : stage == Stage_Luminance ? 6 : 0;
 }
 
 void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rKonst, const NebulaColor8& rEdge) {

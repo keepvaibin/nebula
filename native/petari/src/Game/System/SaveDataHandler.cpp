@@ -60,23 +60,87 @@ void SaveDataHandler::requestLoadSaveData() {
 }
 
 bool SaveDataHandler::requestVerifyAfterLoadGameDataFile() {
-    if (!isCorrectFileHeader(_14)) {
+    // Version 2 is the console's byte order: its header reads 00 00 00 02.
+    const bool consoleOrder = _14[4] == 0 && _14[7] == 2;
+    gSaveConsoleOrder = consoleOrder;
+
+    SaveDataFileAccessor file(_14);
+    const bool correct = isCorrectFileHeader(_14) && _C == NebulaAlignUp32(file.getFileSize()) &&
+                         file.getCheckSum() == MR::calcCheckSum(_14 + sizeof(u32), file.getFileSize() - sizeof(u32));
+    if (!correct) {
+        gSaveConsoleOrder = false;
         return false;
     }
 
-    const SaveDataFileAccessor file(_14);
-
-    if (_C != NebulaAlignUp32(file.getFileSize())) {
-        return false;
-    }
-
-    if (file.getCheckSum() != MR::calcCheckSum(_14 + sizeof(u32), file.getFileSize() - sizeof(u32))) {
-        return false;
+    if (consoleOrder) {
+        convertFileHeader(_14);
     }
 
     copySaveDataEachFile(_18, _14);
 
+    if (consoleOrder) {
+        convertUserFiles(_18);
+    }
+
     return true;
+}
+
+// The header and file table of a version 2 file (read in the console's order) in host order; its file's contents are
+// converted after they are copied.
+void SaveDataHandler::convertFileHeader(u8* pBuffer) {
+    SaveDataFileAccessor file(pBuffer);
+    const u32 fileSize = file.getFileSize();
+    const u32 num = file.getUserFileInfoNum();
+    u32 offsets[24];
+    for (u32 i = 0; i < num; i++) {
+        offsets[i] = file.getFileOffset(i);
+    }
+    const u32 checkSum = file.getCheckSum();
+    gSaveConsoleOrder = false;
+    file.setCheckSum(checkSum);
+    file.setVersion(cSaveFileVersion);
+    file.setUserFileInfoNum(num);
+    file.setFileSize(fileSize);
+    for (u32 i = 0; i < num; i++) {
+        file.setFileOffset(i, offsets[i]);
+    }
+}
+
+// Each user file of a version 2 save, read in the console's order and written back in host order. The next save writes
+// version 3.
+void SaveDataHandler::convertUserFiles(u8* pBuffer) {
+    SaveDataFileAccessor file(pBuffer);
+    UserFile* pUserFile = new UserFile();
+    SysConfigFile* pSysConfigFile = new SysConfigFile();
+    const int num = file.getUserFileInfoNum();
+
+    for (int i = 0; i < num; i++) {
+        const char* pName = file.getFileName(i);
+        SaveDataUserFileInfo info;
+        file.makeUserFileInfo(&info, pName);
+        if (info.mData == nullptr) {
+            continue;
+        }
+
+        pUserFile->resetAllData();
+        gSaveConsoleOrder = true;
+        if (info.mKind == 0) {
+            pUserFile->loadFromGameDataBinary(pName, info.mData, info.mDataSize);
+            gSaveConsoleOrder = false;
+            pUserFile->makeGameDataBinary(info.mData, info.mDataSize);
+        } else if (info.mKind == 1) {
+            pUserFile->loadFromConfigDataBinary(pName, info.mData, info.mDataSize);
+            gSaveConsoleOrder = false;
+            pUserFile->makeConfigDataBinary(info.mData, info.mDataSize);
+        } else {
+            pSysConfigFile->loadFromDataBinary(info.mData, info.mDataSize);
+            gSaveConsoleOrder = false;
+            pSysConfigFile->makeDataBinary(info.mData, info.mDataSize);
+        }
+    }
+
+    delete pSysConfigFile;
+    delete pUserFile;
 }
 
 void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserFile) {
@@ -214,7 +278,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
     u32 offset = 0x140;
 
     file.setCheckSum(0);
-    file.setVersion(2);
+    file.setVersion(cSaveFileVersion);
     file.setUserFileInfoNum(19);
     file.setFileSize(0);
 
@@ -278,7 +342,7 @@ void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const SysConfigFi
 bool SaveDataHandler::isCorrectFileHeader(const u8* pBuffer) {
     const SaveDataFileAccessor file(const_cast< u8* >(pBuffer));
 
-    if (file.getVersion() != 2) {
+    if (file.getVersion() != (gSaveConsoleOrder ? 2u : cSaveFileVersion)) {
         return false;
     }
 

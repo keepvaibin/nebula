@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/GalaxyMapController.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/Nerve.hpp"
@@ -20,7 +21,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include <nw4r/lyt/drawInfo.h>
 
 namespace {
@@ -70,7 +70,7 @@ GalaxyMapController::GalaxyMapController()
 
 namespace {
     u16 getFbWidth() {
-        const u16& rWidth = JUTGetVideoManager()->getFbWidth();
+        const u16& rWidth = NebulaFrameClock::cFrameWidth;
         return rWidth;
     }
 };  // namespace

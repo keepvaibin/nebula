@@ -13,8 +13,8 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace {
     volatile u32 sFrames;
     NebulaThreadQueue sSleepers;
-    NebulaFrameClock::Hook sPreHook;
-    NebulaFrameClock::Hook sPostHook;
+    // Black for the first frames after the game asks for its frame (start).
+    u32 sBlackFrames = ~0u;
     // show() sets the next state; it is what the screen shows from the next frame on.
     bool sNextPicture;
     bool sPicture;
@@ -68,15 +68,15 @@ namespace {
         } else if (sIdleFrames < cTimeToDimming) {
             sIdleFrames++;
         }
-        if (sPreHook != nullptr) {
-            sPreHook(sFrames);
+        if (sBlackFrames != 0) {
+            sBlackFrames--;
+            sNextPicture = false;
+        } else {
+            sNextPicture = true;
         }
         sPicture = sNextPicture;
         nebula_host()->vi_frame(nebula_host()->user, 0, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
-        if (sPostHook != nullptr) {
-            sPostHook(sFrames);
-        }
         sSleepers.wakeup();
     }
 }  // namespace
@@ -97,6 +97,12 @@ namespace NebulaFrameClock {
         NebulaKernel::enableEvent(NEBULA_EVENT_FRAME);
     }
 
+    void startPicture() {
+        waitFrame();
+        waitFrame();
+        sBlackFrames = 2;
+    }
+
     u32 count() {
         return sFrames;
     }
@@ -111,22 +117,19 @@ namespace NebulaFrameClock {
         NebulaKernel::restoreInterrupts(enabled);
     }
 
+    void waitUntil(u32 count) {
+        const BOOL enabled = NebulaKernel::disableInterrupts();
+        while (static_cast< s32 >(sFrames - count) < 0) {
+            sSleepers.sleep();
+        }
+        NebulaKernel::restoreInterrupts(enabled);
+    }
+
     void show(bool picture) {
         sNextPicture = picture;
-    }
-
-    // The frame arrives as a host event, which the kernel delivers only at its scheduling points: a plain store cannot
-    // be interrupted halfway.
-    Hook setPreHook(Hook hook) {
-        const Hook previous = sPreHook;
-        sPreHook = hook;
-        return previous;
-    }
-
-    Hook setPostHook(Hook hook) {
-        const Hook previous = sPostHook;
-        sPostHook = hook;
-        return previous;
+        if (!picture) {
+            sBlackFrames = ~0u;
+        }
     }
 
     const NebulaDisplay& display() {

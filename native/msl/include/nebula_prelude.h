@@ -28,7 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nebula_endian.h"
 
 /* The game's types.h defines nullptr as 0 (the code was written for MSL's macro); clang's stddef.h would declare
    std::nullptr_t again under that macro on a later include. The host declared it above. */
@@ -107,3 +106,5 @@ static inline int nebula_msl_stricmp(const char* s1, const char* s2) {
 #define __fpclassifyd nebula_msl_fpclassifyd
 
 #endif
+
+#include "nebula_float_cast.h"
