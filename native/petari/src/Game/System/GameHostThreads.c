@@ -21,8 +21,47 @@
 #include <time.h>
 #endif
 
+#if defined(_WIN32)
+/* Where each thread last went to sleep, for the dump: a hang shows who waits for what. */
+#define NEBULA_WAIT_THREADS 32
+#define NEBULA_WAIT_FRAMES 10
+static struct {
+    DWORD id;
+    void* frames[NEBULA_WAIT_FRAMES];
+    USHORT count;
+} sWaits[NEBULA_WAIT_THREADS];
+static volatile LONG sWaitCount;
+static __declspec(thread) int tWaitSlot = -1;
+
+static void note_wait(void) {
+    if (tWaitSlot < 0) {
+        const LONG slot = InterlockedIncrement(&sWaitCount) - 1;
+        if (slot >= NEBULA_WAIT_THREADS) {
+            return;
+        }
+        tWaitSlot = (int)slot;
+        sWaits[slot].id = GetCurrentThreadId();
+    }
+    sWaits[tWaitSlot].count = RtlCaptureStackBackTrace(1, NEBULA_WAIT_FRAMES, sWaits[tWaitSlot].frames, NULL);
+}
+#endif
+
 NEBULA_GAME_API void nebula_game_debug_dump(void) {
     nebula_threads_dump();
+#if defined(_WIN32)
+    HMODULE module = NULL;
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (const char*)&nebula_game_debug_dump, &module);
+    for (LONG i = 0; i < sWaitCount && i < NEBULA_WAIT_THREADS; i++) {
+        char text[256];
+        int used = snprintf(text, sizeof(text), "  thread %lu sleeps at", (unsigned long)sWaits[i].id);
+        for (USHORT k = 0; k < sWaits[i].count && used < 230; k++) {
+            used += snprintf(text + used, sizeof(text) - used, " +%llx",
+                             (unsigned long long)((const char*)sWaits[i].frames[k] - (const char*)module));
+        }
+        nebula_log("%s\n", text);
+    }
+#endif
 }
 
 /* The game's host threads: each sleeps on its own turn; only the one whose turn it is runs. A thread's own stack, at least
@@ -94,6 +133,7 @@ void nebula_host_thread_exit(NebulaHostThread* pSelf) {
 
 void nebula_host_thread_wait(NebulaHostThread* pSelf) {
 #if defined(_WIN32)
+    note_wait();
     WaitForSingleObject(pSelf->turn, INFINITE);
 #else
     pthread_mutex_lock(&pSelf->lock);
