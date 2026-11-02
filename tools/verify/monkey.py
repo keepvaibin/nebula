@@ -22,17 +22,17 @@ def run(index, stops):
     r = random.Random(SEED * 1000 + index)
     total = 2600 + FRAMES * len(stops)
     presses, sticks, shakes = [], [], []
-    frame = 1200
+    frame = max(1200, FRAMES + 200)
     while frame < total:
         presses.append(f'{frame}:{r.choice([3, 8, 15, 25, 25, 60, 120])}:{r.choice(["A", "A", "A", "B", "Z", "C", "A+Z"])}')
         frame += r.randint(25, 110)
-    frame = 1200
+    frame = max(1200, FRAMES + 200)
     while frame < total:
         length = r.randint(40, 240)
         angle = r.uniform(-1, 1), r.uniform(-1, 1)
         sticks.append(f'{frame}:{length}:{angle[0]:.2f}:{angle[1]:.2f}')
         frame += length + r.randint(0, 30)
-    frame = 1300
+    frame = max(1300, FRAMES + 300)
     while frame < total:
         shakes.append(f'{frame}:8')
         frame += r.randint(60, 300)

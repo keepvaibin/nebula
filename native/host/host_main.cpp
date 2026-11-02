@@ -3436,27 +3436,30 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
             return 1;
         }
     }
-    // GALAXY_TEST_WALK=water|actor[,every[,seed]]: from 300 frames into each stop, every `every` frames (default 300),
-    // the player placed in the next body of water or at the next live actor, held 30 frames.
+    // GALAXY_TEST_WALK=water|actor[,every[,seed[,forms]]]: from 300 frames into each stop, every `every` frames (default
+    // 300), the player placed in the next body of water or at the next live actor, held 30 frames; with forms 1, each
+    // place in the next power-up form.
     static const struct {
         int32_t kind;
         uint32_t every;
         uint32_t seed;
+        uint32_t forms;
     } walk = [] {
         const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_WALK"));
-        unsigned every = 300u, seed = 0u;
+        unsigned every = 300u, seed = 0u, forms = 0u;
         if (value == nullptr) {
-            return decltype(walk){0, 0u, 0u};
+            return decltype(walk){0, 0u, 0u, 0u};
         }
         if (const char* comma = std::strchr(value, ',')) {
-            (void)std::sscanf(comma + 1, "%u,%u", &every, &seed);
+            (void)std::sscanf(comma + 1, "%u,%u,%u", &every, &seed, &forms);
         }
         return decltype(walk){value[0] == 'w' ? NEBULA_TEST_PLACE_PLAYER_WATER : NEBULA_TEST_PLACE_PLAYER_ACTOR,
-                              every != 0u ? every : 300u, seed};
+                              every != 0u ? every : 300u, seed, forms};
     }();
     if (walk.kind != 0 && frame >= 300u && (frame - 300u) % walk.every < 30u) {
         action->kind = walk.kind;
         action->scenario = static_cast<int32_t>((frame - 300u) / walk.every + walk.seed);
+        action->position[0] = static_cast<float>(walk.forms);
         return 1;
     }
     for (const Teleport& t : teleports) {

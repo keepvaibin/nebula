@@ -38,6 +38,8 @@
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/WaterPoint.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Player/MarioAccess.hpp"
+#include "Game/Player/MarioActor.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Map/LightFunction.hpp"
@@ -187,11 +189,18 @@ namespace {
         return found;
     }
 
-    void testWalkPlace(s32 kind, s32 index) {
+    void testWalkPlace(s32 kind, s32 index, bool forms) {
         static s32 sLastIndex = -1;
         const bool fresh = index != sLastIndex || !sTestWalkActive;
         sTestWalkActive = true;
         sLastIndex = index;
+        if (fresh && forms) {
+            // Normal, rainbow, fire, ice, bee, spring, Boo, flying, tornado (PlayerMode).
+            static const u16 kForms[] = {0, 1, 2, 3, 4, 5, 6, 7, 9};
+            const u16 form = kForms[static_cast< u32 >(index) % (sizeof(kForms) / sizeof(kForms[0]))];
+            JUTNativeLog("test: form %u\n", form);
+            MarioAccess::getPlayerActor()->setPlayerMode(form, true);
+        }
         if (kind == NEBULA_TEST_PLACE_PLAYER_WATER) {
             TVec3f pos;
             const char* pKind = "";
@@ -532,7 +541,7 @@ void GameScene::draw() const {
                          MR::isHiddenModel(pActor) ? 1 : 0, MR::isClipped(pActor) ? 1 : 0);
             }
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER_WATER || action.kind == NEBULA_TEST_PLACE_PLAYER_ACTOR) {
-            testWalkPlace(action.kind, action.scenario);
+            testWalkPlace(action.kind, action.scenario, action.position[0] != 0.0f);
         } else if (action.kind == NEBULA_TEST_KILL_ACTOR) {
             // Killed as their defeat ends (LiveActor::kill): what they leave appears, a KuriboChief's key.
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
