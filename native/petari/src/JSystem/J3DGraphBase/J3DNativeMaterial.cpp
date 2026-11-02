@@ -1,3 +1,4 @@
+#include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
@@ -120,10 +121,10 @@ namespace {
         f32* pC = sRegisters;
         const u8* a = rOp.a;
         switch (rOp.kind) {
-        case NEBULA_STATE_TEV_COLOR:
+        case J3D_STATE_TEV_COLOR:
             setColor(pC + (a[0] & 3) * 4, a + 1, 4);
             return true;
-        case NEBULA_STATE_TEV_COLOR_S10: {
+        case J3D_STATE_TEV_COLOR_S10: {
             f32* pReg = pC + (a[0] & 3) * 4;
             pReg[0] = static_cast< s16 >(rOp.size[0]) / 255.0f;
             pReg[1] = static_cast< s16 >(rOp.size[1]) / 255.0f;
@@ -131,19 +132,19 @@ namespace {
             pReg[3] = rOp.f[1] / 255.0f;
             return true;
         }
-        case NEBULA_STATE_TEV_KCOLOR:
+        case J3D_STATE_TEV_KCOLOR:
             setColor(pC + 16 + (a[0] & 3) * 4, a + 1, 4);
             return true;
-        case NEBULA_STATE_MATERIAL_COLOR:
-        case NEBULA_STATE_AMBIENT_COLOR: {
+        case J3D_STATE_MATERIAL_COLOR:
+        case J3D_STATE_AMBIENT_COLOR: {
             // The channel's whole colour.
-            f32* pColor = pC + (rOp.kind == NEBULA_STATE_MATERIAL_COLOR ? 32 : 40) + (a[0] & 1) * 4;
+            f32* pColor = pC + (rOp.kind == J3D_STATE_MATERIAL_COLOR ? 32 : 40) + (a[0] & 1) * 4;
             for (u32 c = 0; c < 4; c++) {
                 pColor[c] = a[1 + c] / 255.0f;
             }
             return true;
         }
-        case NEBULA_STATE_FOG:
+        case J3D_STATE_FOG:
             pC[72] = rOp.f[0];
             pC[73] = rOp.f[1];
             pC[74] = rOp.f[2];
@@ -151,11 +152,11 @@ namespace {
             setColor(pC + 76, a + 1, 3);
             pC[79] = a[0];  // the fog type (j3d_material.hlsli j3d_fog): a value every J3D shader takes
             return true;
-        case NEBULA_STATE_ALPHA_COMPARE:
+        case J3D_STATE_ALPHA_COMPARE:
             pC[80] = a[1] / 255.0f;
             pC[81] = a[4] / 255.0f;
             return true;
-        case NEBULA_STATE_IND_TEX_MATRIX: {
+        case J3D_STATE_IND_TEX_MATRIX: {
             // GpuSetIndTexMtx: the matrix (or a dynamic S or T matrix in its place), its terms by the scale exponent.
             const u32 id = a[0] >= 9 ? a[0] - 9 : a[0] >= 5 ? a[0] - 5 : a[0] >= 1 ? a[0] - 1 : 3;
             if (id >= 3) {
@@ -183,7 +184,7 @@ namespace {
     // Whether a state change alters what the current native material's shader computes (its stages, channels,
     // coordinates, fog type or alpha test) rather than a value it takes or its fixed-function state.
     bool changesProgram(const NebulaStateOp& rOp) {
-        return rOp.kind == NEBULA_STATE_ALPHA_COMPARE && sCurrentKind == CURRENT_J3D &&
+        return rOp.kind == J3D_STATE_ALPHA_COMPARE && sCurrentKind == CURRENT_J3D &&
                (rOp.a[0] != sCurrentSetup->alpha_compare.comp0 || rOp.a[2] != sCurrentSetup->alpha_compare.op ||
                 rOp.a[3] != sCurrentSetup->alpha_compare.comp1);
     }
@@ -192,7 +193,7 @@ namespace {
     void endCurrent() {
         static NebulaNativeMaterial sNone;
         const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &sNone);
+        J3DNativeState::sendMaterial(&sNone);
         sCurrentKind = CURRENT_NONE;
     }
 
@@ -377,7 +378,7 @@ namespace {
         }
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &material);
+        J3DNativeState::sendMaterial(&material);
         watchMaterial(&material);
         dumpTag(shader);
         sCurrentSetup = &rSetup;
@@ -693,7 +694,7 @@ namespace J3DNativeMaterial {
         pOverride[3] = ref;
         sCurrent.constants_only = 1;
         const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &sCurrent);
+        J3DNativeState::sendMaterial(&sCurrent);
         return true;
     }
 
@@ -714,7 +715,7 @@ namespace J3DNativeMaterial {
         sCurrent.textures[0].min_linear = 1;
         sCurrent.constants_only = 0;
         const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &sCurrent);
+        J3DNativeState::sendMaterial(&sCurrent);
         return true;
     }
 
@@ -747,7 +748,7 @@ namespace J3DNativeMaterial {
         }
         sCurrent.constants_only = 0;
         const NebulaHostServices* host = nebula_host();
-        host->native_material(host->user, &sCurrent);
+        J3DNativeState::sendMaterial(&sCurrent);
         watchMaterial(&sCurrent);
         dumpTag(sCurrent.shader);
     }
@@ -768,13 +769,13 @@ namespace J3DNativeMaterial {
             memcpy(sSiteRegisters.constants, sRegisters, sizeof(sRegisters));
             sSiteRegisters.constants_only = 3;
             const NebulaHostServices* pHost = nebula_host();
-            pHost->native_material(pHost->user, &sSiteRegisters);
+            J3DNativeState::sendMaterial(&sSiteRegisters);
         }
         if (changed && sCurrentKind == CURRENT_J3D) {
             memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
             sCurrent.constants_only = 1;
             const NebulaHostServices* pHost = nebula_host();
-            pHost->native_material(pHost->user, &sCurrent);
+            J3DNativeState::sendMaterial(&sCurrent);
         }
     }
 };  // namespace J3DNativeMaterial

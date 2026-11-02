@@ -78,6 +78,53 @@ pub fn file_programs(bytes: &[u8]) -> Result<Vec<[u8; PROGRAM_BYTES]>> {
     Ok(result)
 }
 
+/// A material without the stages its shaders were cooked from: the bytes kept, each coordinate's texture (the map of
+/// the last stage using it, 255 none) and whether it had stages of its own.
+fn without_stages(source: &[u8], native: &[u8]) -> Result<(Vec<u8>, [u8; 8], bool)> {
+    let bits = u32::from_be_bytes(source.get(60..64).context("short layout material")?.try_into()?);
+    let textures = (bits & 15) as usize;
+    let tex_srt = ((bits >> 4) & 15) as usize;
+    let generators = ((bits >> 8) & 15) as usize;
+    let swaps = ((bits >> 12) & 1) as usize * 4;
+    let indirect_srt = ((bits >> 13) & 3) as usize * 20;
+    let indirect = ((bits >> 15) & 7) as usize;
+    let stages = ((bits >> 18) & 31) as usize;
+    let head = 64
+        + textures * 4
+        + tex_srt * 20
+        + generators * 4
+        + ((bits >> 25) & 1) as usize * 4
+        + ((bits >> 27) & 1) as usize * 4;
+    let srt_at = head + swaps;
+    let orders_at = srt_at + indirect_srt;
+    let stages_at = orders_at + indirect * 4;
+    let rest_at = stages_at + stages * 16;
+    if native.len() < rest_at || source.len() < rest_at {
+        bail!("layout material truncated");
+    }
+    let mut kept = native[..head].to_vec();
+    kept.extend_from_slice(&native[srt_at..orders_at]);
+    kept.extend_from_slice(&native[rest_at..]);
+    let mut coord_map = [255u8; 8];
+    let mut set = |coord: u8, map: u8, high: u8| {
+        if coord < 8 && map < 8 && high == 0 {
+            coord_map[coord as usize] = map;
+        }
+    };
+    for s in source[stages_at..rest_at].chunks_exact(16) {
+        set(s[0], s[2], s[3] & 1);
+    }
+    for o in source[orders_at..stages_at].chunks_exact(4) {
+        set(o[0], o[1], 0);
+    }
+    if stages == 0 {
+        for i in 0..textures.min(8) {
+            coord_map[i] = i as u8;
+        }
+    }
+    Ok((kept, coord_map, stages != 0))
+}
+
 pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
     let converted = super::super::native_data::layout(bytes)?;
     if !bytes.starts_with(b"RLYT") || bytes[4..6] == [255, 254] {
@@ -96,11 +143,14 @@ pub fn cook(bytes: &[u8]) -> Result<Vec<u8>> {
             for (i, range) in ranges.into_iter().enumerate() {
                 let offset = u32::try_from(block.len())?;
                 block[12 + i * 4..16 + i * 4].copy_from_slice(&offset.to_le_bytes());
-                block.extend_from_slice(&native[range.clone()]);
+                let (kept, coord_map, stages) = without_stages(&source[range.clone()], &native[range.clone()])?;
+                block.extend_from_slice(&kept);
                 block.extend_from_slice(b"NSID");
                 for program in programs(&source[range])? {
                     block.extend_from_slice(&cooked_shader(&program)?.to_le_bytes());
                 }
+                block.extend_from_slice(&coord_map);
+                block.extend_from_slice(&[u8::from(stages), 0, 0, 0]);
             }
             let size = u32::try_from(block.len())?;
             block[4..8].copy_from_slice(&size.to_le_bytes());

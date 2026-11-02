@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 94u
+#define NEBULA_GAME_API_VERSION 95u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -153,37 +153,19 @@ typedef struct NebulaDrawMatrix {
     float values[12];
 } NebulaDrawMatrix;
 
-/* One drawing-state change the game makes outside a material (state): `kind` names the GX function whose
-   arguments `a` holds in its order (enumerations and bytes), `size` its sizes, `f` its float arguments and `image`
-   a texture's identity (the game's address of its image). */
+/* One drawing-state change the game makes outside a material (state): `a` holds its enumerations and bytes, `size` its
+   sizes, `f` its floats and `image` a texture's identity (the game's address of its image). */
 enum {
-    NEBULA_STATE_BLEND_ETC = 1,     /* type, source, destination, logic op, colour update, alpha update, dither */
-    NEBULA_STATE_BLEND,             /* type, source, destination, logic op (updates and dither kept) */
-    NEBULA_STATE_Z_MODE,            /* compare, function, update */
-    NEBULA_STATE_ALPHA_COMPARE,     /* comparison 0, reference 0, op, comparison 1, reference 1 */
-    NEBULA_STATE_DST_ALPHA,         /* enable, alpha */
-    NEBULA_STATE_CULL,              /* NEBULA_CULL_* */
-    NEBULA_STATE_TEV_COLOR,         /* register, r, g, b, a */
-    NEBULA_STATE_MATERIAL_COLOR,    /* channel (0, 1), r, g, b, a */
-    NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
-    NEBULA_STATE_TEX_COORD_GEN,     /* coordinate, type and source (J3DNativeTexGen's encoding), normalize,
+    NEBULA_STATE_TEX_COORD_GEN = 1, /* coordinate, type and source (J3DNativeTexGen's encoding), normalize,
                                        post row; a[5] 1: also the coordinate's matrix a[6] (a slot: 0-9 position
                                        matrices, 10-19 texture matrices, 20 identity) */
     NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t (0 clamp, 1 repeat, 2 mirror), minified linear, magnified
                                        linear, levels (0 the first only, 1 nearest, 2 between), bias clamp, edge LOD,
                                        anisotropy (0 off, 1 two, 2 four); f: min LOD, max LOD, LOD bias (levels) */
     NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
-    NEBULA_STATE_FOG,               /* type, r, g, b, a; f: start, end, near, far */
-    /* Changes of some fields of a register, the others as they are (GX's partial setters): */
-    NEBULA_STATE_COLOR_UPDATE,      /* enable */
-    NEBULA_STATE_ALPHA_UPDATE,      /* enable */
     NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
     NEBULA_STATE_VIEWPORT,          /* f: left, top, width, height (pixels), near depth, far depth (0-1) */
     NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
-    NEBULA_STATE_TEV_KCOLOR,        /* konst register, r, g, b, a */
-    NEBULA_STATE_TEV_COLOR_S10,     /* register; size: r, g; f: b, a (signed 10-bit values) */
-    NEBULA_STATE_IND_TEX_MATRIX,    /* matrix id (GXIndTexMtxID), scale exponent (s8); f: offset[0][0], [1][0],
-                                       [0][1], [1][1], [0][2], [1][2] */
     NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix (0-9) */
     NEBULA_STATE_LINE_WIDTH,        /* f: width (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     NEBULA_STATE_POINT_SIZE,        /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
@@ -192,6 +174,15 @@ enum {
     NEBULA_STATE_FRAME_ALPHA,       /* changed (differs from the last one), the frame keeps alpha (1) or not (0) */
     NEBULA_STATE_TEX_OFFSETS,       /* texture coordinate, lines offset it, points offset it */
 };
+
+/* What a draw does to the target (shape_draw, immediate): the game's current values, whichever way it came by them. */
+typedef struct NebulaPassState {
+    uint8_t blend_op, blend_src, blend_dst, logic_op; /* NEBULA_BLEND_*, NEBULA_FACTOR_* */
+    uint8_t depth_test, depth_func, depth_write;      /* depth_func NEBULA_COMPARE_* */
+    uint8_t cull;                                     /* NEBULA_CULL_* */
+    uint8_t color_write, alpha_write;
+    uint8_t constant_alpha, constant_alpha_value;     /* the picture's alpha written is this value */
+} NebulaPassState;
 
 typedef struct NebulaStateOp {
     uint8_t kind;
@@ -239,7 +230,7 @@ typedef struct NebulaImmediate {
     const uint8_t* position_matrix;
     const struct NebulaDrawMatrix* matrices;
     uint32_t matrix_count;
-    uint32_t reserved3;
+    NebulaPassState pass;
 } NebulaImmediate;
 
 /* A texture coordinate a shape draw generates differently from its material (shape_draw): type and source as
@@ -881,11 +872,14 @@ typedef enum NebulaClearChannels {
 
 /* How target_capture takes its picture. */
 typedef enum NebulaCaptureFlags {
-    NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards: colour and alpha 0, depth far (where
-                                  the colour, alpha and depth updates allow) */
+    NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards: colour and alpha 0, depth far (the
+                                  ones named by the _CLEAR_ flags) */
     NEBULA_CAPTURE_HALF = 2u,  /* half size: each picture texel averages 2x2 of the frame's */
     NEBULA_CAPTURE_LUMA = 4u,  /* the red channel holds the colour's luminance */
     NEBULA_CAPTURE_DEPTH = 8u, /* the red channel holds the depth's high byte */
+    NEBULA_CAPTURE_CLEAR_COLOR = 32u,
+    NEBULA_CAPTURE_CLEAR_ALPHA = 64u,
+    NEBULA_CAPTURE_CLEAR_DEPTH = 128u,
     NEBULA_CAPTURE_FILTERED = 16u /* through the display's vertical filter (frame_show's NEBULA_CAPTURE_FILTERED) */
 } NebulaCaptureFlags;
 
@@ -1077,7 +1071,7 @@ typedef struct NebulaHostServices {
        record, kept in order with it). */
     void (*shape_draw)(void* user, uint64_t shape, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaDrawMatrix* matrices, uint32_t matrix_count,
-                       const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count);
+                       const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass);
     /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order). */
     void (*state)(void* user, const NebulaStateOp* ops, uint32_t count);
     /* Vertices drawn as the game sends them (NebulaImmediate). */
