@@ -1,12 +1,11 @@
 #pragma once
 
 #include "Inline.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 typedef void (*JKRErrorHandler)(void*, u32, int);
 void JKRDefaultMemoryErrorRoutine(void*, u32, int);
@@ -105,11 +104,11 @@ public:
     }
 
     void lock() const {
-        (const_cast< NebulaMutex* >(&mMutex))->lock();
+        (const_cast< GameMutex* >(&mMutex))->lock();
     }
 
     void unlock() const {
-        (const_cast< NebulaMutex* >(&mMutex))->unlock();
+        (const_cast< GameMutex* >(&mMutex))->unlock();
     }
 
     bool getErrorFlag() const {
@@ -172,11 +171,10 @@ public:
         sCurrentHeap = pHeap;
     }
 
-    static void setAltAramStartAdr(uintptr_t);
-    static uintptr_t getAltAramStartAdr();
 
     /* 0x806B70A8 */ static JKRHeap* sGameHeap;
-    /* 0x806B70AC */ static JKRHeap* sCurrentHeap;
+    // Each thread's own; a new thread and an async function start with their starter's.
+    static thread_local JKRHeap* sCurrentHeap;
     /* 0x806B70B0 */ static JKRHeap* sRootHeap;
     static JKRHeap* sSystemHeap;
 
@@ -191,7 +189,7 @@ public:
         return (void*)mEnd;
     }
 
-    /* 0x18 */ mutable NebulaMutex mMutex;
+    /* 0x18 */ mutable GameMutex mMutex;
     /* 0x30 */ u8* mStart;
     /* 0x34 */ u8* mEnd;
     /* 0x38 */ u32 mSize;

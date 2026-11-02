@@ -29,7 +29,7 @@ void GameSystemFontHolder::createFontFromEmbeddedData() {
 #else
     char embeddedFontPath[256];
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    snprintf(embeddedFontPath, sizeof(embeddedFontPath), "/%s/LayoutData/EmbeddedFont.arc", languagePrefix);
+    nebula_snprintf(embeddedFontPath, sizeof(embeddedFontPath), "/%s/LayoutData/EmbeddedFont.arc", languagePrefix);
 #endif
 
     _0 = static_cast< u8* >(MR::copyFileFromArchive(pArchive, embeddedFontPath, pHeap, -32));

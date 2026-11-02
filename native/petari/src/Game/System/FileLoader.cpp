@@ -1,5 +1,5 @@
 #include "Game/System/FileLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
@@ -10,8 +10,8 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
     mFileHolder = nullptr;
     mArchiveHolder = nullptr;
-    mLoaderThread = new FileLoaderThread(13, 320, MR::getStationedHeapNapa());
-    NebulaKernel::resume(mLoaderThread->mThread);
+    mLoaderThread = new FileLoaderThread(320, MR::getStationedHeap());
+    GameThreads::resume(mLoaderThread->mThread);
     mMutex.init();
     mRequestFileInfos = new RequestFileInfo[0x140];
     mFileHolder = new FileHolder();
@@ -19,7 +19,7 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
 }
 
-void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection direction, bool jam) {
+void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHeap, GameAssets::AllocDirection direction, bool jam) {
     if (isNeedToLoad(pName)) {
         if (pHeap == nullptr) {
             pHeap = MR::getCurrentHeap();
@@ -98,7 +98,7 @@ void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchi
 }
 
 void FileLoader::clearRequestFileInfo(bool) {
-    mRequestedFileCount = nullptr;
+    mRequestedFileCount = 0;
 }
 
 void FileLoader::removeHolderIfIsEqualHeap(JKRHeap* pHeap) {
@@ -132,14 +132,14 @@ const RequestFileInfo* FileLoader::getRequestFileInfoConst(const char* pName) co
 
 // string load is in the wrong spot for some reason
 RequestFileInfo* FileLoader::addRequest(const char* pName) {
-    NebulaMutex* mutex = &mMutex;
+    GameMutex* mutex = &mMutex;
     mutex->lock();
 
     RequestFileInfo* info = &mRequestFileInfos[mRequestedFileCount];
     mRequestedFileCount++;
     info->mFileEntry = nullptr;
     info->_88 = 0;
-    snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
+    nebula_snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
 
     mutex->unlock();
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/os.h>
+#include "Game/System/NebulaCalendar.hpp"
 
 class ConfigDataHolder;
 class GameDataHolder;
@@ -18,13 +18,13 @@ public:
     bool getIconId(u32*) const;
     bool isLastLoadedMario() const;
     bool isOnCompleteEndingMarioAndLuigi() const;
-    OSTime getLastModified() const;
+    NebulaCalendar::SaveTime getLastModified() const;
     void setCreated();
     void setMiiOrIconId(const void*, const u32*);
     void setLastLoadedMario(bool);
     void onCompleteEndingCurrentPlayer();
     void updateLastModified();
-    void setUserName(const wchar_t*);
+    void setUserName(const char16_t*);
     const char* getGameDataName() const;
     void makeGameDataBinary(u8*, u32) const;
     void loadFromGameDataBinary(const char*, const u8*, u32);
@@ -41,5 +41,5 @@ public:
     /* 0x08 */ bool mIsPlayerMario;
     /* 0x09 */ bool mIsGameDataCorrupted;
     /* 0x0A */ bool mIsConfigDataCorrupted;
-    /* 0x0C */ wchar_t* mUserName;
+    /* 0x0C */ char16_t* mUserName;
 };

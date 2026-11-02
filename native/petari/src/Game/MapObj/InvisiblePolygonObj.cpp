@@ -44,7 +44,7 @@ void InvisiblePolygonObj::initCollision(const JMapInfoIter& rIter) {
     const char* pName = nullptr;
     char fileName[0x40];
     MR::getObjectName(&pName, rIter);
-    snprintf(fileName, sizeof(fileName), "%s.arc", pName);
+    nebula_snprintf(fileName, sizeof(fileName), "%s.arc", pName);
 
     ResourceHolder* resource = MR::createAndAddResourceHolder(fileName);
 

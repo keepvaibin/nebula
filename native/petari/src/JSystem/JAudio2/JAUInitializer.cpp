@@ -10,28 +10,20 @@
 #include "JSystem/JAudio2/JAISoundChild.hpp"
 //
 
-#include "JSystem/JAudio2/JASAramStream.hpp"
-#include "JSystem/JAudio2/JASAudioThread.hpp"
+#include "JSystem/JAudio2/JASStream.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
-#include <revolution/os.h>
 
 JAU_JASInitializer::JAU_JASInitializer() {
     audioMemory_ = 0;
     audioMemSize_ = 0;
-    dvdThreadId_ = -1;
-    audioThreadId_ = -1;
     heapSize_ = 0x1000;
-    dvdThreadPriority_ = 3;
-    audioThreadPriority_ = 2;
     field_0x1c = 0x80;
     dspLevel_ = 1.0f;
-    aramBlockSize_ = 0x2760;
-    aramChannelNum_ = 2;
     field_0x20 = 0;
     waveArcDir_ = nullptr;
 }

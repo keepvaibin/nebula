@@ -2,8 +2,7 @@
 
 #include <RVLFaceLib.h>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 /// @brief The resource creator for the head of a Mii character.
 class MiiFaceRecipe {

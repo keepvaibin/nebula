@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 // The table's values: object pointers as often as numbers.
 typedef uintptr_t HashSortValue;

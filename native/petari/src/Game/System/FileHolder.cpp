@@ -1,14 +1,14 @@
 #include "Game/System/FileHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 #define FILE_HOLDER_STATE_NONE 0
 #define FILE_HOLDER_STATE_READING 1
 #define FILE_HOLDER_STATE_DONE 2
 
 FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, JKRHeap* pHeap, void* pContext)
-    : mEntryNum(NebulaDisc::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
+    : mEntryNum(GameAssets::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
     mQueue.init(&mMessage, 1);
 
     if (pContext) {
@@ -63,7 +63,7 @@ void FileHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
     }
 
     for (FileHolderFileEntry** i = mEntries.begin(); i != mEntries.end();) {
-        if ((*i)->mHeap == pHeap || MR::getHeapNapa((*i)->mHeap) == pHeap || MR::getHeapGDDR3((*i)->mHeap) == pHeap) {
+        if ((*i)->mHeap == pHeap) {
             delete *i;
             mEntries.erase(i);
         } else {
@@ -84,7 +84,7 @@ FileHolderFileEntry** FileHolder::removeFile(const char* pFilePath) {
 }
 
 FileHolderFileEntry* FileHolder::findEntry(const char* pFilePath) const {
-    s32 entryNum = NebulaDisc::find(pFilePath);
+    s32 entryNum = GameAssets::find(pFilePath);
     for (FileHolderFileEntry* const* pEntry = mEntries.begin(); pEntry != mEntries.end(); pEntry++) {
         if (entryNum == (*pEntry)->mEntryNum) {
             return *pEntry;

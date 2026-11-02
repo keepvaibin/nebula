@@ -23,13 +23,14 @@ DisplayListMaker::DisplayListMaker(J3DModel* pModel, const ResourceHolder* pResH
 }
 
 void DisplayListMaker::update() {
-    std::for_each(mMaterialCtrl.begin(), mMaterialCtrl.end(), std::mem_fun(&MaterialCtrl::update));
+    for (auto& item : mMaterialCtrl) {
+        item->update();
+    }
 }
 
 void DisplayListMaker::diff() {
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         if (mCurFlag[i]) {
-            MR::ProhibitSchedulerAndInterrupts prohibit(false);
             j3dSys.setMatPacket(mModel->getMatPacket(i));
             mModel->getModelData()->getMaterialNodePointer(i)->diff(getDiffFlag(i));
         }

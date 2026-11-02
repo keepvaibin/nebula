@@ -3,8 +3,7 @@
 #include <stddef.h>
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 // BRFNT in the native layout the importer writes (crates/nebula-import cook/native_data.rs font_native): host-order
 // numbers; each pointer holds its target's file offset until ResFont::Rebuild adds the file's address.

@@ -19,8 +19,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace NrvDesertLandMoveSwitch {
     NEW_NERVE(HostTypeWait, DesertLandMoveSwitch, Wait);

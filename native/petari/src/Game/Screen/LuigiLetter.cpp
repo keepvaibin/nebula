@@ -25,8 +25,8 @@ void LuigiLetter::init(const JMapInfoIter& rIter) {
 
     initLayoutManager("LuigiLetter", 1);
     initNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
-    snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s.arc", _28);
-    snprintf(textureName, sizeof(textureName), "LuigiPicture%s.bti", _28);
+    nebula_snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s.arc", _28);
+    nebula_snprintf(textureName, sizeof(textureName), "LuigiPicture%s.bti", _28);
 
     mTexture = MR::createLytTexMap(archiveName, textureName);
 
@@ -106,7 +106,7 @@ void LuigiLetter::makeArchiveListCommon(NameObjArchiveListCollector* pCollector,
     }
 
     char archiveName[256];
-    snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s", pGalaxyName);
+    nebula_snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s", pGalaxyName);
 
     pCollector->addArchive("LuigiLetter");
     pCollector->addArchive(archiveName);

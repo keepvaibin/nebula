@@ -14,7 +14,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/types.h>
 
 namespace NrvBossStinkBugActionSequencer {
     NEW_NERVE(BossStinkBugActionSequencerNrvWaitStart, BossStinkBugActionSequencer, WaitStart);

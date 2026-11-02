@@ -1,6 +1,5 @@
 #include "JSystem/JUtility/JUTPalette.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <revolution/os.h>
 #include "JSystem/JUtility/JUTException.hpp"
 
 void JUTPalette::storeTLUT(_GpuTlut param_0, ResTLUT* tlut) {

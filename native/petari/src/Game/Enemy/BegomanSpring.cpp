@@ -1,6 +1,5 @@
 
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Enemy/BegomanSpring.hpp"
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/Enemy/BegomanSpringHead.hpp"

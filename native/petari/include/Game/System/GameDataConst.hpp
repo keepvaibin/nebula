@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace GameDataConst {
     s32 getPowerStarNumToOpenGalaxy(const char*);

@@ -6,7 +6,7 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 
 void MathUtil_FORCE_MATCH_SDATA2() {

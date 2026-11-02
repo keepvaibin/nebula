@@ -39,7 +39,7 @@ bool ConfigDataMisc::isOnCompleteEndingLuigi() {
     return (mFlag & FLAG_COMPLETE_ENDING_LUIGI) != 0;
 }
 
-OSTime ConfigDataMisc::getLastModified() const {
+NebulaCalendar::SaveTime ConfigDataMisc::getLastModified() const {
     return mLastModified;
 }
 
@@ -61,7 +61,7 @@ s32 ConfigDataMisc::serialize(u8* pBuffer, u32 size) const {
     u8 flag = mFlag;
     stream.write(&flag, sizeof(flag));
 
-    OSTime lastModified = mLastModified;
+    s64 lastModified = NebulaCalendar::toFileTime(mLastModified);
     stream.write(&lastModified, sizeof(lastModified));
 
     return stream.mPosition;
@@ -79,9 +79,9 @@ s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
     if (stream.getAvailable() == 0) {
         mLastModified = 0;
     } else {
-        OSTime lastModified;
+        s64 lastModified;
         stream.read(&lastModified, sizeof(lastModified));
-        mLastModified = lastModified;
+        mLastModified = NebulaCalendar::fromFileTime(lastModified);
     }
 
     return 0;

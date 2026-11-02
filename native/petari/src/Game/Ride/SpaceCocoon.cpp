@@ -28,7 +28,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpuEnums.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
 void SpaceCocoon_FORCE_MATCH_SDATA2() {

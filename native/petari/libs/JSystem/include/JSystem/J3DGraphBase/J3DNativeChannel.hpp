@@ -1,7 +1,6 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 
 // A colour channel's lighting as the renderer takes it (nebula_game_api.h NEBULA_STATE_CHANNEL): the diffuse function (0 none, 1 signed, 2 clamped; none with specular attenuation) and the
 // attenuation (0 none, 1 specular, 2 directional, 3 spot) from GpuDiffuseFn and GpuAttnFn.

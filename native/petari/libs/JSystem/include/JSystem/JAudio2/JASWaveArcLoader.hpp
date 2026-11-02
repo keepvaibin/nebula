@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 
 class JKRHeap;
 class JKRSolidHeap;
@@ -65,10 +67,14 @@ struct JASWaveArc : JASDisposer {
 
     /* 0x04 */ mutable JASHeap mHeap;
     /* 0x48 */ u32 _48;
-    /* 0x4C */ volatile s32 mStatus;
+    /* 0x4C */ NebulaAtomic< s32 > mStatus;
     /* 0x50 */ int mEntryNum;
     /* 0x54 */ u32 mFileLength;
     /* 0x58 */ u16 _58;
     /* 0x5A */ u16 _5A;
-    /* 0x5C */ NebulaMutex mMutex;
+    /* 0x5C */ GameMutex mMutex;
+
+    // Until an archive has finished loading since the last wait.
+    static void waitLoadDone();
+    static GameEvent sLoadDone;
 };

@@ -88,7 +88,7 @@ void Syati::init(const JMapInfoIter& rIter) {
     MR::calcModelBoundingRadius(&mClippingRange, this);
     MR::setClippingTypeSphere(this, mClippingRange);
     MR::validateClipping(this);
-    initEffectKeeper(1, nullptr, nullptr);
+    initEffectKeeper(1, nullptr, false);
 
     if (mSwimMode) {
         MR::initEffectSyncBck(this, "Ripple", ::cBckForRipple);

@@ -10,7 +10,6 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "revolution/os.h"
 
 void MarioModule_FORCE_EMIT_STRING() {
     JUTNativeLog("P_PlanetMap");

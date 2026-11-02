@@ -3,8 +3,7 @@
 #include "JSystem/JGeometry/TMatrix.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 struct J3DGXColor : public NebulaColor8 {
     J3DGXColor() {
@@ -50,7 +49,7 @@ struct J3DFogInfo {
 
 struct J3DBlendInfo {
     void operator=(J3DBlendInfo const& other) {
-        __memcpy(this, &other, sizeof(J3DBlendInfo));
+        memcpy(this, &other, sizeof(J3DBlendInfo));
     }
 
     /* 0x0 */ u8 mType;
@@ -143,7 +142,7 @@ struct J3DNBTScaleInfo {
 
 struct J3DTevOrderInfo {
     void operator=(const J3DTevOrderInfo& other) {
-        __memcpy(this, &other, sizeof(J3DTevOrderInfo));
+        memcpy(this, &other, sizeof(J3DTevOrderInfo));
     }
 
     /* 0x0 */ u8 mTexCoord;
@@ -209,7 +208,7 @@ struct J3DIndTexOrderInfo {
     /* 0x3 */ u8 field_0x3;
 
     void operator=(J3DIndTexOrderInfo const& other) {
-        __memcpy(this, &other, sizeof(J3DIndTexOrderInfo));
+        memcpy(this, &other, sizeof(J3DIndTexOrderInfo));
     }
 };  // Size: 0x04
 
@@ -226,7 +225,7 @@ struct J3DIndTexCoordScaleInfo {
     /* 0x3 */ u8 field_0x3;
 
     J3DIndTexCoordScaleInfo& operator=(const J3DIndTexCoordScaleInfo& other) {
-        __memcpy(this, &other, sizeof(J3DIndTexCoordScaleInfo));
+        memcpy(this, &other, sizeof(J3DIndTexCoordScaleInfo));
         return *this;
     }
 };  // Size: 0x4
@@ -262,7 +261,7 @@ struct J3DGXColorS10 : public NebulaColor16 {
     }
 
     J3DGXColorS10& operator=(const NebulaColor16& color) NO_INLINE {
-        __memcpy(this, &color, sizeof(NebulaColor16));
+        memcpy(this, &color, sizeof(NebulaColor16));
         return *this;
     }
 };

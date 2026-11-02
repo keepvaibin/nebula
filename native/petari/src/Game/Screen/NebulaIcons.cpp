@@ -18,7 +18,6 @@
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/material.h>
 #include <nw4r/ut/ResFont.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 
@@ -874,7 +873,7 @@ namespace {
             text[0] = static_cast< char >('0' + slot - NEBULA_KEY_0);
             setLine(k.mLine[0], text, 1.0f);
         } else if (slot < NEBULA_KEY_NUM0) {
-            snprintf(text, sizeof(text), "F%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
+            nebula_snprintf(text, sizeof(text), "F%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
             setLine(k.mLine[0], text, 1.0f);
         } else if (slot <= NEBULA_KEY_NUM_DECIMAL) {
             // The number pad's: NUM over its own legend.
@@ -1149,26 +1148,26 @@ namespace {
             "win-right"};
         static const char* const cMice[5] = {"mouse-left", "mouse-right", "mouse-middle", "mouse-back", "mouse-forward"};
         if (slot < NEBULA_KEY_0) {
-            snprintf(pName, capacity, "key-%c", static_cast< char >('a' + slot));
+            nebula_snprintf(pName, capacity, "key-%c", static_cast< char >('a' + slot));
         } else if (slot < NEBULA_KEY_F1) {
-            snprintf(pName, capacity, "key-%d", static_cast< int >(slot - NEBULA_KEY_0));
+            nebula_snprintf(pName, capacity, "key-%d", static_cast< int >(slot - NEBULA_KEY_0));
         } else if (slot < NEBULA_KEY_NUM0) {
-            snprintf(pName, capacity, "key-f%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
+            nebula_snprintf(pName, capacity, "key-f%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
         } else if (slot < NEBULA_KEY_NUM_ADD) {
-            snprintf(pName, capacity, "key-num%d", static_cast< int >(slot - NEBULA_KEY_NUM0));
+            nebula_snprintf(pName, capacity, "key-num%d", static_cast< int >(slot - NEBULA_KEY_NUM0));
         } else if (slot < NEBULA_KEY_SPACE) {
             static const char* const cNumbers[5] = {"add", "subtract", "multiply", "divide", "decimal"};
-            snprintf(pName, capacity, "key-num-%s", cNumbers[slot - NEBULA_KEY_NUM_ADD]);
+            nebula_snprintf(pName, capacity, "key-num-%s", cNumbers[slot - NEBULA_KEY_NUM_ADD]);
         } else if (slot < NEBULA_KEY_LAYOUT_FIRST) {
-            snprintf(pName, capacity, "key-%s", cNames[slot - NEBULA_KEY_SPACE]);
+            nebula_snprintf(pName, capacity, "key-%s", cNames[slot - NEBULA_KEY_SPACE]);
         } else if (slot < NEBULA_KEY_MOUSE_LEFT) {
-            snprintf(pName, capacity, "key-layout-%d", static_cast< int >(slot - NEBULA_KEY_LAYOUT_FIRST + 1));
+            nebula_snprintf(pName, capacity, "key-layout-%d", static_cast< int >(slot - NEBULA_KEY_LAYOUT_FIRST + 1));
         } else if (slot < NEBULA_KEY_OTHER) {
-            snprintf(pName, capacity, "%s", cMice[slot - NEBULA_KEY_MOUSE_LEFT]);
+            nebula_snprintf(pName, capacity, "%s", cMice[slot - NEBULA_KEY_MOUSE_LEFT]);
         } else if (slot == cKeyPad) {
-            snprintf(pName, capacity, "control-pad");
+            nebula_snprintf(pName, capacity, "control-pad");
         } else {
-            snprintf(pName, capacity, "key-named-%d", static_cast< int >(slot - cKeyNamed + 1));
+            nebula_snprintf(pName, capacity, "key-named-%d", static_cast< int >(slot - cKeyNamed + 1));
         }
     }
 
@@ -1388,7 +1387,7 @@ namespace {
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
         const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 3u) & ~3u;
         const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
-        JKRHeap* pHeap = MR::getStationedHeapGDDR3();
+        JKRHeap* pHeap = MR::getStationedHeap();
         u8* pBlock = bytes <= NebulaIcons::cStationedBytes && pHeap != nullptr && pHeap->getFreeSize() >= static_cast< s32 >(bytes + 64u)
                          ? static_cast< u8* >(JKRHeap::alloc(bytes, 32, pHeap))
                          : nullptr;
@@ -1628,13 +1627,13 @@ namespace {
                     paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText);
                     canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
-                    snprintf(name, sizeof(name), "%s/%s", cFamilyNames[family], cAtlas[k].mName);
+                    nebula_snprintf(name, sizeof(name), "%s/%s", cFamilyNames[family], cAtlas[k].mName);
                     NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                            pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                     NebulaHost::artExport(&art);
                 }
                 const u8* pTexels = texelsOf(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets + sheet) * sFont.mSheetBytes);
-                snprintf(name, sizeof(name), "%s/sheet-%d", cFamilyNames[family], static_cast< int >(sheet + 1));
+                nebula_snprintf(name, sizeof(name), "%s/sheet-%d", cFamilyNames[family], static_cast< int >(sheet + 1));
                 NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pTexels, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
                 NebulaHost::artExport(&art);
@@ -1650,7 +1649,7 @@ namespace {
                     Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
                     paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look]);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
-                    snprintf(name, sizeof(name), "%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
+                    nebula_snprintf(name, sizeof(name), "%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
                     const u8* pTexels = texelsOf(sExportPicture.mRecord);
                     NebulaArtExport art = {name, pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
                                            pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
@@ -1682,13 +1681,13 @@ namespace {
                 canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                 keyName(slot, keyText, sizeof(keyText));
-                snprintf(name, sizeof(name), "Keyboard/%s", keyText);
+                nebula_snprintf(name, sizeof(name), "Keyboard/%s", keyText);
                 NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                 NebulaHost::artExport(&art);
             }
             const u8* pTexels = texelsOf(sFont.mSheets + (sFont.mKeyFirstSheet + sheet) * sFont.mSheetBytes);
-            snprintf(name, sizeof(name), "Keyboard/sheet-%d", static_cast< int >(sheet + 1));
+            nebula_snprintf(name, sizeof(name), "Keyboard/sheet-%d", static_cast< int >(sheet + 1));
             NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                    pTexels, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
             NebulaHost::artExport(&art);
@@ -1704,7 +1703,7 @@ namespace {
                 paintKey(hd, slot, cPictureLooks[look], cUs, cArrowKeys);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                 keyName(slot, keyText, sizeof(keyText));
-                snprintf(name, sizeof(name), "Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
+                nebula_snprintf(name, sizeof(name), "Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
                 const u8* pTexels = texelsOf(sExportPicture.mRecord);
                 NebulaArtExport art = {name, pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};

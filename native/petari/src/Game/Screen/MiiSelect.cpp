@@ -9,7 +9,6 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "revolution/types.h"
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <RVLFaceLib.h>
 
@@ -65,7 +64,7 @@ void MiiSelect::appear() {
     updateButtons();
     _1F8->invalidateAllIcon();
     _1FC->invalidateAllIcon();
-    MR::setTextBoxMessageRecursive(this, "TxtName", L"");
+    MR::setTextBoxMessageRecursive(this, "TxtName", u"");
 }
 
 void MiiSelect::disappear() {
@@ -382,7 +381,7 @@ void MiiSelect::setCurrentPageNum() {
     s32 v2 = (getIconNum() - 1) / 8;
     s32 v1 = _1EC / 8;
 
-    MR::setTextBoxFormatRecursive(this, "TxtPage", L"%d/%d", v1 + 1, v2 + 1);
+    MR::setTextBoxFormatRecursive(this, "TxtPage", u"%d/%d", v1 + 1, v2 + 1);
 }
 
 void MiiSelect::validateAllIcon() {
@@ -477,7 +476,7 @@ namespace MiiSelectSub {
     }
 
     inline void setPointedMiiName(MiiSelect* pHost, s32 index) {
-        wchar_t name[MII_NAME_LEN + 1];
+        char16_t name[MII_NAME_LEN + 1];
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), pHost->makeIconID(index));
         MR::setTextBoxMessageRecursive(pHost, "TxtName", name);
     }
@@ -506,7 +505,7 @@ namespace MiiSelectSub {
         }
 
         if (!isPointingAny) {
-            MR::setTextBoxMessageRecursive(mHost, "TxtName", L"");
+            MR::setTextBoxMessageRecursive(mHost, "TxtName", u"");
         }
     }
 
@@ -520,7 +519,7 @@ namespace MiiSelectSub {
         for (s32 i = 0; i < ARRAY_SIZE(mIconArray); i++) {
             char paneName[128];
 
-            snprintf(paneName, sizeof(paneName), "Mii%02d", v + i);
+            nebula_snprintf(paneName, sizeof(paneName), "Mii%02d", v + i);
             MR::setLayoutPosAtPaneTrans(mIconArray[i], mHost, paneName);
             mIconArray[i]->calcAnim();
         }

@@ -110,7 +110,7 @@ struct J3DTexCoord {
     }
 
     void setTexCoordInfo(const J3DTexCoordInfo& info) {
-        __memcpy(this, &info, sizeof(J3DTexCoordInfo));
+        memcpy(this, &info, sizeof(J3DTexCoordInfo));
     }
 
     u8 getTexGenType() const {
@@ -138,7 +138,7 @@ struct J3DTexCoord {
     }
 
     J3DTexCoord& operator=(const J3DTexCoord& other) NO_INLINE {
-        __memcpy(this, &other, sizeof(J3DTexCoordInfo));
+        memcpy(this, &other, sizeof(J3DTexCoordInfo));
         return *this;
     }
 

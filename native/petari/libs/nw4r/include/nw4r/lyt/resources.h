@@ -3,8 +3,7 @@
 #include "nw4r/lyt/types.h"
 #include "nw4r/math/types.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 // BRLYT/BRLAN, read in place in host order as the importer cooks them (crates/nebula-import
 // cook/native_data.rs layout).

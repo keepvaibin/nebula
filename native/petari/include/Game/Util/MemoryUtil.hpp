@@ -19,12 +19,8 @@ namespace MR {
     JKRHeap* getCurrentHeap();
     f32 getHeapFreeRatio(JKRHeap* pHeap);
     JKRHeap* getAproposHeapForSceneArchive(f32 maxFreeSizeRate);
-    JKRExpHeap* getStationedHeapNapa();
-    JKRExpHeap* getStationedHeapGDDR3();
-    JKRSolidHeap* getSceneHeapNapa();
-    JKRSolidHeap* getSceneHeapGDDR3();
-    JKRHeap* getHeapNapa(const JKRHeap* pHeap);
-    JKRHeap* getHeapGDDR3(const JKRHeap* pHeap);
+    JKRExpHeap* getStationedHeap();
+    JKRSolidHeap* getSceneHeap();
     void becomeCurrentHeap(JKRHeap* pHeap) NO_INLINE;
     bool isEqualCurrentHeap(JKRHeap* pHeap);
     void adjustHeapSize(JKRExpHeap* pHeap, const char* pParam2);
@@ -52,7 +48,5 @@ namespace MR {
     /// @return The computed checksum.
     u32 calcCheckSum(const void* pPtr, u32 size);
 
-    void* allocFromWPadHeap(u32 size);
-    u8 freeFromWPadHeap(void* pPtr);
 
 };  // namespace MR

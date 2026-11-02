@@ -1,8 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 namespace MR {
     /// @brief Appends `pChild` to `pParent` as a new component to the path.
@@ -18,26 +17,26 @@ namespace MR {
     /// @param year The number in the years place.
     /// @param month The number in the months place.
     /// @param day The number in the days place.
-    void makeDateString(wchar_t* pDst, s32 size, s32 year, s32 month, s32 day);
+    void makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day);
 
     /// @brief Creates a localized timestamp with minute precision.
     /// @param pDst The output pointer for the timestamp.
     /// @param size The size of the timestamp buffer, in bytes.
     /// @param hour The number in the hours place.
     /// @param minute The number in the minutes place.
-    void makeTimeString(wchar_t* pDst, s32 size, s32 hour, s32 minute);
+    void makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute);
 
     /// @brief Creates a localized timestamp with centisecond precision.
     /// @param pDst The output pointer for the timestamp.
     /// @param frame The number of frames to convert.
-    void makeClearTimeString(wchar_t* pDst, u32 frame);
+    void makeClearTimeString(char16_t* pDst, u32 frame);
 
     /// @brief Creates a localized timestamp with second precision.
     /// @param pDst The output pointer for the timestamp.
     /// @param frame The number of frames to convert.
-    void makeMinuteAndSecondString(wchar_t* pDst, u32 frame);
+    void makeMinuteAndSecondString(char16_t* pDst, u32 frame);
 
-    wchar_t* addNumberFontTag(wchar_t* pDst, int tag);
+    char16_t* addNumberFontTag(char16_t* pDst, int tag);
 
     /// @brief Removes the file extension from the given path.
     /// @param pDst The output pointer for the path.
@@ -49,11 +48,11 @@ namespace MR {
     /// @brief Creates a localized timestamp for the given race's best time.
     /// @param pDst The output pointer for the timestamp.
     /// @param raceId The identifier of the target race.
-    void makeRaceBestTimeString(wchar_t* pDst, int raceId);
+    void makeRaceBestTimeString(char16_t* pDst, int raceId);
 
     /// @brief Creates a localized timestamp for the current race's elapsed time.
     /// @param pDst The output pointer for the timestamp.
-    void makeRaceCurrentTimeString(wchar_t* pDst);
+    void makeRaceCurrentTimeString(char16_t* pDst);
 
     /// @brief Copies `num` characters from `pSrc` to `pDst`.
     /// @param pDst The pointer to the null-terminated character string to copy to.
@@ -65,18 +64,18 @@ namespace MR {
     /// @param pDst The pointer to the null-terminated wide character string to copy to.
     /// @param pSrc The pointer to the null-terminated wide character string to copy from.
     /// @param num The number of characters to copy.
-    void copyString(wchar_t* pDst, const wchar_t* pSrc, u32 num);
+    void copyString(char16_t* pDst, const char16_t* pSrc, u32 num);
 
-    wchar_t* addPictureFontCode(wchar_t* pDst, int code);
-    wchar_t* addPictureFontTag(wchar_t* pDst, int tag);
-    wchar_t* addPictureFontTagPlayerIcon(wchar_t* pDst);
+    char16_t* addPictureFontCode(char16_t* pDst, int code);
+    char16_t* addPictureFontTag(char16_t* pDst, int tag);
+    char16_t* addPictureFontTagPlayerIcon(char16_t* pDst);
 
     /// @brief Writes a terminated newline character at the given wide character pointer.
     /// @param pDst The pointer to the wide character.
     /// @return The pointer to the new null terminator character.
-    wchar_t* addNewLine(wchar_t* pDst);
+    char16_t* addNewLine(char16_t* pDst);
 
-    wchar_t* addNumberFontTag(wchar_t* pDst, const wchar_t* pFmt, ...);
+    char16_t* addNumberFontTag(char16_t* pDst, const char16_t* pFmt, ...);
 
     /// @brief Returns the final component of the given path.
     /// @param pPath The pointer to the null-terminated path.
@@ -94,7 +93,7 @@ namespace MR {
     /// @param pSrc The pointer to the null-terminated wide character string to transcode.
     /// @param num The number of characters to transcode, including the null terminator character.
     /// @return The number of characters transcoded, excluding the null terminator character.
-    int convertUTF16ToASCII(char* pDst, const wchar_t* pSrc, s32 num);
+    int convertUTF16ToASCII(char* pDst, const char16_t* pSrc, s32 num);
 
     /// @brief Compares two character strings for equivalence without regard to case sensitivity.
     /// @param pStr1 The pointer to the left-hand null-terminated character string.
@@ -145,8 +144,8 @@ namespace MR {
     /// @return `true` if the pointer to the string is `nullptr` or contains no characters, `false` otherwise.
     bool isNullOrEmptyString(const char* pStr);
 
-    bool isMessageEditorNextTag(const wchar_t*);
-    int getStringLengthWithMessageTag(const wchar_t*);
+    bool isMessageEditorNextTag(const char16_t*);
+    int getStringLengthWithMessageTag(const char16_t*);
 
     /// @brief Parses the given character string into a signed 32-bit integer.
     /// @param pSrc The pointer to the null-terminated character string to read from.

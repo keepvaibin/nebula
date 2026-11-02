@@ -57,7 +57,7 @@ namespace nw4r {
             virtual void CalculateMtx(const DrawInfo&);
             virtual void Draw(const DrawInfo&);
             virtual void Animate(u32);
-            virtual void SetTagProcessor(ut::TagProcessorBase< wchar_t >*);
+            virtual void SetTagProcessor(ut::TagProcessorBase< char16_t >*);
 
             const ut::Rect GetLayoutRect() const;
 

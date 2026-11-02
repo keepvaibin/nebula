@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/NPC/NPCActor.hpp"
-#include <revolution/types.h>
 
 class ButlerStateStarPieceReaction;
 class JMapInfoIter;

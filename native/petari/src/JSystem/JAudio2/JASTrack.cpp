@@ -9,7 +9,6 @@
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 
 #include <cstring>
-#include <revolution/os.h>
 
 JASTrack::JASTrack() : mSeqCtrl(), mRegisterParam(), mDefaultChannelMgr(this), mChannelMgrCount(1), mStatus(STATUS_FREE), mNode() {
     mChannelMgrs[0] = &mDefaultChannelMgr;

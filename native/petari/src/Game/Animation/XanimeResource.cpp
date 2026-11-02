@@ -5,7 +5,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <cstring>
-#include <revolution/types.h>
 
 static bool unknownByte;
 XanimeResourceTable::XanimeResourceTable(ResourceHolder* pArg) {

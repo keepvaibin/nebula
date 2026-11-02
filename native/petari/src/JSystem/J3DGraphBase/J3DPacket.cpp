@@ -9,7 +9,7 @@
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <cstdio>
-#include <mem.h>
+#include <cstring>
 
 J3DError J3DDisplayListObj::newDisplayList() {
     mpNebulaMaterial = J3DNativeMaterial::create();

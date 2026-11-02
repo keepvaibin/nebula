@@ -9,7 +9,6 @@
 #include "Game/MapObj/ElectricRailHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <NebulaGpuEnums.h>
 

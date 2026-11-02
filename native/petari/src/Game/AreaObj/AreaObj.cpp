@@ -7,7 +7,6 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <algorithm>
-#include <functional.hpp>
 
 AreaObj::AreaObj(int formType, const char* pName)
     : NameObj(pName), mFormType(formType), mIsValid(true), _15(true), mIsAwake(true), mObjArg0(-1), mObjArg1(-1), mObjArg2(-1), mObjArg3(-1),
@@ -109,16 +108,12 @@ void AreaObjMgr::entry(AreaObj* pAreaObj) {
 }
 
 AreaObj* AreaObjMgr::find_in(const TVec3f& rVec) const {
-    AreaObj* const* Begin = mArray.begin();
-    AreaObj* const* End = mArray.end();
-    AreaObj* const* p = std::rfind_if(
-        End - 1, Begin - 1,
-        std::binder2nd< std::const_mem_fun1_t< bool, AreaObj, const TVec3f& >, const TVec3f& >(std::mem_func(&AreaObj::isInVolume), rVec));
-
-    p = (p == Begin - 1 ? End : p);
-
-    if (p != mArray.end()) {
-        return *p;
+    // The last one added wins.
+    for (AreaObj* const* p = mArray.end(); p != mArray.begin();) {
+        p--;
+        if ((*p)->isInVolume(rVec)) {
+            return *p;
+        }
     }
 
     return nullptr;

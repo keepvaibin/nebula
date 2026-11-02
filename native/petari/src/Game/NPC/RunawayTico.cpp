@@ -139,7 +139,7 @@ void RunawayTico::setPosAllCaught() {
     MR::onRootNodeAutomatic(mMsgCtrl);
 
     char posName[265];
-    snprintf(posName, sizeof(posName), "TicoDemoPos%d", mDemoCastID + 1);
+    nebula_snprintf(posName, sizeof(posName), "TicoDemoPos%d", mDemoCastID + 1);
 
     MR::setNPCActorPos(this, posName);
     setInitPose();

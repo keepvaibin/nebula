@@ -64,10 +64,10 @@ static void infoFromMii_(const NebulaMii* m, Mii_CharInfo* info) {
     info->body.build = m->build;
 
     for (i = 0; i < MII_NAME_LEN; i++) {
-        info->personal.name[i] = (wchar_t)m->name[i];
+        info->personal.name[i] = (char16_t)m->name[i];
     }
     for (i = 0; i < MII_CREATOR_LEN; i++) {
-        info->personal.creator[i] = (wchar_t)m->creator[i];
+        info->personal.creator[i] = (char16_t)m->creator[i];
     }
     info->personal.sex = m->sex;
     info->personal.bmonth = m->birth_month;
@@ -154,7 +154,7 @@ BOOL Mii_IsSameID(const MiiCreateID* id1, const MiiCreateID* id2) {
 }
 
 BOOL Mii_IsValidName2(const Mii_CharInfo* info) {
-    return info != NULL && info->personal.name[0] != L'\0';
+    return info != NULL && info->personal.name[0] != u'\0';
 }
 
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii) {

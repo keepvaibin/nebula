@@ -59,7 +59,7 @@ public:
     TalkNode* getNextNodeEvent() const;
     void updateMessage();
     void readMessage();
-    const wchar_t* getSubMessage() const;
+    const char16_t* getSubMessage() const;
     void forwardCurrentBranchNode(bool);
     void createFlowNode(TalkMessageCtrl*, const JMapInfoIter&, const char*, ActorCameraInfo**);
     void initNodeRecursive(TalkMessageCtrl*, const JMapInfoIter&, ActorCameraInfo*, RecursiveHelper*);

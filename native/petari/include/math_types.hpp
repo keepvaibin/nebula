@@ -1,8 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 const f32 HALF_PI = 1.5707964f;
 const f64 HALF_PI_D = 1.57079637050628662109375;
@@ -19,8 +18,3 @@ const f32 FLOAT_ZERO = 0.0f;
 
 extern const Vec gZeroVec;
 
-namespace std {
-    inline f32 atan2(f32 x, f32 y) {
-        return ::atan2(x, y);
-    }
-};  // namespace std

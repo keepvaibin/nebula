@@ -143,7 +143,7 @@ namespace MR {
     }
 
     void loadProjectionMtx() {
-        J3DNativeView::setProjection(::getCameraContext()->mProjection, (GpuProjectionType) nullptr);
+        J3DNativeView::setProjection(::getCameraContext()->mProjection, (GpuProjectionType) 0);
     }
 
     void loadViewMtx() {
@@ -517,7 +517,7 @@ namespace MR {
 namespace {
     char* createRegisterName(const NameObj* pNameObj, u32 id) {
         char buff[256];
-        snprintf(buff, 256, "%s-%d", pNameObj->getName(), id);
+        nebula_snprintf(buff, 256, "%s-%d", pNameObj->getName(), id);
 
         char* out = new char[strlen(buff) + 1];
         strcpy(out, buff);

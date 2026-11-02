@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Boss/DodoryuStateLv1.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/LiveActor/HitSensor.hpp"

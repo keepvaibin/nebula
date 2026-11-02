@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct JASSoundParams {
     void clamp();

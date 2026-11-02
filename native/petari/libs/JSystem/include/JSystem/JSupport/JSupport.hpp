@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include <stdint.h>
 
 template < typename T >

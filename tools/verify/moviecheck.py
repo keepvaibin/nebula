@@ -4,27 +4,15 @@ order), every frame: the header's fields, each frame's next size, the JPEG bytes
 import struct
 import sys
 
+import pakfiles
+
 HEADER = 0x40
 FRAME_HEADER = 0x10
 AUDIO_HEADER = 0x50
 
 
 def files(pak):
-    pak.seek(0x424)
-    at, size = (v << 2 for v in struct.unpack(">II", pak.read(8)))
-    pak.seek(at)
-    fst = pak.read(size)
-    count = struct.unpack_from(">I", fst, 8)[0]
-    names = count * 12
-    out = {}
-    for n in range(1, count):
-        w, a, b = struct.unpack_from(">III", fst, n * 12)
-        if w >> 24:
-            continue
-        label = fst[names + (w & 0xFFFFFF) : fst.index(b"\0", names + (w & 0xFFFFFF))].decode("latin-1")
-        if label.lower().endswith(".thp"):
-            out[label] = (a << 2, b)
-    return out
+    return {path.rsplit("/", 1)[-1]: at for path, at in pakfiles.files(pak).items() if path.lower().endswith(".thp")}
 
 
 def check(name, src, dst):

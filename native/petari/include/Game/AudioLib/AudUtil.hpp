@@ -1,8 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 namespace AudUtil {
     /// @brief Maps a number from the interval `[0, max]` to the interval `[0.0f, end]`.

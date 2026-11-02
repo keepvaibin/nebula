@@ -2,8 +2,7 @@
 
 #include "Game/Util/Color.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 typedef void (*PreRenderCallback)();
 

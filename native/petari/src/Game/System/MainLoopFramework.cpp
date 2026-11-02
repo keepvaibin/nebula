@@ -1,18 +1,15 @@
 #include "Game/System/MainLoopFramework.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include <revolution/os.h>
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JUtility/JUTAssert.hpp>
 #include <JSystem/JUtility/JUTConsole.hpp>
 #include "Game/Util/RenderSignals.hpp"
-#include <runtime.h>
 #include "Game/System/NebulaFrameClock.hpp"
 
 MainLoopFramework* MainLoopFramework::sManager;

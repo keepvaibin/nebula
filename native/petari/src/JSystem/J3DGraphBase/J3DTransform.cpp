@@ -3,7 +3,7 @@
 #include "JSystem/JMath.hpp"
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include <cmath>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 const J3DTransformInfo j3dDefaultTransformInfo = {
     {1.0f, 1.0f, 1.0f},

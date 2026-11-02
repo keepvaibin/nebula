@@ -38,12 +38,12 @@ public:
     virtual Operation CalcRect(nw4r::ut::Rect*, u16, ContextType*) override;
 
     void setArgNumber(s32, s32);
-    void setArgString(const wchar_t*, s32);
+    void setArgString(const char16_t*, s32);
     void initAlpha(f32, f32, s32, s32);
-    void reset(const wchar_t*);
-    MessageEditorMessageTag getReplaceTag(const wchar_t*, s32, s32, s32) const;
+    void reset(const char16_t*);
+    MessageEditorMessageTag getReplaceTag(const char16_t*, s32, s32, s32) const;
     bool isIgnoreTag(u16, ContextType*) const;
-    bool writeString(nw4r::ut::Rect*, const wchar_t*, ContextType*);
+    bool writeString(nw4r::ut::Rect*, const char16_t*, ContextType*);
     Operation exeDisplayGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeSoundGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exePictureGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);

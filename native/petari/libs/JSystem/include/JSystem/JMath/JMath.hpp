@@ -1,7 +1,6 @@
 #pragma once
 
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 void JMAMTXApplyScale(const Mtx, Mtx, f32, f32, f32);
 void JMAVECLerp(const Vec*, const Vec*, Vec*, f32);

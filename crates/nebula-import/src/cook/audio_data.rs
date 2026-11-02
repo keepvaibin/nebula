@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 
 const AST_HEADER: usize = 0x40;
 const AST_BLOCK_HEADER: usize = 0x20;
-const FORMAT_ADPCM: u8 = 0;
+const STREAM_HEADER: usize = 32;
 const FORMAT_PCM16: u8 = 1;
 /// A wave's format in a wave system.
 const WAVE_PCM16: u8 = 3;
@@ -28,54 +28,67 @@ fn turn_samples(samples: &mut [u8]) {
     }
 }
 
-/// An AST stream in host order: the header's numbers, each block's size and last samples, PCM16 samples. Its tag reads
-/// 'STRM' as a host number: the game refuses a disc stream by it.
+/// A stream as the game plays it (JASStream.hpp): the numbers it needs as host numbers, then each channel's PCM16 samples in
+/// turn. The disc's blocks and their hold-over samples are gone: the whole file is in memory while it plays.
 pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() < AST_HEADER || &bytes[..4] != b"STRM" {
         bail!("not an AST stream");
     }
     let format = bytes[9];
-    if format != FORMAT_ADPCM && format != FORMAT_PCM16 {
+    if format != FORMAT_PCM16 {
         bail!("stream format {format}");
     }
     let channels = u16::from_be_bytes([bytes[0xC], bytes[0xD]]) as usize;
     if channels == 0 || channels > 6 {
         bail!("{channels} channels in a stream");
     }
-    let mut out = bytes.to_vec();
-    turn(&mut out, 0, 4)?;
-    turn(&mut out, 4, 4)?;
-    for at in [0xC, 0xE] {
-        turn(&mut out, at, 2)?;
+    let loop_flag = u16::from_be_bytes([bytes[0xE], bytes[0xF]]) as u32;
+    let rate = be32(bytes, 0x10)?;
+    let samples = be32(bytes, 0x14)? as usize;
+    let loop_start = be32(bytes, 0x18)?;
+    let loop_end = be32(bytes, 0x1C)?;
+    if loop_end as usize > samples || loop_start > loop_end {
+        bail!("a loop past the stream's samples");
     }
-    for at in [0x10, 0x14, 0x18, 0x1C, 0x20, 0x24] {
-        turn(&mut out, at, 4)?;
+    let header: [u32; 8] = [
+        u32::from_be_bytes(*b"NSTR"),
+        channels as u32,
+        rate,
+        samples as u32,
+        loop_flag,
+        loop_start,
+        loop_end,
+        bytes[0x28] as u32,
+    ];
+    let mut out = vec![0u8; STREAM_HEADER + samples * 2 * channels];
+    for (i, value) in header.iter().enumerate() {
+        out[i * 4..i * 4 + 4].copy_from_slice(&value.to_le_bytes());
     }
+    let mut written = 0usize; // bytes of each channel so far
     let mut at = AST_HEADER;
     while at < bytes.len() {
         if bytes.get(at..at + 4) != Some(b"BLCK".as_slice()) {
             bail!("no block at {at:#x}");
         }
         let size = be32(bytes, at + 4)? as usize;
-        turn(&mut out, at, 4)?;
-        turn(&mut out, at + 4, 4)?;
-        for o in (8..AST_BLOCK_HEADER).step_by(2) {
-            turn(&mut out, at + o, 2)?;
-        }
         let data = at + AST_BLOCK_HEADER;
-        // On the disc a last block's size can overrun the file by up to a 32-byte unit per channel; the game reads to the
-        // file's end. Anything more is not a stream.
-        let mut end = data + size * channels;
-        if end > bytes.len() {
-            if end - bytes.len() > 32 * channels {
+        // On the disc a last block's size can overrun the file by up to a 32-byte unit per channel. Anything more is not a stream.
+        let mut per_channel = size;
+        if data + size * channels > bytes.len() {
+            if data + size * channels - bytes.len() > 32 * channels {
                 bail!("a block at {at:#x} past the stream's end");
             }
-            end = bytes.len();
+            per_channel = bytes.len().saturating_sub(data + size * (channels - 1));
         }
-        if format == FORMAT_PCM16 {
-            turn_samples(&mut out[data..end]);
+        for channel in 0..channels {
+            let source = &bytes[data + size * channel..data + size * channel + per_channel];
+            let take = per_channel.min((samples * 2).saturating_sub(written));
+            let target = STREAM_HEADER + samples * 2 * channel + written;
+            out[target..target + take].copy_from_slice(&source[..take]);
+            turn_samples(&mut out[target..target + take]);
         }
-        at = end;
+        written = (written + per_channel).min(samples * 2);
+        at = data + size * (channels - 1) + per_channel;
     }
     Ok(out)
 }
@@ -149,22 +162,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_stream_in_host_order() {
+    fn a_stream_cooked() {
         let mut s = vec![0u8; AST_HEADER + AST_BLOCK_HEADER + 8];
         s[..4].copy_from_slice(b"STRM");
         s[9] = FORMAT_PCM16;
         s[0xC..0xE].copy_from_slice(&2u16.to_be_bytes());
-        s[0x18..0x1C].copy_from_slice(&7u32.to_be_bytes());
+        s[0x10..0x14].copy_from_slice(&32000u32.to_be_bytes());
+        s[0x14..0x18].copy_from_slice(&2u32.to_be_bytes());
+        s[0x1C..0x20].copy_from_slice(&2u32.to_be_bytes());
         s[AST_HEADER..AST_HEADER + 4].copy_from_slice(b"BLCK");
         s[AST_HEADER + 4..AST_HEADER + 8].copy_from_slice(&4u32.to_be_bytes());
         let data = AST_HEADER + AST_BLOCK_HEADER;
         s[data..data + 2].copy_from_slice(&0x1234u16.to_be_bytes());
+        s[data + 4..data + 6].copy_from_slice(&0x5678u16.to_be_bytes());
         let cooked = ast(&s).unwrap();
-        assert_eq!(&cooked[..4], b"MRTS");
-        assert_eq!(u16::from_le_bytes([cooked[0xC], cooked[0xD]]), 2);
-        assert_eq!(u32::from_le_bytes(cooked[0x18..0x1C].try_into().unwrap()), 7);
-        assert_eq!(u32::from_le_bytes(cooked[AST_HEADER + 4..AST_HEADER + 8].try_into().unwrap()), 4);
-        assert_eq!(i16::from_le_bytes([cooked[data], cooked[data + 1]]), 0x1234);
+        assert_eq!(&cooked[..4], b"RTSN");
+        assert_eq!(u32::from_le_bytes(cooked[4..8].try_into().unwrap()), 2);
+        assert_eq!(u32::from_le_bytes(cooked[12..16].try_into().unwrap()), 2);
+        assert_eq!(cooked.len(), STREAM_HEADER + 8);
+        assert_eq!(i16::from_le_bytes([cooked[STREAM_HEADER], cooked[STREAM_HEADER + 1]]), 0x1234);
+        assert_eq!(i16::from_le_bytes([cooked[STREAM_HEADER + 4], cooked[STREAM_HEADER + 5]]), 0x5678);
     }
 
     #[test]

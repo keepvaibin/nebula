@@ -4,7 +4,6 @@
 // code patches, its settings menu and button icons, achievements and play stats, presence, the galaxy select's
 // names, scene and light signals for the renderer, art export, test requests.
 
-#include <revolution/types.h>
 
 #include <nebula_game_api.h>
 

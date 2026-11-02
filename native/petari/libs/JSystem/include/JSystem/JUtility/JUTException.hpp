@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include <stdarg.h>
 
 // A fatal error the game reports (a broken archive, a bad sequence): the host's report (nebula_game_api.h fatal)

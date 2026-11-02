@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/NPC/KinopioAstro.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/DemoFunction.hpp"

@@ -1,7 +1,6 @@
 #ifndef RVL_FACE_LIBRARY_INTERNAL_TYPES_H
 #define RVL_FACE_LIBRARY_INTERNAL_TYPES_H
 #include "RFL_Types.h"
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -242,8 +241,8 @@ typedef struct Mii_CharInfo {
     } body; // at 0x16
 
     struct {
-        wchar_t name[MII_NAME_LEN + 1];       // at 0x18
-        wchar_t creator[MII_CREATOR_LEN + 1]; // at 0x2E
+        char16_t name[MII_NAME_LEN + 1];       // at 0x18
+        char16_t creator[MII_CREATOR_LEN + 1]; // at 0x2E
 
         // at 0x44
         u16 sex : 1;

@@ -5,8 +5,7 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JMath/JMath.hpp"
 #include <math_types.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace JGeometry {
     inline void negateInternal(const f32* rSrc, f32* rDest) {
@@ -729,7 +728,7 @@ namespace JGeometry {
         f32 angle(const TVec3& rB) const {
             f32 crossPart = cross(rB).length();
             f32 dotPart = dot(rB);
-            return __fabsf(JMAATan2(crossPart, dotPart));
+            return fabsf(JMAATan2(crossPart, dotPart));
         }
 
         f32 turnRate(const TVec3& rB, f32 maxAngle) const {
@@ -863,8 +862,7 @@ namespace JGeometry {
                 if (length <= 0.0f) {
                     inverse = length;
                 } else {
-                    f32 estimate = __frsqrte(length);
-                    inverse = (0.5f * estimate) * (3.0f - length * (estimate * estimate));
+                    inverse = 1.0f / sqrtf(length);
                 }
 
                 this->x = rSrc.x * inverse;

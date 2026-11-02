@@ -44,7 +44,9 @@ void DrawBufferExecuter::offExecuteLight() {
 }
 
 void DrawBufferExecuter::calcViewAndEntry() {
-    std::for_each(&mActors[0], &mActors[mNumActors], std::mem_func(&LiveActor::calcViewAndEntry));
+    for (auto it = &mActors[0], end = &mActors[mNumActors]; it != end; ++it) {
+        (*it)->calcViewAndEntry();
+    }
 }
 
 void DrawBufferExecuter::drawOpa() const {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class JAUAudience3DSetting {
 public:

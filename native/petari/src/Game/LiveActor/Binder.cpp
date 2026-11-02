@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
 #include "Game/Map/CollisionDirector.hpp"
@@ -64,7 +65,7 @@ u32 Binder::copyPlaneArrayAndSortingSensor(HitInfo** pPlanes, u32 capacity) {
             pPlanes[count++] = &mRoofInfo;
         }
 
-        std::sort(pPlanes, pPlanes + count, compSensor);
+        MR::sort(pPlanes, pPlanes + count, compSensor);
         return count;
     }
 
@@ -72,7 +73,7 @@ u32 Binder::copyPlaneArrayAndSortingSensor(HitInfo** pPlanes, u32 capacity) {
         pPlanes[i] = &mPlane[i];
     }
 
-    std::sort(pPlanes, pPlanes + mPlaneNum, compSensor);
+    MR::sort(pPlanes, pPlanes + mPlaneNum, compSensor);
     return mPlaneNum;
 }
 

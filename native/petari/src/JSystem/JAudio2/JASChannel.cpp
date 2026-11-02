@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASChannel.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
@@ -8,7 +8,7 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 
-NebulaMessageQueue JASChannel::sBankDisposeMsgQ;
+GameMessageQueue JASChannel::sBankDisposeMsgQ;
 
 void* JASChannel::sBankDisposeMsg[16];
 
@@ -21,6 +21,7 @@ JASChannel::JASChannel(Callback i_callback, void* i_callbackData)
       mVelocity(0x7f), mKeySweep(0.0f), mKeySweepTarget(0.0f), mKeySweepCount(0), mSkipSamples(0) {
     mChannelType = JASChannel::CH_WAVE;
     mWavePtr = nullptr;
+    mWaveLimit = nullptr;
     mMixConfig[0].whole = 0x150;
     mMixConfig[1].whole = 0x210;
     mMixConfig[2].whole = 0x352;
@@ -224,6 +225,7 @@ s32 JASChannel::initialUpdateDSPChannel(JASDsp::TChannel* i_channel) {
     switch (mChannelType) {
     case 0:
         i_channel->setWaveInfo(mWaveInfo, mWavePtr, mSkipSamples);
+        i_channel->wave_end = mWaveLimit;
         break;
     case 2:
         i_channel->setOscInfo(mProgNo);

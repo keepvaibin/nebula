@@ -22,7 +22,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
 namespace NrvCreeper {

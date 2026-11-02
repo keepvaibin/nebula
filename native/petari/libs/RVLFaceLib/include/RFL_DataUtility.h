@@ -2,8 +2,7 @@
 #define RVL_FACE_LIBRARY_DATA_UTILITY_H
 #include "RFL_Types.h"
 #include <NebulaGpu.h>
-#include <revolution/types.h>
-#include <cstdio>
+#include <stdio.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,8 +11,8 @@ extern "C" {
 typedef struct MiiMiddleDB;
 
 typedef struct MiiAdditionalInfo {
-    wchar_t name[MII_NAME_LEN + 1];       // at 0x0
-    wchar_t creator[MII_CREATOR_LEN + 1]; // at 0x16
+    char16_t name[MII_NAME_LEN + 1];       // at 0x0
+    char16_t creator[MII_CREATOR_LEN + 1]; // at 0x16
     MiiCreateID createID;                 // at 0x2C
 
     // at 0x34

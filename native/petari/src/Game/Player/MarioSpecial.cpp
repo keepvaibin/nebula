@@ -6,7 +6,6 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include <revolution/types.h>
 
 void Mario::checkOnimasu(const HitSensor* pSensor) {
     if (strstr(pSensor->mHost->mName, "\203\111\203\152\203\175\203\130" /* オニマス */) == nullptr) {

@@ -1,18 +1,21 @@
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/NebulaAtomic.hpp"
+#include "Game/System/GameThreads.hpp"
+#include <JSystem/JKernel/JKRHeap.hpp>
 
 #include <math.h>
-#include <revolution/os.h>
 
 #include <nebula_game_api.h>
-#include <nebula_kernel.h>
+#include <nebula_threads.h>
 #include "Game/System/NebulaSystemSettings.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    volatile u32 sFrames;
-    NebulaThreadQueue sSleepers;
+    NebulaAtomic< u32 > sFrames;
+    GameFrameGate sGate;
+    GameEvent sRetrace;
+    GameThreadRecord sThread;
     // Black for the first frames after the game asks for its frame (start).
     u32 sBlackFrames = ~0u;
     // show() sets the next state; it is what the screen shows from the next frame on.
@@ -77,12 +80,21 @@ namespace {
         sPicture = sNextPicture;
         nebula_host()->vi_frame(nebula_host()->user, 0, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
-        sSleepers.wakeup();
+        sGate.advance();
+    }
+
+    // The frame's work runs here: never in the middle of another thread's work on the game world.
+    void* frameThread(void*) {
+        while (true) {
+            sRetrace.wait();
+            JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
+            onFrame();
+        }
     }
 }  // namespace
 
 extern "C" NEBULA_GAME_API void nebula_game_vi_retrace(void) {
-    nebula_raise_event(NEBULA_EVENT_FRAME);
+    sRetrace.signal();
 }
 
 namespace NebulaFrameClock {
@@ -92,9 +104,9 @@ namespace NebulaFrameClock {
             return;
         }
         sStarted = true;
-        sSleepers.init();
-        NebulaKernel::setEventHandler(NEBULA_EVENT_FRAME, onFrame);
-        NebulaKernel::enableEvent(NEBULA_EVENT_FRAME);
+        sGate.init();
+        GameThreads::create(&sThread, frameThread, nullptr, 0x10000);
+        GameThreads::resume(&sThread);
     }
 
     void startPicture() {
@@ -107,22 +119,15 @@ namespace NebulaFrameClock {
         return sFrames;
     }
 
-    // Interrupts off from reading the count to sleeping: a frame delivered in between would wake no one.
     void waitFrame() {
-        const BOOL enabled = NebulaKernel::disableInterrupts();
-        const u32 frames = sFrames;
-        do {
-            sSleepers.sleep();
-        } while (frames == sFrames);
-        NebulaKernel::restoreInterrupts(enabled);
+        sGate.waitNext();
     }
 
     void waitUntil(u32 count) {
-        const BOOL enabled = NebulaKernel::disableInterrupts();
+        // A frame cannot pass between the look and the wait: its thread needs the world, which the caller holds.
         while (static_cast< s32 >(sFrames - count) < 0) {
-            sSleepers.sleep();
+            sGate.waitNext();
         }
-        NebulaKernel::restoreInterrupts(enabled);
     }
 
     void show(bool picture) {

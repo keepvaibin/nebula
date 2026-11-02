@@ -1,12 +1,12 @@
 #include "Game/System/GameSystem.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
 #include "Game/Screen/HomeButtonLayout.hpp"
 #include "Game/Screen/SystemWipeHolder.hpp"
 #include "Game/System/AudSystemWrapper.hpp"
-#include "Game/System/FileRipper.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemDimmingWatcher.hpp"
@@ -32,15 +32,14 @@
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 #define GPU_FIFO_SIZE 0x80000
 
@@ -56,11 +55,9 @@ namespace NrvGameSystem {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
-    NebulaDisc::init();
     NebulaFrameClock::init();
-    HeapMemoryWatcher::createRootHeap();
+    JKRExpHeap::createRoot(1, true);
     (MR::MutexHolder< 0 >::sMutex).init();
-    (MR::MutexHolder< 1 >::sMutex).init();
     (MR::MutexHolder< 2 >::sMutex).init();
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
@@ -121,7 +118,7 @@ void GameSystem::startToLoadSystemArchive() {
 
 void GameSystem::exeInitializeAudio() {
     if (MR::isFirstStep(this)) {
-        MR::startFunctionAsyncExecute(MR::Functor(mObjHolder, &GameSystemObjHolder::createAudioSystem), 14, INIT_AUDIO_KEY);
+        MR::startFunctionAsyncExecute(MR::Functor(mObjHolder, &GameSystemObjHolder::createAudioSystem), INIT_AUDIO_KEY);
     }
 
     updateSceneController();
@@ -178,22 +175,6 @@ void GameSystem::initAfterStationedResourceLoaded() {
     NebulaRtPrepare::init();
     mSceneController->initAfterStationedResourceLoaded();
     mSequenceDirector->initAfterResourceLoaded();
-}
-
-void GameSystem::prepareReset() {
-    mStationedArchiveLoader->prepareReset();
-}
-
-inline bool isSystemWaitForReboot(const GameSystem* pGameSystem) {
-    return pGameSystem->isNerve(GET_NERVE(GameSystem, GameSystemWaitForReboot));
-}
-
-inline bool isSystemNormal(const GameSystem* pGameSystem) {
-    return pGameSystem->isNerve(GET_NERVE(GameSystem, GameSystemNormal));
-}
-
-bool GameSystem::isPreparedReset() const {
-    return isSystemWaitForReboot(this) || isSystemNormal(this) || mStationedArchiveLoader->isPreparedReset();
 }
 
 void GameSystem::frameLoop() {

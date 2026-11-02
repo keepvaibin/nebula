@@ -4,8 +4,7 @@
 
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 #include <stdint.h>
 
 class J3DMatPacket;

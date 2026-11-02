@@ -8,7 +8,6 @@
 #include "JSystem/JParticle/JPARandom.hpp"
 #include "JSystem/JParticle/JPAResource.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution/types.h>
 #include <stdint.h>
 
 class JPAResourceManager;

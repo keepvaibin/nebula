@@ -2,8 +2,7 @@
 
 #include <nebula_game_api.h>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 // Geometry the game builds itself (outside its models) as typed records (nebula_game_api.h shape_array,
 // shape_geometry, shape_draw): the values its corners give as the mesh's own arrays, arrays the game keeps (and

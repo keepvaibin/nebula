@@ -80,8 +80,8 @@ void TalkStateShort::clos() {
 
 TalkStateEvent::TalkStateEvent() {
     _18 = nullptr;
-    _14 = nullptr;
-    _10 = nullptr;
+    _14 = 0;
+    _10 = 0;
     _1D = true;
 }
 
@@ -143,7 +143,7 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
 
     bool unknownBool = false;
 
-    if (_1C != nullptr) {
+    if (_1C != 0) {
         _1C = MR::testCorePadButtonA(0);
     } else if (MR::testCorePadButtonA(0) && !MR::testCorePadTriggerA(0)) {
         _1C = true;
@@ -241,7 +241,7 @@ void TalkStateNormal::updateButton() {
     TVec3f centerPlayer(*MR::getPlayerCenterPos());
     MR::getPlayerUpVec(&up);
 
-    f64 absolute = __fabs(camZ.dot(up));  // TODO: look at fabs again
+    f64 absolute = fabs(camZ.dot(up));  // TODO: look at fabs again
     f32 f1 = absolute;
     f32 f2 = camY.dot(up);
     f1 = f1 * f1;

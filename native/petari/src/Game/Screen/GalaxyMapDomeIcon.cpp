@@ -127,7 +127,7 @@ s32 GalaxyMapDomeIcon::calcDomeStatus() const {
 bool GalaxyMapDomeIcon::isComplete() const {
     JMapInfo mapInfo = JMapInfo();
 
-    mapInfo.attach(NebulaDiscTables::getGalaxyInfoTable());
+    mapInfo.attach(NebulaDataTables::getGalaxyInfoTable());
 
     CheckerIsComplete checker = CheckerIsComplete(_20);
 
@@ -187,7 +187,7 @@ void GalaxyMapDomeIcon::syncStatus() {
 bool GalaxyMapDomeIcon::hasNewGalaxy() const {
     JMapInfo mapInfo = JMapInfo();
 
-    mapInfo.attach(NebulaDiscTables::getGalaxyInfoTable());
+    mapInfo.attach(NebulaDataTables::getGalaxyInfoTable());
 
     CheckerIsExistNewGalaxy checker = CheckerIsExistNewGalaxy(_20);
 
@@ -201,7 +201,7 @@ bool GalaxyMapDomeIcon::hasNewGalaxy() const {
 
 namespace {
     AstroDomeCheckerBase::AstroDomeCheckerBase(int param1) {
-        snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
+        nebula_snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
     }
 };  // namespace
 

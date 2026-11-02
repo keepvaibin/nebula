@@ -3,7 +3,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class DriftWood : public MapObjActor {
 public:

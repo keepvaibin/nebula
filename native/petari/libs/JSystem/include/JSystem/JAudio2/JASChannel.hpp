@@ -1,14 +1,13 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 struct JASDSPChannel;
 
@@ -211,8 +210,10 @@ public:
         /* 0x104 */ const u8* mWavePtr;
         /* 0x104 */ int mProgNo;
     };
+    // The end of a wave outside the sound memory (a stream's).
+    const u8* mWaveLimit;
 
-    static NebulaMessageQueue sBankDisposeMsgQ;
+    static GameMessageQueue sBankDisposeMsgQ;
     static void* sBankDisposeMsg[16];
     static void* sBankDisposeList[16];
     static int sBankDisposeListSize;

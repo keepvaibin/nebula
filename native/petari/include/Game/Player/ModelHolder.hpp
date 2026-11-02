@@ -2,7 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 class ModelHolder : public LiveActor {
 public:

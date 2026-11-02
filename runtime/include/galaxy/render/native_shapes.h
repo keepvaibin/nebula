@@ -106,12 +106,12 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear
+        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear, Forget
     };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
     std::uint64_t key = 0;   // the array's or the group's
-    std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays
+    std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays (Forget: keys from `key` up to `position` go)
     std::shared_ptr<const Array> array;
     std::shared_ptr<const Geometry> geometry;
     // A material program (MaterialProgram) and a material's values (Material), both under `key`: the program's.

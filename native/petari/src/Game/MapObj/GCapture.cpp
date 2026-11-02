@@ -26,7 +26,6 @@
 #include "math_types.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 #include "Game/System/NebulaInput.hpp"
 
 void GCapture_FORCE_MATCH_SDATA2() {

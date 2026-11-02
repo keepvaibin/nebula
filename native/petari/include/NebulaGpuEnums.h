@@ -5,7 +5,6 @@
 extern "C" {
 #endif
 
-#include "revolution/types.h"
 
 typedef u8 GpuBool;
 

@@ -71,12 +71,13 @@ void ParticleEmitterHolder::requestMovementOnAllEmitters() {
 }
 
 ParticleEmitter* ParticleEmitterHolder::findAvailableParticleEmitter() {
-    ParticleEmitter* res = std::find_if_array(mEmitters.begin(), mEmitters.end(), std::not1(std::mem_func(&ParticleEmitter::isValid)));
-    if (res == mEmitters.end()) {
-        return nullptr;
+    for (auto& item : mEmitters) {
+        if (!item.isValid()) {
+            return &item;
+        }
     }
 
-    return res;
+    return nullptr;
 }
 
 void ParticleEmitterHolder::requestMovementOffAllLoopEmitters() {

@@ -2,7 +2,6 @@
 
 #include "Game/Util/SingletonHolder.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
-#include <revolution/types.h>
 
 struct AudMeNameData {
     /* 0x0 */ const char* mName;

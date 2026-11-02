@@ -2,8 +2,7 @@
 
 #include "nw4r/lyt/types.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 #include <NebulaGpu.h>
 
 namespace nw4r {

@@ -4,7 +4,7 @@
 #include "JSystem/JAudio2/JAUBankTable.hpp"
 #include "JSystem/JAudio2/JAUSeqDataBlockMgr.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
-#include "JSystem/JKernel/JKRDvdRipper.hpp"
+
 #include <bitset>
 
 struct JAISeqData;

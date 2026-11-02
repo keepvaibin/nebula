@@ -8,7 +8,7 @@ import sys
 
 root = sys.argv[1]
 dirs = ["src/Game", "src/JSystem", "src/nw4r", "src/RVLFaceLib", "include", "libs/JSystem/include", "libs/nw4r/include",
-        "libs/RVLFaceLib/include", "libs/RVL_SDK/include", "libs/MSL_C++/include"]
+        "libs/RVLFaceLib/include", "libs/RVL_SDK/include"]
 asm = re.compile(r"(^|[^A-Za-z0-9_])(asm|__asm|__asm__)\b|\bps_|\bpsq_|\bmtspr\b|\bmfspr\b|\bfrsqrte\b|\bfres\b")
 
 

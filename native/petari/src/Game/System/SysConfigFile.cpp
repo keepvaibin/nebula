@@ -26,10 +26,10 @@ s32 SysConfigChunk::deserialize(const u8* pBuffer, u32 size) {
     u8* pData = const_cast< u8* >(pBuffer) + headerSize;
 
     pName = "mTimeAnnounced";
-    mTimeAnnounced = static_cast< OSTime >(MR::loadSaveU64(accessor.getPointer(pName, pData)));
+    mTimeAnnounced = NebulaCalendar::fromFileTime(static_cast< s64 >(MR::loadSaveU64(accessor.getPointer(pName, pData))));
 
     pName = "mTimeSent";
-    mTimeSent = static_cast< OSTime >(MR::loadSaveU64(accessor.getPointer(pName, pData)));
+    mTimeSent = NebulaCalendar::fromFileTime(static_cast< s64 >(MR::loadSaveU64(accessor.getPointer(pName, pData))));
 
     pName = "mSentBytes";
     mSentBytes = MR::loadSaveU32(accessor.getPointer(pName, pData));
@@ -67,7 +67,7 @@ SysConfigFile::SysConfigFile() : mChunk(nullptr), mChunkHolder(nullptr) {
     mChunkHolder->addChunk(mChunk);
 }
 
-OSTime SysConfigFile::getTimeAnnounced() {
+NebulaCalendar::SaveTime SysConfigFile::getTimeAnnounced() {
     return mChunk->mTimeAnnounced;
 }
 
@@ -77,11 +77,11 @@ void SysConfigFile::updateTimeAnnounced() {
     pChunk->mTimeAnnounced = NebulaCalendar::now();
 }
 
-OSTime SysConfigFile::getTimeSent() {
+NebulaCalendar::SaveTime SysConfigFile::getTimeSent() {
     return mChunk->mTimeSent;
 }
 
-void SysConfigFile::setTimeSent(OSTime timeSent) {
+void SysConfigFile::setTimeSent(NebulaCalendar::SaveTime timeSent) {
     mChunk->mTimeSent = timeSent;
 }
 
@@ -120,8 +120,8 @@ s32 SysConfigChunk::serialize(u8* pBuffer, u32 size) const {
     pName = "mSentBytes";
     void* pSentBytes = accessor.getPointer(pName, pData);
 
-    MR::storeSaveU64(pTimeAnnounced, static_cast< u64 >(mTimeAnnounced));
-    MR::storeSaveU64(pTimeSent, static_cast< u64 >(mTimeSent));
+    MR::storeSaveU64(pTimeAnnounced, static_cast< u64 >(NebulaCalendar::toFileTime(mTimeAnnounced)));
+    MR::storeSaveU64(pTimeSent, static_cast< u64 >(NebulaCalendar::toFileTime(mTimeSent)));
     MR::storeSaveU32(pSentBytes, mSentBytes);
 
     return headerSize + mHeaderSerializer->getDataSize();

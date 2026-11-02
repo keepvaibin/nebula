@@ -56,7 +56,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/RumbleCalculator.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class LayoutActor;
 namespace nw4r {

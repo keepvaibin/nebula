@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 template < class T >
 struct JPANode {

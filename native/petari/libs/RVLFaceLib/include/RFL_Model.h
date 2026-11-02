@@ -2,8 +2,7 @@
 #define RVL_FACE_LIBRARY_MODEL_H
 #include "RFL_Types.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

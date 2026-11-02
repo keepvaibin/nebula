@@ -6,7 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>

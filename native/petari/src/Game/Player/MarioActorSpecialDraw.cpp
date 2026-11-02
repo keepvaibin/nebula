@@ -16,12 +16,10 @@
 #include "Game/Util.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/FurMulti.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JGeometry/TBox.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
 #include <NebulaGpuEnums.h>
-#include <revolution/os.h>
 
 void MarioActorSpecialDraw_FORCE_MATCH_SDATA2() {
     (void)80.0f;

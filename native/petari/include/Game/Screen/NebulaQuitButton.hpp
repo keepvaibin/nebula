@@ -23,7 +23,7 @@ public:
     // Nebula's menu focus: the D-pad or stick's highlight to it, once it waits to be chosen. True when it took it.
     bool takeMenuFocus();
 
-    static const wchar_t* getQuestion();
+    static const char16_t* getQuestion();
 
 private:
     void layOut();

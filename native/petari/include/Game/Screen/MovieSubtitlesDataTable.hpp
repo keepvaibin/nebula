@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 /// @brief The general parameters for a subtitle.
 struct SubtitlesMessageInfo {

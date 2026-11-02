@@ -10,7 +10,6 @@
 #include <cstring>
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 using namespace NebulaUi;
@@ -152,7 +151,7 @@ private:
 
     // The title in the played language and the window's shape around it.
     void fill() {
-        wchar_t text[96];
+        char16_t text[96];
         NebulaText::get(text, 96, "RtPrepareTitle");
         setText(mTitle, text);
         f32 width = 0.0f;
@@ -199,17 +198,17 @@ private:
         const s32 percent = static_cast< s32 >(mShown * 100.0f + 0.0001f);
         if (percent != mPercentShown) {
             mPercentShown = percent;
-            wchar_t pattern[32];
-            wchar_t text[32];
+            char16_t pattern[32];
+            char16_t text[32];
             NebulaText::get(pattern, 32, "RtPreparePercent");
             s32 length = 0;
-            for (const wchar_t* p = pattern; *p != 0 && length < 24; p++) {
-                if (p[0] == L'{' && p[1] == L'n' && p[2] == L'}') {
-                    wchar_t digits[8];
+            for (const char16_t* p = pattern; *p != 0 && length < 24; p++) {
+                if (p[0] == u'{' && p[1] == u'n' && p[2] == u'}') {
+                    char16_t digits[8];
                     s32 count = 0;
                     s32 value = percent;
                     do {
-                        digits[count++] = static_cast< wchar_t >(L'0' + value % 10);
+                        digits[count++] = static_cast< char16_t >(u'0' + value % 10);
                         value /= 10;
                     } while (value > 0 && count < 8);
                     while (count > 0) {

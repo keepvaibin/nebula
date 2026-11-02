@@ -2,7 +2,6 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
-#include <revolution/os.h>
 
 void JPACalcScaleX(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAExtraShape* esp = work->mpRes->getEsp();

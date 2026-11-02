@@ -1,5 +1,9 @@
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
-#include "JSystem/JAudio2/JASAudioThread.hpp"
+#include "Game/System/NebulaAtomic.hpp"
+#include "JSystem/JAudio2/JASChannel.hpp"
+#include "JSystem/JAudio2/JASDSPChannel.hpp"
+#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASCmdStack.hpp"
@@ -10,8 +14,10 @@
 #include "JSystem/JAudio2/JASProbe.hpp"
 
 #include <nebula_game_api.h>
-#include <nebula_kernel.h>
-#include "Game/System/NebulaKernel.hpp"
+#include <nebula_threads.h>
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JKernel/JKRHeap.hpp"
+#include "JSystem/JAudio2/JASDriverIF.hpp"
 
 // The host's audio clock asks for each frame (nebula_game_audio_tick, raised on the audio thread as its event): the
 // driver runs the frame's subframes - commands, the voices' updates and one mix each, then the sequencers - and ends
@@ -25,9 +31,16 @@ namespace {
     const u32 cMaxCatchUp = 4;
 }  // namespace
 
+// On the host's audio clock thread.
 extern "C" NEBULA_GAME_API void nebula_game_audio_tick(void) {
     __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
-    nebula_raise_event(NEBULA_EVENT_AUDIO);
+    GameThreads::enterAudio();
+    JKRHeap* const previous = JKRHeap::sCurrentHeap;
+    JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
+    JASDriver::updateDac();
+    JASDriver::updateDacCallback();
+    JKRHeap::sCurrentHeap = previous;
+    GameThreads::leaveAudio();
 }
 
 u32 JASDriver::sOutputRate;
@@ -36,13 +49,16 @@ f32 JASDriver::sDacRate = 32028.5f;
 
 u32 JASDriver::sSubFrames = 0x00000007;
 
-volatile u32 JASDriver::sSubFrameCounter;
+NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
 
-void JASDriver::initAI(void (*callback)(void)) {
+// The driver up and the host's audio clock running.
+void JASDriver::startAudio() {
     setOutputRate(OUTPUT_RATE_0);
     JASChannel::initBankDisposeMsgQueue();
-    NebulaKernel::setEventHandler(NEBULA_EVENT_AUDIO, callback);
-    NebulaKernel::enableEvent(NEBULA_EVENT_AUDIO);
+    JASDsp::initBuffer();
+    JASDSPChannel::initAll();
+    JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(0x48);
+    startDMA();
 }
 
 void JASDriver::startDMA() {
@@ -97,6 +113,9 @@ void JASDriver::updateDSP() {
     JASLfo::updateFreeRun(freeRun);
     JASProbe::stop(3);
     sSubFrameCounter++;
+    if (sSubFrameDone.isWaiting()) {
+        sSubFrameDone.signal();
+    }
 }
 
 f32 JASDriver::getDacRate() {

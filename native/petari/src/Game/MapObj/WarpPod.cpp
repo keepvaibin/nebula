@@ -179,7 +179,7 @@ void WarpPod::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0WithInit(rIter, &arg0);
 
     char eventCameraName[256];
-    sprintf(eventCameraName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupId, arg0 + 65);
+    nebula_sprintf(eventCameraName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupId, arg0 + 65);
     MR::declareEventCamera(mCamInfo, eventCameraName);
 
     mEventCameraName = new char[strlen(eventCameraName) + 1];
@@ -308,7 +308,7 @@ void WarpPod::initPair() {
     }
 
     char buf[256];
-    sprintf(buf, "wPod\217\157\214\273\203\112\203\201\203\211 %d" /* wPod出現カメラ %d */, mGroupId);
+    nebula_sprintf(buf, "wPod\217\157\214\273\203\112\203\201\203\211 %d" /* wPod出現カメラ %d */, mGroupId);
 
     _9C = new char[strlen(buf) + 1];
     strcpy(_9C, buf);

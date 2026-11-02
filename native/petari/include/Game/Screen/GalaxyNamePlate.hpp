@@ -15,10 +15,10 @@ public:
     void showUnknown(bool);
     void showNew(bool);
     void showOpen(bool);
-    void show(const wchar_t*, bool);
+    void show(const char16_t*, bool);
     void setPos3D(const TVec3f&);
     void setShowBalloonNozzle(bool);
-    void show(const wchar_t*, s32, bool, bool);
+    void show(const char16_t*, s32, bool, bool);
 
     void exeAppearReady();
     void exeAppear();

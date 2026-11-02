@@ -1,5 +1,4 @@
 #include "nw4r/lyt/init.h"
-#include <revolution/os.h>
 
 namespace {
     #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)

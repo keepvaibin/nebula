@@ -305,7 +305,7 @@ uint32_t load_be32(const uint8_t* p) {
 struct Module {
     decltype(&nebula_game_attach) attach;
     decltype(&nebula_game_run) run;
-    decltype(&nebula_game_disc_complete) disc_complete;
+    decltype(&nebula_game_asset_complete) asset_complete;
     decltype(&nebula_game_vi_retrace) vi_retrace;
     decltype(&nebula_game_audio_tick) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
@@ -318,7 +318,7 @@ Module gModule;
 // continues in the second.
 
 // Progress counters for the host's log.
-std::atomic<uint32_t> gDiscReads{0};
+std::atomic<uint32_t> gFileReads{0};
 std::atomic<uint32_t> gFsOps{0};
 std::atomic<uint32_t> gAiBlocks{0};
 std::atomic<uint32_t> gDspFrames{0};
@@ -429,7 +429,7 @@ void load_module(const fs::path& path) {
     }
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
-    gModule.disc_complete = reinterpret_cast<decltype(gModule.disc_complete)>(find_symbol(module, "nebula_game_disc_complete"));
+    gModule.asset_complete = reinterpret_cast<decltype(gModule.asset_complete)>(find_symbol(module, "nebula_game_asset_complete"));
     gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
     gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_audio_tick"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
@@ -475,79 +475,25 @@ void mark_written(const void* dst, uint32_t size) {
 }
 #endif
 
-// The game partition: Setup's game.pak, the decrypted partition data at its disc offsets (boot.bin at 0, main.dol
-// and the file table where boot.bin says), mapped read-only.
+// The game: Setup's game.pak, the asset store (galaxy/disc_files.h).
 struct Pak {
-    const uint8_t* data = nullptr;
-    uint64_t size = 0;
-    const uint8_t* fst = nullptr;
-    size_t fst_size = 0;
-    const uint8_t* dol = nullptr;
-    size_t dol_size = 0;
-    char id[7] = {};  // boot.bin's game id
+    char id[7] = {};  // the game id
+    galaxy::disc::AssetStore store;
 };
 Pak gPak;
-// The mods this session (galaxy::mods): the disc's file table with their files, main.dol's patches, a save folder.
+// The mods this session (galaxy::mods): out until they are rebuilt on the asset store (section W).
 std::unique_ptr<galaxy::mods::ActiveMods> gMods;
 
 void open_pak(const fs::path& path) {
-#if defined(_WIN32)
-    HANDLE file = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                              FILE_ATTRIBUTE_NORMAL, nullptr);
-    LARGE_INTEGER size{};
-    if (file == INVALID_HANDLE_VALUE || !GetFileSizeEx(file, &size)) {
-        die("cannot open %s", path.string().c_str());
+    if (!gPak.store.open(path)) {
+        die("%s is not a game store: import the game again", path.string().c_str());
     }
-    HANDLE mapping = CreateFileMappingW(file, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    const void* view = mapping != nullptr ? MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0) : nullptr;
-    if (view == nullptr) {
-        die("cannot map %s", path.string().c_str());
-    }
-    gPak.data = static_cast<const uint8_t*>(view);
-    gPak.size = static_cast<uint64_t>(size.QuadPart);
-#else
-    const int fd = open(path.c_str(), O_RDONLY);
-    struct stat st {};
-    if (fd < 0 || fstat(fd, &st) != 0) {
-        die("cannot open %s", path.c_str());
-    }
-    void* view = mmap(nullptr, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (view == MAP_FAILED) {
-        die("cannot map %s", path.c_str());
-    }
-    gPak.data = static_cast<const uint8_t*>(view);
-    gPak.size = (uint64_t)st.st_size;
-#endif
-    if (gPak.size < 0x440) {
-        die("%s is too short for a game partition", path.string().c_str());
-    }
-    // The releases the module plays (sdk/region.c): North America, Europe and Japan.
-    std::memcpy(gPak.id, gPak.data, 6);
+    // The releases the module plays (NebulaRegion.hpp): North America, Europe and Japan.
+    std::snprintf(gPak.id, sizeof(gPak.id), "%.6s", std::string(gPak.store.game_id()).c_str());
     if (std::strcmp(gPak.id, "RMGE01") != 0 && std::strcmp(gPak.id, "RMGP01") != 0 &&
         std::strcmp(gPak.id, "RMGJ01") != 0) {
         die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", path.string().c_str(), gPak.id);
     }
-    // Wii partition offsets are words: boot.bin holds them divided by 4.
-    const uint64_t dol = (uint64_t)load_be32(gPak.data + 0x420) << 2;
-    const uint64_t fst = (uint64_t)load_be32(gPak.data + 0x424) << 2;
-    const uint64_t fst_size = (uint64_t)load_be32(gPak.data + 0x428) << 2;
-    if (dol + 0x100 > gPak.size || fst + fst_size > gPak.size) {
-        die("%s: boot.bin points past the partition", path.string().c_str());
-    }
-    gPak.fst = gPak.data + fst;
-    gPak.fst_size = (size_t)fst_size;
-    gPak.dol = gPak.data + dol;
-    uint64_t end = 0x100;
-    for (int s = 0; s < 18; s++) {
-        const uint64_t section_end = (uint64_t)load_be32(gPak.dol + s * 4) + load_be32(gPak.dol + 0x90 + s * 4);
-        if (load_be32(gPak.dol + 0x90 + s * 4) != 0 && section_end > end) {
-            end = section_end;
-        }
-    }
-    if (dol + end > gPak.size) {
-        die("%s: main.dol runs past the partition", path.string().c_str());
-    }
-    gPak.dol_size = (size_t)end;
 }
 
 // The calling thread's name, as profilers, debuggers and the CPU report show it.
@@ -604,7 +550,43 @@ private:
     const wchar_t* name_;
 };
 
-Worker gDisc(L"Nebula Host Disc");
+// File reads, each on the next free thread: a movie's read does not hold up a load or the music.
+class ReadPool {
+public:
+    template <typename F>
+    void post(F&& job) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            jobs_.emplace_back(std::forward<F>(job));
+        }
+        ready_.notify_one();
+    }
+
+    void start() {
+        for (int i = 0; i < 3; i++) {
+            std::thread([this] {
+                name_thread(L"Nebula Host Reads");
+                for (;;) {
+                    std::function<void()> job;
+                    {
+                        std::unique_lock<std::mutex> lock(mutex_);
+                        ready_.wait(lock, [this] { return !jobs_.empty(); });
+                        job = std::move(jobs_.front());
+                        jobs_.pop_front();
+                    }
+                    job();
+                }
+            }).detach();
+        }
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable ready_;
+    std::deque<std::function<void()>> jobs_;
+};
+
+ReadPool gReads;
 Worker gFs(L"Nebula Host Saves");
 
 // NAND: the console's absolute paths under the host's NAND root, in the Wii's layout.
@@ -724,60 +706,38 @@ bool wait_while_suspended() {
     return true;
 }
 
-// The audio clock: the game mixes a frame every frame's length (nebula_game_audio_tick), on fixed deadlines. With an
-// output device the period follows the device's own clock: at most 1 % shorter while fewer frames than the sink's
-// restart level wait there unplayed, longer while more, so the queue holds about that level and the two clocks never
-// drift apart. It never waits for the device: a clock that stalls leaves the game's sounds playing forever until its
-// sound pools run out. A silent or failed device leaves the clock as it is.
+#if !defined(NEBULA_HOST_RENDERER)
+// Headless, nothing is mixed: the game's sound logic runs on the clock.
 void ai_thread() {
     if (deterministic_mode()) {
         return;  // the audio ticks come with each retrace (svc_test_frame_step)
     }
-    name_thread(L"Nebula Host Audio Clock");
-    Clock::time_point next{};
-    bool scheduled = false;
+    name_thread(L"Nebula Host Audio");
     for (;;) {
-        if (wait_while_suspended()) {
-            scheduled = false;
-        }
         uint32_t frame_samples = 0;
         {
             std::unique_lock<std::mutex> lock(gAiLock);
-            // A stopped clock restarts its schedule from the tick that resumes it.
-            if (!(gAiRunning && gAudioFrameSamples != 0)) {
-                gAiWake.wait(lock, [] { return gAiRunning && gAudioFrameSamples != 0; });
-                scheduled = false;
-            }
+            gAiWake.wait(lock, [] { return gAiRunning && gAudioFrameSamples != 0; });
             frame_samples = gAudioFrameSamples;
         }
-        if (!scheduled) {
-            next = Clock::now();
-            scheduled = true;
-        }
-        double period_ns = static_cast<double>(frame_samples) * 1e9 / 32000.0;
-#if defined(NEBULA_HOST_RENDERER)
-        if (gAudio->output_available()) {
-            const int error = static_cast<int>(gAudio->queued_blocks()) - static_cast<int>(gAudio->target_blocks());
-            period_ns *= 1.0 + std::clamp(error * 0.0025, -0.01, 0.01);
-        }
-#endif
         gAiBlocks.fetch_add(1, std::memory_order_relaxed);
-        // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and
-        // its sound pools fill; it must refuse new sounds, not crash.
-        static const uint64_t stall_after = [] {
-            const char* value = std::getenv("GALAXY_TEST_AI_STALL_AFTER");
-            return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
-        }();
-        if (stall_after == 0 || gAiBlocks.load(std::memory_order_relaxed) < stall_after) {
-            gModule.audio_tick();
-        }
-        next += std::chrono::nanoseconds(static_cast<int64_t>(period_ns));
-        // A stall past 100 ms (a debugger, a hitch) starts the schedule again rather than catching up in a burst.
-        const auto now = Clock::now();
-        if (next + std::chrono::milliseconds(100) < now) {
-            next = now;
-        }
-        sleep_until_precise(next);
+        gModule.audio_tick();
+        std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int64_t>(frame_samples * 1e9 / 32000.0)));
+    }
+}
+#endif
+
+// The device asks for the game's next frame of sound, on its thread.
+void audio_frame_tick() {
+    gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+    // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and its sound
+    // pools fill; it must refuse new sounds, not crash.
+    static const uint64_t stall_after = [] {
+        const char* value = std::getenv("GALAXY_TEST_AI_STALL_AFTER");
+        return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
+    }();
+    if (stall_after == 0 || gAiBlocks.load(std::memory_order_relaxed) < stall_after) {
+        gModule.audio_tick();
     }
 }
 
@@ -1861,6 +1821,19 @@ void svc_shape_array(void*, const NebulaShapeArray* array) {
 #endif
 }
 
+void svc_shape_forget(void*, uint64_t start, uint64_t end) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Forget;
+    record.key = start;
+    record.position = end;
+    queue_shape_record(std::move(record));
+#else
+    (void)start, (void)end;
+#endif
+}
+
 void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -2517,21 +2490,11 @@ void svc_gpu_coherent(void*, const void* address, uint32_t size) {
 #endif
 }
 
-// The disc's file table: the mods' disc's when mods change files, else the partition's. Built at its first use (the
-// mods are set up before the game starts).
-const galaxy::disc::FileTable& disc_table() {
-    static const galaxy::disc::FileTable table = [] {
-        galaxy::disc::FileTable loaded;
-        const bool mods = gMods != nullptr && !gMods->fst.empty();
-        if (!(mods ? loaded.load(gMods->fst.data(), gMods->fst.size()) : loaded.load(gPak.fst, gPak.fst_size))) {
-            die("the disc's file table is malformed");
-        }
-        return loaded;
-    }();
-    return table;
+const galaxy::disc::AssetStore& disc_table() {
+    return gPak.store;
 }
 
-int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaDiscEntry* out) {
+int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaAssetEntry* out) {
     if (!entry) {
         return 0;
     }
@@ -2543,49 +2506,23 @@ int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaDiscEn
     return 1;
 }
 
-int svc_disc_find(void*, const char* path, NebulaDiscEntry* out) {
+int svc_asset_find(void*, const char* path, NebulaAssetEntry* out) {
     return path != nullptr ? disc_entry_out(disc_table().find(path), out) : 0;
 }
 
-int svc_disc_entry(void*, int32_t index, NebulaDiscEntry* out) {
+int svc_asset_entry(void*, int32_t index, NebulaAssetEntry* out) {
     return disc_entry_out(disc_table().entry(index), out);
 }
 
-int svc_disc_child(void*, int32_t folder, uint32_t child, NebulaDiscEntry* out) {
+int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out) {
     return disc_entry_out(disc_table().child(folder, child), out);
 }
 
-// A read of a file a mod changed: the crash report names the last one (galaxy::crash). The disc thread only.
-void note_mod_file(uint64_t offset) {
-    const std::string* path = nullptr;
-    const galaxy::mods::DiscNode* file = gMods->disc.placed_file(offset, &path);
-    if (file == nullptr) return;
-    static const galaxy::mods::DiscNode* last = nullptr;
-    static std::string mod;
-    if (file != last) {
-        last = file;
-        // The mod is the folder under the mods folder its first host file is in.
-        mod = "a mod";
-        const fs::path mods = galaxy::mods::mods_folder();
-        for (const galaxy::mods::DiscPiece& piece : file->pieces) {
-            if (piece.source != galaxy::mods::DiscPiece::Source::HostFile) continue;
-            const fs::path relative = piece.path.lexically_relative(mods);
-            if (!relative.empty() && relative.begin()->native() != fs::path("..").native()) {
-                mod = relative.begin()->string();
-            }
-            break;
-        }
-    }
-    galaxy::crash::note_mod_read(mod, *path);
-}
-
-void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, void* dst, uint32_t slot) {
-    gDiscReads.fetch_add(1, std::memory_order_relaxed);
-    // Within the file, or up to 31 bytes past its end (reads rounded up to 32 bytes), as the console allowed.
+void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst, uint32_t slot) {
+    gFileReads.fetch_add(1, std::memory_order_relaxed);
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
-    if (!entry || entry->folder || file_offset > entry->length ||
-        uint64_t{file_offset} + size >= uint64_t{entry->length} + 32) {
-        gModule.disc_complete(slot, -1);
+    if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size) {
+        gModule.asset_complete(slot, -1);
         return;
     }
     const uint64_t offset = entry->position + file_offset;
@@ -2601,36 +2538,25 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
         if (test_delay_us != 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
         }
-        if (gMods != nullptr && !gMods->fst.empty()) {
-            // The mods' disc: the partition, or a changed file's pieces past it.
-            if (!gMods->disc.read(offset, size, static_cast<uint8_t*>(dst), gPak.data)) {
-                gModule.disc_complete(slot, -1);
-                return;
-            }
-            note_mod_file(offset);
-        } else if (offset > gPak.size || gPak.size - offset < size) {
-            gModule.disc_complete(slot, -1);
+        if (!gPak.store.read(offset, size, dst)) {
+            gModule.asset_complete(slot, -1);
             return;
-        } else {
-            std::memcpy(dst, gPak.data + offset, size);
         }
 #if defined(NEBULA_HOST_RENDERER)
-        // The console's disc DMA writes memory the GPU sees.
+        // A read writes memory the GPU sees.
         mark_written(dst, size);
-#endif
-#if defined(NEBULA_HOST_RENDERER)
         frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
 #endif
-        gModule.disc_complete(slot, (int32_t)size);
+        gModule.asset_complete(slot, (int32_t)size);
     };
     if (deterministic) {
         read();
     } else {
-        gDisc.post(read);
+        gReads.post(read);
     }
 }
 
-const char* svc_disc_id(void*) {
+const char* svc_game_id(void*) {
     return gPak.id;
 }
 
@@ -3192,7 +3118,7 @@ void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_
 void svc_audio_setup(void*, NebulaAudioVoice* voices, uint32_t count, const NebulaAudioEffect* effects,
                      const void* sound_memory, uint32_t sound_memory_size) {
 #if defined(NEBULA_HOST_RENDERER)
-    gAudio->setup(voices, count, effects, sound_memory, sound_memory_size);
+    gAudio->setup(voices, count, effects, sound_memory, sound_memory_size, !deterministic_mode());
 #else
     (void)voices, (void)count, (void)effects, (void)sound_memory, (void)sound_memory_size;
 #endif
@@ -3232,14 +3158,23 @@ void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t millis
 }
 
 void svc_audio_control(void*, uint32_t what, uint32_t value) {
-    std::lock_guard<std::mutex> lock(gAiLock);
-    if (what == NEBULA_AUDIO_START) {
-        gAiRunning = true;
-        gAudioFrameSamples = value;
-    } else if (what == NEBULA_AUDIO_STOP) {
-        gAiRunning = false;
+    {
+        std::lock_guard<std::mutex> lock(gAiLock);
+        if (what == NEBULA_AUDIO_START) {
+            gAiRunning = true;
+            gAudioFrameSamples = value;
+        } else if (what == NEBULA_AUDIO_STOP) {
+            gAiRunning = false;
+        }
+        gAiWake.notify_one();
     }
-    gAiWake.notify_one();
+#if defined(NEBULA_HOST_RENDERER)
+    if (what == NEBULA_AUDIO_START) {
+        gAudio->start(audio_frame_tick);
+    } else if (what == NEBULA_AUDIO_STOP) {
+        gAudio->stop();
+    }
+#endif
 }
 
 int svc_hbm(void*, uint32_t what, uint32_t value) {
@@ -3667,29 +3602,13 @@ std::string utf8_of(const fs::path& path) {
     return std::string(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
-// The game id and main.dol from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that
-// is not one: the tools then work without it.
-bool read_game_dol(const fs::path& path, std::string& id, std::vector<std::uint8_t>& dol) {
+// The game id from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that is not one:
+// the tools then work without it.
+bool read_game_id(const fs::path& path, std::string& id) {
     std::ifstream file(path, std::ios::binary);
-    std::uint8_t boot[0x440];
-    if (!file.read(reinterpret_cast<char*>(boot), sizeof(boot))) return false;
-    const std::uint64_t offset = (std::uint64_t)load_be32(boot + 0x420) << 2;
-    std::uint8_t header[0x100];
-    if (!file.seekg((std::streamoff)offset) || !file.read(reinterpret_cast<char*>(header), sizeof(header))) return false;
-    std::uint64_t end = 0x100;
-    for (int s = 0; s < 18; s++) {
-        const std::uint32_t size = load_be32(header + 0x90 + s * 4);
-        const std::uint64_t section_end = (std::uint64_t)load_be32(header + s * 4) + size;
-        if (size != 0 && section_end > end) end = section_end;
-    }
-    // main.dol is a few megabytes; a larger one is not a game.pak.
-    if (end > (64u << 20)) return false;
-    std::vector<std::uint8_t> bytes((std::size_t)end);
-    if (!file.seekg((std::streamoff)offset) || !file.read(reinterpret_cast<char*>(bytes.data()), (std::streamsize)end)) {
-        return false;
-    }
-    id.assign(reinterpret_cast<const char*>(boot), 6);
-    dol = std::move(bytes);
+    char header[64];
+    if (!file.read(header, sizeof(header)) || std::memcmp(header, galaxy::disc::kStoreMagic, 8) != 0) return false;
+    id.assign(header + 48, 6);
     return true;
 }
 
@@ -3713,12 +3632,9 @@ int run_mods_tool() {
         if (args[i] == "--game" && i + 1u < args.size()) {
             game_id = utf8_of(args[++i]);
         } else if (args[i] == "--pak" && i + 1u < args.size()) {
-            // The game's own disc: its id and main.dol (another release's patches are then told apart).
             std::string id;
-            std::vector<std::uint8_t> dol;
-            if (read_game_dol(args[++i], id, dol)) {
+            if (read_game_id(args[++i], id)) {
                 game_id = id;
-                galaxy::mods::set_game_dol(dol);
             }
         } else {
             sources.push_back(args[i]);
@@ -3915,39 +3831,14 @@ int main(int argc, char** argv) {
     {
         // Mods: the mods folder next to the settings (galaxy::mods), applied before the game reads its disc.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
-        const std::string game_id(reinterpret_cast<const char*>(gPak.data), 6);
+        const std::string game_id(gPak.store.game_id());
         char title[9];
-        std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", gPak.data[0], gPak.data[1], gPak.data[2], gPak.data[3]);
+        std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", (unsigned char)gPak.id[0], (unsigned char)gPak.id[1], (unsigned char)gPak.id[2], (unsigned char)gPak.id[3]);
         gSaveDataPath = std::string("/title/00010000/") + title + "/data";
         fs::create_directories(gNandRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
-        // The disc's languages, and those its enabled mods add, before the game's language is first settled (the mods
-        // below take their text in it): Auto settles on one the disc has (Japan's disc: Japanese), never on one only a
-        // fuller list would offer.
-        std::vector<std::string> boot_languages =
-            galaxy::mods::language_folders(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size));
-#if defined(NEBULA_HOST_RENDERER)
-        galaxy::set_disc_languages(boot_languages);
-#endif
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
-#if defined(NEBULA_HOST_RENDERER)
-            for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods(game_id)) {
-                if (!mod.enabled) continue;
-                for (const std::string& language : mod.languages) {
-                    if (std::find(boot_languages.begin(), boot_languages.end(), language) == boot_languages.end()) {
-                        boot_languages.push_back(language);
-                    }
-                }
-            }
-            galaxy::set_disc_languages(boot_languages);
-#endif
-            gMods = galaxy::mods::apply_mods(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size),
-                                             std::span<const std::uint8_t>(gPak.dol, gPak.dol_size),
-                                             static_cast<uint64_t>(gPak.dol - gPak.data), gPak.data, gPak.size, game_id,
-                                             gPak.data[7], gPak.data[6],
-                                             galaxy::mods::language_folder(
-                                                 game_id, static_cast<unsigned>(galaxy::game_language_for_boot())));
         }
         if (gMods != nullptr) {
             galaxy::render::set_texture_pack_mod_folders(gMods->texture_folders);
@@ -3984,16 +3875,12 @@ int main(int argc, char** argv) {
             galaxy::crash::set_session_mods(lines, change_game);
         }
         {
-            // The disc as the game reads it: its version and its languages (the mods' among them), which the
-            // language setting offers.
-            const std::vector<std::string> languages =
-                gMods != nullptr && !gMods->fst.empty()
-                    ? galaxy::mods::language_folders(gMods->fst)
-                    : galaxy::mods::language_folders(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size));
+            // The game's version and its languages, which the language setting offers.
+            const std::vector<std::string> languages = gPak.store.language_folders();
             std::string list;
             for (const std::string& language : languages) list += (list.empty() ? "" : ", ") + language;
             char text[256];
-            std::snprintf(text, sizeof(text), "%s revision %u: %s", game_id.c_str(), static_cast<unsigned>(gPak.data[7]),
+            std::snprintf(text, sizeof(text), "%s revision %u: %s", game_id.c_str(), gPak.store.revision(),
                           list.empty() ? "no language folders" : list.c_str());
             log_line("disc:", text);
 #if defined(NEBULA_HOST_RENDERER)
@@ -4035,6 +3922,7 @@ int main(int argc, char** argv) {
     services.curved_surface = svc_curved_surface;
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
+    services.shape_forget = svc_shape_forget;
     services.shape_draw = svc_shape_draw;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
@@ -4056,11 +3944,11 @@ int main(int argc, char** argv) {
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;
     services.stripe_particle = svc_stripe_particle;
-    services.disc_find = svc_disc_find;
-    services.disc_entry = svc_disc_entry;
-    services.disc_child = svc_disc_child;
-    services.disc_read = svc_disc_read;
-    services.disc_id = svc_disc_id;
+    services.asset_find = svc_asset_find;
+    services.asset_entry = svc_asset_entry;
+    services.asset_child = svc_asset_child;
+    services.asset_read = svc_asset_read;
+    services.game_id = svc_game_id;
     services.vi_frame = svc_vi_frame;
     services.save_request = svc_save_request;
     services.sc_get = svc_sc_get;
@@ -4144,9 +4032,11 @@ int main(int argc, char** argv) {
     }
 
     name_thread(L"Nebula Host Main");
-    gDisc.start();
+    gReads.start();
     gFs.start();
+#if !defined(NEBULA_HOST_RENDERER)
     std::thread(ai_thread).detach();
+#endif
     std::thread(vi_thread).detach();
 #if defined(NEBULA_HOST_RENDERER)
     std::thread(input_thread).detach();
@@ -4233,7 +4123,7 @@ int main(int argc, char** argv) {
             char text[384];
             std::snprintf(text, sizeof(text), "retrace %u, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
                           retraces,
-                          gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
+                          gFileReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
                           gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
 #if defined(NEBULA_HOST_RENDERER)
             if (retraces / 60 % 30 == 0) {

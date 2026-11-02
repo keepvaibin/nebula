@@ -6,7 +6,6 @@
 #include <nw4r/lyt/window.h>
 #include <nw4r/ut/Font.h>
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 
 class NebulaPaneKit;
 
@@ -81,7 +80,7 @@ namespace NebulaUi {
     void paint(Window* pWindow, u32 fill, u32 ring);
     // A rounded box `w` x `h` centred on (x, y) with corners of `radius`.
     void shape(Pane* pPane, f32 x, f32 y, f32 w, f32 h, f32 radius);
-    void setText(TextBox* pText, const wchar_t* pString);
+    void setText(TextBox* pText, const char16_t* pString);
     void setTextSize(TextBox* pText, f32 size);
     // `anchor`: the pane's base point and the text's place in it, 0-8 row by row from the top left (4 the centre).
     void setAnchor(TextBox* pText, s32 anchor);
@@ -95,9 +94,9 @@ namespace NebulaUi {
     // The lines a measured box holds at `size`.
     s32 countLines(f32 height, f32 size);
     // A unit of text: one character, or a whole tag (its parameters may be zero).
-    s32 unitLength(const wchar_t* p);
+    s32 unitLength(const char16_t* p);
     // `pSource` set broken into lines at its spaces so that none runs wider than `limit`.
-    void wrapWords(TextBox* pText, const wchar_t* pSource, f32 limit, f32* pWidth, f32* pHeight);
+    void wrapWords(TextBox* pText, const char16_t* pSource, f32 limit, f32* pWidth, f32* pHeight);
     // A box's font size for picture-font glyphs `size` high.
     nw4r::lyt::Size glyphFontSize(const TextBox* pText, f32 size);
     // The game's picture font: a glyph sized like text, centred on its place.
@@ -113,12 +112,12 @@ namespace NebulaUi {
     // `pString`'s letters side by side as the font's writer sets them (`space` between them, in the font's pixels),
     // their ink boxes joined: in the font's pixels from the first cell's top left, and the cursor after the last
     // letter. False without ink, or (`strict`) when a letter's ink cannot be read.
-    bool stringInkBox(const nw4r::ut::Font* pFont, const wchar_t* pString, f32 space, bool strict, f32* pLeft, f32* pTop,
+    bool stringInkBox(const nw4r::ut::Font* pFont, const char16_t* pString, f32 space, bool strict, f32* pLeft, f32* pTop,
                       f32* pRight, f32* pBottom, f32* pEnd);
     f32 clamp(f32 v, f32 lo, f32 hi);
     f32 easeOut(f32 t);
     u8 toAlpha(f32 a);
-    wchar_t* append(wchar_t* pDst, wchar_t* pEnd, const wchar_t* pSrc);
+    char16_t* append(char16_t* pDst, char16_t* pEnd, const char16_t* pSrc);
 
     Window* makeWindow(const Kits& rKits, Pane* pParent, const char* pName);
     TextBox* makeText(const Kits& rKits, Pane* pParent, const char* pName, u32 length);

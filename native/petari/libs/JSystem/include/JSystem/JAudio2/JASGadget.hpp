@@ -1,7 +1,6 @@
 #pragma once
 
-#include <mem.h>
-#include <revolution/types.h>
+#include <cstring>
 
 template < typename T >
 class JASPtrListAdaptor {

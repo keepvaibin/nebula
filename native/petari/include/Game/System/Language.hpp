@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 #define REGION_EU 0
 #define REGION_JP 1

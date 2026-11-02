@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include "Game/Map/RaceManager.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceRail.hpp"
@@ -199,7 +200,9 @@ void RaceManager::exeWait() {
 }
 
 void RaceManager::exePrep() {
-    std::for_each(&mRacer[0], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::initRacer));
+    for (auto it = &mRacer[0], end = &mRacer[mRacerNum]; it != end; ++it) {
+        (*it)->initRacer();
+    }
 
     if (isNerve(GET_NERVE(RaceManager, RaceManagerNrvPrepWipe))) {
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvPreWipeOut));
@@ -263,7 +266,9 @@ void RaceManager::exeWipeIn() {
     } else {
         MR::onPlayerControl(true);
         MR::endDemo(this, "\203\214\201\133\203\130" /* レース */);
-        std::for_each(&mRacer[0], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::exitRacer));
+        for (auto it = &mRacer[0], end = &mRacer[mRacerNum]; it != end; ++it) {
+            (*it)->exitRacer();
+        }
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvWait));
     }
 }
@@ -340,7 +345,7 @@ void RaceManager::exeRace() {
         }
     }
 
-    std::sort(&mRacer[mRank], &mRacer[mRacerNum], AbstractRacer::compRacer);
+    MR::sort(&mRacer[mRank], &mRacer[mRacerNum], AbstractRacer::compRacer);
 }
 
 void RaceManager::exeDemo() {
@@ -419,7 +424,9 @@ void RaceManager::prepRace() {
         }
     }
 
-    std::for_each(&mAudience[0], &mAudience[mAudienceNum], std::mem_func(&AbstractAudience::prepAudience));
+    for (auto it = &mAudience[0], end = &mAudience[mAudienceNum]; it != end; ++it) {
+        (*it)->prepAudience();
+    }
 }
 
 void RaceManager::startRace() {
@@ -427,7 +434,9 @@ void RaceManager::startRace() {
         MR::sendSimpleMsgToActor(ACTMES_RACE_START, MR::getCurrentRushActor());
     }
 
-    std::for_each(&mRacer[0], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::startRacer));
+    for (auto it = &mRacer[0], end = &mRacer[mRacerNum]; it != end; ++it) {
+        (*it)->startRacer();
+    }
     MR::endStarPointerMode(this);
     MR::endDemo(this, "\203\214\201\133\203\130" /* レース */);
     MR::onPlayerControl(true);
@@ -438,7 +447,9 @@ void RaceManager::goalRace() {
         MR::sendSimpleMsgToActor(ACTMES_RACE_GOAL, MR::getCurrentRushActor());
     }
 
-    std::for_each(&mRacer[mRank], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::loseRacer));
+    for (auto it = &mRacer[mRank], end = &mRacer[mRacerNum]; it != end; ++it) {
+        (*it)->loseRacer();
+    }
 }
 
 void RaceManager::resetRace() {
@@ -456,7 +467,9 @@ void RaceManager::resetRace() {
         }
     }
 
-    std::for_each(&mAudience[0], &mAudience[mAudienceNum], std::mem_func(&AbstractAudience::resetAudience));
+    for (auto it = &mAudience[0], end = &mAudience[mAudienceNum]; it != end; ++it) {
+        (*it)->resetAudience();
+    }
     mLayout->kill();
 }
 

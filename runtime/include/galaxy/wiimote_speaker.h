@@ -23,8 +23,8 @@ public:
     void push(std::span<const std::int16_t> samples, std::uint32_t rate) noexcept;
 
     // Consumer: one audio thread, called with each output buffer as the game produces it. Adds the speaker, scaled by
-    // `gain`, to both channels of interleaved 16-bit little-endian stereo at `output_rate`.
-    void mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept;
+    // `gain`, to both channels of interleaved float stereo at `output_rate`.
+    void mix(std::span<float> stereo, std::uint32_t output_rate, float gain) noexcept;
 
 private:
     // Shared with the producer.

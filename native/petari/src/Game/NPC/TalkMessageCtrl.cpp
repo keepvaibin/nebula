@@ -24,7 +24,7 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const TVec3f& rArg2, MtxPtr pArg3)
     : NameObj("\211\357\230\142\220\247\214\344" /* 会話制御 */), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), _1C(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
@@ -106,7 +106,7 @@ bool TalkMessageCtrl::rootNodeEve() {
             return true;
         }
 
-        if (mEventFunc->operator()(nodeEvent->mUnknown) == nullptr) {
+        if (mEventFunc->operator()(nodeEvent->mUnknown) == false) {
             return false;
         }
     } else if (groupID == 4) {
@@ -114,7 +114,7 @@ bool TalkMessageCtrl::rootNodeEve() {
             return true;
         }
 
-        if (mAnimeFunc->operator()(nodeEvent->mUnknown) == nullptr) {
+        if (mAnimeFunc->operator()(nodeEvent->mUnknown) == false) {
             return false;
         }
     } else if (groupID == 3) {
@@ -125,7 +125,7 @@ bool TalkMessageCtrl::rootNodeEve() {
     } else if (groupID == 6) {
         MR::onSwitchB(mHostActor);
     } else if (groupID == 7) {
-        if (mKillFunc->operator()(nodeEvent->mUnknown) == nullptr) {
+        if (mKillFunc->operator()(nodeEvent->mUnknown) == false) {
             return false;
         }
     }
@@ -474,12 +474,12 @@ TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
     return &pCtrl->mNodeCtrl->mMessageInfo;
 }
 
-const wchar_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
-    return (const wchar_t*)pCtrl->mNodeCtrl->mMessageInfo._0;
+const char16_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
+    return (const char16_t*)pCtrl->mNodeCtrl->mMessageInfo._0;
 }
 
-const wchar_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
-    return (const wchar_t*)pCtrl->mNodeCtrl->getSubMessage();
+const char16_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
+    return (const char16_t*)pCtrl->mNodeCtrl->getSubMessage();
 }
 
 bool TalkMessageCtrl::isNearPlayer(f32 distance) const {

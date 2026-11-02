@@ -1,6 +1,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/MapObj/NormalMapBase.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -138,7 +138,7 @@ void NormalMapBase::setupTexture() {
         }
     }
 
-    mImagePtr = new (MR::getSceneHeapGDDR3(), 0x20) u16[width * height];
+    mImagePtr = new (MR::getSceneHeap(), 0x20) u16[width * height];
     createGradTexture();
 }
 

@@ -1,27 +1,39 @@
 #include "Game/Speaker/SpkSpeakerCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Speaker/SpkMixingBuffer.hpp"
 #include "Game/Speaker/SpkSound.hpp"
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
-#include <mem.h>
+#include <JSystem/JAudio2/JASDriverIF.hpp>
+#include <cstring>
 #include "Game/System/NebulaHost.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-NebulaAlarm sSpeakerAlarm;
 SpeakerInfo sSpeakerInfo[WPAD_MAX_CONTROLLERS];
 SpkSoundHandle sAdjustSoundHandle[WPAD_MAX_CONTROLLERS];
 SpkMixingBuffer* sMixingBuffer;
 
 namespace {
+    // The speaker's 40 samples at 6 kHz last 6.67 ms: an update each 640/3 samples of the driver's 80 per sub-frame.
+    u32 sSubFrameSamples;
+
+    s32 onSubFrame(void*) {
+        sSubFrameSamples += 240;
+        while (sSubFrameSamples >= 640) {
+            sSubFrameSamples -= 640;
+            SpkSpeakerCtrl::updateSpeaker();
+        }
+        return 0;
+    }
+
     SpeakerInfo& getSpeakerInfo(s32 idx) {
         return sSpeakerInfo[idx];
     }
 };  // namespace
 
 void SpkSpeakerCtrl::setMixingBuffer(SpkMixingBuffer* pMixingBuffer) {
-    BOOL status = NebulaKernel::disableInterrupts();
+    BOOL status = GameThreads::excludeAudio();
     sMixingBuffer = pMixingBuffer;
-    NebulaKernel::restoreInterrupts(status);
+    GameThreads::restoreAudio(status);
 }
 
 void SpkSpeakerCtrl::setup() {
@@ -43,8 +55,7 @@ void SpkSpeakerCtrl::setup() {
         }
     }
 
-    sSpeakerAlarm.init();
-    sSpeakerAlarm.setPeriodic(NebulaKernel::time(), NebulaKernel::ticksFromNanoseconds(6666667), SpkSpeakerCtrl::updateSpeaker);
+    JASDriver::registerSubFrameCallback(onSubFrame, nullptr);
 }
 
 void SpkSpeakerCtrl::connect(s32 padChannel) {
@@ -157,7 +168,7 @@ void SpkSpeakerCtrl::continuousUsingProcess(s32 padChannel) {
     }
 }
 
-void SpkSpeakerCtrl::updateSpeaker(NebulaAlarm*) {
+void SpkSpeakerCtrl::updateSpeaker() {
     for (s32 i = 0; i < WPAD_MAX_CONTROLLERS; i++) {
         if (sMixingBuffer == nullptr) {
             continue;

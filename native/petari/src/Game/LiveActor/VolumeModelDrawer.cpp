@@ -19,7 +19,7 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
     MR::createSceneObj(SceneObj_VolumeModelDrawInit);
     mMtx = mtx;
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "%s.arc", pFileName);
+    nebula_snprintf(buf, sizeof(buf), "%s.arc", pFileName);
     mModelData = (J3DModelData*)MR::createAndAddResourceHolder(buf)->mModelResTable->getRes(pFileName);
 }
 

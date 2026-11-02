@@ -186,7 +186,7 @@ JMapInfoIter StageDataHolder::getCommonPathPointInfo(const JMapInfo** ppOut, int
 JMapInfoIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const JMapInfo** ppInfo, int idx) const {
     const JMapInfo* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
     char buf[128];
-    snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
+    nebula_snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
     *ppInfo = findJmpInfoFromArray(&mPathObjs, buf);
     return JMapInfoIter(pInfo, idx);
 }
@@ -463,7 +463,7 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo
 
     for (u32 i = 0; i < 0x11; i++) {
         if ((mask & (1 << i)) != 0) {
-            snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
+            nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
             s32 fileCount = mArchive->countFile(buf) - 2;
             count += fileCount > 0 ? fileCount : 0;
         }
@@ -476,7 +476,7 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo
 
         for (u32 i = 0; i < 0x11; i++) {
             if ((mask & (1 << i)) != 0) {
-                snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
+                nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
                 pInfoArray = attachJmpInfoToArray(pInfoArray, buf);
             }
         }
@@ -494,10 +494,10 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, c
 
     for (u32 i = 0; i < 0x11; i++) {
         if (layerMask & (1 << i)) {
-            snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
+            nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
             s32 fileCount = mArchive->countFile(path) - 2;
             count += fileCount > 0 ? fileCount : 0;
-            snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
+            nebula_snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
             fileCount = mArchive->countFile(path) - 2;
             count += fileCount > 0 ? fileCount : 0;
         }
@@ -509,9 +509,9 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, c
         pInfo->mArr = pCurrent;
         for (u32 i = 0; i < 0x11; i++) {
             if (layerMask & (1 << i)) {
-                snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
+                nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
                 pCurrent = attachJmpInfoToArray(pCurrent, path);
-                snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
+                nebula_snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
                 pCurrent = attachJmpInfoToArray(pCurrent, path);
             }
         }

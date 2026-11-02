@@ -8,7 +8,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 namespace {
     static const f32 sEffectPosOffsetY = 5000.0f;

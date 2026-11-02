@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/System/GameThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -14,7 +16,7 @@ namespace MR {
 
 class FunctionAsyncExecInfo {
 public:
-    FunctionAsyncExecInfo(MR::FunctorBase*, int, const char*);
+    FunctionAsyncExecInfo(MR::FunctorBase*, const char*);
 
     ~FunctionAsyncExecInfo();
 
@@ -25,10 +27,10 @@ public:
     }
 
     /* 0x00 */ MR::FunctorBase* mFunc;
-    /* 0x04 */ int mPriority;
+    JKRHeap* mStarterHeap;  // the current heap where it was started
     /* 0x08 */ const char* mName;
-    /* 0x0C */ volatile bool mIsEnd;
-    /* 0x10 */ NebulaMessageQueue mQueue;
+    /* 0x0C */ NebulaAtomic< bool > mIsEnd;
+    /* 0x10 */ GameMessageQueue mQueue;
     /* 0x30 */ void* mMessage;
 };
 
@@ -44,14 +46,14 @@ public:
 
 class FunctionAsyncExecutorOnMainThread {
 public:
-    FunctionAsyncExecutorOnMainThread(NebulaThread*);
+    FunctionAsyncExecutorOnMainThread(GameThreadRecord*);
 
     void update();
 
     /* 0x000 */ bool _0;
-    /* 0x004 */ NebulaMessageQueue mQueue;
+    /* 0x004 */ GameMessageQueue mQueue;
     /* 0x024 */ void* mMsgArray[64];
-    /* 0x124 */ NebulaThread* mThread;
+    /* 0x124 */ GameThreadRecord* mThread;
 };
 
 class FunctionAsyncExecutor {
@@ -59,12 +61,11 @@ public:
     FunctionAsyncExecutor();
 
     void update();
-    void start(const MR::FunctorBase&, int, const char*);
+    void start(const MR::FunctorBase&, const char*);
     bool startOnMainThread(const MR::FunctorBase&, const char*);
     void waitForEnd(const char*);
     bool isEnd(const char*) const;
-    NebulaThread* getOSThread(const char*);
-    FunctionAsyncExecInfo* createAndAddExecInfo(const MR::FunctorBase&, int, const char*);
+    FunctionAsyncExecInfo* createAndAddExecInfo(const MR::FunctorBase&, const char*);
     FunctionAsyncExecutorThread* getSuspendThread();
 
     /* 0x000 */ FunctionAsyncExecutorThread* mThreads[2];

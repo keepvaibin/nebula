@@ -141,7 +141,7 @@ namespace MR {
         u16 i;
         u16 shape;
         FurMulti* pMulti;
-        CurrentHeapRestorer heapRestorer(getSceneHeapGDDR3());
+        CurrentHeapRestorer heapRestorer(getSceneHeap());
         J3DModelData* pModelData = getJ3DModelData(pActor);
         count = 0;
 

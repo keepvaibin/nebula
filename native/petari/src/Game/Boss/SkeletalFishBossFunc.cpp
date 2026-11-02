@@ -30,7 +30,7 @@ s32 SkeletalFishBossFunc::getNearestGuardPosID(const TVec3f& rVec) {
 
 bool SkeletalFishBossFunc::copyGuardPos(TVec3f* pOut, s32 idx) {
     char name[128];
-    snprintf(name, sizeof(name), "%s%d", ::sNamePosName, idx);
+    nebula_snprintf(name, sizeof(name), "%s%d", ::sNamePosName, idx);
 
     return MR::tryFindNamePos(name, pOut, nullptr);
 }

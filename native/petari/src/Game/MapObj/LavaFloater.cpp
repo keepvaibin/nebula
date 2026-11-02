@@ -17,7 +17,6 @@
 #include "math_types.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 namespace {
     const char* const cEffectName = "LavaBubble";
@@ -51,7 +50,7 @@ void LavaFloater::init(const JMapInfoIter& rIter) {
         initModelManagerWithAnm(mObjectName, nullptr, false);
     }
 
-    initEffectKeeper(nullptr, nullptr, false);
+    initEffectKeeper(0, 0, false);
     MR::setEffectHostSRT(this, ::cEffectName, &_9C, &mRotation, nullptr);
     initSound(4, false);
     initHitSensor(1);

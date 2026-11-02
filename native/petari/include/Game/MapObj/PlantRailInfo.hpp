@@ -2,7 +2,6 @@
 
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class PlantPoint;
 class RailRider;

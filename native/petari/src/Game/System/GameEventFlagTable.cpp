@@ -1,5 +1,5 @@
+#include "Game/Util/SortUtil.hpp"
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/Util/HashUtil.hpp"
@@ -276,7 +276,7 @@ void GameEventFlagTableInstance::initSortTable() {
         mSortTable[i].mHashCode = MR::getHashCode(pFlag->mName);
     }
 
-    std::sort(&mSortTable[0], &mSortTable[mLength], GameEventFlagSortLt());
+    MR::sort(&mSortTable[0], &mSortTable[mLength], GameEventFlagSortLt());
 }
 
 namespace GameEventFlagTable {
@@ -290,7 +290,7 @@ namespace GameEventFlagTable {
 
     // The flags (main.dol's when a mod changed them there).
     const GameEventFlag* flags() {
-        static const GameEventFlag* sFlags = NebulaDiscTables::getEventFlags(::sGameEventFlagStatic);
+        static const GameEventFlag* sFlags = NebulaDataTables::getEventFlags(::sGameEventFlagStatic);
         return sFlags;
     }
 
@@ -453,7 +453,7 @@ namespace GameEventFlagTable {
 
     s32 getStarPieceNumToOpenExclamationGalaxy(const char* pGalaxyName) {
         char flagName[64];
-        snprintf(flagName, sizeof(flagName), "StarPiece%s", pGalaxyName);
+        nebula_snprintf(flagName, sizeof(flagName), "StarPiece%s", pGalaxyName);
 
         GameEventFlagAccessor accessor = makeAccessor(flagName);
 
@@ -466,14 +466,14 @@ namespace GameEventFlagTable {
 
     s32 getGalaxyDependedFlags(const char** pFlags, int a1, const char* pName) {
         JMapInfo info;
-        info.attach(NebulaDiscTables::getGalaxyInfoTable());
+        info.attach(NebulaDataTables::getGalaxyInfoTable());
 
         JMapInfoIter iter = info.findElement("name", pName, 0);
 
         s32 numFlags = 0;
         for (s32 idx = 0; idx < 3; idx++) {
             char key[32];
-            snprintf(key, 32, "OpenCondition%1d", idx);
+            nebula_snprintf(key, 32, "OpenCondition%1d", idx);
             if (info.searchItemInfo(key) < 0) {
                 break;
             }

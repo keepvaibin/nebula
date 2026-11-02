@@ -6,7 +6,6 @@
 #include "Game/Util/JointUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
-#include <revolution/types.h>
 
 namespace {
     const PoltaSensorListEntry sCoreSensorList[] = {

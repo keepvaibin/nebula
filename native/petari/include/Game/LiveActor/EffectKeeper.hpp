@@ -2,7 +2,6 @@
 
 #include "Game/Util/Array.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class Binder;
 class HashSortTable;

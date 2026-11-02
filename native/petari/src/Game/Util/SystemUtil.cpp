@@ -1,6 +1,5 @@
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include <revolution/os.h>
+#include "Game/System/GameThreads.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
 #include "Game/System/AudSystemWrapper.hpp"
@@ -73,9 +72,7 @@ namespace MR {
     }
 
     void waitEndChangeArchivePlayer() {
-        while (!GameSystemFunction::isEndChangeArchivePlayer()) {
-            NebulaKernel::poll();
-        }
+        GameSystemFunction::waitEndChangeArchivePlayer();
     }
 
     void callMethodAllSceneNameObj(NameObjMethod pMethod) {
@@ -104,8 +101,8 @@ namespace MR {
         getGameSystemObjHolder()->clearRequestFileInfo(param1);
     }
 
-    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, int threadPriority, const char* pThreadName) {
-        ::getFunctionAsyncExecutor()->start(rFunc, threadPriority, pThreadName);
+    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, const char* pThreadName) {
+        ::getFunctionAsyncExecutor()->start(rFunc, pThreadName);
     }
 
     bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase& rFunc, const char* pThreadName) {
@@ -130,24 +127,22 @@ namespace MR {
         return false;
     }
 
-    void suspendAsyncExecuteThread(const char* pThreadName) {
-        NebulaKernel::suspend(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+    namespace {
+        GameEvent sSceneInitializeResume;
     }
 
-    void resumeAsyncExecuteThread(const char* pThreadName) {
-        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
-
-        NebulaKernel::resume(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+    void waitSceneInitializeResume() {
+        sSceneInitializeResume.wait();
     }
 
-    bool isSuspendedAsyncExecuteThread(const char* pThreadName) {
-        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
-
-        if (pThread == nullptr) {
+    bool tryResumeSceneInitialize() {
+        if (!sSceneInitializeResume.isWaiting()) {
             return false;
         }
 
-        return NebulaKernel::isSuspended(pThread);
+        sSceneInitializeResume.signal();
+
+        return true;
     }
 
     bool isScreen16Per9() {

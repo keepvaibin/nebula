@@ -1,164 +1,271 @@
 #include "galaxy/disc_files.h"
 
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <cstring>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <unistd.h>
+#endif
+
 namespace galaxy::disc {
 
 namespace {
 
-std::uint32_t load_be32(const std::uint8_t* bytes) {
-    return (std::uint32_t{bytes[0]} << 24) | (std::uint32_t{bytes[1]} << 16) | (std::uint32_t{bytes[2]} << 8) |
-        std::uint32_t{bytes[3]};
-}
+constexpr std::size_t kHeader = 64;
 
-char lower(char c) {
-    return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
-}
-
-bool same_name(std::string_view a, const char* b) {
-    std::size_t i = 0;
-    for (; b[i] != '\0'; i++) {
-        if (i == a.size() || lower(a[i]) != lower(b[i])) {
-            return false;
-        }
-    }
-    return i == a.size();
+std::uint64_t word(const std::uint8_t* at) {
+    std::uint64_t value;
+    std::memcpy(&value, at, sizeof(value));
+    return value;
 }
 
 }  // namespace
 
-bool FileTable::load(const std::uint8_t* fst, std::size_t size) {
-    entries_.clear();
-    names_.clear();
-    child_start_.clear();
-    children_.clear();
-    if (fst == nullptr || size < 12) {
+AssetStore::~AssetStore() {
+    close();
+}
+
+void AssetStore::close() {
+#if defined(_WIN32)
+    if (file_ != nullptr) {
+        CloseHandle(file_);
+        file_ = nullptr;
+    }
+#else
+    if (file_ >= 0) {
+        ::close(file_);
+        file_ = -1;
+    }
+#endif
+    index_.clear();
+    image_ = nullptr;
+    size_ = 0;
+    nodes_ = nullptr;
+    hashes_ = nullptr;
+    names_ = nullptr;
+    count_ = 0;
+    game_id_.clear();
+    revision_ = 0;
+}
+
+bool AssetStore::parse(const std::uint8_t* header, const std::uint8_t* index, std::uint64_t index_at, std::uint64_t size) {
+    std::uint32_t version, count;
+    std::memcpy(&version, header + 8, 4);
+    std::memcpy(&count, header + 12, 4);
+    const std::uint64_t nodes = word(header + 16), hashes = word(header + 24), names = word(header + 32),
+                        names_size = word(header + 40);
+    if (version != 1u || count == 0u || nodes < index_at || nodes > size || (size - nodes) / sizeof(Node) < count ||
+        hashes < index_at || hashes > size || (size - hashes) / sizeof(Hash) < count || names < index_at || names > size ||
+        size - names < names_size || names_size == 0u || index[names - index_at + names_size - 1u] != 0u) {
         return false;
     }
-    const std::uint32_t count = load_be32(fst + 8);
-    if (count == 0 || count > size / 12 || (load_be32(fst) >> 24) == 0) {
-        return false;
-    }
-    std::vector<Raw> entries(count);
-    for (std::uint32_t i = 0; i < count; i++) {
-        const std::uint8_t* raw = fst + std::size_t{i} * 12;
-        const std::uint32_t word = load_be32(raw);
-        entries[i] = {(word >> 24) != 0, word & 0xFFFFFFu, load_be32(raw + 4), load_be32(raw + 8)};
-    }
-    std::string names(reinterpret_cast<const char*>(fst) + std::size_t{count} * 12, size - std::size_t{count} * 12);
-    names.push_back('\0');
-    for (std::uint32_t i = 0; i < count; i++) {
-        const Raw& e = entries[i];
-        if (i != 0 && e.name >= names.size() - 1) {
-            return false;
-        }
-        // A folder's entries run from the one after it to its "next" (exclusive), inside its parent's.
-        if (e.folder && (e.next_or_length <= i || e.next_or_length > count ||
-                         (i != 0 && (e.parent_or_position >= i || !entries[e.parent_or_position].folder)))) {
-            return false;
-        }
-    }
-    std::vector<std::uint32_t> child_start(count + 1, 0);
-    std::vector<std::int32_t> children;
-    for (std::uint32_t i = 0; i < count; i++) {
-        child_start[i] = static_cast<std::uint32_t>(children.size());
-        if (entries[i].folder) {
-            for (std::uint32_t c = i + 1; c < entries[i].next_or_length;
-                 c = entries[c].folder ? entries[c].next_or_length : c + 1) {
-                children.push_back(static_cast<std::int32_t>(c));
-            }
-        }
-    }
-    child_start[count] = static_cast<std::uint32_t>(children.size());
-    entries_ = std::move(entries);
-    names_ = std::move(names);
-    child_start_ = std::move(child_start);
-    children_ = std::move(children);
+    nodes_ = reinterpret_cast<const Node*>(index + (nodes - index_at));
+    hashes_ = reinterpret_cast<const Hash*>(index + (hashes - index_at));
+    names_ = reinterpret_cast<const char*>(index + (names - index_at));
+    count_ = count;
+    game_id_.assign(reinterpret_cast<const char*>(header + 48), strnlen(reinterpret_cast<const char*>(header + 48), 6));
+    revision_ = header[55];
     return true;
 }
 
-std::optional<Entry> FileTable::entry(std::int32_t index) const {
-    if (index < 0 || static_cast<std::size_t>(index) >= entries_.size()) {
+bool AssetStore::load(const std::uint8_t* data, std::size_t size) {
+    close();
+    if (data == nullptr || size < kHeader || std::memcmp(data, kStoreMagic, sizeof(kStoreMagic)) != 0 ||
+        !parse(data, data, 0, size)) {
+        close();
+        return false;
+    }
+    image_ = data;
+    size_ = size;
+    return true;
+}
+
+bool AssetStore::open(const std::filesystem::path& path) {
+    close();
+#if defined(_WIN32)
+    file_ = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr);
+    LARGE_INTEGER length{};
+    if (file_ == INVALID_HANDLE_VALUE || !GetFileSizeEx(file_, &length)) {
+        file_ = nullptr;
+        return false;
+    }
+    size_ = static_cast<std::uint64_t>(length.QuadPart);
+#else
+    file_ = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    const off_t length = file_ >= 0 ? lseek(file_, 0, SEEK_END) : -1;
+    if (length < 0) {
+        close();
+        return false;
+    }
+    size_ = static_cast<std::uint64_t>(length);
+#endif
+    std::uint8_t header[kHeader];
+    if (size_ < kHeader || !read(0, sizeof(header), header) || std::memcmp(header, kStoreMagic, sizeof(kStoreMagic)) != 0) {
+        close();
+        return false;
+    }
+    // The index is the store's end: nodes, hashes, names.
+    const std::uint64_t index_at = word(header + 16);
+    if (index_at >= size_ || size_ - index_at > (1ull << 30)) {
+        close();
+        return false;
+    }
+    index_.resize(static_cast<std::size_t>(size_ - index_at));
+    if (!read(index_at, index_.size(), index_.data()) || !parse(header, index_.data(), index_at, size_)) {
+        close();
+        return false;
+    }
+    return true;
+}
+
+bool AssetStore::read(std::uint64_t position, std::size_t size, void* dst) const {
+    if (position > size_ || size_ - position < size) {
+        return false;
+    }
+    if (image_ != nullptr) {
+        std::memcpy(dst, image_ + position, size);
+        return true;
+    }
+#if defined(_WIN32)
+    // One event a thread, so reads of different threads run at once.
+    thread_local const HANDLE done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    auto* out = static_cast<std::uint8_t*>(dst);
+    while (size != 0) {
+        OVERLAPPED overlapped{};
+        overlapped.Offset = static_cast<DWORD>(position);
+        overlapped.OffsetHigh = static_cast<DWORD>(position >> 32);
+        overlapped.hEvent = done;
+        const DWORD wanted = static_cast<DWORD>(std::min<std::size_t>(size, 1u << 30));
+        DWORD got = 0;
+        if (!ReadFile(file_, out, wanted, nullptr, &overlapped) && GetLastError() != ERROR_IO_PENDING) {
+            return false;
+        }
+        if (!GetOverlappedResult(file_, &overlapped, &got, TRUE) || got == 0) {
+            return false;
+        }
+        out += got;
+        position += got;
+        size -= got;
+    }
+#else
+    auto* out = static_cast<std::uint8_t*>(dst);
+    while (size != 0) {
+        const ssize_t got = pread(file_, out, size, static_cast<off_t>(position));
+        if (got <= 0) {
+            return false;
+        }
+        out += got;
+        position += static_cast<std::uint64_t>(got);
+        size -= static_cast<std::size_t>(got);
+    }
+#endif
+    return true;
+}
+
+std::optional<Entry> AssetStore::entry(std::int32_t index) const {
+    if (index < 0 || static_cast<std::uint32_t>(index) >= count_) {
         return std::nullopt;
     }
-    const Raw& e = entries_[static_cast<std::size_t>(index)];
+    const Node& node = nodes_[index];
     Entry out;
     out.index = index;
-    out.folder = e.folder;
-    out.name = names_.c_str() + (index == 0 ? names_.size() - 1 : e.name);
-    if (!e.folder) {
-        out.length = e.next_or_length;
-        out.position = std::uint64_t{e.parent_or_position} << 2;
+    out.folder = (node.flags & 1u) != 0u;
+    out.name = names_ + node.name;
+    if (!out.folder) {
+        out.length = node.size;
+        out.position = node.position;
     }
     return out;
 }
 
-std::optional<Entry> FileTable::child(std::int32_t folder, std::uint32_t index) const {
-    if (folder < 0 || static_cast<std::size_t>(folder) >= entries_.size() ||
-        !entries_[static_cast<std::size_t>(folder)].folder) {
+std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index) const {
+    if (folder < 0 || static_cast<std::uint32_t>(folder) >= count_ || (nodes_[folder].flags & 1u) == 0u ||
+        index >= nodes_[folder].size) {
         return std::nullopt;
     }
-    const std::uint32_t first = child_start_[static_cast<std::size_t>(folder)];
-    const std::uint32_t end = child_start_[static_cast<std::size_t>(folder) + 1];
-    if (index >= end - first) {
-        return std::nullopt;
-    }
-    return entry(children_[first + index]);
+    return entry(static_cast<std::int32_t>(nodes_[folder].position + index));
 }
 
-// The disc's own walk (DVDConvertPathToEntrynum): a name followed by '/' matches folders only, a last name files and
-// folders; '/' at a name's start returns to the root.
-std::optional<Entry> FileTable::find(std::string_view path) const {
-    if (entries_.empty()) {
+std::optional<Entry> AssetStore::find(std::string_view path) const {
+    if (count_ == 0u) {
         return std::nullopt;
     }
-    std::uint32_t folder = 0;
-    std::size_t at = 0;
-    while (true) {
-        const std::string_view rest = path.substr(at);
-        if (rest.empty()) {
-            return entry(static_cast<std::int32_t>(folder));
-        }
-        if (rest[0] == '/') {
-            folder = 0;
-            at++;
+    // The path from the root: "." and "" steps dropped, ".." going up.
+    std::array<std::string_view, 16> parts;
+    std::size_t depth = 0;
+    const bool folder_only = path.size() > 1 && path.back() == '/';
+    while (!path.empty()) {
+        const std::size_t slash = path.find('/');
+        const std::string_view part = path.substr(0, slash);
+        path = slash == std::string_view::npos ? std::string_view{} : path.substr(slash + 1);
+        if (part.empty()) {
+            depth = 0;
             continue;
         }
-        if (rest.substr(0, 3) == "../") {
-            folder = entries_[folder].parent_or_position;
-            at += 3;
+        if (part == ".") {
             continue;
         }
-        if (rest == "..") {
-            return entry(static_cast<std::int32_t>(entries_[folder].parent_or_position));
-        }
-        if (rest.substr(0, 2) == "./") {
-            at += 2;
+        if (part == "..") {
+            depth -= depth != 0 ? 1 : 0;
             continue;
         }
-        if (rest == ".") {
-            return entry(static_cast<std::int32_t>(folder));
-        }
-        const std::size_t slash = rest.find('/');
-        const bool more = slash != std::string_view::npos;
-        const std::string_view name = rest.substr(0, slash);
-        std::int32_t found = -1;
-        const std::uint32_t first = child_start_[folder];
-        const std::uint32_t end = child_start_[folder + 1];
-        for (std::uint32_t c = first; c < end; c++) {
-            const Raw& e = entries_[static_cast<std::size_t>(children_[c])];
-            if ((more && !e.folder) || !same_name(name, names_.c_str() + e.name)) {
-                continue;
-            }
-            found = children_[c];
-            break;
-        }
-        if (found < 0) {
+        if (depth == parts.size()) {
             return std::nullopt;
         }
-        if (!more) {
-            return entry(found);
+        parts[depth++] = part;
+    }
+    std::uint64_t hash = 0xCBF29CE484222325ull;
+    const auto add = [&hash](char c) {
+        const char lower = c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+        hash = (hash ^ static_cast<std::uint8_t>(lower)) * 0x100000001B3ull;
+    };
+    for (std::size_t i = 0; i < depth; i++) {
+        if (i != 0) {
+            add('/');
         }
-        folder = static_cast<std::uint32_t>(found);
-        at += name.size() + 1;
+        for (const char c : parts[i]) {
+            add(c);
+        }
+    }
+    const Hash* const end = hashes_ + count_;
+    const Hash* const found =
+        std::lower_bound(hashes_, end, hash, [](const Hash& item, std::uint64_t value) { return item.hash < value; });
+    if (found == end || found->hash != hash) {
+        return std::nullopt;
+    }
+    if (folder_only && (nodes_[found->node].flags & 1u) == 0u) {
+        return std::nullopt;
+    }
+    return entry(static_cast<std::int32_t>(found->node));
+}
+
+std::vector<std::string> AssetStore::language_folders() const {
+    std::vector<std::string> folders;
+    static constexpr std::string_view kRegions[] = {"Us", "Eu", "Jp", "Kr", "Cn", "Tw"};
+    for (std::uint32_t i = 0;; i++) {
+        const std::optional<Entry> item = child(0, i);
+        if (!item) {
+            return folders;
+        }
+        if (!item->folder) {
+            continue;
+        }
+        const std::string_view name = item->name;
+        for (const std::string_view region : kRegions) {
+            const std::string_view rest = name.substr(std::min(name.size(), region.size()));
+            if (name.starts_with(region) && !rest.empty() && std::isupper(static_cast<unsigned char>(rest[0])) != 0 &&
+                std::all_of(rest.begin(), rest.end(), [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; })) {
+                folders.emplace_back(name);
+                break;
+            }
+        }
     }
 }
 

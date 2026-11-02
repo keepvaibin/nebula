@@ -4,8 +4,8 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include <cstddef>
-#include <cstdio>
+#include <stddef.h>
+#include <stdio.h>
 
 _Static_assert(sizeof(MiiCharModel) >= sizeof(Mii_CharModel), "MiiCharModel holds an Mii_CharModel");
 

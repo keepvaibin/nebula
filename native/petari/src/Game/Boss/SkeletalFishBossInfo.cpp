@@ -69,19 +69,19 @@ void SkeletalFishBossInfo::loadLevelStatus(const JMapInfoIter& rIter) {
     for (s32 i = 0; i < levelNum; i++) {
         char paramName[128];
 
-        snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameEnergy, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameEnergy, i);
         rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mEnergyLevel);
 
-        snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameSpeed, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameSpeed, i);
         rIter.getValue< f32 >(paramName, &getLevelStatus(i)->mSpeedLevel);
 
-        snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameRailID, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameRailID, i);
         rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mRailIDLevel);
 
-        snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameGuardOffset, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameGuardOffset, i);
         rIter.getValue< f32 >(paramName, &getLevelStatus(i)->mGuardOffsLevel);
 
-        snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameGuardAppearNum, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d", ::sParamNameGuardAppearNum, i);
         rIter.getValue< s32 >(paramName, &getLevelStatus(i)->mGuardAppearNumLevel);
 
         loadGuardStatus(rIter, i, mLevelStatusArray[i].mGuardAppearNumLevel);
@@ -94,10 +94,10 @@ void SkeletalFishBossInfo::loadGuardStatus(const JMapInfoIter& rIter, s32 levelI
     for (s32 i = 0; i < guardLevel; i++) {
         char paramName[128];
 
-        snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardPos, levelIdx, ::sParamNameGuard, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardPos, levelIdx, ::sParamNameGuard, i);
         MR::getJMapInfoV3f(rIter, paramName, &pStatus->getGuardStatus(i)->mGuardPosLevel);
 
-        snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardWait, levelIdx, ::sParamNameGuard, i);
+        nebula_snprintf(paramName, sizeof(paramName), "%s%d%s%d", ::sParamNameGuardWait, levelIdx, ::sParamNameGuard, i);
         rIter.getValue< s32 >(paramName, &pStatus->getGuardStatus(i)->mGuardWaitLevelID);
     }
 }

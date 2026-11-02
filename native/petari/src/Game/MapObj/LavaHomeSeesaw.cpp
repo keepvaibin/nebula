@@ -13,7 +13,6 @@
 #include "JSystem/JGeometry/TMatrix.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 #include "math_types.hpp"
-#include "revolution/types.h"
 
 LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), _94(gZeroVec), mYOffset() {
 }

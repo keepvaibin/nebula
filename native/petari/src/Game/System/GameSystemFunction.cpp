@@ -83,8 +83,8 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->requestChangeArchivePlayer(isPlayerMario);
     }
 
-    bool isEndChangeArchivePlayer() {
-        return SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->isDone();
+    void waitEndChangeArchivePlayer() {
+        SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->waitDone();
     }
 
     void activateScreenPreserver() {
@@ -261,12 +261,11 @@ namespace GameSystemFunction {
     }
 
     void prepareResetSystem() {
-        SingletonHolder< GameSystem >::get()->prepareReset();
         SingletonHolder< GameSystem >::get()->mSceneController->prepareReset();
     }
 
     bool isPreparedFadeinSystem() {
-        return SingletonHolder< GameSystem >::get()->isPreparedReset() && SingletonHolder< GameSystem >::get()->mSceneController->isPreparedReset();
+        return SingletonHolder< GameSystem >::get()->mSceneController->isPreparedReset();
     }
 
     void restartSceneController() {
