@@ -2449,6 +2449,137 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
     return disc_entry_out(disc_table().child(folder, child), out);
 }
 
+// The game's memory. GALAXY_TEST_MEMORY_AT places it, far from the file views and across a 4 GB line, so an address squeezed
+// through 32 bits fails in every run.
+void* svc_memory_block(void*, uint64_t size) {
+#if defined(_WIN32)
+    const char* at = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_MEMORY_AT"));
+    return VirtualAlloc(at != nullptr ? reinterpret_cast<void*>(static_cast<uintptr_t>(std::strtoull(at, nullptr, 16))) : nullptr,
+                        static_cast<SIZE_T>(size), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+#else
+    void* const block = mmap(nullptr, static_cast<size_t>(size), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    return block != MAP_FAILED ? block : nullptr;
+#endif
+}
+
+}  // namespace
+
+// The game's threads: each sleeps on its own turn; only the one whose turn it is runs.
+struct NebulaHostThread {
+    void (*entry)(void*) = nullptr;
+    void* arg = nullptr;
+    bool turn = false;
+    bool cancelled = false;
+    std::mutex lock;
+    std::condition_variable woken;
+};
+
+namespace {
+
+#if defined(_WIN32)
+// Where each thread last went to sleep, for the dump: a hang shows who waits for what.
+constexpr int kWaitThreads = 32;
+constexpr int kWaitFrames = 10;
+struct WaitRecord {
+    DWORD id;
+    void* frames[kWaitFrames];
+    USHORT count;
+};
+WaitRecord gWaits[kWaitThreads];
+std::atomic<int> gWaitCount{0};
+thread_local int tWaitSlot = -1;
+
+void note_wait() {
+    if (tWaitSlot < 0) {
+        const int slot = gWaitCount.fetch_add(1, std::memory_order_relaxed);
+        if (slot >= kWaitThreads) {
+            return;
+        }
+        tWaitSlot = slot;
+        gWaits[slot].id = GetCurrentThreadId();
+    }
+    gWaits[tWaitSlot].count = RtlCaptureStackBackTrace(1, kWaitFrames, gWaits[tWaitSlot].frames, nullptr);
+}
+#else
+void note_wait() {}
+#endif
+
+void svc_threads_dump(void*, const void* in_module) {
+#if defined(_WIN32)
+    HMODULE module = nullptr;
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       static_cast<const char*>(in_module), &module);
+    for (int i = 0; i < gWaitCount.load(std::memory_order_relaxed) && i < kWaitThreads; i++) {
+        char text[256];
+        int used = std::snprintf(text, sizeof(text), "thread %lu sleeps at", static_cast<unsigned long>(gWaits[i].id));
+        for (USHORT k = 0; k < gWaits[i].count && used < 230; k++) {
+            used += std::snprintf(text + used, sizeof(text) - used, " +%llx",
+                                  static_cast<unsigned long long>(static_cast<const char*>(gWaits[i].frames[k]) - reinterpret_cast<const char*>(module)));
+        }
+        log_line("threads:", text);
+    }
+#else
+    (void)in_module;
+#endif
+}
+
+void svc_thread_pass(void*, NebulaHostThread* to) {
+    {
+        const std::lock_guard<std::mutex> guard(to->lock);
+        to->turn = true;
+    }
+    to->woken.notify_one();
+}
+
+void svc_thread_exit(void*, NebulaHostThread* self) {
+    // Game threads end only with the game.
+    std::unique_lock<std::mutex> guard(self->lock);
+    self->woken.wait(guard, [] { return false; });
+}
+
+void svc_thread_wait(void* user, NebulaHostThread* self) {
+    note_wait();
+    {
+        std::unique_lock<std::mutex> guard(self->lock);
+        self->woken.wait(guard, [self] { return self->turn; });
+        self->turn = false;
+    }
+    if (self->cancelled) {
+        svc_thread_exit(user, self);
+    }
+}
+
+void svc_thread_cancel(void* user, NebulaHostThread* thread) {
+    thread->cancelled = true;
+    svc_thread_pass(user, thread);
+}
+
+NebulaHostThread* svc_thread_adopt(void*) {
+    return new NebulaHostThread();
+}
+
+NebulaHostThread* svc_thread_create(void* user, void (*entry)(void*), void* arg) {
+    auto* const thread = new NebulaHostThread();
+    thread->entry = entry;
+    thread->arg = arg;
+    std::thread([user, thread] {
+        name_thread(L"Nebula Game Thread");
+        svc_thread_wait(user, thread);
+        thread->entry(thread->arg);
+    }).detach();
+    return thread;
+}
+
+std::mutex gGameLocks[2];
+
+void svc_lock(void*, int which) {
+    gGameLocks[which].lock();
+}
+
+void svc_unlock(void*, int which) {
+    gGameLocks[which].unlock();
+}
+
 // GALAXY_TEST_DISC_DELAY_US: a slow drive (each way to the store takes this long), so waits on loads are exercised.
 void test_drive_delay() {
     static const uint32_t delay_us = [] {
@@ -3979,6 +4110,16 @@ int main(int argc, char** argv) {
     services.asset_entry = svc_asset_entry;
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
+    services.memory_block = svc_memory_block;
+    services.thread_create = svc_thread_create;
+    services.thread_adopt = svc_thread_adopt;
+    services.thread_pass = svc_thread_pass;
+    services.thread_wait = svc_thread_wait;
+    services.thread_exit = svc_thread_exit;
+    services.thread_cancel = svc_thread_cancel;
+    services.lock = svc_lock;
+    services.unlock = svc_unlock;
+    services.threads_dump = svc_threads_dump;
     services.asset_map = svc_asset_map;
     services.asset_map_private = svc_asset_map_private;
     services.asset_unmap = svc_asset_unmap;
