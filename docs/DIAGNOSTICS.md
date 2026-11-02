@@ -56,3 +56,13 @@ Times are in video frames (60 per second) from the start of the session.
 |---|---|
 | `GALAXY_AUDIO_MUSIC_GAIN`, `GALAXY_AUDIO_EFFECTS_GAIN`, `GALAXY_AUDIO_SFX_GAIN`, `GALAXY_AUDIO_VOICE_GAIN`, `GALAXY_AUDIO_AMBIENCE_GAIN` | Gain per category, 0.0 to 4.0 (default 1.0) |
 | `GALAXY_TRACE_AUDIO_STEMS=1` | Log the JAudio category of each voice; `_START_SYNC`, `_END_SYNC` and `_LANE` narrow it |
+
+## Tools for a landing (`tools/verify`, each says its arguments)
+
+- `all_stops.sh OLD NEW TAG`: two builds, deterministic, through all 102 stops; 386 pictures compared (`compare_stops.py`, `sheet.py`).
+- `monkey.py BIN TAG SHARDS FRAMES SEED`: random input on every stop, looking for crashes and hangs.
+- `boots.sh BIN TAG COUNT PARALLEL`: many boots at once; a boot that never reaches the title stays with its log.
+- `extended.sh BIN TAG`: the ending, Luigi, a slow drive. `luigi2.sh BIN TAG`: a change of player both ways.
+- `gpulost.sh BIN TAG TIMES SECONDS`: the graphics device lost. `validate.sh BIN TAG NAME=value`: the tour under the API's validation.
+- `sizes.sh BIN TAG`: eight window sizes and shapes. `tools/perf/threadprof.py`: one thread's hot functions, from outside, with its pdb.
+- A fatal logs its stack, and a thread dump each thread's stack at its last wait, as module offsets; a link map of the module names them.
