@@ -105,7 +105,7 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 // The game's records, in the order it made them (render_core.h attach_shape_record).
 struct Record {
     enum class Kind : std::uint8_t {
-        Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker,
+        Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
         TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear
     };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
@@ -115,8 +115,6 @@ struct Record {
     std::shared_ptr<const Array> array;
     std::shared_ptr<const Geometry> geometry;
     // A material program (MaterialProgram) and a material's values (Material), both under `key`: the program's.
-    std::shared_ptr<const material::Program> program;
-    std::shared_ptr<const material::Values> material;
     // A native material (NativeMaterial): a shader compiled at build with its constants, textures and state.
     std::shared_ptr<const material::Native> native;
     std::vector<state::Op> state;  // drawing-state changes outside materials, in order

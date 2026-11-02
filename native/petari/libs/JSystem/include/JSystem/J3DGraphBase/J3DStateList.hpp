@@ -36,7 +36,6 @@ public:
     // The changes, as a record after every command written before it.
     void send() const;
     void setMaterialPass(NebulaMaterialPass pass) { mMaterialPass = pass; }
-    u8 materialPass() const { return mMaterialPass; }
 
     void setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op, GpuBool colorUpdate,
                          GpuBool alphaUpdate, GpuBool dither);

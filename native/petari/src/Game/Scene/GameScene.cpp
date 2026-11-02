@@ -1,5 +1,4 @@
 #include "Game/Scene/GameScene.hpp"
-#include "Game/Screen/NebulaMaterialSweep.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -281,7 +280,6 @@ void GameScene::draw() const {
             }
         }
     }
-    NebulaMaterialSweep::run();
     NebulaTestAction action;
     if (NebulaHost::testSceneFrame(&action)) {
         static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name

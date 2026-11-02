@@ -1056,7 +1056,6 @@ private:
     // Vertices the game sent as it drew them, through the frame's rings.
     void draw_record_immediate(const shapes::Immediate& immediate);
     // A material record into the drawing state (native_material.h).
-    void apply_record_material(const material::Program& program, const material::Values& values);
     // A native material (E-04): its state into the drawing state; its pipeline and constants replace the GX ones for
     // the draws until end_native_material (the next material or drawing-state change).
     void apply_native_material(std::shared_ptr<const material::Native> native);
@@ -1117,25 +1116,12 @@ private:
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};
-    // The game's material programs by key (their display lists), as registered.
-    std::unordered_map<std::uint64_t, std::shared_ptr<const material::Program>> material_programs_;
-    // The distinct programs by content hash (material_programs_ points into these).
-    std::unordered_map<std::uint64_t, std::vector<std::shared_ptr<const material::Program>>>
-        material_program_contents_;
-    // The program the drawing state holds whole (set by the last material, nothing set since): a draw with it applies
-    // only its values. Null after any record that sets state outside materials.
-    const material::Program* applied_program_ = nullptr;
     // The native material the draws use (null: the GX state's), whether its constants are not yet uploaded, and the
     // texture maps it binds.
     std::shared_ptr<const material::Native> native_material_;
     std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a GX draw's)
     bool native_constants_dirty_ = false;
     std::uint8_t native_texture_mask_ = 0u;
-    // GALAXY_TEST_MATERIAL_CENSUS=1: programs registered (and re-registered with other content), distinct programs,
-    // material applications whole and values only, logged every 65,536 applications.
-    struct MaterialCensus {
-        std::uint64_t registrations = 0, changed = 0, distinct = 0, applications = 0, values_only = 0;
-    } material_census_;
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.
