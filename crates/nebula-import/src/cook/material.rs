@@ -40,6 +40,9 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
             .get(at..end.min(bytes.len()))
             .context("material block outside model")?;
         let mut native_block = cooked[at..end.min(cooked.len())].to_vec();
+        if &header[..4] == b"MAT2" {
+            bail!("an old format material block: the game reads MAT3 only");
+        }
         if &header[..4] == b"MAT3" {
             let mut descriptors = Vec::new();
             let mut bounded = block.to_vec();
@@ -55,7 +58,9 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
                 descriptors.extend_from_slice(&(i as u32).to_le_bytes());
                 descriptors.extend_from_slice(&p[716..724]);
                 descriptors.extend_from_slice(&[p[4], p[6], 0, 0]);
-                descriptors.extend_from_slice(&[0; 12]);
+                descriptors.extend_from_slice(&coordinate_maps(&p));
+                let (used_maps, used_coords) = used_masks(&p);
+                descriptors.extend_from_slice(&[used_maps, used_coords, 0, 0]);
                 for pass in 0..64 {
                     let id = cooked_shader(&pass_program(&p, pass)).unwrap_or(0);
                     descriptors.extend_from_slice(&id.to_le_bytes());
@@ -66,7 +71,7 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
             }
             native_block.extend_from_slice(&descriptors);
             native_block.extend_from_slice(b"NMAT");
-            native_block.extend_from_slice(&2u32.to_le_bytes());
+            native_block.extend_from_slice(&3u32.to_le_bytes());
             native_block.extend_from_slice(&u32::try_from(table.len())?.to_le_bytes());
             native_block.extend_from_slice(&288u32.to_le_bytes());
             let size = u32::try_from(native_block.len())?;
@@ -81,6 +86,47 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
     let size = u32::try_from(result.len())?;
     result[8..12].copy_from_slice(&size.to_le_bytes());
     Ok(result)
+}
+
+/// Which texture each coordinate samples, for its scale: the last stage order or
+/// indirect order naming it wins. 255: no order names it.
+fn coordinate_maps(p: &[u8]) -> [u8; 8] {
+    let mut maps = [255u8; 8];
+    let stages = usize::from(p[0]);
+    let pairs = if stages % 2 == 1 && stages < 16 && stages != 1 { stages + 1 } else { stages };
+    for s in 0..pairs {
+        let at = 16 + s * 34;
+        maps[usize::from(p[at] & 7)] = p[at + 1] & 7;
+    }
+    let loads = u16::from_le_bytes([p[8], p[9]]);
+    if loads & (1 << 10) != 0 {
+        for i in 0..4 {
+            let at = 576 + i * 4;
+            maps[usize::from(p[at] & 7)] = p[at + 1] & 7;
+        }
+    }
+    maps
+}
+
+/// The maps and coordinates the material's active stages and indirect stages use.
+fn used_masks(p: &[u8]) -> (u8, u8) {
+    let (mut maps, mut coords) = (0u8, 0u8);
+    for s in 0..usize::from(p[0]) {
+        let at = 16 + s * 34;
+        if p[at] < 8 {
+            coords |= 1 << p[at];
+        }
+        if p[at + 1] < 8 {
+            maps |= 1 << p[at + 1];
+        }
+    }
+    for i in 0..usize::from(p[3]).min(4) {
+        let at = 576 + i * 4;
+        if p[at] < 8 {
+            coords |= 1 << p[at];
+        }
+    }
+    (maps, coords)
 }
 
 /// Original MAT3 tables. Offsets are relative to this block, never host pointers.

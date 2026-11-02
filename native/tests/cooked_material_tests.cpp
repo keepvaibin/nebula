@@ -7,7 +7,7 @@ int main() {
     NebulaCookedMaterial material{};
     material.shader = 7;
     memcpy(bytes + 32, &material, sizeof(material));
-    NebulaCookedMaterialFooter footer{{'N', 'M', 'A', 'T'}, 2, 1, sizeof(NebulaCookedMaterial)};
+    NebulaCookedMaterialFooter footer{{'N', 'M', 'A', 'T'}, 3, 1, sizeof(NebulaCookedMaterial)};
     memcpy(bytes + sizeof(bytes) - sizeof(footer), &footer, sizeof(footer));
     uint32_t count = 0;
     const auto* read = nebula_cooked_materials(bytes, sizeof(bytes), &count);
@@ -20,7 +20,7 @@ int main() {
     memcpy(bytes + sizeof(bytes) - sizeof(footer), &footer, sizeof(footer));
     if (nebula_cooked_materials(bytes, sizeof(bytes), &count) != nullptr || count != 0) return 3;
     footer.count = 1;
-    footer.version = 3;
+    footer.version = 4;
     memcpy(bytes + sizeof(bytes) - sizeof(footer), &footer, sizeof(footer));
     if (nebula_cooked_materials(bytes, sizeof(bytes), &count) != nullptr) return 4;
     for (size_t size = 0; size < sizeof(bytes); ++size) {

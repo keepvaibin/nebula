@@ -136,47 +136,6 @@ struct J3DMaterialBlock : public J3DModelBlock {
     /* 0x80 */ u32 mpNBTScaleInfo;
 };
 
-struct J3DMaterialBlock_v21 : public J3DModelBlock {
-    /* 0x08 */ u16 mMaterialNum;
-    /* 0x0C */ u32 mpMaterialInitData;
-    /* 0x10 */ u32 mpMaterialID;
-    /* 0x14 */ u32 mpNameTable;
-    /* 0x18 */ u32 mpCullMode;
-    /* 0x1C */ u32 mpMatColor;
-    /* 0x20 */ u32 mpColorChanNum;
-    /* 0x24 */ u32 mpColorChanInfo;
-    /* 0x28 */ u32 mpTexGenNum;
-    /* 0x2C */ u32 mpTexCoordInfo;
-    /* 0x30 */ u32 mpTexCoord2Info;
-    /* 0x34 */ u32 mpTexMtxInfo;
-    /* 0x38 */ u32 field_0x38;
-    /* 0x3C */ u32 mpTexNo;
-    /* 0x40 */ u32 mpTevOrderInfo;
-    /* 0x44 */ u32 mpTevColor;
-    /* 0x48 */ u32 mpTevKColor;
-    /* 0x4C */ u32 mpTevStageNum;
-    /* 0x50 */ u32 mpTevStageInfo;
-    /* 0x54 */ u32 mpTevSwapModeInfo;
-    /* 0x58 */ u32 mpTevSwapModeTableInfo;
-    /* 0x5C */ u32 mpFogInfo;
-    /* 0x60 */ u32 mpAlphaCompInfo;
-    /* 0x64 */ u32 mpBlendInfo;
-    /* 0x68 */ u32 mpZModeInfo;
-    /* 0x6C */ u32 mpZCompLoc;
-    /* 0x70 */ u32 mpDither;
-    /* 0x74 */ u32 mpNBTScaleInfo;
-};
-
-struct J3DMaterialDLBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mMaterialNum;
-    /* 0x0C */ u32 mpDisplayListInit;
-    /* 0x10 */ u32 mpPatchingInfo;
-    /* 0x14 */ u32 mpCurrentMtxInfo;
-    /* 0x18 */ u32 mpMaterialMode;
-    /* 0x1C */ u32 _1C;
-    /* 0x20 */ u32 mpNameTable;
-};
-
 struct J3DShapeBlock : public J3DModelBlock {
     /* 0x08 */ u16 mShapeNum;
     /* 0x0C */ u32 mpShapeInitData;
@@ -202,10 +161,6 @@ public:
     virtual J3DModelData* load(const void*, u32);
     virtual J3DMaterialTable* loadMaterialTable(const void*);
     virtual J3DModelData* loadBinaryDisplayList(const void*, u32);
-    virtual u32 calcLoadSize(const void*, u32);
-    virtual u32 calcLoadMaterialTableSize(const void*);
-    virtual u32 calcLoadBinaryDisplayListSize(void const*, u32);
-    virtual u16 countMaterialNum(void const*);
     virtual void setupBBoardInfo();
     virtual ~J3DModelLoader() {
     }
@@ -213,21 +168,7 @@ public:
     virtual void readMaterial(J3DMaterialBlock const*, u32) {
     }
 
-    virtual void readMaterial_v21(J3DMaterialBlock_v21 const*, u32) {
-    }
-
     virtual void readMaterialTable(J3DMaterialBlock const*, u32) {
-    }
-
-    virtual void readMaterialTable_v21(J3DMaterialBlock_v21 const*, u32) {
-    }
-
-    virtual u32 calcSizeMaterial(J3DMaterialBlock const*, u32) {
-        return false;
-    }
-
-    virtual u32 calcSizeMaterialTable(J3DMaterialBlock const*, u32) {
-        return false;
     }
 
     void readInformation(J3DModelInfoBlock const*, u32);
@@ -239,18 +180,8 @@ public:
     void readTexture(J3DTextureBlock const*);
     void readTextureTable(J3DTextureBlock const*);
     void readPatchedMaterial(J3DMaterialBlock const*, u32);
-    void readMaterialDL(J3DMaterialDLBlock const*, u32);
     void modifyMaterial(u32);
 
-    u32 calcSizeInformation(J3DModelInfoBlock const*, u32);
-    u32 calcSizeJoint(J3DJointBlock const*);
-    u32 calcSizeEnvelope(J3DEnvelopeBlock const*);
-    u32 calcSizeDraw(J3DDrawBlock const*) NO_INLINE;
-    u32 calcSizeShape(J3DShapeBlock const*, u32);
-    u32 calcSizeTexture(J3DTextureBlock const*);
-    u32 calcSizeTextureTable(J3DTextureBlock const*);
-    u32 calcSizePatchedMaterial(J3DMaterialBlock const*, u32);
-    u32 calcSizeMaterialDL(J3DMaterialDLBlock const*, u32);
 
     /* 0x04 */ J3DModelData* mpModelData;
     /* 0x08 */ J3DMaterialTable* mpMaterialTable;
@@ -272,20 +203,6 @@ public:
 
     void readMaterial(J3DMaterialBlock const*, u32);
     void readMaterialTable(J3DMaterialBlock const*, u32);
-    u32 calcSizeMaterial(J3DMaterialBlock const*, u32);
-    u32 calcSizeMaterialTable(J3DMaterialBlock const*, u32);
-};
-
-class J3DModelLoader_v21 : public J3DModelLoader {
-public:
-    inline J3DModelLoader_v21() {
-    }
-
-    ~J3DModelLoader_v21() {
-    }
-
-    void readMaterial_v21(J3DMaterialBlock_v21 const*, u32);
-    void readMaterialTable_v21(J3DMaterialBlock_v21 const*, u32);
 };
 
 class J3DModelLoaderDataBase {

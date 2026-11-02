@@ -10,6 +10,7 @@
 #include "Game/Util.hpp"
 #include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
 #include <cstdio>
+#include <nebula_cooked_material.h>
 
 namespace {
     inline bool isUseLightChanNo(J3DMaterial* pMaterial, int channel, int index) {
@@ -23,11 +24,6 @@ namespace {
 };  // namespace
 
 namespace MR {
-
-    void FORCE_MATCH_FUNCTION_ORDER1() {
-        J3DTevBlock* block;
-        block->getTevKColor(1);
-    }
 
     XanimePlayer* newXanimePlayer(const ResourceHolder* pModelResourceHolder, const char* pChar, const ResourceHolder* pUnused, J3DMdlFlag mdlFlag,
                                   XanimeResourceTable* pAnimeResourceTable) {
@@ -199,15 +195,10 @@ namespace MR {
     }
 
     bool isUseTex(J3DMaterial* pMaterial, u16 a2) {
-        for (u32 idx = 0; idx < 8; idx++) {
-            if (pMaterial->getTexNo(idx) != a2) {
-                continue;
-            }
-
-            for (u32 stage = 0; stage < pMaterial->getTevStageNum(); stage++) {
-                if (pMaterial->getTevBlock()->getTevOrder(stage)->mTexMap == idx) {
-                    return true;
-                }
+        const NebulaCookedMaterial* pCooked = pMaterial->mNativeMaterial;
+        for (u32 idx = 0; pCooked != nullptr && idx < 8; idx++) {
+            if (pMaterial->getTexNo(idx) == a2 && (pCooked->used_maps & (1u << idx)) != 0) {
+                return true;
             }
         }
 
@@ -227,23 +218,9 @@ namespace MR {
     }
 
     bool isUseTexMtx(J3DMaterial* pMaterial, u32 idx) {
-        J3DTexMtx* texMtx = pMaterial->mTexGenBlock->getTexMtx(idx);
-
-        if (texMtx != nullptr) {
-            for (u32 stage = 0; stage < pMaterial->getTevStageNum(); stage++) {
-                if (pMaterial->getTevBlock()->getTevOrder(stage)->mTexCoord == idx) {
-                    return true;
-                }
-            }
-
-            for (u32 stage = 0; stage < pMaterial->getIndBlock()->getIndTexStageNum(); stage++) {
-                if (pMaterial->getIndBlock()->getIndTexOrder(stage)->mCoord == idx) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        const NebulaCookedMaterial* pCooked = pMaterial->mNativeMaterial;
+        return pMaterial->mTexGenBlock->getTexMtx(idx) != nullptr && pCooked != nullptr &&
+               (pCooked->used_coords & (1u << idx)) != 0;
     }
 
     bool isExistEffectTexMtx(J3DModelData* pModelData) {
