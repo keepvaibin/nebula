@@ -18,9 +18,9 @@ enum J3DMdlFlag {
     /* 0x00004 */ J3DMdlFlag_SkinPosCpu = 0x4,
     /* 0x00008 */ J3DMdlFlag_SkinNrmCpu = 0x8,
     /* 0x00010 */ J3DMdlFlag_EnableLOD = 0x10,
-    /* 0x20000 */ J3DMdlFlag_UseSharedDL = 0x20000,
-    /* 0x40000 */ J3DMdlFlag_UseSingleDL = 0x40000,
-    /* 0x80000 */ J3DMdlFlag_DifferedDLBuffer = 0x80000,
+    /* 0x20000 */ J3DMdlFlag_UseSharedSnapshot = 0x20000,
+    /* 0x40000 */ J3DMdlFlag_UseSingleSnapshot = 0x40000,
+    /* 0x80000 */ J3DMdlFlag_DifferedSnapshots = 0x80000,
 };
 
 struct J3DUnkCalc2 {
@@ -45,7 +45,7 @@ public:
     s32 entryModelData(J3DModelData*, u32, u32);
     s32 createShapePacket(J3DModelData*);
     s32 createMatPacket(J3DModelData*, u32);
-    s32 newDifferedDisplayList(u32);
+    s32 newDifferedSnapshot(u32);
     void lock();
     void unlock();
     void diff();
@@ -58,7 +58,7 @@ public:
     void calcBBoardMtx();
     void prepareShapePackets();
     void ptrToIndex();
-    void makeDL();
+    void makeMesh();
     virtual void update();
     virtual void entry();
     virtual void calc();

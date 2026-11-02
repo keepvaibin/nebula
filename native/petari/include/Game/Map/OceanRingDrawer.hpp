@@ -12,7 +12,7 @@ class OceanRingPartDrawer {
 public:
     OceanRingPartDrawer(const OceanRing*, int, int, bool, f32*, f32*, f32*);
 
-    void initDisplayList(f32*, f32*, f32*);
+    void initMesh(f32*, f32*, f32*);
     void draw() const;
     void drawGD(f32*, f32*, f32*);
     void drawDynamic() const;
@@ -41,7 +41,7 @@ public:
     void draw() const;
     void drawBloom() const;
     void initParts();
-    void initDisplayList();
+    void initMesh();
     void drawGD();
     void loadMaterial() const;
     void loadMaterialBloom() const;

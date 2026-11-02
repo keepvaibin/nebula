@@ -46,7 +46,7 @@ public:
     void exeWait();
     void exeRiseUp();
     void initPoints();
-    void initDisplayList();
+    void initMesh();
     void updatePoints();
     OceanSpherePoint* getPlanePointLeftUpper(int row, int col) const;
     OceanSpherePoint* getPlanePointRightUpper(int row, int col) const;
@@ -88,7 +88,7 @@ public:
     /* 0xFC */ JUTTexture* mWaterEnvTex;
     /* 0x100 */ NebulaColor8 mTevReg1Front;
     /* 0x104 */ NebulaColor8 mTevReg1Back;
-    /* 0x108 */ bool mUseDisplayList;
+    /* 0x108 */ bool mUseMesh;
     /* 0x109 */ u8 _109;
     /* 0x10A */ u8 _10A;
     /* 0x10B */ u8 _10B;

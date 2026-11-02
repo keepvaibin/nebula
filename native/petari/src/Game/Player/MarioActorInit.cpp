@@ -2,12 +2,12 @@
 
 void MarioActor::initMember() {
     _8C = 0;
-    mDLchanger = nullptr;
+    mListChanger = nullptr;
     for (int i = 0; i < ARRAY_SIZE(_94); i++) {
         _94[i] = 0;
     }
 
-    mCurrDL = 0;
+    mCurrList = 0;
     _1A1 = 0;
     _1A4 = 0.0f;
     _1A8 = 0;

@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <cstring>
 
-J3DError J3DDisplayListObj::newDisplayList() {
+J3DError J3DMaterialSnapshot::newSnapshot() {
     mpNebulaMaterial = J3DNativeMaterial::create();
     return kJ3DError_Success;
 }
@@ -31,20 +31,20 @@ void J3DPacket::addChildPacket(J3DPacket* pPacket) {
 
 J3DDrawPacket::J3DDrawPacket() {
     mFlags = 0;
-    mpDisplayListObj = NULL;
+    mpSnapshot = NULL;
     mpTexMtxObj = NULL;
 }
 
 J3DDrawPacket::~J3DDrawPacket() {
 }
 
-J3DError J3DDrawPacket::newDisplayList() {
-    mpDisplayListObj = new J3DDisplayListObj();
+J3DError J3DDrawPacket::newSnapshot() {
+    mpSnapshot = new J3DMaterialSnapshot();
 
-    if (mpDisplayListObj == NULL)
+    if (mpSnapshot == NULL)
         return kJ3DError_Alloc;
 
-    return mpDisplayListObj->newDisplayList();
+    return mpSnapshot->newSnapshot();
 }
 
 void J3DDrawPacket::draw() {
@@ -76,14 +76,14 @@ bool J3DMatPacket::isSame(J3DMatPacket* pOther) const {
 
 void J3DMatPacket::draw() {
     mpMaterial->load();
-    J3DNativeMaterial::send(mpMaterial, mpTexture, mpDisplayListObj);
+    J3DNativeMaterial::send(mpMaterial, mpTexture, mpSnapshot);
 
     J3DShapePacket* packet = getShapePacket();
     packet->getShape()->loadPreDrawSetting();
 
     while (packet != NULL) {
-        if (packet->getDisplayListObj() != NULL) {
-            J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
+        if (packet->getSnapshot() != NULL) {
+            J3DNativeMaterial::sendDiffered(packet->getSnapshot());
         }
 
         packet->drawFast();
@@ -112,10 +112,10 @@ J3DShapePacket::~J3DShapePacket() {
 }
 
 
-J3DError J3DShapePacket::newDifferedDisplayList(u32 diffFlags) {
+J3DError J3DShapePacket::newDifferedSnapshot(u32 diffFlags) {
     mDiffFlag = diffFlags;
 
-    J3DError ret = newDisplayList();
+    J3DError ret = newSnapshot();
     if (ret != kJ3DError_Success) {
         return ret;
     }
@@ -168,8 +168,8 @@ void J3DShapePacket::draw() {
             J3DDifferedTexMtx::sTexGenBlock = NULL;
         }
 
-        if (mpDisplayListObj != NULL) {
-            J3DNativeMaterial::sendDiffered(mpDisplayListObj);
+        if (mpSnapshot != NULL) {
+            J3DNativeMaterial::sendDiffered(mpSnapshot);
         }
 
         mpShape->draw();

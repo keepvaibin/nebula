@@ -31,7 +31,7 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_16 = 0x00008000,
     J3DMLF_TevNumShift = 0x00010000,
     J3DMLF_18 = 0x00020000,
-    J3DMLF_UseSingleSharedDL = 0x00040000,
+    J3DMLF_UseSingleSharedSnapshot = 0x00040000,
     J3DMLF_20 = 0x00080000,
     J3DMLF_21 = 0x00100000,
     J3DMLF_UseUniqueMaterials = 0x00200000,
@@ -144,7 +144,7 @@ struct J3DShapeBlock : public J3DModelBlock {
     /* 0x14 */ u32 mpNameTable;
     /* 0x18 */ u32 mpVtxDescList;
     /* 0x1C */ u32 mpMtxTable;
-    /* 0x20 */ u32 mpDisplayListData;
+    /* 0x20 */ u32 mpShapeDrawData;
     /* 0x24 */ u32 mpMtxInitData;
     /* 0x28 */ u32 mpDrawInitData;
 };
@@ -161,7 +161,7 @@ public:
 
     virtual J3DModelData* load(const void*, u32);
     virtual J3DMaterialTable* loadMaterialTable(const void*);
-    virtual J3DModelData* loadBinaryDisplayList(const void*, u32);
+    virtual J3DModelData* loadBinaryMaterials(const void*, u32);
     virtual void setupBBoardInfo();
     virtual ~J3DModelLoader() {
     }
@@ -210,7 +210,7 @@ class J3DModelLoaderDataBase {
 public:
     static J3DModelData* load(void const*, u32);
     static J3DMaterialTable* loadMaterialTable(const void*);
-    static J3DModelData* loadBinaryDisplayList(const void*, u32);
+    static J3DModelData* loadBinaryMaterials(const void*, u32);
 };
 
 static inline u32 getMdlDataFlag_TevStageNum(u32 flags) {

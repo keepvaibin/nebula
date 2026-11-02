@@ -62,14 +62,14 @@ s32 J3DModel::entryModelData(J3DModelData* pModelData, u32 mdlFlags, u32 mtxNum)
     if (mdlFlags & J3DMdlFlag_EnableLOD) {
         onFlag(J3DMdlFlag_EnableLOD);
     }
-    if (mdlFlags & J3DMdlFlag_UseSharedDL) {
-        onFlag(J3DMdlFlag_UseSharedDL);
+    if (mdlFlags & J3DMdlFlag_UseSharedSnapshot) {
+        onFlag(J3DMdlFlag_UseSharedSnapshot);
     }
-    if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-        onFlag(J3DMdlFlag_UseSingleDL);
+    if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
+        onFlag(J3DMdlFlag_UseSingleSnapshot);
     }
-    if (mdlFlags & J3DMdlFlag_DifferedDLBuffer) {
-        onFlag(J3DMdlFlag_DifferedDLBuffer);
+    if (mdlFlags & J3DMdlFlag_DifferedSnapshots) {
+        onFlag(J3DMdlFlag_DifferedSnapshots);
     }
     if (mdlFlags & J3DMdlFlag_SkinPosCpu) {
         onFlag(J3DMdlFlag_SkinPosCpu);
@@ -115,37 +115,37 @@ s32 J3DModel::createMatPacket(J3DModelData* pModelData, u32 mdlFlags) {
             matPacket->lock();
         }
 
-        if (mdlFlags & J3DMdlFlag_DifferedDLBuffer) {
-            J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
-            matPacket->setDisplayListObj(dlobj);
+        if (mdlFlags & J3DMdlFlag_DifferedSnapshots) {
+            J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
+            matPacket->setSnapshot(dlobj);
         } else {
             if (pModelData->getModelDataType() == 1) {
-                if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-                    matPacket->mpDisplayListObj = materialNode->getSharedDisplayListObj();
-                    matPacket->setDisplayListObj(matPacket->mpDisplayListObj);
+                if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
+                    matPacket->mpSnapshot = materialNode->getSharedSnapshot();
+                    matPacket->setSnapshot(matPacket->mpSnapshot);
                 } else {
-                    J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
+                    J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
 
-                    matPacket->setDisplayListObj(dlobj);
+                    matPacket->setSnapshot(dlobj);
                 }
-            } else if (mdlFlags & J3DMdlFlag_UseSharedDL) {
-                if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-                    materialNode->newSharedDisplayList();
+            } else if (mdlFlags & J3DMdlFlag_UseSharedSnapshot) {
+                if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
+                    materialNode->newSharedSnapshot();
 
-                    J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
-                    matPacket->setDisplayListObj(dlobj);
+                    J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
+                    matPacket->setSnapshot(dlobj);
                 } else {
-                    materialNode->newSharedDisplayList();
+                    materialNode->newSharedSnapshot();
 
-                    J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
+                    J3DMaterialSnapshot* dlobj = materialNode->getSharedSnapshot();
 
-                    matPacket->setDisplayListObj(dlobj);
+                    matPacket->setSnapshot(dlobj);
                 }
             } else {
-                if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-                    matPacket->newDisplayList();
+                if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
+                    matPacket->newSnapshot();
                 } else {
-                    matPacket->newDisplayList();
+                    matPacket->newSnapshot();
                 }
             }
         }
@@ -168,14 +168,14 @@ void J3DModel::unlock() {
     }
 }
 
-void J3DModel::makeDL() {
+void J3DModel::makeMesh() {
     j3dSys.setModel(this);
     j3dSys.setTexture(mModelData->getTexture());
 
     u16 matNum = mModelData->getMaterialNum();
     for (u16 i = 0; i < matNum; i++) {
         j3dSys.setMatPacket(&mMatPacket[i]);
-        mModelData->getMaterialNodePointer(i)->makeDisplayList();
+        mModelData->getMaterialNodePointer(i)->makeSnapshot();
     }
 }
 

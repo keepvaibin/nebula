@@ -29,7 +29,7 @@ public:
     J3DSkinDeform();
     void initSkinInfo(J3DModelData*);
     int initMtxIndexArray(J3DModelData*);
-    void changeFastSkinDL(J3DModelData*);
+    void changeFastSkinList(J3DModelData*);
     void calcNrmMtx(J3DMtxBuffer*);
     void transformVtxPosNrm(J3DModelData*);
     void calcAnmInvJointMtx(J3DMtxBuffer*);

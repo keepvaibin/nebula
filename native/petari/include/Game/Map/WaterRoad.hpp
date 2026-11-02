@@ -61,7 +61,7 @@ public:
     WaterRoadModelInfo(WaterRoad*, bool);
 
     void initPoints(WaterRoad*);
-    void initDisplayList();
+    void initMesh();
     void sendGD();
     void drawGD() const;
     void drawDirect(const WaterRoad*) const;

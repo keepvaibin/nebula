@@ -169,7 +169,7 @@ void J3DJoint::entryIn() {
             if (matPacket->entry(drawBuffer)) {
                 j3dSys.setMatPacket(matPacket);
                 J3DDrawBuffer::entryNum++;
-                mesh->makeDisplayList();
+                mesh->makeSnapshot();
             }
             mesh = mesh->getNext();
         }

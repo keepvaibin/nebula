@@ -5,7 +5,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/Player/DLchanger.hpp"
+#include "Game/Player/StateListChanger.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Player/MarioConst.hpp"
@@ -189,7 +189,7 @@ void MarioActor::calc1stPersonView() {
         hideBeeFur();
     } else {
         _1A1 = false;
-        updateAlphaDL(compareVal);
+        updateAlphaList(compareVal);
     }
 }
 
@@ -238,7 +238,7 @@ void MarioActor::calcFogLighting() {
     }
 
     Color8 ambient = *MR::getLightAmbientColor(this);
-    updateLightDL(ambient, Color8(255, 255, 255, 255), fog, _1A4);
+    updateLightList(ambient, Color8(255, 255, 255, 255), fog, _1A4);
 }
 
 void MarioActor::resetFog() {
@@ -248,7 +248,7 @@ void MarioActor::resetFog() {
     _1AA = 0;
 }
 
-void MarioActor::fillAlphaDL(J3DStateList& rList, u8 alpha) {
+void MarioActor::fillAlphaList(J3DStateList& rList, u8 alpha) {
     NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
     rList.setTevColor(GPU_TEVREG2, color);
@@ -257,44 +257,44 @@ void MarioActor::fillAlphaDL(J3DStateList& rList, u8 alpha) {
     rList.setMaterialPass(NEBULA_PASS_PLAYER_OPACITY);
 }
 
-void MarioActor::updateAlphaDL(u8 alpha) {
+void MarioActor::updateAlphaList(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    fillAlphaDL(list, alpha);
-    mDLchanger->swap()->mList.copy(list);
+    fillAlphaList(list, alpha);
+    mListChanger->swap()->mList.copy(list);
 }
 
-void MarioActor::updateSimpleAlphaDL(u8 alpha) {
+void MarioActor::updateSimpleAlphaList(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
     list.setDstAlpha(GPU_TRUE, alpha);
-    mDLchanger->swap()->mList.copy(list);
+    mListChanger->swap()->mList.copy(list);
 }
 
-void MarioActor::fillReflectAlphaDL(J3DStateList& rList, u8 alpha) {
+void MarioActor::fillReflectAlphaList(J3DStateList& rList, u8 alpha) {
     NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
     rList.setTevColor(GPU_TEVREG2, color);
     rList.setMaterialPass(NEBULA_PASS_REFLECTION_ALPHA);
 }
 
-void MarioActor::updateReflectAlphaDL(u8 alpha) {
+void MarioActor::updateReflectAlphaList(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    fillReflectAlphaDL(list, alpha);
-    mDLchanger->swap()->mList.copy(list);
+    fillReflectAlphaList(list, alpha);
+    mListChanger->swap()->mList.copy(list);
 }
 
-void MarioActor::fillLightDL(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial) {
+void MarioActor::fillLightList(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial) {
     rList.setChanAmbColor(GPU_COLOR0A0, rAmbient);
     rList.setChanMatColor(GPU_COLOR0A0, rMaterial);
     rList.setMaterialPass(NEBULA_PASS_PLAYER_LIGHT);
 }
 
-void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
+void MarioActor::updateLightList(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    fillLightDL(list, rAmbient.mGXColor, rMaterial.mGXColor);
+    fillLightList(list, rAmbient.mGXColor, rMaterial.mGXColor);
 
     if (!MR::isNearZero(strength)) {
         f32 nearZ = MR::getNearZ();
@@ -306,17 +306,17 @@ void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, 
         list.setFog(GPU_FOG_LIN, start, end, nearZ, farZ, color);
     }
 
-    mCurrDL = 1 - mCurrDL;
-    mDL[mCurrDL].copy(list);
+    mCurrList = 1 - mCurrList;
+    mLists[mCurrList].copy(list);
 }
 
-void MarioActor::createRainbowDL() {
+void MarioActor::createRainbowMesh() {
     NebulaStateOp storage[1];
     J3DStateList list(storage, 1);
 
     for (u32 alpha = 0; alpha < 8; alpha++) {
         for (u32 index = 0; index < 8; index++) {
-            _94[alpha * 8 + index] = new DLchanger(1, 1);
+            _94[alpha * 8 + index] = new StateListChanger(1, 1);
             NebulaColor8 color = {0, 0, 0, 0};
 
             if (index & 1) {
@@ -339,7 +339,7 @@ void MarioActor::createRainbowDL() {
 
             color.a = 16 + (alpha + 1) * 24;
             list.setTevColor(GPU_TEVREG0, color);
-            DLchanger* changer = _94[alpha * 8 + index];
+            StateListChanger* changer = _94[alpha * 8 + index];
             changer->mBuffers[changer->mCurrentBuffer].mList.copy(list);
             list.clear();
         }

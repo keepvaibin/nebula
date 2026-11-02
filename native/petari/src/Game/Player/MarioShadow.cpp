@@ -109,7 +109,7 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211
         _F0[i] = 0;
     }
 
-    createDL();
+    createMesh();
 }
 
 void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, const TVec3f& rUp) {
@@ -620,7 +620,7 @@ void CollisionShadow::draw3() const {
     J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
-void CollisionShadow::createDL() {
+void CollisionShadow::createMesh() {
     _344.reserve(7);
     fillVolumeList(_344);
 }

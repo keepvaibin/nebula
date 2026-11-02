@@ -54,30 +54,20 @@ JKRHeap* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInf
     }
 }
 
+namespace {
+    const u32 cPlayerHeapBytes = 0x800000;
+}
+
 PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
-    mNapaHeap = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeap());
-    JKRExpHeap* gddr = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeap());
+    // Room for either player's archives: a change of player loads the other's in the same heaps at any time. Pages not used cost nothing.
+    mNapaHeap = PlayerHeapHolder::createHeap(cPlayerHeapBytes, MR::getStationedHeap());
+    JKRExpHeap* gddr = PlayerHeapHolder::createHeap(cPlayerHeapBytes, MR::getStationedHeap());
     mGDDRHeap = gddr;
     condition->mNapaHeap = mNapaHeap;
     condition->mGDDRHeap = gddr;
     mCondition = condition;
     condition->mIsDataMario = mIsDataMario;
-}
-
-void PlayerHeapHolder::adjust() {
-    JKRExpHeap* napa = mNapaHeap;
-    if (!napa->isEmpty()) {
-        napa->alloc(0x10000, 0);
-    }
-
-    JKRExpHeap* gddr = mGDDRHeap;
-    if (!gddr->isEmpty()) {
-        gddr->alloc(0x10000, 0);
-    }
-
-    MR::adjustHeapSize(mNapaHeap, nullptr);
-    MR::adjustHeapSize(mGDDRHeap, nullptr);
 }
 
 void PlayerHeapHolder::dispose() {
@@ -164,7 +154,6 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
         createAndAddPlayerArchives(mHeapHolder->mIsDataMario);
 
         if (mHeapHolder != nullptr) {
-            mHeapHolder->adjust();
         }
 
         setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderInitializeGameData));

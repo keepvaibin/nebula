@@ -103,7 +103,7 @@ void HeapMemoryWatcher::createHeaps() {
     // Room for what stays the whole game, what it does not use given back once it is loaded (adjustStationedHeaps), and what Nebula
     // keeps (the picture font's icon sheets).
     mSoundMemory = JKRHeap::alloc(AudParams::soundMemorySize, 32, JKRHeap::sRootHeap);
-    mStationedHeap = ::createExpHeap(0x1D00000 + NebulaIcons::cStationedBytes, JKRHeap::sRootHeap, false);
+    mStationedHeap = ::createExpHeap(0x2800000 + NebulaIcons::cStationedBytes, JKRHeap::sRootHeap, false);
     mHomeButtonLayoutHeap = ::createExpHeap(0x80000, JKRHeap::sRootHeap, false);
     createGameHeap();
 }
