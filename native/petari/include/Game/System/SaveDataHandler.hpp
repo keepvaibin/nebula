@@ -32,6 +32,9 @@ public:
     static void initializeAllFileInSaveData(u8*, const SysConfigFile*, const UserFile*);
     static bool isCorrectFileHeader(const u8*);
     static void copySaveDataEachFile(u8*, const u8*);
+    void convertFileHeader(u8*);
+    void convertUserFiles(u8*);
+    static const u32 cSaveFileVersion = 3;
     void createCommunicationBuffer();
     bool tryRemoveFile(const char*, bool*);
     bool trySave(bool*, bool);
