@@ -124,7 +124,7 @@ void FallOutFieldDraw::draw() const {
     JUTTexture* pScreenAlphaTexture3 = MR::getScreenAlphaTexture(3);
     JUTTexture* pScreenAlphaTexture4 = MR::getScreenAlphaTexture(4);
 
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GPU_CTF_A8, true, 0);
+    pScreenAlphaTexture2->frameAlpha(true);
 
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);

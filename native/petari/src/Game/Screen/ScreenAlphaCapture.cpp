@@ -34,7 +34,7 @@ void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
 }
 
 void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
-    mTexture[textureIndex]->capture(0, 0, GPU_CTF_A8, false, 0);
+    mTexture[textureIndex]->frameAlpha(false);
 }
 
 JUTTexture* ScreenAlphaCapture::getTexture(s32 index) {
