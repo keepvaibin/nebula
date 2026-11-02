@@ -921,7 +921,7 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
 // (diagnostic_stick_lease.h), read at most every 100 ms.
 void apply_diagnostic_stick_command_file(NativeInputScriptOverlay& overlay) {
     static const std::optional<std::string> path =
-        read_env_string("GALAXY_INPUT_STICK_COMMAND_FILE");
+        read_env_string(NEBULA_TEST_ENV("GALAXY_INPUT_STICK_COMMAND_FILE"));
     if (!path.has_value()) return;
 
     static galaxy::input::DiagnosticStickLease lease;
@@ -1123,7 +1123,7 @@ galaxy::input::PlayerInput build_live_input(
     // A hidden test window (GALAXY_HIDE_WINDOW) is no keyboard or mouse source: no focus, key or cursor calls are
     // made, while controllers, replay and scripts still work.
     static const bool host_window_input_enabled =
-        !read_env_flag("GALAXY_HIDE_WINDOW");
+        !read_env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
     HWND focused_window = nullptr;
     const bool window_focused =
         host_window_input_enabled &&
