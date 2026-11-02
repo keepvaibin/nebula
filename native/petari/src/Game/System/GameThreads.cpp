@@ -8,7 +8,7 @@
 #include <nebula_game_api.h>
 
 #include "nebula_threads.h"
-#include "nebula_sdk.h"
+#include "nebula_module.h"
 
 namespace {
     thread_local GameThreadRecord* tSelf;

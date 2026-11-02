@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "nebula_sdk.h"
+#include "nebula_module.h"
 
 #if defined(_WIN32)
 #include <windows.h>

@@ -10,12 +10,7 @@
 
 #include "nebula_threads.h"
 #include "Game/System/GameThreads.hpp"
-#include "nebula_sdk.h"
-
-// No host: the log goes to stderr.
-extern "C" const struct NebulaHostServices* nebula_host(void) {
-    return nullptr;
-}
+#include "nebula_module.h"
 
 namespace {
     char sOrder[64];
@@ -283,7 +278,12 @@ namespace {
     }
 }  // namespace
 
+// The module's file wants the game's main; no host: the log goes to stderr.
+extern "C" void nebula_game_main(void) {
+}
+
 int main() {
-    nebula_os_boot(gameMain);
+    nebula_threads_init();
+    gameMain();
     return 0;
 }

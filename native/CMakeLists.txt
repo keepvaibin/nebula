@@ -21,12 +21,9 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
-file(GLOB_RECURSE layer_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.c")
-list(FILTER layer_sources EXCLUDE REGEX "/tests/")
 
 add_library(smg_game SHARED
     ${game_sources}
-    ${layer_sources}
     msl/src/msl_runtime.c
     math/src/nebula_math.c)
 
@@ -39,7 +36,6 @@ target_include_directories(smg_game BEFORE PRIVATE
     "${petari}/libs/RVLFaceLib/include"
     "${petari}/libs/RVL_SDK/include"
     "${petari}/libs/nw4r/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(version_ids RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3)

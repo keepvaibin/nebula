@@ -1,5 +1,4 @@
-/* The platform under the game's threads (Game/System/GameThreads): host threads and their sleep, the kernel's two locks, the log
-   and fatal errors, and the boot. */
+/* The host threads under the game's threads (GameThreads.cpp): each sleeps until woken; the two locks. */
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdatomic.h>
@@ -8,12 +7,11 @@
 #include <string.h>
 #include <time.h>
 
-#include <revolution/os.h>
 
 #include <nebula_game_api.h>
 
 #include "nebula_threads.h"
-#include "nebula_sdk.h"
+#include "nebula_module.h"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -22,70 +20,6 @@
 #include <pthread.h>
 #include <time.h>
 #endif
-
-/* The host's log takes whole lines (stderr before the host attaches): a report without its newline waits for the rest
-   of its line. */
-static char sLogLine[1024];
-static size_t sLogLength;
-static atomic_flag sLogLock = ATOMIC_FLAG_INIT;
-
-static void log_emit(void) {
-    const NebulaHostServices* host = nebula_host();
-    sLogLine[sLogLength] = '\0';
-    if (host != NULL && host->log != NULL) {
-        host->log(host->user, sLogLine);
-    } else {
-        fputs(sLogLine, stderr);
-        fputc('\n', stderr);
-        fflush(stderr);
-    }
-    sLogLength = 0;
-}
-
-void nebula_vlog(const char* format, va_list args) {
-    char text[1024];
-    const int n = vsnprintf(text, sizeof(text), format, args);
-    const size_t length = n < 0 ? 0 : ((size_t)n < sizeof(text) ? (size_t)n : sizeof(text) - 1);
-    while (atomic_flag_test_and_set_explicit(&sLogLock, memory_order_acquire)) {
-    }
-    for (size_t i = 0; i < length; i++) {
-        if (text[i] == '\n') {
-            log_emit();
-            continue;
-        }
-        if (sLogLength == sizeof(sLogLine) - 1) {
-            log_emit();
-        }
-        sLogLine[sLogLength++] = text[i];
-    }
-    atomic_flag_clear_explicit(&sLogLock, memory_order_release);
-}
-
-void nebula_log(const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    nebula_vlog(format, args);
-    va_end(args);
-}
-
-static void __attribute__((noreturn)) fatal_text(const char* text) {
-    const NebulaHostServices* host = nebula_host();
-    if (host != NULL && host->fatal != NULL) {
-        host->fatal(host->user, text);
-    }
-    fprintf(stderr, "Nebula: fatal: %s\n", text);
-    fflush(stderr);
-    abort();
-}
-
-void nebula_fatal(const char* format, ...) {
-    char text[1024];
-    va_list args;
-    va_start(args, format);
-    vsnprintf(text, sizeof(text), format, args);
-    va_end(args);
-    fatal_text(text);
-}
 
 NEBULA_GAME_API void nebula_game_debug_dump(void) {
     nebula_threads_dump();
@@ -245,13 +179,4 @@ NebulaHostThread* nebula_host_thread_create(void (*entry)(void*), void* arg, uin
     pthread_attr_destroy(&attr);
 #endif
     return thread;
-}
-
-void nebula_os_boot(void (*gameMain)(void)) {
-    if (!nebula_memory_init()) {
-        nebula_fatal("could not reserve the game's memory");
-    }
-    nebula_threads_init();
-    gameMain();
-    nebula_fatal("the game's main returned");
 }

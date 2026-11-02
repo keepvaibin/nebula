@@ -1,8 +1,7 @@
 #ifndef NEBULA_THREADS_H
 #define NEBULA_THREADS_H
 
-/* The kernel's C entry points (Game/System/GameThreads.hpp is the game's interface): host events, the platform layer's hooks
-   (native/sdk/os/os_native.c) and the C callers' guards. */
+/* The game's threads' C side: the host threads (GameHostThreads.c) and the start. */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -11,11 +10,10 @@
 extern "C" {
 #endif
 
-/* The platform layer calls these: the kernel's start on the host thread that runs the game, and the thread diagnostic. */
+/* The start on the host thread that runs the game, and the thread diagnostic. */
 void nebula_threads_init(void);
 void nebula_threads_dump(void);
 
-/* The platform layer provides these (os_native.c). */
 /* A game thread is a host thread, which sleeps here until something wakes it. */
 typedef struct NebulaHostThread NebulaHostThread;
 /* A new host thread, asleep; once woken `entry(arg)`, which never returns. */

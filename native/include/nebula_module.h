@@ -1,11 +1,10 @@
-/* The native SDK layer's internal interface (native/sdk). */
-#ifndef NEBULA_SDK_H
-#define NEBULA_SDK_H
+/* What the module's C layer gives the rest of the module. */
+#ifndef NEBULA_MODULE_H
+#define NEBULA_MODULE_H
 
 #include <stdarg.h>
 #include <stdint.h>
 
-#include <revolution/types.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,7 +14,7 @@ int nebula_memory_init(void);
 
 void nebula_memory_arena(void** pStart, void** pEnd);
 
-/* The host's services (sdk/core.c); NULL before nebula_game_attach. */
+/* The host's services; NULL before nebula_game_attach. */
 const struct NebulaHostServices* nebula_host(void);
 
 /* Log lines and fatal errors, through the host's log and fatal services (stderr before the host attaches). */
@@ -24,14 +23,8 @@ void nebula_vlog(const char* format, va_list args) __attribute__((format(printf,
 void nebula_fatal(const char* format, ...) __attribute__((noreturn, format(printf, 1, 2)));
 
 
-/* The disc's release (region.c): 'E' North America, 'P' Europe, 'J' Japan. */
+/* The disc's release: 'E' North America, 'P' Europe, 'J' Japan. */
 char nebula_disc_region(void);
-
-/* The platform layer (os/os_native.c). */
-/* The console's time base: OSGetTime ticks (60.75 MHz) since boot. */
-int64_t nebula_time_base(void);
-/* Runs the game: the OS core's boot, then the game's entry on its boot thread. Does not return. */
-void nebula_os_boot(void (*gameMain)(void)) __attribute__((noreturn));
 
 #ifdef __cplusplus
 }

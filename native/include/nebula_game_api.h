@@ -951,7 +951,7 @@ typedef struct NebulaHostServices {
        nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
     void (*disc_read)(void* user, int32_t file, uint32_t offset, uint32_t size, void* dst, uint32_t slot);
     /* The disc's game id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
-       whose few differences the module follows (sdk/region.c) and whose save folder the NAND holds. */
+       whose few differences the module follows (NebulaRegion.hpp) and whose save folder the NAND holds. */
     const char* (*disc_id)(void* user);
 
     /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),

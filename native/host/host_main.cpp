@@ -521,7 +521,7 @@ void open_pak(const fs::path& path) {
     if (gPak.size < 0x440) {
         die("%s is too short for a game partition", path.string().c_str());
     }
-    // The releases the module plays (sdk/region.c): North America, Europe and Japan.
+    // The releases the module plays: North America, Europe and Japan.
     std::memcpy(gPak.id, gPak.data, 6);
     if (std::strcmp(gPak.id, "RMGE01") != 0 && std::strcmp(gPak.id, "RMGP01") != 0 &&
         std::strcmp(gPak.id, "RMGJ01") != 0) {
