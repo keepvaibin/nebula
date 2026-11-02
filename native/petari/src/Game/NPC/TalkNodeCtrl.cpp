@@ -10,9 +10,21 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 
 void TalkMessageHistory::entry(u16 msgID) {
+    if (mCount == mMax) {
+        const s32 max = mMax != 0 ? mMax * 2 : 16;
+        u16* const pHistory = new (NebulaArena::findFromRoot(this), 0) u16[max];
+        for (s32 i = 0; i < mCount; i++) {
+            pHistory[i] = mHistory[i];
+        }
+        delete[] mHistory;
+        mHistory = pHistory;
+        mMax = max;
+    }
+
     mHistory[mCount++] = msgID;
 }
 
@@ -27,7 +39,9 @@ bool TalkMessageHistory::search(u16 msgID) const {
 }
 
 TalkNodeCtrl::TalkNodeCtrl() : _0(), mCurrentNodeIdx(-1), mMessageInfo() {
+    mHistory.mHistory = nullptr;
     mHistory.mCount = 0;
+    mHistory.mMax = 0;
     _38 = nullptr;
     mCurrentNode = nullptr;
     mNodeData = -1;

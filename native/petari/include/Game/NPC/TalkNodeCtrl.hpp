@@ -8,8 +8,9 @@ public:
     void entry(u16);
     bool search(u16) const;
 
-    /* 0x00 */ u16 mHistory[0x10];
-    /* 0x20 */ s32 mCount;
+    u16* mHistory;
+    s32 mCount;
+    s32 mMax;
 };
 
 class TalkNode {
