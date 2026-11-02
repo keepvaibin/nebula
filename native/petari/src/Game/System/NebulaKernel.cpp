@@ -28,7 +28,7 @@ namespace {
 
     // Host events: host threads set bits in sPending; the thread whose turn it is delivers them at scheduling points.
     uint32_t sPending;
-    uint32_t sEnabledEvents = 1u << NEBULA_EVENT_TIMER;  // device events wait until their handler is set and enabled
+    uint32_t sEnabledEvents;  // events wait until their handler is set and enabled
     int32_t sSleeping;                                   // the thread whose turn it is sleeps for want of work
     bool sInterruptsEnabled;  // read by the audio thread
     // The audio thread: running, and which thread this is.
@@ -36,9 +36,6 @@ namespace {
     thread_local bool tAudio;
     NebulaThread sAudioThread;
     NebulaKernel::EventHandler sHandlers[NEBULA_EVENT_COUNT];
-
-    NebulaAlarm* sAlarmHead;
-    NebulaAlarm* sAlarmTail;
 
     // Host events off for the thread whose turn it is, which also keeps the audio thread out (it stands aside if that one is
     // in: each announces itself, then looks at the other).
@@ -233,25 +230,13 @@ namespace {
 
     void deliver();
 
-    // Deterministic test mode (the host's test_frame_step): with no thread able to run, the clock moves on by itself,
-    // to the first alarm when it falls before the next frame, else to the next frame (which the host delivers, with
-    // that frame's sound). Two runs of a build then take the same steps. False outside the mode.
-    int64_t sSteppedFrames;
+    // Deterministic test mode (the host's test_frame_step): with no thread able to run, the next frame comes, with that
+    // frame's sound. Two runs of a build then take the same steps. False outside the mode.
     bool stepClock() {
         const NebulaHostServices* host = nebula_host();
         if (host == nullptr || host->test_frame_step == nullptr) {
             return false;
         }
-        const int64_t next = (sSteppedFrames + 1) * NebulaKernel::cTicksPerSecond / 60;
-        if (sAlarmHead != nullptr && sAlarmHead->fire <= next) {
-            if (sAlarmHead->fire > nebula_time()) {
-                nebula_time_set(sAlarmHead->fire);
-            }
-            nebula_note_event(NEBULA_EVENT_TIMER);
-            return true;
-        }
-        sSteppedFrames++;
-        nebula_time_set(next);
         host->test_frame_step(host->user);
         return true;
     }
@@ -365,81 +350,6 @@ namespace {
         nebula_fatal("a thread returned from its exit");
     }
 
-    // Alarms, earliest first; the platform's timer raises NEBULA_EVENT_TIMER at the head's time.
-    void armTimer(const NebulaAlarm* pAlarm) {
-        nebula_timer_arm(pAlarm->fire);
-    }
-
-    void insertAlarm(NebulaAlarm* pAlarm, int64_t fire, NebulaAlarmHandler pHandler) {
-        if (pAlarm->period > 0) {
-            const int64_t now = nebula_time();
-            fire = pAlarm->start;
-            // An alarm firing at its start (a clock that lands on it exactly: deterministic test mode) next fires a
-            // period later, never at its start again.
-            if (pAlarm->start <= now) {
-                fire += pAlarm->period * ((now - pAlarm->start) / pAlarm->period + 1);
-            }
-        }
-        pAlarm->handler = pHandler;
-        pAlarm->fire = fire;
-        for (NebulaAlarm* next = sAlarmHead; next != nullptr; next = next->next) {
-            if (next->fire <= fire) {
-                continue;
-            }
-            pAlarm->prev = next->prev;
-            next->prev = pAlarm;
-            pAlarm->next = next;
-            NebulaAlarm* prev = pAlarm->prev;
-            if (prev != nullptr) {
-                prev->next = pAlarm;
-            } else {
-                sAlarmHead = pAlarm;
-                armTimer(pAlarm);
-            }
-            return;
-        }
-        pAlarm->next = nullptr;
-        NebulaAlarm* prev = sAlarmTail;
-        sAlarmTail = pAlarm;
-        pAlarm->prev = prev;
-        if (prev != nullptr) {
-            prev->next = pAlarm;
-        } else {
-            sAlarmHead = sAlarmTail = pAlarm;
-            armTimer(pAlarm);
-        }
-    }
-
-    void onTimer() {
-        NebulaAlarm* alarm = sAlarmHead;
-        if (alarm == nullptr) {
-            return;
-        }
-        if (nebula_time() < alarm->fire) {
-            armTimer(alarm);
-            return;
-        }
-        NebulaAlarm* next = alarm->next;
-        sAlarmHead = next;
-        if (next == nullptr) {
-            sAlarmTail = nullptr;
-        } else {
-            next->prev = nullptr;
-        }
-        const NebulaAlarmHandler handler = alarm->handler;
-        alarm->handler = nullptr;
-        if (alarm->period > 0) {
-            insertAlarm(alarm, 0, handler);
-        }
-        if (sAlarmHead != nullptr) {
-            armTimer(sAlarmHead);
-        }
-        NebulaKernel::disableScheduler();
-        handler(alarm);
-        NebulaKernel::enableScheduler();
-        reschedule();
-    }
-
     // Runs what is pending, one event at a time, in event order; called with host events enabled. A handler runs
     // with them disabled and the scheduler disabled around it, then the kernel reschedules (which may switch threads;
     // this resumes when the interrupted thread runs again).
@@ -451,12 +361,6 @@ namespace {
             }
             const int32_t event = __builtin_ctz(deliverable);
             __atomic_fetch_and(&sPending, ~(1u << event), __ATOMIC_SEQ_CST);
-            if (event == NEBULA_EVENT_TIMER) {
-                interruptsOff();
-                onTimer();
-                interruptsOn();
-                continue;
-            }
             const NebulaKernel::EventHandler handler = sHandlers[event];
             interruptsOff();
             if (handler != nullptr) {
@@ -640,55 +544,7 @@ bool NebulaMessageQueue::receive(void** ppMessage, bool block) {
     return true;
 }
 
-void NebulaAlarm::init() {
-    handler = nullptr;
-    tag = 0;
-}
-
-void NebulaAlarm::set(int64_t ticks, NebulaAlarmHandler pHandler) {
-    const bool enabled = NebulaKernel::disableInterrupts();
-    period = 0;
-    insertAlarm(this, nebula_time() + ticks, pHandler);
-    NebulaKernel::restoreInterrupts(enabled);
-}
-
-void NebulaAlarm::setPeriodic(int64_t startTime, int64_t interval, NebulaAlarmHandler pHandler) {
-    const bool enabled = NebulaKernel::disableInterrupts();
-    period = interval;
-    start = startTime;
-    insertAlarm(this, 0, pHandler);
-    NebulaKernel::restoreInterrupts(enabled);
-}
-
-void NebulaAlarm::cancel() {
-    const bool enabled = NebulaKernel::disableInterrupts();
-    if (handler == nullptr) {
-        NebulaKernel::restoreInterrupts(enabled);
-        return;
-    }
-    NebulaAlarm* following = next;
-    if (following == nullptr) {
-        sAlarmTail = prev;
-    } else {
-        following->prev = prev;
-    }
-    if (prev != nullptr) {
-        prev->next = following;
-    } else {
-        sAlarmHead = following;
-        if (following != nullptr) {
-            armTimer(following);
-        }
-    }
-    handler = nullptr;
-    NebulaKernel::restoreInterrupts(enabled);
-}
-
 namespace NebulaKernel {
-    int64_t time() {
-        return nebula_time();
-    }
-
     bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize, int32_t priority,
                 bool detached) {
         if (priority < 0 || priority >= kPriorities) {
@@ -1018,7 +874,6 @@ void nebula_kernel_init(void) {
     sActive.init();
     enqueueTail(&sActive, thread, &NebulaThread::linkActive);
     sReschedule = 0;
-    sAlarmHead = sAlarmTail = nullptr;
     sInterruptsEnabled = false;
 }
 

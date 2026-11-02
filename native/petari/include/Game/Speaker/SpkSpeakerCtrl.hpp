@@ -57,7 +57,7 @@ namespace SpkSpeakerCtrl {
     void reconnectProcess(s32);
     void initReconnect(s32);
     void continuousUsingProcess(s32);
-    void updateSpeaker(NebulaAlarm*);
+    void updateSpeaker();
     bool isEnable(s32);
     void extensionProcess(s32, s32);
     f32 getDeviceVolume(s32);
