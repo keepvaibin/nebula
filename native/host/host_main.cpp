@@ -3051,6 +3051,41 @@ std::atomic<bool> gInputRead{false};  // the game has read its input (the 10 ms 
 std::atomic<bool> gControlsInput{true};  // player 1 is the controls (not a real remote)
 std::atomic<uint8_t> gInputNunchuk{1};
 std::atomic<uint8_t> gInputBattery{4};
+std::atomic<uint8_t> gInputConnected{1};
+
+// The controller that last gave input is no longer attached, and nothing has been used since: the game shows its message
+// (GameSystemErrorWatcher) until one is back or another device is used. Looked at ten times a second.
+bool input_device_lost() {
+    static unsigned tick = 0;
+    static bool lost = false;
+    static const char* const test_ms = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_INPUT_LOST_AT_MS"));
+    if (test_ms != nullptr) {
+        // Tests: lost for ten seconds from this long after the first look.
+        static const auto first = std::chrono::steady_clock::now();
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - first).count();
+        const long long at = std::atoll(test_ms);
+        return ms >= at && ms < at + 10000;
+    }
+    if (++tick % 10u != 0u) {
+        return lost;
+    }
+    const std::optional<galaxy::input::DeviceKey> last = galaxy::host::last_input_device();
+    if (!last.has_value() || last->scheme == galaxy::input::ControlScheme::Keyboard) {
+        lost = false;
+        return lost;
+    }
+    std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
+    const std::size_t count = galaxy::host::connected_controllers(connected);
+    galaxy::input::DeviceList list;
+    galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count), last, list);
+    lost = true;
+    for (std::size_t i = 0; i < list.count; ++i) {
+        if (list.entries[i].active) {
+            lost = false;
+        }
+    }
+    return lost;
+}
 
 // The controls now (under gInputSampleLock). Each sample renews the motor's state (a stale one stops).
 NebulaInputSample controls_sample() {
@@ -3087,6 +3122,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
         if (player == 0) {
             device->connected = 1;
 #if defined(NEBULA_HOST_RENDERER)
+            device->connected = gInputConnected.load(std::memory_order_relaxed);
             device->nunchuk = gInputNunchuk.load(std::memory_order_relaxed);
             device->battery = gInputBattery.load(std::memory_order_relaxed);
 #else
@@ -3154,6 +3190,8 @@ void input_thread() {
     galaxy::input::wiimote::Reader reader;
     bool real = false;
     std::optional<galaxy::input::DeviceKey> device_when_real;
+    bool remote_lost = false;
+    std::optional<galaxy::input::DeviceKey> device_at_loss;
     const auto use_remote = [&](bool on) {
         if (on == real || (on && !remote.has_value())) return;
         real = on;
@@ -3184,6 +3222,7 @@ void input_thread() {
         const bool wii_remote_mode =
             galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote;
         if (event == galaxy::host::RealWiimoteEvent::Connected) {
+            remote_lost = false;
             remote = real_connection;
             reader.connect(real_connection.eeprom, real_connection.extension_calibration, real_connection.nunchuk);
             galaxy::host::real_wiimote_set_report(real_connection.nunchuk ? 0x37 : 0x33);
@@ -3196,6 +3235,8 @@ void input_thread() {
             continue;
         }
         if (event == galaxy::host::RealWiimoteEvent::Disconnected) {
+            remote_lost = real;
+            device_at_loss = galaxy::host::last_input_device();
             use_remote(false);
             remote.reset();
             continue;
@@ -3235,7 +3276,13 @@ void input_thread() {
             }
             use_remote(false);
         }
+        if (remote_lost && galaxy::host::last_input_device() != device_at_loss) {
+            remote_lost = false;
+        }
+#else
+        constexpr bool remote_lost = false;
 #endif
+        gInputConnected.store(!remote_lost && !input_device_lost() ? 1u : 0u, std::memory_order_relaxed);
         gInputSamples.push(sample);
     }
 }

@@ -65,7 +65,6 @@ namespace nw4r {
             void InitReaderFunc(FontEncoding);
 
             const CharStrmReader GetCharStrmReader() const {
-                NW4R_POINTER_ASSERT_AT(121, this);
                 CharStrmReader reader(mReadFunc);
                 return reader;
             }

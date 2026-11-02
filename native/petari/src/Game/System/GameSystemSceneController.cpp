@@ -27,8 +27,6 @@
 #include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-#endif
 
 namespace {
     AudSystemWrapper* getAudioSystemWrapper() {
@@ -151,14 +149,8 @@ void GameSystemSceneController::initializeScene() {
 void GameSystemSceneController::destroyScene() {
     bool stopSound = isStopSound();
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     delete mScene;
     mScene = nullptr;
-#else
-    Scene* pScene = mScene;
-    mScene = nullptr;
-    delete pScene;
-#endif
 
     mObjHolder->clearArray();
 

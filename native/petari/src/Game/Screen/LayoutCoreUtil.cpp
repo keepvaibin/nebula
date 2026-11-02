@@ -57,15 +57,7 @@ namespace LayoutCoreUtil {
             setTextBoxMessage(pTextBox, message);
         } else {
             reallocateTextBoxMessage(pTextBox, allocSize - 1);
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
             const char16_t* message = ::sDefaultMsg;
-#else
-            s32 maxNumChars = pTextBox->mSize.width / pTextBox->mFontSize.width;
-            char16_t message[] = u"XXXXXXXX";
-
-            s32 end = maxNumChars <= 9 ? maxNumChars : 9;
-            message[end] = u'\0';
-#endif
             setTextBoxMessage(pTextBox, message);
         }
     }

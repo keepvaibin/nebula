@@ -70,7 +70,6 @@ public:
         static GroupFunctionInfo sGroupFunctionTable[];
     };
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     /* 0x04 */ bool mIsShadow;
     /* 0x05 */ bool mIsText;
     /* 0x06 */ bool mIsInfo;
@@ -86,22 +85,4 @@ public:
     /* 0x44 */ f32 mRubyFontHeight;
     /* 0x48 */ f32 mFontWidth;
     /* 0x4C */ f32 mFontHeight;
-#else
-    /* 0x04 */ bool mIsShadow;
-    /* 0x05 */ bool mIsText;
-    /* 0x06 */ bool mIsInfo;
-    /* 0x07 */ bool mNoCharSpace;
-    /* 0x08 */ CustomTagAlphaCtrl mAlphaCtrl;
-    /* 0x2C */ nw4r::lyt::TextBox* mTextBox;
-    /* 0x30 */ u8 mPlayedSounds;
-    /* 0x31 */ u8 mSoundIndex;
-    /* 0x32 */ u8 mColorIndex;
-    /* 0x34 */ u16 mPreviousChar;
-    /* 0x36 */ NebulaColor8 mColorMappingMin;
-    /* 0x3A */ NebulaColor8 mColorMappingMax;
-    /* 0x40 */ f32 mRubyFontWidth;
-    /* 0x44 */ f32 mRubyFontHeight;
-    /* 0x48 */ f32 mFontWidth;
-    /* 0x4C */ f32 mFontHeight;
-#endif
 };
