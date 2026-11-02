@@ -387,7 +387,6 @@ struct J3DTexCoord;
 void loadNBTScale(J3DNBTScale& param_0);
 
 bool isTexNoReg(void* param_0);
-u16 getTexNoReg(void* param_0);
 
 extern J3DTexCoordInfo const j3dDefaultTexCoordInfo[8];
 

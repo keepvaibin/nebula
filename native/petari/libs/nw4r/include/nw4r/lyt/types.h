@@ -1,6 +1,5 @@
 #pragma once
 
-#include "nebula_disc.hpp"
 #include "nw4r/math/types.h"
 #include "nw4r/ut/LinkList.h"
 #include <cstddef>

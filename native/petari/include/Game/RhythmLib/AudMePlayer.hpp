@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JAudio2/JASGlobal.hpp>
-#include "nebula_disc.hpp"
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JSupport/JSUList.hpp>

@@ -2,7 +2,6 @@
 
 #include "JSystem/JGeometry/TMatrix.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
-#include "nebula_disc.hpp"
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
