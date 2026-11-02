@@ -548,6 +548,9 @@ add_library(galaxy_gx STATIC
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     target_compile_options(galaxy_gx PRIVATE -mssse3)
+    if(TARGET galaxy_gx_vk)
+        target_compile_options(galaxy_gx_vk PRIVATE -mssse3)
+    endif()
 endif()
 target_compile_features(galaxy_gx PRIVATE cxx_std_20)
 target_include_directories(galaxy_gx PRIVATE "${galaxy_native_include_dir_dxil}")
@@ -814,6 +817,9 @@ if(NEBULA_VULKAN)
     target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_options(galaxy_gx_vk PRIVATE -mssse3)
+    endif()
     target_link_libraries(galaxy_gx_vk
         PUBLIC
             nebula_vulkan_deps
