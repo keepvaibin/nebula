@@ -24,6 +24,7 @@
 #include "galaxy/ui/settings_model.h"
 #include "galaxy/ui/settings_graphics_page.h"
 #include "galaxy/ui/settings_general_page.h"
+#include "galaxy/ui/settings_display_page.h"
 #include "galaxy/ui/settings_save_model.h"
 
 #include <algorithm>
@@ -2134,110 +2135,32 @@ const char* exposed_text(const RenderFeatureStatus& status) {
     return status.settings_exposed ? "READY" : "HIDDEN";
 }
 
+class WindowDisplayPageHost final : public ui::DisplayPageHost {
+public:
+    ui::DisplayPageState query(const RenderConfig& render) const override {
+        ui::DisplayPageState state;
+        const MonitorInfo* current = settings_monitor(render);
+        for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
+            const auto& monitor = s_settings_monitors[i];
+            state.monitors.push_back({narrow_utf8(monitor.device), monitor.name});
+            if (&monitor == current) state.current_monitor = i;
+        }
+        state.output_size = settings_output_size(render);
+        state.window_sizes = settings_window_sizes(current, render.aspect_mode);
+        state.frame_rates = settings_frame_rate_caps(render);
+        return state;
+    }
+    void changed(ui::DisplayChange change, RenderConfig& draft) const override {
+        if ((change == ui::DisplayChange::Mode || change == ui::DisplayChange::Aspect) &&
+            draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) snap_window_size(draft);
+        if (change != ui::DisplayChange::Aspect) sanitize_settings_draft(draft);
+        if (change == ui::DisplayChange::Monitor) normalize_interpolation(draft);
+    }
+};
+
 std::vector<SettingsRow> display_page(const RenderConfig& render) {
-    std::vector<SettingsRow> rows;
-    char text[96]{};
-    const MonitorInfo* monitor = settings_monitor(render);
-    rows.push_back({"SCREEN", {}, nullptr, {}, true});
-    {
-        std::string value = "PRIMARY";
-        if (monitor != nullptr) {
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
-                if (&s_settings_monitors[i] == monitor) index = i;
-            }
-            const std::string name = monitor->name.empty() ? std::string("Display") : mods_ui_text(monitor->name, 22u);
-            std::snprintf(text, sizeof(text), "%u %s", static_cast<unsigned>(index + 1u), name.c_str());
-            value = text;
-        }
-        SettingsRow row{"MONITOR", value, nullptr, "THE DISPLAY THE GAME RUNS ON"};
-        if (s_settings_monitors.size() >= 2u) {
-            row.change = [](RenderConfig& draft, int delta) {
-                const MonitorInfo* current = settings_monitor(draft);
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
-                    if (&s_settings_monitors[i] == current) index = i;
-                }
-                const std::size_t next = settings_step(static_cast<unsigned>(index),
-                                                       static_cast<unsigned>(s_settings_monitors.size()), delta);
-                if (next == index) return;
-                const std::string device = narrow_utf8(s_settings_monitors[next].device);
-                draft.monitor.fill('\0');
-                std::memcpy(draft.monitor.data(), device.data(), std::min(device.size(), draft.monitor.size() - 1u));
-                // A fullscreen mode belongs to its monitor; start from the new one's desktop mode.
-                draft.fullscreen_width = 0u;
-                draft.fullscreen_height = 0u;
-                draft.fullscreen_refresh_hz = 0u;
-                sanitize_settings_draft(draft);
-                normalize_interpolation(draft);
-            };
-        }
-        rows.push_back(std::move(row));
-    }
-    {
-        static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS FULLSCREEN"};
-        rows.push_back({"DISPLAY MODE", kModes[std::min(render.display_mode, kDisplayBorderless)],
-                        [](RenderConfig& draft, int delta) {
-                            draft.display_mode = settings_step(std::min(draft.display_mode, kDisplayBorderless), 2u, delta);
-                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                                snap_window_size(draft);
-                            }
-                            sanitize_settings_draft(draft);
-                        },
-                        "BORDERLESS FILLS THE SCREEN AND SWITCHES INSTANTLY"});
-    }
-    {
-        const auto [w, h] = settings_output_size(render);
-        std::snprintf(text, sizeof(text), "%uX%u", w, h);
-        SettingsRow row{"RESOLUTION", text, nullptr, "BORDERLESS USES THE DESKTOP RESOLUTION"};
-        if (render.display_mode == kDisplayWindowed) {
-            row.help = "THE WINDOW SIZE";
-            row.change = [](RenderConfig& draft, int delta) {
-                const auto sizes = settings_window_sizes(settings_monitor(draft), draft.aspect_mode);  // smallest first
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < sizes.size(); ++i) {
-                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
-                        std::uint64_t{draft.window_width} * draft.window_height) {
-                        index = i;
-                    }
-                }
-                const int moved = static_cast<int>(index) + delta;
-                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
-                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
-                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
-                sanitize_settings_draft(draft);
-            };
-        }
-        rows.push_back(std::move(row));
-    }
-    {
-        const unsigned hz = settings_refresh_hz(render);
-        std::snprintf(text, sizeof(text), "%u HZ", hz != 0u ? hz : 60u);
-        rows.push_back({"REFRESH RATE", text, nullptr, "SET IN THE WINDOWS DISPLAY SETTINGS"});
-    }
-    {
-        static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
-        static_assert(std::size(kAspects) == kAspectModeCount);
-        rows.push_back({"ASPECT RATIO", kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)],
-                        [](RenderConfig& draft, int delta) {
-                            draft.aspect_mode = settings_step(draft.aspect_mode, kAspectModeCount, delta);
-                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                                snap_window_size(draft);
-                            }
-                        },
-                        "AUTO MATCHES THE WINDOW. WIDER SHOWS MORE OF THE WORLD"});
-    }
-    rows.push_back({"VSYNC", render.vsync_interval == 0u ? "OFF" : "ON",
-                    [](RenderConfig& draft, int) {
-                        draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
-                        normalize_interpolation(draft);
-                    },
-                    "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
-    rows.push_back({"INTERFACE", {}, nullptr, {}, true});
-    rows.push_back({"HUD RESOLUTION", render.hud_output_resolution ? "DISPLAY" : "INTERNAL",
-                    [](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; },
-                    "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
-    return rows;
+    static const WindowDisplayPageHost host;
+    return ui::display_page(render, host);
 }
 
 void open_folder_in_explorer(const std::filesystem::path& folder);
