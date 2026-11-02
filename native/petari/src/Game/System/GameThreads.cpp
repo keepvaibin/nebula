@@ -1,26 +1,26 @@
-// The game's threads and their synchronisation (Game/System/NebulaKernel.hpp): host threads, plain blocking primitives and
+// The game's threads and their synchronisation (Game/System/GameThreads.hpp): host threads, plain blocking primitives and
 // two locks. The world lock: one thread at a time changes the game world, the main thread first when it wants to; a blocked
-// thread lets go of it. The interrupt lock: a section the audio thread stays out of.
-#include "Game/System/NebulaKernel.hpp"
+// thread lets go of it. The audio lock: a section the audio thread stays out of.
+#include "Game/System/GameThreads.hpp"
 
 #include <stdio.h>
 
 #include <nebula_game_api.h>
 
-#include "nebula_kernel.h"
+#include "nebula_threads.h"
 #include "nebula_sdk.h"
 
 namespace {
-    thread_local NebulaThread* tSelf;
-    thread_local bool tInterruptsOff;
+    thread_local GameThreadRecord* tSelf;
+    thread_local bool tAudioExcluded;
 
-    NebulaThread sMainThread;
-    NebulaThread sAudioThread;
-    NebulaThread* sThreads;  // every live thread, by `all`
+    GameThreadRecord sMainThread;
+    GameThreadRecord sAudioThread;
+    GameThreadRecord* sThreads;  // every live thread, by `all`
 
     // All below under the state lock, which is held only to look at them, never across a wait.
-    NebulaThread* sWorldOwner;
-    NebulaWaitList sWorldWaiters;
+    GameThreadRecord* sWorldOwner;
+    GameWaitList sWorldWaiters;
     bool sMainWants;
 
     // Deterministic test mode (the host's test_frame_step): every thread is under the world lock, the sound runs on the thread
@@ -35,7 +35,7 @@ namespace {
         nebula_host_unlock(NEBULA_HOST_LOCK_STATE);
     }
 
-    void append(NebulaWaitList* pList, NebulaThread* pThread) {
+    void append(GameWaitList* pList, GameThreadRecord* pThread) {
         pThread->next = nullptr;
         pThread->prev = pList->tail;
         if (pList->tail != nullptr) {
@@ -47,7 +47,7 @@ namespace {
         pThread->list = pList;
     }
 
-    void prepend(NebulaWaitList* pList, NebulaThread* pThread) {
+    void prepend(GameWaitList* pList, GameThreadRecord* pThread) {
         pThread->prev = nullptr;
         pThread->next = pList->head;
         if (pList->head != nullptr) {
@@ -59,8 +59,8 @@ namespace {
         pThread->list = pList;
     }
 
-    void unlink(NebulaThread* pThread) {
-        NebulaWaitList* list = pThread->list;
+    void unlink(GameThreadRecord* pThread) {
+        GameWaitList* list = pThread->list;
         if (pThread->prev != nullptr) {
             pThread->prev->next = pThread->next;
         } else {
@@ -74,8 +74,8 @@ namespace {
         pThread->list = nullptr;
     }
 
-    void forget(NebulaThread* pThread) {
-        for (NebulaThread** p = &sThreads; *p != nullptr; p = &(*p)->all) {
+    void forget(GameThreadRecord* pThread) {
+        for (GameThreadRecord** p = &sThreads; *p != nullptr; p = &(*p)->all) {
             if (*p == pThread) {
                 *p = pThread->all;
                 return;
@@ -84,7 +84,7 @@ namespace {
     }
 
     // A thread that can go on: a world thread when the world is free or its turn comes, others at once.
-    void wake(NebulaThread* pThread) {
+    void wake(GameThreadRecord* pThread) {
         if (!pThread->world) {
             nebula_host_thread_pass(pThread->host);
         } else if (sWorldOwner == nullptr) {
@@ -98,25 +98,25 @@ namespace {
         }
     }
 
-    void wakeAll(NebulaWaitList* pList) {
+    void wakeAll(GameWaitList* pList) {
         while (pList->head != nullptr) {
-            NebulaThread* thread = pList->head;
+            GameThreadRecord* thread = pList->head;
             unlink(thread);
             wake(thread);
         }
     }
 
-    void wakeFirst(NebulaWaitList* pList) {
+    void wakeFirst(GameWaitList* pList) {
         if (pList->head != nullptr) {
-            NebulaThread* thread = pList->head;
+            GameThreadRecord* thread = pList->head;
             unlink(thread);
             wake(thread);
         }
     }
 
     // The next waiter takes the world; true if that is `pSelf`, which then must not wait for it.
-    bool passWorld(NebulaThread* pSelf) {
-        NebulaThread* next = sWorldWaiters.head;
+    bool passWorld(GameThreadRecord* pSelf) {
+        GameThreadRecord* next = sWorldWaiters.head;
         sWorldOwner = next;
         if (next == nullptr) {
             return false;
@@ -134,7 +134,7 @@ namespace {
 
     // Lets go of the world; true if it came straight back. In test mode, with no thread able to run, this thread moves the clock
     // on, holding the world so that what a step wakes runs after the step, in the order it was woken.
-    bool releaseWorld(NebulaThread* pSelf) {
+    bool releaseWorld(GameThreadRecord* pSelf) {
         if (passWorld(pSelf)) {
             return true;
         }
@@ -154,18 +154,18 @@ namespace {
         return false;
     }
 
-    // This thread sleeps on `pList` until woken, with the state lock held on entry and exit. A section with host events disabled
+    // This thread sleeps on `pList` until woken, with the state lock held on entry and exit. A section the audio thread stays out of
     // ends for the wait: the console's sleeping thread let interrupts back on.
-    void block(NebulaWaitList* pList) {
-        NebulaThread* self = tSelf;
+    void block(GameWaitList* pList) {
+        GameThreadRecord* self = tSelf;
         if (self == &sAudioThread && sTestMode) {
             nebula_fatal("test mode: the audio thread has to wait, and no thread can run while it does");
         }
         append(pList, self);
-        const bool interruptsOff = tInterruptsOff;
+        const bool interruptsOff = tAudioExcluded;
         if (interruptsOff) {
-            tInterruptsOff = false;
-            nebula_host_unlock(NEBULA_HOST_LOCK_INTERRUPTS);
+            tAudioExcluded = false;
+            nebula_host_unlock(NEBULA_HOST_LOCK_AUDIO);
         }
         const bool mine = self->world && releaseWorld(self);
         unlockState();
@@ -173,17 +173,17 @@ namespace {
             nebula_host_thread_wait(self->host);
         }
         if (interruptsOff) {
-            nebula_host_lock(NEBULA_HOST_LOCK_INTERRUPTS);
-            tInterruptsOff = true;
+            nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
+            tAudioExcluded = true;
         }
         lockState();
     }
 
-    // A thread other than main lets main have the world at each kernel call (not with host events disabled: main may want that
-    // section). With the state lock held.
+    // A thread other than main lets main have the world at each kernel call (not in a section the audio thread stays out of: main may
+    // want it). With the state lock held.
     void yieldToMain() {
-        NebulaThread* self = tSelf;
-        if (!sMainWants || tInterruptsOff || self == nullptr || !self->world || self == &sMainThread || sWorldOwner != self) {
+        GameThreadRecord* self = tSelf;
+        if (!sMainWants || tAudioExcluded || self == nullptr || !self->world || self == &sMainThread || sWorldOwner != self) {
             return;
         }
         append(&sWorldWaiters, self);
@@ -196,18 +196,18 @@ namespace {
     }
 
     void threadMain(void* pArg) {
-        NebulaThread* self = static_cast< NebulaThread* >(pArg);
+        GameThreadRecord* self = static_cast< GameThreadRecord* >(pArg);
         tSelf = self;
-        NebulaKernel::exit(self->entry(self->arg));
+        GameThreads::exit(self->entry(self->arg));
     }
 }  // namespace
 
-void NebulaEvent::init() {
+void GameEvent::init() {
     waiters.head = waiters.tail = nullptr;
     signalled = false;
 }
 
-void NebulaEvent::wait() {
+void GameEvent::wait() {
     lockState();
     while (!signalled) {
         block(&waiters);
@@ -216,26 +216,26 @@ void NebulaEvent::wait() {
     unlockState();
 }
 
-void NebulaEvent::signal() {
+void GameEvent::signal() {
     lockState();
     signalled = true;
     wakeAll(&waiters);
     unlockState();
 }
 
-void NebulaFrameGate::init() {
+void GameFrameGate::init() {
     waiters.head = waiters.tail = nullptr;
     frames = 0;
 }
 
-void NebulaFrameGate::advance() {
+void GameFrameGate::advance() {
     lockState();
     frames++;
     wakeAll(&waiters);
     unlockState();
 }
 
-void NebulaFrameGate::waitNext() {
+void GameFrameGate::waitNext() {
     lockState();
     const uint32_t seen = frames;
     while (frames == seen) {
@@ -244,16 +244,16 @@ void NebulaFrameGate::waitNext() {
     unlockState();
 }
 
-void NebulaMutex::init() {
+void GameMutex::init() {
     waiters.head = waiters.tail = nullptr;
     owner = nullptr;
     count = 0;
 }
 
-void NebulaMutex::lock() {
+void GameMutex::lock() {
     lockState();
     yieldToMain();
-    NebulaThread* self = tSelf;
+    GameThreadRecord* self = tSelf;
     while (owner != nullptr && owner != self) {
         block(&waiters);
     }
@@ -262,7 +262,7 @@ void NebulaMutex::lock() {
     unlockState();
 }
 
-void NebulaMutex::unlock() {
+void GameMutex::unlock() {
     lockState();
     if (owner == tSelf && --count == 0) {
         owner = nullptr;
@@ -272,7 +272,7 @@ void NebulaMutex::unlock() {
     unlockState();
 }
 
-void NebulaMessageQueue::init(void** pSlots, int32_t count) {
+void GameMessageQueue::init(void** pSlots, int32_t count) {
     senders.head = senders.tail = nullptr;
     receivers.head = receivers.tail = nullptr;
     slots = pSlots;
@@ -281,7 +281,7 @@ void NebulaMessageQueue::init(void** pSlots, int32_t count) {
     used = 0;
 }
 
-bool NebulaMessageQueue::send(void* pMessage, bool blocks) {
+bool GameMessageQueue::send(void* pMessage, bool blocks) {
     lockState();
     while (capacity <= used) {
         if (!blocks) {
@@ -297,7 +297,7 @@ bool NebulaMessageQueue::send(void* pMessage, bool blocks) {
     return true;
 }
 
-bool NebulaMessageQueue::jam(void* pMessage, bool blocks) {
+bool GameMessageQueue::jam(void* pMessage, bool blocks) {
     lockState();
     while (capacity <= used) {
         if (!blocks) {
@@ -314,7 +314,7 @@ bool NebulaMessageQueue::jam(void* pMessage, bool blocks) {
     return true;
 }
 
-bool NebulaMessageQueue::receive(void** ppMessage, bool blocks) {
+bool GameMessageQueue::receive(void** ppMessage, bool blocks) {
     lockState();
     while (used == 0) {
         if (!blocks) {
@@ -333,8 +333,8 @@ bool NebulaMessageQueue::receive(void** ppMessage, bool blocks) {
     return true;
 }
 
-namespace NebulaKernel {
-    bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize) {
+namespace GameThreads {
+    bool create(GameThreadRecord* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize) {
         pThread->entry = pEntry;
         pThread->arg = pArg;
         pThread->world = true;
@@ -350,13 +350,13 @@ namespace NebulaKernel {
         return true;
     }
 
-    NebulaThread* current() {
+    GameThreadRecord* current() {
         return tSelf;
     }
 
     void exit(void* pValue) {
         lockState();
-        NebulaThread* self = tSelf;
+        GameThreadRecord* self = tSelf;
         self->value = pValue;
         self->ended = true;
         forget(self);
@@ -370,7 +370,7 @@ namespace NebulaKernel {
     }
 
     // A thread that has not started or sleeps on a list; one that runs ends itself.
-    void cancel(NebulaThread* pThread) {
+    void cancel(GameThreadRecord* pThread) {
         if (pThread == tSelf) {
             exit(nullptr);
         }
@@ -391,7 +391,7 @@ namespace NebulaKernel {
         unlockState();
     }
 
-    void resume(NebulaThread* pThread) {
+    void resume(GameThreadRecord* pThread) {
         lockState();
         if (!pThread->started) {
             pThread->started = true;
@@ -405,33 +405,33 @@ namespace NebulaKernel {
             return;
         }
         lockState();
-        NebulaThread* self = tSelf;
+        GameThreadRecord* self = tSelf;
         self->world = false;
         passWorld(self);
         unlockState();
     }
 
-    bool isTerminated(const NebulaThread* pThread) {
+    bool isTerminated(const GameThreadRecord* pThread) {
         return pThread->ended;
     }
 
-    bool disableInterrupts() {
-        if (tInterruptsOff) {
+    bool excludeAudio() {
+        if (tAudioExcluded) {
             return false;
         }
-        nebula_host_lock(NEBULA_HOST_LOCK_INTERRUPTS);
-        tInterruptsOff = true;
+        nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
+        tAudioExcluded = true;
         return true;
     }
 
-    bool restoreInterrupts(bool enabled) {
-        const bool previous = !tInterruptsOff;
-        if (enabled && tInterruptsOff) {
-            tInterruptsOff = false;
-            nebula_host_unlock(NEBULA_HOST_LOCK_INTERRUPTS);
-        } else if (!enabled && !tInterruptsOff) {
-            nebula_host_lock(NEBULA_HOST_LOCK_INTERRUPTS);
-            tInterruptsOff = true;
+    bool restoreAudio(bool enabled) {
+        const bool previous = !tAudioExcluded;
+        if (enabled && tAudioExcluded) {
+            tAudioExcluded = false;
+            nebula_host_unlock(NEBULA_HOST_LOCK_AUDIO);
+        } else if (!enabled && !tAudioExcluded) {
+            nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
+            tAudioExcluded = true;
         }
         return previous;
     }
@@ -443,19 +443,19 @@ namespace NebulaKernel {
         }
         sAudioThread.outer = tSelf;
         tSelf = &sAudioThread;
-        disableInterrupts();
+        excludeAudio();
     }
 
     void leaveAudio() {
-        restoreInterrupts(true);
+        restoreAudio(true);
         tSelf = sAudioThread.outer;
     }
-}  // namespace NebulaKernel
+}  // namespace GameThreads
 
 extern "C" {
 // The main thread, the host thread this runs on, with the world.
-void nebula_kernel_init(void) {
-    NebulaThread* thread = &sMainThread;
+void nebula_threads_init(void) {
+    GameThreadRecord* thread = &sMainThread;
     thread->host = nebula_host_thread_adopt();
     thread->world = true;
     thread->started = true;
@@ -467,9 +467,9 @@ void nebula_kernel_init(void) {
 }
 
 // A diagnostic for the host's reports: every thread's state. A minidump has their stacks: they are host threads.
-void nebula_kernel_dump(void) {
+void nebula_threads_dump(void) {
     nebula_log("threads (current %p, world %p):\n", static_cast< void* >(tSelf), static_cast< void* >(sWorldOwner));
-    for (const NebulaThread* t = sThreads; t != nullptr; t = t->all) {
+    for (const GameThreadRecord* t = sThreads; t != nullptr; t = t->all) {
         nebula_log("  %p started %d sleeps on %p\n", static_cast< const void* >(t), t->started ? 1 : 0,
                    static_cast< const void* >(t->list));
     }

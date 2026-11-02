@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
@@ -80,7 +80,7 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
 }
 
 void* JASTaskThread::run() {
-    NebulaKernel::leaveWorld();
+    GameThreads::leaveWorld();
     JASThreadCallStack* callstack;
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());

@@ -1,5 +1,5 @@
 #include "Game/Player/JetTurtleShadow.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Util/LiveActorUtil.hpp"

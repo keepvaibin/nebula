@@ -1,5 +1,5 @@
 #include "Game/System/FileLoaderThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/FileRipper.hpp"
 #include "Game/Util/FileUtil.hpp"
 
@@ -20,7 +20,7 @@ FileLoaderThread::FileLoaderThread(int msgCount, JKRHeap* pHeap) : GameThread(0x
 }
 
 void* FileLoaderThread::run() {
-    NebulaKernel::leaveWorld();
+    GameThreads::leaveWorld();
 
     while (true) {
         void* msg;

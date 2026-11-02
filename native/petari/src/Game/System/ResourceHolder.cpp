@@ -1,5 +1,5 @@
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/MaterialAnmBuffer.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"

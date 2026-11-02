@@ -1,4 +1,4 @@
-// The kernel's rules (Game/System/NebulaKernel.hpp): one world thread runs at a time, the main thread first when it wants to; a blocked
+// The kernel's rules (Game/System/GameThreads.hpp): one world thread runs at a time, the main thread first when it wants to; a blocked
 // thread lets go of the world; a mutex excludes; messages keep their order and a jammed one comes first; a cancelled thread never runs
 // again; the audio thread stays out of a section with host events disabled, wakes a waiter, and waits for a mutex without stopping the world.
 #include <stdio.h>
@@ -8,8 +8,8 @@
 
 #include <revolution/os.h>
 
-#include "nebula_kernel.h"
-#include "Game/System/NebulaKernel.hpp"
+#include "nebula_threads.h"
+#include "Game/System/GameThreads.hpp"
 #include "nebula_sdk.h"
 
 // No host: the log goes to stderr.
@@ -44,8 +44,8 @@ namespace {
     }
 
     // Main waits until every other thread able to run has run: a new thread comes last, and wakes it.
-    NebulaEvent sIdle;
-    NebulaThread sIdler;
+    GameEvent sIdle;
+    GameThreadRecord sIdler;
 
     void* idlerMain(void*) {
         sIdle.signal();
@@ -54,13 +54,13 @@ namespace {
 
     void letOthersRun() {
         sIdle.init();
-        NebulaKernel::create(&sIdler, idlerMain, nullptr, 0x4000);
-        NebulaKernel::resume(&sIdler);
+        GameThreads::create(&sIdler, idlerMain, nullptr, 0x4000);
+        GameThreads::resume(&sIdler);
         sIdle.wait();
     }
 
     // A started thread runs when main blocks, in the order they were started.
-    NebulaThread sFirst, sSecond;
+    GameThreadRecord sFirst, sSecond;
 
     void* firstMain(void*) {
         note('1');
@@ -73,10 +73,10 @@ namespace {
     }
 
     void threadOrder() {
-        NebulaKernel::create(&sFirst, firstMain, nullptr, 0x4000);
-        NebulaKernel::create(&sSecond, secondMain, nullptr, 0x4000);
-        NebulaKernel::resume(&sFirst);
-        NebulaKernel::resume(&sSecond);
+        GameThreads::create(&sFirst, firstMain, nullptr, 0x4000);
+        GameThreads::create(&sSecond, secondMain, nullptr, 0x4000);
+        GameThreads::resume(&sFirst);
+        GameThreads::resume(&sSecond);
         note('m');
         letOthersRun();
         note('n');
@@ -84,9 +84,9 @@ namespace {
     }
 
     // A thread waking main lets main run at its next kernel call, before it goes on.
-    NebulaThread sYielder;
-    NebulaEvent sMainWait;
-    NebulaMutex sYieldMutex;
+    GameThreadRecord sYielder;
+    GameEvent sMainWait;
+    GameMutex sYieldMutex;
 
     void* yielderMain(void*) {
         note('a');
@@ -101,8 +101,8 @@ namespace {
     void mainFirst() {
         sMainWait.init();
         sYieldMutex.init();
-        NebulaKernel::create(&sYielder, yielderMain, nullptr, 0x4000);
-        NebulaKernel::resume(&sYielder);
+        GameThreads::create(&sYielder, yielderMain, nullptr, 0x4000);
+        GameThreads::resume(&sYielder);
         sMainWait.wait();
         note('m');
         letOthersRun();
@@ -110,9 +110,9 @@ namespace {
     }
 
     // B blocks on the mutex A holds across a wait; A's unlock lets B in.
-    NebulaMutex sMutex;
-    NebulaEvent sHold;
-    NebulaThread sOwner, sWaiter;
+    GameMutex sMutex;
+    GameEvent sHold;
+    GameThreadRecord sOwner, sWaiter;
 
     void* ownerMain(void*) {
         sMutex.lock();
@@ -134,10 +134,10 @@ namespace {
     void mutexOrder() {
         sMutex.init();
         sHold.init();
-        NebulaKernel::create(&sOwner, ownerMain, nullptr, 0x4000);
-        NebulaKernel::create(&sWaiter, waiterMain, nullptr, 0x4000);
-        NebulaKernel::resume(&sOwner);
-        NebulaKernel::resume(&sWaiter);
+        GameThreads::create(&sOwner, ownerMain, nullptr, 0x4000);
+        GameThreads::create(&sWaiter, waiterMain, nullptr, 0x4000);
+        GameThreads::resume(&sOwner);
+        GameThreads::resume(&sWaiter);
         letOthersRun();
         note('m');
         sHold.signal();
@@ -149,7 +149,7 @@ namespace {
     // A jammed message is received before those already queued; a full queue refuses without blocking.
     void messageOrder() {
         void* slots[3];
-        NebulaMessageQueue queue;
+        GameMessageQueue queue;
         queue.init(slots, 3);
         queue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('x')), true);
         queue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('y')), true);
@@ -166,7 +166,7 @@ namespace {
 
     // A signal with nobody waiting is kept for the next wait, and taken by it.
     void eventKept() {
-        NebulaEvent event;
+        GameEvent event;
         event.init();
         event.signal();
         event.wait();
@@ -174,8 +174,8 @@ namespace {
     }
 
     // A thread cancelled while it waits never runs again.
-    NebulaThread sCancelled;
-    NebulaEvent sNever;
+    GameThreadRecord sCancelled;
+    GameEvent sNever;
 
     void* cancelledMain(void*) {
         note('c');
@@ -186,11 +186,11 @@ namespace {
 
     void cancel() {
         sNever.init();
-        NebulaKernel::create(&sCancelled, cancelledMain, nullptr, 0x4000);
-        NebulaKernel::resume(&sCancelled);
+        GameThreads::create(&sCancelled, cancelledMain, nullptr, 0x4000);
+        GameThreads::resume(&sCancelled);
         letOthersRun();
-        NebulaKernel::cancel(&sCancelled);
-        expect("cancelled thread terminated", NebulaKernel::isTerminated(&sCancelled), true);
+        GameThreads::cancel(&sCancelled);
+        expect("cancelled thread terminated", GameThreads::isTerminated(&sCancelled), true);
         sNever.signal();
         letOthersRun();
         expectOrder("cancel", "c");
@@ -201,17 +201,17 @@ namespace {
     NebulaHostThread* sAudioHost;
     volatile int sAudioEntered;
     volatile int sAudioFinished;
-    NebulaMessageQueue sAudioQueue;
+    GameMessageQueue sAudioQueue;
     void* sAudioSlots[1];
-    NebulaMutex sAudioMutex;
+    GameMutex sAudioMutex;
 
     void audioMain(void*) {
-        NebulaKernel::enterAudio();
+        GameThreads::enterAudio();
         sAudioEntered = 1;
         sAudioQueue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('w')), false);
         sAudioMutex.lock();
         sAudioMutex.unlock();
-        NebulaKernel::leaveAudio();
+        GameThreads::leaveAudio();
         sAudioFinished = 1;
         nebula_host_thread_exit(sAudioHost);
     }
@@ -220,13 +220,13 @@ namespace {
         sAudioQueue.init(sAudioSlots, 1);
         sAudioMutex.init();
         sAudioMutex.lock();
-        const bool enabled = NebulaKernel::disableInterrupts();
+        const bool enabled = GameThreads::excludeAudio();
         sAudioHost = nebula_host_thread_create(audioMain, nullptr, 0x10000);
         nebula_host_thread_pass(sAudioHost);
         for (volatile int i = 0; i < 20000000; i++) {
         }
         expect("audio waits for a section with events disabled", sAudioEntered, 0);
-        NebulaKernel::restoreInterrupts(enabled);
+        GameThreads::restoreAudio(enabled);
         void* message;
         sAudioQueue.receive(&message, true);
         expect("audio entered", sAudioEntered, 1);
@@ -236,7 +236,7 @@ namespace {
         for (volatile int i = 0; i < 20000000; i++) {
         }
         {
-            NebulaInterruptGuard guard;
+            GameAudioExclusion guard;
         }
         sAudioMutex.unlock();
         while (sAudioFinished == 0) {
@@ -254,11 +254,11 @@ namespace {
         const int kPairs = 10000000;
         double start = seconds();
         for (int i = 0; i < kPairs; i++) {
-            NebulaKernel::restoreInterrupts(NebulaKernel::disableInterrupts());
+            GameThreads::restoreAudio(GameThreads::excludeAudio());
         }
-        printf("perf: disableInterrupts+restoreInterrupts %.2f ns\n", (seconds() - start) * 1e9 / kPairs);
+        printf("perf: excludeAudio+restoreAudio %.2f ns\n", (seconds() - start) * 1e9 / kPairs);
 
-        NebulaMutex mutex;
+        GameMutex mutex;
         mutex.init();
         start = seconds();
         for (int i = 0; i < kPairs; i++) {

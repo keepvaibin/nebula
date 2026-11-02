@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASChannel.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
@@ -8,7 +8,7 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 
-NebulaMessageQueue JASChannel::sBankDisposeMsgQ;
+GameMessageQueue JASChannel::sBankDisposeMsgQ;
 
 void* JASChannel::sBankDisposeMsg[16];
 

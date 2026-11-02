@@ -1,7 +1,7 @@
 #include "Game/Screen/MovieStream.hpp"
 #include "Game/Screen/MovieDraw.hpp"
 #include "Game/System/NebulaClock.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MemoryUtil.hpp"

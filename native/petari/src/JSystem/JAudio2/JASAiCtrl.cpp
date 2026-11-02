@@ -14,8 +14,8 @@
 #include "JSystem/JAudio2/JASProbe.hpp"
 
 #include <nebula_game_api.h>
-#include <nebula_kernel.h>
-#include "Game/System/NebulaKernel.hpp"
+#include <nebula_threads.h>
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 
@@ -34,13 +34,13 @@ namespace {
 // On the host's audio clock thread.
 extern "C" NEBULA_GAME_API void nebula_game_audio_tick(void) {
     __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
-    NebulaKernel::enterAudio();
+    GameThreads::enterAudio();
     JKRHeap* const previous = JKRHeap::sCurrentHeap;
     JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
     JASDriver::updateDac();
     JASDriver::updateDacCallback();
     JKRHeap::sCurrentHeap = previous;
-    NebulaKernel::leaveAudio();
+    GameThreads::leaveAudio();
 }
 
 u32 JASDriver::sOutputRate;

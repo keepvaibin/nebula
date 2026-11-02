@@ -1,5 +1,5 @@
 #include "JSystem/JKernel/JKRDvdFile.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 
 JKRDvdFile::JKRDvdFile() : mDvdLink(this) {
     initiate();

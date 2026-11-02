@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
@@ -212,7 +212,7 @@ public:
         /* 0x104 */ int mProgNo;
     };
 
-    static NebulaMessageQueue sBankDisposeMsgQ;
+    static GameMessageQueue sBankDisposeMsgQ;
     static void* sBankDisposeMsg[16];
     static void* sBankDisposeList[16];
     static int sBankDisposeListSize;

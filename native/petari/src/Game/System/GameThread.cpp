@@ -1,5 +1,5 @@
 #include "Game/System/GameThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
 
 GameThread::GameThread(u32 stackSize, int messageCount, JKRHeap* pHeap) {
@@ -14,8 +14,8 @@ GameThread::GameThread(u32 stackSize, int messageCount, JKRHeap* pHeap) {
 
 GameThread::~GameThread() {
     if (mHeap != nullptr) {
-        if (!NebulaKernel::isTerminated(mThread)) {
-            NebulaKernel::cancel(mThread);
+        if (!GameThreads::isTerminated(mThread)) {
+            GameThreads::cancel(mThread);
         }
 
         delete mThread;
@@ -34,9 +34,9 @@ void GameThread::initMessageQueue(JKRHeap* pHeap, int messageCount) {
 void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize) {
     mHeap = pHeap;
     mStackSize = stackSize & ~31;  // the host thread's own stack
-    mThread = new (mHeap, 32) NebulaThread();
+    mThread = new (mHeap, 32) GameThreadRecord();
 
-    NebulaKernel::create(mThread, &GameThread::start, this, mStackSize);
+    GameThreads::create(mThread, &GameThread::start, this, mStackSize);
 }
 
 void* GameThread::start(void* pArg) {

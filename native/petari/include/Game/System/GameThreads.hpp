@@ -2,22 +2,22 @@
 
 // The game's threads and their synchronisation (docs/NATIVE_PORT.md, "Platform boundary", Threads). Every game thread is a host
 // thread. One at a time changes the game world (the world lock, the main thread first): a thread lets go of it when it blocks, and
-// lets main have it at each kernel call. A section with host events disabled keeps the audio thread out.
+// lets main have it at each kernel call. excludeAudio keeps the audio thread out of a section.
 
 #include <stdint.h>
 
-struct NebulaThread;
+struct GameThreadRecord;
 struct NebulaHostThread;
 
 // Threads asleep until something happens.
-struct NebulaWaitList {
-    NebulaThread* head;
-    NebulaThread* tail;
+struct GameWaitList {
+    GameThreadRecord* head;
+    GameThreadRecord* tail;
 };
 
 // One thread waits until another says so. A signal with nobody waiting is kept for the next wait; each wait takes it.
-struct NebulaEvent {
-    NebulaWaitList waiters;
+struct GameEvent {
+    GameWaitList waiters;
     bool signalled;
 
     void init();
@@ -28,8 +28,8 @@ struct NebulaEvent {
 };
 
 // Threads waiting for the next frame.
-struct NebulaFrameGate {
-    NebulaWaitList waiters;
+struct GameFrameGate {
+    GameWaitList waiters;
     uint32_t frames;
 
     void init();
@@ -38,9 +38,9 @@ struct NebulaFrameGate {
 };
 
 // A recursive mutex.
-struct NebulaMutex {
-    NebulaWaitList waiters;
-    NebulaThread* owner;
+struct GameMutex {
+    GameWaitList waiters;
+    GameThreadRecord* owner;
     int32_t count;
 
     void init();
@@ -50,9 +50,9 @@ struct NebulaMutex {
 
 // A fixed ring of messages: send appends, jam prepends, receive takes the first; a full or empty queue blocks the
 // caller or fails, as asked.
-struct NebulaMessageQueue {
-    NebulaWaitList senders;
-    NebulaWaitList receivers;
+struct GameMessageQueue {
+    GameWaitList senders;
+    GameWaitList receivers;
     void** slots;
     int32_t capacity;
     int32_t first;
@@ -65,7 +65,7 @@ struct NebulaMessageQueue {
     bool isFull() const { return used >= capacity; }
 };
 
-struct NebulaThread {
+struct GameThreadRecord {
     NebulaHostThread* host;
     void* (*entry)(void*);
     void* arg;
@@ -73,39 +73,40 @@ struct NebulaThread {
     bool world;   // under the world lock
     bool started;
     bool ended;
-    NebulaWaitList* list;  // the list it sleeps on or waits for the world on
-    NebulaThread* next;
-    NebulaThread* prev;
-    NebulaThread* all;
-    NebulaThread* outer;  // the audio thread's: the record it stands in for
+    GameWaitList* list;  // the list it sleeps on or waits for the world on
+    GameThreadRecord* next;
+    GameThreadRecord* prev;
+    GameThreadRecord* all;
+    GameThreadRecord* outer;  // the audio thread's: the record it stands in for
 };
 
-namespace NebulaKernel {
-    bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize);
-    NebulaThread* current();
+namespace GameThreads {
+    bool create(GameThreadRecord* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize);
+    GameThreadRecord* current();
     void exit(void* pValue);
-    void cancel(NebulaThread* pThread);
+    void cancel(GameThreadRecord* pThread);
     // A new thread starts.
-    void resume(NebulaThread* pThread);
+    void resume(GameThreadRecord* pThread);
     // This thread works off the game world from now on (file loaders): it runs alongside the others, under its mutexes. Test mode
     // keeps it under the world lock, so that two runs take the same steps.
     void leaveWorld();
-    bool isTerminated(const NebulaThread* pThread);
+    bool isTerminated(const GameThreadRecord* pThread);
 
-    // disableInterrupts returns the previous state for restoreInterrupts.
-    bool disableInterrupts();
-    bool restoreInterrupts(bool enabled);
+    // A section the audio thread stays out of, as interrupts disabled were on the console. excludeAudio returns the previous state for
+    // restoreAudio.
+    bool excludeAudio();
+    bool restoreAudio(bool enabled);
 
-    // The audio thread (JASDriver, on the host's audio clock) runs between these, when no thread is in a section with host events
-    // disabled, and none enters one until it leaves: what the console's audio interrupt and high-priority thread were to the game.
+    // The audio thread (JASDriver, on the host's audio clock) runs between these, when no thread is in such a section, and none enters
+    // one until it leaves: what the console's audio interrupt and high-priority thread were to the game.
     void enterAudio();
     void leaveAudio();
-}  // namespace NebulaKernel
+}  // namespace GameThreads
 
-class NebulaInterruptGuard {
+class GameAudioExclusion {
 public:
-    NebulaInterruptGuard() : mEnabled(NebulaKernel::disableInterrupts()) {}
-    ~NebulaInterruptGuard() { NebulaKernel::restoreInterrupts(mEnabled); }
+    GameAudioExclusion() : mEnabled(GameThreads::excludeAudio()) {}
+    ~GameAudioExclusion() { GameThreads::restoreAudio(mEnabled); }
 
 private:
     bool mEnabled;

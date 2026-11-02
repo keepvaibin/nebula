@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASCallback.hpp"
 
 typedef s32 (*DriverCallback)(void*);
@@ -13,7 +13,7 @@ namespace JASDriver {
     void setOutputMode(u32);
     u32 getOutputMode();
     void waitSubFrame();
-    extern NebulaEvent sSubFrameDone;
+    extern GameEvent sSubFrameDone;
     int rejectCallback(DriverCallback, void*);
     bool registerSyncCallback(DriverCallback, void*);
     bool registerSubFrameCallback(DriverCallback, void*);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/NerveExecutor.hpp"
 #include "Game/System/StationedArchiveLoader.hpp"
 #include "Game/System/StationedFileInfo.hpp"
@@ -33,7 +33,7 @@ public:
     void createAndAddOtherArchives();
 
     /* 0x8 */ PlayerHeapHolder* mHeapHolder;
-    NebulaEvent mDone;
+    GameEvent mDone;
 };
 
 class ConditionIsEqualType : public StationedArchiveLoader::Condition {

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 #include <revolution/types.h>
@@ -44,12 +44,12 @@ public:
         return mTree.getEndChild();
     }
 
-    NebulaMutex& getMutex() {
+    GameMutex& getMutex() {
         return mMutex;
     }
 
     /* 0x00 */ JSUTree< JASHeap > mTree;
-    /* 0x1C */ NebulaMutex mMutex;
+    /* 0x1C */ GameMutex mMutex;
     /* 0x34 */ JASDisposer* mDisposer;
     /* 0x38 */ u8* mBase;
     /* 0x3C */ u32 mSize;
@@ -90,10 +90,10 @@ namespace JASThreadingModel {
     public:
         struct Lock {
             Lock(const T&) {
-                mInterruptState = NebulaKernel::disableInterrupts();
+                mInterruptState = GameThreads::excludeAudio();
             }
             ~Lock() {
-                NebulaKernel::restoreInterrupts(mInterruptState);
+                GameThreads::restoreAudio(mInterruptState);
             }
 
             /* 0x00 */ u32 mInterruptState;
@@ -101,7 +101,7 @@ namespace JASThreadingModel {
     };
 
     template < typename T >
-    struct ObjectLevelLockable : public NebulaMutex {
+    struct ObjectLevelLockable : public GameMutex {
         ObjectLevelLockable() {
             this->init();
         }

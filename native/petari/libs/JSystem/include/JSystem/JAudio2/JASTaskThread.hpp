@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
 #include <revolution/os.h>
 
@@ -31,6 +31,6 @@ public:
     virtual ~JASTaskThread();
     virtual void* run();
 
-    /* 0x7C */ NebulaEvent threadQueue_;
+    /* 0x7C */ GameEvent threadQueue_;
     /* 0x84 */ bool _84;
 };
