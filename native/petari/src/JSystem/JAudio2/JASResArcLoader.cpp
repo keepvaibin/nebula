@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"

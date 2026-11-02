@@ -1,5 +1,5 @@
 #include "Game/System/FileLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
@@ -11,7 +11,7 @@ FileLoader::FileLoader() {
     mFileHolder = nullptr;
     mArchiveHolder = nullptr;
     mLoaderThread = new FileLoaderThread(320, MR::getStationedHeapNapa());
-    NebulaKernel::resume(mLoaderThread->mThread);
+    GameThreads::resume(mLoaderThread->mThread);
     mMutex.init();
     mRequestFileInfos = new RequestFileInfo[0x140];
     mFileHolder = new FileHolder();
@@ -132,7 +132,7 @@ const RequestFileInfo* FileLoader::getRequestFileInfoConst(const char* pName) co
 
 // string load is in the wrong spot for some reason
 RequestFileInfo* FileLoader::addRequest(const char* pName) {
-    NebulaMutex* mutex = &mMutex;
+    GameMutex* mutex = &mMutex;
     mutex->lock();
 
     RequestFileInfo* info = &mRequestFileInfos[mRequestedFileCount];

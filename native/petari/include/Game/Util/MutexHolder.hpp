@@ -3,7 +3,7 @@
 #include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 
 class JKRHeap;
 
@@ -11,9 +11,9 @@ namespace MR {
     template < int T >
     class MutexHolder {
     public:
-        static NebulaMutex sMutex;
+        static GameMutex sMutex;
     };
 
     template < int T >
-    NebulaMutex MutexHolder< T >::sMutex;
+    GameMutex MutexHolder< T >::sMutex;
 };  // namespace MR

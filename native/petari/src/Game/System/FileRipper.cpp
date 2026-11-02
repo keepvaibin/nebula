@@ -1,5 +1,5 @@
 #include "Game/System/FileRipper.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRDvdRipper.hpp>

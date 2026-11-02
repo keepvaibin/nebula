@@ -1,5 +1,5 @@
 #include "Game/System/FileHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaDisc.hpp"
 

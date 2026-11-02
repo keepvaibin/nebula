@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
@@ -32,7 +32,7 @@ char* JASWaveArcLoader::getCurrentDir() {
     return sCurrentDir;
 }
 
-NebulaEvent JASWaveArc::sLoadDone;
+GameEvent JASWaveArc::sLoadDone;
 
 void JASWaveArc::waitLoadDone() {
     sLoadDone.wait();

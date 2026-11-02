@@ -1,5 +1,5 @@
 #include "Game/System/MainLoopFramework.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>

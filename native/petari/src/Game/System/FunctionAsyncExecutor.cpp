@@ -1,5 +1,5 @@
 #include "Game/System/FunctionAsyncExecutor.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -45,7 +45,7 @@ void* FunctionAsyncExecutorThread::run() {
     }
 }
 
-FunctionAsyncExecutorOnMainThread::FunctionAsyncExecutorOnMainThread(NebulaThread* pThread) : mThread(pThread), _0() {
+FunctionAsyncExecutorOnMainThread::FunctionAsyncExecutorOnMainThread(GameThreadRecord* pThread) : mThread(pThread), _0() {
     mQueue.init(mMsgArray, ARRAY_SIZE(mMsgArray));
 }
 
@@ -69,10 +69,10 @@ FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHold
     for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
         FunctionAsyncExecutorThread* thread = new FunctionAsyncExecutorThread(MR::getStationedHeapNapa());
         mThreads[i] = thread;
-        NebulaKernel::resume(thread->mThread);
+        GameThreads::resume(thread->mThread);
     }
 
-    mMainThreadExec = new FunctionAsyncExecutorOnMainThread(NebulaKernel::current());
+    mMainThreadExec = new FunctionAsyncExecutorOnMainThread(GameThreads::current());
     // Units of the native record (0x34 bytes on the console), as many as the console's heap held.
     _410 = JKRUnitHeap::create(sizeof(FunctionAsyncExecInfo), 0x34A8 / 0x34 * ALIGN_NEXT(sizeof(FunctionAsyncExecInfo), 4), 4,
                                MR::getCurrentHeap(), false);
@@ -91,7 +91,7 @@ void FunctionAsyncExecutor::start(const MR::FunctorBase& rFunc, const char* pNam
 
 bool FunctionAsyncExecutor::startOnMainThread(const MR::FunctorBase& rFunc, const char* pName) {
     FunctionAsyncExecutorOnMainThread* thread = mMainThreadExec;
-    bool isSameThread = NebulaKernel::current() == thread->mThread;
+    bool isSameThread = GameThreads::current() == thread->mThread;
 
     if (isSameThread) {
         rFunc();

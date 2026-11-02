@@ -1,7 +1,7 @@
 #include "Game/Scene/GameScene.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/Screen/NebulaMaterialSweep.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Util/GameLightSignal.hpp"

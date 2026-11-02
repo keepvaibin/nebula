@@ -3,7 +3,7 @@
 #include "Game/System/NebulaAtomic.hpp"
 
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaDisc.hpp"
 
 class JASChannel;
@@ -128,8 +128,8 @@ public:
         return sBlockSize;
     }
 
-    /* 0x000 */ NebulaMessageQueue _000;
-    /* 0x020 */ NebulaMessageQueue _020;
+    /* 0x000 */ GameMessageQueue _000;
+    /* 0x020 */ GameMessageQueue _020;
     /* 0x040 */ void* _040[16];
     /* 0x080 */ void* _080[4];
     /* 0x090 */ JASChannel* mChannels[CHANNEL_MAX];

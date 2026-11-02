@@ -1,5 +1,5 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JUtility/JUTException.hpp"
 

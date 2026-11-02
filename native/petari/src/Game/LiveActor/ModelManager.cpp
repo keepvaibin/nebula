@@ -1,5 +1,5 @@
 #include "Game/LiveActor/ModelManager.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/Animation/BpkPlayer.hpp"
 #include "Game/Animation/BrkPlayer.hpp"

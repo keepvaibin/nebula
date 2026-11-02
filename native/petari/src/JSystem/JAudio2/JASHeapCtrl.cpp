@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"

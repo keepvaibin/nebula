@@ -1,5 +1,5 @@
 #include "Game/Speaker/SpkSpeakerCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Speaker/SpkMixingBuffer.hpp"
 #include "Game/Speaker/SpkSound.hpp"
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
@@ -31,9 +31,9 @@ namespace {
 };  // namespace
 
 void SpkSpeakerCtrl::setMixingBuffer(SpkMixingBuffer* pMixingBuffer) {
-    BOOL status = NebulaKernel::disableInterrupts();
+    BOOL status = GameThreads::excludeAudio();
     sMixingBuffer = pMixingBuffer;
-    NebulaKernel::restoreInterrupts(status);
+    GameThreads::restoreAudio(status);
 }
 
 void SpkSpeakerCtrl::setup() {

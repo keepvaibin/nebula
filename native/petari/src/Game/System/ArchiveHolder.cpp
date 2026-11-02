@@ -1,5 +1,5 @@
 #include "Game/System/ArchiveHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util.hpp"
 #include <cstring>
 
@@ -26,7 +26,7 @@ ArchiveHolder::ArchiveHolder() {
 
 ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(void* pData, JKRHeap* pHeap, const char* pArchiveName) {
     ArchiveHolderArchiveEntry* entry = new (pHeap, 0) ArchiveHolderArchiveEntry(pData, pHeap, pArchiveName);
-    NebulaMutex* mutex = &mMutex;
+    GameMutex* mutex = &mMutex;
     mutex->lock();
 
     mEntries.push_back(entry);

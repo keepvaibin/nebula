@@ -1,6 +1,6 @@
 #include "Game/System/SaveBinary.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"

@@ -1,4 +1,4 @@
-/* The platform under the game's threads (Game/System/NebulaKernel): host threads and their sleep, the kernel's two locks, the log
+/* The platform under the game's threads (Game/System/GameThreads): host threads and their sleep, the kernel's two locks, the log
    and fatal errors, and the boot. */
 #include <stdarg.h>
 #include <stdbool.h>
@@ -12,7 +12,7 @@
 
 #include <nebula_game_api.h>
 
-#include "nebula_kernel.h"
+#include "nebula_threads.h"
 #include "nebula_sdk.h"
 
 #if defined(_WIN32)
@@ -88,7 +88,7 @@ void nebula_fatal(const char* format, ...) {
 }
 
 NEBULA_GAME_API void nebula_game_debug_dump(void) {
-    nebula_kernel_dump();
+    nebula_threads_dump();
 }
 
 /* The game's host threads: each sleeps on its own turn; only the one whose turn it is runs. A thread's own stack, at least
@@ -251,7 +251,7 @@ void nebula_os_boot(void (*gameMain)(void)) {
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
     }
-    nebula_kernel_init();
+    nebula_threads_init();
     gameMain();
     nebula_fatal("the game's main returned");
 }

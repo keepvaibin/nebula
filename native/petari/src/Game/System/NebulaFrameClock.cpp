@@ -1,22 +1,22 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaAtomic.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
 
 #include <math.h>
 #include <revolution/os.h>
 
 #include <nebula_game_api.h>
-#include <nebula_kernel.h>
+#include <nebula_threads.h>
 #include "Game/System/NebulaSystemSettings.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     NebulaAtomic< u32 > sFrames;
-    NebulaFrameGate sGate;
-    NebulaEvent sRetrace;
-    NebulaThread sThread;
+    GameFrameGate sGate;
+    GameEvent sRetrace;
+    GameThreadRecord sThread;
     // Black for the first frames after the game asks for its frame (start).
     u32 sBlackFrames = ~0u;
     // show() sets the next state; it is what the screen shows from the next frame on.
@@ -106,8 +106,8 @@ namespace NebulaFrameClock {
         }
         sStarted = true;
         sGate.init();
-        NebulaKernel::create(&sThread, frameThread, nullptr, 0x10000);
-        NebulaKernel::resume(&sThread);
+        GameThreads::create(&sThread, frameThread, nullptr, 0x10000);
+        GameThreads::resume(&sThread);
     }
 
     void startPicture() {

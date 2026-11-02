@@ -1,11 +1,11 @@
 #include "Game/System/NebulaDisc.hpp"
 #include "Game/System/NebulaAtomic.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 
 #include <revolution/os.h>
 
 #include <nebula_game_api.h>
-#include <nebula_kernel.h>
+#include <nebula_threads.h>
 
 extern "C" {
 const NebulaHostServices* nebula_host(void);
@@ -22,7 +22,7 @@ namespace {
 
     const u32 cSlots = 64;
     Slot sSlots[cSlots];
-    NebulaEvent sCanceled;
+    GameEvent sCanceled;
 
     void finish(Slot* pSlot) {
         NebulaDisc::Request* pRequest = pSlot->mRequest;
@@ -62,16 +62,16 @@ namespace {
     }
 
     void wakeReader(s32, NebulaDisc::Request* pRequest) {
-        (static_cast< NebulaEvent* >(pRequest->mUser))->signal();
+        (static_cast< GameEvent* >(pRequest->mUser))->signal();
     }
 }  // namespace
 
 extern "C" NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result) {
     if (slot < cSlots) {
-        const BOOL enabled = NebulaKernel::disableInterrupts();
+        const BOOL enabled = GameThreads::excludeAudio();
         sSlots[slot].mResult = result;
         finish(&sSlots[slot]);
-        NebulaKernel::restoreInterrupts(enabled);
+        GameThreads::restoreAudio(enabled);
     }
 }
 
@@ -124,7 +124,7 @@ namespace NebulaDisc {
             nebula_fatal("disc read outside file %d (length %u): %d bytes at %d", pFile->mEntry, pFile->mLength, size, offset);
         }
 
-        const BOOL enabled = NebulaKernel::disableInterrupts();
+        const BOOL enabled = GameThreads::excludeAudio();
         u32 slot = 0;
         while (slot < cSlots && sSlots[slot].mRequest != nullptr) {
             slot++;
@@ -138,7 +138,7 @@ namespace NebulaDisc {
         sSlots[slot].mCanceled = false;
         pRequest->mCallback = callback;
         pRequest->mBusy = true;
-        NebulaKernel::restoreInterrupts(enabled);
+        GameThreads::restoreAudio(enabled);
 
         const NebulaHostServices* const host = nebula_host();
         host->disc_read(host->user, pFile->mEntry, static_cast< u32 >(offset), static_cast< u32 >(size), pDst, slot);
@@ -146,7 +146,7 @@ namespace NebulaDisc {
     }
 
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset) {
-        NebulaEvent done;
+        GameEvent done;
         done.init();
         Request request;
         request.mUser = &done;
@@ -156,17 +156,17 @@ namespace NebulaDisc {
     }
 
     void cancel(Request* pRequest) {
-        const BOOL enabled = NebulaKernel::disableInterrupts();
+        const BOOL enabled = GameThreads::excludeAudio();
         Slot* pSlot = slotOf(pRequest);
         if (pSlot != nullptr) {
             pSlot->mCanceled = true;
             while (slotOf(pRequest) != nullptr) {
-                NebulaKernel::restoreInterrupts(enabled);
+                GameThreads::restoreAudio(enabled);
                 sCanceled.wait();
-                NebulaKernel::disableInterrupts();
+                GameThreads::excludeAudio();
             }
         }
-        NebulaKernel::restoreInterrupts(enabled);
+        GameThreads::restoreAudio(enabled);
     }
 
     bool isBusy() {

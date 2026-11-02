@@ -1,5 +1,5 @@
 #include "Game/Util/ModelUtil.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeResource.hpp"
 #include "Game/LiveActor/LiveActor.hpp"

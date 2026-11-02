@@ -1,5 +1,5 @@
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRDvdFile.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/JUTException.hpp"

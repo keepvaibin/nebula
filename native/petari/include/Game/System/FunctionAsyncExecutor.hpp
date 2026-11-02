@@ -3,7 +3,7 @@
 #include "Game/System/NebulaAtomic.hpp"
 
 #include "Game/System/GameThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/StringUtil.hpp"
 
@@ -30,7 +30,7 @@ public:
     JKRHeap* mStarterHeap;  // the current heap where it was started
     /* 0x08 */ const char* mName;
     /* 0x0C */ NebulaAtomic< bool > mIsEnd;
-    /* 0x10 */ NebulaMessageQueue mQueue;
+    /* 0x10 */ GameMessageQueue mQueue;
     /* 0x30 */ void* mMessage;
 };
 
@@ -46,14 +46,14 @@ public:
 
 class FunctionAsyncExecutorOnMainThread {
 public:
-    FunctionAsyncExecutorOnMainThread(NebulaThread*);
+    FunctionAsyncExecutorOnMainThread(GameThreadRecord*);
 
     void update();
 
     /* 0x000 */ bool _0;
-    /* 0x004 */ NebulaMessageQueue mQueue;
+    /* 0x004 */ GameMessageQueue mQueue;
     /* 0x024 */ void* mMsgArray[64];
-    /* 0x124 */ NebulaThread* mThread;
+    /* 0x124 */ GameThreadRecord* mThread;
 };
 
 class FunctionAsyncExecutor {

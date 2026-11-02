@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRDisposer.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 
 #include <revolution/os.h>
@@ -28,7 +28,7 @@ public:
 
     JKRThread(u32 stack_size, int message_count);
     JKRThread(JKRHeap* heap, u32 stack_size, int message_count);
-    JKRThread(NebulaThread* thread, int message_count);
+    JKRThread(GameThreadRecord* thread, int message_count);
 
     virtual ~JKRThread();
     virtual void* run() {
@@ -38,7 +38,7 @@ public:
     void setCommon_mesgQueue(JKRHeap* heap, int message_count);
     void setCommon_heapSpecified(JKRHeap* heap, u32 stack_size);
 
-    NebulaThread* getThreadRecord() const {
+    GameThreadRecord* getThreadRecord() const {
         return mThread;
     }
     void* getStack() const {
@@ -59,7 +59,7 @@ public:
     }
 
     void resume() {
-        NebulaKernel::resume(mThread);
+        GameThreads::resume(mThread);
     }
     BOOL sendMessage(void* message) {
         return mMessageQueue.send(message, false);
@@ -89,13 +89,13 @@ public:
 
     static void* start(void* pData);
 
-    static JKRThread* searchThread(NebulaThread*);
+    static JKRThread* searchThread(GameThreadRecord*);
 
     /* 0x18 */ JSULink< JKRThread > mThreadListLink;
     /* 0x28 */ JKRHeap* mHeap;
-    /* 0x2C */ NebulaThread* mThread;
+    /* 0x2C */ GameThreadRecord* mThread;
     JKRHeap* mStartCurrentHeap;
-    /* 0x30 */ NebulaMessageQueue mMessageQueue;
+    /* 0x30 */ GameMessageQueue mMessageQueue;
     /* 0x50 */ void** mMesgBuffer;
     /* 0x54 */ s32 mMessageCount;
     /* 0x58 */ void* mStackMemory;

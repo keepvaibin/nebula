@@ -1,5 +1,5 @@
 #include "Game/System/ShapePacketUserData.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>

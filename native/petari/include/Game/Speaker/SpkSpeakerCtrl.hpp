@@ -3,7 +3,7 @@
 #include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 
 class SpkMixingBuffer;
 

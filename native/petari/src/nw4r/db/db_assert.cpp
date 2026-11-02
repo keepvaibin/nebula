@@ -1,5 +1,5 @@
 #include "nw4r/db/assert.h"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "nw4r/db/console.h"
 #include "nw4r/db/mapFile.h"
@@ -53,7 +53,7 @@ namespace nw4r {
 
         __declspec(weak) void VPanic(const char* file, int line, const char* fmt, va_list vlist, bool halt) {
             u32 stackPointer = 0;
-            (void)NebulaKernel::disableInterrupts();
+            (void)GameThreads::excludeAudio();
 
 
             ShowStack_(stackPointer);

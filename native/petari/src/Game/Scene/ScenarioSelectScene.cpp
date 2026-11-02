@@ -1,5 +1,5 @@
 #include "Game/Scene/ScenarioSelectScene.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/EffectSystem.hpp"

@@ -1,5 +1,5 @@
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <revolution/os.h>
 #include "Game/NameObj/NameObjHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
@@ -129,7 +129,7 @@ namespace MR {
     }
 
     namespace {
-        NebulaEvent sSceneInitializeResume;
+        GameEvent sSceneInitializeResume;
     }
 
     void waitSceneInitializeResume() {

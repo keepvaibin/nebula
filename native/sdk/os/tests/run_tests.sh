@@ -27,7 +27,7 @@ mkdir -p "$OUT/obj"
 for f in $OS; do
     $CC $FL -c "$f" -o "$OUT/obj/$(basename "$f").o"
 done
-${CC}++ $CXXFL -c "$P/src/Game/System/NebulaKernel.cpp" -o "$OUT/obj/nebula_kernel.o"
+${CC}++ $CXXFL -c "$P/src/Game/System/GameThreads.cpp" -o "$OUT/obj/nebula_kernel.o"
 ${CC}++ $CXXFL "$N/sdk/os/tests/kernel_tests.cpp" "$OUT"/obj/*.o $LIBS -o "$OUT/kernel_tests$EXE"
 $CC $FL "$N/math/tests/math_tests.c" "$N/math/src/nebula_math.c" -o "$OUT/math_tests$EXE"
 $CC $FL "$N/msl/tests/msl_runtime_tests.c" "$N/msl/src/msl_runtime.c" -o "$OUT/msl_runtime_tests$EXE"
