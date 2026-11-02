@@ -24,6 +24,10 @@ enum {
     J3D_STATE_TEV_COLOR_S10,        /* register; size: r, g; f: b, a (signed 10-bit values) */
     J3D_STATE_IND_TEX_MATRIX,       /* matrix id (GXIndTexMtxID), scale exponent (s8); f: offset[0][0], [1][0],
                                        [0][1], [1][1], [0][2], [1][2] */
+    J3D_STATE_CURRENT_MATRIX,       /* position/normal matrix (0-9) */
+    J3D_STATE_LINE_WIDTH,           /* f: width (pixels); a[1]: texture offset n (1/n texel; 0 none) */
+    J3D_STATE_POINT_SIZE,           /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
+    J3D_STATE_TEX_OFFSETS,          /* texture coordinate, lines offset it, points offset it */
 };
 
 // A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).

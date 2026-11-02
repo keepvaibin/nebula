@@ -254,6 +254,10 @@ namespace J3DNativeShape {
         sCurrentPosition = sCurrent.position;
     }
 
+    u8 currentPosition() {
+        return sCurrentPosition;
+    }
+
     void setCurrentPosition(u32 index) {
         J3DNativeDraw::flush();
         sCurrentPosition = static_cast< u8 >(index);

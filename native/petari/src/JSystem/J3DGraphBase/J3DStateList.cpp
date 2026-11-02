@@ -231,7 +231,7 @@ void J3DStateList::setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuT
 }
 
 void J3DStateList::setCurrentMtx(u32 id) {
-    add(NEBULA_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id / 3);  // GX_PNMTXn is 3n
+    add(J3D_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id / 3);  // GX_PNMTXn is 3n
 }
 
 namespace {
@@ -241,13 +241,13 @@ namespace {
 
 // the console's widths are sixths of a pixel: the op carries pixels.
 void J3DStateList::setLineWidth(u8 width, GpuTexOffset texOffsets) {
-    NebulaStateOp& r = add(NEBULA_STATE_LINE_WIDTH);
+    NebulaStateOp& r = add(J3D_STATE_LINE_WIDTH);
     r.f[0] = width / 6.0f;
     r.a[1] = sTexOffsetDivisor[texOffsets & 7];
 }
 
 void J3DStateList::setPointSize(u8 size, GpuTexOffset texOffsets) {
-    NebulaStateOp& r = add(NEBULA_STATE_POINT_SIZE);
+    NebulaStateOp& r = add(J3D_STATE_POINT_SIZE);
     r.f[0] = size / 6.0f;
     r.a[1] = sTexOffsetDivisor[texOffsets & 7];
 }
@@ -280,7 +280,7 @@ void J3DStateList::setFrameAlpha(bool keepAlpha, bool changed) {
 }
 
 void J3DStateList::enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEX_OFFSETS);
+    NebulaStateOp& r = add(J3D_STATE_TEX_OFFSETS);
     r.a[0] = coord;
     r.a[1] = lines;
     r.a[2] = points;
