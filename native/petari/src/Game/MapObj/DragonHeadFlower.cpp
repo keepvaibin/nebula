@@ -223,6 +223,3 @@ void DragonHeadFlower::initParabola(const TVec3f& rStartPos) {
     mParabolaSteps = MR::sqrt(MR::abs((mParabolaAccel * 2.0f) / 1.2f));
 }
 
-void DragonHeadFlower_FORCE_MATCH(TVec3f* pVector, f32 scale) {
-    *pVector *= scale;
-}

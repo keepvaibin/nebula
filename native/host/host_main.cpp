@@ -1800,6 +1800,7 @@ void svc_shape_array(void*, const NebulaShapeArray* array) {
 void svc_shape_forget(void*, uint64_t start, uint64_t end) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
+    forget_handed(start, static_cast<uint32_t>(end - start));
     shapes::Record record;
     record.kind = shapes::Record::Kind::Forget;
     record.key = start;

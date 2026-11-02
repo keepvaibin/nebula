@@ -149,11 +149,6 @@ void DynamicCollisionObj::updateCollisionHeader() {
     this->mKCLFile->mMin = min;
 }
 
-void DynamicCollisionObj_FORCE_MATCH(TVec2f* pDst, const TVec2f& rA) {
-    new (pDst) TVec2f(rA);
-    new (pDst + 1) TVec2f(rA);
-}
-
 void DynamicCollisionObj::createCollision() {
     s32 v = _94;
     mKCLFile = new KCLFile();

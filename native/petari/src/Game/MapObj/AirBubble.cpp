@@ -214,6 +214,3 @@ bool AirBubble::canSpinGet() const {
     return false;
 }
 
-void AirBubble_FORCE_MATCH(TVec3f* pVec, f32 scale) {
-    *pVec *= scale;
-}

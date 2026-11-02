@@ -699,17 +699,6 @@ bool MarioAbyssDamage::close() {
     return true;
 }
 
-const char* MarioDamage_FORCE_MATCH_DATA(u32 index) {
-    switch (index) {
-    case 0:
-        return "\211\212\203\137\203\201\201\133\203\127" /* 炎ダメージ */;
-    case 1:
-        return "\211\212\203\137\203\201\201\133\203\127\220\302\211\214" /* 炎ダメージ青煙 */;
-    default:
-        return "\211\212\203\137\203\201\201\133\203\127\211\214" /* 炎ダメージ煙 */;
-    }
-}
-
 void Mario::connectToFireRun() {
     if (mActor->mHealth) {
         changeStatus(mFireRun);

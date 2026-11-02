@@ -140,6 +140,8 @@ public:
     std::size_t forget(std::uint64_t key);
     // Images and palettes sampled without having been handed over (each logged).
     [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
+    // The images handed over from [start, end) go (their memory is going), with what was decoded from them; the keys, for the caller's bindings.
+    [[nodiscard]] std::vector<std::uint64_t> forget_range(std::uint64_t start, std::uint64_t end);
     // Memory, for GALAXY_TRACE_MEMORY: the images handed over, the upload arenas and the recycled textures, in bytes.
     [[nodiscard]] std::uint64_t image_bytes() const noexcept;
     [[nodiscard]] std::uint64_t upload_arena_bytes() const noexcept;

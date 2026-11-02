@@ -836,6 +836,3 @@ namespace {
     }
 };  // namespace
 
-void RailUtil_FORCE_MATCH(TVec3f* pDst, const TVec3f& rSrc) {
-    *pDst = rSrc;
-}

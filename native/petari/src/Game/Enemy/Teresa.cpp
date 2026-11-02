@@ -1120,6 +1120,3 @@ bool Teresa::isShay() const {
     return isNotSquat;
 }
 
-void Teresa_FORCE_MATCH(TVec3f* pVec, f32 scale) {
-    *pVec *= scale;
-}

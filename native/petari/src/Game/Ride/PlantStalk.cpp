@@ -16,10 +16,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpuEnums.h>
 
-s32 PlantStalk_FORCE_MATCH_CLAMP(s32 a, s32 b, s32 c) {
-    return MR::clamp(a, b, c) + MR::clamp(b, c, a) + MR::clamp(c, a, b);
-}
-
 namespace {
     static const f32 sGrowSpeedMin = 15.0f;
     static const f32 sGrowSpeedMax = 100.0f;

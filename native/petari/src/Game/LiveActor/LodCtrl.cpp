@@ -395,8 +395,4 @@ bool LodCtrlFunction::isExistLodLowModel(const char* pName) {
     return MR::isFileExist(buf, false);
 }
 
-const char* LodCtrl_FORCE_MATCH_STRING() {
-    return "/ObjectData/%sMiddle.arc";
-}
-
 const bool def = false;

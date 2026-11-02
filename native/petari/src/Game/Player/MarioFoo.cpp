@@ -18,12 +18,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-void MarioFoo_FORCE_MATCH(TVec3f& rVec, f32 a, f32 b, f32 c) {
-    rVec.setLength(a);
-    rVec.setLength(b);
-    rVec.setLength(c);
-}
-
 namespace {
     f32 cTurnMotionSpeed = 5.0f;
     f32 cWidth = 70.0f;
@@ -546,11 +540,6 @@ void MarioFoo::hitWall(const TVec3f& rNormal, HitSensor* pSensor) {
 
 f32 MarioFoo::getStickY() const {
     return MarioModule::getStickY();
-}
-
-const char* MarioFoo_FORCE_MATCH_DATA(u32 index) {
-    static const char* const strings[] = {"\220\205\211\152\203\137\203\201\201\133\203\127" /* 水泳ダメージ */, "\220\205\222\206\203\137\203\201\201\133\203\127" /* 水中ダメージ */, "\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */, "\203\137\203\201\201\133\203\127" /* ダメージ */, "\220\205\211\152\203\137\203\201\201\133\203\127\222\206" /* 水泳ダメージ中 */};
-    return strings[index];
 }
 
 void MarioFoo::spin() {

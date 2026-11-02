@@ -775,6 +775,3 @@ bool SpinDriver::canBind(HitSensor* pSensor) const {
     return false;
 }
 
-void SpinDriver_FORCE_MATCH(TQuat4f* pDest, const TQuat4f& rSrc) {
-    *pDest = rSrc;
-}

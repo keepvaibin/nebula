@@ -976,6 +976,3 @@ bool MR::tryFindLinkNamePos(const NameObj* pObj, const char* pName, TVec3f* pPar
     return getNamePosHolder()->find(pObj, pName, pParam3, pParam4);
 }
 
-void ObjUtil_FORCE_MATCH(TVec3f* pOut, const TVec3f& rVec) {
-    pOut->add(rVec);
-}

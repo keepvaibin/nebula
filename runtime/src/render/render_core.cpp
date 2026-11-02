@@ -792,9 +792,11 @@ void RenderCore::trace_memory() {
                  mb(texture_cache_.decoded_map_stats().resident_bytes), mb(texture_cache_.upload_arena_bytes()), mb(texture_cache_.pool_bytes()),
                  mb(curved::memory_bytes()),
                  mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
-#if defined(NEBULA_HOST_D3D12)
-    renderer_.trace_rings();
-#endif
+    [](auto& renderer) {
+        if constexpr (requires { renderer.trace_rings(); }) {
+            renderer.trace_rings();
+        }
+    }(renderer_);
 }
 
 void RenderCore::report_frame_tail_window() noexcept {
@@ -5429,6 +5431,12 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             }
         }
         curved::forget_models(record.key, record.position);
+        flush_pending_draw_batch();
+        for (const std::uint64_t key : texture_cache_.forget_range(record.key, record.position)) {
+            invalidate_texture_binding_cache_key(key);
+        }
+        texture_bindings_dirty_ = true;
+        current_texture_binding_key_valid_ = false;
         return;
     case shapes::Record::Kind::Draw:
         draw_state_.apply_pass(record.pass);
