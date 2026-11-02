@@ -20,18 +20,16 @@ enum {
 J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
     mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, block.mpShapeInitData);
     mIndexTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpIndexTable);
-    mVtxDescList = JSUConvertOffsetToPtr< GpuVtxDescList >(&block, block.mpVtxDescList),
     mMtxTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpMtxTable);
     mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, block.mpDisplayListData),
     mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, block.mpMtxInitData),
     mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, block.mpDrawInitData);
 }
 
-J3DShape* J3DShapeFactory::create(int no, u32 flag, GpuVtxDescList* vtxDesc) {
+J3DShape* J3DShapeFactory::create(int no, u32 flag) {
     J3DShape* shape = new J3DShape;
     shape->mMtxGroupNum = getMtxGroupNum(no);
     shape->mRadius = mShapeInitData[mIndexTable[no]].mRadius;
-    shape->mVtxDesc = getVtxDescList(no);
     shape->mShapeMtx = new J3DShapeMtx*[shape->mMtxGroupNum];
     shape->mShapeDraw = new J3DShapeDraw*[shape->mMtxGroupNum];
     shape->mMin = getMin(no);
@@ -94,7 +92,7 @@ J3DShapeMtx* J3DShapeFactory::newShapeMtx(u32 flag, int shapeNo, int mtxGroupNo)
 J3DShapeDraw* J3DShapeFactory::newShapeDraw(int shapeNo, int mtxGroupNo) const {
     J3DShapeInitData& shapeInitData = mShapeInitData[mIndexTable[shapeNo]];
     const J3DShapeDrawInitData& drawInitData = (&mDrawInitData[shapeInitData.mDrawInitDataIndex])[mtxGroupNo];
-    return new J3DShapeDraw(&mDisplayListData[drawInitData.mDisplayListIndex], drawInitData.mDisplayListSize);
+    return new J3DShapeDraw(reinterpret_cast< J3DShapeMesh* >(&mDisplayListData[drawInitData.mDisplayListIndex]));
 }
 
 s32 J3DShapeFactory::calcSize(int shapeNo, u32 flag) {

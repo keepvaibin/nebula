@@ -14,65 +14,11 @@ CShader::CShader(const J3DModelData* pModelData, const ResTIMG* pTimg) : mIndexA
     _1C = 0.0f;
     _8 = 0.0f;
     mIndexArray = new CIndex[pModelData->mVertexData.mVtxNum];
-    _22 = 8;
-    _21 = 8;
-    _20 = 8;
-    _23 = 0;
-    _24 = 0;
-    _25 = 0;
-
-    GpuVtxAttrFmtList* list = pModelData->mVertexData.mVtxAttrFmtList;
-
-    while (list->attr != GPU_VA_NULL) {
-        if (list->attr == GPU_VA_POS) {
-            _21 = list->frac;
-            _24 = list->type;
-        } else if (list->attr == GPU_VA_NRM) {
-            _22 = list->frac;
-            _25 = list->type;
-        } else if (list->attr == GPU_VA_TEX0) {
-            _20 = list->frac;
-            _23 = list->type;
-        }
-
-        list++;
-    }
 }
 
 CShader::~CShader() {
     delete mIndexArray;
 }
-
-namespace {
-    // The model's vertex arrays (host order, as the importer cooks VTX1) and the fur positions written for them.
-    inline f32 loadF32(const void* pArray, u32 index) {
-        return static_cast< const f32* >(pArray)[index];
-    }
-
-    inline s16 loadS16(const void* pArray, u32 index) {
-        return static_cast< const s16* >(pArray)[index];
-    }
-
-    inline void loadVec(TVec3f* pOut, const void* pArray, u32 index, u8 type, u8 frac) {
-        if (type == GPU_S16) {
-            TVec3s fixed(loadS16(pArray, index), loadS16(pArray, index + 1), loadS16(pArray, index + 2));
-            MR::fixed16ToFloat(pOut, fixed, frac);
-        } else {
-            pOut->set< f32 >(loadF32(pArray, index), loadF32(pArray, index + 1), loadF32(pArray, index + 2));
-        }
-    }
-
-    inline void loadTexCoord(f32* pU, f32* pV, const void* pArray, u32 index, u8 type, u8 frac) {
-        if (type == GPU_S16) {
-            f32 scale = 1 << frac;
-            *pU = f32(loadS16(pArray, index * 2)) / scale;
-            *pV = f32(loadS16(pArray, index * 2 + 1)) / scale;
-        } else {
-            *pU = loadF32(pArray, index * 2);
-            *pV = loadF32(pArray, index * 2 + 1);
-        }
-    }
-}  // namespace
 
 void CShader::calc(J3DModel* pModel) {
     pModel->mVertexBuffer.swapTransformedVtxPos();
@@ -93,9 +39,8 @@ void CShader::calc(J3DModel* pModel) {
         if (index != 0xFFFF) {
             f32 u = 0.0f;
             f32 v = 0.0f;
-            if (_23 == GPU_S16 || _23 == GPU_F32) {
-                loadTexCoord(&u, &v, pTexCoords, index, _23, _20);
-            }
+            u = static_cast< const f32* >(pTexCoords)[index * 2];
+            v = static_cast< const f32* >(pTexCoords)[index * 2 + 1];
 
             if (u > maxU) {
                 maxU = u;
@@ -129,49 +74,31 @@ void CShader::calc(J3DModel* pModel) {
             s32 normalOffset = normalIndex * 3;
             f32 length;
 
-            switch (_23) {
-            case GPU_S16: {
-                f32 u;
-                f32 v;
-                loadTexCoord(&u, &v, pTexCoords, texCoordIndex, _23, _20);
-                u = u / f32(spanU);
-                v = v / f32(spanV);
+            f32 u = static_cast< const f32* >(pTexCoords)[texCoordIndex * 2] / f32(spanU);
+            f32 v = static_cast< const f32* >(pTexCoords)[texCoordIndex * 2 + 1] / f32(spanV);
 
-                if (u < 0.0f) {
-                    u += 1.0f;
-                }
-
-                if (v < 0.0f) {
-                    v += 1.0f;
-                }
-
-                length = mLengthMap.refer(u, v);
-                break;
+            if (u < 0.0f) {
+                u += 1.0f;
             }
 
-            case GPU_F32: {
-                f32 u;
-                f32 v;
-                loadTexCoord(&u, &v, pTexCoords, texCoordIndex, _23, _20);
-                length = mLengthMap.refer(u, v);
-                break;
+            if (v < 0.0f) {
+                v += 1.0f;
             }
-            }
+
+            length = mLengthMap.refer(u, v);
 
             TVec3f position;
             TVec3f normal;
             TVec3f result;
 
-            if (_25 == GPU_S16 || _25 == GPU_F32) {
-                loadVec(&normal, pNormals, normalOffset, _25, _22);
-            }
+            const f32* pNormal = static_cast< const f32* >(pNormals) + normalOffset;
+            normal.set< f32 >(pNormal[0], pNormal[1], pNormal[2]);
 
             MR::normalize(&normal);
             MR::isNan(normal);
 
-            if (_24 == GPU_S16 || _24 == GPU_F32) {
-                loadVec(&position, pPositions, offset, _24, _21);
-            }
+            const f32* pPosition = static_cast< const f32* >(pPositions) + offset;
+            position.set< f32 >(pPosition[0], pPosition[1], pPosition[2]);
 
             MR::isNan(position);
 
@@ -183,103 +110,34 @@ void CShader::calc(J3DModel* pModel) {
 
             MR::isNan(result);
 
-            switch (_24) {
-            case GPU_S16: {
-                TVec3s fixed;
-                MR::floatToFixed16(&fixed, result, _21);
-                s16* pFixedOutput = static_cast< s16* >(pOutput) + offset;
-                pFixedOutput[0] = fixed.x;
-                pFixedOutput[1] = fixed.y;
-                pFixedOutput[2] = fixed.z;
-                break;
-            }
-            case GPU_F32: {
-                f32* pFloatOutput = static_cast< f32* >(pOutput) + offset;
-                pFloatOutput[0] = result.x;
-                pFloatOutput[1] = result.y;
-                pFloatOutput[2] = result.z;
-                break;
-            }
-            }
+            f32* pFloatOutput = static_cast< f32* >(pOutput) + offset;
+            pFloatOutput[0] = result.x;
+            pFloatOutput[1] = result.y;
+            pFloatOutput[2] = result.z;
         }
     }
 
     // The shell's positions as values, for the draws that read them.
-    J3DNativeShape::sendPositions(pOutput, count, static_cast< GpuCompType >(_24), GPU_POS_XYZ, _21);
+    J3DNativeShape::sendPositions(pOutput, count);
     pModel->mVertexBuffer.setCurrentVtxPos(pOutput);
 }
 
 void CShader::setup(J3DModelData* pData) {
 }
 
-namespace {
-    // Display lists in host order, as the importer cooks SHP1.
-    inline s32 getCount(u8* pRead) {
-        return *reinterpret_cast< u16* >(pRead + 1);
-    }
-};  // namespace
-
 void CShader::makeIndexData(J3DShape* pShape) const {
-    GpuVtxDescList* pDesc = pShape->getVtxDesc();
-    s32 stride = 0;
-    s32 posOffset = -1;
-    s32 nrmOffset = -1;
-    s32 texOffset = -1;
-    s32 sizes[4] = {0, 1, 1, 2};
-
-    while (pDesc->attr != GPU_VA_NULL) {
-        switch (pDesc->attr) {
-        case GPU_VA_POS:
-            posOffset = stride;
-            break;
-        case GPU_VA_NRM:
-            nrmOffset = stride;
-            break;
-        case GPU_VA_TEX0:
-            texOffset = stride;
-            break;
+    for (u16 group = 0; group < pShape->getMtxGroupNum(); group++) {
+        J3DShapeMesh* pMesh = pShape->getShapeDraw(group)->getMesh();
+        if ((pMesh->mAttributes & NEBULA_SHAPE_NORMAL) == 0 || (pMesh->mAttributes & NEBULA_SHAPE_TEXCOORD0) == 0) {
+            return;
         }
 
-        stride += sizes[pDesc->type];
-        pDesc++;
-    }
-
-    if (posOffset == -1) {
-        return;
-    }
-
-    if (nrmOffset == -1) {
-        return;
-    }
-
-    if (texOffset == -1) {
-        return;
-    }
-
-    for (u16 group = 0; group < pShape->getMtxGroupNum(); group++) {
-        s32 count;
-        u8* pStart;
-        u8* pRead;
-        pStart = static_cast< u8* >(pShape->getShapeDraw(group)->getDisplayList());
-        pRead = pStart;
-
-        while (u32(pRead - pStart) < pShape->getShapeDraw(group)->getDisplayListSize()) {
-            if (*pRead == 0) {
-                break;
-            }
-
-            count = getCount(pRead);
-
-            for (s32 i = 0; i < count; i++) {
-                u8* pVertex = pRead + 3 + stride * i;
-                u16 pos = *reinterpret_cast< u16* >(pVertex + posOffset);
-                u16 nrm = *reinterpret_cast< u16* >(pVertex + nrmOffset);
-                u16 tex = *reinterpret_cast< u16* >(pVertex + texOffset);
-                mIndexArray[pos]._0 = nrm;
-                mIndexArray[pos]._2 = tex;
-            }
-
-            pRead = pRead + stride * count + 3;
+        const NebulaShapeCorner* pCorners = pMesh->corners();
+        const u16* pIndices = pMesh->indices();
+        for (u32 i = 0; i < pMesh->mIndexCount; i++) {
+            const NebulaShapeCorner& rCorner = pCorners[pIndices[i]];
+            mIndexArray[rCorner.position]._0 = rCorner.normal;
+            mIndexArray[rCorner.position]._2 = rCorner.texcoord[0];
         }
     }
 }
@@ -296,48 +154,12 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
             continue;
         }
 
-        GpuVtxDescList* pDesc = pShape->getVtxDesc();
-        s32 stride = 0;
-        s32 posOffset = -1;
-        s32 sizes[4] = {0, 1, 1, 2};
-
-        while (pDesc->attr != GPU_VA_NULL) {
-            switch (pDesc->attr) {
-            case GPU_VA_POS:
-                posOffset = stride;
-                break;
-            case GPU_VA_NRM:
-                break;
-            case GPU_VA_TEX0:
-                break;
-            }
-
-            stride += sizes[pDesc->type];
-            pDesc++;
-        }
-
-        if (posOffset == -1) {
-            continue;
-        }
-
         for (u16 group = 0; group < pShape->getMtxGroupNum(); group++) {
-            u8* const pStart = pShape->getShapeDraw(group)->getDisplayList();
-            u8* pRead = pStart;
-
-            while (u32(pRead - pStart) < pShape->getShapeDraw(group)->getDisplayListSize()) {
-                if (*pRead == 0) {
-                    break;
-                }
-
-                s32 count = *reinterpret_cast< u16* >(pRead + 1);
-
-                for (s32 i = 0; i < count; i++) {
-                    u16 pos = *reinterpret_cast< u16* >((pRead + stride * i) + (posOffset + 3));
-                    mIndexArray[pos]._0 = 0xFFFF;
-                    mIndexArray[pos]._2 = 0xFFFF;
-                }
-
-                pRead = pRead + stride * count + 3;
+            J3DShapeMesh* pMesh = pShape->getShapeDraw(group)->getMesh();
+            const NebulaShapeCorner* pCorners = pMesh->corners();
+            for (u32 c = 0; c < pMesh->mCornerCount; c++) {
+                mIndexArray[pCorners[c].position]._0 = 0xFFFF;
+                mIndexArray[pCorners[c].position]._2 = 0xFFFF;
             }
         }
     }

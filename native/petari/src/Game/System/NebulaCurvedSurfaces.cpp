@@ -37,181 +37,6 @@ namespace {
             return true;
         }
     };
-
-    struct Format {
-        GpuCompCnt mCount;
-        GpuCompType mType;
-        u8 mFrac;
-    };
-
-    bool findFormat(const GpuVtxAttrFmtList* pList, GpuAttr attr, Format* pFormat) {
-        for (; pList != nullptr && pList->attr != GPU_VA_NULL; pList++) {
-            if (pList->attr == attr) {
-                pFormat->mCount = pList->cnt;
-                pFormat->mType = pList->type;
-                pFormat->mFrac = pList->frac;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    u32 typeBytes(GpuCompType type) {
-        return type == GPU_U8 || type == GPU_S8 ? 1 : type == GPU_U16 || type == GPU_S16 ? 2 : 4;
-    }
-
-    // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
-    u16 host16(const u8* p) {
-        u16 v;
-        memcpy(&v, p, sizeof(v));
-        return v;
-    }
-
-    // One component as GX dequantises it (the arrays in host order, as the importer cooks VTX1).
-    f32 component(const u8* p, GpuCompType type, f32 scale) {
-        switch (type) {
-        case GPU_U8:
-            return p[0] * scale;
-        case GPU_S8:
-            return static_cast< s8 >(p[0]) * scale;
-        case GPU_U16:
-            return host16(p) * scale;
-        case GPU_S16:
-            return static_cast< s16 >(host16(p)) * scale;
-        default: {
-            f32 value;
-            memcpy(&value, p, sizeof(value));
-            return value;
-        }
-        }
-    }
-
-    // A shape's vertex layout in its display lists: each attribute's bytes (GX order) and where the position and normal
-    // indices sit; false where a position or normal is missing or not indexed, or an attribute is sent directly
-    // (its size would need the vertex format).
-    struct Layout {
-        u32 mStride;
-        u32 mPosition;
-        u32 mPositionBytes;
-        u32 mNormal;
-        u32 mNormalBytes;
-    };
-
-    bool layoutOf(const GpuVtxDescList* pDesc, Layout* pLayout) {
-        u32 sizes[GPU_VA_TEX7 + 1];
-        memset(sizes, 0, sizeof(sizes));
-        bool position = false;
-        bool normal = false;
-        for (; pDesc != nullptr && pDesc->attr != GPU_VA_NULL; pDesc++) {
-            const GpuAttr attr = pDesc->attr == GPU_VA_NBT ? GPU_VA_NRM : pDesc->attr;
-            if (pDesc->type == GPU_NONE || attr > GPU_VA_TEX7) {
-                continue;
-            }
-            if (attr <= GPU_VA_TEX7MTXIDX) {
-                sizes[attr] = 1;
-            } else if (pDesc->type == GPU_INDEX8 || pDesc->type == GPU_INDEX16) {
-                sizes[attr] = pDesc->type == GPU_INDEX8 ? 1 : 2;
-                position = position || attr == GPU_VA_POS;
-                normal = normal || attr == GPU_VA_NRM;
-            } else {
-                return false;
-            }
-        }
-        if (!position || !normal) {
-            return false;
-        }
-        u32 at = 0;
-        for (u32 attr = 0; attr <= GPU_VA_TEX7; attr++) {
-            if (attr == GPU_VA_POS) {
-                pLayout->mPosition = at;
-                pLayout->mPositionBytes = sizes[attr];
-            } else if (attr == GPU_VA_NRM) {
-                pLayout->mNormal = at;
-                pLayout->mNormalBytes = sizes[attr];
-            }
-            at += sizes[attr];
-        }
-        pLayout->mStride = at;
-        return true;
-    }
-
-    u16 indexAt(const u8* pVertex, u32 offset, u32 bytes) {
-        return bytes == 1 ? pVertex[offset] : host16(pVertex + offset);
-    }
-
-    // The triangles of a display list (quads, strips and fans split), as position and normal index pairs.
-    bool readDisplayList(const u8* pList, u32 size, const Layout& rLayout, Grow< u16 >* pCorners, u16* pMaxPosition,
-                         u16* pMaxNormal) {
-        u32 at = 0;
-        while (at < size) {
-            const u8 op = pList[at++];
-            if (op == 0x00) {
-                continue;  // padding (the importer finds only primitives and padding in SHP1 lists)
-            }
-            const u8 primitive = op & 0xF8;
-            if (primitive != GPU_QUADS && primitive != GPU_TRIANGLES && primitive != GPU_TRIANGLESTRIP &&
-                primitive != GPU_TRIANGLEFAN) {
-                // Lines and points have no surface; anything else ends what can be read.
-                if (primitive != GPU_LINES && primitive != GPU_LINESTRIP && primitive != GPU_POINTS) {
-                    return true;
-                }
-            }
-            if (at + 2 > size) {
-                return false;
-            }
-            const u32 count = host16(pList + at);
-            at += 2;
-            if (at + count * rLayout.mStride > size) {
-                return false;
-            }
-            const u8* pVertices = pList + at;
-            at += count * rLayout.mStride;
-            const bool lines = primitive == GPU_LINES || primitive == GPU_LINESTRIP || primitive == GPU_POINTS;
-            if (lines) {
-                continue;
-            }
-            u32 triangles = 0;
-            if (primitive == GPU_TRIANGLES) {
-                triangles = count / 3;
-            } else if (primitive == GPU_QUADS) {
-                triangles = count / 4 * 2;
-            } else if (count >= 3) {
-                triangles = count - 2;
-            }
-            for (u32 t = 0; t < triangles; t++) {
-                u32 v[3];
-                if (primitive == GPU_TRIANGLES) {
-                    v[0] = 3 * t;
-                    v[1] = 3 * t + 1;
-                    v[2] = 3 * t + 2;
-                } else if (primitive == GPU_QUADS) {
-                    const u32 q = 4 * (t / 2);
-                    v[0] = q;
-                    v[1] = q + 1 + (t & 1);
-                    v[2] = q + 2 + (t & 1);
-                } else if (primitive == GPU_TRIANGLESTRIP) {
-                    v[0] = t;
-                    v[1] = t + 1;
-                    v[2] = t + 2;
-                } else {
-                    v[0] = 0;
-                    v[1] = t + 1;
-                    v[2] = t + 2;
-                }
-                for (u32 k = 0; k < 3; k++) {
-                    const u8* pVertex = pVertices + v[k] * rLayout.mStride;
-                    const u16 position = indexAt(pVertex, rLayout.mPosition, rLayout.mPositionBytes);
-                    const u16 normal = indexAt(pVertex, rLayout.mNormal, rLayout.mNormalBytes);
-                    if (!pCorners->push(position) || !pCorners->push(normal)) {
-                        return false;
-                    }
-                    *pMaxPosition = position > *pMaxPosition ? position : *pMaxPosition;
-                    *pMaxNormal = normal > *pMaxNormal ? normal : *pMaxNormal;
-                }
-            }
-        }
-        return true;
-    }
 };  // namespace
 
 namespace NebulaCurvedSurfaces {
@@ -220,14 +45,9 @@ namespace NebulaCurvedSurfaces {
             return;
         }
         J3DVertexData& rVertex = pModelData->getVertexData();
-        const void* pPositions = rVertex.getVtxPosArray();
-        const void* pNormals = rVertex.getVtxNrmArray();
-        Format position;
-        Format normal;
-        if (pPositions == nullptr || pNormals == nullptr ||
-            !findFormat(rVertex.getVtxAttrFmtList(), GPU_VA_POS, &position) ||
-            !findFormat(rVertex.getVtxAttrFmtList(), GPU_VA_NRM, &normal) || position.mCount != GPU_POS_XYZ ||
-            normal.mCount != GPU_NRM_XYZ) {
+        const f32* pPositions = static_cast< const f32* >(rVertex.getVtxPosArray());
+        const f32* pNormals = static_cast< const f32* >(rVertex.getVtxNrmArray());
+        if (pPositions == nullptr || pNormals == nullptr || rVertex.getNormalFloats() != 3) {
             return;
         }
         Grow< u16 > corners;
@@ -235,50 +55,32 @@ namespace NebulaCurvedSurfaces {
         u16 maxNormal = 0;
         for (u16 s = 0; s < pModelData->getShapeNum(); s++) {
             J3DShape* pShape = pModelData->getShapeNodePointer(s);
-            Layout layout;
-            // Bump-mapped shapes carry their tangents where the renderer would put the displacement normal.
-            if (pShape == nullptr || pShape->getNBTFlag() || !layoutOf(pShape->getVtxDesc(), &layout)) {
+            // Bump-mapped shapes carry their tangents where the renderer would put the displacement's curve data.
+            if (pShape == nullptr || pShape->getNBTFlag()) {
                 continue;
             }
             for (u16 g = 0; g < pShape->getMtxGroupNum(); g++) {
-                const J3DShapeDraw* pDraw = pShape->getShapeDraw(g);
-                if (pDraw != nullptr &&
-                    !readDisplayList(pDraw->getDisplayList(), pDraw->getDisplayListSize(), layout, &corners, &maxPosition,
-                                     &maxNormal)) {
-                    return;
+                J3DShapeMesh* pMesh = pShape->getShapeDraw(g)->getMesh();
+                if ((pMesh->mAttributes & NEBULA_SHAPE_NORMAL) == 0) {
+                    continue;
+                }
+                const NebulaShapeCorner* pCorners = pMesh->corners();
+                const u16* pIndices = pMesh->indices();
+                for (u32 i = 0; i < pMesh->mIndexCount; i++) {
+                    const NebulaShapeCorner& rCorner = pCorners[pIndices[i]];
+                    if (!corners.push(rCorner.position) || !corners.push(rCorner.normal)) {
+                        return;
+                    }
+                    maxPosition = rCorner.position > maxPosition ? rCorner.position : maxPosition;
+                    maxNormal = rCorner.normal > maxNormal ? rCorner.normal : maxNormal;
                 }
             }
         }
         if (corners.mCount == 0) {
             return;
         }
-        const u32 positionCount = maxPosition + 1;
-        const u32 normalCount = maxNormal + 1;
-        f32* pDecoded = static_cast< f32* >(malloc((positionCount + normalCount) * 3 * sizeof(f32)));
-        if (pDecoded == nullptr) {
-            return;
-        }
-        const u32 positionStride = 3 * typeBytes(position.mType);
-        const u32 normalStride = 3 * typeBytes(normal.mType);
-        const f32 positionScale = 1.0f / static_cast< f32 >(1 << position.mFrac);
-        // GX fixes a normal's scale by its type (6 fraction bits for 8-bit, 14 for 16-bit), whatever the format says.
-        const f32 normalScale = normal.mType == GPU_S8 ? 1.0f / 64.0f : normal.mType == GPU_S16 ? 1.0f / 16384.0f : 1.0f;
-        for (u32 i = 0; i < positionCount; i++) {
-            const u8* p = static_cast< const u8* >(pPositions) + i * positionStride;
-            for (u32 c = 0; c < 3; c++) {
-                pDecoded[i * 3 + c] = component(p + c * typeBytes(position.mType), position.mType, positionScale);
-            }
-        }
-        f32* pDecodedNormals = pDecoded + positionCount * 3;
-        for (u32 i = 0; i < normalCount; i++) {
-            const u8* p = static_cast< const u8* >(pNormals) + i * normalStride;
-            for (u32 c = 0; c < 3; c++) {
-                pDecodedNormals[i * 3 + c] = component(p + c * typeBytes(normal.mType), normal.mType, normalScale);
-            }
-        }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->curved_surface(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pPositions)), pDecoded,
-                              positionCount, pDecodedNormals, normalCount, corners.mData, corners.mCount / 6);
-        free(pDecoded);
+        pHost->curved_surface(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pPositions)), pPositions,
+                              maxPosition + 1u, pNormals, maxNormal + 1u, corners.mData, corners.mCount / 6);
     }
 };  // namespace NebulaCurvedSurfaces

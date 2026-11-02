@@ -73,7 +73,6 @@ namespace MR {
     s32 getLightNum(J3DMaterial*);
     s32 getLightNumMax(const LiveActor*);
     s32 getLightNumMax(J3DModelData*);
-    void downFracVtx(J3DModelData*);
     void calcModelBoundingBox(TBox3f*, const LiveActor*);
     void calcModelBoundingRadius(f32*, const LiveActor*);
     bool isExistCollisionResource(const LiveActor*, const char*);
