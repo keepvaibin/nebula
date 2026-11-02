@@ -50,7 +50,7 @@ public:
     void exeBlowDown();
     void calcPassiveMovement();
     bool isEnableAttack() const;
-    bool isEnableKick() const NO_INLINE;
+    bool isEnableKick() const;
     bool isDown() const;
 
     /* 0x8C */ AnimScaleController* mScaleController;

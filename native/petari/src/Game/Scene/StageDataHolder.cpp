@@ -25,7 +25,7 @@ namespace {
     static const char* cLayerDirName[0x11] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH",
                                               "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP"};
 
-    static bool isPrioPlacementObjInfo(const char* pName) NO_INLINE {
+    static bool isPrioPlacementObjInfo(const char* pName) {
         return MR::isEqualStringCase(pName, "AreaObjInfo") || MR::isEqualStringCase(pName, "PlanetObjInfo") ||
                MR::isEqualStringCase(pName, "DemoObjInfo") || MR::isEqualStringCase(pName, "CameraCubeInfo");
     }
@@ -36,7 +36,7 @@ namespace {
         return commonLayers | scenarioLayers;
     }
 
-    static void calcPlacementInfoNum(int* pPriorityCount, int* pNormalCount, const MR::AssignableArray< JMapInfo >& rArray) NO_INLINE {
+    static void calcPlacementInfoNum(int* pPriorityCount, int* pNormalCount, const MR::AssignableArray< JMapInfo >& rArray) {
         *pPriorityCount = 0;
         *pNormalCount = 0;
 
@@ -66,7 +66,7 @@ namespace {
     }
 
     static void attachJmpInfoToPlacementInfoOrdered(PlacementInfoOrdered* pPriorityInfo, PlacementInfoOrdered* pNormalInfo,
-                                                    PlacementInfoOrdered* pDeferredInfo, const MR::AssignableArray< JMapInfo >& rArray) NO_INLINE {
+                                                    PlacementInfoOrdered* pDeferredInfo, const MR::AssignableArray< JMapInfo >& rArray) {
         for (const JMapInfo* pInfo = rArray.begin(); pInfo != rArray.end(); pInfo++) {
             if (::isPrioPlacementObjInfo(pInfo->getName())) {
                 pPriorityInfo->attach(pInfo, nullptr);

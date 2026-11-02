@@ -8,7 +8,7 @@ class RailGraphIter {
 public:
     RailGraphIter(const RailGraph*);
 
-    RailGraphIter(const RailGraphIter& rIter) NO_INLINE {
+    RailGraphIter(const RailGraphIter& rIter) {
         *this = rIter;
     }
 

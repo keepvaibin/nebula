@@ -2503,11 +2503,11 @@ void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, vo
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TRACE_FILE_READS=1: each read with the retrace it came on: two runs of deterministic mode compare by it.
     static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
-    if (trace_reads) {
-        std::fprintf(stderr, "[read] retrace %llu entry %d at %llu size %u\n", static_cast<unsigned long long>(gDeterministicRetraces.load()),
-                     file, static_cast<unsigned long long>(file_offset), size);
-    }
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    if (trace_reads) {
+        std::fprintf(stderr, "[read] retrace %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicRetraces.load()),
+                     file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
+    }
     if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size) {
         gModule.asset_complete(slot, -1);
         return;

@@ -52,7 +52,7 @@ public:
     void addToTargetPower(const TVec3f&, f32);
     void addIKLimitPower();
     void addAccelUpLeg(TripodBossStepPoint*, f32);
-    f32 calcLegHeight(TripodBossStepPoint*) const NO_INLINE;
+    f32 calcLegHeight(TripodBossStepPoint*) const;
     void updatePose();
     void updateIKPose();
     bool bindEndPosition();

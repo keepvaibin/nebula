@@ -46,7 +46,7 @@
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include "Game/System/NebulaAchievements.hpp"
 
-template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]) NO_INLINE;
+template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]);
 
 void MarioActor_DUMMY() {
     (void)JGeometry::TUtil< f32 >::acos(1.0f);
@@ -690,7 +690,6 @@ void MarioActor::exeWait() {
 }
 
 void MarioActor::movement() {
-    // FIXME: wrong stack
     _46C = nullptr;
     _378++;
     _1E1 = 0;
@@ -1031,7 +1030,6 @@ void MarioActor::updateBehavior() {
 }
 
 void MarioActor::updateBindRatio() {
-    // FIXME: wrong stack
     if (!_934 && !MR::isNearZero(_978 - mLastMove)) {
         f32 mag = _978.length();
         if (mag / (_978 - mLastMove).length() < 2.0f) {
@@ -2616,7 +2614,6 @@ void MarioActor::jumpHop() {
 }
 
 void MarioActor::calcCenterPos() {
-    // FIXME: optimized floats (needs to be separate)
     // https://decomp.me/scratch/oy8tV
     if (_934 || _8C) {
         MR::copyJointPos(this, "Spine1", &_2A0);

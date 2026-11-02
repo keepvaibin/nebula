@@ -42,11 +42,11 @@ namespace {
     char sWipeKoopa[] = "\203\116\203\142\203\160" /* クッパ */;
     char sSoundOneUp[] = "SE_SY_1UP";
 
-    CaptureScreenDirector* getCaptureScreenDirector() NO_INLINE {
+    CaptureScreenDirector* getCaptureScreenDirector() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mCaptureScreenDirector;
     }
 
-    PlayTimerScene* getPlayTimerScene() NO_INLINE {
+    PlayTimerScene* getPlayTimerScene() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mPlayTimerScene;
     }
 
@@ -64,11 +64,11 @@ namespace {
         }
     }
 
-    StarCounter* getStarCounter() NO_INLINE {
+    StarCounter* getStarCounter() {
         return MR::getGameSceneLayoutHolder()->mCounterLayoutCtrl->mStarCounter;
     }
 
-    StarPieceCounter* getStarPieceCounter() NO_INLINE {
+    StarPieceCounter* getStarPieceCounter() {
         return MR::getGameSceneLayoutHolder()->mCounterLayoutCtrl->mStarPieceCounter;
     }
 

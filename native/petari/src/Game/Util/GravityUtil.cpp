@@ -41,7 +41,7 @@ namespace {
     }
 
     bool calcGravityVectorOrZero(const NameObj* pActor, const TVec3f& rPosition, u32 typeFlags, TVec3f* pDest, GravityInfo* pInfo,
-                                 uintptr_t host) NO_INLINE {
+                                 uintptr_t host) {
         if (host == 0) {
             host = (uintptr_t)pActor;
         }

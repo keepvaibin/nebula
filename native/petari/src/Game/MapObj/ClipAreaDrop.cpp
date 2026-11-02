@@ -47,7 +47,7 @@ void ClipAreaDrop::control() {
     mtx.identity();
     mtx.setTrans(mPosition);
 
-    JMath::gekko_ps_copy12(mBaseMtx, mtx);
+    __builtin_memcpy(mBaseMtx, mtx, sizeof(Mtx));
 }
 
 void ClipAreaDrop::exeWait() {

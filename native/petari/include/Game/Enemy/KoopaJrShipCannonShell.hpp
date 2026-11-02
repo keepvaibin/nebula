@@ -6,7 +6,7 @@ class KoopaJrShipCannonShell : public CannonShellBase {
 public:
     KoopaJrShipCannonShell(const char*);
 
-    virtual ~KoopaJrShipCannonShell() NO_INLINE {
+    virtual ~KoopaJrShipCannonShell() {
     }
 
     virtual void init(const JMapInfoIter& rIter);

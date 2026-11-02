@@ -541,7 +541,7 @@ void SkeletalFishGuard::calcTarget(TVec3f* pA1, TVec3f* pA2, TVec3f* pA3, s32 a4
     pA2->add(*pA1, v21 * _94.x + v22 * -_94.y);
 }
 
-bool SkeletalFishGuard::isInScreen() const NO_INLINE {
+bool SkeletalFishGuard::isInScreen() const {
     TVec2f screen;
     return MR::calcScreenPosition(&screen, mPosition);
 }

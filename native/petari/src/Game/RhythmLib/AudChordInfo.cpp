@@ -659,7 +659,6 @@ s32 AudChordInfo::getChordNoteIndex(u8 pitchClass) {
 }
 
 s32 AudChordInfo::addIndexInChordNoteList(s32 idx, s32 count, s32& wrapCount) {
-    // FIXME: regswaps
     wrapCount = 0;
 
     for (s32 c = 0; c < count; c++) {
@@ -691,7 +690,6 @@ s32 AudChordInfo::addIndexInChordNoteList(s32 idx, s32 count, s32& wrapCount) {
 }
 
 s32 AudChordInfo::subIndexInChordNoteList(s32 idx, s32 count, s32& wrapCount) {
-    // FIXME: regswaps
     wrapCount = 0;
 
     for (s32 c = 0; c < count; c++) {

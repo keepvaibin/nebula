@@ -22,7 +22,7 @@ public:
         // resetMtx(mtx);
     }
 
-    void resetMtx(const Mtx pMtx) NO_INLINE {
+    void resetMtx(const Mtx pMtx) {
         mMtx.set(pMtx);
         TPos3f lookAt;
         lookAt.setPositionFromLookAt(mMtx);
@@ -305,7 +305,7 @@ public:
     }
     */
 
-    virtual void mixChannelOut(const JASSoundParams& rParams, JAIAudible* pAudible, int channelNum) NO_INLINE {
+    virtual void mixChannelOut(const JASSoundParams& rParams, JAIAudible* pAudible, int channelNum) {
         Audible* audible = (Audible*)pAudible;
         JAUDopplerAudibleChannel* channel = audible->getChannel(channelNum);
         if (channel == nullptr) {

@@ -20,7 +20,7 @@ public:
     void exeDisplay();
     void exeDisappear();
     void exeAppearToAnother();
-    void exeDisappearToAnother() NO_INLINE;
+    void exeDisappearToAnother();
     bool tryDisappear();
 
 private:

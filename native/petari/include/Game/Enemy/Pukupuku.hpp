@@ -49,7 +49,7 @@ public:
     void updatePoseByRailIgnoreUpScale();
     void rotatePoseByLocalZ();
     void calcGroundHitMtx(TPos3f* pMtx) const;
-    bool isReadyToJumpFromLand() const NO_INLINE;
+    bool isReadyToJumpFromLand() const;
     bool isDamaged() const;
     void exeWait();
     void exeMoveWater();

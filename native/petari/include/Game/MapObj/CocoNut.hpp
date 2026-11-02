@@ -22,7 +22,7 @@ public:
     static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
 
     void initMapToolInfo(const JMapInfoIter&);
-    void initModel() NO_INLINE;
+    void initModel();
     void initSensor();
     void initEffect();
     void updateRotate(f32);

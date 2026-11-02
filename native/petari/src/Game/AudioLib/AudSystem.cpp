@@ -57,7 +57,7 @@ AudSystem* AudNewAudSystem_(JAUSectionHeap* pHeap, JKRArchive* pChordArchive, JK
 }
 
 namespace {
-    int init_JAS_JAI_(JKRSolidHeap* pHeap) NO_INLINE {
+    int init_JAS_JAI_(JKRSolidHeap* pHeap) {
         JAU_JASInitializer initJAS;
         initJAS.audioMemory_ = AudParams::aramAddr;
         initJAS.audioMemSize_ = AudParams::soundMemorySize;
@@ -377,7 +377,7 @@ bool AudSystem::isSubmitSeByVolumeSetting(JAISoundID soundID) {
     }
 
     if (mVolumeController->mCurrVolumeSet >= 3 || mVolumeController->mCurrVolumeSet < 1) {
-        f32 f1 = 0.0f;  // FIXME: DUMMY
+        f32 f1 = 0.0f;
     } else {
         switch (soundID) {
         case SE_SY_TIMER_A_2:

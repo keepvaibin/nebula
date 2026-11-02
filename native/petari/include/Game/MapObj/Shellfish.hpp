@@ -26,7 +26,7 @@ public:
     void exeDPDOpen();
     void endDPDOpen();
     void initItem(const JMapInfoIter&);
-    void initCoin(const JMapInfoIter&) NO_INLINE;
+    void initCoin(const JMapInfoIter&);
     void initYellowChip(const JMapInfoIter&);
     void initBlueChip(const JMapInfoIter&);
     void initKinokoOneUp(const JMapInfoIter&);

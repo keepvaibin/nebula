@@ -375,7 +375,7 @@ void Butler::initForAstroGalaxy(const JMapInfoIter& rIter) {
     }
 }
 
-TalkMessageCtrl* Butler::createTalkCtrl(const JMapInfoIter& rIter, const char* pTalk) NO_INLINE {
+TalkMessageCtrl* Butler::createTalkCtrl(const JMapInfoIter& rIter, const char* pTalk) {
     TVec3f vec;
     vec.setPSZeroVec();
 

@@ -151,7 +151,7 @@ NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info);
 void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info);
 void Mii_InitShapeRes(Mii_ShapeRes* shape);
 void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file,
-                    void* buffer) NO_INLINE;
+                    void* buffer);
 void Mii_TransformCoordinate(s16* to, const s16* from);
 
 #ifdef __cplusplus

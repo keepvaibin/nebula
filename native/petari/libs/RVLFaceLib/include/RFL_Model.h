@@ -56,7 +56,7 @@ NebulaColor8 MiiGetFavoriteColor(MiiFavoriteColor color);
 void MiiLoadDrawSetting(const MiiDrawSetting* setting);
 void MiiDrawOpa(const MiiCharModel* model);
 void MiiDrawXlu(const MiiCharModel* model);
-    NO_INLINE;
+;
 void MiiDrawOpaCore(const MiiCharModel* model,
                     const MiiDrawCoreSetting* setting);
 void MiiDrawXluCore(const MiiCharModel* model,

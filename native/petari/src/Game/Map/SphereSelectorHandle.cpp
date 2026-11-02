@@ -273,7 +273,7 @@ void SphereSelectorHandle::playRotateSE() {
     MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_2");
 }
 
-void SphereSelectorHandle::setStateConfirmStartAtFirstStep() NO_INLINE {
+void SphereSelectorHandle::setStateConfirmStartAtFirstStep() {
     if (MR::isFirstStep(this)) {
         resetRotateParam();
         MR::setStageBGMState(::cBgmConfirmState, ::cBgmConfirmFrames);
@@ -376,7 +376,7 @@ void SphereSelectorHandle::exeGalaxyConfirmCancel() {
     MR::setNerveAtStep(this, GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait), confirmStartCancelFrame);
 }
 
-void SphereSelectorHandle::exeIdleEndForFileSelect() NO_INLINE {
+void SphereSelectorHandle::exeIdleEndForFileSelect() {
     if (MR::isFirstStep(this)) {
         MR::setStageBGMState(::cBgmNotConfirmState, ::cBgmNotConfirmFrames);
     }

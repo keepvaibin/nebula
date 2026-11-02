@@ -31,7 +31,7 @@ public:
     virtual void catchEndClipped() {
     }
 
-    virtual void catchSendPlayerFlying(HitSensor*, HitSensor*) NO_INLINE {
+    virtual void catchSendPlayerFlying(HitSensor*, HitSensor*) {
     }
 
     void calcAttackDir(TVec3f*, const TVec3f&, const TVec3f&);

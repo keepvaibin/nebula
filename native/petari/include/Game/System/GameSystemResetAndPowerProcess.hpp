@@ -23,7 +23,7 @@ public:
     virtual void draw() const;
     virtual void control();
 
-    bool isActive() const NO_INLINE;
+    bool isActive() const;
     void setResetOperationApplicationReset();
     void setResetOperationReturnToMenu();
     void requestReset(bool);
@@ -36,7 +36,7 @@ public:
     void exeWaitPrepareFadein();
     void exeFadein();
     void exitApplication();
-    bool tryPermitReset() NO_INLINE;
+    bool tryPermitReset();
     bool isResetAcceptAudio() const;
 
     /* 0x24 */ ValueControl* mFadeinoutControl;

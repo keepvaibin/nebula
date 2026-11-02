@@ -530,7 +530,7 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
 }
 
 namespace {
-    bool isExistFileInArcLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) NO_INLINE {
+    bool isExistFileInArcLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
         char buf[0x100];
         nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
@@ -546,7 +546,7 @@ bool MR::isExistFileInArc(const ResourceHolder* pHolder, const char* pFormat, ..
 }
 
 namespace {
-    JMapInfo* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) NO_INLINE {
+    JMapInfo* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
         char buf[0x100];
         nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
@@ -612,7 +612,7 @@ void MR::getCsvDataS32(s32* pOut, const JMapInfo* pMapInfo, const char* pKey, s3
     pMapInfo->getValue< s32 >(idx, pKey, pOut);
 }
 
-void MR::getCsvDataU8(u8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) NO_INLINE {
+void MR::getCsvDataU8(u8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     s32 val = 0;
     pMapInfo->getValue< s32 >(idx, pKey, &val);
     *pOut = val;

@@ -76,7 +76,7 @@ public:
 
     void adjust();
     void dispose();
-    void setIsDataMario(bool isDataMario) NO_INLINE;
+    void setIsDataMario(bool isDataMario);
 
     static JKRExpHeap* createHeap(u32, JKRHeap*);
 

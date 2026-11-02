@@ -98,6 +98,6 @@ inline bool ParticleEmitter::isValid() const {
     return mEmitter != nullptr;
 }
 
-inline bool ParticleEmitter::isContinuousParticle() const NO_INLINE {
+inline bool ParticleEmitter::isContinuousParticle() const {
     return mEmitter != nullptr && mEmitter->mMaxFrame == 0;
 }

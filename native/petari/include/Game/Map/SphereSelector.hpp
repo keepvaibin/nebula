@@ -93,13 +93,13 @@ public:
     static void calcHandledRotateMtx(const TVec3f&, TPos3f*);
     static TVec3f& getHandleTrans();
     static f32 getHandleRotateSpeed();
-    static bool isHandleHolding() NO_INLINE;
+    static bool isHandleHolding();
     static void registerPointingTarget(LiveActor*, HandlePointingPriority);
     static bool tryRegisterPointingTarget(LiveActor*, HandlePointingPriority);
     static bool isPointingTarget();
     static bool isPointingTarget(const LiveActor*);
     static LiveActor* getPointingTarget();
-    static LiveActor* getSelectedTarget() NO_INLINE;
+    static LiveActor* getSelectedTarget();
     static TVec3f& getSelectedActorTrans();
     static void calcOffsetPos(TVec3f*, const TVec3f&, const TVec3f&, const TVec3f&, const TVec3f&);
 };

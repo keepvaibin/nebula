@@ -21,7 +21,7 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
     void initSensor();
-    void generateCoin() NO_INLINE;
+    void generateCoin();
     bool tryPress();
     void exeMove();
     void endMove();

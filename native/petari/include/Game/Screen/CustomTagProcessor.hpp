@@ -54,7 +54,7 @@ public:
     Operation exeStringGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeSystemGroupColor(nw4r::ut::Rect*, int, ContextType*);
     Operation exeSystemGroupRuby(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeDisplayGroupWait(nw4r::ut::Rect*, u16, ContextType*) NO_INLINE;
+    Operation exeDisplayGroupWait(nw4r::ut::Rect*, u16, ContextType*);
     Operation exeDisplayGroupOffset(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeDisplayGroupCenter(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeFontGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);

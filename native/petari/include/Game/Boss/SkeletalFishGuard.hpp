@@ -42,7 +42,7 @@ public:
     void turn(TVec3f*, const TVec3f&, const TVec3f&, f32);
     void lookToPlayer(f32, f32);
     void calcTarget(TVec3f*, TVec3f*, TVec3f*, s32);
-    bool isInScreen() const NO_INLINE;
+    bool isInScreen() const;
     bool isPlayerInAttackRange() const;
     bool isLineOfSightClear() const;
     bool tryShiftNumb(const Nerve*);

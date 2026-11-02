@@ -55,7 +55,7 @@ namespace MR {
 
     /// @brief Returns the working region-language identifier.
     /// @return The region-language identifier.
-    u32 getLanguage() NO_INLINE;
+    u32 getLanguage();
 
     /// @brief Extracts the console's language setting from the working region-language identifier.
     /// @return The console's language setting.

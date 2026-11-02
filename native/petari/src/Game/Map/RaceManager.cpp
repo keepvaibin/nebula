@@ -18,7 +18,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 
-// FIXME: String "Record" is out of order in .data, yet function order matches in retail and debug
 
 namespace {
     // static const _ sTimeOutSecond = _;

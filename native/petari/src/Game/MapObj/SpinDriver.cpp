@@ -741,19 +741,19 @@ void SpinDriver::updateCamera() {
     }
 }
 
-void SpinDriver::cancelCamera() NO_INLINE {
+void SpinDriver::cancelCamera() {
     if (mSpinDriverCamera != nullptr) {
         mSpinDriverCamera->cancel();
     }
 }
 
-void SpinDriver::endCamera() NO_INLINE {
+void SpinDriver::endCamera() {
     if (mSpinDriverCamera != nullptr) {
         mSpinDriverCamera->end();
     }
 }
 
-bool SpinDriver::canStartBind() const NO_INLINE {
+bool SpinDriver::canStartBind() const {
     return isNerve(GET_NERVE(SpinDriver, SpinDriverNrvWait));
 }
 

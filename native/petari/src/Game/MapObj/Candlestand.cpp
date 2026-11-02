@@ -35,7 +35,7 @@ namespace {
         {"CandlestandIceVolcano", 500.0f, 150.0f, 220.0f, 0.0f, 0.0f, true},
     };
 
-    const Param* getParam(const char* pObjName) NO_INLINE {
+    const Param* getParam(const char* pObjName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sParams); i++) {
             if (MR::isEqualString(pObjName, ::sParams[i].mObjName)) {
                 return &::sParams[i];

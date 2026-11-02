@@ -20,7 +20,7 @@ public:
     bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    bool updateAction() NO_INLINE;
+    bool updateAction();
     bool startAction();
 
     void exeWaitStart();

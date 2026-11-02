@@ -754,11 +754,11 @@ void BombTeresa::exeReadyRestart() {
     }
 }
 
-bool BombTeresa::isTouchTongue() const NO_INLINE {
+bool BombTeresa::isTouchTongue() const {
     return isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift));
 }
 
-bool BombTeresa::isEnableDrift() const NO_INLINE {
+bool BombTeresa::isEnableDrift() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvBallAppear)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShadowAppear)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDriftRelease)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
@@ -769,7 +769,7 @@ bool BombTeresa::isEnableDrift() const NO_INLINE {
     return true;
 }
 
-bool BombTeresa::isEnablePointBind() const NO_INLINE {
+bool BombTeresa::isEnablePointBind() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvWait)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvWander)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvAttackTongueFailed)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDirectTackleSign)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDirectTackle)) ||
@@ -780,7 +780,7 @@ bool BombTeresa::isEnablePointBind() const NO_INLINE {
     return false;
 }
 
-bool BombTeresa::isEnableDisperse() const NO_INLINE {
+bool BombTeresa::isEnableDisperse() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift))) {
         return false;
     }
@@ -788,7 +788,7 @@ bool BombTeresa::isEnableDisperse() const NO_INLINE {
     return isEnableDrift();
 }
 
-bool BombTeresa::isEnableHitExplosionToPlayer() const NO_INLINE {
+bool BombTeresa::isEnableHitExplosionToPlayer() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift))) {
         return MR::isGreaterStep(this, 190);
     }
@@ -796,7 +796,7 @@ bool BombTeresa::isEnableHitExplosionToPlayer() const NO_INLINE {
     return isEnableHitExplosion();
 }
 
-bool BombTeresa::isEnableHitExplosionToEnemy() const NO_INLINE {
+bool BombTeresa::isEnableHitExplosionToEnemy() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDriftRelease))) {
         return true;
     }
@@ -804,7 +804,7 @@ bool BombTeresa::isEnableHitExplosionToEnemy() const NO_INLINE {
     return false;
 }
 
-bool BombTeresa::isEnableHitExplosion() const NO_INLINE {
+bool BombTeresa::isEnableHitExplosion() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvBallAppear)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShadowAppear)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) ||
@@ -815,7 +815,7 @@ bool BombTeresa::isEnableHitExplosion() const NO_INLINE {
     return true;
 }
 
-bool BombTeresa::isEnableStarPieceAttack() const NO_INLINE {
+bool BombTeresa::isEnableStarPieceAttack() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvBallAppear)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShadowAppear)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) ||
@@ -826,7 +826,7 @@ bool BombTeresa::isEnableStarPieceAttack() const NO_INLINE {
     return true;
 }
 
-bool BombTeresa::isEnableShockWave() const NO_INLINE {
+bool BombTeresa::isEnableShockWave() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse))) {
         return false;

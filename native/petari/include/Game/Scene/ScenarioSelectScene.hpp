@@ -35,7 +35,7 @@ public:
     void exeWaitStartScenarioSelect();
     void exeStartScenarioSelect();
     void exeWaitScenarioSelect();
-    void exeWaitResumeInitializeThread() NO_INLINE;
+    void exeWaitResumeInitializeThread();
     void exeWaitInitializeEnd();
     void exeWaitDisappearLayout();
     void exeWaitResumeInitializeThreadIfRequestedReset();

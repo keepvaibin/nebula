@@ -56,9 +56,9 @@ public:
 };
 
 namespace MR {
-    void setSpinDriverPathColorNormal() NO_INLINE;
-    void setSpinDriverPathColorGreen() NO_INLINE;
-    void setSpinDriverPathColorPink() NO_INLINE;
+    void setSpinDriverPathColorNormal();
+    void setSpinDriverPathColorGreen();
+    void setSpinDriverPathColorPink();
     bool isDrawSpinDriverPathAtOpa();
     void onDrawSpinDriverPathAtOpa();
     void offDrawSpinDriverPathAtOpa();

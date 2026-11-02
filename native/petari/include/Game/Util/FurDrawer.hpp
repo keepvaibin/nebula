@@ -24,7 +24,7 @@ public:
 
     FurDrawer(u32, ResTIMG*, ResTIMG*);
 
-    void update() NO_INLINE;
+    void update();
     void setupMaterial(DynamicFurParam*) const;
     void setupLayerMaterial(s32) const;
     void createFurMap();

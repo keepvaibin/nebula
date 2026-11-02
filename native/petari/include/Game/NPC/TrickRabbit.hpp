@@ -88,7 +88,7 @@ public:
     bool checkDivingThicket(const TVec3f& rVec1, const TVec3f& rVec2);
     bool selectEdgeStartEvent(RailGraphIter* pIter);
     void selectEdgeRunnaway(RailGraphIter* pIter, const TVec3f& rVec, f32 f);
-    void startRouteLevelControl(s32 l1, s32 l2) NO_INLINE;
+    void startRouteLevelControl(s32 l1, s32 l2);
     void controlRouteLevel();
     void addMovingAccel(const TVec3f& rVec, f32 f);
     void addKeepRouteRange(f32 f1, f32 f2, f32 f3);

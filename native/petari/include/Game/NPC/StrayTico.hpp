@@ -21,7 +21,7 @@ public:
 
     void initSensor();
     void setShadowDrop(const char*);
-    void initShadow() NO_INLINE;
+    void initShadow();
     void startGlad();
     bool requestCompleteDemo(const TVec3f&, const TVec3f&, f32);
     void updateWarp();

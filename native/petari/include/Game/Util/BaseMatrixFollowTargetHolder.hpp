@@ -55,7 +55,7 @@ public:
     virtual void movement();
 
     void addFollower(BaseMatrixFollower* pFollower);
-    void setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const TPos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater) NO_INLINE;
+    void setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const TPos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater);
     BaseMatrixFollowTarget* findFollowTarget(const JMapLinkInfo* pLinkInfo);
     BaseMatrixFollowTarget* findFollowTarget(const BaseMatrixFollower* pFollower);
 

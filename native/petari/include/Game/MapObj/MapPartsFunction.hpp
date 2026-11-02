@@ -22,7 +22,7 @@ public:
     virtual void end() {
     }
 
-    virtual bool receiveMsg(u32 msg) NO_INLINE {
+    virtual bool receiveMsg(u32 msg) {
         return false;
     }
 

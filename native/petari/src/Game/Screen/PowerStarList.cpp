@@ -30,7 +30,7 @@ namespace {
     class ListItem {
     public:
         /// @brief Creates a new `ListItem`.
-        ListItem() NO_INLINE : mType(-1), mRaceId() {
+        ListItem() : mType(-1), mRaceId() {
         }
 
         /* 0x0 */ s32 mType;
@@ -89,7 +89,7 @@ namespace {
     const f32 cSeparatorOffset = 20.0f;
     const f32 cTimePaneDefaultHeight = 72.0f;
 
-    s32 getSortPriority(const GalaxyStatusAccessor* pAccessor) NO_INLINE {
+    s32 getSortPriority(const GalaxyStatusAccessor* pAccessor) {
         const char* pName = pAccessor->getName();
 
         if (pAccessor->getNormalScenarioNum() == 3) {
@@ -111,7 +111,7 @@ namespace {
         return 5;
     }
 
-    s32 getDisplayRaceBestTimeNum() NO_INLINE {
+    s32 getDisplayRaceBestTimeNum() {
         s32 num = 0;
 
         for (s32 idx = 0; idx < 5; idx++) {

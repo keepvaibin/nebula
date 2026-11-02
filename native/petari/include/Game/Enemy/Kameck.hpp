@@ -57,7 +57,7 @@ public:
     bool requestPressDown();
     bool tryOpeningDemo();
     bool tryOpeningDemoEnd();
-    bool canNonActive() const NO_INLINE;
+    bool canNonActive() const;
     void setNonActive();
     bool tryActive();
     bool tryAppearEnd();

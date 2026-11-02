@@ -72,7 +72,7 @@ public:
     void updateCameraMan();
     void calcPose();
     void calcSubjective();
-    bool isInterpolationOff() NO_INLINE;
+    bool isInterpolationOff();
     void switchAntiOscillation();
     void createViewMtx();
     void checkStartCondition();

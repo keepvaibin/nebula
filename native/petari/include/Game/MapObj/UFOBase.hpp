@@ -18,7 +18,7 @@ public:
     virtual void calcAndSetBaseMtx();
     virtual void initSensorType();
 
-    void initSubModel(const JMapInfoIter&, const char*) NO_INLINE;
+    void initSubModel(const JMapInfoIter&, const char*);
     void exeWaitForPlayerOn();
     void exeMove();
     void exeWait();

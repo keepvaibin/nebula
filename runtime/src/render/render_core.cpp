@@ -792,6 +792,40 @@ void RenderCore::trace_memory() {
                  mb(texture_cache_.decoded_map_stats().resident_bytes), mb(texture_cache_.upload_arena_bytes()), mb(texture_cache_.pool_bytes()),
                  mb(curved::memory_bytes()),
                  mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
+#if defined(_WIN32)
+    // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
+    static const bool heaps = read_env_u64("GALAXY_TRACE_MEMORY", 0u) == 2u;
+    if (heaps) {
+        HANDLE list[64];
+        const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
+        for (DWORD i = 0; i < count; ++i) {
+            std::unordered_map<std::uint64_t, std::uint64_t> by_size;
+            std::uint64_t busy = 0u;
+            std::uint64_t free_bytes = 0u;
+            HeapLock(list[i]);
+            PROCESS_HEAP_ENTRY entry{};
+            while (HeapWalk(list[i], &entry)) {
+                if ((entry.wFlags & PROCESS_HEAP_ENTRY_BUSY) != 0) {
+                    busy += entry.cbData;
+                    by_size[entry.cbData] += entry.cbData;
+                } else if ((entry.wFlags & (PROCESS_HEAP_REGION | PROCESS_HEAP_UNCOMMITTED_RANGE)) == 0) {
+                    free_bytes += entry.cbData;
+                }
+            }
+            HeapUnlock(list[i]);
+            if (busy < 1024u * 1024u) {
+                continue;
+            }
+            std::vector<std::pair<std::uint64_t, std::uint64_t>> sizes(by_size.begin(), by_size.end());
+            std::sort(sizes.begin(), sizes.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+            std::fprintf(stderr, "[memory] heap %lu: busy %.1f, free %.1f, largest by size:", i, mb(busy), mb(free_bytes));
+            for (std::size_t s = 0; s < sizes.size() && s < 14u; ++s) {
+                std::fprintf(stderr, " %llux%llu", static_cast<unsigned long long>(sizes[s].first), static_cast<unsigned long long>(sizes[s].second / sizes[s].first));
+            }
+            std::fprintf(stderr, "\n");
+        }
+    }
+#endif
     [](auto& renderer) {
         if constexpr (requires { renderer.trace_rings(); }) {
             renderer.trace_rings();

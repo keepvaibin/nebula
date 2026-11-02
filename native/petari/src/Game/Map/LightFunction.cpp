@@ -162,7 +162,7 @@ void LightFunction::blendActorLightInfo(ActorLightInfo* pResult, const ActorLigh
 }
 
 namespace {
-    void loadLightDiffuse(NebulaColor8 color, const TVec3f& rPos, GpuLightID lightID) NO_INLINE {
+    void loadLightDiffuse(NebulaColor8 color, const TVec3f& rPos, GpuLightID lightID) {
         GpuLightObj lightObj;
 
         J3DNativeState::initLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
@@ -178,7 +178,7 @@ namespace {
         ::loadLightDiffuse(NebulaColor8(rInfo.mColor), position, lightID);
     }
 
-    void loadLightInfoDiffuse(const LightInfo& rInfo, GpuLightID lightID) NO_INLINE {
+    void loadLightInfoDiffuse(const LightInfo& rInfo, GpuLightID lightID) {
         if (rInfo.mIsFollowCamera) {
             ::loadCameraLight(rInfo, lightID);
         } else {

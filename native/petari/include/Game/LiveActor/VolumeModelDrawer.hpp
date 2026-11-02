@@ -12,7 +12,7 @@ public:
 
     virtual void draw() const;
 
-    void loadModelDrawMtx() const NO_INLINE;
+    void loadModelDrawMtx() const;
 
     /* 0x0C */ MtxPtr mMtx;
     /* 0x10 */ J3DModelData* mModelData;

@@ -49,8 +49,8 @@ namespace MR {
     void requestStartTripodBossStepSequence(s32);
     void addTripodBossStepPoint(TripodBossStepPoint*);
     void getTripodBossJointMatrix(TPos3f*, s32);
-    void getTripodBossAttachJointMatrix(TPos3f*, s32) NO_INLINE;
+    void getTripodBossAttachJointMatrix(TPos3f*, s32);
     void concatTripodBossAttachJointMatrix(TPos3f*, s32);
-    bool isSteppingTripodBossLegID(s32) NO_INLINE;
+    bool isSteppingTripodBossLegID(s32);
     bool isSteppingTripodBossJointID(s32);
 };  // namespace MR

@@ -45,10 +45,10 @@ namespace MR {
     void makeMtxUpSide(TPos3f*, const TVec3f&, const TVec3f&);
     void makeMtxUpSidePos(TPos3f*, const TVec3f&, const TVec3f&, const TVec3f&);
     void makeMtxUpFront(TPos3f*, const TVec3f&, const TVec3f&);
-    void makeMtxUpFrontPos(TPos3f*, const TVec3f&, const TVec3f&, const TVec3f&) NO_INLINE;
+    void makeMtxUpFrontPos(TPos3f*, const TVec3f&, const TVec3f&, const TVec3f&);
     void makeMtxFrontSidePos(TPos3f*, const TVec3f&, const TVec3f&, const TVec3f&);
     void makeMtxFrontUp(TPos3f*, const TVec3f&, const TVec3f&);
-    void makeMtxFrontUpPos(TPos3f*, const TVec3f&, const TVec3f&, const TVec3f&) NO_INLINE;
+    void makeMtxFrontUpPos(TPos3f*, const TVec3f&, const TVec3f&, const TVec3f&);
     void makeMtxUpNoSupport(TPos3f*, const TVec3f&);
     void makeMtxUpNoSupportPos(TPos3f*, const TVec3f&, const TVec3f&);
     void makeMtxFrontNoSupport(TPos3f*, const TVec3f&);

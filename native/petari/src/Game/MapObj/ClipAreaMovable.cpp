@@ -99,7 +99,7 @@ void ClipAreaMovable::updateMatrix() {
     }
 
     mtx.setTrans(mPosition);
-    JMath::gekko_ps_copy12(mBaseMtx, mtx);
+    __builtin_memcpy(mBaseMtx, mtx, sizeof(Mtx));
 }
 
 NameObj* MR::createClipAreaSphere(const char* pParam1) {

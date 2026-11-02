@@ -125,7 +125,7 @@ public:
     JAIAudience* getAudience() {
         return mAudience;
     }
-    JAIAudience* getAudience(int index) NO_INLINE {
+    JAIAudience* getAudience(int index) {
         if (index >= 0 && index < NUM_CATEGORIES) {
             JAIAudience* rv = mCategoryMgrs[index].getAudience();
             if (rv != nullptr) {

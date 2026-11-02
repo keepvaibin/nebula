@@ -130,7 +130,7 @@ namespace MR {
     void getCsvDataStr(const char**, const JMapInfo*, const char*, s32);
     void getCsvDataStrOrNULL(const char**, const JMapInfo*, const char*, s32);
     void getCsvDataS32(s32*, const JMapInfo*, const char*, s32);
-    void getCsvDataU8(u8*, const JMapInfo*, const char*, s32) NO_INLINE;
+    void getCsvDataU8(u8*, const JMapInfo*, const char*, s32);
     void getCsvDataF32(f32*, const JMapInfo*, const char*, s32);
     void getCsvDataBool(bool*, const JMapInfo*, const char*, s32);
     void getCsvDataVec(Vec*, const JMapInfo*, const char*, s32);

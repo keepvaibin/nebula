@@ -934,7 +934,7 @@ bool FileSelector::isUserFileLuigi(s32 id) const {
     return !mUserFile[id].mIsPlayerMario;
 }
 
-void FileSelector::setUserFileMario(s32 id, bool isMario) NO_INLINE {
+void FileSelector::setUserFileMario(s32 id, bool isMario) {
     id--;
 
     mUserFile[id].mIsPlayerMario = isMario;

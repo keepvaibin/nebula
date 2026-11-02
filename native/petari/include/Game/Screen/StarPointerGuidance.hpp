@@ -30,8 +30,8 @@ public:
     void tryResetTimeout();
     bool isExistGuidanceOrFrame();
     bool isExistGuidance();
-    bool isExistFrame1P() NO_INLINE;
-    bool isExistFrame2P() NO_INLINE;
+    bool isExistFrame1P();
+    bool isExistFrame2P();
     void deactive();
 
     void active() {

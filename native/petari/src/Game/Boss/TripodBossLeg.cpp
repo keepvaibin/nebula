@@ -395,7 +395,6 @@ void TripodBossLeg::exeMoveToLandingPos() {
     }
 }
 
-// float regswap
 void TripodBossLeg::exeStampSign() {
     if (MR::isFirstStep(this)) {
         _240 = _98->mStepPosition + _98->mStepNormal * 1000.0f;

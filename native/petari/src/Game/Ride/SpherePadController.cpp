@@ -31,7 +31,7 @@ f32 SpherePadController::calcJumpPower() const {
 void SpherePadController::update(const TVec3f&) {
 }
 
-void SpherePadController::clacXY(f32* pX, f32* pY) NO_INLINE {
+void SpherePadController::clacXY(f32* pX, f32* pY) {
     *pX = MR::getSubPadStickX(GAMEPAD_CHAN0);
     *pY = MR::getSubPadStickY(GAMEPAD_CHAN0);
 }

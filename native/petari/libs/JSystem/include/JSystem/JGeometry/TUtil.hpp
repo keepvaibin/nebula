@@ -2,6 +2,7 @@
 
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include <cmath>
+#include <nebula_math.h>
 
 namespace JGeometry {
     template < typename T >
@@ -23,23 +24,15 @@ namespace JGeometry {
             return ret;
         }
 
-        static T sqrt(T val) NO_INLINE {
-            if (val <= 0.0f) {
-                return val;
-            }
-
-            return sqrtf(val);
+        static T sqrt(T val) {
+            return NebulaSqrt(val);
         }
 
         static f32 sqrtInline(f32 val) {
-            if (val <= 0.0f) {
-                return val;
-            }
-
-            return sqrtf(val);
+            return NebulaSqrt(val);
         }
 
-        static f32 asin(f32 val) NO_INLINE {
+        static f32 asin(f32 val) {
             if (val >= 1.0f) {
                 return 1.5707964f;
             }
@@ -55,7 +48,7 @@ namespace JGeometry {
             return JMath::sAsinAcosTable.mTable[(u32)(1023.5f * val)];
         }
 
-        static f32 acos(f32 val) NO_INLINE {
+        static f32 acos(f32 val) {
             return JMath::sAsinAcosTable.acos_(val);
         }
 
@@ -63,7 +56,7 @@ namespace JGeometry {
             return 3.1415927f;
         }
 
-        static T clamp(T val, T min, T max) NO_INLINE {
+        static T clamp(T val, T min, T max) {
             if (val < min) {
                 return min;
             }
@@ -75,7 +68,7 @@ namespace JGeometry {
             return val;
         }
 
-        static f32 inv_sqrt(f32 val) NO_INLINE {
+        static f32 inv_sqrt(f32 val) {
             if (val <= 0.0f) {
                 return val;
             }

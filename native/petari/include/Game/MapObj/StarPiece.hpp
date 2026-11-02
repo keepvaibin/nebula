@@ -26,7 +26,7 @@ struct StarPieceHostInfo {
 public:
     inline StarPieceHostInfo(NameObj* pNameObj, s32 a2, s32 a3, s32 a4) : mObj(pNameObj), _4(a2), _8(a3), _C(a4) {
     }
-    bool isAppearable() NO_INLINE {
+    bool isAppearable() {
         return _C < _4 && _8 < _4 - _C;
     }
 
@@ -87,7 +87,7 @@ public:
     void launch(const TVec3f&, const TVec3f&, bool, bool);
     f32 calcEffectScale(f32, f32, bool);
     f32 calcNearCameraScale();
-    f32 calcDistToCamera() NO_INLINE;
+    f32 calcDistToCamera();
     void emitTouchEffect(s32, f32);
     void emitGettableEffect(f32);
     void tryGotJudge();

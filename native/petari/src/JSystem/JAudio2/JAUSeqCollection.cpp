@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JAUSeqCollection.hpp"
+#include <cstring>
 
 JAUSeqCollection::JAUSeqCollection() {
     mCollectionData = nullptr;
@@ -25,11 +26,16 @@ bool JAUSeqCollection::getSeqData(int groupId, int waveId, JAISeqData* pSeqData)
     u32 offset = mSoundTableOffsets[groupId];
     JAUSeqCollectionSoundTable* pSoundTable = (JAUSeqCollectionSoundTable*)((u8*)mCollectionData + offset);
 
-    if (waveId >= pSoundTable->mWaveNum) {
+    // Sound tables follow each other at any address.
+    u32 waveNum;
+    memcpy(&waveNum, &pSoundTable->mWaveNum, sizeof(waveNum));
+    if (waveId >= waveNum) {
         return false;
     }
 
-    pSeqData->set((void*)mCollectionData, pSoundTable->mWaveSeqOffsets[waveId]);
+    u32 seqOffset;
+    memcpy(&seqOffset, &pSoundTable->mWaveSeqOffsets[waveId], sizeof(seqOffset));
+    pSeqData->set((void*)mCollectionData, seqOffset);
     return true;
 }
 

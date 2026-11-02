@@ -36,7 +36,7 @@ public:
     bool isEnableSensor(const HitSensor*) const;
     bool isEnableAttack(const HitSensor*) const;
     bool isEnableDamage() const;
-    bool isEnableScream() const NO_INLINE;
+    bool isEnableScream() const;
     void addDamageBody();
 
     /* 0x14 */ PoltaStateAttackGround* mStateAttackGround;

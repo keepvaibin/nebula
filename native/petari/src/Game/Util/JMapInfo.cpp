@@ -1,6 +1,7 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
+#include <cstring>
 
 JMapInfo::JMapInfo() {
     mData = nullptr;
@@ -67,7 +68,9 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, const char** pValueOu
     switch (item->mType) {
     case JMAP_VALUE_TYPE_STRING_PTR: {
         const char* pStringTable = getEntryAddress(mData, mData->mDataOffset, getNumEntries());
-        *pValueOut = pStringTable + *reinterpret_cast< const u32* >(valuePtr);
+        u32 stringOffset;
+        memcpy(&stringOffset, valuePtr, sizeof(stringOffset));  // a table's columns are packed
+        *pValueOut = pStringTable + stringOffset;
         break;
     }
     default:

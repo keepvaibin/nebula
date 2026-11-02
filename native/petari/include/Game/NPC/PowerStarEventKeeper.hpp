@@ -23,7 +23,7 @@ public:
     void initStarInfoTableAfterPlacement();
     void requestAppearPowerStar(const char*, s32, const TVec3f*, bool, bool);
     bool isExistPowerStarAtScenario(int) const;
-    bool isCorrectStarIdWithBBS(const char*, const char*, s32) const NO_INLINE;
+    bool isCorrectStarIdWithBBS(const char*, const char*, s32) const;
     bool isSuccess(const char*, s32) const;
 
     inline PowerStarInfo* getStarInfo(u32 idx) const {
