@@ -1,4 +1,5 @@
 #include "Game/Scene/GameScene.hpp"
+#include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "Game/Screen/NebulaMaterialSweep.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
@@ -144,7 +145,7 @@ void GameScene::init() {
     SceneFunction::waitDoneStageFileLoad();
     MR::waitEndChangeArchivePlayer();
     SceneFunction::startActorFileLoadCommon();
-    MR::suspendAsyncExecuteThread("\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */);
+    MR::waitSceneInitializeResume();
 
     if (!MR::isScenarioDecided()) {
         MR::receiveAllRequestedFile();
@@ -181,7 +182,7 @@ void GameScene::init() {
         SleepControlFunc::initSyncSleepController();
 
         while (!GameSceneFunction::isLoadDoneScenarioWaveData()) {
-            NebulaKernel::poll();
+            JASWaveArc::waitLoadDone();
         }
     }
 }

@@ -1,4 +1,5 @@
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaAtomic.hpp"
 #include "Game/System/NebulaKernel.hpp"
 
 #include <math.h>
@@ -11,7 +12,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    volatile u32 sFrames;
+    NebulaAtomic< u32 > sFrames;
     NebulaThreadQueue sSleepers;
     NebulaFrameClock::Hook sPreHook;
     NebulaFrameClock::Hook sPostHook;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/System/NerveExecutor.hpp"
 #include "Game/System/NebulaDisc.hpp"
 
@@ -66,7 +68,7 @@ private:
     struct ReadBuffer {
         u8* mData;
         s32 mFrameNumber;
-        volatile bool mValid;
+        NebulaAtomic< bool > mValid;
     };
 
     static const s32 cReadBuffers = 20;
@@ -91,7 +93,7 @@ private:
     MovieVideoInfo mVideoInfo;
     u32 mCurOffset;
     s32 mNextDecodeIndex;
-    volatile s32 mReadIndex;
+    NebulaAtomic< s32 > mReadIndex;
     s32 mReadSize;
     s32 mTotalReadFrame;
     s32 mPreLoadLeft;

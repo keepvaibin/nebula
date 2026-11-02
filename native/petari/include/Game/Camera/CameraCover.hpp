@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Screen/CaptureScreenDirector.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
@@ -21,7 +23,7 @@ public:
     }
 
     /* 0x0C */ TMtx34f _C;
-    /* 0x3C */ volatile s32 _3C;
+    /* 0x3C */ NebulaAtomic< s32 > _3C;
     /* 0x40 */ u8 _40;
     /* 0x41 */ bool _41;
     /* 0x42 */ u8 _42[2];

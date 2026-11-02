@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
@@ -80,7 +82,7 @@ public:
         /* 0x120 */ s32 mColorFrame;
     };
 
-    /* 0x124 */ volatile bool mIsGrandStar;
+    /* 0x124 */ NebulaAtomic< bool > mIsGrandStar;
     /* 0x125 */ bool _125;
     /* 0x126 */ bool _126;
     /* 0x127 */ bool _127;
