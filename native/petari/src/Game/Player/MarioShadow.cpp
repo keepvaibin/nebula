@@ -350,15 +350,15 @@ void CollisionShadow::initCaptureTex() {
     _2FE = 160;
     {
         MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-        _300 = new JUTTexture(_2FC, _2FE, GPU_TF_I8);
+        _300 = new JUTTexture(_2FC, _2FE);
         MR::zeroMemory(_300->mImage, _2FC * _2FE);
         MR::setMarioShadowTex(_300);
     }
 
-    _300->mWrapS = GPU_CLAMP;
-    _300->mWrapT = GPU_CLAMP;
-    _300->mMinType = GPU_LINEAR;
-    _300->mMagType = GPU_LINEAR;
+    _300->mWrapS = NEBULA_WRAP_CLAMP;
+    _300->mWrapT = NEBULA_WRAP_CLAMP;
+    _300->mMinType = NEBULA_FILTER_LINEAR;
+    _300->mMagType = NEBULA_FILTER_LINEAR;
     _300->init();
 }
 

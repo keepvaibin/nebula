@@ -98,43 +98,43 @@ namespace nw4r {
                 TexMap() : texIdx(0), wrapSflt(0), wrapTflt(0) {
                 }
 
-                GpuTexWrapMode GetWarpModeS() const {
-                    return GpuTexWrapMode(detail::GetBits(wrapSflt, 0, 2));
+                u8 GetWarpModeS() const {
+                    return u8(detail::GetBits(wrapSflt, 0, 2));
                 }
 
-                GpuTexWrapMode GetWarpModeT() const {
-                    return GpuTexWrapMode(detail::GetBits(wrapTflt, 0, 2));
+                u8 GetWarpModeT() const {
+                    return u8(detail::GetBits(wrapTflt, 0, 2));
                 }
 
-                GpuTexFilter GetMinFilter() const {
+                u8 GetMinFilter() const {
                     const int bitLen = 3;
                     const u8 bitData = detail::GetBits(wrapSflt, 2, bitLen);
-                    return GpuTexFilter(detail::GetBits(bitData + GPU_LINEAR, 0, bitLen));
+                    return u8(detail::GetBits(bitData + 1, 0, bitLen));
                 }
 
-                GpuTexFilter GetMagFilter() const {
+                u8 GetMagFilter() const {
                     const int bitLen = 1;
                     const u8 bitData = detail::GetBits(wrapTflt, 2, bitLen);
-                    return GpuTexFilter(detail::GetBits(bitData + GPU_LINEAR, 0, bitLen));
+                    return u8(detail::GetBits(bitData + 1, 0, bitLen));
                 }
 
-                void SetWarpModeS(GpuTexWrapMode value) {
+                void SetWarpModeS(u8 value) {
                     detail::SetBits(&wrapSflt, 0, 2, u8(value));
                 }
 
-                void SetWarpModeT(GpuTexWrapMode value) {
+                void SetWarpModeT(u8 value) {
                     detail::SetBits(&wrapTflt, 0, 2, u8(value));
                 }
 
-                void SetMinFilter(GpuTexFilter value) {
+                void SetMinFilter(u8 value) {
                     const int bitLen = 3;
-                    const u8 bitData = u8(detail::GetBits(value - GPU_LINEAR, 0, bitLen));  // Set to zero when (value = GPU_LINEAR)
+                    const u8 bitData = u8(detail::GetBits(value - 1, 0, bitLen));  // Set to zero when (value = NEBULA_FILTER_LINEAR)
                     detail::SetBits(&wrapSflt, 2, bitLen, bitData);
                 }
 
-                void SetMagFilter(GpuTexFilter value) {
+                void SetMagFilter(u8 value) {
                     const int bitLen = 1;
-                    const u8 bitData = u8(detail::GetBits(value - GPU_LINEAR, 0, bitLen));
+                    const u8 bitData = u8(detail::GetBits(value - 1, 0, bitLen));
                     detail::SetBits(&wrapTflt, 2, bitLen, bitData);
                 }
 

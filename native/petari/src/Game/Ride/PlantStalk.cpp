@@ -14,7 +14,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 
 namespace {
     static const f32 sGrowSpeedMin = 15.0f;

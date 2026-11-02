@@ -205,12 +205,12 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
 
     for (i = 0; i < MiiExp_Max; i++) {
         if (imodel->maskTexObj[i] != NULL) {
-            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GPU_TF_RGB5A3, GPU_CLAMP, GPU_CLAMP, mipmap);
+            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
 
             if (mipmap) {
-                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GPU_LIN_MIP_LIN, GPU_LINEAR, 0.0f, maxLod, 0.0f, FALSE, FALSE, GPU_ANISO_1);
+                J3DNativeTextureSetFilter(imodel->maskTexObj[i], NEBULA_FILTER_LINEAR_BETWEEN_LEVELS, NEBULA_FILTER_LINEAR, 0.0f, maxLod, 0.0f, FALSE, 0);
             } else {
-                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GPU_ANISO_1);
+                J3DNativeTextureSetFilter(imodel->maskTexObj[i], NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, 0);
             }
 
             if (!setExpr) {
@@ -260,7 +260,7 @@ void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
         Mii_NativeChain(MII_I_NATIVE_CHAIN_LIGHT, setting->lightMask, setting->diffuse, setting->attn, setting->ambColor,
                         cWhite, 0);
     } else {
-        Mii_NativeChain(MII_I_NATIVE_CHAIN_NONE, 0, GPU_DF_NONE, GPU_AF_NONE, cWhite, cWhite, 0);
+        Mii_NativeChain(MII_I_NATIVE_CHAIN_NONE, 0, J3D_DF_NONE, J3D_AF_NONE, cWhite, cWhite, 0);
     }
 }
 
@@ -305,8 +305,8 @@ static void Mii_DrawShape(const s16* pos, const s16* nrm, const s16* txc, const 
 void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting) {
     Mii_CharModel* imodel = (Mii_CharModel*)model;
     Mii_CharModelRes* res = imodel->res;
-    const GpuCullMode front = setting->reverseCulling ? GPU_CULL_FRONT : GPU_CULL_BACK;
-    const GpuCullMode back = setting->reverseCulling ? GPU_CULL_BACK : GPU_CULL_FRONT;
+    const u8 front = setting->reverseCulling ? J3D_CULL_FRONT : J3D_CULL_BACK;
+    const u8 back = setting->reverseCulling ? J3D_CULL_BACK : J3D_CULL_FRONT;
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
@@ -323,7 +323,7 @@ void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
     }
 
     // A flipped hairstyle draws its forehead and hair with the other side culled.
-    const GpuCullMode hairCull = res->flipHair ? back : front;
+    const u8 hairCull = res->flipHair ? back : front;
     if (res->foreheadDlSize > 0) {
         Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], hairCull, NULL);
         Mii_DrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
@@ -346,7 +346,7 @@ void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
 void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting) {
     Mii_CharModel* imodel = (Mii_CharModel*)model;
     Mii_CharModelRes* res = imodel->res;
-    const GpuCullMode front = setting->reverseCulling ? GPU_CULL_FRONT : GPU_CULL_BACK;
+    const u8 front = setting->reverseCulling ? J3D_CULL_FRONT : J3D_CULL_BACK;
     static const NebulaColor8 cBlack = {0, 0, 0, 255};
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
@@ -362,7 +362,7 @@ void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
     }
 
     if (res->glassesDlSize > 0) {
-        Mii_NativePart(MII_I_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], GPU_CULL_NONE, &res->glassesTexObj);
+        Mii_NativePart(MII_I_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], J3D_CULL_NONE, &res->glassesTexObj);
         Mii_DrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
     }
 }
@@ -808,7 +808,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
 
         for (i = 0; i < primitiveNum; i++) {
             u16 vtxNum = *ptr8++;
-            GpuPrimitive prim = *ptr8++;
+            u8 prim = *ptr8++;
 
             *out++ = (u8)(prim | (skipTxc ? 0 : 1));
             *out++ = (u8)(vtxNum >> 8);
@@ -853,9 +853,9 @@ void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file, voi
     }
     memcpy(buffer, Mii_GetTexImage(tex), texSize);
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
-    J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);
-    J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->format, tex->wrapS, tex->wrapT, FALSE);
-    J3DNativeTextureInitLOD(texObj, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GPU_ANISO_1);
+    J3DNativeTextureRegisterRecord(buffer);
+    J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->wrapS, tex->wrapT);
+    J3DNativeTextureSetFilter(texObj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, 0);
     Mii_Free(tex);
 }
 

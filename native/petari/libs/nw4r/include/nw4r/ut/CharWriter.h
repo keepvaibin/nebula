@@ -5,7 +5,6 @@
 #include "nw4r/math/types.h"
 #include "nw4r/ut/Color.h"
 #include "nw4r/ut/Font.h"
-#include <NebulaGpuEnums.h>
 
 namespace nw4r {
     namespace ut {
@@ -51,18 +50,18 @@ namespace nw4r {
                     return (atSmall != rhs.atSmall) || (atLarge != rhs.atLarge);
                 }
 
-                GpuTexFilter atSmall;
-                GpuTexFilter atLarge;
+                u8 atSmall;
+                u8 atLarge;
             };
 
             class LoadingTexture {
             public:
-                GpuTexMapID slot;
+                u8 slot;
                 const void* texture;
                 TextureFilter filter;
 
                 void Reset() {
-                    slot = GPU_TEXMAP_NULL;
+                    slot = 0xFF;
                     texture = nullptr;
                 }
 
@@ -118,7 +117,7 @@ namespace nw4r {
             f32 GetFontWidth() const;
             f32 GetFontHeight() const;
             void SetFontSize(f32 width, f32 height);
-            void LoadTexture(const Glyph&, GpuTexMapID);
+            void LoadTexture(const Glyph&, u8);
             f32 GetFontAscent() const;
             f32 Print(CharCode);
             void PrintGlyph(f32, f32, f32, const Glyph&);

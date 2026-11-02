@@ -132,7 +132,7 @@ namespace nw4r {
             }
 
             if (pResContent->texCoordNum > 0) {
-                u8 num = ut::Min< u8 >(pResContent->texCoordNum, GPU_MAX_TEXCOORD);
+                u8 num = ut::Min< u8 >(pResContent->texCoordNum, 8);
                 mContent.texCoordAry.Reserve(num);
 
                 if (!mContent.texCoordAry.IsEmpty()) {

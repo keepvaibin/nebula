@@ -1,6 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
+#include <nebula_cooked_texture.h>
 #include <nebula_math.h>
 
 // In host order, as the importer cooks model TEX1 blocks, particle textures and BTI files (native_data.rs host_timg).
@@ -44,8 +45,8 @@ public:
     /// @brief Creates a new `JUTTexture`.
     /// @param width The width of the texture, in pixels.
     /// @param height The height of the texture, in pixels.
-    /// @param format The type of the texture.
-    JUTTexture(int width, int height, GpuTexFmt format);
+    /// @param layout How the game writes it (NEBULA_TEXTURE_LINEAR_*); a capture's buffer is only its key.
+    JUTTexture(int width, int height, u8 layout = NEBULA_TEXTURE_LINEAR_L8);
 
     /// @brief Creates a new `JUTTexture`.
     /// @param pTIMG The image.
@@ -76,9 +77,6 @@ public:
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;
-    }
-    s32 getFormat() const {
-        return mTIMG->mFormat;
     }
     s32 getTransparency() const {
         return mTIMG->mTransparency;

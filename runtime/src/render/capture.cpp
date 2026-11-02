@@ -278,7 +278,7 @@ std::optional<SceneCopyRect> scene_identity_copy_rect(
     const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
     unsigned dest_width, unsigned dest_height) noexcept {
     if (is_depth_copy || params.display || params.channels != kCopyLayoutRgba ||
-        params.luma || params.half_scale ||
+        params.half_scale ||
         params.src_width == 0u || params.src_height == 0u ||
         static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
         static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {

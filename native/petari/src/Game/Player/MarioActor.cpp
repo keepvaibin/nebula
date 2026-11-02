@@ -1765,9 +1765,14 @@ void MarioActor::calcAnimInMovement() {
         }
 
         if (val == false) {
+            // Mario faces the item that gave the form, when one did (a morph can end it first).
             TVec3f frontVec;
-            MR::calcFrontVec(&frontVec, _4A4->mHost);
-            mMario->setFrontVecKeepUp(frontVec);
+            if (_4A4 != nullptr) {
+                MR::calcFrontVec(&frontVec, _4A4->mHost);
+                mMario->setFrontVecKeepUp(frontVec);
+            } else {
+                MR::calcFrontVec(&frontVec, this);
+            }
 
             if (_336 == 0) {
                 MR::zoomInTargetGameCamera();

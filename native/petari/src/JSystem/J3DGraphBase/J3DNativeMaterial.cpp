@@ -341,7 +341,7 @@ namespace {
         rOut.height = pImg->mHeight;
         rOut.wrap_s = pImg->mWrapS;
         rOut.wrap_t = pImg->mWrapT;
-        // GpuTexFilter: near 0, linear 1, then by level near/linear: 2-3 the nearest level, 4-5 between levels.
+        // u8: near 0, linear 1, then by level near/linear: 2-3 the nearest level, 4-5 between levels.
         rOut.min_linear = pImg->mMinType == 1 || pImg->mMinType == 3 || pImg->mMinType == 5;
         rOut.mag_linear = pImg->mMagType != 0;
         rOut.mip_filter = pImg->mMinType < 2 ? 0 : pImg->mMinType < 4 ? 1 : 2;
@@ -394,9 +394,9 @@ namespace J3DNativeMaterial {
         const u32 indStages = pInd->getIndTexStageNum();
         pOut->tex_gens = static_cast< u8 >(pTexGen->getTexGenNum());
         {
-            const GpuCullMode mode = static_cast< GpuCullMode >(pColor->getCullMode());
-            pOut->cull = mode == GPU_CULL_BACK ? NEBULA_CULL_BACK : mode == GPU_CULL_FRONT ? NEBULA_CULL_FRONT
-                         : mode == GPU_CULL_ALL ? NEBULA_CULL_ALL : NEBULA_CULL_NONE;
+            const u8 mode = static_cast< u8 >(pColor->getCullMode());
+            pOut->cull = mode == J3D_CULL_BACK ? NEBULA_CULL_BACK : mode == J3D_CULL_FRONT ? NEBULA_CULL_FRONT
+                         : mode == J3D_CULL_ALL ? NEBULA_CULL_ALL : NEBULA_CULL_NONE;
         }
 
         // The null TEV block has no textures or orders.
@@ -463,9 +463,9 @@ namespace J3DNativeMaterial {
             }
             const bool post = j3dSys.checkFlag(J3DSysFlag_PostTexMtx);
             pOut->texture_matrix[i].present = 1;
-            pOut->texture_matrix[i].listed = i < pOut->tex_gens && pTexGen->getTexCoord(i)->getTexGenMtx() != GPU_IDENTITY;
+            pOut->texture_matrix[i].listed = i < pOut->tex_gens && pTexGen->getTexCoord(i)->getTexGenMtx() != J3D_IDENTITY;
             pOut->texture_matrix[i].id = static_cast< u8 >(post ? i * 3 + 0x40 : i * 3 + 30);
-            pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != GPU_MTX2x4 ? 3 : 2;
+            pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != J3D_MTX2x4 ? 3 : 2;
             memcpy(pVal->texture_matrix[i], pMtx->getMtx(), sizeof(pVal->texture_matrix[i]));
         }
         for (u32 i = 0; i < 2; i++) {
@@ -507,17 +507,17 @@ namespace J3DNativeMaterial {
         if (peType == 'PEOP' || peType == 'PEED' || peType == 'PEXL') {
             const bool edge = peType == 'PEED';
             const bool xlu = peType == 'PEXL';
-            pOut->alpha_compare.comp0 = edge ? GPU_GEQUAL : GPU_ALWAYS;
+            pOut->alpha_compare.comp0 = edge ? NEBULA_COMPARE_GEQUAL : NEBULA_COMPARE_ALWAYS;
             pVal->alpha_ref[0] = edge ? 0x80 : 0;
-            pOut->alpha_compare.op = GPU_AOP_AND;
-            pOut->alpha_compare.comp1 = edge ? GPU_LEQUAL : GPU_ALWAYS;
+            pOut->alpha_compare.op = J3D_AOP_AND;
+            pOut->alpha_compare.comp1 = edge ? NEBULA_COMPARE_LEQUAL : NEBULA_COMPARE_ALWAYS;
             pVal->alpha_ref[1] = edge ? 0xFF : 0;
             pOut->blend.type = xlu ? NEBULA_BLEND_ADD : NEBULA_BLEND_REPLACE;
             pOut->blend.source = xlu ? NEBULA_FACTOR_SRC_ALPHA : NEBULA_FACTOR_ONE;
             pOut->blend.destination = xlu ? NEBULA_FACTOR_INV_SRC_ALPHA : NEBULA_FACTOR_ZERO;
-            pOut->blend.logic_op = GPU_LO_COPY;
+            pOut->blend.logic_op = J3D_LO_COPY;
             pOut->z_mode.enable = 1;
-            pOut->z_mode.func = GPU_LEQUAL;
+            pOut->z_mode.func = NEBULA_COMPARE_LEQUAL;
             pOut->z_mode.update = xlu ? 0 : 1;
             pOut->z_compare_location = edge ? 0 : 1;
             return;
@@ -541,8 +541,8 @@ namespace J3DNativeMaterial {
         const J3DBlend& rBlend = *pPE->getBlend();
         {
             const u8 type = rBlend.mType;
-            pOut->blend.type = type == GPU_BM_BLEND ? NEBULA_BLEND_ADD : type == GPU_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
-                               : type == GPU_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+            pOut->blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+                               : type == J3D_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
         }
         pOut->blend.source = nativeFactor(rBlend.mSrcFactor, true);
         pOut->blend.destination = nativeFactor(rBlend.mDstFactor, false);

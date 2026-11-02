@@ -472,9 +472,9 @@ void OceanRingDrawer::loadMaterial() const {
     NativeShader::setTexture(material, 1, &screen);
     NativeShader::setTexture(material, 2, mWaterIndTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {0, 1, 2, 3,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
 }
 
 void OceanRingDrawer::loadMaterialBloom() const {
@@ -509,7 +509,7 @@ void OceanRingDrawer::loadMaterialBloom() const {
     NativeShader::setColor(material, 4, 80, 80, 80, 255);
     NativeShader::setTexture(material, 0, mWaterTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
 }

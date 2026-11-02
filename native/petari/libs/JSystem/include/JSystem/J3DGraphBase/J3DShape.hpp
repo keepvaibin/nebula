@@ -26,13 +26,13 @@ public:
 };
 
 // The matrices a shape's corners take when they carry none: its position matrix's id and texture coordinates 0-7's
-// (GPU_IDENTITY where a coordinate has no matrix).
+// (J3D_IDENTITY where a coordinate has no matrix).
 class J3DCurrentMtx {
 public:
     J3DCurrentMtx() {
         mPosition = 0;
         for (int i = 0; i < 8; i++) {
-            mTexture[i] = GPU_IDENTITY;
+            mTexture[i] = J3D_IDENTITY;
         }
     }
 
@@ -48,7 +48,7 @@ public:
     }
 
     void load() const {
-        J3DNativeShape::setCurrent(mPosition, mTexture);
+        J3DNativeShape::setCurrentFromFile(mPosition, mTexture);
     }
 
     inline void setCurrentTexMtx(u8 param_1, u8 param_2, u8 param_3, u8 param_4, u8 param_5, u8 param_6, u8 param_7, u8 param_8) {

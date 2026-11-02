@@ -91,6 +91,18 @@ static inline uint32_t nebula_texture_texel_bytes(uint8_t layout) {
     return layout == NEBULA_TEXTURE_RGBA8 ? 4u : layout == NEBULA_TEXTURE_LA8 ? 2u : 1u;
 }
 
+/* How a texture wraps and filters, as texture headers and layouts store them. A minifying filter also says how it uses
+   levels: the first only (nearest, linear), the nearest level, or between levels. */
+enum { NEBULA_WRAP_CLAMP = 0, NEBULA_WRAP_REPEAT = 1, NEBULA_WRAP_MIRROR = 2 };
+enum {
+    NEBULA_FILTER_NEAREST = 0,
+    NEBULA_FILTER_LINEAR = 1,
+    NEBULA_FILTER_NEAREST_NEAREST_LEVEL = 2,
+    NEBULA_FILTER_LINEAR_NEAREST_LEVEL = 3,
+    NEBULA_FILTER_NEAREST_BETWEEN_LEVELS = 4,
+    NEBULA_FILTER_LINEAR_BETWEEN_LEVELS = 5,
+};
+
 /* The bytes of `levels` levels of a width x height texture in `layout`, header excluded. */
 static inline uint32_t nebula_texture_level_bytes(uint32_t width, uint32_t height, uint32_t levels, uint8_t layout) {
     uint32_t total = 0;

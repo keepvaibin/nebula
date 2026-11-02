@@ -26,7 +26,7 @@ public:
     // Slot `slot` reads the game's array named `pKey` (its values sent with sendArray) by the indices corners give.
     void useArray(u32 slot, const void* pKey);
 
-    // A primitive as GpuBegin starts it: `count` corners follow, each its values or indices then corner().
+    // A primitive as u8 starts it: `count` corners follow, each its values or indices then corner().
     void begin(NebulaPrimitive primitive, u16 count);
     void position(f32 x, f32 y, f32 z);
     void normal(f32 x, f32 y, f32 z);

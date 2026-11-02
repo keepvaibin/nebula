@@ -25,7 +25,6 @@
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include <nebula_math.h>
 

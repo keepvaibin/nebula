@@ -1,15 +1,4 @@
-#ifndef GPU_H
-#define GPU_H
+#pragma once
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#include <NebulaGpuEnums.h>
+#include <J3DFileNumbers.h>
 #include <NebulaGpuTypes.h>
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif  // GPU_H

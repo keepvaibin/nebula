@@ -70,14 +70,14 @@ void J3DDifferedTexMtx::loadExecute(f32 const (*param_0)[4]) {
     J3DTexMtxObj* tex_mtx_obj = sTexMtxObj;  // sp_5c
 
     J3DTexMtxInfo* tex_mtx_info_1;  // sp_58
-    GpuTexGenType tex_gen_type;      // sp_54
+    u8 tex_gen_type;      // sp_54
     J3DTexMtx* tex_mtx_2;           // sp_50
 
     u16 tex_mtx_num = tex_mtx_obj->getNumTexMtx();
 
     if (j3dSys.checkFlag(J3DSysFlag_PostTexMtx)) {
         for (u16 i = 0; i < tex_mtx_num; i++) {
-            tex_gen_type = static_cast< GpuTexGenType >(tex_gen_block->getTexCoord(i)->getTexGenType());
+            tex_gen_type = static_cast< u8 >(tex_gen_block->getTexCoord(i)->getTexGenType());
             if (tex_gen_type != 1 && tex_gen_type != 0) {
                 continue;
             }
@@ -165,7 +165,7 @@ void J3DDifferedTexMtx::loadExecute(f32 const (*param_0)[4]) {
         }
     } else {
         for (u16 i = 0; i < tex_mtx_num; i++) {
-            GpuTexGenType tex_gen_type = static_cast< GpuTexGenType >(tex_gen_block->getTexCoord(i)->getTexGenType());
+            u8 tex_gen_type = static_cast< u8 >(tex_gen_block->getTexCoord(i)->getTexGenType());
             if (tex_gen_type != 1 && tex_gen_type != 0) {
                 continue;
             }
@@ -254,7 +254,7 @@ void J3DDifferedTexMtx::loadExecute(f32 const (*param_0)[4]) {
                     break;
                 }
                 }
-                J3DNativeShape::setTexture(i, *mtx, tex_mtx_info_1->mProjection == GPU_MTX2x4 ? 2 : 3);
+                J3DNativeShape::setTexture(i, *mtx, tex_mtx_info_1->mProjection == J3D_MTX2x4 ? 2 : 3);
             }
         }
     }

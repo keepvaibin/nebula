@@ -18,11 +18,14 @@ namespace nw4r {
             FONT_ENCODING_MAX
         };
 
+        // A sheet's format as a font file names it.
+        enum SheetFormat { SHEET_I4 = 0, SHEET_I8, SHEET_IA4, SHEET_IA8, SHEET_RGB565, SHEET_RGB5A3, SHEET_RGBA8 };
+
         struct Glyph {
             void* pTexture;
             CharWidths widths;
             u8 height;
-            GpuTexFmt texFormat;
+            u8 texFormat;
             u16 texWidth;
             u16 texHeight;
             u16 cellX;
@@ -47,7 +50,7 @@ namespace nw4r {
             virtual int GetCellWidth() const = 0;                              // at 0x24
             virtual int GetMaxCharWidth() const = 0;                           // at 0x28
             virtual Type GetType() const = 0;                                  // at 0x2C
-            virtual GpuTexFmt GetTextureFormat() const = 0;                     // at 0x30
+            virtual u8 GetTextureFormat() const = 0;                     // at 0x30
             virtual int GetLineFeed() const = 0;                               // at 0x34
             virtual const CharWidths GetDefaultCharWidths() const = 0;         // at 0x38
             virtual void SetDefaultCharWidths(const CharWidths& rWidths) = 0;  // at 0x3C

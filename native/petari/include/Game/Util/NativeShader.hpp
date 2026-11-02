@@ -38,7 +38,7 @@ namespace NativeShader {
         rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
         rMaterial.alpha_write = 2;
         for (u32 i = 0; i < 8; i++) {
-            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GPU_PTIDENTITY), the console's texgens' default
+            rMaterial.texgen_post[i] = 61;  // the identity post-transform 
         }
     }
 
@@ -47,7 +47,7 @@ namespace NativeShader {
         rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pTexture->mImage);
         rMaterial.textures[slot].repeat_s = pTexture->mWrapS;
         rMaterial.textures[slot].repeat_t = pTexture->mWrapT;
-        // The texture's filters as it loads them (its resource's, GpuTexFilter: near 0, linear 1, then by mip level
+        // The texture's filters as it loads them (its resource's, u8: near 0, linear 1, then by mip level
         // near/linear: 2-3 nearest level, 4-5 between levels).
         const u8 minType = pTexture->mMinType;
         rMaterial.textures[slot].mag_linear = pTexture->mMagType != 0 ? 1 : 0;
@@ -62,29 +62,18 @@ namespace NativeShader {
 
     // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
     inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const J3DNativeTexObj* pObj) {
-        void* pImage;
-        u16 width, height;
-        GpuTexFmt format;
-        GpuTexWrapMode wrapS, wrapT;
-        GpuBool mipmap;
-        J3DNativeTexture::getAll(pObj, &pImage, &width, &height, &format, &wrapS, &wrapT, &mipmap);
-        GpuTexFilter minFilter, magFilter;
-        f32 minLod, maxLod, lodBias;
-        GpuBool biasClamp, edgeLod;
-        GpuAnisotropy maxAniso;
-        J3DNativeTexture::getLODAll(pObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
-                                    &maxAniso);
-        rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pImage);
-        rMaterial.textures[slot].repeat_s = static_cast< u8 >(wrapS);
-        rMaterial.textures[slot].repeat_t = static_cast< u8 >(wrapT);
-        rMaterial.textures[slot].mag_linear = magFilter != GPU_NEAR ? 1 : 0;
+        const u8 minFilter = pObj->mMinFilter;
+        rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pObj->mImage);
+        rMaterial.textures[slot].repeat_s = pObj->mWrapS;
+        rMaterial.textures[slot].repeat_t = pObj->mWrapT;
+        rMaterial.textures[slot].mag_linear = pObj->mMagFilter != NEBULA_FILTER_NEAREST ? 1 : 0;
         rMaterial.textures[slot].min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5 ? 1 : 0;
         rMaterial.textures[slot].mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
-        rMaterial.textures[slot].anisotropy = static_cast< u8 >(maxAniso);
-        rMaterial.textures[slot].edge_lod = edgeLod ? 1 : 0;
-        rMaterial.textures[slot].lod_bias = lodBias;
-        rMaterial.textures[slot].min_lod = minLod;
-        rMaterial.textures[slot].max_lod = maxLod;
+        rMaterial.textures[slot].anisotropy = pObj->mMaxAniso;
+        rMaterial.textures[slot].edge_lod = pObj->mEdgeLod;
+        rMaterial.textures[slot].lod_bias = pObj->mLodBias;
+        rMaterial.textures[slot].min_lod = pObj->mMinLod;
+        rMaterial.textures[slot].max_lod = pObj->mMaxLod;
     }
 
     // Constants from offset `at` (floats): an RGBA colour as 0-1 values.

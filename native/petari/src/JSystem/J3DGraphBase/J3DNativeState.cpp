@@ -213,9 +213,7 @@ namespace J3DNativeState {
             J3DPass::lightMaterial(channel, white);
         }
 
-        static J3DNativeTexObj sDefaultTexture;
-        J3DNativeTexture::registerImage(&sDefaultTexData, GPU_TF_IA8, 4, 4, 1);
-        J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+        J3DNativeTexture::registerRecord(&sDefaultTexData);
 
         J3DPass::noAlphaTest();
         J3DPass::noFog();

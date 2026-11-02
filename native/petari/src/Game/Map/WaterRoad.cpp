@@ -26,7 +26,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
 
@@ -398,11 +397,11 @@ namespace {
         NativeShader::setTexture(material, 2, &screen);
         NativeShader::setTexture(material, 3, pRoad->mEnvMap);
         NativeShader::send(material);
-        static const u8 kHigh[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3,
-                                    GPU_TEXMTX4, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        static const u8 kLow[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3,
-                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, high ? kHigh : kLow);
+        static const u8 kHigh[8] = {0, 1, 2, 3,
+                                    4, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+        static const u8 kLow[8] = {0, 1, 2, 3,
+                                   J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+        J3DNativeShape::setCurrent(0, high ? kHigh : kLow);
     }
 }  // namespace
 

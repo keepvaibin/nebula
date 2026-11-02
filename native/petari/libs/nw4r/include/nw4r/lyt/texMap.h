@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nebula_cooked_texture.h>
 #include "nw4r/lyt/types.h"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -9,18 +10,21 @@ namespace nw4r {
     namespace lyt {
         class TexMap {
         public:
+            // The picture's format as a layout's file names it.
+            enum TexelFormat { TEXEL_I4 = 0, TEXEL_IA4 = 2, TEXEL_RGBA8 = 6 };
+
             TexMap() {
                 SetImage(NULL);
                 SetSize(0, 0);
-                SetTexelFormat(GPU_TF_I4);
-                SetWrapMode(GPU_CLAMP, GPU_CLAMP);
+                SetTexelFormat(TEXEL_I4);
+                SetWrapMode(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
                 SetMipMap(false);
-                SetFilter(GPU_LINEAR, GPU_LINEAR);
+                SetFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
                 SetLOD(0.0f, 0.0f);
                 SetLODBias(0.0f);
                 SetBiasClampEnable(false);
                 SetEdgeLODEnable(false);
-                SetAnisotropy(GPU_ANISO_1);
+                SetAnisotropy(0);
             }
 
             TexMap(const J3DNativeTexObj& rTexObj) {
@@ -31,7 +35,7 @@ namespace nw4r {
                 mImage = pImage;
             }
 
-            void SetAnisotropy(GpuAnisotropy aniso) {
+            void SetAnisotropy(u8 aniso) {
                 mBits.anisotropy = aniso;
             }
 
@@ -40,24 +44,24 @@ namespace nw4r {
             // Image `id` of a cooked TPL file (its image a texture record).
             void ReplaceImage(const void* pTplFile, u32 id = 0);
 
-            inline GpuTexFmt GetTexelFormat() const {
-                return GpuTexFmt(mBits.textureFormat);
+            inline u8 GetTexelFormat() const {
+                return u8(mBits.textureFormat);
             }
 
-            inline GpuTexWrapMode GetWrapModeS() const {
-                return GpuTexWrapMode(mBits.wrapS);
+            inline u8 GetWrapModeS() const {
+                return u8(mBits.wrapS);
             }
 
-            inline GpuTexWrapMode GetWrapModeT() const {
-                return GpuTexWrapMode(mBits.wrapT);
+            inline u8 GetWrapModeT() const {
+                return u8(mBits.wrapT);
             }
 
-            inline GpuTexFilter GetMinFilter() const {
-                return GpuTexFilter(mBits.minFilter);
+            inline u8 GetMinFilter() const {
+                return u8(mBits.minFilter);
             }
 
-            inline GpuTexFilter GetMagFilter() const {
-                return GpuTexFilter(mBits.magFilter);
+            inline u8 GetMagFilter() const {
+                return u8(mBits.magFilter);
             }
 
             inline bool IsBiasClampEnable() const {
@@ -68,8 +72,8 @@ namespace nw4r {
                 return 0 != mBits.edgeLODEnable;
             }
 
-            inline GpuAnisotropy GetAnisotropy() const {
-                return GpuAnisotropy(mBits.anisotropy);
+            inline u8 GetAnisotropy() const {
+                return u8(mBits.anisotropy);
             }
 
             inline f32 GetLODBias() const {
@@ -96,12 +100,12 @@ namespace nw4r {
                 mLODBias = u16((s32)(bias * 256));
             }
 
-            void SetWrapMode(GpuTexWrapMode wrapS, GpuTexWrapMode wrapT) {
+            void SetWrapMode(u8 wrapS, u8 wrapT) {
                 mBits.wrapS = wrapS;
                 mBits.wrapT = wrapT;
             }
 
-            void SetFilter(GpuTexFilter minFlt, GpuTexFilter magFlt) {
+            void SetFilter(u8 minFlt, u8 magFlt) {
                 mBits.minFilter = minFlt;
                 mBits.magFilter = magFlt;
             }
@@ -124,7 +128,7 @@ namespace nw4r {
                 mHeight = height;
             }
 
-            void SetTexelFormat(GpuTexFmt value) {
+            void SetTexelFormat(u8 value) {
                 mBits.textureFormat = value;
             }
 

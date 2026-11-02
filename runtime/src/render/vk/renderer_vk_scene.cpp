@@ -1741,7 +1741,7 @@ bool RendererVk::can_hand_over_display_copy(const CaptureRequest& params, const 
     }
     const unsigned width = scene_map_.width;
     const unsigned height = scene_map_.height;
-    return !params.luma && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
+    return !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kFrameWidth && params.src_height == kFrameHeight && dest.width == width &&
            dest.height == height && scene_.color->width == width && scene_.color->height == height;
 }
@@ -1923,9 +1923,8 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     // The game composites its picture from scene target->texture copies; half_scale halves both dimensions (a 2x2 box).
     const unsigned dw_unscaled = params.half_scale ? std::max(1u, params.src_width / 2u) : params.src_width;
     const unsigned dh_unscaled = params.half_scale ? std::max(1u, params.src_height / 2u) : params.src_height;
-    const bool native = scene_map_.scale() > 1u && is_effect_copy(dw_unscaled, dh_unscaled);
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
-        static_cast<std::uint16_t>(dw_unscaled), static_cast<std::uint16_t>(dh_unscaled), native ? FrameMap(1u) : scene_map_);
+        static_cast<std::uint16_t>(dw_unscaled), static_cast<std::uint16_t>(dh_unscaled), scene_map_);
     const unsigned w = extent.width;
     const unsigned h = extent.height;
     if (w == 0u || h == 0u) {
@@ -1933,8 +1932,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     }
     // Keyed by address, format and source: one address alternates between formats and copies of each.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(params.key) |
-        (static_cast<std::uint64_t>(params.channels) << 48u) | (params.luma ? (1ull << 52u) : 0ull) | (is_depth_copy ? (1ull << 56u) : 0ull) |
-        (native ? (1ull << 57u) : 0ull);  // addresses stay below 2^48
+        (static_cast<std::uint64_t>(params.channels) << 48u) | (is_depth_copy ? (1ull << 56u) : 0ull);
     SceneCopyDest& dest = scene_copy_dests_[dest_key];
     dest.last_used = ++scene_copy_dests_tick_;
     if (!dest.texture || dest.width != w || dest.height != h) {
@@ -2046,7 +2044,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
     const bool keep_alpha = params.channels == kCopyLayoutIntensityAlpha;
-    record_conversion_blit(texture, w, h, params, is_depth_copy, params.luma, keep_alpha, params.channels,
+    record_conversion_blit(texture, w, h, params, is_depth_copy, false, keep_alpha, params.channels,
                            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                            sampling.filter_row_offset);
     return publish_capture(params, current.texture, is_depth_copy, textures);

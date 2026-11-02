@@ -13,7 +13,7 @@ namespace J3DNativeView {
     void setOrthographic(const f32 (*pMtx)[4]);
     void setProjectionv(const f32* pValues);
     void getProjectionv(f32* pValues);
-    // The viewport (GpuSetViewport's values; field 0 of an interlaced pair moves it up half a line), and the depth
+    // The viewport (field 0 of an interlaced pair moves it up half a line), and the depth
     // range's scale and offset that the viewport's z terms take.
     void setViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);
     void setViewportJitter(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, u32 field);
