@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Camera/CameraTargetArg.hpp"
@@ -43,7 +44,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/System/NebulaAchievements.hpp"
 
 void MarioActor_FORCE_MATCH_SDATA2() {
@@ -2910,7 +2910,7 @@ bool MarioActor::binderFilter(const Triangle* pTriangle) {
 
 namespace MR {
     s32 getFrameBufferWidth() {
-        return JUTGetVideoManager()->getFbWidth();
+        return NebulaFrameClock::cFrameWidth;
     }
 };  // namespace MR
 

@@ -23,7 +23,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <cstdio>
 
 namespace {
@@ -54,7 +54,7 @@ void TalkPeekZ::setDrawSyncToken() {
     J3DNativeView::captureReadback(cReadbackChannel);
 
     if (!MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) ||
-        !MR::isInRange(mScreenPos.y, 0.0f, JUTVideo::getManager()->getEfbHeight() - 1)) {
+        !MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cFrameHeight - 1)) {
         return;
     }
 

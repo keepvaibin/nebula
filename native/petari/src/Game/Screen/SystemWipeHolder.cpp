@@ -4,7 +4,7 @@
 #include "Game/Screen/WipeRing.hpp"
 #include "Game/Util.hpp"
 #include <JSystem/J2DGraph/J2DPicture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 SystemWipeHolder::SystemWipeHolder() : WipeHolderBase(4, "\203\126\203\130\203\145\203\200\203\217\203\103\203\166\225\333\216\235" /* システムワイプ保持 */), _1C(false) {
 }
@@ -69,7 +69,7 @@ void SystemWipeHolder::drawGameScreenCapture() const {
     J2DPicture picture(&texture);
     f32 width = MR::getScreenWidth();
     // inlined MR::getscreenHeight
-    f32 height = (s32)JUTVideo::getManager()->getEfbHeight();
+    f32 height = (s32)NebulaFrameClock::cFrameHeight;
 
     picture.draw(0.0f, 0.0f, width, height, false, false, false);
 }

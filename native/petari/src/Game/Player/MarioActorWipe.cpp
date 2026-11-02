@@ -5,7 +5,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 void MarioActor::drawPreWipe() const {
     if (!_1C3) {
@@ -13,7 +13,7 @@ void MarioActor::drawPreWipe() const {
             return;
         }
         f32 width = MR::getScreenWidth();
-        f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+        f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 1, 2);
         NativeShader::send(material);

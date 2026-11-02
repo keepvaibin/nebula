@@ -5,7 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
 // static const _32 hMarginH =
@@ -82,7 +82,7 @@ void StarPointerController::calcPastPointingPosOnScreen(TVec2f* pPos, s32 idx) c
     pPos->x += 1.0f;
     pPos->y += 1.0f;
     pPos->x *= MR::getScreenWidth() * 0.5f;
-    pPos->y *= static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()) * 0.5f;
+    pPos->y *= static_cast< s32 >(NebulaFrameClock::cFrameHeight) * 0.5f;
 }
 
 void StarPointerController::updateDpdInfo() {

@@ -11,7 +11,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/ValueControl.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 
@@ -47,7 +46,7 @@ void GameSystemResetAndPowerProcess::draw() const {
     u8 alpha = MR::lerp(255, 0, mFadeinoutControl->getValue());
     graph.setColor(static_cast< const NebulaColor8& >(NebulaColor8(Color8(0, 0, 0, alpha))));
 
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+    f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
     f32 width = MR::getScreenWidth();
     graph.fillBox(TBox2f(0.0f, 0.0f, width, height));
 }

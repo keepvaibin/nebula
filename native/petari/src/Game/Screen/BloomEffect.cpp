@@ -13,7 +13,6 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "JSystem/JUtility/JUTVideo.hpp"
 #include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include <JSystem/JUtility/JUTTexture.hpp>
