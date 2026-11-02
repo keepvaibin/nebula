@@ -46,7 +46,6 @@ public:
         kCompatNoLogicOp = 1u << 1u,     // console logic ops draw as plain writes
         kCompatNoDualSource = 1u << 2u,  // single-source blend factors, no second pixel-shader output
         kCompatNoDepthClamp = 1u << 3u,
-        kCompatNoGeometry = 1u << 4u,    // lines and points one pixel wide
         kCompatBits = 5u,
     };
 
@@ -55,8 +54,7 @@ private:
     [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,
                                              bool dual_source, bool export_depth, std::uint32_t compat,
                                              VkResult& result, VkShaderModule hs = VK_NULL_HANDLE,
-                                             VkShaderModule ds = VK_NULL_HANDLE,
-                                             VkShaderModule gs = VK_NULL_HANDLE) const;
+                                             VkShaderModule ds = VK_NULL_HANDLE) const;
     [[nodiscard]] std::uint32_t applicable_compat(const RenderStateKey& render_state, bool dual_source,
                                                   bool export_depth) const;
     template <typename Make>

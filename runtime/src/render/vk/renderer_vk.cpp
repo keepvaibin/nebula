@@ -272,8 +272,7 @@ bool RendererVk::create_layouts() {
         depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
     }
 
-    const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
-        (context.geometry_shader() ? VK_SHADER_STAGE_GEOMETRY_BIT : 0u);
+    const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     {
         // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
         const VkDescriptorSetLayoutBinding bindings[] = {
@@ -493,7 +492,6 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateRenderPass(device, &info, nullptr, &grey_pass_), "one-channel copy render pass");
     }
     draw_layout_.depth_format = depth_format_;
-    draw_layout_.geometry_shaders = context.geometry_shader();
     draw_layout_.tessellation = context.tessellation_shader();
     draw_layout_.dual_source_blend = context.dual_source_blend();
     draw_layout_.logic_op = context.logic_op();

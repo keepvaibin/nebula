@@ -63,7 +63,6 @@ int main(int argc, char** argv) {
     const vk::ShaderStage stage = stage_name == "ps"   ? vk::ShaderStage::Fragment
                                   : stage_name == "hs" ? vk::ShaderStage::Hull
                                   : stage_name == "ds" ? vk::ShaderStage::Domain
-                                  : stage_name.rfind("gs", 0) == 0 ? vk::ShaderStage::Geometry
                                                        : vk::ShaderStage::Vertex;
     // The renderer names every stage's entry point "main" (PipelineCacheVk::create_pipeline): the stage's function
     // takes that name.

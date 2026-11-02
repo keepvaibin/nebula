@@ -445,29 +445,9 @@ struct ScopedFlushTiming {
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
 
-void topology_for_primitive(
-    Primitive primitive,
-    gpu::Topology& topology,
-    gpu::TopologyType& topology_type) {
+void topology_for_primitive(gpu::Topology& topology, gpu::TopologyType& topology_type) {
     topology = gpu::kTopologyTriangleList;
     topology_type = gpu::kTopologyTypeTriangle;
-    switch (primitive) {
-    case Primitive::Lines:
-    case Primitive::LineStrip:
-        topology = gpu::kTopologyLineList;
-        topology_type = gpu::kTopologyTypeLine;
-        break;
-    case Primitive::Points:
-        topology = gpu::kTopologyPointList;
-        topology_type = gpu::kTopologyTypePoint;
-        break;
-    case Primitive::Quads:
-    case Primitive::Triangles:
-    case Primitive::TriangleStrip:
-    case Primitive::TriangleFan:
-    default:
-        break;
-    }
 }
 
 // The kinds of a draw's matrices (draw_matrices.h), in the order their blocks are appended (RenderCore::flush).
@@ -5228,7 +5208,7 @@ bool RenderCore::begin_cached_draw_run(
     }
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
-    topology_for_primitive(primitive, topology, topology_type);
+    topology_for_primitive(topology, topology_type);
 
     const ScissorRect sc = draw_state_.scissor;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
@@ -5782,7 +5762,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
 
 void RenderCore::draw_record_immediate(const shapes::Record& record) {
     display_copy_on_output_ = false;
-    const auto primitive = static_cast<Primitive>(record.primitive);
+    const auto primitive = record.primitive == shapes::kWideQuads ? Primitive::Triangles : static_cast<Primitive>(record.primitive);
     const std::uint32_t count = record.vertex_count;
     shapes::primitive_indices(record.primitive, count, immediate_indices_);
     if (immediate_indices_.empty() || count > 0x10000u) {
