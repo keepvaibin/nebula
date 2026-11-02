@@ -27,6 +27,20 @@ cores with SMT of the machine above, `GALAXY_GPU_PREFERENCE=low GALAXY_TEST_CPU_
   instead of 1.08 s.
 - Today, RTX 5090, shader cache warm: 689 ms to the title, 320 of them the device and Streamline (`boot:` lines).
 
+## Loading a galaxy
+
+The `scene:` lines of the log time each phase (real time at 60 fps, RTX 5090, 8 stops, `run_ld`; **M**):
+
+| phase | before | now |
+|---|---|---|
+| `[initialize Scene]` to `[scene ready]` | 834-1,534 ms | 50-67 ms |
+| destroy and wave banks | about 50 ms | about 50 ms |
+| frames over 25 ms in a load | 1 (37 ms) | 5-6 (29-144 ms) |
+
+Each archive's resource holder used to wait for the main thread, which took one a frame. The thread that asks now makes it: all
+game threads hold the world while they run. The picture is black at each long frame. Frames are byte-identical to before at the
+12 stops compared (`matchframes`), each stop starting earlier.
+
 ## Fixed
 
 | path | before | after | evidence |
