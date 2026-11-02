@@ -3,19 +3,15 @@
 #include "Game/Util.hpp"
 #include <cstring>
 
-ArchiveHolderArchiveEntry::ArchiveHolderArchiveEntry(void* pData, NebulaArena* pHeap, const char* pArchiveName)
-    : mHeap(pHeap), mArchive(nullptr), mArchiveName(nullptr) {
-    JKRMemArchive* archive = new (pHeap, 0) JKRMemArchive();
-    archive->mountFixed(pData, JKR_MEM_BREAK_FLAG_0);
-    mArchive = archive;
-
+ArchiveHolderArchiveEntry::ArchiveHolderArchiveEntry(AssetFolder* pFolder, NebulaArena* pHeap, const char* pArchiveName)
+    : mHeap(pHeap), mArchive(pFolder), mArchiveName(nullptr) {
     s32 len = strlen(pArchiveName) + 1;
     mArchiveName = new (pHeap, 0) char[len];
     MR::copyString(mArchiveName, pArchiveName, len);
 }
 
 ArchiveHolderArchiveEntry::~ArchiveHolderArchiveEntry() {
-    mArchive->unmount();
+    delete mArchive;
     delete mArchiveName;
 }
 
@@ -24,8 +20,8 @@ ArchiveHolder::ArchiveHolder() {
     mMutex.init();
 }
 
-ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(void* pData, NebulaArena* pHeap, const char* pArchiveName) {
-    ArchiveHolderArchiveEntry* entry = new (pHeap, 0) ArchiveHolderArchiveEntry(pData, pHeap, pArchiveName);
+ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(AssetFolder* pFolder, NebulaArena* pHeap, const char* pArchiveName) {
+    ArchiveHolderArchiveEntry* entry = new (pHeap, 0) ArchiveHolderArchiveEntry(pFolder, pHeap, pArchiveName);
     GameMutex* mutex = &mMutex;
     mutex->lock();
 
@@ -35,14 +31,14 @@ ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(void* pData, NebulaArena*
     return entry;
 }
 
-JKRMemArchive* ArchiveHolder::getArchive(const char* pArchiveName) const {
+AssetFolder* ArchiveHolder::getArchive(const char* pArchiveName) const {
     mMutex.lock();
     ArchiveHolderArchiveEntry* entry = findEntry(pArchiveName);
     mMutex.unlock();
     return (entry != nullptr) ? entry->mArchive : nullptr;
 }
 
-void ArchiveHolder::getArchiveAndHeap(const char* pArchiveName, JKRArchive** pArchive, NebulaArena** pHeap) const {
+void ArchiveHolder::getArchiveAndHeap(const char* pArchiveName, AssetFolder** pArchive, NebulaArena** pHeap) const {
     mMutex.lock();
     ArchiveHolderArchiveEntry* entry = findEntry(pArchiveName);
     mMutex.unlock();

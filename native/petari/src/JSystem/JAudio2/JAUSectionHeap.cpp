@@ -252,7 +252,7 @@ bool JAUSection::newStaticSeqData(JAISoundID param_0, void const* param_1, u32 p
 }
 
 bool JAUSection::newStaticSeqData(JAISoundID param_0) {
-    JKRArchive* seqArchive = data_.field_0x00.getSeqDataArchive();
+    AssetFolder* seqArchive = data_.field_0x00.getSeqDataArchive();
     JAUSoundInfo* soundInfo = JASGlobalInstance< JAUSoundInfo >::getInstance();
 
     if (!soundInfo) {
@@ -458,7 +458,7 @@ JAUSectionHeap::TSectionHeapData::TSectionHeapData() {
     seqDataUser = nullptr;
 }
 
-void JAUSectionHeap::setSeqDataArchive(JKRArchive* param_0) {
+void JAUSectionHeap::setSeqDataArchive(AssetFolder* param_0) {
     sectionHeapData_.seqDataBlocks.setSeqDataArchive(param_0);
     JSULink< JAUSection >* link;
 

@@ -113,7 +113,7 @@ ResourceHolderManagerName2Resource* ResourceHolderManager::createAndAddInnerStat
 }
 
 void ResourceHolderManager::createResourceHolder(const char* pParam1, CreateResourceHolderArgs* pArgs) {
-    JKRArchive* pArchive;
+    AssetFolder* pArchive;
 
     MR::getMountedArchiveAndHeap(pParam1, &pArchive, &pArgs->mHeap);
     MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);
@@ -122,7 +122,7 @@ void ResourceHolderManager::createResourceHolder(const char* pParam1, CreateReso
 }
 
 void ResourceHolderManager::createLayoutHolder(const char* pParam1, CreateResourceHolderArgs* pArgs) {
-    JKRArchive* pArchive;
+    AssetFolder* pArchive;
 
     MR::getMountedArchiveAndHeap(pParam1, &pArchive, &pArgs->mHeap);
     MR::CurrentHeapRestorer heapRestorer(pArgs->mHeap);

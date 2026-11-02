@@ -4,7 +4,7 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JKRArchive;
+class AssetFolder;
 
 struct AudChordData {
     /* 0x00 */ u8 mBass;
@@ -22,7 +22,7 @@ class AudChordTable {
 public:
     AudChordTable();
 
-    bool setChordTable(s32 id, JKRArchive* pArchive);
+    bool setChordTable(s32 id, AssetFolder* pArchive);
     bool setChordTableResource(void* pRes);
 
     /* 0x00 */ bool mLoaded;
@@ -56,7 +56,7 @@ public:
 
     AudChordInfo();
 
-    void init(JKRArchive* pArchive);
+    void init(AssetFolder* pArchive);
     bool loadChordInfo(s16 id, bool keepCurrent);
     void invalidiate();
     bool setCurChord(s32 index);
@@ -140,7 +140,7 @@ public:
         return mTable.mLoaded && mCurChord != nullptr && mCurScale != nullptr;
     }
 
-    /* 0x00 */ JKRArchive* mArchive;
+    /* 0x00 */ AssetFolder* mArchive;
     /* 0x04 */ AudChordTable mTable;
     /* 0x18 */ const AudChordData* mCurChord;
     /* 0x1C */ const AudScaleData* mCurScale;

@@ -86,7 +86,7 @@ bool AssetStore::parse(const std::uint8_t* header, const std::uint8_t* index, st
         const Node& node = node_table[i];
         const bool folder = (node.flags & 1u) != 0u;
         if (node.name >= names_size || node.parent >= count || hash_table[i].node >= count ||
-            (folder && (node.position > count || node.size > count - node.position))) {
+            (folder && (node.first > count || node.children > count - node.first))) {
             return false;
         }
     }
@@ -272,19 +272,18 @@ std::optional<Entry> AssetStore::entry(std::int32_t index) const {
     out.index = index;
     out.folder = (node.flags & 1u) != 0u;
     out.name = names_ + node.name;
-    if (!out.folder) {
-        out.length = node.size;
-        out.position = node.position;
-    }
+    out.length = node.size;
+    out.position = node.position;
+    out.children = out.folder ? node.children : 0u;
     return out;
 }
 
 std::optional<Entry> AssetStore::child(std::int32_t folder, std::uint32_t index) const {
     if (folder < 0 || static_cast<std::uint32_t>(folder) >= count_ || (nodes_[folder].flags & 1u) == 0u ||
-        index >= nodes_[folder].size) {
+        index >= nodes_[folder].children) {
         return std::nullopt;
     }
-    return entry(static_cast<std::int32_t>(nodes_[folder].position + index));
+    return entry(static_cast<std::int32_t>(nodes_[folder].first + index));
 }
 
 std::optional<Entry> AssetStore::find(std::string_view path) const {

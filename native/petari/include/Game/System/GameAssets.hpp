@@ -38,7 +38,7 @@ namespace GameAssets {
     // Every file mapped for this arena: its views go with it.
     void unloadHeap(const NebulaArena* pHeap);
 
-    // A whole file, or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
+    // A whole file or folder (an archive: the bytes of its files, side by side), or its first `maxLength` bytes when that is not 0, read into pDst, or into a new block of pHeap (the
     // current heap when null): null when there is no such file. A block ends at a 32-byte boundary, zeroed past the file.
     void* load(const char* pPath, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize);
     void* load(s32 entry, u8* pDst, u32 maxLength, NebulaArena* pHeap, AllocDirection direction, u32* pSize);

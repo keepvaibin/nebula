@@ -5,6 +5,7 @@
 #include "Game/Screen/ScreenPreserver.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/System/AudSystemWrapper.hpp"
+#include "Game/System/AssetFolder.hpp"
 #include "Game/System/ErrorMessageArchive.hpp"
 #include "Game/System/FileLoader.hpp"
 #include "Game/System/FunctionAsyncExecutor.hpp"
@@ -29,7 +30,7 @@ GameSystemObjHolder::GameSystemObjHolder()
     initDvd();
     initNAND();
     initNameObj();
-    MR::createAndAddArchive(NebulaDataTables::loadErrorMessageArchive(MR::getStationedHeap()), MR::getStationedHeap(),
+    MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getStationedHeap()), MR::getStationedHeap(),
                             "ErrorMessageArchive.arc");
 }
 
@@ -41,7 +42,7 @@ void GameSystemObjHolder::initAfterStationedResourceLoaded() {
 }
 
 void GameSystemObjHolder::initMessageResource() {
-    JKRArchive* pArchive = nullptr;
+    AssetFolder* pArchive = nullptr;
     NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 
@@ -49,11 +50,8 @@ void GameSystemObjHolder::initMessageResource() {
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
     nebula_snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
 
-    void* pSystemMessageArchive = MR::copyFileFromArchive(pArchive, systemMessagePath, nullptr, 0);
-    MR::createAndAddArchive(pSystemMessageArchive, pHeap, "/Memory/SystemMessage.arc");
-
-    void* pErrorMessageWindowArchive = MR::copyFileFromArchive(pArchive, "/LayoutData/ErrorMessageWindow.arc", pHeap, 32);
-    MR::createAndAddArchive(pErrorMessageWindowArchive, pHeap, "/Memory/ErrorMessageWindow.arc");
+    MR::createAndAddArchive(pArchive->getSubFolder(systemMessagePath, pHeap), pHeap, "/Memory/SystemMessage.arc");
+    MR::createAndAddArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow.arc", pHeap), pHeap, "/Memory/ErrorMessageWindow.arc");
 
     MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow.arc");
 
@@ -107,9 +105,6 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
 }
 
 void GameSystemObjHolder::initDvd() {
-    JKRMemArchive archive;
-
-    JKRFileLoader::initializeVolumeList();
     SingletonHolder< FileLoader >::init();
 }
 

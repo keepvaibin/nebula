@@ -17,7 +17,7 @@ class JAUDisposer_;
 class JAUSectionHeap;
 struct JAUSoundTable;
 struct JAUSoundNameTable;
-class JKRArchive;
+class AssetFolder;
 class NebulaArena;
 
 class JAUSection : public JKRDisposer, protected JSULink< JAUSection > {
@@ -108,7 +108,7 @@ public:
         /* 0x43C */ JAUSoundNameTable* soundNameTable;
     };
 
-    void setSeqDataArchive(JKRArchive*);
+    void setSeqDataArchive(AssetFolder*);
     bool loadDynamicSeq(JAISoundID, bool);
     u32 releaseIdleDynamicSeqDataBlock();
     JAUSectionHeap(NebulaArena*, bool, s32);

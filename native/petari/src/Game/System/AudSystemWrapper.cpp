@@ -11,7 +11,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 
 #include "Game/System/NebulaArena.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 
 namespace AudRhythmWrap {
     void rhythmProc();

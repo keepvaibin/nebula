@@ -9,7 +9,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <algorithm>
 #include "Game/System/GameAssets.hpp"
 
@@ -48,7 +48,7 @@ ScenarioData::ScenarioData(const char* pFilePath) : mScenarioData(), mGalaxyName
     mGalaxyName = new char[galaxyNameSize];
     MR::copyString(mGalaxyName, fileName, galaxyNameSize);
 
-    JKRMemArchive* pArchive = static_cast< JKRMemArchive* >(MR::receiveArchive(pFilePath));
+    AssetFolder* pArchive = static_cast< AssetFolder* >(MR::receiveArchive(pFilePath));
 
     mScenarioData = new JMapInfo();
     mScenarioData->attach(pArchive->getResource("/ScenarioData.bcsv"));

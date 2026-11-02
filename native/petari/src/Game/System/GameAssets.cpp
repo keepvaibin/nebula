@@ -15,10 +15,6 @@ __attribute__((noreturn)) void nebula_fatal(const char* format, ...);
 
 namespace {
     bool toFile(const NebulaAssetEntry& rEntry, GameAssets::File* pFile) {
-        if (rEntry.folder != 0) {
-            return false;
-        }
-
         pFile->mEntry = rEntry.index;
         pFile->mLength = rEntry.length;
         return true;
@@ -141,7 +137,7 @@ namespace GameAssets {
         }
 
         const u32 size = maxLength != 0 && maxLength < file.mLength ? maxLength : file.mLength;
-        const u32 blockSize = (size + 31) & ~31u;
+        const u32 blockSize = size != 0 ? (size + 31) & ~31u : 32;
         const bool allocated = pDst == nullptr;
         if (allocated) {
             pDst = static_cast< u8* >(NebulaArena::alloc(blockSize, direction == ALLOC_DIRECTION_FORWARD ? 64 : -64, pHeap));

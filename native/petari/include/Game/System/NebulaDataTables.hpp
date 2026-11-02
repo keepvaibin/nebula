@@ -11,8 +11,6 @@ namespace NebulaDataTables {
     // The galaxies' information and the story's progress (BCSV, as JMapInfo reads them).
     const void* getGalaxyInfoTable();
     const void* getStoryProgressTable();
-    // The error-message archive, read into `pHeap` (an archive the game writes into as it mounts it).
-    void* loadErrorMessageArchive(NebulaArena* pHeap);
     // Grand galaxy `galaxy`'s comet schedule and the event flags: the compiled ones, unless the disc's (a mod's main.dol)
     // differ from them.
     const GalaxyCometTimePaper* getCometTimePaper(s32 galaxy, const GalaxyCometTimePaper* pCompiled);

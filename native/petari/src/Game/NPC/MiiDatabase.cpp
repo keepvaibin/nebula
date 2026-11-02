@@ -1,6 +1,5 @@
 #include "Game/NPC/MiiDatabase.hpp"
 #include "Game/Util/Array.hpp"
-#include <JSystem/JKernel/JKRFileFinder.hpp>
 #include <RVLFaceLib.h>
 
 struct MiiDatabaseStoreData {

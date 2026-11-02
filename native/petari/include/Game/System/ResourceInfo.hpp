@@ -14,7 +14,6 @@ public:
     /* 0x00 */ void* mResource;
     /* 0x04 */ u32 _4;
     /* 0x08 */ void* _8;
-    /* 0x0C */ u32 _C;
     /* 0x10 */ char* mName;
     /* 0x14 */ u32 mHashCode;
 };

@@ -10,7 +10,6 @@ ResFileInfo::ResFileInfo() {
     mResource = 0;
     _8 = 0;
     _4 = 0;
-    _C = 0;
 }
 
 ResTable::ResTable() : mFileInfoTable(0), mCount(0) {
