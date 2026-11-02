@@ -4,6 +4,7 @@
 // settings migration.
 
 #include "galaxy/input_bindings.h"
+#include "galaxy/input/key_positions.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
@@ -177,11 +178,13 @@ void test_evaluation() {
     levels.set_key('D', true);
     levels.set_key(VK_RETURN, true);
     levels.set_key('L', true);
+    levels = project_key_positions(levels, KeyPositionMap{});
     LogicalInput kb = evaluate_keyboard_bindings(config.table(ControlScheme::Keyboard), levels);
     expect(kb.held(WiiTarget::A) && !kb.held(WiiTarget::B), "Enter presses A");
     expect(approx(kb.stick_x, 1.0f) && approx(kb.stick_y, 1.0f), "WD gives up-right stick");
     expect(approx(kb.pointer_x, 1.0f) && approx(kb.pointer_y, 0.0f), "L moves the pointer right");
     levels.set_key('A', true);
+    levels = project_key_positions(levels, KeyPositionMap{});
     kb = evaluate_keyboard_bindings(config.table(ControlScheme::Keyboard), levels);
     expect(approx(kb.stick_x, 0.0f), "A and D cancel like the fixed map");
     levels = {};
@@ -231,7 +234,9 @@ void test_evaluation() {
            "merge ORs buttons and keeps the larger axis");
 
     const KeyList keys = referenced_keys(config.table(ControlScheme::Keyboard));
-    expect(keys.count == 32u, "default keyboard map reads the 32 keys of the fixed map");
+    const KeyList positions = referenced_key_positions(config.table(ControlScheme::Keyboard));
+    expect(keys.count + positions.count == 32u && positions.count == 13u,
+           "default keyboard map keeps its 32 inputs across logical keys and physical positions");
 }
 
 void test_chord_and_capture() {

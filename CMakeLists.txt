@@ -138,6 +138,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
     runtime/src/input/live_controls_engine.cpp
+    runtime/src/input/key_positions_win32.cpp
     runtime/src/native_audio.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
@@ -477,6 +478,10 @@ galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_r
 galaxy_test(galaxy_controls_engine_tests SOURCES ${rt}/input/controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
+galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests.cpp)
+galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
+    ${rt}/input/key_positions_win32.cpp LIBS user32)
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)

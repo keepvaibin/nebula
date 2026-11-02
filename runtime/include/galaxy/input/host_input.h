@@ -69,6 +69,9 @@ void clear_native_window_key_presses() noexcept;
 // Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
 // the press latch.
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept;
+// One window key event, including its native scan identity. Call before discarding the message payload.
+void publish_native_window_key_event(std::uint32_t key, std::uintptr_t message_bits,
+                                    bool down, bool repeat, bool injected);
 // Whether the window message for `key` / the latest mouse move or button came
 // from SendInput (a controller mapper such as Steam's desktop layout) instead
 // of a device. In auto input mode with a controller attached such input is
