@@ -1,5 +1,6 @@
 // The game's sound on Windows (native_audio.h): the native mixer's frames to XAudio2 at the device's rate, the
 // master volume, and the WAV dump the tests record.
+#include "galaxy/wiimote_speaker.h"
 #include "galaxy/native_audio.h"
 
 #include "galaxy/audio_mixer.h"
@@ -1523,6 +1524,7 @@ void NativeGameAudio::frame() {
             s.block[i * 4u + c * 2u + 1u] = static_cast<std::byte>(bits >> 8u);
         }
     }
+    galaxy::input::speaker::game_speaker().mix(s.block, s.mixer->rate(), audio.wiimote_speaker);
     (void)s.sink.submit_pcm16_stereo(s.block, s.mixer->rate());
 }
 
