@@ -35,6 +35,9 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const auto live_pads = frame.pads;
     const bool use_pads = frame.use_pads && (frame.window_focused || frame.allow_background_device_input);
     const bool use_keyboard = frame.use_keyboard;
+    // The first consuming read after suspension includes motion accumulated while input was inactive.
+    const bool discard_accumulated_motion = use_pads && s_device_input_suspended;
+    s_device_input_suspended = !use_pads;
     const bool window_focused = frame.window_focused, allow_absolute_pointer = frame.allow_absolute_pointer;
     const bool drop_injected = frame.drop_injected;
     const auto current_vi = frame.vi;
@@ -76,9 +79,10 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
         for (const LivePad& pad : live_pads) {
             if (!pad.sample.connected) continue;
             if (first_connected == nullptr) first_connected = &pad;
-            const bool moved = pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
-                               std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f ||
-                               std::fabs(pad.touch_dx) + std::fabs(pad.touch_dy) > 0.0005f;
+            const bool motion_moved = pad.shake_remote || pad.shake_nunchuk ||
+                std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f ||
+                std::fabs(pad.touch_dx) + std::fabs(pad.touch_dy) > 0.0005f;
+            const bool moved = pad_has_input(pad.sample) || (!discard_accumulated_motion && motion_moved);
             if (moved) s_driving_pad = pad_key(pad);
             if (pad_key(pad) == s_driving_pad) driving = &pad;
         }
@@ -118,19 +122,23 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                 pointer_hide_radius = tuning.pointer_hide_radius;
             }
             pad_logic_all = galaxy::input::merge_logical_input(pad_logic_all, pad_logic);
-            motion_shake_remote = motion_shake_remote || pad.shake_remote;
-            motion_shake_nunchuk = motion_shake_nunchuk || pad.shake_nunchuk;
+            motion_shake_remote = motion_shake_remote || (!discard_accumulated_motion && pad.shake_remote);
+            motion_shake_nunchuk = motion_shake_nunchuk || (!discard_accumulated_motion && pad.shake_nunchuk);
             if (gyro_pointing) {
                 pad_gyro_pointing = true;
                 pointer_hide_seconds = tuning.pointer_hide_seconds;
                 pointer_hide_radius = tuning.pointer_hide_radius;
-                gyro_x += pad.gyro_x;
-                gyro_y += tuning.invert_pointer_y ? -pad.gyro_y : pad.gyro_y;
+                if (!discard_accumulated_motion) {
+                    gyro_x += pad.gyro_x;
+                    gyro_y += tuning.invert_pointer_y ? -pad.gyro_y : pad.gyro_y;
+                }
             }
             if (touch_pointing) {
                 pad_touch_pointing = true;
-                touch_x += pad.touch_dx * 2.0f * tuning.touch_sensitivity;
-                touch_y += (tuning.invert_pointer_y ? -pad.touch_dy : pad.touch_dy) * 2.0f * tuning.touch_sensitivity;
+                if (!discard_accumulated_motion) {
+                    touch_x += pad.touch_dx * 2.0f * tuning.touch_sensitivity;
+                    touch_y += (tuning.invert_pointer_y ? -pad.touch_dy : pad.touch_dy) * 2.0f * tuning.touch_sensitivity;
+                }
                 if (!pad_gyro_pointing) {
                     pointer_hide_seconds = tuning.pointer_hide_seconds;
                     pointer_hide_radius = tuning.pointer_hide_radius;
@@ -400,6 +408,9 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
         s_pointer_y = 0.0f;
         pointer_active = true;
     }
+    if (!use_pads && (owner == galaxy::input::PointerSource::Stick ||
+                     owner == galaxy::input::PointerSource::Gyro ||
+                     owner == galaxy::input::PointerSource::Touch)) pointer_active = false;
     // A connected controller keeps the pointer on screen until the mouse
     // owns it.
     if (!pointer_active && use_pads && owner != galaxy::input::PointerSource::Mouse &&
