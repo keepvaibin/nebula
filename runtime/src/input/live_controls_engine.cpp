@@ -40,7 +40,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const auto play_context = frame.context;
     const auto tilt_section = frame.tilt_section;
     const float trigger_threshold = static_cast<float>(kXInputTriggerThreshold) / 255.0f;
-    if (s_pad_previous_pressed.size() < live_pads.size()) s_pad_previous_pressed.resize(live_pads.size());
+    if (s_pad_history.capacity() < live_pads.size()) s_pad_history.reserve(live_pads.size());
+    for (auto& history : s_pad_history) history.seen = false;
     // Each scheme's bindings turn its physical inputs into Wii targets. Pad
     // and keyboard pointer axes stay apart: they are different pointer
     // sources (velocity from the stick, keys at the keyboard speed).
@@ -80,24 +81,32 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
             if (moved) s_driving_pad = pad_key(pad);
             if (pad_key(pad) == s_driving_pad) driving = &pad;
         }
-        if (driving == nullptr && s_driving_pad != kDrivingKeyboard) driving = first_connected;
+        if (driving == nullptr && s_driving_pad != kDrivingKeyboard) {
+            driving = first_connected;
+            s_driving_pad = driving != nullptr ? pad_key(*driving) : kDrivingNone;
+        }
         if (driving != nullptr && driving->gravity_valid) {
             tilt_up_value = driving->gravity;
             tilt_up = &tilt_up_value;
         }
         for (std::size_t index = 0; index < live_pads.size(); ++index) {
             const LivePad& pad = live_pads[index];
-            if (!pad.sample.connected) {
-                s_pad_previous_pressed[index] = 0u;
-                continue;
+            if (!pad.sample.connected) continue;
+            const galaxy::input::DeviceKey device{pad.sample.scheme, pad.device_slot};
+            auto previous = std::find_if(s_pad_history.begin(), s_pad_history.end(),
+                [device](const PadHistory& history) { return history.device == device; });
+            if (previous == s_pad_history.end()) {
+                s_pad_history.push_back({device});
+                previous = s_pad_history.end() - 1;
             }
+            previous->seen = true;
             const galaxy::input::SchemeTuning& tuning = config.tune(pad.sample.scheme);
             const bool gyro_pointing = tuning.gyro_pointer && pad.imu_live;
             const bool touch_pointing = tuning.touch_pointer && pad.touch_live;
             galaxy::input::LogicalInput pad_logic = galaxy::input::evaluate_pad_bindings(
                 config.table(pad.sample.scheme), pad.sample, trigger_threshold,
-                s_pad_previous_pressed[index], gyro_pointing || touch_pointing);
-            s_pad_previous_pressed[index] = pad_logic.pressed;
+                previous->pressed, gyro_pointing || touch_pointing);
+            previous->pressed = pad_logic.pressed;
             if (tuning.invert_pointer_y) pad_logic.pointer_y = -pad_logic.pointer_y;
             if (std::fabs(pad_logic.pointer_x) + std::fabs(pad_logic.pointer_y) >
                 std::fabs(pad_logic_all.pointer_x) + std::fabs(pad_logic_all.pointer_y)) {
@@ -127,9 +136,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
                 }
             }
         }
-    } else {
-        std::fill(s_pad_previous_pressed.begin(), s_pad_previous_pressed.end(), 0u);
     }
+    std::erase_if(s_pad_history, [](const PadHistory& history) { return !history.seen; });
     galaxy::input::LogicalInput keyboard_logic{};
     if (use_keyboard) {
         keyboard_logic = galaxy::input::evaluate_keyboard_bindings(keyboard_table, keyboard_levels);

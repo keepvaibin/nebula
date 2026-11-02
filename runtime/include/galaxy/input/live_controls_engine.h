@@ -82,7 +82,12 @@ public:
 private:
     static constexpr std::uint32_t kDrivingNone = 0xFFFFFFFFu;
     static constexpr std::uint32_t kDrivingKeyboard = 0xFFFFFFFEu;
-    std::vector<std::uint32_t> s_pad_previous_pressed;
+    struct PadHistory {
+        galaxy::input::DeviceKey device;
+        std::uint32_t pressed = 0;
+        bool seen = false;
+    };
+    std::vector<PadHistory> s_pad_history;
     std::uint32_t s_driving_pad = kDrivingNone;
     galaxy::input::JumpBackLatch s_jump_back{};
     float s_pointer_x = 0.0f;

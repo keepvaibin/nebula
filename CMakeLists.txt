@@ -476,6 +476,7 @@ galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime
 galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_controls_engine_tests SOURCES ${rt}/input/controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)
