@@ -69,12 +69,6 @@ namespace GameDataFunction {
     void resetGameDataGoToGalaxyRetry();
     void onCompleteEndingCurrentPlayer();
     bool isOnCompleteEndingMarioAndLuigi();
-    NebulaCalendar::SaveTime getSysConfigFileTimeAnnounced();
-    void updateSysConfigFileTimeAnnounced();
-    NebulaCalendar::SaveTime getSysConfigFileTimeSent();
-    void setSysConfigFileTimeSent(NebulaCalendar::SaveTime);
-    u32 getSysConfigFileSentBytes();
-    void setSysConfigFileSentBytes(u32);
     bool isLuigiLeftSupply();
     void offLuigiLeftSupply();
     bool isOnGameEventFlagNormalComet(const char*);

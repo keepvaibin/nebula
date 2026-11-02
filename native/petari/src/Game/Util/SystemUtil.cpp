@@ -168,10 +168,6 @@ namespace MR {
     }
 
     // The output is 60 Hz: no PAL television to suggest PAL60 for.
-    bool isDisplayEncouragePal60Window() {
-        return false;
-    }
-
     JMapIdInfo* getPlayerRestartIdInfo() {
         return ::getGameDataTemporaryInGalaxy()->mPlayerRestartIdInfo;
     }

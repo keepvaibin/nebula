@@ -7,7 +7,6 @@ class GameDataHolder;
 class SaveErrorSequence;
 class SaveDataHandler;
 class SaveIcon;
-class SysConfigFile;
 class SysInfoWindow;
 class UserFile;
 
@@ -64,12 +63,10 @@ public:
     void exeNoSaveConfirmRemind();
     void exeErrorHandling();
     GameDataHolder* getHolder();
-    SysConfigFile* getSysConfigFile();
     UserFile* getCurrentUserFile();
     UserFile* getBackupUserFile();
     void restoreUserFileConfigData(UserFile*, int);
     void restoreUserFileGameData(UserFile*, int, bool);
-    void restoreSysConfigFile(SysConfigFile*);
     bool trySave();
     bool trySaveWindowDisappear(bool*, const Nerve*);
     bool trySaveWithoutWindow(bool*, const Nerve*);
@@ -80,7 +77,6 @@ public:
     bool executeSaveFinish(bool*, const Nerve*);
     void syncNoSaveFlagsFromErrorSequence();
 
-    /* 0x08 */ SysConfigFile* mSysConfigFile;
     /* 0x0C */ UserFile* mCurrentUserFile;
     /* 0x10 */ UserFile* mBackupUserFile;
     /* 0x14 */ SaveDataHandler* mSaveDataHandler;
