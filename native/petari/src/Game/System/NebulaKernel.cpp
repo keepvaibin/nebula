@@ -2,7 +2,7 @@
 // depends on: priority 0 runs first, a thread that becomes ready runs after the ones already ready at its priority,
 // a wake-up or a priority change that readies a higher-priority thread switches to it at once (unless the scheduler
 // is disabled), a thread waiting for a mutex lends its priority to the owner, and a suspended thread is never ready.
-// Switching is a stack switch on the simulation thread (os_native.c, context_switch.c).
+// Each thread is a host thread waiting for its turn; switching passes the turn on (os_native.c).
 #include "Game/System/NebulaKernel.hpp"
 
 #include <stdio.h>
@@ -12,26 +12,10 @@
 #include "nebula_kernel.h"
 #include "nebula_sdk.h"
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-extern "C" void __sanitizer_start_switch_fiber(void** fake_stack_save, const void* bottom, size_t size);
-extern "C" void __sanitizer_finish_switch_fiber(void* fake_stack_save, const void** bottom_old, size_t* size_old);
-#define NEBULA_ASAN_START(save, bottom, size) __sanitizer_start_switch_fiber((save), (bottom), (size))
-#define NEBULA_ASAN_FINISH(save) __sanitizer_finish_switch_fiber((save), nullptr, nullptr)
-#define NEBULA_NO_ASAN __attribute__((no_sanitize("address")))
-#endif
-#endif
-#ifndef NEBULA_ASAN_START
-#define NEBULA_ASAN_START(save, bottom, size) ((void)0)
-#define NEBULA_ASAN_FINISH(save) ((void)0)
-#define NEBULA_NO_ASAN
-#endif
-
 namespace {
     const int32_t kPriorities = 32;
-    const uint32_t kStackCanary = 0xDEADBABEu;
 
-    // Scheduler state: touched only on the simulation thread.
+    // Scheduler state: touched only by the thread whose turn it is.
     NebulaThreadQueue sRunQueue[kPriorities];
     uint32_t sRunQueueBits;  // bit 31 - p: a thread of priority p is ready
     bool sRunQueueHint;      // something may outrank the running thread
@@ -40,14 +24,12 @@ namespace {
     NebulaThread* sCurrent;
     NebulaThreadQueue sActive;  // every thread not yet freed, by linkActive
     bool sIdling;               // no thread runs: the idle wait delivers host events
-    void* sIdleSp;              // the stack pointer saved by a switch made from the idle wait
-    NebulaThread* sReleasing;   // an exited thread whose stack is freed by the next switch
     uint64_t sSwitches;
 
-    // Host events: host threads set bits in sPending; the simulation thread delivers them at scheduling points.
+    // Host events: host threads set bits in sPending; the thread whose turn it is delivers them at scheduling points.
     uint32_t sPending;
     uint32_t sEnabledEvents = 1u << NEBULA_EVENT_TIMER;  // device events wait until their handler is set and enabled
-    int32_t sSleeping;                                   // the simulation thread sleeps for want of work
+    int32_t sSleeping;                                   // the thread whose turn it is sleeps for want of work
     bool sInterruptsEnabled;
     NebulaKernel::EventHandler sHandlers[NEBULA_EVENT_COUNT];
 
@@ -276,42 +258,16 @@ namespace {
         }
     }
 
-    void releaseStack(NebulaThread* pThread) {
-        if (pThread == sCurrent) {
-            // It still runs on its stack until the switch away.
-            if (sReleasing != nullptr) {
-                nebula_thread_stack_release(sReleasing);
-            }
-            sReleasing = pThread;
-        } else {
-            nebula_thread_stack_release(pThread);
-        }
-    }
-
-    void checkStackDepth(const NebulaThread* pThread, const void* pSp) {
-        static bool sWarned;
-        const uint8_t* const sp = static_cast< const uint8_t* >(pSp);
-        if (pThread->stackEnd != nullptr && sp - pThread->stackEnd < 0x2000 && !sWarned) {
-            sWarned = true;
-            nebula_log("thread %p is within %d bytes of its stack's end\n", static_cast< const void* >(pThread),
-                       static_cast< int >(sp - pThread->stackEnd));
-        }
-    }
-
+    // The turn goes to `pTo`; `pFrom` waits for its next one, or ends if it has exited (its record may be freed from here on).
     void switchTo(NebulaThread* pFrom, NebulaThread* pTo) {
-        if (pFrom != nullptr) {
-            checkStackDepth(pFrom, __builtin_frame_address(0));
-        }
         sSwitches++;
-        void* fake = nullptr;
-        NEBULA_ASAN_START(&fake, pTo->stackEnd, static_cast< size_t >(pTo->stackTop - pTo->stackEnd));
-        nebula_switch_stack(pFrom != nullptr ? &pFrom->nativeSp : &sIdleSp, pTo->nativeSp);
-        NEBULA_ASAN_FINISH(fake);
-        // Running again, on another thread's switch: an exited thread that switch left is off its stack now.
-        if (sReleasing != nullptr && sReleasing != pFrom) {
-            nebula_thread_stack_release(sReleasing);
-            sReleasing = nullptr;
+        NebulaHostThread* const self = pFrom->host;
+        const bool ended = pFrom->state == NebulaThreadState_Exited || pFrom->state == NebulaThreadState_Free;
+        nebula_host_thread_pass(pTo->host);
+        if (ended) {
+            nebula_host_thread_exit(self);
         }
+        nebula_host_thread_wait(self);
     }
 
     void selectThread(bool yield) {
@@ -371,22 +327,18 @@ namespace {
         } else {
             pThread->state = NebulaThreadState_Exited;
         }
-        releaseStack(pThread);
+        if (pThread != sCurrent) {
+            nebula_host_thread_cancel(pThread->host);
+        }
         unlockAllMutexes(pThread);
         pThread->joinQueue.wakeup();
     }
 
-    struct ThreadStart {
-        void* (*entry)(void*);
-        void* arg;
-    };
-
     // A new thread starts with host events enabled and ends in exit with its function's result.
     void threadMain(void* pArg) {
-        NEBULA_ASAN_FINISH(nullptr);
-        const ThreadStart start = *static_cast< const ThreadStart* >(pArg);
+        NebulaThread* const self = static_cast< NebulaThread* >(pArg);
         NebulaKernel::enableInterrupts();
-        NebulaKernel::exit(start.entry(start.arg));
+        NebulaKernel::exit(self->entry(self->arg));
         nebula_fatal("a thread returned from its exit");
     }
 
@@ -717,18 +669,9 @@ namespace NebulaKernel {
         pThread->mutex = nullptr;
         pThread->joinQueue.init();
         pThread->mutexes.head = pThread->mutexes.tail = nullptr;
-        // A native stack from the platform's pool: x64 frames are larger than the console's the game sized for.
-        uint32_t size;
-        uint8_t* top = static_cast< uint8_t* >(nebula_thread_stack(pThread, stackSize, &size));
-        const uintptr_t aligned = reinterpret_cast< uintptr_t >(top) & ~static_cast< uintptr_t >(15);
-        uint8_t* record = reinterpret_cast< uint8_t* >(aligned) - 32;
-        ThreadStart* start = reinterpret_cast< ThreadStart* >(record);
-        start->entry = pEntry;
-        start->arg = pArg;
-        pThread->nativeSp = nebula_prepare_stack(record, size - 48, threadMain, start);
-        pThread->stackTop = top;
-        pThread->stackEnd = top - size;
-        *reinterpret_cast< uint32_t* >(pThread->stackEnd) = kStackCanary;
+        pThread->entry = pEntry;
+        pThread->arg = pArg;
+        pThread->host = nebula_host_thread_create(threadMain, pThread, stackSize);
         const bool enabled = disableInterrupts();
         enqueueTail(&sActive, pThread, &NebulaThread::linkActive);
         restoreInterrupts(enabled);
@@ -925,7 +868,7 @@ namespace NebulaKernel {
     }
 
     // A spin on another thread's work makes no kernel call: what is pending is delivered here (which may switch to the
-    // woken thread), and with nothing pending the simulation thread sleeps until a host thread raises something. The
+    // woken thread), and with nothing pending this thread sleeps until a host thread raises something. The
     // frame clock raises every retrace, so a wait on state a host thread writes without raising lasts at most one.
     void poll() {
         if (!sInterruptsEnabled) {
@@ -995,9 +938,10 @@ void nebula_kernel_poll(void) {
     NebulaKernel::poll();
 }
 
-// The boot thread: the game's main thread, at priority 16, on the boot stack it already runs on.
-void nebula_kernel_init(void* bootStackTop, void* bootStackEnd) {
+// The boot thread: the game's main thread, at priority 16, the host thread it already runs on.
+void nebula_kernel_init(void) {
     NebulaThread* thread = &sBootThread;
+    thread->host = nebula_host_thread_adopt();
     thread->state = NebulaThreadState_Running;
     thread->detached = 1;
     thread->priority = thread->base = 16;
@@ -1006,9 +950,6 @@ void nebula_kernel_init(void* bootStackTop, void* bootStackEnd) {
     thread->mutex = nullptr;
     thread->joinQueue.init();
     thread->mutexes.head = thread->mutexes.tail = nullptr;
-    thread->stackTop = static_cast< uint8_t* >(bootStackTop);
-    thread->stackEnd = static_cast< uint8_t* >(bootStackEnd);
-    *reinterpret_cast< uint32_t* >(thread->stackEnd) = kStackCanary;
     sCurrent = thread;
     sRunQueueBits = 0;
     sRunQueueHint = false;
@@ -1022,40 +963,14 @@ void nebula_kernel_init(void* bootStackTop, void* bootStackEnd) {
     sInterruptsEnabled = false;
 }
 
-// A diagnostic for the host's reports: every thread's state and the addresses into the module's image found on its
-// stack, newest first, as offsets from the image base (symbolize them with the module's PDB). The stack of the thread
-// running now is read where it stands; a reading taken while the game runs is approximate.
-NEBULA_NO_ASAN void nebula_kernel_dump(void) {
-    uintptr_t image, size;
-    nebula_image_range(&image, &size);
+// A diagnostic for the host's reports: every thread's state. A minidump has their stacks: they are host threads.
+void nebula_kernel_dump(void) {
     nebula_log("threads (current %p, %llu switches since boot):\n", static_cast< void* >(sCurrent),
                static_cast< unsigned long long >(sSwitches));
     for (const NebulaThread* t = sActive.head; t != nullptr; t = t->linkActive.next) {
-        char line[1536];
-        int at = snprintf(line, sizeof(line), "  %p prio %d/%d state %u suspend %d queue %p mutex %p:",
-                          static_cast< const void* >(t), t->priority, t->base, t->state, t->suspend,
-                          static_cast< const void* >(t->queue), static_cast< const void* >(t->mutex));
-        const uintptr_t* sp = static_cast< const uintptr_t* >(t->nativeSp);
-        const uintptr_t* top = reinterpret_cast< const uintptr_t* >(t->stackTop);
-        int found = 0;
-        const int room = static_cast< int >(sizeof(line)) - 16;
-        for (int i = 0; sp != nullptr && sp + i < top && i < 8192 && found < 48 && at < room; i++) {
-            const uintptr_t v = sp[i];
-            if (v - image < size) {
-                at += snprintf(line + at, sizeof(line) - static_cast< size_t >(at), " +%llx",
-                               static_cast< unsigned long long >(v - image));
-                found++;
-            }
-        }
-        // The deepest the stack has been: its lowest nonzero word (stacks start zeroed).
-        const uintptr_t* low = reinterpret_cast< const uintptr_t* >(t->stackEnd) + 1;
-        while (low < top && *low == 0) {
-            low++;
-        }
-        const unsigned used =
-            static_cast< unsigned >(reinterpret_cast< const uint8_t* >(top) - reinterpret_cast< const uint8_t* >(low));
-        const unsigned capacity = static_cast< unsigned >(t->stackTop - t->stackEnd);
-        nebula_log("%s\n    stack %u of %u bytes used\n", line, used, capacity);
+        nebula_log("  %p prio %d/%d state %u suspend %d queue %p mutex %p\n", static_cast< const void* >(t), t->priority,
+                   t->base, t->state, t->suspend, static_cast< const void* >(t->queue),
+                   static_cast< const void* >(t->mutex));
     }
 }
 }  // extern "C"
