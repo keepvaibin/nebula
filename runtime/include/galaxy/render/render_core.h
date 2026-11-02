@@ -208,6 +208,12 @@ public:
         std::memcpy(&producer_record_pool_.natives.back(), native, bytes);
         return index;
     }
+    [[nodiscard]] RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t count) {
+        record.vertex_first = static_cast<std::uint32_t>(producer_record_pool_.vertices.size());
+        record.vertex_count = count;
+        producer_record_pool_.vertices.resize(producer_record_pool_.vertices.size() + count);
+        return producer_record_pool_.vertices.data() + record.vertex_first;
+    }
     // Simulation thread: a record's matrices while the pool is still being filled.
     [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record) const noexcept {
         return producer_record_pool_.matrices.data() + record.matrix_first;
@@ -1080,7 +1086,7 @@ private:
     void on_shape_record(const shapes::Record& record);
     void draw_record_shape(const shapes::Record& record);
     // Vertices the game sent as it drew them, through the frame's rings.
-    void draw_record_immediate(const shapes::Immediate& immediate);
+    void draw_record_immediate(const shapes::Record& record);
     // A material record into the drawing state (native_material.h).
     // A native material (E-04): its state into the drawing state; its pipeline and constants replace the GX ones for
     // the draws until end_native_material (the next material or drawing-state change).
@@ -1107,7 +1113,6 @@ private:
     };
     const RecordVertexInputs* record_inputs_ = nullptr;
     // draw_record_immediate's vertices and indices before they go to the rings.
-    std::vector<RenderVertex> immediate_vertices_;
     std::vector<std::uint16_t> immediate_indices_;
     // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
     std::uint64_t vertex_source_ = 0;
