@@ -5,7 +5,7 @@
 // gradient's texels); the gradient (texture 1) there gives light A's colour and its alpha; channel 0 (clamped diffuse,
 // the colour mask's lights) and its alpha (signed diffuse, the alpha mask's lights) light it; the shape's texture
 // (texture 2, coordinate 2) mixes C1 toward the lit colour, plus C0; the back-light mode picks the last stage.
-// GX's stages, each clamped:
+// the console's stages, each clamped:
 //   0: light A x raster (A: 0, 1 or the gradient; raster: channel 0 or 1 in mode 4); alpha the gradient's
 //   1: C2 = stage 0 + light B x raster (B: 0, 1 or stage 0's alpha); alpha A0 + K (1 - (channel alpha or stage 0's))
 //   2: C0 + lerp(C1, C2, texture 2) (modes 2 and 3: stage 1's alpha in place of C0; 4 and 7: C2; 5: texture 2)

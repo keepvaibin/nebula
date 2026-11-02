@@ -154,28 +154,6 @@ typedef enum _GpuChannelID {
 
 typedef enum _GpuColorSrc { GPU_SRC_REG = 0, GPU_SRC_VTX } GpuColorSrc;
 
-typedef enum _GpuTlut {
-  GPU_TLUT0 = 0,
-  GPU_TLUT1,
-  GPU_TLUT2,
-  GPU_TLUT3,
-  GPU_TLUT4,
-  GPU_TLUT5,
-  GPU_TLUT6,
-  GPU_TLUT7,
-  GPU_TLUT8,
-  GPU_TLUT9,
-  GPU_TLUT10,
-  GPU_TLUT11,
-  GPU_TLUT12,
-  GPU_TLUT13,
-  GPU_TLUT14,
-  GPU_TLUT15,
-  GPU_BIGTLUT0,
-  GPU_BIGTLUT1,
-  GPU_BIGTLUT2,
-  GPU_BIGTLUT3
-} GpuTlut;
 
 typedef enum _GpuTexMapID {
   GPU_TEXMAP0,
@@ -688,13 +666,6 @@ typedef enum _GpuCopyMode {
   GPU_COPY_INTLC_ODD = 3
 } GpuCopyMode;
 
-typedef enum _GpuTlutFmt {
-  GPU_TL_IA8 = 0x0,
-  GPU_TL_RGB565 = 0x1,
-  GPU_TL_RGB5A3 = 0x2,
-  GPU_MAX_TLUTFMT
-
-} GpuTlutFmt;
 
 typedef enum _GpuTevSwapSel {
   GPU_TEV_SWAP0 = 0,
@@ -765,12 +736,6 @@ typedef enum _GpuTevColorChan {
 
 } GpuTevColorChan;
 
-typedef enum _GpuCITexFmt {
-  GPU_TF_C4 = 0x8,
-  GPU_TF_C8 = 0x9,
-  GPU_TF_C14X2 = 0xA
-
-} GpuCITexFmt;
 
 typedef enum _GpuSpotFn {
   GPU_SP_OFF = 0,

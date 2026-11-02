@@ -26,14 +26,14 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
     const float F = draw.projection[5];
     const std::uint32_t type = draw.projection_type;
 
-    // GX NDC z runs from -1 (near) to 0 (far). Negating the GX clip z gives D3D's [0, 1] reversed (far 0, near 1),
+    // console NDC z runs from -1 (near) to 0 (far). Negating the console clip z gives D3D's [0, 1] reversed (far 0, near 1),
     // as Dolphin's VertexShaderGen.cpp does; the XF viewport depth range and the flipped depth compares
     // (pipeline_cache) complete the mapping. With far at 1.0, float error clips SMG's far-plane depth-clear quad
     // and the skybox. Dolphin's (1 - 1e-7) factor keeps far-plane geometry inside the clip volume with
     // DepthClipEnable on.
     constexpr float kFarEps = 1.0f - 1e-7f;
     if (type == 0) {
-        // Perspective: GX clip z = z*E + F, clip w = -z. D3D clip z = -(z*E + F) * (1 - 1e-7).
+        // Perspective: console clip z = z*E + F, clip w = -z. D3D clip z = -(z*E + F) * (1 - 1e-7).
         out[0][0] = A;
         out[0][2] = B;    // column 2 of row 0 (pre-divide shear)
         out[1][1] = C;
@@ -42,7 +42,7 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
         out[2][3] = -F * kFarEps;
         out[3][2] = -1.0f;
     } else {
-        // Orthographic: GX clip z = z*E + F, clip w = 1. Same negation.
+        // Orthographic: console clip z = z*E + F, clip w = 1. Same negation.
         out[0][0] = A;
         out[0][3] = B;
         out[1][1] = C;

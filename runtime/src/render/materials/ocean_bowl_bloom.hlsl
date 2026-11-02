@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // OceanBowl's bloom pass (Game/Map/OceanBowl.cpp loadMaterialBloom, OceanBowlBloomDrawer: Beach Bowl's sea seen from
 // under water): the water texture (0) at its two scrolls, each times the grey c0, over the grey c1; alpha the
-// texture's alpha at each scroll times the vertex alpha, summed; drawn where above zero. GX's two stages:
+// texture's alpha at each scroll times the vertex alpha, summed; drawn where above zero. the console's two stages:
 // colour c1 + tex(uv0) c0, then + tex(uv1) c0; alpha tex(uv0).a ras.a, then + tex(uv1).a ras.a; each clamped.
 struct MaterialConstants {
     float4 c0;      // the stages' multiplier (grey, 0-1)

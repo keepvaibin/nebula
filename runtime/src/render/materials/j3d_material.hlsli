@@ -10,9 +10,9 @@ struct MaterialConstants {
     float4 amb_color[2];  // and ambient colour
     float4 ind_mtx[6];    // indirect matrix m: rows 2m and 2m + 1 (xyz), its scale applied
     float4 fog;           // start, end, near, far
-    float4 fog_color;     // rgb; w: the GX fog type (0 none)
+    float4 fog_color;     // rgb; w: the console fog type (0 none)
     float4 alpha_ref;     // the alpha test's references 0 and 1 (0-1)
-    float4 tex_scale[8];  // xy: texture coordinate i's GX scale (texels per unit), zw: map i's size (texels)
+    float4 tex_scale[8];  // xy: texture coordinate i's console scale (texels per unit), zw: map i's size (texels)
     float4 ovr;           // a pass that replaces the material's colour (j3d_override): x the mode (0 none), y and z
                           // alphas A0 and A1 (0-1), w the alpha reference (drawn above it; -1 always)
     float4 ovr_coord;     // x: coordinate 0 replaced (j3d_vertex_override; 0 none, 1 the vertex's normal)
@@ -20,14 +20,14 @@ struct MaterialConstants {
 
 #include "native_material.hlsli"
 
-// GX's colour combiner takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
+// the console's colour combiner takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
 // unclamped stage left past 1 or below 0 wraps.
 float j3d_in(float x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 float3 j3d_in(float3 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 // The final result the same way (materials whose last stage does not clamp).
 float4 j3d_out(float4 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 
-// GX fog over the colour (native_material.hlsli native_fog) with the material's fog values.
+// console fog over the colour (native_material.hlsli native_fog) with the material's fog values.
 float3 j3d_fog(float3 c, float4 pos) {
     return native_fog(c, pos, material.fog, material.fog_color);
 }
@@ -37,7 +37,7 @@ float2 j3d_coord(float4 uv) {
     return uv.z != 0.0 && uv.w != 0.0 ? uv.xy / uv.z : uv.xy;
 }
 
-// Coordinate `coord` in texels of its GX scale (the size of the map its last stage reads, as GX scales it).
+// Coordinate `coord` in texels of its console scale (the size of the map its last stage reads, as console scales it).
 float2 j3d_texel(float4 uv, uint coord) {
     return j3d_coord(uv) * material.tex_scale[coord].xy;
 }
@@ -52,7 +52,7 @@ void j3d_vertex_override(NativeVertex v, inout NativeVaryings o) {
 }
 
 // A pass over the material's own geometry, channels and textures that replaces its stages (J3DNativeMaterial::
-// override; GX's one-stage programs the game loads over a material): 1 texture 0 at coordinate 0 with alpha 1/4
+// override; the console's one-stage programs the game loads over a material): 1 texture 0 at coordinate 0 with alpha 1/4
 // (J3DModelX list 2), 2 the channel colour with alpha A0 (MarioSearchLight's volume), 3 the channel colour with alpha
 // RASA - K(1 - A0) (its cone: stage 0's constant alpha), 4 the channel colour with alpha (A1 + (A0 - A1) RASA) / 2 (its
 // falloff), 5 texture 0 at coordinate 0 halved with stage 0's own alpha (`a0`: the material's stage 0 alpha combiner

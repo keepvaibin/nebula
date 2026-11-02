@@ -84,8 +84,8 @@ void SpiderThread::initThread(const TVec3f& rPos) {
     initMainThreads();
     MR::invalidateClipping(this);
 
-    mThreadTexture = new JUTTexture(MR::loadTexFromArc("SpiderThread.arc", "SpiderThread.bti"), 0);
-    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("SpiderThread.arc", "Indirect.bti"), 0);
+    mThreadTexture = new JUTTexture(MR::loadTexFromArc("SpiderThread.arc", "SpiderThread.bti"));
+    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("SpiderThread.arc", "Indirect.bti"));
 
     mHangInfos = new SpiderThreadHangInfo*[::sHangActorNumMax];
     for (s32 idx = 0; idx < ::sHangActorNumMax; idx++) {

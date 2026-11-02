@@ -907,7 +907,7 @@ namespace {
     // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
     // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
     // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
-    // env carry over from one emitter to the next, as GX's colour registers did.
+    // env carry over from one emitter to the next, as the console's colour registers did.
     NebulaNativeMaterial sParticle;
     bool sParticleSent = false;
     NebulaColor8 sPrm = {0, 0, 0, 0};

@@ -113,6 +113,11 @@ struct PassState {
     std::uint8_t cull = 0;
     std::uint8_t color_write = 0, alpha_write = 0;
     std::uint8_t constant_alpha = 0, constant_alpha_value = 0;
+    std::uint8_t position_matrix = 0;
+    std::uint8_t line_divisor = 0, point_divisor = 0;
+    std::uint8_t line_offsets = 0, point_offsets = 0;
+    std::uint8_t reserved[3] = {};
+    float line_width = 0.0f, point_size = 0.0f;
 };
 
 struct Record {

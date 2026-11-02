@@ -74,7 +74,7 @@ void WaterCameraFilter::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(WaterCameraFilter, WaterCameraFilterNrvAir));
     initScreenTex();
-    JUTTexture* pFilterTex = new JUTTexture(MR::loadTexFromArc("WaterCameraFilter.arc", "WaterCameraFilter.bti"), 0);
+    JUTTexture* pFilterTex = new JUTTexture(MR::loadTexFromArc("WaterCameraFilter.arc", "WaterCameraFilter.bti"));
     mFilterTex = pFilterTex;
     makeActorAppeared();
 }

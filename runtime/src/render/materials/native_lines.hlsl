@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Lines and points for every native material: the geometry stage that widens each line into a quad and each point
-// into a square of the drawing state's width (GX's line and point sizes: line_point_raster.z the half line width,
+// into a square of the drawing state's width (the console's line and point sizes: line_point_raster.z the half line width,
 // .w the half point size, in clip units of the viewport's pixels xy), with the texture coordinates of the far edge
 // moved by the drawing state's offset (line_point_tex_offsets: the coordinates' mask in x (lines) and y (points), the
 // divisor in z (lines) and w (points)). Compiled once per output layout (with or without motion vectors) and paired

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan GX renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
+// The Vulkan console renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
 // copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"
@@ -187,7 +187,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
                 }
             }
         }
-        // The rings are Vulkan buffers with GX addresses; their sizes follow the D3D12 renderer's. Every segmentation
+        // The rings are Vulkan buffers with console addresses; their sizes follow the D3D12 renderer's. Every segmentation
         // shares one buffer per ring.
         const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes) {
             return target.initialize(device, name, UploadRing::budget(bytes, kFramesInFlight), kFramesInFlight,

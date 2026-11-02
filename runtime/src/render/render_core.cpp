@@ -1,4 +1,4 @@
-// RenderCore: decodes the game's GX command stream and drives the renderer.
+// RenderCore: decodes the game's console command stream and drives the renderer.
 // render_api.cpp exposes it through the galaxy::render API in render_api.h.
 
 #if defined(_WIN32)
@@ -1226,7 +1226,7 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
     }
     if (!scene_camera_captured_) {
         scene_camera_captured_ = true;
-        // GX perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
+        // console perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
         const float c = draw_state_.projection[2];
         const float e = draw_state_.projection[4];
         const float f = draw_state_.projection[5];
@@ -4002,7 +4002,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
     // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
-    // is written again in this frame slot even when the GX state did not change.
+    // is written again in this frame slot even when the console state did not change.
     frame_bindings_dirty_ = true;
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
@@ -4016,7 +4016,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // will provide the actual values once processed from the FIFO.
     renderer_.bind_scene();
 
-    // GX keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
+    // console keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
     // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
     if (!scene_seeded_) {
         scene_seeded_ = true;
@@ -4996,11 +4996,11 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
     // native_tex_matrix reads the vertex's index for those texgens).
     const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
-    // The header word as the last upload wrote it (a GX draw's from its key): any change uploads again, or a native
-    // draw after a GX one would read that draw's mask.
+    // The header word as the last upload wrote it (a console draw's from its key): any change uploads again, or a native
+    // draw after a console one would read that draw's mask.
     // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
     // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
-    // frame, as the GX path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
+    // frame, as the old path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
     const BlendMode& pe_blend = draw_state_.blend;
     const bool frame_alpha = draw_state_.frame_alpha;
     const std::uint32_t native_pe = frame_alpha && pe_blend.const_alpha_enable && pe_blend.alpha_update
@@ -5615,7 +5615,7 @@ void RenderCore::apply_native_material(const material::Native* native) {
         out.bias_clamp = false;
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
-    // Its texgens' post-transform matrices, as a GX material's texgens set them (a draw's own texgens replace them:
+    // Its texgens' post-transform matrices, as a console material's texgens set them (a draw's own texgens replace them:
     // apply_record_matrices).
     for (unsigned i = 0; i < 8u; ++i) {
         if (m.texgen_post[i] == material::kNativeKept) {
@@ -5644,7 +5644,7 @@ void RenderCore::end_native_material() {
         return;
     }
     native_material_ = nullptr;
-    // The GX state's pipeline, constants and textures are rebuilt at the next draw, and the next GX material loads
+    // The console state's pipeline, constants and textures are rebuilt at the next draw, and the next console material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     current_pso_key_valid_ = false;
@@ -5918,7 +5918,7 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
         return;
     }
     const DrawCall& state_call = cached_draw_run_state_call_;
-    // Consecutive draws with the same state share one GPU draw (as GX's direct draws batch): the vertices and indices
+    // Consecutive draws with the same state share one GPU draw (as the console's direct draws batch): the vertices and indices
     // follow the batch's in the rings, the indices counted from its first vertex.
     bool append = pending_draw_batch_.active && !pending_draw_batch_.resident && pending_draw_batch_.indexed &&
                   pending_draw_batch_.vertex_count + count <= 0x10000u &&
@@ -5929,15 +5929,8 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     cached_draw_run_batch_compatible_known_ = false;
     const UploadRing::Allocation vb =
         renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertex), 16u);
-    auto* const vertices = reinterpret_cast<RenderVertex*>(vb.cpu);
-    std::memcpy(vertices, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
-    // Vertices without a position matrix of their own take the current one.
-    if ((record.attributes & shapes::kPositionMatrix) == 0u) {
-        const std::uint32_t row = 3u * draw_state_.position_matrix;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            vertices[i].mtx_indices[0] = (vertices[i].mtx_indices[0] & ~0xFFu) | row;
-        }
-    }
+    // The rings are write-combined: this copy is the only touch, never a read.
+    std::memcpy(vb.cpu, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(
         static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));
@@ -6081,7 +6074,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         }
     }
 
-    // GX clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
+    // console clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
     // copy-clear registers, honoring the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
     // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate, alphaEnable =
     // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest. GXCopyTex's

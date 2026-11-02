@@ -297,8 +297,8 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     mWaterTex = nullptr;
     mWaterIndTex = nullptr;
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
     initParts();
     initDisplayList();
 }
@@ -458,7 +458,7 @@ void OceanRingDrawer::loadMaterial() const {
     // the screen behind (texture 1, by texture matrix 3) tinted by color2 and warped by the indirect texture (2, the third
     // scroll) unless the camera is in the water; blended by the vertex alpha where above zero, depth tested and not
     // written, no culling.
-    JUTTexture screen(MR::getScreenResTIMG(), 0);
+    JUTTexture screen(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_RING, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_NONE);

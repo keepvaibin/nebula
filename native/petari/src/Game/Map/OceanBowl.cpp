@@ -65,9 +65,9 @@ void OceanBowl::init(const JMapInfoIter& rIter) {
     initPoints();
     WaterAreaFunction::entryOceanBowl(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
-    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Mask.bti"), 0);
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
+    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Mask.bti"));
 
     mBloomDrawer = new OceanBowlBloomDrawer(this);
     mBloomDrawer->initWithoutIter();
@@ -404,7 +404,7 @@ void OceanBowl::loadMaterial() const {
                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
     J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     const bool inWater = MR::isCameraInWater();
-    JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
+    JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL,
                        inWater ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,

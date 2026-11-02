@@ -3,22 +3,13 @@
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
 
-static_assert(sizeof(J3DNativeTexObj) <= sizeof(GpuTexObj), "a GpuTexObj holds a J3DNativeTexObj");
-static_assert(sizeof(J3DNativeTlutObj) <= sizeof(GpuTlutObj), "a GpuTlutObj holds a J3DNativeTlutObj");
 
 namespace {
-    J3DNativeTexObj& texture(GpuTexObj* pObj) {
-        return *reinterpret_cast< J3DNativeTexObj* >(pObj);
-    }
+    // Colour-indexed formats a cooked header can still name; their images have the palette applied.
+    const u8 cIndexed4 = 8, cIndexed8 = 9, cIndexed14 = 10;
 
-    const J3DNativeTexObj& texture(const GpuTexObj* pObj) {
-        return *reinterpret_cast< const J3DNativeTexObj* >(pObj);
-    }
-
-    // The format of the palette last loaded into each of GX's 20 palette places.
-
-    bool isColorIndexed(GpuTexFmt format) {
-        return format == GPU_TF_C4 || format == GPU_TF_C8 || format == GPU_TF_C14X2;
+    bool isColorIndexed(u8 format) {
+        return format == cIndexed4 || format == cIndexed8 || format == cIndexed14;
     }
 }  // namespace
 
@@ -32,10 +23,10 @@ namespace J3DNativeTexture {
                                               nebula_texture_linear_layout(format));
         }
         // A tile is 32 bytes (RGBA8 and Z24X8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel
-        // (texture and copy formats); an unknown format is a tile per texel, as GX counts it.
+        // (texture and copy formats); an unknown format is a tile per texel, as console counts it.
         u32 shiftX, shiftY;
         switch (format) {
-        case GPU_TF_C4:
+        case cIndexed4:
         case GPU_TF_I4:
         case GPU_TF_CMPR:
         case GPU_CTF_R4:
@@ -43,7 +34,7 @@ namespace J3DNativeTexture {
             shiftX = 3;
             shiftY = 3;
             break;
-        case GPU_TF_C8:
+        case cIndexed8:
         case GPU_TF_I8:
         case GPU_TF_IA4:
         case GPU_TF_A8:
@@ -57,7 +48,7 @@ namespace J3DNativeTexture {
             shiftX = 3;
             shiftY = 2;
             break;
-        case GPU_TF_C14X2:
+        case cIndexed14:
         case GPU_TF_IA8:
         case GPU_TF_RGB565:
         case GPU_TF_RGB5A3:
@@ -123,9 +114,9 @@ namespace J3DNativeTexture {
         pHost->texture_image(pHost->user, &image);
     }
 
-    void init(GpuTexObj* pObj, void* pImage, u16 width, u16 height, GpuTexFmt format, GpuTexWrapMode wrapS,
+    void init(J3DNativeTexObj* pObj, void* pImage, u16 width, u16 height, GpuTexFmt format, GpuTexWrapMode wrapS,
               GpuTexWrapMode wrapT, GpuBool mipmap) {
-        J3DNativeTexObj& rTex = texture(pObj);
+        J3DNativeTexObj& rTex = *pObj;
         memset(&rTex, 0, sizeof(rTex));
         rTex.mImage = pImage;
         rTex.mWidth = width;
@@ -149,14 +140,7 @@ namespace J3DNativeTexture {
         }
     }
 
-    void initCI(GpuTexObj* pObj, void* pImage, u16 width, u16 height, GpuCITexFmt format, GpuTexWrapMode wrapS,
-                GpuTexWrapMode wrapT, GpuBool mipmap, u32 tlutName) {
-        init(pObj, pImage, width, height, static_cast< GpuTexFmt >(format), wrapS, wrapT, mipmap);
-        texture(pObj).mPalette = 1;
-        texture(pObj).mTlutName = tlutName;
-    }
-
-    void initLOD(GpuTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias,
+    void initLOD(J3DNativeTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias,
                  GpuBool biasClamp, GpuBool edgeLod, GpuAnisotropy maxAniso) {
         // GpuInitTexObjLOD's clamps and steps: the bias in 1/32 (-4 to 3.99), the LOD range in 1/16 (0 to 10).
         if (lodBias < -4.0f) {
@@ -166,7 +150,7 @@ namespace J3DNativeTexture {
         }
         minLod = minLod < 0.0f ? 0.0f : minLod > 10.0f ? 10.0f : minLod;
         maxLod = maxLod < 0.0f ? 0.0f : maxLod > 10.0f ? 10.0f : maxLod;
-        J3DNativeTexObj& rTex = texture(pObj);
+        J3DNativeTexObj& rTex = *pObj;
         rTex.mMinFilter = static_cast< u8 >(minFilter);
         rTex.mMagFilter = magFilter == GPU_LINEAR ? GPU_LINEAR : GPU_NEAR;
         rTex.mLodBias = static_cast< s8 >(static_cast< s32 >(lodBias * 32.0f)) / 32.0f;
@@ -177,8 +161,8 @@ namespace J3DNativeTexture {
         rTex.mMaxAniso = static_cast< u8 >(maxAniso);
     }
 
-    void load(const GpuTexObj* pObj, GpuTexMapID map) {
-        const J3DNativeTexObj& rTex = texture(pObj);
+    void load(const J3DNativeTexObj* pObj, GpuTexMapID map) {
+        const J3DNativeTexObj& rTex = *pObj;
         NebulaStateOp ops[2];
         J3DStateList list(ops, 2);
         list.setTexLookupMode(map, static_cast< GpuTexWrapMode >(rTex.mWrapS), static_cast< GpuTexWrapMode >(rTex.mWrapT),
@@ -189,9 +173,9 @@ namespace J3DNativeTexture {
         list.send();
     }
 
-    void getAll(const GpuTexObj* pObj, void** ppImage, u16* pWidth, u16* pHeight, GpuTexFmt* pFormat,
+    void getAll(const J3DNativeTexObj* pObj, void** ppImage, u16* pWidth, u16* pHeight, GpuTexFmt* pFormat,
                 GpuTexWrapMode* pWrapS, GpuTexWrapMode* pWrapT, GpuBool* pMipmap) {
-        const J3DNativeTexObj& rTex = texture(pObj);
+        const J3DNativeTexObj& rTex = *pObj;
         *ppImage = const_cast< void* >(rTex.mImage);
         *pWidth = rTex.mWidth;
         *pHeight = rTex.mHeight;
@@ -201,9 +185,9 @@ namespace J3DNativeTexture {
         *pMipmap = rTex.mMipmap;
     }
 
-    void getLODAll(const GpuTexObj* pObj, GpuTexFilter* pMinFilter, GpuTexFilter* pMagFilter, f32* pMinLod, f32* pMaxLod,
+    void getLODAll(const J3DNativeTexObj* pObj, GpuTexFilter* pMinFilter, GpuTexFilter* pMagFilter, f32* pMinLod, f32* pMaxLod,
                    f32* pLodBias, GpuBool* pBiasClamp, GpuBool* pEdgeLod, GpuAnisotropy* pMaxAniso) {
-        const J3DNativeTexObj& rTex = texture(pObj);
+        const J3DNativeTexObj& rTex = *pObj;
         *pMinFilter = static_cast< GpuTexFilter >(rTex.mMinFilter);
         *pMagFilter = static_cast< GpuTexFilter >(rTex.mMagFilter);
         *pMinLod = rTex.mMinLod;
@@ -214,34 +198,19 @@ namespace J3DNativeTexture {
         *pMaxAniso = static_cast< GpuAnisotropy >(rTex.mMaxAniso);
     }
 
-    u32 getTlut(const GpuTexObj* pObj) {
-        return texture(pObj).mTlutName;
-    }
-
-    void setTlut(GpuTexObj* pObj, u32 tlutName) {
-        texture(pObj).mTlutName = tlutName;
-    }
-
-    void initTlut(GpuTlutObj* pObj, void* pLut, GpuTlutFmt format, u16 entries) {
-        J3DNativeTlutObj& rTlut = *reinterpret_cast< J3DNativeTlutObj* >(pObj);
-        memcpy(rTlut.mLut, &pLut, sizeof(pLut));
-        rTlut.mFormat = static_cast< u8 >(format);
-        rTlut.mEntries = entries;
-    }
-
 };  // namespace J3DNativeTexture
 
-void J3DNativeTextureInit(GpuTexObj* pObj, void* pImage, u16 width, u16 height, GpuTexFmt format, GpuTexWrapMode wrapS,
+void J3DNativeTextureInit(J3DNativeTexObj* pObj, void* pImage, u16 width, u16 height, GpuTexFmt format, GpuTexWrapMode wrapS,
                           GpuTexWrapMode wrapT, GpuBool mipmap) {
     J3DNativeTexture::init(pObj, pImage, width, height, format, wrapS, wrapT, mipmap);
 }
 
-void J3DNativeTextureInitLOD(GpuTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod,
+void J3DNativeTextureInitLOD(J3DNativeTexObj* pObj, GpuTexFilter minFilter, GpuTexFilter magFilter, f32 minLod, f32 maxLod,
                              f32 lodBias, GpuBool biasClamp, GpuBool edgeLod, GpuAnisotropy maxAniso) {
     J3DNativeTexture::initLOD(pObj, minFilter, magFilter, minLod, maxLod, lodBias, biasClamp, edgeLod, maxAniso);
 }
 
-void J3DNativeTextureLoad(const GpuTexObj* pObj, GpuTexMapID map) {
+void J3DNativeTextureLoad(const J3DNativeTexObj* pObj, GpuTexMapID map) {
     J3DNativeTexture::load(pObj, map);
 }
 

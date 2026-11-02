@@ -496,8 +496,8 @@ void WarpPod::initDraw() {
         _C4[i] = position + up * 200.0f;
     }
 
-    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"), 0);
-    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"), 0);
+    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
+    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"));
 }
 
 void WarpPod::drawCylinder(u32) const {
@@ -520,7 +520,7 @@ void WarpPod::drawCylinder(u32) const {
     }
 
     // runtime/src/render/materials/tex_alpha_lerp.hlsl: the glow colour to white by the texture's alpha, opaque
-    // (GX's alpha (texA * k + 1/2) * 2 is 1 for every constant alpha k), added; depth tested.
+    // (the console's alpha (texA * k + 1/2) * 2 is 1 for every constant alpha k), added; depth tested.
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 2, 0);
     MR::ddSetVtxFormat(2);

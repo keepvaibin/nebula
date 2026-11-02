@@ -47,7 +47,7 @@ void BloomEffectSimple::draw() const {
     if (route == 2) {
         // The chain below, drawn by the renderer at the internal resolution (galaxy/gx/game_bloom.h): the threshold,
         // the channel, the ring's tap weight (blurTexture's), the intensity and the ring's vertical radius per unit;
-        // then the GX state the chain leaves.
+        // then the console state the chain leaves.
         const u8 alpha = 255.0f * mIntensity * get_10();
         const u32 tap = static_cast< u8 >(static_cast< s32 >(255.0f * 1.0f / 8));
         const f32 vertical = MR::isScreen16Per9() ? 1.333f : 1.0f;

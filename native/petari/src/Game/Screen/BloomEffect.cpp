@@ -154,7 +154,7 @@ void BloomEffect::postDraw() const {
 
     if (sBloomRoute == 2) {
         // The chain below, drawn by the renderer at the internal resolution: the threshold, both blurs' tap weights (as
-        // initBlur loads them), the intensity and the rings' horizontal radius per unit; then the GX state the chain
+        // initBlur loads them), the intensity and the rings' horizontal radius per unit; then the console state the chain
         // leaves.
         const u8 intensity = _14 * get_10();
         const u32 tap1 = static_cast< u8 >(static_cast< s32 >(_18 * 255.0f));

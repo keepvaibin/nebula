@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 96u
+#define NEBULA_GAME_API_VERSION 97u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -166,13 +166,9 @@ enum {
     NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
     NEBULA_STATE_VIEWPORT,          /* f: left, top, width, height (pixels), near depth, far depth (0-1) */
     NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
-    NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix (0-9) */
-    NEBULA_STATE_LINE_WIDTH,        /* f: width (pixels); a[1]: texture offset n (1/n texel; 0 none) */
-    NEBULA_STATE_POINT_SIZE,        /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     NEBULA_STATE_LIGHT_ATTENUATION, /* light (0-7), r, g, b, a; f: angle attenuation a0-a2, distance k0-k2 */
     NEBULA_STATE_LIGHT_POSITION,    /* light (0-7); f: position x, y, z, direction x, y, z */
     NEBULA_STATE_FRAME_ALPHA,       /* changed (differs from the last one), the frame keeps alpha (1) or not (0) */
-    NEBULA_STATE_TEX_OFFSETS,       /* texture coordinate, lines offset it, points offset it */
 };
 
 /* What a draw does to the target (shape_draw, immediate): the game's current values, whichever way it came by them. */
@@ -182,6 +178,11 @@ typedef struct NebulaPassState {
     uint8_t cull;                                     /* NEBULA_CULL_* */
     uint8_t color_write, alpha_write;
     uint8_t constant_alpha, constant_alpha_value;     /* the picture's alpha written is this value */
+    uint8_t position_matrix;                          /* the place (0-9) vertices without their own take */
+    uint8_t line_divisor, point_divisor;              /* lines' and points' texture offset n (1/n texel; 0 none) */
+    uint8_t line_offsets, point_offsets;              /* bit per texture coordinate those offsets move */
+    uint8_t reserved[3];
+    float line_width, point_size;                     /* pixels */
 } NebulaPassState;
 
 typedef struct NebulaStateOp {

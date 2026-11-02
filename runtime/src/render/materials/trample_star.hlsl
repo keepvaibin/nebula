@@ -21,7 +21,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.uv[0] = float4(v.uv[0], 1.0, 0.0);
     const float4 p = float4(v.pos, 1.0);
     float3 s = float3(dot(p, inline_tex_matrices[3]), dot(p, inline_tex_matrices[4]), dot(p, inline_tex_matrices[5]));
-    // q of 0: GX halves and clamps s and t.
+    // q of 0: console halves and clamps s and t.
     if (s.z == 0.0) {
         s.xy = clamp(s.xy * 0.5, -1.0, 1.0);
     }
