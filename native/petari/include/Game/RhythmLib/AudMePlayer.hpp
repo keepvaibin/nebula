@@ -14,22 +14,27 @@ struct AudMePlayingParams {
     /* 0x1 */ u8 mChordVolume;
     /* 0x2 */ u8 _2;
     /* 0x3 */ u8 _3;
-    /* 0x4 */ NEBULA_BE(u16) _4;
+    /* 0x4 */ u16 _4;
     /* 0x6 */ u8 _6;
     /* 0x7 */ u8 _7;
 };
 
 class AudMePlayingParamsHolder {
 public:
-    AudMePlayingParamsHolder() : mNumEntries(), mParams(), mNames() {
+    AudMePlayingParamsHolder() : mNumEntries(), mParams(), mBase(), mNameOffsets() {
     }
 
     void setResource(void*);
 
     /* 0x0 */ u32 mNumEntries;
     /* 0x4 */ AudMePlayingParams* mParams;
-    // The file's name offsets, relocated in place.
-    /* 0x8 */ NEBULA_SELFREL(const char)* mNames;
+    // The ME table file (host order, as the importer cooks it) and its name offsets from the file's start.
+    const u8* mBase;
+    const u32* mNameOffsets;
+
+    const char* getName(u32 index) const {
+        return reinterpret_cast< const char* >(mBase + mNameOffsets[index]);
+    }
 };
 
 class AudMe : public JSULink< AudMe >, public JASPoolAllocObject< AudMe > {
@@ -99,8 +104,8 @@ public:
 };
 
 struct AudMeTable {
-    /* 0x0 */ NEBULA_BE(s32) mNumEntries;
-    /* 0x4 */ NEBULA_BE(s32) mSeqStartPos[1];
+    /* 0x0 */ s32 mNumEntries;
+    /* 0x4 */ s32 mSeqStartPos[1];
 };
 
 class AudMeMgr : public JASGlobalInstance< AudMeMgr > {

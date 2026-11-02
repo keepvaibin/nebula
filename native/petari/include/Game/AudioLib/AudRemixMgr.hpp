@@ -5,12 +5,12 @@
 
 class JKRHeap;
 
-// In the remix sequence resource, big-endian.
+// In the remix sequence resource (host order, as the importer cooks it).
 struct RemixNoteData {
-    NEBULA_BE(s32) _0;
-    NEBULA_BE(s32) _4;
-    NEBULA_BE(s32) _8;
-    NEBULA_BE(s32) _C;
+    s32 _0;
+    s32 _4;
+    s32 _8;
+    s32 _C;
 };
 
 struct RemixNoteTrackData {
@@ -22,7 +22,7 @@ struct RemixNoteGroupData {
     /* 0x0  */ s32 mIndex;
     /* 0x4  */ s32 mTrackCount;
     /* 0x8  */ s32 mNoteCount;
-    NEBULA_BE(u32)* _C;
+    u32* _C;
     /* 0x10 */ RemixNoteTrackData* mRemixTracks;
 };
 
