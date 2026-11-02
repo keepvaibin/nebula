@@ -23,13 +23,14 @@ void require(bool condition, const char* message) {
 }
 
 void put16(Bytes& bytes, std::size_t offset, unsigned value) {
-    bytes.at(offset) = static_cast<std::byte>((value >> 8) & 255u);
-    bytes.at(offset + 1) = static_cast<std::byte>(value & 255u);
+    bytes[offset] = static_cast<std::byte>(value & 0xFFu);
+    bytes[offset + 1] = static_cast<std::byte>(value >> 8);
 }
 
 void put32(Bytes& bytes, std::size_t offset, std::uint32_t value) {
-    put16(bytes, offset, value >> 16);
-    put16(bytes, offset + 2, value & 65535u);
+    for (int i = 0; i < 4; ++i) {
+        bytes[offset + i] = static_cast<std::byte>((value >> (8 * i)) & 0xFFu);
+    }
 }
 
 // A cooked TPL: one image whose data is a texture record of `layout` holding `texels` (the level's bytes).
@@ -93,15 +94,15 @@ void test_malformed_tpl() {
 
 Bytes archive(const Bytes& texture) {
     Bytes bytes(0x80 + texture.size());
-    bytes[0] = std::byte{'R'}; bytes[1] = std::byte{'A'};
-    bytes[2] = std::byte{'R'}; bytes[3] = std::byte{'C'};
+    bytes[0] = std::byte{'C'}; bytes[1] = std::byte{'R'};
+    bytes[2] = std::byte{'A'}; bytes[3] = std::byte{'R'};
     put32(bytes, 0x0C, 0x60); // File data at 0x80, relative to 0x20.
     put32(bytes, 0x20, 1);
     put32(bytes, 0x24, 0x20); // Node at 0x40.
     put32(bytes, 0x2C, 0x30); // Entry at 0x50.
     put32(bytes, 0x34, 0x44); // String at 0x64.
     put16(bytes, 0x4A, 1);
-    put32(bytes, 0x54, 0x00010000);
+    put32(bytes, 0x54, 0x01000000); // A file (flags in the top byte), name at 0.
     put32(bytes, 0x5C, static_cast<std::uint32_t>(texture.size()));
     constexpr char name[] = "image.tpl";
     for (std::size_t i = 0; i < sizeof(name); ++i) {
@@ -115,6 +116,10 @@ void test_archive_and_loader() {
     const auto texture = tpl(1, 1, NEBULA_TEXTURE_LA8, {1, 2});
     const auto bytes = archive(texture);
     require(galaxy::render::rarc_find_file(bytes, "image.tpl").has_value(), "valid archive lookup failed");
+    auto disc_order = bytes;
+    disc_order[0] = std::byte{'R'}; disc_order[1] = std::byte{'A'};
+    disc_order[2] = std::byte{'R'}; disc_order[3] = std::byte{'C'};
+    require(!galaxy::render::rarc_find_file(disc_order, "image.tpl"), "an uncooked archive accepted");
     require(!galaxy::render::rarc_find_file(bytes, "IMAGE.TPL"), "archive lookup lost case sensitivity");
     for (const std::size_t offset : {0x0Cu, 0x24u, 0x2Cu, 0x34u}) {
         auto corrupt = bytes;
