@@ -130,8 +130,6 @@ void MarioActor::updateTornado() {
     mTornadoMario->setTrHeight(mPosition, mMario->mFrontVec, mMario->_54C, _240);
 }
 
-#pragma push
-#pragma global_optimizer off
 void MarioActor::updateTakingPosition() {
     if (_480) {
         const HitSensor* sensor = _424;
@@ -235,7 +233,6 @@ void MarioActor::updateTakingPosition() {
         carryRotation = _438[0] + rotation;
     }
 }
-#pragma pop
 
 const HitSensor* MarioActor::getCarrySensor() const {
     if (_468 == 0) {

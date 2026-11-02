@@ -85,8 +85,6 @@ void AirBubble::appearMove(const TVec3f& rTrans, s32 life) {
 
 // required to match
 // TODO remove
-#pragma push
-#pragma opt_propagation off
 void AirBubble::exeWait() {
     if (MR::isFirstStep(this)) {
     }
@@ -113,7 +111,6 @@ void AirBubble::exeWait() {
 
     mPosition = _8C + TVec3f(0.0f, 1.0f, 0.0f) * _B0 * 1.0f;
 }
-#pragma pop
 
 void AirBubble::exeMove() {
     if (MR::isFirstStep(this)) {

@@ -196,8 +196,6 @@ void KoopaBattleStairsVs1::exeJumpToNextPosStart() {
 
 // this is the only way I could match this
 // TODO fix
-#pragma push
-#pragma opt_propagation off
 void KoopaBattleStairsVs1::exeJumpToNextPosLoop() {
     if (MR::isFirstStep(this)) {
         MR::startAction(mKoopa, "JumpFast");
@@ -230,7 +228,6 @@ void KoopaBattleStairsVs1::exeJumpToNextPosLoop() {
         setNerve(GET_NERVE(KoopaBattleStairsVs1, KoopaBattleStairsVs1NrvJumpToNextPosEnd));
     }
 }
-#pragma pop
 
 void KoopaBattleStairsVs1::exeJumpToNextPosEnd() {
     if (MR::isFirstStep(this)) {

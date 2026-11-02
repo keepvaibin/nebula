@@ -54,7 +54,6 @@ namespace NrvGameSystem {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
-    NebulaFrameClock::init();
     JKRExpHeap::createRoot(1, true);
     (MR::MutexHolder< 0 >::sMutex).init();
     (MR::MutexHolder< 2 >::sMutex).init();
@@ -188,7 +187,7 @@ void GameSystem::frameLoop() {
     }
     mObjHolder->captureIfAllowForScreenPreserver();
     MainLoopFramework::sManager->endFrame();
-    MainLoopFramework::sManager->waitForFrame();
+    NebulaFrameClock::waitFrame();
 }
 
 void GameSystem::draw() {

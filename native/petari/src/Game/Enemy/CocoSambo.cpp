@@ -461,8 +461,6 @@ void CocoSambo::initSensor() {
     MR::addHitSensorMtx(this, "spine3", ATYPE_SAMBO_BODY, 8, f, MR::getJointMtx(this, "Spine3"), offset);
 }
 
-#pragma push
-#pragma opt_propagation off
 void CocoSambo::dirToPlayer(f32 angle) {
     TVec3f toPlayer;
     toPlayer.sub(*MR::getPlayerPos(), *getPosition());
@@ -477,7 +475,6 @@ void CocoSambo::dirToPlayer(f32 angle) {
         MR::turnVecToVecCos(&mFrontVec, front, targetFront, MR::cosDegree(angle), mUpVec);
     }
 }
-#pragma pop
 
 bool CocoSambo::tryDpdPointing(const Nerve* pNerve) {
     if (isPointing()) {

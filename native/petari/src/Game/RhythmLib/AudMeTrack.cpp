@@ -399,8 +399,6 @@ void AudMeTrack::setOscAdsr(s16 attackTime, s16 decayTime, s16 sustainTime, s16 
     setRelease(release);
 }
 
-#pragma push
-#pragma opt_prelinearize off
 void AudMeTrack::updateChannelParams() {
     for (u32 i = 0; i < mNumChannelMgrs; i++) {
         AudMeChannelMgr* mgr = mChannelMgrs[i];
@@ -444,7 +442,6 @@ void AudMeTrack::updateChannelParams() {
         }
     }
 }
-#pragma pop
 
 
 bool AudMeTrack::gframeProc() {

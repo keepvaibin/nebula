@@ -29,8 +29,6 @@ namespace {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void CamKarikariEffector::update(CameraMan* pCameraMan) {
     if (MR::isPlayerDead()) {
         CameraLocalUtil::setFovy(pCameraMan, CameraLocalUtil::getFovy(pCameraMan));
@@ -93,4 +91,3 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
         CameraLocalUtil::setFovy(pCameraMan, (fovy * 180.0f * t) / MR::pi() + (1.0f - t) * CameraLocalUtil::getFovy(pCameraMan));
     }
 }
-#pragma pop

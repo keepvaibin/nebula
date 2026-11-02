@@ -27,16 +27,6 @@ struct GameEvent {
     bool isWaiting() const { return waiters.head != nullptr; }
 };
 
-// Threads waiting for the next frame.
-struct GameFrameGate {
-    GameWaitList waiters;
-    uint32_t frames;
-
-    void init();
-    void advance();
-    void waitNext();
-};
-
 // A recursive mutex.
 struct GameMutex {
     GameWaitList waiters;
@@ -81,6 +71,8 @@ struct GameThreadRecord {
 };
 
 namespace GameThreads {
+    // The main thread lets go of the world until its next frame is due.
+    void waitFrame();
     bool create(GameThreadRecord* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize);
     GameThreadRecord* current();
     void exit(void* pValue);

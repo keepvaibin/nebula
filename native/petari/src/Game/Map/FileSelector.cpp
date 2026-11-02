@@ -801,8 +801,6 @@ namespace {
     };
 };  // namespace
 
-#pragma push
-#pragma opt_prelinearize off
 void FileSelector::calcBasePos(f32 offset) {
     f32 thetaStep = 2.0f * PI / USER_FILE_NUM;
     TPos3f translationMtx;
@@ -827,7 +825,6 @@ void FileSelector::calcBasePos(f32 offset) {
         transform.mult(_98[i], _98[i]);
     }
 }
-#pragma pop
 
 namespace {
     inline void initFileItem(FileSelector* pSelector, FileSelectItem* pItem) {

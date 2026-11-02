@@ -27,16 +27,13 @@ public:
     void prepareCopyDisp();
     void preGX();
     void endGX();
-    void waitForFrame();
     void beginRender();
     void endRender();
     void endFrame();
-    void waitBlanking(int);
     void clearEfb(NebulaColor8);
     static void setForOSResetSystem();
 
     /* 0x00 */ Color8 mClearColor;
-    /* 0x10 */ u16 mFramesPerStep;
     /* 0x18 */ bool mUseAlpha;
     /* 0x19 */ bool mUseVFilter;
     u8 _1A;

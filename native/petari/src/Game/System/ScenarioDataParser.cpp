@@ -156,8 +156,6 @@ GalaxyStatusAccessor ScenarioDataIter::makeAccessor() const {
     return GalaxyStatusAccessor(mParser->getScenarioData(mCur));
 }
 
-#pragma push
-#pragma opt_propagation off
 ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mScenarioData() {
     GameAssets::FolderEntry dirent;
     for (u32 i = 0; GameAssets::folderEntry("/StageData", i, &dirent); i++) {
@@ -184,7 +182,6 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mSce
 
     MR::sort(mScenarioData.begin(), mScenarioData.end(), GalaxyNameSortLt());
 }
-#pragma pop
 
 const ScenarioData* ScenarioDataParser::getScenarioData(const char* pGalaxyName) const {
     for (s32 i = 0; i < mScenarioData.size(); i++) {

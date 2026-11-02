@@ -224,8 +224,6 @@ bool OceanSphere::isInWater(const TVec3f& rPos) const {
     return rPos.distance(mPosition) <= mRadius;
 }
 
-#pragma push
-#pragma opt_propagation off
 bool OceanSphere::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const {
     const TVec3f& rPosition = mPosition;
     const f32 radius = mRadius;
@@ -241,7 +239,6 @@ bool OceanSphere::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, Wate
     pInfo->mSurfacePos.set(rPosition + normal * radius);
     return true;
 }
-#pragma pop
 
 void OceanSphere::initPoints() {
     if (mRadius <= 300.0f) {

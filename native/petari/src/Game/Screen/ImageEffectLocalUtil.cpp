@@ -144,8 +144,6 @@ void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     J3DNativeDraw::texCoord(1.0f, 0.0f);
 }
 
-#pragma push
-#pragma global_optimizer off
 void ImageEffectLocalUtil::blurTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u32 sampleCount, f32 radius, f32 intensity) {
     f32 aspect = MR::isScreen16Per9() ? 1.333f : 1.0f;
     f32 verticalRadius = radius * aspect;
@@ -166,7 +164,6 @@ void ImageEffectLocalUtil::blurTexture(JUTTexture* pTexture, s32 divisions, s32 
 
     ::setTextureTrans(0.0f, 0.0f);
 }
-#pragma pop
 
 void MR::connectToSceneNormalBloom(BloomEffect* pBloomEffect) {
     MR::connectToScene(pBloomEffect, MR::MovementType_None, MR::CalcAnimType_Environment, MR::DrawBufferType_None, MR::DrawType_None);

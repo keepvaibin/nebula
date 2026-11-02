@@ -37,8 +37,6 @@ RainCloud::RainCloud(const char* pName)
     mSplashMtx.identity();
 }
 
-#pragma push
-#pragma global_optimizer off
 void RainCloud::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("RainCloud", nullptr, false);
@@ -124,7 +122,6 @@ void RainCloud::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(RainCloud, RainCloudNrvWait));
     makeActorAppeared();
 }
-#pragma pop
 
 void RainCloud::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
     bool arg3 = false;

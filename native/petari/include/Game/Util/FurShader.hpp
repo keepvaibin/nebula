@@ -46,10 +46,4 @@ public:
     /* 0x0C */ CShader::CIndex* mIndexArray;
     /* 0x10 */ CShader::CLengthMap mLengthMap;
     /* 0x1C */ f32 _1C;
-    /* 0x20 */ u8 _20;
-    /* 0x21 */ u8 _21;
-    /* 0x22 */ u8 _22;
-    /* 0x23 */ u8 _23;
-    /* 0x24 */ u8 _24;
-    /* 0x25 */ u8 _25;
 };

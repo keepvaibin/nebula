@@ -318,7 +318,6 @@ struct Module {
     decltype(&nebula_game_attach) attach;
     decltype(&nebula_game_run) run;
     decltype(&nebula_game_asset_complete) asset_complete;
-    decltype(&nebula_game_frame_tick) frame_tick;
     decltype(&nebula_game_sound_frame) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
@@ -442,7 +441,6 @@ void load_module(const fs::path& path) {
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
     gModule.asset_complete = reinterpret_cast<decltype(gModule.asset_complete)>(find_symbol(module, "nebula_game_asset_complete"));
-    gModule.frame_tick = reinterpret_cast<decltype(gModule.frame_tick)>(find_symbol(module, "nebula_game_frame_tick"));
     gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_sound_frame"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
@@ -744,20 +742,16 @@ void audio_frame_tick() {
 // wake-up skips the fields it missed, as a display does, rather than delivering them back to back. On Android the
 // retrace follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
 // stays on screen for the same time; the host's clock takes over where the display gives none.
-void vi_thread() {
-    if (deterministic_mode()) {
-        return;  // the game takes its retraces (svc_test_frame_step)
-    }
-    name_thread(L"Nebula Host VI");
+void svc_frame_wait(void*) {
     const auto display_period = std::chrono::nanoseconds(1000000000ull / 60);
-    auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootRetrace) : display_period;
-    auto next = Clock::now() + period;
+    static auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootRetrace) : display_period;
+    static auto next = Clock::now() + period;
 #if defined(NEBULA_HOST_SDL)
-    int64_t vsync_ns = 0;
-    uint32_t on_vsync = 0;
-    uint32_t retraces = 0;
-    int64_t work_sum = 0;
-    int64_t work_max = 0;
+    static int64_t vsync_ns = 0;
+    static uint32_t on_vsync = 0;
+    static uint32_t frames = 0;
+    static int64_t work_sum = 0;
+    static int64_t work_max = 0;
 #endif
     for (;;) {
 #if defined(NEBULA_HOST_SDL)
@@ -774,7 +768,6 @@ void vi_thread() {
         }
         // The last frame's work (the game and render threads' CPU time), to the performance hints (Android).
         [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_retrace();
-        gModule.frame_tick();
         if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
             period = display_period;
         }
@@ -788,22 +781,23 @@ void vi_thread() {
             next = now + period;  // the host's clock continues from the display's
             ++on_vsync;
         }
-        // Every 10 s: how the retraces were paced, and the frame work (the busier of the game and render threads).
+        // Every 10 s: how the frames were paced, and the frame work (the busier of the game and render threads).
         work_sum += work;
         work_max = std::max(work_max, work);
-        if (++retraces == 600u) {
-            std::fprintf(stderr, "[pacing] %u retraces, %u on the display's vsync (%.1f Hz); frame work %.2f ms average, "
-                         "%.2f ms longest\n", retraces, on_vsync, galaxy::sdl::display_refresh_hz(),
-                         static_cast<double>(work_sum) / retraces / 1e6, static_cast<double>(work_max) / 1e6);
-            retraces = on_vsync = 0u;
+        if (++frames == 600u) {
+            std::fprintf(stderr, "[pacing] %u frames, %u on the display's vsync (%.1f Hz); frame work %.2f ms average, "
+                         "%.2f ms longest\n", frames, on_vsync, galaxy::sdl::display_refresh_hz(),
+                         static_cast<double>(work_sum) / frames / 1e6, static_cast<double>(work_max) / 1e6);
+            frames = on_vsync = 0u;
             work_sum = work_max = 0;
         }
 #endif
+        return;
     }
 }
 
-// Deterministic mode's retrace: the game has nothing to run. The audio ticks of one retrace's length (the audio clock's
-// period, without the device's correction), then the retrace.
+// Deterministic mode's frame: the game has nothing to run. The audio ticks of one frame's length (the audio clock's
+// period, without the device's correction) and the clock.
 void svc_test_frame_step(void*) {
     static double due_ns = 0.0;
     uint32_t frame_samples = 0;
@@ -823,7 +817,6 @@ void svc_test_frame_step(void*) {
         due_ns = 0.0;
     }
     gDeterministicRetraces.fetch_add(1, std::memory_order_relaxed);
-    gModule.frame_tick();
 }
 
 void svc_log(void*, const char* text) {
@@ -2554,7 +2547,7 @@ const char* svc_game_id(void*) {
 
 std::atomic<uint32_t> gRetraces{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
-void svc_frame_started(void*, int black, uint32_t retrace) {
+void svc_frame_begun(void*, int black, uint32_t retrace) {
     gRetraces.store(retrace, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     frame_hash_retrace(retrace);
@@ -4016,7 +4009,8 @@ int main(int argc, char** argv) {
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
     services.game_id = svc_game_id;
-    services.frame_started = svc_frame_started;
+    services.frame_wait = svc_frame_wait;
+    services.frame_begun = svc_frame_begun;
     services.save_request = svc_save_request;
     services.system_setting = svc_system_setting;
     services.input_read = svc_input_read;
@@ -4105,7 +4099,6 @@ int main(int argc, char** argv) {
 #if !defined(NEBULA_HOST_RENDERER)
     std::thread(ai_thread).detach();
 #endif
-    std::thread(vi_thread).detach();
 #if defined(NEBULA_HOST_RENDERER)
     std::thread(input_thread).detach();
 #endif

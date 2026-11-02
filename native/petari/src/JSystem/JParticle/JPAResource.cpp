@@ -812,7 +812,6 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getLast();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
-            MotionSignal::drawParticle(node->getObject(), false);
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -823,7 +822,6 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getFirst();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
-            MotionSignal::drawParticle(node->getObject(), false);
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -832,6 +830,8 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         }
     }
 
+
+    JPAParticleBatch::flush();
 
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
@@ -876,7 +876,6 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getLast();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
-            MotionSignal::drawParticle(node->getObject(), true);
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -887,7 +886,6 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getFirst();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
-            MotionSignal::drawParticle(node->getObject(), true);
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -900,6 +898,8 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
     }
+
+    JPAParticleBatch::flush();
 }
 
 namespace {
@@ -948,6 +948,7 @@ namespace {
     // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
     // shape and the manager set; its colours from JPANativeColor.
     void sendParticleMaterial(const JPABaseShape* pShape, u32 flags) {
+        JPAParticleBatch::begin();
         NebulaNativeMaterial& material = sParticle;
         NativeShader::init(material, NEBULA_SHADER_PARTICLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
@@ -987,29 +988,26 @@ namespace {
         }
     }
 
-    // A colour change: the material in use takes it at once (a constants-only resend).
-    void colorsChanged() {
-        if (sParticleSent && J3DNativeMaterial::currentShader() == NEBULA_SHADER_PARTICLE) {
-            sendParticle(true);
-        }
-    }
 }  // namespace
 
 namespace JPANativeColor {
+    u32 prmWord() {
+        return (static_cast< u32 >(sPrm.r) << 24) | (static_cast< u32 >(sPrm.g) << 16) | (static_cast< u32 >(sPrm.b) << 8) | sPrm.a;
+    }
+    u32 envWord() {
+        return (static_cast< u32 >(sEnv.r) << 24) | (static_cast< u32 >(sEnv.g) << 16) | (static_cast< u32 >(sEnv.b) << 8) | sEnv.a;
+    }
     void prm(const NebulaColor8& rColor) {
         sPrm = rColor;
-        colorsChanged();
     }
 
     void env(const NebulaColor8& rColor) {
         sEnv = rColor;
-        colorsChanged();
     }
 
     void prmEnv(const NebulaColor8& rPrm, const NebulaColor8& rEnv) {
         sPrm = rPrm;
         sEnv = rEnv;
-        colorsChanged();
     }
 }  // namespace JPANativeColor
 
@@ -1051,8 +1049,6 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     int base_plane_type = (mpChildShape->getType() == 3 || mpChildShape->getType() == 7) ? mpChildShape->getBasePlaneType() : 0;
     int pos_offset = 0x30 + base_plane_type * 0x6C;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     if (mpChildShape->isClipOn()) {
     } else {
     }

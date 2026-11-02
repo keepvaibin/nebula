@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
@@ -21,6 +22,7 @@ namespace {
     u32 sScissor[4] = {};
 
     void sendOp(const NebulaStateOp& rOp) {
+        J3DNativeDraw::flush();
         const NebulaHostServices* pHost = nebula_host();
         pHost->state(pHost->user, &rOp, 1);
     }
@@ -48,12 +50,14 @@ namespace {
             op.f[i] = sTerms[i];
         }
         const NebulaHostServices* pHost = nebula_host();
+        J3DNativeDraw::flush();
         pHost->state(pHost->user, &op, 1);
     }
 }  // namespace
 
 namespace J3DNativeView {
     void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count) {
+        J3DNativeDraw::flush();
         const NebulaHostServices* pHost = nebula_host();
         pHost->screen_probe(pHost->user, channel, what, pProbes, count);
     }

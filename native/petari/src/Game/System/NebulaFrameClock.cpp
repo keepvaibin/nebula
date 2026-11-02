@@ -1,7 +1,5 @@
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/System/NebulaAtomic.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
 
 #include <math.h>
 
@@ -12,10 +10,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    NebulaAtomic< u32 > sFrames;
-    GameFrameGate sGate;
-    GameEvent sRetrace;
-    GameThreadRecord sThread;
+    u32 sFrames;
     // Black for the first frames after the game asks for its frame (start).
     u32 sBlackFrames = ~0u;
     // show() sets the next state; it is what the screen shows from the next frame on.
@@ -78,37 +73,13 @@ namespace {
             sNextPicture = true;
         }
         sPicture = sNextPicture;
-        nebula_host()->frame_started(nebula_host()->user, sPicture ? 0 : 1, sFrames);
+        nebula_host()->frame_begun(nebula_host()->user, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
-        sGate.advance();
     }
 
-    // The frame's work runs here: never in the middle of another thread's work on the game world.
-    void* frameThread(void*) {
-        while (true) {
-            sRetrace.wait();
-            JKRHeap::sCurrentHeap = JKRHeap::sSystemHeap;
-            onFrame();
-        }
-    }
 }  // namespace
 
-extern "C" NEBULA_GAME_API void nebula_game_frame_tick(void) {
-    sRetrace.signal();
-}
-
 namespace NebulaFrameClock {
-    void init() {
-        static bool sStarted;
-        if (sStarted) {
-            return;
-        }
-        sStarted = true;
-        sGate.init();
-        GameThreads::create(&sThread, frameThread, nullptr, 0x10000);
-        GameThreads::resume(&sThread);
-    }
-
     void startPicture() {
         waitFrame();
         waitFrame();
@@ -120,14 +91,8 @@ namespace NebulaFrameClock {
     }
 
     void waitFrame() {
-        sGate.waitNext();
-    }
-
-    void waitUntil(u32 count) {
-        // A frame cannot pass between the look and the wait: its thread needs the world, which the caller holds.
-        while (static_cast< s32 >(sFrames - count) < 0) {
-            sGate.waitNext();
-        }
+        GameThreads::waitFrame();
+        onFrame();
     }
 
     void show(bool picture) {

@@ -309,8 +309,6 @@ void BegomanBaby::exeBlow() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void BegomanBaby::exeAfterLaunch() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Fly");
@@ -331,7 +329,6 @@ void BegomanBaby::exeAfterLaunch() {
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvAfterLaunchOnGround));
     }
 }
-#pragma pop
 
 void BegomanBaby::exeAfterLaunchOnGround() {
     if (MR::isFirstStep(this)) {

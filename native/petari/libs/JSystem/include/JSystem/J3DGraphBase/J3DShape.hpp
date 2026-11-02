@@ -121,8 +121,9 @@ public:
     }
 
     void initialize();
-    void addTexMtxIndexInDL(_GpuAttr, u32);
-    void addTexMtxIndexInVcd(_GpuAttr);
+    // Each corner carries a texture matrix place for coordinate `coord`: `valueBase` (0 position matrices, 30 texture
+    // matrices, in their ids) plus its position matrix's id.
+    void addTexMtxIndex(u32 coord, u32 valueBase);
     void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
     u16 countBumpMtxNum() const;
     void initVtxAttr();
@@ -204,10 +205,6 @@ public:
     void setBumpMtxOffset(u32 offset) {
         mBumpMtxOffset = offset;
     }
-    GpuVtxDescList* getVtxDesc() {
-        return mVtxDesc;
-    }
-
     J3DMaterial* getMaterial() const {
         return mMaterial;
     }
@@ -245,7 +242,6 @@ public:
     /* 0x14 */ Vec mMin;
     /* 0x20 */ Vec mMax;
     /* 0x2C */ bool mNebulaRegistered;
-    /* 0x30 */ GpuVtxDescList* mVtxDesc;
     /* 0x34 */ bool mHasNBT;
     /* 0x38 */ J3DShapeMtx** mShapeMtx;
     /* 0x3C */ J3DShapeDraw** mShapeDraw;

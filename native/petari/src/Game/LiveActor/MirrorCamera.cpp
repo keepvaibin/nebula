@@ -15,19 +15,6 @@ void MirrorCamera::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MirrorCamera, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
-namespace {
-    const GpuVtxAttrFmtList* getVertexFormat(const J3DModelData* pModelData, GpuAttr attribute) {
-        const GpuVtxAttrFmtList* format = pModelData->mVertexData.getVtxAttrFmtList();
-        for (; format->attr != GPU_VA_NULL; format++) {
-            if (format->attr == attribute) {
-                return format;
-            }
-        }
-
-        return nullptr;
-    }
-};  // namespace
-
 void MirrorCamera::setMirrorMapInfo(const TVec3f& rNormal, const TVec3f& rPosition) {
     _18.set(rNormal);
     _C.set(rPosition);
@@ -37,26 +24,10 @@ void MirrorCamera::setMirrorMapInfo(const TVec3f& rNormal, const TVec3f& rPositi
 void MirrorCamera::setMirrorMapInfo(J3DModelData* pModelData) {
     TVec3f position;
     TVec3f normal;
-    const GpuVtxAttrFmtList* format = ::getVertexFormat(pModelData, GPU_VA_POS);
-    if (format->type == GPU_S16) {
-        // The model's vertex arrays (host order, as the importer cooks VTX1).
-        const s16* data = static_cast< const s16* >(pModelData->getVtxPosArray());
-        TVec3s fixed((s16)data[0], (s16)data[1], (s16)data[2]);
-        MR::fixed16ToFloat(&position, fixed, format->frac);
-    } else {
-        const f32* data = static_cast< const f32* >(pModelData->getVtxPosArray());
-        position.set< f32 >(data[0], data[1], data[2]);
-    }
-
-    format = ::getVertexFormat(pModelData, GPU_VA_NRM);
-    if (format->type == GPU_S16) {
-        const s16* data = static_cast< const s16* >(pModelData->getVtxNrmArray());
-        TVec3s fixed((s16)data[0], (s16)data[1], (s16)data[2]);
-        MR::fixed16ToFloat(&normal, fixed, format->frac);
-    } else {
-        const f32* data = static_cast< const f32* >(pModelData->getVtxNrmArray());
-        normal.set< f32 >(data[0], data[1], data[2]);
-    }
+    const f32* pPositions = static_cast< const f32* >(pModelData->getVtxPosArray());
+    position.set< f32 >(pPositions[0], pPositions[1], pPositions[2]);
+    const f32* pNormals = static_cast< const f32* >(pModelData->getVtxNrmArray());
+    normal.set< f32 >(pNormals[0], pNormals[1], pNormals[2]);
 
     setMirrorMapInfo(normal, position);
 }

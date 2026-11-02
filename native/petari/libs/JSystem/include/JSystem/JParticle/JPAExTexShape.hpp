@@ -20,7 +20,7 @@ class JPAExTexShape {
 public:
     JPAExTexShape(u8 const*);
 
-    // A native copy of the resource's big-endian matrix, for GpuSetIndTexMtx.
+    // The resource's matrix.
     void getIndTexMtx(f32 (*pMtx)[3]) const {
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 3; j++) {

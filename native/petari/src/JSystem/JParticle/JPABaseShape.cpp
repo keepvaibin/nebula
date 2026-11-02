@@ -10,20 +10,132 @@
 #include "JSystem/JParticle/JPAParticle.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
 #include <nebula_math.h>
+#include <string.h>
+
+// The vertices of the particles being drawn: eye-space positions, the coordinates after the particle's texture matrix
+// (coordinate 0: s, t; 2: their projection's q), the corners' own (coordinate 1), its colours (env in coordinate 3's place
+// by way of colour 1). Everything a particle changes is here; only a new image or size ends the draw.
+namespace {
+    const u32 cBatchVertices = 16384;
+    f32 sBatchPos[cBatchVertices * 3];
+    f32 sBatchUv0[cBatchVertices * 2];
+    f32 sBatchUv1[cBatchVertices * 2];
+    f32 sBatchQ[cBatchVertices * 2];
+    u32 sBatchPrm[cBatchVertices];
+    u32 sBatchEnv[cBatchVertices];
+    u32 sBatchCount = 0;
+    u8 sBatchPrimitive = NEBULA_PRIMITIVE_QUADS;
+
+    // The particle's matrix, and its coordinates': none, two rows, or a projection (three rows).
+    Mtx sParticleMtx;
+    enum { TexMtx_None, TexMtx_Rows, TexMtx_Projection };
+    u32 sTexMtxMode = TexMtx_None;
+    f32 sTexMtx[3][4];
+    // The image in place 0 (a particle's animation changes it; repeats do not end the draw).
+    s32 sBatchImage = -1;
+
+    void setParticleMtx(const Mtx mtx) {
+        memcpy(sParticleMtx, mtx, sizeof(Mtx));
+    }
+
+    void setTexMtx(const Mtx mtx, u32 mode) {
+        memcpy(sTexMtx, mtx, sizeof(sTexMtx));
+        sTexMtxMode = mode;
+    }
+
+    void addVertex(f32 x, f32 y, f32 z, f32 s, f32 t) {
+        if (sBatchCount == cBatchVertices) {
+            JPAParticleBatch::flush();
+        }
+        const u32 v = sBatchCount++;
+        f32* pPos = &sBatchPos[v * 3];
+        pPos[0] = sParticleMtx[0][0] * x + sParticleMtx[0][1] * y + sParticleMtx[0][2] * z + sParticleMtx[0][3];
+        pPos[1] = sParticleMtx[1][0] * x + sParticleMtx[1][1] * y + sParticleMtx[1][2] * z + sParticleMtx[1][3];
+        pPos[2] = sParticleMtx[2][0] * x + sParticleMtx[2][1] * y + sParticleMtx[2][2] * z + sParticleMtx[2][3];
+        sBatchUv1[v * 2] = s;
+        sBatchUv1[v * 2 + 1] = t;
+        f32 u = s;
+        f32 w = t;
+        f32 q = 1.0f;
+        if (sTexMtxMode == TexMtx_Rows) {
+            u = sTexMtx[0][0] * s + sTexMtx[0][1] * t + sTexMtx[0][2] + sTexMtx[0][3];
+            w = sTexMtx[1][0] * s + sTexMtx[1][1] * t + sTexMtx[1][2] + sTexMtx[1][3];
+        } else if (sTexMtxMode == TexMtx_Projection) {
+            u = sTexMtx[0][0] * x + sTexMtx[0][1] * y + sTexMtx[0][2] * z + sTexMtx[0][3];
+            w = sTexMtx[1][0] * x + sTexMtx[1][1] * y + sTexMtx[1][2] * z + sTexMtx[1][3];
+            q = sTexMtx[2][0] * x + sTexMtx[2][1] * y + sTexMtx[2][2] * z + sTexMtx[2][3];
+        }
+        sBatchUv0[v * 2] = u;
+        sBatchUv0[v * 2 + 1] = w;
+        sBatchQ[v * 2] = q;
+        sBatchQ[v * 2 + 1] = 0.0f;
+        sBatchPrm[v] = JPANativeColor::prmWord();
+        sBatchEnv[v] = JPANativeColor::envWord();
+    }
+}  // namespace
+
+namespace JPAParticleBatch {
+    void primitive(u8 primitive) {
+        if (sBatchPrimitive != primitive || primitive == NEBULA_PRIMITIVE_TRIANGLE_STRIP) {
+            flush();
+            sBatchPrimitive = primitive;
+        }
+    }
+
+    void vertex(f32 x, f32 y, f32 z, f32 s, f32 t) {
+        addVertex(x, y, z, s, t);
+    }
+
+    void setMatrix(const f32 (*pMtx)[4]) {
+        memcpy(sParticleMtx, pMtx, sizeof(Mtx));
+    }
+
+    void setProjection(const f32 (*pMtx)[4]) {
+        setTexMtx(pMtx, TexMtx_Projection);
+    }
+
+    void begin() {
+        flush();
+        sTexMtxMode = TexMtx_None;
+        sBatchImage = -1;
+    }
+
+    void flush() {
+        if (sBatchCount == 0) {
+            return;
+        }
+        // The positions are in eye space already, the coordinates final.
+        Mtx identity;
+        NebulaMtxIdentity(identity);
+        J3DNativeShape::setPosition(0, identity);
+        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        const u32* const pColors[2] = {sBatchPrm, sBatchEnv};
+        const f32* const pTexCoords[8] = {sBatchUv0, sBatchUv1, sBatchQ, nullptr, nullptr, nullptr, nullptr, nullptr};
+        J3DNativeDraw::drawArrays(sBatchPrimitive, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 | NEBULA_SHAPE_TEXCOORD0 |
+                                                       (NEBULA_SHAPE_TEXCOORD0 << 1) | (NEBULA_SHAPE_TEXCOORD0 << 2),
+                                  sBatchCount, sBatchPos, pColors, pTexCoords);
+        sBatchCount = 0;
+    }
+}  // namespace JPAParticleBatch
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
+    JPAParticleBatch::flush();
     J3DNativeState::setPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
+    JPAParticleBatch::flush();
     J3DNativeState::setLineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
+    JPAParticleBatch::flush();
     J3DNativeState::setPointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
+    JPAParticleBatch::flush();
     J3DNativeState::setLineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
 }
 
@@ -221,22 +333,15 @@ void JPACalcColorCopy(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 }
 
 void JPAGenTexCrdMtxIdt(JPAEmitterWorkData* param_0) {
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    sTexMtxMode = TexMtx_None;
 }
 
 void JPAGenTexCrdMtxAnm(JPAEmitterWorkData* param_0) {
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
 void JPAGenTexCrdMtxPrj(JPAEmitterWorkData* param_0) {
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
-#pragma push
-#pragma opt_common_subs off
 void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     f32 dVar16 = work->mpEmtr->mTick;
@@ -262,14 +367,9 @@ void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     local_108[2][1] = 0.0f;
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
-    J3DNativeShape::setTexture(0, local_108, 2);
-    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    setTexMtx(local_108, TexMtx_Rows);
 }
-#pragma pop
 
-#pragma push
-#pragma opt_common_subs off
 void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     f32 dVar16 = param_1->mAge;
@@ -295,20 +395,29 @@ void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1)
     local_108[2][1] = 0.0f;
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
-    J3DNativeShape::setTexture(0, local_108, 2);
+    setTexMtx(local_108, TexMtx_Rows);
 }
-#pragma pop
+
+namespace {
+    void loadImage(JPAEmitterWorkData* work, s32 image) {
+        if (image != sBatchImage) {
+            JPAParticleBatch::flush();
+            sBatchImage = image;
+            work->mpResMgr->load(image, GPU_TEXMAP0);
+        }
+    }
+}  // namespace
 
 void JPALoadTex(JPAEmitterWorkData* work) {
-    work->mpResMgr->load(work->mpRes->getTexIdx(work->mpRes->getBsp()->getTexIdx()), GPU_TEXMAP0);
+    loadImage(work, work->mpRes->getTexIdx(work->mpRes->getBsp()->getTexIdx()));
 }
 
 void JPALoadTexAnm(JPAEmitterWorkData* work) {
-    work->mpResMgr->load(work->mpRes->getTexIdx(work->mpEmtr->mTexAnmIdx), GPU_TEXMAP0);
+    loadImage(work, work->mpRes->getTexIdx(work->mpEmtr->mTexAnmIdx));
 }
 
 void JPALoadTexAnm(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    work->mpResMgr->load(work->mpRes->getTexIdx(ptcl->mTexAnmIdx), GPU_TEXMAP0);
+    loadImage(work, work->mpRes->getTexIdx(ptcl->mTexAnmIdx));
 }
 
 void JPACalcTexIdxNormal(JPAEmitterWorkData* work) {
@@ -378,7 +487,7 @@ void JPACalcTexIdxRandom(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
 }
 
 void JPALoadPosMtxCam(JPAEmitterWorkData* work) {
-    J3DNativeShape::setPosition(0, work->mPosCamMtx);
+    setParticleMtx(work->mPosCamMtx);
 }
 
 static void noLoadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
@@ -388,11 +497,9 @@ static void noLoadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
 void loadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
     Mtx mtx;
     NebulaMtxConcat(work->mPrjMtx, srt, mtx);
-    J3DNativeShape::setTexture(0, mtx, 3);
+    setTexMtx(mtx, TexMtx_Projection);
 }
 
-#pragma push
-#pragma opt_common_subs off
 static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     f32 dVar16 = work->mpEmtr->getAge();
     JPABaseShape* const shape = work->mpRes->getBsp();
@@ -420,20 +527,18 @@ static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     local_108[2][3] = 0.0f;
     NebulaMtxConcat(local_108, work->mPrjMtx, local_108);
     NebulaMtxConcat(local_108, srt, local_108);
-    J3DNativeShape::setTexture(0, local_108, 3);
+    setTexMtx(local_108, TexMtx_Projection);
 }
-#pragma pop
 
 namespace {
     // The quad arrays JPAResource set for the particles being drawn: positions 3 signed bytes, texture coordinates 2.
     const u8* sQuadPositions = nullptr;
     const u8* sQuadTexCoords = nullptr;
 
-    void sendQuadVertex(u32 position, u32 texCoord) {
+    void addQuadVertex(u32 position, u32 texCoord) {
         const s8* pPos = reinterpret_cast< const s8* >(sQuadPositions) + 3 * position;
         const s8* pCrd = reinterpret_cast< const s8* >(sQuadTexCoords) + 2 * texCoord;
-        J3DNativeDraw::position(pPos[0], pPos[1], pPos[2]);
-        J3DNativeDraw::texCoord(pCrd[0], pCrd[1]);
+        addVertex(pPos[0], pPos[1], pPos[2], pCrd[0], pCrd[1]);
     }
 }  // namespace
 
@@ -444,13 +549,19 @@ void JPASetQuadArrays(const u8* pPositions, const u8* pTexCoords) {
 
 void JPADrawQuad(u32 type) {
     // Positions 0-3 with texture coordinates 0-3; the crossed type adds positions 0x48-0x4B with the same coordinates.
-    J3DNativeDraw::begin(GPU_QUADS, type != 0 ? 8 : 4, NEBULA_SHAPE_TEXCOORD0);
+    if (sBatchPrimitive != NEBULA_PRIMITIVE_QUADS) {
+        JPAParticleBatch::flush();
+        sBatchPrimitive = NEBULA_PRIMITIVE_QUADS;
+    }
+    if (sBatchCount + 8 > cBatchVertices) {
+        JPAParticleBatch::flush();
+    }
     for (u32 i = 0; i < 4; i++) {
-        sendQuadVertex(i, i);
+        addQuadVertex(i, i);
     }
     if (type != 0) {
         for (u32 i = 0; i < 4; i++) {
-            sendQuadVertex(0x48 + i, i);
+            addQuadVertex(0x48 + i, i);
         }
     }
 }
@@ -480,7 +591,7 @@ void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
         local_38[1][0] = 0.0f;
         local_38[0][2] = 0.0f;
         local_38[0][1] = 0.0f;
-        J3DNativeShape::setPosition(0, local_38);
+        setParticleMtx(local_38);
         p_prj[work->mPrjType](work, local_38);
         JPADrawQuad(0);
     }
@@ -508,7 +619,7 @@ void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
         local_38[2][0] = 0.0f;
         local_38[1][2] = 0.0f;
         local_38[0][2] = 0.0f;
-        J3DNativeShape::setPosition(0, local_38);
+        setParticleMtx(local_38);
         p_prj[work->mPrjType](work, local_38);
         JPADrawQuad(0);
     }
@@ -671,7 +782,7 @@ void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
         auStack_88[1][3] = param_1->mPosition.y;
         auStack_88[2][3] = param_1->mPosition.z;
         NebulaMtxConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
-        J3DNativeShape::setPosition(0, auStack_88);
+        setParticleMtx(auStack_88);
         p_prj[param_0->mPrjType](param_0, auStack_88);
         JPADrawQuad(param_0->mDLType);
     }
@@ -682,9 +793,11 @@ void JPADrawPoint(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
         return;
     }
 
-    J3DNativeDraw::begin(GPU_POINTS, 1, NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z);
-    J3DNativeDraw::texCoord(0.0f, 0.0f);
+    if (sBatchPrimitive != NEBULA_PRIMITIVE_POINTS) {
+        JPAParticleBatch::flush();
+        sBatchPrimitive = NEBULA_PRIMITIVE_POINTS;
+    }
+    addVertex(ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z, 0.0f, 0.0f);
 }
 
 

@@ -108,8 +108,6 @@ void Jellyfish::kill() {
     LiveActor::kill();
 }
 
-#pragma push
-#pragma opt_propagation off
 void Jellyfish::control() {
     const TVec3f& rPosition = mPosition;
     MR::requestPointLight(this, TVec3f(rPosition), ::sPointLightColor, 0.9999f, -1);
@@ -135,7 +133,6 @@ void Jellyfish::control() {
     if (tryDPDSwoon()) {
     }
 }
-#pragma pop
 
 void Jellyfish::calcAndSetBaseMtx() {
     TPos3f baseMtx;
@@ -317,8 +314,6 @@ void Jellyfish::threatTurn() {
     }
 }
 
-#pragma push
-#pragma opt_propagation off
 bool Jellyfish::faceToMario() {
     TVec3f v13;
     const TVec3f& rPosition = mPosition;
@@ -357,7 +352,6 @@ bool Jellyfish::faceToMario() {
 
     return true;
 }
-#pragma pop
 
 void Jellyfish::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
     TVec3f toReceiverDir;

@@ -54,8 +54,6 @@ TitleSequenceProduct::TitleSequenceProduct()
 }
 
 // FIXME: GPR4 and GPR5 are swapped and missing addi instruction.
-#pragma push
-#pragma opt_propagation off
 void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
     if (MR::isFirstStep(this)) {
         NebulaCalendar::SaveTime timeAnnounced = GameDataFunction::getSysConfigFileTimeAnnounced();
@@ -79,7 +77,6 @@ void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
         setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
     }
 }
-#pragma pop
 
 void TitleSequenceProduct::exeBgmPrepare() {
     if (MR::isFirstStep(this)) {
