@@ -231,13 +231,9 @@ void MoviePlayerSimple::stop() {
 }
 
 u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
-    u32 needMemory = 0;
-    needMemory += 0x140000;
-    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight());
-    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight() / 4);
-    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight() / 4);
-
-    return needMemory + 0x1188;
+    // The picture's planes: the frames themselves stay in the mapped store. The game's movies are at most 640x480.
+    const u32 pixels = 640 * 480;
+    return NebulaAlignUp32(pixels) + NebulaAlignUp32(pixels / 4) * 2 + 0x1188;
 }
 
 void MoviePlayerSimple::drawCinemaFrame() const {
