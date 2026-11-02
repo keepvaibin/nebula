@@ -10,7 +10,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -764,7 +764,7 @@ bool Karikari::tryDPDAttacked() {
         TVec2f pointerVel(*MR::getStarPointerScreenVelocity(padChannel));
         TVec2f pointingPos;
         TVec2f screenPos;
-        MR::getCorePadPointingPosBasedOnScreen(&pointingPos, padChannel);
+        MR::getPointerPosOnScreen(&pointingPos, padChannel);
         MR::calcScreenPosition(&screenPos, mPosition);
         TVec2f fromCursorPos = screenPos;
         fromCursorPos.sub(pointingPos);

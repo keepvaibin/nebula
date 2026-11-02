@@ -14,7 +14,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -420,7 +420,7 @@ bool SwingRope::isStretched() const {
 }
 
 bool SwingRope::tryJump() {
-    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA()) {
         TVec3f front = mSledPoint->mFront;
 
         TVec3f jumpY = mGravity;
@@ -437,9 +437,9 @@ bool SwingRope::tryJump() {
             MR::normalize(&jumpXZ);
             front.set(jumpXZ);
             jumpXZ.scale(::sJumpSpeedMaxXZ);
-        } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isGamePadStickOperated(GAMEPAD_CHAN0)) {
+        } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isMoveStickOperated(PLAYER_1)) {
             TVec3f stick(0.0f, 0.0f, 0.0f);
-            MR::calcWorldStickDirectionXZ(&stick, GAMEPAD_CHAN0);
+            MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
             front.set< f32 >(stick.x, stick.y, stick.z);
             jumpXZ.set(stick * ::sJumpSpeedRate);
             MR::vecKillElement(jumpXZ, mGravity, &jumpXZ);
@@ -470,7 +470,7 @@ bool SwingRope::tryJump() {
 void SwingRope::updateHangPoint() {
     TVec3f stick(0.0f, 0.0f, 0.0f);
     TVec3f front = mSledPoint->mFront;
-    MR::calcWorldStickDirectionXZ(&stick, GAMEPAD_CHAN0);
+    MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
 
     if (!MR::isNearZero(stick)) {
         MR::vecBlend(mSledPoint->mFront, stick, &front, ::sHangPointBlendRateAxisZ);

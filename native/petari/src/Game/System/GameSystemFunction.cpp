@@ -13,10 +13,10 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/GameSystemStationedArchiveLoader.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
-#include "Game/System/GamePad.hpp"
-#include "Game/System/GamePadHolder.hpp"
-#include "Game/System/GamePadRumble.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
+#include "Game/System/InputRumble.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 
@@ -180,36 +180,36 @@ namespace GameSystemFunction {
     }
 
     void stopControllerLeaveWatcher() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->stopLeaveWatcher();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->stopLeaveWatcher();
         }
     }
 
     void startControllerLeaveWatcher() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->startLeaveWatcher();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->startLeaveWatcher();
         }
     }
 
     void restartControllerLeaveWatcher() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->restartLeaveWatcher();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->restartLeaveWatcher();
         }
     }
 
     void resetAllControllerRumble() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->_18->registInstance();
-            MR::getGamePad(chan)->_18->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->registInstance();
+            MR::getPlayerInput(chan)->_18->stop();
         }
     }
 
-    void setAutoSleepTimeWiiRemote(bool isLongAutoSleep) {
-        MR::setAutoSleepTimeWiiRemote(isLongAutoSleep);
+    void setInputSleepTime(bool isLongAutoSleep) {
+        MR::setInputSleepTime(isLongAutoSleep);
     }
 
-    bool setPermissionToCheckWiiRemoteConnectAndScreenDimming(bool permission) {
-        bool permissionPrev = SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateWiiRemoteStatus(permission);
+    bool setPermissionToCheckInputAndScreenDimming(bool permission) {
+        bool permissionPrev = SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateInputStatus(permission);
 
         SingletonHolder< GameSystem >::get()->mDimmingWatcher->_4 = permission;
 
@@ -217,44 +217,44 @@ namespace GameSystemFunction {
     }
 
     void onPauseBeginAllRumble() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->_18->stop();
-            MR::getGamePad(chan)->_1C->registInstance();
-            MR::getGamePad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->stop();
+            MR::getPlayerInput(chan)->_1C->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onPauseEndAllRumble() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->_18->registInstance();
-            MR::getGamePad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuBeginAllRumble() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->_18->pause();
-            MR::getGamePad(chan)->_1C->registInstance();
-            MR::getGamePad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->pause();
+            MR::getPlayerInput(chan)->_1C->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuCloseAllRumble() {
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            MR::getGamePad(chan)->_18->registInstance();
-            MR::getGamePad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuEndAllRumble() {
-        GamePadRumble* pRumble;
+        InputRumble* pRumble;
 
-        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
-            pRumble = MR::getGamePad(chan)->_18;
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            pRumble = MR::getPlayerInput(chan)->_18;
             pRumble->_BC = 200;
             pRumble->stop();
 
-            pRumble = MR::getGamePad(chan)->_1C;
+            pRumble = MR::getPlayerInput(chan)->_1C;
             pRumble->_BC = 200;
             pRumble->stop();
         }

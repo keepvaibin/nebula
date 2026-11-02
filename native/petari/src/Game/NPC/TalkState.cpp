@@ -8,7 +8,7 @@
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -127,7 +127,7 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
         return !mBalloon->turnPage();
     }
 
-    if (MR::testCorePadButtonA(0)) {
+    if (MR::isHeldJump(0)) {
         if (_10++ > 10) {
             for (int i = 0; i < 2; i++) {
                 mBalloon->skipMessage();
@@ -144,8 +144,8 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
     bool unknownBool = false;
 
     if (_1C != 0) {
-        _1C = MR::testCorePadButtonA(0);
-    } else if (MR::testCorePadButtonA(0) && !MR::testCorePadTriggerA(0)) {
+        _1C = MR::isHeldJump(0);
+    } else if (MR::isHeldJump(0) && !MR::isPressedJump(0)) {
         _1C = true;
         unknownBool = true;
     }
@@ -180,7 +180,7 @@ TalkStateNormal::TalkStateNormal() : TalkStateEvent() {
 }
 
 bool TalkStateNormal::test() {
-    if (!_18->isEnableTalkPlayerStateNormal() || !MR::testCorePadTriggerA(0)) {
+    if (!_18->isEnableTalkPlayerStateNormal() || !MR::isPressedJump(0)) {
         return false;
     }
 
@@ -214,7 +214,7 @@ bool TalkStateNormal::prep(const TalkMessageCtrl* pArg1) {
 
     if (!_18->isEnableTalkPlayerStateNormal()) {
         mAButton->term();
-    } else if (!MR::testCorePadTriggerA(0)) {
+    } else if (!MR::isPressedJump(0)) {
         TalkMessageInfo* info = TalkFunction::getMessageInfo(_04);
         if (!mAButton->isOpen()) {
             if (info->isBalloonSign()) {

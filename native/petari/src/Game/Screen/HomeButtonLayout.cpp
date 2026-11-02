@@ -9,9 +9,9 @@
 #include "Game/Speaker/SpkSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/Language.hpp"
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -61,7 +61,7 @@ void HomeButtonLayout::exeDeactive() {
         return;
     }
 
-    if (tryCorePadTriggerHome()) {
+    if (tryPressedHome()) {
         setNerve(GET_NERVE(HomeButtonLayout, HomeButtonLayoutActive));
     }
 }
@@ -71,7 +71,7 @@ void HomeButtonLayout::exeActive() {
         AudWrap::getSystem()->enterHomeButtonMenu();
         // Natively the game draws the menu (NebulaSettingsMenu), under the game's own pointer.
         GameSystemFunction::onHomeButtonMenuBeginAllRumble();
-        MR::setGamePadHolderModeHomeButton();
+        MR::setPlayerInputsModeHome();
 
         if (_24) {
             GameSystemFunction::stopControllerLeaveWatcher();
@@ -122,7 +122,7 @@ void HomeButtonLayout::exeActive() {
         MR::endStarPointerMode(this);
     }
 
-    MR::setGamePadHolderModeGame();
+    MR::setPlayerInputsModeGame();
 
     if (_24) {
         GameSystemFunction::startControllerLeaveWatcher();
@@ -167,9 +167,9 @@ bool HomeButtonLayout::isActive() const {
 }
 
 
-bool HomeButtonLayout::tryCorePadTriggerHome() {
-    for (s32 i = 0; i < MR::getGamePadMaxCount(); i++) {
-        if (MR::testCorePadTriggerHome(i)) {
+bool HomeButtonLayout::tryPressedHome() {
+    for (s32 i = 0; i < MR::getPlayerMaxCount(); i++) {
+        if (MR::isPressedHome(i)) {
             return true;
         }
     }

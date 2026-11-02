@@ -5,8 +5,8 @@
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
-    static SpkSoundHandle sSoundHandle[GAMEPAD_MAX_CONTROLLERS];
-    static SpkSoundHandle sSoundLevelHandle[GAMEPAD_MAX_CONTROLLERS];
+    static SpkSoundHandle sSoundHandle[PLAYER_MAX];
+    static SpkSoundHandle sSoundLevelHandle[PLAYER_MAX];
 };  // namespace
 
 const char* AudSpeakerWrap::getResName() {
@@ -24,8 +24,8 @@ void AudSpeakerWrap::start(s32 waveID, s32 padChannel) {
         return;
     }
 
-    if (padChannel < GAMEPAD_CHAN0) {
-        for (s32 idx = 0; idx < GAMEPAD_MAX_CONTROLLERS; idx++) {
+    if (padChannel < PLAYER_1) {
+        for (s32 idx = 0; idx < PLAYER_MAX; idx++) {
             system->startSound(idx, waveID, &::sSoundHandle[idx]);
         }
     } else {

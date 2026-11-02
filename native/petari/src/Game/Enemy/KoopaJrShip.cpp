@@ -642,7 +642,7 @@ void KoopaJrShip::exeDamage() {
         emitDamageSmokeEffect();
         emitDamageHitEffect();
         MR::shakeCameraNormal();
-        MR::tryRumbleDefaultHit(this, GAMEPAD_CHAN0);
+        MR::tryRumbleDefaultHit(this, PLAYER_1);
         MR::stopScene(12);
     }
 
@@ -683,7 +683,7 @@ void KoopaJrShip::exeBreakStart() {
         mJr->setStateShipBattleShipDamage();
         emitDamageHitEffect();
         MR::shakeCameraNormal();
-        MR::tryRumbleDefaultHit(this, GAMEPAD_CHAN0);
+        MR::tryRumbleDefaultHit(this, PLAYER_1);
         MR::stopScene(12);
     }
 
@@ -719,7 +719,7 @@ void KoopaJrShip::exeBreakStart() {
 void KoopaJrShip::exeBreak() {
     if (MR::isFirstStep(this)) {
         MR::deleteEffect(this, "EyeLight");
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_S");
         mJr->setStateShipBattleEscape();
@@ -744,7 +744,7 @@ void KoopaJrShip::exeBreak() {
 
     if (MR::isStep(this, 300)) {
         MR::shakeCameraNormal();
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_L");
     }
 

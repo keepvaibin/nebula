@@ -100,7 +100,7 @@ void ValveSwitch::exeValve() {
 
     if (MR::isStep(this, 30)) {
         MR::startSound(this, "SE_OJ_VALVE_SWITCH_ON");
-        MR::tryRumblePadVeryStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 

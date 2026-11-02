@@ -77,7 +77,7 @@ bool PlayerRacer::updateRacer(const RaceManager* pRaceManager) {
 
     if (MR::fabs(mRailCoord - railLength) < 100.0f) {
         if (pRaceManager->isGoal(this)) {
-            MR::tryRumblePadVeryStrong(this, GAMEPAD_CHAN0);
+            MR::tryRumblePadVeryStrong(this, PLAYER_1);
             return true;
         }
         return false;

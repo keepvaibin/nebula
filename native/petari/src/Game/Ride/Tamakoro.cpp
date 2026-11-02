@@ -234,7 +234,7 @@ void Tamakoro::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             if (downVel < ::sStampReactionInvalidSpeed) {
                 downVel = -::sStampReactionV - downVel;
                 mVelocity.add(mGravity * downVel);
-                MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+                MR::tryRumblePadWeak(this, PLAYER_1);
                 MR::shakeCameraNormalWeak();
             }
             return;
@@ -268,7 +268,7 @@ bool Tamakoro::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 
 bool Tamakoro::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgExplosionAttack(msg) && isEnableEnemyAttack()) {
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::setVelocitySeparateHV(this, pSender, pReceiver, ::sExplosionReactionH, ::sExplosionReactionV);
         MR::startSoundPlayer("SE_PV_UPSET");
         return true;
@@ -510,13 +510,13 @@ void Tamakoro::reactionCollision() {
     }
 
     if (hitPower > ::sCollisionStrongPower) {
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
     } else if (hitPower > ::sCollisionMiddlePower) {
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
     } else if (hitPower > ::sCollisionWeakPower) {
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::shakeCameraWeak();
     }
 }
@@ -532,7 +532,7 @@ void Tamakoro::exeStandByBind() {
 void Tamakoro::exeBindStart() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("SlideStomachRecover");
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         mDirectionToMario.set(-mGravity);
         if (MR::normalizeOrZero(&mMarioFront)) {
             MR::makeAxisVerticalZX(&mMarioFront, mGravity);
@@ -572,7 +572,7 @@ void Tamakoro::exeBindStartLand() {
             mBgmCtrl->init();
         }
         MR::startBckPlayer("Land", "BallLand");
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
 
         mDirectionToMario.set(mMarioPos - mPosition);
         if (MR::normalizeOrZero(&mDirectionToMario)) {
@@ -689,7 +689,7 @@ void Tamakoro::exeJump() {
 void Tamakoro::exeBumpWall() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("BallHit");
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
     }
 
@@ -708,7 +708,7 @@ void Tamakoro::exeBumpWall() {
 void Tamakoro::exeLand() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("Land");
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
         MR::startSound(this, "SE_SM_IRONSPH_LAND");
     }
@@ -727,7 +727,7 @@ void Tamakoro::exeLand() {
 
 void Tamakoro::exeJumpHole() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::offBind(this);
         MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\202\265\202\341\202\252\202\335" /* タマコロしゃがみ */);
         mAccelDir.zero();
@@ -741,7 +741,7 @@ void Tamakoro::exeJumpHole() {
 
 void Tamakoro::exeJumpHoleSetUp() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
     updateSquatBckBlend(0.0f);
     updateMarioPose(3.0f);
@@ -751,7 +751,7 @@ void Tamakoro::exeJumpHoleSetUp() {
 void Tamakoro::exeJumpHoleLaunch() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("BallJump");
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         MR::emitEffect(this, "BigJumpBlur");
     }
@@ -774,7 +774,7 @@ void Tamakoro::exeDashRail() {
         MR::startBckPlayer("BallRoll");
         MR::startSoundPlayer("SE_PV_JUMP_JOY");
         MR::startSound(this, "SE_SM_IRONSPH_RAILDASH");
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         mAccelDir.zero();
         mAccelRate = 0.0f;
     }
@@ -811,7 +811,7 @@ void Tamakoro::exeDashRailEnd() {
 void Tamakoro::exeRideRail() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\210\332\223\256" /* タマコロ移動 */);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     f32 speed = updateRideRail();
@@ -861,7 +861,7 @@ void Tamakoro::exeRideRailFastEnd() {
 
 void Tamakoro::exeBindEnd() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         mAccelDir.zero();
         mAccelRate = 0.0f;

@@ -15,7 +15,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -237,10 +237,10 @@ namespace NebulaCutsceneSkip {
 
         switch (sState) {
         case State_Idle: {
-            if (!MR::testCorePadButtonPlus(GAMEPAD_CHAN0)) {
+            if (!MR::isHeldPause(PLAYER_1)) {
                 sNeedRelease = false;
             }
-            if (sNeedRelease || !MR::testCorePadTriggerPlus(GAMEPAD_CHAN0)) {
+            if (sNeedRelease || !MR::isPressedPause(PLAYER_1)) {
                 break;
             }
             sNeedRelease = true;
@@ -260,9 +260,9 @@ namespace NebulaCutsceneSkip {
         }
         case State_Prompt:
             // + again answers No.
-            if (!MR::testCorePadButtonPlus(GAMEPAD_CHAN0)) {
+            if (!MR::isHeldPause(PLAYER_1)) {
                 sNeedRelease = false;
-            } else if (!sNeedRelease && MR::testCorePadTriggerPlus(GAMEPAD_CHAN0)) {
+            } else if (!sNeedRelease && MR::isPressedPause(PLAYER_1)) {
                 sNeedRelease = true;
                 sWindow->decideNo();
             }

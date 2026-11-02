@@ -2,16 +2,16 @@
 
 #include <JSystem/JGeometry/TVec.hpp>
 
-class GamePad;
+class PlayerInput;
 
-class GamePadStick {
+class InputStick {
 public:
-    GamePadStick(const GamePad*);
+    InputStick(const PlayerInput*);
 
     void update();
     bool isChanged() const;
 
-    /* 0x00 */ const GamePad* mPad;
+    /* 0x00 */ const PlayerInput* mPad;
     /* 0x04 */ TVec2f mStick;
     /* 0x0C */ f32 mSpeed;
     /* 0x10 */ u32 mHold;

@@ -210,7 +210,7 @@ void SnowFloorTile::control() {
         changed = true;
     }
 
-    if (MR::testCorePadButtonB(0)) {
+    if (MR::isHeldFire(0)) {
         position = *MR::getStarPointerWorldPosUsingDepth(0);
 
         if (calcLocalPoint(position, &localPoint, 20.0f) || MR::isInRange(localPoint.z, -100.0f, 100.0f)) {

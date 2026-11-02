@@ -133,7 +133,7 @@ void DriftWood::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         }
     } else if (MR::isSensorMapObj(pReceiver) && MR::sendMsgEnemyAttack(pReceiver, pSender) && MR::isOnPlayer(this)) {
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 }
 

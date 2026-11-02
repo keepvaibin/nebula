@@ -30,11 +30,11 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
-#include "Game/System/GamePadRumble.hpp"
+#include "Game/System/InputRumble.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -842,35 +842,35 @@ void MR::stopSceneForDefaultHit(s32 frame) {
 }
 
 bool MR::tryRumblePad(const void* pParam1, const char* pPatternName, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
 }
 
 bool MR::tryRumblePadVeryStrongLong(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
 }
 
 bool MR::tryRumblePadVeryStrong(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
 }
 
 bool MR::tryRumblePadStrong(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
 }
 
 bool MR::tryRumblePadMiddle(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
+    return PlayerInputFunction::getInputRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
 }
 
 bool MR::tryRumblePadWeak(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
 }
 
 bool MR::tryRumblePadVeryWeak(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
 }
 
 bool MR::tryRumbleDefaultHit(const void* pParam1, s32 channel) {
-    return GamePadFunction::getGamePadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
 }
 
 void MR::shakeCameraVeryStrong() {

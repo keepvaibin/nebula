@@ -363,7 +363,7 @@ bool BossStinkBugActionBase::updateGroundDamage() {
         MR::startSound(getHost(), "SE_BM_BOSS_BUG_PRESSED");
         MR::startBck(getHost(), "GroundDamage");
 
-        MR::tryRumblePadStrong(getHost(), GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(getHost(), PLAYER_1);
         MR::shakeCameraStrong();
 
         getHost()->startEventCamera("Fall");
@@ -558,7 +558,7 @@ bool BossStinkBugActionBase::updateFallDamage() {
         MR::startSound(getHost(), "SE_BM_BOSS_BUG_PRESSED");
         MR::startBck(getHost(), "FallDamage");
         MR::startAction(getHost()->getWingModel(), "FallDamage");
-        MR::tryRumblePadStrong(getHost(), GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(getHost(), PLAYER_1);
         MR::shakeCameraStrong();
         MR::offBind(getHost());
 

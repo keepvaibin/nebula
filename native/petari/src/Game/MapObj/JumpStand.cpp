@@ -53,7 +53,7 @@ void JumpStand::exeTrampleBound() {
         MR::startSound(this, "SE_OJ_JUMP_STAND_LAND_S");
     }
 
-    if (MR::isLessEqualStep(this, 5) && MR::testCorePadTriggerA(0)) {
+    if (MR::isLessEqualStep(this, 5) && MR::isPressedJump(0)) {
         mIsMarioJumpingHigh = true;
         MR::startBck(this, "BoundJump");
         MR::setBckFrame(this, getNerveStep());
@@ -199,7 +199,7 @@ bool JumpStand::tryToStartBind(HitSensor* pSensor) {
         return false;
     }
 
-    MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     MR::invalidateCollisionParts(this);
     MR::invalidateClipping(this);
     mBindedActor = pSensor->mHost;
@@ -211,7 +211,7 @@ void JumpStand::updateBindActorMtx() {
     TPos3f v6;
     v6.identity();
     TVec3f v5;
-    MR::calcPlayerWorldPadDir(&v5, MR::getSubPadStickX(0), MR::getSubPadStickY(0));
+    MR::calcPlayerWorldPadDir(&v5, MR::getMoveStickX(0), MR::getMoveStickY(0));
     MR::calcMtxFromGravityAndZAxis(&v6, mBindedActor, mGravity, v5);
     MR::blendMtxRotate(mBindedActor->getBaseMtx(), v6, 0.40f, v6);
     v6.setTrans(mBindedActor->mPosition);
@@ -229,13 +229,13 @@ void JumpStand::endBindAndShootUp(f32 v1, JumpType type) {
         }
 
         v28 *= v1;
-        f32 stickLen = MR::sqrt(MR::getSubPadStickX(GAMEPAD_CHAN0) * MR::getSubPadStickX(GAMEPAD_CHAN0) +
-                                MR::getSubPadStickY(GAMEPAD_CHAN0) * MR::getSubPadStickY(GAMEPAD_CHAN0));
+        f32 stickLen = MR::sqrt(MR::getMoveStickX(PLAYER_1) * MR::getMoveStickX(PLAYER_1) +
+                                MR::getMoveStickY(PLAYER_1) * MR::getMoveStickY(PLAYER_1));
         TVec3f v27;
         if (stickLen > 0.1f) {
             MR::normalize(v28, &v27);
             TVec3f v26;
-            MR::calcPlayerWorldPadDir(&v26, MR::getSubPadStickX(GAMEPAD_CHAN0), MR::getSubPadStickY(GAMEPAD_CHAN0));
+            MR::calcPlayerWorldPadDir(&v26, MR::getMoveStickX(PLAYER_1), MR::getMoveStickY(PLAYER_1));
             TVec3f v25;
             v25.scale(3.0f * stickLen, v26);
             v25.orthogonalize(v27);

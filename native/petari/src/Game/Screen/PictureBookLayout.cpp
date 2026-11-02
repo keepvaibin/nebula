@@ -8,7 +8,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
@@ -702,7 +702,7 @@ void PictureBookLayout::exeWaitWithText() {
         setNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeOutText));
     } else {
         bool isTriggerNextPage =
-            MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testCorePadTriggerRight(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerRight(GAMEPAD_CHAN0);
+            MR::isPressedJump(PLAYER_1) || MR::isPressedRight(PLAYER_1) || MR::isMoveStickPressedRight(PLAYER_1);
         // A skipped reading (Rosalina's, a cutscene) turns each page as soon as it is up.
         isTriggerNextPage = isTriggerNextPage || NebulaCutsceneSkip::isSkipping();
 
@@ -723,7 +723,7 @@ void PictureBookLayout::exeWaitWithText() {
 
             setNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeOutText));
         } else {
-            bool isTriggerPrevPage = MR::testCorePadTriggerLeft(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerLeft(GAMEPAD_CHAN0);
+            bool isTriggerPrevPage = MR::isPressedLeft(PLAYER_1) || MR::isMoveStickPressedLeft(PLAYER_1);
 
             if (isTriggerPrevPage) {
                 if (mChapterMin < mChapterNo || mPageNo > 0 || mTextIndex > 0) {

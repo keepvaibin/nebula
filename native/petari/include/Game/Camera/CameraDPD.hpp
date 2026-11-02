@@ -29,7 +29,7 @@ public:
         mAngleYMin = angleYMin;
     }
 
-    /* 0x4C */ f32 mCorePadDistToDisplay;
+    /* 0x4C */ f32 mPointerDistance;
     /* 0x50 */ TVec2f mRealPointPos;
     /* 0x58 */ TVec2f mBlendPointPos;
     /* 0x60 */ TPos3f mMtx;

@@ -143,7 +143,7 @@ void GameSystemResetAndPowerProcess::exeReset() {
     }
 
     if (_5C) {
-        GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
+        GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
 
         if (mResetOperation != ResetOperation_ApplicationReset) {
             exitApplication();

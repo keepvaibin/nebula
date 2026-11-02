@@ -321,10 +321,10 @@ namespace MR {
         f32 dist = calcDistanceToPlayer(pActor);
 
         if (dist <= strongDistMax) {
-            tryRumblePad(pActor, pStrongPatternName, GAMEPAD_CHAN0);
+            tryRumblePad(pActor, pStrongPatternName, PLAYER_1);
             shakeCameraNormal();
         } else if (dist <= weakDistMax) {
-            tryRumblePad(pActor, pWeakPatternName, GAMEPAD_CHAN0);
+            tryRumblePad(pActor, pWeakPatternName, PLAYER_1);
             shakeCameraWeak();
         }
     }
@@ -334,10 +334,10 @@ namespace MR {
         f32 dist = calcDistanceToPlayer(pActor);
 
         if (dist <= strongDistMax) {
-            tryRumblePad(pActor, pStrongPatternName, GAMEPAD_CHAN0);
+            tryRumblePad(pActor, pStrongPatternName, PLAYER_1);
             shakeCameraNormalWeak();
         } else if (dist <= weakDistMax) {
-            tryRumblePad(pActor, pWeakPatternName, GAMEPAD_CHAN0);
+            tryRumblePad(pActor, pWeakPatternName, PLAYER_1);
             shakeCameraWeak();
         }
     }
@@ -347,10 +347,10 @@ namespace MR {
         f32 dist = calcDistanceToPlayer(pActor);
 
         if (dist <= strongDistMax) {
-            tryRumblePad(pActor, pStrongPatternName, GAMEPAD_CHAN0);
+            tryRumblePad(pActor, pStrongPatternName, PLAYER_1);
             shakeCameraStrong();
         } else if (dist <= weakDistMax) {
-            tryRumblePad(pActor, pWeakPatternName, GAMEPAD_CHAN0);
+            tryRumblePad(pActor, pWeakPatternName, PLAYER_1);
             shakeCameraNormal();
         }
     }

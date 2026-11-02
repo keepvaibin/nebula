@@ -26,12 +26,12 @@ public:
     void movement();
     void draw() const;
     bool isWarning() const;
-    bool setPermissionUpdateWiiRemoteStatus(bool);
+    bool setPermissionUpdateInputStatus(bool);
     void exeNoError();
     void exeErrorWindowIn();
     void exeErrorWindowDisplay();
     void exeErrorWindowOut();
-    void updateWiiRemoteStatus();
+    void updateInputStatus();
     const Message* getProperMessageId() const;
     const nw4r::lyt::TexMap* getProperErrorTexMap() const;
 
@@ -41,9 +41,9 @@ private:
     /* 0x10 */ const nw4r::lyt::TexMap* mUnplaggedTexMap;
     /* 0x14 */ BatteryLayout* mBatteryLayout;
     /* 0x1C */ TriggerChecker* _1C;
-    /* 0x20 */ s32 mWiiRemoteStatus;
-    /* 0x24 */ s32 mCounterIgnoreCheckFreeStyle;
+    /* 0x20 */ s32 mInputStatus;
+    /* 0x24 */ s32 mCounterIgnoreCheckMoveStick;
     /* 0x28 */ s32 mCounterDecideDisconnect;
-    /* 0x2C */ s32 mWiiRemoteBattery;
-    /* 0x30 */ bool mPermissionUpdateWiiRemoteStatus;
+    /* 0x2C */ s32 mInputBattery;
+    /* 0x30 */ bool mPermissionUpdateInputStatus;
 };

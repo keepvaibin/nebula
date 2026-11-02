@@ -11,7 +11,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Screen/MovieSubtitles.hpp"
 #include "Game/Screen/MovieSubtitlesDataTable.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -390,7 +390,7 @@ bool MoviePlayingSequence::trySkip() {
         return false;
     }
 
-    if (!MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
+    if (!MR::isHeldJump(PLAYER_1)) {
         return false;
     }
 

@@ -283,7 +283,7 @@ bool Kanina::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pRec
         }
 
         if (receiveTrample(pSender, pReceiver)) {
-            MR::tryRumblePad(this, "\222\206" /* 中 */, GAMEPAD_CHAN0);
+            MR::tryRumblePad(this, "\222\206" /* 中 */, PLAYER_1);
             return true;
         }
     }
@@ -443,7 +443,7 @@ void Kanina::startRunAwayLevelSound() {
 
 bool Kanina::receiveHipDrop(HitSensor* pSender, HitSensor* pReceiver) {
     if (receiveTrample(pSender, pReceiver)) {
-        MR::tryRumblePad(this, "\222\206" /* 中 */, GAMEPAD_CHAN0);
+        MR::tryRumblePad(this, "\222\206" /* 中 */, PLAYER_1);
         MR::sendMsgAwayJump(pSender, pReceiver);
         return true;
     }
@@ -878,7 +878,7 @@ void Kanina::exeDamageHipDrop() {
 
         MR::startBtp(this, "Swoon");
         MR::startSound(this, "SE_EM_STOMPED_S");
-        MR::tryRumblePad(this, "\213\255" /* 強 */, GAMEPAD_CHAN0);
+        MR::tryRumblePad(this, "\213\255" /* 強 */, PLAYER_1);
         MR::invalidateHitSensors(this);
     }
 

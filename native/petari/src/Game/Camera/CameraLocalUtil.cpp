@@ -7,7 +7,7 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
@@ -274,7 +274,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testSubPadButtonC(GAMEPAD_CHAN0);
+        return MR::isHeldCamera(PLAYER_1);
     }
 
     bool testCameraPadTriggerReset() {
@@ -282,7 +282,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testSubPadTriggerC(GAMEPAD_CHAN0);
+        return MR::isPressedCamera(PLAYER_1);
     }
 
     bool testCameraPadTriggerRoundLeft() {
@@ -294,7 +294,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testCorePadTriggerLeft(GAMEPAD_CHAN0);
+        return MR::isPressedLeft(PLAYER_1);
     }
 
     bool testCameraPadTriggerRoundRight() {
@@ -306,7 +306,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testCorePadTriggerRight(GAMEPAD_CHAN0);
+        return MR::isPressedRight(PLAYER_1);
     }
 
     void slerpCamera(TQuat4f* pDst, const TQuat4f& rA, const TQuat4f& rB, f32 ratio, bool reverse) {

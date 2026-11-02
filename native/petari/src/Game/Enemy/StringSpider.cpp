@@ -12,7 +12,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -638,8 +638,8 @@ void StringSpider::exeDpdGripped() {
         }
     }
 
-    s32 channel = GAMEPAD_CHAN0;
-    if (!MR::testCorePadButtonA(channel = *MR::getStarPointerLastPointedPort(this))) {
+    s32 channel = PLAYER_1;
+    if (!MR::isHeldJump(channel = *MR::getStarPointerLastPointedPort(this))) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
     } else {
         calcPosture(0.25f, false);

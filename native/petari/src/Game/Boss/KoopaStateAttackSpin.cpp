@@ -102,7 +102,7 @@ bool KoopaStateAttackSpin::tryDamage(u32 msg, HitSensor* pSender, HitSensor* pRe
 
     MR::sendMsgEnemyAttackFlipJump(pReceiver, pSender);
 
-    MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadStrong(this, PLAYER_1);
 
     MR::startSound(mHost, "SE_BM_KOOPA_SPIN_EVEN");
     MR::startSound(mHost, "SE_BV_KOOPA_GUARD");

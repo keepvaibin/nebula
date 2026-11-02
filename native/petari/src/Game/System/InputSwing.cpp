@@ -1,15 +1,15 @@
-#include "Game/System/GamePadHVSwing.hpp"
-#include "Game/System/GamePad.hpp"
+#include "Game/System/InputSwing.hpp"
+#include "Game/System/PlayerInput.hpp"
 
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
-    // A shake press's swing lasts as long as a flick of the remote keeps the detector above its threshold.
+    // A shake press's swing lasts as long as a flick of the hand keeps the detector above its threshold.
     const s32 cNebulaShakeSwingFrames = 6;
 };  // namespace
 
-GamePadHVSwing::GamePadHVSwing(const GamePad* pPad, u32 channel)
+InputSwing::InputSwing(const PlayerInput* pPad, u32 channel)
     : mPad(pPad), mChannel(channel), mDistanceSwingThreshold(1.0f), mIsSwing(), mIsSwingLatched(), mSwingLatchedFrames(),
       mSwingBelowThresholdFrames(), mIsTriggerSwing(), mSwingThreshold(0.4f), mSwingDetected(), mSwingTriggered(), mSwingHoldFrames(),
       mSwingCooldownFrames()
@@ -18,7 +18,7 @@ GamePadHVSwing::GamePadHVSwing(const GamePad* pPad, u32 channel)
 {
 }
 
-void GamePadHVSwing::updateSwing() {
+void InputSwing::updateSwing() {
     TVec3f pastAccel;
     TVec3f curAccel;
 
@@ -50,7 +50,7 @@ void GamePadHVSwing::updateSwing() {
     }
 }
 
-void GamePadHVSwing::updateCentrifugal() {
+void InputSwing::updateCentrifugal() {
     TVec3f pastAccel;
     TVec3f curAccel;
 
@@ -106,8 +106,8 @@ void GamePadHVSwing::updateCentrifugal() {
 // A shake button (a controller without motion sensors, or a key) swings directly, the frame it is pressed: each press is
 // a new swing (the flag drops for one frame first if a press's swing is still up), held for cNebulaShakeSwingFrames.
 // Without presses the accelerometer decides, as on the console.
-bool GamePadHVSwing::updateNebulaShake() {
-    mNebulaShakePresses += mPad->mReadInfo->takeShakePresses(mChannel == GAMEPAD_DEV_CORE ? 0 : 1);
+bool InputSwing::updateNebulaShake() {
+    mNebulaShakePresses += mPad->mReadInfo->takeShakePresses(mChannel == INPUT_HAND_MAIN ? 0 : 1);
     if (mNebulaShakeFrames == 0 && mNebulaShakePresses == 0 && !mIsNebulaShaking) {
         return false;
     }
@@ -136,7 +136,7 @@ bool GamePadHVSwing::updateNebulaShake() {
     return true;
 }
 
-void GamePadHVSwing::update() {
+void InputSwing::update() {
     if (updateNebulaShake()) {
         return;
     }

@@ -226,7 +226,7 @@ void FlexibleSphere::control() {
         }
 
         if (MR::isActorOnPlayer(this)) {
-            MR::tryRumblePad(this, "\203\175\203\212\203\111[\202\265\202\321\202\352]" /* マリオ[しびれ] */, GAMEPAD_CHAN0);
+            MR::tryRumblePad(this, "\203\175\203\212\203\111[\202\265\202\321\202\352]" /* マリオ[しびれ] */, PLAYER_1);
         }
     }
 }

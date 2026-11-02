@@ -531,7 +531,7 @@ bool Sandstorm::tryStartBind(HitSensor* pSensor) {
 }
 
 bool Sandstorm::tryTornadoJumpPlayer() {
-    if (!MR::isPadSwing(GAMEPAD_CHAN0)) {
+    if (!MR::isSpin(PLAYER_1)) {
         return false;
     }
 

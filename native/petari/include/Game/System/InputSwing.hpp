@@ -1,18 +1,18 @@
 #pragma once
 
 
-class GamePad;
+class PlayerInput;
 
-class GamePadHVSwing {
+class InputSwing {
 public:
-    GamePadHVSwing(const GamePad*, u32);
+    InputSwing(const PlayerInput*, u32);
 
     void updateSwing();
     void updateCentrifugal();
     void update();
     bool updateNebulaShake();
 
-    /* 0x00 */ const GamePad* mPad;
+    /* 0x00 */ const PlayerInput* mPad;
     /* 0x04 */ s32 mChannel;
     /* 0x08 */ f32 mDistanceSwingThreshold;
     /* 0x0C */ bool mIsSwing;

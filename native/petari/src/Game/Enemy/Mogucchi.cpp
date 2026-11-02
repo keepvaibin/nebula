@@ -388,7 +388,7 @@ bool Mogucchi::receiveAttackBySpinSensor(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     MR::stopScene(8);
-    MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     calcScatterVec(pSender->mPosition, pReceiver->mPosition);
     setNerve(GET_NERVE_ANON(MogucchiNrvScatter));
 
@@ -429,7 +429,7 @@ bool Mogucchi::receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor*
 
     if (MR::isMsgPlayerHitAll(msg)) {
         MR::stopScene(8);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         calcScatterVec(pSender->mPosition, pReceiver->mPosition);
         setNerve(GET_NERVE_ANON(MogucchiNrvScatter));
         return true;

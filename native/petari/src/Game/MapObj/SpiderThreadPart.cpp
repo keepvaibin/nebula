@@ -123,12 +123,12 @@ void SpiderThreadPart::updatePointerPos() {
     center.add(mPointB->mPosition);
     center.scale(0.5f);
 
-    if (MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
-        MR::calcStarPointerPosOnPlane(&mPointerPosPad0, center, TVec3f(0.0f, 0.0f, 1.0f), GAMEPAD_CHAN0, false);
+    if (MR::isStarPointerInScreen(PLAYER_1)) {
+        MR::calcStarPointerPosOnPlane(&mPointerPosPad0, center, TVec3f(0.0f, 0.0f, 1.0f), PLAYER_1, false);
     }
 
-    if (MR::isStarPointerInScreen(GAMEPAD_CHAN1)) {
-        MR::calcStarPointerPosOnPlane(&mPointerPosPad1, center, TVec3f(0.0f, 0.0f, 1.0f), GAMEPAD_CHAN1, false);
+    if (MR::isStarPointerInScreen(PLAYER_2)) {
+        MR::calcStarPointerPosOnPlane(&mPointerPosPad1, center, TVec3f(0.0f, 0.0f, 1.0f), PLAYER_2, false);
     }
 }
 
@@ -335,7 +335,7 @@ void SpiderThreadPart::tryTouch(f32 radius, const TVec3f& rVel, s32 padChannel) 
 
     bool inBounds;
     TVec3f* pointerPos = &mPointerPosPad0;
-    if (padChannel == GAMEPAD_CHAN1) {
+    if (padChannel == PLAYER_2) {
         pointerPos = &mPointerPosPad1;
     }
 

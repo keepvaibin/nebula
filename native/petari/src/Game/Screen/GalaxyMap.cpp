@@ -14,7 +14,7 @@
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataConst.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -609,7 +609,7 @@ bool GalaxyMap::tryFocusIn() {
         return true;
     }
 
-    if (pointingGalaxyIcon != nullptr && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (pointingGalaxyIcon != nullptr && MR::isPressedJump(PLAYER_1)) {
         setNerve(GET_NERVE_ANON(GalaxyMapShowDetail));
 
         return true;

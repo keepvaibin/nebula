@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -223,7 +223,7 @@ void BombTeresa::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         } else if (isEnableHitExplosionToEnemy()) {
             if (MR::sendMsgEnemyAttackExplosion(pReceiver, pSender)) {
-                MR::tryRumbleDefaultHit(this, GAMEPAD_CHAN0);
+                MR::tryRumbleDefaultHit(this, PLAYER_1);
                 MR::zeroVelocity(this);
                 setNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion));
             } else {
@@ -627,8 +627,8 @@ void BombTeresa::exeDrift() {
     MR::vecBlend(_C4, v13, &_C4, MR::calcNerveEaseInRate(this, 15));
     MR::turnDirectionToTarget(this, &_AC, *MR::getPlayerPos(), 0.0f);
     if (_E8 <= 0) {
-        if (MR::isPadSwing(GAMEPAD_CHAN0)) {
-            MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        if (MR::isSpin(PLAYER_1)) {
+            MR::tryRumblePadMiddle(this, PLAYER_1);
             _E8 = 40;
             _E0 += 20.0f;
             _E4 += 20.0f;
@@ -664,7 +664,7 @@ void BombTeresa::exeDrift() {
 void BombTeresa::exeDriftRelease() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Drift");
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::startSound(this, "SE_EM_BOMBTERE_THROW");
     }
 
@@ -692,7 +692,7 @@ void BombTeresa::endBindStarPointer() {
 void BombTeresa::exeExplosion() {
     if (MR::isFirstStep(this)) {
         MR::shakeCameraNormalStrong();
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::deleteEffect(this, "SpinBlur");
         MR::emitEffect(this, "Explosion");
         MR::hideModel(this);

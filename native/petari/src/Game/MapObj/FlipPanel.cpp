@@ -80,7 +80,7 @@ void FlipPanel::exeFrontLand() {
             MapObjActorUtil::killBloomModel(this);
         }
 
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(this, "SE_OJ_FLIP_PANEL_CHANGE");
 
         if (_CD) {
@@ -110,7 +110,7 @@ void FlipPanel::exeBackLand() {
             MR::setBrkFrame(bloomModel, frameMax);
         }
 
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(this, "SE_OJ_FLIP_PANEL_CHANGE");
 
         if (!_CD) {

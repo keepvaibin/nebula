@@ -134,7 +134,7 @@ void WaterPlant::movement() {
         }
     }
 
-    if (!MR::isCorePadSwing(GAMEPAD_CHAN0)) {
+    if (!MR::isMainSpin(PLAYER_1)) {
         return;
     }
 

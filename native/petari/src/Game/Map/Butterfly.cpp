@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -232,7 +232,7 @@ bool Butterfly::tryRunAway() {
         return false;
     }
 
-    if (MR::testCorePadButtonB(port)) {
+    if (MR::isHeldFire(port)) {
         return false;
     }
 
@@ -274,7 +274,7 @@ bool Butterfly::tryHive() {
         return false;
     }
 
-    if (!MR::testCorePadButtonB(port)) {
+    if (!MR::isHeldFire(port)) {
         return false;
     }
 

@@ -15,7 +15,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -520,7 +520,7 @@ void WaterRoad::exeRideStart() {
         return;
     }
 
-    if (MR::isCorePadSwing(GAMEPAD_CHAN0)) {
+    if (MR::isMainSpin(PLAYER_1)) {
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvRideSpin));
         return;
     }
@@ -539,7 +539,7 @@ void WaterRoad::exeRideWait() {
         return;
     }
 
-    if (MR::isCorePadSwing(GAMEPAD_CHAN0)) {
+    if (MR::isMainSpin(PLAYER_1)) {
         setNerve(GET_NERVE(WaterRoad, WaterRoadNrvRideSpin));
     }
 }
@@ -578,7 +578,7 @@ void WaterRoad::exeDemoGrowUp() {
         MR::emitEffect(this, "Top");
         MR::startSound(this, "SE_OJ_WATER_ROAD_GROW_START");
         MR::shakeCameraStrong();
-        MR::tryRumblePadVeryStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
     }
 
     updateDemo(MR::calcDemoPartStepRate("\203\105\203\110\201\133\203\136\201\133\203\215\201\133\203\150\220\254\222\267" /* ウォーターロード成長 */));

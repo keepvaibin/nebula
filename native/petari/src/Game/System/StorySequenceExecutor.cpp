@@ -713,9 +713,9 @@ void StorySequenceExecutor::exePlayDemoSequence() {
         break;
     case 11:
         if (pDemoInfo->_2 == 15) {
-            GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
+            GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
         } else if (pDemoInfo->_2 == 16) {
-            GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(true);
+            GameSystemFunction::setPermissionToCheckInputAndScreenDimming(true);
         }
 
         _48[0]++;

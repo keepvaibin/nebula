@@ -2,7 +2,7 @@
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 

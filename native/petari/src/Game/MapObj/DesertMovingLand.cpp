@@ -119,7 +119,7 @@ void DesertMovingLand::exeMoveDown() {
     }
     MR::startAtmosphereLevelSE("SE_OJ_LV_DESERT_LAND_MOVE");
     if (MR::isLessStep(this, 90)) {
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
     if (MR::isStep(this, 90)) {
@@ -145,7 +145,7 @@ void DesertMovingLand::exeMoveUp() {
     MR::startAtmosphereLevelSE("SE_OJ_LV_DESERT_LAND_MOVE");
 
     if (MR::isLessStep(this, 90)) {
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
     if (MR::isStep(this, 90)) {
@@ -174,7 +174,7 @@ void DesertMovingLand::exeMoveSign() {
     }
 
     MR::startLevelSound(this, "SE_OJ_LV_DESERT_LAND_SIGN");
-    MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     if (MR::isBckStopped(this)) {
         if (isNerve(GET_NERVE(DesertMovingLand, HostTypeMoveUpSign)))
             setNerve(GET_NERVE(DesertMovingLand, HostTypeMoveUp));

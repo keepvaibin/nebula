@@ -11,7 +11,7 @@
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaText.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -855,10 +855,10 @@ namespace {
 
     // The pointer in board units; false when it is off the screen.
     bool readPointer(NebulaBoardParts* p, f32* pX, f32* pY) {
-        if (!MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
+        if (!MR::isStarPointerInScreen(PLAYER_1)) {
             return false;
         }
-        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0);
+        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(PLAYER_1);
         TVec2f layout;
         MR::convertScreenPosToLayoutPos(&layout, screen);
         *pX = layout.x / p->mScaleX;
@@ -1035,7 +1035,7 @@ namespace {
             }
         }
 
-        if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+        if (MR::isPressedJump(PLAYER_1)) {
             if (p->mOverBack) {
                 return true;
             }
@@ -1053,7 +1053,7 @@ namespace {
             }
         }
         if (p->mDragging) {
-            if (!MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
+            if (!MR::isHeldJump(PLAYER_1)) {
                 p->mDragging = false;
             } else {
                 const f32 delta = y - p->mDragStartY;
@@ -1676,9 +1676,9 @@ void NebulaAchievementBoard::exeWait() {
         setNerve(&NrvNebulaAchievementBoard::NebulaAchievementBoardNrvDisappear::sInstance);
         return;
     }
-    if (MR::testCorePadTriggerMinus(GAMEPAD_CHAN0)) {
+    if (MR::isPressedMap(PLAYER_1)) {
         stepTab(p, -1);
-    } else if (MR::testCorePadTriggerPlus(GAMEPAD_CHAN0)) {
+    } else if (MR::isPressedPause(PLAYER_1)) {
         stepTab(p, 1);
     }
     const s32 press = NebulaMenuFocus::readPress(&p->mRepeat);

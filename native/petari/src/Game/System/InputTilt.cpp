@@ -1,6 +1,6 @@
-#include "Game/System/GamePadAcceleration.hpp"
-#include "Game/System/GamePad.hpp"
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/InputTilt.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
@@ -11,13 +11,13 @@ namespace {
     }
 }
 
-GamePadAcceleration::GamePadAcceleration(const GamePad* pPad, u32 device)
+InputTilt::InputTilt(const PlayerInput* pPad, u32 device)
     : mPad(pPad), _4(device), _8(), _C(0.15f), _10(0, 0, 0), _1C(), _20(true), _624(-1), _628(), _62C(0, 0, 0), _638(0.0f, 0.0f, 0.0f), _644(128),
       _648(), _64C() {
     mPad->mReadInfo->setAccelParam(_8, _C);
 }
 
-bool GamePadAcceleration::getAcceleration(TVec3f* pOut) const {
+bool InputTilt::getAcceleration(TVec3f* pOut) const {
     if (_628 <= 0) {
         pOut->zero();
         return false;
@@ -27,7 +27,7 @@ bool GamePadAcceleration::getAcceleration(TVec3f* pOut) const {
     return true;
 }
 
-bool GamePadAcceleration::getPastAcceleration(TVec3f* pOut, s32 index) const {
+bool InputTilt::getPastAcceleration(TVec3f* pOut, s32 index) const {
     if (index >= _628) {
         pOut->zero();
         return false;
@@ -43,15 +43,15 @@ bool GamePadAcceleration::getPastAcceleration(TVec3f* pOut, s32 index) const {
     return true;
 }
 
-bool GamePadAcceleration::isStationary() const {
+bool InputTilt::isStationary() const {
     return _20;
 }
 
-bool GamePadAcceleration::isBalanced() const {
+bool InputTilt::isBalanced() const {
     return _1C < 0.018f;
 }
 
-void GamePadAcceleration::update() {
+void InputTilt::update() {
     s32 statusCount = mPad->getValidStatusCount();
     if (statusCount <= 0) {
         TVec3f previous;
@@ -76,7 +76,7 @@ void GamePadAcceleration::update() {
     }
 
     for (s32 i = statusCount - 1; i >= 0; i--) {
-        GamePadSample* pSample = mPad->getSample(i);
+        PlayerInputSample* pSample = mPad->getSample(i);
 
         if (pSample == nullptr) {
             continue;
@@ -87,11 +87,11 @@ void GamePadAcceleration::update() {
         if (_4 == 0) {
             acceleration = pSample->mAccel;
         } else {
-            if (!MR::isDeviceFreeStyle(pSample)) {
+            if (!MR::hasMoveStick(pSample)) {
                 continue;
             }
 
-            acceleration = pSample->mSubAccel;
+            acceleration = pSample->mSubTilt;
         }
 
         _624++;
@@ -124,7 +124,7 @@ void GamePadAcceleration::update() {
     updateIsStable();
 }
 
-void GamePadAcceleration::updateRotate() {
+void InputTilt::updateRotate() {
     _638.zero();
     s32 count = _644;
 
@@ -182,7 +182,7 @@ void GamePadAcceleration::updateRotate() {
     }
 }
 
-void GamePadAcceleration::updateAccAverage() {
+void InputTilt::updateAccAverage() {
     f32 total = 0.0f;
     s32 count = 0;
     TVec3f previous(0.0f, 0.0f, 0.0f);
@@ -210,7 +210,7 @@ void GamePadAcceleration::updateAccAverage() {
     }
 }
 
-void GamePadAcceleration::updateIsStable() {
+void InputTilt::updateIsStable() {
     TVec3f difference = mHistory[0] - _10;
     _20 = true;
 
