@@ -229,8 +229,17 @@ void JASGenericMemPool::newMemPool(u32 size, int n) {
 }
 
 void* JASGenericMemPool::alloc(u32 size) {
+    // Empty: as many again, from memory that lasts as long as the sound system.
     if (_0 == nullptr) {
-        return nullptr;
+        const int num = mTotalMemCount != 0 ? mTotalMemCount : 16;
+        for (int i = 0; i < num; i++) {
+            void* pChunk = new (JKRHeap::sRootHeap, 0) u8[size];
+            *(void**)pChunk = _0;
+            _0 = pChunk;
+        }
+
+        mFreeMemCount += num;
+        mTotalMemCount += num;
     }
 
     void* pChunk = _0;

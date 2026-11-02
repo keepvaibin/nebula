@@ -2,8 +2,20 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
+#include <JSystem/JKernel/JKRHeap.hpp>
 
 namespace MR {
+    /// @brief A full table: twice the room, in the heap it lies in, and the old one goes. Pointers into it do not survive this.
+    template < class T >
+    T* growArray(T* pOld, s32 num) {
+        T* const pNew = new (JKRHeap::findFromRoot(pOld), 0) T[num * 2];  // num is never 0: see AssignableArray::grow
+        for (s32 i = 0; i < num; i++) {
+            pNew[i] = pOld[i];
+        }
+        delete[] pOld;
+        return pNew;
+    }
+
     /// @brief A contiguous reallocatable array.
     template < class T >
     class AssignableArray {
@@ -44,6 +56,17 @@ namespace MR {
         void init(s32 num) {
             mArr = new T[num];
             mMaxSize = num;
+        }
+
+        /// @brief Makes room for more elements.
+        void grow() {
+            if (mMaxSize == 0) {
+                init(16);
+                return;
+            }
+
+            mArr = growArray(mArr, mMaxSize);
+            mMaxSize *= 2;
         }
 
         /// @brief Returns the number of elements.
@@ -121,6 +144,11 @@ namespace MR {
             typedef X Type;
         };
         typedef typename RemovePtr< T >::Type Base;
+
+        /// @brief A fixed array cannot grow: it says so, where a write past its end would corrupt what follows it.
+        void grow() {
+            NEBULA_PANIC("a table of %d is full", N);
+        }
 
         /// @brief Returns the element at the given position.
         /// @param idx The position of the element.
@@ -231,6 +259,12 @@ namespace MR {
         void push_back(const Item& rItem);
 
         Item* insert(Item* pIter, const Item& rItem) {
+            if (mCount >= mArray.size()) {
+                const s32 index = pIter - begin();
+                mArray.grow();
+                pIter = begin() + index;
+            }
+
             for (Item* p = end(); p != pIter; p--) {
                 *p = *(p - 1);
             }
@@ -368,6 +402,13 @@ namespace MR {
 
     template < class T >
     void Vector< T >::push_back(const Item& rItem) {
+        if (mCount >= mArray.size()) {
+            const Item item = rItem;  // it may lie in the array
+            mArray.grow();
+            mArray[mCount++] = item;
+            return;
+        }
+
         mArray[mCount++] = rItem;
     }
 };  // namespace MR

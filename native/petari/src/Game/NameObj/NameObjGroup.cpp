@@ -1,4 +1,5 @@
 #include "Game/NameObj/NameObjGroup.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
 NameObjGroup::NameObjGroup(const char* pName, int numMax) : NameObj(pName), mObjNumMax(), mObjNum(), mObjArray() {
@@ -10,6 +11,11 @@ NameObjGroup::~NameObjGroup() {
 }
 
 void NameObjGroup::registerObj(NameObj* pObj) {
+    if (mObjNum >= mObjNumMax) {
+        mObjArray = MR::growArray(mObjArray, mObjNumMax);
+        mObjNumMax *= 2;
+    }
+
     mObjArray[mObjNum] = pObj;
     mObjNum++;
 }
