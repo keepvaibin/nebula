@@ -58,7 +58,7 @@ struct alignas(256) VertexConstants {
     std::uint32_t post_rows[kMaxTexGens];
     std::uint32_t reserved_c72[4];  // c72: read by no shader
     // Motion-vector pipelines only (temporal scenes), in the tail padding: the
-    // previous projection (console A..D; E, F, type), the previous position matrix or
+    // previous projection, the previous position matrix or
     // camera delta, the draw's jitter (NDC) and half viewport (pixels), and the
     // mode (0: previous palette rows at motion_ctrl[1]; 1: motion_prev_pos applied
     // to the current eye position for palette draws, to the vertex for inline draws).

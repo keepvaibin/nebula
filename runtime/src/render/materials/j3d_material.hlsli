@@ -20,7 +20,7 @@ struct MaterialConstants {
 
 #include "native_material.hlsli"
 
-// the console's colour combiner takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
+// the console's colour combiner takes a register as an operand a, b or c through its low 8 bits: a value an
 // unclamped stage left past 1 or below 0 wraps.
 float j3d_in(float x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }
 float3 j3d_in(float3 x) { return x - floor(x * 255.0 / 256.0) * 256.0 / 255.0; }

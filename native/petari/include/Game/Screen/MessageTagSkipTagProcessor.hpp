@@ -38,7 +38,7 @@ public:
     u16 getParam16(int) const;
     u32 getParam32(int) const;
     char16_t* getParamPtr(int) const;
-    // A string argument (group 7), in the tag's first, 4-byte parameter (the console stored the pointer there).
+    // A string argument (group 7), in the tag's first, 4-byte parameter.
     void setParamString(const char16_t* pString) const;
     const char16_t* getParamString() const;
 

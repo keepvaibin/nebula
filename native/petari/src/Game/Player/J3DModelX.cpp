@@ -171,7 +171,7 @@ void J3DModelX::directDraw(J3DModel* model) {
 }
 
 namespace {
-    // The flat passes' colours by list (the console's colour register 0 with one stage): `a` marks a flat pass (2: register 0's
+    // The flat passes' colours by list: `a` marks a flat pass (2: register 0's
     // colour as the draw's lists left it), `alpha` its
     // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
     struct OverrideColor {

@@ -165,7 +165,7 @@ public:
     /* 0x58 */ u32 _58;
     /* 0x60 */ EMountDirection mMountDir;
 
-    // Each file entry's loaded data (the console kept it in SDIFileEntry::mFileData), indexed like mFiles.
+    // Each file entry's loaded data, indexed like mFiles.
     mutable void** mFileDataTable = nullptr;
 
     void*& fileData(const SDIFileEntry* pEntry) const {

@@ -265,7 +265,7 @@ void SaveDataHandler::exeSaveProcessingGameData() {
         return;
     }
 
-    // Saved or not, the sequence ends (the console wrote the System Menu's banner next; a PC has no System Menu).
+    // Saved or not, the sequence ends.
     setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
 }
 

@@ -29,7 +29,6 @@ void DinoPackunEggShell::control() {
     MR::extractMtxTrans(_90, &mPosition);
 }
 
-// https://decomp.me/scratch/4gqkt
 void DinoPackunEggShell::calcAndSetBaseMtx() {
     TPos3f mtx;
     mtx.setInline(_90);

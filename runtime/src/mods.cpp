@@ -280,7 +280,7 @@ void apply_config(RiivDisc& d, const fs::path& riivolution_dir, const std::strin
     }
 }
 
-// The SD card's and the patch's roots of a Riivolution mod, and its external paths (Dolphin FileDataLoaderHostFS).
+// The SD card's and the patch's roots of a Riivolution mod, and its external paths.
 struct Loader {
     fs::path sd_root;
     fs::path patch_root;

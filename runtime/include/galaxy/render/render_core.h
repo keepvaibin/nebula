@@ -547,7 +547,7 @@ private:
         // The game camera (world to eye) of the scene.
         Affine34 view{};
         bool view_known = false;
-        // The projection the ray tracer took the scene's view from (console A, B, C, D, E, F without the temporal jitter)
+        // The projection the ray tracer took the scene's view from
         // and its viewport's size in scene target pixels: sub-frames interpolate it (SubframeTime::projection).
         std::array<float, 6> rt_projection{};
         float rt_viewport[2]{};
@@ -995,7 +995,7 @@ private:
     const RecordVertexInputs* record_inputs_ = nullptr;
     // draw_record_immediate's vertices and indices before they go to the rings.
     std::vector<std::uint16_t> immediate_indices_;
-    // The vertex inputs the last keys were built with (the console's VCD bits 0-8, or a record's matrix bits and arrays).
+    // The vertex inputs the last keys were built with.
     std::uint64_t vertex_source_ = 0;
     bool stop_render_thread_ = false;
     std::exception_ptr render_thread_error_;

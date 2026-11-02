@@ -78,7 +78,6 @@ bool DinoPackunTailNode::turnJointLocalXDir(TPos3f* pMtx, const JointControllerI
     return true;
 }
 
-// https://decomp.me/scratch/i48pg
 bool DinoPackunTailNode::calcJointScale(TPos3f* pMtx, const JointControllerInfo& rInfo) {
     if (!_B8) {
         return false;

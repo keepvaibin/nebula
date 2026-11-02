@@ -93,7 +93,6 @@ void DinoPackunTail::registerJointCallBack() {
     }
 }
 
-// https://decomp.me/scratch/PqcAa
 void DinoPackunTail::updateJoint() {
     if (_1C) {
         addAccelKeepDistance();
@@ -155,7 +154,6 @@ void DinoPackunTail::addAccelKeepBend() {
     }
 }
 
-// https://decomp.me/scratch/aWhPK
 void DinoPackunTail::addAccelKeepDistance() {
     TVec3f v19;
     v19.set(mNodes[0]->mPosition);

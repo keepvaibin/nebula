@@ -92,7 +92,7 @@ public:
     void setFrontVec(const TVec3f&);
     void setFrontVecKeepUp(const TVec3f&, f32);
     void setFrontVecKeepUp(const TVec3f&, u32);
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
+    // A call with a long argument (NebulaLongCall).
     template < typename L >
     typename NebulaLongCall< void, L >::Type setFrontVecKeepUp(const TVec3f& rVec, L step) {
         setFrontVecKeepUp(rVec, (u32)step);
@@ -484,7 +484,7 @@ public:
     // instruction comments to make it easier to identify each bit
     struct MovementStates {
         // Code reads these as words (mMovementStates_HIGH_WORD and the others): fields from the least significant value
-        // bit up in each word, so each has the console's bit (CodeWarrior allocates from the most significant bit).
+        // bit up in each word, so each has the console's bit.
         unsigned _1F : 1;
         unsigned digitalJump : 1;  // _1E
         unsigned _1D : 1;

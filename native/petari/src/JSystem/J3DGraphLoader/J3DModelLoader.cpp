@@ -198,7 +198,7 @@ J3DModelData* J3DModelLoader::loadBinaryMaterials(void const* i_data, u32 i_flag
             readTexture((J3DTextureBlock*)block);
             break;
         case 'MDL3':
-            // The file's precompiled material lists (console commands): its materials come from MAT3, their lists
+            // The file's precompiled material lists: its materials come from MAT3, their lists
             // from J3DModel::makeMesh as a .bmd model's.
             break;
         case 'MAT3':

@@ -609,7 +609,6 @@ void WaterRoad::exeDisappear() {
 }
 
 void WaterRoad::movement() {
-    // https://decomp.me/scratch/6VOUU
 
     if (!MR::isValidMovement(this)) {
         return;

@@ -19,7 +19,7 @@ typedef char NebulaTypesCheck[(sizeof(s16) == 2 && sizeof(s32) == 4 && sizeof(s6
 extern "C++" {
 // The console's s32 and u32 are long and unsigned long, so the game's long literals (0L, 1UL) match its s32 and
 // u32 overloads exactly. NebulaLongCall<R, A, B, C>::Type is R when every argument is an integer and one is a long;
-// the overloads that use it forward such calls to the s32/u32 version, as the console resolved them.
+// the overloads that use it forward such calls to the s32/u32 version.
 template < typename T >
 struct NebulaInt {
     enum { integer = 0, wide = 0 };

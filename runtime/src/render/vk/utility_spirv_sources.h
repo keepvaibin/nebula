@@ -43,7 +43,7 @@ V main(uint id : SV_VertexID) {
 }
 )HLSL";
 
-// The depth resolve: each pixel's sample 0 (the console's single sample sits at the pixel centre).
+// The depth resolve: each pixel's sample 0.
 constexpr char kDepthResolvePs[] = R"HLSL(
 Texture2DMS<float> t0 : register(t0);
 float main(float4 pos : SV_Position) : SV_Depth {

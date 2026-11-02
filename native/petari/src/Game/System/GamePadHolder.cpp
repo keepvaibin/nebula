@@ -110,7 +110,7 @@ void GamePadReadDataInfo::resetState() {
     mSubResetRequested = true;
 }
 
-// A connection or a Nunchuk change, told to GamePad as the console's connect and extension callbacks told it.
+// A connection or a Nunchuk change, told to GamePad.
 void GamePadReadDataInfo::updateConnection(s32 chan, const NebulaInputDevice& rDevice) {
     const bool wasConnected = mDevice.connected != 0;
     const bool hadSubPad = wasConnected && mDevice.nunchuk != 0;

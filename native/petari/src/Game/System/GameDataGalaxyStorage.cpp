@@ -252,7 +252,6 @@ void GameDataSomeGalaxyStorage::serialize(const BinaryDataContentAccessor& rAcce
 }
 
 s32 GameDataAllGalaxyStorage::serialize(u8* pData, u32 dataSize) const {
-    // https://decomp.me/scratch/NCESx
 
     const char* name;
     s32 writeOffset = 0;

@@ -29,7 +29,7 @@ struct NebulaMaterialParts {
 namespace {
     // The register file as the J3D materials' constants lay it out (j3d_material.hlsli MaterialConstants): what the
     // J3D materials and the game's state changes set last. A native J3D material takes the parts its program does not
-    // load from here (the TEV register PREV always: J3D loads registers 1-3), as console kept them.
+    // load from here (the TEV register PREV always: J3D loads registers 1-3).
     f32 sRegisters[84];
 
     // The native material the draws use now (J3D: sCurrent, its program and values; or a site's own), and the state
@@ -255,7 +255,7 @@ namespace {
         loadRegisters(rSetup, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
         // Each coordinate's console scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
-        // of map m at c's scale over m's size, as console scales coordinates per coordinate.
+        // of map m at c's scale over m's size.
         for (u32 k = 0; k < 8; k++) {
             f32* pScale = material.constants + 84 + k * 4;
             const NebulaMaterialTexture& rTex = rValues.texture[k];

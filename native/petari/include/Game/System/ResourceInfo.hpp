@@ -26,7 +26,7 @@ public:
     void newFileInfoTable(u32);
     ResFileInfo* add(const char*, void*, bool);
     const char* getResName(u32) const;
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
+    // A call with a long argument (NebulaLongCall).
     template < typename L >
     typename NebulaLongCall< const char*, L >::Type getResName(L index) const {
         return getResName((u32)index);

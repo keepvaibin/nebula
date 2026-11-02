@@ -101,7 +101,7 @@ public:
     }
 
     virtual int entry(J3DDrawBuffer*);
-    // Pure, as on the console (the DOL has no vtable of this base; every packet defines it).
+    // Pure (the DOL has no vtable of this base; every packet defines it).
     virtual void draw() = 0;
     virtual ~J3DPacket() {
     }

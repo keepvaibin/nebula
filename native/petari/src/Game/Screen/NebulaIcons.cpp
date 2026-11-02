@@ -676,7 +676,7 @@ namespace {
         return c;
     }
 
-    // How an icon is drawn: in text (its font cell), or as the A bubble's two frames, as the console's own two pictures:
+    // How an icon is drawn: in text (its font cell), or as the A bubble's two frames:
     // the button up (a 39-pixel button at (4, 4) of 48, lit from above, its shadow down and right) and pressed (36 of
     // 40, centred, its shading reversed).
     enum { LookText, LookUp, LookPressed };
@@ -724,7 +724,7 @@ namespace {
         case NEBULA_ICON_FACE: {
             const s32 p = place & 3;
             if (xbox) {
-                // Y's letter dark on its yellow, as the console's own.
+                // Y's letter dark on its yellow.
                 const Rgba fill = rgba(cXboxFaces[p]);
                 const Rgba top = {fill.r + (1.0f - fill.r) * 0.25f, fill.g + (1.0f - fill.g) * 0.25f, fill.b + (1.0f - fill.b) * 0.25f, 1.0f};
                 drawShape(rCanvas, circle, ringColor, ring, pressed ? darkened(fill) : top, pressed ? darkened(top) : fill);

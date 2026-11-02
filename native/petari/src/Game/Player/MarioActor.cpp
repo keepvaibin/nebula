@@ -1870,7 +1870,6 @@ void MarioActor::forceSetBaseMtx(MtxPtr pMtx) {
 void MarioActor::calcAnim() {
     CollisionShadow* pShadow;
     // FIXME: switch stuff
-    // https://decomp.me/scratch/Xf6TH
     if (_482 != 0) {
         mBlendMtxTimer = 0;
         return;
@@ -2579,7 +2578,6 @@ bool MarioActor::isDebugMode() const {
 }
 
 void MarioActor::jumpHop() {
-    // https://decomp.me/scratch/d3cJS
     if (!isJumping()) {
         return;
     }
@@ -2615,7 +2613,6 @@ void MarioActor::jumpHop() {
 }
 
 void MarioActor::calcCenterPos() {
-    // https://decomp.me/scratch/oy8tV
     if (_934 || _8C) {
         MR::copyJointPos(this, "Spine1", &_2A0);
 

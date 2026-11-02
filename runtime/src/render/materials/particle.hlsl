@@ -15,7 +15,7 @@ struct MaterialConstants {
     float4 alpha_ref;     // the alpha test's references (0-1)
     float4 params;        // x: the colour mode (JPABaseShape::st_ca 0-5), y: the alpha mode (st_aa 0-1), z: flags (1
                           // indirect, 2 second texture, 4 projected coordinates, 8 child: texture 1), w: unused
-    float4 test;          // x, y: the alpha test's compares 0 and 1 (the console's order), z: its logic (and, or, xor, xnor)
+    float4 test;          // x, y: the alpha test's compares 0 and 1, z: its logic (and, or, xor, xnor)
 };
 
 #include "native_material.hlsli"

@@ -139,7 +139,6 @@ JPAFieldBlock::JPAFieldBlock(u8 const* data, NebulaArena* heap) : mpData((const 
     init(heap);
 }
 
-// https://decomp.me/scratch/5AuZW
 void JPAFieldBlock::init(NebulaArena* heap) {
     mFadeInRate = getFadeInTime() - getEnTime();
     if (mFadeInRate == 0.0f) {

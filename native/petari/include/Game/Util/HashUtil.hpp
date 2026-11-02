@@ -19,7 +19,7 @@ public:
     bool search(u32, HashSortValue*);
     bool search(const char*, HashSortValue*);
     bool search(const char*, const char*, HashSortValue*);
-    // Lookups of numeric values (indices) into u32, as on the console.
+    // Lookups of numeric values (indices) into u32.
     bool search(u32 hash, u32* pValue) {
         HashSortValue value;
         const bool found = search(hash, &value);

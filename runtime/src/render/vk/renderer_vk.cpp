@@ -259,7 +259,7 @@ bool RendererVk::create_surface_and_device() {
 bool RendererVk::create_layouts() {
     const vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    // scene target depth: 24-bit integer as the console's (and D3D12's D24) where the device has it.
+    // scene target depth: 24-bit integer.
     VkFormatProperties format{};
     vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_D24_UNORM_S8_UINT, &format);
     depth_format_ = (format.optimalTilingFeatures & (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |

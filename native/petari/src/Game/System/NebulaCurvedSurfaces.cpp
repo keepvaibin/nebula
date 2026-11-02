@@ -13,7 +13,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // A growable array in the CRT's heap: the arrays here are CPU-only and short-lived, and the game's heaps are sized
-    // as the console's.
     template < typename T >
     struct Grow {
         T* mData;
