@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JAudio2/JASGlobal.hpp>
-#include "nebula_disc.hpp"
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
@@ -14,12 +13,10 @@ struct AudChordData {
     /* 0x05 */ u8 mAddNote[3];
 };
 
-// In the chord table file; its offsets are relocated in place (AudChordTable::setChordTableResource).
+// In the chord table file (host order, as the importer cooks it): its note lists' offsets from the file's start.
 struct AudScaleData {
-    void initScaleData(uintptr_t base) NO_INLINE;
-
-    /* 0x00 */ NEBULA_SELFREL(u8) up;
-    /* 0x04 */ NEBULA_SELFREL(u8) down;
+    /* 0x00 */ u32 mUpOffset;
+    /* 0x04 */ u32 mDownOffset;
 };
 
 class AudChordTable {
@@ -32,9 +29,17 @@ public:
     /* 0x00 */ bool mLoaded;
     /* 0x04 */ int mChordCount;
     /* 0x08 */ int mScaleCount;
-    // The file's relocated offset tables.
-    /* 0x0C */ NEBULA_SELFREL(AudChordData)* mChordPtr;
-    /* 0x10 */ NEBULA_SELFREL(AudScaleData)* mScalePtr;
+    // The file and its offset tables (from the file's start); the file is not written.
+    const u8* mBase;
+    const u32* mChordOffsets;
+    const u32* mScaleOffsets;
+
+    const AudChordData* getChord(s32 index) const {
+        return reinterpret_cast< const AudChordData* >(mBase + mChordOffsets[index]);
+    }
+    const AudScaleData* getScale(s32 index) const {
+        return reinterpret_cast< const AudScaleData* >(mBase + mScaleOffsets[index]);
+    }
 };
 
 class AudChordInfo : public JASGlobalInstance< AudChordInfo > {
@@ -69,10 +74,10 @@ public:
         return mCurChord->mAddNote[idx];
     }
     s32 getScaleNoteUp(s32 idx) NO_INLINE {
-        return mCurScale->up[idx];
+        return mCurScaleUp[idx];
     }
     s32 getScaleNoteDown(s32 idx) NO_INLINE {
-        return mCurScale->down[idx];
+        return mCurScaleDown[idx];
     }
 
     u8 getFirst() {
@@ -138,8 +143,10 @@ public:
 
     /* 0x00 */ JKRArchive* mArchive;
     /* 0x04 */ AudChordTable mTable;
-    /* 0x18 */ AudChordData* mCurChord;
-    /* 0x1C */ AudScaleData* mCurScale;
+    /* 0x18 */ const AudChordData* mCurChord;
+    /* 0x1C */ const AudScaleData* mCurScale;
+    const u8* mCurScaleUp;  // the current scale's note lists in the chord table file
+    const u8* mCurScaleDown;
     /* 0x20 */ u8 mChordNoteList[NUM_CHORD_NOTES];
     /* 0x28 */ u8 mFlags;
     /* 0x2C */ u32 _2C;

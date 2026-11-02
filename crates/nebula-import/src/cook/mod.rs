@@ -58,7 +58,7 @@ fn placement_table_name(name: &str) -> bool {
 
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
+    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -99,6 +99,10 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         native_data::bcsv(&bytes, false)?
     } else if extension(name) == "canm" {
         Some(native_data::canm(&bytes).with_context(|| format!("{name}: camera animation"))?)
+    } else if extension(name) == "bas" {
+        Some(native_data::bas(&bytes).with_context(|| format!("{name}: sound animation"))?)
+    } else if extension(name) == "cit" {
+        Some(native_data::cit(&bytes).with_context(|| format!("{name}: chord table"))?)
     } else if extension(name) == "kcl" {
         Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {

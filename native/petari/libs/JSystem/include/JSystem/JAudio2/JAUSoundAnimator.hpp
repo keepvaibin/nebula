@@ -95,15 +95,15 @@ public:
         return mSoundID;
     }
 
-    // A BAS entry, read in place (big-endian).
-    /* 0x00 */ NEBULA_DISC(JAISoundID) mSoundID;
-    /* 0x04 */ NEBULA_BE(f32) mNoteOnTime;
-    /* 0x08 */ NEBULA_BE(f32) mNoteOffTime;
-    /* 0x0C */ NEBULA_BE(f32) mBasePitch;
+    // A BAS entry, read in place (host order, as the importer cooks it: native_data.rs bas).
+    /* 0x00 */ JAISoundID mSoundID;
+    /* 0x04 */ f32 mNoteOnTime;
+    /* 0x08 */ f32 mNoteOffTime;
+    /* 0x0C */ f32 mBasePitch;
     /* 0x10 */  // u32 mFlags;
 #ifdef TARGET_PC
-    // The flags are bits of the big-endian word (the accessors above test mFlags).
-    /* 0x10 */ BE< u32 > mFlags;
+    // The flags are bits of the word (the accessors above test mFlags).
+    /* 0x10 */ u32 mFlags;
 #else
     union {
         /* 0x10 */ struct {
@@ -126,7 +126,7 @@ public:
     /* 0x18 */ s8 mVolumeDelta;
     /* 0x19 */ u8 mRepeatInterval;
     /* 0x1A */ s8 _1A;
-    /* 0x1C */ NEBULA_BE(u32) _1C;
+    /* 0x1C */ u32 _1C;
 };
 
 class JAUSoundAnimation;
@@ -158,7 +158,7 @@ public:
         }
     }
 
-    /* 0x0 */ NEBULA_BE(u16) mNumSounds;
+    /* 0x0 */ u16 mNumSounds;
 #ifdef TARGET_PC
     // A runtime pointer in the console's 4-byte slot of the file header; BAS files hold 0 there.
     /* 0x4 */ u32 mControlSlot;
