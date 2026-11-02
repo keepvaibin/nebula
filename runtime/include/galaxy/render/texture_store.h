@@ -32,6 +32,7 @@
 #include <optional>
 #include <span>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // A texture record (nebula_cooked_texture.h).
@@ -351,6 +352,8 @@ private:
     unsigned movie_ring_at_ = 0;
     bool movie_active_ = false;
     std::int32_t movie_frame_ = -1;
+    // Images drawn blank for want of a record, until one comes (galaxy/loss_report.h).
+    std::unordered_set<std::uint64_t> blank_images_;
     const void* movie_staging_seen_ = nullptr;
     std::array<std::uint64_t, 3> movie_addr_{};
     std::array<std::uint16_t, 3> movie_source_width_{};

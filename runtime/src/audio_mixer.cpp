@@ -1,4 +1,5 @@
 #include "galaxy/audio_mixer.h"
+#include "galaxy/loss_report.h"
 
 #include <algorithm>
 #include <chrono>
@@ -521,6 +522,7 @@ void AudioMixer::decode_adpcm_blocks(VoiceState& state, NebulaAudioVoice& voice,
         address += block_bytes;
         if (block == nullptr) {
             ++stats_.unresolved_reads;
+            galaxy::loss::note(galaxy::loss::Kind::SoundRead);
             std::fill_n(out, 16u, std::int16_t{0});
             continue;
         }
@@ -565,6 +567,7 @@ void AudioMixer::read_pcm(VoiceState& state, NebulaAudioVoice& voice, float* out
         const std::byte* data = wave_bytes(voice, voice.address, samples * bytes);
         if (data == nullptr) {
             ++stats_.unresolved_reads;
+            galaxy::loss::note(galaxy::loss::Kind::SoundRead);
             std::fill_n(out, samples, 0.0f);
         } else if (bytes == 2u) {
             for (std::uint32_t k = 0; k < samples; ++k) {
