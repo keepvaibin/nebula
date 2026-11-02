@@ -384,9 +384,8 @@ namespace MR {
         return ::getNameObjExecuteHolder()->isConnectToDraw(pObj);
     }
 
-    // Scenery with no draw code of its own. Coins, enemies and characters are left out: a level may place them where
-    // only a later scenario uses them (Space Junk's web coins), relying on their staying clipped there.
-    bool isDrawnFarWhenClipped(const NameObj* pObj) {
+    // No draw code of its own: scenery at any time, the rest (hasRun) once it has run.
+    bool isDrawnFarWhenClipped(const NameObj* pObj, bool hasRun) {
         const NameObjExecuteInfo* pInfo = ::getNameObjExecuteHolder()->getConnectToSceneInfo(pObj);
         if (pInfo == nullptr || !pInfo->isDrawBufferOnly()) {
             return false;
@@ -401,7 +400,7 @@ namespace MR {
         case MR::MovementType_Sky:
             return true;
         default:
-            return false;
+            return hasRun;
         }
     }
 

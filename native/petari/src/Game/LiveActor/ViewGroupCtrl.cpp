@@ -12,7 +12,7 @@ namespace {
     const u32 sAllLodCtrlNumMax = 0x100;
 };  // namespace
 
-ViewGroupCtrl::ViewGroupCtrl() : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupData(), mViewCtrlCount(), mLodCtrls() {
+ViewGroupCtrl::ViewGroupCtrl() : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupData(), mViewCtrlCount(), mLodCtrls(), mLodCtrlCapacity(::sAllLodCtrlNumMax) {
     mLodCtrls = new LodCtrl*[::sAllLodCtrlNumMax];
 
     for (u32 i = 0; i < ::sAllLodCtrlNumMax; i++) {
@@ -47,6 +47,16 @@ void ViewGroupCtrl::entryLodCtrl(LodCtrl* pCtrl, const JMapInfoIter& rIter) {
     s32 groupID = -1;
     if (MR::getJMapInfoViewGroupID(rIter, &groupID)) {
         pCtrl->mViewGroupID = groupID;
+        if (mViewCtrlCount >= mLodCtrlCapacity) {
+            const s32 grown = mLodCtrlCapacity * 2;
+            LodCtrl** pList = new LodCtrl*[grown]();
+            for (s32 i = 0; i < mViewCtrlCount; i++) {
+                pList[i] = mLodCtrls[i];
+            }
+            delete[] mLodCtrls;
+            mLodCtrls = pList;
+            mLodCtrlCapacity = grown;
+        }
         mLodCtrls[mViewCtrlCount] = pCtrl;
         mViewCtrlCount++;
     }

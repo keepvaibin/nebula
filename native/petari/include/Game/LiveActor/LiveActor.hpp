@@ -56,6 +56,12 @@ public:
     /* 0x4C */ virtual void calcAndSetBaseMtx();
     void prepareDrawClipped();
 
+    // What a startClipped or endClipped in progress changes, its actor's overrides and parts included: everything (the
+    // actor left or entered both its running distance and the camera's view), its running alone (still seen past its
+    // distance) or its being seen alone (past its distance, entering or leaving the view).
+    enum ClipScope { ClipScope_All, ClipScope_Run, ClipScope_Seen };
+    static ClipScope sClipScope;
+
     /* 0x50 */ virtual void updateHitSensor(HitSensor* pSensor) {
     }
 

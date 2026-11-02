@@ -3821,15 +3821,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
-            // How the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM): without the renderer's bloom, not
-            // at all; NATIVE, its own chain over a scene the renderer keeps; ENHANCED, drawn by the renderer.
-            // GALAXY_TEST_BLOOM_ROUTE=0-2 (tests): that route, 0 the console's chain as it is for comparison.
-            static const std::uint64_t test_route = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_BLOOM_ROUTE"), 3u);
-            const unsigned route = !renderer_.game_bloom_ready()                          ? 0u
-                                   : test_route <= 2u                                  ? static_cast<unsigned>(test_route)
-                                   : get_render_config().bloom_mode == kBloomEnhanced ? 2u
-                                                                                       : 1u;
-            bloom_route_.store(route, std::memory_order_relaxed);
+            // Whether the renderer's bloom is built (NEBULA_OPTION_BLOOM): without it, no bloom.
+            bloom_route_.store(renderer_.game_bloom_ready() ? 1u : 0u, std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies take the scale the scene target
@@ -5429,7 +5422,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
         request.luma = (record.target_flags & 4u) != 0u;        // NEBULA_CAPTURE_LUMA
         request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
-        request.filtered = (record.target_flags & 16u) != 0u;   // NEBULA_CAPTURE_FILTERED
         on_scene_copy(request);
         return;
     }
@@ -5438,7 +5430,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.src_width = static_cast<std::uint16_t>(((record.target_width - 1u) & 0x3FFu) + 1u);
         request.src_height = static_cast<std::uint16_t>(((record.target_height - 1u) & 0x3FFu) + 1u);
         request.display = true;
-        request.filtered = (record.target_flags & 16u) != 0u;  // NEBULA_CAPTURE_FILTERED
         on_scene_copy(request);
         return;
     }
@@ -5947,10 +5938,8 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                 scene_copies_.adopt_picture(
                     *display_picture, renderer_.hand_over_scene_color(scene_copies_.take_idle_texture(
                               static_cast<std::uint16_t>(map.width), static_cast<std::uint16_t>(map.height))));
-                display_picture->display_filter = params.filtered;
             } else {
                 renderer_.copy_scene_to_display(params, *display_picture);
-                display_picture->display_filter = false;
             }
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution scene target again.

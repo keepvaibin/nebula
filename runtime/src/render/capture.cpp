@@ -281,8 +281,7 @@ std::optional<SceneCopyRect> scene_identity_copy_rect(
         params.luma || params.half_scale ||
         params.src_width == 0u || params.src_height == 0u ||
         static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
-        static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight ||
-        params.filtered) {
+        static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {
         return std::nullopt;
     }
     const auto left = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_x) * map.sx));

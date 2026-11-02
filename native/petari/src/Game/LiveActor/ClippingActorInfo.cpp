@@ -25,10 +25,8 @@ void ClippingActorInfo::judgeClipping() {
         } else {
             updateDrawnClipped();
         }
-    } else {
-        if (MR::isClipped(mActor)) {
-            mActor->endClipped();
-        }
+    } else if (MR::isClipped(mActor)) {
+        endClipped();
     }
 }
 
@@ -43,20 +41,44 @@ bool ClippingActorInfo::isJudgedToClip() const {
     return judge->isJudgedToClipFrustum(*_4, val, farClipLevel);
 }
 
-// The level's distances say when an actor runs; the camera says whether it is seen. An actor out of its distance and
-// in view stays stopped and keeps its model, so nothing runs that the level did not expect and scenery does not pop in.
+// The level's distances say when an actor runs; the camera says whether it is seen. Past its distance and in view it
+// stays stopped and keeps its model, effects and parts, so nothing runs that the level did not expect and nothing pops
+// in or goes dark. Scenery always; coins, enemies and characters once they have run: a level may place them where only
+// another scenario uses them (Space Junk's web coins), relying on their staying clipped there.
 bool ClippingActorInfo::isDrawnWhileClipped() const {
-    return !_14->_4 && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor) &&
+    return !_14->_4 && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
            !MR::getClippingJudge()->isJudgedToClipFrustum(*_4, _8, 0);
 }
 
 void ClippingActorInfo::startClipped() {
-    if (isDrawnWhileClipped()) {
-        mActor->mFlag.mIsDrawnClipped = true;
-        mActor->prepareDrawClipped();
+    if (!isDrawnWhileClipped()) {
+        mActor->startClipped();
+        return;
     }
 
+    const bool neverRun = !mActor->mFlag.mHasPose;
+    mActor->mFlag.mIsDrawnClipped = true;
+    mActor->prepareDrawClipped();
+    LiveActor::sClipScope = LiveActor::ClipScope_Run;
     mActor->startClipped();
+    if (neverRun) {
+        // Seen before it has ever run: what it shows when it wakes (a torch's flame, a block's glow), its model already
+        // connected.
+        LiveActor::sClipScope = LiveActor::ClipScope_Seen;
+        mActor->endClipped();
+    }
+    LiveActor::sClipScope = LiveActor::ClipScope_All;
+}
+
+void ClippingActorInfo::endClipped() {
+    if (mActor->mFlag.mIsDrawnClipped) {
+        mActor->mFlag.mIsDrawnClipped = false;
+        LiveActor::sClipScope = LiveActor::ClipScope_Run;
+        mActor->endClipped();
+        LiveActor::sClipScope = LiveActor::ClipScope_All;
+    } else {
+        mActor->endClipped();
+    }
 }
 
 void ClippingActorInfo::updateDrawnClipped() {
@@ -66,18 +88,14 @@ void ClippingActorInfo::updateDrawnClipped() {
     }
 
     mActor->mFlag.mIsDrawnClipped = drawn;
+    LiveActor::sClipScope = LiveActor::ClipScope_Seen;
     if (drawn) {
         mActor->prepareDrawClipped();
-        MR::connectToDrawTemporarily(mActor);
-        if (mActor->mEffectKeeper != nullptr) {
-            mActor->mEffectKeeper->playEmitterOffClipped();
-        }
+        mActor->endClipped();
     } else {
-        MR::disconnectToDrawTemporarily(mActor);
-        if (mActor->mEffectKeeper != nullptr) {
-            mActor->mEffectKeeper->stopEmitterOnClipped();
-        }
+        mActor->startClipped();
     }
+    LiveActor::sClipScope = LiveActor::ClipScope_All;
 }
 
 bool ClippingActorInfo::isGroupClipping() const {
@@ -110,6 +128,16 @@ ClippingActorInfoList::ClippingActorInfoList(int a1) {
 }
 
 void ClippingActorInfoList::add(ClippingActorInfo* pInfo) {
+    if (_4 >= _0) {
+        const s32 grown = _0 * 2;
+        ClippingActorInfo** pList = new ClippingActorInfo*[grown]();
+        for (s32 i = 0; i < _4; i++) {
+            pList[i] = mClippingActorList[i];
+        }
+        delete[] mClippingActorList;
+        mClippingActorList = pList;
+        _0 = grown;
+    }
     mClippingActorList[_4] = pInfo;
     _4++;
 }

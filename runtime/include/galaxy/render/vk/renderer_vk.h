@@ -460,7 +460,6 @@ private:
         }
     }
     // A handed-over frame through the display's vertical filter into a picture of its size (present).
-    [[nodiscard]] vk::Texture* filter_display_picture(const DisplayTexture& source);
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
     void follow_window_and_resize();
@@ -535,7 +534,6 @@ private:
     VkDescriptorSet turn_source_ = VK_NULL_HANDLE;
     const vk::Texture* turn_source_image_ = nullptr;
     std::uint64_t turn_source_frame_ = ~std::uint64_t{0};
-    gpu::TextureRef display_filter_picture_;
     // The output scene target (begin_output_scene) and its scale; they trade places with scene_ and scene_target_scale_ while it is active.
     SceneSet alt_scene_;
     FrameMap alt_scene_map_{};

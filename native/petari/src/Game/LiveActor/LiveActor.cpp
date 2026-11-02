@@ -283,20 +283,28 @@ MtxPtr LiveActor::getBaseMtx() const {
     return nullptr;
 }
 
+LiveActor::ClipScope LiveActor::sClipScope = LiveActor::ClipScope_All;
+
 void LiveActor::startClipped() {
     mFlag.mIsClipped = true;
 
-    if (getSensorKeeper() != nullptr) {
-        mSensorKeeper->invalidateBySystem();
+    if (sClipScope != ClipScope_Seen) {
+        if (getSensorKeeper() != nullptr) {
+            mSensorKeeper->invalidateBySystem();
+        }
+
+        MR::disconnectToSceneTemporarily(this);
     }
 
-    if (mEffectKeeper != nullptr && !mFlag.mIsDrawnClipped) {
+    if (sClipScope == ClipScope_Run) {
+        return;
+    }
+
+    if (mEffectKeeper != nullptr) {
         mEffectKeeper->stopEmitterOnClipped();
     }
 
-    MR::disconnectToSceneTemporarily(this);
-
-    if (MR::isNoEntryDrawBuffer(this) || mFlag.mIsDrawnClipped) {
+    if (MR::isNoEntryDrawBuffer(this)) {
         return;
     }
 
@@ -304,22 +312,27 @@ void LiveActor::startClipped() {
 }
 
 void LiveActor::endClipped() {
-    mFlag.mIsClipped = false;
+    if (sClipScope == ClipScope_All) {
+        mFlag.mIsDrawnClipped = false;
+    }
 
-    if (getSensorKeeper() != nullptr) {
-        mSensorKeeper->validateBySystem();
-        MR::updateHitSensorsAll(this);
+    if (sClipScope != ClipScope_Seen) {
+        mFlag.mIsClipped = false;
+
+        if (getSensorKeeper() != nullptr) {
+            mSensorKeeper->validateBySystem();
+            MR::updateHitSensorsAll(this);
+        }
+
+        MR::connectToSceneTemporarily(this);
+    }
+
+    if (sClipScope == ClipScope_Run) {
+        return;
     }
 
     if (mEffectKeeper != nullptr) {
         mEffectKeeper->playEmitterOffClipped();
-    }
-
-    MR::connectToSceneTemporarily(this);
-
-    if (mFlag.mIsDrawnClipped) {
-        mFlag.mIsDrawnClipped = false;
-        return;
     }
 
     if (MR::isNoEntryDrawBuffer(this)) {

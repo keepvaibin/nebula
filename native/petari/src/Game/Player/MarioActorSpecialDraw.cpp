@@ -125,7 +125,7 @@ void MarioActor::captureScreenBox() const {
     J3DNativeState::setColorUpdate(GPU_FALSE);
     J3DNativeState::setAlphaUpdate(GPU_TRUE);
     J3DNativeTarget::capture(_B44, (s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), NEBULA_TARGET_RGB,
-                             NEBULA_CAPTURE_CLEAR | NEBULA_CAPTURE_FILTERED);
+                             NEBULA_CAPTURE_CLEAR);
     J3DNativeState::setColorUpdate(GPU_ENABLE);
     J3DNativeState::setAlphaUpdate(GPU_FALSE);
     J3DNativeState::setDstAlpha(GPU_FALSE, 0);
@@ -482,32 +482,47 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
 void MarioActor::drawSpinInhibit() const {
 }
 
+namespace {
+    // runtime/src/render/materials/frame_ripple.hlsl over the whole screen: the frame's rows moved by the wave.
+    void drawFrameRipple(const void* pFrame, f32 amplitude, f32 phase, f32 perRow, f32 kind) {
+        J3DNativeTexObj texture;
+        const u16 width = MR::getCanvasWidth();
+        const u16 height = MR::getScreenHeight();
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 0, 2);
+        NativeShader::init(material, NEBULA_SHADER_FRAME_RIPPLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP,
+                               GPU_FALSE);
+        J3DNativeTarget::capture(pFrame, 0, 0, width, height, NEBULA_TARGET_RGB, 0);
+        NativeShader::setTexObj(material, 0, &texture);
+        material.constants[0] = amplitude;
+        material.constants[1] = height;
+        material.constants[2] = MR::getScreenWidth();
+        material.constants[3] = kind;
+        material.constants[4] = phase;
+        material.constants[5] = perRow;
+        NativeShader::send(material);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::position(0.0f, height, 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
+        J3DNativeDraw::position(MR::getScreenWidth(), height, 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
+        J3DNativeDraw::position(MR::getScreenWidth(), 0.0f, 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
+    }
+}  // namespace
+
 void MarioActor::drawColdWaterDamage() const {
-    J3DNativeTexObj texture;
-    u16 width = MR::getCanvasWidth();
-    NebulaNativeMaterial material;
-    TDDraw::setupNative(&material, 1, 0, 2);
-    u16 height = MR::getScreenHeight();
-    J3DNativeTexture::init(&texture, _1D8, width, height, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
-    J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
-    J3DNativeTarget::capture(_1D8, 0, 0, width, height, NEBULA_TARGET_RGB, NEBULA_CAPTURE_FILTERED);
-    NativeShader::setTexObj(material, 0, &texture);
-    NativeShader::send(material);
     f32 frequency = 89.0f * MR::sin((TWO_PI * mMario->mSwim->mColdWaterDamageInterval) / 120.0f);
 
     if (frequency > 0.0f) {
         frequency = 0.0f;
     }
 
-    for (u32 row = 0; row < height; row++) {
-        f32 offset = 5.0f * MR::sin(2.0f * (((_37C + row * frequency) / MR::getScreenHeight()) * JGeometry::TUtil< f32 >::PI()));
-        f32 v = static_cast< f32 >(row) / height;
-        J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
-        J3DNativeDraw::position(offset, row, 0.0f);
-        J3DNativeDraw::texCoord(0.0f, v);
-        J3DNativeDraw::position(offset + MR::getScreenWidth(), row, 0.0f);
-        J3DNativeDraw::texCoord(1.0f, v);
-    }
+    drawFrameRipple(_1D8, 5.0f, _37C, frequency, 0.0f);
 }
 
 void MarioActor::setRasterScroll(s32 i1, s32 i2, s32 i3) {
@@ -544,29 +559,8 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         return;
     }
 
-    J3DNativeTexObj texture;
-    u16 width = MR::getCanvasWidth();
-    NebulaNativeMaterial material;
-    TDDraw::setupNative(&material, 1, 0, 2);
-    u16 height = MR::getScreenHeight();
-    J3DNativeTexture::init(&texture, _1D8, width, height, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
-    J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
-    J3DNativeTarget::capture(_1D8, 0, 0, width, height, NEBULA_TARGET_RGB, NEBULA_CAPTURE_FILTERED);
-    NativeShader::setTexObj(material, 0, &texture);
-    NativeShader::send(material);
-    f32 phase = (_37C * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / period;
-    f32 spatialPhase = TWO_PI / wavelength;
-
-    for (u32 row = 0; row < height; row++) {
-        f32 angle = MR::sin(spatialPhase * row) * JGeometry::TUtil< f32 >::PI();
-        f32 offset = amplitude * MR::sin(angle + phase);
-        f32 v = static_cast< f32 >(row) / height;
-        J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
-        J3DNativeDraw::position(offset, row, 0.0f);
-        J3DNativeDraw::texCoord(0.0f, v);
-        J3DNativeDraw::position(offset + MR::getScreenWidth(), row, 0.0f);
-        J3DNativeDraw::texCoord(1.0f, v);
-    }
+    const f32 phase = (_37C * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / period;
+    drawFrameRipple(_1D8, amplitude, phase, TWO_PI / wavelength, 1.0f);
 }
 
 void MarioActor::drawMosaic() const {
