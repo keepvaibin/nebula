@@ -25,6 +25,7 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
+#include "galaxy/render/utility_shaders.h"
 #include "galaxy/render/capture.h"
 #include "galaxy/render/temporal_upscaler.h"
 #include "galaxy/render/gpu_upload_ring.h"
@@ -64,9 +65,6 @@ namespace galaxy::render {
 class TextureCache;
 struct TextureHandle;
 
-// Compiles the runtime scene target conversion shader without a device (tests).
-[[nodiscard]] bool validate_scene_conversion_shader(
-    std::string& diagnostics) noexcept;
 namespace detail {
 
 // One shared CPU-only conversion RTV. Its contents are the identity being
@@ -1755,8 +1753,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE conv_scene_color_srv_{};
     D3D12_GPU_DESCRIPTOR_HANDLE conv_scene_depth_srv_{};
     // The masked scene target clears (color / alpha only): shaders and pipelines, made at first use.
-    Microsoft::WRL::ComPtr<ID3DBlob> clear_vs_;
-    Microsoft::WRL::ComPtr<ID3DBlob> clear_ps_;
+    UtilityShaderBytes clear_vs_;
+    UtilityShaderBytes clear_ps_;
     // Per scene target variant (scene_variant: samples, then HDR).
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_rgb_pipelines_;
     std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_alpha_pipelines_;

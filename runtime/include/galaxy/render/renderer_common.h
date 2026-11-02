@@ -126,6 +126,8 @@ struct SceneConversionShaderConstants {
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
 // fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the
 // overlay's textured and solid quads (root constants / push constants b0).
+[[nodiscard]] std::string_view depth_resolve_pixel_shader_source() noexcept;
+[[nodiscard]] std::string_view motion_debug_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;

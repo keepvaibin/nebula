@@ -28,12 +28,12 @@ namespace galaxy::render {
 [[nodiscard]] D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc(
     ID3D12RootSignature* root_signature,
     const RenderStateKey& render_state,
-    ID3DBlob* vertex_shader,
-    ID3DBlob* pixel_shader,
-    ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader,
-    ID3DBlob* hull_shader = nullptr,
-    ID3DBlob* domain_shader = nullptr);
+    D3D12_SHADER_BYTECODE vertex_shader,
+    D3D12_SHADER_BYTECODE pixel_shader,
+    D3D12_SHADER_BYTECODE line_geometry_shader,
+    D3D12_SHADER_BYTECODE point_geometry_shader,
+    D3D12_SHADER_BYTECODE hull_shader = {},
+    D3D12_SHADER_BYTECODE domain_shader = {});
 
 class PipelineCache {
 public:
