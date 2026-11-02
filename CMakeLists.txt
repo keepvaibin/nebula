@@ -549,6 +549,7 @@ add_library(galaxy_gx STATIC
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     target_compile_options(galaxy_gx PRIVATE -mssse3)
 endif()
+target_compile_features(galaxy_gx PRIVATE cxx_std_20)
 target_include_directories(galaxy_gx PRIVATE "${galaxy_native_include_dir_dxil}")
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
