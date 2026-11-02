@@ -706,60 +706,38 @@ bool wait_while_suspended() {
     return true;
 }
 
-// The audio clock: the game mixes a frame every frame's length (nebula_game_audio_tick), on fixed deadlines. With an
-// output device the period follows the device's own clock: at most 1 % shorter while fewer frames than the sink's
-// restart level wait there unplayed, longer while more, so the queue holds about that level and the two clocks never
-// drift apart. It never waits for the device: a clock that stalls leaves the game's sounds playing forever until its
-// sound pools run out. A silent or failed device leaves the clock as it is.
+#if !defined(NEBULA_HOST_RENDERER)
+// Headless, nothing is mixed: the game's sound logic runs on the clock.
 void ai_thread() {
     if (deterministic_mode()) {
         return;  // the audio ticks come with each retrace (svc_test_frame_step)
     }
-    name_thread(L"Nebula Host Audio Clock");
-    Clock::time_point next{};
-    bool scheduled = false;
+    name_thread(L"Nebula Host Audio");
     for (;;) {
-        if (wait_while_suspended()) {
-            scheduled = false;
-        }
         uint32_t frame_samples = 0;
         {
             std::unique_lock<std::mutex> lock(gAiLock);
-            // A stopped clock restarts its schedule from the tick that resumes it.
-            if (!(gAiRunning && gAudioFrameSamples != 0)) {
-                gAiWake.wait(lock, [] { return gAiRunning && gAudioFrameSamples != 0; });
-                scheduled = false;
-            }
+            gAiWake.wait(lock, [] { return gAiRunning && gAudioFrameSamples != 0; });
             frame_samples = gAudioFrameSamples;
         }
-        if (!scheduled) {
-            next = Clock::now();
-            scheduled = true;
-        }
-        double period_ns = static_cast<double>(frame_samples) * 1e9 / 32000.0;
-#if defined(NEBULA_HOST_RENDERER)
-        if (gAudio->output_available()) {
-            const int error = static_cast<int>(gAudio->queued_blocks()) - static_cast<int>(gAudio->target_blocks());
-            period_ns *= 1.0 + std::clamp(error * 0.0025, -0.01, 0.01);
-        }
-#endif
         gAiBlocks.fetch_add(1, std::memory_order_relaxed);
-        // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and
-        // its sound pools fill; it must refuse new sounds, not crash.
-        static const uint64_t stall_after = [] {
-            const char* value = std::getenv("GALAXY_TEST_AI_STALL_AFTER");
-            return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
-        }();
-        if (stall_after == 0 || gAiBlocks.load(std::memory_order_relaxed) < stall_after) {
-            gModule.audio_tick();
-        }
-        next += std::chrono::nanoseconds(static_cast<int64_t>(period_ns));
-        // A stall past 100 ms (a debugger, a hitch) starts the schedule again rather than catching up in a burst.
-        const auto now = Clock::now();
-        if (next + std::chrono::milliseconds(100) < now) {
-            next = now;
-        }
-        sleep_until_precise(next);
+        gModule.audio_tick();
+        std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int64_t>(frame_samples * 1e9 / 32000.0)));
+    }
+}
+#endif
+
+// The device asks for the game's next frame of sound, on its thread.
+void audio_frame_tick() {
+    gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+    // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and its sound
+    // pools fill; it must refuse new sounds, not crash.
+    static const uint64_t stall_after = [] {
+        const char* value = std::getenv("GALAXY_TEST_AI_STALL_AFTER");
+        return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
+    }();
+    if (stall_after == 0 || gAiBlocks.load(std::memory_order_relaxed) < stall_after) {
+        gModule.audio_tick();
     }
 }
 
@@ -3127,7 +3105,7 @@ void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_
 void svc_audio_setup(void*, NebulaAudioVoice* voices, uint32_t count, const NebulaAudioEffect* effects,
                      const void* sound_memory, uint32_t sound_memory_size) {
 #if defined(NEBULA_HOST_RENDERER)
-    gAudio->setup(voices, count, effects, sound_memory, sound_memory_size);
+    gAudio->setup(voices, count, effects, sound_memory, sound_memory_size, !deterministic_mode());
 #else
     (void)voices, (void)count, (void)effects, (void)sound_memory, (void)sound_memory_size;
 #endif
@@ -3167,14 +3145,23 @@ void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t millis
 }
 
 void svc_audio_control(void*, uint32_t what, uint32_t value) {
-    std::lock_guard<std::mutex> lock(gAiLock);
-    if (what == NEBULA_AUDIO_START) {
-        gAiRunning = true;
-        gAudioFrameSamples = value;
-    } else if (what == NEBULA_AUDIO_STOP) {
-        gAiRunning = false;
+    {
+        std::lock_guard<std::mutex> lock(gAiLock);
+        if (what == NEBULA_AUDIO_START) {
+            gAiRunning = true;
+            gAudioFrameSamples = value;
+        } else if (what == NEBULA_AUDIO_STOP) {
+            gAiRunning = false;
+        }
+        gAiWake.notify_one();
     }
-    gAiWake.notify_one();
+#if defined(NEBULA_HOST_RENDERER)
+    if (what == NEBULA_AUDIO_START) {
+        gAudio->start(audio_frame_tick);
+    } else if (what == NEBULA_AUDIO_STOP) {
+        gAudio->stop();
+    }
+#endif
 }
 
 int svc_hbm(void*, uint32_t what, uint32_t value) {
@@ -4033,7 +4020,9 @@ int main(int argc, char** argv) {
     name_thread(L"Nebula Host Main");
     gReads.start();
     gFs.start();
+#if !defined(NEBULA_HOST_RENDERER)
     std::thread(ai_thread).detach();
+#endif
     std::thread(vi_thread).detach();
 #if defined(NEBULA_HOST_RENDERER)
     std::thread(input_thread).detach();

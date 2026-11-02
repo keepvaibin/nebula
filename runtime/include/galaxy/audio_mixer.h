@@ -89,6 +89,8 @@ public:
 
     void setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
                const std::byte* sound_memory, std::uint32_t sound_memory_size);
+    // The output's rate changed (another device): filters and delays start over at it, the voices play on.
+    void set_rate(std::uint32_t rate);
     // One subframe at `gain` into the frame being built.
     void mix(float gain);
     // Ends the frame: the movie's sound for the subframes mixed since the last call is added; returns that output,

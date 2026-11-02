@@ -17,9 +17,8 @@ bool expect(bool condition, const char* message) {
     return condition;
 }
 
-std::int16_t left(const std::vector<std::byte>& out, std::size_t frame) {
-    return static_cast<std::int16_t>(std::to_integer<std::uint16_t>(out[frame * 4]) |
-                                     std::to_integer<std::uint16_t>(out[frame * 4 + 1]) << 8u);
+double left(const std::vector<float>& out, std::size_t frame) {
+    return out[frame * 2] * 32768.0;
 }
 
 // A 600 Hz tone at 6 kHz (the game's speaker test tone), `blocks` blocks of 40 samples.
@@ -42,7 +41,7 @@ int main() {
     {
         // Silent at volume 0: nothing kept, nothing added.
         Speaker speaker;
-        std::vector<std::byte> out(3200 * 4);
+        std::vector<float> out(3200 * 2);
         speaker.mix(out, 32000, 0.0f);
         push_tone(speaker, 30);
         speaker.mix(out, 32000, 0.0f);
@@ -52,7 +51,7 @@ int main() {
     }
     {
         Speaker speaker;
-        std::vector<std::byte> out(3200 * 4);
+        std::vector<float> out(3200 * 2);
         speaker.mix(out, 32000, 1.0f);  // starts listening
         push_tone(speaker, 30);         // 0.2 s
         speaker.mix(out, 32000, 1.0f);  // 0.1 s at 32 kHz
@@ -68,7 +67,7 @@ int main() {
         ok &= expect(crossings >= 80 && crossings <= 85, "the tone's pitch (600 Hz: 82.5 crossings in 2200 frames)");
         bool both = true;
         for (std::size_t f = 0; f < 3200; ++f) {
-            both &= out[f * 4] == out[f * 4 + 2] && out[f * 4 + 1] == out[f * 4 + 3];
+            both &= out[f * 2] == out[f * 2 + 1];
         }
         ok &= expect(both, "both channels");
     }

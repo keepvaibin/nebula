@@ -155,6 +155,30 @@ AudioMixer::AudioMixer(std::uint32_t rate)
     frame_.reserve(subframe * 2u * 16u);
 }
 
+void AudioMixer::set_rate(std::uint32_t rate) {
+    rate_ = std::clamp<std::uint32_t>(rate, 8000u, 192000u);
+    game_ratio_ = static_cast<double>(rate_) / kGameRate;
+    stream_kernel_ = InterpolationKernel(128u, std::min(1.0, game_ratio_), 7.0, 512u);
+    const std::size_t subframe = (rate_ + kSubframesPerSecond - 1u) / kSubframesPerSecond;
+    fold_left_.reset(subframe);
+    fold_right_.reset(subframe);
+    panner_send_left_.reset(subframe);
+    panner_send_right_.reset(subframe / 2u);
+    subframe_counter_ = 0u;
+    frame_.clear();
+    stream_history_.clear();
+    stream_running_ = false;
+    for (VoiceState& state : voice_states_) {
+        state.fir_key_mode = 0xFFFFu;
+        state.fir_history.clear();
+        state.iir_valid = false;
+    }
+    for (EffectState& state : effect_states_) {
+        state.subframes = 0xFFFFu;
+        state.fir.clear();
+    }
+}
+
 void AudioMixer::setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
                        const std::byte* sound_memory, std::uint32_t sound_memory_size) {
     ++stats_.setups;

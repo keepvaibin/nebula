@@ -142,6 +142,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/input/raw_mouse_win32.cpp
     runtime/src/input/rumble_route.cpp
     runtime/src/native_audio.cpp
+    runtime/src/audio_device_wasapi.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
     runtime/src/mod_xml.cpp
@@ -169,7 +170,6 @@ target_link_libraries(galaxy_native_host
         setupapi
         cfgmgr32
         xinput9_1_0
-        xaudio2
 )
 galaxy_host_options(galaxy_native_host)
 
