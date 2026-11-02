@@ -16,7 +16,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvTalkBalloonShort {
     NEW_NERVE(TalkBalloonShortNrvOpen, TalkBalloonShort, Open);
@@ -292,7 +292,7 @@ void TalkBalloonEvent::updateBeak() {
     TVec2f v1(messageCtrl->_1C.x, messageCtrl->_1C.y);
 
     if (0.0f <= v1.x && v1.x < MR::getScreenWidth() && 120.0f <= v1.y &&
-        v1.y < static_cast< s32 >(JUTVideo::getManager()->getEfbHeight())) {
+        v1.y < static_cast< s32 >(NebulaFrameClock::cFrameHeight)) {
         MR::showPane(this, "ShaBeak");
         MR::showPane(this, "PicBeak");
     } else {

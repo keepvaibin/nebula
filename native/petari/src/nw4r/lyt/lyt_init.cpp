@@ -1,6 +1,5 @@
 #include "nw4r/lyt/init.h"
 #include <revolution/os.h>
-#include <revolution/os/OSFastCast.h>
 
 namespace {
     #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)

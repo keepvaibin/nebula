@@ -434,7 +434,7 @@ SceneConversionShaderConstants make_scene_peek_conversion_constants(
     return SceneConversionShaderConstants{{
         src_x,
         src_y,
-        sampling.step,
+        sampling.step_x,
         sampling.step,
         0.0f,
         1.0f,
@@ -446,7 +446,7 @@ SceneConversionShaderConstants make_scene_peek_conversion_constants(
         sampling.center_y,
         sampling.center_y,
         255.0f,
-        sampling.step,
+        sampling.step_x,
         sampling.step,
     }};
 }

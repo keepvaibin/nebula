@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LensFlare.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/Nerve.hpp"
@@ -276,7 +277,7 @@ void LensFlareDirector::controlFlare(s32 area, bool hasBrightObj) {
     mGlow->mPosition.set(flarePos);
     mLine->mPosition.set(flarePos);
 
-    TVec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(JUTGetVideoManager()->getEfbHeight()) / 2.0f);
+    TVec2f screenCenter(MR::getScreenWidth() / 2.0f, static_cast< s32 >(NebulaFrameClock::cFrameHeight) / 2.0f);
 
     f32 screenRadius = screenCenter.length();
     TVec2f offset(screenCenter - position);

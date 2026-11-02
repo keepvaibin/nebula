@@ -73,11 +73,17 @@ public:
         unsigned frame_height = 0;
         unsigned logical_width = 640;            // the frame in the game's pixels
         unsigned logical_height = 456;
-        unsigned scale = 1;                      // scene target pixels per game pixel
+        float scale = 1.0f;                      // scene target pixels per game pixel
     };
     // BloomEffect::preDraw, and BloomEffectSimple::draw with the game's own chain: the scene before the bloom's work
     // over it.
     bool keep(ID3D12GraphicsCommandList* list, const Inputs& in, std::uint64_t frame_index, unsigned frames_in_flight);
+    // Keeping without a copy: the scene target continues on the image this returns (null: it makes one), and its
+    // picture is the kept scene (keep_picture). The composite writes the kept scene's alpha back with its colour.
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Resource> take_kept_image(ID3D12GraphicsCommandList* list, const Inputs& in,
+                                                                         std::uint64_t frame_index,
+                                                                         unsigned frames_in_flight);
+    void keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in);
     // The game's own chain (the NATIVE setting) where it draws its kept copy back: the kept scene over the frame, as
     // the scene target held it (RGB; the game's alpha stays). Leaves this pass's root signature, pipeline and render target
     // bound.

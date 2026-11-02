@@ -38,10 +38,6 @@ inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
 inline constexpr unsigned kInterpSegments = 3u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
-// The game's frame in its units (640x456): the scene targets are this size times the render scale.
-inline constexpr unsigned kFrameWidth = 640;
-inline constexpr unsigned kFrameHeight = 456;
-
 struct SamplerTableKey {
     std::array<std::uint32_t, 8> samplers{};
     std::uint32_t config = 0;
