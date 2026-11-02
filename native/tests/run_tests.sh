@@ -19,7 +19,7 @@ case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) LIBS="-lwinmm"; EXE=.exe ;;
     *) LIBS="-lpthread"; EXE= ;;
 esac
-OS="$P/src/Game/System/GameHostThreads.c $P/src/Game/System/NebulaMemory.c $P/src/Game/System/NebulaModule.c"
+OS="$P/src/Game/System/GameHostThreads.c $P/src/Game/System/NebulaMemory.c $P/src/Game/System/NebulaModule.c $P/src/Game/System/NebulaFormat.c"
 # The kernel and its test are C++: the C flags but the language.
 CXXFL=$(echo "$FL" | sed 's/-std=gnu11/-std=gnu++17/; s/-Werror=implicit-function-declaration//; s/-Werror=implicit-int//;
     s/-Werror=incompatible-function-pointer-types//; s/-Werror=int-conversion//')
