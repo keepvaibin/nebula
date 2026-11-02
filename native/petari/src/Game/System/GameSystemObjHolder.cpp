@@ -14,7 +14,7 @@
 #include "Game/System/MessageHolder.hpp"
 #include "Game/System/RenderMode.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -24,7 +24,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mViWidth(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mWPadHolder(),
+    : mObjHolder(), mParticleResHolder(), mViWidth(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mGamePadHolder(),
       mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initDvd();
     initNAND();
@@ -79,7 +79,7 @@ void GameSystemObjHolder::createAudioSystem() {
 
 void GameSystemObjHolder::update() {
     mAudioSystem->updateRhythm();
-    mWPadHolder->update();
+    mGamePadHolder->update();
     mFunctionAsyncExecutor->update();
     mStarPointerDirector->update();
 }
@@ -144,12 +144,12 @@ void GameSystemObjHolder::initResourceHolderManager() {
 }
 
 void GameSystemObjHolder::initGameController() {
-    initWPad();
+    initGamePad();
     initStarPointerDirector();
 }
 
-void GameSystemObjHolder::initWPad() {
-    mWPadHolder = new WPadHolder();
+void GameSystemObjHolder::initGamePad() {
+    mGamePadHolder = new GamePadHolder();
 }
 
 void GameSystemObjHolder::initStarPointerDirector() {

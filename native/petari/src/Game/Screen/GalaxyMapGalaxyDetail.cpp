@@ -86,7 +86,7 @@ void GalaxyMapGalaxyDetail::exeDisplay() {
         mAButtonIcon->openWithoutMessage();
     }
 
-    if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         setNerve(GET_NERVE_ANON(GalaxyMapGalaxyDetailDisappear));
     }
 }

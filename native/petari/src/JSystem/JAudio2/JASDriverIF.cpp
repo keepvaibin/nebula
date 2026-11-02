@@ -1,10 +1,10 @@
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 
-void JASDriver::setDSPLevel(f32 param_0) {
-    JASDsp::setDSPMixerLevel(param_0);
+void JASDriver::setOutputLevel(f32 param_0) {
+    JASVoice::setOutputLevel(param_0);
 }
 
 u16 JASDriver::MAX_MIXERLEVEL = 0x2EE0;
@@ -13,8 +13,8 @@ u16 JASDriver::getChannelLevel_dsp() {
     return JASDriver::MAX_MIXERLEVEL;
 }
 
-f32 JASDriver::getDSPLevel() {
-    return JASDsp::getDSPMixerLevel();
+f32 JASDriver::getOutputLevel() {
+    return JASVoice::getOutputLevel();
 }
 
 u32 JASDriver::JAS_SYSTEM_OUTPUT_MODE = 0x00000001;
@@ -62,6 +62,6 @@ void JASDriver::syncCallback() {
     sSyncCallback.callback();
 }
 
-void JASDriver::updateDacCallback() {
+void JASDriver::updateFrameCallback() {
     sUpdateDacCallback.callback();
 }

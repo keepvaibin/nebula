@@ -3,7 +3,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/System/WPad.hpp"
+#include "Game/System/GamePad.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 
@@ -12,7 +12,7 @@
 #include <JSystem/JKernel/JKRThread.hpp>
 #include <JSystem/JKernel/JKRUnitHeap.hpp>
 
-#include <JSystem/JUtility/JUTConsole.hpp>
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 #include <JSystem/JSupport/JSUInputStream.hpp>
@@ -170,17 +170,6 @@ NEBULA_NO_ASAN
 u32 JKRHeap::getMaxAllocatableSize(int alignment) {
     u32 address = (u32)reinterpret_cast< uintptr_t >(getMaxFreeBlock());
     return ~(alignment - 1) & (getFreeSize() - ((alignment - 1) & (alignment - (address & 0xF))));
-}
-
-extern "C" void JUTWarningConsole_f(const char* pFormat, ...) {
-    va_list args;
-    va_start(args, pFormat);
-    JUTWarningConsole_f_va(pFormat, args);
-    va_end(args);
-}
-
-extern "C" void JUTWarningConsole(const char* pMessage) {
-    JUTWarningConsole_f("%s", pMessage);
 }
 
 JSUOutputStream::~JSUOutputStream() {
@@ -1008,7 +997,7 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
 
         JASDvd::createThread(0x100, 0x8000);
         JASDriver::startAudio();
-        JASDriver::setDSPLevel(dspLevel_);
+        JASDriver::setOutputLevel(outputLevel_);
     }
 
     if (waveArcDir_ != nullptr) {

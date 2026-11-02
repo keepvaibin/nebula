@@ -382,7 +382,7 @@ void Pole::exeBindClimbUp() {
                 }
             }
         } else {
-            MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
         }
         updateBindTrans();
     }
@@ -412,7 +412,7 @@ void Pole::exeBindFallDown() {
     }
 
     updateBindTrans();
-    MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
     MR::startLevelSound(mRider, "SE_PM_LV_POLE_SLIDE");
 
     if ((!mIsSquare && mClimbCoord <= ::sLandingHeightMin) || (mIsSquare && mClimbCoord <= ::sLandingHeightMinSquare)) {
@@ -603,7 +603,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         MR::startSound(mRider, "SE_PM_GRAB_OBJ");
         MR::startSound(mRider, "SE_PV_LIFT_UP");
         MR::startActorCameraNoTarget(this, mCameraInfo);
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
 
         if (speedXZ > ::sPlayerSpeedToCatchMax) {
             setNerve(GET_NERVE(Pole, PoleNrvBindStartFast));
@@ -644,7 +644,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool Pole::tryJump(bool handstand, f32 rotateSpeed) {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testSystemTriggerA()) {
         TPos3f pos;
         calcGravityMtx(&pos);
 
@@ -766,16 +766,16 @@ void Pole::updateTopPos(f32 top) {
 
 f32 Pole::getPoleSubPadStickX() const {
     if (mInvertStick) {
-        return -MR::getSubPadStickX(WPAD_CHAN0);
+        return -MR::getSubPadStickX(GAMEPAD_CHAN0);
     } else {
-        return MR::getSubPadStickX(WPAD_CHAN0);
+        return MR::getSubPadStickX(GAMEPAD_CHAN0);
     }
 }
 
 f32 Pole::getPoleSubPadStickY() const {
     if (mInvertStick) {
-        return -MR::getSubPadStickY(WPAD_CHAN0);
+        return -MR::getSubPadStickY(GAMEPAD_CHAN0);
     } else {
-        return MR::getSubPadStickY(WPAD_CHAN0);
+        return MR::getSubPadStickY(GAMEPAD_CHAN0);
     }
 }

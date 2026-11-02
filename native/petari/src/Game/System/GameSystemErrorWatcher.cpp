@@ -4,8 +4,8 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BatteryInfo.hpp"
 #include "Game/Screen/ErrorMessageWindow.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -45,7 +45,7 @@ namespace {
 GameSystemErrorWatcher::GameSystemErrorWatcher()
     : NerveExecutor("ErrorWatcher"), mWindow(nullptr), mMessage(nullptr), mUnplaggedTexMap(nullptr), mBatteryLayout(nullptr),
       _1C(nullptr), mWiiRemoteStatus(WII_REMOTE_STATUS_OK), mCounterIgnoreCheckFreeStyle(0),
-      mCounterDecideDisconnect(::sCounterMaxDecideDisconnect), mWiiRemoteBattery(WPAD_BATTERY_LEVEL_MAX), mPermissionUpdateWiiRemoteStatus(false) {
+      mCounterDecideDisconnect(::sCounterMaxDecideDisconnect), mWiiRemoteBattery(GAMEPAD_BATTERY_LEVEL_MAX), mPermissionUpdateWiiRemoteStatus(false) {
     mWindow = new ErrorMessageWindow();
     mWindow->initWithoutIter();
 
@@ -183,10 +183,10 @@ void GameSystemErrorWatcher::updateWiiRemoteStatus() {
     } else {
         isOk = true;
 
-        _1C->update(MR::getWPad(WPAD_CHAN0)->mIsConnected);
+        _1C->update(MR::getGamePad(GAMEPAD_CHAN0)->mIsConnected);
 
-        if (MR::getWPad(WPAD_CHAN0)->mIsConnected) {
-            mWiiRemoteBattery = MR::getWPad(WPAD_CHAN0)->getBattery();
+        if (MR::getGamePad(GAMEPAD_CHAN0)->mIsConnected) {
+            mWiiRemoteBattery = MR::getGamePad(GAMEPAD_CHAN0)->getBattery();
         }
 
         if (_1C->getLevel()) {
@@ -206,13 +206,13 @@ void GameSystemErrorWatcher::updateWiiRemoteStatus() {
         }
 
         if (mCounterIgnoreCheckFreeStyle == 0) {
-            if (_1C->getLevel() && !MR::getWPad(WPAD_CHAN0)->mIsSubPadConnected) {
+            if (_1C->getLevel() && !MR::getGamePad(GAMEPAD_CHAN0)->mIsSubPadConnected) {
                 mWiiRemoteStatus = WII_REMOTE_STATUS_UNPLAGGED;
                 isOk = false;
             }
 
             if (!isWaitDecideDisconnect) {
-                if (mWiiRemoteBattery <= WPAD_BATTERY_LEVEL_LOW) {
+                if (mWiiRemoteBattery <= GAMEPAD_BATTERY_LEVEL_LOW) {
                     mWiiRemoteStatus = WII_REMOTE_STATUS_NO_BATTERY;
                 } else {
                     mWiiRemoteStatus = WII_REMOTE_STATUS_DISCONNECT;

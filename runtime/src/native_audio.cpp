@@ -5,6 +5,7 @@
 
 #include "galaxy/audio_device.h"
 #include "galaxy/audio_mixer.h"
+#include "galaxy/path_text.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/wiimote_speaker.h"
@@ -101,7 +102,7 @@ private:
             reinterpret_cast<const char*>(pcm_le.data()),
             static_cast<std::streamsize>(write_size));
         if (!out_) {
-            std::cerr << "[audio] WAV dump write failed: " << path_ << '\n';
+            std::cerr << "[audio] WAV dump write failed: " << galaxy::path_text(path_) << '\n';
             finish_locked();
             disabled_ = true;
             return false;
@@ -123,11 +124,11 @@ private:
         out_.close();
         if (!contents_written || !out_) {
             disabled_ = true;
-            std::cerr << "[audio] WAV dump finalization failed: " << path_ << '\n';
+            std::cerr << "[audio] WAV dump finalization failed: " << galaxy::path_text(path_) << '\n';
             return false;
         }
         std::cout << "[audio] WAV dump wrote " << data_bytes_
-                  << " bytes at " << sample_rate_ << " Hz: " << path_
+                  << " bytes at " << sample_rate_ << " Hz: " << galaxy::path_text(path_)
                   << '\n';
         return true;
     }
@@ -162,8 +163,13 @@ private:
         }
         open_attempted_ = true;
 
+#if defined(_WIN32)
+        const wchar_t* const path = _wgetenv(L"GALAXY_AUDIO_WAV_DUMP");
+        if (path == nullptr || path[0] == L'\0') {
+#else
         const char* const path = std::getenv("GALAXY_AUDIO_WAV_DUMP");
         if (path == nullptr || path[0] == '\0') {
+#endif
             disabled_ = true;
             return false;
         }
@@ -186,7 +192,7 @@ private:
             std::filesystem::create_directories(parent, ec);
             if (ec) {
                 std::cerr << "[audio] WAV dump directory failed: "
-                          << parent << " error=" << ec.message() << '\n';
+                          << galaxy::path_text(parent) << " error=" << ec.message() << '\n';
                 disabled_ = true;
                 return false;
             }
@@ -195,7 +201,7 @@ private:
         sample_rate_ = sample_rate;
         out_.open(path_, std::ios::binary | std::ios::trunc);
         if (!out_) {
-            std::cerr << "[audio] WAV dump open failed: " << path_ << '\n';
+            std::cerr << "[audio] WAV dump open failed: " << galaxy::path_text(path_) << '\n';
             disabled_ = true;
             return false;
         }
@@ -213,14 +219,14 @@ private:
         out_.write("data", 4);
         write_u32_le(out_, 0u);
         if (!out_) {
-            std::cerr << "[audio] WAV dump header failed: " << path_ << '\n';
+            std::cerr << "[audio] WAV dump header failed: " << galaxy::path_text(path_) << '\n';
             finish_locked();
             disabled_ = true;
             return false;
         }
 
         // The first sample's time, to line a recording's audio up with its snapshots ("[snapshot] ... qpc=").
-        std::cout << "[audio] WAV dump enabled: " << path_
+        std::cout << "[audio] WAV dump enabled: " << galaxy::path_text(path_)
                   << " max-bytes=" << max_bytes() << " qpc=" << galaxy::qpc_now() << '\n';
         return true;
     }
@@ -321,7 +327,7 @@ struct NativeGameAudio::State {
 NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
 NativeGameAudio::~NativeGameAudio() = default;
 
-void NativeGameAudio::setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
+void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
                             const void* sound_memory, std::uint32_t sound_memory_size, bool device) {
     State& s = *state_;
     std::uint32_t rate = 48000u;
@@ -453,7 +459,6 @@ std::string NativeGameAudio::stats_line() const {
          << " oscillators=" << s.oscillator_renders << " noise=" << s.noise_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " panner=" << s.panner_renders << " effect-subframes=" << s.effect_subframes
          << " stream-frames=" << s.stream_frames << " unresolved=" << s.unresolved_reads
-         << " categories=" << s.category_decisions << " unnamed=" << s.category_unnamed
          << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }

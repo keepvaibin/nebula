@@ -175,7 +175,7 @@ void SimpleEffectObj::exeMove() {
         }
 
         if (v15 != nullptr) {
-            MR::tryRumblePad(this, v15, WPAD_CHAN0);
+            MR::tryRumblePad(this, v15, GAMEPAD_CHAN0);
         }
     }
 }

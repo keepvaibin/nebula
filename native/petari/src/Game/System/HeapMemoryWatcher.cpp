@@ -8,7 +8,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
-#include "JSystem/JUtility/JUTException.hpp"
 
 
 namespace {
@@ -119,7 +118,7 @@ void HeapMemoryWatcher::memoryErrorCallback(void* pHeap, u32 size, int alignment
     if (static_cast< JKRHeap* >(pHeap)->getHeapType() == 'EXPH') {
         static_cast< JKRExpHeap* >(pHeap)->reportBlocks();
     }
-    JUTException::panic_f(__FILE__, 537, "out of memory: heap %p (%d bytes free), %u bytes, alignment %d", pHeap,
+    NEBULA_PANIC("out of memory: heap %p (%d bytes free), %u bytes, alignment %d", pHeap,
             static_cast< JKRHeap* >(pHeap)->getFreeSize(), size, alignment);
 }
 

@@ -1,10 +1,10 @@
 #include "Game/RhythmLib/AudMeTrackCallback.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 AudCallback AudMeTrackCallback::sMeTrackCallback;
 
 bool AudCallback::regist(AudCallbackFunc pFunc, void* pData) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     for (s32 i = 0; i < 32; i++) {
         if (mCallbackData[i].mFunc == nullptr) {
             mCallbackData[i].mFunc = pFunc;

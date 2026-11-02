@@ -390,7 +390,7 @@ bool MoviePlayingSequence::trySkip() {
         return false;
     }
 
-    if (!MR::testCorePadButtonA(WPAD_CHAN0)) {
+    if (!MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
         return false;
     }
 

@@ -1,18 +1,18 @@
 #include "JSystem/JAudio2/JASProbe.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 JASProbe* JASProbe::sProbeTable[16] = {nullptr};
 
 void JASProbe::start(char const* name) {
-    JASCriticalSection cs;
+    GameAudioExclusion cs;
     mName = name;
     mStartTime = NebulaClock::nowNs();
 }
 
 void JASProbe::stop() {
-    JASCriticalSection cs;
+    GameAudioExclusion cs;
     u32 endTime = NebulaClock::nowNs();
     _8 = endTime - mStartTime;
     _8 /= 1000000000.0f / 59.94f;

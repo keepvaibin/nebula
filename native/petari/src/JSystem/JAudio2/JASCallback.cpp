@@ -1,9 +1,9 @@
 #include "JSystem/JAudio2/JASCallback.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 
 bool JASCallbackMgr::regist(JASCallback* pCallback, void* pArgument) {
-    JASCriticalSection criticalSection;
+    GameAudioExclusion criticalSection;
     for (s32 i = 0; i < JASCALLBACK_MAX_CALLBACKS; i++) {
         if (mCallbacks[i].mCallback == nullptr) {
             mCallbacks[i].mCallback = pCallback;
@@ -17,7 +17,7 @@ bool JASCallbackMgr::regist(JASCallback* pCallback, void* pArgument) {
 
 s32 JASCallbackMgr::reject(JASCallback* pCallback, void* pArgument) {
     s32 rejectNum = 0;
-    JASCriticalSection criticalSection;
+    GameAudioExclusion criticalSection;
     for (s32 i = 0; i < JASCALLBACK_MAX_CALLBACKS; i++) {
         if (mCallbacks[i].mCallback == pCallback && mCallbacks[i].mArg == pArgument) {
             mCallbacks[i].mCallback = nullptr;

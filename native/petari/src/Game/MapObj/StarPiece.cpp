@@ -1250,7 +1250,7 @@ bool StarPiece::touchPlayer() {
             }
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
     }
 
     MR::stopSound(this, "SE_OJ_STAR_PIECE_FLY_W");

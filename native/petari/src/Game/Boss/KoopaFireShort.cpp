@@ -167,7 +167,7 @@ void KoopaFireShort::exeFly() {
 
         mSpeed = 80.0f;
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN1);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN1);
 
         MR::scaleVelocity(this, mSpeed);
 

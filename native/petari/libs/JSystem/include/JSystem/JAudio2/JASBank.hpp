@@ -2,9 +2,7 @@
 
 #include "JSystem/JAudio2/JASGadget.hpp"
 
-namespace JASDsp {
-    struct TChannel;
-};  // namespace JASDsp
+struct JASVoice;
 
 class JASChannel;
 struct JASInstParam;
@@ -28,8 +26,8 @@ public:
         mWaveBank = param_0;
     }
 
-    static JASChannel* noteOn(JASBank const*, int, u8, u8, u16, void (*)(u32, JASChannel*, JASDsp::TChannel*, void*), void*) ATTRIBUTE_WEAK;
-    static JASChannel* noteOnOsc(int, u8, u8, u16, void (*)(u32, JASChannel*, JASDsp::TChannel*, void*), void*);
+    static JASChannel* noteOn(JASBank const*, int, u8, u8, u16, void (*)(u32, JASChannel*, JASVoice*, void*), void*) ATTRIBUTE_WEAK;
+    static JASChannel* noteOnOsc(int, u8, u8, u16, void (*)(u32, JASChannel*, JASVoice*, void*), void*);
 
 private:
     /* 0x04 */ JASWaveBank* mWaveBank;

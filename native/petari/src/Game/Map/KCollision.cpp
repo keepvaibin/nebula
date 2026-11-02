@@ -1,5 +1,4 @@
 #include "Game/Map/KCollision.hpp"
-#include <JSystem/JUtility/JUTException.hpp>
 #include "Game/Camera/CameraPolygonCodeUtil.hpp"
 #include "Game/Map/CollisionCode.hpp"
 #include "Game/Map/CollisionDirector.hpp"
@@ -48,7 +47,7 @@ void KCollisionServer::setData(void* pData) {
     const KCLHeader* pHeader = static_cast< const KCLHeader* >(pData);
     // A cooked file's first offset is the header's size; the disc's, big-endian, reads at least 64 KB here.
     if (pHeader->mPosOffset >= 0x10000) {
-        JUTException::panic_f(__FILE__, __LINE__, "KCollisionServer: a collision file not in host order (the importer cooks it)");
+        NEBULA_PANIC("KCollisionServer: a collision file not in host order (the importer cooks it)");
     }
     u8* pBase = static_cast< u8* >(pData);
     mModel.mPos = reinterpret_cast< TVec3f* >(pBase + pHeader->mPosOffset);

@@ -1,5 +1,5 @@
 #include "Game/RhythmLib/AudChordInfo.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JKernel/JKRArchive.hpp>
 
 AudChordTable::AudChordTable() : mLoaded(false), mChordCount(0), mScaleCount(0), mBase(nullptr), mChordOffsets(nullptr), mScaleOffsets(nullptr) {
@@ -49,7 +49,7 @@ void AudChordInfo::init(JKRArchive* pArchive) {
 bool AudChordInfo::loadChordInfo(s16 id, bool keepCurrent) {
     initParams();
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     bool success = mTable.setChordTable(id, mArchive);
 
     if (success) {
@@ -806,7 +806,7 @@ s32 AudChordInfo::subIndexInScaleNoteList(s32 idx, s32 count, s32& wrapCount) {
 }
 
 void AudChordInfo::initParams() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
 
     mFlags = 0;
     mCurChord = nullptr;

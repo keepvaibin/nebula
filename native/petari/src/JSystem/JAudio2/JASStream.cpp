@@ -2,14 +2,13 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 #include <cstdlib>
 #include <cstring>
@@ -121,13 +120,13 @@ void JASStream::load() {
 
     u8* data = static_cast< u8* >(malloc(mFile.mLength));
     if (data == nullptr || GameAssets::read(&mFile, data, mFile.mLength, 0) < 0) {
-        JUTException::panic_f(__FILE__, __LINE__, "a stream of %u bytes cannot be loaded", mFile.mLength);
+        NEBULA_PANIC("a stream of %u bytes cannot be loaded", mFile.mLength);
     }
 
     Header header;
     memcpy(&header, data, sizeof(header));
     if (header.tag != 'NSTR') {
-        JUTException::panic_f(__FILE__, __LINE__, "a stream not cooked by this version of the importer");
+        NEBULA_PANIC("a stream not cooked by this version of the importer");
     }
 
     if (mData != nullptr) {
@@ -146,11 +145,11 @@ s32 JASStream::channelProcCallback(void* i_this) {
     return static_cast< JASStream* >(i_this)->channelProc();
 }
 
-void JASStream::channelCallback(u32 i_callbackType, JASChannel* i_channel, JASDsp::TChannel* i_dspChannel, void* i_this) {
+void JASStream::channelCallback(u32 i_callbackType, JASChannel* i_channel, JASVoice* i_dspChannel, void* i_this) {
     static_cast< JASStream* >(i_this)->updateChannel(i_callbackType, i_channel, i_dspChannel);
 }
 
-void JASStream::updateChannel(u32 i_callbackType, JASChannel* i_channel, JASDsp::TChannel* i_dspChannel) {
+void JASStream::updateChannel(u32 i_callbackType, JASChannel* i_channel, JASVoice* i_dspChannel) {
     switch (i_callbackType) {
     case JASChannel::CB_START:
         if (mUpdateChannel == nullptr) {
@@ -253,7 +252,7 @@ void JASStream::channelStart() {
             jc->setMixConfig(j, mMixConfig[j]);
         }
 
-        jc->setInitPitch(mHeader.rate / JASDriver::getDacRate());
+        jc->setInitPitch(mHeader.rate / JASDriver::getSoundRate());
         jc->setOscInit(0, &OSC_ENV);
         jc->mWaveInfo = wave_info;
         jc->mWavePtr = mData + sizeof(Header) + i * static_cast< size_t >(mHeader.samples) * sizeof(s16);

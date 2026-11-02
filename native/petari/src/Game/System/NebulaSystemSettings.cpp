@@ -7,24 +7,24 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace {
     u8 setting(u32 item) {
         const NebulaHostServices* const host = nebula_host();
-        return static_cast< u8 >(host->sc_get(host->user, item));
+        return static_cast< u8 >(host->system_setting(host->user, item));
     }
 }  // namespace
 
 namespace NebulaSystemSettings {
     u8 language() {
-        return setting(NEBULA_SC_LANGUAGE);
+        return setting(NEBULA_SETTING_LANGUAGE);
     }
 
     SoundMode soundMode() {
-        return static_cast< SoundMode >(setting(NEBULA_SC_SOUND_MODE));
+        return static_cast< SoundMode >(setting(NEBULA_SETTING_SOUND_MODE));
     }
 
     bool isWidescreen() {
-        return setting(NEBULA_SC_ASPECT_RATIO) == 1;
+        return setting(NEBULA_SETTING_WIDESCREEN) == 1;
     }
 
     bool screenSaver() {
-        return setting(NEBULA_SC_SCREEN_SAVER_MODE) != 0;
+        return setting(NEBULA_SETTING_SCREEN_DIMMING) != 0;
     }
 }  // namespace NebulaSystemSettings

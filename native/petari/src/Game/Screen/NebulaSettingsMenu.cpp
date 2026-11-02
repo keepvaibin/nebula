@@ -1519,7 +1519,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     mHoverButton = nullptr;
     mHoverModButton = -1;
     // A binding that waits for an input takes the mouse's buttons itself, wherever the pointer is.
-    if (!MR::isStarPointerInScreen(WPAD_CHAN0) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
+    if (!MR::isStarPointerInScreen(GAMEPAD_CHAN0) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
         rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_PAD) {
         mDragRow = -1;
         mDragging = false;
@@ -1529,7 +1529,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mSliderRow = -1;
         return;
     }
-    TVec2f screen = MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0);
+    TVec2f screen = MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0);
     TVec2f layout;
     MR::convertScreenPosToLayoutPos(&layout, screen);
     const f32 x = layout.x / mScaleX;
@@ -1589,14 +1589,14 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
 
     // A slider held down follows the pointer along it; an arrow held down steps again and again, stopping at the end.
     if (mSliderRow >= 0) {
-        if (MR::testCorePadButtonA(WPAD_CHAN0)) {
+        if (MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
             dragSlider(rView, x);
             return;
         }
         mSliderRow = -1;
     }
     if (mHeldArrow != 0) {
-        if (MR::testCorePadButtonA(WPAD_CHAN0)) {
+        if (MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
             mHeldFrames++;
             if (mHoverArrow == mHeldArrow && mHoverRow == static_cast< s32 >(rView.selected) && mHeldFrames >= cRepeatDelay &&
                 (mHeldFrames - cRepeatDelay) % cRepeatEvery == 0) {
@@ -1613,7 +1613,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     // The list held down: moved, it is dragged (as the Wii's lists, by pointing and holding A); let go where it was
     // pressed, the row there is clicked.
     if (mPressing) {
-        if (MR::testCorePadButtonA(WPAD_CHAN0)) {
+        if (MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
             if (!mScrollDrag && __builtin_fabsf(y - mPressY) > cDragStart) {
                 mScrollDrag = true;
             }
@@ -1631,7 +1631,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mScrollDrag = false;
         return;
     }
-    if (!MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (!MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         return;
     }
     if (mHoverButton != nullptr) {
@@ -1740,7 +1740,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
             const s32 place = static_cast< s32 >((mModItemsTop - y + mModScroll[mDropList]) / cModHeight + 0.5f);
             mDropPlace = place < 0 ? 0 : place > mModCounts[mDropList] ? mModCounts[mDropList] : place;
         }
-        if (!MR::testCorePadButtonA(WPAD_CHAN0)) {
+        if (!MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
             // Let go: into the list under the pointer at the line's place (counted without the mod itself).
             if (mDragging && mDropList >= 0 && index >= 0 && index < cRowsMax) {
                 s32 place = mDropPlace;
@@ -1759,7 +1759,7 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         }
         return;
     }
-    if (!MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (!MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         return;
     }
     if (mHoverModButton >= 0 && mModButtonsRow >= 0) {
@@ -1793,7 +1793,7 @@ void NebulaSettingsScreen::readHomePointer(f32 x, f32 y) {
     if (mPointerMode && hovered != (mHomeView & 0xFF)) {
         NebulaHomeMenu::point(hovered);
     }
-    if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         NebulaHomeMenu::choose(hovered);
     }
 }

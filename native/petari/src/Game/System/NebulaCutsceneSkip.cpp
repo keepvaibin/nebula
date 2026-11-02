@@ -237,10 +237,10 @@ namespace NebulaCutsceneSkip {
 
         switch (sState) {
         case State_Idle: {
-            if (!MR::testCorePadButtonPlus(WPAD_CHAN0)) {
+            if (!MR::testCorePadButtonPlus(GAMEPAD_CHAN0)) {
                 sNeedRelease = false;
             }
-            if (sNeedRelease || !MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+            if (sNeedRelease || !MR::testCorePadTriggerPlus(GAMEPAD_CHAN0)) {
                 break;
             }
             sNeedRelease = true;
@@ -260,9 +260,9 @@ namespace NebulaCutsceneSkip {
         }
         case State_Prompt:
             // + again answers No.
-            if (!MR::testCorePadButtonPlus(WPAD_CHAN0)) {
+            if (!MR::testCorePadButtonPlus(GAMEPAD_CHAN0)) {
                 sNeedRelease = false;
-            } else if (!sNeedRelease && MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+            } else if (!sNeedRelease && MR::testCorePadTriggerPlus(GAMEPAD_CHAN0)) {
                 sNeedRelease = true;
                 sWindow->decideNo();
             }

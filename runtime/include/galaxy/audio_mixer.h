@@ -1,5 +1,5 @@
 // The game's sound mixed natively (nebula_game_api.h audio_*): the game's 64 voices and four effect lines, mixed in
-// float at the output device's rate. Each audio_mix call is one subframe (1/400 s); audio_frame ends a frame and
+// float at the output device's rate. Each voices_mix call is one subframe (1/400 s); voices_frame ends a frame and
 // hands it to the output.
 //
 // Per voice: the source (ADPCM blocks, PCM8/PCM16, or an oscillator) is read at its own rate with the record's
@@ -40,15 +40,7 @@ struct AudioMixerStats {
     std::uint64_t effect_subframes{};
     std::uint64_t stream_frames{};
     std::uint64_t unresolved_reads{};
-    std::uint64_t category_decisions{};
-    std::uint64_t category_unnamed{};
     std::uint64_t mix_ns{};
-};
-
-// A voice's volume category and the owner it was decided from.
-struct AudioVoiceCategory {
-    NativeAudioBusDecision decision{};
-    JAudioChannelOwner owner{};
 };
 
 // A first-in first-out delay of whole samples (the surround fold and the panner's effect sends).
@@ -87,7 +79,7 @@ public:
     // `rate`: the output rate in Hz (8000..192000).
     explicit AudioMixer(std::uint32_t rate);
 
-    void setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
+    void setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
                const std::byte* sound_memory, std::uint32_t sound_memory_size);
     // The output's rate changed (another device): filters and delays start over at it, the voices play on.
     void set_rate(std::uint32_t rate);
@@ -104,9 +96,6 @@ public:
 
     [[nodiscard]] std::uint32_t rate() const noexcept { return rate_; }
     [[nodiscard]] bool configured() const noexcept { return voices_ != nullptr; }
-    [[nodiscard]] const AudioVoiceCategory& voice_category(std::uint32_t voice) const noexcept {
-        return categories_[voice < categories_.size() ? voice : 0u];
-    }
     [[nodiscard]] const AudioMixerStats& stats() const noexcept { return stats_; }
 
 private:
@@ -142,11 +131,8 @@ private:
         float category_gain{1.0f};
         float category_target{1.0f};
         std::uint32_t category_ramp{};
-        NativeAudioBus category_bus{NativeAudioBus::Sfx};
+        std::uint8_t category_bus{NEBULA_SOUND_EFFECT};
         bool category_set{};
-        std::uint32_t category_key_id{0xFFFFFFFFu};
-        std::uint16_t category_key_route{0xFFFFu};
-        std::uint16_t category_key_format{0xFFFFu};
     };
 
     struct EffectState {
@@ -176,23 +162,22 @@ private:
     };
 
     [[nodiscard]] float* bus(std::uint32_t index) noexcept;
-    void classify(std::uint32_t index, const NebulaAudioVoice& voice);
-    void render_voice(std::uint32_t index, NebulaAudioVoice& voice);
-    void render_source(VoiceState& state, NebulaAudioVoice& voice, float* out);
-    void decode_adpcm(VoiceState& state, NebulaAudioVoice& voice, float* out, std::uint32_t count);
-    void decode_adpcm_blocks(VoiceState& state, NebulaAudioVoice& voice, std::int16_t* out, std::uint32_t blocks);
-    void read_pcm(VoiceState& state, NebulaAudioVoice& voice, float* out, std::uint32_t count, std::uint32_t bytes);
-    void render_oscillator(VoiceState& state, const NebulaAudioVoice& voice, float* out);
-    void apply_fir(VoiceState& state, const NebulaAudioVoice& voice, float* samples);
-    void apply_iir(VoiceState& state, const NebulaAudioVoice& voice, float* samples);
-    void apply_category(std::uint32_t index, VoiceState& state, const NebulaAudioVoice& voice, float* samples);
-    void mix_sends(NebulaAudioVoice& voice, const float* samples);
-    void mix_panner(NebulaAudioVoice& voice, const float* samples);
+    void render_voice(std::uint32_t index, NebulaVoice& voice);
+    void render_source(VoiceState& state, NebulaVoice& voice, float* out);
+    void decode_adpcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count);
+    void decode_adpcm_blocks(VoiceState& state, NebulaVoice& voice, std::int16_t* out, std::uint32_t blocks);
+    void read_pcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count, std::uint32_t bytes);
+    void render_oscillator(VoiceState& state, const NebulaVoice& voice, float* out);
+    void apply_fir(VoiceState& state, const NebulaVoice& voice, float* samples);
+    void apply_iir(VoiceState& state, const NebulaVoice& voice, float* samples);
+    void apply_category(VoiceState& state, const NebulaVoice& voice, float* samples);
+    void mix_sends(NebulaVoice& voice, const float* samples);
+    void mix_panner(NebulaVoice& voice, const float* samples);
     // destination += source * (start + ramp over the first 4/5 of the subframe) / 65536
     void ramp_mix(float* destination, const float* source, float start, float delta) const;
     void effects_begin();
     void effects_end();
-    [[nodiscard]] const std::byte* wave_bytes(const NebulaAudioVoice& voice, std::uint32_t offset,
+    [[nodiscard]] const std::byte* wave_bytes(const NebulaVoice& voice, std::uint32_t offset,
                                               std::uint32_t size) const;
     [[nodiscard]] std::uint32_t game_to_output_delay(double game_samples) const noexcept;
 
@@ -201,9 +186,9 @@ private:
     InterpolationKernel voice_kernel_;
     InterpolationKernel stream_kernel_;
 
-    NebulaAudioVoice* voices_{};
+    NebulaVoice* voices_{};
     std::uint32_t voice_count_{};
-    const NebulaAudioEffect* effects_{};
+    const NebulaEffectLine* effects_{};
     const std::byte* sound_{};
     std::uint32_t sound_size_{};
 
@@ -226,7 +211,6 @@ private:
 
     std::array<float, 5> category_gains_{1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
     bool category_gains_set_{};
-    std::array<AudioVoiceCategory, kVoices> categories_{};
     AudioMixerStats stats_{};
 };
 

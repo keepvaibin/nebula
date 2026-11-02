@@ -179,7 +179,7 @@ void AudioMixer::set_rate(std::uint32_t rate) {
     }
 }
 
-void AudioMixer::setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
+void AudioMixer::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
                        const std::byte* sound_memory, std::uint32_t sound_memory_size) {
     ++stats_.setups;
     voices_ = voices;
@@ -224,7 +224,7 @@ void AudioMixer::mix(float gain) {
     effects_begin();
 
     for (std::uint32_t index = 0; index < voice_count_; ++index) {
-        NebulaAudioVoice& voice = voices_[index];
+        NebulaVoice& voice = voices_[index];
         if (voice.active != 0u && voice.finished == 0u) {
             render_voice(index, voice);
         }
@@ -294,29 +294,7 @@ std::span<const float> AudioMixer::end_frame() {
     return out;
 }
 
-void AudioMixer::classify(std::uint32_t index, const NebulaAudioVoice& voice) {
-    AudioVoiceCategory& category = categories_[index];
-    const std::uint32_t route = voice.sound_route <= 3u ? voice.sound_route : 0u;
-    const std::uint32_t sound_id = voice.sound_id;
-    category.owner = {static_cast<JAudioOwnerRoute>(route), sound_id};
-    category.decision = route != 0u ? native_audio_bus_from_sound_id(sound_id) : NativeAudioBusDecision{};
-    if (category.decision.classification != NativeAudioBusClassification::OwnerSoundId) {
-        // Without an owner the source decides: the game's streams and sequence voices are PCM16.
-        if (voice.format == NEBULA_AUDIO_PCM16) {
-            category.decision = {NativeAudioBus::Music, NativeAudioBusClassification::ChannelFormat};
-        } else if (voice.format == NEBULA_AUDIO_ADPCM4 || voice.format == NEBULA_AUDIO_PCM8) {
-            category.decision = {NativeAudioBus::Sfx, NativeAudioBusClassification::ChannelFormat};
-        } else {
-            category.decision = {};
-        }
-    }
-    ++stats_.category_decisions;
-    if (route == 0u) {
-        ++stats_.category_unnamed;
-    }
-}
-
-void AudioMixer::render_voice(std::uint32_t index, NebulaAudioVoice& voice) {
+void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
     ++stats_.voice_renders;
     VoiceState& state = voice_states_[index];
     float* out = voice_out_.data();
@@ -339,14 +317,7 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaAudioVoice& voice) {
     apply_fir(state, voice, out);
     apply_iir(state, voice, out);
     if (category_gains_set_) {
-        if (state.category_key_id != voice.sound_id || state.category_key_route != voice.sound_route ||
-            state.category_key_format != voice.format) {
-            state.category_key_id = voice.sound_id;
-            state.category_key_route = voice.sound_route;
-            state.category_key_format = voice.format;
-            classify(index, voice);
-        }
-        apply_category(index, state, voice, out);
+        apply_category(state, voice, out);
     }
     if (voice.panner != 0u) {
         mix_panner(voice, out);
@@ -358,9 +329,9 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaAudioVoice& voice) {
     }
 }
 
-void AudioMixer::apply_category(std::uint32_t index, VoiceState& state, const NebulaAudioVoice&, float* samples) {
-    const NativeAudioBus bus = categories_[index].decision.bus;
-    const float target = category_gains_[static_cast<std::size_t>(bus)];
+void AudioMixer::apply_category(VoiceState& state, const NebulaVoice& voice, float* samples) {
+    const std::uint8_t bus = voice.category < category_gains_.size() ? voice.category : std::uint8_t{NEBULA_SOUND_EFFECT};
+    const float target = category_gains_[bus];
     if (!state.category_set || state.category_bus != bus) {
         // A voice's first sound, or a new owner on another bus, starts at its own gain: nothing of a muted bus leaks
         // through a ramp from the previous owner's.
@@ -381,7 +352,7 @@ void AudioMixer::apply_category(std::uint32_t index, VoiceState& state, const Ne
     }
 }
 
-void AudioMixer::render_source(VoiceState& state, NebulaAudioVoice& voice, float* out) {
+void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out) {
     const std::uint32_t n = samples_;
     if (voice.format == NEBULA_AUDIO_OSCILLATOR) {
         render_oscillator(state, voice, out);
@@ -427,7 +398,7 @@ void AudioMixer::render_source(VoiceState& state, NebulaAudioVoice& voice, float
 
 // ADPCM with the record's bookkeeping: `leftover` decoded samples of the last block still unread (the block's tail),
 // `address` the next block, `left` the samples before the end (or loop end).
-void AudioMixer::decode_adpcm(VoiceState& state, NebulaAudioVoice& voice, float* out_float, std::uint32_t count) {
+void AudioMixer::decode_adpcm(VoiceState& state, NebulaVoice& voice, float* out_float, std::uint32_t count) {
     // Room for a whole last block past the samples asked for.
     std::array<std::int16_t, kMaxSourceSamples + 32u> decoded{};
     std::int16_t* out = decoded.data();
@@ -534,7 +505,7 @@ void AudioMixer::decode_adpcm(VoiceState& state, NebulaAudioVoice& voice, float*
     }
 }
 
-void AudioMixer::decode_adpcm_blocks(VoiceState& state, NebulaAudioVoice& voice, std::int16_t* out,
+void AudioMixer::decode_adpcm_blocks(VoiceState& state, NebulaVoice& voice, std::int16_t* out,
                                      std::uint32_t blocks) {
     const std::uint32_t block_bytes = voice.format == NEBULA_AUDIO_ADPCM4 ? 9u : 5u;
     std::int32_t s1 = state.block[15];
@@ -577,7 +548,7 @@ void AudioMixer::decode_adpcm_blocks(VoiceState& state, NebulaAudioVoice& voice,
 }
 
 // PCM: `restart` the sample it starts (or loops) at, `address` the next byte, `left` the samples before the end.
-void AudioMixer::read_pcm(VoiceState& state, NebulaAudioVoice& voice, float* out, std::uint32_t count,
+void AudioMixer::read_pcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count,
                           std::uint32_t bytes) {
     const auto restart = [&] {
         voice.left = voice.end - voice.restart;
@@ -642,7 +613,7 @@ void AudioMixer::read_pcm(VoiceState& state, NebulaAudioVoice& voice, float* out
     }
 }
 
-void AudioMixer::render_oscillator(VoiceState& state, const NebulaAudioVoice& voice, float* out) {
+void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, float* out) {
     ++stats_.oscillator_renders;
     const std::uint32_t n = samples_;
     const double per_game_sample = voice.pitch / 131072.0;
@@ -720,7 +691,7 @@ void AudioMixer::render_oscillator(VoiceState& state, const NebulaAudioVoice& vo
 
 // FIR: taps (filter bits 0-4) over the previous inputs at 32 kHz, fir[k] at taps - k samples back; at the output
 // rate each tap sits at the same time back.
-void AudioMixer::apply_fir(VoiceState& state, const NebulaAudioVoice& voice, float* samples) {
+void AudioMixer::apply_fir(VoiceState& state, const NebulaVoice& voice, float* samples) {
     const std::uint32_t taps = voice.filter & 0x1Fu;
     if (taps == 0u) {
         return;
@@ -746,7 +717,7 @@ void AudioMixer::apply_fir(VoiceState& state, const NebulaAudioVoice& voice, flo
 // IIR: y[n] = c0 x[n] + c1 x[n-1] + c2 y[n-1] + c3 y[n-2] at 32 kHz, carried to the output rate through the analog
 // filter both rates' bilinear transforms share (exact at DC, the same shape with the top octave compressed); outputs
 // saturate as the game's filter did. {1, 0, 0, 0} passes the signal through.
-void AudioMixer::apply_iir(VoiceState& state, const NebulaAudioVoice& voice, float* samples) {
+void AudioMixer::apply_iir(VoiceState& state, const NebulaVoice& voice, float* samples) {
     if ((voice.filter & 0x20u) == 0u) {
         return;
     }
@@ -807,7 +778,7 @@ void AudioMixer::ramp_mix(float* destination, const float* source, float start, 
     }
 }
 
-void AudioMixer::mix_sends(NebulaAudioVoice& voice, const float* samples) {
+void AudioMixer::mix_sends(NebulaVoice& voice, const float* samples) {
     if (voice.forced_stop != 0u) {
         // Every target becomes half its current volume; the voice finishes once all are zero.
         bool silent = true;
@@ -832,7 +803,7 @@ void AudioMixer::mix_sends(NebulaAudioVoice& voice, const float* samples) {
 
 // The surround panner: pan and front/rear positions pick quarter-sine gains; the volume ramps to its target; the
 // effect send feeds effect lines 2 and 3 from the front and the panner's rear sends from the back.
-void AudioMixer::mix_panner(NebulaAudioVoice& voice, const float* samples) {
+void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
     ++stats_.panner_renders;
     if (voice.forced_stop != 0u) {
         const auto current = static_cast<std::uint16_t>(voice.panner_volume);
@@ -870,7 +841,7 @@ void AudioMixer::effects_begin() {
         if (effects_ == nullptr) {
             continue;
         }
-        const NebulaAudioEffect& config = effects_[line];
+        const NebulaEffectLine& config = effects_[line];
         if (config.generation != e.generation || config.subframes != e.subframes) {
             e.generation = config.generation;
             e.subframes = config.subframes;
@@ -913,7 +884,7 @@ void AudioMixer::effects_begin() {
     }
     // The sends, after every line's feedback is in place (a line may send into another's input).
     for (std::size_t line = 0; line < effect_states_.size() && effects_ != nullptr; ++line) {
-        const NebulaAudioEffect& config = effects_[line];
+        const NebulaEffectLine& config = effects_[line];
         if (config.filter == 0u || config.subframes == 0u) {
             continue;
         }
@@ -947,7 +918,7 @@ void AudioMixer::effects_end() {
     }
     for (std::size_t line = 0; line < effect_states_.size() && effects_ != nullptr; ++line) {
         EffectState& e = effect_states_[line];
-        const NebulaAudioEffect& config = effects_[line];
+        const NebulaEffectLine& config = effects_[line];
         if (config.filter == 0u || config.subframes == 0u || e.delay.empty()) {
             continue;
         }
@@ -959,7 +930,7 @@ void AudioMixer::effects_end() {
 }
 
 // `size` bytes `offset` past the voice's wave, when they lie in the sound memory.
-const std::byte* AudioMixer::wave_bytes(const NebulaAudioVoice& voice, std::uint32_t offset, std::uint32_t size) const {
+const std::byte* AudioMixer::wave_bytes(const NebulaVoice& voice, std::uint32_t offset, std::uint32_t size) const {
     const auto* wave = reinterpret_cast<const std::byte*>(voice.wave);
     if (voice.wave_end != nullptr) {
         const auto available = static_cast<std::size_t>(voice.wave_end - voice.wave);

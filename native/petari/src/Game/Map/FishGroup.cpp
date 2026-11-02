@@ -169,7 +169,7 @@ void Fish::control() {
         MR::setBckRate(this, mVelocity.length() * ::sAnimFrameRate);
     }
 
-    if (mCanEscape && MR::isPadSwing(WPAD_CHAN0)) {
+    if (mCanEscape && MR::isPadSwing(GAMEPAD_CHAN0)) {
         if (!isNerve(GET_NERVE(Fish, FishNrvEscape)) && MR::calcDistanceToPlayer(this) < ::sDistanceToSpinEscape) {
             mEscapePos = MR::getPlayerPos();
             setNerve(GET_NERVE(Fish, FishNrvEscape));

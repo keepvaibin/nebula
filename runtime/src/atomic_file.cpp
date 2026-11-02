@@ -1,4 +1,5 @@
 #include "galaxy/atomic_file.h"
+#include "galaxy/path_text.h"
 
 #if defined(_WIN32)
 
@@ -165,7 +166,7 @@ std::atomic<std::uint64_t> s_temp_sequence{0u};
 std::filesystem::path make_sibling_temp_path(
     const std::filesystem::path& destination,
     std::uint64_t sequence) {
-    std::string name = destination.filename().string();
+    std::string name = galaxy::path_text(destination.filename());
     name += ".tmp.";
     name += std::to_string(getpid());
     name += ".";

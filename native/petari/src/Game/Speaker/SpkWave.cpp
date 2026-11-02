@@ -1,11 +1,11 @@
 #include "Game/Speaker/SpkWave.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 SpkWave::SpkWave() : mResource(nullptr) {
 }
 
 void SpkWave::setResource(void* pResource) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mResource = pResource;
 }
 

@@ -9,20 +9,20 @@ enum JASOutputRate {
 
 namespace JASDriver {
     void startAudio();
-    void startDMA();
-    void stopDMA();
+    void startClock();
+    void stopClock();
     void setOutputRate(JASOutputRate);
-    void updateDac();
+    void updateFrame();
     void mixFrame();
-    void updateDSP();
-    f32 getDacRate();
+    void updateSubFrame();
+    f32 getSoundRate();
     u32 getSubFrames();
     u32 getFrameSamples();
     u32 getSubFrameCounter();
     void subframeCallback();
     void syncCallback();
 
-    extern f32 sDacRate;
+    extern f32 sSoundRate;
     extern u32 sSubFrames;
     extern u32 sOutputRate;
     extern NebulaAtomic< u32 > sSubFrameCounter;

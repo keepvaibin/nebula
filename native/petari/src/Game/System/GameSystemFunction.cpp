@@ -13,9 +13,9 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/GameSystemStationedArchiveLoader.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadHolder.hpp"
-#include "Game/System/WPadRumble.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/GamePadRumble.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -180,27 +180,27 @@ namespace GameSystemFunction {
     }
 
     void stopControllerLeaveWatcher() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->stopLeaveWatcher();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->stopLeaveWatcher();
         }
     }
 
     void startControllerLeaveWatcher() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->startLeaveWatcher();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->startLeaveWatcher();
         }
     }
 
     void restartControllerLeaveWatcher() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->restartLeaveWatcher();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->restartLeaveWatcher();
         }
     }
 
     void resetAllControllerRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->registInstance();
-            MR::getWPad(chan)->_18->stop();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->_18->registInstance();
+            MR::getGamePad(chan)->_18->stop();
         }
     }
 
@@ -217,44 +217,44 @@ namespace GameSystemFunction {
     }
 
     void onPauseBeginAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->stop();
-            MR::getWPad(chan)->_1C->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->_18->stop();
+            MR::getGamePad(chan)->_1C->registInstance();
+            MR::getGamePad(chan)->_1C->stop();
         }
     }
 
     void onPauseEndAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->_18->registInstance();
+            MR::getGamePad(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuBeginAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->pause();
-            MR::getWPad(chan)->_1C->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->_18->pause();
+            MR::getGamePad(chan)->_1C->registInstance();
+            MR::getGamePad(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuCloseAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            MR::getGamePad(chan)->_18->registInstance();
+            MR::getGamePad(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuEndAllRumble() {
-        WPadRumble* pRumble;
+        GamePadRumble* pRumble;
 
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            pRumble = MR::getWPad(chan)->_18;
+        for (s32 chan = GAMEPAD_CHAN0; chan < GAMEPAD_CHAN0 + MR::getGamePadMaxCount(); chan++) {
+            pRumble = MR::getGamePad(chan)->_18;
             pRumble->_BC = 200;
             pRumble->stop();
 
-            pRumble = MR::getWPad(chan)->_1C;
+            pRumble = MR::getGamePad(chan)->_1C;
             pRumble->_BC = 200;
             pRumble->stop();
         }

@@ -134,7 +134,7 @@ void GreenCaterpillarBig::exeWriggle() {
 
             if (point_arg == 0.0f) {
                 _9C = 1;
-                MR::tryRumblePadStrong(this, WPAD_CHAN0);
+                MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
                 MR::shakeCameraNormal();
                 MR::startSound(this, "SE_OJ_GRN_CATERP_IN");
             } else if (point_arg == 1.0f) {
@@ -233,7 +233,7 @@ void GreenCaterpillarBig::fixBodyPartsOnRail() {
 
 void GreenCaterpillarBig::leaveApple() {
     _9D = 1;
-    MR::tryRumblePadStrong(this, WPAD_CHAN0);
+    MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
     MR::shakeCameraNormal();
     MR::startSound(this, "SE_OJ_GRN_CATERP_DAMAGE");
     MR::startSound(this, "SE_OJ_GRN_CATERP_OUT");

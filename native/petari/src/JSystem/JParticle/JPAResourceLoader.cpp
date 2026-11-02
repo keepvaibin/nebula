@@ -1,5 +1,4 @@
 #include "JSystem/JParticle/JPAResourceLoader.hpp"
-#include <JSystem/JUtility/JUTException.hpp>
 #include <string.h>
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
@@ -17,7 +16,7 @@ JPAResourceLoader::JPAResourceLoader(u8 const* data, JPAResourceManager* mgr) {
     if (memcmp(data, "JPAc2-10", 8) == 0) {
         load_jpc(data, mgr);
     } else if (memcmp(data, "JPAC2-10", 8) == 0) {
-        JUTException::panic_f(__FILE__, __LINE__, "JPAResourceLoader: a particle file not in host order (the importer cooks it)");
+        NEBULA_PANIC("JPAResourceLoader: a particle file not in host order (the importer cooks it)");
     }
 }
 

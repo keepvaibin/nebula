@@ -647,7 +647,7 @@ void StringSpider::exeDpdGripped() {
         }
     }
 
-    s32 channel = WPAD_CHAN0;
+    s32 channel = GAMEPAD_CHAN0;
     if (!MR::testCorePadButtonA(channel = *MR::getStarPointerLastPointedPort(this))) {
         setNerve(GET_NERVE(StringSpider, HostTypeNrvSearch));
     } else {

@@ -9,11 +9,9 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-struct JASDSPChannel;
+struct JASVoiceSlot;
 
-namespace JASDsp {
-    struct TChannel;
-};  // namespace JASDsp
+struct JASVoice;
 
 class JASChannelParams {
 public:
@@ -45,7 +43,7 @@ public:
 
 class JASChannel : public JASPoolAllocObject_MultiThreaded< JASChannel > {
 public:
-    typedef void (*Callback)(u32, JASChannel*, JASDsp::TChannel*, void*);
+    typedef void (*Callback)(u32, JASChannel*, JASVoice*, void*);
     static const int BUSOUT_CPUCH = 6;
     static const int OSC_NUM = 2;
 
@@ -95,11 +93,11 @@ public:
     static f32 calcPan(JASChannel::PanVector const*);
     void effectOsc(u32, JASOscillator::EffectParams*);
     void setKeySweepTarget(s32, u32);
-    void updateEffectorParam(JASDsp::TChannel*, u16*, JASOscillator::EffectParams const&);
-    static s32 dspUpdateCallback(u32, JASDsp::TChannel*, void*);
-    s32 initialUpdateDSPChannel(JASDsp::TChannel*);
-    s32 updateDSPChannel(JASDsp::TChannel*);
-    void updateAutoMixer(JASDsp::TChannel*, f32, f32, f32, f32);
+    void updateEffectorParam(JASVoice*, u16*, JASOscillator::EffectParams const&);
+    static s32 voiceUpdateCallback(u32, JASVoice*, void*);
+    s32 initialUpdateVoice(JASVoice*);
+    s32 updateVoice(JASVoice*);
+    void updateAutoMixer(JASVoice*, f32, f32, f32, f32);
     void updateMixer(f32, f32, f32, f32, u16*);
     void free();
     static void initBankDisposeMsgQueue();
@@ -186,7 +184,7 @@ public:
 
     /* 0x00 */ int mStatus;
     /* 0x04 */ bool mPauseFlag;
-    /* 0x08 */ JASDSPChannel* mDspCh;
+    /* 0x08 */ JASVoiceSlot* mSlot;
     /* 0x0C */ Callback mCallback;
     /* 0x10 */ void* mCallbackData;
     /* 0x14 */ u32 mUpdateTimer;

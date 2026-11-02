@@ -1,7 +1,6 @@
 #include "Game/System/FileLoaderThread.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 namespace {
     void* loadFile(RequestFileInfo* pInfo) {
@@ -10,7 +9,7 @@ namespace {
                                                                 : GameAssets::ALLOC_DIRECTION_FORWARD,
                                        nullptr);
         if (pData == nullptr) {
-            JUTException::panic_f(__FILE__, __LINE__, "%s cannot be loaded", pInfo->mFileName);
+            NEBULA_PANIC("%s cannot be loaded", pInfo->mFileName);
         }
 
         return pData;

@@ -224,7 +224,7 @@ bool JumpBranch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 }
 
 bool JumpBranch::updateBind() {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA() || MR::isCorePadSwing(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testSystemTriggerA() || MR::isCorePadSwing(GAMEPAD_CHAN0)) {
         TVec3f front = mFront;
         if (mSwingReverse) {
             front.scale(-1.0f);
@@ -233,10 +233,10 @@ bool JumpBranch::updateBind() {
 
         TVec3f stickXZ(0.0f, 0.0f, 0.0f);
         bool fall = false;
-        if (MR::isCorePadSwing(WPAD_CHAN0)) {
+        if (MR::isCorePadSwing(GAMEPAD_CHAN0)) {
             fall = true;
         } else {
-            MR::calcWorldStickDirectionXZ(&stickXZ, WPAD_CHAN0);
+            MR::calcWorldStickDirectionXZ(&stickXZ, GAMEPAD_CHAN0);
         }
 
         TVec3f jumpDir(0.0f, 0.0f, 0.0f);

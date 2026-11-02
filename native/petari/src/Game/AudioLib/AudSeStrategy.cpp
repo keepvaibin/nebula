@@ -6,7 +6,7 @@
 #include "Game/AudioLib/AudWrap.hpp"
 #include <JSystem/JAudio2/JASCalc.hpp>
 #include <JSystem/JAudio2/JAISe.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 void AudSeStrategy::calc(JAISe* pSe) {
     JAISoundID soundID = pSe->mSoundID;
@@ -61,7 +61,7 @@ void AudSeStrategy::calc(JAISe* pSe) {
 
     JASTrack* track = pSe->getTrack();
     if (track != nullptr) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         for (u32 i = 0; i < JASTrack::MAX_CHILDREN; i++) {
             if (track->getChild(i) != nullptr) {
                 track->getChild(i)->setIIR(sIIRCutoff[cutoff]);
