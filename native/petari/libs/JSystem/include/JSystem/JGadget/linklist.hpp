@@ -6,7 +6,6 @@
 
 #include "JSystem/JGadget/predicate.hpp"
 
-#include "Inline.hpp"
 
 #ifndef JGADGET_LINKLIST_NOINLINE
 #define JGADGET_LINKLIST_NOINLINE

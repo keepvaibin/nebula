@@ -61,7 +61,7 @@ s32 ConfigDataMisc::serialize(u8* pBuffer, u32 size) const {
     u8 flag = mFlag;
     stream.write(&flag, sizeof(flag));
 
-    s64 lastModified = NebulaCalendar::toFileTime(mLastModified);
+    s64 lastModified = mLastModified;
     stream.write(&lastModified, sizeof(lastModified));
 
     return stream.mPosition;
@@ -81,7 +81,7 @@ s32 ConfigDataMisc::deserialize(const u8* pBuffer, u32 size) {
     } else {
         s64 lastModified;
         stream.read(&lastModified, sizeof(lastModified));
-        mLastModified = NebulaCalendar::fromFileTime(lastModified);
+        mLastModified = NebulaCalendar::fromSaved(lastModified);
     }
 
     return 0;

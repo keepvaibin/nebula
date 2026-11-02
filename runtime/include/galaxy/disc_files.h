@@ -37,6 +37,10 @@ public:
     // `size` bytes at `position` where they are mapped, read-only, while the store is open; the pages are on their
     // way in when this returns, so the first use does not wait for the drive. Null if out of range.
     [[nodiscard]] const std::uint8_t* map(std::uint64_t position, std::size_t size) const;
+    // The same bytes as a view of their own, writable, the writes staying in this process's pages. Null when it cannot be
+    // had. Ended by unmap_private, or kept while the store is open.
+    [[nodiscard]] std::uint8_t* map_private(std::uint64_t position, std::size_t size) const;
+    void unmap_private(void* data, std::size_t size) const;
 
     [[nodiscard]] std::optional<Entry> entry(std::int32_t index) const;
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;
@@ -71,6 +75,7 @@ private:
     std::uint64_t size_ = 0;
 #if defined(_WIN32)
     void* file_ = nullptr;
+    void* mapping_ = nullptr;
 #else
     int file_ = -1;
 #endif

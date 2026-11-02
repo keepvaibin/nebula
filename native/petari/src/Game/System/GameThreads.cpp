@@ -485,8 +485,8 @@ void nebula_threads_init(void) {
 void nebula_threads_dump(void) {
     nebula_log("threads (current %p, world %p):\n", static_cast< void* >(tSelf), static_cast< void* >(sWorldOwner));
     for (const GameThreadRecord* t = sThreads; t != nullptr; t = t->all) {
-        nebula_log("  %p started %d sleeps on %p\n", static_cast< const void* >(t), t->started ? 1 : 0,
-                   static_cast< const void* >(t->list));
+        nebula_log("  %p entry %p started %d ended %d world %d sleeps on %p\n", static_cast< const void* >(t), reinterpret_cast< const void* >(t->entry),
+                   t->started ? 1 : 0, t->ended ? 1 : 0, t->world ? 1 : 0, static_cast< const void* >(t->list));
     }
 }
 }  // extern "C"

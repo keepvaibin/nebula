@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/GameAssets.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
@@ -149,6 +150,10 @@ void* JKRHeap::alloc(u32 size, int align) {
 }
 
 void JKRHeap::free(void* pData, JKRHeap* pHeap) {
+    if (GameAssets::unload(pData)) {
+        return;
+    }
+
     if (!pHeap) {
         pHeap = findFromRoot(pData);
 
@@ -165,6 +170,10 @@ void JKRHeap::free(void* pData, JKRHeap* pHeap) {
 }
 
 void JKRHeap::free(void* pData) {
+    if (GameAssets::unload(pData)) {
+        return;
+    }
+
 #ifdef NEBULA_ASAN_HEAPS
     // A solid heap frees nothing block by block.
     const s32 block = getHeapType() != 'SLID' && pData != nullptr ? do_getSize(pData) : 0;

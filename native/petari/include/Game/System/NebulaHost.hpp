@@ -12,8 +12,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace NebulaHost {
     // Whether code patch `id` (NEBULA_PATCH_*) is on, and its value: the host's answer is fixed for the session.
     bool codePatch(u32 id, u32* pValue);
-    // Names an object for the renderer's draw identities (its NEBULA_MARKER_OBJECT records).
-    void objectName(const void* pObject, const char* pName);
 
     inline u32 option(u32 what) {
         return nebula_host()->option(nebula_host()->user, what);
