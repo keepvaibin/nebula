@@ -29,6 +29,10 @@
 
 namespace galaxy::render {
 
+void RendererVk::test_lose_device() {
+    throw std::runtime_error("[RendererVk] VK_ERROR_DEVICE_LOST (test)");
+}
+
 namespace {
 
 bool env_flag(const char* name, bool fallback) {

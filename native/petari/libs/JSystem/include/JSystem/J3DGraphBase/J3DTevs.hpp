@@ -47,7 +47,7 @@ public:
     }
 
     /* 0x00 */ J3DLightInfo mInfo;
-    /* 0x34 */ GpuLightObj mLightObj;
+    /* 0x34 */ J3DNativeLight mLightObj;
 };  // Size = 0x74
 
 // One TEV stage as the console's functions take it: the colour and alpha inputs (GpuTevColorArg, GpuTevAlphaArg), operations

@@ -16,7 +16,7 @@ namespace J3DNativeTexGen {
         } else if (type == GPU_TG_SRTG) {
             kind = source == GPU_TG_COLOR0 ? 2 : 3;
         }
-        const u32 projective = type == GX_TG_MTX3x4 ? 1 : 0;
+        const u32 projective = type == GPU_TG_MTX3x4 ? 1 : 0;
         const u32 form = source <= GPU_TG_TANGENT ? 1 : 0;
         return static_cast< u8 >(kind | projective << 2 | form << 3 | light << 4);
     }

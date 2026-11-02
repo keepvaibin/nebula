@@ -75,8 +75,8 @@ JUTTexture* ImageEffectResource::createTexture(f32 scale, GpuTexFmt format) {
 
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-    pTexture = new JUTTexture(scale * (s32)NebulaFrameClock::cFrameWidth,
-                              scale * (s32)NebulaFrameClock::cFrameHeight, format);
+    pTexture = new JUTTexture(scale * (s32)NebulaFrameClock::cCanvasWidth,
+                              scale * (s32)NebulaFrameClock::cCanvasHeight, format);
     pTexture->mWrapS = GPU_CLAMP;
     pTexture->mWrapT = GPU_CLAMP;
     pTexture->mMinType = GPU_LINEAR;

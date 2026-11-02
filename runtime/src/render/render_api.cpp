@@ -48,7 +48,7 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 bool movie_replacement_showing() noexcept { return MovieReplacements::showing(); }
 void set_safety_scene_surround(float intensity) noexcept { backend().set_safety_scene_surround(intensity); }
 
-void attach_scene_marker(SceneMarker marker) noexcept {
+void attach_scene_marker(SceneMarker marker) {
     backend().attach_scene_marker(marker);
 }
 

@@ -96,8 +96,17 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 
 inline constexpr std::uint32_t kNoNative = 0xFFFFFFFFu;
 
+// A scene boundary's camera, the player's up and the stage (the game's values at that boundary).
+struct SceneInfo {
+    std::array<float, 12> view{};
+    std::uint32_t sky_up = 0;
+    bool view_valid = false, sky_up_valid = false;
+    std::array<char, 48> stage{};
+};
+
 // What a chunk's records point into: one allocation a frame, not one a record.
 struct RecordPool {
+    std::vector<SceneInfo> scenes;
     std::vector<Matrix> matrices;
     std::vector<state::Op> ops;
     std::vector<material::Native> natives;
@@ -123,9 +132,8 @@ struct PassState {
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear, Forget
+        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear, Forget, Scene
     };
-    std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
     std::uint64_t key = 0;   // the array's or the group's
     std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays (Forget: keys from `key` up to `position` go)

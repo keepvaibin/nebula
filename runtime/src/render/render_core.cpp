@@ -925,11 +925,6 @@ void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept
     } catch (...) { /* observational text must not unwind rendering */ }
 }
 
-bool RenderCore::subframes_shown() const {
-    // The renderer's mode, not the chunk's copy of it: a present between chunks follows a change at once.
-    return renderer_.interpolation_mode() && std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_}) > 0u;
-}
-
 void RenderCore::record_presented_display_copy(
     const DisplayTexture& texture) noexcept {
     galaxy::timeline::record(galaxy::timeline::Event::DisplayPresented, texture.slot,
@@ -1077,8 +1072,7 @@ void RenderCore::render_frame(
         frame_timing_sample_enabled(
             timing_frame_index_.load(std::memory_order_relaxed));
     // Nothing to render: nothing attached (records, scene markers, captures).
-    const bool empty = producer_shape_records_.empty() && producer_stream_marker_count_ == 0u &&
-        producer_stripe_particles_.empty();
+    const bool empty = producer_shape_records_.empty() && producer_stripe_particles_.empty();
     if (empty) {
         if (present_swap_chain) {
             present_cached_display(black, true);
@@ -1100,7 +1094,6 @@ void RenderCore::render_frame(
         : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
-    take_attached_stream_markers(chunk);
     take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
@@ -1654,6 +1647,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         const std::size_t ops = producer_record_pool_.ops.size();
         const std::size_t natives = producer_record_pool_.natives.size();
         const std::size_t vertices = producer_record_pool_.vertices.size();
+        chunk.record_pool.scenes.swap(producer_record_pool_.scenes);
         chunk.record_pool.vertices.swap(producer_record_pool_.vertices);
         producer_record_pool_.vertices.reserve(vertices);
         chunk.record_pool.probes.swap(producer_record_pool_.probes);
@@ -1673,6 +1667,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     chunk.record_pool.ops.insert(chunk.record_pool.ops.end(), producer_record_pool_.ops.begin(), producer_record_pool_.ops.end());
     const auto first_native = static_cast<std::uint32_t>(chunk.record_pool.natives.size());
     const auto first_vertex = static_cast<std::uint32_t>(chunk.record_pool.vertices.size());
+    const auto first_scene = static_cast<std::uint32_t>(chunk.record_pool.scenes.size());
+    chunk.record_pool.scenes.insert(chunk.record_pool.scenes.end(), producer_record_pool_.scenes.begin(), producer_record_pool_.scenes.end());
+    producer_record_pool_.scenes.clear();
     chunk.record_pool.vertices.insert(chunk.record_pool.vertices.end(), producer_record_pool_.vertices.begin(), producer_record_pool_.vertices.end());
     producer_record_pool_.vertices.clear();
     const auto first_probe = static_cast<std::uint32_t>(chunk.record_pool.probes.size());
@@ -1687,7 +1684,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         record.matrix_first += first_matrix;
         record.op_first += first_op;
         record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe : first_vertex;
-        record.native_index += record.native_index != shapes::kNoNative ? first_native : 0u;
+        record.native_index += record.native_index == shapes::kNoNative ? 0u : record.kind == shapes::Record::Kind::Scene ? first_scene : first_native;
         chunk.shape_records.push_back(std::move(record));
     }
     producer_shape_records_.clear();
@@ -1695,31 +1692,6 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
 
 void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
-}
-
-void RenderCore::take_attached_stream_markers(FrameChunk& chunk) noexcept {
-    chunk.stream_marker_count = 0;
-    chunk.stream_marker_view_mask = 0;
-    chunk.stream_marker_sky_up_mask = 0;
-    for (std::uint8_t i = 0; i < producer_stream_marker_count_; ++i) {
-        if (chunk.stream_marker_count < chunk.stream_markers.size()) {
-            const std::uint8_t index = chunk.stream_marker_count++;
-            chunk.stream_markers[index] = producer_stream_markers_[i];
-            chunk.stream_marker_serials[index] = producer_stream_marker_serials_[i];
-            if ((producer_stream_marker_view_mask_ & (1u << i)) != 0u) {
-                chunk.stream_marker_views[index] = producer_stream_marker_views_[i];
-                chunk.stream_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
-            }
-            if ((producer_stream_marker_sky_up_mask_ & (1u << i)) != 0u) {
-                chunk.stream_marker_sky_up[index] = producer_stream_marker_sky_up_[i];
-                chunk.stream_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
-            }
-            chunk.stream_marker_stages[index] = producer_stream_marker_stages_[i];
-        }
-    }
-    producer_stream_marker_count_ = 0;
-    producer_stream_marker_view_mask_ = 0;
-    producer_stream_marker_sky_up_mask_ = 0;
 }
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
@@ -1852,26 +1824,6 @@ void RenderCore::cancel_screen_frame() {
     screen_frame_open_ = false;
 }
 
-// The recording scene's projection as the ray tracer took its view (scene_depth_view, before the jitter): its
-// sub-frames rebuild their own from it and the scene before's.
-void RenderCore::note_interp_rt_projection() {
-    if (!interp_recording_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u) {
-        return;
-    }
-    InterpScene& scene = interp_scenes_[interp_scene_];
-    if (!scene.valid) {
-        return;
-    }
-    for (unsigned i = 0; i < 6u; ++i) {
-        scene.rt_projection[i] = draw_state_.projection[i];
-    }
-    const FrameMap& map = renderer_.frame_map();
-    scene.rt_viewport[0] = std::fabs(draw_state_.viewport[2]) * map.sx;
-    scene.rt_viewport[1] = std::fabs(draw_state_.viewport[3]) * map.sy;
-    scene.rt_projection_known = true;
-}
-
 RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     const auto projection = [this](unsigned i) {
         return draw_state_.projection[i];
@@ -1899,29 +1851,6 @@ RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     view.min_depth = viewport.min_depth;
     view.max_depth = viewport.max_depth;
     return view;
-}
-
-// The first perspective scene draw with depth since the scene began or the game last cleared its depth
-// (MR::clearZBuffer draws through a flattened viewport after the sky and air layers, which may project otherwise).
-void RenderCore::note_scene_ao_view(const DrawCall& call) {
-    if (ao_scene_applied_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u || !call.has_viewport) {
-        return;
-    }
-    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.frame_map());
-    if (!viewport.valid()) {
-        return;
-    }
-    if (viewport.max_depth - viewport.min_depth < 0.5f) {
-        if ((render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
-            ao_view_set_ = false;
-        }
-        return;
-    }
-    if (!ao_view_set_) {
-        renderer_.set_scene_ao_view(scene_depth_view(viewport));
-        ao_view_set_ = true;
-    }
 }
 
 void RenderCore::apply_scene_ao() {
@@ -3784,6 +3713,13 @@ void RenderCore::present_cached_display_on_thread(
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
+    // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1, processes): the card is lost at frame n.
+    static const std::uint64_t lose_at = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_GPU_LOST_FRAME"), 0u);
+    if (lose_at != 0u && frame_index_ == lose_at) [[unlikely]] {
+        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_GPU_LOST_TIMES"), 1u)) {
+            renderer_.test_lose_device();
+        }
+    }
     pipeline_cache_.merge_prepared();
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
@@ -4060,49 +3996,18 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (!chunk.shape_records.empty() || chunk.stream_marker_count != 0u ||
-        !chunk.stripe_particles.empty()) {
+    if (!chunk.shape_records.empty() || !chunk.stripe_particles.empty()) {
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
         // on workers.
         texture_cache_.set_async_decode_allowed(true);
         try {
-            // The chunk's records and scene markers in the order the game made them.
-            std::vector<StreamSplit>& splits = stream_splits_;
-            splits.clear();
-            for (std::uint8_t i = 0; i < chunk.stream_marker_count; ++i) {
-                splits.push_back({chunk.stream_marker_serials[i], static_cast<int>(chunk.stream_markers[i]),
-                                  static_cast<int>(i)});
-            }
-            for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
-                splits.push_back({chunk.shape_records[i].serial, kSplitShapeRecord, static_cast<int>(i)});
-            }
-            // In the order the game made them (a marker before the records made after it).
-            std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
-                return a.serial != b.serial ? a.serial < b.serial
-                                            : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
-            });
             parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
                                                : std::span<const StripeParticleMark>{};
             parse_stripe_next_ = 0u;
-            for (std::size_t i = 0; i < splits.size(); ++i) {
-                const StreamSplit split = splits[i];
-                if (split.marker == kSplitShapeRecord) {
-                    current_record_pool_ = &chunk.record_pool;
-                    on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
-                } else if (split.marker == static_cast<int>(SceneMarker::Scene2DBegin)) {
-                    on_scene_2d_begin();
-                } else if (split.marker != static_cast<int>(SceneMarker::Scene2DEnd)) {
-                    const auto index = static_cast<std::size_t>(split.view);
-                    const bool sky_up = split.view >= 0 && (chunk.stream_marker_sky_up_mask & (1u << index)) != 0u;
-                    on_scene_marker(static_cast<SceneMarker>(split.marker),
-                        split.view >= 0 &&
-                                (chunk.stream_marker_view_mask & (1u << index)) != 0u
-                            ? &chunk.stream_marker_views[index]
-                            : nullptr,
-                        sky_up ? chunk.stream_marker_sky_up[index] : 0u, sky_up,
-                        split.view >= 0 ? &chunk.stream_marker_stages[index] : nullptr);
-                }
+            current_record_pool_ = &chunk.record_pool;
+            for (const shapes::Record& record : chunk.shape_records) {
+                on_shape_record(record);
             }
             parse_stripes_ = {};
             if (!chunk.stripe_particles.empty()) [[unlikely]] {
@@ -4634,14 +4539,6 @@ bool RenderCore::curved_draw(std::uint8_t vtxfmt) const {
     // A native shape record whose model the analysis rounds (curved_surfaces.h; a model kept only for its flat
     // corners draws plainly).
     return record_inputs_ != nullptr && record_inputs_->curved != nullptr && record_inputs_->curved->bends;
-}
-
-bool RenderCore::draw_positions_indexed() const noexcept {
-    if (record_inputs_ != nullptr) {
-        return !record_inputs_->own_positions;
-    }
-    // An immediate draw's positions are its own.
-    return false;
 }
 
 namespace {
@@ -5507,6 +5404,16 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;
+    case shapes::Record::Kind::Scene: {
+        const auto marker = static_cast<SceneMarker>(static_cast<int>(record.key));
+        if (marker == SceneMarker::Scene2DBegin) {
+            on_scene_2d_begin();
+        } else if (marker != SceneMarker::Scene2DEnd) {
+            const shapes::SceneInfo& info = current_record_pool_->scenes[record.native_index];
+            on_scene_marker(marker, info.view_valid ? &info.view : nullptr, info.sky_up, info.sky_up_valid, &info.stage);
+        }
+        return;
+    }
     case shapes::Record::Kind::Immediate:
         apply_record_matrices(record);
         draw_state_.apply_pass(record.pass);
@@ -6151,12 +6058,6 @@ void RenderCore::load_light(const state::Op& op) {
     } else {
         matrices_.set_light_position(n, first, second);
     }
-}
-
-void RenderCore::on_invalidate_vertex_cache() {
-    flush_pending_draw_batch();
-    // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
-    // vertices are already invalidated by guest writes and checked byte for byte before each hit.
 }
 
 void boot_step(const char* step) noexcept {

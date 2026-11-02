@@ -49,7 +49,7 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     MR::createScreenAlphaSceneObj(2, 0.5f);
     MR::createScreenAlphaSceneObj(3, 0.25f);
     MR::createScreenAlphaSceneObj(4, 0.25f);
-    mMask = new JUTTexture(MR::getFrameBufferWidth() / 2, MR::getFrameBufferHeight() / 2, GPU_TF_I8);
+    mMask = new JUTTexture(MR::getCanvasWidth() / 2, MR::getCanvasHeight() / 2, GPU_TF_I8);
     mMask->mWrapS = GPU_CLAMP;
     mMask->mWrapT = GPU_CLAMP;
     mMask->mMinType = GPU_LINEAR;

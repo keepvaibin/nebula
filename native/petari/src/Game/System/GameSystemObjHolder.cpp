@@ -24,7 +24,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mViWidth(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mGamePadHolder(),
+    : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mGamePadHolder(),
       mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initDvd();
     initNAND();
@@ -63,7 +63,7 @@ void GameSystemObjHolder::initMessageResource() {
 
 void GameSystemObjHolder::init() {
     initAudio();
-    initRenderMode();
+    initPicture();
     initResourceHolderManager();
     initMessageResource();
     initFunctionAsyncExecutor();
@@ -121,10 +121,9 @@ void GameSystemObjHolder::initAudio() {
     mAudioSystem->requestResourceForInitialize();
 }
 
-void GameSystemObjHolder::initRenderMode() {
-    // The game's frame, 640x456 in either aspect; the picture spans 686 of the television line's 720 in 16:9, 670 in
-    // 4:3.
-    mViWidth = MR::isAspectRatioFlag16Per9() ? 686 : 670;
+void GameSystemObjHolder::initPicture() {
+    // The share of the safe area's reference width the picture spans (getSafetyFrameWidth).
+    mPictureSpan = MR::isAspectRatioFlag16Per9() ? 686 : 670;
     NebulaFrameClock::startPicture();
 }
 

@@ -20,7 +20,7 @@ void LightFunction::initLightRegisterAll() {
     Color8 c(255, 255, 255, 255);
 
     for (s32 i = 0; i < 8; i++) {
-        GpuLightObj obj;
+        J3DNativeLight obj;
         J3DNativeState::initLightColor(&obj, c);
         J3DNativeState::initLightPos(&obj, 0.0f, 0.0f, 0.0f);
         J3DNativeState::initLightDir(&obj, 0.0f, -1.0f, 0.0f);
@@ -163,7 +163,7 @@ void LightFunction::blendActorLightInfo(ActorLightInfo* pResult, const ActorLigh
 
 namespace {
     void loadLightDiffuse(NebulaColor8 color, const TVec3f& rPos, GpuLightID lightID) {
-        GpuLightObj lightObj;
+        J3DNativeLight lightObj;
 
         J3DNativeState::initLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
         J3DNativeState::initLightAttn(&lightObj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
@@ -205,7 +205,7 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     MotionSignal::coinLight(pInfo);
     ::loadLightInfoDiffuse(pInfo->base, GPU_LIGHT0);
     TVec3f v7(0.0f, 0.0f, -1.0f);
-    GpuLightObj obj;
+    J3DNativeLight obj;
     f32 v = pInfo->_18;
     J3DNativeState::initLightColor(&obj, NebulaColor8(pInfo->_14));
     J3DNativeState::initSpecularDir(&obj, v7.x, v7.y, v7.z);
@@ -218,7 +218,7 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
     GameLightSignal::pointLight(pInfo);
     TVec3f v7(pInfo->mPos);
     MR::getCameraViewMtx().mult(v7, v7);
-    GpuLightObj obj;
+    J3DNativeLight obj;
     J3DNativeState::initLightPos(&obj, v7.x, v7.y, v7.z);
     J3DNativeState::initLightDistAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
     J3DNativeState::initLightSpot(&obj, 0.0, GPU_SP_OFF);
@@ -231,7 +231,7 @@ void LightFunction::loadAllLightWhite() {
     const GpuLightID cLightDataIDs[8] = {GPU_LIGHT0, GPU_LIGHT1, GPU_LIGHT2, GPU_LIGHT3, GPU_LIGHT4, GPU_LIGHT5, GPU_LIGHT6, GPU_LIGHT7};
 
     for (u32 i = 0; i < ARRAY_SIZE(cLightDataIDs); i++) {
-        GpuLightObj lightObj;
+        J3DNativeLight lightObj;
         J3DNativeState::initLightPos(&lightObj, 0.0f, 0.0f, 0.0f);
 
         NebulaColor8 color = {255, 255, 255, 255};

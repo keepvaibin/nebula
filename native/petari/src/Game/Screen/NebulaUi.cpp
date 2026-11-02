@@ -523,7 +523,7 @@ namespace NebulaUi {
         f32 canvasHeight;
         readScreen(&scaleX, &width, &canvasHeight);
         const f32 canvasWidth = width * scaleX;
-        const f32 frameWidth = static_cast< f32 >(MR::getFrameBufferWidth());
+        const f32 frameWidth = static_cast< f32 >(MR::getCanvasWidth());
         const f32 frameHeight = static_cast< f32 >(MR::getScreenHeight());
         const f32 x0f = (left * scaleX / canvasWidth + 0.5f) * frameWidth;
         const f32 x1f = (right * scaleX / canvasWidth + 0.5f) * frameWidth;

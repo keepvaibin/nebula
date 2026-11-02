@@ -68,8 +68,8 @@ void MarioActor::calcScreenBoxRange() {
     _B2C = minimum.x > maximum.x ? minimum.x : maximum.x;
     _B28 = minimum.y < maximum.y ? minimum.y : maximum.y;
     _B30 = minimum.y > maximum.y ? minimum.y : maximum.y;
-    MR::convertScreenPosToFrameBufferPos(&frameMin, mScreenBoxMin);
-    MR::convertScreenPosToFrameBufferPos(&frameMax, mScreenBoxMax);
+    MR::convertScreenPosToCanvasPos(&frameMin, mScreenBoxMin);
+    MR::convertScreenPosToCanvasPos(&frameMax, mScreenBoxMax);
     s16 left = static_cast< s32 >(frameMin.x) & ~1;
     s16 top = static_cast< s32 >(frameMin.y) & ~1;
     s16 width = static_cast< s32 >(frameMax.x) - left;
@@ -99,7 +99,7 @@ void MarioActor::calcScreenBoxRange() {
     _B40 = height;
     TBox2f capture(_B34, _B38, _B34 + _B3C, _B38 + _B40);
     s32 screenHeight = MR::getScreenHeight();
-    TBox2f screen(0.0f, 0.0f, MR::getFrameBufferWidth(), screenHeight);
+    TBox2f screen(0.0f, 0.0f, MR::getCanvasWidth(), screenHeight);
     TBox2f clipped(capture);
 
     if (!clipped.intersect(screen)) {
@@ -144,8 +144,8 @@ void MarioActor::writeBackScreenBox() const {
     TVec2f minimum;
     TVec2f maximum;
     J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
-    MR::convertFrameBufferPosToScreenPos(&minimum, mScreenBoxPos);
-    MR::convertFrameBufferPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
+    MR::convertCanvasPosToScreenPos(&minimum, mScreenBoxPos);
+    MR::convertCanvasPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     NativeShader::setBlend(material, NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
@@ -484,7 +484,7 @@ void MarioActor::drawSpinInhibit() const {
 
 void MarioActor::drawColdWaterDamage() const {
     J3DNativeTexObj texture;
-    u16 width = MR::getFrameBufferWidth();
+    u16 width = MR::getCanvasWidth();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     u16 height = MR::getScreenHeight();
@@ -545,7 +545,7 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
     }
 
     J3DNativeTexObj texture;
-    u16 width = MR::getFrameBufferWidth();
+    u16 width = MR::getCanvasWidth();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     u16 height = MR::getScreenHeight();
@@ -754,13 +754,13 @@ bool MarioActor::drawDarkMask() const {
     TDDraw::project2D(&origin, position);
     origin.x -= width / 2;
     origin.y -= width / 2;
-    MR::convertScreenPosToFrameBufferPos(&frameOrigin, origin);
+    MR::convertScreenPosToCanvasPos(&frameOrigin, origin);
     u32 left = static_cast< u32 >(frameOrigin.x);
     u32 top = static_cast< u32 >(frameOrigin.y);
     top &= ~1;
     left &= ~1;
-    MR::convertFrameBufferPosToScreenPos(&minimum, TVec2f(left, top));
-    MR::convertFrameBufferPosToScreenPos(&maximum, TVec2f(left + width, top + height));
+    MR::convertCanvasPosToScreenPos(&minimum, TVec2f(left, top));
+    MR::convertCanvasPosToScreenPos(&maximum, TVec2f(left + width, top + height));
     J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);

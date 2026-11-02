@@ -13,7 +13,7 @@ struct J3DMaterialInitData {
     /* 0x004 */ u8 mTevStageNumIdx;
     /* 0x005 */ u8 mZCompLocIdx;
     /* 0x006 */ u8 mZModeIdx;
-    /* 0x007 */ u8 mDitherIdx;
+    /* 0x007 */ u8 mUnused7Idx;
     /* 0x008 */ u16 mMatColorIdx[2];
     /* 0x00C */ u16 mColorChanIdx[4];
     /* 0x014 */ u16 mAmbColorIdx[2];
@@ -102,7 +102,6 @@ public:
     J3DBlend newBlend(int) const;
     J3DZMode newZMode(int) const;
     const u8 newZCompLoc(int) const;
-    const u8 newDither(int) const;
     J3DNBTScale newNBTScale(int) const;
 
     u16 getMaterialID(int idx) const {
