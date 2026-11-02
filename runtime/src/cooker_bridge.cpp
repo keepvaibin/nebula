@@ -83,7 +83,7 @@ bool cooks(std::string_view name) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
     // crates/nebula-import/src/cook/mod.rs cooks().
-    static constexpr std::string_view kCooked[] = {"arc", "szs", "bti", "bmd", "bdl", "bmt", "cit", "bas", "bck", "bca", "btk", "brk", "bpk", "bpa",
+    static constexpr std::string_view kCooked[] = {"arc", "szs", "bti", "bmd", "bdl", "bmt", "cit", "bas", "brs", "bme", "bct", "csw", "bck", "bca", "btk", "brk", "bpk", "bpa",
                                                    "btp", "bva", "blk", "bla", "bxk", "bxa", "tpl", "brfnt", "jpc", "bcsv", "tbl", "pa", "bcam", "banmt",
                                                    "canm", "thp"};
     return std::find(std::begin(kCooked), std::end(kCooked), extension) != std::end(kCooked);
