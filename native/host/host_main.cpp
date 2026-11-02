@@ -3362,6 +3362,16 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
+    // GALAXY_TEST_GAME_STALL_MS=<ms>: the game's main thread stops that long every 120 scene frames; the sound must not
+    // notice (ai blocks x 7 = dsp subframes in the status line).
+    static const int stall_ms = [] {
+        const char* value = std::getenv("GALAXY_TEST_GAME_STALL_MS");
+        return value != nullptr ? std::atoi(value) : 0;
+    }();
+    static uint32_t stall_frames = 0;
+    if (stall_ms > 0 && ++stall_frames % 120u == 0u) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(stall_ms));
+    }
     struct Stop {
         std::string stage;
         int32_t scenario;
