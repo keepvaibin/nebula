@@ -1196,7 +1196,7 @@ namespace J3DNativeMaterial {
                 }
                 if (!seen && sFoldLoggedCount < 256) {
                     sFoldLogged[sFoldLoggedCount++] = pair;
-                    nebula_log("J3DNativeMaterial: J3D shader %u's list %s; drawn by the GX path\n",
+                    nebula_log("J3DNativeMaterial: J3D shader %u's list %s; not drawn\n",
                                static_cast< u32 >(sCurrent.shader),
                                sFoldFailed ? "changes what a program record cannot hold" : "folds to a program not in the set");
                 }
