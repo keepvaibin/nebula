@@ -3,8 +3,11 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
+class J3DStateList;
+
 class FlexibleSphere : public LiveActor {
 public:
+    static void fillTexGens(J3DStateList& rList);
     FlexibleSphere(const char*);
 
     virtual void init(const JMapInfoIter& rIter);

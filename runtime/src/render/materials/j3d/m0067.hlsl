@@ -33,8 +33,8 @@ float4 material_color(NativeVaryings i) {
         const float4 r0 = material.reg[1];
         const float4 r1 = material.reg[2];
         const float4 r2 = material.reg[3];
-        const float ka = 1.0;
-        return j3d_override(t, i.color, 1.0, saturate((0.0 + lerp(j3d_in(r0.a), j3d_in(r1.a), t.a))), i.pos);
+        const float ka = material.kcolor[3].a;
+        return j3d_override(t, i.color, material.kcolor[3].a, (0.0 + lerp(j3d_in(r0.a), j3d_in(r1.a), t.a)), i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -43,8 +43,8 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0).rgba;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(j3d_in(r0.rgb), j3d_in(r1.rgb), t.rgb)));
-        const float ra = saturate((0.0 + lerp(j3d_in(r0.a), j3d_in(r1.a), t.a)));
+        const float3 rc = (float3(0.0, 0.0, 0.0) + lerp(j3d_in(r0.rgb), j3d_in(r1.rgb), t.rgb));
+        const float ra = (0.0 + lerp(j3d_in(r0.a), j3d_in(r1.a), t.a));
         prev.rgb = rc;
         prev.a = ra;
     }

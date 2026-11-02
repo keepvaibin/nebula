@@ -14,15 +14,13 @@ public:
 
     s32 read(void*, s32);
 
-    // Big-endian scalars (JSUBigEndianScalar); a size that is not a whole number of elements reads the bytes as they are.
+    // Scalars: host order, or the console's while a save is converted.
     template < typename T >
-    typename JSUBigEndianScalar< T >::Result read(T* pData, s32 size) {
+    typename JSUScalar< T >::Result read(T* pData, s32 size) {
         const s32 got = read(static_cast< void* >(pData), size);
-        if (size % (s32)sizeof(T) == 0) {
+        if (gSaveConsoleOrder && size % (s32)sizeof(T) == 0) {
             for (s32 i = 0; i < size / (s32)sizeof(T); i++) {
-                BE< T > value;
-                memcpy(&value, &pData[i], sizeof(T));
-                pData[i] = value;
+                pData[i] = jsuSwapScalar(pData[i]);
             }
         }
         return got;

@@ -34,6 +34,7 @@
 #include "galaxy/native_audio.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
+#include "galaxy/loss_report.h"
 #include "galaxy/movie_video.h"
 #include "galaxy/perf_hint.h"
 #include "galaxy/platform_time.h"
@@ -4310,6 +4311,9 @@ int main(int argc, char** argv) {
     }
     log_line("host:", Clock::now() < end ? "the window was closed" : "time limit reached");
     log_line("host:", ("3D scenes " + std::to_string(gSceneBegins.load(std::memory_order_relaxed))).c_str());
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::loss::report();
+#endif
     if (gModule.debug_dump != nullptr) {
         gModule.debug_dump();
     }

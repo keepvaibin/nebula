@@ -115,7 +115,7 @@ std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& k
 }
 
 bool RendererVk::initialize(int window_width, int window_height, unsigned scene_target_scale) {
-    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
+    scene_map_ = FrameMap(std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     frame_slot_ = 0;
     frame_index_ = 0;
     const host_window::OpenedWindow opened = host_window::open_game_window(window_owner_, window_width, window_height);
@@ -129,7 +129,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned scene_
             shutdown();
             return false;
         }
-        scene_target_scale_ = std::min(scene_target_scale_, host_window::display_scene_target_scale_cap());
+        scene_map_ = FrameMap(std::min(scene_map_.scale(), host_window::display_scene_target_scale_cap()));
         const VkDevice device = vk::Context::get().device();
         {
             VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
@@ -142,7 +142,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned scene_
             alloc.commandBufferCount = 1;
             vk::check(vkAllocateCommandBuffers(device, &alloc, &utility_commands_), "vkAllocateCommandBuffers");
         }
-        if (!create_scene_targets(scene_target_scale_, wanted_msaa_samples()) || !create_utility_pipelines()) {
+        if (!create_scene_targets(scene_map_, wanted_msaa_samples()) || !create_utility_pipelines()) {
             shutdown();
             return false;
         }
@@ -232,7 +232,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned scene_
         shutdown();
         return false;
     }
-    std::cout << "[Renderer] Vulkan scene target=" << kFrameWidth * scene_target_scale_ << 'x' << kFrameHeight * scene_target_scale_
+    std::cout << "[Renderer] Vulkan scene target=" << scene_map_.width << 'x' << scene_map_.height
               << " depth=" << (depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? "D24S8" : "D32F") << '\n';
     return true;
 }
@@ -908,6 +908,11 @@ void RendererVk::shutdown() {
         post_.shutdown();
         bloom_.shutdown();
         oriented_.reset();
+        scene_owed_.reset();
+        scene_submitted_color_.reset();
+        scene_shown_image_ = VK_NULL_HANDLE;
+        display_filter_picture_.reset();
+        turn_source_ = peek_color_source_ = VK_NULL_HANDLE;
         release_replay_resources();
         scene_copy_dests_.clear();
         scene_copy_dests_bytes_ = 0u;
@@ -955,7 +960,7 @@ void RendererVk::shutdown() {
             set->ms_depth.reset();
             set->samples = 1u;
         }
-        alt_scene_target_scale_ = 0u;
+        alt_scene_map_ = 0u;
         output_scene_active_ = false;
         scene_carry_color_.reset();
         scene_carry_depth_.reset();
@@ -1172,6 +1177,11 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
                                     void* submission_context) {
     Frame& frame = frames_[frame_slot_];
     end_scene_pass();
+    // A picture still owed stays owed across the submission: the next frame's clear normally covers it. Until then
+    // separate submissions read it as it is (shader-readable), where presentation reads it too.
+    scene_submitted_color_ = scene_owed_;
+    scene_turned_in_frame_ = scene_owed_ != nullptr;
+    scene_shown_image_ = scene_owed_ ? scene_owed_->image : VK_NULL_HANDLE;
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestamps_,
                             frame_slot_ * 2u + 1u);
@@ -1255,10 +1265,15 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         if (gpu_window_.frames != 0u) {
             const double frames = static_cast<double>(gpu_window_.frames);
             std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f scene target passes and %.1f scene target copies a "
-                         "frame; scene target %ux%u, swap chain %ux%u\n", gpu_window_.ms / frames, gpu_window_.max_ms,
+                         "frame; scene target %ux%u, swap chain %ux%u; %llu display copies handed over, owed pictures %llu "
+                         "cleared, %llu banded, %llu copied back\n", gpu_window_.ms / frames, gpu_window_.max_ms,
                          static_cast<double>(gpu_window_.passes) / 600.0,
-                         static_cast<double>(gpu_window_.copies) / 600.0, kFrameWidth * scene_target_scale_,
-                         kFrameHeight * scene_target_scale_, swapchain_.image.width, swapchain_.image.height);
+                         static_cast<double>(gpu_window_.copies) / 600.0, scene_map_.width,
+                         scene_map_.height, swapchain_.image.width, swapchain_.image.height,
+                         static_cast<unsigned long long>(gpu_window_.handovers),
+                         static_cast<unsigned long long>(gpu_window_.owed_free),
+                         static_cast<unsigned long long>(gpu_window_.owed_banded),
+                         static_cast<unsigned long long>(gpu_window_.owed_restored));
         }
         gpu_window_ = GpuWindow{};
     }
@@ -1575,7 +1590,7 @@ void RendererVk::update_gpu_budget() {
     gpu_budget_window_qpc_ = now;
     gpu_budget_ms_ = 0.0;
     const RenderConfig cfg = get_render_config();
-    if (!cfg.gpu_budget || !cfg.internal_follow_window || scene_target_scale_ <= 1u || busy <= kGpuBudgetBusy) {
+    if (!cfg.gpu_budget || !cfg.internal_follow_window || scene_map_.scale() <= 1u || busy <= kGpuBudgetBusy) {
         gpu_budget_over_windows_ = 0u;
         return;
     }
@@ -1583,10 +1598,10 @@ void RendererVk::update_gpu_budget() {
         return;
     }
     gpu_budget_over_windows_ = 0u;
-    gpu_budget_cap_ = scene_target_scale_ - 1u;
+    gpu_budget_cap_ = scene_map_.scale() - 1u;
     follow_window_width_ = 0u;  // re-derive the scale under the cap at this frame boundary
     std::cerr << "[Renderer] GPU busy " << static_cast<int>(busy * 100.0 + 0.5) << "% at internal resolution "
-              << scene_target_scale_ << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
+              << scene_map_.scale() << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
 }
 
 void RendererVk::sync_post_process() {
@@ -1755,6 +1770,13 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
                              nullptr, 0, nullptr, 1, &barrier);
         display_picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
+    // The picture shown: a handed-over frame owed the display's vertical filter is shown filtered (E-10).
+    vk::Texture* shown = &display_picture;
+    if (source->display_filter && !present_black_ && display_filter_pipeline_ != VK_NULL_HANDLE) {
+        if (vk::Texture* filtered = filter_display_picture(*source)) {
+            shown = filtered;
+        }
+    }
 
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(
@@ -1771,12 +1793,13 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
     // turned swap chain takes it through `oriented_` and the blit, which turns it.
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     vk::PostProcessorVk::PresentStep step{};
-    const vk::Texture* picture = &display_picture;
+    const vk::Texture* picture = shown;
     if (post_.ready() && !present_black_) {
         const bool turned = swapchain_.transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         const auto width = static_cast<std::uint32_t>(content.width);
         const auto height = static_cast<std::uint32_t>(content.height);
-        step = post_.prepare_present(commands, display_picture, display_picture.width, display_picture.height, width, height, !turned, allocate);
+        step = post_.prepare_present(commands, *shown, shown->width, shown->height, width, height, !turned,
+                                     allocate);
         if (turned && step.pipeline != VK_NULL_HANDLE) {
             if (!oriented_ || oriented_->width != width || oriented_->height != height) {
                 oriented_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,

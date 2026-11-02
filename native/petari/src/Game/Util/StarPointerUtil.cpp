@@ -22,7 +22,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -639,7 +639,7 @@ namespace MR {
     f32 calcPointRadius2D(const TVec3f& rPosition, f32 radius) {
         f32 fovyRad = MR::toRadian(MR::getRenderFovy());
         f32 tan = MR::tan(fovyRad * 0.5f);
-        f32 focalDist = (static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()) * 0.5f) / tan;
+        f32 focalDist = (static_cast< s32 >(NebulaFrameClock::cFrameHeight) * 0.5f) / tan;
 
         TVec3f viewPos;
         MR::getCameraViewMtx().mult(rPosition, viewPos);

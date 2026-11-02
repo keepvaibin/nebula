@@ -1096,9 +1096,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
                         constants_sets(64u, {.images = kFrameSets * 8u, .storage_images = vk_detail::kPassStorageImages}));
     }
     // The scene scene target's scale (the output scene target's place while the live frame's 2D layer is in it).
-    const unsigned scene_scale = output_scene_active_ ? alt_scene_target_scale_ : scene_target_scale_;
+    const unsigned scene_scale = output_scene_active_ ? alt_scene_map_.scale() : scene_map_.scale();
     const unsigned scene_samples = output_scene_active_ ? alt_scene_.samples : scene_.samples;
-    if (replay_scene_.color && (replay_scene_target_scale_ != scene_scale || replay_scene_.samples != scene_samples)) {
+    if (replay_scene_.color && (replay_scene_map_ != scene_scale || replay_scene_.samples != scene_samples)) {
         destroy_scene_set(replay_scene_);
     }
     if (!replay_scene_.color) {
@@ -1106,7 +1106,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             replay_failure_ = 5u;
             return false;
         }
-        replay_scene_target_scale_ = scene_scale;
+        replay_scene_map_ = scene_scale;
     }
     const ReplayCopy* display = nullptr;
     for (const ReplayCopy& copy : run_log_.copies) {
@@ -1152,7 +1152,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     scene_pass_open_ = false;
     std::swap(scene_, replay_scene_);
     std::swap(alt_scene_, replay_alt_scene_);
-    std::swap(alt_scene_target_scale_, replay_alt_scale_);
+    std::swap(alt_scene_map_, replay_alt_scale_);
     replaying_ = true;
     reset_gx_bindings();
     redirect_.clear();
@@ -1264,7 +1264,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         swap_scene_sets();
     }
     std::swap(alt_scene_, replay_alt_scene_);
-    std::swap(alt_scene_target_scale_, replay_alt_scale_);
+    std::swap(alt_scene_map_, replay_alt_scale_);
     std::swap(scene_, replay_scene_);
     if (live_output) {
         swap_scene_sets();

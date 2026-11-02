@@ -6,9 +6,11 @@ static const u8 bitTable[] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
 
 // The allocation table is bytes, unit 0 in the first byte's top bit, scanned a word at a time: natively the word as the
 // console's big-endian load read it, so a word's top bit stays the first unit.
-#include <nebula_endian.h>
+// A word of the block table, most significant bit first: the bits are set byte by byte.
 static inline u32 batWord(const u32* p) {
-    return nebula_load_be32(p);
+    const u8* bytes = reinterpret_cast< const u8* >(p);
+    return (static_cast< u32 >(bytes[0]) << 24) | (static_cast< u32 >(bytes[1]) << 16) | (static_cast< u32 >(bytes[2]) << 8) |
+           bytes[3];
 }
 
 #pragma push

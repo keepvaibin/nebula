@@ -16,6 +16,8 @@ struct NebulaStateOp;
 
 // A J3D material as the renderer takes it (nebula_game_api.h NebulaMaterialProgram and NebulaMaterialValues): every
 // block's settings as values.
+class J3DStateList;
+
 namespace J3DNativeMaterial {
     // `pTexture`: the texture table the material's texture numbers index (its packet's; j3dSys's for shared lists).
     void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterialParts* pOut);
@@ -33,10 +35,15 @@ namespace J3DNativeMaterial {
     // Tests (NEBULA_OPTION_TEST_MATERIAL_SWEEP): every material of a model just loaded built, and the programs no
     // native shader is made for registered with the host (whose GALAXY_DUMP_MATERIAL_PROGRAMS file collects them).
     void sweep(J3DModelData* pModelData);
+    // What sweep also registers until cleared: its materials under these chains of state lists (a null list is skipped):
+    // J3DModelX's and the player's, which change programs at draw.
+    void setSweepChains(const J3DStateList* const (*pChains)[2], u32 count);
     // State changes the game makes (J3DStateList::send), before they go to the host: the register file the J3D
     // materials' constants take, a value change folded into the current native J3D material, and a change of what
     // its shader computes handing its draws back to the drawing state.
     void state(const NebulaStateOp* pOps, u32 count);
+    // Before each draw (J3DNativeShape, J3DNativeDraw).
+    void noteDraw();
     // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: colour registers, constant colours, material and
     // ambient colours, indirect matrices, fog, alpha references) as the materials and state changes left it.
     const f32* registers();

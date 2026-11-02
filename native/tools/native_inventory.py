@@ -54,6 +54,10 @@ SIGNALS = [
     ("system", r"\b(?:SC|NWC24|HBM|RSO|ES|IPC)[A-Z][A-Za-z0-9_]*\s*\(", "SYSCONF/NWC24/HOME/RSO"),
     ("rfl", r"\bRFL[A-Za-z0-9_]*\s*\(", "Mii library"),
     ("thp_tpl", r"\b(?:THP|TPL)[A-Z][A-Za-z0-9_]*\s*\(", "THP/TPL"),
+    ("kernel_api", r"\b(?:NebulaKernel::|NebulaThread\b|NebulaThreadQueue\b|NebulaMutex\b|NebulaMessageQueue\b|NebulaAlarm\b|"
+                   r"nebula_raise_event\b|nebula_note_event\b|nebula_switch_stack\b)", "the console scheduler under its new name"),
+    ("audio_shape", r"\b(?:NebulaAudioVoice\b|audio_mix\b|JASDsp\b|JASDSPChannel\b|JASAudioThread\b|JASCriticalSection\b|"
+                    r"sDacRate\b|nebula_game_audio_tick\b)", "DSP-shaped audio interface"),
     ("byte_order", r"\bNEBULA_BE\b|\bNEBULA_OFFSET\b|\bBE\s*<|\bBEOffset\s*<|\bSelfRel\s*<|\bbswap\w*|"
                    r"\b__builtin_bswap\w*|\bbyteswap\w*|\bRFLI_(?:LD|ST)\w*", "big-endian access"),
     ("hw_register", r"\b__(?:GXData|cpReg|peReg|piReg|memReg|VIRegs|DSPRegs|AIRegs|EXIRegs|SIRegs|PIRegs|MEMRegs)\b|"
@@ -64,6 +68,10 @@ SIGNALS = [
     ("fifo", r"\bfifo\b|\bFIFO\b|\bFifo[A-Z]\w*|\bon_fifo\w*|\bgx_submit\b|\bcommand ring\b|\bBP register\b|"
              r"\bCP register\b|\bXF register\b|\bkBp[A-Z]\w*|\bkCp[A-Z]\w*|\bkXf[A-Z]\w*|\bGxState\b",
      "command stream/register state"),
+    ("frame_capture", r"\bImageEffectLocalUtil::capture\(|\bJ3DNativeTarget::capture\(|->capture\(0|\bbloomMarker\(NebulaRender::kBloom(?:Keep|Restore)\b",
+     "the game reads the frame through a copy (E-07)"),
+    ("frame_grid", r"\bscene_target_scale\w*|\bkFrameWidth\b|\bkFrameHeight\b|\bcompute_scaled_\w+|\bkMaxSceneScale\b",
+     "the fixed 640x456 grid at an integer scale in the renderer (E-08)"),
     ("efb_xfb", r"\bEFB\b|\befb_\w+|\bXFB\b|\bxfb_\w+|\bkEfb\w+|\bcopy_efb\w*|\bpeek_efb\w*|\bgx_peek_efb\b",
      "EFB/XFB emulation"),
     ("tev", r"\bTEV\b|\btev_\w+|\bTev[A-Z]\w*|\bkTev\w*|\bswap table\b|\bkonst\b|\bindirect stage\b",

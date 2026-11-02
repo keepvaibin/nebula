@@ -20,7 +20,7 @@
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include "Game/Util/RenderSignals.hpp"
@@ -113,9 +113,8 @@ namespace MR {
 
     // The frame's depth cleared to far, with the view, matrix and pixel state the next draws start from.
     void clearZBuffer() {
-        JUTVideo* pJUTVideo = JUTVideo::getManager();
-        u16 width = pJUTVideo->getFbWidth();
-        u16 height = pJUTVideo->getEfbHeight();
+        u16 width = NebulaFrameClock::cFrameWidth;
+        u16 height = NebulaFrameClock::cFrameHeight;
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
@@ -134,9 +133,8 @@ namespace MR {
     }
 
     void clearAlphaBuffer(u8 alpha) {
-        JUTVideo* pVideo = JUTVideo::getManager();
-        f32 height = pVideo->getEfbHeight();
-        f32 width = pVideo->getFbWidth();
+        f32 height = NebulaFrameClock::cFrameHeight;
+        f32 width = NebulaFrameClock::cFrameWidth;
         clearAlphaBuffer(alpha, TVec2f(0.0f, 0.0f), TVec2f(width, height));
     }
 

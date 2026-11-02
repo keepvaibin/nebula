@@ -9,6 +9,7 @@
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
+#include "JSystem/JUtility/JUTException.hpp"
 
 #include <cstring>
 
@@ -232,6 +233,9 @@ bool JASAramStream::headerLoad(u32 param_0, int param_1) {
     }
 
     Header* header = (Header*)sReadBuffer;
+    if (header->tag != 'STRM') {
+        JUTException::panic_f(__FILE__, __LINE__, "an AST stream not in host order (the importer cooks it)");
+    }
     _158 = header->format;
     mChannelNum = header->channels;
     _164 = header->_10;
@@ -332,8 +336,8 @@ bool JASAramStream::load() {
         }
 
         for (int i = 0; i < mChannelNum; i++) {
-            _130[i] = (s16)bhead->_8[i]._0;
-            _13C[i] = (s16)bhead->_8[i]._2;
+            _130[i] = bhead->_8[i]._0;
+            _13C[i] = bhead->_8[i]._2;
         }
 
         _10C = 0;

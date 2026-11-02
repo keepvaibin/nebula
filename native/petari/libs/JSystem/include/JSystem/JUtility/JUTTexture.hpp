@@ -38,7 +38,7 @@ class JUTTexture {
 public:
     /// @brief Creates a new `JUTTexture`.
     JUTTexture() {
-        setCaptureFlag(false);
+        mFlag = 0;
         mEmbPalette = NULL;
         mTIMG = NULL;
     }
@@ -53,9 +53,10 @@ public:
     /// @param pTIMG TODO.
     /// @param param2 TODO.
     JUTTexture(const ResTIMG* p_timg, u8 param_1) {
+        // storeTIMG hands the record to the renderer unless the capture bit says the buffer is its own.
+        mFlag = 0;
         mEmbPalette = NULL;
         storeTIMG(p_timg, param_1);
-        setCaptureFlag(false);
     }
 
     /// @brief Destroys the `JUTTexture`.
@@ -76,7 +77,6 @@ public:
     // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
     // filter: J3DNativeTarget::capture's flags).
     void capture(int x, int y, GpuTexFmt format, bool half, u8 clear, bool filtered = false);
-    static void captureDolTexture(void*, int, int, int, int, bool, GpuTexFmt);
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;
