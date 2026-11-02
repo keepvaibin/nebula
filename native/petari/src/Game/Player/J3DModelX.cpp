@@ -196,7 +196,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = model ? model->getShapePacket(material->getShape()->getIndex()) : getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
-    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getDisplayListObj());
+    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getSnapshot());
 
     if (fog) {
         TVec3f pos;
@@ -205,8 +205,8 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     }
 
     packet->getShape()->loadPreDrawSetting();
-    if (packet->getDisplayListObj()) {
-        J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
+    if (packet->getSnapshot()) {
+        J3DNativeMaterial::sendDiffered(packet->getSnapshot());
     }
     if (MR::getJ3DShapePacketUserData(packet)) {
         MR::getJ3DShapePacketUserData(packet)->load();
@@ -306,10 +306,10 @@ bool J3DModelX::simpleDrawSetup(J3DMaterial* material) {
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
-    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getDisplayListObj());
+    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getSnapshot());
     packet->getShape()->loadPreDrawSetting();
-    if (packet->getDisplayListObj()) {
-        J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
+    if (packet->getSnapshot()) {
+        J3DNativeMaterial::sendDiffered(packet->getSnapshot());
     }
     return true;
 }

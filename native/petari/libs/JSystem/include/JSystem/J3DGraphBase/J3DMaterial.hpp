@@ -14,7 +14,7 @@ class J3DTexGenBlockPatched;
 class J3DTevBlockPatched;
 class J3DPEBlock;
 class J3DMaterialAnm;
-class J3DDisplayListObj;
+class J3DMaterialSnapshot;
 struct NebulaCookedMaterial;
 
 class J3DMaterial {
@@ -26,10 +26,10 @@ public:
     }
     virtual void calc(f32 const (*)[4]);
     virtual void calcDiffTexMtx(f32 const (*)[4]);
-    virtual void makeDisplayList();
-    virtual void makeSharedDisplayList();
+    virtual void makeSnapshot();
+    virtual void makeSharedSnapshot();
     virtual void load();
-    virtual void loadSharedDL();
+    virtual void loadSharedMaterial();
     virtual void patch();
     virtual void diff(u32);
     virtual void reset();
@@ -44,7 +44,7 @@ public:
     void setCurrentMtx();
     void calcCurrentMtx();
     void copy(J3DMaterial*);
-    s32 newSharedDisplayList();
+    s32 newSharedSnapshot();
 
     inline J3DMaterialAnm* getMaterialAnm() {
         // The console's test (a cached MEM1/MEM2 address, below 0xC0000000) would reject every host heap address
@@ -99,8 +99,8 @@ public:
     J3DTexGenBlock* getTexGenBlock() {
         return mTexGenBlock;
     }
-    J3DDisplayListObj* getSharedDisplayListObj() {
-        return mSharedDLObj;
+    J3DMaterialSnapshot* getSharedSnapshot() {
+        return mSharedSnapshot;
     }
     J3DIndBlock* getIndBlock() {
         return mIndBlock;
@@ -144,7 +144,7 @@ public:
     /* 0x38 */ J3DMaterial* mpOrigMaterial;
     /* 0x3C */ J3DMaterialAnm* mMaterialAnm;
     /* 0x40 */ J3DCurrentMtx mCurrentMtx;
-    /* 0x48 */ J3DDisplayListObj* mSharedDLObj;
+    /* 0x48 */ J3DMaterialSnapshot* mSharedSnapshot;
     const NebulaCookedMaterial* mNativeMaterial;
 };
 
@@ -155,10 +155,10 @@ public:
     }
     void initialize();
 
-    virtual void makeDisplayList();
-    virtual void makeSharedDisplayList();
+    virtual void makeSnapshot();
+    virtual void makeSharedSnapshot();
     virtual void load();
-    virtual void loadSharedDL();
+    virtual void loadSharedMaterial();
     virtual void reset();
     virtual void change();
 };
@@ -171,10 +171,10 @@ public:
     void initialize();
 
     virtual void calc(f32 const (*)[4]);
-    virtual void makeDisplayList();
-    virtual void makeSharedDisplayList();
+    virtual void makeSnapshot();
+    virtual void makeSharedSnapshot();
     virtual void load();
-    virtual void loadSharedDL();
+    virtual void loadSharedMaterial();
     virtual void patch();
     virtual void diff(u32);
     virtual void reset();

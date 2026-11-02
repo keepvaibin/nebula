@@ -115,16 +115,16 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
         MR::initDefaultPos(this, rIter);
     }
 
-    bool useDisplayList = rInfo.mUseProjectMapMtx || rInfo.mUseMirrorReflection || rInfo.mDummyChangeTexture != nullptr;
+    bool useMesh = rInfo.mUseProjectMapMtx || rInfo.mUseMirrorReflection || rInfo.mDummyChangeTexture != nullptr;
     if (rInfo.mModelName != nullptr) {
         mObjectName = rInfo.mModelName;
     }
 
-    initModelManagerWithAnm(mObjectName, nullptr, useDisplayList);
+    initModelManagerWithAnm(mObjectName, nullptr, useMesh);
 
     if (rInfo.mDummyChangeTexture != nullptr) {
-        MR::initDLMakerChangeTex(this, rInfo.mDummyChangeTexture);
-        MR::newDifferedDLBuffer(this);
+        MR::initMaterialChangeTex(this, rInfo.mDummyChangeTexture);
+        MR::newDifferedMaterials(this);
     }
 
     MtxPtr pJointMtx;
@@ -136,8 +136,8 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
     }
 
     if (rInfo.mUseProjectMapMtx) {
-        mMatrixSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-        MR::newDifferedDLBuffer(this);
+        mMatrixSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+        MR::newDifferedMaterials(this);
         _B4 = rInfo._48;
     }
 

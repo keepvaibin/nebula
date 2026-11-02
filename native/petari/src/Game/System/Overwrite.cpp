@@ -477,7 +477,7 @@ void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     NebulaMtxConcat(pWork->mPosCamMtx, matrix, matrix);
     JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
-    JPADrawQuad(pWork->mDLType);
+    JPADrawQuad(pWork->mListType);
 }
 
 void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
@@ -525,7 +525,7 @@ void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) 
     NebulaMtxConcat(pWork->mPosCamMtx, rotation, matrix);
     JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
-    JPADrawQuad(pWork->mDLType);
+    JPADrawQuad(pWork->mListType);
 }
 
 void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {

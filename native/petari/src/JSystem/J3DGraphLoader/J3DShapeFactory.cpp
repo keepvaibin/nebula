@@ -21,7 +21,7 @@ J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
     mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, block.mpShapeInitData);
     mIndexTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpIndexTable);
     mMtxTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpMtxTable);
-    mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, block.mpDisplayListData),
+    mShapeDrawData = JSUConvertOffsetToPtr< u8 >(&block, block.mpShapeDrawData),
     mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, block.mpMtxInitData),
     mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, block.mpDrawInitData);
 }
@@ -92,7 +92,7 @@ J3DShapeMtx* J3DShapeFactory::newShapeMtx(u32 flag, int shapeNo, int mtxGroupNo)
 J3DShapeDraw* J3DShapeFactory::newShapeDraw(int shapeNo, int mtxGroupNo) const {
     J3DShapeInitData& shapeInitData = mShapeInitData[mIndexTable[shapeNo]];
     const J3DShapeDrawInitData& drawInitData = (&mDrawInitData[shapeInitData.mDrawInitDataIndex])[mtxGroupNo];
-    return new J3DShapeDraw(reinterpret_cast< J3DShapeMesh* >(&mDisplayListData[drawInitData.mDisplayListIndex]));
+    return new J3DShapeDraw(reinterpret_cast< J3DShapeMesh* >(&mShapeDrawData[drawInitData.mShapeDrawIndex]));
 }
 
 s32 J3DShapeFactory::calcSize(int shapeNo, u32 flag) {

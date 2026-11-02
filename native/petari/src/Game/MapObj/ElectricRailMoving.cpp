@@ -66,7 +66,7 @@ void ElectricRailMoving::init(const JMapInfoIter& rIter) {
     MR::setClippingFar200m(this);
     MR::setGroupClipping(this, rIter, 16);
     initPoints();
-    initDisplayList();
+    initMesh();
     initSound(4, true);
     mSoundObject->setTrans(mSensorOffsets);
     initNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait));
@@ -227,7 +227,7 @@ void ElectricRailMoving::initPoints() {
     }
 }
 
-void ElectricRailMoving::initDisplayList() {
+void ElectricRailMoving::initMesh() {
     mMesh.init(NEBULA_SHAPE_TEXCOORD0, _E4 * 4 * mStackHeight);
     drawPlane(mMesh, 30.0f, 30.0f, -30.0f, -30.0f);
     drawPlane(mMesh, -30.0f, 30.0f, 30.0f, -30.0f);

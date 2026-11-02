@@ -28,7 +28,7 @@ public:
     void drawVolumeBox(const TVec3f&, const TVec3f&) const;
     void draw2() const;
     void draw3() const;
-    void createDL();
+    void createMesh();
     static void fillVolumeList(J3DStateList& rList);
     void drawVolume() const;
     void doSortPolygons();

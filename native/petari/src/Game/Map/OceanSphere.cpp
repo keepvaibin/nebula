@@ -145,7 +145,7 @@ OceanSphere::OceanSphere(const char* pName)
     NebulaColor8 back = sOceanSphereTevReg1BackDefault;
     mTevReg1Back = back;
 
-    mUseDisplayList = false;
+    mUseMesh = false;
     mAlwaysUseRealDrawing = false;
     mIsCameraInside = false;
     mIsStartPosCamera = true;
@@ -160,7 +160,7 @@ void OceanSphere::init(const JMapInfoIter& rIter) {
     mRadiusTarget = mRadius;
     initPoints();
     updatePoints();
-    initDisplayList();
+    initMesh();
     WaterAreaFunction::entryOceanSphere(this);
 
     mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphere.bti"));
@@ -302,7 +302,7 @@ void OceanSphere::initPoints() {
     mEdge7 = new OceanSpherePlaneEdge(mPointCount, &mPosition, -::sPosAxisZ, ::sPosAxisX, TVec2f(0.0f, 0.0f), TVec2f(1.0f, 0.0f));
 }
 
-void OceanSphere::initDisplayList() {
+void OceanSphere::initMesh() {
     // The face's corners carry the sphere's normals too (loadMaterialFace), the back's only them.
     const u32 corners = 8 * mPointCount * (mPointCount + 1);
     mMeshFace.init(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1, corners);
@@ -328,9 +328,9 @@ void OceanSphere::control() {
     mWaveTime2 += -0.1f;
 
     if (!mAlwaysUseRealDrawing && MR::calcDistanceToPlayer(this) > 10000.0f) {
-        mUseDisplayList = true;
+        mUseMesh = true;
     } else {
-        mUseDisplayList = false;
+        mUseMesh = false;
         updatePoints();
     }
 
@@ -571,7 +571,7 @@ void OceanSphere::draw() const {
     if (mIsStartPosCamera && !mIsCameraInside) {
         loadMaterialBack();
 
-        if (mUseDisplayList) {
+        if (mUseMesh) {
             mMeshBack.draw();
         } else {
             drawSphere(true, nullptr);
@@ -586,7 +586,7 @@ void OceanSphere::draw() const {
                              sOceanSphereKColor0Face, NEBULA_CULL_FRONT);
         }
 
-        if (mUseDisplayList) {
+        if (mUseMesh) {
             mMeshFace.draw();
         } else {
             drawSphere(false, nullptr);

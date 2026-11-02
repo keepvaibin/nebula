@@ -60,7 +60,7 @@ struct J3DPatchingInfo {
     /* 0xC */ u8 field_0xc[4];
 };  // size 0x10
 
-struct J3DDisplayListInit {
+struct J3DShapeDrawInit {
     /* 0x0 */ u32 mOffset;
     /* 0x4 */ u32 field_0x4;
 };  // size 8
@@ -137,7 +137,7 @@ public:
     /* 0x6C */ u8* mpZCompLoc;
     /* 0x70 */ u8* mpDither;
     /* 0x74 */ J3DNBTScaleInfo* mpNBTScaleInfo;
-    /* 0x78 */ J3DDisplayListInit* mpDisplayListInit;
+    /* 0x78 */ J3DShapeDrawInit* mpShapeDrawInit;
     /* 0x7C */ J3DPatchingInfo* mpPatchingInfo;
     /* 0x80 */ J3DCurrentMtxInfo* mpCurrentMtxInfo;
     /* 0x84 */ u8* mpMaterialMode;

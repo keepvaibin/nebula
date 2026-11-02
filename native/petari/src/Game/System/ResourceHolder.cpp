@@ -224,11 +224,11 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
 
     if (strstr(pName, ".bdl") != nullptr) {
         (MR::MutexHolder< 0 >::sMutex).lock();
-        J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryDisplayList(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
+        J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryMaterials(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
         (MR::MutexHolder< 0 >::sMutex).unlock();
         MR::initEnvelopeAndEnvMapOrProjMapModelData(modelData);
         // Lists for its materials, made from their MAT3 data as a .bmd model's are (J3DModelLoader skips the file's).
-        modelData->newSharedDisplayList(0);
+        modelData->newSharedSnapshot(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         return mModelResTable->add(pName, modelData, true);
@@ -237,7 +237,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
     if (strstr(pName, ".bmd") != nullptr) {
         J3DModelData* modelData =
             J3DModelLoaderDataBase::load(pData, J3DMLF_Material_PE_Full | J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials | J3DMLF_21);
-        modelData->newSharedDisplayList(0);
+        modelData->newSharedSnapshot(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
         return mModelResTable->add(pName, modelData, true);

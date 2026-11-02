@@ -156,8 +156,8 @@ void SurfRay::init(const JMapInfoIter& pMapInfoIter) {
     resetAllInfo();
     initModelManagerWithAnm("SurfRay", nullptr, this != nullptr);
 
-    mProjmapFxMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-    MR::newDifferedDLBuffer(this);
+    mProjmapFxMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+    MR::newDifferedMaterials(this);
     mProjmapFxMtxSetter->updateMtxUseBaseMtx();
 
     MR::startBtk(this, "SurfRay");

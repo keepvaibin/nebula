@@ -4,15 +4,15 @@
 
 class J3DModelX;
 
-struct DLholder {
+struct StateListHolder {
     J3DStateList mList;
 };
 
-class DLchanger {
+class StateListChanger {
 public:
     // `capacity`: the changes each buffer holds.
-    DLchanger(u8 count, u16 capacity) {
-        mBuffers = new DLholder[count];
+    StateListChanger(u8 count, u16 capacity) {
+        mBuffers = new StateListHolder[count];
         mBufferCount = count;
         mCurrentBuffer = 0;
         for (u32 i = 0; i < mBufferCount; i++) {
@@ -20,14 +20,14 @@ public:
         }
     }
 
-    void addDL(J3DModelX*);
+    void addList(J3DModelX*);
 
-    DLholder* swap() {
+    StateListHolder* swap() {
         mCurrentBuffer = (mCurrentBuffer + 1) % mBufferCount;
         return &mBuffers[mCurrentBuffer];
     }
 
-    /* 0x00 */ DLholder* mBuffers;
+    /* 0x00 */ StateListHolder* mBuffers;
     /* 0x04 */ u8 mBufferCount;
     /* 0x05 */ u8 mCurrentBuffer;
 };

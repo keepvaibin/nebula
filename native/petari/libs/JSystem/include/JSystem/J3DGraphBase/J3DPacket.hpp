@@ -77,15 +77,15 @@ inline int calcDifferedBufferSize_TevStageDirectSize(u32 param_1) {
 
 // A material's typed snapshot (J3DNativeMaterial), where J3D kept the material's display list: made with its owner
 // (a material, a material packet, an instance's shape packet), refreshed where J3D built or patched the list.
-class J3DDisplayListObj {
+class J3DMaterialSnapshot {
 public:
-    J3DDisplayListObj() {
+    J3DMaterialSnapshot() {
         mpNebulaMaterial = nullptr;
         mNebulaCaptured = false;
         mNebulaDiffFlags = 0;
     }
 
-    J3DError newDisplayList();
+    J3DError newSnapshot();
 
     struct NebulaMaterialParts* mpNebulaMaterial;
     bool mNebulaCaptured;
@@ -137,19 +137,19 @@ class J3DDrawPacket : public J3DPacket {
 public:
     J3DDrawPacket();
     ~J3DDrawPacket();
-    J3DError newDisplayList();
+    J3DError newSnapshot();
     virtual void draw();
 
-    J3DDisplayListObj* getDisplayListObj() {
-        return mpDisplayListObj;
+    J3DMaterialSnapshot* getSnapshot() {
+        return mpSnapshot;
     }
 
-    void setDisplayListObj(J3DDisplayListObj* pObj) {
-        mpDisplayListObj = pObj;
+    void setSnapshot(J3DMaterialSnapshot* pObj) {
+        mpSnapshot = pObj;
     }
 
-    bool isValidDisplayListObj() const {
-        return mpDisplayListObj;
+    bool isValidSnapshot() const {
+        return mpSnapshot;
     }
 
     enum {
@@ -181,7 +181,7 @@ public:
 public:
     /* 0x10 */ u32 mFlags;
     /* 0x14 */ char unk_0x14[0x20 - 0x14];
-    /* 0x20 */ J3DDisplayListObj* mpDisplayListObj;
+    /* 0x20 */ J3DMaterialSnapshot* mpSnapshot;
     /* 0x24 */ J3DTexMtxObj* mpTexMtxObj;
 };  // Size: 0x28
 
@@ -189,7 +189,7 @@ class J3DShapePacket : public J3DDrawPacket {
 public:
     J3DShapePacket();
     u32 calcDifferedBufferSize(u32);
-    J3DError newDifferedDisplayList(u32);
+    J3DError newDifferedSnapshot(u32);
     void prepareDraw() const;
     void drawFast();
 
@@ -266,7 +266,7 @@ public:
         return mDiffFlag & J3DDiffFlag_Changed;
     }
     bool isEnabled_Diff() {
-        return mpInitShapePacket->getDisplayListObj() != NULL;
+        return mpInitShapePacket->getSnapshot() != NULL;
     }
 
     virtual ~J3DMatPacket();

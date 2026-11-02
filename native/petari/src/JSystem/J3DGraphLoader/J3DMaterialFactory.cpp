@@ -39,7 +39,7 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
     mpZCompLoc = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpZCompLoc);
     mpDither = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpDither);
     mpNBTScaleInfo = JSUConvertOffsetToPtr< J3DNBTScaleInfo >(&i_block, i_block.mpNBTScaleInfo);
-    mpDisplayListInit = nullptr;
+    mpShapeDrawInit = nullptr;
     mpPatchingInfo = nullptr;
     mpCurrentMtxInfo = nullptr;
     mpMaterialMode = nullptr;

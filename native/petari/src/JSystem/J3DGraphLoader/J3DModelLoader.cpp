@@ -74,7 +74,7 @@ J3DMaterialTable* J3DModelLoaderDataBase::loadMaterialTable(const void* data) {
     return NULL;
 }
 
-J3DModelData* J3DModelLoaderDataBase::loadBinaryDisplayList(const void* data, u32 flags) {
+J3DModelData* J3DModelLoaderDataBase::loadBinaryMaterials(const void* data, u32 flags) {
     if (data == NULL) {
         return NULL;
     }
@@ -82,7 +82,7 @@ J3DModelData* J3DModelLoaderDataBase::loadBinaryDisplayList(const void* data, u3
     if (reinterpret_cast< const u32* >(data)[0] == 'J3D2' &&
         (reinterpret_cast< const u32* >(data)[1] == 'bdl3' || reinterpret_cast< const u32* >(data)[1] == 'bdl4')) {
         J3DModelLoader_v26 loader;
-        return withCurvedSurfaces(loader.loadBinaryDisplayList(data, flags));
+        return withCurvedSurfaces(loader.loadBinaryMaterials(data, flags));
     }
     return NULL;
 }
@@ -163,7 +163,7 @@ J3DMaterialTable* J3DModelLoader::loadMaterialTable(void const* i_data) {
     return mpMaterialTable;
 }
 
-J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_flags) {
+J3DModelData* J3DModelLoader::loadBinaryMaterials(void const* i_data, u32 i_flags) {
     mpModelData = new J3DModelData();
     mpModelData->clear();
     mpModelData->mpRawData = i_data;
@@ -199,7 +199,7 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
             break;
         case 'MDL3':
             // The file's precompiled material lists (console commands): its materials come from MAT3, their lists
-            // from J3DModel::makeDL as a .bmd model's.
+            // from J3DModel::makeMesh as a .bmd model's.
             break;
         case 'MAT3':
             flags = 0x50100000;

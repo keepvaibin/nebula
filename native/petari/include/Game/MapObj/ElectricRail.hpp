@@ -60,7 +60,7 @@ public:
     void initSensor();
     void initPoints();
     void initSeparators();
-    void initDisplayList();
+    void initMesh();
     void drawRailGX(f32) const;
     void drawPlane(NativeMesh&, f32, f32, f32, f32) const;
     void drawPlaneGX(f32, f32, f32, f32) const;

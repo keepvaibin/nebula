@@ -13,17 +13,17 @@ J3DModelData::J3DModelData() {
     clear();
 }
 
-s32 J3DModelData::newSharedDisplayList(u32 mdlFlags) {
+s32 J3DModelData::newSharedSnapshot(u32 mdlFlags) {
     u16 matNum = getMaterialNum();
 
     for (u16 i = 0; i < matNum; i++) {
         s32 ret;
-        if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-            ret = getMaterialNodePointer(i)->newSharedDisplayList();
+        if (mdlFlags & J3DMdlFlag_UseSingleSnapshot) {
+            ret = getMaterialNodePointer(i)->newSharedSnapshot();
             if (ret != kJ3DError_Success)
                 return ret;
         } else {
-            ret = getMaterialNodePointer(i)->newSharedDisplayList();
+            ret = getMaterialNodePointer(i)->newSharedSnapshot();
             if (ret != kJ3DError_Success)
                 return ret;
         }

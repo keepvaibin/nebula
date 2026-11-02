@@ -73,7 +73,7 @@ void MarioActor::calcViewReflectionModel() {
         getRealPos("All_Root", &root);
         TVec3f translation(mPosition - root);
         NebulaMtxTrans(offset.toMtxPtr(), translation.x, translation.y, translation.z);
-        updateReflectAlphaDL(_A09);
+        updateReflectAlphaList(_A09);
         break;
     }
     case 3: {
@@ -121,7 +121,7 @@ void MarioActor::calcViewReflectionModel() {
             _A25++;
         }
 
-        updateSimpleAlphaDL(_A25);
+        updateSimpleAlphaList(_A25);
         _B18 = position;
         break;
     }
@@ -172,7 +172,7 @@ void MarioActor::calcViewReflectionModel() {
             _A24++;
         }
 
-        updateSimpleAlphaDL(_A24);
+        updateSimpleAlphaList(_A24);
         _B18 = position;
         break;
     }

@@ -81,8 +81,8 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     if (isLavaStep) {
         initModelManagerWithAnm(objectName, nullptr, true);
 
-        mMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-        MR::newDifferedDLBuffer(this);
+        mMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+        MR::newDifferedMaterials(this);
     } else {
         initModelManagerWithAnm(objectName, nullptr, false);
     }

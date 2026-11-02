@@ -40,5 +40,5 @@ namespace ElectricRailFunction {
     void registerRail(const LiveActor*, ElectricRailType);
     bool isTouchRail(const HitSensor*, TVec3f*, TVec3f*);
     f32 getHitSensorRadius();
-    u32 calcDisplayListSize(u32, s32);
+    u32 calcMeshSize(u32, s32);
 };  // namespace ElectricRailFunction
