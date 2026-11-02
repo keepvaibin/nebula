@@ -11,15 +11,14 @@
 extern "C" {
 #endif
 
-/* Host events, delivered in this order when several are pending: the timer (alarms), the frame clock, the
-   controllers, the disc, the audio DMA. */
+/* Host events, delivered in this order when several are pending: the frame clock, the controllers, the disc, what
+   the audio thread woke. */
 enum {
-    NEBULA_EVENT_TIMER = 0,
-    NEBULA_EVENT_FRAME = 1,
-    NEBULA_EVENT_CONTROLLER = 2,
-    NEBULA_EVENT_DISC = 3,
-    NEBULA_EVENT_AUDIO = 4,
-    NEBULA_EVENT_COUNT = 5,
+    NEBULA_EVENT_FRAME = 0,
+    NEBULA_EVENT_CONTROLLER = 1,
+    NEBULA_EVENT_DISC = 2,
+    NEBULA_EVENT_AUDIO = 3,
+    NEBULA_EVENT_COUNT = 4,
 };
 
 /* From any host thread: the event's handler runs on the simulation thread at the next scheduling point. */
@@ -42,10 +41,6 @@ void nebula_kernel_init(void);
 void nebula_kernel_dump(void);
 
 /* The platform layer provides these (os_native.c). */
-int64_t nebula_time(void);
-void nebula_timer_arm(int64_t deadline);
-/* Deterministic test mode: the kernel moves the clock itself (no host clock runs). */
-void nebula_time_set(int64_t time);
 void nebula_sleep_for_work(void);
 void nebula_wake_simulation(void);
 /* A game thread is a host thread. The kernel runs one at a time: each waits for its turn here, and passes it on. */
