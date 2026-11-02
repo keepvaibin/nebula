@@ -118,11 +118,7 @@ void J3DTexGenBlock::calc(const Mtx modelMtx) {
             case J3DTexMtxMode_EnvmapOld:
             case J3DTexMtxMode_Envmap:
 
-                if (j3dSys.checkFlag(8) == 0) {
-                    NebulaMtxConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
-                } else {
-                    NebulaMtxCopy(j3dSys.getViewMtx(), viewMtx);
-                }
+                NebulaMtxConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
                 viewMtx[0][3] = 0.0f;
                 viewMtx[1][3] = 0.0f;
                 viewMtx[2][3] = 0.0f;
@@ -130,33 +126,21 @@ void J3DTexGenBlock::calc(const Mtx modelMtx) {
                 break;
             case J3DTexMtxMode_ProjmapBasic:
             case J3DTexMtxMode_Projmap:
-                if (j3dSys.checkFlag(4) == 0) {
-                    mTexMtx[i]->calc(modelMtx);
-                } else {
-                    mTexMtx[i]->calc(j3dDefaultMtx);
-                }
+                mTexMtx[i]->calc(modelMtx);
                 break;
             case J3DTexMtxMode_ViewProjmapBasic:
             case J3DTexMtxMode_ViewProjmap:
-                if (j3dSys.checkFlag(4) == 0) {
-                    NebulaMtxConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
-                    mTexMtx[i]->calc(viewMtx);
-                } else {
-                    mTexMtx[i]->calc(j3dSys.getViewMtx());
-                }
+                NebulaMtxConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
+                mTexMtx[i]->calc(viewMtx);
                 break;
             case J3DTexMtxMode_Unknown5:
             case J3DTexMtxMode_EnvmapOldEffectMtx:
             case J3DTexMtxMode_EnvmapEffectMtx:
-                if (j3dSys.checkFlag(8) == 0) {
-                    NebulaMtxCopy(modelMtx, viewMtx);
-                    viewMtx[0][3] = 0.0f;
-                    viewMtx[1][3] = 0.0f;
-                    viewMtx[2][3] = 0.0f;
-                    mTexMtx[i]->calc(viewMtx);
-                } else {
-                    mTexMtx[i]->calc(j3dDefaultMtx);
-                }
+                NebulaMtxCopy(modelMtx, viewMtx);
+                viewMtx[0][3] = 0.0f;
+                viewMtx[1][3] = 0.0f;
+                viewMtx[2][3] = 0.0f;
+                mTexMtx[i]->calc(viewMtx);
                 break;
             default:
                 mTexMtx[i]->calc(j3dDefaultMtx);
@@ -181,11 +165,7 @@ void J3DTexGenBlock::calcWithoutViewMtx(const Mtx modelMtx) {
                 break;
             case J3DTexMtxMode_ProjmapBasic:
             case J3DTexMtxMode_Projmap:
-                if (j3dSys.checkFlag(4) == 0) {
-                    mTexMtx[i]->calc(modelMtx);
-                } else {
-                    mTexMtx[i]->calc(j3dDefaultMtx);
-                }
+                mTexMtx[i]->calc(modelMtx);
                 break;
             case J3DTexMtxMode_ViewProjmapBasic:
             case J3DTexMtxMode_ViewProjmap:
@@ -194,15 +174,11 @@ void J3DTexGenBlock::calcWithoutViewMtx(const Mtx modelMtx) {
             case J3DTexMtxMode_Unknown5:
             case J3DTexMtxMode_EnvmapOldEffectMtx:
             case J3DTexMtxMode_EnvmapEffectMtx:
-                if (j3dSys.checkFlag(8) == 0) {
-                    NebulaMtxCopy(modelMtx, mtx);
-                    mtx[0][3] = 0.0f;
-                    mtx[1][3] = 0.0f;
-                    mtx[2][3] = 0.0f;
-                    mTexMtx[i]->calc(mtx);
-                } else {
-                    mTexMtx[i]->calc(j3dDefaultMtx);
-                }
+                NebulaMtxCopy(modelMtx, mtx);
+                mtx[0][3] = 0.0f;
+                mtx[1][3] = 0.0f;
+                mtx[2][3] = 0.0f;
+                mTexMtx[i]->calc(mtx);
                 break;
             default:
                 mTexMtx[i]->calc(j3dDefaultMtx);

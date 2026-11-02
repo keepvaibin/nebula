@@ -1,5 +1,5 @@
 // The drawing state as typed values (drawing_state.h): the fixed-function, texture and vertex state the native draws
-// read. The TEV, indirect, alpha-compare and fog state is the native materials' own (the game folds it into them).
+// read. The material, indirect, alpha-compare and fog state is the native materials' own (the game folds it into them).
 
 #include "galaxy/render/drawing_state.h"
 

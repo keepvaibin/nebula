@@ -70,7 +70,7 @@ namespace galaxy::render {
 // range starting at its base level starts at the replacement's (close up, the game magnifies its
 // base level: the replacement shows its own); a game sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
-// by index, as Dolphin does: the bias moves its LOD back to the game's at the console's resolution
+// by index: the bias moves its LOD back to the game's at the console's resolution
 // (scene_target_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
@@ -245,7 +245,7 @@ private:
     void on_scene_copy(const CaptureRequest& params);
     // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
     [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
-    // A light op's words (GXLoadLightObjImm's), into matrix memory.
+    // A light op's words (the state), into matrix memory.
     void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
@@ -849,7 +849,7 @@ private:
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may
     // run a small bounded number of frames ahead, then blocks on queue_space_cv_. This is the
-    // frame-granular analogue of Dolphin's SyncGPU max-distance throttle. fifo_pool_ recycles chunk
+    // a frame-granular throttle. fifo_pool_ recycles chunk
     // buffers, so the steady state does not allocate.
     std::thread render_thread_;
     std::mutex queue_mutex_;
@@ -1094,12 +1094,12 @@ private:
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when console register state did not
     // change. scene target copies can also replace a game-address texture alias
-    // without rewriting its BP texture registers.
+    // without rewriting its texture state.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
     std::uint8_t current_texture_map_mask_ = 0;
-    // sampled_texture_map_mask(draw_state_) reads DrawCounts, the TEV order, indirect-command and IND_REF registers,
-    // all of which set kDirtyTev; invalidated wherever the BP register file resets.
+    // sampled_texture_map_mask(draw_state_) reads DrawCounts, the material order, indirect-command and IND_REF registers,
+    // all of which set kDirtyTev; invalidated wherever the state resets.
     bool current_texture_map_mask_valid_ = false;
 
     struct TextureBindingKey {
@@ -1134,7 +1134,7 @@ private:
     TextureBindingKey current_texture_binding_key_{};
     bool current_texture_binding_key_valid_ = false;
     // Sampled map mask that produced current_texture_binding_key_. A map-mask
-    // change alone must force a new capture even when no texture BP register
+    // change alone must force a new capture even when no texture state
     // moved, so the key stays an exact function of its inputs.
     std::uint8_t current_texture_binding_key_mask_ = 0;
 
@@ -1279,7 +1279,7 @@ private:
     // GALAXY_GX_FRAME_TIMING_SAMPLE.
     bool frame_time_detail_ = false;
     bool frame_time_sample_ = false;
-    // render_start of the last emitted [gx-frame-timing] line, for frame-interval-us.
+    // render_start of the last emitted [render-frame-timing] line, for frame-interval-us.
     std::chrono::steady_clock::time_point last_frame_timing_emit_{};
     bool last_frame_timing_emit_valid_ = false;
     // One-time scene target seed clear; console clears only through the copy command's clear bit (on_scene_copy).

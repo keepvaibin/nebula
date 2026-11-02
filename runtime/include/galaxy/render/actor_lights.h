@@ -10,7 +10,7 @@
 // the follow-camera lights to the scene's key light: light 0 towards it and light 1 opposite. The key is the
 // game's visible sun, else the sun its sky shows, else the world-fixed light most lit draws take; the ray tracer
 // lights the scene from the same key. Colours, attenuation (always 1: the loader's
-// GXInitLightAttn(1, 0, 0, 1, 0, 0)), ambient and world-fixed lights stay the game's. The interpolated sub-frames
+// the state(1, 0, 0, 1, 0, 0)), ambient and world-fixed lights stay the game's. The interpolated sub-frames
 // move a light by its world position, which for a light along a world direction is that direction at every camera.
 //
 // No Windows or D3D12 includes, so unit tests can use it.

@@ -1,9 +1,9 @@
-"""draws.py RUN_LOG...: draws and draw batches a frame from [gx-frame-timing] lines (GALAXY_GX_FRAME_TIMING_SAMPLE): the median of the last 10 samples (in the stage) and the whole run's largest."""
+"""draws.py RUN_LOG...: draws and draw batches a frame from [render-frame-timing] lines (GALAXY_GX_FRAME_TIMING_SAMPLE): the median of the last 10 samples (in the stage) and the whole run's largest."""
 import re, sys
 for path in sys.argv[1:]:
     d, b = [], []
     for line in open(path, encoding='utf8', errors='replace'):
-        if '[gx-frame-timing]' in line:
+        if '[render-frame-timing]' in line:
             m = re.search(r' draws=(\d+) draw-batches=(\d+)', line)
             if m:
                 d.append(int(m.group(1)))

@@ -24,7 +24,7 @@ enum NativeShaderVariant : unsigned {
     kNativeVariantReactive = 1u,  // + the reactive mask
     kNativeVariantLayer = 2u,     // + the reactive mask and the effects layer's targets
     kNativeVariantMotion = 3u,    // + the motion vector
-    kNativeVariantDual = 4u,      // + the TEV alpha for dual-source blending (render state bit 27)
+    kNativeVariantDual = 4u,      // + the material alpha for dual-source blending (render state bit 27)
     kNativeVariants = 5u,
 };
 

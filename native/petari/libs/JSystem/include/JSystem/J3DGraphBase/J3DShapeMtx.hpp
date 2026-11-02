@@ -95,13 +95,7 @@ public:
     virtual void loadNrmMtx(int, u16, f32 (*)[4]) const;
 
     void loadMtxConcatView_PNGP(int, u16) const;
-    void loadMtxConcatView_PCPU(int, u16) const;
-    void loadMtxConcatView_NCPU(int, u16) const;
-    void loadMtxConcatView_PNCPU(int, u16) const;
-    void loadMtxConcatView_PNGP_LOD(int, u16) const;
 
-    static J3DShapeMtxConcatView_LoadFunc sMtxLoadPipeline[4];
-    static J3DShapeMtxConcatView_LoadFunc sMtxLoadLODPipeline[4];
     static MtxPtr sMtxPtrTbl[2];
 };
 

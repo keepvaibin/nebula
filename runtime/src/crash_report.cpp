@@ -52,7 +52,7 @@ bool gpu_lost(std::string_view text) noexcept {
 }
 
 bool renderer_error(std::string_view text) noexcept {
-    return text.starts_with("renderer:") || has(text, "[Renderer") || has(text, "Renderer]") || has(text, "[GX]");
+    return text.starts_with("renderer:") || has(text, "[Renderer") || has(text, "Renderer]") || has(text, "[render");
 }
 
 bool out_of_memory(std::string_view text) noexcept {

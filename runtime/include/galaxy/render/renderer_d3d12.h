@@ -537,7 +537,7 @@ public:
     // scene target copy paths (record into the current command list). Both run the
     // conversion blit (
     // half-scale box / display picture y-scale stretch / depth-source packing) instead
-    // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
+    // of a raw CopyTextureRegion, 
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
     void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
     // Native presentation: whether this display copy can take the scene target's colour target instead of copying it

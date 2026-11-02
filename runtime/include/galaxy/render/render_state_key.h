@@ -25,7 +25,7 @@ inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
 struct RenderStateKey {
     std::uint32_t blend_bits;       // see build_render_state_key; bit27 dual-source alpha,
                                     // bit28 constant scene target alpha overwrite
-    std::uint16_t zmode_bits;       // canonicalized BP 0x40
+    std::uint16_t zmode_bits;       // canonical depth mode
     std::uint8_t cull;              // CullMode
     std::uint8_t pixfmt;            // 1: the frame keeps alpha (destination alpha)
     std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value (bits 0-3; kVsKeyCurved: bits 4-5)

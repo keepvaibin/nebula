@@ -189,7 +189,7 @@ def main():
         hist[round(x / 16.667)] += 1
     print('[timeline-present] new-xfb-interval-in-vi-periods ' + ' '.join(f'{k}:{v}' for k, v in sorted(hist.items())))
     copies = [r[0] for r in records if r[1] == 21]
-    print(f'[timeline-xfb] xfb-copies={len(copies)} per-s={len(copies) / max(span_s, 1e-9):.3f}')
+    print(f'[timeline-xfb] display-copies={len(copies)} per-s={len(copies) / max(span_s, 1e-9):.3f}')
 
     # DXGI frame statistics: per displayed present, refreshes on screen.
     ds = [r for r in records if r[1] == 16]

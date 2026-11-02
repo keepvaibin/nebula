@@ -72,7 +72,6 @@ void J3DShape::loadPreDrawSetting() const {
 }
 
 void J3DShape::setArrayAndBindPipeline() const {
-    J3DShapeMtx::setCurrentPipeline((mFlags & 0x1C) >> 2);
     j3dSys.setModelDrawMtx(mDrawMtx[*mCurrentViewNo]);
     j3dSys.setModelNrmMtx(mNrmMtx[*mCurrentViewNo]);
     J3DShapeMtx::sCurrentScaleFlag = mScaleFlagArray;
@@ -88,9 +87,6 @@ void J3DShape::drawFast() const {
 
     setArrayAndBindPipeline();
     if (!checkFlag(J3DShpFlag_NoMtx)) {
-        if (J3DShapeMtx::getLODFlag())
-            J3DShapeMtx::resetMtxLoadCache();
-
         for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
             if (mShapeMtx[i] != nullptr)
                 mShapeMtx[i]->load();
@@ -114,7 +110,6 @@ void J3DShape::draw() const {
 
 void J3DShape::simpleDraw() const {
     loadPreDrawSetting();
-    J3DShapeMtx::setCurrentPipeline((mFlags & 0x1C) >> 2);
     for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
         if (mShapeDraw[i] != nullptr) {
             mShapeDraw[i]->draw();

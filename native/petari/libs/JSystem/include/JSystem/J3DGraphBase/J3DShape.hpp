@@ -12,8 +12,6 @@ class J3DDrawMtxData;
 
 enum J3DShpFlag {
     J3DShpFlag_Visible = 0x0001,
-    J3DShpFlag_SkinPosCpu = 0x0004,
-    J3DShpFlag_SkinNrmCpu = 0x0008,
     J3DShpFlag_Hidden = 0x0010,
     J3DShpFlag_EnableLod = 0x0100,
     J3DShpFlag_NoMtx = 0x0200,
@@ -90,25 +88,10 @@ public:
     virtual void load() const;
     virtual void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
 
-    static J3DShapeMtx_LoadFunc sMtxLoadPipeline[4];
-    static u16 sMtxLoadCache[10];
-    static u32 sCurrentPipeline;
     static u8* sCurrentScaleFlag;
     static bool sNBTFlag;
-    static bool sLODFlag;
     static u32 sTexMtxLoadType;
 
-    static void setCurrentPipeline(u32 pipeline) {
-        sCurrentPipeline = pipeline;
-    }
-
-    static void setLODFlag(bool flag) {
-        sLODFlag = flag;
-    }
-    static u32 getLODFlag() {
-        return sLODFlag;
-    }
-    static void resetMtxLoadCache();
 
 protected:
     /* 0x04 */ u16 mUseMtxIndex;

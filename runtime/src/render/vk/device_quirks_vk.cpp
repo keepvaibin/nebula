@@ -137,13 +137,13 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     // ANGLE preferDrawClearOverVkCmdClearAttachments: vkCmdClearAttachments races with draws on Qualcomm drivers
     // before 512.762.12 (issuetracker.google.com/166809097).
     quirks.clear_with_draw = qualcomm && !id.driver_version.at_least(512, 762, 12);
-    // Dolphin DriverDetails BUG_SLOW_CACHED_READBACK_MEMORY: Mali and Adreno read cached memory back slower than
+    // BUG_SLOW_CACHED_READBACK_MEMORY: Mali and Adreno read cached memory back slower than
     // coherent memory.
     quirks.coherent_readback = qualcomm || arm;
-    // Dolphin DriverDetails BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY (VKStagingTexture): Qualcomm's driver allocates a
+    // BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY (VKStagingTexture): Qualcomm's driver allocates a
     // temporary image for each copy from an optimal-tiled image to a buffer; a reused linear image avoids it.
     quirks.linear_readback = qualcomm;
-    // Dolphin DriverDetails BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
+    // BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
     quirks.clear_by_command = id.driver == DriverKind::ImaginationProprietary;
     // NVIDIA's Vulkan shader compiler (nvgpucomp64.dll, RTX 5090, Windows driver 610) crashes inside
     // vkCreateGraphicsPipelines building the curved surfaces' pipelines, whose SPIR-V validates.
@@ -151,8 +151,8 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
     // 512.829 crashes on SPIR-V 1.4's OpCopyLogical, Adreno 7xx too, ARM before r47 mishandles its OpSelect); no
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
-    // compiler crashes); TEV byte masks one component at a time (Dolphin BUG_BROKEN_VECTOR_BITWISE_AND: Mali returns
-    // the constant vector of a vector AND); D24S8 depth where the device has it (Dolphin BUG_BROKEN_D32F_CLEAR: D32F
+    // compiler crashes); material byte masks one component at a time (BUG_BROKEN_VECTOR_BITWISE_AND: Mali returns
+    // the constant vector of a vector AND); D24S8 depth where the device has it (BUG_BROKEN_D32F_CLEAR: D32F
     // clears do nothing on Adreno); viewport depth ranges never reversed.
     return quirks;
 }

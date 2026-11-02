@@ -66,7 +66,7 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     const bool native = native_material_ != nullptr;
     std::fprintf(f, "draw %u shader %u path %s\n", dump_count_, dump_tag_, native ? "native" : "gx");
     // The render state the draw's pipeline is built for (blend words, depth, culling, topology) and the blend the
-    // drawing state holds (GXSetBlendMode, GXSetDstAlpha).
+    // drawing state holds (the state, the state).
     const BlendMode blend = draw_blend();
     std::fprintf(f, "render_state blend %08x z %x cull %u topology %u frame_alpha %u\n", render_state_key_.blend_bits,
                  static_cast<unsigned>(render_state_key_.zmode_bits), static_cast<unsigned>(render_state_key_.cull),

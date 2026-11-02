@@ -31,8 +31,6 @@ class J3DDrawBuffer;
 class J3DTexture;
 
 enum J3DSysFlag {
-    J3DSysFlag_SkinPosCpu = 0x00000004,
-    J3DSysFlag_SkinNrmCpu = 0x00000008,
     J3DSysFlag_PostTexMtx = 0x40000000,
 };
 

@@ -75,7 +75,7 @@ struct CaptureRequest {
 struct DisplayTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
-    // GPU dimensions after scene target scaling; the copy's rectangle stays in Wii units.
+    // GPU dimensions after scene target scaling; the copy's rectangle stays in game units.
     std::uint16_t width = 0;
     std::uint16_t height = 0;       // after logical y-scale and scene target scale
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
@@ -117,7 +117,7 @@ struct DisplaySerialAccountingEvent {
     std::uint64_t copy_serial) noexcept;
 
 
-// scene target-copy textures are at the internal resolution; addresses, strides and VI selection stay in Wii units.
+// scene target-copy textures are at the internal resolution; addresses, strides and VI selection stay in game units.
 struct ScaledSceneCopyExtent {
     std::uint16_t width = 0;
     std::uint16_t height = 0;

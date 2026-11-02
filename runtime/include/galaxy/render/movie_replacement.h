@@ -4,7 +4,7 @@
 // HD movie replacements: a video file (MP4 and what else the platform decodes) in place of one of the game's THP
 // movies. The game still plays its THP (its timing, sound, subtitles and rumble follow it); each frame it draws,
 // the texture cache shows the replacement's frame of the same time in place of the THP's Y, U and V planes, at the
-// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's TEV converts them; each is a
+// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's material converts them; each is a
 // one-byte texture whose view repeats its value in every channel, as console expands an I8 texture.
 //
 // Files: <folder>/<name>.<ext> for the disc's /MovieData/<name>.thp, from the folders configure() gives (a later folder

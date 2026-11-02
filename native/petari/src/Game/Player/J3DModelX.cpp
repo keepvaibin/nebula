@@ -141,16 +141,6 @@ void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3
 
 void J3DModelX::directDraw(J3DModel* model) {
     j3dSys.setModel(this);
-    if (J3DModel::checkFlag(4)) {
-        j3dSys.onFlag(4);
-    } else {
-        j3dSys.offFlag(4);
-    }
-    if (J3DModel::checkFlag(8)) {
-        j3dSys.onFlag(8);
-    } else {
-        j3dSys.offFlag(8);
-    }
     mModelData->syncJ3DSysFlags();
     j3dSys.setTexture(mModelData->getTexture());
 
@@ -524,9 +514,6 @@ void J3DModelX::shapeDrawFast(J3DShapeX* shape) const {
     shape->setArrayAndBindPipeline();
 
     if (!(shape->mFlags & 0x200)) {
-        if (J3DShapeMtx::sLODFlag) {
-            J3DShapeMtx::resetMtxLoadCache();
-        }
         u16 count = shape->mMtxGroupNum;
         for (u16 i = 0; i < count; i++) {
             if (shape->mShapeMtx[i]) {

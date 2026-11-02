@@ -40,7 +40,7 @@ inline constexpr std::uint8_t kNativeCullNone = 0u, kNativeCullBack = 1u, kNativ
 // blend_op, depth_test, cull: the drawing state's as it is (nebula_game_api.h NEBULA_NATIVE_KEPT).
 inline constexpr std::uint8_t kNativeKept = 0xFFu;
 
-// GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
+// the state texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
 [[nodiscard]] TexGen tex_gen(std::uint8_t type, std::uint8_t source);
 // A texgen's post-transform: GX_PTTEXMTX0 + 3n / GX_PTIDENTITY as its matrix row, and its normalize flag.
 [[nodiscard]] inline PostTexGen post_tex_gen(std::uint32_t post_row, std::uint32_t normalize) {
