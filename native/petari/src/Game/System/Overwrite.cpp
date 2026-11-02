@@ -1,3 +1,4 @@
+#include "JSystem/JParticle/JPANativeColor.hpp"
 #include "Game/System/ShapePacketUserData.hpp"
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -200,7 +201,7 @@ namespace {
     void loadPrj(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
         Mtx mtx;
         NebulaMtxConcat(pWork->mPrjMtx, pSrt, mtx);
-        J3DNativeShape::setTexture(0, mtx, 3);
+        JPAParticleBatch::setProjection(mtx);
     }
 
 // only way I can get these to match
@@ -234,7 +235,7 @@ namespace {
         matrix[2][3] = 0.0f;
         NebulaMtxConcat(matrix, pWork->mPrjMtx, matrix);
         NebulaMtxConcat(matrix, pSrt, matrix);
-        J3DNativeShape::setTexture(0, matrix, 3);
+        JPAParticleBatch::setProjection(matrix);
     }
 #pragma pop
 
@@ -489,7 +490,7 @@ void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][3] = pParticle->mPosition.z;
     p_plane[pWork->mPlaneType](matrix, scaleX, scaleY);
     NebulaMtxConcat(pWork->mPosCamMtx, matrix, matrix);
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(pWork->mDLType);
 }
@@ -537,7 +538,7 @@ void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) 
     matrix[2][3] = pParticle->mPosition.z;
     NebulaMtxConcat(matrix, rotation, rotation);
     NebulaMtxConcat(pWork->mPosCamMtx, rotation, matrix);
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(pWork->mDLType);
 }
@@ -571,7 +572,7 @@ void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = 1.0f;
     matrix[2][3] = position.z;
     matrix[0][2] = matrix[1][2] = matrix[2][0] = matrix[2][1] = 0.0f;
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -590,11 +591,9 @@ void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
 
     end.setLength(pWork->mGlobalPtclScl.y * (25.0f * pParticle->mParticleScaleY));
     end.sub(position, end);
-    J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(position.x, position.y, position.z);
-    J3DNativeDraw::texCoord(0.0f, 0.0f);
-    J3DNativeDraw::position(end.x, end.y, end.z);
-    J3DNativeDraw::texCoord(0.0f, 1.0f);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_LINES);
+    JPAParticleBatch::vertex(position.x, position.y, position.z, 0.0f, 0.0f);
+    JPAParticleBatch::vertex(end.x, end.y, end.z, 0.0f, 1.0f);
 }
 
 // only way I can get these to match
@@ -627,14 +626,14 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    J3DNativeShape::setPosition(0, pWork->mPosCamMtx);
+    JPAParticleBatch::setMatrix(pWork->mPosCamMtx);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
     TVec3f side;
     TVec3f vertices[2];
     Mtx matrix;
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
@@ -675,10 +674,8 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        J3DNativeDraw::position(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z);
-        J3DNativeDraw::texCoord(0.0f, texCoord);
-        J3DNativeDraw::position(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z);
-        J3DNativeDraw::texCoord(1.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
@@ -718,14 +715,14 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    J3DNativeShape::setPosition(0, pWork->mPosCamMtx);
+    JPAParticleBatch::setMatrix(pWork->mPosCamMtx);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
     TVec3f side;
     TVec3f vertices[2];
     Mtx matrix;
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
@@ -770,16 +767,14 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        J3DNativeDraw::position(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z);
-        J3DNativeDraw::texCoord(0.0f, texCoord);
-        J3DNativeDraw::position(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z);
-        J3DNativeDraw::texCoord(1.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
 
     texCoord = startTexCoord;
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
@@ -824,10 +819,8 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        J3DNativeDraw::position(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z);
-        J3DNativeDraw::texCoord(0.0f, texCoord);
-        J3DNativeDraw::position(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z);
-        J3DNativeDraw::texCoord(1.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
@@ -939,7 +932,7 @@ void JPADrawYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = pWork->mYBBCamMtx[2][2];
     matrix[2][3] = position.z;
     matrix[0][1] = matrix[0][2] = matrix[1][0] = matrix[2][0] = 0.0f;
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -977,7 +970,7 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     matrix[2][1] = cosY * z;
     matrix[2][2] = y;
     matrix[2][3] = position.z;
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }

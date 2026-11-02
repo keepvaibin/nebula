@@ -100,6 +100,25 @@ namespace {
 }  // namespace
 
 namespace J3DNativeDraw {
+    void drawArrays(u8 primitive, u32 attributes, u32 count, const f32* pPositions, const u32* const pColors[2],
+                    const f32* const pTexCoords[8]) {
+        J3DNativeShape::flushState();
+        NebulaImmediate draw = {};
+        draw.primitive = primitive;
+        draw.attributes = attributes;
+        draw.count = count;
+        draw.position = pPositions;
+        draw.color[0] = pColors[0];
+        draw.color[1] = pColors[1];
+        for (u32 t = 0; t < 8; t++) {
+            draw.texcoord[t] = pTexCoords[t];
+        }
+        draw.matrix_count = J3DNativeShape::positionMatrices(0, &draw.matrices);
+        draw.pass = *J3DNativeState::pass();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->immediate(pHost->user, &draw);
+    }
+
     void begin(GpuPrimitive primitive, u16 count, u32 attributes) {
         if (sVertex < sCount) {
             fail("a primitive begun before the last one's vertices were all given");
