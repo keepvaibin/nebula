@@ -29,7 +29,7 @@ cores with SMT of the machine above, `GALAXY_GPU_PREFERENCE=low GALAXY_TEST_CPU_
 
 ## Loading a galaxy
 
-The `scene:` lines of the log time each phase (real time at 60 fps, RTX 5090, 8 stops, `run_ld`; **M**):
+The `scene:` lines of the log time each phase (real time at 60 fps, 8 stops; the same on the RTX 5090 and on the stand-in; **M**):
 
 | phase | before | now |
 |---|---|---|
