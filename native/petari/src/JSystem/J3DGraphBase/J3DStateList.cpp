@@ -33,6 +33,7 @@ void J3DStateList::copy(const J3DStateList& rOther) {
         memcpy(mOps, rOther.mOps, sizeof(NebulaStateOp) * rOther.mCount);
     }
     mCount = rOther.mCount;
+    mMaterialPass = rOther.mMaterialPass;
 }
 
 namespace {
@@ -72,11 +73,12 @@ namespace {
 }  // namespace
 
 void J3DStateList::send() const {
-    if (mCount == 0) {
+    if (isEmpty()) {
         return;
     }
     J3DNativeShape::flushState();
     J3DNativeMaterial::state(mOps, mCount);
+    if (mMaterialPass != 0) { J3DNativeMaterial::applyPass(mMaterialPass); }
     // The host's share, in order, in runs between material-only changes.
     const NebulaHostServices* pHost = nebula_host();
     u16 start = 0;

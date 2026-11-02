@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nebula_game_api.h>
+#include <nebula_cooked_material.h>
 #include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
@@ -18,22 +19,24 @@ struct J3DNativeLight {
 // draw order. Each setter takes the arguments of the GX function its change is named after.
 class J3DStateList {
 public:
-    J3DStateList() : mOps(nullptr), mCount(0), mCapacity(0) {}
+    J3DStateList() : mOps(nullptr), mCount(0), mCapacity(0), mMaterialPass(0) {}
     // A list writing into `pStorage` (`capacity` changes), for one being built.
-    J3DStateList(NebulaStateOp* pStorage, u16 capacity) : mOps(pStorage), mCount(0), mCapacity(capacity) {}
+    J3DStateList(NebulaStateOp* pStorage, u16 capacity) : mOps(pStorage), mCount(0), mCapacity(capacity), mMaterialPass(0) {}
 
     // Storage for `capacity` changes, from the current heap.
     void reserve(u16 capacity);
     // `rOther`'s changes (storage sized to them from the current heap the first time).
     void copy(const J3DStateList& rOther);
-    void clear() { mCount = 0; }
+    void clear() { mCount = 0; mMaterialPass = 0; }
     // The first `count` changes of its storage, written there directly.
     void adopt(u16 count) { mCount = count; }
-    bool isEmpty() const { return mCount == 0; }
+    bool isEmpty() const { return mCount == 0 && mMaterialPass == 0; }
     const NebulaStateOp* ops() const { return mOps; }
     u16 count() const { return mCount; }
     // The changes, as a record after every command written before it.
     void send() const;
+    void setMaterialPass(NebulaMaterialPass pass) { mMaterialPass = pass; }
+    u8 materialPass() const { return mMaterialPass; }
 
     void setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op, GpuBool colorUpdate,
                          GpuBool alphaUpdate, GpuBool dither);
@@ -116,4 +119,5 @@ private:
     NebulaStateOp* mOps;
     u16 mCount;
     u16 mCapacity;
+    u8 mMaterialPass;
 };

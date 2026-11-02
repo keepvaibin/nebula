@@ -7,6 +7,81 @@ use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
 
 pub const PROGRAM_BYTES: usize = 756;
+#[path = "material_layout.rs"]
+pub mod layout;
+
+/// Put native shader/state descriptors in the converted material block itself,
+/// so model and standalone material-table factories receive the same data.
+pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
+    let cooked = super::native_data::j3d_model(bytes)?;
+    if bytes.starts_with(b"2D3J") {
+        return Ok(cooked);
+    }
+    if bytes.len() < 32 {
+        bail!("material model header is incomplete");
+    }
+    let blocks = u32::from_be_bytes(bytes[12..16].try_into()?) as usize;
+    let mut at = 32usize;
+    let mut result = cooked[..32].to_vec();
+    for _ in 0..blocks {
+        let header = bytes
+            .get(at..at.checked_add(8).context("material block overflow")?)
+            .context("material block header missing")?;
+        let size = u32::from_be_bytes(header[4..8].try_into()?) as usize;
+        if size < 8 {
+            bail!("material block too short");
+        }
+        let end = at
+            .checked_add(size)
+            .context("material block length overflow")?;
+        // Older exporters can overstate the final padding; the existing model
+        // conversion accepts that case, so use only bytes actually available.
+        let block = bytes
+            .get(at..end.min(bytes.len()))
+            .context("material block outside model")?;
+        let mut native_block = cooked[at..end.min(cooked.len())].to_vec();
+        if &header[..4] == b"MAT3" {
+            let mut descriptors = Vec::new();
+            let mut bounded = block.to_vec();
+            let actual = u32::try_from(bounded.len())?;
+            bounded[4..8].copy_from_slice(&actual.to_be_bytes());
+            let table = Mat3::parse(&bounded)?;
+            for i in 0..table.len() {
+                let p = table.compatibility_program(i, 0x11100000, false)?;
+                let shader = cooked_shader(&p)?;
+                // Record: generated shader ID, material index, native pipeline
+                // state, then reserved space. No source combiner fields survive.
+                descriptors.extend_from_slice(&shader.to_le_bytes());
+                descriptors.extend_from_slice(&(i as u32).to_le_bytes());
+                descriptors.extend_from_slice(&p[716..724]);
+                descriptors.extend_from_slice(&[p[4], p[6], 0, 0]);
+                descriptors.extend_from_slice(&[0; 12]);
+                for pass in 0..64 {
+                    let id = cooked_shader(&pass_program(&p, pass)).unwrap_or(0);
+                    descriptors.extend_from_slice(&id.to_le_bytes());
+                }
+            }
+            while native_block.len() % 16 != 0 {
+                native_block.push(0);
+            }
+            native_block.extend_from_slice(&descriptors);
+            native_block.extend_from_slice(b"NMAT");
+            native_block.extend_from_slice(&2u32.to_le_bytes());
+            native_block.extend_from_slice(&u32::try_from(table.len())?.to_le_bytes());
+            native_block.extend_from_slice(&288u32.to_le_bytes());
+            let size = u32::try_from(native_block.len())?;
+            native_block[4..8].copy_from_slice(&size.to_le_bytes());
+        }
+        result.extend_from_slice(&native_block);
+        at = end;
+    }
+    if at < cooked.len() {
+        result.extend_from_slice(&cooked[at..]);
+    }
+    let size = u32::try_from(result.len())?;
+    result[8..12].copy_from_slice(&size.to_le_bytes());
+    Ok(result)
+}
 
 /// Original MAT3 tables. Offsets are relative to this block, never host pointers.
 /// This view is used only while cooking the source model, before native_data
@@ -166,6 +241,17 @@ impl<'a> Mat3<'a> {
         p[0] = if capacity == 1 { 1 } else { stages };
         p[1] = texgens;
         p[2] = channels;
+        let cull = if init[1] == 255 {
+            0
+        } else {
+            u32::from_be_bytes(self.record(0x1c, usize::from(init[1]), 4)?.try_into()?)
+        };
+        p[4] = match cull {
+            1 => 2,
+            2 => 1,
+            3 => 3,
+            _ => 0,
+        };
         let mut loads: u16 = (1 << 8) | (1 << 9);
         if capacity > 1 {
             loads |= (1 << 2) | (1 << 3) | (1 << 4) | (1 << 5);
@@ -276,8 +362,17 @@ impl<'a> Mat3<'a> {
         let mode = init[0];
         if pe == 0 && mode & 7 != 0 {
             let edge = mode & 1 == 0 && mode & 2 != 0;
+            let translucent = mode & 3 == 0 && mode & 4 != 0;
             p[712] = if edge { 6 } else { 7 };
             p[714] = if edge { 3 } else { 7 };
+            p[716..720].copy_from_slice(&[
+                u8::from(translucent),
+                if translucent { 4 } else { 1 },
+                if translucent { 5 } else { 0 },
+                3,
+            ]);
+            p[720..723].copy_from_slice(&[1, 3, u8::from(!translucent)]);
+            p[6] = u8::from(!edge);
         } else {
             if pe != 0x10000000 && pe != 0x20000000 {
                 bail!("unsupported pixel block flags");
@@ -293,6 +388,29 @@ impl<'a> Mat3<'a> {
                 .property(material, 0x146, 0x6c, 8)?
                 .context("alpha compare default requires source-table proof")?;
             p[712..715].copy_from_slice(&[a[0], a[2], a[3]]);
+            let blend = self
+                .property(material, 0x148, 0x70, 4)?
+                .unwrap_or(&[1, 4, 5, 5]);
+            p[716] = match blend[0] {
+                1 => 1,
+                2 => 3,
+                3 => 2,
+                _ => 0,
+            };
+            p[717] = match blend[1] {
+                2 => 8,
+                3 => 9,
+                n => n,
+            };
+            p[718] = blend[2];
+            p[719] = blend[3];
+            if init[6] == 255 {
+                bail!("depth mode default requires source-table proof");
+            }
+            let depth = self.record(0x74, usize::from(init[6]), 4)?;
+            p[720..723].copy_from_slice(&depth[..3]);
+            p[5] = self.byte_property(material, 7, 0x7c, 1)?;
+            p[6] = self.byte_property(material, 5, 0x78, 0)?;
         }
         p[8..10].copy_from_slice(&loads.to_le_bytes());
         normalize_program(&p)
@@ -407,6 +525,69 @@ pub fn shader_key(bytes: &[u8]) -> Result<Vec<u8>> {
     }
     key.extend_from_slice(&p[712..715]);
     Ok(key)
+}
+
+/// The base game's actor passes, in draw order: light mask, player lighting,
+/// then the per-shape opacity/reflection/shadow pass. Only compiled shader IDs
+/// are stored in the native asset; no runtime combiner changes are needed.
+pub fn pass_program(source: &[u8], pass: u32) -> Vec<u8> {
+    let mut p = source.to_vec();
+    fn channel(p: &mut [u8], ch: usize, enabled: u8, mask: u8) {
+        p[656 + ch * 8..662 + ch * 8].copy_from_slice(&[enabled, 0, 0, mask, 2, 2]);
+    }
+    fn alpha(p: &mut [u8], inputs: [u8; 4]) {
+        p[28..32].copy_from_slice(&inputs);
+        p[32..39].copy_from_slice(&[0, 0, 0, 1, 0, 0, 0]);
+    }
+    if pass & 4 != 0 {
+        p[712..715].copy_from_slice(&[7, 0, 7]);
+        channel(&mut p, 0, 0, 0);
+        channel(&mut p, 1, 1, 1);
+        alpha(&mut p, [6, 7, 5, 7]);
+    }
+    if pass & 1 != 0 { channel(&mut p, 2, 0, 0); }
+    if pass & 8 != 0 {
+        p[..3].copy_from_slice(&[1, 0, 1]);
+        p[712..715].copy_from_slice(&[7, 1, 7]);
+        p[41..50].fill(0);
+        channel(&mut p, 0, 0, 0);
+        channel(&mut p, 1, 0, 0);
+        alpha(&mut p, [1, 7, 7, 7]);
+    }
+    if pass & 16 != 0 {
+        p[..4].copy_from_slice(&[1, 1, 0, 0]);
+        p[712..715].copy_from_slice(&[7, 0, 7]);
+        for ch in 0..4 { channel(&mut p, ch, 0, 0); }
+        alpha(&mut p, [3, 7, 7, 7]);
+        p[19..28].copy_from_slice(&[8, 15, 15, 15, 0, 0, 0, 1, 0]);
+        p[16..19].copy_from_slice(&[0, 0, 255]);
+        p[50..53].copy_from_slice(&[1, 1, 255]);
+    }
+    if pass & 2 != 0 { alpha(&mut p, [3, 7, 7, 7]); }
+    if pass & 32 != 0 {
+        for coord in 0..3 {
+            let at = 592 + coord * 8;
+            p[at..at + 6].copy_from_slice(&[0, 85, 30, 0, 61, 1]);
+        }
+    }
+    p
+}
+
+/// Resolve a source material directly to this build's precompiled J3D shader.
+/// The one-based ID stays independent of the runtime API enum's base value.
+pub fn cooked_shader(bytes: &[u8]) -> Result<u32> {
+    const KEYS: &[(u64, u32)] = include!("material_shader_keys.inc");
+    let hash = shader_key(bytes)?
+        .iter()
+        .fold(0xcbf29ce484222325u64, |h, &b| {
+            (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
+        });
+    let index = KEYS
+        .binary_search_by_key(&hash, |&(key, _)| key)
+        .map_err(|_| {
+            anyhow::anyhow!("source material shader {hash:016x} absent from this build")
+        })?;
+    Ok(KEYS[index].1)
 }
 
 /// The build's shader table, passed explicitly so a cook cannot silently use a

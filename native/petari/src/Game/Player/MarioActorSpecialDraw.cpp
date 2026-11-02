@@ -268,14 +268,8 @@ void MarioActor::fillAlphaDL(J3DStateList& rList, u8 alpha) {
     color.a = alpha;
     rList.setTevColor(GPU_TEVREG2, color);
     rList.setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
-    rList.setGenMode2(1, 0, 1, 0, GPU_CULL_BACK);
-    rList.setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
-    rList.setChanCtrl(GPU_COLOR1A1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
-    rList.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
-    rList.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
-                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
-    rList.setTevColorCalc(GPU_TEVSTAGE0, GPU_CC_TEXC, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV);
-    rList.setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL, GPU_TEXCOORD1, GPU_TEXMAP1, GPU_COLOR_NULL);
+    rList.setCullMode(GPU_CULL_BACK);
+    rList.setMaterialPass(NEBULA_PASS_PLAYER_OPACITY);
 }
 
 void MarioActor::updateAlphaDL(u8 alpha) {
@@ -296,8 +290,7 @@ void MarioActor::fillReflectAlphaDL(J3DStateList& rList, u8 alpha) {
     NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
     rList.setTevColor(GPU_TEVREG2, color);
-    rList.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
-                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    rList.setMaterialPass(NEBULA_PASS_REFLECTION_ALPHA);
 }
 
 void MarioActor::updateReflectAlphaDL(u8 alpha) {
@@ -310,7 +303,7 @@ void MarioActor::updateReflectAlphaDL(u8 alpha) {
 void MarioActor::fillLightDL(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial) {
     rList.setChanAmbColor(GPU_COLOR0A0, rAmbient);
     rList.setChanMatColor(GPU_COLOR0A0, rMaterial);
-    rList.setChanCtrl(GPU_COLOR1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
+    rList.setMaterialPass(NEBULA_PASS_PLAYER_LIGHT);
 }
 
 void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
