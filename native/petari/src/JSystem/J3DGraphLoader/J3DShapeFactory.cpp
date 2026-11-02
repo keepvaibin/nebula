@@ -20,14 +20,14 @@ enum {
 J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
     mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, block.mpShapeInitData);
     mIndexTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpIndexTable);
-    mVtxDescList = JSUConvertOffsetToPtr< GXVtxDescList >(&block, block.mpVtxDescList),
+    mVtxDescList = JSUConvertOffsetToPtr< GpuVtxDescList >(&block, block.mpVtxDescList),
     mMtxTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpMtxTable);
     mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, block.mpDisplayListData),
     mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, block.mpMtxInitData),
     mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, block.mpDrawInitData);
 }
 
-J3DShape* J3DShapeFactory::create(int no, u32 flag, GXVtxDescList* vtxDesc) {
+J3DShape* J3DShapeFactory::create(int no, u32 flag, GpuVtxDescList* vtxDesc) {
     J3DShape* shape = new J3DShape;
     shape->mMtxGroupNum = getMtxGroupNum(no);
     shape->mRadius = mShapeInitData[mIndexTable[no]].mRadius;

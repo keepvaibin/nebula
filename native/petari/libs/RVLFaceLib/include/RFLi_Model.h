@@ -2,7 +2,7 @@
 #define RVL_FACE_LIBRARY_INTERNAL_MODEL_H
 #include "RFL_Model.h"
 #include "RFLi_Types.h"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/types.h>
 #ifdef __cplusplus
@@ -69,10 +69,10 @@ typedef struct Mii_CharModelRes {
     s16 glassesVtxNrm[1 * VTX_COORDS_IN_NRM]; // at 0x8186
     s16 glassesVtxTxc[4 * VTX_COORDS_IN_TXC]; // at 0x818C
 
-    GXTexObj faceTexObj;    // at 0x819C
-    GXTexObj capTexObj;     // at 0x81BC
-    GXTexObj noseTexObj;    // at 0x81DC
-    GXTexObj glassesTexObj; // at 0x81FC
+    GpuTexObj faceTexObj;    // at 0x819C
+    GpuTexObj capTexObj;     // at 0x81BC
+    GpuTexObj noseTexObj;    // at 0x81DC
+    GpuTexObj glassesTexObj; // at 0x81FC
 
     s16* hairVtxPos;     // at 0x821C
     s16* hairVtxNrm;     // at 0x8220
@@ -132,7 +132,7 @@ typedef struct Mii_CharModel {
     MiiExpression expression;         // at 0x60
     MiiResolution resolution;         // at 0x64
     Mii_CharModelRes* res;            // at 0x68
-    GXTexObj* maskTexObj[MiiExp_Max]; // at 0x6C
+    GpuTexObj* maskTexObj[MiiExp_Max]; // at 0x6C
 } Mii_CharModel;
 
 extern Mii_CoordinateData coordinateData;
@@ -151,7 +151,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work,
 NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info);
 void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info);
 void Mii_InitShapeRes(Mii_ShapeRes* shape);
-void Mii_InitTexRes(GXTexObj* texObj, Mii_PartsShpTex part, u16 file,
+void Mii_InitTexRes(GpuTexObj* texObj, Mii_PartsShpTex part, u16 file,
                     void* buffer) NO_INLINE;
 void Mii_TransformCoordinate(s16* to, const s16* from);
 

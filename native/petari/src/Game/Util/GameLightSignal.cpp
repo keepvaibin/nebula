@@ -126,17 +126,17 @@ namespace GameLightSignal {
         sStarCore = pCore;
     }
 
-    // GXInitLightDistAttn's falloff, 1 / (1 + k1 d + k2 d^2): the distance where the light halves.
+    // GpuInitLightDistAttn's falloff, 1 / (1 + k1 d + k2 d^2): the distance where the light halves.
     void pointLight(const PointLightInfo* pInfo) {
         const f32 reference = pInfo->mRefDistance;
         const f32 brightness = pInfo->mRefBrightness;
-        const GXDistAttnFn function = pInfo->mDistAttnFn;
+        const GpuDistAttnFn function = pInfo->mDistAttnFn;
         f32 half = 0.0f;
-        if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function != GX_DA_OFF) {
+        if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function != GPU_DA_OFF) {
             const f32 q = (1.0f - brightness) / brightness;
-            const f32 k1 = function == GX_DA_GENTLE ? q / reference : function == GX_DA_MEDIUM ? 0.5f * q / reference : 0.0f;
-            const f32 k2 = function == GX_DA_STEEP    ? q / (reference * reference)
-                           : function == GX_DA_MEDIUM ? 0.5f * q / (reference * reference)
+            const f32 k1 = function == GPU_DA_GENTLE ? q / reference : function == GPU_DA_MEDIUM ? 0.5f * q / reference : 0.0f;
+            const f32 k2 = function == GPU_DA_STEEP    ? q / (reference * reference)
+                           : function == GPU_DA_MEDIUM ? 0.5f * q / (reference * reference)
                                                       : 0.0f;
             half = k2 > 0.0f ? (-k1 + __builtin_sqrtf(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
         }
@@ -146,7 +146,7 @@ namespace GameLightSignal {
         NebulaHost::gameLight(NEBULA_LIGHT_POINT, NebulaHost::objectId(pInfo), values);
     }
 
-    // LightPointCtrl blends its light with J3DNativeState::initLightDistAttn(15, brightness, GX_DA_GENTLE): it halves at
+    // LightPointCtrl blends its light with J3DNativeState::initLightDistAttn(15, brightness, GPU_DA_GENTLE): it halves at
     // 15 sqrt(b / (1 - b)).
     void pointRequest(const LiveActor* pActor, const TVec3f& rPosition, Color8 color, f32 brightness) {
         const f32 b = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;

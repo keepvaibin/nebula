@@ -140,7 +140,7 @@ public:
     /* 0x30 */ J3DTexMtxInfo* mpTexMtxInfo;
     /* 0x34 */ J3DTexMtxInfo* field_0x34;
     /* 0x38 */ u16* mpTexNo;
-    /* 0x3C */ GXCullMode* mpCullMode;
+    /* 0x3C */ GpuCullMode* mpCullMode;
     /* 0x40 */ J3DTevOrderInfo* mpTevOrderInfo;
     /* 0x44 */ NebulaColor16* mpTevColor;
     /* 0x48 */ NebulaColor8* mpTevKColor;

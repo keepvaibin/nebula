@@ -106,7 +106,7 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
     SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
     rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
     J3DNativeShape::setPosition(0, rotateMtx);
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
     // runtime/src/render/materials/flat_color.hlsl: the colour added to the frame, depth tested and not written, back
     // faces culled.
     NebulaNativeMaterial material;
@@ -126,7 +126,7 @@ void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const 
         handleTrans.y -= (0.5f * height);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 130, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 130, 0);
 
     for (s32 i = 0; i < ::cDevideNum + 1; i++) {
         f32 angle = TWO_PI * i / ::cDevideNum;
@@ -164,7 +164,7 @@ void AstroDomeOrbit::drawSide(f32 width, bool isAddWidth, f32 height) const {
         scale = mOrbitRadius - (0.5f * width);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, (::cDevideNum + 1) * 2, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, (::cDevideNum + 1) * 2, 0);
 
     for (s32 i = 0; i < ::cDevideNum + 1; i++) {
         f32 angle = TWO_PI * i / ::cDevideNum;

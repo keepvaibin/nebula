@@ -602,9 +602,9 @@ void GhostPlayer::draw() const {
         mJetTurtleShadow->drawType1();
     }
 
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {

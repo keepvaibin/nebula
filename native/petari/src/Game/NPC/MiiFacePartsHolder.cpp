@@ -148,12 +148,12 @@ void MiiFacePartsHolder::drawExtra() const {
 
     MR::loadLight(1);
     setTevOpa();
-    J3DNativeState::setAlphaCompare(GX_NEQUAL, 255, GX_AOP_AND, GX_ALWAYS, GX_LO_CLEAR);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setAlphaCompare(GPU_NEQUAL, 255, GPU_AOP_AND, GPU_ALWAYS, GPU_LO_CLEAR);
+    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_COPY);
     drawEachActor(&MiiFaceParts::drawOpa, &setting);
     setTevXlu();
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    J3DNativeState::setAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
+    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
     drawEachActor(&MiiFaceParts::drawXlu, &setting);
 }
 
@@ -163,13 +163,13 @@ void MiiFacePartsHolder::drawExtra() const {
 void MiiFacePartsHolder::setTevOpa() const {
     const NebulaColor8 material = {165, 165, 165, 255};
     const NebulaColor8 ambient = {128, 128, 128, 128};
-    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 1);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, GPU_LIGHT0 | GPU_LIGHT1, GPU_DF_CLAMP, GPU_AF_NONE, ambient, material, 1);
+    J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
 }
 
 void MiiFacePartsHolder::setTevXlu() const {
     const NebulaColor8 material = {165, 165, 165, 255};
     const NebulaColor8 ambient = {128, 128, 128, 128};
-    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, GPU_LIGHT0 | GPU_LIGHT1, GPU_DF_CLAMP, GPU_AF_NONE, ambient, material, 0);
+    J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
 }

@@ -119,13 +119,13 @@ public:
                 JGeometry::TBox2< f32 >(param_4, param_5, param_4 + param_6, param_5 + param_7));
     }
     virtual void drawOut(JGeometry::TBox2< f32 > const&, JGeometry::TBox2< f32 > const&);
-    virtual void load(_GXTexMapID param_0, u8 param_1) {
+    virtual void load(_GpuTexMapID param_0, u8 param_1) {
         if (param_1 < mTextureNum && param_1 < 4 && mTexture[param_1] != NULL) {
             mTexture[param_1]->load(param_0);
         }
     }
     virtual void load(u8 param_0) {
-        load((_GXTexMapID)param_0, param_0);
+        load((_GpuTexMapID)param_0, param_0);
     }
 
     virtual void setBlendRatio(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7, f32 a8) {
@@ -198,7 +198,7 @@ public:
     void getNewColor(JUtility::TColor*);
     void setTexCoord(JGeometry::TVec2< s16 >*, JUTTexture const*, J2DBinding, J2DMirror, bool);
     void setTexCoord(JUTTexture const*, J2DBinding, J2DMirror, bool);
-    GXTlut getTlutID(ResTIMG const*, u8);
+    GpuTlut getTlutID(ResTIMG const*, u8);
 
     void setCornerColor(JUtility::TColor c0, JUtility::TColor c1, JUtility::TColor c2, JUtility::TColor c3);
     void setCornerColor(JUtility::TColor c0) {

@@ -17,7 +17,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 #include <JSystem/J3DGraphBase/J3DDrawBuffer.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 
@@ -212,7 +212,7 @@ bool ScenarioSelectScene::isResetEnd() const {
 
 void ScenarioSelectScene::setupCameraMtx() const {
     NebulaMtxCopy(mCameraContext->getViewMtx(), j3dSys.mViewMtx);
-    J3DNativeView::setProjection(mCameraContext->mProjection, GX_PERSPECTIVE);
+    J3DNativeView::setProjection(mCameraContext->mProjection, GPU_PERSPECTIVE);
 }
 
 bool ScenarioSelectScene::trySetCurrentScenarioNo() const {

@@ -107,7 +107,7 @@ u32 MiiGetModelBufferSize(MiiResolution res, u32 exprFlags) {
     const u32 exprNum = Mii_GetExpressionNum(exprFlags);
     const s32 texSize = Mii_GetMaskBufSize(res);
 
-    return ROUND_UP(exprNum * sizeof(GXTexObj), 32) + ROUND_UP(sizeof(Mii_CharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
+    return ROUND_UP(exprNum * sizeof(GpuTexObj), 32) + ROUND_UP(sizeof(Mii_CharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
 }
 
 MiiErrcode MiiInitCharModel(MiiCharModel* model, MiiDataSource src, MiiMiddleDB* db, u16 id, void* work, MiiResolution res, u32 exprFlags) {
@@ -126,7 +126,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
     u32 maskSize;
     u8* maskImages[MiiExp_Max];
     u32 maskRes;
-    GXTexObj* exprTexObj;
+    GpuTexObj* exprTexObj;
     u8* image;
     BOOL setExpr;
     f32 maxLod;
@@ -141,7 +141,7 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
     imodel->res = work;
 
     // Expression texobjs
-    exprTexObj = (GXTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 32);
+    exprTexObj = (GpuTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 32);
     for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             imodel->maskTexObj[i] = exprTexObj;
@@ -185,12 +185,12 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
 
     for (i = 0; i < MiiExp_Max; i++) {
         if (imodel->maskTexObj[i] != NULL) {
-            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, mipmap);
+            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GPU_TF_RGB5A3, GPU_CLAMP, GPU_CLAMP, mipmap);
 
             if (mipmap) {
-                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GX_LIN_MIP_LIN, GX_LINEAR, 0.0f, maxLod, 0.0f, FALSE, FALSE, GX_ANISO_1);
+                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GPU_LIN_MIP_LIN, GPU_LINEAR, 0.0f, maxLod, 0.0f, FALSE, FALSE, GPU_ANISO_1);
             } else {
-                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
+                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GPU_ANISO_1);
             }
 
             if (!setExpr) {
@@ -229,9 +229,9 @@ NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info) {
 }
 
 void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
-    J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
-    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
-    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
+    J3DNativeStateSetAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
+    J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
+    J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, TRUE);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetDither(FALSE);
@@ -241,7 +241,7 @@ void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
         Mii_NativeChain(MII_I_NATIVE_CHAIN_LIGHT, setting->lightMask, setting->diffuse, setting->attn, setting->ambColor,
                         cWhite, 0);
     } else {
-        Mii_NativeChain(MII_I_NATIVE_CHAIN_NONE, 0, GX_DF_NONE, GX_AF_NONE, cWhite, cWhite, 0);
+        Mii_NativeChain(MII_I_NATIVE_CHAIN_NONE, 0, GPU_DF_NONE, GPU_AF_NONE, cWhite, cWhite, 0);
     }
 }
 
@@ -262,7 +262,7 @@ static void Mii_DrawShape(const s16* pos, const s16* nrm, const s16* txc, const 
     while (p + 3 <= end) {
         const BOOL streamTxc = (p[0] & 1) != 0;
         const BOOL hasTxc = streamTxc && txc != NULL;
-        const GXPrimitive prim = (GXPrimitive)(p[0] & 0xF8);
+        const GpuPrimitive prim = (GpuPrimitive)(p[0] & 0xF8);
         const u16 count = (u16)(p[1] << 8 | p[2]);
         int i;
 
@@ -286,12 +286,12 @@ static void Mii_DrawShape(const s16* pos, const s16* nrm, const s16* txc, const 
 void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting) {
     Mii_CharModel* imodel = (Mii_CharModel*)model;
     Mii_CharModelRes* res = imodel->res;
-    const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
-    const GXCullMode back = setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT;
+    const GpuCullMode front = setting->reverseCulling ? GPU_CULL_FRONT : GPU_CULL_BACK;
+    const GpuCullMode back = setting->reverseCulling ? GPU_CULL_BACK : GPU_CULL_FRONT;
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
-    J3DNativeStateSetCurrentMtx(GX_PNMTX0 + 3u * setting->matrix);
+    J3DNativeStateSetCurrentMtx(GPU_PNMTX0 + 3u * setting->matrix);
 
     if (res->beardDlSize > 0) {
         Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cBeardColor[res->beardColor], front, NULL);
@@ -304,7 +304,7 @@ void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
     }
 
     // A flipped hairstyle draws its forehead and hair with the other side culled.
-    const GXCullMode hairCull = res->flipHair ? back : front;
+    const GpuCullMode hairCull = res->flipHair ? back : front;
     if (res->foreheadDlSize > 0) {
         Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], hairCull, NULL);
         Mii_DrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
@@ -327,12 +327,12 @@ void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
 void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting) {
     Mii_CharModel* imodel = (Mii_CharModel*)model;
     Mii_CharModelRes* res = imodel->res;
-    const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
+    const GpuCullMode front = setting->reverseCulling ? GPU_CULL_FRONT : GPU_CULL_BACK;
     static const NebulaColor8 cBlack = {0, 0, 0, 255};
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
-    J3DNativeStateSetCurrentMtx(GX_PNMTX0 + 3u * setting->matrix);
+    J3DNativeStateSetCurrentMtx(GPU_PNMTX0 + 3u * setting->matrix);
 
     Mii_NativePart(MII_I_NATIVE_FORM_MASK, cBlack, front, imodel->maskTexObj[imodel->expression]);
     Mii_DrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
@@ -343,7 +343,7 @@ void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
     }
 
     if (res->glassesDlSize > 0) {
-        Mii_NativePart(MII_I_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], GX_CULL_NONE, &res->glassesTexObj);
+        Mii_NativePart(MII_I_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], GPU_CULL_NONE, &res->glassesTexObj);
         Mii_DrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
     }
 }
@@ -789,7 +789,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
 
         for (i = 0; i < primitiveNum; i++) {
             u16 vtxNum = *ptr8++;
-            GXPrimitive prim = *ptr8++;
+            GpuPrimitive prim = *ptr8++;
 
             *out++ = (u8)(prim | (skipTxc ? 0 : 1));
             *out++ = (u8)(vtxNum >> 8);
@@ -808,7 +808,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
     Mii_Free(res);
 }
 
-void Mii_InitTexRes(GXTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buffer) {
+void Mii_InitTexRes(GpuTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buffer) {
     u32 texSize;
     Mii_Texture* tex;
 
@@ -836,7 +836,7 @@ void Mii_InitTexRes(GXTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buff
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
     J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);
     J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->format, tex->wrapS, tex->wrapT, FALSE);
-    J3DNativeTextureInitLOD(texObj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
+    J3DNativeTextureInitLOD(texObj, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GPU_ANISO_1);
     Mii_Free(tex);
 }
 

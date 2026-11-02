@@ -1042,9 +1042,9 @@ void JPAResource::setPTev() {
         flags |= 4;
     }
     if (mpBaseShape->isClipOn()) {
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     } else {
-        J3DNativeState::setClipMode(GX_CLIP_DISABLE);
+        J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
     }
     sendParticleMaterial(mpBaseShape, flags);
 }
@@ -1053,14 +1053,14 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     int base_plane_type = (mpChildShape->getType() == 3 || mpChildShape->getType() == 7) ? mpChildShape->getBasePlaneType() : 0;
     int pos_offset = 0x30 + base_plane_type * 0x6C;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     if (mpChildShape->isClipOn()) {
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     } else {
-        J3DNativeState::setClipMode(GX_CLIP_DISABLE);
+        J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
     }
-    work->mpResMgr->CALL_INLINE_FUNC(load, work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GX_TEXMAP1);
+    work->mpResMgr->CALL_INLINE_FUNC(load, work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GPU_TEXMAP1);
     sendParticleMaterial(mpBaseShape, 8);
 }
 

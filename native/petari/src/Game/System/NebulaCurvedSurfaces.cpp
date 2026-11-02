@@ -5,7 +5,7 @@
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
 #include <nebula_game_api.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -39,13 +39,13 @@ namespace {
     };
 
     struct Format {
-        GXCompCnt mCount;
-        GXCompType mType;
+        GpuCompCnt mCount;
+        GpuCompType mType;
         u8 mFrac;
     };
 
-    bool findFormat(const GXVtxAttrFmtList* pList, GXAttr attr, Format* pFormat) {
-        for (; pList != nullptr && pList->attr != GX_VA_NULL; pList++) {
+    bool findFormat(const GpuVtxAttrFmtList* pList, GpuAttr attr, Format* pFormat) {
+        for (; pList != nullptr && pList->attr != GPU_VA_NULL; pList++) {
             if (pList->attr == attr) {
                 pFormat->mCount = pList->cnt;
                 pFormat->mType = pList->type;
@@ -56,8 +56,8 @@ namespace {
         return false;
     }
 
-    u32 typeBytes(GXCompType type) {
-        return type == GX_U8 || type == GX_S8 ? 1 : type == GX_U16 || type == GX_S16 ? 2 : 4;
+    u32 typeBytes(GpuCompType type) {
+        return type == GPU_U8 || type == GPU_S8 ? 1 : type == GPU_U16 || type == GPU_S16 ? 2 : 4;
     }
 
     // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
@@ -68,15 +68,15 @@ namespace {
     }
 
     // One component as GX dequantises it (the arrays in host order, as the importer cooks VTX1).
-    f32 component(const u8* p, GXCompType type, f32 scale) {
+    f32 component(const u8* p, GpuCompType type, f32 scale) {
         switch (type) {
-        case GX_U8:
+        case GPU_U8:
             return p[0] * scale;
-        case GX_S8:
+        case GPU_S8:
             return static_cast< s8 >(p[0]) * scale;
-        case GX_U16:
+        case GPU_U16:
             return host16(p) * scale;
-        case GX_S16:
+        case GPU_S16:
             return static_cast< s16 >(host16(p)) * scale;
         default: {
             f32 value;
@@ -97,22 +97,22 @@ namespace {
         u32 mNormalBytes;
     };
 
-    bool layoutOf(const GXVtxDescList* pDesc, Layout* pLayout) {
-        u32 sizes[GX_VA_TEX7 + 1];
+    bool layoutOf(const GpuVtxDescList* pDesc, Layout* pLayout) {
+        u32 sizes[GPU_VA_TEX7 + 1];
         memset(sizes, 0, sizeof(sizes));
         bool position = false;
         bool normal = false;
-        for (; pDesc != nullptr && pDesc->attr != GX_VA_NULL; pDesc++) {
-            const GXAttr attr = pDesc->attr == GX_VA_NBT ? GX_VA_NRM : pDesc->attr;
-            if (pDesc->type == GX_NONE || attr > GX_VA_TEX7) {
+        for (; pDesc != nullptr && pDesc->attr != GPU_VA_NULL; pDesc++) {
+            const GpuAttr attr = pDesc->attr == GPU_VA_NBT ? GPU_VA_NRM : pDesc->attr;
+            if (pDesc->type == GPU_NONE || attr > GPU_VA_TEX7) {
                 continue;
             }
-            if (attr <= GX_VA_TEX7MTXIDX) {
+            if (attr <= GPU_VA_TEX7MTXIDX) {
                 sizes[attr] = 1;
-            } else if (pDesc->type == GX_INDEX8 || pDesc->type == GX_INDEX16) {
-                sizes[attr] = pDesc->type == GX_INDEX8 ? 1 : 2;
-                position = position || attr == GX_VA_POS;
-                normal = normal || attr == GX_VA_NRM;
+            } else if (pDesc->type == GPU_INDEX8 || pDesc->type == GPU_INDEX16) {
+                sizes[attr] = pDesc->type == GPU_INDEX8 ? 1 : 2;
+                position = position || attr == GPU_VA_POS;
+                normal = normal || attr == GPU_VA_NRM;
             } else {
                 return false;
             }
@@ -121,11 +121,11 @@ namespace {
             return false;
         }
         u32 at = 0;
-        for (u32 attr = 0; attr <= GX_VA_TEX7; attr++) {
-            if (attr == GX_VA_POS) {
+        for (u32 attr = 0; attr <= GPU_VA_TEX7; attr++) {
+            if (attr == GPU_VA_POS) {
                 pLayout->mPosition = at;
                 pLayout->mPositionBytes = sizes[attr];
-            } else if (attr == GX_VA_NRM) {
+            } else if (attr == GPU_VA_NRM) {
                 pLayout->mNormal = at;
                 pLayout->mNormalBytes = sizes[attr];
             }
@@ -149,10 +149,10 @@ namespace {
                 continue;  // padding (the importer finds only primitives and padding in SHP1 lists)
             }
             const u8 primitive = op & 0xF8;
-            if (primitive != GX_QUADS && primitive != GX_TRIANGLES && primitive != GX_TRIANGLESTRIP &&
-                primitive != GX_TRIANGLEFAN) {
+            if (primitive != GPU_QUADS && primitive != GPU_TRIANGLES && primitive != GPU_TRIANGLESTRIP &&
+                primitive != GPU_TRIANGLEFAN) {
                 // Lines and points have no surface; anything else ends what can be read.
-                if (primitive != GX_LINES && primitive != GX_LINESTRIP && primitive != GX_POINTS) {
+                if (primitive != GPU_LINES && primitive != GPU_LINESTRIP && primitive != GPU_POINTS) {
                     return true;
                 }
             }
@@ -166,30 +166,30 @@ namespace {
             }
             const u8* pVertices = pList + at;
             at += count * rLayout.mStride;
-            const bool lines = primitive == GX_LINES || primitive == GX_LINESTRIP || primitive == GX_POINTS;
+            const bool lines = primitive == GPU_LINES || primitive == GPU_LINESTRIP || primitive == GPU_POINTS;
             if (lines) {
                 continue;
             }
             u32 triangles = 0;
-            if (primitive == GX_TRIANGLES) {
+            if (primitive == GPU_TRIANGLES) {
                 triangles = count / 3;
-            } else if (primitive == GX_QUADS) {
+            } else if (primitive == GPU_QUADS) {
                 triangles = count / 4 * 2;
             } else if (count >= 3) {
                 triangles = count - 2;
             }
             for (u32 t = 0; t < triangles; t++) {
                 u32 v[3];
-                if (primitive == GX_TRIANGLES) {
+                if (primitive == GPU_TRIANGLES) {
                     v[0] = 3 * t;
                     v[1] = 3 * t + 1;
                     v[2] = 3 * t + 2;
-                } else if (primitive == GX_QUADS) {
+                } else if (primitive == GPU_QUADS) {
                     const u32 q = 4 * (t / 2);
                     v[0] = q;
                     v[1] = q + 1 + (t & 1);
                     v[2] = q + 2 + (t & 1);
-                } else if (primitive == GX_TRIANGLESTRIP) {
+                } else if (primitive == GPU_TRIANGLESTRIP) {
                     v[0] = t;
                     v[1] = t + 1;
                     v[2] = t + 2;
@@ -225,9 +225,9 @@ namespace NebulaCurvedSurfaces {
         Format position;
         Format normal;
         if (pPositions == nullptr || pNormals == nullptr ||
-            !findFormat(rVertex.getVtxAttrFmtList(), GX_VA_POS, &position) ||
-            !findFormat(rVertex.getVtxAttrFmtList(), GX_VA_NRM, &normal) || position.mCount != GX_POS_XYZ ||
-            normal.mCount != GX_NRM_XYZ) {
+            !findFormat(rVertex.getVtxAttrFmtList(), GPU_VA_POS, &position) ||
+            !findFormat(rVertex.getVtxAttrFmtList(), GPU_VA_NRM, &normal) || position.mCount != GPU_POS_XYZ ||
+            normal.mCount != GPU_NRM_XYZ) {
             return;
         }
         Grow< u16 > corners;
@@ -262,7 +262,7 @@ namespace NebulaCurvedSurfaces {
         const u32 normalStride = 3 * typeBytes(normal.mType);
         const f32 positionScale = 1.0f / static_cast< f32 >(1 << position.mFrac);
         // GX fixes a normal's scale by its type (6 fraction bits for 8-bit, 14 for 16-bit), whatever the format says.
-        const f32 normalScale = normal.mType == GX_S8 ? 1.0f / 64.0f : normal.mType == GX_S16 ? 1.0f / 16384.0f : 1.0f;
+        const f32 normalScale = normal.mType == GPU_S8 ? 1.0f / 64.0f : normal.mType == GPU_S16 ? 1.0f / 16384.0f : 1.0f;
         for (u32 i = 0; i < positionCount; i++) {
             const u8* p = static_cast< const u8* >(pPositions) + i * positionStride;
             for (u32 c = 0; c < 3; c++) {

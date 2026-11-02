@@ -12,19 +12,19 @@
 #include <revolution/mtx.h>
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
-    J3DNativeState::setPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GX_TO_ONE);
+    J3DNativeState::setPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
-    J3DNativeState::setLineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GX_TO_ONE);
+    J3DNativeState::setLineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    J3DNativeState::setPointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GX_TO_ONE);
+    J3DNativeState::setPointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    J3DNativeState::setLineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GX_TO_ONE);
+    J3DNativeState::setLineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
 }
 
 void JPARegistPrm(JPAEmitterWorkData* work) {
@@ -221,18 +221,18 @@ void JPACalcColorCopy(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 }
 
 void JPAGenTexCrdMtxIdt(JPAEmitterWorkData* param_0) {
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
 void JPAGenTexCrdMtxAnm(JPAEmitterWorkData* param_0) {
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
 void JPAGenTexCrdMtxPrj(JPAEmitterWorkData* param_0) {
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
 #pragma push
@@ -263,8 +263,8 @@ void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
     J3DNativeShape::setTexture(0, local_108, 2);
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 #pragma pop
 
@@ -300,15 +300,15 @@ void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1)
 #pragma pop
 
 void JPALoadTex(JPAEmitterWorkData* work) {
-    work->mpResMgr->load(work->mpRes->getTexIdx(work->mpRes->getBsp()->getTexIdx()), GX_TEXMAP0);
+    work->mpResMgr->load(work->mpRes->getTexIdx(work->mpRes->getBsp()->getTexIdx()), GPU_TEXMAP0);
 }
 
 void JPALoadTexAnm(JPAEmitterWorkData* work) {
-    work->mpResMgr->load(work->mpRes->getTexIdx(work->mpEmtr->mTexAnmIdx), GX_TEXMAP0);
+    work->mpResMgr->load(work->mpRes->getTexIdx(work->mpEmtr->mTexAnmIdx), GPU_TEXMAP0);
 }
 
 void JPALoadTexAnm(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    work->mpResMgr->load(work->mpRes->getTexIdx(ptcl->mTexAnmIdx), GX_TEXMAP0);
+    work->mpResMgr->load(work->mpRes->getTexIdx(ptcl->mTexAnmIdx), GPU_TEXMAP0);
 }
 
 void JPACalcTexIdxNormal(JPAEmitterWorkData* work) {
@@ -444,7 +444,7 @@ void JPASetQuadArrays(const u8* pPositions, const u8* pTexCoords) {
 
 void JPADrawQuad(u32 type) {
     // Positions 0-3 with texture coordinates 0-3; the crossed type adds positions 0x48-0x4B with the same coordinates.
-    J3DNativeDraw::begin(GX_QUADS, type != 0 ? 8 : 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_QUADS, type != 0 ? 8 : 4, NEBULA_SHAPE_TEXCOORD0);
     for (u32 i = 0; i < 4; i++) {
         sendQuadVertex(i, i);
     }
@@ -682,7 +682,7 @@ void JPADrawPoint(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
         return;
     }
 
-    J3DNativeDraw::begin(GX_POINTS, 1, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_POINTS, 1, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
 }
@@ -798,84 +798,84 @@ JPABaseShape::JPABaseShape(u8 const* pData, JKRHeap* pHeap) {
     }
 }
 
-GXBlendMode JPABaseShape::st_bm[3] = {
-    GX_BM_NONE,
-    GX_BM_BLEND,
-    GX_BM_LOGIC,
+GpuBlendMode JPABaseShape::st_bm[3] = {
+    GPU_BM_NONE,
+    GPU_BM_BLEND,
+    GPU_BM_LOGIC,
 };
 
-GXBlendFactor JPABaseShape::st_bf[10] = {
-    GX_BL_ZERO,      GX_BL_ONE,      GX_BL_SRCCLR,      GX_BL_INVSRCCLR, GX_BL_DSTCLR,
-    GX_BL_INVDSTCLR, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_BL_DSTALPHA,  GX_BL_INVDSTALPHA,
+GpuBlendFactor JPABaseShape::st_bf[10] = {
+    GPU_BL_ZERO,      GPU_BL_ONE,      GPU_BL_SRCCLR,      GPU_BL_INVSRCCLR, GPU_BL_DSTCLR,
+    GPU_BL_INVDSTCLR, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_BL_DSTALPHA,  GPU_BL_INVDSTALPHA,
 };
 
-GXLogicOp JPABaseShape::st_lo[16] = {
-    GX_LO_CLEAR, GX_LO_SET, GX_LO_COPY, GX_LO_INVCOPY, GX_LO_NOOP,   GX_LO_INV,    GX_LO_AND,   GX_LO_NAND,
-    GX_LO_OR,    GX_LO_NOR, GX_LO_XOR,  GX_LO_EQUIV,   GX_LO_REVAND, GX_LO_INVAND, GX_LO_REVOR, GX_LO_INVOR,
+GpuLogicOp JPABaseShape::st_lo[16] = {
+    GPU_LO_CLEAR, GPU_LO_SET, GPU_LO_COPY, GPU_LO_INVCOPY, GPU_LO_NOOP,   GPU_LO_INV,    GPU_LO_AND,   GPU_LO_NAND,
+    GPU_LO_OR,    GPU_LO_NOR, GPU_LO_XOR,  GPU_LO_EQUIV,   GPU_LO_REVAND, GPU_LO_INVAND, GPU_LO_REVOR, GPU_LO_INVOR,
 };
 
-GXCompare JPABaseShape::st_c[8] = {
-    GX_NEVER, GX_LESS, GX_LEQUAL, GX_EQUAL, GX_NEQUAL, GX_GEQUAL, GX_GREATER, GX_ALWAYS,
+GpuCompare JPABaseShape::st_c[8] = {
+    GPU_NEVER, GPU_LESS, GPU_LEQUAL, GPU_EQUAL, GPU_NEQUAL, GPU_GEQUAL, GPU_GREATER, GPU_ALWAYS,
 };
 
-GXAlphaOp JPABaseShape::st_ao[4] = {
-    GX_AOP_AND,
-    GX_AOP_OR,
-    GX_AOP_XOR,
-    GX_AOP_XNOR,
+GpuAlphaOp JPABaseShape::st_ao[4] = {
+    GPU_AOP_AND,
+    GPU_AOP_OR,
+    GPU_AOP_XOR,
+    GPU_AOP_XNOR,
 };
 
-GXTevColorArg JPABaseShape::st_ca[6][4] = {
+GpuTevColorArg JPABaseShape::st_ca[6][4] = {
     {
-        GX_CC_ZERO,
-        GX_CC_TEXC,
-        GX_CC_ONE,
-        GX_CC_ZERO,
+        GPU_CC_ZERO,
+        GPU_CC_TEXC,
+        GPU_CC_ONE,
+        GPU_CC_ZERO,
     },
     {
-        GX_CC_ZERO,
-        GX_CC_C0,
-        GX_CC_TEXC,
-        GX_CC_ZERO,
+        GPU_CC_ZERO,
+        GPU_CC_C0,
+        GPU_CC_TEXC,
+        GPU_CC_ZERO,
     },
     {
-        GX_CC_C0,
-        GX_CC_ONE,
-        GX_CC_TEXC,
-        GX_CC_ZERO,
+        GPU_CC_C0,
+        GPU_CC_ONE,
+        GPU_CC_TEXC,
+        GPU_CC_ZERO,
     },
     {
-        GX_CC_C1,
-        GX_CC_C0,
-        GX_CC_TEXC,
-        GX_CC_ZERO,
+        GPU_CC_C1,
+        GPU_CC_C0,
+        GPU_CC_TEXC,
+        GPU_CC_ZERO,
     },
     {
-        GX_CC_ZERO,
-        GX_CC_TEXC,
-        GX_CC_C0,
-        GX_CC_C1,
+        GPU_CC_ZERO,
+        GPU_CC_TEXC,
+        GPU_CC_C0,
+        GPU_CC_C1,
     },
     {
-        GX_CC_ZERO,
-        GX_CC_ZERO,
-        GX_CC_ZERO,
-        GX_CC_C0,
+        GPU_CC_ZERO,
+        GPU_CC_ZERO,
+        GPU_CC_ZERO,
+        GPU_CC_C0,
     },
 };
 
-GXTevAlphaArg JPABaseShape::st_aa[2][4] = {
+GpuTevAlphaArg JPABaseShape::st_aa[2][4] = {
     {
-        GX_CA_ZERO,
-        GX_CA_TEXA,
-        GX_CA_A0,
-        GX_CA_ZERO,
+        GPU_CA_ZERO,
+        GPU_CA_TEXA,
+        GPU_CA_A0,
+        GPU_CA_ZERO,
     },
     {
-        GX_CA_ZERO,
-        GX_CA_ZERO,
-        GX_CA_ZERO,
-        GX_CA_A0,
+        GPU_CA_ZERO,
+        GPU_CA_ZERO,
+        GPU_CA_ZERO,
+        GPU_CA_A0,
     },
 };
 

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -14,7 +14,7 @@ struct PointLightInfo {
     /* 0x0C */ NebulaColor8 mColor;
     /* 0x10 */ f32 mRefDistance;
     /* 0x14 */ f32 mRefBrightness;
-    /* 0x18 */ GXDistAttnFn mDistAttnFn;
+    /* 0x18 */ GpuDistAttnFn mDistAttnFn;
 };
 
 class LightPointCtrl {

@@ -8,7 +8,7 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 
 CShader::CShader(const J3DModelData* pModelData, const ResTIMG* pTimg) : mIndexArray(), mLengthMap(pTimg) {
     _1C = 0.0f;
@@ -21,16 +21,16 @@ CShader::CShader(const J3DModelData* pModelData, const ResTIMG* pTimg) : mIndexA
     _24 = 0;
     _25 = 0;
 
-    GXVtxAttrFmtList* list = pModelData->mVertexData.mVtxAttrFmtList;
+    GpuVtxAttrFmtList* list = pModelData->mVertexData.mVtxAttrFmtList;
 
-    while (list->attr != GX_VA_NULL) {
-        if (list->attr == GX_VA_POS) {
+    while (list->attr != GPU_VA_NULL) {
+        if (list->attr == GPU_VA_POS) {
             _21 = list->frac;
             _24 = list->type;
-        } else if (list->attr == GX_VA_NRM) {
+        } else if (list->attr == GPU_VA_NRM) {
             _22 = list->frac;
             _25 = list->type;
-        } else if (list->attr == GX_VA_TEX0) {
+        } else if (list->attr == GPU_VA_TEX0) {
             _20 = list->frac;
             _23 = list->type;
         }
@@ -54,7 +54,7 @@ namespace {
     }
 
     inline void loadVec(TVec3f* pOut, const void* pArray, u32 index, u8 type, u8 frac) {
-        if (type == GX_S16) {
+        if (type == GPU_S16) {
             TVec3s fixed(loadS16(pArray, index), loadS16(pArray, index + 1), loadS16(pArray, index + 2));
             MR::fixed16ToFloat(pOut, fixed, frac);
         } else {
@@ -63,7 +63,7 @@ namespace {
     }
 
     inline void loadTexCoord(f32* pU, f32* pV, const void* pArray, u32 index, u8 type, u8 frac) {
-        if (type == GX_S16) {
+        if (type == GPU_S16) {
             f32 scale = 1 << frac;
             *pU = f32(loadS16(pArray, index * 2)) / scale;
             *pV = f32(loadS16(pArray, index * 2 + 1)) / scale;
@@ -93,7 +93,7 @@ void CShader::calc(J3DModel* pModel) {
         if (index != 0xFFFF) {
             f32 u = 0.0f;
             f32 v = 0.0f;
-            if (_23 == GX_S16 || _23 == GX_F32) {
+            if (_23 == GPU_S16 || _23 == GPU_F32) {
                 loadTexCoord(&u, &v, pTexCoords, index, _23, _20);
             }
 
@@ -130,7 +130,7 @@ void CShader::calc(J3DModel* pModel) {
             f32 length;
 
             switch (_23) {
-            case GX_S16: {
+            case GPU_S16: {
                 f32 u;
                 f32 v;
                 loadTexCoord(&u, &v, pTexCoords, texCoordIndex, _23, _20);
@@ -149,7 +149,7 @@ void CShader::calc(J3DModel* pModel) {
                 break;
             }
 
-            case GX_F32: {
+            case GPU_F32: {
                 f32 u;
                 f32 v;
                 loadTexCoord(&u, &v, pTexCoords, texCoordIndex, _23, _20);
@@ -162,14 +162,14 @@ void CShader::calc(J3DModel* pModel) {
             TVec3f normal;
             TVec3f result;
 
-            if (_25 == GX_S16 || _25 == GX_F32) {
+            if (_25 == GPU_S16 || _25 == GPU_F32) {
                 loadVec(&normal, pNormals, normalOffset, _25, _22);
             }
 
             MR::normalize(&normal);
             MR::isNan(normal);
 
-            if (_24 == GX_S16 || _24 == GX_F32) {
+            if (_24 == GPU_S16 || _24 == GPU_F32) {
                 loadVec(&position, pPositions, offset, _24, _21);
             }
 
@@ -184,7 +184,7 @@ void CShader::calc(J3DModel* pModel) {
             MR::isNan(result);
 
             switch (_24) {
-            case GX_S16: {
+            case GPU_S16: {
                 TVec3s fixed;
                 MR::floatToFixed16(&fixed, result, _21);
                 s16* pFixedOutput = static_cast< s16* >(pOutput) + offset;
@@ -193,7 +193,7 @@ void CShader::calc(J3DModel* pModel) {
                 pFixedOutput[2] = fixed.z;
                 break;
             }
-            case GX_F32: {
+            case GPU_F32: {
                 f32* pFloatOutput = static_cast< f32* >(pOutput) + offset;
                 pFloatOutput[0] = result.x;
                 pFloatOutput[1] = result.y;
@@ -205,7 +205,7 @@ void CShader::calc(J3DModel* pModel) {
     }
 
     // The shell's positions as values, for the draws that read them.
-    J3DNativeShape::sendPositions(pOutput, count, static_cast< GXCompType >(_24), GX_POS_XYZ, _21);
+    J3DNativeShape::sendPositions(pOutput, count, static_cast< GpuCompType >(_24), GPU_POS_XYZ, _21);
     pModel->mVertexBuffer.setCurrentVtxPos(pOutput);
 }
 
@@ -220,22 +220,22 @@ namespace {
 };  // namespace
 
 void CShader::makeIndexData(J3DShape* pShape) const {
-    GXVtxDescList* pDesc = pShape->getVtxDesc();
+    GpuVtxDescList* pDesc = pShape->getVtxDesc();
     s32 stride = 0;
     s32 posOffset = -1;
     s32 nrmOffset = -1;
     s32 texOffset = -1;
     s32 sizes[4] = {0, 1, 1, 2};
 
-    while (pDesc->attr != GX_VA_NULL) {
+    while (pDesc->attr != GPU_VA_NULL) {
         switch (pDesc->attr) {
-        case GX_VA_POS:
+        case GPU_VA_POS:
             posOffset = stride;
             break;
-        case GX_VA_NRM:
+        case GPU_VA_NRM:
             nrmOffset = stride;
             break;
-        case GX_VA_TEX0:
+        case GPU_VA_TEX0:
             texOffset = stride;
             break;
         }
@@ -296,19 +296,19 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
             continue;
         }
 
-        GXVtxDescList* pDesc = pShape->getVtxDesc();
+        GpuVtxDescList* pDesc = pShape->getVtxDesc();
         s32 stride = 0;
         s32 posOffset = -1;
         s32 sizes[4] = {0, 1, 1, 2};
 
-        while (pDesc->attr != GX_VA_NULL) {
+        while (pDesc->attr != GPU_VA_NULL) {
             switch (pDesc->attr) {
-            case GX_VA_POS:
+            case GPU_VA_POS:
                 posOffset = stride;
                 break;
-            case GX_VA_NRM:
+            case GPU_VA_NRM:
                 break;
-            case GX_VA_TEX0:
+            case GPU_VA_TEX0:
                 break;
             }
 
@@ -355,7 +355,7 @@ void CShader::CLengthMap::setLengthMap(const ResTIMG* pTimg) {
         return;
     }
 
-    if (pTimg->mFormat != GX_TF_I8) {
+    if (pTimg->mFormat != GPU_TF_I8) {
         _8 = 1;
         return;
     }
@@ -370,22 +370,22 @@ f32 CShader::CLengthMap::refer(f32 u, f32 v) const {
         return 1.0f;
     }
 
-    if (_0->mFormat != GX_TF_I8) {
+    if (_0->mFormat != GPU_TF_I8) {
         return 1.0f;
     }
 
-    u16 x = getTexelOrder(_0->mWidth, u, static_cast< GXTexWrapMode >(_0->mWrapS));
-    u16 y = getTexelOrder(_0->mHeight, v, static_cast< GXTexWrapMode >(_0->mWrapT));
+    u16 x = getTexelOrder(_0->mWidth, u, static_cast< GpuTexWrapMode >(_0->mWrapS));
+    u16 y = getTexelOrder(_0->mHeight, v, static_cast< GpuTexWrapMode >(_0->mWrapT));
     return f32(_4[((x % 8) + (y % 4) * 8) + (x / 8 + (_0->mWidth / 8) * (y / 4)) * 32]) / 255.0f;
 }
 
-u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GXTexWrapMode mode) const {
+u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GpuTexWrapMode mode) const {
     if (a2 > 1.0f) {
         switch (mode) {
-        case GX_CLAMP:
+        case GPU_CLAMP:
             a2 = 1.0f;
             break;
-        case GX_REPEAT:
+        case GPU_REPEAT:
             while (a2 > 1.0f) {
                 a2 -= 1.0f;
             }
@@ -395,7 +395,7 @@ u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GXTexWrapMode mode) cons
             }
 
             break;
-        case GX_MIRROR:
+        case GPU_MIRROR:
             while (a2 > 1.0f) {
                 a2 -= 1.0f;
             }

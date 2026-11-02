@@ -26,8 +26,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuEnums.h>
+#include <NebulaGpuTypes.h>
 #include "Game/System/NebulaInput.hpp"
 
 void WaterRoad_DUMMY() {
@@ -212,7 +212,7 @@ void WaterRoadModelInfo::sendGD() {
         }
 
         u16 numPoints = mNumLinePoints * 2;
-        mMesh.begin(GX_TRIANGLESTRIP, numPoints);
+        mMesh.begin(GPU_TRIANGLESTRIP, numPoints);
 
         for (s32 lineIdx = 0; lineIdx < mNumLinePoints; lineIdx++) {
             f32 texV0 = mRailCoords[lineIdx] * ::sTexRateV0;
@@ -282,7 +282,7 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             nextLoopIdx = 0;
         }
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
 
         for (s32 lineIdx = 0; lineIdx < pointNum; lineIdx++) {
             f32 texV0 = mRailCoords[lineIdx] * ::sTexRateV0;
@@ -404,11 +404,11 @@ namespace {
         NativeShader::setTexture(material, 2, &screen);
         NativeShader::setTexture(material, 3, pRoad->mEnvMap);
         NativeShader::send(material);
-        static const u8 kHigh[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_TEXMTX3,
-                                    GX_TEXMTX4, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        static const u8 kLow[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_TEXMTX3,
-                                   GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, high ? kHigh : kLow);
+        static const u8 kHigh[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3,
+                                    GPU_TEXMTX4, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        static const u8 kLow[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3,
+                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, high ? kHigh : kLow);
     }
 }  // namespace
 

@@ -12,7 +12,7 @@ u32 J3DShapeDraw::countVertex(u32 stride) {
     for (u8* dl = dlStart; (dl - dlStart) < getDisplayListSize();) {
         u8 cmd = *dl;
         dl++;
-        if (cmd != GX_TRIANGLEFAN && cmd != GX_TRIANGLESTRIP)
+        if (cmd != GPU_TRIANGLEFAN && cmd != GPU_TRIANGLESTRIP)
             break;
         int vtxNum = *reinterpret_cast< u16* >(dl);
         dl += 2;
@@ -36,7 +36,7 @@ void J3DShapeDraw::addTexMtxIndexInDL(u32 stride, u32 attrOffs, u32 valueBase) {
         oldDL++;
         *newDL++ = cmd;
 
-        if (cmd != GX_TRIANGLEFAN && cmd != GX_TRIANGLESTRIP)
+        if (cmd != GPU_TRIANGLEFAN && cmd != GPU_TRIANGLESTRIP)
             break;
 
         // Copy count

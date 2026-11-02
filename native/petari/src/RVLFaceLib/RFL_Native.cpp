@@ -26,7 +26,7 @@ extern "C" void Mii_NativeTextureForm(u32 form, NebulaColor8 c0, NebulaColor8 c1
     sTextureC1 = c1;
 }
 
-extern "C" void Mii_NativeTexturePart(const GXTexObj* pTexture) {
+extern "C" void Mii_NativeTexturePart(const GpuTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_TEXTURE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
@@ -40,24 +40,24 @@ extern "C" void Mii_NativeTexturePart(const GXTexObj* pTexture) {
     NativeShader::send(material);
 }
 
-extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, NebulaColor8 ambient,
+extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GpuDiffuseFn diffuse, GpuAttnFn atten, NebulaColor8 ambient,
                                 NebulaColor8 material, u32 alphaTest) {
     sChain = chain;
     sLightMask = lightMask;
     // The light function's forms as the material shaders take them (j3d_light: attenuation 1 specular, 2 none
     // (directional), 3 spot; diffuse 0 under specular attenuation).
-    sAtten = atten == GX_AF_SPEC ? 1 : atten == GX_AF_SPOT ? 3 : 2;
-    sDiffuse = atten == GX_AF_SPEC ? 0 : static_cast< u32 >(diffuse);
+    sAtten = atten == GPU_AF_SPEC ? 1 : atten == GPU_AF_SPOT ? 3 : 2;
+    sDiffuse = atten == GPU_AF_SPEC ? 0 : static_cast< u32 >(diffuse);
     sAmbient = ambient;
     sMaterial = material;
     sAlphaTest = alphaTest;
 }
 
-extern "C" void Mii_NativePart(u32 form, NebulaColor8 color, GXCullMode cull, const GXTexObj* pTexture) {
+extern "C" void Mii_NativePart(u32 form, NebulaColor8 color, GpuCullMode cull, const GpuTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_FACE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
-                       cull == GX_CULL_FRONT  ? NEBULA_CULL_FRONT
-                       : cull == GX_CULL_BACK ? NEBULA_CULL_BACK
+                       cull == GPU_CULL_FRONT  ? NEBULA_CULL_FRONT
+                       : cull == GPU_CULL_BACK ? NEBULA_CULL_BACK
                                               : NEBULA_CULL_NONE);
     material.blend_op = NEBULA_NATIVE_KEPT;
     material.depth_test = NEBULA_NATIVE_KEPT;

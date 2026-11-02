@@ -28,7 +28,7 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/lyt/window.h>
 #include <nw4r/ut/Font.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/os.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"

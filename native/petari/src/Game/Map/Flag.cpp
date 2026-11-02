@@ -17,7 +17,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 #include <nebula_game_api.h>
 #include <cstring>
 
@@ -392,7 +392,7 @@ void Flag::draw() const {
         const TVec3f& posA = mFixPoints[idxV + 0].mPos;
         const TVec3f& posB = mFixPoints[idxV + 1].mPos;
         // Each vertex's colour and texture coordinate are its entries of mColors and mTexST.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             J3DNativeDraw::position(posB.x, posB.y, posB.z);
             sendEntry(gxPosB);
@@ -421,7 +421,7 @@ void Flag::draw() const {
         const TVec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
 
         // The stick's colours are ::sStickColors' entries, its texture coordinate mTexST's first.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
 
         f32 length = mStickLength + mPointIntervalV * (mNumPointsV - 1);
         for (s32 idx = 0; idx < 4; idx++) {
@@ -465,8 +465,8 @@ void Flag::loadMaterial() const {
     material.constants[0] = mAlpha / 255.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }

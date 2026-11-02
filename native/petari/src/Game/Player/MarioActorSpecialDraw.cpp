@@ -20,7 +20,7 @@
 #include <JSystem/JGeometry/TBox.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 #include <revolution/os.h>
 
 void MarioActorSpecialDraw_FORCE_MATCH_SDATA2() {
@@ -137,13 +137,13 @@ void MarioActor::captureScreenBox() const {
         return;
     }
 
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    J3DNativeState::setColorUpdate(GPU_FALSE);
+    J3DNativeState::setAlphaUpdate(GPU_TRUE);
     J3DNativeTarget::capture(_B44, (s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), NEBULA_TARGET_RGB,
                              NEBULA_CAPTURE_CLEAR | NEBULA_CAPTURE_FILTERED);
-    J3DNativeState::setColorUpdate(GX_ENABLE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setColorUpdate(GPU_ENABLE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 void MarioActor::writeBackScreenBox() const {
@@ -155,10 +155,10 @@ void MarioActor::writeBackScreenBox() const {
         return;
     }
 
-    GXTexObj texture;
+    GpuTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
-    J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
     MR::convertFrameBufferPosToScreenPos(&minimum, mScreenBoxPos);
     MR::convertFrameBufferPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
     NebulaNativeMaterial material;
@@ -167,10 +167,10 @@ void MarioActor::writeBackScreenBox() const {
     NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, true);
     material.alpha_write = 1;
     NativeShader::setTexObj(material, 0, &texture);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
     NativeShader::send(material);
     maximum.x = static_cast< s16 >(static_cast< s16 >(static_cast< s32 >(maximum.x) + 1) & ~1);
-    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.9999f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
     J3DNativeDraw::position(maximum.x, minimum.y, 0.9999f);
@@ -179,7 +179,7 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeDraw::texCoord(1.0f, 1.0f);
     J3DNativeDraw::position(minimum.x, maximum.y, 0.9999f);
     J3DNativeDraw::texCoord(0.0f, 1.0f);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
     TDDraw::close();
 }
 
@@ -268,23 +268,23 @@ void MarioActor::updateAlphaDL(u8 alpha) {
     J3DStateList list(storage, 16);
     NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
-    list.setTevColor(GX_TEVREG2, color);
-    list.setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_BACK);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+    list.setTevColor(GPU_TEVREG2, color);
+    list.setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
+    list.setGenMode2(1, 0, 1, 0, GPU_CULL_BACK);
+    list.setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
+    list.setChanCtrl(GPU_COLOR1A1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
+    list.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
+    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
+                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    list.setTevColorCalc(GPU_TEVSTAGE0, GPU_CC_TEXC, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV);
+    list.setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL, GPU_TEXCOORD1, GPU_TEXMAP1, GPU_COLOR_NULL);
     mDLchanger->swap()->mList.copy(list);
 }
 
 void MarioActor::updateSimpleAlphaDL(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    list.setDstAlpha(GX_TRUE, alpha);
+    list.setDstAlpha(GPU_TRUE, alpha);
     mDLchanger->swap()->mList.copy(list);
 }
 
@@ -293,9 +293,9 @@ void MarioActor::updateReflectAlphaDL(u8 alpha) {
     J3DStateList list(storage, 16);
     NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
-    list.setTevColor(GX_TEVREG2, color);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
+    list.setTevColor(GPU_TEVREG2, color);
+    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A2, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV,
+                             GPU_TEV_SWAP0, GPU_TEV_SWAP0);
     mDLchanger->swap()->mList.copy(list);
 }
 
@@ -303,10 +303,10 @@ void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, 
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
     NebulaColor8 ambientColor = rAmbient.mGXColor;
-    list.setChanAmbColor(GX_COLOR0A0, ambientColor);
+    list.setChanAmbColor(GPU_COLOR0A0, ambientColor);
     NebulaColor8 materialColor = rMaterial.mGXColor;
-    list.setChanMatColor(GX_COLOR0A0, materialColor);
-    list.setChanCtrl(GX_COLOR1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanMatColor(GPU_COLOR0A0, materialColor);
+    list.setChanCtrl(GPU_COLOR1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT_NULL, GPU_DF_CLAMP, GPU_AF_NONE);
 
     if (!MR::isNearZero(strength)) {
         f32 nearZ = MR::getNearZ();
@@ -315,7 +315,7 @@ void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, 
         f32 start;
         f32 end;
         MR::calcFogStartEnd(mPosition, strength, &start, &end);
-        list.setFog(GX_FOG_LIN, start, end, nearZ, farZ, color);
+        list.setFog(GPU_FOG_LIN, start, end, nearZ, farZ, color);
     }
 
     mCurrDL = 1 - mCurrDL;
@@ -350,7 +350,7 @@ void MarioActor::createRainbowDL() {
             }
 
             color.a = 16 + (alpha + 1) * 24;
-            list.setTevColor(GX_TEVREG0, color);
+            list.setTevColor(GPU_TEVREG0, color);
             DLchanger* changer = _94[alpha * 8 + index];
             changer->mBuffers[changer->mCurrentBuffer].mList.copy(list);
             list.clear();
@@ -397,10 +397,10 @@ void MarioActor::drawScreenBlend() const {
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 0, 0, 2);
         NativeShader::setBlend(material, NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_DST_ALPHA);
-        J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        J3DNativeState::setDstAlpha(GPU_TRUE, 0);
         NativeShader::send(material);
         TDDraw::drawFillBox(position, opposite, 0);
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
+        J3DNativeState::setAlphaUpdate(GPU_FALSE);
         MR::loadProjectionMtx();
         MR::loadViewMtx();
     }
@@ -478,7 +478,7 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
 
     MR::normalizeOrZero(&tangent);
     NebulaMtxRotAxisRad(rotation, &rNormal, 0.3926991f);
-    J3DNativeDraw::begin(GX_TRIANGLEFAN, 18, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLEFAN, 18, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z);
     J3DNativeDraw::color(128);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
@@ -500,14 +500,14 @@ void MarioActor::drawSpinInhibit() const {
 void MarioActor::drawColdWaterDamage() const {
     u32 next;
     u32 stripHeight = 4;
-    GXTexObj textures[2];
+    GpuTexObj textures[2];
     u16 width = MR::getFrameBufferWidth();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     u16 current = 0;
-    J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    J3DNativeState::setLineWidth(6, GX_TO_ZERO);
+    J3DNativeTexture::init(&textures[0], _1D8, width, 4, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeTexture::init(&textures[1], _1DC, width, 4, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
     J3DNativeTarget::capture(_1D8, 0, 0, width, 4, NEBULA_TARGET_RGB, NEBULA_CAPTURE_FILTERED);
     f32 textureStep = 1.0f / static_cast< f32 >(stripHeight);
     f32 frequency = 89.0f * MR::sin((TWO_PI * mMario->mSwim->mColdWaterDamageInterval) / 120.0f);
@@ -525,7 +525,7 @@ void MarioActor::drawColdWaterDamage() const {
 
         for (u32 row = y; row < y + 4; row++) {
             f32 offset = 5.0f * MR::sin(2.0f * (((_37C + row * frequency) / MR::getScreenHeight()) * JGeometry::TUtil< f32 >::PI()));
-            J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
             J3DNativeDraw::position(offset, row, 0.0f);
             J3DNativeDraw::texCoord(0.0f, v);
             J3DNativeDraw::position(offset + MR::getScreenWidth(), row, 0.0f);
@@ -573,14 +573,14 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
 
     u32 next;
     u32 stripHeight = 4;
-    GXTexObj textures[2];
+    GpuTexObj textures[2];
     u16 width = MR::getFrameBufferWidth();
     NebulaNativeMaterial material;
     TDDraw::setupNative(&material, 1, 0, 2);
     u16 current = 0;
-    J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    J3DNativeState::setLineWidth(6, GX_TO_ZERO);
+    J3DNativeTexture::init(&textures[0], _1D8, width, 4, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeTexture::init(&textures[1], _1DC, width, 4, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
     J3DNativeTarget::capture(_1D8, 0, 0, width, 4, NEBULA_TARGET_RGB, NEBULA_CAPTURE_FILTERED);
     f32 textureStep = 1.0f / static_cast< f32 >(stripHeight);
     f32 phase = (_37C * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / period;
@@ -596,7 +596,7 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         for (u32 row = y; row < y + 4; row++) {
             f32 angle = MR::sin(spatialPhase * row) * JGeometry::TUtil< f32 >::PI();
             f32 offset = amplitude * MR::sin(angle + phase);
-            J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
             J3DNativeDraw::position(offset, row, 0.0f);
             J3DNativeDraw::texCoord(0.0f, v);
             J3DNativeDraw::position(offset + MR::getScreenWidth(), row, 0.0f);
@@ -670,7 +670,7 @@ void MarioActor::drawSpinEffect() const {
     TVec3f direction(mMario->mFrontVec);
     TVec3f previous;
     NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
-    J3DNativeState::setLineWidth(36, GX_TO_ZERO);
+    J3DNativeState::setLineWidth(36, GPU_TO_ZERO);
 
     for (u32 i = 0; i <= 64; i++) {
         TVec3f point(direction);
@@ -685,7 +685,7 @@ void MarioActor::drawSpinEffect() const {
         NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
-    J3DNativeState::setLineWidth(18, GX_TO_ZERO);
+    J3DNativeState::setLineWidth(18, GPU_TO_ZERO);
 
     for (u32 i = 0; i <= 64; i++) {
         TVec3f point(direction);
@@ -767,7 +767,7 @@ bool MarioActor::drawDarkMask() const {
     material.alpha_write = 1;
     material.constants[4] = 1.0f;
     NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
-    J3DNativeState::setDstAlpha(GX_TRUE, 255);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 255);
     NativeShader::send(material);
     TVec3f spine;
     TVec2f center;
@@ -800,7 +800,7 @@ bool MarioActor::drawDarkMask() const {
     left &= ~1;
     MR::convertFrameBufferPosToScreenPos(&minimum, TVec2f(left, top));
     MR::convertFrameBufferPosToScreenPos(&maximum, TVec2f(left + width, top + height));
-    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
     J3DNativeDraw::position(maximum.x, minimum.y, 0.0f);
@@ -809,9 +809,9 @@ bool MarioActor::drawDarkMask() const {
     J3DNativeDraw::texCoord(4.0f, 4.0f);
     J3DNativeDraw::position(minimum.x, maximum.y, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 4.0f);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
     TDDraw::close();
     return true;
 }

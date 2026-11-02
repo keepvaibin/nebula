@@ -2,7 +2,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 namespace {
     const f32 sModelScale = 100.0f;

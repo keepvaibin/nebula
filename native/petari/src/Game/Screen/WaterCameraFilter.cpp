@@ -20,8 +20,8 @@
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuEnums.h>
+#include <NebulaGpuTypes.h>
 #include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>
 
@@ -88,7 +88,7 @@ namespace {
 
 void WaterCameraFilter::initScreenTex() {
     MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
-    mScreenTex = new JUTTexture(::getFrameBufferWidth(), ::getScreenHeight(), GX_TF_RGB565);
+    mScreenTex = new JUTTexture(::getFrameBufferWidth(), ::getScreenHeight(), GPU_TF_RGB565);
 }
 
 void WaterCameraFilter::exeAirToWater() {
@@ -136,7 +136,7 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    mScreenTex->capture(0, 0, GX_TF_RGB565, false, 0);
+    mScreenTex->capture(0, 0, GPU_TF_RGB565, false, 0);
     loadMaterial();
     TVec2f pos;
     pos.x = 0.0f;
@@ -150,7 +150,7 @@ void WaterCameraFilter::draw() const {
     f32 centerU = 1.0f - pos.x;
     f32 centerV = 1.0f - pos.y;
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
         J3DNativeDraw::texCoord(centerU - halfSize, centerV - halfSize);
@@ -179,7 +179,7 @@ void WaterCameraFilter::loadMaterial() const {
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
     NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
     TMtx34f modelView;
     modelView.identity();
     J3DNativeShape::setPosition(0, modelView);
@@ -205,7 +205,7 @@ void WaterCameraFilter::loadMaterial() const {
     MR::multMtx(textureMtx, textureMtx, translation);
     sendFilterMaterial(mFilterTex, mScreenTex, textureMtx,
                        Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void WaterCameraFilter::exeWater() {

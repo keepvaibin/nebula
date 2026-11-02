@@ -98,35 +98,35 @@ namespace {
 }  // namespace
 
 namespace J3DNativeDraw {
-    void begin(GXPrimitive primitive, u16 count, u32 attributes) {
+    void begin(GpuPrimitive primitive, u16 count, u32 attributes) {
         if (sVertex < sCount) {
             fail("a primitive begun before the last one's vertices were all given");
         }
         if (count > kMaxVertices) {
             fail("more vertices in one primitive than kMaxVertices");
         }
-        // GXBegin's primitive as the host's grouping (NebulaPrimitive).
+        // GpuBegin's primitive as the host's grouping (NebulaPrimitive).
         switch (primitive) {
-        case GX_QUADS:
+        case GPU_QUADS:
         case 0x88:  // GX's second quads opcode
             sPrimitive = NEBULA_PRIMITIVE_QUADS;
             break;
-        case GX_TRIANGLES:
+        case GPU_TRIANGLES:
             sPrimitive = NEBULA_PRIMITIVE_TRIANGLES;
             break;
-        case GX_TRIANGLESTRIP:
+        case GPU_TRIANGLESTRIP:
             sPrimitive = NEBULA_PRIMITIVE_TRIANGLE_STRIP;
             break;
-        case GX_TRIANGLEFAN:
+        case GPU_TRIANGLEFAN:
             sPrimitive = NEBULA_PRIMITIVE_TRIANGLE_FAN;
             break;
-        case GX_LINES:
+        case GPU_LINES:
             sPrimitive = NEBULA_PRIMITIVE_LINES;
             break;
-        case GX_LINESTRIP:
+        case GPU_LINESTRIP:
             sPrimitive = NEBULA_PRIMITIVE_LINE_STRIP;
             break;
-        case GX_POINTS:
+        case GPU_POINTS:
             sPrimitive = NEBULA_PRIMITIVE_POINTS;
             break;
         default:
@@ -196,7 +196,7 @@ namespace J3DNativeDraw {
     }
 };  // namespace J3DNativeDraw
 
-void J3DNativeDrawBegin(GXPrimitive primitive, u16 count, u32 attributes) {
+void J3DNativeDrawBegin(GpuPrimitive primitive, u16 count, u32 attributes) {
     J3DNativeDraw::begin(primitive, count, attributes);
 }
 

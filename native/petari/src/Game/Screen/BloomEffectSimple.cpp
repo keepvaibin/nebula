@@ -23,12 +23,12 @@ namespace {
         TexSpec() {
         }
 
-        void set(JUTTexture*, s32, s32, GXTexFmt);
+        void set(JUTTexture*, s32, s32, GpuTexFmt);
 
         /* 0x00 */ JUTTexture* _0;
         /* 0x04 */ s32 _4;
         /* 0x08 */ s32 _8;
-        /* 0x0C */ GXTexFmt _C;
+        /* 0x0C */ GpuTexFmt _C;
     };
 };  // namespace
 
@@ -67,15 +67,15 @@ void BloomEffectSimple::draw() const {
                               verticalBits);
         MR::reinitGX();
         ImageEffectLocalUtil::setupDrawTexture();
-        _28->load(GX_TEXMAP0);
-        J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(alpha, alpha, alpha, 255));
-        J3DNativeState::setChanAmbColor(GX_COLOR0A0, Color8(0, 0, 0, 255));
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
+        _28->load(GPU_TEXMAP0);
+        J3DNativeState::setChanMatColor(GPU_COLOR0A0, Color8(alpha, alpha, alpha, 255));
+        J3DNativeState::setChanAmbColor(GPU_COLOR0A0, Color8(0, 0, 0, 255));
+        J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
         return;
     }
 
     ::TexSpec texSpec;
-    texSpec.set(_20, 4, 0, GX_TF_RGB565);
+    texSpec.set(_20, 4, 0, GPU_TF_RGB565);
 
     // The renderer keeps the scene in the scene target's own format: the corner the chain works in is saved as a texture copy,
     // which cuts the ray tracer's HDR scene at 1 there.
@@ -85,34 +85,34 @@ void BloomEffectSimple::draw() const {
     {
         ImageEffectLocalUtil::capture(texSpec._0, texSpec._4, texSpec._8, texSpec._C, false, 0);
     }
-    ImageEffectLocalUtil::capture(_18, texSpec._4, texSpec._8, GX_TF_RGB565, true, 0);
+    ImageEffectLocalUtil::capture(_18, texSpec._4, texSpec._8, GPU_TF_RGB565, true, 0);
     MR::reinitGX();
     ImageEffectLocalUtil::setupDrawTexture();
     ImageEffectLocalUtil::drawTexture(_18, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(_1C, 4, 0, GX_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_1C, 4, 0, GPU_TF_RGB565, false, 0);
 
     switch (mMaskFilter) {
     case 0:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GX_TF_I8, false, 0);
+        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_TF_I8, false, 0);
         break;
     case 1:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GX_CTF_R8, false, 0);
+        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_CTF_R8, false, 0);
         break;
     case 2:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GX_CTF_G8, false, 0);
+        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_CTF_G8, false, 0);
         break;
     case 3:
-        ImageEffectLocalUtil::capture(_2C, 4, 0, GX_CTF_B8, false, 0);
+        ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_CTF_B8, false, 0);
         break;
     }
 
     ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Threshold);
     ImageEffectLocalUtil::drawTexture(_2C, 4, 0, mThreshold, ImageEffectLocalUtil::TexDrawType_3);
     ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Modulate);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GX_TF_RGB565, true, 0);
-    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
+    ImageEffectLocalUtil::capture(_24, 4, 0, GPU_TF_RGB565, true, 0);
+    J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_CLEAR);
     ImageEffectLocalUtil::setupDrawTexture();
-    texSpec.set(_24, 8, 0, GX_TF_RGB565);
+    texSpec.set(_24, 8, 0, GPU_TF_RGB565);
     ImageEffectLocalUtil::blurTexture(texSpec._0, texSpec._4, texSpec._8, 8, 0.009f, 1.0f);
     ImageEffectLocalUtil::capture(_28, texSpec._4, texSpec._8, texSpec._C, false, 0);
     if (route != 0) {
@@ -126,7 +126,7 @@ void BloomEffectSimple::draw() const {
     ImageEffectLocalUtil::drawTexture(_28, 1, 0, alpha, ImageEffectLocalUtil::TexDrawType_1);
 }
 
-void ::TexSpec::set(JUTTexture* pParam1, s32 param2, s32 param3, GXTexFmt param4) {
+void ::TexSpec::set(JUTTexture* pParam1, s32 param2, s32 param3, GpuTexFmt param4) {
     _0 = pParam1;
     _4 = param2;
     _8 = param3;

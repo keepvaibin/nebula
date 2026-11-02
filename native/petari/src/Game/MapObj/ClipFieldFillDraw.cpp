@@ -38,15 +38,15 @@ void ClipFieldFillDraw::setModeSubColor() {
 void ClipFieldFillDraw::setUpFillScreen() const {
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
 }
 
 void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
@@ -62,11 +62,11 @@ void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
     material.constants[4] = _25 ? 1.0f : 0.0f;
     NativeShader::setTexture(material, 0, MR::getScreenAlphaTexture(1));
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {
         u16 screenWidth = MR::getScreenWidth();
         u16 screenHeight = MR::getScreenHeight();
@@ -94,8 +94,8 @@ void ClipFieldFillDraw::draw() const {
     MR::clearAlphaBuffer(0);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
 
     if (_24) {
         NebulaNativeMaterial material;

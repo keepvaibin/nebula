@@ -137,7 +137,7 @@ void ShadowVolumeBox::makeVertexBuffer() const {
 }
 
 void ShadowVolumeBox::drawShape() const {
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 14, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 14, 0);
     {
         TDDraw::sendPoint(mPoints[0]);
         TDDraw::sendPoint(mPoints[1]);
@@ -156,7 +156,7 @@ void ShadowVolumeBox::drawShape() const {
     }
 
 
-    J3DNativeDraw::begin(GX_TRIANGLEFAN, 8, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLEFAN, 8, 0);
     {
         TDDraw::sendPoint(mPoints[12]);
         TDDraw::sendPoint(mPoints[0]);
@@ -169,7 +169,7 @@ void ShadowVolumeBox::drawShape() const {
     }
 
 
-    J3DNativeDraw::begin(GX_TRIANGLEFAN, 8, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLEFAN, 8, 0);
     {
         TDDraw::sendPoint(mPoints[13]);
         TDDraw::sendPoint(mPoints[1]);

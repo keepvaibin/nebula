@@ -1,6 +1,6 @@
 #include "Game/System/GameSystemDimmingWatcher.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 #include "Game/System/NebulaFrameClock.hpp"

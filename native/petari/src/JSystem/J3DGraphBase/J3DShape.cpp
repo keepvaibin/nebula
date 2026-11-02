@@ -31,7 +31,7 @@ void J3DShape::initialize() {
     mNebulaRegistered = false;
 }
 
-void J3DShape::addTexMtxIndexInDL(GXAttr attr, u32 valueBase) {
+void J3DShape::addTexMtxIndexInDL(GpuAttr attr, u32 valueBase) {
     u32 kSize[] = {0, 1, 1, 2};
 
     s32 pnmtxidxOffs = -1;
@@ -39,8 +39,8 @@ void J3DShape::addTexMtxIndexInDL(GXAttr attr, u32 valueBase) {
     s32 stride = 0;
     bool found = false;
 
-    for (GXVtxDescList* vtxDesc = getVtxDesc(); vtxDesc->attr != GX_VA_NULL; vtxDesc++) {
-        if (vtxDesc->attr == GX_VA_PNMTXIDX)
+    for (GpuVtxDescList* vtxDesc = getVtxDesc(); vtxDesc->attr != GPU_VA_NULL; vtxDesc++) {
+        if (vtxDesc->attr == GPU_VA_PNMTXIDX)
             pnmtxidxOffs = stride;
 
         if (attr < vtxDesc->attr && !found) {
@@ -58,32 +58,32 @@ void J3DShape::addTexMtxIndexInDL(GXAttr attr, u32 valueBase) {
         getShapeDraw(i)->addTexMtxIndexInDL(stride, attrOffs, (s32)valueBase);
 }
 
-void J3DShape::addTexMtxIndexInVcd(GXAttr attr) {
+void J3DShape::addTexMtxIndexInVcd(GpuAttr attr) {
 
     s32 attrIdx = -1;
     s32 attrOffs = -1;
     s32 stride = 0;
 
-    GXVtxDescList* vtxDesc = getVtxDesc();
+    GpuVtxDescList* vtxDesc = getVtxDesc();
     s32 attrCount = 0;
 
-    for (; vtxDesc->attr != GX_VA_NULL; attrCount++, vtxDesc++) {
-        if (vtxDesc->attr == GX_VA_PNMTXIDX)
+    for (; vtxDesc->attr != GPU_VA_NULL; attrCount++, vtxDesc++) {
+        if (vtxDesc->attr == GPU_VA_PNMTXIDX)
             attrIdx = stride;
     }
 
     if (attrIdx == -1)
         return;
 
-    GXVtxDescList* newVtxDesc = new GXVtxDescList[attrCount + 2];
+    GpuVtxDescList* newVtxDesc = new GpuVtxDescList[attrCount + 2];
     bool inserted = false;
 
     vtxDesc = getVtxDesc();
-    GXVtxDescList* dst = newVtxDesc;
-    for (; vtxDesc->attr != GX_VA_NULL; dst++, vtxDesc++) {
+    GpuVtxDescList* dst = newVtxDesc;
+    for (; vtxDesc->attr != GPU_VA_NULL; dst++, vtxDesc++) {
         if ((attr < vtxDesc->attr) && !inserted) {
             dst->attr = attr;
-            dst->type = GX_DIRECT;
+            dst->type = GPU_DIRECT;
             attrOffs = stride;
             dst++;
 
@@ -92,11 +92,11 @@ void J3DShape::addTexMtxIndexInVcd(GXAttr attr) {
 
         dst->attr = vtxDesc->attr;
         dst->type = vtxDesc->type;
-        stride += vtxDesc->type == GX_INDEX16 ? sizeof(u16) : vtxDesc->type != GX_NONE;
+        stride += vtxDesc->type == GPU_INDEX16 ? sizeof(u16) : vtxDesc->type != GPU_NONE;
     }
 
-    dst->attr = GX_VA_NULL;
-    dst->type = GX_NONE;
+    dst->attr = GPU_VA_NULL;
+    dst->type = GPU_NONE;
     mVtxDesc = newVtxDesc;
 }
 
@@ -117,21 +117,21 @@ u16 J3DShape::countBumpMtxNum() const {
 // What the shape's vertex description and its model's formats imply for drawing it: the vertex data's position and
 // normal formats (J3DDeformer reads them), NBT normals and per-vertex position matrices.
 void J3DShape::initVtxAttr() {
-    for (GXVtxAttrFmtList* vtxAttr = mVertexData->getVtxAttrFmtList(); vtxAttr->attr != GX_VA_NULL; vtxAttr++) {
-        if (vtxAttr->attr == GX_VA_POS) {
+    for (GpuVtxAttrFmtList* vtxAttr = mVertexData->getVtxAttrFmtList(); vtxAttr->attr != GPU_VA_NULL; vtxAttr++) {
+        if (vtxAttr->attr == GPU_VA_POS) {
             mVertexData->setVtxPosFrac((u8)vtxAttr->frac);
-            mVertexData->setVtxPosType((GXCompType)vtxAttr->type);
-        } else if (vtxAttr->attr == GX_VA_NRM) {
+            mVertexData->setVtxPosType((GpuCompType)vtxAttr->type);
+        } else if (vtxAttr->attr == GPU_VA_NRM) {
             mVertexData->setVtxNrmFrac((u8)vtxAttr->frac);
-            mVertexData->setVtxNrmType((GXCompType)vtxAttr->type);
+            mVertexData->setVtxNrmType((GpuCompType)vtxAttr->type);
         }
     }
 
     mHasPNMTXIdx = false;
-    for (GXVtxDescList* vtxDesc = mVtxDesc; vtxDesc->attr != GX_VA_NULL; vtxDesc++) {
-        if (vtxDesc->attr == GX_VA_NBT && vtxDesc->type != GX_NONE) {
+    for (GpuVtxDescList* vtxDesc = mVtxDesc; vtxDesc->attr != GPU_VA_NULL; vtxDesc++) {
+        if (vtxDesc->attr == GPU_VA_NBT && vtxDesc->type != GPU_NONE) {
             mHasNBT = true;
-        } else if (vtxDesc->attr == GX_VA_PNMTXIDX && vtxDesc->type != GX_NONE) {
+        } else if (vtxDesc->attr == GPU_VA_PNMTXIDX && vtxDesc->type != GPU_NONE) {
             mHasPNMTXIdx = true;
         }
     }

@@ -117,10 +117,10 @@ void MarioActor::initDrawAndModel() {
 
     {
         MR::CurrentHeapRestorer restorer(static_cast< JKRHeap* >(MR::getSceneHeapGDDR3()));
-        _B7C = new JUTTexture(0x80, 0x40, GX_TF_RGB565);
+        _B7C = new JUTTexture(0x80, 0x40, GPU_TF_RGB565);
 
         for (u32 i = 0; i < 2; i++) {
-            mMaskTextures[i] = new JUTTexture(8, 8, GX_TF_IA8);
+            mMaskTextures[i] = new JUTTexture(8, 8, GPU_TF_IA8);
             mMaskTextures[i]->mWrapS = 1;
             mMaskTextures[i]->mWrapT = 1;
             mMaskTextures[i]->mMinType = 0;
@@ -500,8 +500,8 @@ void MarioActor::drawMarioModel() const {
         }
 
         if (mBeeWallWalk != 0) {
-            J3DNativeState::setAlphaUpdate(GX_TRUE);
-            J3DNativeState::setDstAlpha(GX_TRUE, 0);
+            J3DNativeState::setAlphaUpdate(GPU_TRUE);
+            J3DNativeState::setDstAlpha(GPU_TRUE, 0);
         }
 
         model->setDrawView(0);
@@ -524,8 +524,8 @@ void MarioActor::drawMarioModel() const {
     }
 
     if (mBeeWallWalk != 0) {
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        J3DNativeState::setAlphaUpdate(GPU_FALSE);
+        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
     }
 }
 
@@ -948,7 +948,7 @@ void MarioActor::drawModelBlur() const {
 void MarioActor::createTextureDL(DLholder* pHolder, u16 texMapID, u16 texIndex) {
     ResTIMG* texture = _B64[texIndex];
     pHolder->mList.reserve(1);
-    pHolder->mList.setTexImgPtr(static_cast< GXTexMapID >(texMapID), reinterpret_cast< u8* >(texture) + texture->mImageDataOffset);
+    pHolder->mList.setTexImgPtr(static_cast< GpuTexMapID >(texMapID), reinterpret_cast< u8* >(texture) + texture->mImageDataOffset);
 }
 
 void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {

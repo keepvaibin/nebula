@@ -31,7 +31,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 #include "Game/Screen/NebulaMenuFocus.hpp"
@@ -42,7 +42,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaDisc.hpp"
 
-#define GX_FIFO_SIZE 0x80000
+#define GPU_FIFO_SIZE 0x80000
 
 #define INIT_AUDIO_KEY "\203\111\201\133\203\146\203\102\203\111\217\211\212\372\211\273" /* オーディオ初期化 */  // "Audio Initialization"
 

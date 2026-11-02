@@ -23,7 +23,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 #include <revolution/mtx.h>
 
 MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "\203\124\201\133\203\140\203\211\203\103\203\147" /* サーチライト */, "SearchLightCone", nullptr, -1, 0), _9C(), _A0(), _A4() {
@@ -257,7 +257,7 @@ void MarioActor::drawSearchLight() const {
     box.color_write = 0;
     box.alpha_write = 1;
     NativeShader::setBlend(box, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
     NativeShader::send(box);
 
     TDDraw::drawFillBox(screenPos1, screenPos2, 0);
@@ -268,10 +268,10 @@ void MarioActor::drawSearchLight() const {
     J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(mSearchLight));
     J3DMaterial* const material = model->getModelData()->getMaterialNodePointer(0);
     if (model->simpleDrawSetup(material)) {
-        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
-        J3DNativeState::setColorUpdate(GX_FALSE);
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+        J3DNativeState::setAlphaUpdate(GPU_TRUE);
+        J3DNativeState::setColorUpdate(GPU_FALSE);
+        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 
         // Gradually fade in the search light.
         f32 lightBrightness = 1.0f;
@@ -288,13 +288,13 @@ void MarioActor::drawSearchLight() const {
 
         // Render intersection of light cone with the scene by subtracting
         // visible back faces from front faces.
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
-        J3DNativeState::setCullMode(GX_CULL_BACK);
+        J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP);
+        J3DNativeState::setCullMode(GPU_CULL_BACK);
         model->setDrawView(0);
         model->simpleDrawShape(material);
 
-        J3DNativeState::setCullMode(GX_CULL_FRONT);
-        J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
+        J3DNativeState::setCullMode(GPU_CULL_FRONT);
+        J3DNativeState::setBlendMode(GPU_BM_SUBTRACT, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP);
         model->simpleDrawShape(material);
 
         // The light's colour added over the box by the destination alpha the volume left (vertex_color).
@@ -302,20 +302,20 @@ void MarioActor::drawSearchLight() const {
         TDDraw::setupNative(&fill, 0, 1, 2);
         fill.alpha_write = 1;
         NativeShader::setBlend(fill, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
-        J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        J3DNativeState::setDstAlpha(GPU_TRUE, 0);
         NativeShader::send(fill);
 
         u8* col = mConst->getTable()->mSearchLightColor;
         TDDraw::drawFillBox(screenPos1, screenPos2, col[0] << 24 | col[1] << 16 | col[2] << 8);
 
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
+        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+        J3DNativeState::setAlphaUpdate(GPU_FALSE);
 
         TDDraw::setupNative(&view, 0, 1, 1);
-        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+        J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
         bool res = model->simpleDrawSetup(material);
 
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
+        J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_NOOP);
 
         // Colour of the light cone: the channel colour at alpha RASA - K(1 - A0), drawn above 4.
         const u8 coneAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel));

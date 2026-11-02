@@ -25,9 +25,9 @@ namespace {
         NativeShader::setTexture(material, 0, pPicture);
         NativeShader::setTexture(material, 1, pDepth);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     }
 }  // namespace
 #include <JSystem/JGeometry/TMatrix.hpp>
@@ -68,22 +68,22 @@ void ScreenBlurEffect::drawBlur() const {
 
     TProj3f projectionMtx;
     projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
-    J3DNativeView::setProjection(projectionMtx, GX_PERSPECTIVE);
+    J3DNativeView::setProjection(projectionMtx, GPU_PERSPECTIVE);
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
     sendBlurMaterial(_14, _18, static_cast< u8 >(static_cast< s32 >(get_10() * 220.0f * mIntensity)));
 
     f32 y = MR::tanDegree(MR::getRenderFovy() * 0.5f) * mScale;
     f32 x = MR::getAspect() * y;
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {
         f32 z = -mScale;
 
@@ -102,6 +102,6 @@ void ScreenBlurEffect::drawBlur() const {
 }
 
 void ScreenBlurEffect::captureBlur() const {
-    _14->capture(0, 0, GX_TF_RGBA8, false, 0);
-    _18->capture(0, 0, GX_TF_Z8, true, 0);
+    _14->capture(0, 0, GPU_TF_RGBA8, false, 0);
+    _18->capture(0, 0, GPU_TF_Z8, true, 0);
 }

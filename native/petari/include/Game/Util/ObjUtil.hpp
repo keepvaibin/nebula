@@ -2,7 +2,7 @@
 
 #include <JSystem/JGeometry/TVec.hpp>
 #include "Game/System/NebulaInput.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class BenefitItemLifeUp;
 class BenefitItemObj;

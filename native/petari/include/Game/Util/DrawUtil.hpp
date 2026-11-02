@@ -3,7 +3,7 @@
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class J3DModelData;
 class J3DModel;

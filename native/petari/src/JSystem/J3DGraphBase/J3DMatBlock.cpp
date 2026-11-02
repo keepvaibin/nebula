@@ -108,7 +108,7 @@ void J3DTevBlockPatched::initialize() {
     }
 
     for (s32 i = 0; i < ARRAY_SIZE(mTevKColorSel); i++) {
-        mTevKColorSel[i] = GX_TEV_KCSEL_K0;
+        mTevKColorSel[i] = GPU_TEV_KCSEL_K0;
     }
 
     mTevStageNum = 1;
@@ -129,10 +129,10 @@ void J3DTevBlock2::initialize() {
 
     mTevStage[0].setStageNo(0);
     mTevStage[1].setStageNo(1);
-    mTevKColorSel[0] = GX_TEV_KCSEL_K0;
-    mTevKColorSel[1] = GX_TEV_KCSEL_K0;
-    mTevKAlphaSel[0] = GX_TEV_KASEL_K0_A;
-    mTevKAlphaSel[1] = GX_TEV_KASEL_K0_A;
+    mTevKColorSel[0] = GPU_TEV_KCSEL_K0;
+    mTevKColorSel[1] = GPU_TEV_KCSEL_K0;
+    mTevKAlphaSel[0] = GPU_TEV_KASEL_K0_A;
+    mTevKAlphaSel[1] = GPU_TEV_KASEL_K0_A;
 
     for (s32 i = 0; i < ARRAY_SIZE(mTevColor) - 1; i++) {
         mTevColor[i] = j3dDefaultTevColor;
@@ -158,14 +158,14 @@ void J3DTevBlock4::initialize() {
     mTevStage[2].setStageNo(2);
     mTevStage[3].setStageNo(3);
 
-    mTevKColorSel[0] = GX_TEV_KCSEL_K0;
-    mTevKColorSel[1] = GX_TEV_KCSEL_K0;
-    mTevKColorSel[2] = GX_TEV_KCSEL_K0;
-    mTevKColorSel[3] = GX_TEV_KCSEL_K0;
-    mTevKAlphaSel[0] = GX_TEV_KASEL_K0_A;
-    mTevKAlphaSel[1] = GX_TEV_KASEL_K0_A;
-    mTevKAlphaSel[2] = GX_TEV_KASEL_K0_A;
-    mTevKAlphaSel[3] = GX_TEV_KASEL_K0_A;
+    mTevKColorSel[0] = GPU_TEV_KCSEL_K0;
+    mTevKColorSel[1] = GPU_TEV_KCSEL_K0;
+    mTevKColorSel[2] = GPU_TEV_KCSEL_K0;
+    mTevKColorSel[3] = GPU_TEV_KCSEL_K0;
+    mTevKAlphaSel[0] = GPU_TEV_KASEL_K0_A;
+    mTevKAlphaSel[1] = GPU_TEV_KASEL_K0_A;
+    mTevKAlphaSel[2] = GPU_TEV_KASEL_K0_A;
+    mTevKAlphaSel[3] = GPU_TEV_KASEL_K0_A;
 
     for (s32 i = 0; i < ARRAY_SIZE(mTevColor) - 1; i++) {
         mTevColor[i] = j3dDefaultTevColor;
@@ -195,11 +195,11 @@ void J3DTevBlock16::initialize() {
     }
 
     for (s32 i = 0; i < ARRAY_SIZE(mTevKColorSel); i++) {
-        mTevKColorSel[i] = GX_TEV_KCSEL_K0;
+        mTevKColorSel[i] = GPU_TEV_KCSEL_K0;
     }
 
     for (s32 i = 0; i < ARRAY_SIZE(mTevKColorSel); i++) {
-        mTevKAlphaSel[i] = GX_TEV_KASEL_K0_A;
+        mTevKAlphaSel[i] = GPU_TEV_KASEL_K0_A;
     }
 
     for (u32 i = 0; i < ARRAY_SIZE(mTevStage); i++) {

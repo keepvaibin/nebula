@@ -16,7 +16,7 @@
 
 FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     : mBodyTexture(), mFurTexture(), mIndirectTexture(), mNumLayers(numLayers), mLength(3.0f, 1.0f), mIndirect(0.2f, 1.5f), mBrightness(40.0f, 4.5f),
-      mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(GX_CULL_BACK), mMatIntensity(255),
+      mAlpha(210.0f, 1.8f), mFurUVScale(1.0f), mBodyUVScale(1.0f), mColorBlend(0.0f, 1.0f), mCullMode(GPU_CULL_BACK), mMatIntensity(255),
       mAmbIntensity(50), mUseIndirect(1), mZCompLoc(), mZWrite(), mAdditive(), mAlphaRef(32) {
     mBodyTexture = new JUTTexture(pBody, 0);
 
@@ -27,23 +27,23 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
         mUseIndirect = 0;
     }
 
-    u32 size = J3DNativeTexture::imageSize(GX_TF_IA8, 32, 32, 1);
+    u32 size = J3DNativeTexture::imageSize(GPU_TF_IA8, 32, 32, 1);
     ResTIMG* pImage = reinterpret_cast< ResTIMG* >(new (32) u8[size + sizeof(ResTIMG)]);
-    pImage->mFormat = GX_TF_IA8;
+    pImage->mFormat = GPU_TF_IA8;
     pImage->mWidth = 32;
     pImage->mHeight = 32;
-    pImage->mWrapS = GX_REPEAT;
-    pImage->mWrapT = GX_REPEAT;
-    pImage->mPaletteName = GX_TLUT0;
-    pImage->mPaletteFormat = GX_TL_IA8;
+    pImage->mWrapS = GPU_REPEAT;
+    pImage->mWrapT = GPU_REPEAT;
+    pImage->mPaletteName = GPU_TLUT0;
+    pImage->mPaletteFormat = GPU_TL_IA8;
     pImage->mPaletteNum = 0;
     pImage->mPaletteDataOffset = 0;
     pImage->mMipmap = false;
     pImage->mDoEdgeLod = false;
     pImage->mBiasClamp = false;
-    pImage->mMaxAnisotropy = GX_ANISO_1;
-    pImage->mMinType = GX_LINEAR;
-    pImage->mMagType = GX_LINEAR;
+    pImage->mMaxAnisotropy = GPU_ANISO_1;
+    pImage->mMinType = GPU_LINEAR;
+    pImage->mMagType = GPU_LINEAR;
     pImage->mMinLod = 0;
     pImage->mMaxLod = 0;
     pImage->mImageNum = 1;
@@ -104,11 +104,11 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         useSpecular = true;
     }
 
-    J3DNativeState::setCoPlanar(GX_FALSE);
+    J3DNativeState::setCoPlanar(GPU_FALSE);
     NativeShader::init(sMaterial, NEBULA_SHADER_FUR, mAdditive ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA,
                        NEBULA_COMPARE_LEQUAL, mZWrite != 0,
-                       mCullMode == GX_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == GX_CULL_FRONT ? NEBULA_CULL_FRONT
-                       : mCullMode == GX_CULL_ALL ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
+                       mCullMode == GPU_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == GPU_CULL_FRONT ? NEBULA_CULL_FRONT
+                       : mCullMode == GPU_CULL_ALL ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
     sMaterial.early_depth = mZCompLoc != 0 ? 1 : 0;
     sMaterial.color_write = 1;
     sMaterial.alpha_write = 0;
@@ -133,9 +133,9 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         pFog[4] = 1.0f;
         pFog[5] = 0.0f;
         pFog[6] = 0.0f;
-        pFog[7] = GX_FOG_PERSP_LIN;
+        pFog[7] = GPU_FOG_PERSP_LIN;
     } else {
-        pFog[7] = GX_FOG_NONE;
+        pFog[7] = GPU_FOG_NONE;
     }
 
     Mtx bodyMtx;
@@ -157,13 +157,13 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         J3DNativeShape::setTexture(2, indirectMtx, 2);
     }
 
-    J3DNativeState::setClipMode(GX_CLIP_DISABLE);
+    J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
 
     u32 sources;
     u32 mask0 = 0;
     u32 mask1 = 0;
     if (pLight) {
-        // GXSetChanCtrl's ambient source then material source per channel (GX_SRC_VTX 1).
+        // GpuSetChanCtrl's ambient source then material source per channel (GPU_SRC_VTX 1).
         sources = (pLight->mColorSource & 1) | (((pLight->mColorSource >> 1) & 1) << 1);
         mask0 = pLight->mLightMask;
         if (useSpecular) {

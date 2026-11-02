@@ -12,7 +12,7 @@ namespace {
 
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
         static const nw4r::ut::Color fog = 0;
-        J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fog);
+        J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fog);
         NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         sMaterial.depth_test = NEBULA_NATIVE_KEPT;
@@ -37,7 +37,7 @@ namespace nw4r {
             EnableLinearFilter(true, true);
         }
 
-        void CharWriter::LoadTexture(const Glyph& glyph, GXTexMapID slot) {
+        void CharWriter::LoadTexture(const Glyph& glyph, GpuTexMapID slot) {
             LoadingTexture loadInfo;
 
             loadInfo.slot = slot;
@@ -45,12 +45,12 @@ namespace nw4r {
             loadInfo.filter = mFilter;
 
             if (loadInfo != mLoadingTexture) {
-                GXTexObj tobj;
+                GpuTexObj tobj;
 
-                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GX_CLAMP, GX_CLAMP,
-                             GX_FALSE);
-                J3DNativeTexture::initLOD(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GX_DISABLE, GX_DISABLE, GX_ANISO_1);
-                NativeShader::setTexObj(sMaterial, slot - GX_TEXMAP0, &tobj);
+                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GPU_CLAMP, GPU_CLAMP,
+                             GPU_FALSE);
+                J3DNativeTexture::initLOD(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GPU_DISABLE, GPU_DISABLE, GPU_ANISO_1);
+                NativeShader::setTexObj(sMaterial, slot - GPU_TEXMAP0, &tobj);
                 NativeShader::send(sMaterial);
 
                 mLoadingTexture = loadInfo;
@@ -70,22 +70,22 @@ namespace nw4r {
                 SetupGXWithColorMapping(mColorMapping.min, mColorMapping.max);
             } else {
                 if (mFont) {
-                    GXTexFmt format = mFont->GetTextureFormat();
+                    GpuTexFmt format = mFont->GetTextureFormat();
 
                     switch (format) {
-                    case GX_TF_I4:
-                    case GX_TF_I8:
+                    case GPU_TF_I4:
+                    case GPU_TF_I8:
                         SetupGXForI();
                         break;
 
-                    case GX_TF_IA4:
-                    case GX_TF_IA8:
+                    case GPU_TF_IA4:
+                    case GPU_TF_IA8:
                         SetupGXDefault();
                         break;
 
-                    case GX_TF_RGB565:
-                    case GX_TF_RGB5A3:
-                    case GX_TF_RGBA8:
+                    case GPU_TF_RGB565:
+                    case GPU_TF_RGB5A3:
+                    case GPU_TF_RGBA8:
                         SetupGXForRGBA();
                         break;
 
@@ -130,8 +130,8 @@ namespace nw4r {
         }
 
         void CharWriter::EnableLinearFilter(bool atSmall, bool atLarge) {
-            mFilter.atSmall = atSmall ? GX_LINEAR : GX_NEAR;
-            mFilter.atLarge = atLarge ? GX_LINEAR : GX_NEAR;
+            mFilter.atSmall = atSmall ? GPU_LINEAR : GPU_NEAR;
+            mFilter.atLarge = atLarge ? GPU_LINEAR : GPU_NEAR;
         }
 
         f32 CharWriter::Print(CharCode code) {
@@ -171,9 +171,9 @@ namespace nw4r {
             const u16 texRight = static_cast< u16 >((glyph.cellX + glyph.widths.glyphWidth) * TEXTURE_COODINATE_ONE / glyph.texWidth);
             const u16 texBottom = static_cast< u16 >((glyph.cellY + glyph.height) * TEXTURE_COODINATE_ONE / glyph.texHeight);
 
-            LoadTexture(glyph, GX_TEXMAP0);
+            LoadTexture(glyph, GPU_TEXMAP0);
 
-            J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {
                 J3DNativeDraw::position(posLeft, posTop, posZ);
                 J3DNativeDraw::color(mVertexColor.lu);

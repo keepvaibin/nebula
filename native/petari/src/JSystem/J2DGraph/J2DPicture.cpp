@@ -54,7 +54,7 @@ void J2DPicture::private_initiate(const ResTIMG* timg, const ResTLUT* tlut) {
 
     mPalette = NULL;
     if (tlut && mPalette == NULL) {
-        mPalette = new JUTPalette(GX_TLUT0, const_cast< ResTLUT* >(tlut));
+        mPalette = new JUTPalette(GPU_TLUT0, const_cast< ResTLUT* >(tlut));
         if (mTexture[0] != NULL) {
             mTexture[0]->attachPalette(mPalette);
         }
@@ -282,7 +282,7 @@ const ResTIMG* J2DPicture::changeTexture(ResTIMG const* img, u8 texIndex, JUTPal
         JUTTexture* tex = getTexture(texIndex);
         result = tex->getTexInfo();
 
-        GXTlut var_r30 = GX_TLUT0;
+        GpuTlut var_r30 = GPU_TLUT0;
         if (img->mPaletteName != 0) {
             var_r30 = getTlutID(img, getUsableTlut(texIndex));
         }
@@ -329,12 +329,12 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
         setTevMode();
         makeMatrix(x, y, 0.0f, 0.0f);
         J3DNativeShape::setPosition(0, mPositionMtx);
-        J3DNativeState::setCurrentMtx(GX_PNMTX0);
+        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
         JGeometry::TVec2< s16 > coords[4];
         setTexCoord(coords, mTexture[0], BIND15, (J2DMirror)((mirrorX << 1) | mirrorY), rotate90);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
         J3DNativeDraw::color(color[0]);
         J3DNativeDraw::texCoord(static_cast< s16 >(coords[0].x) / 256.0f, static_cast< s16 >(coords[0].y) / 256.0f);
@@ -373,7 +373,7 @@ void J2DPicture::drawOut(JGeometry::TBox2< f32 > const& posBox, JGeometry::TBox2
         getNewColor(color);
         setTevMode();
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position((s16)(s32)(posBox.i.x), (s16)(s32)(posBox.i.y), 0.0f);
         J3DNativeDraw::color(color[0]);
         J3DNativeDraw::texCoord(s0, t0);
@@ -410,7 +410,7 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
         NebulaMtxConcat((MtxPtr)param_12, mGlobalMtx, outputMtx);
 
         J3DNativeShape::setPosition(0, outputMtx);
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
 
         J3DNativeDraw::position(param_0, param_1, 0.0f);
         J3DNativeDraw::color(black[0]);
@@ -455,9 +455,9 @@ void J2DPicture::setTevMode() {
         }
     }
     NativeShader::send(material);
-    static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                    GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kIdentity);
+    static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                    GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kIdentity);
 }
 
 void J2DPicture::swap(f32& lhs, f32& rhs) {
@@ -665,7 +665,7 @@ u8 J2DPicture::getUsableTlut(u8 param_0) {
 
             if (img != NULL && img->mPaletteName != 0) {
                 int name = mTexture[i]->getTlutName();
-                int var_r0 = name >= GX_BIGTLUT0 ? GX_BIGTLUT0 : GX_TLUT0;
+                int var_r0 = name >= GPU_BIGTLUT0 ? GPU_BIGTLUT0 : GPU_TLUT0;
 
                 u8 temp_r0 = name - var_r0;
                 if (temp_r0 < 4) {
@@ -686,12 +686,12 @@ u8 J2DPicture::getUsableTlut(u8 param_0) {
     return var_r26;
 }
 
-GXTlut J2DPicture::getTlutID(ResTIMG const* img, u8 param_1) {
+GpuTlut J2DPicture::getTlutID(ResTIMG const* img, u8 param_1) {
     if (img->mPaletteNum > 256) {
-        return (GXTlut)((param_1 % 4) + 0x10);
+        return (GpuTlut)((param_1 % 4) + 0x10);
     }
 
-    return (GXTlut)param_1;
+    return (GpuTlut)param_1;
 }
 
 void J2DPicture::setCornerColor(JUtility::TColor c0, JUtility::TColor c1, JUtility::TColor c2, JUtility::TColor c3) {

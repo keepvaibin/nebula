@@ -1,25 +1,25 @@
 #include "nw4r/lyt/common.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "nw4r/lyt/texMap.h"
-#include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuEnums.h>
+#include <NebulaGpuTypes.h>
 #include "JSystem/JUtility/JUTException.hpp"
 
 namespace nw4r {
     namespace lyt {
-        void TexMap::Get(_GXTexObj* pTexObj) const {
+        void TexMap::Get(_GpuTexObj* pTexObj) const {
             J3DNativeTexture::init(pTexObj, mImage, mWidth, mHeight, GetTexelFormat(), GetWrapModeS(), GetWrapModeT(), IsMipMap());
 
             J3DNativeTexture::initLOD(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(), IsBiasClampEnable(), IsEdgeLODEnable(),
                             GetAnisotropy());
         }
 
-        void TexMap::Set(const GXTexObj& texObj) {
+        void TexMap::Set(const GpuTexObj& texObj) {
             void* image;
             u16 width, height;
-            GXTexFmt format;
-            GXTexWrapMode wrapS, wrapT;
-            GXBool mipmap;
+            GpuTexFmt format;
+            GpuTexWrapMode wrapS, wrapT;
+            GpuBool mipmap;
 
             J3DNativeTexture::getAll(&texObj, &image, &width, &height, &format, &wrapS, &wrapT, &mipmap);
 
@@ -29,10 +29,10 @@ namespace nw4r {
             SetWrapMode(wrapS, wrapT);
             SetMipMap(mipmap);
 
-            GXTexFilter minFilter, magFilter;
+            GpuTexFilter minFilter, magFilter;
             f32 minLOD, maxLOD, lodBias;
-            GXBool biasCLampEnable, edgeLODEnable;
-            GXAnisotropy aniso;
+            GpuBool biasCLampEnable, edgeLODEnable;
+            GpuAnisotropy aniso;
             J3DNativeTexture::getLODAll(&texObj, &minFilter, &magFilter, &minLOD, &maxLOD, &lodBias, &biasCLampEnable, &edgeLODEnable, &aniso);
 
             SetFilter(minFilter, magFilter);

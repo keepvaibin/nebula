@@ -102,7 +102,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
     {
         MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
 
-        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2, GX_TF_RGB565);
+        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2, GPU_TF_RGB565);
     }
 
     if (MR::startFunctionAsyncExecuteOnMainThread(MR::Functor(this, &GalaxyMapController::capture), "GalaxyMapController::capture")) {
@@ -635,9 +635,9 @@ void GalaxyMapController::capture() {
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
     f32 halfWidth = 304.0f;
     NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
     drawForCapture();
-    _38->capture(0, 0, GX_TF_RGB565, true, 0, true);
+    _38->capture(0, 0, GPU_TF_RGB565, true, 0, true);
 }
 
 namespace MR {

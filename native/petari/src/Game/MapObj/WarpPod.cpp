@@ -640,7 +640,7 @@ void WarpPod::drawCylinder(u32) const {
         vecC0 = _C4[i] + vec164;
         vecB4 = _C4[i] - vec164;
 
-        J3DNativeDraw::begin(GX_QUADS, 8, MR::ddVtxAttributes());
+        J3DNativeDraw::begin(GPU_QUADS, 8, MR::ddVtxAttributes());
 
         MR::ddSendVtxData(vecA8, previousTexCoords[0]);
         MR::ddSendVtxData(vecD8, currentTexCoords[0]);

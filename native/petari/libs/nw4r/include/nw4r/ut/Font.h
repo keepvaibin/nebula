@@ -2,7 +2,7 @@
 
 #include "nw4r/ut/CharStrmReader.h"
 #include "nw4r/ut/fontResourceFormat.h"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -23,7 +23,7 @@ namespace nw4r {
             void* pTexture;
             CharWidths widths;
             u8 height;
-            GXTexFmt texFormat;
+            GpuTexFmt texFormat;
             u16 texWidth;
             u16 texHeight;
             u16 cellX;
@@ -48,7 +48,7 @@ namespace nw4r {
             virtual int GetCellWidth() const = 0;                              // at 0x24
             virtual int GetMaxCharWidth() const = 0;                           // at 0x28
             virtual Type GetType() const = 0;                                  // at 0x2C
-            virtual GXTexFmt GetTextureFormat() const = 0;                     // at 0x30
+            virtual GpuTexFmt GetTextureFormat() const = 0;                     // at 0x30
             virtual int GetLineFeed() const = 0;                               // at 0x34
             virtual const CharWidths GetDefaultCharWidths() const = 0;         // at 0x38
             virtual void SetDefaultCharWidths(const CharWidths& rWidths) = 0;  // at 0x3C

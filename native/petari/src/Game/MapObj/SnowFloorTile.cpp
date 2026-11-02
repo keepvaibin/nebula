@@ -64,8 +64,8 @@ void SnowFloorTile::init(const JMapInfoIter& rIter) {
     }
 
     initLocalPoint(rIter);
-    mTextures[0] = new JUTTexture(mTextureSize, mTextureSize, GX_TF_I8);
-    mTextures[1] = new JUTTexture(mTextureSize, mTextureSize, GX_TF_I8);
+    mTextures[0] = new JUTTexture(mTextureSize, mTextureSize, GPU_TF_I8);
+    mTextures[1] = new JUTTexture(mTextureSize, mTextureSize, GPU_TF_I8);
     mTexture = mTextures[0];
     mTextureIndex = 0;
     mImage = mTexture->mImage;
@@ -444,7 +444,7 @@ void SnowFloorTile::drawLayer(s32 layer) const {
 
     for (u32 i = 0; i < ::sStripCount; i++) {
         TVec3f center(mPosition + mUp * (5.0f + ::sLayerHeight * layer));
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         TDDraw::sendPoint(center + p0);
         J3DNativeDraw::texCoord(0.0f, 0.0f);
         TDDraw::sendPoint(center + p1);

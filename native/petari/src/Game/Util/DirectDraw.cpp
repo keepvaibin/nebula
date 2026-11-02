@@ -14,7 +14,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "math_types.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 
 namespace {
     static Mtx mViewMtx;
@@ -56,25 +56,25 @@ namespace TDDraw {
     void close() {
         MR::loadProjectionMtx();
         MR::loadViewMtx();
-        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+        J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
     }
 
     void setup(u32 drawMode, u32 blendMode, u8 viewMode) {
         NebulaColor8 color = {0, 0, 0, 0};
 
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setCullMode(GPU_CULL_NONE);
+        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
         J3DNativeState::setCoPlanar(0);
-        J3DNativeState::setZMode(0, GX_ALWAYS, 0);
-        J3DNativeState::setColorUpdate(GX_TRUE);
+        J3DNativeState::setZMode(0, GPU_ALWAYS, 0);
+        J3DNativeState::setColorUpdate(GPU_TRUE);
         J3DNativeState::setAlphaUpdate(0);
-        J3DNativeState::setLineWidth(6, GX_TO_ZERO);
-        J3DNativeState::setChanMatColor(GX_COLOR0A0, color);
-        J3DNativeState::setChanAmbColor(GX_COLOR0A0, color);
-        J3DNativeState::setChanMatColor(GX_COLOR1A1, color);
-        J3DNativeState::setChanAmbColor(GX_COLOR1A1, color);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+        J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
+        J3DNativeState::setChanMatColor(GPU_COLOR0A0, color);
+        J3DNativeState::setChanAmbColor(GPU_COLOR0A0, color);
+        J3DNativeState::setChanMatColor(GPU_COLOR1A1, color);
+        J3DNativeState::setChanAmbColor(GPU_COLOR1A1, color);
+        J3DNativeState::setChanCtrl(GPU_COLOR0A0, 0, GPU_SRC_VTX, GPU_SRC_VTX, 0, GPU_DF_NONE, GPU_AF_NONE);
+        J3DNativeState::setChanCtrl(GPU_COLOR1A1, 0, GPU_SRC_REG, GPU_SRC_REG, 0, GPU_DF_NONE, GPU_AF_NONE);
         J3DNativeState::setNumChans(1);
 
         Mtx mtx;
@@ -100,58 +100,58 @@ namespace TDDraw {
 
         J3DNativeShape::setNormal(0, mtx);
         J3DNativeState::setCurrentMtx(0);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE0);
+        J3DNativeState::setTevDirect(GPU_TEVSTAGE0);
         J3DNativeState::setNumIndStages(0);
 
         switch (drawMode) {
         case 0:
             J3DNativeState::setNumTexGens(0);
             J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+            J3DNativeState::setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD_NULL, GPU_TEXMAP_NULL, GPU_COLOR0A0);
+            J3DNativeState::setTevOp(GPU_TEVSTAGE0, GPU_PASSCLR);
             break;
         case 1:
-            J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+            J3DNativeState::setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
             J3DNativeState::setNumTexGens(1);
             J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_REPLACE);
+            J3DNativeState::setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL);
+            J3DNativeState::setTevOp(GPU_TEVSTAGE0, GPU_REPLACE);
             break;
         case 2:
-            J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+            J3DNativeState::setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
             J3DNativeState::setNumTexGens(1);
             J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+            J3DNativeState::setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL);
+            J3DNativeState::setTevColorIn(GPU_TEVSTAGE0, GPU_CC_TEXC, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_C0);
+            J3DNativeState::setTevAlphaIn(GPU_TEVSTAGE0, GPU_CA_ZERO, GPU_CA_TEXA, GPU_CA_A0, GPU_CA_ZERO);
+            J3DNativeState::setTevColorOp(GPU_TEVSTAGE0, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, 1, GPU_TEVPREV);
+            J3DNativeState::setTevAlphaOp(GPU_TEVSTAGE0, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, 1, GPU_TEVPREV);
             break;
         }
 
         switch (blendMode) {
         case 2:
-            J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
-            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR);
+            J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
             break;
         case 1:
-            J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
-            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR);
+            J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
             break;
         case 0:
-            J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
-            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR);
+            J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
             break;
         }
 
-        J3DNativeState::setFog(GX_FOG_NONE, 0.0, 0.0, 0.0, 0.0, color);
-        J3DNativeState::setFogRangeAdj(GX_FALSE, 0, nullptr);
+        J3DNativeState::setFog(GPU_FOG_NONE, 0.0, 0.0, 0.0, 0.0, color);
+        J3DNativeState::setFogRangeAdj(GPU_FALSE, 0, nullptr);
     }
 
     void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
         J3DNativeState::setCoPlanar(0);
-        J3DNativeState::setLineWidth(6, GX_TO_ZERO);
+        J3DNativeState::setLineWidth(6, GPU_TO_ZERO);
 
         Mtx mtx;
         NebulaMtxIdentity(mtx);
@@ -175,9 +175,9 @@ namespace TDDraw {
         }
 
         J3DNativeShape::setNormal(0, mtx);
-        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 
         static const NebulaShaderId kShaders[3] = {NEBULA_SHADER_VERTEX_COLOR, NEBULA_SHADER_DD_TEXTURE,
                                                    NEBULA_SHADER_DD_TEXTURE_COLOR};
@@ -200,7 +200,7 @@ namespace TDDraw {
     }
 
     void drawLine(const TVec3f& rStart, const TVec3f& rEnd, u32 color) {
-        J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rStart.x, rStart.y, rStart.z);
             J3DNativeDraw::color(color);
@@ -227,7 +227,7 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rNormal, 6.2831855f / segments);
 
-        J3DNativeDraw::begin(GX_LINESTRIP, segments + 1, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_LINESTRIP, segments + 1, NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f point(rCenter + axis * radius);
             J3DNativeDraw::position(point.x, point.y, point.z);
@@ -239,7 +239,7 @@ namespace TDDraw {
     void drawFillCircle(const TVec3f& rCenter, f32 radius, u32 centerColor, u32 edgeColor, u32 segments) {
         TVec3f point;
         point.z = rCenter.z;
-        J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
         J3DNativeDraw::color(centerColor);
 
@@ -263,7 +263,7 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rNormal, (6.2831855f / segments));
 
-        J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
             J3DNativeDraw::color(color);
@@ -285,7 +285,7 @@ namespace TDDraw {
         TVec3f axis;
         NebulaMtxMultVec(startRotation, rAxis, axis);
 
-        J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
             J3DNativeDraw::color(color);
@@ -319,7 +319,7 @@ namespace TDDraw {
         Mtx rotation;
         NebulaMtxRotAxisRad(rotation, rHeight, (TWO_PI / segments));
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f basePoint(rBase + axis * radius);
             TVec3f topPoint(top + axis * radius);
@@ -352,7 +352,7 @@ namespace TDDraw {
             azimuthCos = MR::cos(azimuth);
             TVec3f radial((side * azimuthCos + up * azimuthSin) * radius);
 
-            J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * (polarSegments + 1), NEBULA_SHAPE_COLOR0);
+            J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * (polarSegments + 1), NEBULA_SHAPE_COLOR0);
             for (u32 j = 0; j <= polarSegments; j++) {
                 f32 polar = (startPolar + (static_cast< f32 >(j) / polarSegments) * (endPolar - startPolar));
                 f32 polarSin = MR::sin(polar);
@@ -391,7 +391,7 @@ namespace TDDraw {
     // The site's native material holds the texture (`pTexture` as it set it).
     void drawTexture(const TVec2f& rPosition, JUTTexture* pTexture, const TVec2f& rSize) {
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         {
             J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
             J3DNativeDraw::texCoord(0.0f, 0.0f);
@@ -426,7 +426,7 @@ namespace TDDraw {
         f32 rightTex = flipX ? 0.0f : 1.0f;
         f32 top = flipY ? 1.0f : 0.0f;
         f32 bottom = flipY ? 0.0f : 1.0f;
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::texCoord(left, top);
         sendPoint(p1);
@@ -438,7 +438,7 @@ namespace TDDraw {
     }
 
     void drawFillBox(const TVec3f& rMin, const TVec3f& rMax, u32 color) {
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rMin.x, rMin.y, rMin.z);
             J3DNativeDraw::color(color);
@@ -452,7 +452,7 @@ namespace TDDraw {
     }
 
     void drawFillBox(const TVec2f& rMin, const TVec2f& rMax, u32 color) {
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         {
             J3DNativeDraw::position(rMin.x, rMin.y, 0.0f);
             J3DNativeDraw::color(color);
@@ -476,40 +476,40 @@ namespace TDDraw {
         p6 = p2 + rHeight;
         p7 = p3 + rHeight;
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::color(color);
         sendPoint(p1, color);
         sendPoint(p2, color);
         sendPoint(p3, color);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p7, color);
         sendPoint(p4, color);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::color(color);
         sendPoint(p3, color);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p2, color);
         sendPoint(p1, color);
         sendPoint(p5, color);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         J3DNativeDraw::position(p0.x, p0.y, p0.z);
         J3DNativeDraw::color(color);
         sendPoint(p4, color);
         sendPoint(p5, color);
         sendPoint(p1, color);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p7, color);
         sendPoint(p3, color);
         sendPoint(p2, color);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p5, color);
         sendPoint(p4, color);
@@ -532,7 +532,7 @@ namespace TDDraw {
         height = MR::getScreenHeight() / 2;
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, nearZ, -farZ);
-        J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
+        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
         MR::setDefaultViewportAndScissor();
     }
 
@@ -544,7 +544,7 @@ namespace TDDraw {
         f32 start;
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);
-        J3DNativeState::setFog(GX_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
+        J3DNativeState::setFog(GPU_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
     }
 
     u32 getTexel32(const JUTTexture* pTexture, u32 x, u32 y) {

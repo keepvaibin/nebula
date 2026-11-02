@@ -299,10 +299,10 @@ void CollisionShadow::draw1() const {
     initShadowMaterial(&material, _300, 0, 1);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_GEQUAL, false);
     material.alpha_write = 1;
-    J3DNativeState::setDstAlpha(GX_TRUE, 64);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 64);
     NativeShader::send(material);
     sendVtx();
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 void CollisionShadow::sendVtx() const {
@@ -312,9 +312,9 @@ void CollisionShadow::sendVtx() const {
 
     u16 vertexCount = _54 * _5A;
     if (_5A == 4) {
-        J3DNativeDraw::begin(GX_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     } else {
-        J3DNativeDraw::begin(GX_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
     const TVec2f* pTex;
@@ -333,9 +333,9 @@ void CollisionShadow::sendVtx() const {
 void CollisionShadow::sendZsortedVtx(bool offset) const {
     u16 vertexCount = _54 * _5A;
     if (_5A == 4) {
-        J3DNativeDraw::begin(GX_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     } else {
-        J3DNativeDraw::begin(GX_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
     TVec3f shift(-_24 * 5.0f);
@@ -359,15 +359,15 @@ void CollisionShadow::initCaptureTex() {
     _2FE = 160;
     {
         MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
-        _300 = new JUTTexture(_2FC, _2FE, GX_TF_I8);
+        _300 = new JUTTexture(_2FC, _2FE, GPU_TF_I8);
         MR::zeroMemory(_300->mImage, _2FC * _2FE);
         MR::setMarioShadowTex(_300);
     }
 
-    _300->mWrapS = GX_CLAMP;
-    _300->mWrapT = GX_CLAMP;
-    _300->mMinType = GX_LINEAR;
-    _300->mMagType = GX_LINEAR;
+    _300->mWrapS = GPU_CLAMP;
+    _300->mWrapT = GPU_CLAMP;
+    _300->mMinType = GPU_LINEAR;
+    _300->mMagType = GPU_LINEAR;
     _300->init();
 }
 
@@ -435,7 +435,7 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         TDDraw::setupNative(&view, 0, 0, 1);
         Mtx44 projection;
         NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
-        J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
+        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
         if (_307) {
             J3DNativeView::setViewport(608 - (_2FC + 32), -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);
             s32 left = 608 - _2FC;
@@ -467,7 +467,7 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         circle.color_write = 0;
         circle.alpha_write = 1;
         NativeShader::setBlend(circle, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ZERO);
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
         NativeShader::send(circle);
         f32 y = _2FE / 2;
         f32 x = 608 - _2FC / 2;
@@ -478,14 +478,14 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         TDDraw::drawFillCircle(center, _2FC / 2, 0xFFFFFFC0, 0, 16);
         const ResTIMG* image = _300->getTexInfo();
         void* destination = const_cast< u8* >(reinterpret_cast< const u8* >(image) + image->mImageDataOffset);
-        JUTTexture::captureDolTexture(destination, _2FC, _2FE, 608 - _2FC, 0, false, GX_CTF_A8);
+        JUTTexture::captureDolTexture(destination, _2FC, _2FE, 608 - _2FC, 0, false, GPU_CTF_A8);
     }
 
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
     MR::setDefaultViewportAndScissor();
     TDDraw::cameraInit3D();
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 void CollisionShadow::clearAlphaBuffer() {
@@ -510,7 +510,7 @@ void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDept
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
     material.color_write = 0;
     material.alpha_write = 1;
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
     NativeShader::setBlend(material, NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
     material.cull = NEBULA_CULL_BACK;
     NativeShader::send(material);
@@ -539,8 +539,8 @@ void CollisionShadow::draw() const {
         break;
     }
 
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
 }
 
 void CollisionShadow::draw2() const {
@@ -554,10 +554,10 @@ void CollisionShadow::draw2() const {
     initShadowMaterial(&material, _300, 0, 1);
     material.alpha_write = 1;
     NativeShader::setBlend(material, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
     NativeShader::send(material);
     sendVtx();
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 void CollisionShadow::draw3() const {
@@ -577,7 +577,7 @@ void CollisionShadow::draw3() const {
     material.blend_op = NEBULA_BLEND_REPLACE;
     material.blend_src = NEBULA_FACTOR_ONE;
     material.blend_dst = NEBULA_FACTOR_ZERO;
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
     NativeShader::send(material);
     sendZsortedVtx(true);
     if (_6E) {
@@ -585,7 +585,7 @@ void CollisionShadow::draw3() const {
         clear.shader = NEBULA_SHADER_FLAT_COLOR;
         NativeShader::setColor(clear, 0, 0, 0, 0, 0);
         NativeShader::send(clear);
-        J3DNativeDraw::begin(GX_TRIANGLES, _6E * 3, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLES, _6E * 3, NEBULA_SHAPE_TEXCOORD0);
         for (u32 i = 0; i < _6E; i++) {
             for (u32 j = 0; j < 3; j++) {
                 const TVec3f& point = *_32C[_70[i]].getPos(j);
@@ -600,12 +600,12 @@ void CollisionShadow::draw3() const {
     NativeShader::setBlend(material, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
     for (u32 i = 0; i < _54; i++) {
         material.color_write = 0;
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
         NativeShader::send(material);
         if (_5A == 4) {
-            J3DNativeDraw::begin(GX_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
         } else {
-            J3DNativeDraw::begin(GX_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
         }
 
         for (u32 j = 0; j < _5A; j++) {
@@ -616,12 +616,12 @@ void CollisionShadow::draw3() const {
         }
 
         material.color_write = 1;
-        J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        J3DNativeState::setDstAlpha(GPU_TRUE, 0);
         NativeShader::send(material);
         if (_5A == 4) {
-            J3DNativeDraw::begin(GX_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
         } else {
-            J3DNativeDraw::begin(GX_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(GPU_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
         }
 
         for (u32 j = 0; j < _5A; j++) {
@@ -632,20 +632,20 @@ void CollisionShadow::draw3() const {
         }
     }
 
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 void CollisionShadow::createDL() {
     _344.reserve(7);
-    _344.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    _344.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    _344.setTevDirect(GX_TEVSTAGE0);
+    _344.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+    _344.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
+    _344.setTevDirect(GPU_TEVSTAGE0);
     _344.setGenMode(0, 1, 1);
-    _344.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    _344.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
-                                GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
+    _344.setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, 0, GPU_DF_CLAMP, GPU_AF_NONE);
+    _344.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A0, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE,
+                                GPU_TEVPREV, GPU_TEV_SWAP0, GPU_TEV_SWAP0);
     NebulaColor8 color = {0, 0, 0, 4};
-    _344.setTevColor(GX_TEVREG0, color);
+    _344.setTevColor(GPU_TEVREG0, color);
 }
 
 void CollisionShadow::drawVolume() const {
@@ -659,7 +659,7 @@ void CollisionShadow::drawVolume() const {
     _340->mFlags.clear();
     _340->mFlags._15 = true;
     _340->directDraw(nullptr);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
 }
 
 void CollisionShadow::doSortPolygons() {

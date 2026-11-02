@@ -4,7 +4,7 @@
 #include "JSystem/J3DGraphAnimator/J3DVtxShader.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

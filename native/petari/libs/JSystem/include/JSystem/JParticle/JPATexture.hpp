@@ -13,7 +13,7 @@ public:
     JPATexture(u8 const*);
     virtual ~JPATexture();
 
-    void load(GXTexMapID texMapID) {
+    void load(GpuTexMapID texMapID) {
         mTexture.load(texMapID);
     }
 

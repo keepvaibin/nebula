@@ -27,9 +27,9 @@ namespace {
         NativeShader::setTexture(material, 0, pColor);
         NativeShader::setTexture(material, 1, pMask);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_IDENTITY, GPU_IDENTITY,
+                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     }
 }  // namespace
 
@@ -66,7 +66,7 @@ void SpinDriverPathDrawInit::initDraw() {
 
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     sendPathMaterial(mOrangeTexture, mMaskTexture);
 }
 
@@ -334,7 +334,7 @@ void SpinDriverPathDrawer::draw() const {
         f32 prevVal = _9C[i - 1];
         f32 val = _9C[i];
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
 
         sendPoint(prev90 - prev98, 0.0f, prevVal);
         sendPoint(curr90 - curr98, 0.0f, val);
@@ -343,7 +343,7 @@ void SpinDriverPathDrawer::draw() const {
         sendPoint(prev90 + prev98, 1.0f, prevVal);
         sendPoint(curr90 + curr98, 1.0f, val);
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
 
         sendPoint(prev90 - prev94, 0.0f, prevVal);
         sendPoint(curr90 - curr94, 0.0f, val);

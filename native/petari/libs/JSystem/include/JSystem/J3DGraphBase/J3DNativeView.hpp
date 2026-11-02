@@ -1,18 +1,18 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
 // The projection the game draws with: its values kept here (the game reads them back) and each change sent as a
-// state record (nebula_game_api.h NEBULA_STATE_PROJECTION). The values are GX's (GXSetProjectionv's layout: the type,
+// state record (nebula_game_api.h NEBULA_STATE_PROJECTION). The values are GX's (GpuSetProjectionv's layout: the type,
 // 0 for perspective, then the six terms).
 #ifdef __cplusplus
 namespace J3DNativeView {
-    void setProjection(const f32 (*pMtx)[4], GXProjectionType type);
+    void setProjection(const f32 (*pMtx)[4], GpuProjectionType type);
     void setProjectionv(const f32* pValues);
     void getProjectionv(f32* pValues);
-    // The viewport (GXSetViewport's values; field 0 of an interlaced pair moves it up half a line), and the depth
+    // The viewport (GpuSetViewport's values; field 0 of an interlaced pair moves it up half a line), and the depth
     // range's scale and offset that the viewport's z terms take.
     void setViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);
     void setViewportJitter(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, u32 field);
@@ -33,7 +33,7 @@ namespace J3DNativeView {
 extern "C" {
 #endif
 // The same for the C sources (RVLFaceLib).
-void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GXProjectionType type);
+void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GpuProjectionType type);
 void J3DNativeViewSetProjectionv(const f32* pValues);
 void J3DNativeViewGetProjectionv(f32* pValues);
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);

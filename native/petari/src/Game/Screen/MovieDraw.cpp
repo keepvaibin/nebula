@@ -1,5 +1,5 @@
 #include "Game/Screen/MovieDraw.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -32,15 +32,15 @@ namespace MovieDraw {
         J3DNativeState::setFrameAlpha(false);
         Mtx44 projection;
         NebulaMtxOrtho(projection, 0.0f, screenHeight, 0.0f, screenWidth, 0.0f, -1.0f);
-        J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
+        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
         J3DNativeView::setViewport(0.0f, 0.0f, screenWidth, screenHeight, 0.0f, 1.0f);
         J3DNativeView::setScissor(0, 0, screenWidth, screenHeight);
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
-        J3DNativeState::setCurrentMtx(GX_PNMTX0);
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
+        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+        J3DNativeState::setColorUpdate(GPU_TRUE);
+        J3DNativeState::setAlphaUpdate(GPU_FALSE);
 
         // The frame's planes, decoded into these buffers since the last frame as rows of texels (nebula_cooked_texture.h).
         const u16 chromaWidth = static_cast< u16 >(textureWidth >> 1);
@@ -57,11 +57,11 @@ namespace MovieDraw {
         setPlane(material, 2, pV);
         NativeShader::send(material);
         // The coordinates' texture matrices: the identity's place.
-        static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                        GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kIdentity);
+        static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                        GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, kIdentity);
 
-        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(static_cast< f32 >(x), static_cast< f32 >(y), 0.0f);
         J3DNativeDraw::texCoord(0.0f, 0.0f);
         J3DNativeDraw::position(static_cast< f32 >(static_cast< s16 >(x + width)), static_cast< f32 >(y), 0.0f);

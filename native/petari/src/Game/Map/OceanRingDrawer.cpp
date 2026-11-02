@@ -119,7 +119,7 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
-        mMesh.begin(GX_TRIANGLESTRIP, (u16)mOceanRing->mStride << 1);
+        mMesh.begin(GPU_TRIANGLESTRIP, (u16)mOceanRing->mStride << 1);
 
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
@@ -197,7 +197,7 @@ void OceanRingPartDrawer::drawDynamic() const {
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
             J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
@@ -261,7 +261,7 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
             WaterPoint* pPoint2 = mOceanRing->getPoint(j, indexPlusOne);
@@ -401,7 +401,7 @@ void OceanRingDrawer::drawGD() {
     f32 V10 = 0.05f * m;
     f32 V20 = 0.1f * m;
 
-    mMesh.begin(GX_TRIANGLESTRIP, (flag + mRing->mSegCount) * 2);
+    mMesh.begin(GPU_TRIANGLESTRIP, (flag + mRing->mSegCount) * 2);
 
     scalex = 1.0f;
     f32 V0 = V00 * scalex;
@@ -473,9 +473,9 @@ void OceanRingDrawer::loadMaterial() const {
     NativeShader::setTexture(material, 1, &screen);
     NativeShader::setTexture(material, 2, mWaterIndTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_TEXMTX3,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
 void OceanRingDrawer::loadMaterialBloom() const {
@@ -510,7 +510,7 @@ void OceanRingDrawer::loadMaterialBloom() const {
     NativeShader::setColor(material, 4, 80, 80, 80, 255);
     NativeShader::setTexture(material, 0, mWaterTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }

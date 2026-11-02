@@ -7,7 +7,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // GXInit's projection (an orthographic identity-like one) until the game sets its own.
+    // GpuInit's projection (an orthographic identity-like one) until the game sets its own.
     bool sPerspective = false;
     f32 sTerms[6] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f};
 
@@ -74,9 +74,9 @@ namespace J3DNativeView {
         return pHost->readback_serial(pHost->user, channel);
     }
 
-    void setProjection(const f32 (*pMtx)[4], GXProjectionType type) {
-        // GXSetProjection's terms: the orthographic one takes the translation column, the perspective one the third.
-        sPerspective = type == GX_PERSPECTIVE;
+    void setProjection(const f32 (*pMtx)[4], GpuProjectionType type) {
+        // GpuSetProjection's terms: the orthographic one takes the translation column, the perspective one the third.
+        sPerspective = type == GPU_PERSPECTIVE;
         sTerms[0] = pMtx[0][0];
         sTerms[2] = pMtx[1][1];
         sTerms[4] = pMtx[2][2];
@@ -164,7 +164,7 @@ namespace J3DNativeView {
 };  // namespace J3DNativeView
 
 extern "C" {
-void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GXProjectionType type) {
+void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GpuProjectionType type) {
     J3DNativeView::setProjection(pMtx, type);
 }
 

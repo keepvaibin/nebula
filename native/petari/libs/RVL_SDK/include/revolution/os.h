@@ -106,7 +106,7 @@ inline void OSf32tou8(f32* f, u8* out) {
 }
 #endif
 
-#include "revolution/gx.h"
+#include <NebulaGpu.h>
 #include "revolution/os/OSContext.h"
 #include "revolution/os/OSFastCast.h"
 #include "revolution/os/OSThread.h"

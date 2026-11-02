@@ -8,7 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuTypes.h>
 
 namespace {
     static const f32 sBeginThick = 10.0f;
@@ -171,7 +171,7 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
             const TVec2f& pos = mBlurPoints[point].mPos;
             const TVec2f& offset = dir * mBlurThicks[point];
@@ -194,7 +194,7 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
             const TVec2f& pos = mBlurPoints[point].mPos;
             const TVec2f& offset = dir * mBlurThicks[point];
@@ -212,9 +212,9 @@ void StarPointerBlur::initDraw() const {
     TPos3f mtx;
     mtx.identity();
     J3DNativeShape::setPosition(0, mtx);
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     // runtime/src/render/materials/color_tex_alpha.hlsl: mMainColor at the trail texture's alpha, added by it; depth
     // tested and written, no culling.
     NebulaNativeMaterial material;

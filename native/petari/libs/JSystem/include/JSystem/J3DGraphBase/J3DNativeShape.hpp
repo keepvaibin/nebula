@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -42,7 +42,7 @@ namespace J3DNativeShape {
     void setCurrent(u8 position, const u8* pTexture);
     // The position matrix corners without one take (J3DNativeState::setCurrentMtx).
     void setCurrentPosition(u32 index);
-    // Texture coordinate `coord` of the next draw generated as given (GXSetTexCoordGen's values).
+    // Texture coordinate `coord` of the next draw generated as given (GpuSetTexCoordGen's values).
     void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix);
     // Texture matrices, current matrices and texgens set since the last draw, as a record now (before a material
     // record, which must not overtake them).
@@ -51,7 +51,7 @@ namespace J3DNativeShape {
     // place), in a buffer valid until the next record.
     u32 positionMatrices(u32 mask, const NebulaDrawMatrix** ppMatrices);
     // A position array the game wrote (`count` entries in its model's position format) as values.
-    void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac);
+    void sendPositions(const void* pArray, u32 count, GpuCompType type, GpuCompCnt cnt, u8 frac);
 };  // namespace J3DNativeShape
 
 extern "C" {

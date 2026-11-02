@@ -77,11 +77,11 @@ namespace nw4r {
             }
 
             inline u32 GetTexMtxIdx(u32 mtx) {
-                return (mtx - GX_TEXMTX0) / 3;
+                return (mtx - GPU_TEXMTX0) / 3;
             }
 
             inline u32 GetTexMtx(u32 idx) {
-                return GX_TEXMTX0 + idx * 3;
+                return GPU_TEXMTX0 + idx * 3;
             }
 
             void SetColorComponentValue(nw4r::ut::Color* pColor, u32 idx, s16 value) {
@@ -193,17 +193,17 @@ namespace nw4r {
             const TexCoordGen* const resTexCoordGens = detail::ConvertOffsToPtr< TexCoordGen >(pRes, resOffs);
             resOffs += sizeof(TexCoordGen) * pRes->resNum.GetTexCoordGenNum();
 
-            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(GX_MAX_TEXMAP));
+            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(GPU_MAX_TEXMAP));
             const u8 texSRTNum = ut::Min(pRes->resNum.GetTexSRTNum(), u8(10));
-            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(GX_MAX_TEXCOORD));
+            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(GPU_MAX_TEXCOORD));
             const bool allocChanCtrl = 0 != pRes->resNum.GetChanCtrlNum();
             const bool allocMatCol = 0 != pRes->resNum.GetMatColNum();
             const bool allocTevSwap = pRes->resNum.HasTevSwapTable();
             const bool allocAlpComp = pRes->resNum.HasAlphaCompare();
             const bool allocBlendMode = pRes->resNum.HasBlendMode();
             u8 indTexSRTNum = ut::Min(pRes->resNum.GetIndTexSRTNum(), u8(3));
-            u8 indStageNum = ut::Min(pRes->resNum.GetIndTexStageNum(), u8(GX_MAX_INDTEXSTAGE));
-            u8 tevStageNum = ut::Min(pRes->resNum.GetTevStageNum(), u8(GX_MAX_TEVSTAGE));
+            u8 indStageNum = ut::Min(pRes->resNum.GetIndTexStageNum(), u8(GPU_MAX_INDTEXSTAGE));
+            u8 tevStageNum = ut::Min(pRes->resNum.GetTevStageNum(), u8(GPU_MAX_TEVSTAGE));
 
             ReserveGXMem(texMapNum, texSRTNum, texCoordGenNum, tevStageNum, allocTevSwap, indStageNum, indTexSRTNum, allocChanCtrl, allocMatCol,
                          allocAlpComp, allocBlendMode);
@@ -256,10 +256,10 @@ namespace nw4r {
                 if (allocTevSwap) {
                     const TevSwapMode* const pResTevSwap = detail::ConvertOffsToPtr< TevSwapMode >(pRes, resOffs);
                     TevSwapMode* const tevSwaps = GetTevSwapAry();
-                    for (int i = 0; i < GX_MAX_TEVSWAP; ++i) {
+                    for (int i = 0; i < GPU_MAX_TEVSWAP; ++i) {
                         tevSwaps[i] = pResTevSwap[i];
                     }
-                    resOffs += sizeof(*tevSwaps) * GX_MAX_TEVSWAP;
+                    resOffs += sizeof(*tevSwaps) * GPU_MAX_TEVSWAP;
                 }
 
                 if (indTexSRTNum > 0) {
@@ -397,10 +397,10 @@ namespace nw4r {
                     mGXMemNum.tevSwap = mGXMemCap.tevSwap;
                     if (mGXMemNum.tevSwap) {
                         TevSwapMode* const tevSwaps = GetTevSwapAry();
-                        tevSwaps[0].Set(GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-                        tevSwaps[1].Set(GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
-                        tevSwaps[2].Set(GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
-                        tevSwaps[3].Set(GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
+                        tevSwaps[0].Set(GPU_CH_RED, GPU_CH_GREEN, GPU_CH_BLUE, GPU_CH_ALPHA);
+                        tevSwaps[1].Set(GPU_CH_RED, GPU_CH_RED, GPU_CH_RED, GPU_CH_ALPHA);
+                        tevSwaps[2].Set(GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_ALPHA);
+                        tevSwaps[3].Set(GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_ALPHA);
                     }
 
                     mGXMemNum.alpComp = mGXMemCap.alpComp;
@@ -581,11 +581,11 @@ namespace nw4r {
         }
 
         bool Material::SetupGX(bool modulate, u8 alpha) {
-            static GXTevKColorSel kColSels[GX_MAX_TEXMAP] = {GX_TEV_KCSEL_K3_A, GX_TEV_KCSEL_K3_B, GX_TEV_KCSEL_K3_G, GX_TEV_KCSEL_K3_R,
-                                                             GX_TEV_KCSEL_K2_A, GX_TEV_KCSEL_K2_B, GX_TEV_KCSEL_K2_G, GX_TEV_KCSEL_K2_R};
+            static GpuTevKColorSel kColSels[GPU_MAX_TEXMAP] = {GPU_TEV_KCSEL_K3_A, GPU_TEV_KCSEL_K3_B, GPU_TEV_KCSEL_K3_G, GPU_TEV_KCSEL_K3_R,
+                                                             GPU_TEV_KCSEL_K2_A, GPU_TEV_KCSEL_K2_B, GPU_TEV_KCSEL_K2_G, GPU_TEV_KCSEL_K2_R};
 
-            static GXTevKAlphaSel kAlpSels[GX_MAX_TEXMAP] = {GX_TEV_KASEL_K3_A, GX_TEV_KASEL_K3_B, GX_TEV_KASEL_K3_G, GX_TEV_KASEL_K3_R,
-                                                             GX_TEV_KASEL_K2_A, GX_TEV_KASEL_K2_B, GX_TEV_KASEL_K2_G, GX_TEV_KASEL_K2_R};
+            static GpuTevKAlphaSel kAlpSels[GPU_MAX_TEXMAP] = {GPU_TEV_KASEL_K3_A, GPU_TEV_KASEL_K3_B, GPU_TEV_KASEL_K3_G, GPU_TEV_KASEL_K3_R,
+                                                             GPU_TEV_KASEL_K2_A, GPU_TEV_KASEL_K2_B, GPU_TEV_KASEL_K2_G, GPU_TEV_KASEL_K2_R};
 
             // The material as a material program and values (nebula_game_api.h), drawn by its generated native shader
             // (J3DNativeMaterial::sendWhole). Stored until the next material.
@@ -601,26 +601,26 @@ namespace nw4r {
             rProgram.cull = NEBULA_CULL_NONE;
             rProgram.channels = 1;
             for (u32 s = 0; s < 16; s++) {
-                rProgram.tev[s].tex_coord = GX_TEXCOORD_NULL;
-                rProgram.tev[s].tex_map = GX_TEXMAP_NULL;
-                rProgram.tev[s].channel = GX_COLOR_NULL;
-                rProgram.tev[s].konst_color = GX_TEV_KCSEL_1_4;
-                rProgram.tev[s].konst_alpha = GX_TEV_KASEL_1;
+                rProgram.tev[s].tex_coord = GPU_TEXCOORD_NULL;
+                rProgram.tev[s].tex_map = GPU_TEXMAP_NULL;
+                rProgram.tev[s].channel = GPU_COLOR_NULL;
+                rProgram.tev[s].konst_color = GPU_TEV_KCSEL_1_4;
+                rProgram.tev[s].konst_alpha = GPU_TEV_KASEL_1;
             }
 
             bool useVtxColor = true;
             bool useMatColor = false;
 
-            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (GXSetChanCtrl's material
+            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (GpuSetChanCtrl's material
             // source; the ambient source the register).
-            u8 colorSrc = GX_SRC_VTX;
-            u8 alphaSrc = GX_SRC_VTX;
+            u8 colorSrc = GPU_SRC_VTX;
+            u8 alphaSrc = GPU_SRC_VTX;
             if (IsChanCtrlCap()) {
                 const ChanCtrl* const pChanCtrl = GetChanCtrlAry();
                 colorSrc = pChanCtrl->GetColorSrc();
                 alphaSrc = pChanCtrl->GetAlphaSrc();
-                useVtxColor = pChanCtrl->GetColorSrc() == GX_SRC_VTX || pChanCtrl->GetAlphaSrc() == GX_SRC_VTX;
-                useMatColor = pChanCtrl->GetColorSrc() == GX_SRC_REG || pChanCtrl->GetAlphaSrc() == GX_SRC_REG;
+                useVtxColor = pChanCtrl->GetColorSrc() == GPU_SRC_VTX || pChanCtrl->GetAlphaSrc() == GPU_SRC_VTX;
+                useMatColor = pChanCtrl->GetColorSrc() == GPU_SRC_REG || pChanCtrl->GetAlphaSrc() == GPU_SRC_REG;
             }
             rProgram.channel[0].material_source = colorSrc;
             rProgram.channel[1].material_source = alphaSrc;
@@ -658,8 +658,8 @@ namespace nw4r {
                 useTexMtx[i] = false;
             }
 
-            u8 places[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                            GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+            u8 places[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                            GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
             rProgram.tex_gens = mGXMemNum.texCoordGen;
             if (mGXMemNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
@@ -667,7 +667,7 @@ namespace nw4r {
                 for (int i = 0; i < mGXMemNum.texCoordGen; i++) {
                     u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
-                    if (pTexCoordGen[i].GetTexGenType() == GX_TG_MTX2x4 && texMtx != GX_IDENTITY) {
+                    if (pTexCoordGen[i].GetTexGenType() == GX_TG_MTX2x4 && texMtx != GPU_IDENTITY) {
                         useTexMtx[GetTexMtxIdx(texMtx)] = true;
                         setTexMtx = true;
                     }
@@ -677,7 +677,7 @@ namespace nw4r {
                     rProgram.tex_gen[i].source = J3DNativeTexGen::source(pTexCoordGen[i].GetTexGenSrc());
                     rProgram.tex_gen[i].reserved[0] = 1;
                     rProgram.tex_gen[i].matrix = static_cast< u8 >(texMtx);
-                    rProgram.tex_gen[i].post_matrix = GX_PTIDENTITY;
+                    rProgram.tex_gen[i].post_matrix = GPU_PTIDENTITY;
                     if (i < 8) {
                         places[i] = static_cast< u8 >(texMtx);
                     }
@@ -694,7 +694,7 @@ namespace nw4r {
 
                     math::MTX34 mtx;
                     CalcTextureMtx(&mtx, pTexSrt[i]);
-                    J3DNativeShape::setTexture((GetTexMtx(i) - GX_TEXMTX0) / 3, mtx, 2);
+                    J3DNativeShape::setTexture((GetTexMtx(i) - GPU_TEXMTX0) / 3, mtx, 2);
                 }
             }
 
@@ -702,18 +702,18 @@ namespace nw4r {
                 const TexMap* const pTexMap = GetTexMapAry();
 
                 for (int i = 0; i < mGXMemNum.texMap && i < 8; i++) {
-                    GXTexObj texObj;
+                    GpuTexObj texObj;
                     pTexMap[i].Get(&texObj);
                     void* pImage;
                     u16 width, height;
-                    GXTexFmt format;
-                    GXTexWrapMode wrapS, wrapT;
-                    GXBool mipmap;
+                    GpuTexFmt format;
+                    GpuTexWrapMode wrapS, wrapT;
+                    GpuBool mipmap;
                     J3DNativeTexture::getAll(&texObj, &pImage, &width, &height, &format, &wrapS, &wrapT, &mipmap);
-                    GXTexFilter minFilter, magFilter;
+                    GpuTexFilter minFilter, magFilter;
                     f32 minLod, maxLod, lodBias;
-                    GXBool biasClamp, edgeLod;
-                    GXAnisotropy maxAniso;
+                    GpuBool biasClamp, edgeLod;
+                    GpuAnisotropy maxAniso;
                     J3DNativeTexture::getLODAll(&texObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
                                                 &maxAniso);
                     NebulaMaterialTexture& rTex = rValues.texture[i];
@@ -722,9 +722,9 @@ namespace nw4r {
                     rTex.height = height;
                     rTex.wrap_s = static_cast< u8 >(wrapS);
                     rTex.wrap_t = static_cast< u8 >(wrapT);
-                    rTex.min_linear = minFilter == GX_LINEAR || minFilter == GX_LIN_MIP_NEAR || minFilter == GX_LIN_MIP_LIN;
-                    rTex.mag_linear = magFilter != GX_NEAR;
-                    rTex.mip_filter = minFilter < GX_NEAR_MIP_NEAR ? 0 : minFilter < GX_NEAR_MIP_LIN ? 1 : 2;
+                    rTex.min_linear = minFilter == GPU_LINEAR || minFilter == GPU_LIN_MIP_NEAR || minFilter == GPU_LIN_MIP_LIN;
+                    rTex.mag_linear = magFilter != GPU_NEAR;
+                    rTex.mip_filter = minFilter < GPU_NEAR_MIP_NEAR ? 0 : minFilter < GPU_NEAR_MIP_LIN ? 1 : 2;
                     rTex.edge_lod = edgeLod ? 1 : 0;
                     rTex.anisotropy = static_cast< u8 >(maxAniso);
                     rTex.min_lod = minLod;
@@ -749,17 +749,17 @@ namespace nw4r {
             if (IsTevSwapCap()) {
                 const TevSwapMode* const pTevSwap = GetTevSwapAry();
 
-                for (int i = 0; i < GX_MAX_TEVSWAP; i++) {
+                for (int i = 0; i < GPU_MAX_TEVSWAP; i++) {
                     rProgram.swap_table[i][0] = pTevSwap[i].GetR();
                     rProgram.swap_table[i][1] = pTevSwap[i].GetG();
                     rProgram.swap_table[i][2] = pTevSwap[i].GetB();
                     rProgram.swap_table[i][3] = pTevSwap[i].GetA();
                 }
             } else {
-                static const u8 kSwap[4][4] = {{GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA},
-                                               {GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA},
-                                               {GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA},
-                                               {GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA}};
+                static const u8 kSwap[4][4] = {{GPU_CH_RED, GPU_CH_GREEN, GPU_CH_BLUE, GPU_CH_ALPHA},
+                                               {GPU_CH_RED, GPU_CH_RED, GPU_CH_RED, GPU_CH_ALPHA},
+                                               {GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_ALPHA},
+                                               {GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_ALPHA}};
                 memcpy(rProgram.swap_table, kSwap, sizeof(kSwap));
             }
 
@@ -803,7 +803,7 @@ namespace nw4r {
                     rStage.alpha_clamp = rSrc.IsAlphaClamp() ? 1 : 0;
                     rStage.alpha_reg = rSrc.GetAlphaOutReg();
                     rStage.konst_alpha = rSrc.GetKAlphaSel();
-                    GXIndTexMtxID indMtx = rSrc.GetIndMtxSel();
+                    GpuIndTexMtxID indMtx = rSrc.GetIndMtxSel();
                     rStage.ind_stage = rSrc.GetIndStage();
                     rStage.ind_format = rSrc.GetIndFormat();
                     rStage.ind_bias = rSrc.GetIndBiasSel();
@@ -813,7 +813,7 @@ namespace nw4r {
                     rStage.ind_prev = rSrc.IsIndAddPrev() ? 1 : 0;
                     rStage.ind_lod = rSrc.IsIndUtcLod() ? 1 : 0;
                     rStage.ind_alpha = rSrc.GetIndAlphaSel();
-                    if (GX_ITM_0 <= indMtx && indMtx <= GX_ITM_2) {
+                    if (GPU_ITM_0 <= indMtx && indMtx <= GPU_ITM_2) {
                         useIndTexMtx[indMtx - 1] = true;
                         setIndTexMtx = true;
                     }
@@ -823,7 +823,7 @@ namespace nw4r {
             } else {
                 // nw4r's stages for a material without its own: the textures blended by the constant selections, the
                 // black/white remap, the vertex colour; each adds into PREV, clamped.
-                u8 tevStageID = GX_TEVSTAGE0;
+                u8 tevStageID = GPU_TEVSTAGE0;
                 const auto stage = [&rProgram](u8 id, u8 coord, u8 map, u8 channel, u8 ca, u8 cb, u8 cc, u8 cd, u8 aa, u8 ab,
                                                u8 ac, u8 ad) {
                     NebulaMaterialTevStage& rStage = rProgram.tev[id];
@@ -841,33 +841,33 @@ namespace nw4r {
                 };
 
                 if (mGXMemNum.texMap == 0) {
-                    stage(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_CC_ZERO, GX_CC_C1, GX_CC_RASC, GX_CC_ZERO,
-                          GX_CA_ZERO, GX_CA_A1, GX_CA_RASA, GX_CA_ZERO);
+                    stage(GPU_TEVSTAGE0, GPU_TEXCOORD_NULL, GPU_TEXMAP_NULL, GPU_COLOR0A0, GPU_CC_ZERO, GPU_CC_C1, GPU_CC_RASC, GPU_CC_ZERO,
+                          GPU_CA_ZERO, GPU_CA_A1, GPU_CA_RASA, GPU_CA_ZERO);
 
                     useRasStage = true;
-                    tevStageID = GX_TEVSTAGE1;
+                    tevStageID = GPU_TEVSTAGE1;
                 } else {
                     if (mGXMemNum.texMap == 1) {
-                        stage(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO,
-                              GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
+                        stage(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL, GPU_CC_C0, GPU_CC_C1, GPU_CC_TEXC, GPU_CC_ZERO,
+                              GPU_CA_A0, GPU_CA_A1, GPU_CA_TEXA, GPU_CA_ZERO);
 
-                        tevStageID = GX_TEVSTAGE1;
+                        tevStageID = GPU_TEVSTAGE1;
                     } else {
                         if (mGXMemNum.texMap == 2) {
-                            stage(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC,
-                                  GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-                            stage(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL, GX_CC_TEXC, GX_CC_CPREV, GX_CC_KONST, GX_CC_ZERO,
-                                  GX_CA_TEXA, GX_CA_APREV, GX_CA_KONST, GX_CA_ZERO);
-                            rProgram.tev[GX_TEVSTAGE1].konst_color = kColSels[GX_TEXMAP0];
-                            rProgram.tev[GX_TEVSTAGE1].konst_alpha = kAlpSels[GX_TEXMAP0];
+                            stage(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR_NULL, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_TEXC,
+                                  GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_TEXA);
+                            stage(GPU_TEVSTAGE1, GPU_TEXCOORD1, GPU_TEXMAP1, GPU_COLOR_NULL, GPU_CC_TEXC, GPU_CC_CPREV, GPU_CC_KONST, GPU_CC_ZERO,
+                                  GPU_CA_TEXA, GPU_CA_APREV, GPU_CA_KONST, GPU_CA_ZERO);
+                            rProgram.tev[GPU_TEVSTAGE1].konst_color = kColSels[GPU_TEXMAP0];
+                            rProgram.tev[GPU_TEVSTAGE1].konst_alpha = kAlpSels[GPU_TEXMAP0];
 
-                            tevStageID = GX_TEVSTAGE2;
+                            tevStageID = GPU_TEVSTAGE2;
                         } else {
                             for (int i = 0; i < mGXMemNum.texMap; i++) {
-                                const u8 colorD = i == GX_TEXMAP0 ? GX_CC_ZERO : GX_CC_CPREV;
-                                const u8 alphaD = i == GX_TEXMAP0 ? GX_CA_ZERO : GX_CA_APREV;
-                                stage(tevStageID, static_cast< u8 >(i), static_cast< u8 >(i), GX_COLOR_NULL, GX_CC_ZERO, GX_CC_TEXC,
-                                      GX_CC_KONST, colorD, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, alphaD);
+                                const u8 colorD = i == GPU_TEXMAP0 ? GPU_CC_ZERO : GPU_CC_CPREV;
+                                const u8 alphaD = i == GPU_TEXMAP0 ? GPU_CA_ZERO : GPU_CA_APREV;
+                                stage(tevStageID, static_cast< u8 >(i), static_cast< u8 >(i), GPU_COLOR_NULL, GPU_CC_ZERO, GPU_CC_TEXC,
+                                      GPU_CC_KONST, colorD, GPU_CA_ZERO, GPU_CA_TEXA, GPU_CA_KONST, alphaD);
                                 rProgram.tev[tevStageID].konst_color = kColSels[i];
                                 rProgram.tev[tevStageID].konst_alpha = kAlpSels[i];
 
@@ -876,16 +876,16 @@ namespace nw4r {
                         }
 
                         if (mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1])) {
-                            stage(tevStageID, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL, GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO,
-                                  GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO);
+                            stage(tevStageID, GPU_TEXCOORD_NULL, GPU_TEXMAP_NULL, GPU_COLOR_NULL, GPU_CC_C0, GPU_CC_C1, GPU_CC_CPREV, GPU_CC_ZERO,
+                                  GPU_CA_A0, GPU_CA_A1, GPU_CA_APREV, GPU_CA_ZERO);
 
                             tevStageID++;
                         }
                     }
 
                     if (useRasStage) {
-                        stage(tevStageID, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO,
-                              GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
+                        stage(tevStageID, GPU_TEXCOORD_NULL, GPU_TEXMAP_NULL, GPU_COLOR0A0, GPU_CC_ZERO, GPU_CC_CPREV, GPU_CC_RASC, GPU_CC_ZERO,
+                              GPU_CA_ZERO, GPU_CA_APREV, GPU_CA_RASA, GPU_CA_ZERO);
 
                         tevStageID++;
                     }
@@ -894,12 +894,12 @@ namespace nw4r {
                 const u8 tevStageNum = tevStageID;
                 for (u8 id = 0; id < tevStageNum; id++) {
                     NebulaMaterialTevStage& rStage = rProgram.tev[id];
-                    rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-                    rStage.color_bias = rStage.alpha_bias = GX_TB_ZERO;
-                    rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
+                    rStage.color_op = rStage.alpha_op = GPU_TEV_ADD;
+                    rStage.color_bias = rStage.alpha_bias = GPU_TB_ZERO;
+                    rStage.color_scale = rStage.alpha_scale = GPU_CS_SCALE_1;
                     rStage.color_clamp = rStage.alpha_clamp = 1;
-                    rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-                    rStage.ras_swap = rStage.tex_swap = GX_TEV_SWAP0;
+                    rStage.color_reg = rStage.alpha_reg = GPU_TEVPREV;
+                    rStage.ras_swap = rStage.tex_swap = GPU_TEV_SWAP0;
                 }
 
                 rProgram.tev_stages = tevStageNum;
@@ -944,9 +944,9 @@ namespace nw4r {
                 rValues.alpha_ref[0] = pAlphaComp->GetRef0();
                 rValues.alpha_ref[1] = pAlphaComp->GetRef1();
             } else {
-                rProgram.alpha_compare.comp0 = GX_ALWAYS;
-                rProgram.alpha_compare.op = GX_AOP_AND;
-                rProgram.alpha_compare.comp1 = GX_ALWAYS;
+                rProgram.alpha_compare.comp0 = GPU_ALWAYS;
+                rProgram.alpha_compare.op = GPU_AOP_AND;
+                rProgram.alpha_compare.comp1 = GPU_ALWAYS;
             }
 
             if (IsBlendModeCap()) {
@@ -954,14 +954,14 @@ namespace nw4r {
 
                 {
                     const u8 type = pBlendMode->GetType();
-                    rProgram.blend.type = type == GX_BM_BLEND ? NEBULA_BLEND_ADD : type == GX_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
-                                          : type == GX_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+                    rProgram.blend.type = type == GPU_BM_BLEND ? NEBULA_BLEND_ADD : type == GPU_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+                                          : type == GPU_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
                 }
                 {
                     // NEBULA_FACTOR_*: GX's source colour factors (2, 3) are the destination's colour.
                     const u8 src = pBlendMode->GetSrcFactor();
-                    rProgram.blend.source = src == GX_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
-                                            : src == GX_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
+                    rProgram.blend.source = src == GPU_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
+                                            : src == GPU_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
                 }
                 rProgram.blend.destination = pBlendMode->GetDstFactor();
                 rProgram.blend.logic_op = pBlendMode->GetOp();
@@ -969,10 +969,10 @@ namespace nw4r {
                 rProgram.blend.type = NEBULA_BLEND_ADD;
                 rProgram.blend.source = NEBULA_FACTOR_SRC_ALPHA;
                 rProgram.blend.destination = NEBULA_FACTOR_INV_SRC_ALPHA;
-                rProgram.blend.logic_op = GX_LO_SET;
+                rProgram.blend.logic_op = GPU_LO_SET;
             }
 
-            // Each coordinate's scale: the size of the texture its stage samples (GXLoadTexObj's normalized coordinates).
+            // Each coordinate's scale: the size of the texture its stage samples (GpuLoadTexObj's normalized coordinates).
             for (u32 s = 0; s < rProgram.tev_stages && s < 16; s++) {
                 const u8 coord = rProgram.tev[s].tex_coord;
                 const u8 map = rProgram.tev[s].tex_map;
@@ -991,7 +991,7 @@ namespace nw4r {
             }
 
             J3DNativeMaterial::sendWhole(rProgram, rValues);
-            J3DNativeShape::setCurrent(GX_PNMTX0, places);
+            J3DNativeShape::setCurrent(GPU_PNMTX0, places);
 
             return useRasStage && useVtxColor;
         }

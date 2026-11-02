@@ -10,7 +10,7 @@ J2DGrafContext::J2DGrafContext(f32 x, f32 y, f32 width, f32 height)
     JUtility::TColor color(-1);
     setColor(color);
     mLineWidth = 6;
-    J3DNativeState::setLineWidth(mLineWidth, GX_TO_ZERO);
+    J3DNativeState::setLineWidth(mLineWidth, GPU_TO_ZERO);
 }
 
 void J2DGrafContext::setColor(JUtility::TColor colorTL, JUtility::TColor colorTR, JUtility::TColor colorBR, JUtility::TColor colorBL) {
@@ -18,29 +18,29 @@ void J2DGrafContext::setColor(JUtility::TColor colorTL, JUtility::TColor colorTR
     mColorTR = colorTR;
     mColorBR = colorBR;
     mColorBL = colorBL;
-    _B0.mType = GX_BM_BLEND;
-    _B0.mSrcFactor = GX_BL_SRCALPHA;
-    _B0.mDestFactor = GX_BL_INVSRCALPHA;
-    mLinePart.mType = GX_BM_BLEND;
-    mLinePart.mSrcFactor = GX_BL_SRCALPHA;
-    mLinePart.mDestFactor = GX_BL_INVSRCALPHA;
-    mBoxPart.mType = GX_BM_BLEND;
-    mBoxPart.mSrcFactor = GX_BL_SRCALPHA;
-    mBoxPart.mDestFactor = GX_BL_INVSRCALPHA;
+    _B0.mType = GPU_BM_BLEND;
+    _B0.mSrcFactor = GPU_BL_SRCALPHA;
+    _B0.mDestFactor = GPU_BL_INVSRCALPHA;
+    mLinePart.mType = GPU_BM_BLEND;
+    mLinePart.mSrcFactor = GPU_BL_SRCALPHA;
+    mLinePart.mDestFactor = GPU_BL_INVSRCALPHA;
+    mBoxPart.mType = GPU_BM_BLEND;
+    mBoxPart.mSrcFactor = GPU_BL_SRCALPHA;
+    mBoxPart.mDestFactor = GPU_BL_INVSRCALPHA;
     if ((mColorTL & 0xFF) != 0xFF) {
         return;
     }
 
-    _B0.mType = GX_BM_NONE;
-    _B0.mSrcFactor = GX_BL_ONE;
-    _B0.mDestFactor = GX_BL_ZERO;
+    _B0.mType = GPU_BM_NONE;
+    _B0.mSrcFactor = GPU_BL_ONE;
+    _B0.mDestFactor = GPU_BL_ZERO;
     if ((mColorBR & 0xFF) != 0xFF) {
         return;
     }
 
-    mLinePart.mType = GX_BM_NONE;
-    mLinePart.mSrcFactor = GX_BL_ONE;
-    mLinePart.mDestFactor = GX_BL_ZERO;
+    mLinePart.mType = GPU_BM_NONE;
+    mLinePart.mSrcFactor = GPU_BL_ONE;
+    mLinePart.mDestFactor = GPU_BL_ZERO;
     if ((mColorTR & 0xFF) != 0xFF) {
         return;
     }
@@ -49,9 +49,9 @@ void J2DGrafContext::setColor(JUtility::TColor colorTL, JUtility::TColor colorTR
         return;
     }
 
-    mBoxPart.mType = GX_BM_NONE;
-    mBoxPart.mSrcFactor = GX_BL_ONE;
-    mBoxPart.mDestFactor = GX_BL_ZERO;
+    mBoxPart.mType = GPU_BM_NONE;
+    mBoxPart.mSrcFactor = GPU_BL_ONE;
+    mBoxPart.mDestFactor = GPU_BL_ZERO;
 }
 
 void J2DGrafContext::setPort() {
@@ -74,15 +74,15 @@ void J2DGrafContext::setPort() {
 // The 2D view's fixed state: the panes draw with their own native materials (J2DPicture, J2DMaterial,
 // fillBox's vertex_color), so the TEV program the console reset here has no reader.
 void J2DGrafContext::setup2D() {
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(GX_FALSE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
+    J3DNativeState::setAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_GREATER, 0);
+    J3DNativeState::setZMode(GPU_FALSE, GPU_LEQUAL, GPU_FALSE);
+    J3DNativeState::setCullMode(GPU_CULL_NONE);
     J3DNativeShape::setPosition(0, mPosMtx);
     Mtx mtx;
     NebulaMtxIdentity(mtx);
     J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, mtx, 3);
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setLineWidth(mLineWidth, GX_TO_ZERO);
+    J3DNativeState::setLineWidth(mLineWidth, GPU_TO_ZERO);
 }
 
 void J2DGrafContext::setScissor() {
@@ -115,18 +115,18 @@ void J2DGrafContext::fillBox(JGeometry::TBox2< f32 > const& rBox) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_VERTEX_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
-    if (mBoxPart.mType == GX_BM_BLEND) {
+    if (mBoxPart.mType == GPU_BM_BLEND) {
         NativeShader::setBlend(material, mBoxPart.mSrcFactor, mBoxPart.mDestFactor);
-    } else if (mBoxPart.mType == GX_BM_SUBTRACT) {
+    } else if (mBoxPart.mType == GPU_BM_SUBTRACT) {
         material.blend_op = NEBULA_BLEND_SUBTRACT;
     }
     material.constants[4] = 0.0f;
     J3DNativeShape::setPosition(0, mPosMtx);
-    static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                    GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kIdentity);
+    static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                    GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kIdentity);
     NativeShader::send(material);
-    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(rBox.i.x, rBox.i.y, 0);
     J3DNativeDraw::color(mColorTL);
     J3DNativeDraw::position(rBox.f.x, rBox.i.y, 0);

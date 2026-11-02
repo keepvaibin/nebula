@@ -20,7 +20,7 @@ void J2DPane::initiate() {
     mBasePosition = 0;
     mRotAxis = 'z';
     mScaleY = mScaleX = 1;
-    mCullMode = GX_CULL_NONE;
+    mCullMode = GPU_CULL_NONE;
     mAlpha = 255;
     mIsInfluencedAlpha = true;
     mColorAlpha = 255;
@@ -220,7 +220,7 @@ void J2DPane::makeMatrix(f32 parami, f32 param_1, f32 param_2, f32 param_3) {
     NebulaMtxTransApply(tmp, mPositionMtx, parami + tmpX, param_1 + tmpY, 0);
 }
 
-void J2DPane::setCullBack(GXCullMode mode) {
+void J2DPane::setCullBack(GpuCullMode mode) {
     mCullMode = mode;
 
     JSUTreeIterator< J2DPane > iter;
@@ -442,12 +442,12 @@ bool J2DPane::setConnectParent(bool connected) {
 }
 
 void J2DPane::setCullBack(bool cull) {
-    GXCullMode mode;
+    GpuCullMode mode;
 
     if (!cull)
-        mode = GX_CULL_NONE;
+        mode = GPU_CULL_NONE;
     else
-        mode = GX_CULL_BACK;
+        mode = GPU_CULL_BACK;
 
     setCullBack(mode);
 }

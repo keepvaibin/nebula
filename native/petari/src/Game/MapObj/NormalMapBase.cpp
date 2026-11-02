@@ -28,7 +28,7 @@
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <cmath>
 #include <cstring>
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 
 s16 sgrad_tex_thresh;
 
@@ -67,7 +67,7 @@ void NormalMapBase::setup(const char* pName) {
     MR::invalidateClipping(this);
     mHeight = 128;
     mWidth = 128;
-    _4B8 = new (0x20) JUTTexture(mHeight, mWidth, GX_TF_IA8);
+    _4B8 = new (0x20) JUTTexture(mHeight, mWidth, GPU_TF_IA8);
     appear();
 }
 
@@ -123,8 +123,8 @@ void NormalMapBase::setupTexture() {
             pImage = MR::getTexFromArc(fileName, this);
             mNormalTex = new JUTTexture(pImage, 0);
             mTextures[i] = mNormalTex;
-            mTextures[i]->mMinType = GX_LINEAR;
-            mTextures[i]->mMagType = GX_LINEAR;
+            mTextures[i]->mMinType = GPU_LINEAR;
+            mTextures[i]->mMagType = GPU_LINEAR;
             mTextures[i]->init();
         } else if (strstr(pName, "ormal") && !mNormalTex) {
             mNormalTex = new JUTTexture(pImage, 0);
@@ -182,7 +182,7 @@ void NormalMapBase::draw() const {
         MR::loadActorLight(this);
         MR::loadViewMtx();
         MR::loadProjectionMtx();
-        J3DNativeState::setDither(GX_FALSE);
+        J3DNativeState::setDither(GPU_FALSE);
         const TPos3f& rCameraViewMtx = MR::getCameraViewMtx();
         TPos3f lightMtx;
         Mtx mtx;
@@ -196,7 +196,7 @@ void NormalMapBase::draw() const {
         drawSetting(lightMtx);
         shapeAnalyzeDraw(MR::getJ3DModel(this));
         standardDraw(MR::getJ3DModel(this));
-        J3DNativeState::setDither(GX_TRUE);
+        J3DNativeState::setDither(GPU_TRUE);
     }
 }
 
@@ -369,29 +369,29 @@ void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
 }
 
 void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
-    GXTexObj obj;
-    J3DNativeTexture::init(&obj, mImagePtr, width, height, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GpuTexObj obj;
+    J3DNativeTexture::init(&obj, mImagePtr, width, height, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
 
     if (_13A & 1) {
-        J3DNativeTexture::initLOD(&obj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+        J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_NEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
     } else {
-        J3DNativeTexture::initLOD(&obj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+        J3DNativeTexture::initLOD(&obj, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
     }
 
     NativeShader::setTexObj(sNormalMap, slot, &obj);
 }
 
 void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
-    GXTexObj obj;
-    J3DNativeTexture::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GpuTexObj obj;
+    J3DNativeTexture::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, GPU_TF_RGBA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
     if ((_13A & 2) != 0 && (_13A & 0x4) != 0) {
-        J3DNativeTexture::initLOD(&obj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+        J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_NEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
     } else if ((_13A & 0x2) != 0) {
-        J3DNativeTexture::initLOD(&obj, GX_NEAR, GX_LINEAR, 0.0, 0.0, 0.0, 0, 0, GX_ANISO_1);
+        J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_LINEAR, 0.0, 0.0, 0.0, 0, 0, GPU_ANISO_1);
     } else if ((_13A & 0x4) != 0) {
-        J3DNativeTexture::initLOD(&obj, GX_LINEAR, GX_NEAR, 0.0, 0.0, 0.0, 0, 0, GX_ANISO_1);
+        J3DNativeTexture::initLOD(&obj, GPU_LINEAR, GPU_NEAR, 0.0, 0.0, 0.0, 0, 0, GPU_ANISO_1);
     } else {
-        J3DNativeTexture::initLOD(&obj, GX_LINEAR, GX_LINEAR, 0.0, 0.0, 0.0, 0, 0, GX_ANISO_1);
+        J3DNativeTexture::initLOD(&obj, GPU_LINEAR, GPU_LINEAR, 0.0, 0.0, 0.0, 0, 0, GPU_ANISO_1);
     }
 
     NativeShader::setTexObj(sNormalMap, slot, &obj);
@@ -482,7 +482,7 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     NebulaMtxScale(scale_mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(scale_mtx, 0.5f, 0.5f, 0.0f);
     J3DNativeShape::setTexture(1, scale_mtx, 2);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 
     // Channel 0: lit by the hard light mask with the ambient colour from the material and the material colour from
     // the vertex; else by no lights from the material's colours (the model's light registers) or the vertex's. Its
@@ -621,7 +621,7 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
         }
     }
 
-    J3DNativeTexture::registerImage(pTexture->mImage, GX_TF_RGBA8, pTexture->getWidth(), pTexture->getHeight(), 1);
+    J3DNativeTexture::registerImage(pTexture->mImage, GPU_TF_RGBA8, pTexture->getWidth(), pTexture->getHeight(), 1);
 }
 
 void NormalMapBase::loadData(const char* pData, u32 size) {

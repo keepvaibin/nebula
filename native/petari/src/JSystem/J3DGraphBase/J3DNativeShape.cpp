@@ -50,7 +50,7 @@ namespace {
     }
 
     u32 typeBytes(u32 type) {
-        return type == GX_U8 || type == GX_S8 ? 1 : type == GX_U16 || type == GX_S16 ? 2 : 4;
+        return type == GPU_U8 || type == GPU_S8 ? 1 : type == GPU_U16 || type == GPU_S16 ? 2 : 4;
     }
 
     // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
@@ -63,13 +63,13 @@ namespace {
     // One component as the arrays hold it (host order, as the importer cooks VTX1), times `scale`.
     f32 component(const u8* p, u32 type, f32 scale) {
         switch (type) {
-        case GX_U8:
+        case GPU_U8:
             return p[0] * scale;
-        case GX_S8:
+        case GPU_S8:
             return static_cast< s8 >(p[0]) * scale;
-        case GX_U16:
+        case GPU_U16:
             return host16(p) * scale;
-        case GX_S16:
+        case GPU_S16:
             return static_cast< s16 >(host16(p)) * scale;
         default: {
             f32 value;
@@ -82,20 +82,20 @@ namespace {
     // A colour entry as R << 24 | G << 16 | B << 8 | A (each format widened by repeating its high bits).
     u32 color(const u8* p, u32 type) {
         switch (type) {
-        case GX_RGB565: {
+        case GPU_RGB565: {
             const u32 v = host16(p);
             const u32 r = (v >> 11) & 0x1F, g = (v >> 5) & 0x3F, b = v & 0x1F;
             return ((r << 3 | r >> 2) << 24) | ((g << 2 | g >> 4) << 16) | ((b << 3 | b >> 2) << 8) | 0xFF;
         }
-        case GX_RGB8:
-        case GX_RGBX8:
+        case GPU_RGB8:
+        case GPU_RGBX8:
             return (static_cast< u32 >(p[0]) << 24) | (static_cast< u32 >(p[1]) << 16) | (static_cast< u32 >(p[2]) << 8) | 0xFF;
-        case GX_RGBA4: {
+        case GPU_RGBA4: {
             const u32 v = host16(p);
             const u32 r = (v >> 12) & 0xF, g = (v >> 8) & 0xF, b = (v >> 4) & 0xF, a = v & 0xF;
             return ((r | r << 4) << 24) | ((g | g << 4) << 16) | ((b | b << 4) << 8) | (a | a << 4);
         }
-        case GX_RGBA6: {
+        case GPU_RGBA6: {
             const u32 v = (static_cast< u32 >(p[0]) << 16) | (static_cast< u32 >(p[1]) << 8) | p[2];
             const u32 r = (v >> 18) & 0x3F, g = (v >> 12) & 0x3F, b = (v >> 6) & 0x3F, a = v & 0x3F;
             return ((r << 2 | r >> 4) << 24) | ((g << 2 | g >> 4) << 16) | ((b << 2 | b >> 4) << 8) | (a << 2 | a >> 4);
@@ -112,14 +112,14 @@ namespace {
         u32 mFrac;
     };
 
-    Format formatOf(const GXVtxAttrFmtList* pList, GXAttr attr) {
+    Format formatOf(const GpuVtxAttrFmtList* pList, GpuAttr attr) {
         Format format;
-        format.mCnt = attr == GX_VA_POS ? GX_POS_XYZ : attr == GX_VA_NRM ? GX_NRM_XYZ :
-                      attr == GX_VA_CLR0 || attr == GX_VA_CLR1 ? GX_CLR_RGBA : GX_TEX_ST;
-        format.mType = attr == GX_VA_CLR0 || attr == GX_VA_CLR1 ? GX_RGBA8 : GX_F32;
+        format.mCnt = attr == GPU_VA_POS ? GPU_POS_XYZ : attr == GPU_VA_NRM ? GPU_NRM_XYZ :
+                      attr == GPU_VA_CLR0 || attr == GPU_VA_CLR1 ? GPU_CLR_RGBA : GPU_TEX_ST;
+        format.mType = attr == GPU_VA_CLR0 || attr == GPU_VA_CLR1 ? GPU_RGBA8 : GPU_F32;
         format.mFrac = 0;
-        for (; pList != nullptr && pList->attr != GX_VA_NULL; pList++) {
-            const GXAttr listed = pList->attr == GX_VA_NBT ? GX_VA_NRM : pList->attr;
+        for (; pList != nullptr && pList->attr != GPU_VA_NULL; pList++) {
+            const GpuAttr listed = pList->attr == GPU_VA_NBT ? GPU_VA_NRM : pList->attr;
             if (listed == attr) {
                 format.mCnt = pList->cnt;
                 format.mType = pList->type;
@@ -164,15 +164,15 @@ namespace {
         const u32 bytes = typeBytes(rFormat.mType);
         u32 kind = NEBULA_SHAPE_ARRAY_TEXCOORD;
         u32 floats = 2;
-        u32 stride = rFormat.mType == GX_F32 ? 8 : 4;
+        u32 stride = rFormat.mType == GPU_F32 ? 8 : 4;
         if (array == kPosition) {
             kind = NEBULA_SHAPE_ARRAY_POSITION;
             floats = 3;
-            stride = rFormat.mType == GX_F32 ? 12 : 6;
+            stride = rFormat.mType == GPU_F32 ? 12 : 6;
         } else if (array == kNormal || array == kNbt) {
             kind = nbtNormals ? NEBULA_SHAPE_ARRAY_NBT : NEBULA_SHAPE_ARRAY_NORMAL;
             floats = nbtNormals ? 9 : 3;
-            stride = (rFormat.mType == GX_F32 ? 12 : 6) * (array == kNbt ? 3 : 1);
+            stride = (rFormat.mType == GPU_F32 ? 12 : 6) * (array == kNbt ? 3 : 1);
         } else if (array == kColor0 || array == kColor1) {
             kind = NEBULA_SHAPE_ARRAY_COLOR;
             floats = 1;
@@ -191,11 +191,11 @@ namespace {
         } else {
             f32* pOut = static_cast< f32* >(pValues);
             f32 scale = 1.0f / static_cast< f32 >(1 << rFormat.mFrac);
-            u32 components = kind == NEBULA_SHAPE_ARRAY_POSITION ? (rFormat.mCnt == GX_POS_XYZ ? 3 : 2) :
-                             kind == NEBULA_SHAPE_ARRAY_TEXCOORD ? (rFormat.mCnt == GX_TEX_ST ? 2 : 1) : 3;
+            u32 components = kind == NEBULA_SHAPE_ARRAY_POSITION ? (rFormat.mCnt == GPU_POS_XYZ ? 3 : 2) :
+                             kind == NEBULA_SHAPE_ARRAY_TEXCOORD ? (rFormat.mCnt == GPU_TEX_ST ? 2 : 1) : 3;
             if (kind == NEBULA_SHAPE_ARRAY_NORMAL || kind == NEBULA_SHAPE_ARRAY_NBT) {
-                const u32 shift = rFormat.mType == GX_U8 ? 7 : rFormat.mType == GX_S8 ? 6 : rFormat.mType == GX_U16 ? 15 : 14;
-                scale = rFormat.mType == GX_F32 ? 1.0f : 1.0f / static_cast< f32 >(1 << shift);
+                const u32 shift = rFormat.mType == GPU_U8 ? 7 : rFormat.mType == GPU_S8 ? 6 : rFormat.mType == GPU_U16 ? 15 : 14;
+                scale = rFormat.mType == GPU_F32 ? 1.0f : 1.0f / static_cast< f32 >(1 << shift);
             }
             const u32 vectors = kind == NEBULA_SHAPE_ARRAY_NBT ? 3 : 1;
             for (u32 i = 0; i < count; i++) {
@@ -222,40 +222,40 @@ namespace {
     // Where each attribute sits in a display list's vertices (GX's order) and how wide it is.
     struct Layout {
         u32 mStride;
-        s32 mOffset[GX_VA_TEX7 + 1];  // -1 where absent
-        u32 mBytes[GX_VA_TEX7 + 1];
+        s32 mOffset[GPU_VA_TEX7 + 1];  // -1 where absent
+        u32 mBytes[GPU_VA_TEX7 + 1];
         bool mNbt;
         bool mNbtThree;
     };
 
     bool layoutOf(const J3DShape* pShape, const J3DVertexData* pData, Layout* pLayout) {
-        u32 type[GX_VA_TEX7 + 1];
+        u32 type[GPU_VA_TEX7 + 1];
         memset(type, 0, sizeof(type));
         pLayout->mNbt = false;
-        for (const GXVtxDescList* pDesc = pShape->mVtxDesc; pDesc != nullptr && pDesc->attr != GX_VA_NULL; pDesc++) {
-            const GXAttr attr = pDesc->attr == GX_VA_NBT ? GX_VA_NRM : pDesc->attr;
-            if (attr > GX_VA_TEX7 || pDesc->type == GX_NONE) {
+        for (const GpuVtxDescList* pDesc = pShape->mVtxDesc; pDesc != nullptr && pDesc->attr != GPU_VA_NULL; pDesc++) {
+            const GpuAttr attr = pDesc->attr == GPU_VA_NBT ? GPU_VA_NRM : pDesc->attr;
+            if (attr > GPU_VA_TEX7 || pDesc->type == GPU_NONE) {
                 continue;
             }
-            if (attr >= GX_VA_POS && pDesc->type == GX_DIRECT) {
+            if (attr >= GPU_VA_POS && pDesc->type == GPU_DIRECT) {
                 return false;  // values inside the list: J3D's shapes index every array
             }
             type[attr] = pDesc->type;
-            pLayout->mNbt = pLayout->mNbt || pDesc->attr == GX_VA_NBT;
+            pLayout->mNbt = pLayout->mNbt || pDesc->attr == GPU_VA_NBT;
         }
-        const Format normal = formatOf(pData->mVtxAttrFmtList, GX_VA_NRM);
-        pLayout->mNbtThree = normal.mCnt == GX_NRM_NBT3;
+        const Format normal = formatOf(pData->mVtxAttrFmtList, GPU_VA_NRM);
+        pLayout->mNbtThree = normal.mCnt == GPU_NRM_NBT3;
         // J3D's vertex format: NBT normals for a bump-mapped shape or a listed NBT format.
-        const bool nbt = pLayout->mNbt || normal.mCnt != GX_NRM_XYZ;
+        const bool nbt = pLayout->mNbt || normal.mCnt != GPU_NRM_XYZ;
         u32 at = 0;
-        for (u32 attr = 0; attr <= GX_VA_TEX7; attr++) {
+        for (u32 attr = 0; attr <= GPU_VA_TEX7; attr++) {
             pLayout->mOffset[attr] = -1;
             pLayout->mBytes[attr] = 0;
-            if (type[attr] == GX_NONE) {
+            if (type[attr] == GPU_NONE) {
                 continue;
             }
-            u32 bytes = attr < GX_VA_POS ? 1 : type[attr] == GX_INDEX8 ? 1 : 2;
-            if (attr == GX_VA_NRM && nbt && pLayout->mNbtThree) {
+            u32 bytes = attr < GPU_VA_POS ? 1 : type[attr] == GPU_INDEX8 ? 1 : 2;
+            if (attr == GPU_VA_NRM && nbt && pLayout->mNbtThree) {
                 bytes *= 3;
             }
             pLayout->mOffset[attr] = static_cast< s32 >(at);
@@ -264,7 +264,7 @@ namespace {
         }
         pLayout->mNbt = nbt;
         pLayout->mStride = at;
-        return pLayout->mOffset[GX_VA_POS] >= 0;
+        return pLayout->mOffset[GPU_VA_POS] >= 0;
     }
 
     u16 indexAt(const u8* pVertex, const Layout& rLayout, u32 attr, u32 which) {
@@ -272,7 +272,7 @@ namespace {
             return 0;
         }
         const u8* p = pVertex + rLayout.mOffset[attr];
-        const u32 width = attr == GX_VA_NRM && rLayout.mNbtThree && rLayout.mNbt ? rLayout.mBytes[attr] / 3 : rLayout.mBytes[attr];
+        const u32 width = attr == GPU_VA_NRM && rLayout.mNbtThree && rLayout.mNbt ? rLayout.mBytes[attr] / 3 : rLayout.mBytes[attr];
         p += which * width;
         return width == 1 ? p[0] : host16(p);
     }
@@ -350,31 +350,31 @@ namespace {
     void readCorner(const u8* pVertex, const Layout& rLayout, NebulaShapeCorner* pCorner, u32* pNeeded) {
         memset(pCorner, 0, sizeof(*pCorner));
         // The display list's matrix ids (three apart; texture matrices from 30, the identity at 60) as places.
-        pCorner->position_matrix = static_cast< u8 >(rLayout.mOffset[GX_VA_PNMTXIDX] >= 0 ? pVertex[rLayout.mOffset[GX_VA_PNMTXIDX]] / 3 : 0);
+        pCorner->position_matrix = static_cast< u8 >(rLayout.mOffset[GPU_VA_PNMTXIDX] >= 0 ? pVertex[rLayout.mOffset[GPU_VA_PNMTXIDX]] / 3 : 0);
         for (u32 t = 0; t < 8; t++) {
-            const s32 at = rLayout.mOffset[GX_VA_TEX0MTXIDX + t];
+            const s32 at = rLayout.mOffset[GPU_VA_TEX0MTXIDX + t];
             pCorner->texture_matrix[t] = static_cast< u8 >(at >= 0 && pVertex[at] >= 30 ? (pVertex[at] - 30) / 3 : 0);
         }
-        pCorner->position = indexAt(pVertex, rLayout, GX_VA_POS, 0);
+        pCorner->position = indexAt(pVertex, rLayout, GPU_VA_POS, 0);
         noteUse(pNeeded, kPosition, pCorner->position);
-        if (rLayout.mOffset[GX_VA_NRM] >= 0) {
+        if (rLayout.mOffset[GPU_VA_NRM] >= 0) {
             const u32 array = rLayout.mNbt ? kNbt : kNormal;
-            pCorner->normal = indexAt(pVertex, rLayout, GX_VA_NRM, 0);
-            pCorner->tangent = rLayout.mNbt && rLayout.mNbtThree ? indexAt(pVertex, rLayout, GX_VA_NRM, 1) : pCorner->normal;
-            pCorner->binormal = rLayout.mNbt && rLayout.mNbtThree ? indexAt(pVertex, rLayout, GX_VA_NRM, 2) : pCorner->normal;
+            pCorner->normal = indexAt(pVertex, rLayout, GPU_VA_NRM, 0);
+            pCorner->tangent = rLayout.mNbt && rLayout.mNbtThree ? indexAt(pVertex, rLayout, GPU_VA_NRM, 1) : pCorner->normal;
+            pCorner->binormal = rLayout.mNbt && rLayout.mNbtThree ? indexAt(pVertex, rLayout, GPU_VA_NRM, 2) : pCorner->normal;
             noteUse(pNeeded, array, pCorner->normal);
             noteUse(pNeeded, array, pCorner->tangent);
             noteUse(pNeeded, array, pCorner->binormal);
         }
         for (u32 c = 0; c < 2; c++) {
-            if (rLayout.mOffset[GX_VA_CLR0 + c] >= 0) {
-                pCorner->color[c] = indexAt(pVertex, rLayout, GX_VA_CLR0 + c, 0);
+            if (rLayout.mOffset[GPU_VA_CLR0 + c] >= 0) {
+                pCorner->color[c] = indexAt(pVertex, rLayout, GPU_VA_CLR0 + c, 0);
                 noteUse(pNeeded, kColor0 + c, pCorner->color[c]);
             }
         }
         for (u32 t = 0; t < 8; t++) {
-            if (rLayout.mOffset[GX_VA_TEX0 + t] >= 0) {
-                pCorner->texcoord[t] = indexAt(pVertex, rLayout, GX_VA_TEX0 + t, 0);
+            if (rLayout.mOffset[GPU_VA_TEX0 + t] >= 0) {
+                pCorner->texcoord[t] = indexAt(pVertex, rLayout, GPU_VA_TEX0 + t, 0);
                 noteUse(pNeeded, kTexCoord0 + t, pCorner->texcoord[t]);
             }
         }
@@ -395,8 +395,8 @@ namespace {
                 continue;
             }
             const u8 primitive = op & 0xF8;
-            if ((op & 0x80) == 0 || (op & 7) != GX_VTXFMT0 || primitive == GX_LINES || primitive == GX_LINESTRIP ||
-                primitive == GX_POINTS || at + 2 > size) {
+            if ((op & 0x80) == 0 || (op & 7) != GPU_VTXFMT0 || primitive == GPU_LINES || primitive == GPU_LINESTRIP ||
+                primitive == GPU_POINTS || at + 2 > size) {
                 return false;
             }
             const u32 count = host16(pList + at);
@@ -408,25 +408,25 @@ namespace {
             at += count * rLayout.mStride;
             s32 corner[3];
             u32 triangles = 0;
-            if (primitive == GX_TRIANGLES) {
+            if (primitive == GPU_TRIANGLES) {
                 triangles = count / 3;
-            } else if (primitive == GX_QUADS || primitive == kQuads2) {
+            } else if (primitive == GPU_QUADS || primitive == kQuads2) {
                 triangles = count / 4 * 2;
             } else if (count >= 3) {
                 triangles = count - 2;
             }
             for (u32 t = 0; t < triangles; t++) {
                 u32 v[3];
-                if (primitive == GX_TRIANGLES) {
+                if (primitive == GPU_TRIANGLES) {
                     v[0] = 3 * t;
                     v[1] = 3 * t + 1;
                     v[2] = 3 * t + 2;
-                } else if (primitive == GX_QUADS || primitive == kQuads2) {
+                } else if (primitive == GPU_QUADS || primitive == kQuads2) {
                     const u32 q = 4 * (t / 2);
                     v[0] = q;
                     v[1] = q + 1 + (t & 1);
                     v[2] = q + 2 + (t & 1);
-                } else if (primitive == GX_TRIANGLESTRIP) {
+                } else if (primitive == GPU_TRIANGLESTRIP) {
                     v[0] = (t & 1) != 0 ? t + 1 : t;
                     v[1] = (t & 1) != 0 ? t : t + 1;
                     v[2] = t + 2;
@@ -638,16 +638,16 @@ namespace J3DNativeShape {
             return;
         }
         u32 attributes = 0;
-        if (layout.mOffset[GX_VA_NRM] >= 0) {
+        if (layout.mOffset[GPU_VA_NRM] >= 0) {
             attributes |= NEBULA_SHAPE_NORMAL | (layout.mNbt ? NEBULA_SHAPE_NBT : 0) |
                           (layout.mNbt && layout.mNbtThree ? NEBULA_SHAPE_NBT_THREE : 0);
         }
-        attributes |= layout.mOffset[GX_VA_CLR0] >= 0 ? NEBULA_SHAPE_COLOR0 : 0;
-        attributes |= layout.mOffset[GX_VA_CLR1] >= 0 ? NEBULA_SHAPE_COLOR1 : 0;
-        attributes |= layout.mOffset[GX_VA_PNMTXIDX] >= 0 ? NEBULA_SHAPE_POSITION_MATRIX : 0;
+        attributes |= layout.mOffset[GPU_VA_CLR0] >= 0 ? NEBULA_SHAPE_COLOR0 : 0;
+        attributes |= layout.mOffset[GPU_VA_CLR1] >= 0 ? NEBULA_SHAPE_COLOR1 : 0;
+        attributes |= layout.mOffset[GPU_VA_PNMTXIDX] >= 0 ? NEBULA_SHAPE_POSITION_MATRIX : 0;
         for (u32 t = 0; t < 8; t++) {
-            attributes |= layout.mOffset[GX_VA_TEX0 + t] >= 0 ? NEBULA_SHAPE_TEXCOORD0 << t : 0;
-            attributes |= layout.mOffset[GX_VA_TEX0MTXIDX + t] >= 0 ? NEBULA_SHAPE_TEXTURE_MATRIX0 << t : 0;
+            attributes |= layout.mOffset[GPU_VA_TEX0 + t] >= 0 ? NEBULA_SHAPE_TEXCOORD0 << t : 0;
+            attributes |= layout.mOffset[GPU_VA_TEX0MTXIDX + t] >= 0 ? NEBULA_SHAPE_TEXTURE_MATRIX0 << t : 0;
         }
 
         u32 needed[kArrayCount];
@@ -674,7 +674,7 @@ namespace J3DNativeShape {
             }
             // The position matrix places its corners read: each draw of the group carries those.
             u32 places = 0;
-            if (layout.mOffset[GX_VA_PNMTXIDX] >= 0) {
+            if (layout.mOffset[GPU_VA_PNMTXIDX] >= 0) {
                 for (u32 c = 0; c < corners.mCorners.mCount; c++) {
                     places |= 1u << corners.mCorners.mData[c].position_matrix;
                 }
@@ -693,11 +693,11 @@ namespace J3DNativeShape {
             if (pArray == nullptr || needed[array] <= pData->mNebulaArrayCount[array]) {
                 continue;
             }
-            const GXAttr attr = array == kPosition ? GX_VA_POS : array <= kNbt ? GX_VA_NRM :
-                                array <= kColor1 ? static_cast< GXAttr >(GX_VA_CLR0 + array - kColor0) :
-                                                   static_cast< GXAttr >(GX_VA_TEX0 + array - kTexCoord0);
+            const GpuAttr attr = array == kPosition ? GPU_VA_POS : array <= kNbt ? GPU_VA_NRM :
+                                array <= kColor1 ? static_cast< GpuAttr >(GPU_VA_CLR0 + array - kColor0) :
+                                                   static_cast< GpuAttr >(GPU_VA_TEX0 + array - kTexCoord0);
             const Format format = formatOf(pData->mVtxAttrFmtList, attr);
-            sendArray(pArray, array, needed[array], format, array == kNbt || (array == kNormal && format.mCnt != GX_NRM_XYZ));
+            sendArray(pArray, array, needed[array], format, array == kNbt || (array == kNormal && format.mCnt != GPU_NRM_XYZ));
             pData->mNebulaArrayCount[array] = needed[array];
         }
     }
@@ -739,7 +739,7 @@ namespace J3DNativeShape {
         return gather(mask != 0 ? mask : 1u << sCurrentPosition, false);
     }
 
-    void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac) {
+    void sendPositions(const void* pArray, u32 count, GpuCompType type, GpuCompCnt cnt, u8 frac) {
         Format format;
         format.mCnt = cnt;
         format.mType = type;

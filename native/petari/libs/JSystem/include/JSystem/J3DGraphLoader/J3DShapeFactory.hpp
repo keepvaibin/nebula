@@ -31,7 +31,7 @@ struct J3DShapeDrawInitData {
 
 struct J3DShapeFactory {
     J3DShapeFactory(J3DShapeBlock const&);
-    J3DShape* create(int, u32, GXVtxDescList*);
+    J3DShape* create(int, u32, GpuVtxDescList*);
     J3DShapeMtx* newShapeMtx(u32, int, int) const;
     J3DShapeDraw* newShapeDraw(int, int) const;
     s32 calcSize(int, u32);
@@ -39,7 +39,7 @@ struct J3DShapeFactory {
 
     /* 0x00 */ J3DShapeInitData* mShapeInitData;
     /* 0x04 */ u16* mIndexTable;
-    /* 0x08 */ GXVtxDescList* mVtxDescList;
+    /* 0x08 */ GpuVtxDescList* mVtxDescList;
     /* 0x0C */ u16* mMtxTable;
     /* 0x10 */ u8* mDisplayListData;
     /* 0x14 */ J3DShapeMtxInitData* mMtxInitData;
@@ -49,8 +49,8 @@ struct J3DShapeFactory {
         return mShapeInitData[mIndexTable[no]].mMtxGroupNum;
     }
     // The shape's list in the file (host order, as the importer cooks SHP1).
-    GXVtxDescList* getVtxDescList(int no) const {
-        return (GXVtxDescList*)((u8*)mVtxDescList + mShapeInitData[mIndexTable[no]].mVtxDescListIndex);
+    GpuVtxDescList* getVtxDescList(int no) const {
+        return (GpuVtxDescList*)((u8*)mVtxDescList + mShapeInitData[mIndexTable[no]].mVtxDescListIndex);
     }
     f32 getRadius(int no) const {
         return mShapeInitData[mIndexTable[no]].mRadius;
