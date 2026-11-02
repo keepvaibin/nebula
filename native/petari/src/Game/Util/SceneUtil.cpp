@@ -297,10 +297,6 @@ namespace MR {
         return 1;
     }
 
-    bool SceneUtil_DUMMY(const JMapInfoIter& rIter) {
-        return isEqualRailUsage(rIter, "General");
-    }
-
     void getRailInfo(JMapInfoIter* pRailIter, const JMapInfo** ppPointInfo, const JMapInfoIter& rIter) {
         s32 railId = -1;
         getRailId(rIter, &railId);

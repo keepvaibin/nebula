@@ -6,14 +6,6 @@
 #include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
 #include <JSystem/JMath/JMath.hpp>
 
-TVec3f (TVec3f::* XanimeCore_FORCE_EMIT())(const TVec3f&) const {
-    (void)1.0f;
-    (void)0.0f;
-    TVec3f* pVectors = new TVec3f[1];
-    delete[] pVectors;
-    return &TVec3f::operator-;
-}
-
 void XanimeTrack::init() {
     _0 = nullptr;
     mWeight = 0.0f;

@@ -9,17 +9,6 @@
 #include <nebula_math.h>
 
 
-void MathUtil_DUMMY() {
-    TVec3f vec;
-    vec.setLength(1.0f);
-
-    TVec3f a, b, c;
-    a.sub(b, c);
-
-    TQuat4f rot;
-    rot.setRotate(a, 1.0f);
-}
-
 const Vec gZeroVec = {0.0f, 0.0f, 0.0f};
 
 namespace {

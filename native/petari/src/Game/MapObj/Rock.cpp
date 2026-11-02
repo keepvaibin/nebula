@@ -391,7 +391,7 @@ void Rock::initMapToolInfo(const JMapInfoIter& rIter) {
     mAppearPos.set(mPosition);
 
     mRadius = getRadius() * ::cBinderRadius;
-    mRotateSpeed = (mMoveSpeed * 180.0f * ::cRotateSpeedRate) / (MR::pi() * mRadius);  // regswap
+    mRotateSpeed = (mMoveSpeed * 180.0f * ::cRotateSpeedRate) / (MR::pi() * mRadius);
 
     MR::getJMapInfoArg3NoInit(rIter, &mAppearTime);
 

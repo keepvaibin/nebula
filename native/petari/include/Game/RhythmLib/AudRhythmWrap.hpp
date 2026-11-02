@@ -1,6 +1,5 @@
 #pragma once
 
-// TODO : these need to be included together in this order to match sinit
 // in multiple files. Where should this actually go?
 #include "Game/RhythmLib/AudMeTrack.hpp"
 

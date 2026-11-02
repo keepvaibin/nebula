@@ -21,21 +21,6 @@
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <cstdio>
 
-// TODO: mismatch in .data order likely due to a stripped function containing "CAM_TYPE_DPD"
-
-void CameraUtil_DUMMY() {
-    TVec4f a(1.0f, 0.0f, 0.0f, 0.0f);
-    TVec3f b;
-    TVec3f c = -b;
-    f32 f1 = MR::tan(1.0f);
-    c = b;
-    TVec3f e = b - c;
-
-    TPos3f m;
-    m.getXDir(b);
-    m.getYDir(b);
-    m.getZDir(b);
-}
 
 namespace {
     static const char* sLauncherCameraName = "\221\345\226\103" /* 大砲 */;
@@ -707,6 +692,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void CameraUtil_DUMMY2() {
-    TVec2f d(1.0f, 0.0f);
-}

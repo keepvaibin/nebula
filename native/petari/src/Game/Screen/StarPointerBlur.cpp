@@ -102,8 +102,6 @@ void StarPointerBlur::updatePoint(const TVec2f& rPos, bool hide, TVec2f* pDir) {
 }
 
 u16 StarPointerBlur::findDrawPointRange(u16* start, u16* end) const {
-    // [WARNING] LIKELY A FAKEMATCH: I do not believe this is correct, as nearly every other case a goto has
-    // been "required" has been able to be rewritten without a goto
 
     u16 range;
     u16 idx = *start;

@@ -31,11 +31,6 @@ namespace NrvSuperSpinDriver {
 };  // namespace NrvSuperSpinDriver
 
 // Fix JGeometry inlining
-void SuperSpinDriver_DUMMY() {
-    TQuat4f e;
-    e = e;
-}
-
 SuperSpinDriver::SuperSpinDriver(const char* pName, s32 color)
     : LiveActor(pName), mBindActor(), mShootPath(), mSpinDriverCamera(), mOperateRing(), mPathDrawer(), mEmptyModel(), _A4(0, 0, 0, 1),
       _B4(0, 0, 0, 1), _C4(0, 0, 0), _D0(0, 0, 0), mShootPathDirection(0, 1, 0), _E8(0, 0, 1), _F4(1, 0, 0), _100(0, 1, 0),

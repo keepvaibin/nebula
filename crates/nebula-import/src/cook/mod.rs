@@ -6,6 +6,7 @@
 pub mod archive;
 pub mod audio_data;
 pub mod dol;
+pub mod ghost;
 pub mod formats;
 pub mod material;
 pub mod mesh;
@@ -63,7 +64,7 @@ fn placement_table_name(name: &str) -> bool {
 
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
+    matches!(extension(name).as_str(), "arc" | "szs" | "gst" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -106,6 +107,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if placement_table_name(name) && native_data::bcsv(&bytes, false).ok().flatten().is_some()
     {
         native_data::bcsv(&bytes, false)?
+    } else if extension(name) == "gst" {
+        Some(ghost::host_order(&bytes).with_context(|| format!("{name}: ghost"))?)
     } else if extension(name) == "canm" {
         Some(native_data::canm(&bytes).with_context(|| format!("{name}: camera animation"))?)
     } else if extension(name) == "bas" {

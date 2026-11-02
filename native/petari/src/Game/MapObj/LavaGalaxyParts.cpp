@@ -9,11 +9,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 
-void FORCE_SUB_NO_INLINE() {
-    TVec3f a, b;
-    a = a - b;
-}
-
 LavaGalaxyParts::~LavaGalaxyParts() {
 }
 

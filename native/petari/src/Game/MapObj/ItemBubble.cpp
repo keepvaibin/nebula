@@ -17,11 +17,6 @@ namespace NrvItemBubble {
     NEW_NERVE(ItemBubbleNrvBreak, ItemBubble, Break);
 };  // namespace NrvItemBubble
 
-void FORCE_OPERATOR() {
-    TVec3f vec;
-    vec *= 1.0f;
-}
-
 ItemBubble::ItemBubble(const char* pName) : LiveActor(pName), _90(), _94() {
     _8C = 0.0f;
 }

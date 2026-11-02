@@ -363,7 +363,7 @@ namespace JGeometry {
                 return;
             }
 
-            f32 f1 = 1.0f;  // TODO: this is a hack to fix the float regswap
+            f32 f1 = 1.0f;
             if (zx + f1 <= (f32)JGeometry::TUtil< f32 >::epsilon()) {
                 rDest.set(JMAATan2(this->mMtx[0][1], this->mMtx[1][1]), HALF_PI, 0.0f);
                 return;

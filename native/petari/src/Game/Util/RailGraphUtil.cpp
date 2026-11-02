@@ -58,10 +58,6 @@ namespace MR {
         return pGraph;
     }
 
-    void RailGraphUtil_FORCE_EMIT(const RailGraphIter& rIter) {
-        RailGraphIter copy(rIter);
-    }
-
     RailGraphIter* createRailGraphIter(const RailGraph* pGraph) {
         return new RailGraphIter(pGraph->getIterator());
     }

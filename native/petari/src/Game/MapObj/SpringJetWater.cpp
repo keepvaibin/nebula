@@ -91,10 +91,6 @@ void SpringJetWater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 }
 
-void SpringJetWater_DUMMY() {
-    MR::isDemoPartFirstStep("\227\116\202\253\220\205\217\343\217\270" /* 湧き水上昇 */);
-}
-
 void SpringJetWater::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::invalidateHitSensor(this, "body");

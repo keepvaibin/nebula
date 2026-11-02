@@ -3,10 +3,6 @@
 #include "Game/MapObj/StarPiece.hpp"
 #include "Game/Util.hpp"
 
-void StarPieceMother_FORCE_SDATA2() {
-    (void)10.0f;
-}
-
 namespace {
     // const f32 hMoveSpeed = _;
     const f32 hAddRandomVectorValue = 0.5f;
@@ -119,7 +115,7 @@ void StarPieceMother::exeMoveOnRail() {
     MR::startLevelSound(this, "SE_OJ_LV_STAR_PIECE_MO_MV");
     MR::moveCoordAndFollowTrans(this, _A0);
 
-    f32 railCoord = MR::getRailCoord(this);  // Necessary to match
+    f32 railCoord = MR::getRailCoord(this);
     if (_90[_98] <= railCoord) {
         mStarPieceArray[_98]->appear();
         MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");

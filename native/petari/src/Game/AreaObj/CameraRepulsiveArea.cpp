@@ -6,11 +6,6 @@ namespace {
     // static const s32 sCylPower = _;
 };  // namespace
 
-void CameraRepulsiveArea_FORCE_EMIT(TVec3f* pVec, const TVec3f& rVec) {
-    pVec->scale(1.0f);
-    *pVec -= rVec;
-}
-
 CameraRepulsiveArea::~CameraRepulsiveArea() {
 }
 
