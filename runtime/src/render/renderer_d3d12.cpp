@@ -499,11 +499,9 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
     return Table{cpu, gpu};
 }
 
-// Upload rings are committed UPLOAD-heap resources mapped for the life of the process, so
-// bytes_per_frame * frames_in_flight stays reserved: (64+16+8+32) MiB * 2 slots = 240 MiB, plus a
-// shader-visible descriptor heap. An UPLOAD heap's untouched pages are never backed, so unused
-// reservation costs address space and commit, not memory; [gpu-rings] logs the reservation and
-// UploadRing tracks each ring's peak use. On an integrated adapter the memory is system memory;
+// Upload rings are committed UPLOAD-heap resources mapped for the life of the process. Their whole size is in the
+// working set from the start (memws.py: every page of them resident on NVIDIA's driver), so they start at what the
+// game needs and grow on demand; [gpu-rings] logs the sizes and UploadRing tracks each ring's peak use. On an integrated adapter the memory is system memory;
 // DXGI's DedicatedVideoMemory there is a fixed compatibility value, not VRAM (Intel support article
 // 000020962: 128 MB), and the graphics share is capped at half of installed RAM. Exhaustion is
 // fatal: UploadRing::allocate throws rather than dropping geometry.
@@ -537,13 +535,11 @@ std::uint64_t RendererD3D12::scene_copy_dest_budget_bytes() {
 
 // The upload rings' first buffers. A segmentation gives each frame an equal share and keeps one more share as
 // spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
-// boundary. Worst observed frame without the whole stage drawn: 117,361 vertices x 144 B = 16.1 MiB.
-static constexpr std::size_t kVertexRingBytes = 192u * 1024u * 1024u;
-static constexpr std::size_t kIndexRingBytes = 48u * 1024u * 1024u;
-// Interpolated sub-frames add one VS constant block per scene record each.
-static constexpr std::size_t kConstantRingBytes = 96u * 1024u * 1024u;
-// A busy frame reloads the XF palette many times (per-object and skinned matrices via LOAD_INDX).
-static constexpr std::size_t kMatrixRingBytes = 128u * 1024u * 1024u;
+// boundary. The most a frame took over the 102-stop tour (mem_f2): vertex 2.2 MB, index 1.2, constant 1.4, matrix 0.7.
+static constexpr std::size_t kVertexRingBytes = 32u * 1024u * 1024u;
+static constexpr std::size_t kIndexRingBytes = 12u * 1024u * 1024u;
+static constexpr std::size_t kConstantRingBytes = 12u * 1024u * 1024u;
+static constexpr std::size_t kMatrixRingBytes = 8u * 1024u * 1024u;
 static constexpr unsigned    kSrvPerFrame = 32768u;
 // The descriptor ring's persistent prefix, outside the rewound frame segments: the scene target
 // conversion sources (the scene target's views, the output scene target's, the MSAA depth's, then the HDR scene

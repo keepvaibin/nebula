@@ -254,7 +254,7 @@ void report_crash_facts(const fs::path& dump) {
     char technical[1600];
     std::snprintf(technical, sizeof(technical), "%s%s%s%s%s", gCrashText,
                   gCrashFacts.last_mod_read.empty() ? "" : "\nLast file read from a mod: ", gCrashModRead,
-                  dump.empty() ? "" : "\nDump: ", dump.empty() ? "" : utf8_of(dump).c_str());
+                  dump.empty() ? "" : "\nDump: ", dump.empty() ? "" : utf8_of(dump.filename()).c_str());
     static char text[8192];
     const std::size_t length = galaxy::crash::format_report(report, technical, text, sizeof(text));
     std::error_code error;
@@ -272,7 +272,7 @@ void report_crash_facts(const fs::path& dump) {
     if (FILE* out = open_for_writing(file)) {
         std::fwrite(text, 1, length, out);
         std::fclose(out);
-        std::snprintf(line, sizeof(line), "report %s", utf8_of(file).c_str());
+        std::snprintf(line, sizeof(line), "report %s", utf8_of(file.filename()).c_str());
         log_line("crash:", line);
     }
     if (!crash_dialog_wanted()) return;
@@ -436,7 +436,7 @@ void load_module(const fs::path& path) {
     void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
     if (module == nullptr) {
-        die("cannot load the game module %s", utf8_of(path).c_str());
+        die("cannot load the game module %s", utf8_of(path.filename()).c_str());
     }
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
@@ -494,13 +494,13 @@ Pak gPak;
 
 void open_pak(const fs::path& path) {
     if (!gPak.store.open(path)) {
-        die("%s is not a game store: import the game again", utf8_of(path).c_str());
+        die("%s is not a game store: import the game again", utf8_of(path.filename()).c_str());
     }
     // The releases the module plays (NebulaRegion.hpp): North America, Europe and Japan.
     std::snprintf(gPak.id, sizeof(gPak.id), "%.6s", std::string(gPak.store.game_id()).c_str());
     if (std::strcmp(gPak.id, "RMGE01") != 0 && std::strcmp(gPak.id, "RMGP01") != 0 &&
         std::strcmp(gPak.id, "RMGJ01") != 0) {
-        die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", utf8_of(path).c_str(), gPak.id);
+        die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", utf8_of(path.filename()).c_str(), gPak.id);
     }
 }
 
@@ -984,7 +984,7 @@ void crash_writer() {
             const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, type,
                                   gCrashInfo != nullptr ? &exception : nullptr, nullptr, nullptr);
             char text[MAX_PATH + 32];
-            std::snprintf(text, sizeof(text), "%s %ls", ok ? "minidump" : "minidump failed:", path);
+            std::snprintf(text, sizeof(text), "%s %ls", ok ? "minidump" : "minidump failed:", fs::path(path).filename().c_str());
             log_line("crash:", text);
         }
         if (file != INVALID_HANDLE_VALUE) {
@@ -3899,7 +3899,7 @@ int main(int argc, char** argv) {
                                       });
         std::string message;
         (void)galaxy::host::import_mii_folder(&message);
-        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the library)\n", utf8_of(import_folder).c_str(),
+        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the library)\n", utf8_of(import_folder.filename()).c_str(),
                      message.c_str(), galaxy::host::mii_library_count());
         (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
     }

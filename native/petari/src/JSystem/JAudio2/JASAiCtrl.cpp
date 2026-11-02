@@ -43,7 +43,9 @@ extern "C" NEBULA_GAME_API void nebula_game_sound_frame(void) {
 
 u32 JASDriver::sOutputRate;
 
-f32 JASDriver::sSoundRate = 32028.5f;
+// The sound clock's rate, samples a second. The console's DSP ran at 32,028.5 Hz, and pitches and tempos were worked out from that; the
+// host's clock is exactly 32 kHz, so with the console's number here everything played 0.089 % slow.
+f32 JASDriver::sSoundRate = 32000.0f;
 
 u32 JASDriver::sSubFrames = 0x00000007;
 
@@ -76,7 +78,6 @@ void JASDriver::setOutputRate(JASOutputRate rate) {
         sSubFrames = 10;
         sSoundRate = 48000.0f;
     }
-    sSoundRate *= 1.0008897f;
 }
 
 // The frames the clock asked for (at most cMaxCatchUp; the rest are dropped): each one's subframes, then the frame to
