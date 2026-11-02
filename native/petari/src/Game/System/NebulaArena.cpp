@@ -14,11 +14,11 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #ifdef NEBULA_ASAN_HEAPS
 // AddressSanitizer test builds: what no block holds is poisoned, so overflows and uses after free inside an arena are reported.
 #include <sanitizer/asan_interface.h>
-#define ARENA_POISON(p, n) __asan_poison_memory_region((p), (size_t)(n))
-#define ARENA_UNPOISON(p, n) __asan_unpoison_memory_region((p), (size_t)(n))
+#define POISON_BLOCK(p, n) __asan_poison_memory_region((p), (size_t)(n))
+#define UNPOISON_BLOCK(p, n) __asan_unpoison_memory_region((p), (size_t)(n))
 #else
-#define ARENA_POISON(p, n)
-#define ARENA_UNPOISON(p, n)
+#define POISON_BLOCK(p, n)
+#define UNPOISON_BLOCK(p, n)
 #endif
 
 thread_local NebulaArena* NebulaArena::sCurrentHeap;
@@ -111,7 +111,7 @@ NebulaArena::NebulaArena() : JKRDisposer() {
 
 NebulaArena::~NebulaArena() {
     const NebulaHostServices* const host = nebula_host();
-    ARENA_UNPOISON(mStart, mCommitted - mStart);
+    UNPOISON_BLOCK(mStart, mCommitted - mStart);
     host->memory_release(host->user, mStart, cSpan);
 }
 
@@ -195,7 +195,7 @@ void NebulaArena::commitTo(u8* pEnd) {
     if (!host->memory_commit(host->user, mCommitted, bytes)) {
         NEBULA_PANIC("out of memory: %llu bytes more for an arena", static_cast< unsigned long long >(bytes));
     }
-    ARENA_POISON(mCommitted, bytes);
+    POISON_BLOCK(mCommitted, bytes);
     mCommitted += bytes;
 }
 
@@ -206,7 +206,7 @@ void* NebulaArena::takeBlock(u32 bytes) {
     if (mFree[index] != nullptr) {
         void* const pBlock = mFree[index];
         mFree[index] = *static_cast< void** >(pBlock);
-        ARENA_UNPOISON(pBlock, rounded);
+        UNPOISON_BLOCK(pBlock, rounded);
         return pBlock;
     }
 
@@ -215,7 +215,7 @@ void* NebulaArena::takeBlock(u32 bytes) {
         commitTo(pBlock + rounded);
     }
     mNext = pBlock + rounded;
-    ARENA_UNPOISON(pBlock, rounded);
+    UNPOISON_BLOCK(pBlock, rounded);
     return pBlock;
 }
 
@@ -239,8 +239,8 @@ void* NebulaArena::alloc(u32 size, int alignment) {
     Header* const pHeader = reinterpret_cast< Header* >(data) - 1;
     pHeader->mClass = index;
     pHeader->mBack = static_cast< u32 >(reinterpret_cast< u8* >(pHeader) - pBlock);
-    ARENA_POISON(pBlock, data - reinterpret_cast< uintptr_t >(pBlock));
-    ARENA_POISON(reinterpret_cast< u8* >(data) + size, reinterpret_cast< uintptr_t >(pBlock) + rounded - data - size);
+    POISON_BLOCK(pBlock, data - reinterpret_cast< uintptr_t >(pBlock));
+    POISON_BLOCK(reinterpret_cast< u8* >(data) + size, reinterpret_cast< uintptr_t >(pBlock) + rounded - data - size);
     return reinterpret_cast< void* >(data);
 }
 
@@ -257,7 +257,7 @@ void NebulaArena::free(void* pData) {
     *reinterpret_cast< void** >(pBlock) = mFree[index];
     mFree[index] = pBlock;
 #ifdef NEBULA_ASAN_HEAPS
-    ARENA_POISON(pBlock, sizeOfClass(index));
+    POISON_BLOCK(pBlock, sizeOfClass(index));
 #endif
     unlock();
 }
@@ -274,7 +274,7 @@ void NebulaArena::freeAll() {
     GameAssets::unloadHeap(this);
 
     lock();
-    ARENA_UNPOISON(mStart, mCommitted - mStart);
+    UNPOISON_BLOCK(mStart, mCommitted - mStart);
     host->memory_decommit(host->user, mStart, mCommitted - mStart);
     mCommitted = mStart;
     mNext = mStart;

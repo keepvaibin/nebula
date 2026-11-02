@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 106u
+#define NEBULA_GAME_API_VERSION 107u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
