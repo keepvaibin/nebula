@@ -634,7 +634,6 @@ void GameScene::draw3D() const {
     MR::setStarPointerDrawSyncToken();
     MR::setTalkDirectorDrawSyncToken();
     SceneFunction::executeDrawImageEffect();
-    J3DNativeState::setDither(GPU_TRUE);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     CategoryList::execute(MR::DrawType_EffectDrawAfterImageEffect);

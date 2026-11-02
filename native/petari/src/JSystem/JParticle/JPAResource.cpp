@@ -1042,9 +1042,7 @@ void JPAResource::setPTev() {
         flags |= 4;
     }
     if (mpBaseShape->isClipOn()) {
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     } else {
-        J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
     }
     sendParticleMaterial(mpBaseShape, flags);
 }
@@ -1056,9 +1054,7 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
     J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     if (mpChildShape->isClipOn()) {
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     } else {
-        J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
     }
     work->mpResMgr->CALL_INLINE_FUNC(load, work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GPU_TEXMAP1);
     sendParticleMaterial(mpBaseShape, 8);

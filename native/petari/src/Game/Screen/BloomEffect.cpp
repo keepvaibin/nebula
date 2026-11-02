@@ -142,7 +142,6 @@ void BloomEffect::preDraw() const {
     MR::fillScreen(Color8(0, 0, 0, 0xFF).mGXColor);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void BloomEffect::postDraw() const {
@@ -240,11 +239,9 @@ void BloomEffect::initDraw() const {
     J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
     J3DNativeState::setCullMode(GPU_CULL_NONE);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     J3DNativeState::setColorUpdate(GPU_TRUE);
     J3DNativeState::setAlphaUpdate(GPU_FALSE);
     J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
-    J3DNativeState::setDither(GPU_FALSE);
     sBloomStage = BloomStage_Modulate;
 }
 
