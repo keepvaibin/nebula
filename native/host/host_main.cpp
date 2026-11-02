@@ -32,6 +32,7 @@
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
 #include "galaxy/movie_video.h"
+#include "galaxy/wiimote_speaker.h"
 #include "galaxy/perf_hint.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
@@ -3220,8 +3221,16 @@ void input_thread() {
 }
 #endif
 
-// The remote speaker's sound is not played yet (I-06: the host's speaker mixer, galaxy/wiimote_speaker.h).
-void svc_speaker_samples(void*, uint32_t, const int16_t*, uint32_t) {}
+// Player 1's remote speaker sound, 6 kHz: to the audio output, which mixes it at its own gain (galaxy/wiimote_speaker.h).
+void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_t count) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (player == 0u) {
+        galaxy::input::speaker::game_speaker().push({samples, count}, 6000u);
+    }
+#else
+    (void)player, (void)samples, (void)count;
+#endif
+}
 
 // The game's sound (native_audio.h), on its audio thread. Headless, nothing is mixed.
 void svc_audio_setup(void*, NebulaAudioVoice* voices, uint32_t count, const NebulaAudioEffect* effects,

@@ -6,6 +6,7 @@
 #include "galaxy/native_audio_queue.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
+#include "galaxy/wiimote_speaker.h"
 #include "galaxy/scope_exit.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -1523,6 +1524,7 @@ void NativeGameAudio::frame() {
             s.block[i * 4u + c * 2u + 1u] = static_cast<std::byte>(bits >> 8u);
         }
     }
+    galaxy::input::speaker::game_speaker().mix(s.block, s.mixer->rate(), audio.wiimote_speaker * target);
     (void)s.sink.submit_pcm16_stereo(s.block, s.mixer->rate());
 }
 
