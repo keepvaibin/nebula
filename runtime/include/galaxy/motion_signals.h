@@ -26,7 +26,7 @@
 // 2D layer: GameScene::draw2D's entry and epilogue are FIFO markers like the
 // 3D scene's (render::SceneMarker::Scene2DBegin / Scene2DEnd). Layout markers sit
 // at the start of a pane's, layout actor's or star pointer's draw: a function
-// entry or the path after its visibility test, never inside a GXBegin.
+// entry or the path after its visibility test, never inside a a draw.
 //
 // No Windows or D3D12 includes: the header is unit-tested on its own.
 

@@ -20,7 +20,7 @@ public:
     };
 
     virtual TVec3f* getClippingCenterOffset() const {
-        // A zero offset; the console returned a stack temporary its caller read before anything overwrote it.
+        // A zero offset.
         static TVec3f vec;
         vec.set(0.0f, 0.0f, 0.0f);
         return &vec;

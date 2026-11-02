@@ -1,6 +1,6 @@
 #pragma once
 
-// Nebula's services beyond the console's, asked directly by the game (nebula_game_api.h): the host's options and
+// Nebula's services, asked directly by the game (nebula_game_api.h): the host's options and
 // code patches, its settings menu and button icons, achievements and play stats, presence, the galaxy select's
 // names, scene and light signals for the renderer, art export, test requests.
 

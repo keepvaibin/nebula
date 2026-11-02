@@ -299,7 +299,7 @@ public:
     /* 0x16C */ TTrackInfo mTrackInfo;
     /* 0x180 */ JGadget::TLinkListNode mNode;
 
-    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's code uses the literal -384.
+    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T).
     static int nebulaListNodeOffset() {
         return -(int)offsetof(AudMeTrack, mNode);
     }

@@ -404,7 +404,7 @@ J3DAlphaComp J3DMaterialFactory::newAlphaComp(int i_idx) const {
     if (mtl_init_data->mAlphaCompIdx != 0xffff) {
         return J3DAlphaComp(mpAlphaCompInfo[mtl_init_data->mAlphaCompIdx]);
     } else {
-        return J3DAlphaComp(0xffff);
+        return J3DAlphaComp();
     }
 }
 

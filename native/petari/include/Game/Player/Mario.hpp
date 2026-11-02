@@ -479,7 +479,7 @@ public:
     // instruction comments to make it easier to identify each bit
     struct MovementStates {
         // Code reads these as words (mMovementStates_HIGH_WORD and the others): fields from the least significant value
-        // bit up in each word, so each has the console's bit.
+        // bit up in each word.
         unsigned _1F : 1;
         unsigned digitalJump : 1;  // _1E
         unsigned _1D : 1;

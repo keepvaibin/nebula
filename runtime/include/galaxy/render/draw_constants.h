@@ -44,7 +44,7 @@ struct alignas(256) VertexConstants {
     float inline_pos_matrix[3][4];
     float inline_tex_matrices[kMaxTexGens][3][4];
     float inline_post_matrices[kMaxTexGens][3][4];
-    // Physical viewport width and height, line width and point size (BP 0x22) at the scene target scale. Geometry shaders
+    // Physical viewport width and height, line width and point size (the line width) at the scene target scale. Geometry shaders
     // read it at HLSL packoffset(c65).
     float line_point_raster[4];
     // Line mask, point mask, line divisor, point divisor for console texture

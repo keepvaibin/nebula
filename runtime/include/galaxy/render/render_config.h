@@ -171,7 +171,7 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
 
 // The most interpolated frames one game frame needs at a present rate: ceil(rate / 60) - 1 (75 Hz shows one between
 // most pairs of game frames, 144 Hz two between some), none at 60 and below, at most 7.
-// The ray tracer is parked (E-02): it shaded hits by evaluating the console TEV from the old path's shader keys, which native
+// The ray tracer is parked (E-02): it shaded hits by evaluating the console material from the old path's shader keys, which native
 // draws no longer have. It returns when it is rebuilt on native materials (the additions' F/G phase); until then the
 // RAY TRACING row is not offered and no tracer starts, on any adapter.
 inline constexpr bool kRayTracingParked = true;

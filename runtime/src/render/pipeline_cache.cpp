@@ -156,7 +156,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         rt.DestBlendAlpha = to_alpha_blend(rt.DestBlend);
         rt.BlendOpAlpha   = rt.BlendOp;
         if (bb & (1u << 27)) {           // dual-source dst-alpha
-            // The PS exports the TEV alpha on SV_Target1 (the matching
+            // The PS exports the material alpha on SV_Target1 (the matching
             // PixelShaderKey flags bit7 is derived from the same register
             // snapshot): RGB blends against SRC1_ALPHA while the alpha
             // channel keeps its independently selected alpha equation.
@@ -188,7 +188,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     // console screen space is Y-down relative to D3D NDC (the scene target viewport does not flip), so a console
-    // front face lands as a D3D back face and vice versa, as in Dolphin's D3D backends.
+    // front face lands as a D3D back face and vice versa.
     // CullMode::All (rasterize nothing) has no PSO equivalent and maps to None.
     switch (static_cast<CullMode>(rs.cull)) {
     case CullMode::Front:
@@ -208,16 +208,16 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
 
     // Depth is reversed-Z relative to the console z24 values (near=1, far=0; the projection negation
     // in render_core.cpp fill_projection), so console LESS maps to D3D GREATER, console LEQUAL to
-    // GREATER_EQUAL, and so on, as in Dolphin's D3D backends.
+    // GREATER_EQUAL, and so on.
     static constexpr D3D12_COMPARISON_FUNC kGxDepthFunc[8] = {
-        D3D12_COMPARISON_FUNC_NEVER,           // GX_NEVER
-        D3D12_COMPARISON_FUNC_GREATER,         // GX_LESS     (reversed-Z)
-        D3D12_COMPARISON_FUNC_EQUAL,           // GX_EQUAL
-        D3D12_COMPARISON_FUNC_GREATER_EQUAL,   // GX_LEQUAL   (reversed-Z)
-        D3D12_COMPARISON_FUNC_LESS,            // GX_GREATER  (reversed-Z)
-        D3D12_COMPARISON_FUNC_NOT_EQUAL,       // GX_NEQUAL
-        D3D12_COMPARISON_FUNC_LESS_EQUAL,      // GX_GEQUAL   (reversed-Z)
-        D3D12_COMPARISON_FUNC_ALWAYS,          // GX_ALWAYS
+        D3D12_COMPARISON_FUNC_NEVER,           // NEVER
+        D3D12_COMPARISON_FUNC_GREATER,         // LESS     (reversed-Z)
+        D3D12_COMPARISON_FUNC_EQUAL,           // EQUAL
+        D3D12_COMPARISON_FUNC_GREATER_EQUAL,   // LEQUAL   (reversed-Z)
+        D3D12_COMPARISON_FUNC_LESS,            // GREATER  (reversed-Z)
+        D3D12_COMPARISON_FUNC_NOT_EQUAL,       // NEQUAL
+        D3D12_COMPARISON_FUNC_LESS_EQUAL,      // GEQUAL   (reversed-Z)
+        D3D12_COMPARISON_FUNC_ALWAYS,          // ALWAYS
     };
     const std::uint32_t zb = rs.zmode_bits;
     if (zb & 1u) {

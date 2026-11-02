@@ -17,7 +17,7 @@ public:
     /* 0x20 */ union {
         u32 _20;
         struct {
-            // _20 is read by shifts: fields from the least significant bit up, so each has the console's bits.
+            // _20 is read by shifts: fields from the least significant bit up,.
             u32 _8 : 24;
             u32 mDamageType : 4;
             u32 _0 : 4;

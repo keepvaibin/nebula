@@ -18,7 +18,7 @@ public:
     }
 
     virtual const TVec3f& getCurrentVelocity() const {
-        // Zero; the console returned a stack temporary its caller read before anything overwrote it.
+        // Zero.
         static const TVec3f zero(0.0f, 0.0f, 0.0f);
         return zero;
     }
