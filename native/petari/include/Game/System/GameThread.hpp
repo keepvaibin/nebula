@@ -5,7 +5,7 @@
 
 class JKRHeap;
 
-// A game thread: a host thread (NebulaKernel) with its message queue; subclasses run their work in run().
+// A game thread: a host thread (GameThreads) with its message queue; subclasses run their work in run().
 class GameThread {
 public:
     GameThread(u32, int, JKRHeap*);
