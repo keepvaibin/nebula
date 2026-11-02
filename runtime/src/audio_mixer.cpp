@@ -961,6 +961,10 @@ void AudioMixer::effects_end() {
 // `size` bytes `offset` past the voice's wave, when they lie in the sound memory.
 const std::byte* AudioMixer::wave_bytes(const NebulaAudioVoice& voice, std::uint32_t offset, std::uint32_t size) const {
     const auto* wave = reinterpret_cast<const std::byte*>(voice.wave);
+    if (voice.wave_end != nullptr) {
+        const auto available = static_cast<std::size_t>(voice.wave_end - voice.wave);
+        return offset <= available && size <= available - offset ? wave + offset : nullptr;
+    }
     if (sound_ == nullptr || wave < sound_ || wave > sound_ + sound_size_) {
         return nullptr;
     }

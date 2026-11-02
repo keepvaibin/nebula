@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 86u
+#define NEBULA_GAME_API_VERSION 87u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -85,7 +85,8 @@ typedef struct NebulaAudioVoice {
     uint16_t pitch;          /* source samples per 32 kHz sample, 4.12 */
     uint16_t format;         /* NEBULA_AUDIO_SILENT..OSCILLATOR */
     uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
-    const uint8_t* wave;     /* the source's first byte, in the sound memory (audio_setup) */
+    const uint8_t* wave;     /* the source's first byte, in the sound memory (audio_setup) or before wave_end */
+    const uint8_t* wave_end; /* the end of a source outside the sound memory; else null */
     uint32_t restart;        /* PCM: the sample it starts at */
     uint32_t loop_start;     /* samples */
     uint32_t end;            /* samples: the end, or the loop's end when loop is set */
@@ -1085,6 +1086,9 @@ typedef struct NebulaHostServices {
     void (*shape_array)(void* user, const struct NebulaShapeArray* array);
     /* A model's shape group (J3DShapeDraw) as typed geometry (NebulaShapeGeometry); the host copies it. */
     void (*shape_geometry)(void* user, const struct NebulaShapeGeometry* geometry);
+    /* The game freed the memory from `start` up to `end`: arrays and groups keyed inside it are gone, at this place in the
+       records. */
+    void (*shape_forget)(void* user, uint64_t start, uint64_t end);
     /* Draws shape group `shape` (NebulaShapeGeometry::key) under the drawing state the game has set so far, its corners reading the position,
        normal and colour 0 arrays named by `position`, `normal` and `color` (shape_array keys; the geometry's own for
        the rest) and the position and normal matrices among `matrices` (`matrix_count` of them, NebulaDrawMatrix),

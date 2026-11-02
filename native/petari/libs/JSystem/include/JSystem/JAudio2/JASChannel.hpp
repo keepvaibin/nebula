@@ -210,6 +210,8 @@ public:
         /* 0x104 */ const u8* mWavePtr;
         /* 0x104 */ int mProgNo;
     };
+    // The end of a wave outside the sound memory (a stream's).
+    const u8* mWaveLimit;
 
     static GameMessageQueue sBankDisposeMsgQ;
     static void* sBankDisposeMsg[16];

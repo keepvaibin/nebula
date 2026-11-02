@@ -1821,6 +1821,19 @@ void svc_shape_array(void*, const NebulaShapeArray* array) {
 #endif
 }
 
+void svc_shape_forget(void*, uint64_t start, uint64_t end) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Forget;
+    record.key = start;
+    record.position = end;
+    queue_shape_record(std::move(record));
+#else
+    (void)start, (void)end;
+#endif
+}
+
 void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -3909,6 +3922,7 @@ int main(int argc, char** argv) {
     services.curved_surface = svc_curved_surface;
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
+    services.shape_forget = svc_shape_forget;
     services.shape_draw = svc_shape_draw;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;

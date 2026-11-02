@@ -1,3 +1,7 @@
+#include <nebula_game_api.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/AudioLib/AudParams.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
@@ -35,8 +39,12 @@ namespace {
         return heap;
     }
 
+    // The host's copies of what a heap's models registered go with it.
     void destroyHeapAndSetNULL(JKRHeap** pHeap) {
         if (*pHeap != nullptr) {
+            const NebulaHostServices* const pHost = nebula_host();
+            pHost->shape_forget(pHost->user, reinterpret_cast< uintptr_t >((*pHeap)->getStartAddr()),
+                                reinterpret_cast< uintptr_t >((*pHeap)->getEndAddr()));
             JKRHeap::destroy(*pHeap);
             *pHeap = nullptr;
         }

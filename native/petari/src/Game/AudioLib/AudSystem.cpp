@@ -23,7 +23,7 @@
 #include <JSystem/JAudio2/JAISoundStarter.hpp>
 #include <JSystem/JAudio2/JAIStreamDataMgr.hpp>
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
-#include <JSystem/JAudio2/JASAramStream.hpp>
+#include <JSystem/JAudio2/JASStream.hpp>
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
 #include <JSystem/JAudio2/JASSoundParams.hpp>
@@ -32,7 +32,6 @@
 #include <JSystem/JAudio2/JAUSectionHeap.hpp>
 #include <JSystem/JAudio2/JAUSoundMgr.hpp>
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
-#include <JSystem/JAudio2/JAUStreamDataMgr.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JKernel/JKRArchive.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
@@ -65,8 +64,6 @@ namespace {
         initJAS.heapSize_ = AudParams::workAreaSize;
         initJAS.field_0x1c = AudParams::numFreeTracks;
         initJAS.field_0x20 = AudParams::numFreeTrackChannels;
-        initJAS.aramBlockSize_ = AudParams::streamBlockSize;
-        initJAS.aramChannelNum_ = AudParams::numStreamChannels;
         initJAS.dspLevel_ = AudParams::outputGain;
         initJAS.initJASystem(pHeap);
 
@@ -152,7 +149,7 @@ static JAUStdSoundInfo* newSoundInfo(JAUSection* pSection) {
 
 AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, JKRArchive* pChordArchive, JKRArchive* pMeArchive, JKRArchive* pRemixArchive)
     : mIsResetReady(), mIsReset(), mStopThreads(), _828(), mIsPaused(), _82A(), _82B(), _82C(), _830(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
-      mStreamAramMgr(), mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
+      mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsDvdError(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
@@ -171,10 +168,6 @@ AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, JKRArchive* pChordArchive, JK
 
     setAudience(&mAudience);
 
-    JAUStreamStaticAramMgr* streamAramMgr = new JAUStreamStaticAramMgr();
-    streamAramMgr->alloc(AudParams::streamAramBlocks_perChunk, JASKernel::getAramHeap());
-    mStreamAramMgr = streamAramMgr;
-    mStreamMgr.setStreamAramMgr(mStreamAramMgr);
 
     mSoundInfo = nullptr;
     JAUSoundTable* soundTable = mSectionHeap->getSoundTable();

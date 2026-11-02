@@ -2,6 +2,3 @@
 
 JAIStreamDataMgr::~JAIStreamDataMgr() {
 }
-
-JAIStreamAramMgr::~JAIStreamAramMgr() {
-}

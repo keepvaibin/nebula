@@ -23,7 +23,6 @@ class AudSystemVolumeController;
 class JAISoundHandle;
 class JAISoundID;
 class JAUSectionHeap;
-class JAUStreamStaticAramMgr;
 class JKRArchive;
 class JKRSolidHeap;
 class SpkSystem;
@@ -132,7 +131,6 @@ public:
     /* 0x0830 */ s32 _830;
     /* 0x0834 */ JAUStdSoundInfo* mSoundInfo;
     /* 0x0838 */ JAUSectionHeap* mSectionHeap;
-    /* 0x083C */ JAUStreamStaticAramMgr* mStreamAramMgr;
     /* 0x0840 */ AudAudience< 4 > mAudience;
     /* 0x09E8 */ AudDopplerAudible< 4 >* mAudible;  // TODO: should this be merged into AudAudience<>??
     /* 0x09EC */ AudSoundObject* mSystemSeObject;

@@ -5,7 +5,6 @@
 
 JAIStreamMgr::JAIStreamMgr(bool setInstance) : JASGlobalInstance< JAIStreamMgr >(setInstance) {
     streamDataMgr_ = nullptr;
-    mStreamAramMgr = nullptr;
     soundStrategyMgr = nullptr;
     mAudience = nullptr;
     mParams.init();
@@ -53,11 +52,6 @@ void JAIStreamMgr::freeDeadStream_() {
         JSULink< JAIStream >* next = i->getNext();
         if (stream->isDead()) {
             mStreamList.remove(i);
-            void* aramAddr = stream->JAIStreamMgr_getAramAddr_();
-            if (aramAddr != nullptr) {
-                bool result = mStreamAramMgr->deleteStreamAram(aramAddr);
-            }
-
             delete stream;
         }
         i = next;
@@ -104,10 +98,6 @@ void JAIStreamMgr::mixOut() {
 }
 
 JAIStream* JAIStreamMgr::newStream_() {
-    if (mStreamAramMgr == nullptr) {
-        return nullptr;
-    }
-
     JAIStream* stream = new JAIStream(this, soundStrategyMgr);
     if (stream == nullptr) {
         return nullptr;
