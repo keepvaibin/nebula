@@ -1798,7 +1798,7 @@ void RenderCore::note_scene_ao_view(const DrawCall& call) {
         draw_state_.projection_type != 0u || !call.has_viewport) {
         return;
     }
-    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.scene_target_scale());
+    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.frame_map());
     if (!viewport.valid()) {
         return;
     }
