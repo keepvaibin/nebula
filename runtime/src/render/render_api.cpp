@@ -74,6 +74,22 @@ void attach_shape_record(shapes::Record&& record) {
     backend().attach_shape_record(std::move(record));
 }
 
+shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t count) {
+    return backend().reserve_record_matrices(record, count);
+}
+
+state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count) {
+    return backend().reserve_record_ops(record, count);
+}
+
+std::uint32_t reserve_record_native(const void* native, std::size_t bytes) {
+    return backend().reserve_record_native(native, bytes);
+}
+
+const shapes::Matrix* producer_record_matrices(const shapes::Record& record) {
+    return backend().producer_record_matrices(record);
+}
+
 bool readback_published(
     std::uint16_t x,
     std::uint16_t y,

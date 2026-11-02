@@ -55,9 +55,7 @@ void ParticleDrawExecutor::draw2D() const {
         J3DNativeState::setZMode(GPU_FALSE, GPU_NEVER, GPU_FALSE);
         NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
         mHost->mEmitterManager->draw(&drawInfo, 6);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
         mHost->mEmitterManager->draw(&drawInfo, 7);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 
@@ -65,7 +63,6 @@ void ParticleDrawExecutor::drawIndirect() const {
     if (_20) {
         JPADrawInfo drawInfo(j3dSys.getViewMtx(), MR::getRenderFovy(), MR::getAspect());
         mHost->mEmitterManager->draw(&drawInfo, 2);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 
@@ -77,7 +74,6 @@ void ParticleDrawExecutor::drawFor2DModel() const {
     if (_20) {
         JPADrawInfo drawInfo(j3dSys.getViewMtx());
         mHost->mEmitterManager->draw(&drawInfo, 8);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 
@@ -93,9 +89,7 @@ void ParticleDrawExecutor::drawWithViewMtx3D(const TPos3f& rViewMtx) const {
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 0);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
         mHost->mEmitterManager->draw(&drawInfo, 1);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 
@@ -103,7 +97,6 @@ void ParticleDrawExecutor::drawWithViewMtxAfterIndirect(const TPos3f& rViewMtx) 
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 3);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 
@@ -111,7 +104,6 @@ void ParticleDrawExecutor::drawWithViewMtxForBloomEffect(const TPos3f& rViewMtx)
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 4);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 
@@ -119,7 +111,6 @@ void ParticleDrawExecutor::drawWithViewMtxAfterImageEffect(const TPos3f& rViewMt
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 5);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 }
 

@@ -189,6 +189,29 @@ public:
         record.serial = producer_shape_record_serial_++;
         producer_shape_records_.push_back(std::move(record));
     }
+    // Simulation thread: room for a record's matrices and state ops in the pool the next submission carries.
+    [[nodiscard]] shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t count) {
+        record.matrix_first = static_cast<std::uint32_t>(producer_record_pool_.matrices.size());
+        record.matrix_count = count;
+        producer_record_pool_.matrices.resize(producer_record_pool_.matrices.size() + count);
+        return producer_record_pool_.matrices.data() + record.matrix_first;
+    }
+    [[nodiscard]] state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count) {
+        record.op_first = static_cast<std::uint32_t>(producer_record_pool_.ops.size());
+        record.op_count = count;
+        producer_record_pool_.ops.resize(producer_record_pool_.ops.size() + count);
+        return producer_record_pool_.ops.data() + record.op_first;
+    }
+    [[nodiscard]] std::uint32_t reserve_record_native(const void* native, std::size_t bytes) {
+        const auto index = static_cast<std::uint32_t>(producer_record_pool_.natives.size());
+        producer_record_pool_.natives.emplace_back();
+        std::memcpy(&producer_record_pool_.natives.back(), native, bytes);
+        return index;
+    }
+    // Simulation thread: a record's matrices while the pool is still being filled.
+    [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record) const noexcept {
+        return producer_record_pool_.matrices.data() + record.matrix_first;
+    }
     // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
     void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint64_t y, std::uint64_t u,
                             std::uint64_t v, std::uint32_t width, std::uint32_t height) noexcept {
@@ -346,6 +369,7 @@ private:
         std::vector<StripeParticleMark> stripe_particles;
         // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
         std::vector<shapes::Record> shape_records;
+        shapes::RecordPool record_pool;
     };
 
     struct PendingFrameEffects {
@@ -1049,6 +1073,8 @@ private:
     };
     std::unordered_map<std::uint64_t, RecordShape> record_shapes_;
     std::vector<shapes::Record> producer_shape_records_;
+    shapes::RecordPool producer_record_pool_;
+    const shapes::RecordPool* current_record_pool_ = nullptr;
     void take_attached_shape_records(FrameChunk& chunk);
     // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
     void on_shape_record(const shapes::Record& record);
@@ -1058,7 +1084,7 @@ private:
     // A material record into the drawing state (native_material.h).
     // A native material (E-04): its state into the drawing state; its pipeline and constants replace the GX ones for
     // the draws until end_native_material (the next material or drawing-state change).
-    void apply_native_material(std::shared_ptr<const material::Native> native);
+    void apply_native_material(const material::Native* native);
     void end_native_material();
     void begin_target_pass(const shapes::Record& record);
     void end_target_pass(const shapes::Record& record);
@@ -1118,7 +1144,8 @@ private:
     std::uint64_t current_vs_hash_{};
     // The native material the draws use (null: the GX state's), whether its constants are not yet uploaded, and the
     // texture maps it binds.
-    std::shared_ptr<const material::Native> native_material_;
+    material::Native native_material_storage_{};
+    const material::Native* native_material_ = nullptr;
     std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a GX draw's)
     bool native_constants_dirty_ = false;
     std::uint8_t native_texture_mask_ = 0u;

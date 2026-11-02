@@ -234,7 +234,6 @@ void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
     J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, TRUE);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(TRUE);
-    J3DNativeStateSetDither(FALSE);
     J3DNativeStateSetDstAlpha(FALSE, 0);
 
     if (setting->lightEnable) {

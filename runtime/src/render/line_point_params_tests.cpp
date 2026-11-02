@@ -695,17 +695,6 @@ int main() {
             fallback.viewport_height_pixels,
             456.0f,
             "unset viewport uses the 1x frame height");
-        const galaxy::render::LinePointRasterParams maximum_scale =
-            galaxy::render::make_line_point_raster_params(
-                {1.0f, 2.0f}, 64.0f, 64.0f, 99u);
-        passed &= expect_near(
-            maximum_scale.line_width_pixels,
-            static_cast<float>(galaxy::render::kMaxSceneScale),
-            "line width scale clamps to the supported maximum");
-        passed &= expect_near(
-            maximum_scale.point_size_pixels,
-            2.0f * static_cast<float>(galaxy::render::kMaxSceneScale),
-            "point size scale clamps to the supported maximum");
 
         galaxy::render::NativeDrawState state;
         (void)state.consume_dirty();

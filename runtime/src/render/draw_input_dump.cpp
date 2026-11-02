@@ -80,7 +80,7 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     // them into the uploaded copy).
     VertexConstants vs = cpu_vs_constants_.constants;
     if (native) {
-        vs.draw_header[1] = renderer_.scene_target_scale();
+        vs.draw_header[1] = renderer_.covering_scale();
         vs.draw_header[2] = native_pe;
         vs.draw_header[3] = native_texmtx;
         for (unsigned i = 0; i < 8u; ++i) {

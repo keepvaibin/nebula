@@ -66,7 +66,6 @@ void SpinDriverPathDrawInit::initDraw() {
 
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     sendPathMaterial(mOrangeTexture, mMaskTexture);
 }
 

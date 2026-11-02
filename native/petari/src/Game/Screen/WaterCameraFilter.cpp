@@ -204,7 +204,6 @@ void WaterCameraFilter::loadMaterial() const {
     MR::multMtx(textureMtx, textureMtx, translation);
     sendFilterMaterial(mFilterTex, mScreenTex, textureMtx,
                        Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void WaterCameraFilter::exeWater() {

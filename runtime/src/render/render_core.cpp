@@ -33,6 +33,8 @@
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/draw_constants.h"
+#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/content_viewport.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -528,7 +530,7 @@ void RenderCore::reset_fifo_session_state() {
     texture_bindings_dirty_ = true;
     current_texture_map_mask_ = 0u;
     current_texture_map_mask_valid_ = false;
-    native_material_.reset();
+    native_material_ = nullptr;
     current_texture_binding_key_ = {};
     current_texture_binding_key_mask_ = 0u;
     // Also clears current_texture_binding_key_valid_, so no key outlives its tables.
@@ -562,13 +564,20 @@ bool RenderCore::initialize(int w, int h) {
     const RenderConfig cfg = get_render_config();
 
     boot_step("begins");
-    if (!renderer_.initialize(w, h, cfg.scene_target_scale)) {
+    // The scene at the window's picture: its exact size, square pixels.
+    const auto start_aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport start_content =
+        galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kWiiContentAspect);
+    const FrameMap start_frame = start_content.width > 0 && start_content.height > 0
+                                     ? FrameMap(static_cast<unsigned>(start_content.width), static_cast<unsigned>(start_content.height))
+                                     : FrameMap(1u);
+    if (!renderer_.initialize(w, h, start_frame)) {
         std::cerr << "[RenderCore] RendererD3D12::initialize failed\n";
         return false;
     }
     boot_step("device rest");
 
-    if (!scene_copies_.initialize(renderer_.device(), cfg.scene_target_scale)) {
+    if (!scene_copies_.initialize(renderer_.device(), start_frame)) {
         std::cerr << "[RenderCore] EfbCopyManager::initialize failed\n";
         renderer_.shutdown();
         return false;
@@ -625,7 +634,7 @@ bool RenderCore::initialize(int w, int h) {
                     display_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
                     display_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
             }, static_cast<std::uint64_t>(w), static_cast<std::uint64_t>(h),
-               get_render_config().scene_target_scale);
+               renderer_.covering_scale());
         } catch (...) { /* Optional startup allocation cannot fail gameplay. */ }
     }
     return true;
@@ -1574,10 +1583,32 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     if (chunk.shape_records.empty()) {
         chunk.shape_records.swap(producer_shape_records_);
         producer_shape_records_.reserve(count);
+        const std::size_t matrices = producer_record_pool_.matrices.size();
+        const std::size_t ops = producer_record_pool_.ops.size();
+        const std::size_t natives = producer_record_pool_.natives.size();
+        chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
+        chunk.record_pool.ops.swap(producer_record_pool_.ops);
+        chunk.record_pool.natives.swap(producer_record_pool_.natives);
+        producer_record_pool_.matrices.reserve(matrices);
+        producer_record_pool_.ops.reserve(ops);
+        producer_record_pool_.natives.reserve(natives);
         return;
     }
+    const auto first_matrix = static_cast<std::uint32_t>(chunk.record_pool.matrices.size());
+    const auto first_op = static_cast<std::uint32_t>(chunk.record_pool.ops.size());
+    chunk.record_pool.matrices.insert(chunk.record_pool.matrices.end(), producer_record_pool_.matrices.begin(),
+                                      producer_record_pool_.matrices.end());
+    chunk.record_pool.ops.insert(chunk.record_pool.ops.end(), producer_record_pool_.ops.begin(), producer_record_pool_.ops.end());
+    const auto first_native = static_cast<std::uint32_t>(chunk.record_pool.natives.size());
+    chunk.record_pool.natives.insert(chunk.record_pool.natives.end(), producer_record_pool_.natives.begin(), producer_record_pool_.natives.end());
+    producer_record_pool_.matrices.clear();
+    producer_record_pool_.ops.clear();
+    producer_record_pool_.natives.clear();
     chunk.shape_records.reserve(chunk.shape_records.size() + count);
     for (shapes::Record& record : producer_shape_records_) {
+        record.matrix_first += first_matrix;
+        record.op_first += first_op;
+        record.native_index += record.native_index != shapes::kNoNative ? first_native : 0u;
         chunk.shape_records.push_back(std::move(record));
     }
     producer_shape_records_.clear();
@@ -1961,7 +1992,7 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         frame_bindings_dirty_ = true;
     }
     if (marker == SceneMarker::SceneEnd) {
-        s_layer_2d_scale.store(renderer_.scene_target_scale(), std::memory_order_relaxed);
+        s_layer_2d_scale.store(renderer_.covering_scale(), std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
     if (marker == SceneMarker::SceneBegin) {
@@ -4266,6 +4297,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             for (std::size_t i = 0; i < splits.size(); ++i) {
                 const StreamSplit split = splits[i];
                 if (split.marker == kSplitShapeRecord) {
+                    current_record_pool_ = &chunk.record_pool;
                     on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
                 } else if (split.marker < 0) {
                     record_pointer_depth_capture_in_frame(chunk);
@@ -5228,7 +5260,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         const VertexConstants& vs_c = cpu_vs_constants_.update(
-            matrices_, draw_state_, dirty, renderer_.scene_target_scale(), frame_bindings_dirty_);
+            matrices_, draw_state_, dirty, RasterScale{renderer_.frame_map().sx, renderer_.frame_map().sy}, frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
@@ -5647,12 +5679,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         draw_record_shape(record);
         return;
     case shapes::Record::Kind::NativeMaterial:
-        apply_native_material(record.native);
+        apply_native_material(record.native_index != shapes::kNoNative ? &current_record_pool_->natives[record.native_index] : nullptr);
         return;
     case shapes::Record::Kind::State: {
         // A native material stays through state changes (the game folds a change of its values into it and ends it
         // before a change of its program: J3DNativeMaterial); its fixed-function state and textures take them here.
-        for (const state::Op& op : record.state) {
+        for (std::uint32_t op_index = 0; op_index < record.op_count; ++op_index) {
+            const state::Op& op = current_record_pool_->ops[record.op_first + op_index];
             if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
             }
@@ -5765,7 +5798,7 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
     frame_bindings_dirty_ = true;
 }
 
-void RenderCore::apply_native_material(std::shared_ptr<const material::Native> native) {
+void RenderCore::apply_native_material(const material::Native* native) {
     if (native == nullptr) {
         end_native_material();  // NEBULA_SHADER_NONE: the game ended it
         return;
@@ -5775,7 +5808,8 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         dump_tag_ = 0u;
     }
     if ((m.constants_only & 1u) != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
-        native_material_ = std::move(native);
+        native_material_storage_ = m;
+        native_material_ = &native_material_storage_;
         native_constants_dirty_ = true;
         return;
     }
@@ -5854,7 +5888,8 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         }
     }
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
-    native_material_ = std::move(native);
+    native_material_storage_ = m;
+    native_material_ = &native_material_storage_;
     native_constants_dirty_ = true;
     current_texture_map_mask_valid_ = false;
     texture_bindings_dirty_ = true;
@@ -5864,7 +5899,7 @@ void RenderCore::end_native_material() {
     if (native_material_ == nullptr) {
         return;
     }
-    native_material_.reset();
+    native_material_ = nullptr;
     // The GX state's pipeline, constants and textures are rebuilt at the next draw, and the next GX material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
@@ -5881,7 +5916,8 @@ void RenderCore::release_record_shape(RecordShape& shape) noexcept {
 }
 
 void RenderCore::apply_record_matrices(const shapes::Record& record) {
-    for (const shapes::Matrix& m : record.matrices) {
+    for (std::uint32_t matrix_index = 0; matrix_index < record.matrix_count; ++matrix_index) {
+        const shapes::Matrix& m = current_record_pool_->matrices[record.matrix_first + matrix_index];
         switch (m.kind) {
         case shapes::MatrixKind::Position:
             matrices_.set_position(m.place, m.values.data(), m.model_matrix);
@@ -5914,7 +5950,8 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
             draw_state_.dirty |= kStateDirtyVertexConstants;
         }
     }
-    for (const auto& g : record.texgens) {
+    for (std::uint8_t texgen_index = 0; texgen_index < record.texgen_count; ++texgen_index) {
+        const auto& g = record.texgens[texgen_index];
         const TexGen gen = material::tex_gen(g[1], g[2]);
         const PostTexGen post = material::post_tex_gen(g[4], g[3]);
         if (!(draw_state_.texgen[g[0] & 7u] == gen) || !(draw_state_.post_texgen[g[0] & 7u] == post)) {
@@ -6257,12 +6294,12 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;
             if (trace_layout) {
                 const std::array<unsigned,7> current{params.src_x,params.src_y,params.src_width,params.src_height,
-                    display_picture->width,display_picture->height,renderer_.scene_target_scale()};
+                    display_picture->width,display_picture->height,renderer_.covering_scale()};
                 static std::array<std::array<unsigned,7>,8> seen{};
                 static unsigned count{};
                 if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
                     seen[count++]=current;
-                    const auto scale=renderer_.scene_target_scale();
+                    const auto scale=renderer_.covering_scale();
                     std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
                         <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale

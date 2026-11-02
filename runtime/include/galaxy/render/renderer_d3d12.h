@@ -181,7 +181,7 @@ create_scene_conversion_source_views(
 // Exact color/alpha identity only: rejects filtering, conversion, resampling
 // and any source rectangle that would require shader clamp behavior.
 [[nodiscard]] std::optional<D3D12_BOX> scene_identity_copy_box(
-    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
+    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
     unsigned dest_width, unsigned dest_height) noexcept;
 // Source enters/leaves RENDER_TARGET; destination enters/leaves PSR. Neither
 // the copy nor its barriers changes any graphics binding on the command list.
@@ -196,7 +196,7 @@ public:
     // Creates the Win32 window, device, queue, swap chain, scene target targets at
     // kFrameWidth x kFrameHeight x scene_target_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
-    bool initialize(int window_width, int window_height, unsigned scene_target_scale);
+    bool initialize(int window_width, int window_height, const FrameMap& frame);
     [[nodiscard]] std::string startup_failure() const { return {}; }
     // Creates the scene target-peek and pointer-depth resources up front, so the first frame
     // that shows the pointer does not stall creating them.
@@ -273,7 +273,7 @@ public:
     [[nodiscard]] bool output_scene_active() const noexcept { return output_scene_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
-    [[nodiscard]] bool scene_target_scale_fits_memory(unsigned scale) const;
+    [[nodiscard]] bool scene_fits_memory(const FrameMap& map) const;
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
@@ -620,7 +620,7 @@ public:
         std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return frame_.scale(); }
+    [[nodiscard]] unsigned covering_scale() const noexcept { return frame_.scale(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return frame_; }
     // The scene target's samples per pixel as a power of two (MSAA; 0 for one sample).
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
@@ -753,32 +753,21 @@ private:
     void swap_target_set();
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().scene_target_scale differs from the live targets.
-    void apply_pending_scene_target_scale();
+    void apply_window_size();
     // Creates, replaces or releases the temporal upscaler for the live render
     // and output scales, from begin_frame before its command list records.
     void prepare_temporal_upscaler();
-    // The INTERNAL RESOLUTION row's scale, taken by apply_pending_scene_target_scale: the
+    // The INTERNAL RESOLUTION row's scale, taken by apply_window_size: the
     // temporal upscaler's output (its quality mode renders below it).
     unsigned upscale_output_scale_ = 0;
-    // With internal_follow_window, re-derive scene_target_scale from the settled
-    // window size (see RenderConfig::internal_follow_window).
-    void follow_window_internal_resolution();
     // Hands changed presentation settings (overlay or config) to the
     // post-processor at the frame boundary.
     void sync_post_process_settings();
-    UINT follow_window_width_ = 0;
-    UINT follow_window_height_ = 0;
-    double follow_window_aspect_ = 0.0;
     // A scale refused for the memory budget is tried again at this tick.
-    std::uint64_t follow_window_retry_ms_ = 0;
+    std::uint64_t window_size_refused_ms_ = 0;
     // Match Output's GPU budget: the frame command lists' measured GPU time over 2 s windows. When it stays above
     // kGpuBudgetBusy of the wall time for two windows, the internal resolution Match Output may pick is capped one step
     // lower for the session, so a GPU too slow for the window's resolution keeps every frame.
-    void update_gpu_budget();
-    double gpu_budget_ms_ = 0.0;
-    std::chrono::steady_clock::time_point gpu_budget_window_start_{};
-    unsigned gpu_budget_over_windows_ = 0;
-    unsigned gpu_budget_cap_ = 0;  // 0: none
     // (Re)creates the scene target color/depth conversion SRVs in their fixed slots.
     void refresh_scene_conversion_source_views();
     // The scene target's conversion views (colour and depth) into `table`.

@@ -1724,7 +1724,9 @@ void frame_hash_record(const galaxy::render::shapes::Record& r) {
     }
     uint64_t h = 0xCBF29CE484222325ull;
     h = fnv1a(h, &r.kind, sizeof(r.kind));
-    for (const auto& m : r.matrices) {
+    const galaxy::render::shapes::Matrix* pool = galaxy::render::producer_record_matrices(r);
+    for (uint32_t i = 0; i < r.matrix_count; ++i) {
+        const auto& m = pool[i];
         h = fnv1a(h, &m.kind, sizeof(m.kind));
         h = fnv1a(h, m.values.data(), sizeof(m.values));
     }
@@ -1871,11 +1873,11 @@ void attach_pending_records() {
 // A group drawn.
 #if defined(NEBULA_HOST_RENDERER)
 // A draw's matrices (NebulaDrawMatrix) as the renderer's records hold them.
-void copy_draw_matrices(const NebulaDrawMatrix* matrices, uint32_t count,
-                        std::vector<galaxy::render::shapes::Matrix>& out) {
+void copy_draw_matrices(const NebulaDrawMatrix* matrices, uint32_t count, galaxy::render::shapes::Record& record) {
     namespace shapes = galaxy::render::shapes;
-    out.resize(matrices != nullptr ? count : 0u);
-    for (std::size_t i = 0; i < out.size(); ++i) {
+    const uint32_t total = matrices != nullptr ? count : 0u;
+    shapes::Matrix* out = galaxy::render::reserve_record_matrices(record, total);
+    for (uint32_t i = 0; i < total; ++i) {
         const NebulaDrawMatrix& in = matrices[i];
         if (in.kind > NEBULA_DRAW_MATRIX_POST_TEXTURE) {
             die("a draw's matrix of unknown kind %u", in.kind);
@@ -1906,10 +1908,12 @@ void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, u
     record.position = position;
     record.normal = normal;
     record.color = color;
-    copy_draw_matrices(matrices, matrix_count, record.matrices);
+    copy_draw_matrices(matrices, matrix_count, record);
     for (uint32_t i = 0; texgens != nullptr && i < texgen_count; ++i) {
         const NebulaShapeTexGen& g = texgens[i];
-        record.texgens.push_back({g.coord, g.type, g.source, g.normalize, g.post_matrix});
+        if (record.texgen_count < record.texgens.size()) {
+            record.texgens[record.texgen_count++] = {g.coord, g.type, g.source, g.normalize, g.post_matrix};
+        }
     }
     if (current != nullptr) {
         record.has_current = true;
@@ -2151,7 +2155,7 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
     }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Immediate;
-    copy_draw_matrices(draw->matrices, draw->matrix_count, record.matrices);
+    copy_draw_matrices(draw->matrices, draw->matrix_count, record);
     attach_pending_records();
     record.immediate = std::move(imm);
     galaxy::render::attach_shape_record(std::move(record));
@@ -2333,8 +2337,7 @@ void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
     shapes::Record record;
     record.kind = shapes::Record::Kind::State;
     attach_pending_records();
-    record.state.resize(count);
-    std::memcpy(record.state.data(), ops, sizeof(NebulaStateOp) * count);
+    std::memcpy(galaxy::render::reserve_record_ops(record, count), ops, sizeof(NebulaStateOp) * count);
     galaxy::render::attach_shape_record(std::move(record));
 #else
     (void)ops, (void)count;
@@ -2350,15 +2353,12 @@ void svc_native_material(void*, const NebulaNativeMaterial* native) {
         return;
     }
     // NEBULA_SHADER_NONE: the draws that follow go back to the drawing state (a record without a material).
-    std::shared_ptr<galaxy::render::material::Native> copy;
-    if (native->shader != NEBULA_SHADER_NONE) {
-        copy = std::make_shared<galaxy::render::material::Native>();
-        std::memcpy(copy.get(), native, sizeof(NebulaNativeMaterial));
-    }
     shapes::Record record;
     record.kind = shapes::Record::Kind::NativeMaterial;
     attach_pending_records();
-    record.native = std::move(copy);
+    if (native->shader != NEBULA_SHADER_NONE) {
+        record.native_index = galaxy::render::reserve_record_native(native, sizeof(NebulaNativeMaterial));
+    }
     galaxy::render::attach_shape_record(std::move(record));
 #else
     (void)native;

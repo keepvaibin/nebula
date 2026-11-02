@@ -468,5 +468,4 @@ void Flag::loadMaterial() const {
     static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
     J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }

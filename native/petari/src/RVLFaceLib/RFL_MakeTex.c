@@ -462,7 +462,6 @@ void Mii_Setup2DCameraAndParam(void) {
     J3DNativeStateSetZMode(FALSE, GPU_LEQUAL, FALSE);
     J3DNativeStateSetAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
     J3DNativeStateSetAlphaUpdate(TRUE);
-    J3DNativeStateSetDither(FALSE);
 }
 
 // The parts' forms (runtime/src/render/materials/mii_texture.hlsl): GX's stages over the texture's channels as RFL ran

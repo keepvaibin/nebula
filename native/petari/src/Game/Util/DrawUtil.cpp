@@ -148,8 +148,6 @@ namespace MR {
         Mtx matrix;
         NebulaMtxIdentity(matrix);
         J3DNativeShape::setPosition(0, matrix);
-        J3DNativeState::setCoPlanar(GPU_FALSE);
-        J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
         // runtime/src/render/materials/flat_color.hlsl into the alpha buffer alone: the constant destination alpha.
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
@@ -172,7 +170,6 @@ namespace MR {
         J3DNativeDraw::position(rPosition.x, height + rPosition.y, 0.0f);
 
         J3DNativeState::setDstAlpha(GPU_FALSE, 0);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 
     void fillScreenSetup(const NebulaColor8& rColor) {
@@ -183,7 +180,6 @@ namespace MR {
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getFrameBufferWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
-        J3DNativeState::setDither(GPU_FALSE);
         // runtime/src/render/materials/flat_color.hlsl in the colour, depth off, no culling; the blending and writes
         // the drawing state has (its callers set them).
         NebulaNativeMaterial material;
@@ -222,7 +218,6 @@ namespace MR {
     void setupShadowVolumeDraw() {
         // The volumes draw in a flat colour each sets (setShadowVolumeColor).
         J3DNativeState::setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
-        J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     }
 
     void setShadowVolumeColor(const NebulaColor8& rColor) {
@@ -256,7 +251,6 @@ namespace MR {
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        J3DNativeState::setDither(GPU_FALSE);
         // runtime/src/render/materials/clip_fill.hlsl: black at alpha 0x80 where the captured screen alpha is above 1
         // (GX's A8 compare against constant alpha 1), blended by alpha, depth not tested, the alpha buffer cleared to 0
         // there (constant destination alpha).

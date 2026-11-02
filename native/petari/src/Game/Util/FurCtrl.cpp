@@ -46,7 +46,6 @@ void FurDrawManager::draw() const {
         }
     }
 
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 drawOrder) : mParam(pParam), mVisible(), mFurUVScale(1.0f) {
@@ -150,7 +149,6 @@ void FurCtrl::drawFur() {
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
     NebulaColor8 fogColor = {0, 0, 0, 0};
     J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void FurCtrl::createFurMap() {
