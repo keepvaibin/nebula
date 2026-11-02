@@ -11,12 +11,7 @@ struct ResTIMG {
     /* 0x04 */ u16 mHeight;
     /* 0x06 */ u8 mWrapS;
     /* 0x07 */ u8 mWrapT;
-    /* 0x08 */ u8 mCookedPaletteName;  // cooked images have their palettes applied: these eight bytes are unused
-    /* 0x09 */ u8 mCookedPaletteFormat;
-    /* 0x0A */ u16 mCookedPaletteNum;
-    // Signed, as the console's 32-bit address arithmetic wrapped: J3DTexture::setResTIMG can point a copied header back
-    // at another header's data.
-    /* 0x0C */ s32 mCookedPaletteOffset;
+    /* 0x08 */ const u8* mImage;  // null in a file; J3DTexture::setResTIMG's other image, anywhere in memory
     /* 0x10 */ bool mMipmap;
     /* 0x11 */ bool mDoEdgeLod;
     /* 0x12 */ bool mBiasClamp;
@@ -28,7 +23,14 @@ struct ResTIMG {
     /* 0x18 */ u8 mImageNum;
     /* 0x19 */ u8 _19;
     /* 0x1A */ s16 mLodBias;
-    /* 0x1C */ s32 mImageDataOffset;  // signed
+    /* 0x1C */ s32 mImageDataOffset;  // from this header; 0 means right after it
+
+    const u8* image() const {
+        if (mImage != nullptr) {
+            return mImage;
+        }
+        return reinterpret_cast< const u8* >(this) + (mImageDataOffset != 0 ? mImageDataOffset : 0x20);
+    }
 };
 
 class JUTTexture {
