@@ -6,6 +6,7 @@
 // this class (gpu_texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
 
 #include "galaxy/render/gpu_types.h"
+#include "galaxy/render/texel_format.h"
 
 #include <cstdint>
 
@@ -32,13 +33,15 @@ public:
     void shutdown();
     [[nodiscard]] bool ready() const noexcept { return device_ != nullptr && srv_heap_ != nullptr; }
 
-    // A Texture2D view of `levels` mips in slot `index`: RGBA8, or a one-byte texture's value in every channel.
+    // A Texture2D view of `levels` mips in slot `index`, every channel as the texture's format gives it.
     void write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
-    // A DEFAULT-heap texture in the copy-destination state: RGBA8, or one byte per texel (`grey`, a movie plane).
+    // A DEFAULT-heap texture in the copy-destination state.
     [[nodiscard]] gpu::TextureRef create_texture(
-        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey = false);
+        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
+        TexelFormat format = TexelFormat::Rgba8);
+    [[nodiscard]] static bool supports_bc1() noexcept { return true; }
     // A texture made by create_texture that the pool may hand out again for the same extent.
     [[nodiscard]] static bool poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);

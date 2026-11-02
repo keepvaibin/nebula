@@ -61,12 +61,14 @@ void TextureBackend::shutdown() {
 }
 
 void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels) {
-    const bool grey = texture->GetDesc().Format == DXGI_FORMAT_R8_UNORM;
+    const DXGI_FORMAT format = texture->GetDesc().Format;
     D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-    srv_desc.Format                        = grey ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
+    srv_desc.Format                        = format;
     srv_desc.ViewDimension                 = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.Shader4ComponentMapping       = grey ? D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0)
-                                                  : D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv_desc.Shader4ComponentMapping =
+        format == DXGI_FORMAT_R8_UNORM   ? D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 0)
+        : format == DXGI_FORMAT_R8G8_UNORM ? D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(0, 0, 0, 1)
+                                           : D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srv_desc.Texture2D.MipLevels           = static_cast<UINT>(levels);
     srv_desc.Texture2D.MostDetailedMip     = 0;
     srv_desc.Texture2D.PlaneSlice          = 0;
@@ -113,14 +115,17 @@ void TextureBackend::release_upload_chunk(UploadChunk& chunk) noexcept {
 }
 
 gpu::TextureRef TextureBackend::create_texture(
-    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey) {
+    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format) {
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     rd.Width            = width;
     rd.Height           = height;
     rd.DepthOrArraySize = 1;
     rd.MipLevels        = static_cast<UINT16>(levels);
-    rd.Format           = grey ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
+    rd.Format           = format == TexelFormat::R8    ? DXGI_FORMAT_R8_UNORM
+                          : format == TexelFormat::Rg8 ? DXGI_FORMAT_R8G8_UNORM
+                          : format == TexelFormat::Bc1 ? DXGI_FORMAT_BC1_UNORM
+                                                       : DXGI_FORMAT_R8G8B8A8_UNORM;
     rd.SampleDesc.Count = 1;
     rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     gpu::TextureRef resource;
@@ -172,8 +177,10 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
         copy_src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         copy_src.PlacedFootprint.Offset             = offset + offsets[l];
         copy_src.PlacedFootprint.Footprint.Format   = texture->GetDesc().Format;
-        copy_src.PlacedFootprint.Footprint.Width    = lw;
-        copy_src.PlacedFootprint.Footprint.Height   = lh;
+        // A block format's footprint covers whole blocks, also at levels smaller than one.
+        const bool blocks = texture->GetDesc().Format == DXGI_FORMAT_BC1_UNORM;
+        copy_src.PlacedFootprint.Footprint.Width    = blocks ? (lw + 3u) & ~3u : lw;
+        copy_src.PlacedFootprint.Footprint.Height   = blocks ? (lh + 3u) & ~3u : lh;
         copy_src.PlacedFootprint.Footprint.Depth    = 1;
         copy_src.PlacedFootprint.Footprint.RowPitch = pitches[l];
 
