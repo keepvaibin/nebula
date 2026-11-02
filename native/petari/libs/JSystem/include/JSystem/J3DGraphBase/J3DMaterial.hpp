@@ -41,11 +41,6 @@ public:
     static J3DTevBlock* createTevBlock(int);
     static J3DIndBlock* createIndBlock(int);
     static J3DPEBlock* createPEBlock(u32, u32);
-    static u32 calcSizeColorBlock(u32);
-    static u32 calcSizeTexGenBlock(u32);
-    static u32 calcSizeTevBlock(int);
-    static u32 calcSizeIndBlock(int);
-    static u32 calcSizePEBlock(u32, u32);
     void initialize();
     void setCurrentMtx();
     void calcCurrentMtx();
@@ -88,9 +83,6 @@ public:
 
     u32 getTexGenNum() const {
         return mTexGenBlock->getTexGenNum();
-    }
-    u8 getTevStageNum() const {
-        return mTevBlock->getTevStageNum();
     }
 
     J3DMaterial* getNext() {
