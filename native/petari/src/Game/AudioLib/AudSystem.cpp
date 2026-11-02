@@ -725,12 +725,6 @@ void AudSystem::recoverSeVolumeSet(u32 maxSteps) {
     }
 }
 
-void AudSystem::setSeVolumeSetLevel(s32 volumeSet) {
-    if (mVolumeController != nullptr) {
-        mVolumeController->setSeVolumeSetLevel(volumeSet);
-    }
-}
-
 void AudSystem::initVolumeSetting() {
     setSeVolumeSet(AudSystemVolumeController::VolumeSet_0, 0);
     mSeMgr.getParams()->moveVolume(AudParams::masterVolSe, 0);

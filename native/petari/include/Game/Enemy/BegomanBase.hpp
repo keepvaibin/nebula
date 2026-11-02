@@ -37,8 +37,6 @@ public:
     virtual const Nerve* getNerveWait() = 0;
     virtual void addVelocityOnPushedFromElectricRail(const TVec3f&, const TVec3f&);
     virtual bool requestAttack();
-
-    const BegomanSound* getSoundBaby();
     const BegomanSound* getSoundNormal();
     const BegomanSound* getSoundBoss();
 

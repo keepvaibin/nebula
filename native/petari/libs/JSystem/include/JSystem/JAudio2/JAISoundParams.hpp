@@ -85,8 +85,6 @@ struct JAISoundParamsMove {
     void moveVolume(f32 newValue, u32 maxSteps);
     void movePitch(f32 newValue, u32 maxSteps);
     void moveFxMix(f32 newValue, u32 maxSteps);
-    void movePan(f32 newValue, u32 maxSteps);
-    void moveDolby(f32 newValue, u32 maxSteps);
 
     /* 0x00 */ JASSoundParams mParams;
     /* 0x14 */ JAISoundParamsTransition mTransition;

@@ -115,7 +115,7 @@ public:
     /* 0xCC */ s32 mGettableDelayCounter;
     /* 0xD0 */ s32 mFallKillTimer;
 
-    /* 0xD4 */ J3DGXColor mColor;
+    /* 0xD4 */ J3DColor mColor;
 
     /* 0xD8 */ groupType mGroupType;
     /* 0xDC */ StarPieceHostInfo* mHostInfo;

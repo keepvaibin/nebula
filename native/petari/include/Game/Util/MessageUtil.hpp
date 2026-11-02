@@ -6,7 +6,6 @@ namespace MR {
     const char16_t* getGameMessageDirect(const char*);
     const char16_t* getLayoutMessageDirect(const char*);
     const char16_t* getCurrentGalaxyNameOnCurrentLanguage();
-    const char16_t* getCurrentGalaxyNameShortOnCurrentLanguage();
     const char16_t* getCurrentScenarioNameOnCurrentLanguage();
     const char16_t* getRaceNameOnCurrentLanguage(int);
     bool isExistGameMessage(const char*);

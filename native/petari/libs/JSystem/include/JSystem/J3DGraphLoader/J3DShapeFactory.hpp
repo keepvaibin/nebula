@@ -34,8 +34,6 @@ struct J3DShapeFactory {
     J3DShape* create(int, u32);
     J3DShapeMtx* newShapeMtx(u32, int, int) const;
     J3DShapeDraw* newShapeDraw(int, int) const;
-    s32 calcSize(int, u32);
-    s32 calcSizeShapeMtx(u32, int, int) const;
 
     /* 0x00 */ J3DShapeInitData* mShapeInitData;
     /* 0x04 */ u16* mIndexTable;

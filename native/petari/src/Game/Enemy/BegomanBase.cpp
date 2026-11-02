@@ -92,11 +92,6 @@ BegomanBase::BegomanBase(const char* pName)
     mInvertSideVec = false;
 }
 
-// needed to get a string to show up in .data, should be deadstripped.
-const BegomanSound* BegomanBase::getSoundBaby() {
-    return &::sound_baby;
-}
-
 const BegomanSound* BegomanBase::getSoundNormal() {
     return &::sound_normal;
 }

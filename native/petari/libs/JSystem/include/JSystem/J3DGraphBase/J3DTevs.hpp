@@ -17,8 +17,8 @@ extern const J3DNBTScaleInfo j3dDefaultNBTScaleInfo;
 
 extern const NebulaColor8 j3dDefaultColInfo;
 extern const NebulaColor8 j3dDefaultAmbInfo;
-extern const NebulaColor16 j3dDefaultTevColor;
-extern const NebulaColor8 j3dDefaultTevKColor;
+extern const NebulaColor16 j3dDefaultRegisterColor;
+extern const NebulaColor8 j3dDefaultConstantColor;
 extern const u8 j3dDefaultNumChans;
 
 
@@ -77,7 +77,6 @@ struct J3DNBTScale;
 struct J3DTexCoord;
 void loadNBTScale(J3DNBTScale& param_0);
 
-bool isTexNoReg(void* param_0);
 
 extern J3DTexCoordInfo const j3dDefaultTexCoordInfo[8];
 

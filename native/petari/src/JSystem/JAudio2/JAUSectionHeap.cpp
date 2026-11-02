@@ -467,14 +467,6 @@ void JAUSectionHeap::setSeqDataArchive(AssetFolder* param_0) {
     }
 }
 
-bool JAUSectionHeap::loadDynamicSeq(JAISoundID param_0, bool param_1) {
-    return sectionHeapData_.seqDataBlocks.loadDynamicSeq(param_0, param_1, sectionHeapData_.seqDataUser);
-}
-
-u32 JAUSectionHeap::releaseIdleDynamicSeqDataBlock() {
-    return sectionHeapData_.seqDataBlocks.releaseIdleDynamicSeqDataBlock(sectionHeapData_.seqDataUser);
-}
-
 static JAUSectionHeap* JAUNewSectionHeap(NebulaArena* heap, bool param_1) {
     TPushCurrentHeap push(heap);
     JAUSectionHeap* sectionHeap = new JAUSectionHeap(heap, param_1, 0);
@@ -494,23 +486,6 @@ JAUSectionHeap::JAUSectionHeap(NebulaArena* param_0, bool param_1, s32 param_2)
 
 JAUSection* JAUSectionHeap::getOpenSection() {
     return mSectionList.getLast()->getObject();
-}
-
-JAUSection* JAUSectionHeap::getSection(int param_0) {
-    JSULink< JAUSection >* link = mSectionList.getFirst();
-
-    while (param_0 > 0) {
-        JSULink< JAUSection >* link2 = link->getNext();
-
-        if (link2 == nullptr) {
-            return nullptr;
-        }
-
-        link = link2;
-        param_0--;
-    }
-
-    return link->getObject();
 }
 
 JAUSoundTable* JAUSectionHeap::getSoundTable() {

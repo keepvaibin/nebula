@@ -33,13 +33,8 @@ struct JASVoiceSlot {
     static JASVoiceSlot* alloc(u8, Callback, void*);
     static JASVoiceSlot* allocForce(u8, Callback, void*);
     static JASVoiceSlot* getLowestChannel(int);
-    static JASVoiceSlot* getLowestActiveChannel();
     static void updateAll();
-    static int killActiveChannel();
     static JASVoiceSlot* getHandle(u32);
-    static u32 getNumUse();
-    static u32 getNumFree();
-    static u32 getNumBreak();
 
     static JASVoiceSlot* sSlots;
 

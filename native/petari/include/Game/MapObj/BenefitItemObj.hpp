@@ -10,7 +10,6 @@ class FlashingCtrl;
 class ShadowClipActor : public LiveActor {
 public:
     virtual void endClipped();
-    virtual void control();
 
     /* 0x8C */ LiveActor* _8C;
 };

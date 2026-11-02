@@ -79,18 +79,6 @@ void JAISound::start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience*
     mPriority = 0;
 }
 
-bool JAISound::acceptsNewAudible() const {
-    return mAudible == nullptr && !isCalcedOnce();
-}
-
-void JAISound::newAudible(const TVec3f& pos, const TVec3f* param_1, u32 param_2, JAIAudience* audience) {
-    if (audience != nullptr) {
-        mAudience = audience;
-    }
-
-    mAudible = mAudience->newAudible(pos, mSoundID, param_1, param_2);
-}
-
 void JAISound::stop(u32 fadeTime) {
     if (fadeTime == 0) {
         stop();

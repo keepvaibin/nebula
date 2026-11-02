@@ -35,12 +35,12 @@ public:
 
 class MatColorCtrl : public MaterialCtrl {
 public:
-    MatColorCtrl(J3DModelData*, const char*, u32, const J3DGXColor*);
+    MatColorCtrl(J3DModelData*, const char*, u32, const J3DColor*);
 
     virtual void updateMaterial(J3DMaterial*) override;
 
     /* 0x0C */ u32 mColorChoice;
-    /* 0x10 */ const J3DGXColor* mColor;
+    /* 0x10 */ const J3DColor* mColor;
 };
 
 class ViewProjmapEffectMtxSetter : public MaterialCtrl {

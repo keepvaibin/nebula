@@ -9,8 +9,7 @@
 
 class J3DShape;
 class J3DJoint;
-class J3DTevBlockPatched;
-class J3DPEBlock;
+class J3DOutputBlock;
 class J3DMaterialAnm;
 class J3DMaterialSnapshot;
 struct NebulaCookedMaterial;
@@ -35,9 +34,9 @@ public:
 
     static J3DColorBlock* createColorBlock(u32);
     static J3DTexGenBlock* createTexGenBlock(u32);
-    static J3DTevBlock* createTevBlock(int);
+    static J3DRegisterBlock* createRegisterBlock(int);
     static J3DIndBlock* createIndBlock(int);
-    static J3DPEBlock* createPEBlock(u32, u32);
+    static J3DOutputBlock* createOutputBlock(u32, u32);
     void initialize();
     void setCurrentMtx();
     void calcCurrentMtx();
@@ -88,8 +87,8 @@ public:
     J3DShape* getShape() {
         return mShape;
     }
-    J3DTevBlock* getTevBlock() {
-        return mTevBlock;
+    J3DRegisterBlock* getRegisterBlock() {
+        return mRegisterBlock;
     }
     J3DColorBlock* getColorBlock() {
         return mColorBlock;
@@ -106,12 +105,12 @@ public:
     J3DJoint* getJoint() {
         return mJoint;
     }
-    J3DPEBlock* getPEBlock() {
-        return mPEBlock;
+    J3DOutputBlock* getOutputBlock() {
+        return mOutputBlock;
     }
 
     u16 getTexNo(u32 idx) {
-        return mTevBlock->getTexNo(idx);
+        return mRegisterBlock->getTexNo(idx);
     }
 
     void setNext(J3DMaterial* pMaterial) {
@@ -136,9 +135,9 @@ public:
     /* 0x20 */ u32 mDiffFlag;
     /* 0x24 */ J3DColorBlock* mColorBlock;
     /* 0x28 */ J3DTexGenBlock* mTexGenBlock;
-    /* 0x2C */ J3DTevBlock* mTevBlock;
+    /* 0x2C */ J3DRegisterBlock* mRegisterBlock;
     /* 0x30 */ J3DIndBlock* mIndBlock;
-    /* 0x34 */ J3DPEBlock* mPEBlock;
+    /* 0x34 */ J3DOutputBlock* mOutputBlock;
     /* 0x38 */ J3DMaterial* mpOrigMaterial;
     /* 0x3C */ J3DMaterialAnm* mMaterialAnm;
     /* 0x40 */ J3DCurrentMtx mCurrentMtx;
@@ -146,35 +145,3 @@ public:
     const NebulaCookedMaterial* mNativeMaterial;
 };
 
-class J3DPatchedMaterial : public J3DMaterial {
-public:
-    J3DPatchedMaterial() {
-        initialize();
-    }
-    void initialize();
-
-    virtual void makeSnapshot();
-    virtual void makeSharedSnapshot();
-    virtual void load();
-    virtual void loadSharedMaterial();
-    virtual void reset();
-    virtual void change();
-};
-
-class J3DLockedMaterial : public J3DMaterial {
-public:
-    J3DLockedMaterial() {
-        initialize();
-    }
-    void initialize();
-
-    virtual void calc(f32 const (*)[4]);
-    virtual void makeSnapshot();
-    virtual void makeSharedSnapshot();
-    virtual void load();
-    virtual void loadSharedMaterial();
-    virtual void patch();
-    virtual void diff(u32);
-    virtual void reset();
-    virtual void change();
-};

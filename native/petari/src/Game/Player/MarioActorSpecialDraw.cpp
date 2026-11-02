@@ -227,7 +227,7 @@ void MarioActor::calcFogLighting() {
         f32 low = getConst().getTable()->mDamageFogLow;
         _1A4 = (low + wave * (getConst().getTable()->mDamageFogHigh - getConst().getTable()->mDamageFogLow)) / 255.0f;
     } else if (_1AA) {
-        fog.mGXColor = _1B0.mGXColor;
+        fog.mRGBA = _1B0.mRGBA;
 
         if (_1B5) {
             fog.g = (s32)(255.0f * MR::sin(JGeometry::TUtil< f32 >::PI() * (_1AA / 20.0f)));
@@ -271,13 +271,13 @@ void MarioActor::updateReflectAlphaList(u8 alpha) {
 
 void MarioActor::updateLightList(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
     mLightTint.kind = MarioModelTint::Kind_Light;
-    mLightTint.color0 = rAmbient.mGXColor;
-    mLightTint.color1 = rMaterial.mGXColor;
+    mLightTint.color0 = rAmbient.mRGBA;
+    mLightTint.color1 = rMaterial.mRGBA;
     mLightTint.hasFog = !MR::isNearZero(strength);
     if (mLightTint.hasFog) {
         mLightTint.fogNear = MR::getNearZ();
         mLightTint.fogFar = MR::getFarZ();
-        mLightTint.fogColor = rFog.mGXColor;
+        mLightTint.fogColor = rFog.mRGBA;
         MR::calcFogStartEnd(mPosition, strength, &mLightTint.fogStart, &mLightTint.fogEnd);
     }
 }

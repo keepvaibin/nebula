@@ -6,7 +6,7 @@
 #include "nw4r/ut/Font.h"
 
 namespace {
-    // The writer's native material (runtime/src/render/materials/font_text.hlsl) as SetupGX set it; each glyph sheet
+    // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it; each glyph sheet
     // LoadTexture binds sends it. Blended by alpha; depth, culling and writes as the drawing state has them.
     NebulaNativeMaterial sMaterial;
 
@@ -62,11 +62,11 @@ namespace nw4r {
         void CharWriter::SetupVertexFormat() {
         }
 
-        void CharWriter::SetupGX() {
+        void CharWriter::Setup() {
             ResetTextureCache();
 
             if ((mColorMapping.min != 0x00000000u) || (mColorMapping.max != 0xFFFFFFFFu)) {
-                SetupGXWithColorMapping(mColorMapping.min, mColorMapping.max);
+                SetupWithColorMapping(mColorMapping.min, mColorMapping.max);
             } else {
                 if (mFont) {
                     u8 format = mFont->GetTextureFormat();
@@ -74,42 +74,42 @@ namespace nw4r {
                     switch (format) {
                     case SHEET_I4:
                     case SHEET_I8:
-                        SetupGXForI();
+                        SetupForIntensity();
                         break;
 
                     case SHEET_IA4:
                     case SHEET_IA8:
-                        SetupGXDefault();
+                        SetupDefault();
                         break;
 
                     case SHEET_RGB565:
                     case SHEET_RGB5A3:
                     case SHEET_RGBA8:
-                        SetupGXForRGBA();
+                        SetupForColor();
                         break;
 
                     default:
-                        SetupGXDefault();
+                        SetupDefault();
                         break;
                     }
                 } else {
-                    SetupGXDefault();
+                    SetupDefault();
                 }
             }
         }
 
-        void CharWriter::SetupGXDefault() {
+        void CharWriter::SetupDefault() {
             SetupMaterial(0x00000000u, 0xFFFFFFFFu, false);
             SetupVertexFormat();
         }
 
-        void CharWriter::SetupGXForI() {
+        void CharWriter::SetupForIntensity() {
             SetupMaterial(0x00000000u, 0xFFFFFFFFu, true);
             SetupVertexFormat();
         }
 
-        void CharWriter::SetupGXForRGBA() {
-            SetupGXDefault();
+        void CharWriter::SetupForColor() {
+            SetupDefault();
         }
 
         void CharWriter::SetFontSize(f32 width, f32 height) {
@@ -204,7 +204,7 @@ namespace nw4r {
             mVertexColor.rd.a = static_cast< u8 >(mVertexColor.rd.a * mAlpha / Color::ALPHA_MAX);
         }
 
-        void CharWriter::SetupGXWithColorMapping(Color min, Color max) {
+        void CharWriter::SetupWithColorMapping(Color min, Color max) {
             SetupMaterial(min, max, false);
             SetupVertexFormat();
         }

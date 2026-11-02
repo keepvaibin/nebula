@@ -11,7 +11,6 @@ public:
     bool getAcceleration(TVec3f* pOut) const;
     bool getPastAcceleration(TVec3f* pOut, s32 index) const;
     bool isStationary() const;
-    bool isBalanced() const;
     void update();
     void updateRotate();
     void updateAccAverage();

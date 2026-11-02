@@ -122,8 +122,8 @@ struct J3DMaterialBlock : public J3DModelBlock {
     /* 0x44 */ u32 field_0x44;
     /* 0x48 */ u32 mpTexNo;
     /* 0x4C */ u32 mpTevOrderInfo;
-    /* 0x50 */ u32 mpTevColor;
-    /* 0x54 */ u32 mpTevKColor;
+    /* 0x50 */ u32 mpRegisterColor;
+    /* 0x54 */ u32 mpConstantColor;
     /* 0x58 */ u32 mpTevStageNum;
     /* 0x5C */ u32 mpTevStageInfo;
     /* 0x60 */ u32 mpTevSwapModeInfo;
@@ -180,8 +180,6 @@ public:
     void readShape(J3DShapeBlock const*, u32);
     void readTexture(J3DTextureBlock const*);
     void readTextureTable(J3DTextureBlock const*);
-    void readPatchedMaterial(J3DMaterialBlock const*, u32);
-    void modifyMaterial(u32);
 
 
     /* 0x04 */ J3DModelData* mpModelData;

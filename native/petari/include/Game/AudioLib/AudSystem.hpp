@@ -91,7 +91,6 @@ public:
     void setFarCamera(bool);
     void setSeVolumeSet(s32, u32);
     void recoverSeVolumeSet(u32);
-    void setSeVolumeSetLevel(s32);
     void initVolumeSetting();
     void initCategoryArrangement();
     void setMeResource(AssetFolder*, u16, u16);

@@ -112,12 +112,6 @@ void JAISeCategoryMgr::stopSoundID(JAISoundID id) {
     }
 }
 
-void JAISeCategoryMgr::pause(bool param_0) {
-    for (JSULink< JAISe >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
-        i->getObject()->pause(param_0);
-    }
-}
-
 void JAISeCategoryMgr::JAISeMgr_mixOut_(const JAISoundParamsMove& params, JAISoundActivity activity) {
     JASSoundParams mixParams;
     mixParams.combine(params.mParams, mParams.mParams);
@@ -182,15 +176,6 @@ void JAISeMgr::setCategoryArrangement(const JAISeCategoryArrangement& arrangemen
     for (int i = 0; i < NUM_CATEGORIES; i++) {
         mCategoryMgrs[i].setMaxActiveSe(arrangement.mItems[i].mMaxActiveSe);
         mCategoryMgrs[i].setMaxInactiveSe(arrangement.mItems[i].mMaxInactiveSe);
-    }
-}
-
-void JAISeMgr::getCategoryArrangement(JAISeCategoryArrangement* arrangement) {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
-        int active = mCategoryMgrs[i].getMaxActiveSe();
-        arrangement->mItems[i].mMaxActiveSe = active;
-        int inactive = mCategoryMgrs[i].getMaxInactiveSe();
-        arrangement->mItems[i].mMaxInactiveSe = inactive;
     }
 }
 

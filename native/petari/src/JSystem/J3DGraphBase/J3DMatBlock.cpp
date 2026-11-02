@@ -12,26 +12,26 @@
 
 
 
-J3DTevBlock::J3DTevBlock(u8 texCapacity, bool hasTextures, bool hasColors)
+J3DRegisterBlock::J3DRegisterBlock(u8 texCapacity, bool hasTextures, bool hasColors)
     : mTexCapacity(texCapacity), mHasTextures(hasTextures), mHasColors(hasColors) {
     for (u32 i = 0; i < ARRAY_SIZE(mTexNo); i++) {
         mTexNo[i] = 0xFFFF;
     }
-    for (u32 i = 0; i < ARRAY_SIZE(mTevColor); i++) {
-        mTevColor[i] = j3dDefaultTevColor;
+    for (u32 i = 0; i < ARRAY_SIZE(mRegisterColor); i++) {
+        mRegisterColor[i] = j3dDefaultRegisterColor;
     }
-    for (u32 i = 0; i < ARRAY_SIZE(mTevKColor); i++) {
-        mTevKColor[i] = j3dDefaultTevKColor;
+    for (u32 i = 0; i < ARRAY_SIZE(mConstantColor); i++) {
+        mConstantColor[i] = j3dDefaultConstantColor;
     }
 }
 
-void J3DTevBlock::reset(J3DTevBlock* pBlock) {
+void J3DRegisterBlock::reset(J3DRegisterBlock* pBlock) {
     for (u32 i = 0; i < mTexCapacity; i++) {
         mTexNo[i] = pBlock->getTexNo(i);
     }
     if (mHasColors && pBlock->mHasColors) {
-        memcpy(mTevColor, pBlock->mTevColor, sizeof(mTevColor));
-        memcpy(mTevKColor, pBlock->mTevKColor, sizeof(mTevKColor));
+        memcpy(mRegisterColor, pBlock->mRegisterColor, sizeof(mRegisterColor));
+        memcpy(mConstantColor, pBlock->mConstantColor, sizeof(mConstantColor));
     }
 }
 
@@ -89,11 +89,11 @@ void J3DTexGenBlock::reset(J3DTexGenBlock* pBlock) {
     }
 }
 
-J3DPEBlock::J3DPEBlock(Kind kind) : mKind(kind) {
+J3DOutputBlock::J3DOutputBlock(Kind kind) : mKind(kind) {
     mZCompLoc = 0xFF;
 }
 
-void J3DPEBlock::reset(J3DPEBlock* pBlock) {
+void J3DOutputBlock::reset(J3DOutputBlock* pBlock) {
     if (mKind == Kind_Full && pBlock->getFog() != NULL) {
         mFog.setFogInfo(pBlock->getFog()->getFogInfo());
     }

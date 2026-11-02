@@ -34,7 +34,7 @@ void BigBubbleDrawer::setUpVertexFormat() const {
 void BigBubbleDrawer::setUpTexture() const {
 }
 
-void BigBubbleDrawer::setUpTevStage() const {
+void BigBubbleDrawer::setUpStage() const {
     // runtime/src/render/materials/big_bubble.hlsl: the rainbow (texture 0) with sTevColor0 mixed in by the bubble
     // environment map's alpha (texture 1, by the eye-space normal through the camera's rotation offset by
     // sEnvMatTrans), sTevColor1 over it by its alpha; blended by alpha, depth tested and not written, back faces culled.
@@ -64,7 +64,7 @@ void BigBubbleDrawer::setUpPixelFormat() const {
 void BigBubbleDrawer::setUpMaterial() const {
     setUpVertexFormat();
     setUpTexture();
-    setUpTevStage();
+    setUpStage();
     setUpPixelFormat();
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
 

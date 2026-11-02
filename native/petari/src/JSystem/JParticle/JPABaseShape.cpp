@@ -122,22 +122,22 @@ static const f32 cParticleSizePixels = 25.0f / 6.0f;
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DPass::pointSize(cParticleSizePixels * work->mGlobalPtclScl.x);
+    J3DPass::pointSize(cParticleSizePixels * work->mGlobalPtclScl.x, true);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DPass::lineWidth(cParticleSizePixels * work->mGlobalPtclScl.x);
+    J3DPass::lineWidth(cParticleSizePixels * work->mGlobalPtclScl.x, true);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DPass::pointSize(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x);
+    J3DPass::pointSize(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x, true);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DPass::lineWidth(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x);
+    J3DPass::lineWidth(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x, true);
 }
 
 void JPARegistPrm(JPAEmitterWorkData* work) {
@@ -952,7 +952,7 @@ const u8 JPABaseShape::st_c[8] = {
 // The shape's blending and depth (the particle material keeps them) and its alpha test's references (the register
 // file the particle material reads); its colour and alpha modes and compares go into the particle material
 // (JPAResource::sendMaterial).
-void JPABaseShape::setGX(JPAEmitterWorkData* work) const {
+void JPABaseShape::setPass(JPAEmitterWorkData* work) const {
     J3DPass::blendState(getBlendMode(), getBlendSrc(), getBlendDst(), getLogicOp());
     J3DPass::depth(getZEnable(), getZCmp(), getZUpd());
     J3DPass::alphaCompare(getAlphaCmp0(), getAlphaRef0(), getAlphaOp(), getAlphaCmp1(), getAlphaRef1());

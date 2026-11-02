@@ -33,7 +33,6 @@ public:
     s32 getSeqData(JAISoundID, JAISeqDataUser*, JAISeqData*, bool);
     bool appendDynamicSeqDataBlock(JAUSeqDataBlock*);
     bool loadDynamicSeq(JAISoundID, bool, JAISeqDataUser*);
-    u32 releaseIdleDynamicSeqDataBlock(JAISeqDataUser*);
     JAUSeqDataBlock* releaseIdleDynamicSeqDataBlock_(JAISeqDataUser*, u32);
     void rearrangeLoadingSeqs_();
 

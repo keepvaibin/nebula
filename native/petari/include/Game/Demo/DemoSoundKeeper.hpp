@@ -25,7 +25,5 @@ public:
     virtual void update();
 
     virtual void executeType(const DemoSoundInfo* pInfo);
-
-    void addInfo(const char* pPartName);
     bool isPermitBgmChange();
 };

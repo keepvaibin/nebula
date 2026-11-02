@@ -81,7 +81,7 @@ void ElectricRailMoving::draw() const {
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {
             mMesh.draw();
         } else {
-            drawRailGX(_F0);
+            drawRail(_F0);
         }
     }
 }
@@ -233,7 +233,7 @@ void ElectricRailMoving::initMesh() {
     mMesh.send();
 }
 
-void ElectricRailMoving::drawRailGX(f32 a1) const {
+void ElectricRailMoving::drawRail(f32 a1) const {
     drawPlaneGX(a1, a1, -a1, -a1);
     drawPlaneGX(-a1, a1, a1, -a1);
 }

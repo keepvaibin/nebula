@@ -33,8 +33,9 @@ namespace J3DPass {
     void alphaTest(u8 compare, u8 reference);  // NEBULA_COMPARE_*
     void noFog();
     void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
-    void lineWidth(f32 pixels);
-    void pointSize(f32 pixels);
+    // Pixels across; `spreadTexture`: texture coordinates 0-2 run 0 to 1 across the width of the line or the point.
+    void lineWidth(f32 pixels, bool spreadTexture = false);
+    void pointSize(f32 pixels, bool spreadTexture = false);
     void materialColor(u8 index, NebulaColor8 color);
     void materialColorWide(u8 index, const NebulaColor16& rColor);
     void constantColor(u8 index, NebulaColor8 color);
@@ -49,14 +50,11 @@ extern "C" {
 #endif
 void J3DPassDepth(int test, u8 compare, int write);
 void J3DPassBlend(u8 source, u8 destination);
-void J3DPassNoBlend(void);
-void J3DPassSubtractBlend(void);
 void J3DPassCull(u8 faces);
 void J3DPassWriteColor(int write);
 void J3DPassWriteAlpha(int write);
 void J3DPassConstantAlpha(int on, u8 alpha);
 void J3DPassPositionMatrix(u8 index);
-void J3DPassNoAlphaTest(void);
 void J3DPassAlphaTest(u8 compare, u8 reference);
 void J3DPassNoFog(void);
 #ifdef __cplusplus

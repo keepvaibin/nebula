@@ -231,22 +231,6 @@ namespace GameDataFunction {
         return ::getGameDataTemporaryInGalaxy()->mLast1upStarPieceNum;
     }
 
-    const char16_t* getUserName() {
-        return ::getSaveDataHandleSequence()->getCurrentUserFile()->mUserName;
-    }
-
-    u16 getUserFileIndex() {
-        const char* pGameDataName = ::getSaveDataHandleSequence()->getCurrentUserFile()->getGameDataName();
-        s32 index = strlen(pGameDataName) - 1;
-        char ch = pGameDataName[index];
-
-        if (ch <= '0' || ch > '9') {
-            return 1;
-        }
-
-        return ch - '0';
-    }
-
     void resetAllGameData() {
         getCurrentGameDataHolder()->resetAllData();
     }

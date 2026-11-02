@@ -27,20 +27,3 @@ void JAISoundParamsMove::moveFxMix(f32 newValue, u32 maxSteps) {
     }
 }
 
-void JAISoundParamsMove::movePan(f32 newValue, u32 maxSteps) {
-    if (maxSteps == 0) {
-        mParams.mPan = newValue;
-        mTransition.mPan.mRemainingSteps = 0;
-    } else {
-        mTransition.mPan.set(newValue, mParams.mPan, maxSteps);
-    }
-}
-
-void JAISoundParamsMove::moveDolby(f32 newValue, u32 maxSteps) {
-    if (maxSteps == 0) {
-        mParams.mDolby = newValue;
-        mTransition.mDolby.mRemainingSteps = 0;
-    } else {
-        mTransition.mDolby.set(newValue, mParams.mDolby, maxSteps);
-    }
-}

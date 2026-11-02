@@ -153,14 +153,6 @@ void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]) {
     J3DNativeView::setOrthographic(pMtx);
 }
 
-void J3DNativeViewSetProjectionv(const f32* pValues) {
-    J3DNativeView::setProjectionv(pValues);
-}
-
-void J3DNativeViewGetProjectionv(f32* pValues) {
-    J3DNativeView::getProjectionv(pValues);
-}
-
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ) {
     J3DNativeView::setViewport(left, top, width, height, nearZ, farZ);
 }

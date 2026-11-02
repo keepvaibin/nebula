@@ -34,8 +34,6 @@ extern "C" {
 // The same for the C sources (RVLFaceLib).
 void J3DNativeViewSetPerspective(const f32 (*pMtx)[4]);
 void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]);
-void J3DNativeViewSetProjectionv(const f32* pValues);
-void J3DNativeViewGetProjectionv(f32* pValues);
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ);
 void J3DNativeViewGetViewportv(f32* pValues);
 void J3DNativeViewSetZScaleOffset(f32 scale, f32 offset);

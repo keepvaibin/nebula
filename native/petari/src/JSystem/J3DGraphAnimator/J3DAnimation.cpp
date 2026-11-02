@@ -1344,6 +1344,3 @@ void J3DAnmTevRegKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 
-void J3DAnimation_FORCE_EMIT(s16 frameMax, f32* pWeight) {
-    J3DAnmCluster cluster(frameMax, pWeight);
-}

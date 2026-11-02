@@ -10,7 +10,7 @@ public:
     void setUpDraw() const;
     void setUpVertexFormat() const;
     void setUpTexture() const;
-    void setUpTevStage() const;
+    void setUpStage() const;
     void setUpPixelFormat() const;
     void setUpMaterial() const;
 

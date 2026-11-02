@@ -329,19 +329,6 @@ namespace MR {
         return MR::getGamePad(channel)->mIsConnected;
     }
 
-    bool isOperatingGamePad(s32 channel) {
-        GamePad* pGamePad = MR::getGamePad(channel);
-
-        if (!pGamePad->mCorePadAccel->isBalanced()) {
-            return true;
-        }
-
-        if (pGamePad->mButton->testButtonA()) {
-            return true;
-        }
-
-        return pGamePad->mButton->testButtonB();
-    }
 };  // namespace MR
 
 namespace GamePadFunction {

@@ -5,22 +5,22 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-struct J3DGXColor : public NebulaColor8 {
-    J3DGXColor() {
+struct J3DColor : public NebulaColor8 {
+    J3DColor() {
     }
 
-    J3DGXColor(const J3DGXColor& other) : NebulaColor8(other) {
+    J3DColor(const J3DColor& other) : NebulaColor8(other) {
     }
 
-    J3DGXColor(const NebulaColor8 color) : NebulaColor8(color) {
+    J3DColor(const NebulaColor8 color) : NebulaColor8(color) {
     }
 
-    J3DGXColor& operator=(const NebulaColor8 color) {
+    J3DColor& operator=(const NebulaColor8 color) {
         *(NebulaColor8*)this = color;
         return *this;
     }
 
-    J3DGXColor& operator=(const J3DGXColor& other) {
+    J3DColor& operator=(const J3DColor& other) {
         NebulaColor8::operator=(other);
         return *this;
     }
@@ -254,17 +254,17 @@ struct J3DAlphaCompInfo {
     }
 };
 
-struct J3DGXColorS10 : public NebulaColor16 {
-    J3DGXColorS10() {
+struct J3DColorWide : public NebulaColor16 {
+    J3DColorWide() {
     }
 
-    J3DGXColorS10(const J3DGXColorS10& other) : NebulaColor16(other) {
+    J3DColorWide(const J3DColorWide& other) : NebulaColor16(other) {
     }
 
-    J3DGXColorS10(const NebulaColor16& color) : NebulaColor16(color) {
+    J3DColorWide(const NebulaColor16& color) : NebulaColor16(color) {
     }
 
-    J3DGXColorS10& operator=(const NebulaColor16& color) {
+    J3DColorWide& operator=(const NebulaColor16& color) {
         memcpy(this, &color, sizeof(NebulaColor16));
         return *this;
     }

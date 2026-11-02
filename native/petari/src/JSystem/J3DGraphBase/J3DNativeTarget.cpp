@@ -47,10 +47,6 @@ void J3DNativeTargetEnd(const void* pKey) {
     J3DNativeTarget::end(pKey);
 }
 
-void J3DNativeTargetEndChannels(const void* pKey, NebulaTargetChannels channels) {
-    J3DNativeTarget::end(pKey, channels);
-}
-
 void J3DNativeTargetClear(u32 clearRgba, u32 clearZ, u32 channels) {
     J3DNativeTarget::clear(clearRgba, clearZ, channels);
 }

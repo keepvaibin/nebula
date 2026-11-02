@@ -47,10 +47,6 @@ bool GamePadAcceleration::isStationary() const {
     return _20;
 }
 
-bool GamePadAcceleration::isBalanced() const {
-    return _1C < 0.018f;
-}
-
 void GamePadAcceleration::update() {
     s32 statusCount = mPad->getValidStatusCount();
     if (statusCount <= 0) {

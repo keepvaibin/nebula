@@ -494,7 +494,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(nw4r::ut::Rect
     } else {
         if (!mIsShadow) {
             writer.ResetColorMapping();
-            writer.SetupGX();
+            writer.Setup();
             if (mColorIndex) {
                 ::setTextColor(&writer, 0);
             }
@@ -504,7 +504,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(nw4r::ut::Rect
 
         writer.Print(&picture, 1);
         if (!mIsShadow) {
-            context->writer->SetupGX();
+            context->writer->Setup();
         }
     }
 
@@ -597,7 +597,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupColor(nw4r::ut::
             context->writer->SetColorMapping(color, ::getTextColor(index));
         }
 
-        context->writer->SetupGX();
+        context->writer->Setup();
         ::setTextColor(context->writer, index);
     }
 
@@ -699,14 +699,14 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(nw4r::ut::Rect* r
         f32 offset = -writer.GetFontAscent();
         if (!mIsShadow) {
             writer.ResetColorMapping();
-            writer.SetupGX();
+            writer.Setup();
             ::setTextColor(&writer, 0);
         }
 
         writer.MoveCursorY(offset);
         writer.Print(string, length);
         if (!mIsShadow) {
-            context->writer->SetupGX();
+            context->writer->Setup();
         }
     }
 

@@ -4,7 +4,7 @@
 
 class FogCtrl;
 class J3DAnmBase;
-class J3DGXColor;
+class J3DColor;
 class J3DModel;
 class J3DModelData;
 class MarioShadowProjmapMtxSetter;
@@ -28,7 +28,7 @@ public:
     void onCurFlag(u16, u32);
     u32 getDiffFlag(s32) const;
     FogCtrl* addFogCtrl(bool);
-    MatColorCtrl* addMatColorCtrl(const char*, u32, const J3DGXColor*);
+    MatColorCtrl* addMatColorCtrl(const char*, u32, const J3DColor*);
     TexMtxCtrl* addTexMtxCtrl(const char*);
     ProjmapEffectMtxSetter* addProjmapEffectMtxSetter();
     MirrorReflectionMtxSetter* addMirrorReflectionMtxSetter();

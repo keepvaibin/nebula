@@ -35,7 +35,7 @@ namespace nw4r {
             }
 
             virtual ~Material();
-            virtual bool SetupGX(bool, u8);
+            virtual bool Setup(bool, u8);
             virtual void BindAnimation(AnimTransform*);
             virtual void UnbindAnimation(AnimTransform*);
             virtual void UnbindAllAnimation();
@@ -113,11 +113,11 @@ namespace nw4r {
             }
 
             void SetTevColor(u32 idx, const NebulaColor16& color) {
-                mTevCols[idx] = color;
+                mRegisterColors[idx] = color;
             }
 
             void SetTevKColor(u32 idx, ut::Color value) {
-                mTevKCols[idx] = value;
+                mConstantColors[idx] = value;
             }
 
             void SetTexSRT(u32 texSRTIdx, const TexSRT& value) {
@@ -145,7 +145,7 @@ namespace nw4r {
             }
 
             const NebulaColor16 GetTevColor(u32 idx) const {
-                return mTevCols[idx];
+                return mRegisterColors[idx];
             }
 
             const TexMap* GetTexMapAry() const;
@@ -163,8 +163,8 @@ namespace nw4r {
             void AddAnimationLink(AnimationLink*);
 
             AnimationList mAnimList;
-            NebulaColor16 mTevCols[3];
-            ut::Color mTevKCols[4];
+            NebulaColor16 mRegisterColors[3];
+            ut::Color mConstantColors[4];
             detail::StorageNums mCap;
             detail::StorageNums mNum;
             void* mpStorage;

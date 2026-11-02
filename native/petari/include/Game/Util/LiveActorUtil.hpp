@@ -121,7 +121,7 @@ namespace MR {
 
     void newDifferedMaterials(LiveActor*);
     void initMaterialFog(LiveActor*, bool);
-    void initMaterialColor0(LiveActor*, const char*, const J3DGXColor*);
+    void initMaterialColor0(LiveActor*, const char*, const J3DColor*);
     void initMaterialChangeTex(LiveActor*, const char*);
     TexMtxCtrl* initMaterialTexMtx(LiveActor*, const char*);
 

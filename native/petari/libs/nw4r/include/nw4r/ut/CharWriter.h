@@ -95,11 +95,11 @@ namespace nw4r {
                 UpdateVertexColor();
             }
 
-            void SetupGX();
-            void SetupGXForI();
-            void SetupGXDefault();
-            void SetupGXForRGBA();
-            static void SetupGXWithColorMapping(Color, Color);
+            void Setup();
+            void SetupForIntensity();
+            void SetupDefault();
+            void SetupForColor();
+            static void SetupWithColorMapping(Color, Color);
 
             void ResetTextureCache() {
                 mLoadingTexture.Reset();

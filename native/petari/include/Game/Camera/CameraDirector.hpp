@@ -67,7 +67,6 @@ public:
     void push(CameraMan*);
     CameraMan* pop();
     void backLastMtx();
-    void updateTarget();
     CameraMan* getCurrentCameraMan() const;
     void updateCameraMan();
     void calcPose();

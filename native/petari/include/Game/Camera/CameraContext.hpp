@@ -15,7 +15,6 @@ public:
     f32 getRenderFovy() const;
     void setViewMtx(const TPos3f&, bool, bool, const TVec3f&);
     void setNearZ(f32);
-    void setFarZ(f32);
     void setFovy(f32);
     void setShakeOffset(f32, f32);
     void updateProjectionMtx();

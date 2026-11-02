@@ -46,7 +46,6 @@ public:
     void moveOnRail(f32, f32, bool);
     bool isForceInvalidBindSection() const;
     bool tryBreakReachedGoal();
-    const char* getTouchEffect() const;  // stripped
     bool isMoveEnabled() const;          // stripped
 
     void exeAppear();

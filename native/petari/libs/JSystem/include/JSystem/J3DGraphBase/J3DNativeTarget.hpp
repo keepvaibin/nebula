@@ -26,7 +26,6 @@ extern "C" {
 // The same for the C sources (RVLFaceLib).
 void J3DNativeTargetBegin(const void* pKey, u16 width, u16 height, u32 clearRgba, u32 clearZ);
 void J3DNativeTargetEnd(const void* pKey);
-void J3DNativeTargetEndChannels(const void* pKey, NebulaTargetChannels channels);
 void J3DNativeTargetClear(u32 clearRgba, u32 clearZ, u32 channels);
 #ifdef __cplusplus
 }

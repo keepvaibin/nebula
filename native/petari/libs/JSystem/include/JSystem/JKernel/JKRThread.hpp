@@ -88,8 +88,6 @@ public:
 
     static void* start(void* pData);
 
-    static JKRThread* searchThread(GameThreadRecord*);
-
     /* 0x18 */ JSULink< JKRThread > mThreadListLink;
     /* 0x28 */ NebulaArena* mHeap;
     /* 0x2C */ GameThreadRecord* mThread;
@@ -119,8 +117,6 @@ inline void JKRThread::TLoad::clear() {
 }
 
 class JKRThreadSwitch {
-public:
-    JKRThread* enter(JKRThread*, int);
 
     static JKRThreadSwitch* getManager() {
         return sManager;

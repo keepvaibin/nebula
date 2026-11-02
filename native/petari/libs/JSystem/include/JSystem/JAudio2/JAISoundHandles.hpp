@@ -29,7 +29,6 @@ public:
     }
 
     JAISoundHandle* getHandleSoundID(JAISoundID);
-    JAISoundHandle* getFreeHandle();
     JAISoundHandle* getHandleUserData(uintptr_t);
 
     void setPos(const TVec3f&);

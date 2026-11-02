@@ -109,11 +109,8 @@ public:
     };
 
     void setSeqDataArchive(AssetFolder*);
-    bool loadDynamicSeq(JAISoundID, bool);
-    u32 releaseIdleDynamicSeqDataBlock();
     JAUSectionHeap(NebulaArena*, bool, s32);
     JAUSection* getOpenSection();
-    JAUSection* getSection(int);
     bool setSeqDataUser(JAISeqDataUser*);
     bool newDynamicSeqBlock(u32);
     int newDynamicSeqBlocks(u32, int);

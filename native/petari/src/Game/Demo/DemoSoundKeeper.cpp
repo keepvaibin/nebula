@@ -32,12 +32,6 @@ void DemoSoundKeeper::update() {
     DemoSheetKeeperInfoHolder< DemoSoundInfo >::update();
 }
 
-void DemoSoundKeeper::addInfo(const char* pPartName) {
-    DemoSoundInfo info;
-    info.mPartName = pPartName;
-    mInfo.push_back(info);
-}
-
 void DemoSoundKeeper::executeType(const DemoSoundInfo* pInfo) {
     if (MR::isDemoPartFirstStep(pInfo->mPartName)) {
         if (pInfo->mBgmWipeoutFrame >= 0 && isPermitBgmChange()) {

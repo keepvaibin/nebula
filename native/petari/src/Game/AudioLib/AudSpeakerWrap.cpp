@@ -13,10 +13,6 @@ const char* AudSpeakerWrap::getResName() {
     return "/AudioRes/SpkRes/SpkRes.arc";
 }
 
-u32 AudSpeakerWrap::getRequiredHeapSize() {
-    return 0x40000;
-}
-
 void AudSpeakerWrap::start(s32 waveID, s32 padChannel) {
     SpkSystem* system = JASGlobalInstance< SpkSystem >::getInstance();
 

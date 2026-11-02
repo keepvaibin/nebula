@@ -24,7 +24,5 @@ public:
     virtual void start();
     virtual void update();
 
-    void addInfo(const char* pPartName);
-
     virtual void executeType(const DemoWipeInfo* pInfo);
 };

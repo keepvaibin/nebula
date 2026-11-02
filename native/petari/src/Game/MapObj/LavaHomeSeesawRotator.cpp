@@ -10,10 +10,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
-f32 JMAAcosRadian_dummy(f32 f) {
-    return JMAAcosRadian(f);
-}
-
 namespace {
     const f32 sAngularVelocityFric = 0.99f;
     const f32 sAngularAccelHipDrop = 40.0f;

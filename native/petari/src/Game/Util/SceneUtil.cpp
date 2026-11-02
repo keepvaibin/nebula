@@ -133,14 +133,6 @@ namespace MR {
         return isKoopaVs;
     }
 
-    bool isStageKoopaVs1() {
-        return isEqualStageName("KoopaBattleVs1Galaxy");
-    }
-
-    bool isStageKoopaVs2() {
-        return isEqualStageName("KoopaBattleVs2Galaxy");
-    }
-
     bool isStageKoopaVs3() {
         return isEqualStageName("KoopaBattleVs3Galaxy");
     }

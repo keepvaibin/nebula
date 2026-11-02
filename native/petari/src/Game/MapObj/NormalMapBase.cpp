@@ -393,7 +393,7 @@ void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
 }
 
 void NormalMapBase::loadTexture1(J3DMaterial* pMaterial) const {
-    J3DTevBlock* pBlock = pMaterial->getTevBlock();
+    J3DRegisterBlock* pBlock = pMaterial->getRegisterBlock();
     const u32 count = pBlock->getTexCapacity();
 
     u16 textures[8];
@@ -437,9 +437,9 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
 
     NativeShader::setColor(sNormalMap, 0, material.r, material.g, material.b, material.a);
     NativeShader::setColor(sNormalMap, 4, ambient.r, ambient.g, ambient.b, ambient.a);
-    const NebulaColor16& rColor0 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getTevBlock()->getTevColor(0))
+    const NebulaColor16& rColor0 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(0))
                                                 : static_cast< const NebulaColor16& >(mTevColor0);
-    const NebulaColor16& rColor1 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getTevBlock()->getTevColor(1))
+    const NebulaColor16& rColor1 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getRegisterBlock()->getRegisterColor(1))
                                                 : static_cast< const NebulaColor16& >(mTevColor1);
     // C0 and C1 as the combiner takes a register (its low 8 bits).
     sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / 255.0f;

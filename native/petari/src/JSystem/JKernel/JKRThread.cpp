@@ -62,45 +62,9 @@ void* JKRThread::start(void* pThread) {
     return self->run();
 }
 
-JKRThread* JKRThread::searchThread(GameThreadRecord* pThread) {
-    for (JSUPtrLink* i = sThreadList.mHead; i != nullptr; i = i->mNext) {
-        JKRThread* thread = reinterpret_cast< JKRThread* >(i->mData);
-
-        if (thread->mThread == pThread) {
-            return thread;
-        }
-    }
-
-    return nullptr;
-}
-
-JKRThread* JKRThreadSwitch::enter(JKRThread* pThread, int a2) {
-    if (pThread == nullptr) {
-        return nullptr;
-    }
-
-    JKRThread* foundThread = JKRThread::searchThread(pThread->mThread);
-
-    if (foundThread != nullptr) {
-        pThread = foundThread;
-    }
-
-    JKRThread::TLoad* inf = &pThread->mLoadInfo;
-
-    inf->clear();
-    inf->_10 = a2;
-    inf->_0 = 1;
-
-    return pThread;
-}
-
 JUtility::TColor& JUtility::TColor::operator=(const TColor& rColor) {
     static_cast< NebulaColor8& >(*this) = rColor;
     return *this;
-}
-
-void setThreadColor(JUtility::TColor& rDestination, u8 r, u8 g, u8 b, u8 a) {
-    rDestination = JUtility::TColor(r, g, b, a);
 }
 
 JSUList< JKRThread > JKRThread::sThreadList = JSUList< JKRThread >(false);

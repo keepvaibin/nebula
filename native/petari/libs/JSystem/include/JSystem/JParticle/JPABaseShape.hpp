@@ -38,7 +38,7 @@ struct JPABaseShapeData {
 struct JPABaseShape {
 public:
     JPABaseShape(u8 const*, NebulaArena*);
-    void setGX(JPAEmitterWorkData*) const;
+    void setPass(JPAEmitterWorkData*) const;
 
     static const u8 st_bm[4];
     static const u8 st_lo[16];

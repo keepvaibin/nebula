@@ -321,14 +321,18 @@ namespace J3DPass {
         J3DNativeMaterial::sendRegisters();
     }
 
-    void lineWidth(f32 pixels) {
+    void lineWidth(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
         sPass.line_width = pixels;
+        sPass.line_divisor = spreadTexture ? 1 : 0;
+        sPass.line_offsets = spreadTexture ? 7 : 0;
     }
 
-    void pointSize(f32 pixels) {
+    void pointSize(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
         sPass.point_size = pixels;
+        sPass.point_divisor = spreadTexture ? 1 : 0;
+        sPass.point_offsets = spreadTexture ? 7 : 0;
     }
 
     void materialColor(u8 index, NebulaColor8 color) {
@@ -383,12 +387,6 @@ void J3DPassDepth(int test, u8 compare, int write) {
 void J3DPassBlend(u8 source, u8 destination) {
     J3DPass::blend(source, destination);
 }
-void J3DPassNoBlend(void) {
-    J3DPass::noBlend();
-}
-void J3DPassSubtractBlend(void) {
-    J3DPass::subtractBlend();
-}
 void J3DPassCull(u8 faces) {
     J3DPass::cull(faces);
 }
@@ -403,9 +401,6 @@ void J3DPassConstantAlpha(int on, u8 alpha) {
 }
 void J3DPassPositionMatrix(u8 index) {
     J3DPass::positionMatrix(index);
-}
-void J3DPassNoAlphaTest(void) {
-    J3DPass::noAlphaTest();
 }
 void J3DPassAlphaTest(u8 compare, u8 reference) {
     J3DPass::alphaTest(compare, reference);

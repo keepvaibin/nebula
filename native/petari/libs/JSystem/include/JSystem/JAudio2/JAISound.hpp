@@ -413,8 +413,6 @@ public:
     void attachHandle(JAISoundHandle* handle);
 
     void start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience);
-    bool acceptsNewAudible() const;
-    void newAudible(const TVec3f&, TVec3f const*, u32, JAIAudience*);
     void stop();
     void stop(u32 fadeTime);
     void die_JAISound_();

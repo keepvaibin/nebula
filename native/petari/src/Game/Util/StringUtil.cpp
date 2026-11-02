@@ -144,12 +144,6 @@ namespace MR {
         return &pTag->mBuffer[1];
     }
 
-    char16_t* addPictureFontTagPlayerIcon(char16_t* pDst) {
-        int tag = isPlayerLuigi() ? 76 : 66;
-
-        return MR::addPictureFontTag(pDst, tag);
-    }
-
     char16_t* addNewLine(char16_t* pDst) {
         pDst[0] = '\n';
         pDst[1] = '\0';

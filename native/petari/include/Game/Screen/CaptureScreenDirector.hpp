@@ -22,7 +22,6 @@ public:
     void requestCaptureTiming(const char* pName);
     void invalidateCaptureTiming(const char* pName);
     const ResTIMG* getResTIMG() const;
-    u8* getTexImage() const;
     const TimingInfo* getUsingTiming() const;
     const TimingInfo* getCurrentTiming() const;
     const TimingInfo* findFromName(const char* pName) const;

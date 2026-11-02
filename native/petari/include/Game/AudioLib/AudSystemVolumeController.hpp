@@ -21,7 +21,6 @@ public:
     void update();
     void setSeVolumeSetTrig(s32, u32);
     void recoverSeVolumeSet(u32);
-    void setSeVolumeSetLevel(s32);
     void updateSeVolumeSetLevel();
     void setSeVolumeSetInner(s32, u32);
     void pushVolumeSet();

@@ -169,14 +169,6 @@ namespace J3DNativeDraw {
         }
     }
 
-    void matrix(u8 place) {
-        if (place >= J3DNativeShape::kPositions) {
-            fail("a position matrix past place 9");
-        }
-        sMatrix[sWaiting + sVertex] = place;
-        arrive(0);
-    }
-
     void position(f32 x, f32 y, f32 z) {
         f32* p = sPosition + 3 * (sWaiting + sVertex);
         p[0] = x;

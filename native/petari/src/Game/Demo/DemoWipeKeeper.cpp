@@ -44,12 +44,6 @@ void DemoWipeKeeper::executeType(const DemoWipeInfo* pInfo) {
     }
 }
 
-void DemoWipeKeeper::addInfo(const char* pPartName) {
-    DemoWipeInfo info;
-    info.mPartName = pPartName;
-    mInfo.push_back(info);
-}
-
 inline const char* DemoWipeKeeper::getTypeString() const {
     return "Wipe";
 }

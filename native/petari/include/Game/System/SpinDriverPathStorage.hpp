@@ -47,7 +47,6 @@ public:
     SpinDriverPathStorageGalaxy(const GalaxyStatusAccessor&);
 
     void resetAllData();
-    s32 setup(int, int, int, f32*);
     void updateValue(int, int, f32);
     s32 serialize(u8*, u32) const;
     s32 deserialize(const u8*, u32);

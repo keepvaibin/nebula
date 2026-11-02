@@ -17,7 +17,6 @@ public:
 
     void initRootHeap(void*, u32);
     bool alloc(JASHeap*, u32);
-    bool allocTail(JASHeap*, u32);
     bool free();
     void insertChild(JASHeap*, JASHeap*, void*, u32, bool);
     JASHeap* getTailHeap();

@@ -400,21 +400,6 @@ bool SwingRope::isAllPointsStop() const {
     return true;
 }
 
-bool SwingRope::isAllPointsSlow() const {
-    for (s32 idx = 0; idx < mNumPoints; idx++) {
-        if (MR::abs(mPoints[idx]->mVelocity.x) > ::sPointSpeedToSlow || MR::abs(mPoints[idx]->mVelocity.y) > ::sPointSpeedToSlow ||
-            MR::abs(mPoints[idx]->mVelocity.z) > ::sPointSpeedToSlow) {
-            return false;
-        }
-
-        if (mPoints[idx]->mUp.y < ::sPointNormalToSlow) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool SwingRope::isStretched() const {
     return MR::abs(mGrabCoord - mBasePos.distance(mSledPoint->mPosition)) < ::sCoordLooseToStretch;
 }

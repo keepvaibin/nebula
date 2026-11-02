@@ -68,7 +68,6 @@ namespace MR {
 
     char16_t* addPictureFontCode(char16_t* pDst, int code);
     char16_t* addPictureFontTag(char16_t* pDst, int tag);
-    char16_t* addPictureFontTagPlayerIcon(char16_t* pDst);
 
     /// @brief Writes a terminated newline character at the given wide character pointer.
     /// @param pDst The pointer to the wide character.

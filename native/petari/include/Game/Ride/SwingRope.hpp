@@ -36,7 +36,6 @@ public:
     void restrictPointToHead(s32, const TVec3f&, f32 length = 0.0f);
 
     bool isAllPointsStop() const;
-    bool isAllPointsSlow() const;
     bool isStretched() const;
     bool tryJump();
     void updateHangPoint();

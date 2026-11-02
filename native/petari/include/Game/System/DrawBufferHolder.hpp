@@ -32,7 +32,6 @@ public:
 
     ExecutorList& getExecuteList(s32 drawBufferType);
     bool isBufferGroupEmpty(s32 drawBufferType) const;
-    DrawBufferGroup* getDrawBufferGroup(s32 drawBufferType);
 
     // debug symbol map functions
     s32 getActiveActorCount(const char*);
@@ -44,7 +43,6 @@ public:
     void offDrawXluAll();
 
     // TODO: see .cpp
-    void dummy(s32);
 
     /* 0x00 */ MR::AssignableArray< DrawBufferGroup > mBufferGroups;
     /* 0x08 */ ExecutorList mExecuteLists[3];
