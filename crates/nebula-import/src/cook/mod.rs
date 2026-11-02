@@ -89,6 +89,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
     } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
         Some(native_data::layout(&bytes).with_context(|| format!("{name}: layout"))?)
+    } else if bytes.starts_with(b"AA_<") {
+        Some(native_data::baa(&bytes).with_context(|| format!("{name}: audio archive"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
         Some(native_data::bmg(&bytes).with_context(|| format!("{name}: messages"))?)
     } else if matches!(extension(name).as_str(), "bcsv" | "tbl" | "pa" | "bcam" | "banmt") {
