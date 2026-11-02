@@ -55,9 +55,6 @@ struct DeviceIdentity {
 // Workarounds the table turns on. Everything Nebula needs from the device beyond these is a capability the device
 // reports (features, extensions, formats): the context enables only what the device has.
 struct DeviceQuirks {
-    // Specialised TEV stages take a zero colour input A or B from a constant instead of a literal (Qualcomm compilers
-    // fold the literal wrongly).
-    bool tev_zero_from_constant = false;
     // scene target clears drawn instead of vkCmdClearAttachments (which races with draws on older Qualcomm drivers).
     bool clear_with_draw = false;
     // Readback buffers in host-coherent memory (cached memory reads back slower on Mali and Adreno).

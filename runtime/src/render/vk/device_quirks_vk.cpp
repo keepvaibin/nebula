@@ -134,9 +134,6 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     DeviceQuirks quirks;
     const bool qualcomm = id.driver == DriverKind::QualcommProprietary;
     const bool arm = id.driver == DriverKind::ArmProprietary;
-    // Dolphin DriverDetails BUG_BROKEN_TEV_COLOR_ZERO: Qualcomm's Android drivers from 512.700 (0x802bc000)
-    // miscompile specialised TEV shaders whose colour input A or B is the constant zero.
-    quirks.tev_zero_from_constant = qualcomm && id.driver_version.at_least(512, 700, 0);
     // ANGLE preferDrawClearOverVkCmdClearAttachments: vkCmdClearAttachments races with draws on Qualcomm drivers
     // before 512.762.12 (issuetracker.google.com/166809097).
     quirks.clear_with_draw = qualcomm && !id.driver_version.at_least(512, 762, 12);
@@ -199,7 +196,6 @@ std::string describe(const DeviceQuirks& quirks) {
             text += name;
         }
     };
-    add(quirks.tev_zero_from_constant, "tev-zero-from-constant");
     add(quirks.clear_with_draw, "clear-with-draw");
     add(quirks.coherent_readback, "coherent-readback");
     add(quirks.linear_readback, "linear-readback");
