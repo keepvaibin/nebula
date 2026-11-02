@@ -393,7 +393,7 @@ endif()
 
 # The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
 # (smg_game.dll, beside the executable or --module) on Nebula's renderer.
-add_executable(NebulaNative native/host/host_main.cpp runtime/src/native_thp_video.cpp)
+add_executable(NebulaNative native/host/host_main.cpp runtime/src/movie_video.cpp)
 target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
@@ -459,7 +459,7 @@ galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_t
     LIBS galaxy_host_pointer_events)
 galaxy_test(galaxy_diagnostic_stick_lease_tests SOURCES ${rt}/diagnostic_stick_lease_tests.cpp)
 galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
-galaxy_test(galaxy_native_thp_video_tests SOURCES ${rt}/native_thp_video_tests.cpp ${rt}/native_thp_video.cpp)
+galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_motion_signals_tests SOURCES ${rt}/motion_signals_tests.cpp)
 galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
@@ -609,7 +609,7 @@ if(NEBULA_VULKAN)
         target_link_libraries(galaxy_gx_vk PRIVATE mfplat mfreadwrite mfuuid d3d11)
     endif()
 
-    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/native_thp_video.cpp)
+    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/movie_video.cpp)
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(NebulaNativeVk PRIVATE galaxy_gx_vk galaxy_save_files galaxy_disc_files)

@@ -126,11 +126,11 @@ public:
     virtual s32 getResSize(const void*) const;
     virtual s32 countFile(const char*) const;
     JKRArcFinder* getFirstFile(const char*) const;
-    virtual u32 getExpandedResSize(const void*) const;
     virtual void* fetchResource(SDIFileEntry*, u32*) = 0;
     virtual void* fetchResource(void*, u32, SDIFileEntry*, u32*) = 0;
-    virtual void setExpandSize(SDIFileEntry*, u32);
-    virtual u32 getExpandSize(SDIFileEntry*) const;
+
+    // The importer expands every member and clears its compressed flag; a set flag was not cooked.
+    void panicIfCompressedEntry(const SDIFileEntry* pEntry) const;
 
     static JKRArchive* check_mount_already(s32);
     static JKRArchive* check_mount_already(s32, JKRHeap*);
@@ -161,10 +161,8 @@ public:
     /* 0x44 */ RarcInfoBlock* mInfoBlock;
     /* 0x48 */ SDIDirEntry* mDirs;
     /* 0x4C */ SDIFileEntry* mFiles;
-    /* 0x50 */ s32* mExpandSizes;
     /* 0x54 */ char* mStringTable;
     /* 0x58 */ u32 _58;
-    /* 0x5C */ int _5C;
     /* 0x60 */ EMountDirection mMountDir;
 
     // Each file entry's loaded data (the console kept it in SDIFileEntry::mFileData), indexed like mFiles.

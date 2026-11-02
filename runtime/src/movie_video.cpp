@@ -3,8 +3,11 @@
 // Copyright (c) 2022 Luke Street. MIT; full notice in THIRD-PARTY-NOTICES.md.
 // Changes: bounded input and planes, validated dimensions, EOF propagation, restart streams refused, the SDK's
 // quarter-IDCT behaviour, no Aurora runtime, fused multiply-adds without the C runtime (galaxy/fused_multiply_add.h).
-#include "galaxy/native_thp_video.h"
+#include "galaxy/movie_video.h"
 #include "galaxy/fused_multiply_add.h"
+#if defined(__aarch64__) || defined(_M_ARM64)
+#include <arm_neon.h>
+#endif
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
@@ -490,42 +493,122 @@ void write_block(u8* output, u16 width, u16 height, u16 blockX, u16 blockY, cons
   }
 }
 
-// One instantiation of native_thp_video_idct.inl per fused multiply-add, both
+// One instantiation of movie_video_idct.inl per fused multiply-add, both
 // bit-identical to the console's paired-single decoder. AArch64 and an x86 CPU
 // with FMA3 run the instruction; any other runs the exact SSE2 sequence.
 // Neither calls the C runtime's fma, which is a soft-float routine on x86 CPUs
 // without FMA3.
 namespace exact_sse2 {
 [[nodiscard]] inline float madd(float a, float b, float c) noexcept { return galaxy::fused_multiply_add_sse2(a, b, c); }
-#include "native_thp_video_idct.inl"
+#include "movie_video_idct.inl"
 } // namespace exact_sse2
 
+// The column pass of the inverse DCT, every column at once: the same operations in the same order as
+// transform_column, so the same planes as the scalar pass (the kernels test).
+template <class Vec, class Ops>
+inline void transform_columns(const Vec* x, Vec* out) noexcept {
+  const Vec bias = Ops::set(kOutputBias);
+  const Vec sum04 = Ops::add(Ops::add(x[0], x[4]), bias);
+  const Vec dif04 = Ops::add(Ops::sub(x[0], x[4]), bias);
+  const Vec sum26 = Ops::add(x[2], x[6]);
+  const Vec dif26 = Ops::sub(x[2], x[6]);
+  const Vec rotated = Ops::madd(dif26, Ops::set(kSqrt2), Ops::neg(sum26));
+  const Vec even0 = Ops::add(sum04, sum26);
+  const Vec even1 = Ops::add(dif04, rotated);
+  const Vec even2 = Ops::sub(dif04, rotated);
+  const Vec even3 = Ops::sub(sum04, sum26);
+
+  const Vec z10 = Ops::sub(x[5], x[3]);
+  const Vec z11 = Ops::add(x[1], x[7]);
+  const Vec z12 = Ops::sub(x[1], x[7]);
+  const Vec z13 = Ops::add(x[5], x[3]);
+  const Vec odd7 = Ops::add(z11, z13);
+  const Vec z5 = Ops::mul(Ops::add(z10, z12), Ops::set(kC2));
+  const Vec odd6 = Ops::sub(Ops::madd(Ops::neg(z10), Ops::set(kC2PlusC6), z5), odd7);
+  const Vec odd5 = Ops::madd(Ops::sub(z11, z13), Ops::set(kSqrt2), Ops::neg(odd6));
+  const Vec odd4 = Ops::sub(Ops::madd(Ops::neg(z12), Ops::set(kC2MinusC6), z5), odd5);
+
+  out[0] = Ops::add(even0, odd7);
+  out[1] = Ops::add(even1, odd6);
+  out[2] = Ops::add(even2, odd5);
+  out[3] = Ops::add(even3, odd4);
+  out[4] = Ops::sub(even3, odd4);
+  out[5] = Ops::sub(even2, odd5);
+  out[6] = Ops::sub(even1, odd6);
+  out[7] = Ops::sub(even0, odd7);
+}
+
+#define MOVIE_VIDEO_COLUMNS_SIMD 1
 #if GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+struct NeonOps {
+  static float32x4_t set(float v) noexcept { return vdupq_n_f32(v); }
+  static float32x4_t add(float32x4_t a, float32x4_t b) noexcept { return vaddq_f32(a, b); }
+  static float32x4_t sub(float32x4_t a, float32x4_t b) noexcept { return vsubq_f32(a, b); }
+  static float32x4_t mul(float32x4_t a, float32x4_t b) noexcept { return vmulq_f32(a, b); }
+  static float32x4_t neg(float32x4_t a) noexcept { return vnegq_f32(a); }
+  static float32x4_t madd(float32x4_t a, float32x4_t b, float32x4_t c) noexcept { return vfmaq_f32(c, a, b); }
+};
 namespace fma3 {
 [[nodiscard]] inline float madd(float a, float b, float c) noexcept { return galaxy::fused_multiply_add(a, b, c); }
-#include "native_thp_video_idct.inl"
+inline void columns_simd(const float* workspace, u8* output) noexcept {
+  for (size_t half = 0; half < 2; ++half) {
+    float32x4_t x[8];
+    float32x4_t out[8];
+    for (size_t row = 0; row < 8; ++row) x[row] = vld1q_f32(workspace + row * 8 + half * 4);
+    transform_columns<float32x4_t, NeonOps>(x, out);
+    for (size_t row = 0; row < 8; ++row) {
+      const float32x4_t scaled = vminq_f32(vmaxq_f32(vmulq_n_f32(out[row], 0.125f), vdupq_n_f32(0.0f)), vdupq_n_f32(255.0f));
+      const uint16x4_t words = vmovn_u32(vcvtq_u32_f32(scaled));
+      const uint8x8_t bytes = vmovn_u16(vcombine_u16(words, words));
+      std::memcpy(output + row * 8 + half * 4, &bytes, 4);
+    }
+  }
+}
+#include "movie_video_idct.inl"
 } // namespace fma3
 #else
 #if defined(__clang__)
-#pragma clang attribute push(__attribute__((target("fma"))), apply_to = function)
+#pragma clang attribute push(__attribute__((target("avx,fma"))), apply_to = function)
 #endif
+struct AvxOps {
+  static __m256 set(float v) noexcept { return _mm256_set1_ps(v); }
+  static __m256 add(__m256 a, __m256 b) noexcept { return _mm256_add_ps(a, b); }
+  static __m256 sub(__m256 a, __m256 b) noexcept { return _mm256_sub_ps(a, b); }
+  static __m256 mul(__m256 a, __m256 b) noexcept { return _mm256_mul_ps(a, b); }
+  static __m256 neg(__m256 a) noexcept { return _mm256_xor_ps(a, _mm256_set1_ps(-0.0f)); }
+  static __m256 madd(__m256 a, __m256 b, __m256 c) noexcept { return _mm256_fmadd_ps(a, b, c); }
+};
 namespace fma3 {
 [[nodiscard]] inline float madd(float a, float b, float c) noexcept { return galaxy::fused_multiply_add_fma3(a, b, c); }
-#include "native_thp_video_idct.inl"
+inline void columns_simd(const float* workspace, u8* output) noexcept {
+  __m256 x[8];
+  __m256 out[8];
+  for (size_t row = 0; row < 8; ++row) x[row] = _mm256_loadu_ps(workspace + row * 8);
+  transform_columns<__m256, AvxOps>(x, out);
+  for (size_t row = 0; row < 8; ++row) {
+    const __m256 scaled = _mm256_min_ps(_mm256_max_ps(_mm256_mul_ps(out[row], _mm256_set1_ps(0.125f)), _mm256_setzero_ps()), _mm256_set1_ps(255.0f));
+    const __m256i words = _mm256_cvttps_epi32(scaled);
+    const __m128i packed = _mm_packs_epi32(_mm256_castsi256_si128(words), _mm256_extractf128_si256(words, 1));
+    _mm_storel_epi64(reinterpret_cast<__m128i*>(output + row * 8), _mm_packus_epi16(packed, packed));
+  }
+  _mm256_zeroupper();
+}
+#include "movie_video_idct.inl"
 } // namespace fma3
 #if defined(__clang__)
 #pragma clang attribute pop
 #endif
 #endif
+#undef MOVIE_VIDEO_COLUMNS_SIMD
 } // namespace
 
-namespace galaxy::thp {
-s32 decode_video(std::span<const u8> file, u16 width, u16 height, std::span<u8> tileY, std::span<u8> tileU, std::span<u8> tileV,
+namespace galaxy::movie {
+s32 decode_video(std::span<const u8> file, u16 width, u16 height, std::span<u8> planeY, std::span<u8> planeU, std::span<u8> planeV,
                  VideoKernel kernel) {
   if (file.empty()) {
     return kNoInput;
   }
-  if (tileY.empty() || tileU.empty() || tileV.empty()) {
+  if (planeY.empty() || planeU.empty() || planeV.empty()) {
     return kNoOutput;
   }
 
@@ -536,14 +619,13 @@ s32 decode_video(std::span<const u8> file, u16 width, u16 height, std::span<u8> 
   }
 
   if (context.width != width || context.height != height || width > 4096 || height > 4096 || context.restartInterval != 0) return kBadSyntax;
-  auto plane_size = [](u16 w, u16 h) { return ((size_t(w) + 7) / 8) * ((size_t(h) + 3) / 4) * 32; };
-  const auto chromaSize = plane_size(static_cast<u16>((width + 1) / 2), static_cast<u16>((height + 1) / 2));
-  if (tileY.size() < plane_size(width, height) || tileU.size() < chromaSize || tileV.size() < chromaSize) return kNoOutput;
+  const size_t chromaSize = size_t((width + 1) / 2) * ((height + 1) / 2);
+  if (planeY.size() < size_t(width) * height || planeU.size() < chromaSize || planeV.size() < chromaSize) return kNoOutput;
 
   const bool instruction = GALAXY_FUSED_MULTIPLY_ADD_IS_BASE || galaxy::host_has_fma3();
   const bool fma = kernel == VideoKernel::Fma3 || (kernel == VideoKernel::Automatic && instruction);
   if (fma && !instruction) return kNoOutput;
-  return fma ? fma3::decode_scan(file, context, tileY.data(), tileU.data(), tileV.data())
-             : exact_sse2::decode_scan(file, context, tileY.data(), tileU.data(), tileV.data());
+  return fma ? fma3::decode_scan(file, context, planeY.data(), planeU.data(), planeV.data())
+             : exact_sse2::decode_scan(file, context, planeY.data(), planeU.data(), planeV.data());
 }
 }

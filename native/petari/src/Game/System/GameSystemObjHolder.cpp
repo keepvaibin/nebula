@@ -49,10 +49,10 @@ void GameSystemObjHolder::initMessageResource() {
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
     snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
 
-    void* pSystemMessageArchive = MR::decompressFileFromArchive(pArchive, systemMessagePath, nullptr, 0);
+    void* pSystemMessageArchive = MR::copyFileFromArchive(pArchive, systemMessagePath, nullptr, 0);
     MR::createAndAddArchive(pSystemMessageArchive, pHeap, "/Memory/SystemMessage.arc");
 
-    void* pErrorMessageWindowArchive = MR::decompressFileFromArchive(pArchive, "/LayoutData/ErrorMessageWindow.arc", pHeap, 32);
+    void* pErrorMessageWindowArchive = MR::copyFileFromArchive(pArchive, "/LayoutData/ErrorMessageWindow.arc", pHeap, 32);
     MR::createAndAddArchive(pErrorMessageWindowArchive, pHeap, "/Memory/ErrorMessageWindow.arc");
 
     MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow.arc");

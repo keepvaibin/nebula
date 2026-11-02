@@ -108,7 +108,7 @@
 #include "Game/Screen/SurfingGuidance.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/Screen/SystemWipeHolder.hpp"
-#include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/Screen/MovieStream.hpp"
 #include "Game/Screen/TimeLimitLayout.hpp"
 #include "Game/Screen/TitleSequenceProduct.hpp"
 #include "Game/Screen/WipeFade.hpp"

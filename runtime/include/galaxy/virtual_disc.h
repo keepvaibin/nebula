@@ -62,6 +62,9 @@ public:
     // A disc file's bytes, its pieces read (the DOL's patches: main.dol is a file Riivolution can patch).
     static std::vector<std::uint8_t> materialize(const DiscNode& file, const std::uint8_t* partition,
                                                  std::uint64_t partition_size);
+    // `size` bytes of a disc file at `at`.
+    static void read_pieces(const DiscNode& file, std::uint64_t at, std::uint64_t size, std::uint8_t* dst,
+                            const std::uint8_t* partition, std::uint64_t partition_size);
 
 private:
     struct Placed {
@@ -69,8 +72,6 @@ private:
         const DiscNode* file;
         std::string path;     // on the disc
     };
-    static void read_pieces(const DiscNode& file, std::uint64_t at, std::uint64_t size, std::uint8_t* dst,
-                            const std::uint8_t* partition, std::uint64_t partition_size);
 
     DiscNode root_;
     std::uint64_t partition_size_ = 0;

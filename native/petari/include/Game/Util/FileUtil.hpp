@@ -98,8 +98,8 @@ namespace MR {
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file within the archive file.
     /// @param[in,out] pHeap A pointer to the target heap.
     /// @param[in] align The alignment for the allocation.
-    /// @return A pointer to the decompressed file data.
-    void* decompressFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align);
+    /// @return A pointer to the copy.
+    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align);
 
     /// @brief Determines if an file is currently loaded.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.

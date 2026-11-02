@@ -27,9 +27,6 @@ extern "C" {
 #ifdef __cplusplus
 extern "C" {
 #endif
-// A THP movie's opening (frame -2), each frame it draws and its close (-1) (movie_frame in nebula_game_api.h).
-void __NebulaMovieFrame(const char* pName, s32 frame, f32 frameRate, const void* pY, const void* pU, const void* pV,
-                        u32 width, u32 height);
 // A wait on another thread's work (a busy loop the console's interrupts preempt): runs what is pending, or sleeps until
 // a host thread raises something.
 void __NebulaPoll(void);

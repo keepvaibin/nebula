@@ -50,6 +50,12 @@ void JKRArchive::panicIfNotCooked(const void* pHeader) {
     }
 }
 
+void JKRArchive::panicIfCompressedEntry(const SDIFileEntry* pEntry) const {
+    if ((pEntry->mFlag & FILE_FLAG_COMPRESSED) != 0) {
+        JUTException::panic_f(__FILE__, __LINE__, "%s: a compressed member, not cooked (the importer expands them)", mStringTable + pEntry->mNameOffset);
+    }
+}
+
 bool JKRArchive::isSameName(CArcName& rName, u32 nameOffset, u16 hash) const {
     if (rName.mHash != hash) {
         return false;
@@ -236,20 +242,3 @@ const char* JKRArchive::CArcName::store(const char* name, char endChar) {
     return name + 1;
 }
 
-void JKRArchive::setExpandSize(SDIFileEntry* pFile, u32 size) {
-    u32 fileIndex = static_cast< u32 >(pFile - mFiles);
-    if (mExpandSizes == nullptr || fileIndex >= mInfoBlock->mNrFiles) {
-        return;
-    }
-
-    mExpandSizes[fileIndex] = size;
-}
-
-u32 JKRArchive::getExpandSize(SDIFileEntry* pFile) const {
-    u32 fileIndex = static_cast< u32 >(pFile - mFiles);
-    if (mExpandSizes == nullptr || fileIndex >= mInfoBlock->mNrFiles) {
-        return 0;
-    }
-
-    return mExpandSizes[fileIndex];
-}

@@ -2,17 +2,21 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace galaxy::audio {
 namespace {
 
-[[nodiscard]] std::uint32_t be32(const std::uint8_t* p) noexcept {
-    return (static_cast<std::uint32_t>(p[0]) << 24u) | (static_cast<std::uint32_t>(p[1]) << 16u) |
-           (static_cast<std::uint32_t>(p[2]) << 8u) | static_cast<std::uint32_t>(p[3]);
+[[nodiscard]] std::uint32_t read32(const std::uint8_t* p) noexcept {
+    std::uint32_t value;
+    std::memcpy(&value, p, sizeof(value));
+    return value;
 }
 
-[[nodiscard]] std::int16_t be16(const std::uint8_t* p) noexcept {
-    return static_cast<std::int16_t>((static_cast<std::uint16_t>(p[0]) << 8u) | p[1]);
+[[nodiscard]] std::int16_t read16(const std::uint8_t* p) noexcept {
+    std::int16_t value;
+    std::memcpy(&value, p, sizeof(value));
+    return value;
 }
 
 // The player's volume curve: the square of volume / 127, as a 15-bit fraction.
@@ -22,7 +26,7 @@ namespace {
 }
 
 // The record's header: the offset of the second channel's data, the samples, each channel's eight predictor pairs
-// and its two history samples (big-endian); the data from byte 0x50. DSP-ADPCM: 8-byte frames of a header byte
+// and its two history samples (host order, cook/thp.rs); the data from byte 0x50. DSP-ADPCM: 8-byte frames of a header byte
 // (predictor in bits 4-6, scale in bits 0-3) and 14 four-bit samples.
 constexpr std::size_t kHeaderBytes = 0x50u;
 
@@ -44,8 +48,8 @@ void decode_channel(const std::uint8_t* data, const std::uint8_t* end, const std
         const std::uint8_t byte = frame[1u + nibble_index / 2u];
         const std::int32_t nibble = (nibble_index & 1u) != 0u ? static_cast<std::int8_t>(byte << 4u) >> 4
                                                                : static_cast<std::int8_t>(byte) >> 4;
-        const std::int64_t c1 = be16(coefficients + predictor * 4u);
-        const std::int64_t c2 = be16(coefficients + predictor * 4u + 2u);
+        const std::int64_t c1 = read16(coefficients + predictor * 4u);
+        const std::int64_t c2 = read16(coefficients + predictor * 4u + 2u);
         std::int64_t value = c1 * history1 + c2 * history2 + (static_cast<std::int64_t>(nibble) << scale << 11);
         value = std::clamp<std::int64_t>((value << 5) + 0x8000, -2147483648LL, 2147483647LL);
         const auto sample = static_cast<std::int16_t>(value >> 16);
@@ -64,8 +68,8 @@ bool MovieAudio::decode(const std::uint8_t* record, std::size_t size, std::vecto
     if (record == nullptr || size < kHeaderBytes) {
         return false;
     }
-    const std::uint32_t second = be32(record);
-    const std::uint32_t samples = be32(record + 4u);
+    const std::uint32_t second = read32(record);
+    const std::uint32_t samples = read32(record + 4u);
     if (samples > 0x10000u) {
         return false;
     }
@@ -73,15 +77,15 @@ bool MovieAudio::decode(const std::uint8_t* record, std::size_t size, std::vecto
     const std::uint8_t* end = record + size;
     const std::uint8_t* left = record + kHeaderBytes;
     if (second == 0u) {
-        decode_channel(left, end, record + 8u, be16(record + 0x48u), be16(record + 0x4Au), samples, out.data(),
+        decode_channel(left, end, record + 8u, read16(record + 0x48u), read16(record + 0x4Au), samples, out.data(),
                        out.data() + 1);
         return true;
     }
     if (second > size - kHeaderBytes) {
         return false;
     }
-    decode_channel(left, end, record + 8u, be16(record + 0x48u), be16(record + 0x4Au), samples, out.data(), nullptr);
-    decode_channel(left + second, end, record + 0x28u, be16(record + 0x4Cu), be16(record + 0x4Eu), samples,
+    decode_channel(left, end, record + 8u, read16(record + 0x48u), read16(record + 0x4Au), samples, out.data(), nullptr);
+    decode_channel(left + second, end, record + 0x28u, read16(record + 0x4Cu), read16(record + 0x4Eu), samples,
                    out.data() + 1, nullptr);
     return true;
 }
