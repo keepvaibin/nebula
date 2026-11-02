@@ -21,7 +21,9 @@ typedef struct NebulaCookedMaterial {
     uint8_t blend_op, blend_src, blend_dst, logic_op;
     uint8_t depth_test, depth_func, depth_write, reserved_depth;
     uint8_t cull, early_depth, reserved_state[2];
-    uint8_t reserved[12];
+    uint8_t coord_map[8]; /* the texture each coordinate samples, for its scale (255 none) */
+    uint8_t used_maps, used_coords; /* bit per map and coordinate the stages use */
+    uint8_t reserved[2];
     uint32_t passes[64];
 } NebulaCookedMaterial;
 
@@ -38,7 +40,7 @@ static inline const NebulaCookedMaterial* nebula_cooked_materials(const void* da
     if (size < sizeof(footer) || size % 16 != 0) return NULL;
     memcpy(&footer, (const uint8_t*)data + size - sizeof(footer), sizeof(footer));
     if (memcmp(footer.magic, "NMAT", 4) != 0) return NULL;
-    if (footer.version != 2 || footer.stride != sizeof(NebulaCookedMaterial) ||
+    if (footer.version != 3 || footer.stride != sizeof(NebulaCookedMaterial) ||
         footer.count > (size - sizeof(footer)) / sizeof(NebulaCookedMaterial)) return NULL;
     const uint8_t* first = (const uint8_t*)data + size - sizeof(footer) - footer.count * sizeof(NebulaCookedMaterial);
     if ((uintptr_t)first % 16 != 0) return NULL;

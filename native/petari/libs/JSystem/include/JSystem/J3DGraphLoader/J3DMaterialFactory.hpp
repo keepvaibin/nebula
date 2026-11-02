@@ -73,11 +73,9 @@ class J3DMaterialFactory {
 public:
     enum MaterialType {
         MATERIAL_TYPE_NORMAL = 0,
-        MATERIAL_TYPE_LOCKED = 1,
         MATERIAL_TYPE_PATCHED = 2,
     };
 
-    J3DMaterialFactory(J3DMaterialDLBlock const&);
     J3DMaterialFactory(J3DMaterialBlock const&);
     u16 countUniqueMaterials();
     u32 countTexGens(int) const;
@@ -86,11 +84,6 @@ public:
     J3DMaterial* createNormalMaterial(J3DMaterial*, int, u32) const;
     J3DMaterial* createPatchedMaterial(J3DMaterial*, int, u32) const;
     void modifyPatchedCurrentMtx(J3DMaterial*, int) const;
-    J3DMaterial* createLockedMaterial(J3DMaterial*, int, u32) const;
-    u32 calcSize(J3DMaterial*, MaterialType, int, u32) const;
-    u32 calcSizeNormalMaterial(J3DMaterial*, int, u32) const;
-    u32 calcSizePatchedMaterial(J3DMaterial*, int, u32) const;
-    u32 calcSizeLockedMaterial(J3DMaterial*, int, u32) const;
     J3DGXColor newMatColor(int, int) const;
     const u8 newColorChanNum(int) const;
     J3DColorChan newColorChan(int, int) const;
@@ -100,17 +93,10 @@ public:
     J3DTexMtx* newTexMtx(int, int) const;
     u8 newCullMode(int) const;
     u16 newTexNo(int, int) const;
-    J3DTevOrder newTevOrder(int, int) const;
     J3DGXColorS10 newTevColor(int, int) const;
     J3DGXColor newTevKColor(int, int) const;
-    const u8 newTevStageNum(int) const;
-    J3DTevStage newTevStage(int, int) const;
-    J3DTevSwapModeTable newTevSwapModeTable(int, int) const;
     u8 newIndTexStageNum(int) const;
-    J3DIndTexOrder newIndTexOrder(int, int) const;
     J3DIndTexMtx newIndTexMtx(int, int) const;
-    J3DIndTevStage newIndTevStage(int, int) const;
-    J3DIndTexCoordScale newIndTexCoordScale(int, int) const;
     J3DFog newFog(int) const;
     J3DAlphaComp newAlphaComp(int) const;
     J3DBlend newBlend(int) const;
@@ -142,13 +128,9 @@ public:
     /* 0x34 */ J3DTexMtxInfo* field_0x34;
     /* 0x38 */ u16* mpTexNo;
     /* 0x3C */ GpuCullMode* mpCullMode;
-    /* 0x40 */ J3DTevOrderInfo* mpTevOrderInfo;
     /* 0x44 */ NebulaColor16* mpTevColor;
     /* 0x48 */ NebulaColor8* mpTevKColor;
     /* 0x4C */ u8* mpTevStageNum;
-    /* 0x50 */ J3DTevStageInfo* mpTevStageInfo;
-    /* 0x54 */ J3DTevSwapModeInfo* mpTevSwapModeInfo;
-    /* 0x58 */ J3DTevSwapModeTableInfo* mpTevSwapModeTableInfo;
     /* 0x5C */ J3DFogInfo* mpFogInfo;
     /* 0x60 */ J3DAlphaCompInfo* mpAlphaCompInfo;
     /* 0x64 */ J3DBlendInfo* mpBlendInfo;

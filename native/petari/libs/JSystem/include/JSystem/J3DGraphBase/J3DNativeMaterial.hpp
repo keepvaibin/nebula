@@ -47,7 +47,7 @@ struct J3DMaterialValues {
     u8 light_mask;  // the lights below that are set
     u8 alpha_ref[2];
     struct { f32 m[2][3]; s8 scale; } ind_matrix[3];
-    struct { u16 scale_s, scale_t; u8 bias_s, bias_t; } tex_coord_scale[8];
+    struct { u16 scale_s, scale_t; } tex_coord_scale[8];
     NebulaMaterialTexture texture[8];
     NebulaMaterialLight light[8];
     struct { f32 start, end, near_z, far_z; u8 color[4]; } fog;

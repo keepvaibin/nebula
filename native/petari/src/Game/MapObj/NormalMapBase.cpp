@@ -398,21 +398,7 @@ void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
 
 void NormalMapBase::loadTexture1(J3DMaterial* pMaterial) const {
     J3DTevBlock* pBlock = pMaterial->getTevBlock();
-    u32 count;
-    switch (pBlock->getType()) {
-    case 'TVB1':
-        count = 1;
-        break;
-    case 'TVB2':
-        count = 2;
-        break;
-    case 'TVB4':
-        count = 4;
-        break;
-    case 'TV16':
-        count = 8;
-        break;
-    }
+    const u32 count = pBlock->getTexCapacity();
 
     u16 textures[8];
     for (u32 i = 0; i < count; i++) {
