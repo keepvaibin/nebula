@@ -105,7 +105,7 @@ target_compile_options(smg_game PRIVATE
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
-        -fno-threadsafe-statics>
+>
     # Every new-expression tests the allocation before constructing, as the console's compiler does: JKRHeap's
     # operator new and the sound pools' (JASPoolAllocObject) return null when full, and the game checks
     # (JAISeMgr::newSe_). Standard C++ lets the compiler drop those checks for an operator new that is not
