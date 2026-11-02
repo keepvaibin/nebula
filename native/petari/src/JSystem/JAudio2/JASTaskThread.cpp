@@ -5,7 +5,7 @@
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 
-JASTaskThread::JASTaskThread(int priority, int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount, priority) {
+JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount) {
     _84 = false;
     threadQueue_.init();
 }

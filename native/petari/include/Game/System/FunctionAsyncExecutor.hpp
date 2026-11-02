@@ -16,7 +16,7 @@ namespace MR {
 
 class FunctionAsyncExecInfo {
 public:
-    FunctionAsyncExecInfo(MR::FunctorBase*, int, const char*);
+    FunctionAsyncExecInfo(MR::FunctorBase*, const char*);
 
     ~FunctionAsyncExecInfo();
 
@@ -28,7 +28,6 @@ public:
 
     /* 0x00 */ MR::FunctorBase* mFunc;
     JKRHeap* mStarterHeap;  // the current heap where it was started
-    /* 0x04 */ int mPriority;
     /* 0x08 */ const char* mName;
     /* 0x0C */ NebulaAtomic< bool > mIsEnd;
     /* 0x10 */ NebulaMessageQueue mQueue;
@@ -62,11 +61,11 @@ public:
     FunctionAsyncExecutor();
 
     void update();
-    void start(const MR::FunctorBase&, int, const char*);
+    void start(const MR::FunctorBase&, const char*);
     bool startOnMainThread(const MR::FunctorBase&, const char*);
     void waitForEnd(const char*);
     bool isEnd(const char*) const;
-    FunctionAsyncExecInfo* createAndAddExecInfo(const MR::FunctorBase&, int, const char*);
+    FunctionAsyncExecInfo* createAndAddExecInfo(const MR::FunctorBase&, const char*);
     FunctionAsyncExecutorThread* getSuspendThread();
 
     /* 0x000 */ FunctionAsyncExecutorThread* mThreads[2];

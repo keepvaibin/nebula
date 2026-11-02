@@ -16,7 +16,7 @@ namespace {
     }
 };  // namespace
 
-FileLoaderThread::FileLoaderThread(int priority, int msgCount, JKRHeap* pHeap) : GameThread(0x8000, msgCount, priority, pHeap) {
+FileLoaderThread::FileLoaderThread(int msgCount, JKRHeap* pHeap) : GameThread(0x8000, msgCount, pHeap) {
 }
 
 void* FileLoaderThread::run() {

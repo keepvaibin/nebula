@@ -22,11 +22,7 @@
 JAU_JASInitializer::JAU_JASInitializer() {
     audioMemory_ = 0;
     audioMemSize_ = 0;
-    dvdThreadId_ = -1;
-    audioThreadId_ = -1;
     heapSize_ = 0x1000;
-    dvdThreadPriority_ = 3;
-    audioThreadPriority_ = 2;
     field_0x1c = 0x80;
     dspLevel_ = 1.0f;
     aramBlockSize_ = 0x2760;

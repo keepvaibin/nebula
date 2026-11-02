@@ -353,7 +353,7 @@ void GameSystemSceneController::exeWaitDrawDoneScene() {
 void GameSystemSceneController::exeDestroyScene() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", mCurrSceneControlInfo.mScene);
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::destroyScene), 17, "\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */);
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::destroyScene), "\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */);
     }
 
     if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */)) {
@@ -384,7 +384,7 @@ void GameSystemSceneController::exeChangeWaveBank() {
 void GameSystemSceneController::exeInitializeScene() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", mNextSceneControlInfo.mScene);
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::initializeScene), 17, "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */);
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::initializeScene), "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */);
     }
 
     if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */)) {

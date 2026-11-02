@@ -102,8 +102,8 @@ namespace MR {
         getGameSystemObjHolder()->clearRequestFileInfo(param1);
     }
 
-    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, int threadPriority, const char* pThreadName) {
-        ::getFunctionAsyncExecutor()->start(rFunc, threadPriority, pThreadName);
+    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, const char* pThreadName) {
+        ::getFunctionAsyncExecutor()->start(rFunc, pThreadName);
     }
 
     bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase& rFunc, const char* pThreadName) {

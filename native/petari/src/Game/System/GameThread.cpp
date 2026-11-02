@@ -2,13 +2,13 @@
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
 
-GameThread::GameThread(u32 stackSize, int messageCount, int priority, JKRHeap* pHeap) {
+GameThread::GameThread(u32 stackSize, int messageCount, JKRHeap* pHeap) {
     mStartCurrentHeap = JKRHeap::sCurrentHeap;
     if (pHeap == nullptr) {
         pHeap = JKRHeap::sCurrentHeap;
     }
 
-    initHeapSpecified(pHeap, stackSize, priority);
+    initHeapSpecified(pHeap, stackSize);
     initMessageQueue(mHeap, messageCount);
 }
 
@@ -31,7 +31,7 @@ void GameThread::initMessageQueue(JKRHeap* pHeap, int messageCount) {
     mQueue.init(mMessageArray, mMessageCount);
 }
 
-void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize, int priority) {
+void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize) {
     mHeap = pHeap;
     mStackSize = stackSize & ~31;  // the host thread's own stack
     mThread = new (mHeap, 32) NebulaThread();

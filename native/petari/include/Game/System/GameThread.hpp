@@ -8,13 +8,13 @@ class JKRHeap;
 // A game thread: a host thread (NebulaKernel) with its message queue; subclasses run their work in run().
 class GameThread {
 public:
-    GameThread(u32, int, int, JKRHeap*);
+    GameThread(u32, int, JKRHeap*);
 
     virtual ~GameThread();
     virtual void* run();
 
     void initMessageQueue(JKRHeap*, int);
-    void initHeapSpecified(JKRHeap*, u32, int);
+    void initHeapSpecified(JKRHeap*, u32);
     static void* start(void*);
 
     JKRHeap* mHeap;

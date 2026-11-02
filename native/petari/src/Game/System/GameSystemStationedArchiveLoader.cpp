@@ -156,7 +156,7 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
     if (MR::isFirstStep(this)) {
         mHeapHolder = new PlayerHeapHolder();
 
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, true), 14,
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, true),
                                       "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
     }
 
@@ -173,7 +173,7 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
 
 void GameSystemStationedArchiveLoader::exeLoadStationedArchiveOthers() {
     if (MR::isFirstStep(this)) {
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers), 14,
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers),
                                       "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
     }
 
@@ -200,7 +200,7 @@ void GameSystemStationedArchiveLoader::exeChangeArchivePlayer() {
     if (MR::isFirstStep(this)) {
         mHeapHolder->dispose();
         bool isMario = mHeapHolder->mIsDataMario;
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, isMario), 14,
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, isMario),
                                       "\203\166\203\214\203\103\203\204\201\133\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* プレイヤーリソース読み込み */);
     }
 

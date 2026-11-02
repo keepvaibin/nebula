@@ -26,8 +26,8 @@ public:
         u32 _10;
     };
 
-    JKRThread(u32 stack_size, int message_count, int param_3);
-    JKRThread(JKRHeap* heap, u32 stack_size, int message_count, int param_4);
+    JKRThread(u32 stack_size, int message_count);
+    JKRThread(JKRHeap* heap, u32 stack_size, int message_count);
     JKRThread(NebulaThread* thread, int message_count);
 
     virtual ~JKRThread();
@@ -36,7 +36,7 @@ public:
     }
 
     void setCommon_mesgQueue(JKRHeap* heap, int message_count);
-    void setCommon_heapSpecified(JKRHeap* heap, u32 stack_size, int param_3);
+    void setCommon_heapSpecified(JKRHeap* heap, u32 stack_size);
 
     NebulaThread* getThreadRecord() const {
         return mThread;
