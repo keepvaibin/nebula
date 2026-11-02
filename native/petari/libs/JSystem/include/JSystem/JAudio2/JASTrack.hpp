@@ -109,10 +109,11 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     void noteOffAll(u16);
     void mute(bool);
     void setOscScale(u32, f32);
-    void setOscTable(u32, JASOscillator::Point const*);
+    // A table in a sequence's bytecode (high byte first), copied into the track in host order.
+    void setOscTable(u32, u8 const*);
     void setOscAdsr(s16, s16, s16, s16, u16);
     // The coefficients as the sequence data has them (big-endian).
-    void setFIR(NEBULA_BE(s16) const*);
+    void setFIR(u8 const*);
     void setIIR(s16 const*);
     u16 readPortSelf(u32);
     void writePortSelf(u32, u16);
@@ -358,6 +359,8 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
 #endif
     /* 0x0E4 */ JASOscillator::Data mOscParam[OSC_NUM];
     /* 0x114 */ JASOscillator::Point mOscPoint[4];
+    static const u32 cOscTablePoints = 32;
+    JASOscillator::Point mOscTable[OSC_NUM][cOscTablePoints];
     /* 0x12C */ JASTrack* mParent;
     /* 0x130 */ JASTrack* mChildren[MAX_CHILDREN];
     /* 0x170 */ TChannelMgr* mChannelMgrs[CHANNEL_MGR_MAX];
