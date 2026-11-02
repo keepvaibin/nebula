@@ -119,7 +119,7 @@ void BeeFlowerHover::exeHardTouch() {
         MR::invalidateCollisionParts(this);
         MR::invalidateShadow(this, 0);
         MR::onCalcShadowOneTime(this, 0);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::shakeCameraNormal();
     }
 

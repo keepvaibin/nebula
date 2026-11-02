@@ -111,13 +111,13 @@ void SpiderCoin::exeTouch() {
     mPosition.set(*mPointPos);
     mRotation.y += ::sRotateSpeedY;
     mRotation.y = MR::repeatDegree(mRotation.y);
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testCorePadTriggerA(WPAD_CHAN1)) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testCorePadTriggerA(GAMEPAD_CHAN1)) {
         kill();
         return;
     }
 
-    if (!tryRub(WPAD_CHAN0, &mPad0Velocity) && !tryRub(WPAD_CHAN1, &mPad1Velocity) && !MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */) &&
-        !MR::isStarPointerPointing(this, WPAD_CHAN1, true, "\216\343" /* 弱 */)) {
+    if (!tryRub(GAMEPAD_CHAN0, &mPad0Velocity) && !tryRub(GAMEPAD_CHAN1, &mPad1Velocity) && !MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */) &&
+        !MR::isStarPointerPointing(this, GAMEPAD_CHAN1, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvTouchAndApart));
     }
 }
@@ -129,7 +129,7 @@ void SpiderCoin::exeTouchAndApart() {
         MR::getEaseOutValue((::sStepToucnAndApart - getNerveStep()) / static_cast< f32 >(::sStepToucnAndApart), 0.0f, 1.0f, 1.0f) * ::sRotateSpeedY;
     MR::repeatDegree(&mRotation.y);
 
-    if (MR::isGreaterStep(this, ::sStepToTouch2nd) && MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (MR::isGreaterStep(this, ::sStepToTouch2nd) && MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */)) {
         kill();
         return;
     }

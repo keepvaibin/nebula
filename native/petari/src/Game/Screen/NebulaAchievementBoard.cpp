@@ -855,10 +855,10 @@ namespace {
 
     // The pointer in board units; false when it is off the screen.
     bool readPointer(NebulaBoardParts* p, f32* pX, f32* pY) {
-        if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+        if (!MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
             return false;
         }
-        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0);
+        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(GAMEPAD_CHAN0);
         TVec2f layout;
         MR::convertScreenPosToLayoutPos(&layout, screen);
         *pX = layout.x / p->mScaleX;
@@ -1035,7 +1035,7 @@ namespace {
             }
         }
 
-        if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+        if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
             if (p->mOverBack) {
                 return true;
             }
@@ -1053,7 +1053,7 @@ namespace {
             }
         }
         if (p->mDragging) {
-            if (!MR::testCorePadButtonA(WPAD_CHAN0)) {
+            if (!MR::testCorePadButtonA(GAMEPAD_CHAN0)) {
                 p->mDragging = false;
             } else {
                 const f32 delta = y - p->mDragStartY;
@@ -1676,9 +1676,9 @@ void NebulaAchievementBoard::exeWait() {
         setNerve(&NrvNebulaAchievementBoard::NebulaAchievementBoardNrvDisappear::sInstance);
         return;
     }
-    if (MR::testCorePadTriggerMinus(WPAD_CHAN0)) {
+    if (MR::testCorePadTriggerMinus(GAMEPAD_CHAN0)) {
         stepTab(p, -1);
-    } else if (MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+    } else if (MR::testCorePadTriggerPlus(GAMEPAD_CHAN0)) {
         stepTab(p, 1);
     }
     const s32 press = NebulaMenuFocus::readPress(&p->mRepeat);

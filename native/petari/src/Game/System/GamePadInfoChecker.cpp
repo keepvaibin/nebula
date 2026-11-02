@@ -1,31 +1,31 @@
-#include "Game/System/WPadInfoChecker.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadInfoChecker.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadHolder.hpp"
 
 namespace {
     static const s32 sCheckInfoInterval = 18000;
 };  // namespace
 
-WPadInfoChecker::WPadInfoChecker(WPad* pPad) : mPad(pPad) {
+GamePadInfoChecker::GamePadInfoChecker(GamePad* pPad) : mPad(pPad) {
     reset();
 }
 
-s32 WPadInfoChecker::getBattery() const {
+s32 GamePadInfoChecker::getBattery() const {
     return mBattery;
 }
 
-void WPadInfoChecker::startCheck() {
+void GamePadInfoChecker::startCheck() {
     mBattery = mPad->mReadInfo->mDevice.battery;
 
     mCheckInfoFrame = ::sCheckInfoInterval;
 }
 
-void WPadInfoChecker::reset() {
+void GamePadInfoChecker::reset() {
     mCheckInfoFrame = 0;
     mBattery = -1;
 }
 
-void WPadInfoChecker::update() {
+void GamePadInfoChecker::update() {
     if (mPad->mIsConnected) {
         if (mCheckInfoFrame <= 0) {
             startCheck();

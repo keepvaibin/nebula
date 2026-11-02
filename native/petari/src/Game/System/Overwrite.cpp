@@ -3,7 +3,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/System/WPad.hpp"
+#include "Game/System/GamePad.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 

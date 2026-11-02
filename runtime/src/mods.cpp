@@ -4,6 +4,7 @@
 // defaults and patch order are Riivolution's as Dolphin reproduces them.
 
 #include "galaxy/mods.h"
+#include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/cooker_bridge.h"
@@ -415,7 +416,7 @@ std::string language_of(std::string_view disc_path) {
 
 // Notes beside a mod's files: never placed on the disc.
 bool mod_note(const fs::path& file) {
-    const std::string extension = lower(file.extension().string());
+    const std::string extension = lower(galaxy::path_text(file.extension()));
     for (const char* known : {".txt", ".md", ".pdf", ".url", ".htm", ".html", ".rtf", ".png", ".jpg", ".jpeg",
                               ".webp", ".gif", ".nfo", ".xml", ".ini", ".db", ".zip", ".7z", ".rar"}) {
         if (extension == known) return true;
@@ -484,7 +485,7 @@ ModLayout layout_of(const fs::path& mod) {
             layout.sd_root = root;
             layout.riivolution_dir = *riiv;
             for (const auto& entry : fs::directory_iterator(*riiv, error)) {
-                if (entry.is_regular_file(error) && lower(entry.path().extension().string()) == ".xml") {
+                if (entry.is_regular_file(error) && lower(galaxy::path_text(entry.path().extension())) == ".xml") {
                     layout.xmls.push_back(entry.path());
                 }
             }

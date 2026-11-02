@@ -184,7 +184,7 @@ void AssemblyBlock::exeAssembleWait() {
             MR::deleteEffect(this, "Blur");
         }
 
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         MR::validateCollisionParts(this);
         MR::validateHitSensors(this);
     }
@@ -198,7 +198,7 @@ void AssemblyBlock::exeAssembleWait() {
 
 void AssemblyBlock::exeReturn() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
         MR::emitEffect(this, "Blur");
 
         if (_13C) {

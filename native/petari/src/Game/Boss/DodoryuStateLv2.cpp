@@ -117,7 +117,7 @@ void DodoryuStateLv2::exeReadyChase() {
         MR::stopBck(mHost);
         MR::emitEffect(mHost, "AttackSign");
         MR::startSound(mHost, "SE_BM_DODORYU_SAND_SPLASH");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::shakeCameraNormal();
         mHost->shiftMoveStateNull();
     }
@@ -704,7 +704,7 @@ bool DodoryuStateLv2::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         }
 
         turnToward(-_A0, 180.0f);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
         MR::stopScene(::sStopSceneFrame);
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvKnockDown));
 

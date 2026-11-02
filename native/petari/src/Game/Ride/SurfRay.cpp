@@ -1010,7 +1010,7 @@ bool SurfRay::tryInWater() {
 }
 
 bool SurfRay::tryJumpOrFall() {
-    if (MR::isPadSwing(WPAD_CHAN0) && (MR::isBinded(this) || mWaterInfo.isInWater() || mAirTime < 15)) {
+    if (MR::isPadSwing(GAMEPAD_CHAN0) && (MR::isBinded(this) || mWaterInfo.isInWater() || mAirTime < 15)) {
         f32 f0 = (mSurfSpeed / 40.0f) * (((70.0f - MR::abs(mRotation.z)) * 5.0f) / 70.0f) + 15.0f;
         TVec3f v1(mGroundNormal);
 

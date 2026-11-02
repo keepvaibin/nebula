@@ -1,6 +1,6 @@
-#include "Game/System/WPadAcceleration.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadAcceleration.hpp"
+#include "Game/System/GamePad.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/Util/MathUtil.hpp"
 
 namespace {
@@ -11,13 +11,13 @@ namespace {
     }
 }
 
-WPadAcceleration::WPadAcceleration(const WPad* pPad, u32 device)
+GamePadAcceleration::GamePadAcceleration(const GamePad* pPad, u32 device)
     : mPad(pPad), _4(device), _8(), _C(0.15f), _10(0, 0, 0), _1C(), _20(true), _624(-1), _628(), _62C(0, 0, 0), _638(0.0f, 0.0f, 0.0f), _644(128),
       _648(), _64C() {
     mPad->mReadInfo->setAccelParam(_8, _C);
 }
 
-bool WPadAcceleration::getAcceleration(TVec3f* pOut) const {
+bool GamePadAcceleration::getAcceleration(TVec3f* pOut) const {
     if (_628 <= 0) {
         pOut->zero();
         return false;
@@ -27,7 +27,7 @@ bool WPadAcceleration::getAcceleration(TVec3f* pOut) const {
     return true;
 }
 
-bool WPadAcceleration::getPastAcceleration(TVec3f* pOut, s32 index) const {
+bool GamePadAcceleration::getPastAcceleration(TVec3f* pOut, s32 index) const {
     if (index >= _628) {
         pOut->zero();
         return false;
@@ -43,15 +43,15 @@ bool WPadAcceleration::getPastAcceleration(TVec3f* pOut, s32 index) const {
     return true;
 }
 
-bool WPadAcceleration::isStationary() const {
+bool GamePadAcceleration::isStationary() const {
     return _20;
 }
 
-bool WPadAcceleration::isBalanced() const {
+bool GamePadAcceleration::isBalanced() const {
     return _1C < 0.018f;
 }
 
-void WPadAcceleration::update() {
+void GamePadAcceleration::update() {
     s32 statusCount = mPad->getValidStatusCount();
     if (statusCount <= 0) {
         TVec3f previous;
@@ -76,7 +76,7 @@ void WPadAcceleration::update() {
     }
 
     for (s32 i = statusCount - 1; i >= 0; i--) {
-        WPadSample* pSample = mPad->getSample(i);
+        GamePadSample* pSample = mPad->getSample(i);
 
         if (pSample == nullptr) {
             continue;
@@ -124,7 +124,7 @@ void WPadAcceleration::update() {
     updateIsStable();
 }
 
-void WPadAcceleration::updateRotate() {
+void GamePadAcceleration::updateRotate() {
     _638.zero();
     s32 count = _644;
 
@@ -182,7 +182,7 @@ void WPadAcceleration::updateRotate() {
     }
 }
 
-void WPadAcceleration::updateAccAverage() {
+void GamePadAcceleration::updateAccAverage() {
     f32 total = 0.0f;
     s32 count = 0;
     TVec3f previous(0.0f, 0.0f, 0.0f);
@@ -210,7 +210,7 @@ void WPadAcceleration::updateAccAverage() {
     }
 }
 
-void WPadAcceleration::updateIsStable() {
+void GamePadAcceleration::updateIsStable() {
     TVec3f difference = mHistory[0] - _10;
     _20 = true;
 

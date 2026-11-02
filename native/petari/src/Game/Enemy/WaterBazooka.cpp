@@ -490,7 +490,7 @@ void WaterBazooka::exeDemoBreakSign() {
         }
     }
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
     MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_PRE_EXPLODE");
     if (MR::isGreaterEqualStep(this, 120)) {
         MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_BREAK_FLASH");
@@ -518,7 +518,7 @@ void WaterBazooka::exeDemoBreakExplosion() {
         MR::invalidateClipping(mBreakModel);
         MR::startBck(mBreakModel, "Break");
         MR::startBrk(mBreakModel, "Break");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
         MR::shakeCameraNormal();
         MR::startSound(this, "SE_EM_WATERBAZ_EXPLODE");
         MR::startSound(this, "SE_EV_MOGUBAZ_DEAD");

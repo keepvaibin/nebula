@@ -2,11 +2,11 @@
 
 #include <JSystem/JGeometry/TVec.hpp>
 
-class WPad;
+class GamePad;
 
-class WPadAcceleration {
+class GamePadAcceleration {
 public:
-    WPadAcceleration(const WPad* pPad, u32 device);
+    GamePadAcceleration(const GamePad* pPad, u32 device);
 
     bool getAcceleration(TVec3f* pOut) const;
     bool getPastAcceleration(TVec3f* pOut, s32 index) const;
@@ -17,7 +17,7 @@ public:
     void updateAccAverage();
     void updateIsStable();
 
-    /* 0x000 */ const WPad* mPad;
+    /* 0x000 */ const GamePad* mPad;
     /* 0x004 */ u32 _4;
     /* 0x008 */ f32 _8;
     /* 0x00C */ f32 _C;

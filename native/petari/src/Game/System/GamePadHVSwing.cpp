@@ -1,7 +1,7 @@
-#include "Game/System/WPadHVSwing.hpp"
-#include "Game/System/WPad.hpp"
+#include "Game/System/GamePadHVSwing.hpp"
+#include "Game/System/GamePad.hpp"
 
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -9,7 +9,7 @@ namespace {
     const s32 cNebulaShakeSwingFrames = 6;
 };  // namespace
 
-WPadHVSwing::WPadHVSwing(const WPad* pPad, u32 channel)
+GamePadHVSwing::GamePadHVSwing(const GamePad* pPad, u32 channel)
     : mPad(pPad), mChannel(channel), mDistanceSwingThreshold(1.0f), mIsSwing(), mIsSwingLatched(), mSwingLatchedFrames(),
       mSwingBelowThresholdFrames(), mIsTriggerSwing(), mSwingThreshold(0.4f), mSwingDetected(), mSwingTriggered(), mSwingHoldFrames(),
       mSwingCooldownFrames()
@@ -18,7 +18,7 @@ WPadHVSwing::WPadHVSwing(const WPad* pPad, u32 channel)
 {
 }
 
-void WPadHVSwing::updateSwing() {
+void GamePadHVSwing::updateSwing() {
     TVec3f pastAccel;
     TVec3f curAccel;
 
@@ -50,7 +50,7 @@ void WPadHVSwing::updateSwing() {
     }
 }
 
-void WPadHVSwing::updateCentrifugal() {
+void GamePadHVSwing::updateCentrifugal() {
     TVec3f pastAccel;
     TVec3f curAccel;
 
@@ -106,8 +106,8 @@ void WPadHVSwing::updateCentrifugal() {
 // A shake button (a controller without motion sensors, or a key) swings directly, the frame it is pressed: each press is
 // a new swing (the flag drops for one frame first if a press's swing is still up), held for cNebulaShakeSwingFrames.
 // Without presses the accelerometer decides, as on the console.
-bool WPadHVSwing::updateNebulaShake() {
-    mNebulaShakePresses += mPad->mReadInfo->takeShakePresses(mChannel == WPAD_DEV_CORE ? 0 : 1);
+bool GamePadHVSwing::updateNebulaShake() {
+    mNebulaShakePresses += mPad->mReadInfo->takeShakePresses(mChannel == GAMEPAD_DEV_CORE ? 0 : 1);
     if (mNebulaShakeFrames == 0 && mNebulaShakePresses == 0 && !mIsNebulaShaking) {
         return false;
     }
@@ -136,7 +136,7 @@ bool WPadHVSwing::updateNebulaShake() {
     return true;
 }
 
-void WPadHVSwing::update() {
+void GamePadHVSwing::update() {
     if (updateNebulaShake()) {
         return;
     }

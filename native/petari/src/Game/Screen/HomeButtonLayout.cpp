@@ -9,7 +9,7 @@
 #include "Game/Speaker/SpkSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/Language.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/GamePadHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -71,7 +71,7 @@ void HomeButtonLayout::exeActive() {
         AudWrap::getSystem()->enterHomeButtonMenu();
         // Natively the game draws the menu (NebulaSettingsMenu), under the game's own pointer.
         GameSystemFunction::onHomeButtonMenuBeginAllRumble();
-        MR::setWPadHolderModeHomeButton();
+        MR::setGamePadHolderModeHomeButton();
 
         if (_24) {
             GameSystemFunction::stopControllerLeaveWatcher();
@@ -122,7 +122,7 @@ void HomeButtonLayout::exeActive() {
         MR::endStarPointerMode(this);
     }
 
-    MR::setWPadHolderModeGame();
+    MR::setGamePadHolderModeGame();
 
     if (_24) {
         GameSystemFunction::startControllerLeaveWatcher();
@@ -168,7 +168,7 @@ bool HomeButtonLayout::isActive() const {
 
 
 bool HomeButtonLayout::tryCorePadTriggerHome() {
-    for (s32 i = 0; i < MR::getWPadMaxCount(); i++) {
+    for (s32 i = 0; i < MR::getGamePadMaxCount(); i++) {
         if (MR::testCorePadTriggerHome(i)) {
             return true;
         }

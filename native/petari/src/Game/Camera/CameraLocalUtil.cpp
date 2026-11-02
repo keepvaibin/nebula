@@ -274,7 +274,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testSubPadButtonC(WPAD_CHAN0);
+        return MR::testSubPadButtonC(GAMEPAD_CHAN0);
     }
 
     bool testCameraPadTriggerReset() {
@@ -282,7 +282,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testSubPadTriggerC(WPAD_CHAN0);
+        return MR::testSubPadTriggerC(GAMEPAD_CHAN0);
     }
 
     bool testCameraPadTriggerRoundLeft() {
@@ -294,7 +294,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testCorePadTriggerLeft(WPAD_CHAN0);
+        return MR::testCorePadTriggerLeft(GAMEPAD_CHAN0);
     }
 
     bool testCameraPadTriggerRoundRight() {
@@ -306,7 +306,7 @@ namespace CameraLocalUtil {
             return false;
         }
 
-        return MR::testCorePadTriggerRight(WPAD_CHAN0);
+        return MR::testCorePadTriggerRight(GAMEPAD_CHAN0);
     }
 
     void slerpCamera(TQuat4f* pDst, const TQuat4f& rA, const TQuat4f& rB, f32 ratio, bool reverse) {

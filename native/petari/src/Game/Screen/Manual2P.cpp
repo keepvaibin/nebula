@@ -109,7 +109,7 @@ void Manual2P::exeWait() {
             return;
         }
 
-        if (MR::testSubPadStickTriggerLeft(WPAD_CHAN0) || MR::testCorePadTriggerLeft(WPAD_CHAN0)) {
+        if (MR::testSubPadStickTriggerLeft(GAMEPAD_CHAN0) || MR::testCorePadTriggerLeft(GAMEPAD_CHAN0)) {
             mLeftPaneCtrl->_24 = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");
@@ -127,7 +127,7 @@ void Manual2P::exeWait() {
             return;
         }
 
-        if (MR::testSubPadStickTriggerRight(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0)) {
+        if (MR::testSubPadStickTriggerRight(GAMEPAD_CHAN0) || MR::testCorePadTriggerRight(GAMEPAD_CHAN0)) {
             mRightPaneCtrl->_24 = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");

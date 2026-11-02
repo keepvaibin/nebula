@@ -638,7 +638,7 @@ bool GalaxyMap::tryFocusIn() {
         return true;
     }
 
-    if (pointingGalaxyIcon != nullptr && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (pointingGalaxyIcon != nullptr && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
         setNerve(GET_NERVE_ANON(GalaxyMapShowDetail));
 
         return true;

@@ -163,9 +163,9 @@ void MiiSelect::exeWait() {
         }
     }
 
-    if (!_20[0]->isHidden() && (MR::testCorePadTriggerLeft(WPAD_CHAN0) || MR::testSubPadStickTriggerLeft(WPAD_CHAN0))) {
+    if (!_20[0]->isHidden() && (MR::testCorePadTriggerLeft(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerLeft(GAMEPAD_CHAN0))) {
         callbackLeft();
-    } else if (!_20[1]->isHidden() && (MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testSubPadStickTriggerRight(WPAD_CHAN0))) {
+    } else if (!_20[1]->isHidden() && (MR::testCorePadTriggerRight(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerRight(GAMEPAD_CHAN0))) {
         callbackRight();
     }
 }

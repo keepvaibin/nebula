@@ -421,7 +421,7 @@ bool SwingRope::isStretched() const {
 }
 
 bool SwingRope::tryJump() {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testSystemTriggerA()) {
         TVec3f front = mSledPoint->mFront;
 
         TVec3f jumpY = mGravity;
@@ -438,9 +438,9 @@ bool SwingRope::tryJump() {
             MR::normalize(&jumpXZ);
             front.set(jumpXZ);
             jumpXZ.scale(::sJumpSpeedMaxXZ);
-        } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isGamePadStickOperated(WPAD_CHAN0)) {
+        } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isGamePadStickOperated(GAMEPAD_CHAN0)) {
             TVec3f stick(0.0f, 0.0f, 0.0f);
-            MR::calcWorldStickDirectionXZ(&stick, WPAD_CHAN0);
+            MR::calcWorldStickDirectionXZ(&stick, GAMEPAD_CHAN0);
             front.set< f32 >(stick.x, stick.y, stick.z);
             jumpXZ.set(stick * ::sJumpSpeedRate);
             MR::vecKillElement(jumpXZ, mGravity, &jumpXZ);
@@ -471,7 +471,7 @@ bool SwingRope::tryJump() {
 void SwingRope::updateHangPoint() {
     TVec3f stick(0.0f, 0.0f, 0.0f);
     TVec3f front = mSledPoint->mFront;
-    MR::calcWorldStickDirectionXZ(&stick, WPAD_CHAN0);
+    MR::calcWorldStickDirectionXZ(&stick, GAMEPAD_CHAN0);
 
     if (!MR::isNearZero(stick)) {
         MR::vecBlend(mSledPoint->mFront, stick, &front, ::sHangPointBlendRateAxisZ);

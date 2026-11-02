@@ -48,7 +48,7 @@ void RevolvingWay::exeWait() {
     addAccelMoment();
     MR::rotateQuatMoment(&mRotateQuat, mFriction);
     f32 friction;
-    if (MR::testCorePadButtonB(WPAD_CHAN0)) {
+    if (MR::testCorePadButtonB(GAMEPAD_CHAN0)) {
         friction = 0.98f;
     } else {
         friction = 0.9f;
@@ -58,7 +58,7 @@ void RevolvingWay::exeWait() {
 
 void RevolvingWay::addAccelMoment() {
     TVec3f rotateMoment;
-    if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::testCorePadButtonB(WPAD_CHAN0) &&
+    if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::testCorePadButtonB(GAMEPAD_CHAN0) &&
         MR::calcStarPointerStrokeRotateMoment(&rotateMoment, mPosition, mRadius, 0)) {
         mFriction += rotateMoment * 0.04f;
         f32 mag = mFriction.length();

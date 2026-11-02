@@ -25,7 +25,7 @@ void DemoPadRumbler::update(s32 frame) {
     for (int i = 0; i < mNumPadRumbleEntries; i++) {
         PadRumbleInfo* rumble = &mPadRumbleEntries[i];
         if (rumble->mStartFrame == frame) {
-            MR::tryRumblePad(this, rumble->mName, WPAD_CHAN0);
+            MR::tryRumblePad(this, rumble->mName, GAMEPAD_CHAN0);
         }
     }
 }

@@ -609,7 +609,7 @@ bool BenefitItemObj::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 
             setNerve(GET_NERVE(BenefitItemObj, HostTypeNrvCatch));
 
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
 
             return true;
         }

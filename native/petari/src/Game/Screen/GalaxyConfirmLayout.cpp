@@ -63,7 +63,7 @@ void GalaxyConfirmLayout::exeSelecting() {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_OK");
             mBackButton->disappear();
             setNerve(GET_NERVE(GalaxyConfirmLayout, GalaxyConfirmLayoutNrvSelected));
-        } else if (!mBackButton->isAppearing() && !mPaneCtrl->isAppearing() && MR::testCorePadTriggerB(WPAD_CHAN0)) {
+        } else if (!mBackButton->isAppearing() && !mPaneCtrl->isAppearing() && MR::testCorePadTriggerB(GAMEPAD_CHAN0)) {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
             mPaneCtrl->disappear();
             mBackButton->disappear();

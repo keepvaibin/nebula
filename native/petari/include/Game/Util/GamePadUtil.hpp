@@ -3,7 +3,7 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include "Game/System/NebulaInput.hpp"
 
-class WPadRumble;
+class GamePadRumble;
 
 namespace MR {
     void getCorePadPointingPosBasedOnScreen(TVec2f* pPos, s32 channel);
@@ -275,19 +275,19 @@ namespace MR {
 
     /// @brief Returns the maximum number of allowed controllers.
     /// @return The maximum number of allowed controllers.
-    u32 getWPadMaxCount();
+    u32 getGamePadMaxCount();
 
     /// @brief Determines if the given Wii Remote is connected.
     /// @param channel The handle to the Wii Remote.
     /// @return `true` if the Wii Remote is connected, `false` otherwise.
-    bool isConnectedWPad(s32 channel);
+    bool isConnectedGamePad(s32 channel);
 
     /// @brief Determines if the given Wii Remote is being controlled.
     /// @param channel The handle to the Wii Remote.
     /// @return `true` if the Wii Remote is being controlled, `false` otherwise.
-    bool isOperatingWPad(s32 channel);
+    bool isOperatingGamePad(s32 channel);
 };  // namespace MR
 
-namespace WPadFunction {
-    WPadRumble* getWPadRumble(s32 channel);
-};  // namespace WPadFunction
+namespace GamePadFunction {
+    GamePadRumble* getGamePadRumble(s32 channel);
+};  // namespace GamePadFunction

@@ -33,7 +33,7 @@ bool TalkSupportPlayerWatcher::isEnableTalkPlayerStateNormal() const {
         return false;
     }
 
-    if (!MR::isNearZero(MR::getSubPadStickX(WPAD_CHAN0)) || !MR::isNearZero(MR::getSubPadStickY(WPAD_CHAN0))) {
+    if (!MR::isNearZero(MR::getSubPadStickX(GAMEPAD_CHAN0)) || !MR::isNearZero(MR::getSubPadStickY(GAMEPAD_CHAN0))) {
         return false;
     }
 

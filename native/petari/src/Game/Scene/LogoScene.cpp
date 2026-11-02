@@ -164,7 +164,7 @@ void LogoScene::exeStrapDisplay() {
     }
 
     if (MR::isGreaterStep(this, STRAP_DISPLAY_MIN_FRAME) &&
-        (MR::testCorePadTriggerAnyWithoutHome(WPAD_CHAN0) || MR::isGreaterEqualStep(this, STRAP_DISPLAY_MAX_FRAME))) {
+        (MR::testCorePadTriggerAnyWithoutHome(GAMEPAD_CHAN0) || MR::isGreaterEqualStep(this, STRAP_DISPLAY_MAX_FRAME))) {
         setNerve(GET_NERVE_ANON(LogoSceneStrapFadeout));
     }
 }

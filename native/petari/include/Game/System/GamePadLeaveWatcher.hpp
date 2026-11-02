@@ -1,11 +1,11 @@
 #pragma once
 
 
-class WPad;
+class GamePad;
 
-class WPadLeaveWatcher {
+class GamePadLeaveWatcher {
 public:
-    WPadLeaveWatcher(WPad*);
+    GamePadLeaveWatcher(GamePad*);
 
     void update();
     void start();
@@ -13,7 +13,7 @@ public:
     void restart();
 
 private:
-    /* 0x00 */ WPad* mPad;
+    /* 0x00 */ GamePad* mPad;
     /* 0x04 */ s32 mStep;
     /* 0x08 */ bool mIsSuspend;
 };

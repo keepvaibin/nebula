@@ -580,11 +580,11 @@ void SkeletalFishBoss::exeBreakDemo() {
         MR::startSound(mBossHead, "SE_BM_SKL_BOSS_EXPLODE");
         mGuardHolder->invalidate();
         mBossDirector->appearBirdLouse();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
     }
 
     if (MR::isStep(this, 204)) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
     }
 
     if (MR::isStep(this, 206)) {

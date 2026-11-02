@@ -150,6 +150,11 @@ void sleep_until_precise(Clock::time_point when) {
 }
 const Clock::time_point kStart = Clock::now();
 
+std::string utf8_of(const fs::path& path) {
+    const std::u8string text = path.u8string();
+    return std::string(reinterpret_cast<const char*>(text.data()), text.size());
+}
+
 void log_line(const char* tag, const char* text) {
     const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
     std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
@@ -245,7 +250,7 @@ void report_crash_facts(const fs::path& dump) {
     char technical[1600];
     std::snprintf(technical, sizeof(technical), "%s%s%s%s%s", gCrashText,
                   gCrashFacts.last_mod_read.empty() ? "" : "\nLast file read from a mod: ", gCrashModRead,
-                  dump.empty() ? "" : "\nDump: ", dump.empty() ? "" : dump.string().c_str());
+                  dump.empty() ? "" : "\nDump: ", dump.empty() ? "" : utf8_of(dump).c_str());
     static char text[8192];
     const std::size_t length = galaxy::crash::format_report(report, technical, text, sizeof(text));
     std::error_code error;
@@ -263,7 +268,7 @@ void report_crash_facts(const fs::path& dump) {
     if (FILE* out = open_for_writing(file)) {
         std::fwrite(text, 1, length, out);
         std::fclose(out);
-        std::snprintf(line, sizeof(line), "report %s", file.string().c_str());
+        std::snprintf(line, sizeof(line), "report %s", utf8_of(file).c_str());
         log_line("crash:", line);
     }
     if (!crash_dialog_wanted()) return;
@@ -428,7 +433,7 @@ void load_module(const fs::path& path) {
     void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
     if (module == nullptr) {
-        die("cannot load the game module %s", path.string().c_str());
+        die("cannot load the game module %s", utf8_of(path).c_str());
     }
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
@@ -487,13 +492,13 @@ Pak gPak;
 
 void open_pak(const fs::path& path) {
     if (!gPak.store.open(path)) {
-        die("%s is not a game store: import the game again", path.string().c_str());
+        die("%s is not a game store: import the game again", utf8_of(path).c_str());
     }
     // The releases the module plays (NebulaRegion.hpp): North America, Europe and Japan.
     std::snprintf(gPak.id, sizeof(gPak.id), "%.6s", std::string(gPak.store.game_id()).c_str());
     if (std::strcmp(gPak.id, "RMGE01") != 0 && std::strcmp(gPak.id, "RMGP01") != 0 &&
         std::strcmp(gPak.id, "RMGJ01") != 0) {
-        die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", path.string().c_str(), gPak.id);
+        die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", utf8_of(path).c_str(), gPak.id);
     }
 }
 
@@ -3593,10 +3598,6 @@ std::string json_text(std::string_view text) {
     return out + "\"";
 }
 
-std::string utf8_of(const fs::path& path) {
-    const std::u8string text = path.u8string();
-    return std::string(reinterpret_cast<const char*>(text.data()), text.size());
-}
 
 // The game id from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that is not one:
 // the tools then work without it.
@@ -3777,15 +3778,27 @@ int main(int argc, char** argv) {
 #endif
     boot_mark("main");
     fs::path pak, nand, module;
+    // A path in the command line: argv is in the system's code page, which cannot hold every folder name.
+    const auto arg_path = [&](int index) {
+#if defined(_WIN32)
+        int count = 0;
+        if (LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count)) {
+            fs::path path = index < count ? fs::path(wide[index]) : fs::path(argv[index]);
+            LocalFree(wide);
+            return path;
+        }
+#endif
+        return fs::path(argv[index]);
+    };
     double seconds = 0;
     for (int i = 1; i + 1 < argc; i += 2) {
         const std::string key = argv[i];
         if (key == "--pak") {
-            pak = argv[i + 1];
+            pak = arg_path(i + 1);
         } else if (key == "--nand") {
-            nand = argv[i + 1];
+            nand = arg_path(i + 1);
         } else if (key == "--module") {
-            module = argv[i + 1];
+            module = arg_path(i + 1);
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
         } else {
@@ -3797,7 +3810,7 @@ int main(int argc, char** argv) {
     }
     if (module.empty()) {
 #if defined(_WIN32)
-        module = fs::path(argv[0]).parent_path() / "smg_game.dll";
+        module = arg_path(0).parent_path() / "smg_game.dll";
 #elif defined(__APPLE__)
         module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
 #else
@@ -3829,7 +3842,7 @@ int main(int argc, char** argv) {
                                       });
         std::string message;
         (void)galaxy::host::import_mii_folder(&message);
-        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the library)\n", import_folder.string().c_str(),
+        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the library)\n", utf8_of(import_folder).c_str(),
                      message.c_str(), galaxy::host::mii_library_count());
         (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
     }
@@ -3974,7 +3987,7 @@ int main(int argc, char** argv) {
     } catch (const std::exception& failure) {
         die("the settings did not load: %s", failure.what());
     }
-    galaxy::render::set_native_settings_content_root(galaxy::host::locate_game(pak).content_root.string());
+    galaxy::render::set_native_settings_content_root(utf8_of(galaxy::host::locate_game(pak).content_root));
     // Discord: never from a hidden test run, which must leave the player's status alone.
     if (const char* hidden = std::getenv("GALAXY_HIDE_WINDOW"); hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
         const char* id = std::getenv("GALAXY_DISCORD_CLIENT_ID");

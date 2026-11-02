@@ -628,7 +628,7 @@ namespace MR {
     }
 
     void startCSSound2P(const char* pCSName, const char* pSEName) {
-        if (isConnectedWPad(1)) {
+        if (isConnectedGamePad(1)) {
             startCSSound(pCSName, pSEName, 1);
         }
     }
