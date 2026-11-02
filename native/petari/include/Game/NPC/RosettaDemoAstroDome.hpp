@@ -22,8 +22,8 @@ public:
     void exeDemo();
 
     /// @brief The pointer to the actor instance for Rosalina.
-    /* 0x08 */ Rosetta* mRosetta;
-    /* 0x0C */ RosettaMonologue* mMonologue;
+    Rosetta* mRosetta;
+    RosettaMonologue* mMonologue;
 };
 
 class RosettaDemoAstroDomeFinalBattle : public NerveExecutor {
@@ -37,7 +37,7 @@ public:
     void exeDemo();
 
     /// @brief The pointer to the actor instance for Rosalina.
-    /* 0x08 */ Rosetta* mRosetta;
+    Rosetta* mRosetta;
 };
 
 class RosettaDemoAstroDomeTalk : public NerveExecutor {
@@ -51,7 +51,7 @@ public:
     void exeDemo();
 
     /// @brief The pointer to the actor instance for Rosalina.
-    /* 0x08 */ Rosetta* mRosetta;
+    Rosetta* mRosetta;
 };
 
 class RosettaMonologue : public SimpleLayout {
@@ -64,7 +64,7 @@ public:
     virtual void appear();
     virtual void control();
 
-    /* 0x20 */ s32 mMessageNo;
-    /* 0x24 */ TalkTextFormer mTextFormer;
-    /* 0x34 */ IconAButton* mIconAButton;
+    s32 mMessageNo;
+    TalkTextFormer mTextFormer;
+    IconAButton* mIconAButton;
 };

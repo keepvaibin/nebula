@@ -17,6 +17,6 @@ public:
     void exeSteam();
     void exeSteamEnd();
 
-    /* 0x8C */ TVec3f mUp;
-    /* 0x98 */ TVec3f mEffectScale;
+    TVec3f mUp;
+    TVec3f mEffectScale;
 };

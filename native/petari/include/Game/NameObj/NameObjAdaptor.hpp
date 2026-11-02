@@ -21,8 +21,8 @@ public:
     void connectToCalcAnim(const MR::FunctorBase&);
     void connectToDraw(const MR::FunctorBase&);
 
-    /* 0x0C */ MR::FunctorBase* mMovementFunc;
-    /* 0x10 */ MR::FunctorBase* mCalcAnimFunc;
-    /* 0x14 */ MR::FunctorBase* mCalcViewFunc;
-    /* 0x18 */ MR::FunctorBase* mDrawAnimFunc;
+    MR::FunctorBase* mMovementFunc;
+    MR::FunctorBase* mCalcAnimFunc;
+    MR::FunctorBase* mCalcViewFunc;
+    MR::FunctorBase* mDrawAnimFunc;
 };

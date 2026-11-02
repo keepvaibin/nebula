@@ -47,8 +47,8 @@ public:
 
     bool isInRace() const;
 
-    /* 0x180 */ s32 mRaceDisabled;
-    /* 0x184 */ f32 mMoveSpeed;
-    /* 0x188 */ f32 mSpeed;
-    /* 0x18C */ s32 mRailPointNo;
+    s32 mRaceDisabled;
+    f32 mMoveSpeed;
+    f32 mSpeed;
+    s32 mRailPointNo;
 };

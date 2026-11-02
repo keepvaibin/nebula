@@ -75,8 +75,8 @@ public:
 
 private:
     /// @brief Determines if the icon represents a Mii character.
-    /* 0x0 */ bool mIsMii;
+    bool mIsMii;
 
     /// @brief The position of the Mii data in the Mii database or the identifier of a Mario character.
-    /* 0x2 */ u16 mData;
+    u16 mData;
 };

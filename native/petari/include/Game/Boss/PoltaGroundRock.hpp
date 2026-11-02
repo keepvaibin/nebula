@@ -28,8 +28,8 @@ public:
     void exeWait();
     void exeBreak();
 
-    /* 0x8C */ LiveActor* mOwner;
-    /* 0x90 */ ModelObj* mBreakModel;
-    /* 0x94 */ TQuat4f _94;
-    /* 0xA4 */ TVec3f _A4;
+    LiveActor* mOwner;
+    ModelObj* mBreakModel;
+    TQuat4f _94;
+    TVec3f _A4;
 };

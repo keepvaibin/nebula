@@ -18,10 +18,10 @@ public:
         mDist = dist;
     }
 
-    /* 0x4C */ TVec3f mAxis;
-    /* 0x58 */ TVec3f mWPoint;
-    /* 0x64 */ f32 mAngleX;
-    /* 0x68 */ f32 mAngleY;
-    /* 0x6C */ f32 mDist;
-    /* 0x70 */ bool _70;
+    TVec3f mAxis;
+    TVec3f mWPoint;
+    f32 mAngleX;
+    f32 mAngleY;
+    f32 mDist;
+    bool _70;
 };

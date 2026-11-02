@@ -177,12 +177,12 @@ public:
         mShapeTable.hide();
     }
 
-    /* 0x04 */ void const* mpRawData;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u16 mbHasBumpArray;
-    /* 0x0E */ u16 mbHasBillboard;
-    /* 0x10 */ J3DJointTree mJointTree;
-    /* 0x58 */ J3DMaterialTable mMaterialTable;
-    /* 0x78 */ J3DShapeTable mShapeTable;
-    /* 0x88 */ J3DVertexData mVertexData;
+    void const* mpRawData;
+    u32 mFlags;
+    u16 mbHasBumpArray;
+    u16 mbHasBillboard;
+    J3DJointTree mJointTree;
+    J3DMaterialTable mMaterialTable;
+    J3DShapeTable mShapeTable;
+    J3DVertexData mVertexData;
 };

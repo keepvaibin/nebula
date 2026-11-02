@@ -19,7 +19,7 @@ public:
     void startFadeOut();
     bool isFadeEnd() const;
 
-    /* 0x20 */ bool _20;
-    /* 0x24 */ u32 mMaxStep;
-    /* 0x28 */ f32 mRate;
+    bool _20;
+    u32 mMaxStep;
+    f32 mRate;
 };

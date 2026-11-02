@@ -15,8 +15,8 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    /* 0x8C */ LavaHomeSeesawRotator* mSeesawRotator;
-    /* 0x90 */ ProjmapEffectMtxSetter* mMtxSetter;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ f32 mYOffset;
+    LavaHomeSeesawRotator* mSeesawRotator;
+    ProjmapEffectMtxSetter* mMtxSetter;
+    TVec3f _94;
+    f32 mYOffset;
 };

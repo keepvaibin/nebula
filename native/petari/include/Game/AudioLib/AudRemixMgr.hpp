@@ -23,7 +23,7 @@ struct RemixNoteGroupData {
     /* 0x4  */ s32 mTrackCount;
     /* 0x8  */ s32 mNoteCount;
     u32* _C;
-    /* 0x10 */ RemixNoteTrackData* mRemixTracks;
+    RemixNoteTrackData* mRemixTracks;
 };
 
 class AudRemixMgr {
@@ -38,5 +38,5 @@ public:
     /* 0x4  */ RemixNoteGroupData* mGroups;
     /* 0x8  */ s32 mGroupCount;
     /* 0xC  */ AudSoundObject* mSoundObj;
-    /* 0x10 */ AudRemixSequencer* mRemixSeq;
+    AudRemixSequencer* mRemixSeq;
 };

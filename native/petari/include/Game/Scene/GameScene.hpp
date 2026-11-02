@@ -63,11 +63,11 @@ public:
     void stageClear();
     inline bool isPlayMovie() const;
 
-    /* 0x14 */ u32 _14;
-    /* 0x18 */ GameSceneScenarioOpeningCameraState* mScenarioCamera;
-    /* 0x1C */ GameScenePauseControl* mPauseCtrl;
-    /* 0x20 */ GamePauseSequence* mPauseSeq;
-    /* 0x24 */ GameStageClearSequence* mStageClearSeq;
-    /* 0x28 */ bool mDraw3D;
-    /* 0x29 */ u8 _29;
+    u32 _14;
+    GameSceneScenarioOpeningCameraState* mScenarioCamera;
+    GameScenePauseControl* mPauseCtrl;
+    GamePauseSequence* mPauseSeq;
+    GameStageClearSequence* mStageClearSeq;
+    bool mDraw3D;
+    u8 _29;
 };

@@ -11,6 +11,6 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void control();
 
-    /* 0x8C */ s32 mTimeLimit;
-    /* 0x90 */ s32 mTimeLeft;
+    s32 mTimeLimit;
+    s32 mTimeLeft;
 };

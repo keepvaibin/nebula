@@ -7,15 +7,15 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 struct SetUpData {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ const f32* mAngleTable;
-    /* 0x08 */ s32 mAngleNum;
-    /* 0x0C */ f32 _C;
-    /* 0x10 */ f32 _10;
-    /* 0x14 */ f32 _14;
-    /* 0x18 */ f32 _18;
-    /* 0x1C */ u32 mActiveLabel;
-    /* 0x20 */ bool mHasCollision;
+    const char* mName;
+    const f32* mAngleTable;
+    s32 mAngleNum;
+    f32 _C;
+    f32 _10;
+    f32 _14;
+    f32 _18;
+    u32 mActiveLabel;
+    bool mHasCollision;
 };
 
 namespace {

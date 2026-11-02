@@ -7,13 +7,13 @@ struct J3DJointBlock;
 
 // In host order as the importer cooks it (j3d_model, JNT1).
 struct J3DJointInitData {
-    /* 0x00 */ u16 mKind;
-    /* 0x02 */ bool mScaleCompensate;
-    /* 0x04 */ J3DTransformInfo mTransformInfo;
-    /* 0x24 */ f32 mRadius;
-    /* 0x28 */ Vec mMin;
-    /* 0x2C */ Vec mMax;
-};  // Size: 0x40
+    u16 mKind;
+    bool mScaleCompensate;
+    J3DTransformInfo mTransformInfo;
+    f32 mRadius;
+    Vec mMin;
+    Vec mMax;
+};
 static_assert(sizeof(J3DJointInitData) == 0x40, "the file's joint data");
 
 struct J3DJointFactory {

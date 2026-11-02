@@ -210,7 +210,7 @@ struct J3DIndTexMtx : public J3DIndTexMtxInfo {
 
     ~J3DIndTexMtx() {
     }
-};  // Size: 0x1C
+};
 
 // A material's indirect matrices.
 class J3DIndBlock {

@@ -14,8 +14,8 @@ public:
     bool isAnimEnd() const;
 
     /* 0x8  */ TVec3f _8;
-    /* 0x14 */ TPos3f _14;
-    /* 0x44 */ s32 _44;
-    /* 0x50 */ TVec3f _50;  // unused
-    /* 0x5C */ TVec3f _5C;  // unused
+    TPos3f _14;
+    s32 _44;
+    TVec3f _50;  // unused
+    TVec3f _5C;  // unused
 };

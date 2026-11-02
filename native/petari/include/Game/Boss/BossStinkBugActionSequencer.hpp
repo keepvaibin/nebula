@@ -33,13 +33,13 @@ public:
     void exeFinishDemo();
     void exeEnd();
 
-    /* 0x08 */ BossStinkBug* mStinkBug;
-    /* 0x0C */ BossStinkBugActionBase* mCurrentAction;
-    /* 0x10 */ BossStinkBugOpeningDemo* mOpeningDemo;
-    /* 0x14 */ BossStinkBugActionGround* mActionGround;
-    /* 0x18 */ BossStinkBugFlyDemo* mFlyDemo;
-    /* 0x1C */ BossStinkBugActionFlyLow* mActionFlyLow;
-    /* 0x20 */ BossStinkBugAngryDemo* mAngryDemo;
-    /* 0x24 */ BossStinkBugActionFlyHigh* mActionFlyHigh;
-    /* 0x28 */ BossStinkBugFinishDemo* mFinishDemo;
+    BossStinkBug* mStinkBug;
+    BossStinkBugActionBase* mCurrentAction;
+    BossStinkBugOpeningDemo* mOpeningDemo;
+    BossStinkBugActionGround* mActionGround;
+    BossStinkBugFlyDemo* mFlyDemo;
+    BossStinkBugActionFlyLow* mActionFlyLow;
+    BossStinkBugAngryDemo* mAngryDemo;
+    BossStinkBugActionFlyHigh* mActionFlyHigh;
+    BossStinkBugFinishDemo* mFinishDemo;
 };

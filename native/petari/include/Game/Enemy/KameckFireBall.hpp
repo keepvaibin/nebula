@@ -26,7 +26,7 @@ public:
     void exeWait();
     void exeSweep();
 
-    /* 0x8C */ TQuat4f mRotateQuat;
-    /* 0x9C */ KameckBeamEventListener* mEventListener;
-    /* 0xA0 */ u8 _A0[4];
+    TQuat4f mRotateQuat;
+    KameckBeamEventListener* mEventListener;
+    u8 _A0[4];
 };

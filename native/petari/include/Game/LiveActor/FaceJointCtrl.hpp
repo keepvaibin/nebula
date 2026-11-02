@@ -19,10 +19,10 @@ public:
 
     bool updateJointMtxCallBack(TPos3f* pMtx, const JointControllerInfo& rInfo);
 
-    /* 0x00 */ LiveActor* mHostActor;
-    /* 0x04 */ f32 mDegreeMax;
-    /* 0x08 */ TVec3f _8;
-    /* 0x14 */ TVec3f _14;
-    /* 0x20 */ JointController* mJointController;
-    /* 0x24 */ JointCtrlRate* mJointCtrlRate;
+    LiveActor* mHostActor;
+    f32 mDegreeMax;
+    TVec3f _8;
+    TVec3f _14;
+    JointController* mJointController;
+    JointCtrlRate* mJointCtrlRate;
 };

@@ -12,5 +12,5 @@ public:
     void exeHide();
     void exeEnd();
 
-    /* 0xC4 */ s32 mTimer;
+    s32 mTimer;
 };

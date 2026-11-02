@@ -38,18 +38,18 @@ public:
         }
     }
 
-    /* 0x0C */ s32 mID;
-    /* 0x10 */ TVec3f mPosition;
-    /* 0x1C */ TVec3f mAxis;
-    /* 0x28 */ TVec3f mSide;
-    /* 0x34 */ TVec3f mUp;
-    /* 0x40 */ TVec3f mFront;
-    /* 0x4C */ f32 mCylinderRadius;
-    /* 0x50 */ f32 mCylinderHeight;
-    /* 0x54 */ f32 mPlaneWidth;
-    /* 0x58 */ f32 mPlaneHeight;
-    /* 0x5C */ s32 mLimitMarginType;
-    /* 0x60 */ s32 mType;
+    s32 mID;
+    TVec3f mPosition;
+    TVec3f mAxis;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
+    f32 mCylinderRadius;
+    f32 mCylinderHeight;
+    f32 mPlaneWidth;
+    f32 mPlaneHeight;
+    s32 mLimitMarginType;
+    s32 mType;
 };
 
 namespace MR {

@@ -28,10 +28,10 @@ public:
     static void makeArchiveListCommon(NameObjArchiveListCollector*, const char*);
 
 private:
-    /* 0x20 */ nw4r::lyt::TexMap* mTexture;
-    /* 0x24 */ IconAButton* mAButtonIcon;
-    /* 0x28 */ const char* _28;
-    /* 0x2C */ bool _2C;
+    nw4r::lyt::TexMap* mTexture;
+    IconAButton* mAButtonIcon;
+    const char* _28;
+    bool _2C;
 };
 
 namespace MR {

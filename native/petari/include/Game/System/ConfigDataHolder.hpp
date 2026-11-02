@@ -31,11 +31,11 @@ public:
     bool loadFromFileBinary(const char*, const u8*, u32);
 
 private:
-    /* 0x00 */ BinaryDataChunkHolder* mChunkHolder;
-    /* 0x04 */ ConfigDataCreateChunk* mCreateChunk;
-    /* 0x08 */ ConfigDataMii* mMii;
-    /* 0x0C */ ConfigDataMisc* mMisc;
-    /* 0x10 */ char mName[16];
+    BinaryDataChunkHolder* mChunkHolder;
+    ConfigDataCreateChunk* mCreateChunk;
+    ConfigDataMii* mMii;
+    ConfigDataMisc* mMisc;
+    char mName[16];
 };
 
 class ConfigDataCreateChunk : public BinaryDataChunkBase {
@@ -51,5 +51,5 @@ public:
     virtual void initializeData();
 
 private:
-    /* 0x04 */ bool mIsCreated;
+    bool mIsCreated;
 };

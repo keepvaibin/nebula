@@ -25,7 +25,7 @@ public:
     virtual ~JAUAudioArcLoader() {
     }
 
-    /* 0x0C */ JAUSection* mSection;
+    JAUSection* mSection;
 };
 
 class JAUAudioArcLoader_withoutCopy : public JAUAudioArcInterpreter {
@@ -34,5 +34,5 @@ class JAUAudioArcLoader_withoutCopy : public JAUAudioArcInterpreter {
     virtual ~JAUAudioArcLoader_withoutCopy() {
     }
 
-    /* 0x0C */ JAUSection* mSection;
+    JAUSection* mSection;
 };

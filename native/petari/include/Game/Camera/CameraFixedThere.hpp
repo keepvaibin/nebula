@@ -5,8 +5,8 @@
 class CameraFixedThere : public Camera {
 public:
     enum CameraType {
-        /* 0x0 */ CameraType_GravityUp,
-        /* 0x1 */ CameraType_WorldUp,
+        CameraType_GravityUp,
+        CameraType_WorldUp,
     };
 
     CameraFixedThere(const char* pName = "\202\273\202\314\217\352\222\350\223\137\203\112\203\201\203\211" /* その場定点カメラ */);
@@ -30,9 +30,9 @@ public:
     void updateUpVec(const TVec3f&);
     void updateNormalUpVec(const TVec3f&);
 
-    /* 0x4C */ u32 mCameraType;
-    /* 0x50 */ bool mIsFovyFixed;
-    /* 0x54 */ TVec3f mUp;
-    /* 0x60 */ TVec3f mAxis;
-    /* 0x6C */ f32 mRoll;
+    u32 mCameraType;
+    bool mIsFovyFixed;
+    TVec3f mUp;
+    TVec3f mAxis;
+    f32 mRoll;
 };

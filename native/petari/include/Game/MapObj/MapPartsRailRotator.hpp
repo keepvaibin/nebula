@@ -38,12 +38,12 @@ public:
     void exeDone() {
     }
 
-    /* 0x18 */ s32 mRotateAxis;
-    /* 0x1C */ s32 mRotateType;
-    /* 0x20 */ f32 mRotateSpeed;
-    /* 0x24 */ f32 mTargetAngle;
-    /* 0x28 */ f32 mAngle;
-    /* 0x2C */ TPos3f _2C;
-    /* 0x5C */ TPos3f _5C;
-    /* 0x8C */ MtxPtr mHostRotateMtx;
+    s32 mRotateAxis;
+    s32 mRotateType;
+    f32 mRotateSpeed;
+    f32 mTargetAngle;
+    f32 mAngle;
+    TPos3f _2C;
+    TPos3f _5C;
+    MtxPtr mHostRotateMtx;
 };

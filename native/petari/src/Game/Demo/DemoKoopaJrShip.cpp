@@ -15,8 +15,8 @@
 
 namespace {
     struct Anim {
-        /* 0x00 */ const char* mEntryAnimName;
-        /* 0x04 */ const char* mLeaveAnimName;
+        const char* mEntryAnimName;
+        const char* mLeaveAnimName;
     };
 
     static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};

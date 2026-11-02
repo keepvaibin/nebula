@@ -9,9 +9,9 @@ typedef void (*JASThreadCallback)(void*);
 class JASTaskThread : public JKRThread {
 private:
     struct JASThreadCallStack {
-        /* 0x00 */ JASThreadCallback callback_;
-        /* 0x04 */ u32 msgType_;
-        /* 0x08 */ union {
+        JASThreadCallback callback_;
+        u32 msgType_;
+        union {
             u8 buffer[0x400];
             void* bufferPtr;
         } msg;

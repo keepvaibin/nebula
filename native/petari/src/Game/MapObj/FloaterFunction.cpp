@@ -5,10 +5,10 @@
 
 namespace {
     struct SeName {
-        /* 0x0 */ const char* mObjName;
-        /* 0x4 */ const char* mSeGroundOn;
-        /* 0x8 */ const char* mSeMoveDown;
-        /* 0xC */ const char* mSeMoveUp;
+        const char* mObjName;
+        const char* mSeGroundOn;
+        const char* mSeMoveDown;
+        const char* mSeMoveUp;
     };
 
     static const SeName sSeNameTable[] = {

@@ -19,7 +19,7 @@ public:
     bool isDisappearing() const;
     bool isPointing() const;
 
-    /* 0x20 */ ButtonPaneController* mPaneCtrl;
-    /* 0x24 */ bool _24;
-    /* 0x24 */ bool _25;
+    ButtonPaneController* mPaneCtrl;
+    bool _24;
+    bool _25;
 };

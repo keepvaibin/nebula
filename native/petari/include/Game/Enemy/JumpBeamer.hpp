@@ -28,5 +28,5 @@ public:
     void exeClose();
     void exeInter();
 
-    /* 0xDC */ RingBeam** mBeams;
+    RingBeam** mBeams;
 };

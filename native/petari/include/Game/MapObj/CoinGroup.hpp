@@ -29,9 +29,9 @@ public:
     void exeDemoAppear();
     void exeKill();
 
-    /* 0x8C */ Coin** mCoinArray;
-    /* 0x90 */ ActorCameraInfo* mCameraInfo;
-    /* 0x94 */ u32 mCoinCount;
-    /* 0x98 */ s32 mTimeLimit;
-    /* 0x9C */ bool mIsPurpleCoinGroup;
+    Coin** mCoinArray;
+    ActorCameraInfo* mCameraInfo;
+    u32 mCoinCount;
+    s32 mTimeLimit;
+    bool mIsPurpleCoinGroup;
 };

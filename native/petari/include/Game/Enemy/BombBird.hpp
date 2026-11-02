@@ -48,13 +48,13 @@ public:
     void exeBindStarPointer();
     void endBindStarPointer();
 
-    /* 0x8C */ MR::FixedArray< BombBirdBomb*, 3 > mBombs;
-    /* 0x98 */ BombBirdBomb* mHeldBomb;
-    /* 0x9C */ TVec3f mFront;
-    /* 0xA8 */ bool mSearchPlayer;
-    /* 0xA9 */ bool mHoldBomb;
-    /* 0xAC */ FixedPosition* mFixedPos;
-    /* 0xB0 */ SpinHitController* mSpinHitController;
-    /* 0xB4 */ AnimScaleController* mScaleController;
-    /* 0xB8 */ WalkerStateBindStarPointer* mStarPointer;
+    MR::FixedArray< BombBirdBomb*, 3 > mBombs;
+    BombBirdBomb* mHeldBomb;
+    TVec3f mFront;
+    bool mSearchPlayer;
+    bool mHoldBomb;
+    FixedPosition* mFixedPos;
+    SpinHitController* mSpinHitController;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mStarPointer;
 };

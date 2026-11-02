@@ -22,16 +22,16 @@ struct JASWaveInfo {
         _24 = other._24;
     }
 
-    /* 0x00 */ u8 mFormat;
-    /* 0x01 */ u8 mBaseKey;
-    /* 0x04 */ f32 mSampleRate;
-    /* 0x08 */ int mAWStartOffs;
-    /* 0x0C */ int mAWLength;
-    /* 0x10 */ u32 mLoopFlags;
-    /* 0x14 */ int mSampleLoopStart;
-    /* 0x18 */ int mSampleLoopEnd;
-    /* 0x1C */ int mSampleCount;
-    /* 0x24 */ const u32* _24;
+    u8 mFormat;
+    u8 mBaseKey;
+    f32 mSampleRate;
+    int mAWStartOffs;
+    int mAWLength;
+    u32 mLoopFlags;
+    int mSampleLoopStart;
+    int mSampleLoopEnd;
+    int mSampleCount;
+    const u32* _24;
 
     static u32 one;
 };

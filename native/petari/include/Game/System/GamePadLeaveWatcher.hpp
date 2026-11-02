@@ -13,7 +13,7 @@ public:
     void restart();
 
 private:
-    /* 0x00 */ GamePad* mPad;
-    /* 0x04 */ s32 mStep;
-    /* 0x08 */ bool mIsSuspend;
+    GamePad* mPad;
+    s32 mStep;
+    bool mIsSuspend;
 };

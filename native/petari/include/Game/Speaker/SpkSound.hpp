@@ -23,7 +23,7 @@ public:
         return mSound;
     }
 
-    /* 0x00 */ SpkSound* mSound;
+    SpkSound* mSound;
 };
 
 class SpkSoundVolume {
@@ -34,14 +34,14 @@ public:
     void setFadeOut(s32);
     f32 calc(bool&);
 
-    /* 0x00 */ f32 mReleaseVolume;
-    /* 0x04 */ f32 mReleaseRate;
-    /* 0x08 */ f32 mFadeOutVolume;
-    /* 0x0C */ f32 mFadeOutRate;
-    /* 0x10 */ f32 mFadeVolume;
-    /* 0x14 */ f32 mFadeTarget;
-    /* 0x18 */ f32 mFadeRate;
-    /* 0x1C */ f32 mBaseVolume;
+    f32 mReleaseVolume;
+    f32 mReleaseRate;
+    f32 mFadeOutVolume;
+    f32 mFadeOutRate;
+    f32 mFadeVolume;
+    f32 mFadeTarget;
+    f32 mFadeRate;
+    f32 mBaseVolume;
 };
 
 class SpkSound : public JSULink< SpkSound >, public JASPoolAllocObject< SpkSound > {
@@ -69,19 +69,19 @@ public:
         return mLoopStartPos >= 0 && mLoopEndPos > mLoopStartPos;
     }
 
-    /* 0x10 */ SpkSoundHandle* mSoundHandle;
-    /* 0x14 */ s32 mWaveID;
-    /* 0x18 */ s16* mWave;
-    /* 0x1C */ s32 mWavePtr;
-    /* 0x20 */ s32 mPadChannel;
-    /* 0x24 */ u32 _24;
-    /* 0x28 */ u32 mReleaseTime;
-    /* 0x2C */ s32 mWaveSize;
-    /* 0x30 */ s32 mLoopStartPos;
-    /* 0x34 */ s32 mLoopEndPos;
-    /* 0x38 */ s32 mState;
-    /* 0x3C */ s32 _3C;
-    /* 0x40 */ SpkSoundVolume mVolume;
+    SpkSoundHandle* mSoundHandle;
+    s32 mWaveID;
+    s16* mWave;
+    s32 mWavePtr;
+    s32 mPadChannel;
+    u32 _24;
+    u32 mReleaseTime;
+    s32 mWaveSize;
+    s32 mLoopStartPos;
+    s32 mLoopEndPos;
+    s32 mState;
+    s32 _3C;
+    SpkSoundVolume mVolume;
 };
 
 class SpkSoundHolder : JASGlobalInstance< SpkSoundHolder > {
@@ -102,8 +102,8 @@ public:
         return _44 / 15.0f;
     }
 
-    /* 0x00 */ JSUList< SpkSound > mSoundList[4];
-    /* 0x30 */ f32 mVolume[4];
-    /* 0x40 */ f32 mBaseVolume;
-    /* 0x44 */ s32 _44;
+    JSUList< SpkSound > mSoundList[4];
+    f32 mVolume[4];
+    f32 mBaseVolume;
+    s32 _44;
 };

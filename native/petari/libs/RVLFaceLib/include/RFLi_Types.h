@@ -145,7 +145,7 @@ typedef struct Mii_CharInfo {
             u16 padding : 6;
         };
         u16 rawdata;
-    } faceline; // at 0x0
+    } faceline;
 
     union {
         struct {
@@ -155,7 +155,7 @@ typedef struct Mii_CharInfo {
             u16 padding : 5;
         };
         u16 rawdata;
-    } hair; // at 0x2
+    } hair;
 
     union {
         struct {
@@ -168,7 +168,7 @@ typedef struct Mii_CharInfo {
             u32 padding : 5;
         };
         u32 rawdata;
-    } eye; // at 0x4
+    } eye;
 
     union {
         struct {
@@ -181,7 +181,7 @@ typedef struct Mii_CharInfo {
             u32 padding : 6;
         };
         u32 rawdata;
-    } eyebrow; // at 0x8
+    } eyebrow;
 
     union {
         struct {
@@ -191,7 +191,7 @@ typedef struct Mii_CharInfo {
             u16 padding : 3;
         };
         u16 rawdata;
-    } nose; // at 0xC
+    } nose;
 
     union {
         struct {
@@ -201,7 +201,7 @@ typedef struct Mii_CharInfo {
             u16 y : 5;
         };
         u16 rawdata;
-    } mouth; // at 0xE
+    } mouth;
 
     union {
         struct {
@@ -212,7 +212,7 @@ typedef struct Mii_CharInfo {
             u16 y : 5;
         };
         u16 rawdata;
-    } beard; // at 0x10
+    } beard;
 
     union {
         struct {
@@ -222,7 +222,7 @@ typedef struct Mii_CharInfo {
             u16 y : 5;
         };
         u16 rawdata;
-    } glass; // at 0x12
+    } glass;
 
     union {
         struct {
@@ -233,27 +233,27 @@ typedef struct Mii_CharInfo {
             u16 padding : 1;
         };
         u16 rawdata;
-    } mole; // at 0x14
+    } mole;
 
     struct {
         u8 height;
         u8 build;
-    } body; // at 0x16
+    } body;
 
     struct {
-        char16_t name[MII_NAME_LEN + 1];       // at 0x18
-        char16_t creator[MII_CREATOR_LEN + 1]; // at 0x2E
+        char16_t name[MII_NAME_LEN + 1];
+        char16_t creator[MII_CREATOR_LEN + 1];
 
-        // at 0x44
+
         u16 sex : 1;
         u16 bmonth : 4;
         u16 bday : 5;
         u16 color : 4;
         u16 favorite : 1;
         u16 localOnly : 1;
-    } personal; // at 0x18
+    } personal;
 
-    MiiCreateID createID; // at 0x46
+    MiiCreateID createID;
 } Mii_CharInfo;
 
 #ifdef __cplusplus

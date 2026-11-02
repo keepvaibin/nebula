@@ -67,16 +67,16 @@ public:
     bool tryZoomCamera();
     bool isZoomCamera() const;
 
-    /* 0x48 */ CameraHolder* mHolder;
-    /* 0x4C */ CameraParamChunkHolder* mChunkHolder;
-    /* 0x50 */ Camera* mCamera;
-    /* 0x54 */ CameraParamChunk* mChunk;
-    /* 0x58 */ bool mRequestReset;
-    /* 0x5C */ u32 _5C;
-    /* 0x60 */ CamKarikariEffector* mKarikari;
-    /* 0x64 */ CamHeliEffector* mHeli;
-    /* 0x68 */ u32 mTypeState;
-    /* 0x6C */ bool mIsStartPosActive;
-    /* 0x70 */ s32 mInterpolateOffCounter;
-    /* 0x74 */ bool mZoomedIn;
+    CameraHolder* mHolder;
+    CameraParamChunkHolder* mChunkHolder;
+    Camera* mCamera;
+    CameraParamChunk* mChunk;
+    bool mRequestReset;
+    u32 _5C;
+    CamKarikariEffector* mKarikari;
+    CamHeliEffector* mHeli;
+    u32 mTypeState;
+    bool mIsStartPosActive;
+    s32 mInterpolateOffCounter;
+    bool mZoomedIn;
 };

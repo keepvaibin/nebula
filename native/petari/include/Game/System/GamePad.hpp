@@ -36,22 +36,22 @@ public:
     bool getAcceleration(TVec3f*, u32) const;
     bool getPastAcceleration(TVec3f*, s32, u32) const;
 
-    /* 0x00 */ s32 mChannel;
-    /* 0x04 */ GamePadReadDataInfo* mReadInfo;
-    /* 0x08 */ GamePadButton* mButton;
-    /* 0x0C */ GamePadPointer* mPointer;
-    /* 0x10 */ GamePadAcceleration* mCorePadAccel;
-    /* 0x14 */ GamePadHVSwing* mCorePadSwing;
-    /* 0x18 */ GamePadRumble* _18;
-    /* 0x1C */ GamePadRumble* _1C;
-    /* 0x20 */ GamePadStick* mStick;
-    /* 0x24 */ GamePadAcceleration* mSubPadAccel;
-    /* 0x28 */ GamePadHVSwing* mSubPadSwing;
-    /* 0x2C */ GamePadLeaveWatcher* mLeaveWatcher;
-    /* 0x30 */ GamePadInfoChecker* mInfoChecker;
-    /* 0x34 */ bool _34;
-    /* 0x35 */ bool mIsConnected;
-    /* 0x36 */ bool mIsSubPadConnected;
+    s32 mChannel;
+    GamePadReadDataInfo* mReadInfo;
+    GamePadButton* mButton;
+    GamePadPointer* mPointer;
+    GamePadAcceleration* mCorePadAccel;
+    GamePadHVSwing* mCorePadSwing;
+    GamePadRumble* _18;
+    GamePadRumble* _1C;
+    GamePadStick* mStick;
+    GamePadAcceleration* mSubPadAccel;
+    GamePadHVSwing* mSubPadSwing;
+    GamePadLeaveWatcher* mLeaveWatcher;
+    GamePadInfoChecker* mInfoChecker;
+    bool _34;
+    bool mIsConnected;
+    bool mIsSubPadConnected;
 };
 
 namespace MR {

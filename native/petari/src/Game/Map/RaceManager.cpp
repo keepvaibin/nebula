@@ -30,13 +30,13 @@ namespace {
             return mMaxTime;
         }
 
-        /* 0x00 */ const char* mName;
-        /* 0x04 */ s32 mEventBgmId;
-        /* 0x08 */ s32 mMaxTime;
-        /* 0x0C */ const char* mMessageId;
-        /* 0x10 */ const char* mGalaxyName;
-        /* 0x14 */ s32 mScenarioNo;
-        /* 0x18 */ bool mIsDemoWithStarPointer;
+        const char* mName;
+        s32 mEventBgmId;
+        s32 mMaxTime;
+        const char* mMessageId;
+        const char* mGalaxyName;
+        s32 mScenarioNo;
+        bool mIsDemoWithStarPointer;
     };
 
     static const RaceStructData sRaceStruct[] = {

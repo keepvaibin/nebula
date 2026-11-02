@@ -7,9 +7,9 @@
 
 class J3DTexture {
 private:
-    /* 0x0 */ u16 mNum;
-    /* 0x2 */ u16 unk_0x2;
-    /* 0x4 */ ResTIMG* mpRes;
+    u16 mNum;
+    u16 unk_0x2;
+    ResTIMG* mpRes;
 
 public:
     J3DTexture(u16 num, ResTIMG* res) : mNum(num), unk_0x2(0), mpRes(res) {
@@ -66,8 +66,8 @@ public:
         mTexMtxInfo.setEffectMtx(effectMtx);
     }
 
-    /* 0x00 */ J3DTexMtxInfo mTexMtxInfo;
+    J3DTexMtxInfo mTexMtxInfo;
 
 private:
-    /* 0x64 */ Mtx mMtx;
-};  // Size: 0x94
+    Mtx mMtx;
+};

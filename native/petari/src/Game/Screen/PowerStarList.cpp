@@ -33,10 +33,10 @@ namespace {
         ListItem() : mType(-1), mRaceId() {
         }
 
-        /* 0x0 */ s32 mType;
+        s32 mType;
         union {
-            /* 0x4 */ GalaxyStatusAccessor mGalaxyAccessor;
-            /* 0x4 */ s32 mRaceId;
+            GalaxyStatusAccessor mGalaxyAccessor;
+            s32 mRaceId;
         };
     };
 
@@ -347,11 +347,11 @@ namespace {
             MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex], mBuffer);
         }
 
-        /* 0x000 */ LayoutActor* mActor;
-        /* 0x004 */ const char* const* mPaneNames;
-        /* 0x008 */ s32 mRowsPerPane;
-        /* 0x00C */ char16_t mBuffer[256];
-        /* 0x20C */ char16_t* mTail;
+        LayoutActor* mActor;
+        const char* const* mPaneNames;
+        s32 mRowsPerPane;
+        char16_t mBuffer[256];
+        char16_t* mTail;
     };
 };  // namespace
 

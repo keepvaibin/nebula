@@ -15,5 +15,5 @@ public:
 
     void exeWait();
 
-    /* 0x8C */ TPos3f mBaseMtx;
+    TPos3f mBaseMtx;
 };

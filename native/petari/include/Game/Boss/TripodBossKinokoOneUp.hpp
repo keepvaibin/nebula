@@ -22,8 +22,8 @@ public:
     void exeActive();
     void exeEnd();
 
-    /* 0x8C */ TPos3f _8C;
-    /* 0xBC */ TPos3f _BC;
-    /* 0xEC */ BenefitItemOneUp* mOneUp;
-    /* 0xF0 */ s32 mJointID;
+    TPos3f _8C;
+    TPos3f _BC;
+    BenefitItemOneUp* mOneUp;
+    s32 mJointID;
 };

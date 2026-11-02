@@ -20,9 +20,9 @@ public:
         mRoundAngleSpeed = roundSpeed;
     }
 
-    /* 0x4C */ f32 mDistMin;
-    /* 0x50 */ f32 mDistMax;
-    /* 0x54 */ f32 mAngleX;
-    /* 0x58 */ bool mIsForcePitch;
-    /* 0x5C */ f32 mRoundAngleSpeed;
+    f32 mDistMin;
+    f32 mDistMax;
+    f32 mAngleX;
+    bool mIsForcePitch;
+    f32 mRoundAngleSpeed;
 };

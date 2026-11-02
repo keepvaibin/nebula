@@ -18,10 +18,10 @@ public:
     void updatePattern();
     void updateInterval();
 
-    /* 0x00 */ CameraShakePattern* mPattern;
-    /* 0x04 */ bool mHasEnded;
-    /* 0x05 */ bool mIsInfinite;
-    /* 0x08 */ u32 mTime;
-    /* 0x0C */ u32 mDelay;
-    /* 0x10 */ u32 mDelayTimer;
+    CameraShakePattern* mPattern;
+    bool mHasEnded;
+    bool mIsInfinite;
+    u32 mTime;
+    u32 mDelay;
+    u32 mDelayTimer;
 };

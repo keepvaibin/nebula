@@ -12,9 +12,9 @@ public:
 
     void setParam(s32, TVec3f, const TVec3f&, const TVec2f&);
 
-    /* 0x4C */ s32 mJointId;
-    /* 0x50 */ TVec3f mUp;
-    /* 0x5C */ TVec3f mWPoint;
-    /* 0x68 */ f32 mAngleX;
-    /* 0x6C */ f32 mAngleY;
+    s32 mJointId;
+    TVec3f mUp;
+    TVec3f mWPoint;
+    f32 mAngleX;
+    f32 mAngleY;
 };

@@ -14,5 +14,5 @@ public:
     void exeWait();
     void exeDemo();
 
-    /* 0x08 */ Tico* mHost;
+    Tico* mHost;
 };

@@ -23,6 +23,6 @@ public:
     void exeWait();
     bool tryAvoid();
 
-    /* 0x8C */ ActorCameraInfo* mCameraInfo;
-    /* 0x90 */ s32 mCurDemoFrame;
+    ActorCameraInfo* mCameraInfo;
+    s32 mCurDemoFrame;
 };

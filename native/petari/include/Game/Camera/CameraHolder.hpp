@@ -26,8 +26,8 @@ public:
         return getIndexOf(pType) == index;
     }
 
-    /* 0x0C */ s32 mDefaultCameraIndex;
-    /* 0x10 */ Camera** mCameras;
-    /* 0x14 */ CamTranslatorBase** mTranslators;
-    /* 0x18 */ Camera* mDefaultCamera;
+    s32 mDefaultCameraIndex;
+    Camera** mCameras;
+    CamTranslatorBase** mTranslators;
+    Camera* mDefaultCamera;
 };

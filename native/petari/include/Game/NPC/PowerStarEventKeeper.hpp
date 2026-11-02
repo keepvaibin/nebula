@@ -34,7 +34,7 @@ public:
         return (1 << (scenarioNo - 1));
     }
 
-    /* 0x0 */ u32 mStartScenario;
-    /* 0x4 */ s32 mPowerStarNum;
-    /* 0x8 */ PowerStarInfo* mInfoTbl;
+    u32 mStartScenario;
+    s32 mPowerStarNum;
+    PowerStarInfo* mInfoTbl;
 };

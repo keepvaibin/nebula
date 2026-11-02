@@ -35,6 +35,6 @@ public:
     virtual bool receiveMsgPlayerAttackTail(u32, HitSensor*, HitSensor*);
     virtual bool receiveOtherMsgTail(u32, HitSensor*, HitSensor*);
 
-    /* 0x8 */ DinoPackun* mParent;
-    /* 0xC */ DinoPackunAction* mCurrentAction;
+    DinoPackun* mParent;
+    DinoPackunAction* mCurrentAction;
 };

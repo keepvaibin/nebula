@@ -10,11 +10,11 @@ class NamePosInfo {
 public:
     NamePosInfo();
 
-    /* 0x00 */ const char* mName;         ///< The name of the NamePos.
-    /* 0x04 */ TVec3f mPosition;          ///< The position of the NamePos.
-    /* 0x10 */ TVec3f mRotation;         ///< The rotation of the NamePos.
-    /* 0x1C */ JMapLinkInfo* mLinkInfo;  ///< The information to link this NamePos to other objects.
-    /* 0x20 */ const NameObj* _20;
+    const char* mName;         ///< The name of the NamePos.
+    TVec3f mPosition;          ///< The position of the NamePos.
+    TVec3f mRotation;         ///< The rotation of the NamePos.
+    JMapLinkInfo* mLinkInfo;  ///< The information to link this NamePos to other objects.
+    const NameObj* _20;
 };
 
 /// @brief Class that contains the array of NamePosInfo instances.
@@ -25,8 +25,8 @@ public:
     bool tryRegisterLinkObj(const NameObj*, const JMapInfoIter&);
     bool find(const NameObj*, const char*, TVec3f*, TVec3f*) const;
 
-    /* 0x0C */ s32 mPosNum;           ///< The number of NamePosInfo instances.
-    /* 0x10 */ NamePosInfo* mInfos;  ///< The array of NamePosInfo instances.
+    s32 mPosNum;           ///< The number of NamePosInfo instances.
+    NamePosInfo* mInfos;  ///< The array of NamePosInfo instances.
 };
 
 namespace MR {

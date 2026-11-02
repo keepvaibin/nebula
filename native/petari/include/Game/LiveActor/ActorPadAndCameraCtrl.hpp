@@ -6,20 +6,20 @@ class ModelManager;
 class ResourceHolder;
 
 struct ActorPadAndCameraCtrlInfo {
-    /* 0x00 */ const char* mBckName;
-    /* 0x04 */ f32 mStartFrame;
-    /* 0x08 */ f32 mEndFrame;
-    /* 0x0C */ const char* mPadRumbleName;
-    /* 0x10 */ const char* mCameraShakeName;
-    /* 0x14 */ const char* mPadRumbleNameMiddle;
-    /* 0x18 */ const char* mCameraShakeNameMiddle;
-    /* 0x1C */ const char* mPadRumbleNameFar;
-    /* 0x20 */ const char* mCameraShakeNameFar;
-    /* 0x24 */ f32 mDistanceNear;
-    /* 0x28 */ f32 mDistanceFar;
-    /* 0x2C */ f32 mDistanceInvalid;
-    /* 0x30 */ bool _30;
-    /* 0x31 */ bool _31;
+    const char* mBckName;
+    f32 mStartFrame;
+    f32 mEndFrame;
+    const char* mPadRumbleName;
+    const char* mCameraShakeName;
+    const char* mPadRumbleNameMiddle;
+    const char* mCameraShakeNameMiddle;
+    const char* mPadRumbleNameFar;
+    const char* mCameraShakeNameFar;
+    f32 mDistanceNear;
+    f32 mDistanceFar;
+    f32 mDistanceInvalid;
+    bool _30;
+    bool _31;
 };
 
 class ActorPadAndCameraCtrl {
@@ -32,10 +32,10 @@ public:
     void updateInfoBck();
     void updatePadAndCamera(const ActorPadAndCameraCtrlInfo*);
 
-    /* 0x00 */ const ModelManager* _0;
-    /* 0x04 */ const TVec3f* _4;
-    /* 0x08 */ const ResourceHolder* _8;
-    /* 0x0C */ const char* _C;
-    /* 0x10 */ s32 mInfoNum;
-    /* 0x14 */ ActorPadAndCameraCtrlInfo* mInfo;
+    const ModelManager* _0;
+    const TVec3f* _4;
+    const ResourceHolder* _8;
+    const char* _C;
+    s32 mInfoNum;
+    ActorPadAndCameraCtrlInfo* mInfo;
 };

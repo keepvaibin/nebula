@@ -15,11 +15,11 @@ public:
     void endRead();
     void reset();
 
-    /* 0x00 */ u32 mIndex;
-    /* 0x04 */ u32 mCurrIndex;
-    /* 0x08 */ TVec2f mBrightnessCenter[3];
-    /* 0x20 */ TVec2f mRealCenter[3];
-    /* 0x38 */ f32 mBright[3];
+    u32 mIndex;
+    u32 mCurrIndex;
+    TVec2f mBrightnessCenter[3];
+    TVec2f mRealCenter[3];
+    f32 mBright[3];
 };
 
 class BrightObjBase {
@@ -45,11 +45,11 @@ public:
     void setResult(const NebulaScreenProbe*);
     void drawSphere(const TVec3f&, float) const;
 
-    /* 0x04 */ BrightInfo mInfo;
-    /* 0x48 */ TVec2f mBrightCenter;
-    /* 0x50 */ TVec2f mNowCenter;
-    /* 0x58 */ f32 mBrightness;
-    /* 0x5C */ bool mIsNotVisible;
+    BrightInfo mInfo;
+    TVec2f mBrightCenter;
+    TVec2f mNowCenter;
+    f32 mBrightness;
+    bool mIsNotVisible;
     TVec3f mDrawPos;
     f32 mDrawRadius;
 };
@@ -66,7 +66,7 @@ public:
     virtual void calcBrightInfo(NebulaScreenProbe*);
     virtual void getNowCenter(TVec2f*) const;
 
-    /* 0x10C */ f32 mRadius;
+    f32 mRadius;
 };
 
 class BrightSun : public LiveActor, public BrightObjBase {
@@ -83,5 +83,5 @@ public:
 
     void controlSunModel();
 
-    /* 0x10C */ Sun* mSun;
+    Sun* mSun;
 };

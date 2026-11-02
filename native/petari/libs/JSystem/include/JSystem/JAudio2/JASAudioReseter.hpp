@@ -12,8 +12,8 @@ struct JASAudioReseter {
     s32 calc();
     static s32 callback(void*);
 
-    /* 0x0 */ u32 mTime;
-    /* 0x4 */ f32 mDSPLevel;
-    /* 0x8 */ s32 mDoneFlag;
-    /* 0xC */ bool mThreadStopFlag;
+    u32 mTime;
+    f32 mDSPLevel;
+    s32 mDoneFlag;
+    bool mThreadStopFlag;
 };

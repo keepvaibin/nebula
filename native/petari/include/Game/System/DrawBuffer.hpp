@@ -11,9 +11,9 @@ class J3DShapePacket;
 class ActorLightCtrl;
 
 struct PacketInfo {
-    /* 0x00 */ J3DShapePacket* mShapePacket;
-    /* 0x04 */ ActorLightCtrl* mLightLoader;
-    /* 0x08 */ ActorLightCtrl* mLightCtrl;
+    J3DShapePacket* mShapePacket;
+    ActorLightCtrl* mLightLoader;
+    ActorLightCtrl* mLightCtrl;
 };
 
 class DrawBufferShapeDrawer {
@@ -36,12 +36,12 @@ public:
         return mPackets[index]->mLightLoader;
     }
 
-    /* 0x00 */ J3DMaterial* mMaterial;
-    /* 0x04 */ J3DMatPacket* mMatPacket;
-    /* 0x08 */ s32 _8;
-    /* 0x0C */ s32 mMaxPackets;
-    /* 0x10 */ s32 mNumPackets;
-    /* 0x14 */ PacketInfo** mPackets;
+    J3DMaterial* mMaterial;
+    J3DMatPacket* mMatPacket;
+    s32 _8;
+    s32 mMaxPackets;
+    s32 mNumPackets;
+    PacketInfo** mPackets;
 };
 
 class DrawBuffer {
@@ -65,14 +65,14 @@ public:
         return mShapeDrawers[index];
     }
 
-    /* 0x00 */ J3DModelData* mModelData;
-    /* 0x04 */ J3DModel* mModel;
-    /* 0x08 */ u32 _8;
-    /* 0x0C */ s32 mNumActors;
-    /* 0x10 */ u32 _10;
-    /* 0x14 */ s32 mNumMaterials;
-    /* 0x18 */ s32* mMaterialNos;
-    /* 0x1C */ s32 mNumShapeDrawers;
-    /* 0x20 */ s32 mNumOpaShapeDrawers;
-    /* 0x24 */ DrawBufferShapeDrawer** mShapeDrawers;
+    J3DModelData* mModelData;
+    J3DModel* mModel;
+    u32 _8;
+    s32 mNumActors;
+    u32 _10;
+    s32 mNumMaterials;
+    s32* mMaterialNos;
+    s32 mNumShapeDrawers;
+    s32 mNumOpaShapeDrawers;
+    DrawBufferShapeDrawer** mShapeDrawers;
 };

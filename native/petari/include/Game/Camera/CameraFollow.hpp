@@ -34,18 +34,18 @@ public:
     void checkValidityOfRound(const TVec3f&, const TVec3f&);
     bool isUpsideDownByRoll() const;
 
-    /* 0x4C */ f32 mDistMax;
-    /* 0x50 */ f32 mDistMin;
-    /* 0x54 */ f32 mAngleXMin;
-    /* 0x58 */ f32 mAngleXRange;
-    /* 0x5C */ TVec3f mPos;
-    /* 0x68 */ TVec3f mWatchPos;
-    /* 0x74 */ f32 mAngleYRoundSpeed;  // moving round magnitude (rate?)
-    /* 0x78 */ f32 mAngleXSpeed;
-    /* 0x7C */ bool mCheckWall;
-    /* 0x7D */ bool mIsRounding;
-    /* 0x80 */ f32 mAngleYTarget;
-    /* 0x84 */ f32 mAngleYSpeed;
-    /* 0x88 */ bool mIsRoundLeftValid;
-    /* 0x89 */ bool mIsRoundRightValid;
+    f32 mDistMax;
+    f32 mDistMin;
+    f32 mAngleXMin;
+    f32 mAngleXRange;
+    TVec3f mPos;
+    TVec3f mWatchPos;
+    f32 mAngleYRoundSpeed;  // moving round magnitude (rate?)
+    f32 mAngleXSpeed;
+    bool mCheckWall;
+    bool mIsRounding;
+    f32 mAngleYTarget;
+    f32 mAngleYSpeed;
+    bool mIsRoundLeftValid;
+    bool mIsRoundRightValid;
 };

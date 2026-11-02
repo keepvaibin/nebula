@@ -12,7 +12,7 @@ public:
     void initSync();
     void update();
 
-    /* 0x00 */ SwitchIdInfo* mSwitchIdInfo;
-    /* 0x04 */ SwitchEventListener* mSwitchEventListener;
-    /* 0x08 */ bool mIsOnSwitchByIdInfo;
+    SwitchIdInfo* mSwitchIdInfo;
+    SwitchEventListener* mSwitchEventListener;
+    bool mIsOnSwitchByIdInfo;
 };

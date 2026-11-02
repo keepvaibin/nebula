@@ -36,10 +36,10 @@ public:
     }
 
 private:
-    /* 0x0 */ u16 field_0x0;
-    /* 0x2 */ u16 mAnmFlag;
-    /* 0x4 */ J3DAnmColor* mAnmColor;
-};  // Size: 0x8
+    u16 field_0x0;
+    u16 mAnmFlag;
+    J3DAnmColor* mAnmColor;
+};
 
 class J3DTexMtxAnm {
 public:
@@ -73,10 +73,10 @@ public:
     }
 
 private:
-    /* 0x0 */ u16 field_0x0;
-    /* 0x2 */ u16 mAnmFlag;
-    /* 0x4 */ J3DAnmTextureSRTKey* mAnmTransform;
-};  // Size: 0x8
+    u16 field_0x0;
+    u16 mAnmFlag;
+    J3DAnmTextureSRTKey* mAnmTransform;
+};
 
 class J3DTexNoAnm {
 public:
@@ -112,10 +112,10 @@ public:
     }
 
 private:
-    /* 0x4 */ u16 field_0x4;
-    /* 0x6 */ u16 mAnmFlag;
-    /* 0x8 */ J3DAnmTexPattern* mAnmTexPattern;
-};  // Size: 0xC
+    u16 field_0x4;
+    u16 mAnmFlag;
+    J3DAnmTexPattern* mAnmTexPattern;
+};
 
 class J3DTevColorAnm {
 public:
@@ -148,10 +148,10 @@ public:
     }
 
 private:
-    /* 0x0 */ u16 field_0x0;
-    /* 0x2 */ u16 mAnmFlag;
-    /* 0x4 */ J3DAnmTevRegKey* mAnmTevReg;
-};  // Size: 0x8
+    u16 field_0x0;
+    u16 mAnmFlag;
+    J3DAnmTevRegKey* mAnmTevReg;
+};
 
 class J3DTevKColorAnm {
 public:
@@ -184,10 +184,10 @@ public:
     }
 
 private:
-    /* 0x0 */ u16 field_0x0;
-    /* 0x2 */ u16 mAnmFlag;
-    /* 0x4 */ J3DAnmTevRegKey* mAnmTevReg;
-};  // Size: 0x8
+    u16 field_0x0;
+    u16 mAnmFlag;
+    J3DAnmTevRegKey* mAnmTevReg;
+};
 
 class J3DMaterialAnm {
 public:
@@ -215,9 +215,9 @@ public:
     }
 
 private:
-    /* 0x04 */ J3DMatColorAnm mMatColorAnm[2];
-    /* 0x14 */ J3DTexMtxAnm mTexMtxAnm[8];
-    /* 0x54 */ J3DTexNoAnm mTexNoAnm[8];
-    /* 0xB4 */ J3DTevColorAnm mTevColorAnm[4];
-    /* 0xD4 */ J3DTevKColorAnm mTevKColorAnm[4];
-};  // Size: 0xF4
+    J3DMatColorAnm mMatColorAnm[2];
+    J3DTexMtxAnm mTexMtxAnm[8];
+    J3DTexNoAnm mTexNoAnm[8];
+    J3DTevColorAnm mTevColorAnm[4];
+    J3DTevKColorAnm mTevKColorAnm[4];
+};

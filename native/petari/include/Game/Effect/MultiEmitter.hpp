@@ -106,14 +106,14 @@ public:
         mFlags &= ~flag;
     }
 
-    /* 0x00 */ MR::AssignableArray< SingleEmitter > mEmitters;
-    /* 0x08 */ MR::Vector< MR::FixedArray< MultiEmitter*, 4 > > mChildren;
-    /* 0x1C */ MultiEmitterCallBack* mCallBack;
-    /* 0x20 */ MultiEmitterParticleCallBack* mParticleCallBack;
-    /* 0x24 */ SyncBckEffectInfo* _24;
-    /* 0x28 */ const AutoEffectInfo* _28;
-    /* 0x2C */ f32 _2C;
-    /* 0x30 */ f32 _30;
-    /* 0x34 */ u16 mHash;
-    /* 0x36 */ u8 mFlags;
+    MR::AssignableArray< SingleEmitter > mEmitters;
+    MR::Vector< MR::FixedArray< MultiEmitter*, 4 > > mChildren;
+    MultiEmitterCallBack* mCallBack;
+    MultiEmitterParticleCallBack* mParticleCallBack;
+    SyncBckEffectInfo* _24;
+    const AutoEffectInfo* _28;
+    f32 _2C;
+    f32 _30;
+    u16 mHash;
+    u8 mFlags;
 };

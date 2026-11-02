@@ -13,8 +13,8 @@
 
 namespace {
     struct SaveFileSpec {
-        /* 0x00 */ const char* mName;
-        /* 0x04 */ u32 mBufferSize;
+        const char* mName;
+        u32 mBufferSize;
     };
 
     const char cSaveFileName[] = "GameData.bin";

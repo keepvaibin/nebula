@@ -70,17 +70,17 @@ public:
     bool receivePlayerAttackAtSpin(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     void calcMouthPos(TVec3f* pOut) const;
 
-    /* 0x8C */ AnimScaleController* mAnimScaleCtrl;
-    /* 0x90 */ FootPrint* mFootPrint;
-    /* 0x94 */ f32 mFootprintYOffs;
-    /* 0x98 */ bool mRequestSmoke;
-    /* 0x9C */ TVec3f mFront;
-    /* 0xA8 */ TVec3f mBodyCenter;
-    /* 0xB4 */ TVec3f mTargetDir;
-    /* 0xC0 */ s32 mMeanderStep;
-    /* 0xC4 */ f32 mMeanderAngle;
-    /* 0xC8 */ s32 mStarPieceTotal;
-    /* 0xCC */ s32 mStarPieceRemaining;
-    /* 0xD0 */ u8 _D0;  // unused
-    /* 0xD4 */ TMtx34f mHeadMtx;
+    AnimScaleController* mAnimScaleCtrl;
+    FootPrint* mFootPrint;
+    f32 mFootprintYOffs;
+    bool mRequestSmoke;
+    TVec3f mFront;
+    TVec3f mBodyCenter;
+    TVec3f mTargetDir;
+    s32 mMeanderStep;
+    f32 mMeanderAngle;
+    s32 mStarPieceTotal;
+    s32 mStarPieceRemaining;
+    u8 _D0;  // unused
+    TMtx34f mHeadMtx;
 };

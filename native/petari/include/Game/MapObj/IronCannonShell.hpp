@@ -32,9 +32,9 @@ public:
     void initBullet();
     bool tryShotBullet(f32);
 
-    /* 0x8C */ CannonShellHolder* mShellHolder;
-    /* 0x90 */ s32 mShotInterval;  // Delay between cannon shots [ObjArg0]
-    /* 0x94 */ f32 mBulletSpeed;   // Speed of each bullet [ObjArg1]
+    CannonShellHolder* mShellHolder;
+    s32 mShotInterval;  // Delay between cannon shots [ObjArg0]
+    f32 mBulletSpeed;   // Speed of each bullet [ObjArg1]
 };
 
 class IronCannonLauncher : public IronCannonLauncherPoint {
@@ -50,5 +50,5 @@ public:
     void exeWait();
     void exeShot();
 
-    /* 0x98 */ TVec3f mEffectMtx;
+    TVec3f mEffectMtx;
 };

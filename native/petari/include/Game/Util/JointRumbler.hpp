@@ -9,10 +9,10 @@ class XjointTransform;
 class JointRumbler {
 public:
     enum Flag {
-        /* 0x01 */ FLAG_1 = 1 << 0,
-        /* 0x02 */ FLAG_LOCK_X = 1 << 1,
-        /* 0x04 */ FLAG_LOCK_Y = 1 << 2,
-        /* 0x08 */ FLAG_LOCK_Z = 1 << 3,
+        FLAG_1 = 1 << 0,
+        FLAG_LOCK_X = 1 << 1,
+        FLAG_LOCK_Y = 1 << 2,
+        FLAG_LOCK_Z = 1 << 3,
     };
 
     JointRumbler(LiveActor* pActor, const char* pJointName, f32, f32, u32, bool, s32);
@@ -28,11 +28,11 @@ public:
         return static_cast< u32 >(mFlags & flag) == flag;
     }
 
-    /* 0x00 */ RumbleCalculatorCosMultLinear* mRumbleCalculator;
-    /* 0x04 */ XjointTransform* mJointTransform;
-    /* 0x08 */ s32 _8;
-    /* 0x0C */ s32 _C;
-    /* 0x10 */ f32 mModelScale;
-    /* 0x14 */ u16 mFlags;
-    /* 0x16 */ bool _16[2];
+    RumbleCalculatorCosMultLinear* mRumbleCalculator;
+    XjointTransform* mJointTransform;
+    s32 _8;
+    s32 _C;
+    f32 mModelScale;
+    u16 mFlags;
+    bool _16[2];
 };

@@ -28,6 +28,6 @@ public:
     void exeEndLand();
 
 private:
-    /* 0x10 */ KoopaFigureBall* mFigureBall;
-    /* 0x14 */ s32 mRollDelay;
+    KoopaFigureBall* mFigureBall;
+    s32 mRollDelay;
 };

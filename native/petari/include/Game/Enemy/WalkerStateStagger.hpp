@@ -10,18 +10,18 @@ class WalkerStateStaggerParam {
 public:
     WalkerStateStaggerParam();
 
-    /* 0x00 */ f32 mPunchPowerH;
-    /* 0x04 */ f32 mPunchPowerV;
-    /* 0x08 */ f32 mPunchPowerSideH;
-    /* 0x0C */ s32 mStopSceneFrames;
-    /* 0x10 */ s32 mKickEnableStep;
-    /* 0x14 */ s32 mStaggerTime;
-    /* 0x18 */ s32 mRotateStartTime;
-    /* 0x1C */ s32 mRotateEndTime;
-    /* 0x20 */ f32 mStaggerFrontPower;
-    /* 0x24 */ f32 mStaggerSidePower;
-    /* 0x28 */ f32 mStaggerSideCircleRateDegree;
-    /* 0x2C */ f32 mRotateRateDegree;
+    f32 mPunchPowerH;
+    f32 mPunchPowerV;
+    f32 mPunchPowerSideH;
+    s32 mStopSceneFrames;
+    s32 mKickEnableStep;
+    s32 mStaggerTime;
+    s32 mRotateStartTime;
+    s32 mRotateEndTime;
+    f32 mStaggerFrontPower;
+    f32 mStaggerSidePower;
+    f32 mStaggerSideCircleRateDegree;
+    f32 mRotateRateDegree;
 };
 
 class WalkerStateStagger : public ActorStateBase< LiveActor > {
@@ -41,8 +41,8 @@ public:
     bool isSpinning(s32 spinStartStep, s32 spinEndStep) const;
     bool isRecoverStart() const;
 
-    /* 0x10 */ WalkerStateParam* mStateParam;
-    /* 0x14 */ WalkerStateStaggerParam* mStaggerParam;
-    /* 0x18 */ TVec3f mVelH;
-    /* 0x24 */ TVec3f* mDirection;
+    WalkerStateParam* mStateParam;
+    WalkerStateStaggerParam* mStaggerParam;
+    TVec3f mVelH;
+    TVec3f* mDirection;
 };

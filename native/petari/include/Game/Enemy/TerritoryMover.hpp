@@ -17,7 +17,7 @@ public:
         mCenter.set(rPos);
     }
 
-    /* 0x00 */ f32 mRadius;
-    /* 0x04 */ TVec3f mCenter;
-    /* 0x10 */ TVec3f mTarget;
+    f32 mRadius;
+    TVec3f mCenter;
+    TVec3f mTarget;
 };

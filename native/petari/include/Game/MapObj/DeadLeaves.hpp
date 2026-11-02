@@ -13,5 +13,5 @@ public:
     void exeWait();
     void exeSpin();
 
-    /* 0xC4 */ s32 mItemType;
+    s32 mItemType;
 };

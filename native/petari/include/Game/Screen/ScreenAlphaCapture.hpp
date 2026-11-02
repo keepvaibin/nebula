@@ -17,7 +17,7 @@ public:
     JUTTexture* getTexture(s32);
 
 private:
-    /* 0x0C */ JUTTexture* mTexture[5];
+    JUTTexture* mTexture[5];
 };
 
 namespace MR {

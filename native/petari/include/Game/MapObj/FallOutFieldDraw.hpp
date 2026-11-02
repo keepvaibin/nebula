@@ -18,7 +18,7 @@ public:
     void activate();
     void deactivate();
 
-    /* 0x0C */ bool _C;
+    bool _C;
     JUTTexture* mMask;  // the screen mask at half size
 };
 

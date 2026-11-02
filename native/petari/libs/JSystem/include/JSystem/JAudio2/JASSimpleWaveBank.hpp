@@ -14,8 +14,8 @@ struct JASSimpleWaveBank : JASWaveBank, JASWaveArc {
             return &mWaveInfo;
         }
 
-        /* 0x04 */ JASWaveInfo mWaveInfo;
-        /* 0x28 */ JASWaveArc* mArc;
+        JASWaveInfo mWaveInfo;
+        JASWaveArc* mArc;
     };
 
     JASSimpleWaveBank();
@@ -28,6 +28,6 @@ struct JASSimpleWaveBank : JASWaveBank, JASWaveArc {
         return 1;
     };
 
-    /* 0x78 */ TWaveHandle* mWaveTable;
-    /* 0x7C */ u32 mWaveTableSize;
+    TWaveHandle* mWaveTable;
+    u32 mWaveTableSize;
 };

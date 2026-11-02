@@ -13,21 +13,21 @@ struct PlanetMapData {
         mData[index] = pValue;
     }
 
-    /* 0x00 */ const char* mPlanetName;
-    /* 0x04 */ const char* mData[5];
-    /* 0x18 */ const char* mForceScenarioData[8];
+    const char* mPlanetName;
+    const char* mData[5];
+    const char* mForceScenarioData[8];
 };
 
 struct UniqueEntry {
-    /* 0x00 */ const char* _0;
-    /* 0x04 */ const char* _4;
+    const char* _0;
+    const char* _4;
 };
 
 typedef NameObj* (*CreatorFuncPtr)(const char*);
 
 struct PlanetEntry {
-    /* 0x0 */ const char* mName;
-    /* 0x4 */ CreatorFuncPtr mCreateFunc;
+    const char* mName;
+    CreatorFuncPtr mCreateFunc;
 };
 
 class PlanetMapCreator : public NameObj {
@@ -41,8 +41,8 @@ public:
     PlanetMapData* getTableData(const char*) const;
     bool isScenarioForceLow(const PlanetMapData*) const;
 
-    /* 0x0C */ PlanetMapData** mPlanetMapData;
-    /* 0x10 */ s32 mTableCount;
+    PlanetMapData** mPlanetMapData;
+    s32 mTableCount;
 };
 
 class PlanetMapFarClippable : public PlanetMap {

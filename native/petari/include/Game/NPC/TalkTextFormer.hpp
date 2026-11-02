@@ -16,10 +16,10 @@ public:
     void updateTalkingAtTextSpeed();
     bool isTextAppearedAll() const;
 
-    /* 0x0 */ LayoutActor* mHostActor;
-    /* 0x4 */ const char16_t* mMsg;
-    /* 0x8 */ s32 _8;
-    /* 0xC */ const char* mPaneName;
+    LayoutActor* mHostActor;
+    const char16_t* mMsg;
+    s32 _8;
+    const char* mPaneName;
 };
 
 namespace MR {

@@ -30,14 +30,14 @@ public:
     /// @brief Scales the note's velocity by -30.0 and then invalidates all hit sensors, and after 10 steps, calls Note::kill().
     void exeFlyUp();
 
-    /* 0x8C */ NoteFairy* mParentFairy;  ///< The parent NoteFairy that this note was spawned from.
-    /* 0x90 */ TVec3f _90;
-    /* 0x9C */ TVec3f mRailDirection;
-    /* 0xA8 */ int mCounter;  ///< The amount of steps it takes for the note to disappear.
-    /* 0xAC */ f32 _AC;
-    /* 0xB0 */ bool mIsCountdown;
-    /* 0xB4 */ FlashingCtrl* mFlashCtrl;  // A pointer to the FlashingCtrl instance that handles the "fading away" effects.
-    /* 0xB8 */ u32 _B8;
+    NoteFairy* mParentFairy;  ///< The parent NoteFairy that this note was spawned from.
+    TVec3f _90;
+    TVec3f mRailDirection;
+    int mCounter;  ///< The amount of steps it takes for the note to disappear.
+    f32 _AC;
+    bool mIsCountdown;
+    FlashingCtrl* mFlashCtrl;  // A pointer to the FlashingCtrl instance that handles the "fading away" effects.
+    u32 _B8;
 };
 
 class NoteGroup : public LiveActorGroup {
@@ -47,5 +47,5 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void movement();
 
-    /* 0x18 */ f32 mRotation;
+    f32 mRotation;
 };

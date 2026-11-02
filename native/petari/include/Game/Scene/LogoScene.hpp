@@ -36,6 +36,6 @@ public:
     bool tryFadeoutLayout();
 
 private:
-    /* 0x14 */ SimpleLayout* mStrapLayout;
-    /* 0x18 */ LogoFader* mLogoFader;
+    SimpleLayout* mStrapLayout;
+    LogoFader* mLogoFader;
 };

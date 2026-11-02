@@ -15,5 +15,5 @@ public:
     virtual void notifyDeactivate(){};
 
 protected:
-    /* 0x04 */ u32 _4;
+    u32 _4;
 };

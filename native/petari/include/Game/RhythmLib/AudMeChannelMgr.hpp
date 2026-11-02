@@ -17,9 +17,9 @@ public:
         return mChannelParams;
     }
 
-    /* 0x00 */ JASChannel* mChannels[8];
-    /* 0x20 */ JASChannelParams mChannelParams;
-    /* 0x38 */ u16 _38[8];
-    /* 0x48 */ JASSoundParams mParams;
-    /* 0x5C */ AudMeTrack* mTrack;
+    JASChannel* mChannels[8];
+    JASChannelParams mChannelParams;
+    u16 _38[8];
+    JASSoundParams mParams;
+    AudMeTrack* mTrack;
 };

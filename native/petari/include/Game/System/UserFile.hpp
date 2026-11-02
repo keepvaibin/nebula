@@ -36,10 +36,10 @@ public:
     bool isViewCompleteEnding() const;
     bool isPowerStarGetFinalChallengeGalaxy() const;
 
-    /* 0x00 */ GameDataHolder* mGameDataHolder;
-    /* 0x04 */ ConfigDataHolder* mConfigDataHolder;
-    /* 0x08 */ bool mIsPlayerMario;
-    /* 0x09 */ bool mIsGameDataCorrupted;
-    /* 0x0A */ bool mIsConfigDataCorrupted;
-    /* 0x0C */ char16_t* mUserName;
+    GameDataHolder* mGameDataHolder;
+    ConfigDataHolder* mConfigDataHolder;
+    bool mIsPlayerMario;
+    bool mIsGameDataCorrupted;
+    bool mIsConfigDataCorrupted;
+    char16_t* mUserName;
 };

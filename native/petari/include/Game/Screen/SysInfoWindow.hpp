@@ -72,13 +72,13 @@ public:
     void resetYesNoSelectorSE();
     void setTextBoxArgNumber(s32, s32);
 
-    /* 0x20 */ SysInfoWindowType mWindowType;
-    /* 0x24 */ SysInfoType mType;
-    /* 0x28 */ YesNoController* mYesNoSelector;
-    /* 0x2C */ IconAButton* mIconAButton;
-    /* 0x30 */ const char* mTextParentPaneName;
-    /* 0x34 */ const char* mWindowParentPaneName;
-    /* 0x38 */ bool _38;
+    SysInfoWindowType mWindowType;
+    SysInfoType mType;
+    YesNoController* mYesNoSelector;
+    IconAButton* mIconAButton;
+    const char* mTextParentPaneName;
+    const char* mWindowParentPaneName;
+    bool _38;
     bool mIsBackAnswersNo;
 
     // Nebula: the screen dim (the layout's BG pane) is drawn by the window itself. Where the game opens another system

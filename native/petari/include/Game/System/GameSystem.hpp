@@ -38,15 +38,15 @@ public:
     void updateSceneController();
     void calcAnim();
 
-    /* 0x0C */ GameSequenceDirector* mSequenceDirector;
-    /* 0x14 */ GameSystemErrorWatcher* mErrorWatcher;
-    /* 0x18 */ GameSystemFontHolder* mFontHolder;
-    /* 0x1C */ GameSystemFrameControl* mFrameControl;
-    /* 0x20 */ GameSystemObjHolder* mObjHolder;
-    /* 0x24 */ GameSystemSceneController* mSceneController;
-    /* 0x28 */ GameSystemStationedArchiveLoader* mStationedArchiveLoader;
-    /* 0x2C */ HomeButtonLayout* mHomeButtonLayout;
-    /* 0x30 */ SystemWipeHolder* mSystemWipeHolder;
-    /* 0x34 */ HomeButtonStateNotifier* mHomeButtonStateNotifier;
-    /* 0x38 */ bool mIsExecuteLoadSystemArchive;
+    GameSequenceDirector* mSequenceDirector;
+    GameSystemErrorWatcher* mErrorWatcher;
+    GameSystemFontHolder* mFontHolder;
+    GameSystemFrameControl* mFrameControl;
+    GameSystemObjHolder* mObjHolder;
+    GameSystemSceneController* mSceneController;
+    GameSystemStationedArchiveLoader* mStationedArchiveLoader;
+    HomeButtonLayout* mHomeButtonLayout;
+    SystemWipeHolder* mSystemWipeHolder;
+    HomeButtonStateNotifier* mHomeButtonStateNotifier;
+    bool mIsExecuteLoadSystemArchive;
 };

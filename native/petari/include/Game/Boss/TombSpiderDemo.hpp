@@ -23,7 +23,7 @@ public:
         return mParent->mCameraInfo;
     }
 
-    /* 0x00 */ TombSpider* mParent;
-    /* 0x04 */ TPos3f mMtx;
-    /* 0x34 */ f32 mRotateSpeed;
+    TombSpider* mParent;
+    TPos3f mMtx;
+    f32 mRotateSpeed;
 };

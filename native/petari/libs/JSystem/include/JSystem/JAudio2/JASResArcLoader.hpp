@@ -11,13 +11,13 @@ namespace JASResArcLoader {
     struct TLoadResInfo {
         TLoadResInfo(AssetFolder* archive, u16 id, void* buffer, u32 size);
 
-        /* 0x0 */ AssetFolder* mArchive;
-        /* 0x4 */ u16 mResID;
-        /* 0x8 */ void* mBuffer;
-        /* 0xC */ u32 mBufferSize;
-        /* 0x10 */ LoadCallback mCallback;
-        /* 0x14 */ uintptr_t mCallbackArg;
-        /* 0x18 */ GameMessageQueue* mMsgQueue;
+        AssetFolder* mArchive;
+        u16 mResID;
+        void* mBuffer;
+        u32 mBufferSize;
+        LoadCallback mCallback;
+        uintptr_t mCallbackArg;
+        GameMessageQueue* mMsgQueue;
     };
 
     u32 getResSize(AssetFolder const*, u16);

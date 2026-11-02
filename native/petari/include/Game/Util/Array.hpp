@@ -124,10 +124,10 @@ namespace MR {
         }
 
         /// @brief The pointer to the array of elements.
-        /* 0x0 */ T* mArr;
+        T* mArr;
 
         /// @brief The number of elements.
-        /* 0x4 */ s32 mMaxSize;
+        s32 mMaxSize;
     };
 
     /// @brief A contiguous fixed-size array.
@@ -207,7 +207,7 @@ namespace MR {
 
     private:
         /// @brief The array of elements.
-        /* 0x0 */ T mArr[N];
+        T mArr[N];
     };
 
     /// @brief A contiguous growable array.
@@ -347,7 +347,7 @@ namespace MR {
         }
 
         /// @brief The array of elements.
-        /* 0x0 */ T mArray;
+        T mArray;
 
         /// @brief The number of valid elements.
         /* 0x? */ s32 mCount;
@@ -365,9 +365,9 @@ namespace MR {
 
             void operator++();
 
-            /* 0x0 */ T* mHead;
-            /* 0x4 */ T* mTail;
-            /* 0x8 */ T* mEnd;
+            T* mHead;
+            T* mTail;
+            T* mEnd;
         };
 
         inline FixedRingBuffer() {
@@ -378,7 +378,7 @@ namespace MR {
 
         void push_back(const T& val);
 
-        /* 0x00 */ T mBuffer[S];
+        T mBuffer[S];
         /* 0x40 for S=16 */ iterator mHead;
         /* 0x4C for S=16 */ iterator mEnd;
         /* 0x58 for S=16 */ s32 mCount;

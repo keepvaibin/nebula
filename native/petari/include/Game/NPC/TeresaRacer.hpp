@@ -36,9 +36,9 @@ public:
 
     void changeBgmState();
 
-    /* 0x180 */ TakeOutStar* mTakeOutStar;
-    /* 0x184 */ ActorCameraInfo* mCameraInfo;
-    /* 0x188 */ bool mIsGoal;
-    /* 0x18C */ s32 mBgmState;
-    /* 0x190 */ s32 mRacerId;  // -1: Ghostly Galaxy, 0: Boo's Boneyard - Mario, 1: Boo's Boneyard - Luigi
+    TakeOutStar* mTakeOutStar;
+    ActorCameraInfo* mCameraInfo;
+    bool mIsGoal;
+    s32 mBgmState;
+    s32 mRacerId;  // -1: Ghostly Galaxy, 0: Boo's Boneyard - Mario, 1: Boo's Boneyard - Luigi
 };

@@ -22,22 +22,22 @@ public:
     void tryEndDisp();
 
     /// @brief The total number of notes in the song.
-    /* 0x20 */ s32 mNoteNum;
+    s32 mNoteNum;
 
     /// @brief The cumulative number of collected notes.
-    /* 0x24 */ s32 mNoteAddNum;
+    s32 mNoteAddNum;
 
     /// @brief The total number of missed notes.
-    /* 0x28 */ s32 mNoteMissNum;
+    s32 mNoteMissNum;
 
     /// @brief The numeric identifier for the selected song.
-    /* 0x2C */ s32 mMelodyNo;
+    s32 mMelodyNo;
 
     /// @brief The length of the path that notes are distributed along.
-    /* 0x30 */ f32 mRailLength;
+    f32 mRailLength;
 
     /// @brief The pointer to the owning actor instance.
-    /* 0x34 */ LiveActor* mHost;
+    LiveActor* mHost;
 };
 
 namespace MR {

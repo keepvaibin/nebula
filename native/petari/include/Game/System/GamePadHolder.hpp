@@ -38,8 +38,8 @@ public:
     GamePadSample* getSample(u32) const;
     u32 getValidStatusCount() const;
 
-    /* 0x00 */ GamePadSample* mStatusArray;
-    /* 0x04 */ u32 mValidStatusCount;
+    GamePadSample* mStatusArray;
+    u32 mValidStatusCount;
     NebulaInputDevice mDevice;
 
 private:
@@ -71,9 +71,9 @@ public:
     void resetPad();
     GamePad* getGamePad(s32);
 
-    /* 0x00 */ GamePad* mPad[2];
-    /* 0x08 */ GamePadReadDataInfo* mReadDataInfoArray;
-    /* 0x0C */ u32 mMode;
+    GamePad* mPad[2];
+    GamePadReadDataInfo* mReadDataInfoArray;
+    u32 mMode;
 };
 
 namespace MR {

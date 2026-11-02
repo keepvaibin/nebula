@@ -26,12 +26,12 @@ public:
     bool tryEmitMyEffect();
     bool tryDeleteMyEffect();
 
-    /* 0x8C */ const char* mModelName;
-    /* 0x90 */ TVec3f _90;
-    /* 0x9C */ LodCtrl* mLODCtrl;
-    /* 0xA0 */ ModelObj* mBloomModel;
-    /* 0xA4 */ PartsModel* mWaterModel;
-    /* 0xA8 */ PartsModel* mIndirectModel;
+    const char* mModelName;
+    TVec3f _90;
+    LodCtrl* mLODCtrl;
+    ModelObj* mBloomModel;
+    PartsModel* mWaterModel;
+    PartsModel* mIndirectModel;
 };
 
 class FurPlanetMap : public PlanetMap {
@@ -51,8 +51,8 @@ public:
 };
 
 struct PlanetMapClippingInfo {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ f32 mRadius;
-    /* 0x08 */ Vec mOffset;
-    /* 0x14 */ s32 _14;
+    const char* mName;
+    f32 mRadius;
+    Vec mOffset;
+    s32 _14;
 };

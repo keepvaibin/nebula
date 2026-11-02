@@ -14,8 +14,8 @@ public:
     void updatePlayerRestartIdInfo();
     void changeBgm();
 
-    /* 0x3C */ JMapIdInfo* mIdInfo;
-    /* 0x40 */ s32 _40;
-    /* 0x44 */ s32 _44;
-    /* 0x48 */ bool _48;
+    JMapIdInfo* mIdInfo;
+    s32 _40;
+    s32 _44;
+    bool _48;
 };

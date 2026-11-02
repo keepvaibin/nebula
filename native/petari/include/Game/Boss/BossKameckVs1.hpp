@@ -21,5 +21,5 @@ public:
     void exeEndDemo();
     bool isBattle() const;
 
-    /* 0x14 */ BossKameckStateBattle* mStateBattle;
+    BossKameckStateBattle* mStateBattle;
 };

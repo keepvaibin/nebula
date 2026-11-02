@@ -9,19 +9,19 @@ extern "C" {
 typedef struct Mii_Texture;
 
 typedef struct Mii_Archive {
-    u16 numFiles;    // at 0x0
-    u16 biggestSize; // at 0x2
-    u32 offset;      // at 0x4
+    u16 numFiles;
+    u16 biggestSize;
+    u32 offset;
 } Mii_Archive;
 
 typedef struct Mii_Loader {
-    Mii_Archive archives[Mii_ArcID_Max]; // at 0x0
-    u32 cacheSize;                       // at 0x90
-    void* cache;                         // at 0x94
-    u16 version;                         // at 0x9C
-    void* headerBuf1;                    // at 0xA0
-    void* headerBuf2;                    // at 0xA4
-    u8 numResources;                     // at 0xA8
+    Mii_Archive archives[Mii_ArcID_Max];
+    u32 cacheSize;
+    void* cache;
+    u16 version;
+    void* headerBuf1;
+    void* headerBuf2;
+    u8 numResources;
 } Mii_Loader;
 
 void Mii_InitLoader(void);

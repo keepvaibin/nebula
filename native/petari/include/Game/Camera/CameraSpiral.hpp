@@ -30,14 +30,14 @@ public:
         return (mEndTime - mStartTime);
     }
 
-    /* 0x4C */ s32 mEndTime;
-    /* 0x50 */ s32 mTimer;
-    /* 0x54 */ s32 mStartTime;
-    /* 0x58 */ s32 mEaseType;
-    /* 0x5C */ f32 mOffsetYStart;
-    /* 0x60 */ f32 mOffsetYEnd;
-    /* 0x64 */ f32 mDistStart;
-    /* 0x68 */ f32 mDistEnd;
-    /* 0x6C */ f32 mAngleStart;
-    /* 0x70 */ f32 mAngleEnd;
+    s32 mEndTime;
+    s32 mTimer;
+    s32 mStartTime;
+    s32 mEaseType;
+    f32 mOffsetYStart;
+    f32 mOffsetYEnd;
+    f32 mDistStart;
+    f32 mDistEnd;
+    f32 mAngleStart;
+    f32 mAngleEnd;
 };

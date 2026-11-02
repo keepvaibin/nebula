@@ -5,13 +5,13 @@
 class GalaxyCometState;
 
 struct GalaxyCometSerializeInfo {
-    /* 0x0 */ u16 mStateIndexPacked;
-    /* 0x2 */ u16 mPastSecond;
+    u16 mStateIndexPacked;
+    u16 mPastSecond;
 };
 
 struct GalaxyCometTimePaper {
-    /* 0x0 */ const char* mGalaxyName;
-    /* 0x4 */ s32 mCategory;
+    const char* mGalaxyName;
+    s32 mCategory;
 };
 
 class GalaxyCometTimeTable {
@@ -63,11 +63,11 @@ public:
     /// @brief Forces the current state forward and reapplies cursor adjustment.
     void advance();
 
-    /* 0x0 */ GalaxyCometState* mState;
-    /* 0x4 */ const GalaxyCometTimePaper* mTimePaper;
-    /* 0x8 */ s32 mTimePaperPos;
-    /* 0xC */ bool mIsReady;
-    /* 0xD */ bool mIsHide;
+    GalaxyCometState* mState;
+    const GalaxyCometTimePaper* mTimePaper;
+    s32 mTimePaperPos;
+    bool mIsReady;
+    bool mIsHide;
 };
 
 class GalaxyCometScheduler {
@@ -133,6 +133,6 @@ public:
     s32 getStateValueIncluded(const char*);
 
 private:
-    /* 0x0 */ MR::AssignableArray< GalaxyCometTimeTable* > mTimeTables;
-    /* 0x8 */ bool mEnabled;
+    MR::AssignableArray< GalaxyCometTimeTable* > mTimeTables;
+    bool mEnabled;
 };

@@ -24,8 +24,8 @@ public:
     void exeSwitchDown();
     void exeOn();
 
-    /* 0x8C */ CollisionParts* mSwitchCollision;
-    /* 0x90 */ MapObjConnector* mConnector;
-    /* 0x94 */ s32 _94;
-    /* 0x98 */ bool _98;
+    CollisionParts* mSwitchCollision;
+    MapObjConnector* mConnector;
+    s32 _94;
+    bool _98;
 };

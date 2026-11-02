@@ -16,14 +16,14 @@ public:
 
     void placementGenerater();
 
-    /* 0x0C */ TripodBossKillerGenerater* mGenerater;
-    /* 0x10 */ TVec3f mPosition;
-    /* 0x1C */ TVec3f mRotation;
-    /* 0x28 */ const f32* mAngleTable;
-    /* 0x2C */ s32 mAngleNum;
-    /* 0x30 */ f32 _30;
-    /* 0x34 */ f32 _34;
-    /* 0x38 */ f32 _38;
-    /* 0x3C */ f32 _3C;
-    /* 0x40 */ u32 _40;
+    TripodBossKillerGenerater* mGenerater;
+    TVec3f mPosition;
+    TVec3f mRotation;
+    const f32* mAngleTable;
+    s32 mAngleNum;
+    f32 _30;
+    f32 _34;
+    f32 _38;
+    f32 _3C;
+    u32 _40;
 };

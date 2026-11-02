@@ -25,17 +25,17 @@
 
 namespace {
     struct StaffRollParam {
-        /* 0x00 */ f32 mPaneScale;
-        /* 0x04 */ f32 mScrollSpeed;
-        /* 0x08 */ f32 mLineLeading;
-        /* 0x0C */ f32 mEmptyLineLeading;
+        f32 mPaneScale;
+        f32 mScrollSpeed;
+        f32 mLineLeading;
+        f32 mEmptyLineLeading;
     };
 
     struct PictureTiming {
-        /* 0x00 */ s32 mAppearStep;
-        /* 0x04 */ s32 mReplaceTextureId;
-        /* 0x08 */ s32 mPaneId;
-        /* 0x0C */ s32 mAnimId;
+        s32 mAppearStep;
+        s32 mReplaceTextureId;
+        s32 mPaneId;
+        s32 mAnimId;
     };
 
     static const StaffRollParam sStaffRollParamTable[] = {

@@ -38,16 +38,16 @@ public:
     void setPriority(s32 priority);
     void updateIdentityMtx();
 
-    /* 0x04 */ f32 mRange;
-    /* 0x08 */ f32 mDistant;
-    /* 0x0C */ s32 mPriority;
-    /* 0x10 */ s32 mGravityId;     // read from the stage files but never used
-    /* 0x14 */ const void* mHost;  // host object pointer, can be any pointer
-    /* 0x18 */ u32 mGravityType;   // gravity type bits
-    /* 0x1C */ s32 mGravityPower;  // gravity power type
-    /* 0x20 */ bool mActivated;    // corresponding GlobalGravityObj has switch activated?
-    /* 0x21 */ bool mIsInverse;    // invert gravity vector?
-    /* 0x22 */ bool mValidFollower;
-    /* 0x23 */ bool mIsRegistered;  // is registered by PlanetGravityManager?
-    /* 0x24 */ bool mAppeared;      // corresponding GlobalGravityObj has appeared?
+    f32 mRange;
+    f32 mDistant;
+    s32 mPriority;
+    s32 mGravityId;     // read from the stage files but never used
+    const void* mHost;  // host object pointer, can be any pointer
+    u32 mGravityType;   // gravity type bits
+    s32 mGravityPower;  // gravity power type
+    bool mActivated;    // corresponding GlobalGravityObj has switch activated?
+    bool mIsInverse;    // invert gravity vector?
+    bool mValidFollower;
+    bool mIsRegistered;  // is registered by PlanetGravityManager?
+    bool mAppeared;      // corresponding GlobalGravityObj has appeared?
 };

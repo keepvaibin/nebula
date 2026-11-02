@@ -20,7 +20,7 @@ public:
     void calcRootJoint(TPos3f*, const TVec3f&) const;
     void calcDropJoint(TPos3f*, const TVec3f&) const;
 
-    /* 0x20 */ MtxPtr mBaseMtx;
-    /* 0x24 */ s32 mRootDrawMtxIndex;
-    /* 0x28 */ s32 mDropDrawMtxIndex;
+    MtxPtr mBaseMtx;
+    s32 mRootDrawMtxIndex;
+    s32 mDropDrawMtxIndex;
 };

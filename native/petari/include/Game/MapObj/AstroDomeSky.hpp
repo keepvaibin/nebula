@@ -24,7 +24,7 @@ public:
     void exeReturnDemoWait();
     void exeJumpOutDemo() {};
 
-    /* 0x8C */ f32 mBrkFrame;
-    /* 0x90 */ Color8 mColor;
-    /* 0x94 */ ProjmapEffectMtxSetter* mProjmap;
+    f32 mBrkFrame;
+    Color8 mColor;
+    ProjmapEffectMtxSetter* mProjmap;
 };

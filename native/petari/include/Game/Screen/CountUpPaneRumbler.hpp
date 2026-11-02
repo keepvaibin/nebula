@@ -19,6 +19,6 @@ public:
     void connectPane(LayoutActor*, const char*);
 
 private:
-    /* 0x0 */ RumbleCalculatorCosMultLinear* mRumbleCalculator;
-    /* 0x4 */ TVec2f mPosition;
+    RumbleCalculatorCosMultLinear* mRumbleCalculator;
+    TVec2f mPosition;
 };

@@ -16,8 +16,8 @@ public:
         return "GlaringLightArea";
     }
 
-    /* 0x3C */ AudSoundObject* mSoundObj;
-    /* 0x40 */ TVec3f mPos;
+    AudSoundObject* mSoundObj;
+    TVec3f mPos;
 };
 
 class GlaringLightAreaMgr : public AreaObjMgr {

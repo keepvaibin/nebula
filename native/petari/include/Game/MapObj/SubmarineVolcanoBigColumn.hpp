@@ -18,6 +18,6 @@ public:
     void pauseOff();
     void initBreakModel(const char*);
 
-    /* 0x8C */ ModelObj* mBreakModel;
-    /* 0x90 */ bool mIsSmallColumn;
+    ModelObj* mBreakModel;
+    bool mIsSmallColumn;
 };

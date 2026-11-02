@@ -16,7 +16,7 @@ public:
         mWPoint.set(rWPoint);
     }
 
-    /* 0x4C */ TVec3f mBasePos;
-    /* 0x58 */ TVec3f mUp;
-    /* 0x64 */ TVec3f mWPoint;
+    TVec3f mBasePos;
+    TVec3f mUp;
+    TVec3f mWPoint;
 };

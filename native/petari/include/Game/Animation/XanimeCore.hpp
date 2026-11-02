@@ -10,9 +10,9 @@ class XtransformInfo {
 public:
     XtransformInfo();
 
-    /* 0x00 */ TVec3f _0;
-    /* 0x0C */ TVec3f _C;
-    /* 0x18 */ Quaternion mRotation;
+    TVec3f _0;
+    TVec3f _C;
+    Quaternion mRotation;
 };
 
 class XjointTransform {
@@ -23,28 +23,28 @@ public:
         mScale.set(scale);
     }
 
-    /* 0x00 */ J3DJoint* _0;
-    /* 0x04 */ u16 _4;
-    /* 0x08 */ TVec3f mScale;
-    /* 0x14 */ TVec3f _14;
-    /* 0x20 */ TVec3f _20;
-    /* 0x2C */ TVec3f _2C;
-    /* 0x38 */ TVec3f _38;
-    /* 0x44 */ J3DTransformInfo _44;
-    /* 0x64 */ MtxPtr _64;
-    /* 0x68 */ uintptr_t _68;
-    /* 0x6C */ MtxPtr _6C;
+    J3DJoint* _0;
+    u16 _4;
+    TVec3f mScale;
+    TVec3f _14;
+    TVec3f _20;
+    TVec3f _2C;
+    TVec3f _38;
+    J3DTransformInfo _44;
+    MtxPtr _64;
+    uintptr_t _68;
+    MtxPtr _6C;
 };
 
 class XjointInfo {
 public:
     XjointInfo();
 
-    /* 0x00 */ XtransformInfo _0;
-    /* 0x28 */ XtransformInfo _28;
-    /* 0x50 */ TVec3f _50;
-    /* 0x5C */ f32 _5C;
-    /* 0x60 */ f32 _60;
+    XtransformInfo _0;
+    XtransformInfo _28;
+    TVec3f _50;
+    f32 _5C;
+    f32 _60;
 };
 
 class XanimeTrack {
@@ -62,10 +62,10 @@ public:
         return mWeight;
     }
 
-    /* 0x0 */ J3DAnmTransform* _0;
-    /* 0x4 */ f32 mWeight;
-    /* 0x8 */ f32 _8;
-    /* 0xC */ u8 _C;
+    J3DAnmTransform* _0;
+    f32 mWeight;
+    f32 _8;
+    u8 _C;
 };
 
 class XanimeCore : public J3DMtxCalc {
@@ -107,17 +107,17 @@ public:
         return &mTransformList[index];
     }
 
-    /* 0x04 */ u8 _4;
-    /* 0x05 */ u8 mTrackCount;
-    /* 0x06 */ u8 _6;
-    /* 0x08 */ u32 mJointCount;
-    /* 0x0C */ u16 _C;
-    /* 0x10 */ XjointInfo* mJointList;
-    /* 0x14 */ XjointTransform* mTransformList;
-    /* 0x18 */ XanimeTrack* mTrackList;
-    /* 0x1C */ f32 _1C;
-    /* 0x20 */ f32 _20;
-    /* 0x24 */ f32 mFrameRatio;
-    /* 0x28 */ u8 _28;
-    /* 0x29 */ u8 _29;
+    u8 _4;
+    u8 mTrackCount;
+    u8 _6;
+    u32 mJointCount;
+    u16 _C;
+    XjointInfo* mJointList;
+    XjointTransform* mTransformList;
+    XanimeTrack* mTrackList;
+    f32 _1C;
+    f32 _20;
+    f32 mFrameRatio;
+    u8 _28;
+    u8 _29;
 };

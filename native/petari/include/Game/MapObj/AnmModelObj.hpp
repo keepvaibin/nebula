@@ -40,7 +40,7 @@ public:
     void exeMove();
     void exeDone();
 
-    /* 0xC4 */ TVec3f mJointPos;
+    TVec3f mJointPos;
 };
 
 class AnmModelSwitchMove : public AnmModelObj {
@@ -106,5 +106,5 @@ public:
     virtual void startInner();
     virtual void stopInner();
 
-    /* 0xD0 */ ActorCameraInfo* mCameraInfo;
+    ActorCameraInfo* mCameraInfo;
 };

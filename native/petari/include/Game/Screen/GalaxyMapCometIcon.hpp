@@ -22,7 +22,7 @@ public:
     void syncStatus();
 
 private:
-    /* 0x20 */ const char* _20;
-    /* 0x24 */ LayoutActor* _24;
-    /* 0x28 */ const char* _28;
+    const char* _20;
+    LayoutActor* _24;
+    const char* _28;
 };

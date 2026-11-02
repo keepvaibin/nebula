@@ -29,10 +29,10 @@ public:
     void setFarClipLevel(LiveActor*, s32);
     ClippingActorInfo* find(const LiveActor*) const;
 
-    /* 0x0C */ s32 mActorNum;
-    /* 0x10 */ ClippingActorInfoList* _10;
-    /* 0x14 */ ClippingActorInfoList* _14;
-    /* 0x18 */ ClippingActorInfoList* _18;
-    /* 0x1C */ ClippingActorInfoList* _1C;
-    /* 0x20 */ ViewGroupCtrl* mViewGroupCtrl;
+    s32 mActorNum;
+    ClippingActorInfoList* _10;
+    ClippingActorInfoList* _14;
+    ClippingActorInfoList* _18;
+    ClippingActorInfoList* _1C;
+    ViewGroupCtrl* mViewGroupCtrl;
 };

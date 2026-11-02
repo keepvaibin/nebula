@@ -13,7 +13,7 @@ public:
 
     void add(const NameObj*);
 
-    /* 0x0C */ HashSortTable* mHashTable;
+    HashSortTable* mHashTable;
 };
 
 class GroupCheckManager : public NameObj {
@@ -25,6 +25,6 @@ public:
     void add(const NameObj*, s32);
     bool isExist(const NameObj*, s32);
 
-    /* 0x0C */ GroupChecker* mGroups[2];
-    /* 0x14 */ u32 _14;
+    GroupChecker* mGroups[2];
+    u32 _14;
 };

@@ -13,6 +13,6 @@ public:
     void setSize(const TVec3f&);
     void makeVertexBuffer() const;
 
-    /* 0x1C */ TVec3f mSize;
-    /* 0x28 */ mutable TVec3f mPoints[14];
+    TVec3f mSize;
+    mutable TVec3f mPoints[14];
 };

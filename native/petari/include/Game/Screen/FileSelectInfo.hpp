@@ -31,20 +31,20 @@ public:
     void reflectInfo();
 
 private:
-    /* 0x20 */ s32 mNumber;
-    /* 0x24 */ s32 mStarNum;
-    /* 0x28 */ s32 mStarPieceNum;
-    /* 0x2C */ s32 mNameBufferSize;
-    /* 0x30 */ char16_t* mName;
-    /* 0x34 */ char16_t mDateMessage[32];
-    /* 0x74 */ char16_t mTimeMessage[32];
-    /* 0xB4 */ s32 mMissNum;
-    /* 0xB8 */ bool mIsSelectedMarioPrev;
-    /* 0xB9 */ bool mIsSelectedMario;
-    /* 0xBA */ bool mIsViewNormalEnding;
-    /* 0xBB */ bool mIsViewCompleteEnding;
-    /* 0xBC */ FileSelectInfoSub::SlideState* mSlideState;
-    /* 0xC0 */ FileSelectInfoSub::CharaState* mCharaState;
+    s32 mNumber;
+    s32 mStarNum;
+    s32 mStarPieceNum;
+    s32 mNameBufferSize;
+    char16_t* mName;
+    char16_t mDateMessage[32];
+    char16_t mTimeMessage[32];
+    s32 mMissNum;
+    bool mIsSelectedMarioPrev;
+    bool mIsSelectedMario;
+    bool mIsViewNormalEnding;
+    bool mIsViewCompleteEnding;
+    FileSelectInfoSub::SlideState* mSlideState;
+    FileSelectInfoSub::CharaState* mCharaState;
 };
 
 namespace FileSelectInfoSub {
@@ -60,7 +60,7 @@ namespace FileSelectInfoSub {
         void exeSlidingBack();
 
     private:
-        /* 0x8 */ FileSelectInfo* mHost;
+        FileSelectInfo* mHost;
     };
 
     class CharaState : public NerveExecutor {
@@ -75,6 +75,6 @@ namespace FileSelectInfoSub {
         void exeToMario();
 
     private:
-        /* 0x8 */ FileSelectInfo* mHost;
+        FileSelectInfo* mHost;
     };
 };  // namespace FileSelectInfoSub

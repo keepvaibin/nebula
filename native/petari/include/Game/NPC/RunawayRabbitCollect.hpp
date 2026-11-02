@@ -26,14 +26,14 @@ public:
     void exeActive();
 
 private:
-    /* 0x8C */ ActorCameraInfo* mCameraInfo;
-    /* 0x90 */ RunawayRabbit** mRabbit;
-    /* 0x94 */ s32 mRabbitNum;
-    /* 0x98 */ RunawayTico** mTico;
-    /* 0x9C */ s32 mTicoNum;
-    /* 0xA0 */ u32 mLinkedRabbitCount;
-    /* 0xA4 */ s32 mCaughtRabbitCount;
-    /* 0xA8 */ s32 mCompleteRabbitCount;
-    /* 0xAC */ s32 mBgmState;
-    /* 0xB0 */ bool mIsAppearTico[3];
+    ActorCameraInfo* mCameraInfo;
+    RunawayRabbit** mRabbit;
+    s32 mRabbitNum;
+    RunawayTico** mTico;
+    s32 mTicoNum;
+    u32 mLinkedRabbitCount;
+    s32 mCaughtRabbitCount;
+    s32 mCompleteRabbitCount;
+    s32 mBgmState;
+    bool mIsAppearTico[3];
 };

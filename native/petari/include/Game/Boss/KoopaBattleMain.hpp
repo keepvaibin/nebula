@@ -38,9 +38,9 @@ public:
     void exeFind();
     void exeAttackFireLong();
 
-    /* 0x1C */ KoopaStateAttackHipDrop* mStateAttackHipDrop;
-    /* 0x20 */ KoopaStateAttackShockWave* mStateAttackShockWave;
-    /* 0x24 */ KoopaStateAttackRoll* mStateAttackRoll;
-    /* 0x28 */ KoopaStateAttackSpin* mStateAttackSpin;
-    /* 0x2C */ bool _2C;
+    KoopaStateAttackHipDrop* mStateAttackHipDrop;
+    KoopaStateAttackShockWave* mStateAttackShockWave;
+    KoopaStateAttackRoll* mStateAttackRoll;
+    KoopaStateAttackSpin* mStateAttackSpin;
+    bool _2C;
 };

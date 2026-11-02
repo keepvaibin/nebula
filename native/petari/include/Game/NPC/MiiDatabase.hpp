@@ -8,6 +8,6 @@ public:
     ~MiiDatabase();
 
 private:
-    /* 0x00 */ u8* _0;
-    /* 0x04 */ MiiDatabaseStoreData* mStoreData;
+    u8* _0;
+    MiiDatabaseStoreData* mStoreData;
 };

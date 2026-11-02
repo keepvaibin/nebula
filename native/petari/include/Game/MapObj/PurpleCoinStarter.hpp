@@ -17,6 +17,6 @@ public:
     void setHost(PurpleCoinHolder* pHost);
     void start();
 
-    /* 0x0C */ PurpleCoinHolder* mHost;
-    /* 0x10 */ StageSwitchCtrl* mStageSwitchCtrl;
+    PurpleCoinHolder* mHost;
+    StageSwitchCtrl* mStageSwitchCtrl;
 };

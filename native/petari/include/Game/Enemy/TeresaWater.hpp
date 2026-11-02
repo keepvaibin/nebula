@@ -25,10 +25,10 @@ public:
     void endDPDSwoon();
     bool tryDPDSwoon();
 
-    /* 0x8C */ AnimScaleController* _8C;
-    /* 0x90 */ WalkerStateBindStarPointer* _90;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ TVec3f _A0;
-    /* 0xAC */ TVec3f _AC;
-    /* 0xB8 */ TVec3f* _B8;
+    AnimScaleController* _8C;
+    WalkerStateBindStarPointer* _90;
+    TVec3f _94;
+    TVec3f _A0;
+    TVec3f _AC;
+    TVec3f* _B8;
 };

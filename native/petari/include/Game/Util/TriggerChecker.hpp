@@ -28,8 +28,8 @@ public:
 
 private:
     /// @brief The previous state of the trigger.
-    /* 0x00 */ bool mPrevLevel;
+    bool mPrevLevel;
 
     /// @brief The current state of the trigger.
-    /* 0x01 */ bool mCurrLevel;
+    bool mCurrLevel;
 };

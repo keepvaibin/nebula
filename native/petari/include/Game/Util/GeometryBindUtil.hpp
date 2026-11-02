@@ -12,8 +12,8 @@ public:
         return mRadius;
     }
 
-    /* 0x0 */ TVec3f mPosition;
-    /* 0xC */ f32 mRadius;
+    TVec3f mPosition;
+    f32 mRadius;
 };
 
 class BindCone {
@@ -34,12 +34,12 @@ public:
         return mGeneratrixLength;
     }
 
-    /* 0x00 */ TVec3f mPosition;
-    /* 0x0C */ TVec3f mVertex;
-    /* 0x18 */ TVec3f mDirection;
-    /* 0x24 */ f32 mHeight;
-    /* 0x28 */ f32 mRadius;
-    /* 0x2C */ f32 mGeneratrixLength;
+    TVec3f mPosition;
+    TVec3f mVertex;
+    TVec3f mDirection;
+    f32 mHeight;
+    f32 mRadius;
+    f32 mGeneratrixLength;
 };
 
 class BindResult {
@@ -47,10 +47,10 @@ public:
     BindResult() : mPosition(0, 0, 0), mNormal(0, 0, 0), mContactPosition(0, 0, 0), mIsBound() {
     }
 
-    /* 0x00 */ TVec3f mPosition;
-    /* 0x0C */ TVec3f mNormal;
-    /* 0x18 */ TVec3f mContactPosition;
-    /* 0x24 */ bool mIsBound;
+    TVec3f mPosition;
+    TVec3f mNormal;
+    TVec3f mContactPosition;
+    bool mIsBound;
 };
 
 namespace MR {

@@ -19,11 +19,11 @@ public:
     void createFontFromEmbeddedData();
     void createFontFromFile();
 
-    /* 0x04 */ AssetFolder* _4;
-    /* 0x08 */ nw4r::ut::ResFont* mEmbeddedMessageFont;
-    /* 0x0C */ nw4r::ut::ResFont* mMessageFont;
-    /* 0x10 */ nw4r::ut::ResFont* mPictureFont;
-    /* 0x14 */ nw4r::ut::ResFont* mMenuFont;
-    /* 0x18 */ nw4r::ut::ResFont* mNumberFont;
-    /* 0x1C */ nw4r::ut::ResFont* mCinemaFont;
+    AssetFolder* _4;
+    nw4r::ut::ResFont* mEmbeddedMessageFont;
+    nw4r::ut::ResFont* mMessageFont;
+    nw4r::ut::ResFont* mPictureFont;
+    nw4r::ut::ResFont* mMenuFont;
+    nw4r::ut::ResFont* mNumberFont;
+    nw4r::ut::ResFont* mCinemaFont;
 };

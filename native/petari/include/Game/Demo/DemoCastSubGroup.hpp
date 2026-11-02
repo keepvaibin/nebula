@@ -11,5 +11,5 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual bool tryRegisterDemoActor(LiveActor*, const JMapInfoIter&, const JMapIdInfo&);
 
-    /* 0x14 */ DemoExecutor* mExecutor;
+    DemoExecutor* mExecutor;
 };

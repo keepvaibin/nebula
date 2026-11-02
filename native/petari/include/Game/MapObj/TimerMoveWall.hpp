@@ -15,6 +15,6 @@ public:
     void exeWait();
     void exeMove();
 
-    /* 0xC4 */ s32 mTimer;
-    /* 0xC8 */ f32 mMoveLenght;
+    s32 mTimer;
+    f32 mMoveLenght;
 };

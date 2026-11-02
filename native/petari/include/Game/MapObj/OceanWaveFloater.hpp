@@ -20,11 +20,11 @@ public:
     f32 getCurrentSinkDepth() const;
     void controlEffect();
 
-    /* 0xC4 */ FloaterFloatingForceTypeSpring* mSpring;
-    /* 0xC8 */ WaveFloatingForce* mForce;
-    /* 0xCC */ TVec3f mRipplePos;
-    /* 0xD8 */ s32 mSoundDelay;
-    /* 0xDC */ TVec3f mMapGroundUpper;
-    /* 0xE8 */ f32 mOffset;
-    /* 0xEC */ bool mCanRipple;
+    FloaterFloatingForceTypeSpring* mSpring;
+    WaveFloatingForce* mForce;
+    TVec3f mRipplePos;
+    s32 mSoundDelay;
+    TVec3f mMapGroundUpper;
+    f32 mOffset;
+    bool mCanRipple;
 };

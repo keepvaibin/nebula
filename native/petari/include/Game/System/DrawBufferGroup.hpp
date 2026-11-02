@@ -26,9 +26,9 @@ public:
         return mExecutors[index]->mNumActors == 0;
     }
 
-    /* 0x00 */ MR::Vector< MR::AssignableArray< DrawBufferExecuter* > > mExecutors;
-    /* 0x0C */ MR::Vector< MR::AssignableArray< DrawBufferExecuter* > > mActiveExecutors;
-    /* 0x18 */ s32 mDrawCameraType;
-    /* 0x1C */ s32 mLightType;
-    /* 0x20 */ s32 mLightLoadType;
+    MR::Vector< MR::AssignableArray< DrawBufferExecuter* > > mExecutors;
+    MR::Vector< MR::AssignableArray< DrawBufferExecuter* > > mActiveExecutors;
+    s32 mDrawCameraType;
+    s32 mLightType;
+    s32 mLightLoadType;
 };

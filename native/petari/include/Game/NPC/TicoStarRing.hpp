@@ -15,7 +15,7 @@ public:
 
     void exeWait();
 
-    /* 0x190 */ const char* mGalaxyName;
-    /* 0x194 */ LiveActor* _194;
-    /* 0x198 */ LiveActor* mTicoGalaxy;
+    const char* mGalaxyName;
+    LiveActor* _194;
+    LiveActor* mTicoGalaxy;
 };

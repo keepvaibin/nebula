@@ -139,12 +139,12 @@ namespace nw4r {
 
                 case 2: {
                     struct CMapScanEntry {
-                        u16 ccode;  // at 0x0
-                        u16 index;  // at 0x2
+                        u16 ccode;
+                        u16 index;
                     };
                     struct CMapInfoScan {
-                        u16 num;       // at 0x0
-                        CMapScanEntry entries[];  // at 0x2
+                        u16 num;
+                        CMapScanEntry entries[];
                     };
 
                     const CMapInfoScan* pInfo = reinterpret_cast< const CMapInfoScan* >(pMap->mapInfo);

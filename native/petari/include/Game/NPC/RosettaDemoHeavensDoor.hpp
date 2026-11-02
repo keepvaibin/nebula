@@ -27,9 +27,9 @@ public:
     void exeFade();
     void exeDemo();
 
-    /* 0x08 */ Rosetta* mHost;
-    /* 0x0C */ PartsModel* mLightDomeModel;
-    /* 0x10 */ PartsModel* mLightHaloModel;
+    Rosetta* mHost;
+    PartsModel* mLightDomeModel;
+    PartsModel* mLightHaloModel;
 };
 
 class RosettaDemoHeavensDoor2 : public NerveExecutor {
@@ -47,6 +47,6 @@ public:
     void exeDemo() {
     }
 
-    /* 0x08 */ DemoStarter mDemoStarter;
-    /* 0x14 */ Rosetta* mHost;
+    DemoStarter mDemoStarter;
+    Rosetta* mHost;
 };

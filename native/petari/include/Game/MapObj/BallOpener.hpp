@@ -19,11 +19,11 @@ public:
     void exeOpen();
     void bindHole();
 
-    /* 0x8C */ BindCone* mCone;
-    /* 0x90 */ HitSensor* mBoundSensor;
-    /* 0x94 */ TVec3f mHoleGravity;
-    /* 0xA0 */ TVec3f _A0;
-    /* 0xAC */ TVec3f mInitialVelocity;
-    /* 0xB8 */ TVec3f mBindVelocity;
-    /* 0xC4 */ s32 mSettledFrames;
+    BindCone* mCone;
+    HitSensor* mBoundSensor;
+    TVec3f mHoleGravity;
+    TVec3f _A0;
+    TVec3f mInitialVelocity;
+    TVec3f mBindVelocity;
+    s32 mSettledFrames;
 };

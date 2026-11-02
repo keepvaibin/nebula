@@ -19,9 +19,9 @@ public:
     static TripodBossAccesser* createSceneObj();
 
 private:
-    /* 0x00C */ TripodBoss* mBoss;
-    /* 0x010 */ LiveActor* mParts[256];
-    /* 0x410 */ s32 mPartsNum;
+    TripodBoss* mBoss;
+    LiveActor* mParts[256];
+    s32 mPartsNum;
 };
 
 namespace MR {

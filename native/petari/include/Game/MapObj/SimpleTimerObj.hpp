@@ -15,7 +15,7 @@ public:
 
     void exeTimer();
 
-    /* 0xC4 */ FlashingCtrl* mFlashingCtrl;
-    /* 0xC8 */ s32 mTimeLimit;
-    /* 0xCC */ s32 mTimeLeft;
+    FlashingCtrl* mFlashingCtrl;
+    s32 mTimeLimit;
+    s32 mTimeLeft;
 };

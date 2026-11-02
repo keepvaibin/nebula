@@ -3,8 +3,8 @@
 #include "Game/System/BinaryDataChunkHolder.hpp"
 
 struct GameEventValue {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ u16 mDefaultValue;
+    const char* mName;
+    u16 mDefaultValue;
 };
 
 class GameEventValueChecker : public BinaryDataChunkBase {
@@ -23,6 +23,6 @@ public:
     s32 findIndex(const char*) const;
     s32 findIndexFromHashCode(u16) const;
 
-    /* 0x04 */ u16* mValues;
-    /* 0x08 */ s32 mNumValues;
+    u16* mValues;
+    s32 mNumValues;
 };

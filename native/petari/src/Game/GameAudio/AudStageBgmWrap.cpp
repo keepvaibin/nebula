@@ -5,10 +5,10 @@
 #include <JSystem/JAudio2/JAISound.hpp>
 
 struct StageBgmData {
-    /* 0x00 */ const char* mSceneName;
-    /* 0x04 */ const char* mStageName;
-    /* 0x08 */ u32 mSoundID;
-    /* 0x0C */ s32 mScenarioGroup;
+    const char* mSceneName;
+    const char* mStageName;
+    u32 mSoundID;
+    s32 mScenarioGroup;
 };
 
 const StageBgmData sMAStageBgmData[] = {

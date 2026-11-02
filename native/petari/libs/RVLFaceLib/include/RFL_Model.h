@@ -31,12 +31,12 @@ typedef struct MiiCharModel {
 } MiiCharModel;
 
 typedef struct MiiDrawSetting {
-    u8 lightEnable;      // at 0x0
-    u32 lightMask; // at 0x4
-    u32 diffuse; // at 0x8
-    u32 attn;       // at 0xC
-    NebulaColor8 ambColor;    // at 0x10
-    u8 compLoc;          // at 0x14
+    u8 lightEnable;
+    u32 lightMask;
+    u32 diffuse;
+    u32 attn;
+    NebulaColor8 ambColor;
+    u8 compLoc;
 } MiiDrawSetting;
 
 // How a head draws: the position/normal matrix slot it loads its matrices into (0-9) and whether its faces cull the

@@ -18,7 +18,7 @@ public:
     void setDivideLevel(s32);
     void calcControlPoint();
 
-    /* 0x04 */ TVec3f mVertices[6];  // top, right, back, left, front, bottom
-    /* 0x4C */ BezierSurface* mSurfaces[8];
-    /* 0x6C */ f32 mDiagonalRate;
+    TVec3f mVertices[6];  // top, right, back, left, front, bottom
+    BezierSurface* mSurfaces[8];
+    f32 mDiagonalRate;
 };

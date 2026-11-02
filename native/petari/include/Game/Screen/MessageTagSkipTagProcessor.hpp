@@ -42,5 +42,5 @@ public:
     void setParamString(const char16_t* pString) const;
     const char16_t* getParamString() const;
 
-    /* 0x00 */ const char16_t* mMessage;
+    const char16_t* mMessage;
 };

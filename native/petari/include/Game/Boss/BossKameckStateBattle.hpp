@@ -45,15 +45,15 @@ public:
     bool isEnableDamage() const;
     bool isEnableGuard() const;
 
-    /* 0x10 */ BossKameckMoveRail* mMoveRail;
-    /* 0x14 */ BossKameckBattlePattarn* mBattlePattarn;
-    /* 0x18 */ KameckBeam* mBeam;
-    /* 0x1C */ KameckBeamEventListener* mBeamEventListener;
-    /* 0x20 */ TVec3f _20;
-    /* 0x2C */ s32 _2C;
-    /* 0x30 */ s32 _30;
-    /* 0x34 */ s32 _34;
-    /* 0x38 */ s32 _38;
-    /* 0x3C */ bool mIsFinal;
-    /* 0x3D */ bool mIsVs2;
+    BossKameckMoveRail* mMoveRail;
+    BossKameckBattlePattarn* mBattlePattarn;
+    KameckBeam* mBeam;
+    KameckBeamEventListener* mBeamEventListener;
+    TVec3f _20;
+    s32 _2C;
+    s32 _30;
+    s32 _34;
+    s32 _38;
+    bool mIsFinal;
+    bool mIsVs2;
 };

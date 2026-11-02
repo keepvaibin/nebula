@@ -15,7 +15,7 @@ public:
     bool tryStartPointBind() const;
     void exeBind();
 
-    /* 0x10 */ AnimScaleController* mScaleController;  ///< The controller for scaling the actor during animations.
-    /* 0x14 */ s32 mUpdateCounter;                     ///< Counter that is incremented in exeBind. Once it exceeds 5, it updates the actor.
-    /* 0x18 */ bool mHasEffect;                        ///< Does the host actor contain the "Touch" effect name?
+    AnimScaleController* mScaleController;  ///< The controller for scaling the actor during animations.
+    s32 mUpdateCounter;                     ///< Counter that is incremented in exeBind. Once it exceeds 5, it updates the actor.
+    bool mHasEffect;                        ///< Does the host actor contain the "Touch" effect name?
 };

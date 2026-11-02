@@ -25,5 +25,5 @@ public:
     void exeOpen();
     void exeEndCamera();
 
-    /* 0xC4 */ ActorCameraInfo* mCameraInfo;
+    ActorCameraInfo* mCameraInfo;
 };

@@ -11,8 +11,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 struct OffsetPair {
-    /* 0x00 */ f32 x;
-    /* 0x04 */ f32 z;
+    f32 x;
+    f32 z;
 };
 
 namespace {

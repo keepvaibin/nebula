@@ -14,10 +14,10 @@ public:
 
     void setVec(const TVec3f&);
 
-    /* 0x12 */ u16 mTimer;
-    /* 0x14 */ u16 _14;
-    /* 0x16 */ u16 _16;
-    /* 0x18 */ TVec3f _18;
-    /* 0x24 */ bool mNoDamage;
-    /* 0x25 */ bool mTookDamage;
+    u16 mTimer;
+    u16 _14;
+    u16 _16;
+    TVec3f _18;
+    bool mNoDamage;
+    bool mTookDamage;
 };

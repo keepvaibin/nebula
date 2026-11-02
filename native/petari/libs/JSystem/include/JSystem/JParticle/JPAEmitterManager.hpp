@@ -40,14 +40,14 @@ public:
     }
 
 public:
-    /* 0x00 */ JSUList< JPABaseEmitter >* pEmtrUseList;
-    /* 0x04 */ JSUList< JPABaseEmitter > mFreeEmtrList;
-    /* 0x10 */ JPAList< JPABaseParticle > mPtclPool;
-    /* 0x1C */ JPAResourceManager** pResMgrAry;
-    /* 0x20 */ JPAEmitterWorkData* pWd;
-    /* 0x24 */ u32 emtrNum;
-    /* 0x28 */ u32 ptclNum;
-    /* 0x2C */ u8 gidMax;
-    /* 0x2D */ u8 ridMax;
+    JSUList< JPABaseEmitter >* pEmtrUseList;
+    JSUList< JPABaseEmitter > mFreeEmtrList;
+    JPAList< JPABaseParticle > mPtclPool;
+    JPAResourceManager** pResMgrAry;
+    JPAEmitterWorkData* pWd;
+    u32 emtrNum;
+    u32 ptclNum;
+    u8 gidMax;
+    u8 ridMax;
     NebulaArena* mHeap;
 };

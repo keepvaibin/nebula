@@ -22,9 +22,9 @@ public:
         mDist = dist;
     }
 
-    /* 0x4C */ TVec3f mWPoint;
-    /* 0x58 */ TVec3f mAxis;
-    /* 0x64 */ f32 mRotateRate;
-    /* 0x68 */ f32 mMaxDipAngle;
-    /* 0x6C */ f32 mDist;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mRotateRate;
+    f32 mMaxDipAngle;
+    f32 mDist;
 };

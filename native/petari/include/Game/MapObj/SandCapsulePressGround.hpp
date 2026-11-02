@@ -30,7 +30,7 @@ public:
     void calcMoveVelocity();
     bool tryStop();
 
-    /* 0xC4 */ TVec3f _C4;
-    /* 0xD0 */ TVec3f _D0;
-    /* 0xDC */ TPos3f _DC;
+    TVec3f _C4;
+    TVec3f _D0;
+    TPos3f _DC;
 };

@@ -16,7 +16,7 @@ public:
         mAngleY = angleY;
     }
 
-    /* 0x4C */ f32 mAngleX;
-    /* 0x50 */ f32 mAngleY;
-    /* 0x54 */ f32 mDist;
+    f32 mAngleX;
+    f32 mAngleY;
+    f32 mDist;
 };

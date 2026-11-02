@@ -12,5 +12,5 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
-    /* 0x8C */ MapPartsAppearController* mAppearController;
+    MapPartsAppearController* mAppearController;
 };

@@ -13,8 +13,8 @@ public:
     void exeWait();
     void exeIsInTornado();
 
-    /* 0x8C */ s32 _8C;
-    /* 0x8C */ bool mIsInTornado;
-    /* 0x8C */ s32 _94;
-    /* 0x8C */ s32 _98;
+    s32 _8C;
+    bool mIsInTornado;
+    s32 _94;
+    s32 _98;
 };

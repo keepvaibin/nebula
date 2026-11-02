@@ -31,9 +31,9 @@ public:
     void exeBattleLv3();
     void exeDownDemo();
 
-    /* 0x10 */ DinoPackunDemo* mDemo;
-    /* 0x14 */ DinoPackunBattleEggVs2* mEgg;
-    /* 0x18 */ DinoPackunBattleVs2Lv1* mBattleLv1;
-    /* 0x1C */ DinoPackunTrackFireHolder* mTrackFireHolder;
-    /* 0x20 */ DinoPackunFireHolder* mFireHolder;
+    DinoPackunDemo* mDemo;
+    DinoPackunBattleEggVs2* mEgg;
+    DinoPackunBattleVs2Lv1* mBattleLv1;
+    DinoPackunTrackFireHolder* mTrackFireHolder;
+    DinoPackunFireHolder* mFireHolder;
 };

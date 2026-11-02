@@ -8,28 +8,28 @@ class WalkerStateRunawayParam {
 public:
     WalkerStateRunawayParam();
 
-    /* 0x00 */ const char* mWaitAction;
-    /* 0x04 */ const char* mRunawayAction;
-    /* 0x08 */ const char* mJumpAction;
-    /* 0x0C */ f32 mGroundAccel;
-    /* 0x10 */ f32 mAirAccel;
-    /* 0x14 */ f32 _14;  // mGroundFriction? - fric if ._18 <= _1C
-    /* 0x18 */ f32 _18;  // mAirFriction? - fric if ._18 > _1C
-    /* 0x1C */ s32 _1C;  // step?
-    /* 0x20 */ f32 mTurnMaxRateDegree;
-    /* 0x24 */ f32 mRunawayDistance;
-    /* 0x28 */ f32 mWaitDistance;
-    /* 0x2C */ f32 mRunawayTurnRateMaxDegree;
-    /* 0x30 */ f32 mRunawayTurnRateMinDegree;
-    /* 0x34 */ s32 mRunawayTurnTime;
-    /* 0x38 */ f32 mPlayerFrontLineLength;
-    /* 0x3C */ f32 mRunawayBckRatio;
-    /* 0x40 */ f32 mMinRunawayBckRate;
-    /* 0x44 */ f32 mMaxRunawayBckRate;
-    /* 0x48 */ s32 mWallJumpTime;
-    /* 0x4C */ f32 mWallReboundPower;
-    /* 0x50 */ f32 mWallJumpPowerH;
-    /* 0x54 */ f32 mWallJumpPowerV;
+    const char* mWaitAction;
+    const char* mRunawayAction;
+    const char* mJumpAction;
+    f32 mGroundAccel;
+    f32 mAirAccel;
+    f32 _14;  // mGroundFriction? - fric if ._18 <= _1C
+    f32 _18;  // mAirFriction? - fric if ._18 > _1C
+    s32 _1C;  // step?
+    f32 mTurnMaxRateDegree;
+    f32 mRunawayDistance;
+    f32 mWaitDistance;
+    f32 mRunawayTurnRateMaxDegree;
+    f32 mRunawayTurnRateMinDegree;
+    s32 mRunawayTurnTime;
+    f32 mPlayerFrontLineLength;
+    f32 mRunawayBckRatio;
+    f32 mMinRunawayBckRate;
+    f32 mMaxRunawayBckRate;
+    s32 mWallJumpTime;
+    f32 mWallReboundPower;
+    f32 mWallJumpPowerH;
+    f32 mWallJumpPowerV;
 };
 
 class WalkerStateRunaway : public ActorStateBase< LiveActor > {
@@ -59,8 +59,8 @@ public:
         return _18 < mRunawayParam->_1C;
     }
 
-    /* 0x10 */ WalkerStateRunawayParam* mRunawayParam;
-    /* 0x14 */ TVec3f* mDirection;
-    /* 0x18 */ s32 _18;
-    /* 0x1C */ f32 mRunawaySpeed;
+    WalkerStateRunawayParam* mRunawayParam;
+    TVec3f* mDirection;
+    s32 _18;
+    f32 mRunawaySpeed;
 };

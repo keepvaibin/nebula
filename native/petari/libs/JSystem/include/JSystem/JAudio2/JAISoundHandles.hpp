@@ -33,6 +33,6 @@ public:
 
     void setPos(const TVec3f&);
 
-    /* 0x00 */ JAISoundHandle* mHandles;
-    /* 0x04 */ int mNumHandles;
+    JAISoundHandle* mHandles;
+    int mNumHandles;
 };

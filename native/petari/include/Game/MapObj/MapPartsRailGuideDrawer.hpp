@@ -22,8 +22,8 @@ public:
     void exeDrawAll();
     void exeDrawForward();
 
-    /* 0x018 */ MR::Vector< MR::FixedArray< MapPartsRailGuidePoint*, 256 > > mGuidePoints;
-    /* 0x41C */ s32 mGuideType;
-    /* 0x420 */ s32 mRailId;
-    /* 0x424 */ const char* mModelName;
+    MR::Vector< MR::FixedArray< MapPartsRailGuidePoint*, 256 > > mGuidePoints;
+    s32 mGuideType;
+    s32 mRailId;
+    const char* mModelName;
 };

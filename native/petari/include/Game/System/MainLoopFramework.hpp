@@ -33,18 +33,18 @@ public:
     void clearEfb(NebulaColor8);
     static void setForOSResetSystem();
 
-    /* 0x00 */ Color8 mClearColor;
-    /* 0x18 */ bool mUseAlpha;
+    Color8 mClearColor;
+    bool mUseAlpha;
     u8 _1A;
     u8 _1B;
-    /* 0x1C */ f32 mCombinationRatio;
-    /* 0x2C */ s32 mRenderInterval;
-    /* 0x30 */ s32 mRenderCounter;
-    /* 0x34 */ u8 mDoRenderFrame;
+    f32 mCombinationRatio;
+    s32 mRenderInterval;
+    s32 mRenderCounter;
+    u8 mDoRenderFrame;
     u8 _35;
     u8 _36;
     u8 _37;
-    /* 0x38 */ PreRenderCallback mPreRenderCallback;
+    PreRenderCallback mPreRenderCallback;
 
     u32 _pad1;
     u32 _pad2;

@@ -13,6 +13,6 @@ public:
         mOrigPosition = rOrig;
     }
 
-    /* 0x28 */ TVec3f mOrigPosition;
-    /* 0x34 */ TVec3f mTranslation;
+    TVec3f mOrigPosition;
+    TVec3f mTranslation;
 };

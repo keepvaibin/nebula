@@ -8,5 +8,5 @@ public:
     void setMovement60fps();
 
 private:
-    /* 0x0 */ bool mIs60fps;
+    bool mIs60fps;
 };

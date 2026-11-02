@@ -70,14 +70,14 @@ public:
     void changeBckSetting(const char*, const char*, XanimePlayer*);
     void init(const char*, const char*, bool);
 
-    /* 0x00 */ BtkPlayer* mBtkPlayer;
-    /* 0x04 */ BrkPlayer* mBrkPlayer;
-    /* 0x08 */ BtpPlayer* mBtpPlayer;
-    /* 0x0C */ BpkPlayer* mBpkPlayer;
-    /* 0x10 */ BvaPlayer* mBvaPlayer;
-    /* 0x14 */ XanimeResourceTable* mXanimeResourceTable;
-    /* 0x18 */ XanimePlayer* mXanimePlayer;
-    /* 0x1C */ J3DModel* mModel;
-    /* 0x20 */ ResourceHolder* mModelResourceHolder;
-    /* 0x24 */ MaterialUpdater* mMaterialUpdater;
+    BtkPlayer* mBtkPlayer;
+    BrkPlayer* mBrkPlayer;
+    BtpPlayer* mBtpPlayer;
+    BpkPlayer* mBpkPlayer;
+    BvaPlayer* mBvaPlayer;
+    XanimeResourceTable* mXanimeResourceTable;
+    XanimePlayer* mXanimePlayer;
+    J3DModel* mModel;
+    ResourceHolder* mModelResourceHolder;
+    MaterialUpdater* mMaterialUpdater;
 };

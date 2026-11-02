@@ -20,12 +20,12 @@ public:
         TexMtxInfo() : mType(), mPostMtx(J3D_PTIDENTITY) {
         }
 
-        /* 0x00 */ s32 mType;
-        /* 0x04 */ u32 mPostMtx;
+        s32 mType;
+        u32 mPostMtx;
     };
 
-    /* 0x00 */ TexMtxInfo mTexMtxInfo[8];
-    /* 0x40 */ u32 mTexGenNum;
+    TexMtxInfo mTexMtxInfo[8];
+    u32 mTexGenNum;
     bool mEnvMap;
     u8 mTexGenType[8];
     u8 mTexGenSource[8];

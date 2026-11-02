@@ -17,6 +17,6 @@ public:
     void generate(const LiveActor*);
     bool isUseFarSE() const;
 
-    /* 0x0 */ s32 mNumType;
-    /* 0x4 */ u8 mType;
+    s32 mNumType;
+    u8 mType;
 };

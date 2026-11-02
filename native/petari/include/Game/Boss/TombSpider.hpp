@@ -40,13 +40,13 @@ public:
         return mRotation.z;
     }
 
-    /* 0x8C */ TombSpiderSensorCtrl* mSensorCtrl;
-    /* 0x90 */ TombSpiderParts* mParts;
-    /* 0x94 */ TombSpiderEnvironment* mEnvironment;
-    /* 0x98 */ TombSpiderActionCocoon* mActionCocoon;
-    /* 0x9C */ TombSpiderAction1st* mAction1st;
-    /* 0xA0 */ TombSpiderAction2nd* mAction2nd;
-    /* 0xA4 */ TombSpiderDemo* mDemo;
-    /* 0xA8 */ bool mNoctilucaActive;
-    /* 0xAC */ ActorCameraInfo* mCameraInfo;
+    TombSpiderSensorCtrl* mSensorCtrl;
+    TombSpiderParts* mParts;
+    TombSpiderEnvironment* mEnvironment;
+    TombSpiderActionCocoon* mActionCocoon;
+    TombSpiderAction1st* mAction1st;
+    TombSpiderAction2nd* mAction2nd;
+    TombSpiderDemo* mDemo;
+    bool mNoctilucaActive;
+    ActorCameraInfo* mCameraInfo;
 };

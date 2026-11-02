@@ -24,14 +24,14 @@ public:
     f32 calcBoundingSphereRadius(const TVec3f&);
     void emitHintEffect();
 
-    /* 0x8C */ PlantMember** mMembers;
-    /* 0x90 */ s32 mMemberCount;
-    /* 0x94 */ s32 mPlantType;
-    /* 0x98 */ bool mIsStarPiece;
-    /* 0x9C */ TVec3f mHintPosition;
-    /* 0xA8 */ TVec3f mHintRotation;
-    /* 0xB4 */ s32 mHintTimer;
-    /* 0xB8 */ s32 mHintIndex;
+    PlantMember** mMembers;
+    s32 mMemberCount;
+    s32 mPlantType;
+    bool mIsStarPiece;
+    TVec3f mHintPosition;
+    TVec3f mHintRotation;
+    s32 mHintTimer;
+    s32 mHintIndex;
 };
 
 class PlantMember : public CutBushModelObj {
@@ -54,9 +54,9 @@ public:
     bool tryPush(const TVec3f&, f32, s32);
     void animControl(PlantGroup*);
 
-    /* 0x90 */ f32 _90;
-    /* 0x94 */ f32 _94;
-    /* 0x98 */ s32 mTouchType;
-    /* 0x9C */ bool _9C;
-    /* 0x9D */ bool mHasItem;
+    f32 _90;
+    f32 _94;
+    s32 mTouchType;
+    bool _9C;
+    bool mHasItem;
 };

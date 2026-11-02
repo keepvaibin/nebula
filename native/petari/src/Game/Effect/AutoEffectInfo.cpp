@@ -39,8 +39,8 @@ namespace {
 
 namespace {
     struct DrawOrderData {
-        /* 0x00 */ s32 _0;
-        /* 0x04 */ const char* _4;
+        s32 _0;
+        const char* _4;
     };
 
     static const DrawOrderData sDrawOrderDataTable[] = {

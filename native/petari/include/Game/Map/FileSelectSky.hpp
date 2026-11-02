@@ -22,8 +22,8 @@ public:
     void exeWait();
 
 private:
-    /* 0x8C */ f32 mAngleX;
-    /* 0x90 */ f32 mAngleY;
-    /* 0x94 */ TPos3f mBaseMtx;
-    /* 0xC4 */ ProjmapEffectMtxSetter* mProjmapEffectMtxSetter;
+    f32 mAngleX;
+    f32 mAngleY;
+    TPos3f mBaseMtx;
+    ProjmapEffectMtxSetter* mProjmapEffectMtxSetter;
 };

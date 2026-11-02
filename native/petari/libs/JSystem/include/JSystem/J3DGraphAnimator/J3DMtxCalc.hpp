@@ -43,4 +43,4 @@ public:
 
     static J3DMtxBuffer* mMtxBuffer;
     static J3DJoint* mJoint;
-};  // Size: 0x4
+};

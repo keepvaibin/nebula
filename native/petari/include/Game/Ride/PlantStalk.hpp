@@ -20,14 +20,14 @@ public:
     void calcNearestPos(TVec3f*, const TVec3f&) const;
     f32 calcPlayerCoord() const;
 
-    /* 0x8C */ s32 mNumPlantPoints;
-    /* 0x90 */ PlantPoint** mPlantPoints;
-    /* 0x94 */ PlantRailInfo* mRailInfo;
-    /* 0x98 */ f32 mStalkLength;
-    /* 0x9C */ f32 mGrowthPercent;
-    /* 0xA0 */ f32 mGrowSpeed;
-    /* 0xA4 */ s32 mGrowAccelTime;
-    /* 0xA8 */ s32 mGrownPlantPoints;
+    s32 mNumPlantPoints;
+    PlantPoint** mPlantPoints;
+    PlantRailInfo* mRailInfo;
+    f32 mStalkLength;
+    f32 mGrowthPercent;
+    f32 mGrowSpeed;
+    s32 mGrowAccelTime;
+    s32 mGrownPlantPoints;
 };
 
 class PlantStalkDrawInit : public NameObj {
@@ -36,5 +36,5 @@ public:
 
     virtual void initDraw() const;
 
-    /* 0x0C */ JUTTexture* mTexture;
+    JUTTexture* mTexture;
 };

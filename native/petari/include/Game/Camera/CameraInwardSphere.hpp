@@ -19,10 +19,10 @@ public:
         mDistBase = distBase;
     }
 
-    /* 0x4C */ f32 mDistMax;
-    /* 0x50 */ f32 mDistMin;
-    /* 0x54 */ f32 mDistBase;
-    /* 0x58 */ TVec3f mVelocity;
-    /* 0x64 */ TVec3f mPos;
-    /* 0x70 */ TVec3f mGravityCenter;
+    f32 mDistMax;
+    f32 mDistMin;
+    f32 mDistBase;
+    TVec3f mVelocity;
+    TVec3f mPos;
+    TVec3f mGravityCenter;
 };

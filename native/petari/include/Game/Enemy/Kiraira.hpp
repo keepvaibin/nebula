@@ -34,13 +34,13 @@ public:
     void exeRecover();
 
 private:
-    /* 0x8C */ f32 mRailCoordSpeed;
-    /* 0x90 */ TVec3f mRailVec;
-    /* 0x9C */ TVec3f mFront;
-    /* 0xA8 */ f32 _A8;
-    /* 0xAC */ bool mIsRail;
-    /* 0xAD */ bool mIsForceDetonated;
-    /* 0xAE */ bool mEyesOpen;
-    /* 0xB0 */ MsgSharedGroup* mSharedGroup;
-    /* 0xB4 */ KirairaChain* mChain;
+    f32 mRailCoordSpeed;
+    TVec3f mRailVec;
+    TVec3f mFront;
+    f32 _A8;
+    bool mIsRail;
+    bool mIsForceDetonated;
+    bool mEyesOpen;
+    MsgSharedGroup* mSharedGroup;
+    KirairaChain* mChain;
 };

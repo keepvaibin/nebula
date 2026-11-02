@@ -30,10 +30,10 @@ public:
     void syncStatus();
     bool hasNewGalaxy() const;
 
-    /* 0x20 */ int _20;
-    /* 0x24 */ LayoutActor* mHost;
-    /* 0x28 */ const char* mPaneName;
-    /* 0x2C */ const char* _2C;
-    /* 0x30 */ GalaxyNamePlate* mNamePlate;
-    /* 0x34 */ u8 mMode;
+    int _20;
+    LayoutActor* mHost;
+    const char* mPaneName;
+    const char* _2C;
+    GalaxyNamePlate* mNamePlate;
+    u8 mMode;
 };
