@@ -52,7 +52,7 @@ public:
         unsigned frame_height = 0;
         unsigned logical_width = 640;
         unsigned logical_height = 456;
-        unsigned scale = 1;
+        float scale = 1.0f;
     };
     // BloomEffect::preDraw, BloomEffectSimple::draw with the game's own chain: the scene before the bloom works over it.
     bool keep(VkCommandBuffer commands, const Inputs& in);

@@ -47,8 +47,19 @@ struct FrameMap {
     constexpr FrameMap(unsigned scale) noexcept  // NOLINT: an integer scale is a map
         : width(kFrameWidth * scale), height(kFrameHeight * scale), sx(static_cast<float>(scale)),
           sy(static_cast<float>(scale)) {}
-    // The whole-pixel scale, for what still works in them.
-    [[nodiscard]] constexpr unsigned scale() const noexcept { return static_cast<unsigned>(sx); }
+    // A frame of exactly `pixels_wide` x `pixels_high`: square pixels at any size.
+    constexpr FrameMap(unsigned pixels_wide, unsigned pixels_high) noexcept
+        : width(pixels_wide), height(pixels_high), sx(static_cast<float>(pixels_wide) / static_cast<float>(kFrameWidth)),
+          sy(static_cast<float>(pixels_high) / static_cast<float>(kFrameHeight)) {}
+    // The smallest whole scale that covers it, for what still works in them.
+    [[nodiscard]] unsigned scale() const noexcept {
+        return static_cast<unsigned>(std::ceil(std::max(sx, sy) - 1e-4f));
+    }
+    // An integer multiple of the game's frame.
+    [[nodiscard]] bool whole() const noexcept {
+        const unsigned s = scale();
+        return width == kFrameWidth * s && height == kFrameHeight * s;
+    }
     [[nodiscard]] constexpr bool operator==(const FrameMap&) const noexcept = default;
 };
 
@@ -249,7 +260,7 @@ struct ScaledViewport {
 struct ScenePeekSamplingGeometry {
     float src_x = 0.0f;
     float src_y = 0.0f;
-    float step = 1.0f;
+    float step = 1.0f;  // pixels a game row
     float center_y = 0.5f;
     // A depth peek reads the single physical texel nearest the center of the scaled
     // logical pixel. At even scales the center lies on a texel boundary, so point-sampling
@@ -257,6 +268,7 @@ struct ScenePeekSamplingGeometry {
     std::uint32_t depth_texel_x = 0;
     std::uint32_t depth_texel_y = 0;
     unsigned color_reduction_samples = 1;
+    float step_x = 1.0f;  // pixels a game column
 };
 
 [[nodiscard]] ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
@@ -270,8 +282,8 @@ public:
     void shutdown();
     // Live internal-resolution change: later acquisitions re-create any display picture
     // texture whose physical extent no longer matches.
-    void set_scene_target_scale(unsigned scene_target_scale) noexcept;
-    [[nodiscard]] unsigned scene_target_scale() const noexcept { return scene_target_scale_; }
+    void set_frame_map(const FrameMap& map) noexcept { map_ = map; }
+    [[nodiscard]] const FrameMap& frame_map() const noexcept { return map_; }
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
     // The next picture of the ring, created or resized to match the copy's size. The caller
@@ -312,7 +324,7 @@ private:
     std::vector<std::vector<PooledTexture>> retired_textures_;
     std::vector<PooledTexture> idle_textures_;
     unsigned current_frame_slot_ = 0;
-    unsigned scene_target_scale_ = 1;
+    FrameMap map_ = FrameMap(1u);
 };
 
 }  // namespace galaxy::render

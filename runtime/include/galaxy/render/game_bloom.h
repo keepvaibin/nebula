@@ -73,7 +73,7 @@ public:
         unsigned frame_height = 0;
         unsigned logical_width = 640;            // the frame in the game's pixels
         unsigned logical_height = 456;
-        unsigned scale = 1;                      // scene target pixels per game pixel
+        float scale = 1.0f;                      // scene target pixels per game pixel
     };
     // BloomEffect::preDraw, and BloomEffectSimple::draw with the game's own chain: the scene before the bloom's work
     // over it.

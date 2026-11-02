@@ -65,7 +65,7 @@ constexpr std::uint32_t kPictures = 3u;
 
 bool SceneCopyManager::initialize(gpu::Device* device, unsigned scene_target_scale) {
     device_ = device;
-    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
+    map_ = FrameMap(std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     return device_ != nullptr;
 }
 
@@ -77,7 +77,7 @@ void SceneCopyManager::shutdown() {
     latest_slot_ = 0;
     next_slot_ = 0;
     next_copy_serial_ = 1;
-    scene_target_scale_ = 1;
+    map_ = FrameMap(1u);
     device_.Reset();
 }
 
@@ -192,11 +192,8 @@ ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
         static_cast<float>(src_y) + 0.5f * map.sy,
         src_x + box_x / 2u,
         src_y + box_y / 2u,
-        box_x * box_y};
-}
-
-void SceneCopyManager::set_scene_target_scale(unsigned scene_target_scale) noexcept {
-    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
+        box_x * box_y,
+        map.sx};
 }
 
 DisplayTexture* SceneCopyManager::acquire_display(
@@ -209,7 +206,7 @@ DisplayTexture* SceneCopyManager::acquire_display(
     const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
         params.src_width,
         logical_h,
-        scene_target_scale_);
+        map_);
     const std::uint16_t wanted_w = extent.width;
     const std::uint16_t wanted_h = extent.height;
 
