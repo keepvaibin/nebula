@@ -24,7 +24,7 @@ void ShadowSurfaceDrawInit::sendColor(const NebulaColor8& rColor) {
 void ShadowSurfaceDrawInit::initDraw() {
     NebulaNativeMaterial view;
     TDDraw::setupNative(&view, 0, 1, 1);
-    J3DNativeState::setDstAlpha(1, 0);
+    J3DPass::constantAlpha(true, 0);
     sendColor(Color8(128));
 }
 

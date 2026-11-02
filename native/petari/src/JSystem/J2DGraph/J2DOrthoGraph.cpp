@@ -16,7 +16,7 @@ J2DOrthoGraph::J2DOrthoGraph(f32 x, f32 y, f32 width, f32 height, f32 far, f32 n
 void J2DOrthoGraph::setPort() {
     this->J2DGrafContext::setPort();
     NebulaMtxOrtho(mMtx44, mOrtho.i.y, mOrtho.f.y, mOrtho.i.x, mOrtho.f.x, mNear, mFar);
-    J3DNativeView::setProjection(mMtx44, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(mMtx44);
 }
 
 void J2DOrthoGraph::setOrtho(JGeometry::TBox2< f32 > const& bounds, f32 far, f32 near) {

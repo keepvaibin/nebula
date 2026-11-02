@@ -84,17 +84,17 @@ void ShadowVolumeDrawer::draw() const {
         loadModelDrawMtx();
         NebulaColor8 shapeColor = reinterpret_cast< NebulaColor8& >(::sShapeColor);
         MR::setShadowVolumeColor(shapeColor);
-        J3DNativeState::setColorUpdate(0);
-        J3DNativeState::setDstAlpha(0, 0);
-        J3DNativeState::setCullMode(GPU_CULL_FRONT);
-        J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_COPY);
+        J3DPass::writeColor(false);
+        J3DPass::constantAlpha(false, 0);
+        J3DPass::cull(NEBULA_CULL_FRONT);
+        J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
         drawShape();
-        J3DNativeState::setCullMode(GPU_CULL_BACK);
-        J3DNativeState::setBlendMode(GPU_BM_SUBTRACT, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_COPY);
+        J3DPass::cull(NEBULA_CULL_BACK);
+        J3DPass::subtractBlend();
         drawShape();
-        J3DNativeState::setCullMode(GPU_CULL_NONE);
-        J3DNativeState::setColorUpdate(1);
-        J3DNativeState::setDstAlpha(1, 0);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::writeColor(true);
+        J3DPass::constantAlpha(true, 0);
     }
 }
 

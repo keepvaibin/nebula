@@ -72,7 +72,7 @@ void JPAEmitterManager::draw(JPADrawInfo const* drawInfo, u8 group_id) {
     drawInfo->getCamMtx(pWd->mPosCamMtx);
     drawInfo->getPrjMtx(pWd->mPrjMtx);
     calcYBBCam();
-    J3DNativeState::setCullMode(GPU_CULL_NONE);
+    J3DPass::cull(NEBULA_CULL_NONE);
 
     for (JSULink< JPABaseEmitter >* pLink = pEmtrUseList[group_id].getFirst(); pLink != pEmtrUseList[group_id].getEnd(); pLink = pLink->getNext()) {
         JPABaseEmitter* emtr = pLink->getObject();

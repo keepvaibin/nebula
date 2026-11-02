@@ -90,6 +90,26 @@ static const NebulaColor8 cFavoriteColor[MiiFavoriteColor_Max] = {
 
 static const NebulaColor8 cWhite = {255, 255, 255, 255};
 
+/* The face data's primitive byte as the host's kind. */
+static NebulaPrimitive rflPrimitive(int code) {
+    switch (code) {
+    case 0x90:
+        return NEBULA_PRIMITIVE_TRIANGLES;
+    case 0x98:
+        return NEBULA_PRIMITIVE_TRIANGLE_STRIP;
+    case 0xA0:
+        return NEBULA_PRIMITIVE_TRIANGLE_FAN;
+    case 0xA8:
+        return NEBULA_PRIMITIVE_LINES;
+    case 0xB0:
+        return NEBULA_PRIMITIVE_LINE_STRIP;
+    case 0xB8:
+        return NEBULA_PRIMITIVE_POINTS;
+    default:
+        return NEBULA_PRIMITIVE_QUADS;
+    }
+}
+
 static u32 Mii_GetExpressionNum(u32 exprFlags) {
     int i;
     u32 num = 0;
@@ -230,11 +250,11 @@ NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info) {
 
 void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
     J3DNativeStateSetAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
-    J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
-    J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, TRUE);
-    J3DNativeStateSetColorUpdate(TRUE);
-    J3DNativeStateSetAlphaUpdate(TRUE);
-    J3DNativeStateSetDstAlpha(FALSE, 0);
+    J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+    J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
+    J3DPassWriteColor(1);
+    J3DPassWriteAlpha(1);
+    J3DPassConstantAlpha(0, 0);
 
     if (setting->lightEnable) {
         Mii_NativeChain(MII_I_NATIVE_CHAIN_LIGHT, setting->lightMask, setting->diffuse, setting->attn, setting->ambColor,
@@ -261,7 +281,7 @@ static void Mii_DrawShape(const s16* pos, const s16* nrm, const s16* txc, const 
     while (p + 3 <= end) {
         const BOOL streamTxc = (p[0] & 1) != 0;
         const BOOL hasTxc = streamTxc && txc != NULL;
-        const GpuPrimitive prim = (GpuPrimitive)(p[0] & 0xF8);
+        const NebulaPrimitive prim = rflPrimitive(p[0] & 0xF8);
         const u16 count = (u16)(p[1] << 8 | p[2]);
         int i;
 

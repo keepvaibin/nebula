@@ -241,7 +241,7 @@ void ElectricRailMoving::drawRailGX(f32 a1) const {
 
 void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f32 a5) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        rMesh.begin(GPU_TRIANGLESTRIP, (2 * _E4) & 0xFFFE);
+        rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (2 * _E4) & 0xFFFE);
 
         for (s32 j = 0; j < _E4; j++) {
             setVertexAttribute(j, i, a2, a3, a4, a5, &rMesh);
@@ -251,7 +251,7 @@ void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f3
 
 void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, _E4 * 2, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, _E4 * 2, NEBULA_SHAPE_TEXCOORD0);
 
         for (s32 j = 0; j < _E4; j++) {
             setVertexAttribute(j, i, a1, a2, a3, a4, nullptr);

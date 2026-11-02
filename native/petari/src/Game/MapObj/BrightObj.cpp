@@ -219,7 +219,7 @@ void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
     TDDraw::setupNative(&material, 0, 0, 1);
     TDDraw::loadViewMtx(mtx);
 
-    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+    J3DPass::constantAlpha(false, 0);
     material.color_write = 0;
     material.alpha_write = 1;
     NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, false);
@@ -232,8 +232,8 @@ void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius, 0x00FF00FF, 0x10);
 
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
 }
 
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {

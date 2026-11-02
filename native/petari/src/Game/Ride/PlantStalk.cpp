@@ -161,7 +161,7 @@ f32 PlantStalk::calcPlayerCoord() const {
 }
 
 void PlantStalk::drawGrowUp() const {
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         TVec3f side(mPlantPoints[idx]->mSide);
@@ -182,7 +182,7 @@ void PlantStalk::drawGrowUp() const {
     }
 
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         TVec3f side(mPlantPoints[idx]->mSide);
@@ -203,7 +203,7 @@ void PlantStalk::drawGrowUp() const {
     }
 
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         TVec3f side(mPlantPoints[idx]->mSide);
@@ -244,7 +244,5 @@ void PlantStalkDrawInit::initDraw() const {
     material.constants[1] = 0.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
 }

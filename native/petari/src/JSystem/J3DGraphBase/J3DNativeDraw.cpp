@@ -142,40 +142,14 @@ namespace J3DNativeDraw {
         return sPrimitive != NEBULA_PRIMITIVE_QUADS || attributes != sAttributes;
     }
 
-    void begin(GpuPrimitive primitive, u16 count, u32 attributes) {
+    void begin(NebulaPrimitive primitive, u16 count, u32 attributes) {
         if (sVertex < sCount) {
             fail("a primitive begun before the last one's vertices were all given");
         }
         if (count > kMaxVertices) {
             fail("more vertices in one primitive than kMaxVertices");
         }
-        // GpuBegin's primitive as the host's grouping (NebulaPrimitive).
-        switch (primitive) {
-        case GPU_QUADS:
-        case 0x88:  // the console's second quads opcode
-            sPrimitive = NEBULA_PRIMITIVE_QUADS;
-            break;
-        case GPU_TRIANGLES:
-            sPrimitive = NEBULA_PRIMITIVE_TRIANGLES;
-            break;
-        case GPU_TRIANGLESTRIP:
-            sPrimitive = NEBULA_PRIMITIVE_TRIANGLE_STRIP;
-            break;
-        case GPU_TRIANGLEFAN:
-            sPrimitive = NEBULA_PRIMITIVE_TRIANGLE_FAN;
-            break;
-        case GPU_LINES:
-            sPrimitive = NEBULA_PRIMITIVE_LINES;
-            break;
-        case GPU_LINESTRIP:
-            sPrimitive = NEBULA_PRIMITIVE_LINE_STRIP;
-            break;
-        case GPU_POINTS:
-            sPrimitive = NEBULA_PRIMITIVE_POINTS;
-            break;
-        default:
-            fail("a primitive of no kind the host draws");
-        }
+        sPrimitive = primitive;
         if (sWaiting != 0 && (primitive_changed(attributes) || sWaiting + count > kMaxVertices ||
                               memcmp(&sWaitingPass, J3DNativeState::pass(), sizeof(sWaitingPass)) != 0)) {
             const u8 next = sPrimitive;
@@ -247,7 +221,7 @@ namespace J3DNativeDraw {
     }
 };  // namespace J3DNativeDraw
 
-void J3DNativeDrawBegin(GpuPrimitive primitive, u16 count, u32 attributes) {
+void J3DNativeDrawBegin(NebulaPrimitive primitive, u16 count, u32 attributes) {
     J3DNativeDraw::begin(primitive, count, attributes);
 }
 

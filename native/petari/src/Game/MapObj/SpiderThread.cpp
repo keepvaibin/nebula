@@ -382,9 +382,7 @@ void SpiderThread::initDraw() const {
     NativeShader::setTexture(material, 0, mThreadTexture);
     NativeShader::setTexture(material, 1, mIndirectTexture);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
 }
 
 namespace {

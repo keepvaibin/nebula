@@ -74,17 +74,17 @@ namespace {
 }  // namespace
 
 void FallOutFieldDraw::setUpFillScreen() const {
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
     J3DNativeView::setZScaleOffset(0.0f, 1.0f);
     sendFillMaterial(_C);
 }
 
 
 void FallOutFieldDraw::setUpEdgeAndClearAlpha() const {
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_TRUE);
-    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(true);
+    J3DPass::constantAlpha(true, 0);
 }
 
 void FallOutFieldDraw::init(const JMapInfoIter& rIter) {
@@ -126,9 +126,9 @@ void FallOutFieldDraw::draw() const {
 
     ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GPU_CTF_A8, true, 0);
 
-    J3DNativeState::setColorUpdate(GPU_FALSE);
-    J3DNativeState::setAlphaUpdate(GPU_TRUE);
-    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+    J3DPass::writeColor(false);
+    J3DPass::writeAlpha(true);
+    J3DPass::constantAlpha(false, 0);
     J3DNativeView::setZScaleOffset(0.0f, 0.0f);
     // The mask: alpha 255 where the screen's alpha is under (or, by arg 0, over) 1, a pass of its own at half size, then
     // halved again and blurred, each into its own texture.
@@ -161,9 +161,9 @@ void FallOutFieldDraw::draw() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_TRUE);
-    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(true);
+    J3DPass::constantAlpha(true, 0);
     J3DNativeView::setZScaleOffset(1.0f, 0.0f);
 }
 

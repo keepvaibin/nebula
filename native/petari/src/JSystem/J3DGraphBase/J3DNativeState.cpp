@@ -572,3 +572,85 @@ void J3DNativeStateSetAlphaUpdate(GpuBool enable) {
     J3DNativeState::setAlphaUpdate(enable);
 }
 
+namespace J3DPass {
+    namespace {
+        void send(u8 kind, u8 a0, u8 a1 = 0, u8 a2 = 0, u8 a3 = 0) {
+            NebulaStateOp op;
+            memset(&op, 0, sizeof(op));
+            op.kind = kind;
+            op.a[0] = a0;
+            op.a[1] = a1;
+            op.a[2] = a2;
+            op.a[3] = a3;
+            J3DStateList list(&op, 1);
+            list.adopt(1);
+            list.send();
+        }
+    }  // namespace
+
+    void depth(bool test, u8 compare, bool write) {
+        send(J3D_STATE_Z_MODE, test, compare, write);
+    }
+
+    void blend(u8 source, u8 destination) {
+        send(J3D_STATE_BLEND, NEBULA_BLEND_ADD, source, destination);
+    }
+
+    void noBlend() {
+        send(J3D_STATE_BLEND, NEBULA_BLEND_REPLACE);
+    }
+
+    void subtractBlend() {
+        send(J3D_STATE_BLEND, NEBULA_BLEND_SUBTRACT);
+    }
+
+    void cull(u8 faces) {
+        send(J3D_STATE_CULL, faces);
+    }
+
+    void writeColor(bool write) {
+        send(J3D_STATE_COLOR_UPDATE, write);
+    }
+
+    void writeAlpha(bool write) {
+        send(J3D_STATE_ALPHA_UPDATE, write);
+    }
+
+    void constantAlpha(bool on, u8 alpha) {
+        send(J3D_STATE_DST_ALPHA, on, alpha);
+    }
+
+    void positionMatrix(u8 index) {
+        send(J3D_STATE_CURRENT_MATRIX, index);
+    }
+};  // namespace J3DPass
+
+extern "C" {
+void J3DPassDepth(int test, u8 compare, int write) {
+    J3DPass::depth(test != 0, compare, write != 0);
+}
+void J3DPassBlend(u8 source, u8 destination) {
+    J3DPass::blend(source, destination);
+}
+void J3DPassNoBlend(void) {
+    J3DPass::noBlend();
+}
+void J3DPassSubtractBlend(void) {
+    J3DPass::subtractBlend();
+}
+void J3DPassCull(u8 faces) {
+    J3DPass::cull(faces);
+}
+void J3DPassWriteColor(int write) {
+    J3DPass::writeColor(write != 0);
+}
+void J3DPassWriteAlpha(int write) {
+    J3DPass::writeAlpha(write != 0);
+}
+void J3DPassConstantAlpha(int on, u8 alpha) {
+    J3DPass::constantAlpha(on != 0, alpha);
+}
+void J3DPassPositionMatrix(u8 index) {
+    J3DPass::positionMatrix(index);
+}
+}

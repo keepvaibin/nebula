@@ -57,8 +57,8 @@ void BigBubbleDrawer::setUpTevStage() const {
 }
 
 void BigBubbleDrawer::setUpPixelFormat() const {
-    J3DNativeState::setColorUpdate(1);
-    J3DNativeState::setAlphaUpdate(0);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
 }
 
 void BigBubbleDrawer::setUpMaterial() const {

@@ -365,7 +365,7 @@ void OceanBowl::draw() const {
     u16 odd = 1;
     for (s32 x = 0; x < 24; x++) {
         // Texture coordinates 0-3 are entries of the bowl's arrays (two floats each), the vertex's index in all four.
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 50,
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50,
                              NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 |
                                  NEBULA_SHAPE_TEXCOORD0 << 2 | NEBULA_SHAPE_TEXCOORD0 << 3);
 
@@ -398,9 +398,7 @@ void OceanBowl::loadMaterial() const {
     // 1) warped by the indirect texture (texture 2); alpha the vertex alpha times the shore mask (texture 3). Blended by
     // its alpha (added under water), depth tested, not written.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
     const bool inWater = MR::isCameraInWater();
     JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
@@ -442,9 +440,7 @@ void OceanBowl::loadMaterialBloom() const {
     // the grey c1, alpha the texture's by the vertex alpha at both; blended by its alpha where above zero, depth
     // tested and written before texturing, no culling.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);

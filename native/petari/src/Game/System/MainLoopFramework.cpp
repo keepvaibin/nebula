@@ -37,9 +37,9 @@ MainLoopFramework* MainLoopFramework::createManager(bool useAlpha) {
 }
 
 void MainLoopFramework::prepareCopyDisp() {
-    J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
+    J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
     if (mUseAlpha) {
-        J3DNativeState::setAlphaUpdate(GPU_TRUE);
+        J3DPass::writeAlpha(true);
     }
 }
 
@@ -86,21 +86,21 @@ void MainLoopFramework::clearEfb(NebulaColor8 color) {
     u16 efbHeight = NebulaFrameClock::cCanvasHeight;
     Mtx44 proj;
     NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
-    J3DNativeView::setProjection(proj, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(proj);
     J3DNativeView::setViewport(0.0f, 0.0f, fbWidth, efbHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, fbWidth, efbHeight);
     Mtx identity;
     NebulaMtxIdentity(identity);
     J3DNativeShape::setPosition(0, identity);
-    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DPass::positionMatrix(0);
     J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
-    J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP);
+    J3DPass::noBlend();
     if (mUseAlpha) {
-        J3DNativeState::setAlphaUpdate(GPU_TRUE);
-        J3DNativeState::setDstAlpha(GPU_FALSE, color.a);
+        J3DPass::writeAlpha(true);
+        J3DPass::constantAlpha(false, color.a);
     }
-    J3DNativeState::setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
-    J3DNativeState::setCullMode(GPU_CULL_BACK);
+    J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);
+    J3DPass::cull(NEBULA_CULL_BACK);
     const u32 rgba = (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
                      (static_cast< u32 >(color.b) << 8) | color.a;
     J3DNativeTarget::clearFrame(0, 0, fbWidth, efbHeight, rgba, 0xFFFFFF,

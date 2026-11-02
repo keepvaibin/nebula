@@ -105,7 +105,6 @@ void OceanRingPipeOutside::loadMaterial() const {
 }
 
 void OceanRingPipeOutside::sendGD() {
-    u8 something = 0x98;
     s32 vv;
     s32 v;
     f32 f29;
@@ -116,7 +115,7 @@ void OceanRingPipeOutside::sendGD() {
     for (s32 i = 0; i < mRingPipe->_9C - 1; i++) {
         f32 f27 = 0.0f;
         vv = mRingPipe->_98;
-        mMesh.begin(static_cast< GpuPrimitive >(something), (u16)(vv << 1));
+        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (u16)(vv << 1));
         for (s32 j = 0; j < mRingPipe->_98; j++) {
             v = j * mRingPipe->_9C;
             u16 cl2 = i + v + 1;

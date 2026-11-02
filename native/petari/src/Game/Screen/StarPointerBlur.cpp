@@ -169,7 +169,7 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
             const TVec2f& pos = mBlurPoints[point].mPos;
             const TVec2f& offset = dir * mBlurThicks[point];
@@ -192,7 +192,7 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
             const TVec2f& pos = mBlurPoints[point].mPos;
             const TVec2f& offset = dir * mBlurThicks[point];
@@ -210,9 +210,7 @@ void StarPointerBlur::initDraw() const {
     TPos3f mtx;
     mtx.identity();
     J3DNativeShape::setPosition(0, mtx);
-    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
     // runtime/src/render/materials/color_tex_alpha.hlsl: mMainColor at the trail texture's alpha, added by it; depth
     // tested and written, no culling.
     NebulaNativeMaterial material;
