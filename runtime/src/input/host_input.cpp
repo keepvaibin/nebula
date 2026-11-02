@@ -914,8 +914,6 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
         client_width,
         client_height,
         viewport,
-        1.0f,
-        1.0f,
     });
 }
 
