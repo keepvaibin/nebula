@@ -5,9 +5,9 @@
 #include "JSystem/JUtility/JUTTexture.hpp"
 
 struct JPATextureData {
-    /* 0x00 */ char field_0x00[0x0C];
-    /* 0x0C */ char mName[0x14];
-    /* 0x20 */ ResTIMG mResTIMG;
+    char field_0x00[0x0C];
+    char mName[0x14];
+    ResTIMG mResTIMG;
 };
 
 class JPATexture {

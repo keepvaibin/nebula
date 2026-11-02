@@ -32,7 +32,7 @@ public:
     void initRail(const JMapInfoIter&);
     void initPoints();
     void initMesh();
-    void drawRailGX(f32) const;
+    void drawRail(f32) const;
     void drawPlane(NativeMesh&, f32, f32, f32, f32) const;
     void drawPlaneGX(f32, f32, f32, f32) const;
     // A segment's two corners into `pMesh`, or drawn now when it is null.
@@ -48,17 +48,17 @@ public:
     void exeDisappeared();
     void exeWait();
 
-    /* 0x8C */ s32 mSegmentNum;
-    /* 0x90 */ f32 mMovementSpeed;
-    /* 0x94 */ f32 mSegmentLength;
-    /* 0x98 */ s32 mStackHeight;
+    s32 mSegmentNum;
+    f32 mMovementSpeed;
+    f32 mSegmentLength;
+    s32 mStackHeight;
     TPos3f _9C;
     u8 _CC;
     u8 _CD;
     u8 _CE;
     u8 _CF;
-    /* 0xD0 */ TVec3f* mSensorOffsets;
-    /* 0xD4 */ ElectricRailMovingPoint* mMovingPoints;
+    TVec3f* mSensorOffsets;
+    ElectricRailMovingPoint* mMovingPoints;
     s32 _D8;
     // The rail as the renderer draws it while it waits.
     NativeMesh mMesh;

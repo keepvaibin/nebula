@@ -23,8 +23,8 @@ public:
 
     void calcIdealPoseOfTowerBase();
 
-    /* 0x4C */ TVec3f mWPoint;
-    /* 0x58 */ TVec3f mAxis;
-    /* 0x64 */ f32 mAngleX;
-    /* 0x68 */ f32 mDist;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mAngleX;
+    f32 mDist;
 };

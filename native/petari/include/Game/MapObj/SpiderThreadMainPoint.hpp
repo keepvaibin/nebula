@@ -15,11 +15,11 @@ public:
     void clear();
     const TVec3f* getPos() const;
 
-    /* 0x00 */ SpiderThreadMainPoint* mMainPoint;
-    /* 0x04 */ SpiderThreadPoint* mPartPoint;
-    /* 0x08 */ f32 mDistToPoint;
-    /* 0x0C */ f32 mSpringFactor;
-    /* 0x10 */ SpiderThreadPart* mThreadPart;
+    SpiderThreadMainPoint* mMainPoint;
+    SpiderThreadPoint* mPartPoint;
+    f32 mDistToPoint;
+    f32 mSpringFactor;
+    SpiderThreadPart* mThreadPart;
 };
 
 class SpiderThreadMainPoint : public SpiderThreadPoint {
@@ -43,8 +43,8 @@ public:
         return &mNearInfos[mNumNearInfos - 1];
     }
 
-    /* 0x4C */ SpiderThreadRadialLine* mRadialLine;
-    /* 0x50 */ s32 mNearInfoBufferSize;
-    /* 0x54 */ s32 mNumNearInfos;
-    /* 0x58 */ SpiderThreadPointNearInfo* mNearInfos;  // array
+    SpiderThreadRadialLine* mRadialLine;
+    s32 mNearInfoBufferSize;
+    s32 mNumNearInfos;
+    SpiderThreadPointNearInfo* mNearInfos;  // array
 };

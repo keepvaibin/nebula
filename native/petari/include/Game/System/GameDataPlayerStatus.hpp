@@ -50,15 +50,15 @@ public:
     void addStockedStarPiece(int num);
 
     /// @brief The number of extra lives.
-    /* 0x04 */ u16 mPlayerLeft;
+    u16 mPlayerLeft;
 
     /// @brief The number of universally collected Star Bits.
-    /* 0x08 */ u32 mStockedStarPiece;
+    u32 mStockedStarPiece;
 
     /// @brief TODO.
-    /* 0x0C */ u8 mStoryProgress;
+    u8 mStoryProgress;
 
 private:
     /// @brief The number of extra lives from the previous session.
-    /* 0x0E */ u16 mPlayerLeftSupply;
+    u16 mPlayerLeftSupply;
 };

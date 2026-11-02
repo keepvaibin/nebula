@@ -35,7 +35,7 @@ namespace {
 
 namespace {
     inline u32 packPathColor(const TVec3f& rColor, const f32& rAlpha) {
-        // The console's 0xRRGGBBAA word (its bytes stored r, g, b, a).
+        // The 0xRRGGBBAA word (its bytes stored r, g, b, a).
         return (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.x)) << 24 | (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.y)) << 16 |
                (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rColor.z)) << 8 | (u32)(u8)static_cast< s32 >(255.0f * MR::abs(rAlpha));
     }

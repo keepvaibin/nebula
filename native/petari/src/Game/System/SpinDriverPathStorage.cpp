@@ -206,10 +206,6 @@ void SpinDriverPathStorageGalaxy::resetAllData() {
     }
 }
 
-s32 SpinDriverPathStorageGalaxy::setup(int scenarioNo, int zoneId, int spinDriverId, f32* pDrawRange) {
-    return getScenarioStorage(scenarioNo).setup(zoneId, spinDriverId, pDrawRange);
-}
-
 void SpinDriverPathStorageGalaxy::updateValue(int scenarioNo, int spinDriverIndex, f32 drawRange) {
     getScenarioStorage(scenarioNo).updateValue(spinDriverIndex, drawRange);
 }

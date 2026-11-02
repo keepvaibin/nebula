@@ -763,7 +763,7 @@ void JPAResource::draw(JPAEmitterWorkData* work, JPABaseEmitter* emtr) {
     work->mpRes = this;
     work->mDrawCount = 0;
     calcWorkData_d(work);
-    mpBaseShape->setGX(work);
+    mpBaseShape->setPass(work);
     for (s32 i = 1; i <= emtr->getDrawTimes(); i++) {
         work->mDrawCount++;
         if (mpBaseShape->isDrawPrntAhead() && mpChildShape != NULL)
@@ -907,7 +907,7 @@ namespace {
     // textures the emitter's functions chose, the blending, depth and culling the
     // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
     // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
-    // env carry over from one emitter to the next, as the console's colour registers did.
+    // env carry over from one emitter to the next.
     NebulaNativeMaterial sParticle;
     bool sParticleSent = false;
     // The textures the emitter's functions chose, by slot.

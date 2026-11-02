@@ -26,6 +26,6 @@ public:
     void exeGuard();
     void exeRecover();
 
-    /* 0x1C */ KoopaStateChaseRoll* mStateChaseRoll;
-    /* 0x20 */ KoopaStateAttackShockWave* mStateAttackShockWave;
+    KoopaStateChaseRoll* mStateChaseRoll;
+    KoopaStateAttackShockWave* mStateAttackShockWave;
 };

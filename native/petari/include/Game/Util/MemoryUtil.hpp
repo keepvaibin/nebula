@@ -13,7 +13,7 @@ namespace MR {
         ~CurrentHeapRestorer();
 
     private:
-        /* 0x00 */ NebulaArena* _0;
+        NebulaArena* _0;
     };
 
     NebulaArena* getCurrentHeap();

@@ -37,11 +37,11 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
 
         static const int CHANNEL_MAX = 8;
 
-        /* 0x00 */ JASChannel* mChannels[CHANNEL_MAX];
-        /* 0x20 */ JASChannelParams mParams;
-        /* 0x38 */ s16 _38[CHANNEL_MAX];
-        /* 0x48 */ JASSoundParams* mSoundParams;
-        /* 0x4c */ JASTrack* mTrack;
+        JASChannel* mChannels[CHANNEL_MAX];
+        JASChannelParams mParams;
+        s16 _38[CHANNEL_MAX];
+        JASSoundParams* mSoundParams;
+        JASTrack* mTrack;
     };
 
     struct TList {
@@ -55,14 +55,14 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
 
         static s32 cbSeqMain(void*);
 
-        /* 0x0 */ TrackList mTracks;
-        /* 0xC */ bool mCallbackRegistered;
+        TrackList mTracks;
+        bool mCallbackRegistered;
     };
 
     struct MoveParam_ {
-        /* 0x00 */ f32 mValue;
-        /* 0x04 */ f32 mTarget;
-        /* 0x08 */ u32 mCount;
+        f32 mValue;
+        f32 mTarget;
+        u32 mCount;
     };
 
     JASTrack();
@@ -121,7 +121,6 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     void setTimebase(u16);
     void updateChannel(JASChannel*, JASVoice*);
     JASTrack* getRootTrack();
-    s32 getChannelCount() const;
     int tickProc();
     s32 seqMain();
 
@@ -320,10 +319,10 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
         mGateRate = param_0;
     }
 
-    /* 0x000 */ JASSeqCtrl mSeqCtrl;
-    /* 0x05C */ JASTrackPort mTrackPort;
-    /* 0x080 */ JASRegisterParam mRegisterParam;
-    /* 0x09C */ union MoveParam_u {
+    JASSeqCtrl mSeqCtrl;
+    JASTrackPort mTrackPort;
+    JASRegisterParam mRegisterParam;
+    union MoveParam_u {
         struct {
             MoveParam_ volume;
             MoveParam_ pitch;
@@ -336,44 +335,44 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
         MoveParam_u() {
         }
     } mMoveParam;
-    /* 0x0E4 */ JASOscillator::Data mOscParam[OSC_NUM];
-    /* 0x114 */ JASOscillator::Point mOscPoint[4];
+    JASOscillator::Data mOscParam[OSC_NUM];
+    JASOscillator::Point mOscPoint[4];
     static const u32 cOscTablePoints = 32;
     JASOscillator::Point mOscTable[OSC_NUM][cOscTablePoints];
-    /* 0x12C */ JASTrack* mParent;
-    /* 0x130 */ JASTrack* mChildren[MAX_CHILDREN];
-    /* 0x170 */ TChannelMgr* mChannelMgrs[CHANNEL_MGR_MAX];
-    /* 0x180 */ TChannelMgr mDefaultChannelMgr;
-    /* 0x1D0 */ u32 mChannelMgrCount;
-    /* 0x1D4 */ const JASDefaultBankTable* mBankTable;
-    /* 0x1D8 */ f32 mPlaytime;
-    /* 0x1DC */ f32 mSampleInterval;
-    /* 0x1E0 */ f32 mVibDepth;
-    /* 0x1E4 */ f32 mVibPitch;
-    /* 0x1E8 */ f32 mTremDepth;
-    /* 0x1EC */ f32 mTremPitch;
-    /* 0x1F0 */ u16 mVibDelay;
-    /* 0x1F2 */ u16 mTremDelay;
-    /* 0x1F4 */ short mFIR[8];
-    /* 0x204 */ short mIIR[8];
-    /* 0x214 */ u8 mFilterMode;
-    /* 0x218 */ f32 mPanPower;
-    /* 0x21C */ f32 mTempoRate;
-    /* 0x220 */ u32 mSkipSample;
-    /* 0x224 */ u16 mDirectRelease;
-    /* 0x226 */ u16 mTempo;
-    /* 0x228 */ u16 mTimebase;
-    /* 0x22A */ s8 mTranspose;
-    /* 0x22B */ u8 mPitch;
-    /* 0x22C */ u16 mBankNumber;
-    /* 0x22E */ u16 mProgNumber;
-    /* 0x230 */ u8 mBendSense;
-    /* 0x231 */ u8 mNoteOnPrio;
-    /* 0x232 */ u8 mReleasePrio;
-    /* 0x233 */ u8 mGateRate;
-    /* 0x234 */ u16 mMixConfig[6];
-    /* 0x240 */ NebulaAtomic< s32 > mStatus;
-    /* 0x244 */ union {
+    JASTrack* mParent;
+    JASTrack* mChildren[MAX_CHILDREN];
+    TChannelMgr* mChannelMgrs[CHANNEL_MGR_MAX];
+    TChannelMgr mDefaultChannelMgr;
+    u32 mChannelMgrCount;
+    const JASDefaultBankTable* mBankTable;
+    f32 mPlaytime;
+    f32 mSampleInterval;
+    f32 mVibDepth;
+    f32 mVibPitch;
+    f32 mTremDepth;
+    f32 mTremPitch;
+    u16 mVibDelay;
+    u16 mTremDelay;
+    short mFIR[8];
+    short mIIR[8];
+    u8 mFilterMode;
+    f32 mPanPower;
+    f32 mTempoRate;
+    u32 mSkipSample;
+    u16 mDirectRelease;
+    u16 mTempo;
+    u16 mTimebase;
+    s8 mTranspose;
+    u8 mPitch;
+    u16 mBankNumber;
+    u16 mProgNumber;
+    u8 mBendSense;
+    u8 mNoteOnPrio;
+    u8 mReleasePrio;
+    u8 mGateRate;
+    u16 mMixConfig[6];
+    NebulaAtomic< s32 > mStatus;
+    union {
         struct {
             bool mPauseFlag : 1;
             bool mIsMute : 1;
@@ -386,9 +385,9 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
         };
         volatile u8 byteRepr;
     };
-    /* 0x248 */ JGadget::TLinkListNode mNode;
+    JGadget::TLinkListNode mNode;
 
-    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's code uses the literal -0x248.
+    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T).
     static int nebulaListNodeOffset() {
         return -(int)offsetof(JASTrack, mNode);
     }

@@ -23,8 +23,8 @@ public:
     const TVec3f getPivotPointPos() const;
     const TVec3f getNextPointPos() const;
 
-    /* 0x104 */ s32 mCurNormal;
-    /* 0x108 */ MR::AssignableArray< TVec3f > mNormals;
-    /* 0x110 */ TQuat4f _110;
-    /* 0x120 */ TQuat4f _120;
+    s32 mCurNormal;
+    MR::AssignableArray< TVec3f > mNormals;
+    TQuat4f _110;
+    TQuat4f _120;
 };

@@ -11,5 +11,5 @@ public:
 
     void setSize(const TVec3f&);
 
-    /* 0x20 */ TVec3f mSize;
+    TVec3f mSize;
 };

@@ -344,7 +344,7 @@ void MiiSelect::collectValidMiiIndex() {
             continue;
         }
 
-        // At most the ten favourites the console allows (the array's size): a database made elsewhere can mark more.
+        // At most ten favourites (the array's size): a database made elsewhere can mark more.
         if (additionalInfo.favorite == 1 && mFavoriteMiiNum < ARRAY_SIZE(mFavoriteMiiIndices)) {
             mFavoriteMiiIndices[mFavoriteMiiNum] = static_cast< u16 >(i);
             mFavoriteMiiNum++;

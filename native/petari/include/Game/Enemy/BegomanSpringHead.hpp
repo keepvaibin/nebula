@@ -11,7 +11,7 @@ public:
     virtual ~BegomanHead();
     virtual void calcAndSetBaseMtx();
 
-    /* 0x9C */ TVec3f* _9C;
+    TVec3f* _9C;
 };
 
 class BegomanSpringHead : public BegomanHead {

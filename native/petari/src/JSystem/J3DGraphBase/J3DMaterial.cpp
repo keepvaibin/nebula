@@ -5,72 +5,58 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 
 J3DColorBlock* J3DMaterial::createColorBlock(u32 flags) {
-    J3DColorBlock* rv = NULL;
     switch (flags) {
     case 0:
-        rv = new J3DColorBlockLightOff();
-        break;
+        return new J3DColorBlock(J3DColorBlock::Kind_LightOff);
     case 0x40000000:
-        rv = new J3DColorBlockLightOn();
-        break;
+        return new J3DColorBlock(J3DColorBlock::Kind_LightOn);
     case 0x80000000:
-        rv = new J3DColorBlockAmbientOn();
-        break;
+        return new J3DColorBlock(J3DColorBlock::Kind_AmbientOn);
+    default:
+        return NULL;
     }
-
-    return rv;
 }
 
 J3DTexGenBlock* J3DMaterial::createTexGenBlock(u32 flags) {
-    J3DTexGenBlock* rv = NULL;
-    switch (flags) {
-    case 0x8000000:
-        rv = new J3DTexGenBlock4();
-        break;
-    case 0:
-    default:
-        rv = new J3DTexGenBlockBasic();
-    }
-
-    return rv;
+    return flags == 0x8000000 ? new J3DTexGenBlock(4, true) : new J3DTexGenBlock(8, true);
 }
 
-J3DTevBlock* J3DMaterial::createTevBlock(int tevStageNum) {
+J3DRegisterBlock* J3DMaterial::createRegisterBlock(int tevStageNum) {
     if (tevStageNum <= 1) {
-        return new J3DTevBlock(1, true, false);
+        return new J3DRegisterBlock(1, true, false);
     }
     if (tevStageNum == 2) {
-        return new J3DTevBlock(2, true, true);
+        return new J3DRegisterBlock(2, true, true);
     }
     if (tevStageNum <= 4) {
-        return new J3DTevBlock(4, true, true);
+        return new J3DRegisterBlock(4, true, true);
     }
-    return tevStageNum <= 16 ? new J3DTevBlock(8, true, true) : nullptr;
+    return tevStageNum <= 16 ? new J3DRegisterBlock(8, true, true) : nullptr;
 }
 
 J3DIndBlock* J3DMaterial::createIndBlock(int flags) {
     return new J3DIndBlock(flags != 0);
 }
 
-J3DPEBlock* J3DMaterial::createPEBlock(u32 flags, u32 materialMode) {
-    J3DPEBlock* rv = NULL;
+J3DOutputBlock* J3DMaterial::createOutputBlock(u32 flags, u32 materialMode) {
+    J3DOutputBlock* rv = NULL;
     if (flags == 0) {
         if (materialMode & 1) {
-            rv = new J3DPEBlockOpa();
+            rv = new J3DOutputBlock(J3DOutputBlock::Kind_Opaque);
             return rv;
         } else if (materialMode & 2) {
-            rv = new J3DPEBlockTexEdge();
+            rv = new J3DOutputBlock(J3DOutputBlock::Kind_TexEdge);
             return rv;
         } else if (materialMode & 4) {
-            rv = new J3DPEBlockXlu();
+            rv = new J3DOutputBlock(J3DOutputBlock::Kind_Translucent);
             return rv;
         }
     }
 
     if (flags == 0x10000000) {
-        rv = new J3DPEBlockFull();
+        rv = new J3DOutputBlock(J3DOutputBlock::Kind_Full);
     } else if (flags == 0x20000000) {
-        rv = new J3DPEBlockFogOff();
+        rv = new J3DOutputBlock(J3DOutputBlock::Kind_FogOff);
     }
 
     return rv;
@@ -86,9 +72,9 @@ void J3DMaterial::initialize() {
     mDiffFlag = 0;
     mColorBlock = NULL;
     mTexGenBlock = NULL;
-    mTevBlock = NULL;
+    mRegisterBlock = NULL;
     mIndBlock = NULL;
-    mPEBlock = NULL;
+    mOutputBlock = NULL;
     mpOrigMaterial = NULL;
     mMaterialAnm = NULL;
     mSharedSnapshot = NULL;
@@ -174,9 +160,9 @@ void J3DMaterial::copy(J3DMaterial* pOther) {
     mNativeMaterial = pOther->mNativeMaterial;
     mColorBlock->reset(pOther->mColorBlock);
     mTexGenBlock->reset(pOther->mTexGenBlock);
-    mTevBlock->reset(pOther->mTevBlock);
+    mRegisterBlock->reset(pOther->mRegisterBlock);
     mIndBlock->reset(pOther->mIndBlock);
-    mPEBlock->reset(pOther->mPEBlock);
+    mOutputBlock->reset(pOther->mOutputBlock);
 }
 
 void J3DMaterial::reset() {
@@ -213,71 +199,3 @@ s32 J3DMaterial::newSharedSnapshot() {
 }
 
 
-void J3DPatchedMaterial::initialize() {
-    J3DMaterial::initialize();
-}
-
-void J3DPatchedMaterial::makeSnapshot() {
-}
-
-void J3DPatchedMaterial::makeSharedSnapshot() {
-}
-
-void J3DPatchedMaterial::load() {
-    j3dSys.setMaterialMode(mMaterialMode);
-    if (j3dSys.checkFlag(2)) {
-        return;
-    }
-}
-
-void J3DPatchedMaterial::loadSharedMaterial() {
-    j3dSys.setMaterialMode(mMaterialMode);
-    if (!j3dSys.checkFlag(0x02)) {
-        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedSnapshot);
-    }
-}
-
-void J3DPatchedMaterial::reset() {
-}
-
-void J3DPatchedMaterial::change() {
-}
-
-void J3DLockedMaterial::initialize() {
-    J3DMaterial::initialize();
-}
-
-void J3DLockedMaterial::makeSnapshot() {
-}
-
-void J3DLockedMaterial::makeSharedSnapshot() {
-}
-
-void J3DLockedMaterial::load() {
-    j3dSys.setMaterialMode(mMaterialMode);
-    if (j3dSys.checkFlag(2)) {
-        return;
-    }
-}
-
-void J3DLockedMaterial::loadSharedMaterial() {
-    j3dSys.setMaterialMode(mMaterialMode);
-    if (!j3dSys.checkFlag(0x02)) {
-        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedSnapshot);
-    }
-}
-
-void J3DLockedMaterial::patch() {
-}
-
-void J3DLockedMaterial::diff(u32 diffFlags) {
-}
-
-void J3DLockedMaterial::calc(const Mtx param_0) {
-}
-
-void J3DLockedMaterial::reset() {
-}
-
-void J3DLockedMaterial::change() {
-}

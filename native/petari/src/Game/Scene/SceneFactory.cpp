@@ -10,8 +10,8 @@ namespace {
             return strcmp(mName, pName) == 0;
         }
 
-        /* 0x0 */ const char* mName;
-        /* 0x4 */ Scene* (*mCreateFunc)();
+        const char* mName;
+        Scene* (*mCreateFunc)();
     };
 
     template < typename T >

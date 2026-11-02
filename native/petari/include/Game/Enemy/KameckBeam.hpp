@@ -9,11 +9,11 @@ class KameckFireBall;
 class KameckBeam : public LiveActor {
 public:
     enum BeamType {
-        /* 0x0 */ BeamType_None,
-        /* 0x1 */ BeamType_Turtle,
-        /* 0x2 */ BeamType_FireBall1,
-        /* 0x3 */ BeamType_FireBall2,
-        /* 0x4 */ BeamType_FireBall3,
+        BeamType_None,
+        BeamType_Turtle,
+        BeamType_FireBall1,
+        BeamType_FireBall2,
+        BeamType_FireBall3,
     };
 
     /// @brief Creates a new `KameckBeam`.
@@ -48,14 +48,14 @@ public:
     void emitBeamReadyEffect();
     void emitBeamEffect();
 
-    /* 0x8C */ KameckBeamEventListener* mEventListener;
-    /* 0x90 */ KameckTurtle* mKameckTurtle;
-    /* 0x94 */ KameckFireBall* mKameckFireBalls[3];
-    /* 0xA0 */ MtxPtr mFollowMtx;
-    /* 0xA4 */ TVec3f _A4;
-    /* 0xB0 */ TVec3f mWandLocalPosition;
-    /* 0xBC */ s32 mBeamKind;
-    /* 0xC0 */ u8 _C0[4];
+    KameckBeamEventListener* mEventListener;
+    KameckTurtle* mKameckTurtle;
+    KameckFireBall* mKameckFireBalls[3];
+    MtxPtr mFollowMtx;
+    TVec3f _A4;
+    TVec3f mWandLocalPosition;
+    s32 mBeamKind;
+    u8 _C0[4];
 };
 
 class KameckBeamEventListener {
@@ -72,8 +72,8 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts*) const;
 
-    /* 0x04 */ const TVec3f* _4;
-    /* 0x08 */ f32 _8;
+    const TVec3f* _4;
+    f32 _8;
 };
 
 namespace MR {

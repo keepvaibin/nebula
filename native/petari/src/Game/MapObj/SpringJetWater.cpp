@@ -24,7 +24,6 @@ namespace NrvSpringJetWater {
 SpringJetWater::SpringJetWater(const char* pName) : LiveActor(pName), mObjName(), mUp(0.0f, 1.0f, 0.0f) {
 }
 
-// https://decomp.me/scratch/e7fUQ
 void SpringJetWater::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     TPos3f mtx;

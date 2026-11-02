@@ -33,11 +33,11 @@ public:
     void exePlayerMoving();
     void exePlayerNotMoving();
 
-    /* 0x20 */ s32 mPlayerNotMovingFrame;
-    /* 0x24 */ bool _24;
-    /* 0x28 */ CoinCounter* mCoinCounter;
-    /* 0x2C */ StarPieceCounter* mStarPieceCounter;
-    /* 0x30 */ PlayerLeft* mPlayerLeft;
-    /* 0x34 */ StarCounter* mStarCounter;
-    /* 0x38 */ MarioMeter* mHPMeter;
+    s32 mPlayerNotMovingFrame;
+    bool _24;
+    CoinCounter* mCoinCounter;
+    StarPieceCounter* mStarPieceCounter;
+    PlayerLeft* mPlayerLeft;
+    StarCounter* mStarCounter;
+    MarioMeter* mHPMeter;
 };

@@ -19,12 +19,12 @@ public:
         mSideDist = sideDist;
     }
 
-    /* 0x4C */ TVec3f mWPoint;
-    /* 0x58 */ TVec3f mAxis;
-    /* 0x64 */ f32 mAngleA;
-    /* 0x68 */ f32 mAngleB;
-    /* 0x6C */ f32 mDist;
-    /* 0x70 */ f32 mSideDist;
-    /* 0x74 */ TVec3f mLastWatchPoint;
-    /* 0x80 */ bool mIsNotInitialized;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mAngleA;
+    f32 mAngleB;
+    f32 mDist;
+    f32 mSideDist;
+    TVec3f mLastWatchPoint;
+    bool mIsNotInitialized;
 };

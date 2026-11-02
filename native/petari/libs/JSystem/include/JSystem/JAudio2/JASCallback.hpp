@@ -10,13 +10,13 @@ struct JASCallbackMgr {
         TCallback() : mCallback(nullptr), mArg(nullptr) {
         }
 
-        /* 0x0 */ JASCallback* mCallback;
-        /* 0x4 */ void* mArg;
+        JASCallback* mCallback;
+        void* mArg;
     };
 
     bool regist(JASCallback*, void*);
     s32 reject(JASCallback*, void*);
     void callback();
 
-    /* 0x0 */ TCallback mCallbacks[JASCALLBACK_MAX_CALLBACKS];
+    TCallback mCallbacks[JASCALLBACK_MAX_CALLBACKS];
 };

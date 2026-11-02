@@ -33,9 +33,9 @@ public:
     bool isPointing() const;
     void syncStatus();
 
-    /* 0x20 */ ButtonPaneController* mButtonPaneController;
-    /* 0x24 */ const char* mGalaxyName;
-    /* 0x28 */ LayoutActor* mHost;
-    /* 0x2C */ const char* mPaneName;
-    /* 0x30 */ u8 mMode;
+    ButtonPaneController* mButtonPaneController;
+    const char* mGalaxyName;
+    LayoutActor* mHost;
+    const char* mPaneName;
+    u8 mMode;
 };

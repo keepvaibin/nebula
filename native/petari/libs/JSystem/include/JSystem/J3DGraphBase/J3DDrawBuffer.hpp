@@ -9,7 +9,7 @@ class J3DDrawPacket;
 class J3DMatPacket;
 class J3DShapePacket;
 
-inline f32 J3DCalcZValue(__REGISTER MtxPtr m, __REGISTER Vec v) {
+inline f32 J3DCalcZValue(MtxPtr m, Vec v) {
     return (v.z * m[2][2] + v.x * m[2][0]) + (m[2][3] + v.y * m[2][1]);
 }
 
@@ -76,15 +76,15 @@ public:
         mpZMtx = mtx;
     }
 
-    /* 0x00 */ J3DPacket** mpBuffer;
-    /* 0x04 */ u32 mEntryTableSize;
-    /* 0x08 */ u32 mDrawMode;
-    /* 0x0C */ u32 mSortMode;
-    /* 0x10 */ f32 mZNear;
-    /* 0x14 */ f32 mZFar;
-    /* 0x18 */ f32 mZRatio;
-    /* 0x1C */ MtxPtr mpZMtx;
-    /* 0x20 */ J3DPacket* mpCallBackPacket;
+    J3DPacket** mpBuffer;
+    u32 mEntryTableSize;
+    u32 mDrawMode;
+    u32 mSortMode;
+    f32 mZNear;
+    f32 mZFar;
+    f32 mZRatio;
+    MtxPtr mpZMtx;
+    J3DPacket* mpCallBackPacket;
 
     static sortFunc sortFuncTable[6];
     static drawFunc drawFuncTable[2];

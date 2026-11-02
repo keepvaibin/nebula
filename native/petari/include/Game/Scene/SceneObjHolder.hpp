@@ -159,7 +159,7 @@ public:
 
 private:
     /// @brief The array of objects.
-    /* 0x00 */ NameObj* mObj[SceneObj_NumMax];
+    NameObj* mObj[SceneObj_NumMax];
 };
 
 namespace MR {

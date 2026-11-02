@@ -9,7 +9,7 @@ public:
 
     virtual ~ResourceShare();
 
-    /* 0x0C */ void* _C;
-    /* 0x10 */ void* _10;
-    /* 0x14 */ u32 _14;
+    void* _C;
+    void* _10;
+    u32 _14;
 };

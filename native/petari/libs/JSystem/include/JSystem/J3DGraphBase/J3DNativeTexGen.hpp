@@ -3,7 +3,7 @@
 #include <NebulaGpu.h>
 
 // A texture coordinate's generation as the renderer takes it (nebula_game_api.h NebulaMaterialProgram::tex_gen,
-// NEBULA_STATE_TEX_COORD_GEN, NebulaShapeTexGen): the console's type and source as two bytes, its post-transform as a row.
+// NebulaShapeTexGen): the file's type and source as two bytes, its post-transform as a row.
 // tools/dev/gen_j3d_materials.py native_tex_gen converts dumped records the same way.
 namespace J3DNativeTexGen {
     // Bits 0-1 the kind (0 a matrix, 1 emboss, 2 colour 0, 3 colour 1), bit 2 projective (three outputs), bit 3 an

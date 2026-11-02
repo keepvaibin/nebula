@@ -26,7 +26,7 @@ bool GameDataSomeScenarioAccessor::isAlreadyVisited() const {
 }
 
 s32 GameDataSomeScenarioAccessor::getMaxCoinNum() const {
-    return MR::clamp(mSomeGalaxyStorage->getMaxCoinNum(mScenarioNum - 1), 0, 999L);
+    return MR::clamp(mSomeGalaxyStorage->getMaxCoinNum(mScenarioNum - 1), 0, 999);
 }
 
 void GameDataSomeScenarioAccessor::setPowerStarFlag(bool val) {
@@ -40,7 +40,7 @@ void GameDataSomeScenarioAccessor::setFlagAlreadyVisited(bool val) {
 void GameDataSomeScenarioAccessor::updateMaxCoinNum(int coinNum) {
     if (getMaxCoinNum() < coinNum) {
         s32 scenarioNo = mScenarioNum - 1;
-        u16 maxCoins = MR::clamp(coinNum, 0, 999L);
+        u16 maxCoins = MR::clamp(coinNum, 0, 999);
         mSomeGalaxyStorage->setMaxCoinNum(scenarioNo, maxCoins);
     }
 }
@@ -252,7 +252,6 @@ void GameDataSomeGalaxyStorage::serialize(const BinaryDataContentAccessor& rAcce
 }
 
 s32 GameDataAllGalaxyStorage::serialize(u8* pData, u32 dataSize) const {
-    // https://decomp.me/scratch/NCESx
 
     const char* name;
     s32 writeOffset = 0;

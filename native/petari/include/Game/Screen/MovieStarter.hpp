@@ -14,5 +14,5 @@ public:
     virtual void control();
 
 private:
-    /* 0x8C */ s32 mMovieType;
+    s32 mMovieType;
 };

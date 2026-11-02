@@ -26,12 +26,12 @@ public:
     void createSingleEmitter(SingleEmitter*, MultiEmitterCallBackBase*, MultiEmitterParticleCallBack*);
     void entry(ParticleResourceHolder*, u32, u32);
 
-    /* 0x0C */ JPAEmitterManager* mEmitterManager;
-    /* 0x10 */ ParticleEmitterHolder* mEmitterHolder;
-    /* 0x14 */ ParticleDrawExecutor* mDrawExec;
-    /* 0x18 */ ParticleCalcExecutor* mCalcExec;
-    /* 0x1C */ AutoEffectGroupHolder* mGroupHolder;
-    /* 0x20 */ bool _20;
+    JPAEmitterManager* mEmitterManager;
+    ParticleEmitterHolder* mEmitterHolder;
+    ParticleDrawExecutor* mDrawExec;
+    ParticleCalcExecutor* mCalcExec;
+    AutoEffectGroupHolder* mGroupHolder;
+    bool _20;
 };
 
 namespace MR {

@@ -24,14 +24,14 @@ public:
     void exeDemoGrandStarAppear();
 
 private:
-    /* 0x8C */ const char* mModelName;
-    /* 0x90 */ TPos3f mBaseMtx;
-    /* 0xC0 */ TVec3f _C0;
-    /* 0xCC */ LiveActorGroup* mDamagePlateGroup;
-    /* 0xD0 */ LiveActorGroup* mCoinPlateGroup;
-    /* 0xD4 */ LiveActorGroup* mPlateGroup;
-    /* 0xD8 */ LiveActor* mDamagePlate;
-    /* 0xDC */ bool _DC;
-    /* 0xDD */ bool _DD;
-    /* 0xDE */ bool _DE;
+    const char* mModelName;
+    TPos3f mBaseMtx;
+    TVec3f _C0;
+    LiveActorGroup* mDamagePlateGroup;
+    LiveActorGroup* mCoinPlateGroup;
+    LiveActorGroup* mPlateGroup;
+    LiveActor* mDamagePlate;
+    bool _DC;
+    bool _DD;
+    bool _DE;
 };

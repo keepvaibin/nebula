@@ -199,18 +199,14 @@ J3DModelData* J3DModelLoader::loadBinaryMaterials(void const* i_data, u32 i_flag
             readTexture((J3DTextureBlock*)block);
             break;
         case 'MDL3':
-            // The file's precompiled material lists (console commands): its materials come from MAT3, their lists
+            // The file's precompiled material lists: its materials come from MAT3, their lists
             // from J3DModel::makeMesh as a .bmd model's.
             break;
         case 'MAT3':
             flags = 0x50100000;
             flags |= (i_flags & 0x3000000);
             mpMaterialBlock = (J3DMaterialBlock*)block;
-            if (((u32)i_flags & 0x3000) == 0) {
-                readMaterial((J3DMaterialBlock*)block, flags);
-            } else if (((u32)i_flags & 0x3000) == 0x2000) {
-                readPatchedMaterial((J3DMaterialBlock*)block, flags);
-            }
+            readMaterial((J3DMaterialBlock*)block, flags);
             break;
         default:
             break;
@@ -498,29 +494,3 @@ void J3DModelLoader::readTextureTable(J3DTextureBlock const* i_block) {
     registerTextureImages(texture_res, texture_num);
 }
 
-void J3DModelLoader::readPatchedMaterial(J3DMaterialBlock const* i_block, u32 i_flags) {
-    J3DMaterialFactory factory(*i_block);
-    mpMaterialTable->mMaterialNum = i_block->mMaterialNum;
-    mpMaterialTable->mUniqueMatNum = factory.countUniqueMaterials();
-    if (i_block->mpNameTable != 0) {
-        mpMaterialTable->mMaterialName = new JUTNameTab(JSUConvertOffsetToPtr< ResNTAB >(i_block, i_block->mpNameTable));
-    } else {
-        mpMaterialTable->mMaterialName = NULL;
-    }
-    mpMaterialTable->mMaterialNodePointer = new J3DMaterial*[mpMaterialTable->mMaterialNum];
-    const u32 materialIDs = allocMaterialIDs(mpMaterialTable->mMaterialNum);
-    mpMaterialTable->field_0x10 = NULL;
-    for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
-        mpMaterialTable->mMaterialNodePointer[i] = factory.create(NULL, J3DMaterialFactory::MATERIAL_TYPE_PATCHED, i, i_flags);
-        mpMaterialTable->mMaterialNodePointer[i]->mDiffFlag = materialIDs + factory.getMaterialID(i);
-    }
-}
-
-void J3DModelLoader::modifyMaterial(u32 i_flags) {
-    if (i_flags & 0x2000) {
-        J3DMaterialFactory factory(*mpMaterialBlock);
-        for (u16 i = 0; i < mpMaterialTable->mMaterialNum; i++) {
-            factory.modifyPatchedCurrentMtx(mpMaterialTable->mMaterialNodePointer[i], i);
-        }
-    }
-}

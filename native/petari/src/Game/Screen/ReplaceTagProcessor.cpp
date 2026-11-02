@@ -131,7 +131,7 @@ namespace ReplaceTagProcessor {
     u32 exeStringGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
         va_list copy;
         const char16_t* pString = nullptr;
-        // A va_list is a pointer natively, not the console's one-element array.
+        // A va_list is a pointer.
         va_copy(copy, args);
         for (u32 i = 0; i <= rTag.getParam32(1); i++) {
             pString = va_arg(copy, const char16_t*);

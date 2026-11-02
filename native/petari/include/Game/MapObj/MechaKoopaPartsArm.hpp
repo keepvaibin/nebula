@@ -20,5 +20,5 @@ public:
     void exeBreak();
     void startBreak();
 
-    /* 0xC4 */ bool mIsRightArm;
+    bool mIsRightArm;
 };

@@ -32,7 +32,7 @@ public:
     f32 calcBaseDropLength() const;
     f32 calcBaseDropLength(const ShadowController*) const;
 
-    /* 0x10 */ f32 mStartDrawShapeOffset;
-    /* 0x14 */ f32 mEndDrawShapeOffset;
-    /* 0x18 */ bool mIsCutDropShadow;
+    f32 mStartDrawShapeOffset;
+    f32 mEndDrawShapeOffset;
+    bool mIsCutDropShadow;
 };

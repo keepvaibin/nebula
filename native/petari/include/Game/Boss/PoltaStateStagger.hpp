@@ -18,6 +18,6 @@ public:
     void setActionName(const char*);
 
     u8 padding[0xC];
-    /* 0x1C */ const char* mActionName;
+    const char* mActionName;
     bool _20;
 };

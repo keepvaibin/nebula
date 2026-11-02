@@ -8,37 +8,37 @@ class NebulaArena;
 
 struct JPABaseShapeData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ u32 mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ s16 mClrPrmAnmOffset;
-    /* 0x0E */ s16 mClrEnvAnmOffset;
-    /* 0x10 */ f32 mBaseSizeX;
-    /* 0x14 */ f32 mBaseSizeY;
-    /* 0x18 */ u16 mBlendModeCfg;
-    /* 0x1A */ u8 mAlphaCompareCfg;
-    /* 0x1B */ u8 mAlphaRef0;
-    /* 0x1C */ u8 mAlphaRef1;
-    /* 0x1D */ u8 mZModeCfg;
-    /* 0x1E */ u8 mTexFlg;
-    /* 0x1F */ u8 mTexAnmNum;
-    /* 0x20 */ u8 mTexIdx;
-    /* 0x21 */ u8 mClrFlg;
-    /* 0x22 */ u8 mClrPrmKeyNum;
-    /* 0x23 */ u8 mClrEnvKeyNum;
-    /* 0x24 */ s16 mClrAnmFrmMax;
-    /* 0x26 */ NebulaColor8 mClrPrm;
-    /* 0x2A */ NebulaColor8 mClrEnv;
-    /* 0x2E */ u8 mAnmRndm;
-    /* 0x2F */ u8 mClrAnmRndmMask;
-    /* 0x30 */ u8 mTexAnmRndmMask;
-};  // Size: 0x34
+    u32 mFlags;
+    s16 mClrPrmAnmOffset;
+    s16 mClrEnvAnmOffset;
+    f32 mBaseSizeX;
+    f32 mBaseSizeY;
+    u16 mBlendModeCfg;
+    u8 mAlphaCompareCfg;
+    u8 mAlphaRef0;
+    u8 mAlphaRef1;
+    u8 mZModeCfg;
+    u8 mTexFlg;
+    u8 mTexAnmNum;
+    u8 mTexIdx;
+    u8 mClrFlg;
+    u8 mClrPrmKeyNum;
+    u8 mClrEnvKeyNum;
+    s16 mClrAnmFrmMax;
+    NebulaColor8 mClrPrm;
+    NebulaColor8 mClrEnv;
+    u8 mAnmRndm;
+    u8 mClrAnmRndmMask;
+    u8 mTexAnmRndmMask;
+};
 
 struct JPABaseShape {
 public:
     JPABaseShape(u8 const*, NebulaArena*);
-    void setGX(JPAEmitterWorkData*) const;
+    void setPass(JPAEmitterWorkData*) const;
 
     static const u8 st_bm[4];
     static const u8 st_lo[16];
@@ -237,16 +237,16 @@ public:
     }
 
 public:
-    /* 0x00 */ const JPABaseShapeData* mpData;
-    /* 0x04 */ const void* mpTexCrdMtxAnmTbl;
-    /* 0x08 */ const u8* mpTexIdxAnimTbl;
-    /* 0x0C */ NebulaColor8* mpPrmClrAnmTbl;
-    /* 0x10 */ NebulaColor8* mpEnvClrAnmTbl;
+    const JPABaseShapeData* mpData;
+    const void* mpTexCrdMtxAnmTbl;
+    const u8* mpTexIdxAnimTbl;
+    NebulaColor8* mpPrmClrAnmTbl;
+    NebulaColor8* mpEnvClrAnmTbl;
 };
 
 struct JPAClrAnmKeyData {
-    /* 0x0 */ s16 index;
-    /* 0x2 */ NebulaColor8 color;
+    s16 index;
+    NebulaColor8 color;
 };
 
 // The quad arrays the particles drawn next read (JPAResource's), and a particle's quad from them (type 1: crossed).

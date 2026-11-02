@@ -75,7 +75,7 @@ namespace {
     }
 
     PartsModel* createSubModel(LiveActor* pActor, const char* pSubModelName, MtxPtr pMtx, int drawBufferType) {
-        const char* modelResName = MR::getModelResourceHolder(pActor)->mModelResTable->getResName(0UL);
+        const char* modelResName = MR::getModelResourceHolder(pActor)->mModelResTable->getResName(0u);
 
         if (!MR::isExistSubModel(modelResName, pSubModelName)) {
             return nullptr;
@@ -780,7 +780,7 @@ namespace MR {
     }
 
     const char* getModelResName(const LiveActor* pActor) {
-        return getModelResourceHolder(pActor)->mModelResTable->getResName(0UL);
+        return getModelResourceHolder(pActor)->mModelResTable->getResName(0u);
     }
 
     bool isExistAnim(const LiveActor* pActor, const char* pName) {
@@ -867,7 +867,7 @@ namespace MR {
         pActor->mModelManager->mMaterialUpdater->addFogCtrl(enable);
     }
 
-    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DGXColor* pColor) {
+    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DColor* pColor) {
         pActor->mModelManager->mMaterialUpdater->addMatColorCtrl(pMatName, 0, pColor);
     }
 

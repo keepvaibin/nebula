@@ -73,18 +73,18 @@ public:
         return 0.0f < _18;
     }
 
-    /* 0x18 */ f32 _18;
-    /* 0x1C */ f32 mRotateAngle;
-    /* 0x20 */ s32 mRotateStopTime;
-    /* 0x24 */ f32 mTargetAngle;
-    /* 0x28 */ f32 mRotateSpeed;
-    /* 0x2C */ f32 mAngle;
-    /* 0x30 */ s32 mRotateAxis;
-    /* 0x34 */ s32 mRotateAccelType;
-    /* 0x38 */ s32 mRotateType;
-    /* 0x3C */ s32 mSignMotionType;
-    /* 0x40 */ TPos3f mBaseHostMtx;
-    /* 0x70 */ TPos3f mRotateMtx;
-    /* 0xA0 */ f32 _A0;
-    /* 0xA4 */ bool mIsOnReverse;
+    f32 _18;
+    f32 mRotateAngle;
+    s32 mRotateStopTime;
+    f32 mTargetAngle;
+    f32 mRotateSpeed;
+    f32 mAngle;
+    s32 mRotateAxis;
+    s32 mRotateAccelType;
+    s32 mRotateType;
+    s32 mSignMotionType;
+    TPos3f mBaseHostMtx;
+    TPos3f mRotateMtx;
+    f32 _A0;
+    bool mIsOnReverse;
 };

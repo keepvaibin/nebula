@@ -18,8 +18,8 @@ public:
     void createChainParts();
     void invalidateClippingAllChainParts();
 
-    /* 0x8C */ LargeChainParts* _8C;
-    /* 0x90 */ LargeChainParts* _90;
-    /* 0x94 */ LargeChainParts* mChainArray;
-    /* 0x98 */ u32 mChainCount;
+    LargeChainParts* _8C;
+    LargeChainParts* _90;
+    LargeChainParts* mChainArray;
+    u32 mChainCount;
 };

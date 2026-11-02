@@ -32,13 +32,13 @@ public:
         mMaxCoinNum[scenarioNo] = coinNum;
     }
 
-    /* 0x00 */ const char* mGalaxyName;
-    /* 0x04 */ s32 mPowerStarNum;
-    /* 0x08 */ u8 mPowerStarOwnedFlags;
-    /* 0x09 */ u8 mAlreadyVisitedFlags;
-    /* 0x0A */ u8 _A;
-    /* 0x0B */ u8 _B;
-    /* 0x0C */ u16 mMaxCoinNum[8];
+    const char* mGalaxyName;
+    s32 mPowerStarNum;
+    u8 mPowerStarOwnedFlags;
+    u8 mAlreadyVisitedFlags;
+    u8 _A;
+    u8 _B;
+    u16 mMaxCoinNum[8];
 };
 
 class GameDataSomeScenarioAccessor {
@@ -55,8 +55,8 @@ public:
 
     void setBitFlagAccordingToBool(u8*, bool);
 
-    /* 0x00 */ GameDataSomeGalaxyStorage* mSomeGalaxyStorage;
-    /* 0x04 */ u32 mScenarioNum;
+    GameDataSomeGalaxyStorage* mSomeGalaxyStorage;
+    u32 mScenarioNum;
 };
 
 // NOTE/TODO: This dummy is here to ensure vtable alignment in GameDataAllGalaxyStorage.
@@ -91,6 +91,6 @@ public:
         return mHeaderSerializer;
     }
 
-    /* 0x08 */ MR::Vector< MR::AssignableArray< GameDataSomeGalaxyStorage* > > mSomeGalaxyStorages;
-    /* 0x14 */ BinaryDataContentHeaderSerializer* mHeaderSerializer;
+    MR::Vector< MR::AssignableArray< GameDataSomeGalaxyStorage* > > mSomeGalaxyStorages;
+    BinaryDataContentHeaderSerializer* mHeaderSerializer;
 };

@@ -14,8 +14,8 @@ namespace {
             return strcmp(pObj->getName(), mName) == 0;
         }
 
-        /* 0x00 */ u32 mHash;
-        /* 0x04 */ const char* mName;
+        u32 mHash;
+        const char* mName;
     };
 };  // namespace
 

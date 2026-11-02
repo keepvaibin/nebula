@@ -44,10 +44,10 @@ struct alignas(256) VertexConstants {
     float inline_pos_matrix[3][4];
     float inline_tex_matrices[kMaxTexGens][3][4];
     float inline_post_matrices[kMaxTexGens][3][4];
-    // Physical viewport width and height, line width and point size (BP 0x22) at the scene target scale. Geometry shaders
+    // Physical viewport width and height, line width and point size (the line width) at the scene target scale. Geometry shaders
     // read it at HLSL packoffset(c65).
     float line_point_raster[4];
-    // Line mask, point mask, line divisor, point divisor for console texture
+    // Line mask, point mask, line divisor, point divisor for texture
     // coordinate offsets. Geometry shaders read this at packoffset(c66).
     std::uint32_t line_point_tex_offsets[4];
     // native_material.hlsli vs_header (c67): y the frame scale, z the PE word (native_ps), w the shape's per-vertex
@@ -58,7 +58,7 @@ struct alignas(256) VertexConstants {
     std::uint32_t post_rows[kMaxTexGens];
     std::uint32_t reserved_c72[4];  // c72: read by no shader
     // Motion-vector pipelines only (temporal scenes), in the tail padding: the
-    // previous projection (console A..D; E, F, type), the previous position matrix or
+    // previous projection, the previous position matrix or
     // camera delta, the draw's jitter (NDC) and half viewport (pixels), and the
     // mode (0: previous palette rows at motion_ctrl[1]; 1: motion_prev_pos applied
     // to the current eye position for palette draws, to the vertex for inline draws).

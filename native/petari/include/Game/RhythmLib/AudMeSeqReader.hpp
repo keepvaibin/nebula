@@ -82,9 +82,9 @@ public:
         return mLoopCounts[mNumStacks - 1];
     }
 
-    /* 0x00 */ u8* mSeqBuff;
-    /* 0x04 */ u8* mSeqCursor;
-    /* 0x08 */ u32 mNumStacks;
-    /* 0x0C */ u8* mStackPtrs[8];
-    /* 0x2C */ u16 mLoopCounts[8];
+    u8* mSeqBuff;
+    u8* mSeqCursor;
+    u32 mNumStacks;
+    u8* mStackPtrs[8];
+    u16 mLoopCounts[8];
 };

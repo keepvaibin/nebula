@@ -20,11 +20,6 @@ namespace NebulaFrameClock {
     // What the screen shows from the next frame: the game's picture (true) or black.
     void show(bool picture);
 
-    // Screen saver, as the console counts it: frames since the controllers' last input (resetIdle) reach the dimming
-    // time while dimming is enabled (and the system setting allows it). The game then lowers its volume.
-    bool enableDimming(bool enable);
-    u32 framesUntilDimming();
-    void resetIdle();
 
     // The picture's shape the game draws for, latched at each frame from the host's output shape: the screen width,
     // the camera's aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).

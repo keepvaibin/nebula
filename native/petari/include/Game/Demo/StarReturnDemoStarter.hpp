@@ -37,12 +37,12 @@ public:
     void exeStageResultAfter();
 
 private:
-    /* 0x8C */ ReturnDemoRailMove* mReturnDemoRailMove;
-    /* 0x90 */ StageResultInformer* mStageResultInformer;
-    /* 0x94 */ TPos3f mTransform;
-    /* 0xC4 */ TVec3f mPosition;
-    /* 0xD0 */ LiveActor* mPowerStar;
-    /* 0xD4 */ LiveActor* mLuma;
-    /* 0xD8 */ LiveActor* mHair;
-    /* 0xDC */ s32 mFrame;
+    ReturnDemoRailMove* mReturnDemoRailMove;
+    StageResultInformer* mStageResultInformer;
+    TPos3f mTransform;
+    TVec3f mPosition;
+    LiveActor* mPowerStar;
+    LiveActor* mLuma;
+    LiveActor* mHair;
+    s32 mFrame;
 };

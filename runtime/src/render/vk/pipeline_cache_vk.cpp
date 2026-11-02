@@ -476,7 +476,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         target.alphaBlendOp = target.colorBlendOp;
         if ((bb & (1u << 27u)) != 0u && dual_source && layout_->dual_source_blend &&
             (compat & kCompatNoDualSource) == 0u) {
-            // The pixel shader's second output carries the TEV alpha the colour blends against.
+            // The pixel shader's second output carries the material alpha the colour blends against.
             const auto second_source = [](VkBlendFactor factor) {
                 return factor == VK_BLEND_FACTOR_SRC_ALPHA ? VK_BLEND_FACTOR_SRC1_ALPHA
                     : factor == VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ? VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA : factor;

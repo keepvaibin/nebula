@@ -14,8 +14,8 @@ struct JAISeqData {
         offset = _offset;
     }
 
-    /* 0x00 */ void* data;
-    /* 0x04 */ u32 offset;
+    void* data;
+    u32 offset;
 };
 
 struct JAISeqDataRegion {
@@ -29,8 +29,8 @@ struct JAISeqDataRegion {
         return true;
     }
 
-    /* 0x00 */ u8* addr;
-    /* 0x04 */ u32 size;
+    u8* addr;
+    u32 size;
 };
 
 struct JAISeqDataUser {

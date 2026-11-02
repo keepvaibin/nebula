@@ -22,6 +22,6 @@ public:
     NameObj* find(const char* pName);
 
 private:
-    /* 0x00 */ MR::Vector< MR::AssignableArray< NameObj* > > mObjArray1;
-    /* 0x0C */ MR::Vector< MR::FixedArray< NameObj*, 16 > > mObjArray2;
+    MR::Vector< MR::AssignableArray< NameObj* > > mObjArray1;
+    MR::Vector< MR::FixedArray< NameObj*, 16 > > mObjArray2;
 };

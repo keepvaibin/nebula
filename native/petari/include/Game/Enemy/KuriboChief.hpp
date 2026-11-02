@@ -48,14 +48,14 @@ public:
     bool isEnableKick() const;
     bool isDown() const;
 
-    /* 0x8C */ AnimScaleController* mScaleController;
-    /* 0x90 */ WalkerStateWander* mStateWander;
-    /* 0x94 */ WalkerStateFindPlayer* mStateFindPlayer;
-    /* 0x98 */ WalkerStateChase* mStateChase;
-    /* 0x9C */ WalkerStateStagger* mStateStagger;
-    /* 0xA0 */ WalkerStateBindStarPointer* mStateBindStarPointer;
-    /* 0xA4 */ ItemGenerator* mItemGenerator;
-    /* 0xA8 */ KeySwitch* mKeySwitch;
-    /* 0xAC */ TQuat4f _AC;
-    /* 0xBC */ TVec3f _BC;
+    AnimScaleController* mScaleController;
+    WalkerStateWander* mStateWander;
+    WalkerStateFindPlayer* mStateFindPlayer;
+    WalkerStateChase* mStateChase;
+    WalkerStateStagger* mStateStagger;
+    WalkerStateBindStarPointer* mStateBindStarPointer;
+    ItemGenerator* mItemGenerator;
+    KeySwitch* mKeySwitch;
+    TQuat4f _AC;
+    TVec3f _BC;
 };

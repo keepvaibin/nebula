@@ -6,32 +6,32 @@
 
 // The sound tables (BST, BSTN) in host order, as the importer cooks the audio archive (native_data.rs baa).
 struct JAUSoundTableItem {
-    /* 0x00 */ u8 mPriority;
-    /* 0x01 */ u8 mVolume;
-    /* 0x02 */ u16 mResourceId;
-    /* 0x04 */ u8 _4[0];
+    u8 mPriority;
+    u8 mVolume;
+    u16 mResourceId;
+    u8 _4[0];
 };
 
 struct JAUSoundTableSe {
-    /* 0x00 */ u8 mPriority;
-    /* 0x01 */ u8 mVolume;
-    /* 0x02 */ u16 mAudibleSw;
-    /* 0x04 */ u16 mSoundSw;
+    u8 mPriority;
+    u8 mVolume;
+    u16 mAudibleSw;
+    u16 mSoundSw;
 };
 
 struct JAUSoundTableBgm {
-    /* 0x00 */ u8 mPriority;
-    /* 0x01 */ u8 mVolume;
-    /* 0x02 */ u16 mResourceId;
-    /* 0x04 */ u16 mChordResId;
-    /* 0x06 */ u16 mSoundSw;
+    u8 mPriority;
+    u8 mVolume;
+    u16 mResourceId;
+    u16 mChordResId;
+    u16 mSoundSw;
 };
 
 struct JAUSoundTableStream {
-    /* 0x00 */ u8 mPriority;
-    /* 0x01 */ u8 mVolume;
-    /* 0x02 */ u16 mChannelCtrl;
-    /* 0x04 */ u32 mStreamFileNameOffset;
+    u8 mPriority;
+    u8 mVolume;
+    u16 mChannelCtrl;
+    u32 mStreamFileNameOffset;
 };
 
 template < typename Root, typename Section, typename Group, typename Item >
@@ -91,16 +91,16 @@ struct JAUSoundTable_ {
         return (Item*)((u8*)mData + offset);
     }
 
-    /* 0x00 */ const void* mData;
-    /* 0x04 */ Root* mRoot;
+    const void* mData;
+    Root* mRoot;
 };
 
 struct JAUSoundTableRoot {
     static inline u32 magicNumber() {
         return 'BST ';
     }
-    /* 0x00 */ u32 mSectionNumber;
-    /* 0x04 */ u32 mSectionOffsets[0];
+    u32 mSectionNumber;
+    u32 mSectionOffsets[0];
 };
 
 struct JAUSoundTableSection {
@@ -114,8 +114,8 @@ struct JAUSoundTableSection {
         return mGroupOffsets[index];
     }
 
-    /* 0x00 */ u32 mNumGroups;
-    /* 0x04 */ u32 mGroupOffsets[0];
+    u32 mNumGroups;
+    u32 mGroupOffsets[0];
 };
 
 struct JAUSoundTableGroup {
@@ -139,9 +139,9 @@ struct JAUSoundTableGroup {
         return mItemOffsets[index] & 0xffffff;
     }
 
-    /* 0x00 */ u32 mNumItems;
-    /* 0x04 */ u32 mGlobalOffset;
-    /* 0x08 */ u32 mItemOffsets[0];
+    u32 mNumItems;
+    u32 mGlobalOffset;
+    u32 mItemOffsets[0];
 };
 
 struct JAUSoundTable : public JASGlobalInstance< JAUSoundTable > {
@@ -167,15 +167,15 @@ struct JAUSoundTable : public JASGlobalInstance< JAUSoundTable > {
         return mTable.mData != nullptr;
     }
 
-    /* 0x00 */ JAUSoundTable_< JAUSoundTableRoot, JAUSoundTableSection, JAUSoundTableGroup, void > mTable;
+    JAUSoundTable_< JAUSoundTableRoot, JAUSoundTableSection, JAUSoundTableGroup, void > mTable;
 };
 
 struct JAUSoundNameTableRoot {
     static inline u32 magicNumber() {
         return 'BSTN';
     }
-    /* 0x00 */ u32 mSectionNumber;
-    /* 0x04 */ u32 mSectionOffsets[0];
+    u32 mSectionNumber;
+    u32 mSectionOffsets[0];
 };
 
 struct JAUSoundNameTableSection {
@@ -189,9 +189,9 @@ struct JAUSoundNameTableSection {
         return mGroupOffsets[index];
     }
 
-    /* 0x00 */ u32 mNumGroups;
-    /* 0x04 */ u32 mGlobalOffset;
-    /* 0x08 */ u32 mGroupOffsets[0];
+    u32 mNumGroups;
+    u32 mGlobalOffset;
+    u32 mGroupOffsets[0];
 };
 
 struct JAUSoundNameTableGroup {
@@ -205,9 +205,9 @@ struct JAUSoundNameTableGroup {
         return mItemOffsets[index];
     }
 
-    /* 0x00 */ u32 mNumItems;
-    /* 0x04 */ u32 mCategoryNameOffset;
-    /* 0x08 */ u32 mItemOffsets[0];
+    u32 mNumItems;
+    u32 mCategoryNameOffset;
+    u32 mItemOffsets[0];
 };
 
 struct JAUSoundNameTable : public JASGlobalInstance< JAUSoundNameTable > {
@@ -225,5 +225,5 @@ struct JAUSoundNameTable : public JASGlobalInstance< JAUSoundNameTable > {
         return (const char*)mTable.getItem(group, index);
     }
 
-    /* 0x00 */ JAUSoundTable_< JAUSoundNameTableRoot, JAUSoundNameTableSection, JAUSoundNameTableGroup, char > mTable;
+    JAUSoundTable_< JAUSoundNameTableRoot, JAUSoundNameTableSection, JAUSoundNameTableGroup, char > mTable;
 };

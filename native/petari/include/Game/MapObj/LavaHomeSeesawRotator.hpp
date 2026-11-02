@@ -38,16 +38,16 @@ public:
     bool tryRebound();
     void soundMoveSE();
 
-    /* 0x18 */ f32 mAngularSpeedMax;
-    /* 0x1C */ f32 mInertia;
-    /* 0x20 */ f32 mRotateAngle;
-    /* 0x24 */ f32 mRestoreForce;
-    /* 0x28 */ TPos3f mRotateMtx;
-    /* 0x58 */ TQuat4f mRotateQuat;
-    /* 0x68 */ bool mIsHipDropped;
-    /* 0x6C */ TVec3f mRotateAxis;
-    /* 0x78 */ f32 mAngularVelocity;
-    /* 0x7C */ TVec3f mInitialUp;
-    /* 0x88 */ const char* mMoveSound;
-    /* 0x8C */ f32 mMoveSoundSpeed;
+    f32 mAngularSpeedMax;
+    f32 mInertia;
+    f32 mRotateAngle;
+    f32 mRestoreForce;
+    TPos3f mRotateMtx;
+    TQuat4f mRotateQuat;
+    bool mIsHipDropped;
+    TVec3f mRotateAxis;
+    f32 mAngularVelocity;
+    TVec3f mInitialUp;
+    const char* mMoveSound;
+    f32 mMoveSoundSpeed;
 };

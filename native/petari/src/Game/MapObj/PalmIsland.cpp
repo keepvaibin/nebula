@@ -38,7 +38,7 @@ void PalmIsland::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
-    _8C = MR::getRandom(0l, 60);
+    _8C = MR::getRandom(0, 60);
     initNerve(GET_NERVE(PalmIsland, PalmIslandNrvWait));
     makeActorAppeared();
 }

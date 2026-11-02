@@ -14,16 +14,6 @@ JAISoundHandle* JAISoundHandles::getHandleSoundID(JAISoundID id) {
     return nullptr;
 }
 
-JAISoundHandle* JAISoundHandles::getFreeHandle() {
-    for (int i = 0; i < mNumHandles; i++) {
-        if (!mHandles[i].isSoundAttached()) {
-            return &mHandles[i];
-        }
-    }
-
-    return nullptr;
-}
-
 JAISoundHandle* JAISoundHandles::getHandleUserData(uintptr_t addr) {
     for (int i = 0; i < mNumHandles; i++) {
         if (mHandles[i].isSoundAttached()) {

@@ -12,6 +12,6 @@ public:
     void reqLayout(u16 eventFrame, u16 sequenceFrame);
     void finish(u16 eventFrame, u16 sequenceFrame);
 
-    /* 0x24 */ s32 _24;
-    /* 0x28 */ f32 _28;
+    s32 _24;
+    f32 _28;
 };

@@ -33,9 +33,9 @@ public:
     void exePointing();
     void exeTalk();
 
-    /* 0x10 */ const char* mTalkActionName;
-    /* 0x14 */ TVec3f* mHostFrontVec;
-    /* 0x18 */ TalkMessageCtrl* mTalkCtrl;
-    /* 0x1C */ bool _1C;
-    /* 0x1D */ bool _1D;
+    const char* mTalkActionName;
+    TVec3f* mHostFrontVec;
+    TalkMessageCtrl* mTalkCtrl;
+    bool _1C;
+    bool _1D;
 };

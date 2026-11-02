@@ -25,8 +25,8 @@ public:
         return &mBomb->mVelocity;
     }
 
-    /* 0x8C */ BombHei* mBomb;
-    /* 0x90 */ s32 mCountdown;
-    /* 0x94 */ MapObjConnector* mConnector;
-    /* 0x98 */ bool mIsActive;
+    BombHei* mBomb;
+    s32 mCountdown;
+    MapObjConnector* mConnector;
+    bool mIsActive;
 };

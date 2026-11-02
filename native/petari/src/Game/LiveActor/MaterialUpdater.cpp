@@ -73,7 +73,7 @@ FogCtrl* MaterialUpdater::addFogCtrl(bool useAllMaterials) {
     return fog;
 }
 
-MatColorCtrl* MaterialUpdater::addMatColorCtrl(const char* pName, u32 color, const J3DGXColor* pColor) {
+MatColorCtrl* MaterialUpdater::addMatColorCtrl(const char* pName, u32 color, const J3DColor* pColor) {
     MatColorCtrl* ctrl = new MatColorCtrl(mModel->mModelData, pName, color, pColor);
     push(ctrl);
     s16 materialNo = MR::getMaterialNo(mModel->mModelData, pName);

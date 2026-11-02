@@ -19,9 +19,9 @@ public:
     void exeWait();
     void exeLockPosition();
 
-    /* 0xD4 */ f32 _D4;
-    /* 0xD8 */ u8 _D8;
-    /* 0xD9 */ u8 _D9;
-    /* 0xDA */ u8 _DA;
-    /* 0xDB */ u8 _DB;
+    f32 _D4;
+    u8 _D8;
+    u8 _D9;
+    u8 _DA;
+    u8 _DB;
 };

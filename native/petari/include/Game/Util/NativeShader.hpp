@@ -84,14 +84,14 @@ namespace NativeShader {
         rMaterial.constants[at + 3] = a / 255.0f;
     }
 
-    // Depth: tested by `func` (NEBULA_COMPARE_*, the console's order) when `test`, written when `write` (GpuSetZMode's terms).
+    // Depth: tested by `func` (NEBULA_COMPARE_*) when `test`, written when `write`.
     inline void setDepth(NebulaNativeMaterial& rMaterial, bool test, u8 func, bool write) {
         rMaterial.depth_test = test ? 1 : 0;
         rMaterial.depth_func = test ? func : static_cast< u8 >(NEBULA_COMPARE_ALWAYS);
         rMaterial.depth_write = test && write ? 1 : 0;
     }
 
-    // Blending as GpuSetBlendMode's blend: source and destination factors (NEBULA_FACTOR_*, the console's order).
+    // Blending: source and destination factors (NEBULA_FACTOR_*).
     inline void setBlend(NebulaNativeMaterial& rMaterial, u8 src, u8 dst) {
         rMaterial.blend_op = NEBULA_BLEND_ADD;
         rMaterial.blend_src = src;

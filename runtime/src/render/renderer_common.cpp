@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// What both console renderers share (renderer_common.h).
+// What both renderers share (renderer_common.h).
 
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/platform_time.h"
@@ -53,93 +53,35 @@ uint4 pack_depth(float depth_sample) {
         z24 & 255u,
         255u);
 }
-float4 sample_frame(float2 sample_pos, float2 inv) {
-    // A destination texel covering more than 2x2 source texels (a native-size
-    // effect capture of a scaled frame) averages the central half of its
-    // footprint. At 1x each frame pixel is one sample at its centre; when the
-    // game minifies a texture 4:1 into the bloom workspace that sample is a
-    // bilinear 2x2 of each 4x4 block, and the bloom threshold that follows is
-    // tuned to that sparse coverage. The central half reproduces it (a full
-    // footprint average dims small glows below the threshold) while still
-    // averaging many scaled samples. Bilinear taps cover 2x2 texel groups.
-    const float2 step = src_xform.zw;
-    float4 tex_sample;
-    [branch] if (max(step.x, step.y) > 2.0) {
-        const float2 footprint = 0.5 * step;
-        const uint2 taps = uint2(clamp(ceil(footprint * 0.5), 1.0, 16.0));
-        const float2 origin = sample_pos - 0.5 * footprint;
-        const float2 pitch = footprint / float2(taps);
-        tex_sample = 0.0;
-        [loop] for (uint ty = 0u; ty < taps.y; ++ty) {
-            [loop] for (uint tx = 0u; tx < taps.x; ++tx) {
-                tex_sample += srctex.SampleLevel(
-                    s_lin, (origin + (float2(tx, ty) + 0.5) * pitch) * inv, 0);
-            }
-        }
-        tex_sample /= float(taps.x * taps.y);
-    } else {
-        tex_sample = srctex.SampleLevel(s_lin, sample_pos * inv, 0);
-    }
-    if (modes.z != 0.0) {
-        // The depth buffer is reversed: the game's depth is one minus it.
-        const float depth = saturate(1.0 - tex_sample.r);
-        return float4(depth, depth, depth, 1.0);
-    }
-    return saturate(tex_sample);
-}
 float4 main(V v) : SV_Target {
     float2 dims;
     srctex.GetDimensions(dims.x, dims.y);
-    float2 inv = 1.0 / dims;
-    float2 sp = src_xform.xy + v.pos.xy * src_xform.zw;
     float4 c;
     if (filt2.w > 0.0) {
         // A screen probe: the pixel src_xform.xy names.
         const float4 texel = srctex.Load(int3(int2(src_xform.xy), 0));
         c = modes.z != 0.0 ? float4(pack_depth(texel.r)) / 255.0 : saturate(texel);
     } else {
-        float ylo = filt.w, yhi = filt2.x;
-        float filter_offset = max(filt2.z, 1.0);
-        const float3 weights = filt.xyz / 64.0;
-        const float4 line_sample = sample_frame(float2(sp.x, clamp(sp.y, ylo, yhi)), inv);
-        float3 rgb = line_sample.rgb * weights.y;
-        [branch] if (weights.x != 0.0) {
-            rgb += sample_frame(float2(sp.x, clamp(sp.y - filter_offset, ylo, yhi)), inv).rgb * weights.x;
-        }
-        [branch] if (weights.z != 0.0) {
-            rgb += sample_frame(float2(sp.x, clamp(sp.y + filter_offset, ylo, yhi)), inv).rgb * weights.z;
-        }
-        c = float4(saturate(rgb), line_sample.a);
+        const float2 at = (src_xform.xy + v.pos.xy * src_xform.zw) / dims;
+        c = srctex.SampleLevel(s_lin, at, 0);
+        // The depth buffer is reversed: the game's depth is one minus it.
+        c = modes.z != 0.0 ? float4(saturate(1.0 - c.rrr), 1.0) : saturate(c);
     }
-    if (modes.x != 0.0) {
-        // Luminance (BT.601, studio range), as the game's effects expect it.
-        const float y = dot(c.rgb, float3(66.0, 129.0, 25.0) / 256.0) + 16.0 / 255.0;
-        c.rgb = float3(y, y, y);
-    }
-
     // The picture's channels (capture.h): the game's NebulaTargetChannels, 7 the frame shown. (Not named `layout`:
     // glslang's HLSL front end reserves the word.)
     uint channels = uint(filt2.y + 0.5);
-    if (channels == 3u) {          // red (or luminance) in every channel
+    if (channels == 3u) {          // red in every channel
         c = c.rrrr;
-    } else if (channels == 1u) {   // intensity and alpha
-        c = c.rrra;
     } else if (channels == 6u || channels == 7u) { // colour, opaque
         c.a = 1.0;
     } else if (channels == 2u) {   // alpha in every channel
         c = c.aaaa;
-    } else if (channels == 4u) {   // green
-        c = c.gggg;
-    } else if (channels == 5u) {   // blue
-        c = c.bbbb;
     }
     return c;
 }
 )HLSL";
 
-// The frame shown, one frame pixel to one picture pixel: kConvPs's arithmetic for it alone. The filter's rows (inside
-// the rectangle, one physical row apart) weighted; opaque. The same constants as kConvPs; its rows are loads, which is
-// what its bilinear taps at texel centres return.
+// The frame shown, one frame pixel to one picture pixel, opaque.
 static constexpr char kDisplayFilterPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;
@@ -148,22 +90,8 @@ cbuffer C : register(b0) {
     float4 filt2;
 };
 Texture2D srctex : register(t0);
-float3 row(int x, int y, int lo, int hi) {
-    return saturate(srctex.Load(int3(x, clamp(y, lo, hi), 0)).rgb);
-}
 float4 main(float4 pos : SV_Position) : SV_Target {
-    const int2 p = int2(src_xform.xy) + int2(pos.xy);
-    const int lo = int(filt.w);
-    const int hi = int(filt2.x);
-    const float3 weights = filt.xyz / 64.0;
-    float3 sum = row(p.x, p.y, lo, hi) * weights.y;
-    [branch] if (weights.x != 0.0) {
-        sum += row(p.x, p.y - 1, lo, hi) * weights.x;
-    }
-    [branch] if (weights.z != 0.0) {
-        sum += row(p.x, p.y + 1, lo, hi) * weights.z;
-    }
-    return float4(saturate(sum), 1.0);
+    return float4(saturate(srctex.Load(int3(int2(src_xform.xy) + int2(pos.xy), 0)).rgb), 1.0);
 }
 )HLSL";
 
@@ -284,7 +212,7 @@ constexpr char kDepthCarryPs[] =
     "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
     "float main(V v):SV_Depth{return t.SampleLevel(s,v.uv,0);}";
 
-// The depth resolve: each pixel's first sample (the console's single sample sits at the pixel centre).
+// The depth resolve: each pixel's first sample.
 constexpr char kDepthResolvePs[] = R"HLSL(
 Texture2DMS<float> depth_samples : register(t0);
 float main(float4 pos : SV_Position) : SV_Depth {
@@ -358,42 +286,17 @@ std::string_view display_filter_shader_source() noexcept {
 }
 
 SceneConversionShaderConstants make_scene_conversion_constants(
-    const CaptureRequest& params,
     bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
-    std::uint8_t copy_format,
+    std::uint8_t channels,
     float src_x,
     float src_y,
     float step_x,
-    float step_y,
-    float filter_row_offset,
-    float scale,
-    unsigned logical_scene_height,
-    unsigned reduction_width) noexcept {
-    const float fw_up = 0.0f;
-    const float fw_mid = 64.0f;
-    const float fw_low = 0.0f;
-
-    const float copy_y0 = static_cast<float>(params.src_y) * scale;
-    const float copy_y1 =
-        copy_y0 + static_cast<float>(params.src_height) * scale;
-    const float full_y1 =
-        static_cast<float>(std::max(logical_scene_height, 1u)) * scale;
-    const float clamp_y_min = copy_y0 + 0.5f;
-    const float clamp_y_max = std::max(clamp_y_min, std::min(copy_y1, full_y1) - 0.5f);
-
+    float step_y) noexcept {
     return SceneConversionShaderConstants{{
         src_x, src_y, step_x, step_y,
-        intensity ? 1.0f : 0.0f,
-        1.0f,
-        is_depth_copy ? 1.0f : 0.0f,
-        keep_alpha ? 1.0f : 0.0f,
-        fw_up, fw_mid, fw_low, clamp_y_min,
-        clamp_y_max,
-        static_cast<float>(copy_format),
-        filter_row_offset,
-        static_cast<float>(reduction_width),
+        0.0f, 1.0f, is_depth_copy ? 1.0f : 0.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, static_cast<float>(channels), 0.0f, 0.0f,
     }};
 }
 
@@ -406,8 +309,8 @@ SceneConversionShaderConstants make_screen_probe_constants(float x, float y, con
     return SceneConversionShaderConstants{{
         px, py, 1.0f, 1.0f,
         0.0f, 1.0f, depth ? 1.0f : 0.0f, 1.0f,
-        0.0f, 64.0f, 0.0f, py + 0.5f,
-        py + 0.5f, 255.0f, 1.0f, 1.0f,
+        0.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 255.0f, 0.0f, 1.0f,
     }};
 }
 

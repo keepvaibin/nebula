@@ -4,8 +4,8 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 enum MeteorStrikeType {
-    /* 0x1 */ MeteorStrikeType_Environment = 1,
-    /* 0x2 */ MeteorStrikeType_Cannon = 2
+    MeteorStrikeType_Environment = 1,
+    MeteorStrikeType_Cannon = 2
 };
 
 class ModelObj;
@@ -36,11 +36,11 @@ public:
     void exeMove();
     void exeBreak();
 
-    /* 0x8C */ s32 mType;
-    /* 0x90 */ f32 mStepSize;  // Obj_arg0
-    /* 0x94 */ TVec3f mRailDir;
-    /* 0xA0 */ ModelObj* mBrokenModel;
-    /* 0xA4 */ s32 mStepsLeft;
-    /* 0xA8 */ s32 mTotalSteps;
-    /* 0xAC */ TMtx34f mLavaColumnPos;
+    s32 mType;
+    f32 mStepSize;  // Obj_arg0
+    TVec3f mRailDir;
+    ModelObj* mBrokenModel;
+    s32 mStepsLeft;
+    s32 mTotalSteps;
+    TMtx34f mLavaColumnPos;
 };

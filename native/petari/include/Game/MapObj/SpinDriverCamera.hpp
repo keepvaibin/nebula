@@ -25,8 +25,8 @@ public:
     void init(const JMapInfoIter&, LiveActor*);
     void initAppearCamera(const JMapInfoIter&, LiveActor*);
 
-    /* 0x00 */ MultiEventCamera* mCamera;
-    /* 0x04 */ CameraTargetMtx* mTargetMtx;
-    /* 0x08 */ ActorCameraInfo* mCameraInfo;
-    /* 0x0C */ s32 mAppearCameraFrame;
+    MultiEventCamera* mCamera;
+    CameraTargetMtx* mTargetMtx;
+    ActorCameraInfo* mCameraInfo;
+    s32 mAppearCameraFrame;
 };

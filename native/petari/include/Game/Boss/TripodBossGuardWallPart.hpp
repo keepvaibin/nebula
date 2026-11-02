@@ -29,7 +29,7 @@ public:
     void exeBreak();
     void exeRepair();
 
-    /* 0x8C */ const TPos3f* mHostMtx;
-    /* 0x90 */ f32 mPlacementAngle;
-    /* 0x94 */ s32 mStartTiming;
+    const TPos3f* mHostMtx;
+    f32 mPlacementAngle;
+    s32 mStartTiming;
 };

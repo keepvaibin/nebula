@@ -49,15 +49,15 @@ public:
         return _94[index];
     }
 
-    /* 0x8C */ f32 _8C;
-    /* 0x90 */ RotPartsModel** _90;
-    /* 0x94 */ StarPiece** _94;
-    /* 0x98 */ u16 mItemCount;
-    /* 0x9A */ u16 mItemType;
-    /* 0x9C */ TPos3f _9C;
-    /* 0xCC */ TPos3f _CC;
-    /* 0xFC */ TVec3f _FC;
-    /* 0x108 */ TVec3f _108;
-    /* 0x114 */ f32 mRailSpeed;
-    /* 0x118 */ bool mUseRail;
+    f32 _8C;
+    RotPartsModel** _90;
+    StarPiece** _94;
+    u16 mItemCount;
+    u16 mItemType;
+    TPos3f _9C;
+    TPos3f _CC;
+    TVec3f _FC;
+    TVec3f _108;
+    f32 mRailSpeed;
+    bool mUseRail;
 };

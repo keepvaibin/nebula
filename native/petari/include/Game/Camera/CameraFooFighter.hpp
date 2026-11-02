@@ -16,10 +16,10 @@ public:
         mAngleXRateMin = angleXRateMin;
     }
 
-    /* 0x4C */ f32 mDistMin;
-    /* 0x50 */ f32 mDistMax;
-    /* 0x54 */ f32 mAngleXRateMin;
-    /* 0x58 */ f32 mAngleXRate;
-    /* 0x5C */ s32 mCollideCount;
-    /* 0x60 */ TVec3f mTargetLastMoveDir;
+    f32 mDistMin;
+    f32 mDistMax;
+    f32 mAngleXRateMin;
+    f32 mAngleXRate;
+    s32 mCollideCount;
+    TVec3f mTargetLastMoveDir;
 };

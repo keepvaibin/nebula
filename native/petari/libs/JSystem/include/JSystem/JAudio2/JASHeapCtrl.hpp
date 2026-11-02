@@ -17,7 +17,6 @@ public:
 
     void initRootHeap(void*, u32);
     bool alloc(JASHeap*, u32);
-    bool allocTail(JASHeap*, u32);
     bool free();
     void insertChild(JASHeap*, JASHeap*, void*, u32, bool);
     JASHeap* getTailHeap();
@@ -45,12 +44,12 @@ public:
         return mMutex;
     }
 
-    /* 0x00 */ JSUTree< JASHeap > mTree;
-    /* 0x1C */ GameMutex mMutex;
-    /* 0x34 */ JASDisposer* mDisposer;
-    /* 0x38 */ u8* mBase;
-    /* 0x3C */ u32 mSize;
-    /* 0x40 */ JASHeap* mHeap;
+    JSUTree< JASHeap > mTree;
+    GameMutex mMutex;
+    JASDisposer* mDisposer;
+    u8* mBase;
+    u32 mSize;
+    JASHeap* mHeap;
 };
 
 class JASGenericMemPool {
@@ -75,10 +74,10 @@ public:
         return mUsedMemCount;
     }
 
-    /* 0x0 */ void* _0;
-    /* 0x4 */ u32 mFreeMemCount;
-    /* 0x8 */ u32 mTotalMemCount;
-    /* 0xC */ u32 mUsedMemCount;
+    void* _0;
+    u32 mFreeMemCount;
+    u32 mTotalMemCount;
+    u32 mUsedMemCount;
 };
 
 namespace JASThreadingModel {
@@ -93,7 +92,7 @@ namespace JASThreadingModel {
                 GameThreads::restoreAudio(mEnabled);
             }
 
-            /* 0x00 */ u32 mEnabled;
+            u32 mEnabled;
         };
     };
 
@@ -113,7 +112,7 @@ namespace JASThreadingModel {
                 mMutex->unlock();
             }
 
-            /* 0x00 */ T* mMutex;
+            T* mMutex;
         };
     };
 
@@ -205,10 +204,10 @@ public:
             mUsedSize = 0;
         }
 
-        /* 0x0 */ MemoryChunk* mNextChunk;
-        /* 0x4 */ u32 mUsedSize;
-        /* 0x8 */ u32 mChunks;
-        /* 0xC */ u8 mBuffer[ChunkSize];
+        MemoryChunk* mNextChunk;
+        u32 mUsedSize;
+        u32 mChunks;
+        u8 mBuffer[ChunkSize];
     };
 
     JASMemChunkPool() {
@@ -270,7 +269,7 @@ public:
         }
     }
 
-    /* 0x18 */ MemoryChunk* mChunk;
+    MemoryChunk* mChunk;
 };
 
 namespace JASKernel {

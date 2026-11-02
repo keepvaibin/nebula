@@ -142,8 +142,6 @@ namespace MR {
     const char* getLuigiLetterGalaxyName();
     const char* getLuigiLetterGalaxyNameForNPC();
     void onMessageAlreadyRead(s8);
-    void offMsgLedPattern();
-    bool isMsgLedPattern();
     void explainBeeMarioIfAtFirst();
     void explainTeresaMarioIfAtFirst();
     void explainHopperMarioIfAtFirst();
@@ -186,5 +184,4 @@ namespace MR {
     bool isStarPieceCounterStop();
     bool isOnGameEventFlagAstroGalaxyBgmBright();
     bool isOnMessageAlreadyRead(s8);
-    void onMsgLedPattern();
 };  // namespace MR

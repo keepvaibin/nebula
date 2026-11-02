@@ -29,15 +29,15 @@ public:
     bool checkItemPos();
     bool isHalfOpen() const;
 
-    /* 0x8C */ CollisionParts* mBoxCollider;
-    /* 0x90 */ TPos3f mTopMtx;
-    /* 0xC0 */ s32 mBoxType;
-    /* 0xC4 */ s32 mOpenCondition;
-    /* 0xC8 */ LiveActor* mItem;
-    /* 0xCC */ s32 mItemType;
-    /* 0xD0 */ TVec3f mItemVelocity;
-    /* 0xDC */ TVec3f mItemTargetPos;
-    /* 0xE8 */ bool mIsItemMoving;
-    /* 0xEC */ s32 mWaitForSwitchOn;
-    /* 0xF0 */ s32 mPowerStarId;
+    CollisionParts* mBoxCollider;
+    TPos3f mTopMtx;
+    s32 mBoxType;
+    s32 mOpenCondition;
+    LiveActor* mItem;
+    s32 mItemType;
+    TVec3f mItemVelocity;
+    TVec3f mItemTargetPos;
+    bool mIsItemMoving;
+    s32 mWaitForSwitchOn;
+    s32 mPowerStarId;
 };

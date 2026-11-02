@@ -27,9 +27,9 @@ public:
     bool isEnableAttack() const;
     void appearJetTurtle(bool);
 
-    /* 0x8C */ SmallKameckBeamEventListener* mEventListener;
-    /* 0x90 */ JetTurtle* mTurtle;
-    /* 0x94 */ TQuat4f mRotateQuat;
-    /* 0xA4 */ TVec3f _A4;
-    /* 0xB0 */ TVec3f _B0;
+    SmallKameckBeamEventListener* mEventListener;
+    JetTurtle* mTurtle;
+    TQuat4f mRotateQuat;
+    TVec3f _A4;
+    TVec3f _B0;
 };

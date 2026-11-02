@@ -32,7 +32,6 @@ struct JASVoice : NebulaVoice {
     void playStop();
     void replyFinishRequest();
     void forceStop();
-    bool isActive() const;
     bool isFinish() const;
     void setWaveInfo(JASWaveInfo const&, const u8*, u32);
     void setOscInfo(u32);

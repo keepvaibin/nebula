@@ -20,8 +20,8 @@ public:
     void exeAppear();
     void exeDisappear();
 
-    /* 0x8C */ s32 mBegomanCount;
-    /* 0x90 */ s32 mAppearDelay;
-    /* 0x94 */ BegomanBase** mBegomanArray;
-    /* 0x98 */ s32 mLaunchType;
+    s32 mBegomanCount;
+    s32 mAppearDelay;
+    BegomanBase** mBegomanArray;
+    s32 mLaunchType;
 };

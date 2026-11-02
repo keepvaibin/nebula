@@ -161,19 +161,6 @@ SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
     geometry.src_y = static_cast<float>(params.src_y) * map.sy;
     geometry.step_x = dest_width == 0u ? 0.0f : static_cast<float>(params.src_width) * map.sx / static_cast<float>(dest_width);
     geometry.step_y = dest_height == 0u ? 0.0f : static_cast<float>(params.src_height) * map.sy / static_cast<float>(dest_height);
-    // The filter's taps are one game row apart.
-    geometry.filter_row_offset = map.sy;
-    return geometry;
-}
-
-SceneCopySamplingGeometry compute_display_sampling_geometry(
-    const CaptureRequest& params,
-    unsigned dest_width,
-    unsigned dest_height,
-    const FrameMap& map) noexcept {
-    auto geometry = compute_scene_copy_sampling_geometry(params, dest_width, dest_height, map);
-    // The frame shown filters adjacent pixel rows; only the tap spacing differs from a capture.
-    geometry.filter_row_offset = 1.0f;
     return geometry;
 }
 

@@ -216,7 +216,6 @@ void TrampleStar::writeCheckFlag(u16 vtxA, u16 vtxB, u16 value) {
 }
 
 void TrampleStar::divide() {
-    // https://decomp.me/scratch/SCOGi
 
     initCheckFlag(mNumVtxs);
     u16 numSurfaces = mNumSurfaces;

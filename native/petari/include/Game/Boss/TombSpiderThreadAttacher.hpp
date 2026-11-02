@@ -11,7 +11,7 @@ public:
     void exeFree();
     void exeAttach();
 
-    /* 0x8C */ MtxPtr mJointMtx;
-    /* 0x90 */ f32 mRadius;
-    /* 0x94 */ f32 mZOffset;
+    MtxPtr mJointMtx;
+    f32 mRadius;
+    f32 mZOffset;
 };

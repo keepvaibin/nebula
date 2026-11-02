@@ -6,9 +6,9 @@ class CollisionParts;
 
 namespace {
     struct Param {
-        /* 0x0 */ f32 mDashVelocity;
-        /* 0x4 */ f32 mDashDistance;
-        /* 0x8 */ s32 mPanicStep;
+        f32 mDashVelocity;
+        f32 mDashDistance;
+        s32 mPanicStep;
     };
 };  // namespace
 
@@ -49,6 +49,6 @@ public:
     inline bool isNrvMoving() const;
     inline bool isNrvDemo() const;
 
-    /* 0xBC */ CollisionParts* mParent;
-    /* 0xC0 */ bool mIsChildAlive;
+    CollisionParts* mParent;
+    bool mIsChildAlive;
 };

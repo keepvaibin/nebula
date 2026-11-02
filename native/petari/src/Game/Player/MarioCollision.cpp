@@ -849,7 +849,7 @@ const TVec3f& Mario::getWallNorm() const {
     return mFrontVec;
 }
 
-// No wall: a zero normal. The console returned a stack temporary its caller read before anything overwrote it.
+// No wall: a zero normal.
 static const TVec3f sZeroNormal(0.0f, 0.0f, 0.0f);
 
 const TVec3f& Mario::getSideWallNorm() const {
@@ -1600,7 +1600,7 @@ bool Mario::updateBinderInfo() {
                     mJumpVec = horizontal;
                 }
 
-                startPadVib(0UL);
+                startPadVib(0u);
                 firstCeiling = false;
                 *_4C8 = *triangle;
             }

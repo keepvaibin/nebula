@@ -39,8 +39,8 @@ public:
     bool tryPermitReset();
     bool isResetAcceptAudio() const;
 
-    /* 0x24 */ ValueControl* mFadeinoutControl;
-    /* 0x58 */ NebulaAtomic< s32 > mResetOperation;
-    /* 0x5C */ bool _5C;
-    /* 0x5E */ bool _5E;
+    ValueControl* mFadeinoutControl;
+    NebulaAtomic< s32 > mResetOperation;
+    bool _5C;
+    bool _5E;
 };

@@ -12,23 +12,23 @@ public:
         /// @brief Creates a new `PlantData`.
         PlantData();
 
-        /* 0x00 */ TVec3f mPosition;
-        /* 0x0C */ TVec3f mRotation;
-        /* 0x18 */ TVec3f mSpinSwingDir;
-        /* 0x24 */ TVec3f mTempSpinSwingDir;
-        /* 0x30 */ f32 mSpinSwingStrength;
-        /* 0x34 */ s32 mSpinWaveSwingTimer;
-        /* 0x38 */ s32 mSpinWaveTimer;
-        /* 0x3C */ TVec3f mSpinWaveSwingVec1;
-        /* 0x48 */ TVec3f mSpinWaveSwingVec2;
-        /* 0x54 */ TVec3f mSpinWaveSwingVec3;
-        /* 0x60 */ f32 mHeight1;
-        /* 0x64 */ f32 mHeight2;
-        /* 0x68 */ f32 mHeight3;
-        /* 0x6C */u8 pad_6C;
-        /* 0x70 */ f32* mSwingStrength1;
-        /* 0x74 */ f32* mSwingStrength2;
-        /* 0x78 */ f32* mSwingStrength3;
+        TVec3f mPosition;
+        TVec3f mRotation;
+        TVec3f mSpinSwingDir;
+        TVec3f mTempSpinSwingDir;
+        f32 mSpinSwingStrength;
+        s32 mSpinWaveSwingTimer;
+        s32 mSpinWaveTimer;
+        TVec3f mSpinWaveSwingVec1;
+        TVec3f mSpinWaveSwingVec2;
+        TVec3f mSpinWaveSwingVec3;
+        f32 mHeight1;
+        f32 mHeight2;
+        f32 mHeight3;
+        u8 pad_6C;
+        f32* mSwingStrength1;
+        f32* mSwingStrength2;
+        f32* mSwingStrength3;
 
         bool newSpinWaveTimerIsGreater(s32 newTimer) {
             return !(newTimer < mSpinWaveTimer);
@@ -52,13 +52,13 @@ public:
         return &mPlantDataArray[i];
     }
 
-    /* 0x8C */ s32 mPlantNum;
-    /* 0x90 */ PlantData* mPlantDataArray;
-    /* 0x94 */ f32 mAreaRadius;
-    /* 0x98 */ bool mIsSpin;
-    /* 0x9C */ f32 mHalfWidth;
-    /* 0xA0 */ f32 mHeight;
-    /* 0xA4 */ s32 mType;
+    s32 mPlantNum;
+    PlantData* mPlantDataArray;
+    f32 mAreaRadius;
+    bool mIsSpin;
+    f32 mHalfWidth;
+    f32 mHeight;
+    s32 mType;
 };
 
 class WaterPlantDrawInit : public NameObj {
@@ -73,10 +73,10 @@ public:
     void loadTex(int);
     void updateSwingPos();
 
-    /* 0x0C */ f32 mAngleOffset;
-    /* 0x10 */ f32* mSwingPosTable;
-    /* 0x14 */ JUTTexture* mPlantATex;
-    /* 0x18 */ JUTTexture* mPlantBTex;
-    /* 0x1C */ JUTTexture* mPlantCTex;
-    /* 0x20 */ JUTTexture* mPlantDTex;
+    f32 mAngleOffset;
+    f32* mSwingPosTable;
+    JUTTexture* mPlantATex;
+    JUTTexture* mPlantBTex;
+    JUTTexture* mPlantCTex;
+    JUTTexture* mPlantDTex;
 };

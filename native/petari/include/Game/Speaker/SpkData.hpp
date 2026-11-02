@@ -20,7 +20,7 @@ public:
         return &mWave;
     }
 
-    /* 0x00 */ SpkTable mTable;
-    /* 0x10 */ SpkWave mWave;
-    /* 0x20 */ AssetFolder* mArchive;
+    SpkTable mTable;
+    SpkWave mWave;
+    AssetFolder* mArchive;
 };

@@ -45,15 +45,15 @@ public:
     bool decCountAndTryToHide(bool);
     bool isStarPointerPointingParts();
 
-    /* 0x8C */ const Nerve* mStarPointerBindEndNerve;
-    /* 0x90 */ TVec3f mInitialPos;
-    /* 0x9C */ s32 mHideTimer;
-    /* 0xA0 */ s32 mPartsCount;
-    /* 0xA4 */ MR::Vector< MR::AssignableArray< DharmaSamboParts* > > mParts;
-    /* 0xB0 */ MR::Vector< MR::AssignableArray< FixedPosition* > > mFixedPositions;
-    /* 0xBC */ HitSensor* mHitSensor;
-    /* 0xC0 */ AnimScaleController* mAnimScaleController;
-    /* 0xC4 */ AnimScaleParam* mAnimScaleParam;
+    const Nerve* mStarPointerBindEndNerve;
+    TVec3f mInitialPos;
+    s32 mHideTimer;
+    s32 mPartsCount;
+    MR::Vector< MR::AssignableArray< DharmaSamboParts* > > mParts;
+    MR::Vector< MR::AssignableArray< FixedPosition* > > mFixedPositions;
+    HitSensor* mHitSensor;
+    AnimScaleController* mAnimScaleController;
+    AnimScaleParam* mAnimScaleParam;
 };
 
 class DharmaSamboParts : public ModelObj {
@@ -75,10 +75,10 @@ public:
     void endStarPointerBind();
     void setHead(bool);
 
-    /* 0x90 */ DharmaSambo* mHost;
-    /* 0x94 */ s32 mOriginalIndex;
-    /* 0x98 */ s32 mIndex;
-    /* 0x9C */ SpinHitController* mSpinHitController;
-    /* 0xA0 */ f32 mHitDistance;
-    /* 0xA4 */ bool mIsHead;
+    DharmaSambo* mHost;
+    s32 mOriginalIndex;
+    s32 mIndex;
+    SpinHitController* mSpinHitController;
+    f32 mHitDistance;
+    bool mIsHead;
 };

@@ -42,18 +42,6 @@ namespace {
     static f32 cTurnMotionSpeed = 5.0f;
 };  // namespace
 
-f32 getSwimValue(f32 stick, u32 index, const MarioConstTable* pTable) {
-    if (index == 2) {
-        return pTable->mSwimRotXIne;
-    }
-
-    if (index == 3) {
-        return pTable->mSwimRotZIne;
-    }
-
-    return 0.0f;
-}
-
 bool Mario::isSwimming() const {
     if (isStatusActive(MarioStatus_Swim)) {
         return true;

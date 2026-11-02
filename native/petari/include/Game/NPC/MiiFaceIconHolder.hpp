@@ -21,13 +21,13 @@ public:
 
 private:
     /// @brief The maximum number of icon resource creator instances.
-    /* 0x0C */ u32 mIconNumMax;
+    u32 mIconNumMax;
 
     /// @brief The current number of icon resource creator instances.
-    /* 0x10 */ u32 mIconNum;
+    u32 mIconNum;
 
     /// @brief The pointer to the array of pointers to icon resource creator instances.
-    /* 0x14 */ MiiFaceIcon** mIcon;
+    MiiFaceIcon** mIcon;
 };
 
 namespace MR {

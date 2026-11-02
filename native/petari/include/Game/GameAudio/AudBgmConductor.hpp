@@ -21,9 +21,9 @@ public:
         StateBit_Delay = 0b100,
     };
 
-    /* 0x0C */ u32 mStateBits;
-    /* 0x10 */ s32 mState;
-    /* 0x14 */ s32 mStartDelay;
-    /* 0x18 */ s32 mFadeInDelay;
-    /* 0x1C */ bool mStopImmediately;
+    u32 mStateBits;
+    s32 mState;
+    s32 mStartDelay;
+    s32 mFadeInDelay;
+    bool mStopImmediately;
 };

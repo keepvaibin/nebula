@@ -33,12 +33,12 @@ public:
         mDolby = 0.0f;
     }
 
-    /* 0x00 */ f32 mVolume;
-    /* 0x04 */ f32 mPitch;
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ f32 mPan;
-    /* 0x10 */ f32 mFxMix;
-    /* 0x14 */ f32 mDolby;
+    f32 mVolume;
+    f32 mPitch;
+    f32 _8;
+    f32 mPan;
+    f32 mFxMix;
+    f32 mDolby;
 };
 
 class JASChannel : public JASPoolAllocObject_MultiThreaded< JASChannel > {
@@ -66,9 +66,9 @@ public:
     };
 
     struct PanVector {
-        /* 0x0 */ f32 mSound;
-        /* 0x4 */ f32 mEffect;
-        /* 0x8 */ f32 mChannel;
+        f32 mSound;
+        f32 mEffect;
+        f32 mChannel;
     };
 
     union MixConfig {
@@ -182,31 +182,31 @@ public:
         return mMixConfig[0].whole == 0xffff;
     }
 
-    /* 0x00 */ int mStatus;
-    /* 0x04 */ bool mPauseFlag;
-    /* 0x08 */ JASVoiceSlot* mSlot;
-    /* 0x0C */ Callback mCallback;
-    /* 0x10 */ void* mCallbackData;
-    /* 0x14 */ u32 mUpdateTimer;
-    /* 0x18 */ const void* mBankDisposeID;
-    /* 0x1C */ JASOscillator mOscillators[2];
-    /* 0x5C */ JASLfo mVibrate;
-    /* 0x74 */ JASLfo mTremolo;
-    /* 0x8C */ MixConfig mMixConfig[BUSOUT_CPUCH];
-    /* 0x98 */ u16 mPriority;
-    /* 0x9C */ JASChannelParams mParams;
-    /* 0xB4 */ JASSoundParams mSoundParams;
-    /* 0xC8 */ s16 mKey;
-    /* 0xCA */ u16 mVelocity;
-    /* 0xCC */ f32 mKeySweep;
-    /* 0xD0 */ f32 mKeySweepTarget;
-    /* 0xD4 */ u32 mKeySweepCount;
-    /* 0xD8 */ u32 mSkipSamples;
-    /* 0xDC */ u32 mChannelType;
-    /* 0xE0 */ JASWaveInfo mWaveInfo;
+    int mStatus;
+    bool mPauseFlag;
+    JASVoiceSlot* mSlot;
+    Callback mCallback;
+    void* mCallbackData;
+    u32 mUpdateTimer;
+    const void* mBankDisposeID;
+    JASOscillator mOscillators[2];
+    JASLfo mVibrate;
+    JASLfo mTremolo;
+    MixConfig mMixConfig[BUSOUT_CPUCH];
+    u16 mPriority;
+    JASChannelParams mParams;
+    JASSoundParams mSoundParams;
+    s16 mKey;
+    u16 mVelocity;
+    f32 mKeySweep;
+    f32 mKeySweepTarget;
+    u32 mKeySweepCount;
+    u32 mSkipSamples;
+    u32 mChannelType;
+    JASWaveInfo mWaveInfo;
     union {
-        /* 0x104 */ const u8* mWavePtr;
-        /* 0x104 */ int mProgNo;
+        const u8* mWavePtr;
+        int mProgNo;
     };
     // The end of a wave outside the sound memory (a stream's).
     const u8* mWaveLimit;

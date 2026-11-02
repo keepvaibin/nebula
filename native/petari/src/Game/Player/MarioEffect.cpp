@@ -44,25 +44,25 @@ struct EffectFlagWord {
 };
 
 struct MaterialEffectEntry {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ EffectFlagWord mFlag;
-    /* 0x08 */ const char* mEffects[7];
-    /* 0x24 */ const char* mCurrent;
-    /* 0x28 */ MultiEmitter* mEmitter;
+    const char* mName;
+    EffectFlagWord mFlag;
+    const char* mEffects[7];
+    const char* mCurrent;
+    MultiEmitter* mEmitter;
 };
 
 struct SmokeEffectEntry {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ EffectFlagWord mType;
-    /* 0x08 */ f32 mScale;
-    /* 0x0C */ f32 mRate;
-    /* 0x10 */ EffectFlagWord mFlags;
-    /* 0x14 */ u16 mInterval;
-    /* 0x16 */ u16 mTimer;
-    /* 0x18 */ u32 mHash;
-    /* 0x1C */ MultiEmitter* mEmitter;
-    /* 0x20 */ u8 mMaterial;
-    /* 0x21 */ u8 _21[3];
+    const char* mName;
+    EffectFlagWord mType;
+    f32 mScale;
+    f32 mRate;
+    EffectFlagWord mFlags;
+    u16 mInterval;
+    u16 mTimer;
+    u32 mHash;
+    MultiEmitter* mEmitter;
+    u8 mMaterial;
+    u8 _21[3];
 };
 
 MaterialEffectEntry cMaterialEffectTable[] = {

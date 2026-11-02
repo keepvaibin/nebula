@@ -11,8 +11,8 @@ namespace galaxy::render {
 
 namespace {
 
-// console blending uses the TEV-computed source alpha. The scene target alpha that is eventually stored may
-// be quantized to the target format or replaced by GXSetDstAlpha. Source-alpha blend factors
+// console blending uses the material-computed source alpha. The scene target alpha that is eventually stored may
+// be quantized to the target format or replaced by the state. Source-alpha blend factors
 // therefore need a separate export whenever they cannot safely read color0.a.
 [[nodiscard]] bool blend_reads_src_alpha(const BlendMode& bm) {
     return bm.blend_enable && !bm.subtract &&
@@ -91,8 +91,8 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     if (bm.alpha_update && frame_alpha) {
         key.blend_bits |= (1u << 26u);
     }
-    // bit27 = dual-source TEV alpha. The PSO uses
-    // SRC1_ALPHA/INV_SRC1_ALPHA in place of SrcAlpha/InvSrcAlpha, so the blender reads TEV alpha
+    // bit27 = dual-source material alpha. The PSO uses
+    // SRC1_ALPHA/INV_SRC1_ALPHA in place of SrcAlpha/InvSrcAlpha, so the blender reads material alpha
     // while color0.a stays the physical scene target alpha.
     if (needs_dual_src_alpha(frame_alpha, bm)) {
         key.blend_bits |= (1u << 27u);

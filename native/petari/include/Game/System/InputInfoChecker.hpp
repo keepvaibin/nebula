@@ -13,7 +13,7 @@ public:
     void update();
 
 private:
-    /* 0x00 */ PlayerInput* mPad;
-    /* 0x04 */ s32 mCheckInfoFrame;
-    /* 0x08 */ s32 mBattery;
+    PlayerInput* mPad;
+    s32 mCheckInfoFrame;
+    s32 mBattery;
 };

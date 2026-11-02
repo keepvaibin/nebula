@@ -10,5 +10,5 @@ public:
     virtual void appear();
 
 private:
-    /* 0x20 */ const LayoutActor* mActor;
+    const LayoutActor* mActor;
 };

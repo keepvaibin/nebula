@@ -10,10 +10,6 @@ import subprocess
 import sys
 
 REVIEWED = {
-    "native/petari/src/JSystem/JUtility/JUTFont.cpp": "a char read as unsigned: same width",
-    "native/petari/include/Game/Player/J3DModelX.hpp": "the lead's draw files: flags word, open",
-    "native/petari/src/Game/Player/J3DModelX.cpp": "the lead's draw files: flags word, open",
-    "native/petari/src/nw4r/lyt/lyt_texMap.cpp": "the lead's texture files, open",
 }
 CAST = re.compile(
     r"\*\s*(?:reinterpret_cast<\s*(?:const\s+)?(?:u8|s8|u16|s16|u32|s32|u64|s64|f32|f64|char16_t|wchar)\s*\*\s*>\s*\(|"

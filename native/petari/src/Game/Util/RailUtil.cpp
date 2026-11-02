@@ -599,18 +599,6 @@ namespace MR {
         return pActor->mRailRider->getRailArgNoInit("path_arg4", pArg);
     }
 
-    bool getRailArg5NoInit(const LiveActor* pActor, s32* pArg) {
-        return pActor->mRailRider->getRailArgNoInit("path_arg5", pArg);
-    }
-
-    bool getRailArg6NoInit(const LiveActor* pActor, s32* pArg) {
-        return pActor->mRailRider->getRailArgNoInit("path_arg6", pArg);
-    }
-
-    bool getRailArg7NoInit(const LiveActor* pActor, s32* pArg) {
-        return pActor->mRailRider->getRailArgNoInit("path_arg7", pArg);
-    }
-
     bool getRailArg1WithInit(const RailRider* pRailRider, s32* pArg) {
         return pRailRider->getRailArgWithInit("path_arg1", pArg);
     }

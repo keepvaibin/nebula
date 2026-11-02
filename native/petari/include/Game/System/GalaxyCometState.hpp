@@ -43,5 +43,5 @@ public:
 
 private:
     /// @brief Determines if the working nerve action should be updated.
-    /* 0x08 */ bool mIsUpdateNerve;
+    bool mIsUpdateNerve;
 };

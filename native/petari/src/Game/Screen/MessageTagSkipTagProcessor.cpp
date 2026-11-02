@@ -86,7 +86,7 @@ char16_t* MessageEditorMessageTag::getParamPtr(int index) const {
     return const_cast< char16_t* >(reinterpret_cast< const char16_t* >(pParam));
 }
 
-// The token travels with the message text as the console's pointer did.
+// The token travels with the message text.
 void MessageEditorMessageTag::setParamString(const char16_t* pString) const {
     const u32 token = nameParamString(pString);
     memcpy(getParamPtr(0), &token, sizeof(token));

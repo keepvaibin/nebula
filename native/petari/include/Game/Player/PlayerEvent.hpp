@@ -10,27 +10,27 @@ typedef bool (EventSequence::*EventFunc2)(u16 sequenceFrame);
 
 class EventSequence {
 private:
-    /* 0x00 */ u16 mEventNumMax;
-    /* 0x02 */ u16 mEventNum;
+    u16 mEventNumMax;
+    u16 mEventNum;
 
-    /* 0x04 */ u16 mPhase;
-    /* 0x06 */ u16 mFrameInPhase;
+    u16 mPhase;
+    u16 mFrameInPhase;
 
     // Event callbacks.
-    /* 0x08 */ EventFunc1* mEventFuncs;
-    /* 0x0C */ EventFunc2* mEventCheckFuncs;
+    EventFunc1* mEventFuncs;
+    EventFunc2* mEventCheckFuncs;
 
     // Stores either the start frame of the event or a special value for status/phase events.
-    /* 0x10 */ u16* mStartFrameOrModes;
+    u16* mStartFrameOrModes;
 
     // Stores either the stop frame of the event or the phase for phase events.
-    /* 0x14 */ u16* mStopFrameOrPhases;
+    u16* mStopFrameOrPhases;
 
     // How many frames has each event been running for?
-    /* 0x18 */ u16* mEventFrames;
+    u16* mEventFrames;
 
-    /* 0x1C */ bool mStopSequence;
-    /* 0x1D */ bool mNextPhase;
+    bool mStopSequence;
+    bool mNextPhase;
 
 public:
     EventSequence(u32 eventNumMax);
@@ -94,7 +94,7 @@ public:
     }
 
 private:
-    /* 0x0C */ HashSortTable* mHashTable;
-    /* 0x10 */ EventSequence* mSequence;
-    /* 0x14 */ u16 mSequenceFrame;
+    HashSortTable* mHashTable;
+    EventSequence* mSequence;
+    u16 mSequenceFrame;
 };

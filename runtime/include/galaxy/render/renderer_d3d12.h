@@ -7,7 +7,7 @@
 // begin_frame() waits only on the fence of frame N - kFramesInFlight. A full
 // CPU/GPU sync happens only in shutdown() and on resize.
 //
-// All console draws target the offscreen scene target (color RGBA8 + depth
+// All draws target the offscreen scene target (color RGBA8 + depth
 // D24_UNORM_S8_UINT, which keeps 24-bit Z parity with the Wii). present()
 // aspect-fits an display picture into the swap-chain backbuffer.
 //
@@ -107,7 +107,7 @@ inline constexpr DXGI_FORMAT kSceneDepthSrvFormat =
     DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-// Builds the console graphics root signature used by RendererD3D12. Root
+// Builds the graphics root signature used by RendererD3D12. Root
 // CBV b0 is visible to both VS and GS because native console line/point expansion
 // reads its scale-aware raster constants in the geometry stage.
 [[nodiscard]] HRESULT create_draw_root_signature(
@@ -194,7 +194,7 @@ void record_scene_identity_copy(
 class RendererD3D12 final : public UiCanvas {
 public:
     // Creates the Win32 window, device, queue, swap chain, scene target targets at
-    // kFrameWidth x kFrameHeight x scene_target_scale, the shared console root signature, the
+    // kFrameWidth x kFrameHeight x scene_target_scale, the shared root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     [[nodiscard]] std::string startup_failure() const { return init_error_; }
@@ -504,7 +504,7 @@ public:
             scene_view_ = *view;
         }
     }
-    // console copy-clear: color from the latched AR/GB regs, depth from z24
+    // copy-clear: color from the latched AR/GB regs, depth from z24
     // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled scene target pixels (w==0 -> full target), matching
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
@@ -535,11 +535,10 @@ public:
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
     // scene target copy paths (record into the current command list). Both run the
-    // conversion blit (intensity / gamma / 3-tap vertical copy filter /
+    // conversion blit (
     // half-scale box / display picture y-scale stretch / depth-source packing) instead
-    // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
+    // of a raw CopyTextureRegion, 
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
-    // (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY).
     void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
     // Native presentation: whether this display copy can take the scene target's colour target instead of copying it
     // (hand_over_scene_color): an exact copy of the scene target's top rows (the identity filter, no gamma or scaling) on the
@@ -625,7 +624,7 @@ public:
         return last_begin_reset_us_;
     }
     // Current frame's shared s0-s7 table for draws without dynamic samplers.
-    // Exhaustion is explicit; defaults never replace a requested console table.
+    // Exhaustion is explicit; defaults never replace a requested table.
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table() const {
         return default_sampler_table_;
     }
@@ -767,23 +766,19 @@ private:
     // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
     // origin and (step_x, step_y) the source texels advanced per dest pixel,
     // all in scaled scene target texels.  Caller handles dest resource transitions;
-    // scene target transitions happen inside.  Restores console root signature/scene target
+    // scene target transitions happen inside.  Restores root signature/scene target
     // binding before returning.
     void record_conversion_blit(
         ID3D12Resource* dest,
         unsigned dest_w,
         unsigned dest_h,
         D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-        const CaptureRequest& params,
         bool is_depth_copy,
-        bool intensity,
-        bool keep_alpha,
         std::uint8_t copy_format,
         float src_x,
         float src_y,
         float step_x,
-        float step_y,
-        float filter_row_offset);
+        float step_y);
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE allocate_conversion_rtv(
         ID3D12Resource* resource);
 
@@ -846,7 +841,7 @@ private:
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
-    // GALAXY_GPU_DRAWS=1: each console draw between two timestamps, its time summed by pipeline for present-stats'
+    // GALAXY_GPU_DRAWS=1: each draw between two timestamps, its time summed by pipeline for present-stats'
     // [gpu-draws] lines (the timestamps serialize the draws: the total grows, the shares hold).
     static constexpr unsigned kGpuDrawSlots = 16384;
     struct GpuDrawMark {
@@ -1056,10 +1051,8 @@ private:
         unsigned height = 0;
         CaptureRequest params{};
         bool depth = false;
-        bool intensity = false;
-        bool keep_alpha = false;
         std::uint8_t format = 0;
-        float geometry[5]{};  // src x, y, step x, y, filter row offset
+        float geometry[4]{};  // src x, y, step x, y
         bool identity = false;
         D3D12_BOX box{};
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample
@@ -1594,7 +1587,7 @@ private:
     D3D12_INDEX_BUFFER_VIEW bound_index_view_{};
     bool bound_index_view_valid_ = false;
     D3D12_RECT bound_scissor_{};
-    // Successful nonempty console input that produced the currently bound scissor.
+    // Successful nonempty input that produced the currently bound scissor.
     D3D12_RECT bound_scissor_input_{};
     unsigned bound_scissor_input_scale_ = 0;
     bool bound_scissor_input_valid_ = false;

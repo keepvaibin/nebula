@@ -23,11 +23,11 @@ public:
     }
 
 public:
-    /* 0x00 */ NebulaArena* mpHeap;
-    /* 0x04 */ JPAResource** mpResArr;
-    /* 0x08 */ JPATexture** mpTexArr;
-    /* 0x0C */ u16 mResMax;
-    /* 0x0E */ u16 mResNum;
-    /* 0x10 */ u16 mTexMax;
-    /* 0x12 */ u16 mTexNum;
+    NebulaArena* mpHeap;
+    JPAResource** mpResArr;
+    JPATexture** mpTexArr;
+    u16 mResMax;
+    u16 mResNum;
+    u16 mTexMax;
+    u16 mTexNum;
 };

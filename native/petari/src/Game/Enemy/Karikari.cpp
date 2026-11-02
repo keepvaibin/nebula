@@ -756,7 +756,6 @@ bool Karikari::tryDPDRelease(const TVec2f& rVel) {
 }
 
 bool Karikari::tryDPDAttacked() {
-    // https://decomp.me/scratch/W6YWF
 
     if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
         MR::startDPDHitSound();

@@ -11,7 +11,7 @@ public:
     void initActorSystemInfo(const JMapInfoIter&);
     void endInitActorSystemInfo();
 
-    /* 0x18 */ s32 mActorNum;
+    s32 mActorNum;
 };
 
 namespace MR {

@@ -3,8 +3,8 @@
 #include <RVLFaceLib.h>
 
 struct MiiDatabaseStoreData {
-    /* 0x00 */ MiiStoreData* mData;
-    /* 0x04 */ MR::AssignableArray< MiiStoreData* > mEntries;
+    MiiStoreData* mData;
+    MR::AssignableArray< MiiStoreData* > mEntries;
 };
 
 MiiDatabase::~MiiDatabase() {

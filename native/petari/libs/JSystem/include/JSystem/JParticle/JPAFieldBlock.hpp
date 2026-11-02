@@ -20,7 +20,7 @@ public:
     virtual void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     virtual void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*) = 0;
 
-    /* 0x04 */ JGeometry::TVec3< f32 > mAccel;
+    JGeometry::TVec3< f32 > mAccel;
 };
 
 class JPAFieldSpin : public JPAFieldBase {
@@ -31,9 +31,9 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    /* 0x10 */ JGeometry::TVec3< f32 > field_0x10;
-    /* 0x1C */ JGeometry::TVec3< f32 > field_0x1c;
-    /* 0x28 */ JGeometry::TVec3< f32 > field_0x28;
+    JGeometry::TVec3< f32 > field_0x10;
+    JGeometry::TVec3< f32 > field_0x1c;
+    JGeometry::TVec3< f32 > field_0x28;
 };
 
 class JPAFieldRandom : public JPAFieldBase {
@@ -52,8 +52,8 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    /* 0x10 */ JGeometry::TVec3< f32 > mDir;
-    /* 0x1C */ f32 mCutoff;
+    JGeometry::TVec3< f32 > mDir;
+    f32 mCutoff;
 };
 
 class JPAFieldMagnet : public JPAFieldBase {
@@ -64,7 +64,7 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    /* 0x10 */ JGeometry::TVec3< f32 > mDir;
+    JGeometry::TVec3< f32 > mDir;
 };
 
 class JPAFieldGravity : public JPAFieldBase {
@@ -92,9 +92,9 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    /* 0x10 */ JGeometry::TVec3< f32 > field_0x10;
-    /* 0x1C */ JGeometry::TVec3< f32 > field_0x1c;
-    /* 0x28 */ JGeometry::TVec3< f32 > field_0x28;
+    JGeometry::TVec3< f32 > field_0x10;
+    JGeometry::TVec3< f32 > field_0x1c;
+    JGeometry::TVec3< f32 > field_0x28;
 };
 
 class JPAFieldVortex : public JPAFieldBase {
@@ -105,9 +105,9 @@ public:
     void prepare(JPAEmitterWorkData*, JPAFieldBlock*);
     void calc(JPAEmitterWorkData*, JPAFieldBlock*, JPABaseParticle*);
 
-    /* 0x10 */ JGeometry::TVec3< f32 > field_0x10;
-    /* 0x1C */ f32 field_0x1c;
-    /* 0x20 */ f32 field_0x20;
+    JGeometry::TVec3< f32 > field_0x10;
+    f32 field_0x1c;
+    f32 field_0x20;
 };
 
 class JPAFieldAir : public JPAFieldBase {
@@ -121,19 +121,19 @@ public:
 // unknown name
 class JPAFieldBlockData {
 public:
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ u32 mSize;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ JGeometry::TVec3< f32 > mPos;
-    /* 0x18 */ JGeometry::TVec3< f32 > mDir;
-    /* 0x24 */ f32 mMag;
-    /* 0x28 */ f32 mMagRndm;
-    /* 0x2C */ f32 mVal1;
-    /* 0x30 */ f32 mFadeInTime;
-    /* 0x34 */ f32 mFadeOutTime;
-    /* 0x38 */ f32 mEnTime;
-    /* 0x3C */ f32 mDisTime;
-    /* 0x40 */ u8 mCycle;
+    u8 mMagic[4];
+    u32 mSize;
+    u32 mFlags;
+    JGeometry::TVec3< f32 > mPos;
+    JGeometry::TVec3< f32 > mDir;
+    f32 mMag;
+    f32 mMagRndm;
+    f32 mVal1;
+    f32 mFadeInTime;
+    f32 mFadeOutTime;
+    f32 mEnTime;
+    f32 mDisTime;
+    u8 mCycle;
 };
 
 class JPAFieldBlock {
@@ -211,24 +211,24 @@ public:
     }
 
 private:
-    /* 0x00 */ const JPAFieldBlockData* mpData;
-    /* 0x04 */ JPAFieldBase* mpField;
-    /* 0x08 */ f32 mFadeInRate;
-    /* 0x0C */ f32 mFadeOutRate;
-    /* 0x10 */ JGeometry::TVec3< f32 > mPos;
-    /* 0x1C */ JGeometry::TVec3< f32 > mDir;
-    /* 0x28 */ f32 mMag;
+    const JPAFieldBlockData* mpData;
+    JPAFieldBase* mpField;
+    f32 mFadeInRate;
+    f32 mFadeOutRate;
+    JGeometry::TVec3< f32 > mPos;
+    JGeometry::TVec3< f32 > mDir;
+    f32 mMag;
 
     enum Type {
-        /* 0x0 */ FIELD_GRAVITY,
-        /* 0x1 */ FIELD_AIR,
-        /* 0x2 */ FIELD_MAGNET,
-        /* 0x3 */ FIELD_NEWTON,
-        /* 0x4 */ FIELD_VORTEX,
-        /* 0x5 */ FIELD_RANDOM,
-        /* 0x6 */ FIELD_DRAG,
-        /* 0x7 */ FIELD_CONVECTION,
-        /* 0x8 */ FIELD_SPIN,
+        FIELD_GRAVITY,
+        FIELD_AIR,
+        FIELD_MAGNET,
+        FIELD_NEWTON,
+        FIELD_VORTEX,
+        FIELD_RANDOM,
+        FIELD_DRAG,
+        FIELD_CONVECTION,
+        FIELD_SPIN,
     };
 };
 

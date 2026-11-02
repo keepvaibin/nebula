@@ -63,13 +63,13 @@ public:
     }
 
     /// @brief The current frame.
-    /* 0x0 */ s32 mFrame;
+    s32 mFrame;
 
     /// @brief The maximum number of frames.
-    /* 0x4 */ s32 mMaxFrame;
+    s32 mMaxFrame;
 
     /// @brief The sign of the direction of progression.
-    /* 0x8 */ s32 mDirection;
+    s32 mDirection;
 
 private:
     /// @brief Determines if the given direction of progression suggests approaching `0.0`.

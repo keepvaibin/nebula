@@ -75,7 +75,7 @@ struct CaptureRequest {
 struct DisplayTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
-    // GPU dimensions after scene target scaling; the copy's rectangle stays in Wii units.
+    // GPU dimensions after scene target scaling; the copy's rectangle stays in game units.
     std::uint16_t width = 0;
     std::uint16_t height = 0;       // after logical y-scale and scene target scale
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
@@ -117,7 +117,7 @@ struct DisplaySerialAccountingEvent {
     std::uint64_t copy_serial) noexcept;
 
 
-// scene target-copy textures are at the internal resolution; addresses, strides and VI selection stay in Wii units.
+// scene target-copy textures are at the internal resolution; addresses, strides and VI selection stay in game units.
 struct ScaledSceneCopyExtent {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
@@ -133,18 +133,9 @@ struct SceneCopySamplingGeometry {
     float src_y = 0.0f;
     float step_x = 0.0f;
     float step_y = 0.0f;
-    float filter_row_offset = 1.0f;
 };
 
 [[nodiscard]] SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
-    const CaptureRequest& params,
-    unsigned dest_width,
-    unsigned dest_height,
-    const FrameMap& map) noexcept;
-
-// The frame shown at a high resolution keeps the filter's weights but samples adjacent physical rows; captures
-// keep their logical-row footprint.
-[[nodiscard]] SceneCopySamplingGeometry compute_display_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
@@ -160,11 +151,9 @@ struct SceneCopyRect {
 };
 // A colour copy whose texture is one channel (I4, or I8 from R, G, B or A): the conversion writes (i, i, i, i), so
 // its destination holds the one byte (R8, viewed as R in every channel, as decoded I8 textures are).
-// A copy's picture layout: the game's NebulaTargetChannels (0 RGBA, 1 intensity and alpha, 2 alpha, 3 red, 4 green,
-// 5 blue, 6 colour with alpha one) for captures; kCopyLayoutDisplay for display copies (opaque colour through the
-// display filter).
+// A read's picture layout: the game's NebulaTargetChannels (0 RGBA, 2 alpha, 3 red, 6 colour with alpha one);
+// kCopyLayoutDisplay for the frame shown (opaque colour).
 inline constexpr std::uint8_t kCopyLayoutRgba = 0u;
-inline constexpr std::uint8_t kCopyLayoutIntensityAlpha = 1u;
 inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
 
 // One channel read in every channel (alpha, red, green or blue): an R8 picture.

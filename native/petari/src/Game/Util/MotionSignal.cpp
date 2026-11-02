@@ -230,7 +230,7 @@ namespace MotionSignal {
         NebulaRender::hostMarker(Kind_Light, site, pInfo != nullptr ? id(pInfo) : 0, followCamera);
     }
 
-    // Bit 0: light A (console light 0) follows the camera; bit 1: light B (console light 1). The renderer moves those lights
+    // Bit 0: light A follows the camera; bit 1: light B. The renderer moves those lights
     // with the camera under ray tracing.
     void actorLight(const ActorLightInfo* pInfo) {
         if (NebulaRender::sDrawIdentities != 0) {

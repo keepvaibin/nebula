@@ -75,7 +75,7 @@ public:
         setWaveID(waveID);
     }
 
-    /* 0x00 */ union {
+    union {
         u32 mComposite;
         struct {
             union {
@@ -115,7 +115,7 @@ public:
 
     void releaseSound();
 
-    /* 0x00 */ JAISound* mSound;
+    JAISound* mSound;
 };
 
 struct JAISoundStatus_ {
@@ -226,7 +226,7 @@ struct JAISoundStatus_ {
         return mUserData;
     }
 
-    /* 0x0 */ union {  // TODO: is this just JAISoundActivity?
+    union {  // TODO: is this just JAISoundActivity?
         u8 value;
         struct {
             u8 mute : 1;
@@ -239,7 +239,7 @@ struct JAISoundStatus_ {
             u8 flag8 : 1;
         } flags;
     } _0;
-    /* 0x1 */ union {
+    union {
         u8 value;
         struct {
             u8 comesBack : 1;
@@ -252,7 +252,7 @@ struct JAISoundStatus_ {
             u8 flag8 : 1;
         } flags;
     } _1;
-    /* 0x2 */ struct {
+    struct {
         u8 state;
         struct {
             u8 flag1 : 1;
@@ -264,7 +264,7 @@ struct JAISoundStatus_ {
             u8 flag8 : 1;
         } flags;
     } mState;
-    /* 0x4 */ uintptr_t mUserData;
+    uintptr_t mUserData;
 };
 
 struct JAISoundFader {
@@ -310,8 +310,8 @@ struct JAISoundFader {
         return mValue;
     }
 
-    /* 0x00 */ f32 mValue;
-    /* 0x04 */ JAISoundParamsTransition::TTransition mTransition;
+    f32 mValue;
+    JAISoundParamsTransition::TTransition mTransition;
 };
 
 template < typename T >
@@ -350,7 +350,7 @@ public:
         return _0.flags.paused;
     }
 
-    /* 0x0 */ union {
+    union {
         u8 value;
         struct {
             u8 muted : 1;
@@ -389,8 +389,8 @@ public:
         mTempo = mTransition.apply(mTempo);
     }
 
-    /* 0x00 */ f32 mTempo;
-    /* 0x04 */ JAISoundParamsTransition::TTransition mTransition;
+    f32 mTempo;
+    JAISoundParamsTransition::TTransition mTransition;
 };
 
 class JAISoundHandle;
@@ -413,8 +413,6 @@ public:
     void attachHandle(JAISoundHandle* handle);
 
     void start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience);
-    bool acceptsNewAudible() const;
-    void newAudible(const TVec3f&, TVec3f const*, u32, JAIAudience*);
     void stop();
     void stop(u32 fadeTime);
     void die_JAISound_();
@@ -576,15 +574,15 @@ public:
         return mParams.mMove;
     }
 
-    /* 0x04 */ JAISoundHandle* mHandle;
-    /* 0x08 */ JAIAudible* mAudible;
-    /* 0x0C */ JAIAudience* mAudience;
-    /* 0x10 */ u32 mLifeTime;
-    /* 0x14 */ s32 mPrepareCount;
-    /* 0x18 */ JAISoundID mSoundID;
-    /* 0x1C */ JAISoundStatus_ mStatus;
-    /* 0x24 */ JAISoundFader mFader;
-    /* 0x34 */ u32 mPriority;
-    /* 0x38 */ s32 mCount;
-    /* 0x3C */ JAISoundParams mParams;
+    JAISoundHandle* mHandle;
+    JAIAudible* mAudible;
+    JAIAudience* mAudience;
+    u32 mLifeTime;
+    s32 mPrepareCount;
+    JAISoundID mSoundID;
+    JAISoundStatus_ mStatus;
+    JAISoundFader mFader;
+    u32 mPriority;
+    s32 mCount;
+    JAISoundParams mParams;
 };

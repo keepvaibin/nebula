@@ -44,24 +44,24 @@ public:
 
     void drawRope(const TVec3f&, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32) const;
 
-    /* 0x8C */ TVec3f mSide;
-    /* 0x98 */ TVec3f mUp;
-    /* 0xA4 */ TVec3f mFront;
-    /* 0xB0 */ f32 mRopeLength;
-    /* 0xB4 */ SwingRopePoint* mStickPoint;
-    /* 0xB8 */ PartsModel* mTrapezeModel;
-    /* 0xBC */ TPos3f mPosMtx;
-    /* 0xEC */ LiveActor* mRider;
-    /* 0xF0 */ SwingRopePoint* mHangPoint;
-    /* 0xF4 */ f32 mGrabCoord;
-    /* 0xF8 */ f32 mSwingVel;
-    /* 0xFC */ bool mSwingReverse;
-    /* 0xFD */ bool mIsSwingFront;
-    /* 0xFE */ bool mIsSwingBack;
-    /* 0xFF */ bool mWasSwingFront;
-    /* 0x100 */ bool mWasSwingBack;
-    /* 0x104 */ ActorCameraInfo* mCameraInfo;
-    /* 0x108 */ s32 mPrevSoundLvl;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
+    f32 mRopeLength;
+    SwingRopePoint* mStickPoint;
+    PartsModel* mTrapezeModel;
+    TPos3f mPosMtx;
+    LiveActor* mRider;
+    SwingRopePoint* mHangPoint;
+    f32 mGrabCoord;
+    f32 mSwingVel;
+    bool mSwingReverse;
+    bool mIsSwingFront;
+    bool mIsSwingBack;
+    bool mWasSwingFront;
+    bool mWasSwingBack;
+    ActorCameraInfo* mCameraInfo;
+    s32 mPrevSoundLvl;
 };
 
 class TrapezeRopeDrawInit : public NameObj {
@@ -70,7 +70,7 @@ public:
 
     virtual void initDraw() const;
 
-    /* 0x0C */ JUTTexture* mTexture;
+    JUTTexture* mTexture;
 };
 
 // these have to be header bodies because for some reason they are actually linked in NameObjFactory

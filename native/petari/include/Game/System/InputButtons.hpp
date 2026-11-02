@@ -122,16 +122,16 @@ public:
 
 private:
     /// @brief The owning player's input.
-    /* 0x00 */ const PlayerInput* mPad;
+    const PlayerInput* mPad;
 
     /// @brief The combination of buttons pressed.
-    /* 0x04 */ u32 mHold;
+    u32 mHold;
 
     /// @brief The combination of buttons just pressed.
-    /* 0x08 */ u32 mTrigger;
+    u32 mTrigger;
 
     /// @brief The combination of buttons just released.
-    /* 0x0C */ u32 mRelease;
+    u32 mRelease;
 
 
 

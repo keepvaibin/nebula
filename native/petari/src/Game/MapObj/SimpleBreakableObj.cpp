@@ -275,9 +275,5 @@ void SimpleBreakableObj::exeDemo() {
     }
 }
 
-void SimpleBreakableIndirectObj::connectToScene(const MapObjActorInitInfo&) {
-    MR::connectToSceneIndirectMapObj(this);
-}
-
 SimpleBreakableObj::~SimpleBreakableObj() {
 }

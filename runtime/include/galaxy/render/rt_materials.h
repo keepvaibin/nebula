@@ -64,7 +64,7 @@ enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 
 // The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (the owner, 27 October
 // 2026: ice 20 to 25 % of its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
-// multiply and add (TEV and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
+// multiply and add (material and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
 // it by (0, 40, 65), its sheen by (55, 77, 92)); their textures are grey and what shows through them (the screen
 // capture the ice refracts, its reflection) keeps its own colours. Those colours keep that share of their chroma, their
 // luminance kept: RenderCore clears the registers in a draw's constants, the pixel shaders its rasterized colours
@@ -73,7 +73,7 @@ inline constexpr float kRtIceTintKept = 0.225f;
 inline constexpr float kRtCrystalTintKept = 0.075f;
 
 struct RtMaterial {
-    std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the console state shows it
+    std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the state shows it
     RtEmission emission = RtEmission::None;
     bool no_light = false;                // skip: never a light, whatever the picture shows
     bool helper = false;                  // a lookup texture: skipped when a draw's material is chosen

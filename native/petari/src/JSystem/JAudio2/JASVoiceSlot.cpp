@@ -101,29 +101,6 @@ JASVoiceSlot* JASVoiceSlot::getLowestChannel(int i_priority) {
     return &sSlots[best_index];
 }
 
-JASVoiceSlot* JASVoiceSlot::getLowestActiveChannel() {
-    s16 best_priority = 0xff;
-    int best_index = -1;
-    int best_unknown = 0;
-    for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        JASVoiceSlot* channel = &sSlots[i];
-        if (channel->mStatus == STATUS_ACTIVE) {
-            s16 priority = channel->mPriority;
-            if (priority < 0x7f && priority <= best_priority) {
-                if (priority != best_priority || channel->field_0xc > best_unknown) {
-                    best_unknown = channel->field_0xc;
-                    best_index = i;
-                    best_priority = priority;
-                }
-            }
-        }
-    }
-    if (best_index < 0) {
-        return NULL;
-    }
-    return &sSlots[best_index];
-}
-
 void JASVoiceSlot::updateProc() {
     int ret = 0;
     if (mChannel->isFinish()) {
@@ -202,48 +179,8 @@ void JASVoiceSlot::updateAll() {
     JASVoice::mixSubframe();
 }
 
-int JASVoiceSlot::killActiveChannel() {
-    JASVoiceSlot* channel = getLowestActiveChannel();
-    if (channel == NULL) {
-        return 0;
-    } else {
-        channel->drop();
-        return 1;
-    }
-}
-
 JASVoiceSlot* JASVoiceSlot::getHandle(u32 i_index) {
     return &sSlots[i_index];
-}
-
-u32 JASVoiceSlot::getNumUse() {
-    u32 count = 0;
-    for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if (sSlots[i].mStatus == STATUS_ACTIVE) {
-            count++;
-        }
-    }
-    return count;
-}
-
-u32 JASVoiceSlot::getNumFree() {
-    u32 count = 0;
-    for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if (sSlots[i].mStatus == STATUS_INACTIVE) {
-            count++;
-        }
-    }
-    return count;
-}
-
-u32 JASVoiceSlot::getNumBreak() {
-    u32 count = 0;
-    for (int i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if (sSlots[i].mStatus == STATUS_DROP) {
-            count++;
-        }
-    }
-    return count;
 }
 
 namespace {

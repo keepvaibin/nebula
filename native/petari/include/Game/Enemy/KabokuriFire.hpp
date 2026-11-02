@@ -19,5 +19,5 @@ public:
     void exeWait();
 
 private:
-    /* 0x8C */ TPos3f _8C;
+    TPos3f _8C;
 };

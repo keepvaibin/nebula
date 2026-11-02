@@ -54,12 +54,12 @@ public:
 
     bool inClingNerve() const;
 
-    /* 0x8C */ TVec3f mFront;
-    /* 0x98 */ FixedPosition* mClingPosition;
-    /* 0x9C */ bool mIsReadyToLandTornado;
-    /* 0x9D */ bool _9D;
-    /* 0x9E */ bool _9E;
-    /* 0x9F */ bool mIsPushable;
-    /* 0xA0 */ s32 mFrozenTime;
-    /* 0xA4 */ u32 _A4;
+    TVec3f mFront;
+    FixedPosition* mClingPosition;
+    bool mIsReadyToLandTornado;
+    bool _9D;
+    bool _9E;
+    bool mIsPushable;
+    s32 mFrozenTime;
+    u32 _A4;
 };

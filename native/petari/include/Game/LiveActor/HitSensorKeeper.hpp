@@ -30,9 +30,9 @@ public:
 
     void registHitSensorInfo(HitSensorInfo*);
 
-    /* 0x00 */ s32 mSensorInfosSize;
-    /* 0x04 */ s32 mSensorCount;
-    /* 0x08 */ HitSensorInfo** mSensorInfos;
-    /* 0x0C */ HitSensor* mTaking;
-    /* 0x10 */ HitSensor* mTaken;
+    s32 mSensorInfosSize;
+    s32 mSensorCount;
+    HitSensorInfo** mSensorInfos;
+    HitSensor* mTaking;
+    HitSensor* mTaken;
 };

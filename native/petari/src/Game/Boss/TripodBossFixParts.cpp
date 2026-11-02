@@ -21,8 +21,8 @@ namespace NrvTripodBossFixParts {
 };  // namespace NrvTripodBossFixParts
 
 struct TripodBossSetting {
-    /* 0x0 */ const char* mPartName;
-    /* 0x4 */ s32 mType;
+    const char* mPartName;
+    s32 mType;
 };
 
 namespace {
@@ -48,7 +48,6 @@ TripodBossFixParts::TripodBossFixParts(const char* pName)
     : TripodBossFixPartsBase(pName), _E4(-1), _E8(180), mHasCollision(), _ED(true), _EE(), mIsPlayingWarning() {
 }
 
-// https://decomp.me/scratch/UtuYP
 void TripodBossFixParts::init(const JMapInfoIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);

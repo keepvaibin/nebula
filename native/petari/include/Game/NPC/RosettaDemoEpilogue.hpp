@@ -17,8 +17,8 @@ public:
 
 private:
     /// @brief The pointer to the actor instance for Rosalina.
-    /* 0x08 */ Rosetta* mRosetta;
+    Rosetta* mRosetta;
 
     /// @brief TODO.
-    /* 0x0C */ bool mIsFadeOut;
+    bool mIsFadeOut;
 };

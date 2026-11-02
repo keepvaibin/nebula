@@ -177,7 +177,7 @@ void WaterRoadModelInfo::initMesh() {
     mMesh.useArray(NativeMesh::SLOT_POSITION, mPoints);
     mMesh.useArray(NativeMesh::SLOT_NORMAL, mNormals);
     NativeMesh::sendArray(mPoints, NEBULA_SHAPE_ARRAY_POSITION, mNumPoints, mPoints);
-    // The normals as console reads S16 normals (1.14 fixed point).
+    // The normals are 1.14 fixed point.
     f32* pNormals = new f32[3 * mNumPoints];
     for (s32 i = 0; i < mNumPoints; i++) {
         pNormals[3 * i] = mNormals[i].x / 16384.0f;
@@ -609,7 +609,6 @@ void WaterRoad::exeDisappear() {
 }
 
 void WaterRoad::movement() {
-    // https://decomp.me/scratch/6VOUU
 
     if (!MR::isValidMovement(this)) {
         return;

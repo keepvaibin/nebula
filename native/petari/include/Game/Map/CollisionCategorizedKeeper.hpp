@@ -34,13 +34,13 @@ public:
     HitInfo* getStrikeInfo(u32);
     CollisionZone* getZone(int);
 
-    /* 0x0C */ HitInfo* mHitInfoArray;
-    /* 0x10 */ s32 _10;
-    /* 0x14 */ s32 mPartsCount;
-    /* 0x18 */ MR::Vector< MR::FixedArray< CollisionZone*, 32 > > mZones;
-    /* 0x9C */ s32 mCategory;
-    /* 0xA0 */ bool mZonesInitialized;
-    /* 0xA1 */ bool mUpdateZoneBounds;
+    HitInfo* mHitInfoArray;
+    s32 _10;
+    s32 mPartsCount;
+    MR::Vector< MR::FixedArray< CollisionZone*, 32 > > mZones;
+    s32 mCategory;
+    bool mZonesInitialized;
+    bool mUpdateZoneBounds;
 };
 
 class CollisionZone {
@@ -53,10 +53,10 @@ public:
     void addAndUpdateMinMax(TVec3f, TVec3f);
     void eraseParts(CollisionParts*);
 
-    /* 0x000 */ s32 mZoneID;
-    /* 0x004 */ MR::Vector< MR::FixedArray< CollisionParts*, 512 > > mParts;
-    /* 0x808 */ TVec3f mCenter;
-    /* 0x814 */ f32 mRadius;
-    /* 0x818 */ TVec3f mMin;
-    /* 0x824 */ TVec3f mMax;
+    s32 mZoneID;
+    MR::Vector< MR::FixedArray< CollisionParts*, 512 > > mParts;
+    TVec3f mCenter;
+    f32 mRadius;
+    TVec3f mMin;
+    TVec3f mMax;
 };

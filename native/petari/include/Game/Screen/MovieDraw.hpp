@@ -2,7 +2,7 @@
 
 
 // A movie frame drawn from its decoded planes (Y at the frame's size, U and V at half), converted from YUV to RGB by
-// the console THP library's coefficients in a native material program.
+// the THP coefficients in a native material program.
 namespace MovieDraw {
     // The planes are sampled linearly (else nearest).
     void setLinearFilter(bool linear);

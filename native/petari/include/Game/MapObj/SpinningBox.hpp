@@ -34,11 +34,11 @@ public:
         return 1.0f;
     }
 
-    /* 0x8C */ TQuat4f mRotate;
-    /* 0x9C */ f32 mRotateSpeed;
-    /* 0xA0 */ f32 mSlideSpeed;
-    /* 0xA4 */ TVec3f mSlideDir;
-    /* 0xB0 */ bool mIsOnGround;
-    /* 0xB1 */ bool mIsIceBox;
-    /* 0xB4 */ f32 mSpinAngle;  // NOTE: This keeps track of when the spin sfx should be emitted again
+    TQuat4f mRotate;
+    f32 mRotateSpeed;
+    f32 mSlideSpeed;
+    TVec3f mSlideDir;
+    bool mIsOnGround;
+    bool mIsIceBox;
+    f32 mSpinAngle;  // NOTE: This keeps track of when the spin sfx should be emitted again
 };

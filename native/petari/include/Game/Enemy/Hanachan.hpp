@@ -9,9 +9,9 @@ class Hanachan;
 class HanachanParts : public LiveActor {
 public:
     enum PartsType {
-        /* 0x0 */ PartsType_Head,
-        /* 0x1 */ PartsType_Body,
-        /* 0x2 */ PartsType_BodyS,
+        PartsType_Head,
+        PartsType_Body,
+        PartsType_BodyS,
     };
 
     HanachanParts(Hanachan*, s32, const char*, const char*);
@@ -48,14 +48,14 @@ public:
     void changeHeadAngry();
     void changeHeadCalmDown();
 
-    /* 0x8C */ Hanachan* mHost;
-    /* 0x90 */ TVec3f mPushVelocity;
-    /* 0x9C */ TVec3f mFallVelocity;
-    /* 0xA8 */ PartsType mPartsType;
-    /* 0xAC */ TQuat4f mRotationQuat;
-    /* 0xBC */ s32 mPartsIndex;
-    /* 0xC0 */ s32 mActionStartStep;
-    /* 0xC4 */ bool mIsLanded;
+    Hanachan* mHost;
+    TVec3f mPushVelocity;
+    TVec3f mFallVelocity;
+    PartsType mPartsType;
+    TQuat4f mRotationQuat;
+    s32 mPartsIndex;
+    s32 mActionStartStep;
+    bool mIsLanded;
 };
 
 class Hanachan : public LiveActor {
@@ -95,9 +95,9 @@ public:
     TVec3f calcSensorDirection(const HitSensor*, const HitSensor*) const;
     void moveBodyAlongHead();
 
-    /* 0x8C */ MR::FixedArray< HanachanParts*, 5 > mBodyParts;
-    /* 0xA0 */ TVec3f mAttackPos;
-    /* 0xAC */ TVec3f mFrontDir;
-    /* 0xB8 */ bool mIsChasePlayer;
-    /* 0xBC */ AnimScaleController* mScaleController;
+    MR::FixedArray< HanachanParts*, 5 > mBodyParts;
+    TVec3f mAttackPos;
+    TVec3f mFrontDir;
+    bool mIsChasePlayer;
+    AnimScaleController* mScaleController;
 };

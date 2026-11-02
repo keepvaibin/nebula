@@ -70,14 +70,14 @@ public:
         return mAbsPos.getVelocity();
     }
 
-    /* 0x010 */ JAUAudibleParam mAudibleParam;
-    /* 0x014 */ U mAbsPos;
-    /* 0x02C */ T* mChannels[SIZE];
-    /* 0x03C */ T _3C[SIZE];
-    /* 0x10C */ f32 mVolume;
-    /* 0x110 */ f32 mPan;
-    /* 0x114 */ f32 mDolby;
-    /* 0x118 */ bool mIsResetting;
+    JAUAudibleParam mAudibleParam;
+    U mAbsPos;
+    T* mChannels[SIZE];
+    T _3C[SIZE];
+    f32 mVolume;
+    f32 mPan;
+    f32 mDolby;
+    bool mIsResetting;
 };
 
 template < int SIZE >

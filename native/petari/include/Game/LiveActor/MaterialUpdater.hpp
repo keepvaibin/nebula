@@ -4,7 +4,7 @@
 
 class FogCtrl;
 class J3DAnmBase;
-class J3DGXColor;
+class J3DColor;
 class J3DModel;
 class J3DModelData;
 class MarioShadowProjmapMtxSetter;
@@ -28,7 +28,7 @@ public:
     void onCurFlag(u16, u32);
     u32 getDiffFlag(s32) const;
     FogCtrl* addFogCtrl(bool);
-    MatColorCtrl* addMatColorCtrl(const char*, u32, const J3DGXColor*);
+    MatColorCtrl* addMatColorCtrl(const char*, u32, const J3DColor*);
     TexMtxCtrl* addTexMtxCtrl(const char*);
     ProjmapEffectMtxSetter* addProjmapEffectMtxSetter();
     MirrorReflectionMtxSetter* addMirrorReflectionMtxSetter();
@@ -50,10 +50,10 @@ public:
     void checkTexture();
     static bool isExistDiffMaterial(const J3DModelData*);
 
-    /* 0x00 */ MR::Vector< MR::AssignableArray< MaterialCtrl* > > mMaterialCtrl;
-    /* 0x0C */ u32* mPrgFlag;
-    /* 0x10 */ u32* mCurFlag;
-    /* 0x14 */ J3DModel* mModel;
-    /* 0x18 */ FogCtrl* mFogCtrl;
-    /* 0x1C */ const ResourceHolder* mResHolder;
+    MR::Vector< MR::AssignableArray< MaterialCtrl* > > mMaterialCtrl;
+    u32* mPrgFlag;
+    u32* mCurFlag;
+    J3DModel* mModel;
+    FogCtrl* mFogCtrl;
+    const ResourceHolder* mResHolder;
 };

@@ -12,5 +12,5 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    /* 0x8C */ MapPartsSeesaw1AxisRotator* mRotator;
+    MapPartsSeesaw1AxisRotator* mRotator;
 };

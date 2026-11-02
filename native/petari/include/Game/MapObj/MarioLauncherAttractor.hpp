@@ -12,5 +12,5 @@ public:
 
     void exeWait();
 
-    /* 0x8C */ PointGravityCreator* mGravityCreator;
+    PointGravityCreator* mGravityCreator;
 };

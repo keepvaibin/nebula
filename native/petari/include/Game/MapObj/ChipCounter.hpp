@@ -32,9 +32,9 @@ public:
     inline bool isHidden();
     inline bool isComplete();
 
-    /* 0x20 */ CollectCounter* mCollectCounter;
-    /* 0x24 */ s32 mCount;
-    /* 0x28 */ s32 mType;
-    /* 0x2C */ s32 mGroupId;
-    /* 0x30 */ f32 _30;
+    CollectCounter* mCollectCounter;
+    s32 mCount;
+    s32 mType;
+    s32 mGroupId;
+    f32 _30;
 };

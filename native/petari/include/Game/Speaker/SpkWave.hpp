@@ -20,5 +20,5 @@ public:
     s16* getWave(s32) const;
     WaveData* getWaveData(s32) const;
 
-    /* 0x0 */ void* mResource;  // Raw data of AudioRes/SpkRes/SpkRes.arc
+    void* mResource;  // Raw data of AudioRes/SpkRes/SpkRes.arc
 };

@@ -69,7 +69,7 @@ public:
     virtual void setResource(J3DAnmBase*, void const*);
     virtual ~J3DAnmFullLoader_v15();
 
-    /* 0x4 */ J3DAnmBase* mAnm;
+    J3DAnmBase* mAnm;
 };
 
 class J3DAnmKeyLoader_v15 : public J3DAnmLoader {
@@ -92,6 +92,6 @@ public:
     virtual void setResource(J3DAnmBase*, void const*);
     virtual ~J3DAnmKeyLoader_v15();
 
-    /* 0x4 */ J3DAnmBase* mAnm;
+    J3DAnmBase* mAnm;
 };
 

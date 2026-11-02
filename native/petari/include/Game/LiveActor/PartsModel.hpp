@@ -26,11 +26,11 @@ public:
         return mFixedPosition != nullptr;
     }
 
-    /* 0x8C */ LiveActor* mHost;
-    /* 0x90 */ FixedPosition* mFixedPosition;
-    /* 0x94 */ MtxPtr mMtx;
-    /* 0x98 */ bool mIsCalcOwnMtx;
-    /* 0x99 */ bool _99;
-    /* 0x9A */ bool mIsDead;
-    /* 0x9B */ bool _9B;
+    LiveActor* mHost;
+    FixedPosition* mFixedPosition;
+    MtxPtr mMtx;
+    bool mIsCalcOwnMtx;
+    bool _99;
+    bool mIsDead;
+    bool _9B;
 };

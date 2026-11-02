@@ -8,7 +8,7 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    /* 0x3C */ s32 _3C;
+    s32 _3C;
 };
 
 class WaterAreaMgr : public AreaObjMgr {

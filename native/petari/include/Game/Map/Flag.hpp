@@ -14,8 +14,8 @@ public:
         FixPoints() {
         }
 
-        /* 0x00 */ TVec3f mPos;
-        /* 0x0C */ SwingRopePoint** mPoints;
+        TVec3f mPos;
+        SwingRopePoint** mPoints;
     };
 
     Flag(const char*);
@@ -50,40 +50,40 @@ public:
         return mFixPoints[idxV].mPoints[idxU];
     }
 
-    /* 0x8C */ u32 _8C;  // Note: unused?
-    /* 0x90 */ const char* mObjName;
-    /* 0x94 */ bool mDisableLighting;
-    /* 0x98 */ s32 mNumPointsV;
-    /* 0x9C */ s32 mNumPointsU;
-    /* 0xA0 */ f32 mPointIntervalU;
-    /* 0xA4 */ f32 mPointIntervalV;
-    /* 0xA8 */ FixPoints* mFixPoints;
-    /* 0xAC */ TVec3f mUp;
-    /* 0xB8 */ TVec3f mClipCenter;
-    /* 0xC4 */ const TVec3f* mBasePos;
-    /* 0xC8 */ TPos3f* mBaseMtx;
-    /* 0xCC */ f32 mStickLength;
-    /* 0xD0 */ f32 mWavePhase;
-    /* 0xD4 */ TVec3f mSide;
-    /* 0xE0 */ TVec3f mFront;
-    /* 0xEC */ bool mIsVerticalFlag;
-    /* 0xF0 */ s32 mWaitTime;
-    /* 0xF4 */ f32 mGravityScale;
-    /* 0xF8 */ f32 mFrictionRateMin;
-    /* 0xFC */ f32 mFrictionRateMax;
-    /* 0x100 */ f32 mWindAccelRate;
-    /* 0x104 */ f32 mWindAccelMin;
-    /* 0x108 */ f32 mRandomWindAccelMin;
-    /* 0x10C */ f32 mRandomWindAccelMax;
-    /* 0x110 */ f32 mLightColorMin;
-    /* 0x114 */ Color8* mColors;
+    u32 _8C;  // Note: unused?
+    const char* mObjName;
+    bool mDisableLighting;
+    s32 mNumPointsV;
+    s32 mNumPointsU;
+    f32 mPointIntervalU;
+    f32 mPointIntervalV;
+    FixPoints* mFixPoints;
+    TVec3f mUp;
+    TVec3f mClipCenter;
+    const TVec3f* mBasePos;
+    TPos3f* mBaseMtx;
+    f32 mStickLength;
+    f32 mWavePhase;
+    TVec3f mSide;
+    TVec3f mFront;
+    bool mIsVerticalFlag;
+    s32 mWaitTime;
+    f32 mGravityScale;
+    f32 mFrictionRateMin;
+    f32 mFrictionRateMax;
+    f32 mWindAccelRate;
+    f32 mWindAccelMin;
+    f32 mRandomWindAccelMin;
+    f32 mRandomWindAccelMax;
+    f32 mLightColorMin;
+    Color8* mColors;
     // Texture coordinates.
-    /* 0x118 */ f32* mTexST;
-    /* 0x11C */ JUTTexture* mTexture;
-    /* 0x120 */ bool mUseAlpha;
-    /* 0x121 */ u8 mAlpha;
-    /* 0x124 */ f32 mAlphaDistanceNear;
-    /* 0x128 */ f32 mAlphaDistanceFar;
-    /* 0x12C */ s32 mSeStep;
-    /* 0x130 */ bool mDisableSound;
+    f32* mTexST;
+    JUTTexture* mTexture;
+    bool mUseAlpha;
+    u8 mAlpha;
+    f32 mAlphaDistanceNear;
+    f32 mAlphaDistanceFar;
+    s32 mSeStep;
+    bool mDisableSound;
 };

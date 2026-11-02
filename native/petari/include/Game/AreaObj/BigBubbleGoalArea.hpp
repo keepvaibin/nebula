@@ -19,10 +19,10 @@ public:
 
     void addBubble(BigBubble*);
 
-    /* 0x3C */ TVec3f mTrans;
-    /* 0x48 */ f32 mMeterCapacity;
-    /* 0x4C */ f32 mMeterDisplayAmount;
-    /* 0x50 */ f32 mMeterAmount;
+    TVec3f mTrans;
+    f32 mMeterCapacity;
+    f32 mMeterDisplayAmount;
+    f32 mMeterAmount;
 };
 
 namespace MR {

@@ -26,8 +26,8 @@ public:
 
     void create(const char*, bool, bool);
 
-    /* 0x20 */ TalkMessageCtrl* mMessageCtrl;
-    /* 0x24 */ TalkTextFormer* mTextFormer;
+    TalkMessageCtrl* mMessageCtrl;
+    TalkTextFormer* mTextFormer;
     bool _28;
     bool _29;
 };
@@ -68,7 +68,7 @@ public:
     void exeClose();
 
     u32 _2C;
-    /* 0x30 */ IconAButton* mAButton;
+    IconAButton* mAButton;
 };
 
 class TalkBalloonSign : public TalkBalloonEvent {
@@ -112,13 +112,13 @@ public:
     void update();
     bool isActiveBalloonShort() const;
 
-    /* 0x00 */ TalkBalloonShort** mBalloonShortArray;
-    /* 0x04 */ TalkBalloonEvent* mBalloonEvent;
-    /* 0x08 */ TalkBalloonInfo* mBalloonInfo;
-    /* 0x0C */ TalkBalloonSign* mBalloonSign;
-    /* 0x10 */ TalkBalloonIcon* mBalloonIcon;
+    TalkBalloonShort** mBalloonShortArray;
+    TalkBalloonEvent* mBalloonEvent;
+    TalkBalloonInfo* mBalloonInfo;
+    TalkBalloonSign* mBalloonSign;
+    TalkBalloonIcon* mBalloonIcon;
     s32 _14;
-    /* 0x18 */ IconAButton* mAButton;
+    IconAButton* mAButton;
 };
 
 namespace MR {

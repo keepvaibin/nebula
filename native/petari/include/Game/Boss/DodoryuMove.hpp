@@ -13,9 +13,9 @@ namespace DodoryuSub {
 
         virtual void execute() = 0;
 
-        /* 0x04 */ MoveStateHolder* mHolder;
-        /* 0x08 */ Dodoryu* mHost;
-        /* 0x0C */ s32 mStep;
+        MoveStateHolder* mHolder;
+        Dodoryu* mHost;
+        s32 mStep;
     };
 
     class MoveStateRail : public MoveState {
@@ -24,8 +24,8 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        /* 0x10 */ f32 _10;
-        /* 0x14 */ f32 _14;
+        f32 _10;
+        f32 _14;
     };
 
     class MoveStateChase : public MoveState {
@@ -35,10 +35,10 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        /* 0x10 */ f32 _10;
-        /* 0x14 */ f32 _14;
-        /* 0x18 */ f32 _18;
-        /* 0x1C */ f32 _1C;
+        f32 _10;
+        f32 _14;
+        f32 _18;
+        f32 _1C;
     };
 
     class MoveStateDetour : public MoveState {
@@ -49,10 +49,10 @@ namespace DodoryuSub {
 
         bool isPlayerOppositeFromWall() const;
 
-        /* 0x10 */ f32 _10;
-        /* 0x14 */ f32 _14;
-        /* 0x18 */ f32 _18;
-        /* 0x1C */ f32 _1C;
+        f32 _10;
+        f32 _14;
+        f32 _18;
+        f32 _1C;
     };
 
     class MoveStateEscape : public MoveState {
@@ -61,14 +61,14 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        /* 0x10 */ s32 _10;
-        /* 0x14 */ s32 _14;
-        /* 0x18 */ s32 _18;
-        /* 0x1C */ f32 _1C;
-        /* 0x20 */ f32 _20;
-        /* 0x24 */ f32 _24;
-        /* 0x28 */ f32 _28;
-        /* 0x2C */ TVec3f _2C;
+        s32 _10;
+        s32 _14;
+        s32 _18;
+        f32 _1C;
+        f32 _20;
+        f32 _24;
+        f32 _28;
+        TVec3f _2C;
     };
 
     class MoveStateJumpOut : public MoveState {
@@ -77,8 +77,8 @@ namespace DodoryuSub {
 
         virtual void execute();
 
-        /* 0x10 */ f32 _10;
-        /* 0x14 */ f32 _14;
+        f32 _10;
+        f32 _14;
     };
 
     class MoveStateNull : public MoveState {
@@ -101,14 +101,14 @@ namespace DodoryuSub {
         void brake();
         void setRailSpeed(f32);
 
-        /* 0x00 */ Dodoryu* mHost;
-        /* 0x04 */ MoveState* mNextState;
-        /* 0x08 */ MoveState* mCurrentState;
-        /* 0x0C */ MoveStateRail* mRailState;
-        /* 0x10 */ MoveStateChase* mChaseState;
-        /* 0x14 */ MoveStateDetour* mDetourState;
-        /* 0x18 */ MoveStateEscape* mEscapeState;
-        /* 0x1C */ MoveStateJumpOut* mJumpOutState;
-        /* 0x20 */ MoveStateNull* mNullState;
+        Dodoryu* mHost;
+        MoveState* mNextState;
+        MoveState* mCurrentState;
+        MoveStateRail* mRailState;
+        MoveStateChase* mChaseState;
+        MoveStateDetour* mDetourState;
+        MoveStateEscape* mEscapeState;
+        MoveStateJumpOut* mJumpOutState;
+        MoveStateNull* mNullState;
     };
 };  // namespace DodoryuSub

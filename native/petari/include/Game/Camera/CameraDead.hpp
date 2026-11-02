@@ -24,9 +24,9 @@ public:
         mCameraType = cameraType;
     }
 
-    /* 0x4C */ f32 mFovy;
-    /* 0x50 */ f32 mDist;
-    /* 0x54 */ s32 mDeadTime;
-    /* 0x58 */ s32 mCameraType;
-    /* 0x5C */ s32 mDeadFrame;
+    f32 mFovy;
+    f32 mDist;
+    s32 mDeadTime;
+    s32 mCameraType;
+    s32 mDeadFrame;
 };

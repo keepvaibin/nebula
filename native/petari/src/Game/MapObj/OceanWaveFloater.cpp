@@ -15,12 +15,12 @@
 
 namespace {
     struct Param {
-        /* 0x00 */ const char* const mObjectName;
-        /* 0x04 */ f32 mAmplitude;
-        /* 0x08 */ u32 mStepCount;
-        /* 0x0C */ f32 mSinkDepth;
-        /* 0x10 */ f32 mRippleHeight;
-        /* 0x14 */ bool mIsUseProjmap;
+        const char* const mObjectName;
+        f32 mAmplitude;
+        u32 mStepCount;
+        f32 mSinkDepth;
+        f32 mRippleHeight;
+        bool mIsUseProjmap;
     };
 
     static const Param sDataTable[] = {

@@ -4,9 +4,9 @@
 
 // bsft, in host order (cook/audio_data.rs).
 struct BinaryStreamFileTable {
-    /* 0x0 */ char mIdentifier[4];
-    /* 0x4 */ u32 mNumFiles;
-    /* 0x8 */ s32 mFilePathOffsets[];
+    char mIdentifier[4];
+    u32 mNumFiles;
+    s32 mFilePathOffsets[];
 };
 
 struct JAUStreamFileTable {
@@ -19,7 +19,7 @@ struct JAUStreamFileTable {
         return mData != nullptr;
     }
 
-    /* 0x0 */ const BinaryStreamFileTable* mData;
+    const BinaryStreamFileTable* mData;
 };
 
 struct JAUStreamDataMgr_StreamFileTable : public JAIStreamDataMgr, JAUStreamFileTable {

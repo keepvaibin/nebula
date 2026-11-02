@@ -25,12 +25,12 @@ public:
     bool tryBreak();
     void initMember(const char* pModelName, bool useGravity);
 
-    /* 0x8C */ SmallStoneMember** mMembers;
-    /* 0x90 */ s32 mMemberCount;
-    /* 0x94 */ f32 mPlacementOffset;
-    /* 0x98 */ s32 mStoneType;
-    /* 0x9C */ bool mUseGravity;
-    /* 0x9D */ bool mIsStarPiece;
+    SmallStoneMember** mMembers;
+    s32 mMemberCount;
+    f32 mPlacementOffset;
+    s32 mStoneType;
+    bool mUseGravity;
+    bool mIsStarPiece;
 };
 
 class SmallStoneMember : public ModelObj {
@@ -49,10 +49,10 @@ public:
     void animControl();
     void doBreak(SmallStone* pHost);
 
-    /* 0x90 */ f32 mAnimRate;
-    /* 0x94 */ u8 mShakeRequested;
-    /* 0x95 */ bool mAnimStopped;
-    /* 0x98 */ s32 mBreakTimer;
-    /* 0x9C */ const char* mBreakEffectName;
-    /* 0xA0 */ bool mUseGravity;
+    f32 mAnimRate;
+    u8 mShakeRequested;
+    bool mAnimStopped;
+    s32 mBreakTimer;
+    const char* mBreakEffectName;
+    bool mUseGravity;
 };

@@ -24,7 +24,7 @@ public:
     void exeActivePowerStarList();
     void exeSceneInformation();
 
-    /* 0x20 */ MenuType mMenuType;
-    /* 0x24 */ PauseMenu* mPauseMenu;
-    /* 0x28 */ MR::FunctorBase* mWindowMenuFunc;
+    MenuType mMenuType;
+    PauseMenu* mPauseMenu;
+    MR::FunctorBase* mWindowMenuFunc;
 };

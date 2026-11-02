@@ -15,11 +15,11 @@ public:
 
     void sendMsgToGroupMember(u32, HitSensor*, const char*);
 
-    /* 0x18 */ JMapIdInfo* mIdInfo;
-    /* 0x1C */ u32 mMsg;
-    /* 0x20 */ HitSensor* mSensor;
-    /* 0x24 */ const char* mSensorName;
-    /* 0x28 */ char mGroupName[48];
+    JMapIdInfo* mIdInfo;
+    u32 mMsg;
+    HitSensor* mSensor;
+    const char* mSensorName;
+    char mGroupName[48];
 };
 
 class LiveActorGroupArray : public NameObj {
@@ -34,5 +34,5 @@ public:
     LiveActorGroup* findGroup(const JMapInfoIter&) const;
     LiveActorGroup* entry(LiveActor*, const JMapInfoIter&, const char*, s32);
 
-    /* 0x0C */ MR::Vector< MR::FixedArray< MsgSharedGroup*, 32 > > mGroups;
+    MR::Vector< MR::FixedArray< MsgSharedGroup*, 32 > > mGroups;
 };

@@ -14,7 +14,7 @@ public:
     /// @brief Shifts to the left sounds from initialIndex to finalIndex in mArray to replace AudSoundObject stored in initialIndex
     void moveOver(s32 initialIndex, s32 finalIndex);
 
-    /* 0x00 */ AudSoundObject** mArray;  ///< AudSoundObject storage
-    /* 0x04 */ s32 mCapacity;            ///< Physical capacity of mArray
-    /* 0x08 */ s32 mSize;                ///< Logical capacity of mArray
+    AudSoundObject** mArray;  ///< AudSoundObject storage
+    s32 mCapacity;            ///< Physical capacity of mArray
+    s32 mSize;                ///< Logical capacity of mArray
 };

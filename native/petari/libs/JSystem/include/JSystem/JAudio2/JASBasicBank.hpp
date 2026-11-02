@@ -20,5 +20,5 @@ public:
     void setInst(int, JASInst*);
     JASInst* getInst(int) const;
 
-    /* 0x8 */ JASInst* mInstTable[INST_NUM_MAX];
+    JASInst* mInstTable[INST_NUM_MAX];
 };

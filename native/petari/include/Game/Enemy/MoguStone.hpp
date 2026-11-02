@@ -44,5 +44,5 @@ public:
 
     void emitIce(const TVec3f&, const TVec3f&, f32, const TVec3f&);
 
-    /* 0xC4 */ ParabolicPath* mPath;
+    ParabolicPath* mPath;
 };

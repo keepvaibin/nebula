@@ -574,7 +574,7 @@ bool MiniatureGalaxy::isUseKoopaFaceModel() const {
 }
 
 void MiniatureGalaxy::playPointedME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY1");
 
@@ -599,7 +599,7 @@ void MiniatureGalaxy::playPointedME() {
 }
 
 void MiniatureGalaxy::playNeedStarME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY_N1");
 

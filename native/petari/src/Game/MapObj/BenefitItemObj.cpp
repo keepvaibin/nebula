@@ -39,12 +39,6 @@ void ShadowClipActor::endClipped() {
     }
 }
 
-void ShadowClipActor::control() {
-    if (!MR::isClipped(this)) {
-        _8C->endClipped();
-    }
-}
-
 BenefitItemObj::BenefitItemObj(const char* pName, const char* pPowerUp) : LiveActor(pName), _138() {
     _D8 = 0;
     _E2 = 0;

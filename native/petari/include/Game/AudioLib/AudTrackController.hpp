@@ -19,9 +19,9 @@ public:
     void update();
     void muteIfVolumeZero();
 
-    /* 0x00 */ s32 mTrackNo;
-    /* 0x04 */ JAISoundHandle* mHandle;
-    /* 0x08 */ AudFader mFader;
-    /* 0x14 */ f32 mVolume;
-    /* 0x18 */ bool mAutoMute;
+    s32 mTrackNo;
+    JAISoundHandle* mHandle;
+    AudFader mFader;
+    f32 mVolume;
+    bool mAutoMute;
 };

@@ -10,7 +10,6 @@ class J3DTexture;
 class J3DMaterialSnapshot;
 struct NebulaMaterialParts;
 struct NebulaNativeMaterial;
-struct NebulaStateOp;
 
 // The parts a material loads (the others keep what was set before).
 enum {
@@ -89,7 +88,6 @@ namespace J3DNativeMaterial {
     // values): the draws after it no longer use the current J3D material.
     void watch(const NebulaNativeMaterial* pNative);
     // The native shader of the material the draws use now (0: the drawing state's program).
-    u32 currentShader();
     // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the next draws when `shader` is the asked native shader.
     void dumpTag(u32 shader);
     // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts
@@ -103,6 +101,6 @@ namespace J3DNativeMaterial {
     bool overrideCoordinate(const void* pImage, u16 width, u16 height);
     // A pass over the current J3D material's draws that replaces its stages (j3d_material.hlsli j3d_override: `mode`
     // 1-4, alphas A0 and A1, drawn above `ref`, -1 always): whether the material draws natively and took it (else the
-    // caller loads its console program). Mode 0 ends it.
+    // caller loads its program). Mode 0 ends it.
     bool override(u32 mode, f32 a0, f32 a1, f32 ref);
 };  // namespace J3DNativeMaterial

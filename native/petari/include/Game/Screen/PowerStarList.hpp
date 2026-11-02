@@ -13,8 +13,8 @@ public:
         /// @brief Creates a new `Separator`.
         Separator();
 
-        /* 0x00 */ f32 _0;
-        /* 0x04 */ TVec2f _4;
+        f32 _0;
+        TVec2f _4;
     };
 
     /// @brief Creates a new `PowerStarList`.
@@ -49,10 +49,10 @@ public:
     void exePagePrev();
 
 private:
-    /* 0x20 */ ButtonPaneController* mArrowUpButtonCtrl;
-    /* 0x24 */ ButtonPaneController* mArrowDownButtonCtrl;
-    /* 0x2C */ SysInfoWindow* mSysInfoWindow;
-    /* 0x30 */ s32 mPageNo;
-    /* 0x34 */ s32 mPageNum;
-    /* 0x38 */ Separator* mSeparatorArray;
+    ButtonPaneController* mArrowUpButtonCtrl;
+    ButtonPaneController* mArrowDownButtonCtrl;
+    SysInfoWindow* mSysInfoWindow;
+    s32 mPageNo;
+    s32 mPageNum;
+    Separator* mSeparatorArray;
 };

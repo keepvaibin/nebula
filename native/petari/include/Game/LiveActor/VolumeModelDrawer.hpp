@@ -14,9 +14,9 @@ public:
 
     void loadModelDrawMtx() const;
 
-    /* 0x0C */ MtxPtr mMtx;
-    /* 0x10 */ J3DModelData* mModelData;
-    /* 0x14 */ Color8 mColor;
+    MtxPtr mMtx;
+    J3DModelData* mModelData;
+    Color8 mColor;
 };
 
 class VolumeModelDrawInit : public NameObj {

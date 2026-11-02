@@ -97,7 +97,7 @@ void PlantGroup::init(const JMapInfoIter& rIter) {
     }
 
     MR::tryRegisterDemoCast(this, rIter);
-    mHintTimer = MR::getRandom(3L, 10L) * 10;
+    mHintTimer = MR::getRandom(3, 10) * 10;
 }
 
 void PlantGroup::makeActorAppeared() {
@@ -139,7 +139,7 @@ void PlantGroup::initMember(s32 itemCount, const JMapInfoIter&) {
     }
 
     for (s32 i = 0; i < mMemberCount; i++) {
-        s32 index = MR::getRandom(0L, i + 1);
+        s32 index = MR::getRandom(0, i + 1);
         bool hasItem = mMembers[i]->mHasItem;
         mMembers[i]->mHasItem = mMembers[index]->mHasItem;
         mMembers[index]->mHasItem = hasItem;

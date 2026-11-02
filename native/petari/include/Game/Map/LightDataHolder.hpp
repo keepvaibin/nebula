@@ -5,34 +5,34 @@
 #include <nebula_math.h>
 
 struct LightInfo {
-    /* 0x00 */ NebulaColor8 mColor;
-    /* 0x04 */ Vec mPos;
-    /* 0x10 */ bool mIsFollowCamera;
+    NebulaColor8 mColor;
+    Vec mPos;
+    bool mIsFollowCamera;
 };
 
 struct LightInfoCoin {
-    /* 0x00 */ LightInfo base;
+    LightInfo base;
     struct {
-        /* 0x14 */ NebulaColor8 _14;
-        /* 0x18 */ f32 _18;
+        NebulaColor8 _14;
+        f32 _18;
     };
 };
 
 struct ActorLightInfo {
-    /* 0x00 */ LightInfo mInfo0;
-    /* 0x14 */ LightInfo mInfo1;
-    /* 0x28 */ u8 mAlpha2;
-    /* 0x29 */ NebulaColor8 mColor;
+    LightInfo mInfo0;
+    LightInfo mInfo1;
+    u8 mAlpha2;
+    NebulaColor8 mColor;
 };
 
 struct AreaLightInfo {
-    /* 0x00 */ const char* mAreaLightName;
-    /* 0x04 */ s32 mInterpolate;
-    /* 0x08 */ bool mFix;
-    /* 0x0C */ ActorLightInfo mPlayerLight;
-    /* 0x3C */ ActorLightInfo mStrongLight;
-    /* 0x6C */ ActorLightInfo mWeakLight;
-    /* 0x9C */ ActorLightInfo mPlanetLight;
+    const char* mAreaLightName;
+    s32 mInterpolate;
+    bool mFix;
+    ActorLightInfo mPlayerLight;
+    ActorLightInfo mStrongLight;
+    ActorLightInfo mWeakLight;
+    ActorLightInfo mPlanetLight;
 };
 
 class LightDataHolder {
@@ -49,7 +49,7 @@ public:
         return &mLights[idx];
     }
 
-    /* 0x00 */ s32 mLightCount;
-    /* 0x04 */ AreaLightInfo* mLights;
-    /* 0x08 */ LightInfoCoin _8;
+    s32 mLightCount;
+    AreaLightInfo* mLights;
+    LightInfoCoin _8;
 };

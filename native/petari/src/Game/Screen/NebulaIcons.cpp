@@ -676,7 +676,7 @@ namespace {
         return c;
     }
 
-    // How an icon is drawn: in text (its font cell), or as the A bubble's two frames, as the console's own two pictures:
+    // How an icon is drawn: in text (its font cell), or as the A bubble's two frames:
     // the button up (a 39-pixel button at (4, 4) of 48, lit from above, its shadow down and right) and pressed (36 of
     // 40, centred, its shading reversed).
     enum { LookText, LookUp, LookPressed };
@@ -724,7 +724,7 @@ namespace {
         case NEBULA_ICON_FACE: {
             const s32 p = place & 3;
             if (xbox) {
-                // Y's letter dark on its yellow, as the console's own.
+                // Y's letter dark on its yellow.
                 const Rgba fill = rgba(cXboxFaces[p]);
                 const Rgba top = {fill.r + (1.0f - fill.r) * 0.25f, fill.g + (1.0f - fill.g) * 0.25f, fill.b + (1.0f - fill.b) * 0.25f, 1.0f};
                 drawShape(rCanvas, circle, ringColor, ring, pressed ? darkened(fill) : top, pressed ? darkened(top) : fill);
@@ -1718,7 +1718,7 @@ namespace {
     const f32 cJcBodyWidth = NebulaIcons::cJoyConBody[0];
     const f32 cJcBodyHeight = NebulaIcons::cJoyConBody[1];
     const f32 cJcOutline = 0.12f;
-    const s32 cJcMaxSide = 1024;  // the console's largest texture: past it (or past cJcMaxTexels), a picture is a little magnified
+    const s32 cJcMaxSide = 1024;  // the largest texture: past it (or past cJcMaxTexels), a picture is a little magnified
     const s32 cJcMaxTexels = 1024 * 512;
     const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
     const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
@@ -1727,7 +1727,7 @@ namespace {
     const s32 cJcSteady = 3;         // a density asked for this many frames running before a set is painted for it
 
     // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
-    // game's image (console reads textures only from the game's memory).
+    // game's image.
     struct JoyConSet {
         u8* mTexels[2][NebulaIcons::JoyConLooks];
         nw4r::lyt::TexMap mMaps[2][NebulaIcons::JoyConLooks];
@@ -2164,7 +2164,7 @@ namespace NebulaIcons {
             swapPane(pManager->mLayout->mpRootPane, swaps, 0);
         }
         pActor->LayoutActor::draw();
-        // The console's own again: its animation and the next frame see the layout as it was.
+        // The original again: its animation and the next frame see the layout as it was.
         for (s32 i = 0; i < swaps.mCount; i++) {
             *swaps.mMaps[i] = swaps.mSaved[i];
         }

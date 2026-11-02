@@ -12,6 +12,6 @@ public:
 
     bool bindToMapCollision(f32);
 
-    /* 0x40 */ Binder* mBinder;
-    /* 0x44 */ bool mNoBind;
+    Binder* mBinder;
+    bool mNoBind;
 };

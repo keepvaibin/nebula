@@ -165,7 +165,7 @@ namespace nw4r {
             ut::Color minCol = GetColor(mpMaterial->GetTevColor(0));
             ut::Color maxCol = GetColor(mpMaterial->GetTevColor(1));
             writer.SetColorMapping(minCol, maxCol);
-            writer.SetupGX();
+            writer.Setup();
 
             J3DPass::noAlphaTest();
             writer.SetCursor(textRect.left, textRect.top);

@@ -28,6 +28,6 @@ public:
     void exeLectureDemoShowMapAfter();
     void exeStarPieceReaction();
 
-    /* 0x15C */ ButlerStateStarPieceReaction* mStateStarPieceReaction;
-    /* 0x160 */ bool mObjArg0;
+    ButlerStateStarPieceReaction* mStateStarPieceReaction;
+    bool mObjArg0;
 };

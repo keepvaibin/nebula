@@ -18,7 +18,7 @@ public:
     void executeOnSaveSuccess();
     void executeJustBeforeSave();
 
-    /* 0x00 */ GameDataTemporaryInGalaxy* mGameDataTemporaryInGalaxy;
-    /* 0x04 */ GameSequenceProgress* mGameSequenceProgress;
-    /* 0x08 */ SaveDataHandleSequence* mSaveDataHandleSequence;
+    GameDataTemporaryInGalaxy* mGameDataTemporaryInGalaxy;
+    GameSequenceProgress* mGameSequenceProgress;
+    SaveDataHandleSequence* mSaveDataHandleSequence;
 };

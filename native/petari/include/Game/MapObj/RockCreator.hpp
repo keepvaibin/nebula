@@ -24,11 +24,11 @@ public:
         return (mSpawnDelay != 0 ? mSpawnTimer % mSpawnDelay : mSpawnTimer) == 0;
     }
 
-    /* 0x8C */ Rock* mRocks;
-    /* 0x90 */ f32 mRockSpeed;
-    /* 0x94 */ bool mBreakModelOnRailGoal;
-    /* 0x98 */ s32 mSpawnDelay;
-    /* 0x9C */ s32 mNumRocks;
-    /* 0xA0 */ u32 mSpawnTimer;
-    /* 0xA4 */ bool mIsValid;
+    Rock* mRocks;
+    f32 mRockSpeed;
+    bool mBreakModelOnRailGoal;
+    s32 mSpawnDelay;
+    s32 mNumRocks;
+    u32 mSpawnTimer;
+    bool mIsValid;
 };

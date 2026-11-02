@@ -23,10 +23,10 @@ public:
     void exeWait();
     void exeBreak();
 
-    /* 0xE4 */ s32 _E4;
-    /* 0xE8 */ s32 _E8;
-    /* 0xEC */ bool mHasCollision;
-    /* 0xED */ bool _ED;
-    /* 0xEE */ bool _EE;
-    /* 0xEF */ bool mIsPlayingWarning;
+    s32 _E4;
+    s32 _E8;
+    bool mHasCollision;
+    bool _ED;
+    bool _EE;
+    bool mIsPlayingWarning;
 };

@@ -55,15 +55,6 @@ void ActorLightCtrl::reset() {
     }
 }
 
-void ActorLightCtrl::copy(const ActorLightCtrl* pCtrl) {
-    mAreaLightInf = pCtrl->mAreaLightInf;
-    mLightID = pCtrl->mLightID;
-    _1C = pCtrl->_1C;
-    mLightInfo = pCtrl->mLightInfo;
-    mInterpolate = pCtrl->mInterpolate;
-    _54 = pCtrl->_54;
-}
-
 bool ActorLightCtrl::isSameLight(const ActorLightCtrl* pLight) const {
     if (_1C) {
         return false;

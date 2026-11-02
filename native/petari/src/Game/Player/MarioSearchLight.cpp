@@ -280,7 +280,7 @@ void MarioActor::drawSearchLight() const {
             lightBrightness = (mSearchLightTimer - 30) / 150.0f;
         }
 
-        // The channel colour at alpha A0 (console: stage 0 passing the colour, alpha register 0).
+        // The channel colour at alpha A0.
         const u8 volumeAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]));
         // (The light's model is a native J3D material: J3DNativeMaterial::override draws the pass over it.)
         J3DNativeMaterial::override(2, volumeAlpha / 255.0f, 0.0f, -1.0f);

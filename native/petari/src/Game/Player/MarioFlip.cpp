@@ -39,7 +39,7 @@ bool Mario::doFlipBackRoll(const TVec3f& rVec) {
 
         TVec3f vec28;
         MR::vecKillElement(rVec, getAirGravityVec(), &vec28);
-        setFrontVecKeepUp(-vec28, static_cast< u32 >(12l));
+        setFrontVecKeepUp(-vec28, static_cast< u32 >(12));
 
         return true;
     }

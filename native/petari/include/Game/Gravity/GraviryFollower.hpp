@@ -12,7 +12,7 @@ public:
     virtual void setGravityFollowHost(const NameObj* pHost);
     virtual void update();
 
-    /* 0x14 */ PlanetGravity* mGravity;
+    PlanetGravity* mGravity;
 };
 
 namespace MR {

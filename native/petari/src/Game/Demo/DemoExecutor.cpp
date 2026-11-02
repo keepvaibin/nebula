@@ -253,8 +253,3 @@ void DemoExecutor::end() {
     mActor.clear();
 }
 
-void DemoExecutor_EmitUnused(DemoSheetKeeperBase* pKeeper) {
-    pKeeper->DemoSheetKeeperBase::update();
-    pKeeper->DemoSheetKeeperBase::start();
-    pKeeper->DemoSheetKeeperBase::end();
-}

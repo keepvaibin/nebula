@@ -21,13 +21,13 @@ public:
     void exeWait();
     void exeRotate();
 
-    /* 0x8C */ JMapIdInfo* mIdInfo;
-    /* 0x90 */ ArrowSwitchTarget* mTargetArray[4];
-    /* 0xA0 */ f32 mRotAngle;
-    /* 0xA4 */ f32 mRotSpeed;
-    /* 0xA8 */ u32 mActiveTargetIndex;
-    /* 0xAC */ s32 mRotYTargetIndex;
-    /* 0xB0 */ bool mIsRotPlus;
+    JMapIdInfo* mIdInfo;
+    ArrowSwitchTarget* mTargetArray[4];
+    f32 mRotAngle;
+    f32 mRotSpeed;
+    u32 mActiveTargetIndex;
+    s32 mRotYTargetIndex;
+    bool mIsRotPlus;
 };
 
 class ArrowSwitchTarget : public NameObj {
@@ -42,7 +42,7 @@ public:
     void onTarget();
     void offTarget();
 
-    /* 0x0C */ JMapIdInfo* mIdInfo;
-    /* 0x10 */ StageSwitchCtrl* mStageSwitchCtrl;
-    /* 0x14 */ s32 mTargetIndex;
+    JMapIdInfo* mIdInfo;
+    StageSwitchCtrl* mStageSwitchCtrl;
+    s32 mTargetIndex;
 };

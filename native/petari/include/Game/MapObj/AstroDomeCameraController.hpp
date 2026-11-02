@@ -23,9 +23,9 @@ public:
             mTarget.set(rVec);
         }
 
-        /* 0x00 */ TVec3f mStart;
-        /* 0x0C */ TVec3f mEnd;
-        /* 0x18 */ TVec3f mTarget;
+        TVec3f mStart;
+        TVec3f mEnd;
+        TVec3f mTarget;
     };
 
     AstroDomeCameraController(const char*);
@@ -47,10 +47,10 @@ public:
     void exeGalaxyConfirm();
     void exeGalaxyConfirmCancel();
 
-    /* 0x08C */ TVec3f mStartPos;
-    /* 0x098 */ Position mZoomPos;
-    /* 0x0BC */ Position mTargetPos;
-    /* 0x0E0 */ Position mUpPos;
-    /* 0x104 */ f32 mEaseRate;
-    /* 0x108 */ TVec3f mZeroPos;
+    TVec3f mStartPos;
+    Position mZoomPos;
+    Position mTargetPos;
+    Position mUpPos;
+    f32 mEaseRate;
+    TVec3f mZeroPos;
 };

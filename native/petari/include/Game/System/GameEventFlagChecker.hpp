@@ -17,6 +17,6 @@ public:
     bool isOnGalaxyDepended(const char*) const;
     bool isOnComet(const GameEventFlag*) const;
 
-    /* 0x00 */ GameDataHolder* mDataHolder;
-    /* 0x04 */ GameEventFlagStorage* mFlagStorage;
+    GameDataHolder* mDataHolder;
+    GameEventFlagStorage* mFlagStorage;
 };

@@ -35,9 +35,9 @@ namespace {
             : mTarget(pTarget), mHitInfo(pHitInfo), mCollisionParts(pCollisionParts) {
         }
 
-        /* 0x00 */ StarPointerTarget* mTarget;
-        /* 0x04 */ HitInfo* mHitInfo;
-        /* 0x08 */ CollisionParts* mCollisionParts;
+        StarPointerTarget* mTarget;
+        HitInfo* mHitInfo;
+        CollisionParts* mCollisionParts;
     };
 
     typedef bool (*StarPointerFunc1)(StarPointerTargetInfo*, const TVec3f&, const TVec2f&, f32, f32);
@@ -772,10 +772,6 @@ namespace MR {
 
     void startStarPointerModeMarioLauncher(void* pRequester) {
         ::getStarPointerOnOffController()->incModeCounter(pRequester, StarPointerMode_MarioLauncher);
-    }
-
-    void startStarPointerModeHomeButton(void* pRequester) {
-        ::getStarPointerOnOffController()->incModeCounter(pRequester, StarPointerMode_HomeButton);
     }
 
     void startStarPointerModeChooseYesNo(void* pRequester) {

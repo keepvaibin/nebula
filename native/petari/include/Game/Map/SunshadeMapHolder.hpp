@@ -8,7 +8,7 @@ public:
     /// @brief Creates a new `SunshadeMapHolder`.
     SunshadeMapHolder();
 
-    /* 0x0C */ TVec3f _C;
+    TVec3f _C;
 };
 
 namespace MR {

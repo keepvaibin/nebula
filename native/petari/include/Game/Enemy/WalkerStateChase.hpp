@@ -9,11 +9,11 @@ class WalkerStateChaseParam {
 public:
     WalkerStateChaseParam();
 
-    /* 0x00 */ f32 mChaseSpeed;
-    /* 0x04 */ s32 mChaseTime;
-    /* 0x08 */ s32 mForceChaseEndTime;
-    /* 0x0C */ f32 mTurnMaxRateDegree;
-    /* 0x10 */ s32 mChaseEndWaitTime;
+    f32 mChaseSpeed;
+    s32 mChaseTime;
+    s32 mForceChaseEndTime;
+    f32 mTurnMaxRateDegree;
+    s32 mChaseEndWaitTime;
 };
 
 class WalkerStateChase : public ActorStateBase< LiveActor > {
@@ -26,7 +26,7 @@ public:
     void exeEnd();
     bool isRunning() const;
 
-    /* 0x10 */ WalkerStateParam* mStateParam;
-    /* 0x14 */ WalkerStateChaseParam* mChaseParam;
-    /* 0x18 */ TVec3f* mDirection;
+    WalkerStateParam* mStateParam;
+    WalkerStateChaseParam* mChaseParam;
+    TVec3f* mDirection;
 };

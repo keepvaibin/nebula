@@ -7,8 +7,8 @@ class ActorCameraInfo;
 class MultiEventCamera {
 public:
     enum CameraType {
-        /* 0x00 */ CameraType_Soon,
-        /* 0x01 */ CameraType_AtLanding,
+        CameraType_Soon,
+        CameraType_AtLanding,
     };
 
     /// @brief Creates a new `MultiEventCamera`.
@@ -32,12 +32,12 @@ public:
     void endCamera(s32);
     void changeTarget(const CameraTargetArg&);
 
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ s32 mCameraNum;
-    /* 0x08 */ s32 _8;
-    /* 0x0C */ s32 _C;
-    /* 0x10 */ s32 _10;
-    /* 0x14 */ s32 mCameraType;
-    /* 0x18 */ const ActorCameraInfo* mCameraInfo;
-    /* 0x1C */ CameraTargetArg mTarget;
+    const char* mName;
+    s32 mCameraNum;
+    s32 _8;
+    s32 _C;
+    s32 _10;
+    s32 mCameraType;
+    const ActorCameraInfo* mCameraInfo;
+    CameraTargetArg mTarget;
 };

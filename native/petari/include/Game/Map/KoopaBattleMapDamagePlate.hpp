@@ -17,5 +17,5 @@ public:
     void exeBreak();
     void exeRecover();
 
-    /* 0x8C */ TPos3f mBaseMtx;
+    TPos3f mBaseMtx;
 };

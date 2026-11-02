@@ -15,10 +15,10 @@ public:
     void add(J3DJoint*, u16);
     void updateJointPos();
 
-    /* 0x00 */ AudSoundObject* mSoundObj;
-    /* 0x04 */ J3DJoint* mJoint;
-    /* 0x08 */ TVec3f mPos;
-    /* 0x14 */ u16 mHash;
+    AudSoundObject* mSoundObj;
+    J3DJoint* mJoint;
+    TVec3f mPos;
+    u16 mHash;
 };
 
 class AudSeKeeper : public JKRDisposer {
@@ -31,8 +31,8 @@ public:
     bool playLevel(const char*, const char*);
     int getBoxEqualName(const char*);
 
-    /* 0x18 */ LiveActor* mActor;
-    /* 0x1C */ AudSeKeeperBox* mBoxes;
-    /* 0x20 */ int mMaxBoxes;
-    /* 0x24 */ int mNumBoxes;
+    LiveActor* mActor;
+    AudSeKeeperBox* mBoxes;
+    int mMaxBoxes;
+    int mNumBoxes;
 };

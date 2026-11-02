@@ -12,8 +12,8 @@ public:
 
     void pauseOff();
 
-    /* 0x0C */ ImageEffectResource* mResource;
-    /* 0x10 */ ImageEffectDirector* mDirector;
+    ImageEffectResource* mResource;
+    ImageEffectDirector* mDirector;
 };
 
 namespace MR {

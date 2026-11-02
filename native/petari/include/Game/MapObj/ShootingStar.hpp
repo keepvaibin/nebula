@@ -14,10 +14,10 @@ public:
     void exeShooting();
     void exeWaitForNextShoot();
 
-    /* 0x8C */ TVec3f mBasePos;
-    /* 0x98 */ TVec3f mFallAxis;
-    /* 0xA4 */ TVec3f mGravityPreShoot;
-    /* 0xB0 */ s32 mNumBurstStarPiece;
-    /* 0xB4 */ s32 mWaitForNextShootTime;
-    /* 0xB8 */ f32 mFallHeight;
+    TVec3f mBasePos;
+    TVec3f mFallAxis;
+    TVec3f mGravityPreShoot;
+    s32 mNumBurstStarPiece;
+    s32 mWaitForNextShootTime;
+    f32 mFallHeight;
 };

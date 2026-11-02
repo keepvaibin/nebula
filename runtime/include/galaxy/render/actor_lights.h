@@ -3,14 +3,14 @@
 
 // The game's actor lights under ray tracing.
 //
-// Characters and most lit objects take console lights 0 and 1 from an ActorLightInfo
+// Characters and most lit objects take lights 0 and 1 from an ActorLightInfo
 // (LightFunction::loadActorLightInfo: LightInfo A and B; loadLightInfoCoin: A only). A light with the
 // follow-camera flag is loaded at a fixed eye-space position, so it turns with the camera; one without it sits at
 // a world position. With ray tracing on and GALAXY_RT_ACTOR_LIGHTS set, the scene draws' palette snapshots move
 // the follow-camera lights to the scene's key light: light 0 towards it and light 1 opposite. The key is the
 // game's visible sun, else the sun its sky shows, else the world-fixed light most lit draws take; the ray tracer
 // lights the scene from the same key. Colours, attenuation (always 1: the loader's
-// GXInitLightAttn(1, 0, 0, 1, 0, 0)), ambient and world-fixed lights stay the game's. The interpolated sub-frames
+// the state(1, 0, 0, 1, 0, 0)), ambient and world-fixed lights stay the game's. The interpolated sub-frames
 // move a light by its world position, which for a light along a world direction is that direction at every camera.
 //
 // No Windows or D3D12 includes, so unit tests can use it.

@@ -6,9 +6,9 @@
 class ActorStateKeeper {
 private:
     struct State {
-        /* 0x0 */ ActorStateBaseInterface* mInterface;
-        /* 0x4 */ const Nerve* mNerve;
-        /* 0x8 */ const char* mName;
+        ActorStateBaseInterface* mInterface;
+        const Nerve* mNerve;
+        const char* mName;
     };
 
 public:
@@ -20,8 +20,8 @@ public:
     void endState(const Nerve*);
     State* findStateInfo(const Nerve*);
 
-    /* 0x0 */ s32 mStatesCapacity;
-    /* 0x4 */ s32 mLength;
-    /* 0x8 */ State* mStates;
-    /* 0xC */ State* mCurrentState;
+    s32 mStatesCapacity;
+    s32 mLength;
+    State* mStates;
+    State* mCurrentState;
 };

@@ -5,9 +5,9 @@
 // GameData.bin: a header (checksum of the rest, version, entry count, file size), then one entry per user file (a
 // 12-byte name and the file's offset), then the files. Read and written field by field (SaveBinary.hpp).
 struct SaveDataUserFileInfo {
-    /* 0x00 */ u8* mData;
-    /* 0x04 */ u32 mDataSize;
-    /* 0x08 */ u8 mKind;
+    u8* mData;
+    u32 mDataSize;
+    u8 mKind;
 };
 
 class SaveDataFileAccessor {
@@ -33,5 +33,5 @@ public:
     void makeUserFileInfo(SaveDataUserFileInfo*, const char*);
 
 private:
-    /* 0x00 */ u8* mFile;
+    u8* mFile;
 };

@@ -29,7 +29,7 @@ public:
 
     void startBckThisAndBloomModel(const char*);
 
-    /* 0x9C */ PartsModel* mBloomModel;
-    /* 0xA0 */ ProjmapEffectMtxSetter* _A0;
-    /* 0xA4 */ ProjmapEffectMtxSetter* _A4;
+    PartsModel* mBloomModel;
+    ProjmapEffectMtxSetter* _A0;
+    ProjmapEffectMtxSetter* _A4;
 };
