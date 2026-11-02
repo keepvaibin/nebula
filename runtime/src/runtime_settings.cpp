@@ -142,6 +142,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.audio.ambience = parse_gain(value, settings.audio.ambience);
     } else if (std::strcmp(key, "audio_cutscene_gain") == 0) {
         settings.audio.cutscene = parse_gain(value, settings.audio.cutscene);
+    } else if (std::strcmp(key, "co_star") == 0) {
+        settings.co_star = std::strcmp(value, "true") == 0 || std::strcmp(value, "1") == 0;
     } else if (std::strcmp(key, "audio_wiimote_speaker_gain") == 0) {
         settings.audio.wiimote_speaker = parse_gain(value, settings.audio.wiimote_speaker);
     } else if (std::strcmp(key, "text_speed") == 0) {
@@ -528,7 +530,7 @@ bool save_runtime_settings_to_file() {
         if (!contents) {
             return false;
         }
-        if (!io::write_text_file_atomically(path, contents.str())) {
+        if (!io::write_file_atomically(path, contents.str())) {
             return false;
         }
         record_input_mode_sync(input_mode, settings.input_mode);

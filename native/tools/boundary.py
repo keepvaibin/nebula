@@ -2,6 +2,7 @@
 CMakeFiles/smg_game.dir). Every symbol some object references and no object defines, demangled, grouped by owner
 (RVL SDK area by prefix, MSL/C library, compiler runtime, C++ runtime), with how many objects reference it. Writes
 boundary.tsv and prints a summary."""
+import shutil
 import collections
 import os
 import re
@@ -9,7 +10,7 @@ import subprocess
 import sys
 
 objdir, out = sys.argv[1], sys.argv[2]
-bin_ = r"C:\Program Files\LLVM\bin"
+bin_ = os.path.dirname(shutil.which("llvm-nm") or r"C:\Program Files\LLVM\bin\llvm-nm")
 objs = sorted(os.path.join(b, f) for b, _, fs in os.walk(objdir) for f in fs if f.endswith((".o", ".obj")))
 defined, refs = set(), collections.defaultdict(set)
 for i in range(0, len(objs), 200):

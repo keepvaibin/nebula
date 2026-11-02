@@ -23,12 +23,12 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 93u
+#define NEBULA_GAME_API_VERSION 97u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
-   of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
+   of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
    its filters into mix buses or the surround panner; the game writes its settings, the mixer advances its playback.
-   Volumes are 15-bit fractions (a send of 32767 adds half the voice to its bus; voices_mix's gain scales the output). */
+   Volumes are gains (a send of 0.5 adds half the voice to its bus; voices_mix's gain scales the output). */
 enum {
     NEBULA_AUDIO_BUS_NONE = 0,
     NEBULA_AUDIO_BUS_LEFT,
@@ -45,24 +45,21 @@ enum {
     NEBULA_AUDIO_BUSES
 };
 
-/* A voice's source (NebulaVoice.format). Wave data stays as on the disc (big-endian PCM16). */
+/* A voice's source (NebulaVoice.format). Wave data is PCM16 in host order (the importer decodes the disc's forms). */
 enum {
     NEBULA_AUDIO_SILENT = 0,
-    NEBULA_AUDIO_ADPCM4,     /* 9-byte blocks of 16 samples */
-    NEBULA_AUDIO_ADPCM2,     /* 5-byte blocks of 16 samples */
-    NEBULA_AUDIO_PCM8,
     NEBULA_AUDIO_PCM16,
     NEBULA_AUDIO_OSCILLATOR, /* waveform `oscillator`, no wave data */
 };
 
-/* Oscillator waveforms (NebulaVoice.oscillator); the frequency is pitch / 131072 cycles per 32 kHz sample. */
+/* Oscillator waveforms (NebulaVoice.oscillator); NebulaVoice.rate is its frequency in Hz. */
 enum {
     NEBULA_AUDIO_SQUARE = 0,
     NEBULA_AUDIO_SAWTOOTH = 1,
     NEBULA_AUDIO_SQUARE_FM = 2, /* the square, its rate modulated by the surround-right bus (which it consumes) */
     NEBULA_AUDIO_PULSE25 = 3,   /* 25 % duty */
     NEBULA_AUDIO_TRIANGLE = 4,
-    NEBULA_AUDIO_CONSTANT = 6,  /* the value pitch */
+    NEBULA_AUDIO_CONSTANT = 6,  /* the value `rate` */
     NEBULA_AUDIO_SINE = 7,
     NEBULA_AUDIO_SINE_PM = 10,
     NEBULA_AUDIO_NOISE_A = 11,
@@ -79,10 +76,9 @@ enum {
 };
 
 typedef struct NebulaAudioSend {
-    uint16_t bus;    /* NEBULA_AUDIO_BUS_* */
-    int16_t target;  /* volume reached over the next subframe */
-    int16_t current; /* volume now (the mixer's) */
-    uint16_t reserved;
+    uint32_t bus;   /* NEBULA_AUDIO_BUS_* */
+    float target;   /* gain reached over the next subframe */
+    float current;  /* gain now (the mixer's) */
 } NebulaAudioSend;
 
 typedef struct NebulaVoice {
@@ -91,32 +87,31 @@ typedef struct NebulaVoice {
     uint16_t starting;       /* set at play start: the next mix starts the source over (the mixer clears it) */
     uint16_t paused;         /* holds its last output */
     uint16_t forced_stop;    /* every volume halves each subframe; finished once all are zero */
-    uint16_t pitch;          /* source samples per 32 kHz sample, 4.12 */
+    float rate;              /* source samples played a second */
     uint16_t format;         /* NEBULA_AUDIO_SILENT..OSCILLATOR */
     uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
     const uint8_t* wave;     /* the source's first byte, in the sound memory (voices_setup) or before wave_end */
     const uint8_t* wave_end; /* the end of a source outside the sound memory; else null */
-    uint32_t restart;        /* PCM: the sample it starts at */
+    uint32_t restart;        /* the sample it starts at */
     uint32_t loop_start;     /* samples */
     uint32_t end;            /* samples: the end, or the loop's end when loop is set */
     uint16_t loop;           /* nonzero: plays on from loop_start after end */
-    int16_t loop_history[2]; /* ADPCM: the decoder's previous two samples at loop_start, newest first */
     /* The position, advanced by the mixer each subframe (the stream player reads and moves it): */
-    uint16_t leftover;       /* ADPCM: decoded samples of the current block still to play */
-    uint32_t address;        /* the next ADPCM block or PCM sample, in bytes from wave */
+    uint32_t address;        /* the next sample, in bytes from wave */
     uint32_t left;           /* samples before end */
-    uint16_t filter;         /* FIR taps (bits 0-4; coefficients past the eighth are zero), IIR on (bit 5) */
+    uint8_t fir_taps;        /* 0: no FIR (coefficients past the eighth are zero) */
+    uint8_t iir_on;
     /* FIR: y[n] = sum fir[k] x[n - taps + k], k < taps; IIR: y[n] = iir[0] x[n] + iir[1] x[n-1] + iir[2] y[n-1] +
-       iir[3] y[n-2]; Q15 at 32 kHz (the mixer keeps their responses at its own rate). */
-    int16_t fir[8];
-    int16_t iir[4];
+       iir[3] y[n-2]; designed for 32 kHz (the mixer keeps their responses at its own rate). */
+    float fir[8];
+    float iir[4];
     NebulaAudioSend sends[6];
     uint16_t panner;         /* nonzero: the surround panner plays the voice instead of its sends */
-    uint8_t pan;             /* 0 left .. 127 right */
-    uint8_t rear;            /* 0 front .. 127 rear */
-    int16_t panner_send;     /* effect send */
-    int16_t panner_volume;   /* now (the mixer's) */
-    int16_t panner_target;   /* reached over the next subframe */
+    float pan;               /* 0 left .. 1 right */
+    float rear;              /* 0 front .. 1 rear */
+    float panner_send;       /* effect send */
+    float panner_volume;     /* gain now (the mixer's) */
+    float panner_target;     /* gain reached over the next subframe */
     uint8_t category;        /* NEBULA_SOUND_*: the volume setting it follows */
     uint8_t named;           /* the game knows the sound playing it (else its source's format chose the category) */
     uint16_t reserved_category;
@@ -130,10 +125,10 @@ typedef struct NebulaEffectLine {
     uint16_t filter;
     uint16_t subframes;
     uint16_t bus_a;
-    int16_t volume_a;
     uint16_t bus_b;
-    int16_t volume_b;
-    int16_t fir[8];
+    float volume_a;
+    float volume_b;
+    float fir[8];
     uint32_t generation;
 } NebulaEffectLine;
 
@@ -530,7 +525,7 @@ enum {
 };
 
 /* The picture's shape as the game draws it (NebulaFrameClock::display), from the output's shape the host latches at
-   each retrace (display_extent): the camera, the 2D screen and the layouts widen with it. */
+   each frame (display_extent): the camera, the 2D screen and the layouts widen with it. */
 typedef struct NebulaDisplay {
     int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
@@ -920,7 +915,7 @@ typedef struct NebulaHostServices {
        lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
     void (*stripe_particle)(void* user, uint64_t particle, uint32_t age_lifetime, uint8_t strip);
 
-    /* Disc: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
+    /* The game's files: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
        none. */
     int (*asset_find)(void* user, const char* path, NebulaAssetEntry* entry);
@@ -931,8 +926,8 @@ typedef struct NebulaHostServices {
     /* Reads `size` bytes at `offset` of a file into dst; the host calls nebula_game_asset_complete(slot, bytes read or -1)
        from any thread when done. */
     void (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
-    /* The disc's game id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
-       whose few differences the module follows (NebulaRegion.hpp) and whose save folder the NAND holds. */
+    /* The game's id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
+       whose few differences the module follows (NebulaRegion.hpp) and whose folder holds its saves. */
     const char* (*game_id)(void* user);
 
     /* Blocks the game's main loop until its next frame is due: 60 a second, on the display's own refresh where the host
@@ -964,8 +959,8 @@ typedef struct NebulaHostServices {
                         const void* sound_memory, uint32_t sound_memory_size);
     void (*voices_mix)(void* user, float gain);
     void (*voices_frame)(void* user);
-    /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its
-       big-endian header, then the ADPCM data of the track played) for the host to decode and play with the game's
+    /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,
+       u32, then the samples, PCM16, left and right in turn, of the track played) for the mixer; 0 when the queue is full (null asks only that).
        sound at 32 kHz; 0 when 20 frames already wait (nothing taken). A null record only asks for room.
        movie_audio_control: NEBULA_MOVIE_AUDIO_*. */
     int (*movie_audio)(void* user, const void* record, uint32_t size);
@@ -980,10 +975,8 @@ typedef struct NebulaHostServices {
        top) in game memory, which must hold the result before the renderer reads them; 0 on success. */
     int32_t (*movie_video_decode)(void* user, const void* frame, uint32_t size, uint32_t width, uint32_t height, void* y, void* u, void* v);
 
-    /* The game wrote [address, address + size) for the GPU: the console's cache flushes (DCFlushRange,
-       DCStoreRange) and DMA copies. An image handed over there must be handed over again. Called on the simulation
-       thread; the host's own writes to game memory (disc reads) need no call. */
-    void (*gpu_coherent)(void* user, const void* address, uint32_t size);
+    /* The game rewrote [address, address + size): an image handed over there must be handed over again. */
+    void (*memory_rewritten)(void* user, const void* address, uint32_t size);
 
     /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
     void (*game_context)(void* user, uint32_t what, int32_t value);
@@ -1181,15 +1174,13 @@ NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 NEBULA_GAME_API void nebula_game_run(void);
 /* A file read finished: `result` is the bytes read, or -1 on a read error. */
 NEBULA_GAME_API void nebula_game_asset_complete(uint32_t slot, int32_t result);
-/* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
-/* A NAND operation finished. */
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);
 /* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would
    refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as
    its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
    the same Mii (its create ID); 0 when the database is not loaded or another Mii holds the slot. On the game thread
-   (the host's retrace). */
+   (the host's frame tick). */
 /* Whether the game takes a Mii into its database (its parts and values in range); the host keeps only these. */
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
 /* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */

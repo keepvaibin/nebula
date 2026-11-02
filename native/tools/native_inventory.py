@@ -81,7 +81,7 @@ SIGNALS = [
     ("gx_texture", r"\bCMPR\b|\bRGB5A3\b|\bC14X2\b|\bIA4\b|\bIA8\b|\bTLUT\b|\btlut\w*|\bdecode_(?:i4|i8|ia4|ia8|"
                    r"rgb565|rgb5a3|cmpr|c4|c8|c14)\w*", "GX texture format"),
     ("guest", r"\b[Gg]uest\w*", "recompiler-era guest model"),
-    ("wii_report", r"\breport_\w+|\bwpad_report\b|\bWpadReport\w*|\bIR dot\w*|\bir_dot\w*|\bEEPROM\b|\beeprom\w*",
+    ("wii_report", r"\bwpad_report\b|\bWpadReport\w*|\bIR dot\w*|\bir_dot\w*",
      "Wii Remote report model"),
     ("dsp_program", r"\bDSP data memory\b|\bIRAM\b|\bDRAM\b|\bucode\b|\bCH_BUF\b|\bFX_BUF\b|\bDSPRES_FILTER\b|"
                     r"\baudio_dsp\b|\bai_dma\b", "DSP program model"),
@@ -99,6 +99,7 @@ SOURCE_EXT = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inc", 
 # machinery to be removed in favour of a native design), CONVERT (native code with console signals to rewrite),
 # KEEP (native; rework only where it holds signals), THIRD (vendored), DOC, DATA.
 AREAS = [
+    (r"^native/tools/|^tools/", "tools", "TOOL", "Audits and verifiers: they name what they look for."),
     (r"^third_party/", "third-party", "THIRD", "Vendored; keep license notices; update only for new native features."),
     (r"^native/petari/src/RVL_SDK/gx/|^native/petari/src/RVL_SDK/gd/", "sdk-gx", "REPLACE",
      "Decompiled GX/GD: writes the hardware command stream. Delete once nothing calls GX/GD (native records)."),
@@ -210,10 +211,9 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/", "renderer-other", "CONVERT", "Renderer: native records."),
     (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
      "Host copy of the JAudio DSP program: replace with a native float mixer."),
-    (r"^runtime/(?:src|include/galaxy)/(?:native_host|virtual_disc|native_thp_video)",
+    (r"^runtime/(?:src|include/galaxy)/(?:virtual_disc|native_thp_video)",
      "host-console-model", "REPLACE",
-     "Input as Wii Remote reports, virtual device data, disc image, software THP: replace with native input, "
-     "cooked assets and native video."),
+     "Disc image, software THP: replace with cooked assets and native video."),
     (r"^runtime/(?:src|include/galaxy)/(?:input/|wiimote_|controller_|generic_hid|switch_controller|playstation_|"
      r"steam_controller|native_input|input_bindings|pointer_control|host_pointer|rumble|tilt)", "host-input-devices",
      "KEEP", "Device drivers: feed the native input API directly (no reports)."),
@@ -269,7 +269,7 @@ for rel in files:
     ext = os.path.splitext(rel)[1].lower()
     counts = collections.Counter()
     lines = 0
-    if ext in SOURCE_EXT and disp != "THIRD":
+    if ext in SOURCE_EXT and disp not in ("THIRD", "TOOL"):
         try:
             raw = open(os.path.join(root, rel), encoding="utf-8", errors="replace").read()
         except OSError:

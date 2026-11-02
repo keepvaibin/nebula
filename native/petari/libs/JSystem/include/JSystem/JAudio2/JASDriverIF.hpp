@@ -7,7 +7,7 @@ typedef s32 (*DriverCallback)(void*);
 
 namespace JASDriver {
     void setOutputLevel(f32);
-    u16 getChannelLevel_dsp();
+    f32 getChannelGain();
     f32 getChannelLevel();
     f32 getOutputLevel();
     void setOutputMode(u32);
@@ -24,7 +24,6 @@ namespace JASDriver {
     extern JASCallbackMgr sSyncCallback;
     extern JASCallbackMgr sSubFrameCallback;
     extern JASCallbackMgr sUpdateDacCallback;
-    extern u16 MAX_MIXERLEVEL;
     extern u32 JAS_SYSTEM_OUTPUT_MODE;
 };  // namespace JASDriver
 

@@ -19,12 +19,9 @@ import sys
 from collections import defaultdict
 
 EVENTS = {
-    1: 'SubmitBegin', 2: 'SubmitEnd', 3: 'SubmitSource', 4: 'RenderBegin', 5: 'RenderReadsDone',
-    6: 'RenderSubmitted', 7: 'GpuBegin', 8: 'GpuEnd', 9: 'FenceObserved', 10: 'PeDelivered',
-    11: 'TokenConsumed', 12: 'ViEdge', 13: 'ViLatched', 14: 'PresentBegin', 15: 'PresentEnd',
-    16: 'DisplayStats', 17: 'IdleWaitBegin', 18: 'IdleWaitEnd', 19: 'PeWaitBegin', 20: 'PeWaitEnd',
-    21: 'XfbCopy', 22: 'SlotWaitBegin', 23: 'SlotWaitEnd', 24: 'VBlank', 25: 'XfbPresented',
-    26: 'GuestFrame', 27: 'IdleWake',
+    1: 'SubmitBegin', 2: 'SubmitEnd', 4: 'RenderBegin', 6: 'RenderSubmitted', 7: 'GpuBegin', 8: 'GpuEnd', 14: 'PresentBegin',
+    15: 'PresentEnd', 16: 'DisplayStats', 21: 'DisplayCopy', 22: 'SlotWaitBegin', 23: 'SlotWaitEnd', 24: 'VBlank',
+    25: 'DisplayPresented', 26: 'GameFrame',
 }
 SOURCES = {1: 'vi', 2: 'draw-done', 3: 'gx-sync', 4: 'other', 5: 'stream'}
 

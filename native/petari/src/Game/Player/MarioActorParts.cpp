@@ -171,7 +171,7 @@ void MarioActor::updateTakingPosition() {
             landing |= terminated;
             updateAnimation = landing;
         } else {
-            f32 frame;
+            f32 frame = 0.0f;
             if (_B92 == -1)
                 frame = mMarioAnim->getUpperFrame();
             if (_B92 == -2)

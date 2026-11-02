@@ -93,6 +93,10 @@ struct Surface {
 // first crease neighbour (place | neighbour << 16), the second crease neighbour (kNoPlace where none), the crease
 // normal (packed), and the bends by normal index (packed).
 struct Model {
+    [[nodiscard]] std::size_t bytes() const noexcept {
+        return places.capacity() * 4u + second.capacity() * 2u + crease.capacity() * 4u + first.capacity() * 4u + bend_normal.capacity() * 2u +
+               bend.capacity() * 4u + bend_flat.capacity();
+    }
     std::vector<std::uint32_t> places;         // per position: place | first crease neighbour << 16
     std::vector<std::uint16_t> second;         // per position: the second crease neighbour
     std::vector<std::uint32_t> crease;         // per position: the crease normal, packed
@@ -107,6 +111,9 @@ struct Model {
     // Whether a vertex's corner is a flat solid's normal shaded soft (PlaceBend::flat).
     [[nodiscard]] bool flat_of(std::uint32_t position, std::uint32_t normal) const noexcept;
 };
+
+// What the models hold, in bytes (GALAXY_TRACE_MEMORY).
+[[nodiscard]] std::uint64_t memory_bytes();
 
 // The models by their position array's identity (the game's key for it: nebula_game_api.h curved_surface;
 // thread-safe: the game registers while the renderer draws). A model in which nothing bends and no corner is flat is

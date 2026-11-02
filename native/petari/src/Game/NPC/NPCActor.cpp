@@ -853,6 +853,3 @@ void NPCActor::exeTalk() {
 void NPCActor::exeNull() {
 }
 
-void NPCActor_FORCE_MATCH(TQuat4f* pDest, const TQuat4f& rSrc) {
-    *pDest = rSrc;
-}

@@ -1,5 +1,4 @@
-// The native game's Windows host services (native_host.cpp): the game's audio output, its files and the Mii
-// database; the controls are galaxy/input/host_input.h.
+// Where the game's store is. (Its includes are what the host's files take from here.)
 #pragma once
 
 #include "galaxy/host_env.h"

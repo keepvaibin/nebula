@@ -636,38 +636,40 @@ namespace Nebula.Launcher
 
         // A game.pak's start: boot.bin with the game id and where the file table is, then the table with a directory
         // at the root for each name (each empty), as the disc's file table lists them.
+        // A store (crates/nebula-import/src/cook/store.rs) of a root and folders.
         static byte[] TestPak(string gameId, params string[] directories)
         {
-            var names = new List<byte>();
-            var entries = new List<byte>();
-            Action<byte, uint, uint, uint> entry = (kind, name, a, b) =>
+            var names = new List<byte> { 0 };
+            var nodes = new List<byte>();
+            Action<ulong, ulong, uint> node = (position, size, name) =>
             {
-                entries.Add(kind);
-                entries.Add((byte)(name >> 16)); entries.Add((byte)(name >> 8)); entries.Add((byte)name);
-                foreach (uint word in new[] { a, b })
-                {
-                    entries.Add((byte)(word >> 24)); entries.Add((byte)(word >> 16)); entries.Add((byte)(word >> 8)); entries.Add((byte)word);
-                }
+                nodes.AddRange(BitConverter.GetBytes(position));
+                nodes.AddRange(BitConverter.GetBytes(size));
+                nodes.AddRange(BitConverter.GetBytes(name));
+                nodes.AddRange(BitConverter.GetBytes(0u));
+                nodes.AddRange(BitConverter.GetBytes(1u));
+                nodes.AddRange(BitConverter.GetBytes(0u));
             };
-            uint count = (uint)directories.Length + 1;
-            entry(1, 0, 0, count);
-            names.Add(0);
-            for (int i = 0; i < directories.Length; i++)
+            node(1, (ulong)directories.Length, 0);
+            foreach (string directory in directories)
             {
                 uint at = (uint)names.Count;
-                names.AddRange(System.Text.Encoding.ASCII.GetBytes(directories[i]));
+                names.AddRange(System.Text.Encoding.ASCII.GetBytes(directory));
                 names.Add(0);
-                entry(1, at, 0, (uint)i + 2);
+                node(0, 0, at);
             }
-            var fst = new List<byte>(entries);
-            fst.AddRange(names);
-            while (fst.Count % 4 != 0) fst.Add(0);
-            var pak = new byte[0x440 + fst.Count];
-            System.Text.Encoding.ASCII.GetBytes(gameId).CopyTo(pak, 0);
-            uint offset = 0x440 >> 2, size = (uint)fst.Count >> 2;
-            pak[0x424] = (byte)(offset >> 24); pak[0x425] = (byte)(offset >> 16); pak[0x426] = (byte)(offset >> 8); pak[0x427] = (byte)offset;
-            pak[0x428] = (byte)(size >> 24); pak[0x429] = (byte)(size >> 16); pak[0x42a] = (byte)(size >> 8); pak[0x42b] = (byte)size;
-            fst.CopyTo(pak, 0x440);
+            const int HeaderSize = 64;
+            long namesAt = HeaderSize + nodes.Count;
+            var pak = new byte[namesAt + names.Count];
+            System.Text.Encoding.ASCII.GetBytes("NBSTORE").CopyTo(pak, 0);
+            BitConverter.GetBytes(2u).CopyTo(pak, 8);
+            BitConverter.GetBytes((uint)directories.Length + 1).CopyTo(pak, 12);
+            BitConverter.GetBytes((long)HeaderSize).CopyTo(pak, 16);
+            BitConverter.GetBytes(namesAt).CopyTo(pak, 32);
+            BitConverter.GetBytes((long)names.Count).CopyTo(pak, 40);
+            System.Text.Encoding.ASCII.GetBytes(gameId).CopyTo(pak, 48);
+            nodes.CopyTo(pak, HeaderSize);
+            names.CopyTo(pak, (int)namesAt);
             return pak;
         }
 

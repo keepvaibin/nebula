@@ -1,6 +1,7 @@
 // RendererD3D12: device and swap chain, scene target targets and copies, draws, presentation, and the
 // replayed sub-frames of frame interpolation.
 #include "galaxy/render/utility_shaders.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/interp_eval.h"
 #include "galaxy/render/host_window_win32.h"
@@ -21,7 +22,7 @@
 #include "galaxy/motion_signals.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/windows_power.h"
 
@@ -548,6 +549,17 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // conversion sources (the scene target's views, the output scene target's, the MSAA depth's, then the HDR scene
 // EFBs', live and sub-frame: 10). TextureCache's own SRV indices are independent of this prefix.
 static constexpr unsigned    kPersistentSrvDescriptors = 10u;
+
+void RendererD3D12::trace_rings() const {
+    const auto line = [](const char* name, const UploadRing& ring) {
+        std::fprintf(stderr, "[memory] ring %s %.1f MB, a frame took at most %.1f MB\n", name, static_cast<double>(ring.capacity()) / (1024.0 * 1024.0),
+                     static_cast<double>(ring.high_water()) / (1024.0 * 1024.0));
+    };
+    line("vertex", vertex_ring_);
+    line("index", index_ring_);
+    line("constant", constant_ring_);
+    line("matrix", matrix_ring_);
+}
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -3503,7 +3515,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         static const bool hitches = [] {
             char value[8]{};
             std::size_t length = 0u;
-            return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_HITCHES") == 0 && length > 1u && value[0] == '1';
+            return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_HITCHES")) == 0 && length > 1u && value[0] == '1';
         }();
         if (hitches && frame_begun_.time_since_epoch().count() != 0) {
             const double ms = std::chrono::duration<double, std::milli>(now - frame_begun_).count();
@@ -8103,7 +8115,7 @@ void RendererD3D12::record_conversion_blit(
     static const bool filter_ab = [] {
         char value[8]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_DISPLAY_FILTER_AB") == 0 && length > 1u &&
+        return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_DISPLAY_FILTER_AB")) == 0 && length > 1u &&
                value[0] == '1';
     }();
     const bool display_filter = !(filter_ab && (presented_frames_ & 1u) != 0u) && copy_format == kCopyLayoutDisplay && keep_alpha &&

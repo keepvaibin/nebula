@@ -1,4 +1,5 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
@@ -455,7 +456,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
 
 void SaveDataHandleSequence::exePreLoad() {
     if (MR::isFirstStep(this)) {
-        mSaveDataHandler->requestLoadSaveData();
+        mSaveDataHandler->requestLoadSaveData(mSaveCopyLoading);
     }
 
     if (!mSaveDataHandler->isDone()) {
@@ -466,8 +467,12 @@ void SaveDataHandleSequence::exePreLoad() {
 
     if (result == SaveRequest::Result_Done) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoadDone));
+    } else if (result == SaveRequest::Result_NoFile && mSaveCopyLoading != 0) {
+        tryNextSaveCopy();
     } else if (result == SaveRequest::Result_NoFile) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceCheckEnableToCreate));
+    } else if (result == SaveRequest::Result_Corrupted && mSaveCopyLoading != 0) {
+        tryNextSaveCopy();
     } else if (result == SaveRequest::Result_Corrupted) {
         mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
 
@@ -478,12 +483,24 @@ void SaveDataHandleSequence::exePreLoad() {
     }
 }
 
+// A damaged save falls back on the copies of the last two; the game asks to remove the file only when none is good.
+void SaveDataHandleSequence::tryNextSaveCopy() {
+    if (mSaveCopyLoading < 2) {
+        mSaveCopyLoading++;
+        JUTNativeLog("save: damaged, trying copy %d\n", mSaveCopyLoading);
+        setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoad));
+        return;
+    }
+    mSaveCopyLoading = 0;
+    mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
+    mSaveErrorSequence->startRemoveFile();
+
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+}
+
 void SaveDataHandleSequence::exePreLoadDone() {
     if (!mSaveDataHandler->requestVerifyAfterLoadGameDataFile()) {
-        mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
-        mSaveErrorSequence->startRemoveFile();
-
-        setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+        tryNextSaveCopy();
     } else {
         restoreSysConfigFile(mSysConfigFile);
         _24 = 2;

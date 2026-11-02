@@ -9,7 +9,7 @@ namespace AudParams {
     extern const int numFreeStream;
     extern const int numFreeSoundChild;
     extern const int aramAddr;
-    extern const int aramSize;
+    extern const int soundMemorySize;
     extern const int workAreaSize;
     extern const int numFreeTracks;
     extern const int numFreeTrackChannels;

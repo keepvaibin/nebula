@@ -117,8 +117,7 @@ namespace JMath {
         T atan2_(T, T) const;
         T get_(T, T) const;
 
-        T mTable[Len];
-        T _1000;
+        T mTable[Len + 1];
     };
 
     template < s32 Len, typename T >

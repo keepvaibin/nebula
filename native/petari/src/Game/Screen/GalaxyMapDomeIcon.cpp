@@ -8,16 +8,6 @@
 #include "Game/Util/MessageUtil.hpp"
 #include <cstdio>
 
-void GalaxyMapDomeIcon_FORCE_MATCH(LayoutActor* pLayout) {
-    MR::startAnim(pLayout, "MapDomeIcon", 0);
-    MR::startAnim(pLayout, "DomeColor", 0);
-    MR::startAnim(pLayout, "AstroDome", 0);
-    MR::startAnim(pLayout, "Status", 0);
-    MR::startAnim(pLayout, "SelectIn", 0);
-    MR::startAnim(pLayout, "Blink", 0);
-    MR::startAnim(pLayout, "Wait", 0);
-}
-
 namespace {
     class AstroDomeCheckerBase {
     public:

@@ -72,7 +72,7 @@ void CShader::calc(J3DModel* pModel) {
         if (normalIndex != 0xFFFF && texCoordIndex != 0xFFFF) {
             u32 offset = i * 3;
             s32 normalOffset = normalIndex * 3;
-            f32 length;
+            f32 length = 0.0f;
 
             f32 u = static_cast< const f32* >(pTexCoords)[texCoordIndex * 2] / f32(spanU);
             f32 v = static_cast< const f32* >(pTexCoords)[texCoordIndex * 2 + 1] / f32(spanV);
@@ -167,7 +167,7 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
 
 CShader::CLengthMap::CLengthMap(const ResTIMG* pTimg) {
     _0 = pTimg;
-    _4 = reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG);
+    _4 = pTimg != nullptr ? reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG) : nullptr;
     setLengthMap(pTimg);
 }
 

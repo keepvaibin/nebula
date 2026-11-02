@@ -1,17 +1,18 @@
-//! Movies (B-60): a THP file rewritten for the native game, in host order. The video stays JPEG (the decoder's input)
-//! and the sound DSP-ADPCM (the mixer's input); their headers, frame sizes and the file header become plain numbers.
+//! Movies (B-60): a THP file rewritten for the native game, in host order. The video stays JPEG (the decoder's input);
+//! the sound becomes PCM16; the frame sizes and the file header become plain numbers.
 //!
 //! The file: `NMOV`, the frame count, frame rate, largest frame, first frame's size, width, height, audio tracks, then
 //! zeros to `HEADER` bytes; then the frames, each `next frame's size, video size, one track's audio size, 0`, the
-//! video, each track's audio record, padded to 32 bytes.
+//! video, each track's audio record, padded to 32 bytes. An audio record: its stereo sample count (u32), then the samples,
+//! left and right in turn, PCM16 (movie_audio.h).
 
 use anyhow::{bail, Context, Result};
 
 pub const MAGIC: &[u8; 4] = b"NMOV";
 const HEADER: usize = 0x40;
 const FRAME_HEADER: usize = 0x10;
-/// A track's audio record header (movie_audio.cpp): the second channel's offset, the samples, 32 predictor words and
-/// 4 history samples.
+/// A disc audio record's header: the second channel's offset, the samples, each channel's eight predictor pairs and its two
+/// history samples.
 const AUDIO_HEADER: usize = 0x50;
 
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
@@ -22,16 +23,67 @@ fn align32(n: usize) -> usize {
     (n + 31) & !31
 }
 
-/// One frame's audio record in host order.
-fn audio_record(record: &mut [u8]) -> Result<()> {
+fn be16(bytes: &[u8], at: usize) -> Result<i64> {
+    Ok(i16::from_be_bytes(bytes.get(at..at + 2).context("a field past the movie's end")?.try_into().unwrap()) as i64)
+}
+
+/// One channel of a disc audio record: 8-byte frames of a header byte (predictor in bits 4-6, scale in bits 0-3) and 14
+/// four-bit samples, into every other sample of `out` from `first` (data past the record's end stays silent).
+fn decode_channel(data: &[u8], predictors: &[u8], mut history: [i64; 2], samples: usize, out: &mut [i16], first: usize) -> Result<()> {
+    let (mut c1, mut c2, mut scale) = (0i64, 0i64, 0u32);
+    for i in 0..samples {
+        let nibble_index = i % 14;
+        let Some(frame) = data.get(i / 14 * 8..i / 14 * 8 + 8) else {
+            break;
+        };
+        if nibble_index == 0 {
+            let predictor = ((frame[0] >> 4) & 7) as usize;
+            scale = (frame[0] & 15) as u32;
+            c1 = be16(predictors, predictor * 4)?;
+            c2 = be16(predictors, predictor * 4 + 2)?;
+        }
+        let byte = frame[1 + nibble_index / 2];
+        let bits = if nibble_index & 1 != 0 { byte << 4 } else { byte };
+        let nibble = (bits as i8 >> 4) as i64;
+        let value = c1 * history[0] + c2 * history[1] + ((nibble << scale) << 11);
+        let sample = (((value << 5) + 0x8000).clamp(-2147483648, 2147483647) >> 16) as i16;
+        out[i * 2 + first] = sample;
+        history = [sample as i64, history[0]];
+    }
+    Ok(())
+}
+
+/// The samples a disc audio record holds.
+fn record_samples(record: &[u8]) -> Result<usize> {
     if record.len() < AUDIO_HEADER {
         bail!("an audio record shorter than its header");
     }
-    for at in [0usize, 4] {
-        record[at..at + 4].reverse();
+    let samples = be32(record, 4)? as usize;
+    if samples > 0x10000 {
+        bail!("{samples} samples in an audio record");
     }
-    for at in (8..AUDIO_HEADER).step_by(2) {
-        record[at..at + 2].reverse();
+    Ok(samples)
+}
+
+/// A disc audio record as the native one (a mono record plays on both sides), `samples` from the frame's largest track.
+fn audio_record(record: &[u8], samples: usize, out: &mut [u8]) -> Result<()> {
+    let second = be32(record, 0)? as usize;
+    let own = record_samples(record)?;
+    let data = &record[AUDIO_HEADER..];
+    let mut pcm = vec![0i16; samples * 2];
+    let left = [be16(record, 0x48)?, be16(record, 0x4A)?];
+    decode_channel(data, &record[8..0x28], left, own, &mut pcm, 0)?;
+    if second == 0 {
+        for pair in pcm.chunks_exact_mut(2) {
+            pair[1] = pair[0];
+        }
+    } else {
+        let right = [be16(record, 0x4C)?, be16(record, 0x4E)?];
+        decode_channel(data.get(second..).context("a second channel past the record")?, &record[0x28..0x48], right, own, &mut pcm, 1)?;
+    }
+    out[..4].copy_from_slice(&(samples as u32).to_le_bytes());
+    for (sample, target) in pcm.iter().zip(out[4..].chunks_exact_mut(2)) {
+        target.copy_from_slice(&sample.to_le_bytes());
     }
     Ok(())
 }
@@ -71,17 +123,23 @@ pub fn movie(bytes: &[u8]) -> Result<Vec<u8>> {
         let header = 8 + components * 4;
         let video = be32(body, 8)? as usize;
         let audio = if components > 1 { be32(body, 12)? as usize } else { 0 };
-        let total = FRAME_HEADER + video + audio * tracks;
         let payload = body.get(header..header + video + audio * tracks).with_context(|| format!("frame {frame}: sizes past its end"))?;
+        let records: Vec<&[u8]> = (0..tracks).map(|track| &payload[video + audio * track..video + audio * track + audio]).collect();
+        let mut samples = 0usize;
+        for record in &records {
+            samples = samples.max(record_samples(record).with_context(|| format!("frame {frame}"))?);
+        }
+        let cooked_audio = if tracks != 0 { 4 + samples * 4 } else { 0 };
+        let total = FRAME_HEADER + video + cooked_audio * tracks;
         let start = out.len();
         out.resize(start + align32(total), 0);
         sizes.push(align32(total));
         out[start + 4..start + 8].copy_from_slice(&(video as u32).to_le_bytes());
-        out[start + 8..start + 12].copy_from_slice(&(audio as u32).to_le_bytes());
-        out[start + FRAME_HEADER..start + total].copy_from_slice(payload);
-        for track in 0..tracks {
-            let record = start + FRAME_HEADER + video + audio * track;
-            audio_record(&mut out[record..record + audio]).with_context(|| format!("frame {frame}"))?;
+        out[start + 8..start + 12].copy_from_slice(&(cooked_audio as u32).to_le_bytes());
+        out[start + FRAME_HEADER..start + FRAME_HEADER + video].copy_from_slice(&payload[..video]);
+        for (track, record) in records.iter().enumerate() {
+            let at = start + FRAME_HEADER + video + cooked_audio * track;
+            audio_record(record, samples, &mut out[at..at + cooked_audio]).with_context(|| format!("frame {frame}"))?;
         }
         at += size;
         size = be32(body, 0)? as usize;
@@ -135,9 +193,13 @@ mod tests {
             let at = 0x60 + frame * frame_size;
             put(&mut thp, at, frame_size as u32);
             put(&mut thp, at + 8, 8);
-            put(&mut thp, at + 12, AUDIO_HEADER as u32);
+            put(&mut thp, at + 12, AUDIO_HEADER as u32 + 8);
             thp[at + 16] = 0xFF;
-            put(&mut thp, at + 24, 0x1234);
+            // One sample, one channel: the predictor 0 pair is 1.0 and 0; history 0; scale 0, nibble 1.
+            let record = at + 24;
+            put(&mut thp, record + 4, 1);
+            thp[record + 8] = 0x08;
+            thp[record + AUDIO_HEADER + 1] = 0x10;
         }
         let cooked = movie(&thp).unwrap();
         assert_eq!(&cooked[..4], MAGIC);
@@ -146,8 +208,12 @@ mod tests {
         let frame = &cooked[HEADER..];
         assert_eq!(u32::from_le_bytes(frame[4..8].try_into().unwrap()), 8);
         assert_eq!(frame[FRAME_HEADER], 0xFF);
-        // The audio record's first word, host order.
-        assert_eq!(u32::from_le_bytes(frame[FRAME_HEADER + 8..FRAME_HEADER + 12].try_into().unwrap()), 0x1234);
+        // The audio record: one stereo sample, the mono channel on both sides.
+        let audio = &frame[FRAME_HEADER + 8..];
+        assert_eq!(u32::from_le_bytes(frame[8..12].try_into().unwrap()), 8);
+        assert_eq!(u32::from_le_bytes(audio[..4].try_into().unwrap()), 1);
+        assert_eq!(i16::from_le_bytes([audio[4], audio[5]]), 1);
+        assert_eq!(i16::from_le_bytes([audio[6], audio[7]]), 1);
     }
 
     #[test]

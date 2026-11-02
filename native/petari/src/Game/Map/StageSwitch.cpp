@@ -224,6 +224,3 @@ StageSwitchCtrl::StageSwitchCtrl(const JMapInfoIter& rIter) : mSwitchA(), mSwitc
     mSwitchDead = StageSwitchFunction::createSwitchIdInfo("SW_DEAD", rIter, false);
 }
 
-bool StageSwitch_FORCE_MATCH(const JMapInfoIter& rIter, const char* pKey, s32* pValue) {
-    return rIter.getValue(pKey, pValue);
-}

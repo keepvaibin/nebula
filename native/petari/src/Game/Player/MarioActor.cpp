@@ -1514,10 +1514,6 @@ void MarioActor::updateLife() {
     mHealth--;
 }
 
-const char* MarioActor_FORCE_MATCH_DATA() {
-    return "\220\205\222\206\203\211\203\103\203\164\214\270\217\255" /* 水中ライフ減少 */;
-}
-
 void MarioActor::incLife(u32 amt) {
     if (isEnableNerveChange() && !_3E4) {
         const u32 health = getHealth();

@@ -1,4 +1,5 @@
 #include "Game/System/StorySequenceExecutor.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Demo/PrologueDirector.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
@@ -639,7 +640,11 @@ void StorySequenceExecutor::exeWaitToSceneStart() {
 void StorySequenceExecutor::exePlayDemoSequence() {
     const StorySequenceExecutorType::DemoSequenceInfo* pDemoInfo = getCurrentDemoInfo();
 
-    if (MR::isFirstStep(this)) {
+    // A scene change emptied the list while this ran: nothing is left to play.
+    if (pDemoInfo == nullptr) {
+        _B0 = false;
+        setNerve(GET_NERVE_ANON(StorySequenceExecutorIdle));
+        return;
     }
 
     switch (pDemoInfo->_0) {
@@ -750,7 +755,8 @@ void StorySequenceExecutor::exePlayDemoSequence() {
 }
 
 void StorySequenceExecutor::exeWaitTimeKeepDemoEnd() {
-    if (MR::isDemoActive()) {
+    // A stage change can take the scene away while this waits (the sequence runs on between scenes): it waits on for the next.
+    if (!MR::isExistSceneObj(SceneObj_DemoDirector) || MR::isDemoActive()) {
         return;
     }
 
@@ -1211,7 +1217,7 @@ const StorySequenceExecutorType::DemoSequenceInfo* StorySequenceExecutor::getCur
 }
 
 bool StorySequenceExecutor::tryNextDemoInfo() {
-    if (_48.size() == 1) {
+    if (_48.size() <= 1) {
         return false;
     }
 

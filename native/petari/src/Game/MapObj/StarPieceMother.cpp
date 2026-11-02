@@ -137,7 +137,7 @@ void StarPieceMother::placementPieceOnRail(f32 distance) {
     mStarPieceArray[0]->mPosition.set(railPos);
     _90[0] = distance;
 
-    f32 step;
+    f32 step = 0.0f;
     f32 difference = MR::getRailTotalLength(this) - distance;
     if (1 < _94) {
         step = 1.0f / (_94 - 1.0f);

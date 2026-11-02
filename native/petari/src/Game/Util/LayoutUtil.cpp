@@ -882,8 +882,3 @@ void MR::setCometAnimFromId(LayoutActor* pActor, int cometId, u32 animLayer) {
     setAnimFrameAndStop(pActor, ::getCometColorAnimFrameFromId(cometId), animLayer);
 }
 
-void LayoutUtil_FORCE_MATCH(nw4r::lyt::Pane* pPane, J2DPicture* pPicture) {
-    pPane->SetInfluencedAlpha(true);
-    pPicture->J2DPicture::draw(0.0f, 0.0f, static_cast< u8 >(0), false, false, false);
-    pPicture->J2DPicture::draw(0.0f, 0.0f, static_cast< u8 >(1), false, false, false);
-}

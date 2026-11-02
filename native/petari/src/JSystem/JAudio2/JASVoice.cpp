@@ -61,7 +61,7 @@ void JASVoice::initAll() {
     for (u8 i = 0; i < 4; i++) {
         setEffectLine(i, false, nullptr);
     }
-    JASHeap* const sound = JASKernel::getAramHeap();
+    JASHeap* const sound = JASKernel::getSoundHeap();
     const NebulaHostServices* const host = nebula_host();
     host->voices_setup(host->user, sVoices, 64, sEffects, sound->getBase(), sound->getSize());
 }
@@ -71,13 +71,13 @@ int JASVoice::setEffectLine(u8 line, bool restart, EffectConfig* config) {
     JASEffectLine& effect = sEffects[line];
     GameAudioExclusion cs;
     if (config != NULL) {
-        effect.volume_a = config->_4;
+        effect.volume_a = config->_4 / 32768.0f;
         effect.bus_a = sEffectDestinations[config->_2];
-        effect.volume_b = config->_8;
+        effect.volume_b = config->_8 / 32768.0f;
         effect.bus_b = sEffectDestinations[config->_6];
         effect.subframes = config->_C;
         for (int i = 0; i < 8; i++) {
-            effect.fir[i] = config->_10[i];
+            effect.fir[i] = config->_10[i] / 32768.0f;
         }
     }
     if (restart && config != nullptr) {
@@ -128,18 +128,13 @@ bool JASVoice::isFinish() const {
     return finished != 0;
 }
 
-// `wave_data`: the wave's data in the sound memory; `skip`: samples to start into it (1: from its loop start).
+// `wave_data`: the wave's data in the sound memory, PCM16; `skip`: samples to start into it (1: from its loop start). A voice nobody
+// names follows its wave: a wave that was PCM16 on the disc is music (JASVoiceSlot::nameSound).
 void JASVoice::setWaveInfo(JASWaveInfo const& waveInfo, const u8* wave_data, u32 skip) {
-    static const u16 FORMATS[8] = {
-        NEBULA_AUDIO_ADPCM4, NEBULA_AUDIO_ADPCM2, NEBULA_AUDIO_PCM8,   NEBULA_AUDIO_PCM16,
-        NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT,
-    };
-    static const u8 BLOCK_SAMPLES[8] = {16, 16, 1, 1, 1, 16, 16, 1};
-    static const u8 BLOCK_BYTES[8] = {9, 5, 1, 2, 0, 0, 0, 0};
     const u8 kind = waveInfo.mFormat & 7;
     wave = wave_data;
-    leftover = BLOCK_SAMPLES[kind];
-    format = FORMATS[kind];
+    format = kind < 4 ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
+    category = kind == 3 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
     restart = 0;
     if (format == NEBULA_AUDIO_SILENT) {
         return;
@@ -151,25 +146,18 @@ void JASVoice::setWaveInfo(JASWaveInfo const& waveInfo, const u8* wave_data, u32
         }
         loop_start = waveInfo.mSampleLoopStart;
         end = waveInfo.mSampleLoopEnd;
-        loop_history[0] = waveInfo.mpLastSample;
-        loop_history[1] = waveInfo.mpPenultSample;
     } else {
         end = waveInfo.mSampleCount;
     }
     if (skip != 0 && end > skip) {
         restart = skip;
-        if (format == NEBULA_AUDIO_ADPCM4 || format == NEBULA_AUDIO_ADPCM2) {
-            wave += skip * BLOCK_BYTES[kind] >> 4;
-            loop_start -= skip;
-            end -= skip;
-        }
     }
 }
 
 void JASVoice::setOscInfo(u32 waveform) {
     wave = nullptr;
-    leftover = 16;
     format = NEBULA_AUDIO_OSCILLATOR;
+    category = NEBULA_SOUND_EFFECT;
     oscillator = waveform;
 }
 
@@ -182,27 +170,31 @@ void JASVoice::initAutoMixer() {
     }
 }
 
-void JASVoice::setAutoMixer(u16 volume, u8 pan_position, u8 rear_position, u8 send, u8) {
+void JASVoice::setAutoMixer(f32 volume, f32 pan_position, f32 rear_position, f32 send) {
     pan = pan_position;
     rear = rear_position;
-    panner_send = send << 8 | send << 1;
+    panner_send = send;
     panner_target = volume;
     panner = 1;
 }
 
-void JASVoice::setPitch(u16 value) {
-    if (value >= 0x7fff) {
-        value = 0x7fff;
+// `ratio`: source samples per 32 kHz sample; an oscillator's frequency, in units of 1 kHz (a constant: eight times its value).
+void JASVoice::setPitch(f32 ratio) {
+    if (format != NEBULA_AUDIO_OSCILLATOR) {
+        rate = ratio * 32000.0f;
+    } else if (oscillator == NEBULA_AUDIO_CONSTANT) {
+        rate = ratio / 8.0f;
+    } else {
+        rate = ratio * 1000.0f;
     }
-    pitch = value;
 }
 
-void JASVoice::setMixerInitVolume(u8 send, s16 volume) {
+void JASVoice::setMixerInitVolume(u8 send, f32 volume) {
     sends[send].current = volume;
     sends[send].target = volume;
 }
 
-void JASVoice::setMixerVolume(u8 send, s16 volume) {
+void JASVoice::setMixerVolume(u8 send, f32 volume) {
     if (forced_stop == 0) {
         sends[send].target = volume;
     }
@@ -214,13 +206,13 @@ void JASVoice::setPauseFlag(u8 flag) {
 
 void JASVoice::initFilter() {
     for (int i = 0; i < 8; i++) {
-        fir[i] = 0;
+        fir[i] = 0.0f;
     }
-    fir[0] = 0x7fff;
+    fir[0] = 32767.0f / 32768.0f;
     for (int i = 0; i < 4; i++) {
-        iir[i] = 0;
+        iir[i] = 0.0f;
     }
-    iir[0] = 0x7fff;
+    iir[0] = 32767.0f / 32768.0f;
 }
 
 void JASVoice::setFilterMode(u16 mode) {
@@ -229,22 +221,23 @@ void JASVoice::setFilterMode(u16 mode) {
     if (taps > (iir_on ? 0x14 : 0x18)) {
         taps = iir_on ? 0x14 : 0x18;
     }
-    filter = iir_on + taps;
+    fir_taps = taps;
+    this->iir_on = iir_on != 0;
 }
 
 void JASVoice::setIIRFilterParam(s16* coefficients) {
     for (int i = 0; i < 4; i++) {
-        iir[i] = coefficients[i];
+        iir[i] = coefficients[i] / 32768.0f;
     }
 }
 
 void JASVoice::setFIR8FilterParam(s16* coefficients) {
     for (int i = 0; i < 8; i++) {
-        fir[i] = coefficients[i];
+        fir[i] = coefficients[i] / 32768.0f;
     }
 }
 
 // The bus a send feeds: the mix configuration's value is the bus (NEBULA_AUDIO_BUS_*).
 void JASVoice::setBusConnect(u8 send, u8 bus) {
-    sends[send].bus = bus < NEBULA_AUDIO_BUSES ? bus : NEBULA_AUDIO_BUS_NONE;
+    sends[send].bus = bus < NEBULA_AUDIO_BUSES ? bus : static_cast< u32 >(NEBULA_AUDIO_BUS_NONE);
 }

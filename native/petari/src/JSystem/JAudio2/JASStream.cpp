@@ -5,7 +5,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
@@ -62,7 +62,7 @@ void JASStream::init(StreamCallback i_callback, void* i_callbackData) {
     mCallbackData = i_callbackData;
     mCommands.init(mCommandSlots, ARRAY_SIZE(mCommandSlots));
     if (sLoadThread == nullptr) {
-        sLoadThread = JASDvd::getThreadPointer();
+        sLoadThread = JASLoad::getThreadPointer();
     }
 }
 
@@ -242,8 +242,6 @@ void JASStream::channelStart() {
         wave_info.mSampleLoopStart = mHeader.loop_start;
         wave_info.mSampleLoopEnd = mHeader.loop_end;
         wave_info.mSampleCount = mHeader.loop_end;
-        wave_info.mpLastSample = 0;
-        wave_info.mpPenultSample = 0;
         static u32 const one = 1;
         wave_info._24 = &one;
         JASChannel* jc = new JASChannel(channelCallback, this);

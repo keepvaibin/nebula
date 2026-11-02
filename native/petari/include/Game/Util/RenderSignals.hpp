@@ -21,7 +21,7 @@ namespace NebulaRender {
     // over there must be handed over again.
     inline void memoryRewritten(const void* p, uint32_t size) {
         const NebulaHostServices* const host = nebula_host();
-        host->gpu_coherent(host->user, p, size);
+        host->memory_rewritten(host->user, p, size);
     }
 
     // A host marker, whatever the draw identities.

@@ -1,16 +1,16 @@
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 
-namespace JASDvd {
+namespace JASLoad {
     static JASTaskThread* sThread;
-};  // namespace JASDvd
+};  // namespace JASLoad
 
-JASTaskThread* JASDvd::getThreadPointer() {
-    return JASDvd::sThread;
+JASTaskThread* JASLoad::getThreadPointer() {
+    return JASLoad::sThread;
 }
 
-bool JASDvd::createThread(int msgCount, u32 stackSize) {
+bool JASLoad::createThread(int msgCount, u32 stackSize) {
     if (sThread != NULL) {
         return false;
     }

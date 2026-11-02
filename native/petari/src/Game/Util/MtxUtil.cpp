@@ -883,7 +883,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void MtxUtil_FORCE_MATCH(TVec3f* pA, TVec3f* pB, TRot3f* pMtx) {
-    *pA = *pA + *pB;
-    pMtx->getEuler(*pA);
-}

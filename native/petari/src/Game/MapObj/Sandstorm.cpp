@@ -555,10 +555,3 @@ bool Sandstorm::isSunakazeKun() const {
     return mType == Type_SunakazeKun;
 }
 
-TVec3f Sandstorm_FORCE_MATCH(f32 v) {
-    return TVec3f(v);
-}
-
-void Sandstorm_FORCE_MATCH_SUB(TVec3f* pDest, const TVec3f& rA, const TVec3f& rB) {
-    pDest->sub(rA, rB);
-}

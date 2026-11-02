@@ -32,7 +32,7 @@
 #include <JSystem/JAudio2/JASStream.hpp>
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
-#include <JSystem/JAudio2/JASDvdThread.hpp>
+#include <JSystem/JAudio2/JASLoadThread.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JAudio2/JASTrack.hpp>
 #include <JSystem/JAudio2/JASWaveArcLoader.hpp>
@@ -947,19 +947,19 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
 }
 
 void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
-    if (JASDvd::getThreadPointer() == nullptr) {
+    if (JASLoad::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
         if (audioMemSize_ == 0) {
-            audioMemSize_ = AudParams::aramSize;
+            audioMemSize_ = AudParams::soundMemorySize;
         }
 
-        JASKernel::setupAramHeap(audioMemory_, audioMemSize_);
+        JASKernel::setupSoundHeap(audioMemory_, audioMemSize_);
         JASTrack::newMemPool(field_0x1c);
         if (field_0x20 > 0) {
             JASTrack::TChannelMgr::newMemPool(field_0x20);
         }
 
-        JASDvd::createThread(0x100, 0x8000);
+        JASLoad::createThread(0x100, 0x8000);
         JASDriver::startAudio();
         JASDriver::setOutputLevel(outputLevel_);
     }

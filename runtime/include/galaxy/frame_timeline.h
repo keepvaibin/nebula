@@ -27,33 +27,21 @@
 namespace galaxy::timeline {
 
 enum class Event : std::uint16_t {
-    SubmitBegin = 1,       // sim: render_frame with a FIFO. a=fifo bytes
-    SubmitEnd = 2,         // sim: render_frame returned. a=token value, b=token kind
-    SubmitSource = 3,      // sim: caller of the next render_frame. a=1 VI, 2 draw-done, 3 console sync, 4 other
-    RenderBegin = 4,       // render: chunk dequeued. a=token value, b=fifo bytes
-    RenderReadsDone = 5,   // render: every guest-memory read of the chunk done. a=token value
-    RenderSubmitted = 6,   // render: command list executed and fence signaled. a=token value, b=fence | pe<<63
+    SubmitBegin = 1,       // game: a frame's records handed to the renderer. a=bytes
+    SubmitEnd = 2,         // game: handed over. a=token value, b=token kind
+    RenderBegin = 4,       // render: chunk dequeued. a=token value, b=bytes
+    RenderSubmitted = 6,   // render: command list executed and fence signaled. a=token value, b=fence
     GpuBegin = 7,          // GPU timestamp at command-list start (QPC domain). a=fence
     GpuEnd = 8,            // GPU timestamp at command-list end (QPC domain). a=fence
-    FenceObserved = 9,     // render: fence of a PE-bearing frame seen complete. a=fence, b=token value
-    PeDelivered = 10,      // a=1 finish, 2 token. b=PE token value
-    TokenConsumed = 11,    // sim: frame PE token observed complete by its consumer. a=token value
-    ViEdge = 12,           // sim: VI deadline consumed. a=deadline sequence, b=deadline ticks
-    ViLatched = 13,        // sim: VI interrupt level raised for the guest. a=boundary serial
     PresentBegin = 14,     // render: IDXGISwapChain::Present call. a=present ordinal, b=sync interval
     PresentEnd = 15,       // render: Present returned. a=present ordinal
-    DisplayStats = 16,     // render: DXGI frame statistics. qpc=SyncQPCTime, a=PresentCount<<32|PresentRefreshCount, b=SyncRefreshCount
-    IdleWaitBegin = 17,    // sim: idle-loop wait
-    IdleWaitEnd = 18,      // a=1 woken by a publication, 0 timer or timeout
-    PeWaitBegin = 19,      // sim: blocked on a frame PE token
-    PeWaitEnd = 20,
-    DisplayCopy = 21,          // render: display picture copy executed. a=guest destination
+    DisplayStats = 16,     // render: DXGI frame statistics. qpc=SyncQPCTime, a=PresentCount<<32|PresentRefreshCount
+    DisplayCopy = 21,      // render: display picture copy executed. a=destination key
     SlotWaitBegin = 22,    // render: waiting for a frame slot's fence. a=fence
     SlotWaitEnd = 23,
     VBlank = 24,           // render: DWM composition timing. qpc=last vblank, a=refresh period (QPC ticks)
-    DisplayPresented = 25,     // render: display picture chosen for a present. a=guest address, b=copy serial
-    GuestFrame = 26,       // sim: game frame boundary marker. a=VI retrace count
-    IdleWake = 27,         // any thread: woke the waiting simulation thread. a=EventKind, 100=host (PE, IOS)
+    DisplayPresented = 25, // render: display picture chosen for a present. a=key
+    GameFrame = 26,        // game: frame boundary marker. a=frame count
 };
 
 struct Record {

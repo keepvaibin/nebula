@@ -6,10 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
 
-f32 KCollision_FORCE_MATCH_CONVERSION(s32 value) {
-    return value;
-}
-
 // trying to get both operator== and operator/ to emit
 void DUMMY_KCollision() {
     TVec3f a, b, c;
@@ -1441,10 +1437,9 @@ s32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, co
 
     s32 xyShift = file->mBlockXYShift;
     s32 xShift = file->mBlockXShift;
-    s32 offset = (((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift)) * 4;
-
-    if (xyShift == -1 && xShift == -1) {
-        offset = 0;
+    s32 offset = 0;
+    if (xyShift != -1 || xShift != -1) {
+        offset = (((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift)) * 4;
     }
 
     while ((offset = *reinterpret_cast< s32* >(octree + offset)) >= 0) {

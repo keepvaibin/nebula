@@ -876,7 +876,7 @@ bool MarioSwim::update() {
             mIdleWaitTimer = 0;
         }
 
-        f32 fr1d;
+        f32 fr1d = 0.0f;
         if (MR::isNearZero(getStickY(), 0.1f)) {
             f32 num = mIdleWaitTimer / 120.0f;
             if (num > 1.0f) {

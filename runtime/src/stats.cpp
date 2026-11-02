@@ -70,7 +70,7 @@ void write_waiting() {
         contents = out.str();
         path = file_path_locked(s);
     }
-    if (!path.empty()) (void)io::write_text_file_atomically(path, contents);
+    if (!path.empty()) (void)io::write_file_atomically(path, contents);
 }
 
 void writer_main() {

@@ -162,6 +162,3 @@ void LavaFloater::exeSink() {
     }
 }
 
-void LavaFloater_FORCE_MATCH(const FloaterFloatingForce* pForce, TVec3f* pTranslation) {
-    pForce->FloaterFloatingForce::updateHostTrans(pTranslation);
-}

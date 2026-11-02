@@ -36,20 +36,6 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <cstdio>
 
-void Dodoryu_FORCE_MATCH(DodoryuStateBase* pState, TPos3f* pMtx, TVec3f* pVec) {
-    pVec->setAll< f32 >(0.0f);
-    pState->DodoryuStateBase::catchSendPlayerFlying(nullptr, nullptr);
-    pState->DodoryuStateBase::catchSendPlayerFlying(nullptr, nullptr);
-    pMtx->getXDir(*pVec);
-    pMtx->getXDir(*pVec);
-    pMtx->getYDir(*pVec);
-    pMtx->getYDir(*pVec);
-}
-
-f32 Dodoryu_FORCE_MATCH_CONVERSION(s32 value) {
-    return value;
-}
-
 namespace {
     static const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
     static const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
@@ -823,10 +809,6 @@ void DodoryuBank::exeAppear() {
         kill();
         MR::validateClipping(this);
     }
-}
-
-void Dodoryu_FORCE_MATCH_RABBIT(LiveActor* pActor) {
-    MR::startBck(pActor, "Jump");
 }
 
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const JMapInfoIter& rIter)

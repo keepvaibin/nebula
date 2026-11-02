@@ -586,7 +586,3 @@ namespace RaceManagerFunction {
     }
 };  // namespace RaceManagerFunction
 
-void RaceManager_FORCE_MATCH(AbstractRacer* pRacer) {
-    pRacer->AbstractRacer::initRacer();
-    pRacer->AbstractRacer::initRacer();
-}

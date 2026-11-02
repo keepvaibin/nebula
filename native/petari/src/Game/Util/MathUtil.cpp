@@ -27,16 +27,6 @@ namespace {
 };  // namespace
 
 namespace MR {
-    void MathUtil_FORCE_MATCH_RODATA() {
-        (void)0.98;
-        (void)(1.0 - 0.98);
-        (void)255.0;
-        (void)1.0;
-        (void)4503599627370496.0;
-        (void)4503601774854144.0;
-        (void)360.0;
-    }
-
     void initAcosTable() {
         ::gAcosTable = new f32[256];
 
@@ -52,6 +42,9 @@ namespace MR {
     }
 
     f32 acosEx(f32 x) {
+        if (x != x) {
+            return 0.0f;
+        }
         if (MR::abs(x) < 0.98f) {
             return JMAAcosRadian(x);
         } else if (x < 0.0f) {

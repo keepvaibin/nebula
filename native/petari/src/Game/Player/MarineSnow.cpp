@@ -164,6 +164,3 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     }
 }
 
-MarineSnow* MarineSnow_FORCE_MATCH() {
-    return new MarineSnow();
-}
