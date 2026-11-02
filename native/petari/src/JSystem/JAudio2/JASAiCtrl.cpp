@@ -1,6 +1,9 @@
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "Game/System/NebulaAtomic.hpp"
-#include "JSystem/JAudio2/JASAudioThread.hpp"
+#include "JSystem/JAudio2/JASChannel.hpp"
+#include "JSystem/JAudio2/JASDSPChannel.hpp"
+#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASCmdStack.hpp"
@@ -27,9 +30,13 @@ namespace {
     const u32 cMaxCatchUp = 4;
 }  // namespace
 
+// On the host's audio clock thread.
 extern "C" NEBULA_GAME_API void nebula_game_audio_tick(void) {
     __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
-    nebula_raise_event(NEBULA_EVENT_AUDIO);
+    NebulaKernel::enterAudio();
+    JASDriver::updateDac();
+    JASDriver::updateDacCallback();
+    NebulaKernel::leaveAudio();
 }
 
 u32 JASDriver::sOutputRate;
@@ -40,11 +47,15 @@ u32 JASDriver::sSubFrames = 0x00000007;
 
 NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
 
-void JASDriver::initAI(void (*callback)(void)) {
+// The driver up and the host's audio clock running.
+void JASDriver::startAudio() {
     setOutputRate(OUTPUT_RATE_0);
     JASChannel::initBankDisposeMsgQueue();
-    NebulaKernel::setEventHandler(NEBULA_EVENT_AUDIO, callback);
     NebulaKernel::enableEvent(NEBULA_EVENT_AUDIO);
+    JASDsp::initBuffer();
+    JASDSPChannel::initAll();
+    JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(0x48);
+    startDMA();
 }
 
 void JASDriver::startDMA() {

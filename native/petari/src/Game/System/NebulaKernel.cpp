@@ -30,11 +30,32 @@ namespace {
     uint32_t sPending;
     uint32_t sEnabledEvents = 1u << NEBULA_EVENT_TIMER;  // device events wait until their handler is set and enabled
     int32_t sSleeping;                                   // the thread whose turn it is sleeps for want of work
-    bool sInterruptsEnabled;
+    bool sInterruptsEnabled;  // read by the audio thread
+    // The audio thread: running, and which thread this is.
+    int32_t sAudioRunning;
+    thread_local bool tAudio;
+    NebulaThread sAudioThread;
     NebulaKernel::EventHandler sHandlers[NEBULA_EVENT_COUNT];
 
     NebulaAlarm* sAlarmHead;
     NebulaAlarm* sAlarmTail;
+
+    // Host events off for the thread whose turn it is, which also keeps the audio thread out (it stands aside if that one is
+    // in: each announces itself, then looks at the other).
+    void interruptsOff() {
+        __atomic_store_n(&sInterruptsEnabled, false, __ATOMIC_SEQ_CST);
+        while (__atomic_load_n(&sAudioRunning, __ATOMIC_SEQ_CST) != 0) {
+            __atomic_store_n(&sInterruptsEnabled, true, __ATOMIC_SEQ_CST);
+            while (__atomic_load_n(&sAudioRunning, __ATOMIC_SEQ_CST) != 0) {
+                nebula_host_thread_yield();
+            }
+            __atomic_store_n(&sInterruptsEnabled, false, __ATOMIC_SEQ_CST);
+        }
+    }
+
+    void interruptsOn() {
+        __atomic_store_n(&sInterruptsEnabled, true, __ATOMIC_SEQ_CST);
+    }
 
     int32_t highestReady() {
         return sRunQueueBits != 0 ? __builtin_clz(sRunQueueBits) : kPriorities;
@@ -244,17 +265,19 @@ namespace {
     // No thread can run: deliver host events, sleeping until one arrives, until a thread is ready.
     void idle() {
         while (sRunQueueBits == 0) {
-            sInterruptsEnabled = true;
+            interruptsOn();
             deliver();
-            sInterruptsEnabled = false;
+            interruptsOff();
             if (sRunQueueBits != 0) {
                 break;
             }
+            interruptsOn();
             __atomic_store_n(&sSleeping, 1, __ATOMIC_SEQ_CST);
             if ((__atomic_load_n(&sPending, __ATOMIC_SEQ_CST) & sEnabledEvents) == 0) {
                 sleepForWork();
             }
             __atomic_store_n(&sSleeping, 0, __ATOMIC_SEQ_CST);
+            interruptsOff();
         }
     }
 
@@ -271,7 +294,7 @@ namespace {
     }
 
     void selectThread(bool yield) {
-        if (sReschedule > 0 || sIdling) {
+        if (sReschedule > 0 || sIdling || tAudio) {
             return;
         }
         NebulaThread* current = sCurrent;
@@ -429,20 +452,20 @@ namespace {
             const int32_t event = __builtin_ctz(deliverable);
             __atomic_fetch_and(&sPending, ~(1u << event), __ATOMIC_SEQ_CST);
             if (event == NEBULA_EVENT_TIMER) {
-                sInterruptsEnabled = false;
+                interruptsOff();
                 onTimer();
-                sInterruptsEnabled = true;
+                interruptsOn();
                 continue;
             }
             const NebulaKernel::EventHandler handler = sHandlers[event];
+            interruptsOff();
             if (handler != nullptr) {
-                sInterruptsEnabled = false;
                 NebulaKernel::disableScheduler();
                 handler();
                 NebulaKernel::enableScheduler();
-                reschedule();
-                sInterruptsEnabled = true;
             }
+            reschedule();
+            interruptsOn();
         }
     }
 
@@ -458,6 +481,13 @@ void NebulaThreadQueue::init() {
 }
 
 void NebulaThreadQueue::sleep() {
+    if (tAudio) {
+        // Its callers look again.
+        NebulaKernel::leaveAudio();
+        nebula_host_thread_yield();
+        NebulaKernel::enterAudio();
+        return;
+    }
     const bool enabled = NebulaKernel::disableInterrupts();
     NebulaThread* current = sCurrent;
     current->state = NebulaThreadState_Waiting;
@@ -510,7 +540,7 @@ void NebulaMutex::init() {
 
 void NebulaMutex::lock() {
     const bool enabled = NebulaKernel::disableInterrupts();
-    NebulaThread* current = sCurrent;
+    NebulaThread* current = NebulaKernel::current();
     for (;;) {
         NebulaThread* holder = *static_cast< NebulaThread* volatile* >(&owner);
         if (holder == nullptr) {
@@ -523,6 +553,10 @@ void NebulaMutex::lock() {
             count++;
             break;
         }
+        if (tAudio) {
+            waiters.sleep();
+            continue;
+        }
         current->mutex = this;
         promote(owner, current->priority);
         waiters.sleep();
@@ -533,7 +567,7 @@ void NebulaMutex::lock() {
 
 void NebulaMutex::unlock() {
     const bool enabled = NebulaKernel::disableInterrupts();
-    NebulaThread* current = sCurrent;
+    NebulaThread* current = NebulaKernel::current();
     if (owner == current && --count == 0) {
         mutexDequeue(&current->mutexes, this);
         owner = nullptr;
@@ -679,7 +713,27 @@ namespace NebulaKernel {
     }
 
     NebulaThread* current() {
-        return sCurrent;
+        return tAudio ? &sAudioThread : sCurrent;
+    }
+
+    void enterAudio() {
+        tAudio = true;
+        sAudioThread.state = NebulaThreadState_Running;
+        sAudioThread.priority = sAudioThread.base = 0;
+        __atomic_store_n(&sAudioRunning, 1, __ATOMIC_SEQ_CST);
+        while (!__atomic_load_n(&sInterruptsEnabled, __ATOMIC_SEQ_CST)) {
+            nebula_host_thread_yield();
+        }
+    }
+
+    // What it woke runs at the next scheduling point; the event brings one on.
+    void leaveAudio() {
+        const bool woke = sRunQueueHint;
+        __atomic_store_n(&sAudioRunning, 0, __ATOMIC_SEQ_CST);
+        tAudio = false;
+        if (woke) {
+            nebula_raise_event(NEBULA_EVENT_AUDIO);
+        }
     }
 
     void exit(void* pValue) {
@@ -833,13 +887,13 @@ namespace NebulaKernel {
     // Work that arrived while events were enabled is delivered before they are disabled: it would have come before
     // this point, not at the end of the section that follows.
     bool disableInterrupts() {
-        if (!sInterruptsEnabled) {
+        if (tAudio || !sInterruptsEnabled) {
             return false;
         }
         if (workPending()) {
             deliver();
         }
-        sInterruptsEnabled = false;
+        interruptsOff();
         return true;
     }
 
@@ -847,23 +901,28 @@ namespace NebulaKernel {
         if (sInterruptsEnabled) {
             return true;
         }
-        sInterruptsEnabled = true;
+        interruptsOn();
         return workPending() ? deliverFromDisabled() : false;
     }
 
     bool restoreInterrupts(bool enabled) {
+        if (tAudio) {
+            return false;
+        }
         const bool previous = sInterruptsEnabled;
         if (!enabled) {
             if (previous && workPending()) {
                 deliver();
             }
-            sInterruptsEnabled = false;
+            if (previous) {
+                interruptsOff();
+            }
             return previous;
         }
         if (previous) {
             return true;
         }
-        sInterruptsEnabled = true;
+        interruptsOn();
         return workPending() ? deliverFromDisabled() : false;
     }
 
@@ -871,7 +930,7 @@ namespace NebulaKernel {
     // woken thread), and with nothing pending this thread sleeps until a host thread raises something. The
     // frame clock raises every retrace, so a wait on state a host thread writes without raising lasts at most one.
     void poll() {
-        if (!sInterruptsEnabled) {
+        if (tAudio || !sInterruptsEnabled) {
             return;
         }
         if (!workPending()) {
