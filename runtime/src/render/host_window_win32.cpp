@@ -22,6 +22,7 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/ui/home_menu_model.h"
 #include "galaxy/ui/settings_model.h"
+#include "galaxy/ui/settings_save_model.h"
 
 #include <algorithm>
 #include <array>
@@ -217,8 +218,10 @@ bool handle_home_menu_key(WPARAM key, bool was_down) {
     s_home_menu.key(action, was_down);
     return true;
 }
-std::atomic<bool> s_native_settings_dirty{false};
-std::atomic<bool> s_native_settings_save_error{false};
+ui::SettingsSaveModel s_settings_save{
+    save_runtime_settings_to_file, save_render_config_to_file,
+    [] { std::cerr << "[settings] save failed; kept for retry\n"; },
+    [] { SetThreadDescription(GetCurrentThread(), L"Nebula Settings Save"); }};
 std::atomic<unsigned> s_native_settings_tab{0};
 std::atomic<unsigned> s_native_settings_row{0};
 // The selected row's selected button, for the page and row it was chosen on (page << 16 | row); selecting a row
@@ -310,73 +313,10 @@ std::uint32_t s_handled_key_normalized = 0u;
 
 constexpr unsigned kNativeSettingsTabCount = 8;
 
-// Each language in its own name (UTF-8: Ç, Ñ, 日本語); a disc offers only its own, whose letters its font has.
+// Each language in its own name (UTF-8: Ã‡, Ã‘, æ—¥æœ¬èªž); a disc offers only its own, whose letters its font has.
 using ui::game_language_name;
 using ui::native_settings_first_row;
 using ui::kNativeSettingsVisibleRows;
-
-// Writes both settings files when something changed. Each atomic replace flushes the disk, which a busy or
-// scanned disk can hold for tens of milliseconds and more.
-bool write_dirty_settings_files() {
-    if (!s_native_settings_dirty.exchange(false, std::memory_order_acq_rel)) {
-        return true;
-    }
-    bool runtime_saved = false;
-    bool render_saved = false;
-    try {
-        runtime_saved = save_runtime_settings_to_file();
-    } catch (...) {
-        runtime_saved = false;
-    }
-    try {
-        render_saved = save_render_config_to_file();
-    } catch (...) {
-        render_saved = false;
-    }
-    if (!runtime_saved || !render_saved) {
-        s_native_settings_dirty.store(true, std::memory_order_release);
-        const bool already_reported =
-            s_native_settings_save_error.exchange(
-                true,
-                std::memory_order_acq_rel);
-        if (!already_reported) {
-            std::cerr << "[settings] save failed; kept for retry\n";
-        }
-        return false;
-    }
-    s_native_settings_save_error.store(false, std::memory_order_release);
-    return true;
-}
-
-// Saves run on a worker: the menu, the window thread and the render thread hold the settings lock while they
-// ask for one, and the render thread takes that lock every frame the menu is open.
-std::mutex s_settings_save_mutex;
-std::condition_variable s_settings_save_changed;
-bool s_settings_save_requested = false;  // guarded by s_settings_save_mutex
-bool s_settings_save_running = false;    // guarded by s_settings_save_mutex
-
-void settings_save_worker() {
-    SetThreadDescription(GetCurrentThread(), L"Nebula Settings Save");
-    for (;;) {
-        {
-            std::unique_lock<std::mutex> lock(s_settings_save_mutex);
-            s_settings_save_changed.wait(lock, [] { return s_settings_save_requested; });
-            s_settings_save_requested = false;
-            s_settings_save_running = true;
-        }
-        (void)write_dirty_settings_files();
-        {
-            const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
-            s_settings_save_running = false;
-        }
-        s_settings_save_changed.notify_all();
-    }
-}
-
-bool settings_save_pending() {
-    const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
-    return s_settings_save_requested || s_settings_save_running;
-}
 
 using ui::step_gain;
 using ui::display_settings_differ;
@@ -984,7 +924,7 @@ void revert_display_settings() {
     s_settings_draft.fullscreen_refresh_hz = render.fullscreen_refresh_hz;
     s_settings_draft.window_width = render.window_width;
     s_settings_draft.window_height = render.window_height;
-    s_native_settings_dirty.store(true, std::memory_order_release);
+    s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
     std::cerr << "[settings] display reverted\n";
 }
@@ -1103,7 +1043,7 @@ void apply_native_settings_draft() {
         s_display_confirm_deadline_ms = GetTickCount64() + kDisplayConfirmMs;
     }
     s_settings_applied_ms = GetTickCount64();
-    s_native_settings_dirty.store(true, std::memory_order_release);
+    s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
     std::cerr << "[settings] applied " << changes << " change"
               << (changes == 1u ? "" : "s") << '\n';
@@ -2114,7 +2054,7 @@ void ui_text(
             cursor_x += 4 * scale;
             continue;
         }
-        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other letter of several bytes draws as one blank cell.
+        // UTF-8 Ã‡/Ã§ and Ã‘/Ã± (C3 87/A7, C3 91/B1); any other letter of several bytes draws as one blank cell.
         if (static_cast<unsigned char>(ch) == 0xC3u && i + 1u < text.size()) {
             const auto next = static_cast<unsigned char>(text[++i]);
             ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
@@ -3866,7 +3806,7 @@ void poll_dlss_download() {
     render.upscaler = 3u;
     set_render_config(render);
     s_settings_draft.upscaler = 3u;
-    s_native_settings_dirty.store(true, std::memory_order_release);
+    s_settings_save.dirty.store(true, std::memory_order_release);
     flush_native_settings_if_dirty();
     s_dlss_offer = DlssOffer::Ready;
     std::cerr << "[dlss] installed; it starts with the next launch\n";
@@ -3952,17 +3892,7 @@ unsigned display_scene_target_scale_cap() {
 std::atomic<bool> ray_tracing_offered{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
-    if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
-        return true;
-    }
-    static std::once_flag started;
-    std::call_once(started, [] { std::thread(settings_save_worker).detach(); });
-    {
-        const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
-        s_settings_save_requested = true;
-    }
-    s_settings_save_changed.notify_all();
-    return true;  // queued: the worker reports a failed write and keeps the settings dirty
+    return s_settings_save.queue();
 }
 
 unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
@@ -3970,15 +3900,7 @@ unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
 }
 
 // Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.
-void save_native_settings_now() {
-    {
-        std::unique_lock<std::mutex> lock(s_settings_save_mutex);
-        s_settings_save_changed.wait_for(lock, std::chrono::seconds(5), [] {
-            return !s_settings_save_requested && !s_settings_save_running;
-        });
-    }
-    (void)write_dirty_settings_files();
-}
+void save_native_settings_now() { s_settings_save.save_now(); }
 
 // Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
 // apply does, so the next save from the game writes them back rather than over them. Checked twice a second,
@@ -3992,7 +3914,7 @@ void poll_render_config_file() {
     }
     s_next_check_ms = now + 500u;
     // A save of the game's own still in flight would read back as a change made outside it.
-    if (settings_save_pending()) {
+    if (s_settings_save.pending()) {
         return;
     }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
@@ -4337,7 +4259,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 render.window_width = static_cast<unsigned>(client.right);
                 render.window_height = static_cast<unsigned>(client.bottom);
                 set_render_config(render);
-                s_native_settings_dirty.store(true, std::memory_order_release);
+                s_settings_save.dirty.store(true, std::memory_order_release);
                 // Saved now, not when the game closes: Nebula Settings reads the file meanwhile.
                 if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
                     flush_native_settings_if_dirty();
@@ -5073,7 +4995,7 @@ NativeSettingsView build_native_settings_view() {
         const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms ? s_display_confirm_deadline_ms - now_ms : 0u;
         view.status = NativeSettingsStatus::KeepDisplay;
         view.status_number = static_cast<int>((left_ms + 999u) / 1000u);
-    } else if (s_native_settings_save_error.load(std::memory_order_acquire)) {
+    } else if (s_settings_save.error.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::SaveFailed;
     } else if (const unsigned pending = pending_settings_changes(); pending != 0u) {
         view.status = NativeSettingsStatus::Pending;
@@ -5529,9 +5451,9 @@ NativeSettingsOverlaySnapshot native_settings_overlay_snapshot() noexcept {
     snapshot.visible =
         s_native_settings_visible.load(std::memory_order_relaxed);
     snapshot.dirty =
-        s_native_settings_dirty.load(std::memory_order_acquire);
+        s_settings_save.dirty.load(std::memory_order_acquire);
     snapshot.save_error =
-        s_native_settings_save_error.load(std::memory_order_acquire);
+        s_settings_save.error.load(std::memory_order_acquire);
     snapshot.tab = tab;
     snapshot.row = row;
     snapshot.tab_count = kNativeSettingsTabCount;
@@ -5742,8 +5664,8 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_settings_first_row = 0u;
     s_controls_message_until_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);
-    s_native_settings_dirty.store(false, std::memory_order_relaxed);
-    s_native_settings_save_error.store(false, std::memory_order_relaxed);
+    s_settings_save.dirty.store(false, std::memory_order_relaxed);
+    s_settings_save.error.store(false, std::memory_order_relaxed);
     s_native_settings_tab.store(0u, std::memory_order_relaxed);
     s_native_settings_row.store(0u, std::memory_order_relaxed);
     settle_native_settings_row();
@@ -5776,10 +5698,7 @@ RenderConfig native_settings_draft_for_tests() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     return s_settings_draft;
 }
-void native_settings_wait_saved_for_tests() {
-    std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
-    s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
-}
+void native_settings_wait_saved_for_tests() { s_settings_save.wait_until_idle(); }
 void host_window::native_settings_set_refresh_override_for_tests(unsigned hz) noexcept {
     s_refresh_override_hz.store(hz, std::memory_order_relaxed);
 }
