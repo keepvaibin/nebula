@@ -1046,6 +1046,18 @@ std::shared_ptr<const Model> find_model(std::uint64_t key) {
     return it != r.models.end() && !it->second.pending ? it->second.model : nullptr;
 }
 
+std::uint64_t memory_bytes() {
+    Registry& r = registry();
+    std::lock_guard guard(r.lock);
+    std::uint64_t bytes = 0u;
+    for (const auto& [key, entry] : r.models) {
+        if (entry.model != nullptr) {
+            bytes += entry.model->bytes();
+        }
+    }
+    return bytes;
+}
+
 void forget_models(std::uint64_t start, std::uint64_t end) {
     Registry& r = registry();
     {

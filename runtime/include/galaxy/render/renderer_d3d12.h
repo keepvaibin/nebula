@@ -207,6 +207,8 @@ public:
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureCache& cache);
+    // The upload rings' sizes and the most one frame took (GALAXY_TRACE_MEMORY).
+    void trace_rings() const;
     void pump_messages();           // no-op: window_owner_ pumps the window's messages
     [[nodiscard]] bool quit_requested() const noexcept;
 
