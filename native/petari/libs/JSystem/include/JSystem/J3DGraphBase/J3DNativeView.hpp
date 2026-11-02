@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nebula_game_api.h>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
@@ -22,11 +23,9 @@ namespace J3DNativeView {
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight);
     // The picture's colour and depth where the drawing has reached, kept as `channel`'s; reads take the latest finished
     // capture (a frame or so old) and never wait. Frame-buffer coordinates.
-    void captureReadback(u32 channel);
-    u32 readbackColor(u32 channel, s32 x, s32 y);
-    u32 readbackDepth(u32 channel, s32 x, s32 y);
-    // How many captures of `channel`'s colour have finished (a capture made at count n is readable past n).
-    u32 readbackSerial(u32 channel);
+    // What the picture holds at the game's points where the drawing has reached; the answers come back a frame or two later.
+    void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count);
+    u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity);
 };  // namespace J3DNativeView
 
 extern "C" {

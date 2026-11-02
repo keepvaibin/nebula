@@ -7,7 +7,7 @@
 #include "galaxy/render/capture.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render_api.h"  // ReadbackKind
+#include "galaxy/render_api.h"
 
 #include <array>
 #include <cstddef>
@@ -160,12 +160,9 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
     unsigned logical_scene_height,
     unsigned reduction_width = 0u) noexcept;
 
-// The 1x1 GXPeek conversion constants. Color peeks box-reduce the complete
-// scaled logical-pixel block; depth peeks address the exact point-selected
-// physical texel recorded in ScenePeekSamplingGeometry.
-[[nodiscard]] SceneConversionShaderConstants make_scene_peek_conversion_constants(
-    const ScenePeekSamplingGeometry& sampling,
-    ReadbackKind kind) noexcept;
+// A screen probe's constants: the capture shader reads the one pixel of the frame the point names (`depth`: as the
+// 24-bit value in three bytes, otherwise as it is).
+[[nodiscard]] SceneConversionShaderConstants make_screen_probe_constants(float x, float y, const FrameMap& map, bool depth) noexcept;
 
 // The scene target-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
 // the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in

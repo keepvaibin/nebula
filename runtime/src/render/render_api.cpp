@@ -82,6 +82,14 @@ state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count) {
     return backend().reserve_record_ops(record, count);
 }
 
+ScreenProbe* reserve_record_probes(shapes::Record& record, std::uint32_t count) {
+    return backend().reserve_record_probes(record, count);
+}
+
+RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t count) {
+    return backend().reserve_record_vertices(record, count);
+}
+
 std::uint32_t reserve_record_native(const void* native, std::size_t bytes) {
     return backend().reserve_record_native(native, bytes);
 }
@@ -90,17 +98,8 @@ const shapes::Matrix* producer_record_matrices(const shapes::Record& record) {
     return backend().producer_record_matrices(record);
 }
 
-bool readback_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    ReadbackKind kind,
-    std::uint16_t token,
-    std::uint32_t& value) {
-    return backend().readback_published(x, y, kind, token, value);
-}
-
-std::uint32_t readback_serial(std::uint16_t token) noexcept {
-    return backend().readback_serial(token);
+std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity) {
+    return backend().screen_probe_results(channel, probes, capacity);
 }
 
 void pump_messages() {

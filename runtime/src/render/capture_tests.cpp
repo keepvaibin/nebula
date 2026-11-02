@@ -97,7 +97,7 @@ int main() {
         }
         passed &= expect(
             shader_valid,
-            "runtime scene target copy/peek conversion shader compiles as ps_5_0");
+            "runtime scene target capture shader compiles as ps_5_0");
     }
     passed &= test_scaled_display_resource_allocation();
 
@@ -292,65 +292,6 @@ int main() {
         passed &= expect_near(
             sixfold_viewport.height, 2736.0f,
             "6x viewport spans the scaled copy height");
-    }
-    {
-        for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
-            const galaxy::render::ScenePeekSamplingGeometry peek =
-                galaxy::render::compute_scene_peek_sampling_geometry(
-                    123u, 45u, scale);
-            const std::uint32_t expected_x = 123u * scale;
-            const std::uint32_t expected_y = 45u * scale;
-            char label[128]{};
-            std::snprintf(
-                label,
-                sizeof(label),
-                "%ux scene target peek addresses the scaled logical-pixel block",
-                scale);
-            passed &= expect(
-                peek.src_x == static_cast<float>(expected_x) &&
-                    peek.src_y == static_cast<float>(expected_y) &&
-                    peek.step == static_cast<float>(scale),
-                label);
-
-            std::snprintf(
-                label,
-                sizeof(label),
-                "%ux scene target depth peek uses deterministic center-nearest point semantics",
-                scale);
-            passed &= expect(
-                peek.depth_texel_x == expected_x + scale / 2u &&
-                    peek.depth_texel_y == expected_y + scale / 2u,
-                label);
-
-            std::snprintf(
-                label,
-                sizeof(label),
-                "%ux scene target color peek reduces the complete scaled pixel block",
-                scale);
-            passed &= expect(
-                peek.color_reduction_samples == scale * scale,
-                label);
-
-            const galaxy::render::ScenePeekSamplingGeometry bottom_right =
-                galaxy::render::compute_scene_peek_sampling_geometry(
-                    639u, 527u, scale);
-            std::snprintf(
-                label,
-                sizeof(label),
-                "%ux scene target depth point remains inside the bottom-right scaled block",
-                scale);
-            passed &= expect(
-                bottom_right.depth_texel_x >= 639u * scale &&
-                    bottom_right.depth_texel_x < 640u * scale &&
-                    bottom_right.depth_texel_y >= 527u * scale &&
-                    bottom_right.depth_texel_y < 528u * scale,
-                label);
-        }
-
-        const galaxy::render::ScenePeekSamplingGeometry clamped_low =
-            galaxy::render::compute_scene_peek_sampling_geometry(1u, 1u, 0u);
-        const galaxy::render::ScenePeekSamplingGeometry clamped_high =
-            galaxy::render::compute_scene_peek_sampling_geometry(1u, 1u, 99u);
     }
     passed &= expect(
         galaxy::render::scene_copy_single_channel(2u, false) && !galaxy::render::scene_copy_single_channel(2u, true) &&

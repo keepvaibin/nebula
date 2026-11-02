@@ -20,7 +20,7 @@ enum class TimingPhase : std::uint8_t {
     LiveMemoryReadBarrierWait,
     RenderBegin,
     RenderCacheInvalidation,
-    RenderFifoParse,
+    RenderRecords,
     RenderPostParseFlush,
     PeFenceWait,
     WorkerDependencyScan,

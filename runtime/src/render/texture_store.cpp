@@ -46,7 +46,7 @@ std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
 }
 
-bool trace_gx_stalls_enabled() {
+bool trace_stalls_enabled() {
     static const bool enabled = [] {
         char value[16]{};
         std::size_t length = 0;
@@ -77,7 +77,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
         ? fallback : static_cast<std::uint64_t>(parsed);
 }
 
-std::uint64_t trace_gx_stall_threshold_us() {
+std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
         read_env_u64("GALAXY_TRACE_GX_STALL_US", 1000u);
     return threshold;
@@ -1256,7 +1256,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             }
         }
     }
-    const bool trace_stalls = trace_gx_stalls_enabled();
+    const bool trace_stalls = trace_stalls_enabled();
     const auto get_start = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -1396,7 +1396,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     if (trace_stalls) {
         const std::uint64_t pre_miss_us =
             elapsed_us(get_start, miss_start);
-        if (pre_miss_us >= trace_gx_stall_threshold_us()) {
+        if (pre_miss_us >= trace_stall_threshold_us()) {
             std::cerr << "[gx-texture-premiss] addr=0x" << std::hex
                       << image.key << std::dec
                       << " size=" << total_source_size
@@ -1577,7 +1577,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     if (trace_stalls) {
         const std::uint64_t post_record_us =
             elapsed_us(upload_record_end, emplace_end);
-        if (post_record_us >= trace_gx_stall_threshold_us()) {
+        if (post_record_us >= trace_stall_threshold_us()) {
             std::cerr << "[gx-texture-postrecord] addr=0x" << std::hex
                       << image.key << std::dec
                       << " entry-us="
@@ -1591,7 +1591,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         }
     }
     if (trace_stalls &&
-        total_us >= trace_gx_stall_threshold_us()) {
+        total_us >= trace_stall_threshold_us()) {
         std::cerr << "[gx-texture-miss] addr=0x" << std::hex
                   << image.key << std::dec
                   << " fmt=" << static_cast<unsigned>(image.disc_format)

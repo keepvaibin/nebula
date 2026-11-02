@@ -20,7 +20,7 @@ public:
 
     static const u32 cReadbackChannel = 2;
 
-    /* 0x08 */ u32 _8;
+    /* 0x08 */ f32 _8;  // the depth at the balloon's point, 0 near to 1 far
     /* 0x0C */ TVec2f mScreenPos;
     /* 0x14 */ TVec3f _14;
     /* 0x20 */ f32 _20;

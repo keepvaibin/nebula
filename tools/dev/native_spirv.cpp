@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
     // takes that name.
     defines += "#define native_" + stage_name + " main\n";
     std::string error;
-    const std::vector<std::uint32_t> spirv = vk::compile_hlsl(vk::annotate(defines + source, vk::gx_draw_bindings()),
+    const std::vector<std::uint32_t> spirv = vk::compile_hlsl(vk::annotate(defines + source, vk::draw_bindings()),
                                                               stage, "main", {}, error,
                                                               {true, dual_source && stage == vk::ShaderStage::Fragment,
                                                                false});

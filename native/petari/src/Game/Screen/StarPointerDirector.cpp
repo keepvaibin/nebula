@@ -161,16 +161,26 @@ StarPointerPeekZ::StarPointerPeekZ() {
 void StarPointerPeekZ::setDrawSyncToken() {
     J3DNativeView::getProjectionv(mProjectionParameters);
     J3DNativeView::getViewportv(mViewportParameters);
-    J3DNativeView::captureReadback(cReadbackChannel);
-    for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
+    // The depth under each pointer: what was asked last, and the picture drawn so far at where they are now.
+    NebulaScreenProbe probes[2];
+    const u32 count = StarPointerFunction::getNumStarPointer();
+    const u32 done = J3DNativeView::screenProbeResults(cReadbackChannel, probes, count);
+    for (u32 channel = 0; channel < count; channel++) {
         if (MR::isInRange(mInfos[channel]->mPos.x, 0.0f, MR::getScreenWidth() - 1) &&
             MR::isInRange(mInfos[channel]->mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
+            mInfos[channel]->mZDepth = channel < done && probes[channel].x >= 0.0f ? probes[channel].value : 0.0f;
+            mInfos[channel]->mDrawReady = true;
+
             TVec2f pos;
             MR::convertScreenPosToFrameBufferPos(&pos, mInfos[channel]->mPos);
-            mInfos[channel]->mZDepth = J3DNativeView::readbackDepth(cReadbackChannel, (s32)(pos.x), (s32)(pos.y));
-            mInfos[channel]->mDrawReady = true;
+            probes[channel].x = pos.x;
+            probes[channel].y = pos.y;
+        } else {
+            probes[channel].x = -1.0f;
+            probes[channel].y = -1.0f;
         }
     }
+    J3DNativeView::probeScreen(cReadbackChannel, NEBULA_SCREEN_PROBE_DEPTH, probes, count);
 }
 
 namespace StarPointerFunction {

@@ -1,5 +1,9 @@
 #pragma once
 
+#include <atomic>
+#include <mutex>
+#include <thread>
+
 // PipelineCache: native materials' pipelines on the D3D12 renderer (E-04). A material's shaders are compiled at build
 // (native_shaders.h); its pipeline under a render state is created on the render thread at its first draw and kept for
 // the session.
@@ -49,11 +53,28 @@ public:
     // RENDER THREAD ONLY. A native material's pipeline: its build-compiled shaders under the draw's render state; null
     // when the build has none or the driver refuses it.
     [[nodiscard]] ID3D12PipelineState* get_native(std::uint32_t shader, const RenderStateKey& render_state);
+    // Starts building the seed pipelines on background threads; merge_prepared takes in what they finished.
+    void start_prepare();
+    void merge_prepared();
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     // Native materials' pipelines by shader, output variant and render state.
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12PipelineState> create_native(std::uint32_t shader, const RenderStateKey& rs,
+                                                                             unsigned variant) const;
+    struct Prepared {
+        std::uint32_t shader;
+        RenderStateKey rs;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    };
+    bool prepare_started_ = false;
+    std::vector<std::thread> prepare_threads_;
+    std::atomic<std::size_t> prepare_next_{0u};
+    std::atomic<bool> prepare_stop_{false};
+    std::atomic<bool> prepare_ready_{false};
+    std::mutex prepared_lock_;
+    std::vector<Prepared> prepared_;
     std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint32_t, RenderStateKey>,
                                                          Microsoft::WRL::ComPtr<ID3D12PipelineState>>>> native_psos_;
 };

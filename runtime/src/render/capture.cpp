@@ -177,25 +177,6 @@ SceneCopySamplingGeometry compute_display_sampling_geometry(
     return geometry;
 }
 
-ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
-    std::uint16_t x,
-    std::uint16_t y,
-    const FrameMap& map) noexcept {
-    const std::uint32_t src_x = static_cast<std::uint32_t>(std::lround(static_cast<double>(x) * map.sx));
-    const std::uint32_t src_y = static_cast<std::uint32_t>(std::lround(static_cast<double>(y) * map.sy));
-    const std::uint32_t box_x = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::lround(map.sx)));
-    const std::uint32_t box_y = std::max<std::uint32_t>(1u, static_cast<std::uint32_t>(std::lround(map.sy)));
-    return ScenePeekSamplingGeometry{
-        static_cast<float>(src_x),
-        static_cast<float>(src_y),
-        map.sy,
-        static_cast<float>(src_y) + 0.5f * map.sy,
-        src_x + box_x / 2u,
-        src_y + box_y / 2u,
-        box_x * box_y,
-        map.sx};
-}
-
 DisplayTexture* SceneCopyManager::acquire_display(
     const CaptureRequest& params,
     std::uint64_t frame_index) {

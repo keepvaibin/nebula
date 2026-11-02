@@ -479,9 +479,9 @@ public:
 private:
     void create_root_signature() {
         check_hr(
-            galaxy::render::create_gx_root_signature(
+            galaxy::render::create_draw_root_signature(
                 device_.Get(), root_signature_.ReleaseAndGetAddressOf()),
-            "create_gx_root_signature");
+            "create_draw_root_signature");
     }
 
     void create_pipelines() {

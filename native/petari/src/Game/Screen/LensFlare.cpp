@@ -176,8 +176,7 @@ void LensFlareLine::controlAnim() {
 }
 
 LensFlareDirector::LensFlareDirector()
-    : NameObj("\203\214\203\223\203\131\203\164\203\214\203\101\212\307\227\235" /* レンズフレア管理 */), mRing(), mGlow(), mLine(), mBrightObjCount(), _60(0.0f, 0.0f), _68(), _6C(0.0f, 0.0f), _74(0.0f, 0.0f), _7C(),
-      mDrawSyncTokenIndex(), mBrightCamInfo() {
+    : NameObj("\203\214\203\223\203\131\203\164\203\214\203\101\212\307\227\235" /* レンズフレア管理 */), mRing(), mGlow(), mLine(), mBrightObjCount(), _60(0.0f, 0.0f), _68(), _6C(0.0f, 0.0f), _74(0.0f, 0.0f), _7C() {
 }
 
 LensFlareDirector::~LensFlareDirector() {
@@ -187,7 +186,6 @@ void LensFlareDirector::init(const JMapInfoIter& rIter) {
     mRing = new LensFlareRing();
     mGlow = new LensFlareGlow();
     mLine = new LensFlareLine();
-    mBrightCamInfo = new BrightCamInfo();
 
     MR::connectToSceneMapObjMovement(this);
 }
@@ -196,7 +194,6 @@ void LensFlareDirector::movement() {
     s32 area = checkArea();
     controlFlare(area, checkBrightObj(area != 0));
 
-    mBrightCamInfo->write(mDrawSyncTokenIndex, MR::getCameraViewMtx(), MR::getCameraProjectionMtx(), MR::getCamYdir(), MR::getCamPos());
 }
 
 void LensFlareDirector::pauseOff() {
@@ -207,13 +204,21 @@ void LensFlareDirector::pauseOff() {
 }
 
 void LensFlareDirector::setDrawSyncToken() {
-    // Two readbacks alternate, each with its frame's camera (BrightCamInfo).
-    J3DNativeView::captureReadback(BrightObjBase::cReadbackChannel + mDrawSyncTokenIndex);
-    for (u32 i = 0; i < mBrightObjCount; i++) {
-        mBrightObjArray[i]->calcBrightInfo(mDrawSyncTokenIndex, *mBrightCamInfo);
+    // What the last finished probes saw; then this picture's points.
+    NebulaScreenProbe probes[16 * BrightObjBase::cProbeCount];
+    const u32 count = mBrightObjCount * BrightObjBase::cProbeCount;
+    const u32 done = J3DNativeView::screenProbeResults(BrightObjBase::cReadbackChannel, probes, count);
+    for (u32 i = 0; i < mBrightObjCount && (i + 1) * BrightObjBase::cProbeCount <= done; i++) {
+        const NebulaScreenProbe* pProbes = &probes[i * BrightObjBase::cProbeCount];
+        if (pProbes->x != BrightObjBase::cNoProbes) {
+            mBrightObjArray[i]->setResult(pProbes);
+        }
     }
 
-    mDrawSyncTokenIndex = mDrawSyncTokenIndex ^ 0x1;
+    for (u32 i = 0; i < mBrightObjCount; i++) {
+        mBrightObjArray[i]->calcBrightInfo(&probes[i * BrightObjBase::cProbeCount]);
+    }
+    J3DNativeView::probeScreen(BrightObjBase::cReadbackChannel, NEBULA_SCREEN_PROBE_ALPHA, probes, count);
 }
 
 s32 LensFlareDirector::checkArea() {
@@ -321,9 +326,6 @@ namespace MR {
         }
     }
 
-    u32 getLensFlareDrawSyncTokenIndex() {
-        return ::getLensFlareDirector()->mDrawSyncTokenIndex;
-    }
 };  // namespace MR
 
 TVec2f LensFlare_FORCE_MATCH(const TVec2f& rA, const TVec2f& rB) {

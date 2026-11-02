@@ -110,7 +110,7 @@ inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // Builds the GX graphics root signature used by RendererD3D12. Root
 // CBV b0 is visible to both VS and GS because native GX line/point expansion
 // reads its scale-aware raster constants in the geometry stage.
-[[nodiscard]] HRESULT create_gx_root_signature(
+[[nodiscard]] HRESULT create_draw_root_signature(
     ID3D12Device* device,
     ID3D12RootSignature** root_signature) noexcept;
 
@@ -198,8 +198,7 @@ public:
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     [[nodiscard]] std::string startup_failure() const { return {}; }
-    // Creates the scene target-peek and pointer-depth resources up front, so the first frame
-    // that shows the pointer does not stall creating them.
+    // Creates the screen probes' resources up front, so the first frame that asks does not stall creating them.
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
     // A persistently mapped upload buffer; empty when it cannot be created.
@@ -239,7 +238,7 @@ public:
     // scene target is a second target at the window's integer scale, so the 2D layer
     // renders at display resolution over the resampled scene. The two target
     // sets share layout and resource states and are swapped as a whole, so
-    // every scene target path (draws, clears, copies, peeks) works unchanged on either.
+    // every scene target path (draws, clears, copies, probes) works unchanged on either.
     // begin_output_scene returns false when the split is off or the scene target already
     // covers the window.
     [[nodiscard]] bool begin_output_scene();
@@ -305,7 +304,7 @@ public:
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
     // segment advances only after frames that wrote palettes, so present and
-    // peek frames do not age the previous scene's palettes.
+    // utility frames do not age the previous scene's palettes.
     [[nodiscard]] unsigned matrix_history_frames() const noexcept {
         return matrix_segments_ - kFramesInFlight;
     }
@@ -555,57 +554,11 @@ public:
     // diagnostic buffers never suppress the required blit/presentation.
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Reads the scene target's 640x456 depth field into `pixels`.
-    [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
-    // Render-owner only. Keeps the shared GXPeek resources owned until
-    // try_complete_pointer_depth_capture_in_place has taken the field.
-    [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
-    // Records the pointer depth field capture into the frame's own command
-    // list at the current point of the stream (the simulation thread marks the
-    // FIFO offset of the scene boundary). The readback completes at this
-    // frame's fence; try_complete_pointer_depth_capture_in_place publishes it.
-    // False while another pointer field is still owned.
-    [[nodiscard]] bool record_pointer_depth_capture_in_frame();
-    [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept {
-        return pointer_depth_capture_fence_;
-    }
-    // On completion `rgba` names the mapped field (null when the readback
-    // could not be mapped).
-    [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(
-        const std::uint8_t*& rgba);
-    // Render-owner only. Asynchronous 640x456 scene target fields (depth for GXPeekZ,
-    // color for GXPeekARGB) for the simulation thread, one per channel
-    // (RenderCore binds a channel to a peek kind and draw-sync token), each on
-    // private resources so they never contend with the pointer field above or
-    // with each other. Returns the fence value, or 0 when that channel is in
-    // flight.
-    static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
-    static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
-    // Captures the field into readback `slot` (0..2). Completion leaves it
-    // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x456).
-    [[nodiscard]] std::uint64_t submit_async_peek_field(
-        std::size_t channel, ReadbackKind kind, std::size_t slot);
-    // The same capture recorded in the open frame where the stream is now
-    // (a draw-sync token); fenced when the frame is submitted.
-    [[nodiscard]] bool record_async_peek_field_in_frame(
-        std::size_t channel, ReadbackKind kind, std::size_t slot);
-    [[nodiscard]] bool try_complete_async_peek_field(std::size_t channel);
-    [[nodiscard]] const std::uint8_t* async_peek_field_rgba(
-        std::size_t channel, std::size_t slot) const noexcept;
-    [[nodiscard]] bool async_peek_field_pending(std::size_t channel) const noexcept {
-        return async_peek_fields_[channel].fence != 0u;
-    }
-    [[nodiscard]] bool any_async_peek_field_pending() const noexcept {
-        for (const AsyncPeekField& field : async_peek_fields_) {
-            if (field.fence != 0u) return true;
-        }
-        return false;
-    }
-    [[nodiscard]] bool peek_scene(
-        std::uint16_t x,
-        std::uint16_t y,
-        ReadbackKind kind,
-        std::uint32_t& value);
+    // Render-owner only. The picture's value at each point into slot `slot`'s readback, in the open frame where the
+    // stream is now; screen_probes_finished names its bytes (RGBA8 per point) once that frame's fence has passed.
+    static constexpr std::size_t kScreenProbeSlots = 12u;
+    [[nodiscard]] bool record_screen_probes(std::size_t slot, ScreenProbeKind kind, std::span<const ScreenProbe> probes);
+    [[nodiscard]] const std::uint8_t* screen_probes_finished(std::size_t slot) noexcept;
     bool debug_copy_scene_to_readback();
     void debug_log_readback();
     void debug_log_backbuffer_readback();
@@ -698,7 +651,7 @@ public:
         const std::array<float, 4>& color) override;
 
 private:
-    void invalidate_gx_bindings();
+    void invalidate_draw_bindings();
     // VSYNC ON presents each frame for round(refresh / rate) refreshes when
     // the refresh is a multiple of the present rate (60 at 120 Hz, 30 at
     // 60 Hz), so every frame stays on screen equally long; other rates keep
@@ -798,7 +751,7 @@ private:
     void reset_sampler_frame(); // only after this slot's fence completes
     bool create_conversion_pipeline();  // scene target-copy conversion blit PSO
     bool create_clear_pipeline();
-    bool ensure_peek_resources();
+    bool ensure_screen_probe_resources();
 
     // Records the conversion blit: fullscreen triangle into `dest` (RTV),
     // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
@@ -957,7 +910,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE scene_dsv_{};
     // The inactive scene target target set (the output-resolution one between frames).
     // MSAA: an scene target's draws and clears go to these multisampled targets (the set's rtv and dsv name them); its color
-    // and depth, which copies, peeks and readbacks read, are their resolves (resolve_scene).
+    // and depth, which copies and probes read, are their resolves (resolve_scene).
     struct SceneMsaa {
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
@@ -1586,7 +1539,7 @@ private:
     std::uint64_t last_begin_reset_us_ = 0;
 
     // Redundant-state elision for draw(). Every one of these is re-armed by
-    // invalidate_gx_bindings(), which begin_frame() calls after the upload rings
+    // invalidate_draw_bindings(), which begin_frame() calls after the upload rings
     // for the new frame slot have been rewound and before any list is recorded.
     // The vertex view is part of the set: its GPU VA comes from the per-frame
     // vertex ring, so a stale entry can never survive that rewind.
@@ -1606,7 +1559,7 @@ private:
     bool bound_vertex_view_valid_ = false;
     // The index view is a CPU-side 20-byte descriptor whose BufferLocation comes
     // from the per-frame index ring, so like the vertex view it must be re-armed
-    // by invalidate_gx_bindings() after the ring for the new slot is rewound.
+    // by invalidate_draw_bindings() after the ring for the new slot is rewound.
     D3D12_INDEX_BUFFER_VIEW bound_index_view_{};
     bool bound_index_view_valid_ = false;
     D3D12_RECT bound_scissor_{};
@@ -1755,55 +1708,19 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
 
-    // Synchronous GXPeekARGB/GXPeekZ: the render thread copies the pixel through
-    // a 1x1 conversion target into a readback buffer.
-    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> peek_allocator_;
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> peek_command_list_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> peek_target_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> peek_readback_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> peek_rtv_heap_;
-    D3D12_CPU_DESCRIPTOR_HANDLE peek_rtv_{};
-    UINT peek_readback_row_pitch_ = 0;
-    Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_target_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_readback_;
-    std::uint64_t pointer_depth_capture_fence_ = 0;
-    // Pointer depth fields rotate through mapped readbacks so a published
-    // field stays readable while the next ones are captured (the consumer
-    // reads at most the two newest; four leave margin).
-    static constexpr std::size_t kPointerDepthRing = 4u;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kPointerDepthRing> pointer_depth_ring_;
-    std::array<const std::uint8_t*, kPointerDepthRing> pointer_depth_ring_rgba_{};
-    std::size_t pointer_depth_ring_next_ = 0;
-    const std::uint8_t* pointer_depth_pending_rgba_ = nullptr;
-    bool pointer_depth_in_frame_pending_ = false;
-    bool ensure_pointer_depth_resources();
-    struct AsyncPeekField {
-        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list;
-        Microsoft::WRL::ComPtr<ID3D12Resource> target;
-        // One mapped readback per published slot of RenderCore's field ring.
-        std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kAsyncPeekFieldSlots> readbacks;
-        std::array<const std::uint8_t*, kAsyncPeekFieldSlots> rgba{};
-        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
-        D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
+    // Screen probes: one pixel of the target per point, each slot's readback fenced with its frame.
+    Microsoft::WRL::ComPtr<ID3D12Resource> probe_target_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> probe_rtv_heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE probe_rtv_{};
+    struct ScreenProbeSlot {
+        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+        const std::uint8_t* rgba = nullptr;
         std::uint64_t fence = 0;
-        // Recorded on the open frame's command list; end_frame assigns its fence.
-        bool in_frame = false;
     };
-    std::array<AsyncPeekField, kAsyncPeekFieldChannels> async_peek_fields_{};
-    // AsyncPeekField::fence of a field recorded in the open frame.
-    static constexpr std::uint64_t kAsyncPeekInFrame = ~std::uint64_t{0};
-    bool ensure_async_peek_field_resources(AsyncPeekField& field, ReadbackKind kind);
-    void record_async_peek_field_commands(
-        ID3D12GraphicsCommandList* list, AsyncPeekField& field, ReadbackKind kind, std::size_t slot);
-    bool read_scene_pixels(std::uint16_t x, std::uint16_t y, ReadbackKind kind,
-        std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
-        bool defer_pointer_depth = false);
+    std::array<ScreenProbeSlot, kScreenProbeSlots> probe_slots_{};
+    // ScreenProbeSlot::fence of probes recorded in the open frame.
+    static constexpr std::uint64_t kProbesInFrame = ~std::uint64_t{0};
     static const std::uint8_t* pin_readback_mapping(ID3D12Resource* readback);
-    void select_pointer_depth_destination();
-    void copy_scene_readback_pixels(ID3D12Resource* readback, UINT width,
-        UINT height, UINT row_pitch, bool is_depth, std::uint32_t& value,
-        std::span<std::uint32_t> depth_pixels);
 
 };
 

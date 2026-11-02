@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
+#include <thread>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -23,12 +24,18 @@ namespace galaxy::render {
 
 class PipelineCacheVk {
 public:
+    ~PipelineCacheVk() noexcept { stop_prepare(); }
+
     // `cache_dir` holds vk_pipelines.bin and vk_compat.txt (created if missing).
     bool initialize(VkDevice device, const vk::RenderLayout* layout, const std::filesystem::path& cache_dir);
 
     // RENDER THREAD ONLY. A native material's pipeline: its build-compiled shaders under the draw's render state; null
     // when the build has none or the driver refuses every form.
     [[nodiscard]] VkPipeline get_native(std::uint32_t shader, const RenderStateKey& render_state);
+    // Starts building the seed pipelines on background threads; merge_prepared takes in what they finished.
+    void start_prepare();
+    void merge_prepared();
+    void stop_prepare() noexcept;
 
     // The driver's cache data written to vk_pipelines.bin.
     void save_driver_cache();
@@ -74,6 +81,19 @@ private:
     std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint32_t, RenderStateKey>, VkPipeline>>>
         native_pipelines_;
     std::uint32_t created_ = 0;
+    [[nodiscard]] VkPipeline create_native(std::uint32_t shader, const RenderStateKey& rs, unsigned variant);
+    struct Prepared {
+        std::uint32_t shader;
+        RenderStateKey rs;
+        VkPipeline pipeline;
+    };
+    bool prepare_started_ = false;
+    std::vector<std::thread> prepare_threads_;
+    std::atomic<std::size_t> prepare_next_{0u};
+    std::atomic<bool> prepare_stop_{false};
+    std::atomic<bool> prepare_ready_{false};
+    std::mutex prepared_lock_;
+    std::vector<Prepared> prepared_;
     // The optional features left out of every pipeline on this driver build, and how often each fixed a refusal.
     std::atomic<std::uint32_t> device_compat_{0};
     std::array<std::atomic<std::uint32_t>, kCompatBits + 1u> fixes_{};

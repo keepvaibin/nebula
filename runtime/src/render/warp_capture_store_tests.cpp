@@ -618,105 +618,6 @@ V main(uint id : SV_VertexID) {
             constants);
     }
 
-    Pixel run_color_peek(
-        const std::vector<Pixel>& pixels,
-        unsigned width,
-        unsigned height,
-        const galaxy::render::ScenePeekSamplingGeometry& sampling) {
-        if (pixels.size() !=
-            static_cast<std::size_t>(width) * height) {
-            throw std::invalid_argument(
-                "color-peek source size does not match dimensions");
-        }
-        std::vector<std::uint8_t> bytes(pixels.size() * 4u);
-        for (std::size_t index = 0u; index < pixels.size(); ++index) {
-            bytes[index * 4u + 0u] = pixels[index].r;
-            bytes[index * 4u + 1u] = pixels[index].g;
-            bytes[index * 4u + 2u] = pixels[index].b;
-            bytes[index * 4u + 3u] = pixels[index].a;
-        }
-        const std::vector<Pixel> result = run_bytes(
-            DXGI_FORMAT_R8G8B8A8_UNORM,
-            bytes,
-            width,
-            height,
-            1u,
-            galaxy::render::make_scene_peek_conversion_constants(
-                sampling, galaxy::render::ReadbackKind::Color));
-        if (result.size() != 1u) {
-            throw std::runtime_error("color peek returned a non-1x1 result");
-        }
-        return result.front();
-    }
-
-    Pixel run_depth_peek(
-        const std::vector<std::uint32_t>& z24_pixels,
-        unsigned width,
-        unsigned height,
-        const galaxy::render::ScenePeekSamplingGeometry& sampling) {
-        if (z24_pixels.size() !=
-            static_cast<std::size_t>(width) * height) {
-            throw std::invalid_argument(
-                "depth-peek source size does not match dimensions");
-        }
-        std::vector<std::uint8_t> bytes(
-            z24_pixels.size() * sizeof(float));
-        for (std::size_t index = 0u; index < z24_pixels.size(); ++index) {
-            const std::uint32_t z24 =
-                z24_pixels[index] & 0x00ffffffu;
-            const float depth =
-                1.0f - static_cast<float>(z24) / 16777216.0f;
-            std::memcpy(
-                bytes.data() + index * sizeof(float),
-                &depth,
-                sizeof(depth));
-        }
-        const std::vector<Pixel> result = run_bytes(
-            DXGI_FORMAT_R32_FLOAT,
-            bytes,
-            width,
-            height,
-            1u,
-            galaxy::render::make_scene_peek_conversion_constants(
-                sampling, galaxy::render::ReadbackKind::Depth));
-        if (result.size() != 1u) {
-            throw std::runtime_error("depth peek returned a non-1x1 result");
-        }
-        return result.front();
-    }
-
-    std::vector<Pixel> run_color_field(
-        const std::vector<Pixel>& pixels, unsigned width, unsigned height, unsigned scale,
-        unsigned logical_size) {
-        std::vector<std::uint8_t> bytes(pixels.size() * 4u);
-        for (std::size_t index = 0u; index < pixels.size(); ++index) {
-            bytes[index * 4u + 0u] = pixels[index].r;
-            bytes[index * 4u + 1u] = pixels[index].g;
-            bytes[index * 4u + 2u] = pixels[index].b;
-            bytes[index * 4u + 3u] = pixels[index].a;
-        }
-        auto constants = galaxy::render::make_scene_peek_conversion_constants(
-            galaxy::render::compute_scene_peek_sampling_geometry(0, 0, scale),
-            galaxy::render::ReadbackKind::Color);
-        constants.values[15] = -1.0f;
-        return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes, width, height, logical_size, constants);
-    }
-
-    std::vector<Pixel> run_depth_field(
-        const std::vector<std::uint32_t>& z24_pixels, unsigned width,
-        unsigned height, unsigned scale, unsigned logical_size) {
-        std::vector<std::uint8_t> bytes(z24_pixels.size() * sizeof(float));
-        for (std::size_t i=0; i<z24_pixels.size(); ++i) {
-            const float depth=1.0f-static_cast<float>(z24_pixels[i])/16777216.0f;
-            std::memcpy(bytes.data()+i*sizeof(float), &depth, sizeof(depth));
-        }
-        auto constants=galaxy::render::make_scene_peek_conversion_constants(
-            galaxy::render::compute_scene_peek_sampling_geometry(0,0,scale),
-            galaxy::render::ReadbackKind::Depth);
-        constants.values[15]=-1.0f;
-        return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
-    }
-
     bool test_descriptor_ring_allocation_identity() {
         using namespace galaxy::render;
         DescriptorRing ring;
@@ -797,10 +698,9 @@ V main(uint id : SV_VertexID) {
 
     bool test_persistent_conversion_sources() {
         using namespace galaxy::render;
-        const auto sampling = compute_scene_peek_sampling_geometry(0u, 0u, 1u);
         const std::vector<std::uint8_t> color{18u, 52u, 86u, 120u};
         bool passed = expect_pixel(run_bytes(kSceneColorFormat, color, 1u, 1u,
-            1u, make_scene_peek_conversion_constants(sampling, ReadbackKind::Color),
+            1u, make_screen_probe_constants(0.0f, 0.0f, FrameMap(1u), false),
             true).front(), {18u, 52u, 86u, 120u},
             "persistent color source survives frame descriptor overwrite/rewind");
         // Native R24/X8 views, not the R32 float fixture used by the broader
@@ -813,7 +713,7 @@ V main(uint id : SV_VertexID) {
             const std::uint8_t expected = depth == 0u ? 255u : 0u;
             passed &= expect_pixel(run_bytes(kSceneDepthResourceFormat, bytes,
                 1u, 1u, 1u,
-                make_scene_peek_conversion_constants(sampling, ReadbackKind::Depth),
+                make_screen_probe_constants(0.0f, 0.0f, FrameMap(1u), true),
                 true).front(),
                 {expected, expected, expected, 255u},
                 "persistent native depth view survives frame descriptor overwrite/rewind");
@@ -1480,8 +1380,8 @@ private:
         const D3D12_HEAP_PROPERTIES readback_heap =
             heap_properties(D3D12_HEAP_TYPE_READBACK);
 
-        ComPtr<ID3D12RootSignature> gx_root;
-        ComPtr<ID3D12PipelineState> gx_pipeline;
+        ComPtr<ID3D12RootSignature> draw_root;
+        ComPtr<ID3D12PipelineState> draw_pipeline;
         ComPtr<ID3D12Resource> gx_constants;
         const bool native_depth = source_format == galaxy::render::kSceneDepthResourceFormat;
         const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,
@@ -2027,125 +1927,6 @@ bool test_warp_against_oracle() {
                 scale,
                 oracle_depth(z24_rows, depth_filter),
                 depth_label);
-        }
-
-        // A depth peek reads one pixel: at a scaled resolution one fixed physical texel, never a blend. Four logical
-        // pixels cover both edges and the z24 endpoints; every other subpixel holds a different depth.
-        constexpr std::array<std::uint32_t, 4> kPeekDepths{
-            0x000000u,
-            0x123456u,
-            0x654321u,
-            0xffffffu,
-        };
-        for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
-            const unsigned width = 2u * scale;
-            const unsigned height = 2u * scale;
-            std::vector<std::uint32_t> depth_grid(
-                static_cast<std::size_t>(width) * height,
-                0x345678u);
-            for (unsigned logical_y = 0u; logical_y < 2u; ++logical_y) {
-                for (unsigned logical_x = 0u; logical_x < 2u; ++logical_x) {
-                    const galaxy::render::ScenePeekSamplingGeometry sampling =
-                        galaxy::render::compute_scene_peek_sampling_geometry(
-                            static_cast<std::uint16_t>(logical_x),
-                            static_cast<std::uint16_t>(logical_y),
-                            scale);
-                    const std::size_t index =
-                        static_cast<std::size_t>(sampling.depth_texel_y) *
-                            width +
-                        sampling.depth_texel_x;
-                    depth_grid[index] =
-                        kPeekDepths[logical_y * 2u + logical_x];
-                }
-            }
-
-            for (unsigned logical_y = 0u; logical_y < 2u; ++logical_y) {
-                for (unsigned logical_x = 0u; logical_x < 2u; ++logical_x) {
-                    const galaxy::render::ScenePeekSamplingGeometry sampling =
-                        galaxy::render::compute_scene_peek_sampling_geometry(
-                            static_cast<std::uint16_t>(logical_x),
-                            static_cast<std::uint16_t>(logical_y),
-                            scale);
-                    const std::uint32_t expected_z24 =
-                        kPeekDepths[logical_y * 2u + logical_x];
-                    char label[128]{};
-                    std::snprintf(
-                        label,
-                        sizeof(label),
-                        "%ux point depth peek (%u,%u) preserves exact z24",
-                        scale,
-                        logical_x,
-                        logical_y);
-                    passed &= expect_pixel(
-                        harness.run_depth_peek(
-                            depth_grid, width, height, sampling),
-                        packed_depth(expected_z24),
-                        label);
-                }
-            }
-
-            const auto field=harness.run_depth_field(depth_grid,width,height,scale,2u);
-            for (std::size_t i=0; i<kPeekDepths.size(); ++i) {
-                passed &= expect_pixel(field.at(i),packed_depth(kPeekDepths[i]),
-                    "whole pointer depth field keeps each peek's exact pixel and z24");
-            }
-
-            // Color peeks keep their full NxN box reduction. The center and corner deltas cancel only when
-            // every physical subpixel takes part in the reduction.
-            constexpr Pixel kColorMean{64u, 96u, 128u, 160u};
-            std::vector<Pixel> color_block(
-                static_cast<std::size_t>(scale) * scale,
-                kColorMean);
-            if (scale > 1u) {
-                const galaxy::render::ScenePeekSamplingGeometry sampling =
-                    galaxy::render::compute_scene_peek_sampling_geometry(
-                        0u, 0u, scale);
-                color_block[0] = Pixel{32u, 64u, 96u, 128u};
-                const std::size_t center =
-                    static_cast<std::size_t>(sampling.depth_texel_y) *
-                        scale +
-                    sampling.depth_texel_x;
-                color_block[center] = Pixel{96u, 128u, 160u, 192u};
-            }
-            const galaxy::render::ScenePeekSamplingGeometry color_sampling =
-                galaxy::render::compute_scene_peek_sampling_geometry(
-                    0u, 0u, scale);
-            char color_label[96]{};
-            std::snprintf(
-                color_label,
-                sizeof(color_label),
-                "%ux color peek retains full logical-pixel box reduction",
-                scale);
-            passed &= expect_pixel(
-                harness.run_color_peek(
-                    color_block, scale, scale, color_sampling),
-                kColorMean,
-                color_label);
-
-            // The whole colour field (colour peeks from a draw-sync token's field): every logical pixel is its own
-            // block's reduction, as a single peek of that pixel. The lens flare's visibility test reads its alpha.
-            constexpr std::array<Pixel, 4> kFieldColors{
-                Pixel{64u, 96u, 128u, 255u}, Pixel{200u, 40u, 80u, 0u},
-                Pixel{16u, 240u, 32u, 128u}, Pixel{100u, 100u, 100u, 250u}};
-            std::vector<Pixel> color_grid(static_cast<std::size_t>(width) * height);
-            for (unsigned y = 0u; y < height; ++y) {
-                for (unsigned x = 0u; x < width; ++x) {
-                    color_grid[static_cast<std::size_t>(y) * width + x] =
-                        kFieldColors[(y / scale) * 2u + x / scale];
-                }
-            }
-            if (scale > 1u) {
-                // Deltas that cancel only when the whole block takes part.
-                Pixel& corner = color_grid[0];
-                Pixel& next = color_grid[1];
-                corner.r = static_cast<std::uint8_t>(corner.r - 32u);
-                next.r = static_cast<std::uint8_t>(next.r + 32u);
-            }
-            const auto color_field = harness.run_color_field(color_grid, width, height, scale, 2u);
-            for (std::size_t i = 0; i < kFieldColors.size(); ++i) {
-                passed &= expect_pixel(color_field.at(i), kFieldColors[i],
-                    "whole colour field reduces each logical pixel's block, alpha included");
-            }
         }
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAILED: WARP scene target conversion suite: %s\n", error.what());

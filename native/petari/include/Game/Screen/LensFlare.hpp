@@ -3,7 +3,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/Array.hpp"
 
-class BrightCamInfo;
 class BrightObjBase;
 class TriggerChecker;
 
@@ -97,12 +96,9 @@ public:
     /* 0x6C */ TVec2f _6C;
     /* 0x74 */ TVec2f _74;
     /* 0x7C */ u16 _7C;
-    /* 0x7E */ u16 mDrawSyncTokenIndex;
-    /* 0x80 */ BrightCamInfo* mBrightCamInfo;
 };
 
 namespace MR {
     void addBrightObj(BrightObjBase* pBrightObj);
     void setLensFlareDrawSyncToken();
-    u32 getLensFlareDrawSyncTokenIndex();
 };  // namespace MR
