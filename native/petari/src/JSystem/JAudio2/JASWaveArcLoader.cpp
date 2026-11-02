@@ -3,10 +3,10 @@
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "JSystem/JKernel/JKRDvdRipper.hpp"
+
 #include <cstring>
 #include <stdint.h>
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 JASHeap* JASWaveArcLoader::sAramHeap;
 
@@ -81,7 +81,7 @@ bool JASWaveArc::eraseSetup() {
 void JASWaveArc::loadToAramCallback(void* this_) {
     loadToAramCallbackParams* tmp = (loadToAramCallbackParams*)this_;
     JASWaveArc* wavArc = tmp->mWavArc;
-    if (JKRDvdRipper::loadToMainRAM(tmp->mEntryNum, tmp->mBase, wavArc->mFileLength, nullptr, JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, nullptr) ==
+    if (GameAssets::load(tmp->mEntryNum, tmp->mBase, wavArc->mFileLength, nullptr, GameAssets::ALLOC_DIRECTION_FORWARD, nullptr) ==
         nullptr) {
         return;
     }
@@ -140,8 +140,8 @@ void JASWaveArc::onDispose() {
 }
 
 void JASWaveArc::setEntryNum(s32 entryNum) {
-    NebulaDisc::File file;
-    if (entryNum < 0 || !NebulaDisc::open(entryNum, &file)) {
+    GameAssets::File file;
+    if (entryNum < 0 || !GameAssets::open(entryNum, &file)) {
         return;
     }
     mFileLength = file.mLength;

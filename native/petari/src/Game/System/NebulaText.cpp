@@ -3,7 +3,7 @@
 
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/Language.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
@@ -170,13 +170,12 @@ namespace {
 
         char path[96];
         snprintf(path, sizeof(path), "/%s/MessageData/NebulaText.txt", pPrefix);
-        NebulaDisc::File file;
-        if (!NebulaDisc::open(path, &file)) {
+        GameAssets::File file;
+        if (!GameAssets::open(path, &file)) {
             return;
         }
         const s32 length = file.mLength < static_cast< u32 >(cFileMax) ? static_cast< s32 >(file.mLength) : cFileMax;
-        const s32 read = (length + 31) & ~31;
-        if (length > 0 && read <= cFileMax && NebulaDisc::read(&file, sFile, read, 0) >= 0) {
+        if (length > 0 && GameAssets::read(&file, sFile, length, 0) >= 0) {
             parse(sFile, length);
             JUTNativeLog("NebulaText: %s (%d texts)\n", path, sOverrideNum);
         }

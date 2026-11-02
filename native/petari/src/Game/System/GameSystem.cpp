@@ -7,7 +7,6 @@
 #include "Game/Screen/HomeButtonLayout.hpp"
 #include "Game/Screen/SystemWipeHolder.hpp"
 #include "Game/System/AudSystemWrapper.hpp"
-#include "Game/System/FileRipper.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemDimmingWatcher.hpp"
@@ -41,7 +40,7 @@
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 #define GPU_FIFO_SIZE 0x80000
 
@@ -57,7 +56,6 @@ namespace NrvGameSystem {
 
 // The game thread's entry; the native platform layer starts it.
 extern "C" void nebula_game_main(void) {
-    NebulaDisc::init();
     NebulaFrameClock::init();
     JKRExpHeap::createRoot(1, true);
     (MR::MutexHolder< 0 >::sMutex).init();

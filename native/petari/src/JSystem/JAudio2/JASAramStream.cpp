@@ -6,7 +6,7 @@
 #include "JSystem/JAudio2/JASDspInterface.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
-#include "JSystem/JKernel/JKRDvdRipper.hpp"
+
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
@@ -105,7 +105,7 @@ void JASAramStream::init(u8* buffer, u32 param_1, StreamCallback i_callback, voi
 }
 
 bool JASAramStream::prepare(s32 param_0, int param_1) {
-    if (!NebulaDisc::open(param_0, &mDvdFile)) {
+    if (!GameAssets::open(param_0, &mDvdFile)) {
         return false;
     }
 
@@ -227,7 +227,7 @@ bool JASAramStream::headerLoad(u32 param_0, int param_1) {
         return false;
     }
 
-    if (NebulaDisc::read(&mDvdFile, sReadBuffer, sizeof(Header), 0) < 0) {
+    if (GameAssets::read(&mDvdFile, sReadBuffer, sizeof(Header), 0) < 0) {
         UNK_BOOL_B = true;
         return false;
     }
@@ -302,7 +302,7 @@ bool JASAramStream::load() {
         size = mDvdFile.mLength - offset;
     }
 
-    if (NebulaDisc::read(&mDvdFile, sReadBuffer, size, offset) < 0) {
+    if (GameAssets::read(&mDvdFile, sReadBuffer, size, offset) < 0) {
         UNK_BOOL_B = true;
         return false;
     }

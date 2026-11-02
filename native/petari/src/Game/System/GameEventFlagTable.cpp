@@ -290,7 +290,7 @@ namespace GameEventFlagTable {
 
     // The flags (main.dol's when a mod changed them there).
     const GameEventFlag* flags() {
-        static const GameEventFlag* sFlags = NebulaDiscTables::getEventFlags(::sGameEventFlagStatic);
+        static const GameEventFlag* sFlags = NebulaDataTables::getEventFlags(::sGameEventFlagStatic);
         return sFlags;
     }
 
@@ -466,7 +466,7 @@ namespace GameEventFlagTable {
 
     s32 getGalaxyDependedFlags(const char** pFlags, int a1, const char* pName) {
         JMapInfo info;
-        info.attach(NebulaDiscTables::getGalaxyInfoTable());
+        info.attach(NebulaDataTables::getGalaxyInfoTable());
 
         JMapInfoIter iter = info.findElement("name", pName, 0);
 

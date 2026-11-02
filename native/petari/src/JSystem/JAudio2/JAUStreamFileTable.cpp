@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JAUStreamFileTable.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 JAUStreamFileTable::JAUStreamFileTable() {
     mData = nullptr;
@@ -34,5 +34,5 @@ s32 JAUStreamDataMgr_StreamFileTable::getStreamFileEntry(JAISoundID soundID) {
     if (filePath == nullptr) {
         return -1;
     }
-    return NebulaDisc::find(filePath);
+    return GameAssets::find(filePath);
 }

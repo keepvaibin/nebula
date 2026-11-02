@@ -6,9 +6,8 @@ using System.Text;
 namespace Nebula.Launcher
 {
     /// <summary>
-    /// What the installed game.pak is (Setup's copy of the disc's game partition: boot.bin at 0, the file table where
-    /// boot.bin says): its game id and its language folders (UsEnglish, EuGerman, JpJapanese...), which the language
-    /// setting offers.
+    /// What the installed game.pak is (the asset store, crates/nebula-import/src/cook/store.rs): its game id and its
+    /// language folders (UsEnglish, EuGerman, JpJapanese...), which the language setting offers.
     /// </summary>
     internal static class GameDisc
     {
@@ -19,16 +18,15 @@ namespace Nebula.Launcher
             {
                 using (var file = new FileStream(pak, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    var id = new byte[6];
-                    return file.Read(id, 0, 6) == 6 ? Encoding.ASCII.GetString(id) : null;
+                    var header = new byte[HeaderSize];
+                    return ReadHeader(file, header) ? Encoding.ASCII.GetString(header, 48, 6) : null;
                 }
             }
             catch (IOException) { return null; }
             catch (UnauthorizedAccessException) { return null; }
         }
 
-        /// <summary>The language folders at the root of game.pak's file table, in its order; empty when it cannot be
-        /// read.</summary>
+        /// <summary>The language folders at the root of game.pak, in its order; empty when it cannot be read.</summary>
         public static List<string> LanguageFolders(string pak)
         {
             var folders = new List<string>();
@@ -36,33 +34,29 @@ namespace Nebula.Launcher
             {
                 using (var file = new FileStream(pak, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    var boot = new byte[0x440];
-                    if (file.Read(boot, 0, boot.Length) != boot.Length) return folders;
-                    // Wii partition offsets and sizes are words: boot.bin holds them divided by 4.
-                    long fstOffset = (long)BigEndian32(boot, 0x424) << 2;
-                    long fstSize = (long)BigEndian32(boot, 0x428) << 2;
-                    if (fstSize < 12 || fstSize > 16 << 20 || fstOffset + fstSize > file.Length) return folders;
-                    var fst = new byte[fstSize];
-                    file.Seek(fstOffset, SeekOrigin.Begin);
-                    if (file.Read(fst, 0, fst.Length) != fst.Length) return folders;
-                    // Entries of 12 bytes (a flag byte, the name's offset in the strings after the last entry, then
-                    // two words: a directory's parent and the entry after its last); the root's second word is the
-                    // entry count.
-                    uint count = BigEndian32(fst, 8);
-                    if (count == 0 || count * 12L > fst.Length) return folders;
-                    long strings = count * 12L;
-                    for (uint index = 1; index < count;)
+                    var header = new byte[HeaderSize];
+                    if (!ReadHeader(file, header)) return folders;
+                    long nodesAt = BitConverter.ToInt64(header, 16);
+                    long namesAt = BitConverter.ToInt64(header, 32);
+                    long namesSize = BitConverter.ToInt64(header, 40);
+                    uint count = BitConverter.ToUInt32(header, 12);
+                    if (count == 0 || count > 1 << 24 || namesSize <= 0 || namesSize > 16 << 20 ||
+                        namesAt + namesSize > file.Length || nodesAt + count * (long)NodeSize > file.Length) return folders;
+                    var names = new byte[namesSize];
+                    file.Seek(namesAt, SeekOrigin.Begin);
+                    if (file.Read(names, 0, names.Length) != names.Length) return folders;
+                    var nodes = new byte[count * NodeSize];
+                    file.Seek(nodesAt, SeekOrigin.Begin);
+                    if (file.Read(nodes, 0, nodes.Length) != nodes.Length) return folders;
+                    // The root is node 0: its position is its first child, its size the number of its children.
+                    ulong first = BitConverter.ToUInt64(nodes, 0);
+                    ulong children = BitConverter.ToUInt64(nodes, 8);
+                    for (ulong index = first; index < first + children && index < count; index++)
                     {
-                        long entry = index * 12L;
-                        bool directory = fst[entry] != 0;
-                        uint next = directory ? BigEndian32(fst, (int)entry + 8) : index + 1;
-                        if (directory)
-                        {
-                            string name = Name(fst, strings + (BigEndian32(fst, (int)entry) & 0xFFFFFF));
-                            if (name != null && IsLanguageFolder(name)) folders.Add(name);
-                        }
-                        if (next <= index) break;
-                        index = next;
+                        int node = (int)index * NodeSize;
+                        if ((BitConverter.ToUInt32(nodes, node + 24) & 1) == 0) continue;
+                        string name = Name(names, BitConverter.ToUInt32(nodes, node + 16));
+                        if (name != null && IsLanguageFolder(name)) folders.Add(name);
                     }
                 }
             }
@@ -85,17 +79,21 @@ namespace Nebula.Launcher
             return false;
         }
 
-        private static string Name(byte[] fst, long at)
+        private const int HeaderSize = 64;
+        private const int NodeSize = 32;
+
+        private static bool ReadHeader(Stream file, byte[] header)
         {
-            if (at < 0 || at >= fst.Length) return null;
-            long end = at;
-            while (end < fst.Length && fst[end] != 0) end++;
-            return end < fst.Length ? Encoding.ASCII.GetString(fst, (int)at, (int)(end - at)) : null;
+            if (file.Read(header, 0, header.Length) != header.Length) return false;
+            return Encoding.ASCII.GetString(header, 0, 7) == "NBSTORE" && header[7] == 0;
         }
 
-        private static uint BigEndian32(byte[] data, int at)
+        private static string Name(byte[] names, long at)
         {
-            return (uint)data[at] << 24 | (uint)data[at + 1] << 16 | (uint)data[at + 2] << 8 | data[at + 3];
+            if (at < 0 || at >= names.Length) return null;
+            long end = at;
+            while (end < names.Length && names[end] != 0) end++;
+            return end < names.Length ? Encoding.ASCII.GetString(names, (int)at, (int)(end - at)) : null;
         }
     }
 }

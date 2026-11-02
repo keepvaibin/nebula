@@ -23,8 +23,8 @@ void nebula_vlog(const char* format, va_list args) __attribute__((format(printf,
 void nebula_fatal(const char* format, ...) __attribute__((noreturn, format(printf, 1, 2)));
 
 
-/* The disc's release: 'E' North America, 'P' Europe, 'J' Japan. */
-char nebula_disc_region(void);
+/* The game's release: 'E' North America, 'P' Europe, 'J' Japan. */
+char nebula_game_region(void);
 
 #ifdef __cplusplus
 }

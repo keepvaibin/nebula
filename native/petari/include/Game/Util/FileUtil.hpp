@@ -1,6 +1,8 @@
 #pragma once
 
-#include <JSystem/JKernel/JKRDvdRipper.hpp>
+#include "Game/System/GameAssets.hpp"
+
+
 #include <revolution/types.h>
 
 class JKRArchive;
@@ -31,14 +33,14 @@ namespace MR {
     /// @param[in,out] pHeap An optional pointer to the target heap.
     /// @param[in] allocDir The direction for the allocation.
     /// @return A pointer to the loaded file data.
-    void* loadToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection allocDir);
+    void* loadToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir);
 
     /// @brief Requests asynchronous loading of a file into main memory.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[out] pDst A pointer to the target memory address, or `nullptr` to allocate.
     /// @param[in,out] pHeap An optional pointer to the target heap.
     /// @param[in] allocDir The direction for the allocation.
-    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection allocDir);
+    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir);
 
     /// @brief Mounts an archive file synchronously.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.

@@ -1141,17 +1141,7 @@ mod tests {
         let output = directory.path().join("content");
         partition.write_content(&output, &mut |_, _| true).unwrap();
         assert_eq!(fs::read(output.join("files").join("LayoutData").join("FileSelect.arc")).unwrap(), b"archive");
-        let mut pak = File::open(output.join("game.pak")).unwrap();
-        let system = cook::pak_system_area(&mut pak).unwrap();
-        let files = cook::pak_files(system.fst()).unwrap();
-        let read = |path: &str| {
-            let file = files.iter().find(|f| f.path == path).unwrap();
-            let mut bytes = vec![0u8; file.length as usize];
-            let mut pak = File::open(output.join("game.pak")).unwrap();
-            pak.seek(SeekFrom::Start(file.offset)).unwrap();
-            pak.read_exact(&mut bytes).unwrap();
-            bytes
-        };
+        let read = |path: &str| cook::store::read_file(&output.join("game.pak"), path).unwrap();
         assert_eq!(read("small.szs"), b"abcd");
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
         // main.dol's tables as files of their own folder (cook/dol.rs).

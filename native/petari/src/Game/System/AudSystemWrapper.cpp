@@ -9,7 +9,7 @@
 #include "Game/AudioLib/CSSoundNameConverter.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JKernel/JKRDvdRipper.hpp>
+
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
@@ -37,7 +37,7 @@ AudSystemWrapper::AudSystemWrapper(JKRSolidHeap* pSolidHeap, JKRHeap* pHeap) {
 }
 
 void AudSystemWrapper::requestResourceForInitialize() {
-    MR::loadAsyncToMainRAM(sAudioResFile, nullptr, mHeap, JKRDvdRipper::ALLOC_DIRECTION_BACKWARD);
+    MR::loadAsyncToMainRAM(sAudioResFile, nullptr, mHeap, GameAssets::ALLOC_DIRECTION_BACKWARD);
     MR::mountAsyncArchive(sJaiSeqArc, mSolidHeap);
     MR::mountAsyncArchive(sJaiChordArc, mSolidHeap);
     MR::mountAsyncArchive(sJaiMeArc, mSolidHeap);

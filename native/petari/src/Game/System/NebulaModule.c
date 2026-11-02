@@ -101,7 +101,7 @@ void nebula_fatal(const char* format, ...) {
     fatal_text(text);
 }
 
-/* The release the disc is: North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01), by its game id's fourth letter. */
-char nebula_disc_region(void) {
-    return sHost->disc_id(sHost->user)[3];
+/* The release the game is: North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01), by its game id's fourth letter. */
+char nebula_game_region(void) {
+    return sHost->game_id(sHost->user)[3];
 }
