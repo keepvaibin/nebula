@@ -2306,20 +2306,98 @@ void svc_frame_show(void*, uint16_t width, uint16_t height, uint32_t flags) {
 #endif
 }
 
-void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
+void attach_state_ops(const galaxy::render::state::Op* ops, uint32_t count) {
     namespace shapes = galaxy::render::shapes;
-    static_assert(sizeof(NebulaStateOp) == sizeof(galaxy::render::state::Op), "the renderer's copy of NebulaStateOp");
-    if (ops == nullptr || count == 0u) {
-        return;
-    }
     shapes::Record record;
     record.kind = shapes::Record::Kind::State;
     attach_pending_records();
-    std::memcpy(galaxy::render::reserve_record_ops(record, count), ops, sizeof(NebulaStateOp) * count);
+    std::memcpy(galaxy::render::reserve_record_ops(record, count), ops, sizeof(galaxy::render::state::Op) * count);
     galaxy::render::attach_shape_record(std::move(record));
+}
+#endif
+
+void svc_view_projection(void*, int orthographic, const float terms[6]) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::state::Op op{};
+    op.kind = galaxy::render::state::kProjection;
+    op.a[0] = orthographic != 0 ? 1u : 0u;
+    std::memcpy(op.f, terms, sizeof(op.f));
+    attach_state_ops(&op, 1u);
 #else
-    (void)ops, (void)count;
+    (void)orthographic, (void)terms;
+#endif
+}
+
+void svc_view_viewport(void*, const float viewport[6]) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::state::Op op{};
+    op.kind = galaxy::render::state::kViewport;
+    std::memcpy(op.f, viewport, sizeof(op.f));
+    attach_state_ops(&op, 1u);
+#else
+    (void)viewport;
+#endif
+}
+
+void svc_view_scissor(void*, float left, float top, float width, float height) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::state::Op op{};
+    op.kind = galaxy::render::state::kScissor;
+    op.f[0] = left;
+    op.f[1] = top;
+    op.f[2] = width;
+    op.f[3] = height;
+    attach_state_ops(&op, 1u);
+#else
+    (void)left, (void)top, (void)width, (void)height;
+#endif
+}
+
+void svc_light(void*, uint32_t index, const NebulaLight* light) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::state::Op ops[2]{};
+    ops[0].kind = galaxy::render::state::kLightAttenuation;
+    ops[0].a[0] = static_cast<std::uint8_t>(index & 7u);
+    std::memcpy(ops[0].a + 1, light->color, 4u);
+    ops[1].kind = galaxy::render::state::kLightPosition;
+    ops[1].a[0] = static_cast<std::uint8_t>(index & 7u);
+    for (unsigned i = 0u; i < 3u; ++i) {
+        ops[0].f[i] = light->angle[i];
+        ops[0].f[3u + i] = light->distance[i];
+        ops[1].f[i] = light->position[i];
+        ops[1].f[3u + i] = light->direction[i];
+    }
+    attach_state_ops(ops, 2u);
+#else
+    (void)index, (void)light;
+#endif
+}
+
+void svc_frame_alpha(void*, int keep) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::state::Op op{};
+    op.kind = galaxy::render::state::kFrameAlpha;
+    op.a[0] = 1u;
+    op.a[1] = keep != 0 ? 1u : 0u;
+    attach_state_ops(&op, 1u);
+#else
+    (void)keep;
+#endif
+}
+
+void svc_texture_coordinate(void*, uint32_t coord, uint32_t from, uint32_t matrix_slot) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::render::state::Op op{};
+    op.kind = galaxy::render::state::kTexCoordGen;
+    op.a[0] = static_cast<std::uint8_t>(coord);
+    op.a[2] = static_cast<std::uint8_t>((5u + from) | 5u << 4u);  // source row 5 + n, no emboss source
+    op.a[4] = 61u;                                                // the identity post-transform
+    op.a[5] = 1u;
+    op.a[6] = static_cast<std::uint8_t>(matrix_slot);
+    attach_state_ops(&op, 1u);
+#else
+    (void)coord, (void)from, (void)matrix_slot;
 #endif
 }
 
@@ -4152,7 +4230,12 @@ int main(int argc, char** argv) {
     services.shape_draw = svc_shape_draw;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
-    services.state = svc_state;
+    services.view_projection = svc_view_projection;
+    services.view_viewport = svc_view_viewport;
+    services.view_scissor = svc_view_scissor;
+    services.light = svc_light;
+    services.frame_alpha = svc_frame_alpha;
+    services.texture_coordinate = svc_texture_coordinate;
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;
     services.target_end = svc_target_end;

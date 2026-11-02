@@ -21,37 +21,19 @@ namespace {
     bool sScissorSet = false;
     u32 sScissor[4] = {};
 
-    void sendOp(const NebulaStateOp& rOp) {
-        J3DNativeDraw::flush();
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->state(pHost->user, &rOp, 1);
-    }
-
     void sendViewport() {
         // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far planes map to.
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_VIEWPORT;
-        op.f[0] = sViewport[0];
-        op.f[1] = sViewport[1];
-        op.f[2] = sViewport[2];
-        op.f[3] = sViewport[3];
-        op.f[4] = sViewport[4] * sDepthScale + sDepthOffset;
-        op.f[5] = sViewport[5] * sDepthScale + sDepthOffset;
-        sendOp(op);
+        const f32 viewport[6] = {sViewport[0], sViewport[1], sViewport[2], sViewport[3], sViewport[4] * sDepthScale + sDepthOffset,
+                                 sViewport[5] * sDepthScale + sDepthOffset};
+        J3DNativeDraw::flush();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->view_viewport(pHost->user, viewport);
     }
 
     void send() {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_PROJECTION;
-        op.a[0] = sPerspective ? 0 : 1;
-        for (u32 i = 0; i < 6; i++) {
-            op.f[i] = sTerms[i];
-        }
         const NebulaHostServices* pHost = nebula_host();
         J3DNativeDraw::flush();
-        pHost->state(pHost->user, &op, 1);
+        pHost->view_projection(pHost->user, sPerspective ? 0 : 1, sTerms);
     }
 }  // namespace
 
@@ -145,14 +127,10 @@ namespace J3DNativeView {
         sScissor[2] = width;
         sScissor[3] = height;
         sScissorSet = true;
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_SCISSOR;
-        op.f[0] = static_cast< f32 >(left);
-        op.f[1] = static_cast< f32 >(top);
-        op.f[2] = static_cast< f32 >(width);
-        op.f[3] = static_cast< f32 >(height);
-        sendOp(op);
+        J3DNativeDraw::flush();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->view_scissor(pHost->user, static_cast< f32 >(left), static_cast< f32 >(top), static_cast< f32 >(width),
+                            static_cast< f32 >(height));
     }
 
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight) {

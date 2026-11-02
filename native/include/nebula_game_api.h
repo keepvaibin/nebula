@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 107u
+#define NEBULA_GAME_API_VERSION 108u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -155,20 +155,6 @@ typedef struct NebulaDrawMatrix {
     float values[12];
 } NebulaDrawMatrix;
 
-/* One drawing-state change the game makes outside a material (state): `a` holds its enumerations and bytes, `size` its
-   sizes, `f` its floats and `image` a texture's identity (the game's address of its image). */
-enum {
-    NEBULA_STATE_TEX_COORD_GEN = 1, /* coordinate, type and source (J3DNativeTexGen's encoding), normalize,
-                                       post row; a[5] 1: also the coordinate's matrix a[6] (a slot: 0-9 position
-                                       matrices, 10-19 texture matrices, 20 identity) */
-    NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
-    NEBULA_STATE_VIEWPORT,          /* f: left, top, width, height (pixels), near depth, far depth (0-1) */
-    NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
-    NEBULA_STATE_LIGHT_ATTENUATION, /* light (0-7), r, g, b, a; f: angle attenuation a0-a2, distance k0-k2 */
-    NEBULA_STATE_LIGHT_POSITION,    /* light (0-7); f: position x, y, z, direction x, y, z */
-    NEBULA_STATE_FRAME_ALPHA,       /* changed (differs from the last one), the frame keeps alpha (1) or not (0) */
-};
-
 /* What a draw does to the target (shape_draw, immediate): the game's current values, whichever way it came by them. */
 typedef struct NebulaPassState {
     uint8_t blend_op, blend_src, blend_dst, logic_op; /* NEBULA_BLEND_*, NEBULA_FACTOR_* */
@@ -183,13 +169,14 @@ typedef struct NebulaPassState {
     float line_width, point_size;                     /* pixels */
 } NebulaPassState;
 
-typedef struct NebulaStateOp {
-    uint8_t kind;
-    uint8_t a[13];
-    uint16_t size[2];
-    float f[6];
-    uint64_t image;
-} NebulaStateOp;
+/* A light: colour, angle and distance terms, position and direction in view space. */
+typedef struct NebulaLight {
+    uint8_t color[4];
+    float angle[3];
+    float distance[3];
+    float position[3];
+    float direction[3];
+} NebulaLight;
 
 /* An image (texture_image): its identity (the game's address of its bytes), format (GXTexFmt), size, mipmap levels
    and its bytes (`size` of them, in the format's layout). */
@@ -1082,8 +1069,18 @@ typedef struct NebulaHostServices {
     void (*shape_draw)(void* user, uint64_t shape, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaDrawMatrix* matrices, uint32_t matrix_count,
                        const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count, const NebulaPassState* pass);
-    /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order). */
-    void (*state)(void* user, const NebulaStateOp* ops, uint32_t count);
+    /* The projection the draws after this use: `terms` the six of a perspective or orthographic matrix. */
+    void (*view_projection)(void* user, int orthographic, const float terms[6]);
+    /* The viewport: left, top, width, height (the game's units), near and far depth (0-1). */
+    void (*view_viewport)(void* user, const float viewport[6]);
+    void (*view_scissor)(void* user, float left, float top, float width, float height);
+    /* Light `index` (0-7). */
+    void (*light)(void* user, uint32_t index, const NebulaLight* light);
+    /* Whether the frame keeps alpha. */
+    void (*frame_alpha)(void* user, int keep);
+    /* Coordinate `coord` of the draws after this is texture coordinate `from`, through matrix slot `matrix_slot` (0-9
+       position matrices, 10-19 texture matrices, 20 identity). */
+    void (*texture_coordinate)(void* user, uint32_t coord, uint32_t from, uint32_t matrix_slot);
     /* Vertices drawn as the game sends them (NebulaImmediate). */
     void (*immediate)(void* user, const NebulaImmediate* draw);
     /* A pass into a texture target the renderer owns (E-07): the records until target_end draw into it, not the
