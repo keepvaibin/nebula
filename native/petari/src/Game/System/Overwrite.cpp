@@ -28,7 +28,7 @@
 #include <JSystem/JParticle/JPAFieldBlock.hpp>
 #include <JSystem/JParticle/JPAParticle.hpp>
 
-#include <JSystem/JAudio2/JASAramStream.hpp>
+#include <JSystem/JAudio2/JASStream.hpp>
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
 #include <JSystem/JAudio2/JASDvdThread.hpp>
@@ -1009,7 +1009,6 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
         JASDvd::createThread(0x100, 0x8000);
         JASDriver::startAudio();
         JASDriver::setDSPLevel(dspLevel_);
-        JASAramStream::initSystem(aramBlockSize_, aramChannelNum_);
     }
 
     if (waveArcDir_ != nullptr) {

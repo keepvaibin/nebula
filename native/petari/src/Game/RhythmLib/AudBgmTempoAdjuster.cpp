@@ -41,8 +41,8 @@ f32 AudBgmTempoAdjuster::beatProc(f32 tempo) {
         return 1.0f;
     }
 
-    f32 currSample = mStream->inner_.aramStream._0B8;
-    u32 loopCount = mStream->inner_.aramStream._0C4;
+    f32 currSample = mStream->inner_.mStream.mPosition;
+    u32 loopCount = mStream->inner_.mStream.mLoopCount;
 
     bool newStreamLoop = false;
     if (loopCount != mLoopCount) {

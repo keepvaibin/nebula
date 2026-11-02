@@ -10,7 +10,7 @@
 #include "JSystem/JAudio2/JAISoundChild.hpp"
 //
 
-#include "JSystem/JAudio2/JASAramStream.hpp"
+#include "JSystem/JAudio2/JASStream.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
@@ -24,8 +24,6 @@ JAU_JASInitializer::JAU_JASInitializer() {
     heapSize_ = 0x1000;
     field_0x1c = 0x80;
     dspLevel_ = 1.0f;
-    aramBlockSize_ = 0x2760;
-    aramChannelNum_ = 2;
     field_0x20 = 0;
     waveArcDir_ = nullptr;
 }

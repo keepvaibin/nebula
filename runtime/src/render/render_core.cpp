@@ -5629,6 +5629,20 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         shape.geometry = record.geometry;
         return;
     }
+    case shapes::Record::Kind::Forget:
+        for (auto it = shape_arrays_.begin(); it != shape_arrays_.end();) {
+            it = it->first >= record.key && it->first < record.position ? shape_arrays_.erase(it) : std::next(it);
+        }
+        for (auto it = record_shapes_.begin(); it != record_shapes_.end();) {
+            if (it->first >= record.key && it->first < record.position) {
+                release_record_shape(it->second);
+                it = record_shapes_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        curved::forget_models(record.key, record.position);
+        return;
     case shapes::Record::Kind::Draw:
         draw_record_shape(record);
         return;

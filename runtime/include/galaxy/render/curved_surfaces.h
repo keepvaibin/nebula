@@ -118,6 +118,8 @@ void register_model_later(std::uint64_t key, std::vector<Vec3> positions, std::v
                           std::vector<Corner> corners);
 [[nodiscard]] std::shared_ptr<const Model> find_model(std::uint64_t key);
 void clear_models();
+// Models keyed from `start` up to `end` go.
+void forget_models(std::uint64_t start, std::uint64_t end);
 
 // The HLSL of the curved surfaces' GPU triangle sort (RendererD3D12's curve sort pass).
 [[nodiscard]] std::string curve_sort_source();

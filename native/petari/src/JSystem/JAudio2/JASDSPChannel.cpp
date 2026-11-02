@@ -1,6 +1,6 @@
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
 #include "JSystem/JAudio2/JAISound.hpp"
-#include "JSystem/JAudio2/JASAramStream.hpp"
+#include "JSystem/JAudio2/JASStream.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
@@ -278,8 +278,8 @@ uint32_t voice_owner(JASDSPChannel& dsp, uint32_t* route) {
         }
         return 0u;
     }
-    if (voice->mCallback == JASAramStream::channelCallback) {
-        const auto* stream = static_cast<const JASAramStream*>(voice->mCallbackData);
+    if (voice->mCallback == JASStream::channelCallback) {
+        const auto* stream = static_cast<const JASStream*>(voice->mCallbackData);
         if (stream != nullptr && stream->mNebulaOwner != nullptr) {
             *route = 3u;
             return owner_id(stream->mNebulaOwner);

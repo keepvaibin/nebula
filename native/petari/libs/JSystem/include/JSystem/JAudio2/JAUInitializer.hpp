@@ -13,8 +13,6 @@ public:
     /* 0x08 */ int heapSize_;
     /* 0x1C */ int field_0x1c;
     /* 0x20 */ int field_0x20;
-    /* 0x24 */ int aramBlockSize_;
-    /* 0x28 */ int aramChannelNum_;
     /* 0x2C */ f32 dspLevel_;
     /* 0x30 */ char* waveArcDir_;
 };
