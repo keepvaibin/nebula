@@ -109,7 +109,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
 
     NebulaMtxMultVec(viewMtx, &pos, &pos);
     J3DNativeStateInitLightPos(&light, pos.x, pos.y, pos.z);
-    J3DNativeStateLoadLightObjImm(&light, GPU_LIGHT0);
+    J3DNativeStateSendLight(&light, 0);
     MiiSetMtx(&model, viewMtx);
 
     drawSetting.lightEnable = TRUE;

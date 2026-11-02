@@ -180,11 +180,11 @@ void MarioActor::drawHand() const {
     }
 
     J3DModelX* model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A48));
-    model->setDynamicList(&mLists[mCurrList]);
+    model->setDynamicList(&mLightTint);
     model->directDraw(nullptr);
 
     model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A4C));
-    model->setDynamicList(&mLists[mCurrList]);
+    model->setDynamicList(&mLightTint);
     model->directDraw(nullptr);
 }
 
@@ -203,10 +203,10 @@ void MarioActor::drawIndirectHand() const {
         return;
     }
 
-    model->setDynamicList(&mLists[mCurrList]);
+    model->setDynamicList(&mLightTint);
     model->directDraw(nullptr);
 
     model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A44));
-    model->setDynamicList(&mLists[mCurrList]);
+    model->setDynamicList(&mLightTint);
     model->directDraw(nullptr);
 }

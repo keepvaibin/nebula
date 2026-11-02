@@ -1,3 +1,5 @@
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <nebula_cooked_material.h>
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
@@ -220,7 +222,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
                                                       NebulaFrameClock::cCanvasHeight);
                 continue;
             }
-            mStateLists[i].send();
+            sendFlagState(i);
             if (i == 2) {
                 J3DNativeMaterial::override(1, 0.0f, 0.0f, -1.0f);
             }
@@ -318,106 +320,157 @@ void J3DModelX::simpleDrawShape(J3DMaterial* material) {
     getShapePacket(material->getShape()->getIndex())->drawFast();
 }
 
-void J3DModelX::buildStateLists(J3DStateList* pLists) {
-    NebulaStateOp storage[16];
-    J3DStateList list(storage, 16);
+void J3DModelX::sendFlagState(u32 flag) {
+    using namespace J3DPass;
+    switch (flag) {
+    case 0:
+        cull(NEBULA_CULL_FRONT);
+        break;
+    // Flags 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by drawIn
+    // as a native material): their fixed state here.
+    case 1:
+        depth(false, NEBULA_COMPARE_ALWAYS, false);
+        cull(NEBULA_CULL_BACK);
+        noBlend();
+        writeColor(false);
+        writeAlpha(true);
+        constantAlpha(true, 0xFF);
+        break;
+    // Texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
+    case 2:
+        cull(NEBULA_CULL_FRONT);
+        depth(true, NEBULA_COMPARE_LEQUAL, true);
+        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 3:
+        depth(true, NEBULA_COMPARE_GEQUAL, false);
+        cull(NEBULA_CULL_BACK);
+        noBlend();
+        writeColor(false);
+        writeAlpha(true);
+        constantAlpha(true, 0x90);
+        break;
+    case 4:
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        cull(NEBULA_CULL_FRONT);
+        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 5:
+        depth(true, NEBULA_COMPARE_ALWAYS, true);
+        cull(NEBULA_CULL_FRONT);
+        noBlend();
+        writeColor(false);
+        writeAlpha(false);
+        break;
+    case 7: {
+        const NebulaColor8 ambient = {0, 0, 0, 0};
+        const NebulaColor8 material = {0, 0, 0, 255};
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setLightAmbient(0, ambient);
+        J3DNativeMaterial::setLightMaterial(0, material);
+        J3DNativeMaterial::sendRegisters();
+        noBlend();
+        writeColor(false);
+        writeAlpha(true);
+        J3DNativeMaterial::applyPass(NEBULA_PASS_LIGHT_MASK);
+        break;
+    }
+    case 8:
+        cull(NEBULA_CULL_FRONT);
+        blend(NEBULA_FACTOR_ZERO, NEBULA_FACTOR_ZERO);
+        writeColor(false);
+        writeAlpha(true);
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        break;
+    case 9:
+        cull(NEBULA_CULL_BACK);
+        blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
+        writeColor(false);
+        writeAlpha(true);
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        break;
+    case 10:
+        blend(NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
+        writeColor(true);
+        writeAlpha(true);
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        constantAlpha(true, 0);
+        break;
+    // The reflection model: its program (one stage: texture 0 halved, stage 0's alpha above 0x20, no channels) is
+    // J3DNativeMaterial::override mode 5.
+    case 11:
+        depth(true, NEBULA_COMPARE_LEQUAL, true);
+        cull(NEBULA_CULL_FRONT);
+        noBlend();
+        writeColor(true);
+        writeAlpha(true);
+        break;
+    // The blur ghosts in colour 0 (the ghost's tint sets it).
+    case 12:
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        cull(NEBULA_CULL_BACK);
+        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 13:
+        depth(true, NEBULA_COMPARE_GEQUAL, false);
+        cull(NEBULA_CULL_BACK);
+        blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_ALPHA);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 14:
+        constantAlpha(true, 0x40);
+        break;
+    case 15:
+        blend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    default:
+        break;
+    }
+}
 
-    list.setCullMode(GPU_CULL_FRONT);
-    pLists[0].copy(list);
-    list.clear();
-
-    // Lists 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by
-    // drawIn as a native material); they hold the pass's fixed state.
-    list.setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE);
-    list.setDstAlpha(GPU_TRUE, 0xFF);
-    pLists[1].copy(list);
-    list.clear();
-
-    // List 2: texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
-    pLists[2].copy(list);
-    list.clear();
-    list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE);
-    list.setDstAlpha(GPU_TRUE, 0x90);
-    pLists[3].copy(list);
-    list.clear();
-
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
-    pLists[4].copy(list);
-    list.clear();
-
-    list.setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_FALSE, GPU_FALSE);
-    pLists[5].copy(list);
-    list.clear();
-
-    pLists[6].copy(list);
-    list.clear();
-
-    NebulaColor8 ambientColor = {0, 0, 0, 0};
-    NebulaColor8 materialColor = {0, 0, 0, 255};
-    list.setChanAmbColor(GPU_ALPHA0, ambientColor);
-    list.setChanMatColor(GPU_ALPHA0, materialColor);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE);
-    list.setMaterialPass(NEBULA_PASS_LIGHT_MASK);
-    pLists[7].copy(list);
-    list.clear();
-
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    pLists[8].copy(list);
-    list.clear();
-
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    pLists[9].copy(list);
-    list.clear();
-
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_DSTALPHA, GPU_BL_INVDSTALPHA, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE);
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    list.setDstAlpha(GPU_TRUE, 0);
-    pLists[10].copy(list);
-    list.clear();
-
-    // List 11 (the reflection model): its fixed state here; its program (one stage: texture 0 halved, stage 0's alpha
-    // above 0x20, no channels) is J3DNativeMaterial::override mode 5.
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-    list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE);
-    pLists[11].copy(list);
-    list.clear();
-
-    // List 12: the blur ghosts in register 0's colour (the ghost's dynamic list sets it).
-    list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_NOOP, GPU_TRUE, GPU_FALSE);
-    pLists[12].copy(list);
-    list.clear();
-
-    list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
-    list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_SRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
-    pLists[13].copy(list);
-    list.clear();
-
-    list.setDstAlpha(GPU_TRUE, 0x40);
-    pLists[14].copy(list);
-    list.clear();
-
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_INVDSTALPHA, GPU_BL_DSTALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
-    pLists[15].copy(list);
-    list.clear();
+void MarioModelTint::send() const {
+    J3DNativeShape::flushState();
+    switch (kind) {
+    case Kind_Alpha:
+        J3DNativeMaterial::setColorRegister(3, color0);
+        J3DNativeMaterial::sendRegisters();
+        J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        J3DPass::cull(NEBULA_CULL_BACK);
+        J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_OPACITY);
+        break;
+    case Kind_ConstantAlpha:
+        J3DPass::constantAlpha(true, alpha);
+        break;
+    case Kind_ReflectAlpha:
+        J3DNativeMaterial::setColorRegister(3, color0);
+        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::applyPass(NEBULA_PASS_REFLECTION_ALPHA);
+        break;
+    case Kind_Light:
+        J3DNativeMaterial::setLightAmbient(0, color0);
+        J3DNativeMaterial::setLightMaterial(0, color1);
+        if (hasFog) {
+            J3DNativeMaterial::setFog(2, fogStart, fogEnd, fogNear, fogFar, fogColor);
+        }
+        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_LIGHT);
+        break;
+    case Kind_Ghost:
+        J3DNativeMaterial::setColorRegister(1, color0);
+        J3DNativeMaterial::sendRegisters();
+        break;
+    default:
+        break;
+    }
 }
 
 J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(data, flags, bufferFlags) {
@@ -429,8 +482,6 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     mShapeCallback = nullptr;
     _1E4 = 0;
     _1E5 = 0;
-
-    buildStateLists(mStateLists);
 
     _1E0 = -1;
     _1DC = 0x32323232;

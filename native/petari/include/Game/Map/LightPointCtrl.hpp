@@ -2,6 +2,7 @@
 
 #include "Game/Util/Color.hpp"
 #include <NebulaGpuEnums.h>
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/JGeometry.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
@@ -13,7 +14,7 @@ struct PointLightInfo {
     /* 0x0C */ NebulaColor8 mColor;
     /* 0x10 */ f32 mRefDistance;
     /* 0x14 */ f32 mRefBrightness;
-    /* 0x18 */ GpuDistAttnFn mDistAttnFn;
+    /* 0x18 */ J3DLightFalloff mDistAttnFn;
 };
 
 class LightPointCtrl {

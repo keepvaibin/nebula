@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
-#include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
 

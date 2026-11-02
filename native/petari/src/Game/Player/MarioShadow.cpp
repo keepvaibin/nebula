@@ -621,15 +621,6 @@ void CollisionShadow::draw3() const {
 }
 
 void CollisionShadow::createMesh() {
-    _344.reserve(7);
-    fillVolumeList(_344);
-}
-
-void CollisionShadow::fillVolumeList(J3DStateList& rList) {
-    rList.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    rList.setMaterialPass(NEBULA_PASS_SHADOW_VOLUME);
-    NebulaColor8 color = {0, 0, 0, 4};
-    rList.setTevColor(GPU_TEVREG0, color);
 }
 
 void CollisionShadow::drawVolume() const {

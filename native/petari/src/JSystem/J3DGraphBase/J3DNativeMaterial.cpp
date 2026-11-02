@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
-#include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
@@ -49,6 +48,13 @@ namespace {
     const J3DMaterialSetup* sCurrentSetup = NULL;
     const NebulaCookedMaterial* sCurrentCooked = NULL;
     u8 sCurrentPass = 0;
+
+    void setColor8(f32* pOut, NebulaColor8 color) {
+        pOut[0] = color.r / 255.0f;
+        pOut[1] = color.g / 255.0f;
+        pOut[2] = color.b / 255.0f;
+        pOut[3] = color.a / 255.0f;
+    }
 
     void setColor(f32* pOut, const u8* pColor, u32 count) {
         for (u32 c = 0; c < count; c++) {
@@ -114,79 +120,6 @@ namespace {
             pC[80] = rValues.alpha_ref[0] / 255.0f;
             pC[81] = rValues.alpha_ref[1] / 255.0f;
         }
-    }
-
-    // A state change of a register the J3D constants hold, into the register file: whether it was one.
-    bool setRegister(const NebulaStateOp& rOp) {
-        f32* pC = sRegisters;
-        const u8* a = rOp.a;
-        switch (rOp.kind) {
-        case J3D_STATE_TEV_COLOR:
-            setColor(pC + (a[0] & 3) * 4, a + 1, 4);
-            return true;
-        case J3D_STATE_TEV_COLOR_S10: {
-            f32* pReg = pC + (a[0] & 3) * 4;
-            pReg[0] = static_cast< s16 >(rOp.size[0]) / 255.0f;
-            pReg[1] = static_cast< s16 >(rOp.size[1]) / 255.0f;
-            pReg[2] = rOp.f[0] / 255.0f;
-            pReg[3] = rOp.f[1] / 255.0f;
-            return true;
-        }
-        case J3D_STATE_TEV_KCOLOR:
-            setColor(pC + 16 + (a[0] & 3) * 4, a + 1, 4);
-            return true;
-        case J3D_STATE_MATERIAL_COLOR:
-        case J3D_STATE_AMBIENT_COLOR: {
-            // The channel's whole colour.
-            f32* pColor = pC + (rOp.kind == J3D_STATE_MATERIAL_COLOR ? 32 : 40) + (a[0] & 1) * 4;
-            for (u32 c = 0; c < 4; c++) {
-                pColor[c] = a[1 + c] / 255.0f;
-            }
-            return true;
-        }
-        case J3D_STATE_FOG:
-            pC[72] = rOp.f[0];
-            pC[73] = rOp.f[1];
-            pC[74] = rOp.f[2];
-            pC[75] = rOp.f[3];
-            setColor(pC + 76, a + 1, 3);
-            pC[79] = a[0];  // the fog type (j3d_material.hlsli j3d_fog): a value every J3D shader takes
-            return true;
-        case J3D_STATE_ALPHA_COMPARE:
-            pC[80] = a[1] / 255.0f;
-            pC[81] = a[4] / 255.0f;
-            return true;
-        case J3D_STATE_IND_TEX_MATRIX: {
-            // GpuSetIndTexMtx: the matrix (or a dynamic S or T matrix in its place), its terms by the scale exponent.
-            const u32 id = a[0] >= 9 ? a[0] - 9 : a[0] >= 5 ? a[0] - 5 : a[0] >= 1 ? a[0] - 1 : 3;
-            if (id >= 3) {
-                return false;
-            }
-            f32 scale = 1.0f;
-            for (s32 e = static_cast< s8 >(a[1]); e > 0; e--) {
-                scale *= 2.0f;
-            }
-            for (s32 e = static_cast< s8 >(a[1]); e < 0; e++) {
-                scale *= 0.5f;
-            }
-            for (u32 w = 0; w < 3; w++) {
-                for (u32 row = 0; row < 2; row++) {
-                    pC[48 + (id * 2 + row) * 4 + w] = rOp.f[2 * w + row] * scale;
-                }
-            }
-            return true;
-        }
-        default:
-            return false;
-        }
-    }
-
-    // Whether a state change alters what the current native material's shader computes (its stages, channels,
-    // coordinates, fog type or alpha test) rather than a value it takes or its fixed-function state.
-    bool changesProgram(const NebulaStateOp& rOp) {
-        return rOp.kind == J3D_STATE_ALPHA_COMPARE && sCurrentKind == CURRENT_J3D &&
-               (rOp.a[0] != sCurrentSetup->alpha_compare.comp0 || rOp.a[2] != sCurrentSetup->alpha_compare.op ||
-                rOp.a[3] != sCurrentSetup->alpha_compare.comp1);
     }
 
     // The current material ends: the draws that follow have none (the host draws nothing without one) until the next.
@@ -762,28 +695,77 @@ namespace J3DNativeMaterial {
         dumpTag(sCurrent.shader);
     }
 
-    void state(const NebulaStateOp* pOps, u32 count) {
-        bool changed = false;
-        for (u32 i = 0; i < count; i++) {
-            const NebulaStateOp& rOp = pOps[i];
-            if (sCurrentKind != CURRENT_NONE && changesProgram(rOp)) {
-                // Legacy setup ends the previous draw. Actor passes use cooked IDs through applyPass.
-                endCurrent();
-            }
-            changed = setRegister(rOp) || changed;
+    void setColorRegister(u32 index, NebulaColor8 color) {
+        setColor8(sRegisters + (index & 3) * 4, color);
+    }
+
+    void setColorRegisterWide(u32 index, const NebulaColor16& rColor) {
+        f32* pRegister = sRegisters + (index & 3) * 4;
+        pRegister[0] = rColor.r / 255.0f;
+        pRegister[1] = rColor.g / 255.0f;
+        pRegister[2] = rColor.b / 255.0f;
+        pRegister[3] = rColor.a / 255.0f;
+    }
+
+    void setConstantColor(u32 index, NebulaColor8 color) {
+        setColor8(sRegisters + 16 + (index & 3) * 4, color);
+    }
+
+    void setLightMaterial(u32 channel, NebulaColor8 color) {
+        setColor8(sRegisters + 32 + (channel & 1) * 4, color);
+    }
+
+    void setLightAmbient(u32 channel, NebulaColor8 color) {
+        setColor8(sRegisters + 40 + (channel & 1) * 4, color);
+    }
+
+    void setIndirectMatrix(u32 index, const f32 offset[2][3], s8 scaleExp) {
+        f32 scale = 1.0f;
+        for (s32 e = scaleExp; e > 0; e--) {
+            scale *= 2.0f;
         }
-        // A value the current J3D material takes: the material again with its constants (its state, textures and
-        // lights as set since).
-        if (changed && sCurrentKind == CURRENT_SITE && sSiteFollows) {
+        for (s32 e = scaleExp; e < 0; e++) {
+            scale *= 0.5f;
+        }
+        for (u32 column = 0; column < 3; column++) {
+            for (u32 row = 0; row < 2; row++) {
+                sRegisters[48 + (index * 2 + row) * 4 + column] = offset[row][column] * scale;
+            }
+        }
+    }
+
+    void setFog(u32 type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
+        f32* pC = sRegisters;
+        pC[72] = start;
+        pC[73] = end;
+        pC[74] = nearZ;
+        pC[75] = farZ;
+        pC[76] = color.r / 255.0f;
+        pC[77] = color.g / 255.0f;
+        pC[78] = color.b / 255.0f;
+        pC[79] = static_cast< f32 >(type);  // j3d_material.hlsli j3d_fog
+    }
+
+    void setAlphaTest(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1) {
+        // Comparisons other than the current J3D material's: its shader does not compute them, so it ends.
+        if (sCurrentKind == CURRENT_J3D &&
+            (compare0 != sCurrentSetup->alpha_compare.comp0 || op != sCurrentSetup->alpha_compare.op ||
+             compare1 != sCurrentSetup->alpha_compare.comp1)) {
+            endCurrent();
+        }
+        sRegisters[80] = reference0 / 255.0f;
+        sRegisters[81] = reference1 / 255.0f;
+    }
+
+    void sendRegisters() {
+        if (sCurrentKind == CURRENT_SITE && sSiteFollows) {
             memcpy(sSiteRegisters.constants, sRegisters, sizeof(sRegisters));
             sSiteRegisters.constants_only = 3;
-            const NebulaHostServices* pHost = nebula_host();
             J3DNativeState::sendMaterial(&sSiteRegisters);
         }
-        if (changed && sCurrentKind == CURRENT_J3D) {
+        if (sCurrentKind == CURRENT_J3D) {
             memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
             sCurrent.constants_only = 1;
-            const NebulaHostServices* pHost = nebula_host();
             J3DNativeState::sendMaterial(&sCurrent);
         }
     }
