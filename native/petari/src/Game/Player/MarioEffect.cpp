@@ -431,7 +431,7 @@ void MarioActor::initCommonEffect() {
 
         char name[0x80];
         for (u32 materialIndex = 0; materialIndex < 7; materialIndex++) {
-            sprintf(name, "%s", entry->mName);
+            nebula_sprintf(name, "%s", entry->mName);
 
             const u8 flag2 = entry->mFlags.mByte2;
             if ((flag2 & 0x8) && materialIndex != 1) {

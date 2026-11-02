@@ -5,7 +5,6 @@
 // simulation thread: the frame count, what to show (the game's picture or black, committed by
 // show() and taking effect at the next frame), the host told what it shows, and waitFrame's sleepers woken.
 
-#include <revolution/types.h>
 
 #include <nebula_game_api.h>
 

@@ -1,5 +1,5 @@
 #include "Game/LiveActor/ModelManager.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/Animation/BpkPlayer.hpp"
 #include "Game/Animation/BrkPlayer.hpp"
@@ -403,14 +403,14 @@ void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnim
 
 void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferDisplayList) {
     char modelArchive[64];
-    snprintf(modelArchive, sizeof(modelArchive), "%s.arc", pModelName);
+    nebula_snprintf(modelArchive, sizeof(modelArchive), "%s.arc", pModelName);
     ResourceHolder* modelHolder = MR::createAndAddResourceHolder(modelArchive);
     ResourceHolder* animationHolder;
     if (pAnimationName == nullptr) {
         animationHolder = modelHolder;
     } else {
         char animationArchive[64];
-        snprintf(animationArchive, sizeof(animationArchive), "%s.arc", pAnimationName);
+        nebula_snprintf(animationArchive, sizeof(animationArchive), "%s.arc", pAnimationName);
         animationHolder = MR::createAndAddResourceHolder(animationArchive);
     }
 

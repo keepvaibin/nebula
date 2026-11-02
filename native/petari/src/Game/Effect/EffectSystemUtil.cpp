@@ -264,7 +264,7 @@ namespace MR {
 
         bool isExistInResource(u16* pIndex, const char* pName, s32 number) {
             char name[42];
-            snprintf(name, sizeof(name), "%s%02d", pName, number);
+            nebula_snprintf(name, sizeof(name), "%s%02d", pName, number);
             return isExistInResource(pIndex, name);
         }
 

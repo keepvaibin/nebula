@@ -11,7 +11,6 @@
 #include "Game/Util/DrawUtil.hpp"
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 
 namespace {
@@ -173,8 +172,8 @@ void SysInfoWindow::appear(const char* pMessageId, SysInfoType type, SysInfoText
     if (type == Type_YesNo) {
         char yesMessageId[48];
         char noMessageId[48];
-        snprintf(yesMessageId, sizeof(yesMessageId), "%s_Yes", pMessageId);
-        snprintf(noMessageId, sizeof(noMessageId), "%s_No", pMessageId);
+        nebula_snprintf(yesMessageId, sizeof(yesMessageId), "%s_Yes", pMessageId);
+        nebula_snprintf(noMessageId, sizeof(noMessageId), "%s_No", pMessageId);
         pMessageChangeFunc(this, "Right", yesMessageId);
         pMessageChangeFunc(this, "Left", noMessageId);
     }
@@ -245,7 +244,7 @@ namespace {
 
 // A Yes/No question of Nebula's own (the cutscene skip): its text as given, centred; the answers as init set them (the
 // save prompt's Yes and No, in the played language).
-void SysInfoWindow::appearYesNoWithText(const wchar_t* pText) {
+void SysInfoWindow::appearYesNoWithText(const char16_t* pText) {
     mType = Type_YesNo;
     MR::showPaneRecursive(this, "Left");
     MR::showPaneRecursive(this, "Right");
@@ -429,7 +428,7 @@ void SysInfoWindow::setTextBoxArgNumber(s32 arg, s32 param2) {
     MR::setTextBoxArgNumberRecursive(this, mTextParentPaneName, arg, param2);
 }
 
-void SysInfoWindow::setTextBoxArgString(const wchar_t* pArg, s32 param2) {
+void SysInfoWindow::setTextBoxArgString(const char16_t* pArg, s32 param2) {
     MR::setTextBoxArgStringRecursive(this, mTextParentPaneName, pArg, param2);
 }
 

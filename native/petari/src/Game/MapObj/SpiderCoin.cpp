@@ -12,8 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace {
     static const f32 sCoinSpeed = 20.0f;

@@ -12,7 +12,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/types.h>
 
 namespace NrvBossStinkBugActionFlyLow {
     NEW_NERVE(BossStinkBugActionFlyLowNrvFly, BossStinkBugActionFlyLow, Fly);

@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Enemy/WaterBazooka.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Enemy/ElectricPressureBullet.hpp"
@@ -34,7 +33,7 @@
 #include "math_types.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace NrvWaterBazooka {

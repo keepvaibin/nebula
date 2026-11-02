@@ -41,7 +41,7 @@ namespace {
 
     void fail(const char* pWhat, const void* pShape) {
         char text[160];
-        snprintf(text, sizeof(text), "J3D shape %p: %s", pShape, pWhat);
+        nebula_snprintf(text, sizeof(text), "J3D shape %p: %s", pShape, pWhat);
         const NebulaHostServices* pHost = nebula_host();
         pHost->fatal(pHost->user, text);
     }

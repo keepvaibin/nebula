@@ -1,7 +1,7 @@
 #include "Game/Screen/MovieStream.hpp"
 #include "Game/Screen/MovieDraw.hpp"
 #include "Game/System/NebulaClock.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -28,11 +28,11 @@ namespace {
         host->movie_audio_control(host->user, what, value, milliseconds);
     }
 
-    void frameReadCallback(s32 result, NebulaDisc::Request* pRequest) {
+    void frameReadCallback(s32 result, GameAssets::Request* pRequest) {
         static_cast< MovieStream* >(pRequest->mUser)->onFrameRead(result);
     }
 
-    void loadReadCallback(s32 result, NebulaDisc::Request* pRequest) {
+    void loadReadCallback(s32 result, GameAssets::Request* pRequest) {
         static_cast< MovieStream* >(pRequest->mUser)->onLoadRead(result);
     }
 }  // namespace
@@ -62,7 +62,7 @@ void MovieStream::quit() {
 }
 
 bool MovieStream::open(const char* pName) {
-    if (mOpen || !NebulaDisc::open(pName, &mFile)) {
+    if (mOpen || !GameAssets::open(pName, &mFile)) {
         return false;
     }
 
@@ -138,7 +138,7 @@ void MovieStream::loadStop() {
     mPreFetching = false;
 
     if (mReading) {
-        NebulaDisc::cancel(&mRequest);
+        GameAssets::cancel(&mRequest);
         mReading = false;
     }
 
@@ -230,10 +230,7 @@ void MovieStream::startFrameRead() {
     mReading = true;
     mRequest.mUser = this;
 
-    if (!NebulaDisc::readAsync(&mFile, &mRequest, mReadBuffer[mReadIndex].mData, mReadSize, mCurOffset, frameReadCallback)) {
-        mReading = false;
-        mReadError = true;
-    }
+    GameAssets::readAsync(&mFile, &mRequest, mReadBuffer[mReadIndex].mData, mReadSize, mCurOffset, frameReadCallback);
 }
 
 void MovieStream::checkPrefetch() {
@@ -243,11 +240,11 @@ void MovieStream::checkPrefetch() {
 }
 
 void MovieStream::onFrameRead(s32 result) {
-    if (result == NebulaDisc::cResultFailed) {
+    if (result == GameAssets::cResultFailed) {
         mReadError = true;
         return;
     }
-    if (result == NebulaDisc::cResultCanceled) {
+    if (result == GameAssets::cResultCanceled) {
         return;
     }
 
@@ -284,7 +281,7 @@ void MovieStream::exeWait() {
 void MovieStream::exeReadHeader() {
     if (MR::isFirstStep(this)) {
         mRequest.mUser = this;
-        NebulaDisc::readAsync(&mFile, &mRequest, &sHeaderBuffer, sizeof(sHeaderBuffer), 0, loadReadCallback);
+        GameAssets::readAsync(&mFile, &mRequest, &sHeaderBuffer, sizeof(sHeaderBuffer), 0, loadReadCallback);
     }
 }
 
@@ -321,7 +318,7 @@ void MovieStream::onHeaderRead() {
 void MovieStream::exeReadPreLoad() {
     if (MR::isFirstStep(this)) {
         mRequest.mUser = this;
-        NebulaDisc::readAsync(&mFile, &mRequest, mReadBuffer[mReadIndex].mData, mReadSize, mCurOffset, loadReadCallback);
+        GameAssets::readAsync(&mFile, &mRequest, mReadBuffer[mReadIndex].mData, mReadSize, mCurOffset, loadReadCallback);
     }
 
     if (mPreLoadLeft == 0) {

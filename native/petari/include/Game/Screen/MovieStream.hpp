@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/System/NerveExecutor.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 // A movie file as the importer cooks it (crates/nebula-import/src/cook/thp.rs), host order.
 struct MovieFileHeader {
@@ -66,7 +68,7 @@ private:
     struct ReadBuffer {
         u8* mData;
         s32 mFrameNumber;
-        volatile bool mValid;
+        NebulaAtomic< bool > mValid;
     };
 
     static const s32 cReadBuffers = 20;
@@ -85,13 +87,13 @@ private:
     bool mLoop;
     bool mReadError;
     bool mReading;
-    NebulaDisc::File mFile;
-    NebulaDisc::Request mRequest;
+    GameAssets::File mFile;
+    GameAssets::Request mRequest;
     MovieFileHeader mHeader;
     MovieVideoInfo mVideoInfo;
     u32 mCurOffset;
     s32 mNextDecodeIndex;
-    volatile s32 mReadIndex;
+    NebulaAtomic< s32 > mReadIndex;
     s32 mReadSize;
     s32 mTotalReadFrame;
     s32 mPreLoadLeft;

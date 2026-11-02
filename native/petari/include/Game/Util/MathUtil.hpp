@@ -6,7 +6,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 
 namespace MR {
     /// @brief Initializes the precomputed arccosine table.
@@ -449,15 +448,15 @@ namespace MR {
     }
 
     inline f32 fabs(f64 x) {
-        return __fabs(x);
+        return fabs(x);
     }
 
     inline f32 abs(f32 x) {
-        return __fabsf(x);
+        return fabsf(x);
     }
 
     inline s32 abs(s32 x) {
-        return __abs(x);
+        return abs(x);
     }
 
     /// @brief Computes the cosine of a number, in radians.

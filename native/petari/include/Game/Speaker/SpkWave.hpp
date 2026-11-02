@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 // SpkRes wave data, read in place (host order, as the importer cooks it): header and 16-bit PCM.
 struct WaveData {

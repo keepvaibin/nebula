@@ -1,5 +1,4 @@
 #include "nw4r/ut/LinkList.h"
-#include <revolution/types.h>
 
 namespace nw4r {
     namespace ut {

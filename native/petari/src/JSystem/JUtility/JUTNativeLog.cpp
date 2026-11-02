@@ -24,7 +24,7 @@ namespace {
 
 void JUTNativeLogV(const char* pFormat, va_list args) {
     char text[1024];
-    const int n = vsnprintf(text, sizeof(text), pFormat, args);
+    const int n = nebula_vsnprintf(text, sizeof(text), pFormat, args);
     const size_t length = n < 0 ? 0 : (static_cast< size_t >(n) < sizeof(text) ? static_cast< size_t >(n) : sizeof(text) - 1);
     while (__atomic_test_and_set(&sLock, __ATOMIC_ACQUIRE)) {
     }

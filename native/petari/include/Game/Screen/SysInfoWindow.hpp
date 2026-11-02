@@ -55,7 +55,7 @@ public:
     virtual void control();
 
     void appear(const char*, SysInfoType, SysInfoTextPos, SysInfoMessageType);
-    void appearYesNoWithText(const wchar_t* pText);
+    void appearYesNoWithText(const char16_t* pText);
     void decideNo();
     // B answers No (a question the player opened from a menu, as Back closes Nebula's menus). Off by default.
     void setBackAnswersNo(bool on);
@@ -71,7 +71,7 @@ public:
     void setYesNoSelectorSE(const char*, const char*, const char*);
     void resetYesNoSelectorSE();
     void setTextBoxArgNumber(s32, s32);
-    void setTextBoxArgString(const wchar_t*, s32);
+    void setTextBoxArgString(const char16_t*, s32);
 
     /* 0x20 */ SysInfoWindowType mWindowType;
     /* 0x24 */ SysInfoType mType;

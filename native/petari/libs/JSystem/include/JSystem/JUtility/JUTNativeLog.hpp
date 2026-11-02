@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include <stdarg.h>
 
 // The game's log through the host (nebula_game_api.h log): text gathered into lines, each line sent when it ends.

@@ -30,7 +30,7 @@ namespace MR {
         pCtrl->setMessageArg(arg);
     }
 
-    void setMessageArg(TalkMessageCtrl* pCtrl, const wchar_t* pArg) {
+    void setMessageArg(TalkMessageCtrl* pCtrl, const char16_t* pArg) {
         CustomTagArg arg(pArg, CustomTagArg::Type_Char);
         pCtrl->setMessageArg(arg);
     }

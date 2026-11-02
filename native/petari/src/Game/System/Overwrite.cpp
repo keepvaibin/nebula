@@ -1,5 +1,5 @@
 #include "Game/System/ShapePacketUserData.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -28,8 +28,8 @@
 #include <JSystem/JParticle/JPAFieldBlock.hpp>
 #include <JSystem/JParticle/JPAParticle.hpp>
 
-#include <JSystem/JAudio2/JASAramStream.hpp>
-#include <JSystem/JAudio2/JASAudioThread.hpp>
+#include <JSystem/JAudio2/JASStream.hpp>
+#include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
 #include <JSystem/JAudio2/JASDvdThread.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
@@ -38,7 +38,7 @@
 #include <JSystem/JAudio2/JAUInitializer.hpp>
 
 #include <cstdarg>
-#include "Game/System/NebulaAuxMemory.hpp"
+#include "Game/AudioLib/AudParams.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 
 void Overwrite_FORCE_MATCH_SDATA2() {
@@ -994,10 +994,10 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
 }
 
 void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
-    if (JASAudioThread::getThreadPointer() == nullptr && JASDvd::getThreadPointer() == nullptr) {
+    if (JASDvd::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
         if (audioMemSize_ == 0) {
-            audioMemSize_ = NebulaAuxMemory::cSoundBytes;
+            audioMemSize_ = AudParams::aramSize;
         }
 
         JASKernel::setupAramHeap(audioMemory_, audioMemSize_);
@@ -1006,21 +1006,9 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
             JASTrack::TChannelMgr::newMemPool(field_0x20);
         }
 
-        JASDvd::createThread(dvdThreadPriority_, 0x100, 0x8000);
-        JASAudioThread::create(audioThreadPriority_);
-        JKRThreadSwitch* pThreadSwitch = JKRThreadSwitch::getManager();
-        if (pThreadSwitch != nullptr) {
-            if (dvdThreadId_ >= 0) {
-                pThreadSwitch->enter(JASDvd::getThreadPointer(), dvdThreadId_);
-            }
-
-            if (audioThreadId_ >= 0) {
-                pThreadSwitch->enter(JASAudioThread::getThreadPointer(), audioThreadId_);
-            }
-        }
-
+        JASDvd::createThread(0x100, 0x8000);
+        JASDriver::startAudio();
         JASDriver::setDSPLevel(dspLevel_);
-        JASAramStream::initSystem(aramBlockSize_, aramChannelNum_);
     }
 
     if (waveArcDir_ != nullptr) {
@@ -1038,15 +1026,5 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
         JASDriver::setOutputMode(2);
         break;
     }
-}
-
-namespace {
-    s32 sAudioThreadMsgSize = 0x20;
-    u32 sAudioThreadStackSize = 0x8000;
-};  // namespace
-
-JASAudioThread::JASAudioThread(int priority, int, u32)
-    : JKRThread(JASDram, ::sAudioThreadStackSize, ::sAudioThreadMsgSize, priority), JASGlobalInstance< JASAudioThread >(true), sbPauseFlag() {
-    sThreadQueue.init();
 }
 

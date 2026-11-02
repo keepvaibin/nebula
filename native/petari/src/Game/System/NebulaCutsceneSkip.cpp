@@ -23,7 +23,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstring>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 
 namespace {
@@ -191,8 +190,8 @@ namespace {
 
     // The question in the played language (NebulaText; the game's own Yes and No answer it), its lines broken as
     // the game's messages are (its text boxes do not wrap).
-    const wchar_t* promptText() {
-        static wchar_t question[128];
+    const char16_t* promptText() {
+        static char16_t question[128];
         NebulaText::get(question, 128, "SkipCutsceneQuestion");
         return question;
     }

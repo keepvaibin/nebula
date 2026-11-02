@@ -1,5 +1,5 @@
 #include "Game/Scene/ScenarioSelectScene.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/EffectSystem.hpp"
@@ -42,13 +42,7 @@ namespace {
     }
 
     bool tryResumeInitializeThread() {
-        const char* thread = "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */;
-        if (MR::isSuspendedAsyncExecuteThread(thread)) {
-            MR::resumeAsyncExecuteThread(thread);
-            return true;
-        }
-
-        return false;
+        return MR::tryResumeSceneInitialize();
     }
 };  // namespace
 

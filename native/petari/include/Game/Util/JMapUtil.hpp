@@ -3,8 +3,7 @@
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry.hpp>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 namespace MR {
     bool isValidInfo(const JMapInfoIter& rIter);

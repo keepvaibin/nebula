@@ -23,7 +23,7 @@
 #include <JSystem/JAudio2/JAISoundStarter.hpp>
 #include <JSystem/JAudio2/JAIStreamDataMgr.hpp>
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
-#include <JSystem/JAudio2/JASAramStream.hpp>
+#include <JSystem/JAudio2/JASStream.hpp>
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
 #include <JSystem/JAudio2/JASSoundParams.hpp>
@@ -32,14 +32,13 @@
 #include <JSystem/JAudio2/JAUSectionHeap.hpp>
 #include <JSystem/JAudio2/JAUSoundMgr.hpp>
 #include <JSystem/JAudio2/JAUStdSoundInfo.hpp>
-#include <JSystem/JAudio2/JAUStreamDataMgr.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JKernel/JKRArchive.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 const char sAudioResFile[] = "/AudioRes/SMR.szs";
 const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq.arc";
@@ -63,14 +62,8 @@ namespace {
         initJAS.audioMemory_ = AudParams::aramAddr;
         initJAS.audioMemSize_ = AudParams::aramSize;
         initJAS.heapSize_ = AudParams::workAreaSize;
-        initJAS.dvdThreadPriority_ = AudParams::dvdThreadPriority;
-        initJAS.audioThreadPriority_ = AudParams::audioThreadPriority;
-        initJAS.dvdThreadId_ = AudParams::dvdThreadSwitchID;
-        initJAS.audioThreadId_ = AudParams::audioThreadSwitchID;
         initJAS.field_0x1c = AudParams::numFreeTracks;
         initJAS.field_0x20 = AudParams::numFreeTrackChannels;
-        initJAS.aramBlockSize_ = AudParams::streamBlockSize;
-        initJAS.aramChannelNum_ = AudParams::numStreamChannels;
         initJAS.dspLevel_ = AudParams::outputGain;
         initJAS.initJASystem(pHeap);
 
@@ -99,7 +92,7 @@ AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchiv
     newHeap->getHeap()->becomeCurrentHeap();
 
     if (pV == nullptr) {
-        if (NebulaDisc::find(sAudioResFile) >= 0) {
+        if (GameAssets::find(sAudioResFile) >= 0) {
             JAUAudioArcLoader loader(newHeap);
             loader.load(sAudioResFile);
             newHeap->getHeap()->freeTail();
@@ -112,8 +105,8 @@ AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchiv
 
     u32 maxSeqDataSize;
     if (pSeqArchive == nullptr) {
-        if (NebulaDisc::find(sJaiSeqArc) >= 0) {
-            JKRArchive* seqArc = JKRArchive::mount(sJaiSeqArc, JKRArchive::MOUNT_MODE_DVD, newHeap->getHeap(), JKRArchive::MOUNT_DIRECTION_1);
+        if (GameAssets::find(sJaiSeqArc) >= 0) {
+            JKRArchive* seqArc = JKRArchive::mount(sJaiSeqArc, JKRArchive::MOUNT_MODE_MEM, currHeap, JKRArchive::MOUNT_DIRECTION_1);
             newHeap->setSeqDataArchive(seqArc);
             maxSeqDataSize = AudParams::maxSeqDataSize;
         } else {
@@ -156,7 +149,7 @@ static JAUStdSoundInfo* newSoundInfo(JAUSection* pSection) {
 
 AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, JKRArchive* pChordArchive, JKRArchive* pMeArchive, JKRArchive* pRemixArchive)
     : mIsResetReady(), mIsReset(), mStopThreads(), _828(), mIsPaused(), _82A(), _82B(), _82C(), _830(-1), mSoundInfo(), mSectionHeap(pSectionHeap),
-      mStreamAramMgr(), mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
+      mAudible(), mSystemSeObject(), mSystemMeObject(), mSceneMgr(), mRhythmMeSystem(), mRemixMgr(), mAudEffector(),
       mSeStrategyMgr(), mVolumeController(), mHomeButtonMenuState(), mHomeButtonToggleTime(-1), mPauseMenuState(), mPauseMenuToggleTime(-1),
       mIsDvdError(), mLimitedSoundInfo(), mSpkSystem() {
     msBasic = this;
@@ -175,10 +168,6 @@ AudSystem::AudSystem(JAUSectionHeap* pSectionHeap, JKRArchive* pChordArchive, JK
 
     setAudience(&mAudience);
 
-    JAUStreamStaticAramMgr* streamAramMgr = new JAUStreamStaticAramMgr();
-    streamAramMgr->alloc(AudParams::streamAramBlocks_perChunk, JASKernel::getAramHeap());
-    mStreamAramMgr = streamAramMgr;
-    mStreamMgr.setStreamAramMgr(mStreamAramMgr);
 
     mSoundInfo = nullptr;
     JAUSoundTable* soundTable = mSectionHeap->getSoundTable();

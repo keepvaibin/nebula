@@ -5,27 +5,7 @@ import array
 import struct
 import sys
 
-
-def files(pak):
-    pak.seek(0x424)
-    at, size = (v << 2 for v in struct.unpack(">II", pak.read(8)))
-    pak.seek(at)
-    fst = pak.read(size)
-    count = struct.unpack_from(">I", fst, 8)[0]
-    names = count * 12
-    out = {}
-    folders = []
-    for n in range(1, count):
-        while folders and n >= folders[-1][1]:
-            folders.pop()
-        w, a, b = struct.unpack_from(">III", fst, n * 12)
-        at = names + (w & 0xFFFFFF)
-        label = fst[at : fst.index(b"\0", at)].decode("latin-1")
-        if w >> 24:
-            folders.append((label, b))
-        else:
-            out["/".join([f for f, _ in folders] + [label])] = (a << 2, b)
-    return out
+from pakfiles import files
 
 
 def read(pak, entry):
@@ -42,36 +22,33 @@ def swapped16(data):
 
 def check_ast(name, s, d):
     errors = []
-    if len(s) != len(d) or d[:4] != b"MRTS":
+    tag, channels, rate, samples, loop, loop_start, loop_end, volume = struct.unpack_from("<8I", d, 0)
+    if tag != 0x4E535452 or len(d) != 32 + samples * 2 * channels:
         return [f"{name}: size or tag"]
-    for at, width in [(4, 4), (0xC, 2), (0xE, 2), (0x10, 4), (0x14, 4), (0x18, 4), (0x1C, 4), (0x20, 4), (0x24, 4)]:
-        if s[at : at + width] != d[at : at + width][::-1]:
-            errors.append(f"{name}: header at {at:#x}")
-    if s[8:0xC] != d[8:0xC] or s[0x28:0x40] != d[0x28:0x40]:
-        errors.append(f"{name}: header bytes")
-    fmt = s[9]
-    channels = struct.unpack_from(">H", s, 0xC)[0]
+    if (channels, loop, rate, samples, loop_start, loop_end) != (
+            struct.unpack_from(">H", s, 0xC)[0], struct.unpack_from(">H", s, 0xE)[0], *struct.unpack_from(">IIII", s, 0x10)):
+        errors.append(f"{name}: header numbers")
+    if volume != s[0x28]:
+        errors.append(f"{name}: volume")
     at = 0x40
     blocks = 0
+    done = 0
     while at < len(s):
-        if s[at : at + 4] != b"BLCK" or d[at : at + 4] != b"KCLB":
+        if s[at : at + 4] != b"BLCK":
             errors.append(f"{name}: block tag at {at:#x}")
             break
         size = struct.unpack_from(">I", s, at + 4)[0]
-        if struct.unpack_from("<I", d, at + 4)[0] != size:
-            errors.append(f"{name}: block size at {at:#x}")
-        if swapped16(s[at + 8 : at + 0x20]) != d[at + 8 : at + 0x20]:
-            errors.append(f"{name}: last samples at {at:#x}")
         data = at + 0x20
-        end = data + size * channels
-        if end > len(s) and end - len(s) <= 32 * channels:
-            end = len(s)
-        src = s[data:end]
-        if (swapped16(src) if fmt == 1 else src) != d[data:end]:
-            errors.append(f"{name}: samples at {at:#x}")
-        at = end
+        per = size if data + size * channels <= len(s) else max(len(s) - (data + size * (channels - 1)), 0)
+        take = min(per, samples * 2 - done)
+        for c in range(channels):
+            src = s[data + size * c : data + size * c + take]
+            if swapped16(src) != d[32 + samples * 2 * c + done : 32 + samples * 2 * c + done + take]:
+                errors.append(f"{name}: samples at {at:#x}, channel {c}")
+        done += take
+        at = data + size * (channels - 1) + per
         blocks += 1
-    return errors, blocks, channels, fmt
+    return errors, blocks, channels, 1
 
 
 def pcm16(smr):

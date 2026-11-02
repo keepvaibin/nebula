@@ -11,10 +11,6 @@ namespace AudParams {
     extern const int aramAddr;
     extern const int aramSize;
     extern const int workAreaSize;
-    extern const int audioThreadPriority;
-    extern const int dvdThreadPriority;
-    extern const int dvdThreadSwitchID;
-    extern const int audioThreadSwitchID;
     extern const int numFreeTracks;
     extern const int numFreeTrackChannels;
     extern const int streamBlockSize;
@@ -39,7 +35,6 @@ namespace AudParams {
     extern const JAISeCategoryArrangementItem arrangeSE_DM;
     extern const JAISeCategoryArrangementItem arrangeSE_RS;
     extern const JAISeCategoryArrangementItem arrangeHOMESE;
-    extern const s32 streamAramBlocks_perChunk;
     extern const f32 streamSampleRate;
     extern const f32 faderVolZeroVolume;
     extern const f32 faderVolDownVolume;

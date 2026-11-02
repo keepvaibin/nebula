@@ -208,7 +208,7 @@ void FurCtrl::setupFur(J3DModel* pModel, ResTIMG* pLength, ResTIMG* pIndirect, R
 
     for (s32 i = 0; i < mNumLayers; i++) {
         char name[16];
-        sprintf(name, "\203\214\203\103\203\204 %d" /* レイヤ %d */, i);
+        nebula_sprintf(name, "\203\214\203\103\203\204 %d" /* レイヤ %d */, i);
         J3DModel2* pLayer = new J3DModel2(mModel);
         pLayer->setVtxShader(mShader, componentSize);
         mLayerModels[i] = pLayer;
@@ -231,7 +231,7 @@ void FurCtrl::setupFurClone(J3DModel* pModel, FurCtrl* pOther) {
 
     for (u32 i = 0; i < mNumLayers; i++) {
         char name[32];
-        sprintf(name, "\203\214\203\103\203\204(\203\122\203\163\201\133) %d" /* レイヤ(コピー) %d */, i);
+        nebula_sprintf(name, "\203\214\203\103\203\204(\203\122\203\163\201\133) %d" /* レイヤ(コピー) %d */, i);
         J3DModel2* pLayer = new J3DModel2(mModel);
         *pLayer->getVertexBuffer() = *pOther->mLayerModels[i]->getVertexBuffer();
         mLayerModels[i] = pLayer;

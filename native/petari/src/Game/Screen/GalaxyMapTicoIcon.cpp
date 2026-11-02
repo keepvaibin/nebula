@@ -11,7 +11,7 @@ GalaxyMapTicoIcon::GalaxyMapTicoIcon(int exclamationGalaxyIndex, const char* pGa
 
     mPaneName = new char[paneNameLen];
 
-    snprintf(mPaneName, paneNameLen, "%s", pPaneName);
+    nebula_snprintf(mPaneName, paneNameLen, "%s", pPaneName);
 }
 
 void GalaxyMapTicoIcon::init(const JMapInfoIter&) {

@@ -19,7 +19,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 namespace {
     // hCommonGravity

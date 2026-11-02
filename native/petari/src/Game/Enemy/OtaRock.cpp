@@ -35,7 +35,7 @@ namespace NrvOtaRock {
 
 OtaRock::OtaRock(const char* pName)
     : LiveActor(pName), mNoThrowCocoNut(false), mCocoNutArray(nullptr), mFireBallArray(nullptr), mFixedPosition(nullptr),
-      mThrowCocoNutCounter(nullptr), mWaitFrame(0), _A4(), _D4(0.0f, 0.0f, 1.0f), mAnimScaleController(nullptr) {
+      mThrowCocoNutCounter(0), mWaitFrame(0), _A4(), _D4(0.0f, 0.0f, 1.0f), mAnimScaleController(0) {
     _A4.identity();
 }
 

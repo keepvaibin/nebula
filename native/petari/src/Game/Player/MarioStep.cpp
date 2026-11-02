@@ -8,7 +8,7 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void Mario::checkStep() {
     if (mMovementStates.jumping) {

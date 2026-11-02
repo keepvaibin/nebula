@@ -104,7 +104,7 @@ void BeamGoRoundPlanet::initBeam() {
 
     for (s32 i = 0; i < 16; i++) {
         char buf[256];
-        snprintf(buf, sizeof(buf), "beam%d", i + 1);
+        nebula_snprintf(buf, sizeof(buf), "beam%d", i + 1);
         MtxPtr jointMtx = MR::getJointMtx(this, buf);
         mBeams[i] = new BeamGoRoundBeam(jointMtx);
         mBeams[i]->initWithoutIter();

@@ -2,7 +2,6 @@
 #include "Game/Demo/DemoStartRequestUtil.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <revolution/types.h>
 
 // Defined below; declared before this file's first use instantiates them.
 template <>

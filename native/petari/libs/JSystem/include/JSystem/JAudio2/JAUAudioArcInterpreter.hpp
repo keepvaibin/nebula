@@ -2,7 +2,6 @@
 
 #include <cstring>
 
-#include <revolution/types.h>
 
 class JAUAudioArcInterpreter {
 public:

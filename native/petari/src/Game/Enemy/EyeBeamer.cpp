@@ -24,7 +24,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TQuat.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace NrvEyeBeamer {
     NEW_NERVE(EyeBeamerNrvDemoStartWait, EyeBeamer, DemoStartWait);

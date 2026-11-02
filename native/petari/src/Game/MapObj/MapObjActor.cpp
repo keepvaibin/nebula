@@ -345,7 +345,7 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
 
     if (MR::isExistSubModel(mObjectName, "Bloom")) {
         char modelName[0x100];
-        snprintf(modelName, sizeof(modelName), "%sBloom", mObjectName);
+        nebula_snprintf(modelName, sizeof(modelName), "%sBloom", mObjectName);
         const char* pName = mName;
         mBloomModel = MR::createModelObjBloomModel(pName, modelName, getBaseMtx());
         mBloomModel->mScale.set(mScale);
@@ -571,9 +571,9 @@ bool MapObjActor::tryCreateBreakModel(const MapObjActorInitInfo& rInfo) {
     char buf[0x100];
 
     if (rInfo._80 != nullptr) {
-        snprintf(buf, sizeof(buf), "%s", rInfo._80);
+        nebula_snprintf(buf, sizeof(buf), "%s", rInfo._80);
     } else {
-        snprintf(buf, sizeof(buf), "%sBreak", mObjectName);
+        nebula_snprintf(buf, sizeof(buf), "%sBreak", mObjectName);
     }
 
     if (!MR::isExistModel(buf)) {
@@ -868,6 +868,6 @@ void MapObjActorUtil::killBloomModel(MapObjActor* pActor) {
 void MapObjActorUtil::appearBloomModel(MapObjActor* pActor) {
     pActor->mBloomModel->appear();
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "%sBloom", pActor->mObjectName);
+    nebula_snprintf(buf, sizeof(buf), "%sBloom", pActor->mObjectName);
     MR::tryStartAllAnim(pActor->mBloomModel, buf);
 }

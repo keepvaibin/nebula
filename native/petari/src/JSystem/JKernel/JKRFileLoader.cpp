@@ -1,12 +1,11 @@
 #include "JSystem/JKernel/JKRFileLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 JKRFileLoader* JKRFileLoader::sCurrentVolume;
 JSUList< JKRFileLoader > JKRFileLoader::sVolumeList = JSUList< JKRFileLoader >();
-NebulaMutex JKRFileLoader::sVolumeListMutex;
+GameMutex JKRFileLoader::sVolumeListMutex;
 
 JKRFileLoader::JKRFileLoader() : JKRDisposer(), mLoaderLink(this) {
     mLoaderName = nullptr;

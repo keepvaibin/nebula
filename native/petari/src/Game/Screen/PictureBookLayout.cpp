@@ -42,11 +42,11 @@ namespace {
         s32 textureNo = 0;
 
         char chapterArcName[64];
-        snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", chapterNo);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", chapterNo);
 
         for (;;) {
             char pageTexName[64];
-            snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", chapterNo, textureNo + 1);
+            nebula_snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", chapterNo, textureNo + 1);
 
             if (!MR::isExistResourceInArc(chapterArcName, pageTexName)) {
                 break;
@@ -61,7 +61,7 @@ namespace {
     s32 getPageNum(s32 chapterNo) {
         for (s32 pageNo = 0; pageNo < 100; pageNo++) {
             char messageId[64];
-            snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo + 1, 0);
+            nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo + 1, 0);
 
             if (MR::isExistGameMessage(messageId)) {
                 continue;
@@ -168,7 +168,7 @@ void PictureBookLayout::makeArchiveList(NameObjArchiveListCollector* pCollector,
     for (s32 c = chapterMin; c <= chapterMax; c++) {
         char chapterArcName[64];
 
-        snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", c);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", c);
         pCollector->addArchive(chapterArcName);
     }
 
@@ -207,11 +207,11 @@ void PictureBookLayout::initTexture() {
 
     for (s32 c = mChapterMin; c <= mChapterMax; c++) {
         char chapterArcName[64];
-        snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", c);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", c);
 
         for (s32 p = 0; p < ::getTextureNum(c); p++) {
             char pageTexName[64];
-            snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", c, p + 1);
+            nebula_snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", c, p + 1);
 
             _44[textureIndex] = MR::createLytTexMap(chapterArcName, pageTexName);
             textureIndex++;
@@ -230,7 +230,7 @@ void PictureBookLayout::initContentsButton() {
         mContentsButtonPaneController[i] = new ButtonPaneController(this, ::cContentsPaneName[i], ::cContentsPointingPaneName[i], 0, false);
         mContentsButtonPaneController[i]->invalidateAppearance();
 
-        snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", i + 1);
+        nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", i + 1);
 
         MR::setTextBoxGameMessageRecursive(this, ::cContentsPaneName[i], messageId);
     }
@@ -239,13 +239,13 @@ void PictureBookLayout::initContentsButton() {
 namespace {
     inline void setChapterTitle(LayoutActor* pActor, const char* pPaneName, s32 chapter) {
         char messageId[64];
-        snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", chapter);
+        nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", chapter);
         MR::setTextBoxGameMessageRecursive(pActor, pPaneName, messageId);
     }
 };  // namespace
 namespace {
     inline bool setPageText(LayoutActor* pActor, char (&rMessageId)[64], const s32& rChapter, const s32& rPage, const s32& rTextIndex) {
-        snprintf(rMessageId, sizeof(rMessageId), "PictureBookChapter%d_Page%d_%03d", rChapter, rPage, rTextIndex);
+        nebula_snprintf(rMessageId, sizeof(rMessageId), "PictureBookChapter%d_Page%d_%03d", rChapter, rPage, rTextIndex);
 
         if (MR::isExistGameMessage(rMessageId)) {
             MR::setTextBoxGameMessageRecursive(pActor, "Text", rMessageId);
@@ -449,7 +449,7 @@ s32 PictureBookLayout::getCurrentMaxTextIndex() const {
 
     for (s32 i = 0; i < 100; i++) {
         char messageId[64];
-        snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo, i);
+        nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo, i);
 
         if (MR::isExistGameMessage(messageId)) {
             continue;

@@ -5,8 +5,7 @@
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 class J3DModelData;
 class J3DMtxBuffer;

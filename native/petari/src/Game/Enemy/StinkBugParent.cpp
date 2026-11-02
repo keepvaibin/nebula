@@ -14,7 +14,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 namespace {
     // sGravity

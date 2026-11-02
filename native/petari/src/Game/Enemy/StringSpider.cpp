@@ -25,8 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 void StringSpider_FORCE_MATCH_SDATA2() {
     (void)1.0f;

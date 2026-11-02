@@ -15,7 +15,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/NativeMesh.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>

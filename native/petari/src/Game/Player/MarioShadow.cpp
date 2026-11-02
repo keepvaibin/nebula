@@ -14,7 +14,6 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
@@ -358,7 +357,7 @@ void CollisionShadow::initCaptureTex() {
     _2FC = 160;
     _2FE = 160;
     {
-        MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
+        MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
         _300 = new JUTTexture(_2FC, _2FE, GPU_TF_I8);
         MR::zeroMemory(_300->mImage, _2FC * _2FE);
         MR::setMarioShadowTex(_300);

@@ -1,9 +1,8 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
-#include <revolution/os.h>
 
 typedef void (*JASThreadCallback)(void*);
 
@@ -21,7 +20,7 @@ private:
 public:
     typedef JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable > ThreadMemPool;
 
-    JASTaskThread(int priority, int msgCount, u32 stackSize);
+    JASTaskThread(int msgCount, u32 stackSize);
     void* allocCallStack(JASThreadCallback callback, void* msg);
     void* allocCallStack(JASThreadCallback callback, const void* msg, u32 msgSize);
     int sendCmdMsg(JASThreadCallback callback, void* msg);
@@ -31,6 +30,6 @@ public:
     virtual ~JASTaskThread();
     virtual void* run();
 
-    /* 0x7C */ NebulaThreadQueue threadQueue_;
+    /* 0x7C */ GameEvent threadQueue_;
     /* 0x84 */ bool _84;
 };

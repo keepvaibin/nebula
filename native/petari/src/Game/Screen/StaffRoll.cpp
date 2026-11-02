@@ -191,7 +191,7 @@ void StaffRollPicture::initReplaceTexture() {
     }
 
     for (s32 i = 0; i < PICTURE_TEXTURE_NUM; i++) {
-        snprintf(replaceTextureName, sizeof(replaceTextureName), "%s%03d.bti", pReplaceTexturePrefix, i);
+        nebula_snprintf(replaceTextureName, sizeof(replaceTextureName), "%s%03d.bti", pReplaceTexturePrefix, i);
         mReplaceTexture[i] = MR::createLytTexMap(::cReplaceTextureArcName, replaceTextureName);
     }
 }
@@ -322,7 +322,7 @@ bool StaffRoll::isNextLineEmpty() const {
         return false;
     }
 
-    wchar_t message[256];
+    char16_t message[256];
     MR::getMessageLine(message, ARRAY_SIZE(message), mMsg, mMsgLine);
 
     return message[0] == '\0';
@@ -638,13 +638,13 @@ bool StaffRoll::tryGenerateLine() {
 
 void StaffRoll::makeLine() {
     StaffRollLine* pLine;
-    wchar_t message[256];
+    char16_t message[256];
     MR::getMessageLine(message, ARRAY_SIZE(message), mMsg, mMsgLine);
-    wchar_t buffer[256] = {};
-    const wchar_t* pMessage = message;
+    char16_t buffer[256] = {};
+    const char16_t* pMessage = message;
     s32 columnCount = 0;
-    wchar_t columns[3][256] = {};
-    wchar_t* pColumn = columns[0];
+    char16_t columns[3][256] = {};
+    char16_t* pColumn = columns[0];
 
     while (true) {
         if (*pMessage == 0x1A) {
@@ -659,12 +659,12 @@ void StaffRoll::makeLine() {
             continue;
         }
 
-        if (*pMessage != L'|' && *pMessage != L'\0') {
+        if (*pMessage != u'|' && *pMessage != u'\0') {
             *pColumn++ = *pMessage;
         } else {
-            *pColumn = L'\0';
+            *pColumn = u'\0';
             columnCount++;
-            if (*pMessage == L'\0') {
+            if (*pMessage == u'\0') {
                 break;
             }
 

@@ -20,7 +20,7 @@ bool NPCFunction::getNPCItemData(NPCActorItem* pItem, s32 idx) {
     NPCItemParameterReader* pItemReader = pDirector->mItemParameterReader;
 
     char resName[256];
-    snprintf(resName, sizeof(resName), "%sItem.bcsv", pItem->mActor);
+    nebula_snprintf(resName, sizeof(resName), "%sItem.bcsv", pItem->mActor);
 
     if (!pHolder->mFileInfoTable->isExistRes(resName)) {
         return false;

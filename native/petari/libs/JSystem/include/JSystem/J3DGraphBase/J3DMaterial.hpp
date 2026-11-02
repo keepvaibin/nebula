@@ -5,8 +5,7 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 class J3DShape;
 class J3DJoint;

@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Effect/MultiEmitter.hpp"
@@ -30,7 +31,6 @@ template void JGeometry::TVec2< f32 >::set< f32 >(f32, f32);
 template void JGeometry::TBox2< f32 >::set(const TVec2f&, const TVec2f&);
 
 
-extern "C" int vswprintf(wchar_t*, size_t, const wchar_t*, va_list);
 
 void LayoutUtil_FORCE_MATCH_SDATA2() {
     (void)255.0f;
@@ -208,16 +208,16 @@ void MR::setTextBoxSystemMessageRecursive(LayoutActor* pActor, const char* pPane
     setTextBoxMessageRecursive(pActor, pPaneName, getSystemMessageDirect(pMessageId));
 }
 
-void MR::setTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName, const wchar_t* pMessage) {
+void MR::setTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pMessage) {
     executeTextBoxRecursive(pActor, pPaneName, TextBoxRecursiveSetMessage(pMessage));
 }
 
-void MR::setTextBoxFormatRecursive(LayoutActor* pActor, const char* pPaneName, const wchar_t* pFormat, ...) {
-    wchar_t message[256];
+void MR::setTextBoxFormatRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pFormat, ...) {
+    char16_t message[256];
     va_list list;
 
     va_start(list, pFormat);
-    vswprintf(message, ARRAY_SIZE(message), pFormat, list);
+    MR::formatTextV(message, ARRAY_SIZE(message), pFormat, list);
     va_end(list);
 
     setTextBoxMessageRecursive(pActor, pPaneName, message);
@@ -227,7 +227,7 @@ void MR::setTextBoxArgNumberRecursive(LayoutActor* pActor, const char* pPaneName
     executeTextBoxRecursive(pActor, pPaneName, TextBoxRecursiveSetArgNumber(number, argIndex));
 }
 
-void MR::setTextBoxArgStringRecursive(LayoutActor* pActor, const char* pPaneName, const wchar_t* pMessage, s32 argIndex) {
+void MR::setTextBoxArgStringRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pMessage, s32 argIndex) {
     executeTextBoxRecursive(pActor, pPaneName, TextBoxRecursiveSetArgString(pMessage, argIndex));
 }
 
@@ -264,14 +264,14 @@ void MR::setTextBoxHorizontalPositionCenterRecursive(LayoutActor* pActor, const 
 }
 
 void MR::updateClearTimeTextBox(LayoutActor* pActor, const char* pPaneName, u32 step) {
-    wchar_t clearTimeText[16];
+    char16_t clearTimeText[16];
 
     makeClearTimeString(clearTimeText, step);
     setTextBoxMessageRecursive(pActor, pPaneName, clearTimeText);
 }
 
 void MR::updateMinuteAndSecondTextBox(LayoutActor* pActor, const char* pPaneName, u32 step) {
-    wchar_t minuteAndSecondText[16];
+    char16_t minuteAndSecondText[16];
 
     makeMinuteAndSecondString(minuteAndSecondText, step);
     setTextBoxMessageRecursive(pActor, pPaneName, minuteAndSecondText);
@@ -866,11 +866,11 @@ void MR::setCometPaneAnimFromId(LayoutActor* pActor, const char* pPaneName, int 
 }
 
 void MR::setTextBoxNumberRecursive(LayoutActor* pActor, const char* pPaneName, s32 number) {
-    setTextBoxFormatRecursive(pActor, pPaneName, L"%d", number);
+    setTextBoxFormatRecursive(pActor, pPaneName, u"%d", number);
 }
 
 void MR::clearTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName) {
-    setTextBoxMessageRecursive(pActor, pPaneName, L"");
+    setTextBoxMessageRecursive(pActor, pPaneName, u"");
 }
 
 IconAButton* MR::createAndSetupIconAButton(LayoutActor* pActor, bool connectToScene, bool connectToPause) {

@@ -11,7 +11,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "revolution/types.h"
 
 namespace NrvWoodBox {
     NEW_NERVE(WoodBoxNrvWait, WoodBox, Wait);

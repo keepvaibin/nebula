@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include <revolution/types.h>
 
 class ActorCameraInfo;
 class BckCtrlData;

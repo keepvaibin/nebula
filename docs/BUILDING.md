@@ -56,7 +56,7 @@ Put `NebulaNative.exe` and `smg_game.dll` in one folder, then:
 ```powershell
 ctest --test-dir build\host --output-on-failure
 cargo test -p nebula-import
-sh native/sdk/os/tests/run_tests.sh
+sh native/tests/run_tests.sh
 .\tools\audit_repo.ps1
 ```
 

@@ -1,5 +1,5 @@
 #include "RVLFaceLibInternal.h"
-#include <cstdio>
+#include <stdio.h>
 
 // For masking out padding when comparing fields
 #define PADMASK(t, size) ((t)(~((1 << size) - 1)))
@@ -213,11 +213,11 @@ static void copyChar2Additional_(MiiAdditionalInfo* dst,
     u8 height;
     u8 build;
 
-    memcpy(dst->name, src->personal.name, sizeof(wchar_t) * MII_NAME_LEN);
+    memcpy(dst->name, src->personal.name, sizeof(char16_t) * MII_NAME_LEN);
     dst->name[MII_NAME_LEN] = '\0';
 
     memcpy(dst->creator, src->personal.creator,
-           sizeof(wchar_t) * MII_CREATOR_LEN);
+           sizeof(char16_t) * MII_CREATOR_LEN);
     // @bug Copy paste error
     dst->name[MII_CREATOR_LEN] = '\0';
 

@@ -67,7 +67,7 @@ public:
 
     inline CustomTagArg(int a1, TagType a2) : mIntArg(a1), mArgType(a2) {
     }
-    inline CustomTagArg(const wchar_t* a1, TagType a2) : mCharArg(a1), mArgType(a2) {
+    inline CustomTagArg(const char16_t* a1, TagType a2) : mCharArg(a1), mArgType(a2) {
     }
 
     inline void operator=(const CustomTagArg& rhs) {
@@ -77,7 +77,7 @@ public:
 
     union {
         /* 0x0 */ int mIntArg;
-        /* 0x0 */ const wchar_t* mCharArg;
+        /* 0x0 */ const char16_t* mCharArg;
     };
 
     /* 0x4 */ TagType mArgType;
@@ -164,8 +164,8 @@ public:
     static void registerTalkSystem(TalkMessageCtrl*);
 
     static TalkMessageInfo* getMessageInfo(const TalkMessageCtrl*);
-    static const wchar_t* getSubMessage(const TalkMessageCtrl*);
-    static const wchar_t* getMessage(const TalkMessageCtrl*);
+    static const char16_t* getSubMessage(const TalkMessageCtrl*);
+    static const char16_t* getMessage(const TalkMessageCtrl*);
     static void onTalkStateEntry(TalkMessageCtrl*);
     static void onTalkStateNone(TalkMessageCtrl*);
     static void onTalkStateEnableStart(TalkMessageCtrl*);

@@ -86,7 +86,7 @@ namespace {
 };  // namespace
 
 void WaterCameraFilter::initScreenTex() {
-    MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
+    MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
     mScreenTex = new JUTTexture(::getFrameBufferWidth(), ::getScreenHeight(), GPU_TF_RGB565);
 }
 

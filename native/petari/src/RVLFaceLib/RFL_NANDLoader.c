@@ -1,7 +1,7 @@
 #include "RVLFaceLibInternal.h"
 #include "RFLi_Texture.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <cstdio>
+#include <stdio.h>
 
 #define LOADER_HEADER_BUF_1_SIZE 0x100
 #define LOADER_HEADER_BUF_2_SIZE 0x20

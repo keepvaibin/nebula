@@ -8,7 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     static const char* cDemoName = "\215\273\224\231\202\164\202\145\202\156\217\343\217\270" /* 砂漠ＵＦＯ上昇 */;

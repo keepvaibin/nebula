@@ -2,8 +2,7 @@
 
 #include "nw4r/math/arithmetic.h"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 namespace nw4r {
     namespace ut {

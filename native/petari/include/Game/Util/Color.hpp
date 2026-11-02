@@ -1,7 +1,6 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 
 class Color8 {
 public:

@@ -7,7 +7,6 @@
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/SpringValue.hpp"
-#include <revolution/types.h>
 
 class DesertLandMoveSwitch : public LiveActor {
 public:

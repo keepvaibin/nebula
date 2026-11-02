@@ -3,10 +3,9 @@
 #include "nw4r/math/types.h"
 #include "nw4r/ut/LinkList.h"
 #include <cstddef>
-#include <mem.h>
+#include <cstring>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 namespace nw4r {
     namespace lyt {

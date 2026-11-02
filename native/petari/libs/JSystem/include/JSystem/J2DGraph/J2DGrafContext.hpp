@@ -4,8 +4,7 @@
 #include "JSystem/JGeometry/TBox.hpp"
 #include "JSystem/JUtility/TColor.hpp"
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 enum J2DGrafType {
     J2DGraf_Base = 0,

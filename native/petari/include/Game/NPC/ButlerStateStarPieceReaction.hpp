@@ -2,7 +2,6 @@
 
 #include "Game/LiveActor/ActorStateBase.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include <revolution/types.h>
 
 class TalkMessageCtrl;
 

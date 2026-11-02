@@ -22,7 +22,7 @@ void PlanetMapWithoutHighModel::init(const JMapInfoIter& rIter) {
     info.setupEffect(nullptr);
     info.setupFarClipping(-1.0f);
     char modelName[256];
-    snprintf(modelName, sizeof(modelName), "%sLow", mObjectName);
+    nebula_snprintf(modelName, sizeof(modelName), "%sLow", mObjectName);
     info.setupModelName(modelName);
     initialize(rIter, info);
 }

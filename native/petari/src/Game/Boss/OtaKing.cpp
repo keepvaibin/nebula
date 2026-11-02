@@ -611,9 +611,9 @@ void OtaKing::startBckWaitIfNotPlaying() {
 
 void OtaKing::startBckWithFrontFoot(const char* pBckName) {
     MR::startBck(this, pBckName);
-    snprintf(mBckLBuffer, sizeof(mBckLBuffer), "%sR", pBckName);
+    nebula_snprintf(mBckLBuffer, sizeof(mBckLBuffer), "%sR", pBckName);
     MR::startBck(mFeet[0], mBckLBuffer);
-    snprintf(mBckRBuffer, sizeof(mBckRBuffer), "%sL", pBckName);
+    nebula_snprintf(mBckRBuffer, sizeof(mBckRBuffer), "%sL", pBckName);
     MR::startBck(mFeet[1], mBckRBuffer);
 }
 

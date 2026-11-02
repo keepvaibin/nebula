@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASAudioReseter.hpp"
-#include "JSystem/JAudio2/JASAudioThread.hpp"
+#include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
@@ -47,7 +47,7 @@ s32 JASAudioReseter::calc() {
             }
         }
         if (mThreadStopFlag != false) {
-            JASAudioThread::getInstance()->stop();
+            JASDriver::stopDMA();
         }
         mDoneFlag = 1;
         return -1;

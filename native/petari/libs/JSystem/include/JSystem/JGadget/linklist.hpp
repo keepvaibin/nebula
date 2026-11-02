@@ -1,7 +1,8 @@
 #pragma once
 
+#include <iterator>
+
 #include <cstddef>
-#include <revolution/types.h>
 
 #include "JSystem/JGadget/predicate.hpp"
 
@@ -13,36 +14,16 @@
 
 #define JGADGET_LINK_LIST(type, node) JGadget::TLinkList< type, -offsetof(type, node) >
 
-namespace std {
-
-    struct input_iterator_tag {};
-    struct forward_iterator_tag : public input_iterator_tag {};
-    struct bidirectional_iterator_tag : public forward_iterator_tag {};
+namespace JGadget {
 
     template < typename Category, typename T, typename Distance = s32, typename Pointer = T*, typename Reference = T& >
-    class iterator {
+    class TIterator {
     public:
         typedef Category iterator_category;
         typedef T value_type;
         typedef Distance difference_type;
         typedef Pointer pointer;
         typedef Reference reference;
-        iterator& operator=(const iterator& rOther) NO_INLINE {
-            return *this;
-        }
-    };
-
-}  // namespace std
-
-namespace JGadget {
-
-    template < typename Category, typename T, typename Distance = s32, typename Pointer = T*, typename Reference = T& >
-    class TIterator : std::iterator< Category, T, Distance, Pointer, Reference > {
-    public:
-        const TIterator& operator=(const TIterator& rOther) NO_INLINE {
-            std::iterator< Category, T, Distance, Pointer, Reference >::operator=(rOther);
-            return *this;
-        }
     };
 
     class TLinkListNode {

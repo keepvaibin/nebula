@@ -1046,6 +1046,17 @@ std::shared_ptr<const Model> find_model(std::uint64_t key) {
     return it != r.models.end() && !it->second.pending ? it->second.model : nullptr;
 }
 
+void forget_models(std::uint64_t start, std::uint64_t end) {
+    Registry& r = registry();
+    {
+        std::lock_guard guard(r.lock);
+        for (auto it = r.models.begin(); it != r.models.end();) {
+            it = it->first >= start && it->first < end ? r.models.erase(it) : std::next(it);
+        }
+    }
+    r.done.notify_all();
+}
+
 void clear_models() {
     Registry& r = registry();
     {

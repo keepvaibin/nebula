@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JASBasicWaveBank.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"

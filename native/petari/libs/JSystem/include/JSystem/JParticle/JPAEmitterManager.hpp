@@ -4,7 +4,6 @@
 #include "JSystem/JParticle/JPADrawInfo.hpp"
 #include "JSystem/JParticle/JPAList.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution/types.h>
 
 class JPAEmitterCallBack;
 class JPAParticleCallBack;

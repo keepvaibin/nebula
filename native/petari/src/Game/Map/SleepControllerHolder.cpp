@@ -19,7 +19,9 @@ SleepControllerHolder::SleepControllerHolder() : NameObj("\203\111\203\165\203\1
 }
 
 void SleepControllerHolder::movement() {
-    std::for_each(mSleepControl.begin(), mSleepControl.end(), std::mem_func(&SleepController::update));
+    for (auto& item : mSleepControl) {
+        item->update();
+    }
 }
 
 void SleepControllerHolder::add(NameObj* pObj, const JMapInfoIter& rIter, SwitchEventListener* pListener) {
@@ -29,7 +31,9 @@ void SleepControllerHolder::add(NameObj* pObj, const JMapInfoIter& rIter, Switch
 }
 
 void SleepControllerHolder::initSync() {
-    std::for_each(mSleepControl.begin(), mSleepControl.end(), std::mem_func(&SleepController::initSync));
+    for (auto& item : mSleepControl) {
+        item->initSync();
+    }
 }
 
 namespace SleepControlFunc {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/JMapInfo.hpp"
-#include <revolution/types.h>
 
 class ActorLightCtrl;
 class LiveActor;

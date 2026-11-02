@@ -45,7 +45,7 @@ void CrystalCage::init(const JMapInfoIter& rIter) {
 
     if (mHasBinding) {
         initBinder(50.0f, 0.0f, 0);
-        MR::setBinderOffsetVec(this, &_110, nullptr);
+        MR::setBinderOffsetVec(this, &_110, false);
         MR::setBinderExceptActor(this, this);
     }
 

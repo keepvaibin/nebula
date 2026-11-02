@@ -3,12 +3,12 @@
 
 namespace {
     inline f32 JPASinShort(s16 v) {
-        const std::pair< f32, f32 >* p = &JMath::sSinCosTable.table[static_cast< u16 >(v) >> 2];
+        const JMath::Pair< f32, f32 >* p = &JMath::sSinCosTable.table[static_cast< u16 >(v) >> 2];
         return p->a1;
     }
 
     inline f32 JPACosShort(s16 v) {
-        const std::pair< f32, f32 >* p = &JMath::sSinCosTable.table[static_cast< u16 >(v) >> 2];
+        const JMath::Pair< f32, f32 >* p = &JMath::sSinCosTable.table[static_cast< u16 >(v) >> 2];
         return p->b1;
     }
 }

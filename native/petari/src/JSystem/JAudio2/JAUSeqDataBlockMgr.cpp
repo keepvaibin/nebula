@@ -1,7 +1,6 @@
 #include "JSystem/JAudio2/JAUSeqDataBlockMgr.hpp"
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
 #include "JSystem/JAudio2/JAUSoundInfo.hpp"
-#include <revolution/types.h>
 
 JAUSeqDataBlock::JAUSeqDataBlock() : mLink(this) {
 }

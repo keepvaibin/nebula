@@ -34,7 +34,7 @@ void BallBeamer::makeArchiveList(NameObjArchiveListCollector* pCollector, const 
 }
 
 void BallBeamer::init(const JMapInfoIter& rIter) {
-    initModelManagerWithAnm("BallBeamer", nullptr, nullptr);
+    initModelManagerWithAnm("BallBeamer", nullptr, false);
     MR::initDefaultPos(this, rIter);
     mPosition.y = mPosition.y - 50.0f;
     MR::connectToSceneEnemy(this);
@@ -42,8 +42,8 @@ void BallBeamer::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
     MR::addHitSensorPush(this, "Body", 8, 120.0f, TVec3f(0.0f, -20.0f, 0.0f));
     MR::initShadowVolumeSphere(this, 120.0f);
-    initEffectKeeper(3, nullptr, nullptr);
-    initSound(2, nullptr);
+    initEffectKeeper(3, nullptr, false);
+    initSound(2, false);
     initNerve(GET_NERVE(BallBeamer, BallBeamerNrvWait));
     makeActorAppeared();
     if (MR::useStageSwitchReadA(this, rIter)) {

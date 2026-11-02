@@ -9,6 +9,7 @@ pub mod dol;
 pub mod formats;
 pub mod material;
 pub mod native_data;
+pub mod store;
 pub mod texture;
 pub mod thp;
 
@@ -213,10 +214,10 @@ pub fn write_cooked_pak(
 ) -> Result<u64> {
     let files = pak_files(system.fst())?;
     let total: u64 = files.iter().map(|f| f.length).sum();
-    let mut fst = system.fst().to_vec();
     let mut pak = File::create(output).with_context(|| format!("{} cannot be created", output.display()))?;
-    pak.write_all(&system.bytes)?;
-    let mut at = (system.bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+    pak.write_all(&[0u8; store::HEADER as usize])?;
+    let mut at = store::HEADER.div_ceil(ALIGN) * ALIGN;
+    let mut placed = Vec::with_capacity(files.len());
     let mut done = 0u64;
     if !progress(0, total) {
         bail!("the import was cancelled");
@@ -244,13 +245,9 @@ pub fn write_cooked_pak(
         } else {
             bytes
         };
-        if at >> 2 > u32::MAX as u64 || out.len() > u32::MAX as usize {
-            bail!("the cooked game is larger than a file table can address");
-        }
         pak.seek(SeekFrom::Start(at))?;
         pak.write_all(&out).with_context(|| format!("{} cannot be written", file.path))?;
-        fst[file.node * 12 + 4..file.node * 12 + 8].copy_from_slice(&((at >> 2) as u32).to_be_bytes());
-        fst[file.node * 12 + 8..file.node * 12 + 12].copy_from_slice(&(out.len() as u32).to_be_bytes());
+        placed.push((file.node, store::Placed { path: file.path.clone(), position: at, size: out.len() as u64 }));
         stats.bytes_out += out.len() as u64;
         at = (at + out.len() as u64).div_ceil(ALIGN) * ALIGN;
         done += file.length;
@@ -258,28 +255,20 @@ pub fn write_cooked_pak(
             bail!("the import was cancelled");
         }
     }
-    // The tables main.dol holds, as files of their own folder after the disc's (B-05): the file table grows, so it
-    // moves after the files and boot.bin names its new place.
+    // A folder lists its files in the file table's order, whatever order their bytes are in.
+    placed.sort_by_key(|(node, _)| *node);
+    let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();
+    // The tables main.dol holds, as files of their own folder (B-05).
     let dol = system_dol(system)?;
     let game_id = String::from_utf8_lossy(&system.bytes[..6]).into_owned();
     let extra = dol::tables(dol, &game_id, stats)?;
-    let mut placed = Vec::with_capacity(extra.len());
-    for (_, bytes) in &extra {
+    for (name, bytes) in &extra {
         pak.seek(SeekFrom::Start(at))?;
         pak.write_all(bytes)?;
-        placed.push(at);
+        placed.push(store::Placed { path: format!("{}/{name}", dol::FOLDER), position: at, size: bytes.len() as u64 });
         at = (at + bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
     }
-    let fst = append_folder(&fst, dol::FOLDER, &extra, &placed)?;
-    let fst_at = at;
-    pak.seek(SeekFrom::Start(fst_at))?;
-    pak.write_all(&fst)?;
-    at = (at + fst.len() as u64).div_ceil(ALIGN) * ALIGN;
-    let words = |n: u64| ((n >> 2) as u32).to_be_bytes();
-    pak.seek(SeekFrom::Start(0x424))?;
-    pak.write_all(&words(fst_at))?;
-    pak.write_all(&words(fst.len() as u64))?;
-    pak.write_all(&words(fst.len() as u64))?;
+    let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
     Ok(at)
@@ -297,43 +286,6 @@ fn system_dol(system: &SystemArea) -> Result<&[u8]> {
         }
     }
     system.bytes.get(start..start + end).context("main.dol runs past the system area")
-}
-
-/// A file table with a folder of `files` added at the root, after every other node: their places `placed`.
-fn append_folder(fst: &[u8], folder: &str, files: &[(String, Vec<u8>)], placed: &[u64]) -> Result<Vec<u8>> {
-    let count = be32(fst, 8) as usize;
-    let names_at = count * 12;
-    let new_count = count + 1 + files.len();
-    let mut out = Vec::with_capacity(fst.len() + (1 + files.len()) * 12 + 64);
-    out.extend_from_slice(&fst[..names_at]);
-    out[8..12].copy_from_slice(&(new_count as u32).to_be_bytes());
-    // Names: the table's own, then the folder's and its files'.
-    let mut names = fst[names_at..].to_vec();
-    while names.last() == Some(&0) && names.len() > 1 && names[names.len() - 2] == 0 {
-        names.pop();
-    }
-    let mut add_name = |names: &mut Vec<u8>, name: &str| -> u32 {
-        let at = names.len() as u32;
-        names.extend_from_slice(name.as_bytes());
-        names.push(0);
-        at
-    };
-    let folder_name = add_name(&mut names, folder);
-    out.extend_from_slice(&(0x0100_0000 | folder_name).to_be_bytes());
-    out.extend_from_slice(&0u32.to_be_bytes());
-    out.extend_from_slice(&(new_count as u32).to_be_bytes());
-    for ((name, bytes), at) in files.iter().zip(placed) {
-        let name = add_name(&mut names, name);
-        out.extend_from_slice(&name.to_be_bytes());
-        out.extend_from_slice(&((at >> 2) as u32).to_be_bytes());
-        out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
-    }
-    if names.len() > 0x00FF_FFFF {
-        bail!("the file table's names outgrow it");
-    }
-    out.extend_from_slice(&names);
-    out.resize((out.len() + 3) & !3, 0);
-    Ok(out)
 }
 
 /// The system area of an existing game.pak (the content format before cooking).
@@ -398,16 +350,7 @@ pub const FILE_SELECT_ARCHIVE: &str = "LayoutData/FileSelect.arc";
 
 /// files/LayoutData/FileSelect.arc beside a cooked game.pak, copied out of it.
 pub fn write_beside_files(pak_path: &Path, output: &Path) -> Result<()> {
-    let mut pak = File::open(pak_path)?;
-    let system = pak_system_area(&mut pak)?;
-    let files = pak_files(system.fst())?;
-    let file = files
-        .iter()
-        .find(|f| f.path.eq_ignore_ascii_case(FILE_SELECT_ARCHIVE))
-        .with_context(|| format!("the file table has no {FILE_SELECT_ARCHIVE}"))?;
-    let mut bytes = vec![0u8; file.length as usize];
-    pak.seek(SeekFrom::Start(file.offset))?;
-    pak.read_exact(&mut bytes)?;
+    let bytes = store::read_file(pak_path, FILE_SELECT_ARCHIVE)?;
     let target = FILE_SELECT_ARCHIVE.split('/').fold(output.join("files"), |p, c| p.join(c));
     fs::create_dir_all(target.parent().unwrap())?;
     fs::write(&target, bytes).with_context(|| format!("{} cannot be written", target.display()))?;

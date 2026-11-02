@@ -1043,7 +1043,7 @@ namespace MR {
             return false;
         }
 
-        snprintf(key, sizeof(key), "SpecialStarGrand%1d", scenarioNo + 1);
+        nebula_snprintf(key, sizeof(key), "SpecialStarGrand%1d", scenarioNo + 1);
 
         GameEventFlagAccessor accessor = GameEventFlagTable::makeAccessor(key);
 

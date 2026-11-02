@@ -8,7 +8,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     static const f32 hZCheckAddDepth = 60.0f;

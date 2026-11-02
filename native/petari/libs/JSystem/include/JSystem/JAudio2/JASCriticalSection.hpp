@@ -1,13 +1,12 @@
 #pragma once
 
-#include <revolution/types.h>
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 
 class JASCriticalSection {
 public:
-    JASCriticalSection() : mInterruptState(NebulaKernel::disableInterrupts()) {};
+    JASCriticalSection() : mInterruptState(GameThreads::excludeAudio()) {};
     ~JASCriticalSection() {
-        NebulaKernel::restoreInterrupts(mInterruptState);
+        GameThreads::restoreAudio(mInterruptState);
     }
     /* 0x00 */ BOOL mInterruptState;
 };

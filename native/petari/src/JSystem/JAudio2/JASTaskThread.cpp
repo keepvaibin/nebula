@@ -1,11 +1,11 @@
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 
-JASTaskThread::JASTaskThread(int priority, int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount, priority) {
+JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount) {
     _84 = false;
     threadQueue_.init();
 }
@@ -80,11 +80,12 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
 }
 
 void* JASTaskThread::run() {
+    GameThreads::leaveWorld();
     JASThreadCallStack* callstack;
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
         if (_84) {
-            threadQueue_.sleep();
+            threadQueue_.wait();
         }
 
         if (callstack->msgType_) {
@@ -103,7 +104,7 @@ void JASTaskThread::pause(bool param_0) {
         _84 = 1;
     } else {
         if (_84) {
-            threadQueue_.wakeup();
+            threadQueue_.signal();
         }
         _84 = 0;
     }

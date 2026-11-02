@@ -26,8 +26,7 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/Rect.h>
 #include <nw4r/ut/RuntimeTypeInfo.h>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace {
     namespace Local {
@@ -145,7 +144,7 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
     }
 
     char archiveName[0x40];
-    snprintf(archiveName, sizeof(archiveName), "%s.arc", pLayoutName);
+    nebula_snprintf(archiveName, sizeof(archiveName), "%s.arc", pLayoutName);
 
     char fileName[0x40];
     MR::copyString(fileName, pLayoutName, sizeof(fileName));
@@ -401,7 +400,7 @@ bool LayoutManager::isPointing(const char* pName, const TVec2f& rPos) const {
 
 nw4r::lyt::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
     char fileName[0x80];
-    snprintf(fileName, sizeof(fileName), "%s.brlan", pName);
+    nebula_snprintf(fileName, sizeof(fileName), "%s.brlan", pName);
     u32 hash = MR::getHashCodeLower(fileName);
     for (u32 i = 0; i < mLayoutHolder->mAnimRes.mCount; i++) {
         if (mLayoutHolder->isAnimationHashEqual(hash, i)) {
@@ -507,7 +506,7 @@ void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
     mLayoutHolder = MR::createAndAddLayoutHolder(pArchiveName);
 
     char layoutResName[0x80];
-    snprintf(layoutResName, sizeof(layoutResName), "%s.brlyt", pLayoutName);
+    nebula_snprintf(layoutResName, sizeof(layoutResName), "%s.brlyt", pLayoutName);
     void* pLayoutRes = mLayoutHolder->GetResource('blyt', layoutResName, nullptr);
 
     mLayout = new nw4r::lyt::Layout();

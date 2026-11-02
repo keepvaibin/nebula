@@ -1,11 +1,12 @@
+#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/Util/SingletonHolder.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRExpHeap.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
-#include "Game/System/NebulaAuxMemory.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mBase(), mSize(), mHeap() {
@@ -273,10 +274,10 @@ JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getC
 
 JASHeap JASKernel::audioAramHeap;
 
-// The sound memory (wave archives and stream buffers): `size` bytes of the auxiliary memory past its reserved start,
+// The sound memory (wave archives and stream buffers): `size` bytes off the root heap,
 // handed out as pointers the mixer reads.
 void JASKernel::setupAramHeap(u32, u32 size) {
-    audioAramHeap.initRootHeap(NebulaAuxMemory::base() + NebulaAuxMemory::cReserved, size);
+    audioAramHeap.initRootHeap(SingletonHolder< HeapMemoryWatcher >::get()->mSoundMemory, size);
 }
 
 JASHeap* JASKernel::getAramHeap() {

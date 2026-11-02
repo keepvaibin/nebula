@@ -6,7 +6,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#include <cmath>
+#include <math.h>
 
 // The drawing state a Mii texture is drawn with.
 void Mii_SetupTextureDraw(void) {

@@ -10,7 +10,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

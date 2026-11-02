@@ -1,4 +1,3 @@
-#include <revolution/types.h>
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/MapObj/LavaHomeSeesawRotator.hpp"

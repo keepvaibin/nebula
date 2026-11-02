@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JAudio2/JAISound.hpp>
-#include <revolution/types.h>
 
 class AudLimitedSoundInfo {
 public:

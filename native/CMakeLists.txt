@@ -1,5 +1,5 @@
 # The game module (docs/NATIVE_PORT.md): Petari's kept code for RMGE01 and the parts of the RVL SDK it reuses,
-# built natively with clang against the game's own C++ library (MSL_C++) and Nebula's MSL interface, with the
+# built natively with clang against the host's C and C++ libraries, with the
 # native SDK layer, as a shared library apart from the host runtime.
 cmake_minimum_required(VERSION 3.24)
 project(NebulaGame LANGUAGES C CXX)
@@ -21,30 +21,22 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
-file(GLOB_RECURSE layer_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.c")
-list(FILTER layer_sources EXCLUDE REGEX "/tests/")
 
 add_library(smg_game SHARED
     ${game_sources}
-    ${layer_sources}
-    msl/src/msl_runtime.c
     math/src/nebula_math.c)
 
 target_include_directories(smg_game BEFORE PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/msl/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
     "${petari}/libs/JSystem/include"
-    "${petari}/libs/MSL_C++/include"
     "${petari}/libs/RVLFaceLib/include"
-    "${petari}/libs/RVL_SDK/include"
     "${petari}/libs/nw4r/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(version_ids RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3)
 string(REGEX MATCH "${NEBULA_GAME_VERSION}=([0-9])" _ "${version_ids}")
-target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} TARGET_PC=1 NEBULA_GAME_MODULE=1)
+target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} TARGET_PC=1 NEBULA_GAME_MODULE=1 _HAS_EXCEPTIONS=0)
 
 set_target_properties(smg_game PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON
@@ -92,20 +84,20 @@ target_compile_definitions(smg_game PRIVATE $<$<PLATFORM_ID:Linux,Android>:_GNU_
 target_compile_options(smg_game PRIVATE
     -ffp-contract=off  # the same results on every CPU (A-10)
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fms-extensions>
-    -fsigned-char -fshort-wchar
+    -fsigned-char
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fno-plt>
     -fno-ms-compatibility -fno-delayed-template-parsing
     ${diagnostics}
-    -Werror=return-type -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast
+    -Werror=return-type -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast -Werror=format
     -Werror=int-to-pointer-cast -Werror=pointer-to-enum-cast
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
     -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
     "SHELL:-include nebula_prelude.h"
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
-    $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
-        -fno-threadsafe-statics>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
+>
     # Every new-expression tests the allocation before constructing, as the console's compiler does: JKRHeap's
     # operator new and the sound pools' (JASPoolAllocObject) return null when full, and the game checks
     # (JAISeMgr::newSe_). Standard C++ lets the compiler drop those checks for an operator new that is not
@@ -119,7 +111,6 @@ target_compile_options(smg_game PRIVATE
 if(WIN32)
     # The DLL's own operator new/delete are JKRHeap's; the host process keeps its own.
     target_link_options(smg_game PRIVATE -fuse-ld=lld "LINKER:/errorlimit:0")
-    target_link_libraries(smg_game PRIVATE winmm)
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
     if(NOT ANDROID)  # Android's C library holds the threads

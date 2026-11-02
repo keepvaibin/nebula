@@ -372,7 +372,7 @@ void ScenarioSelectLayout::fadeInText() {
 
     if (isPlacedCoin) {
         const s32 bestScore = MR::getCoinBestScore(stageName, mSelectedScenarioNo);
-        MR::setTextBoxFormatRecursive(this, "ShaCoinNum", L"%03d", bestScore);
+        MR::setTextBoxFormatRecursive(this, "ShaCoinNum", u"%03d", bestScore);
     } else {
         MR::setPaneAnimFrameAndStop(this, "BestScore", 0.0f, 0);
     }
@@ -380,7 +380,7 @@ void ScenarioSelectLayout::fadeInText() {
     MR::startPaneAnim(this, "BestTime", "SelectIn", 0);
 
     if (::isCurrentStageRaceComplete(mSelectedScenarioNo)) {
-        wchar_t bestTime[16];
+        char16_t bestTime[16];
         MR::makeRaceBestTimeString(bestTime, RaceManagerFunction::getRaceId(stageName, mSelectedScenarioNo));
         MR::setTextBoxMessageRecursive(this, "ShaTime", bestTime);
     } else {

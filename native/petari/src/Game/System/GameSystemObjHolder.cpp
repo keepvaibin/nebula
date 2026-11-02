@@ -29,7 +29,7 @@ GameSystemObjHolder::GameSystemObjHolder()
     initDvd();
     initNAND();
     initNameObj();
-    MR::createAndAddArchive(NebulaDiscTables::loadErrorMessageArchive(MR::getStationedHeapNapa()), MR::getStationedHeapNapa(),
+    MR::createAndAddArchive(NebulaDataTables::loadErrorMessageArchive(MR::getStationedHeap()), MR::getStationedHeap(),
                             "ErrorMessageArchive.arc");
 }
 
@@ -47,7 +47,7 @@ void GameSystemObjHolder::initMessageResource() {
 
     char systemMessagePath[128];
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
+    nebula_snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
 
     void* pSystemMessageArchive = MR::copyFileFromArchive(pArchive, systemMessagePath, nullptr, 0);
     MR::createAndAddArchive(pSystemMessageArchive, pHeap, "/Memory/SystemMessage.arc");
@@ -117,7 +117,7 @@ void GameSystemObjHolder::initNAND() {
 }
 
 void GameSystemObjHolder::initAudio() {
-    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeapNapa());
+    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeap());
     mAudioSystem->requestResourceForInitialize();
 }
 

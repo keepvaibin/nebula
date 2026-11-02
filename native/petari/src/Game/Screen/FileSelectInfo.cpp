@@ -32,12 +32,12 @@ namespace FileSelectInfoSub {
 };  // namespace FileSelectInfoSub
 
 FileSelectInfo::FileSelectInfo(s32 nameBufferSize, const char* pName)
-    : LayoutActor(pName, 1), mNumber(), mStarNum(), mStarPieceNum(), mNameBufferSize(nameBufferSize), mName(new wchar_t[nameBufferSize]),
+    : LayoutActor(pName, 1), mNumber(), mStarNum(), mStarPieceNum(), mNameBufferSize(nameBufferSize), mName(new char16_t[nameBufferSize]),
       mMissNum(-1), mIsSelectedMarioPrev(true), mIsSelectedMario(true), mIsViewNormalEnding(), mIsViewCompleteEnding() {
     mSlideState = new FileSelectInfoSub::SlideState(this);
     mCharaState = new FileSelectInfoSub::CharaState(this);
 
-    MR::zeroMemory(mName, nameBufferSize * sizeof(wchar_t));
+    MR::zeroMemory(mName, nameBufferSize * sizeof(char16_t));
 }
 
 void FileSelectInfo::init(const JMapInfoIter& rIter) {
@@ -90,7 +90,7 @@ void FileSelectInfo::slideBack() {
 }
 
 void FileSelectInfo::setInfo(u16* pName, s32 number, s32 starNum, s32 starPieceNum, bool isSelectedMario, bool isViewNormalEnding,
-                             bool isViewCompleteEnding, const wchar_t* pDateMessage, const wchar_t* pTimeMessage, s32 missNum) {
+                             bool isViewCompleteEnding, const char16_t* pDateMessage, const char16_t* pTimeMessage, s32 missNum) {
     mNumber = number;
     mStarNum = starNum;
     mStarPieceNum = starPieceNum;

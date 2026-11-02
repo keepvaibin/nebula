@@ -155,6 +155,30 @@ AudioMixer::AudioMixer(std::uint32_t rate)
     frame_.reserve(subframe * 2u * 16u);
 }
 
+void AudioMixer::set_rate(std::uint32_t rate) {
+    rate_ = std::clamp<std::uint32_t>(rate, 8000u, 192000u);
+    game_ratio_ = static_cast<double>(rate_) / kGameRate;
+    stream_kernel_ = InterpolationKernel(128u, std::min(1.0, game_ratio_), 7.0, 512u);
+    const std::size_t subframe = (rate_ + kSubframesPerSecond - 1u) / kSubframesPerSecond;
+    fold_left_.reset(subframe);
+    fold_right_.reset(subframe);
+    panner_send_left_.reset(subframe);
+    panner_send_right_.reset(subframe / 2u);
+    subframe_counter_ = 0u;
+    frame_.clear();
+    stream_history_.clear();
+    stream_running_ = false;
+    for (VoiceState& state : voice_states_) {
+        state.fir_key_mode = 0xFFFFu;
+        state.fir_history.clear();
+        state.iir_valid = false;
+    }
+    for (EffectState& state : effect_states_) {
+        state.subframes = 0xFFFFu;
+        state.fir.clear();
+    }
+}
+
 void AudioMixer::setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
                        const std::byte* sound_memory, std::uint32_t sound_memory_size) {
     ++stats_.setups;
@@ -937,6 +961,10 @@ void AudioMixer::effects_end() {
 // `size` bytes `offset` past the voice's wave, when they lie in the sound memory.
 const std::byte* AudioMixer::wave_bytes(const NebulaAudioVoice& voice, std::uint32_t offset, std::uint32_t size) const {
     const auto* wave = reinterpret_cast<const std::byte*>(voice.wave);
+    if (voice.wave_end != nullptr) {
+        const auto available = static_cast<std::size_t>(voice.wave_end - voice.wave);
+        return offset <= available && size <= available - offset ? wave + offset : nullptr;
+    }
     if (sound_ == nullptr || wave < sound_ || wave > sound_ + sound_size_) {
         return nullptr;
     }

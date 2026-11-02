@@ -36,7 +36,9 @@ s32 DrawBufferGroup::registerDrawBuffer(LiveActor* pActor) {
 }
 
 void DrawBufferGroup::allocateActorListBuffer() {
-    std::for_each(mExecutors.begin(), mExecutors.end(), std::mem_func(&DrawBufferExecuter::allocateActorListBuffer));
+    for (auto& item : mExecutors) {
+        item->allocateActorListBuffer();
+    }
 }
 
 void DrawBufferGroup::active(LiveActor* pActor, s32 index) {
@@ -74,7 +76,9 @@ void DrawBufferGroup::findLightInfo(LiveActor* pActor, s32 index) {
 
 void DrawBufferGroup::entry() {
     if (mActiveExecutors.size() != 0) {
-        std::for_each(mActiveExecutors.begin(), mActiveExecutors.end(), std::mem_func(&DrawBufferExecuter::calcViewAndEntry));
+        for (auto& item : mActiveExecutors) {
+            item->calcViewAndEntry();
+        }
     }
 }
 
@@ -84,7 +88,9 @@ void DrawBufferGroup::drawOpa() const {
         if (mLightLoadType != -1) {
             MR::loadLight(mLightLoadType);
         }
-        std::for_each(mActiveExecutors.begin(), mActiveExecutors.end(), std::mem_func(&DrawBufferExecuter::drawOpa));
+        for (auto& item : mActiveExecutors) {
+            item->drawOpa();
+        }
     }
 }
 
@@ -94,7 +100,9 @@ void DrawBufferGroup::drawXlu() const {
         if (mLightLoadType != -1) {
             MR::loadLight(mLightLoadType);
         }
-        std::for_each(mActiveExecutors.begin(), mActiveExecutors.end(), std::mem_func(&DrawBufferExecuter::drawXlu));
+        for (auto& item : mActiveExecutors) {
+            item->drawXlu();
+        }
     }
 }
 

@@ -17,7 +17,7 @@ in this tree. **D**: read from the RMGE01 assembly or source. **H**: hypothesis,
   - one has no source: `StarPointerFunction::forceOutsideScreenEdge`, now written from the assembly (D);
   - two differ only in instruction order (D);
   - 39 are SDK code the platform layer replaces.
-- Kept code: `src/Game` (1,609 units), `src/JSystem` (169), `src/nw4r` (29) and `src/RVLFaceLib` (14). The RVL SDK, MSL_C, Runtime and MetroTRK are replaced.
+- Kept code: `src/Game` (1,609 units), `src/JSystem` (169), `src/nw4r` (29) and `src/RVLFaceLib` (14). The RVL SDK, MSL, Runtime and MetroTRK are replaced.
 
 ## Build of the game code
 
@@ -26,15 +26,13 @@ clang 22 on every host, with the same flags everywhere:
 | flag | why |
 |---|---|
 | `-std=gnu++17`, C `-std=gnu11` | The code is C++03 for CodeWarrior. C++20 adds rewritten comparison candidates that can change which `operator==` runs, and makes clang's builtin `stddef.h` re-enter under `__has_feature(modules)` (M). |
-| `-nostdinc++`, Petari's `MSL_C++` headers | The game's own C++ library, linked into the DOL. MSL's `std::sort` decides the order of equal elements; the collision binder sorts with it (D). Its `std::pair` has `a1`/`b1` members. |
-| `native/msl/include`, force-included `nebula_prelude.h` | MSL's C interface: the host C library where the two behave the same, renames where they don't (see below). |
-| `-fsigned-char`, `-fshort-wchar` | Console `char`; 16-bit `wchar_t` for the UTF-16 disc text and the game's wide strings. |
+| The host's C and C++ libraries, force-included `nebula_prelude.h` | `MR::sort` (`SortUtil.hpp`) keeps the order of equal elements the same on every host; the collision binder depends on it (D). Text is UTF-16, `char16_t` (`TextString.hpp`). |
+| `-fsigned-char` | Console `char`. |
 | `-fno-strict-aliasing` | The decompiled code type-puns through pointer casts throughout. |
 | `-fno-math-errno` | No kept code reads `errno` (M). With it, `sqrtf` is one instruction instead of a compare and a library call on the negative path (M, assembly). |
 | `-fno-stack-protector` | Pinned off for every toolchain (some distribution compilers enable it by default), so the module performs the same everywhere. |
 | `-fno-strict-float-cast-overflow` | Float-to-int casts saturate (`llvm.fpto[su]i.sat`, M). Unsigned conversions equal the console's `__cvt_fp2unsigned` (D). Signed ones differ only for NaN (0 here, 0x80000000 there). 8- and 16-bit targets saturate where the console wrapped after an int32 conversion: every such conversion goes through `s32` in the source (`(s16)(s32)(x)`, 205 sites; `native/tools/narrow_float_audit.py`). Degrees to binary angles (x 182.04) leave the 16-bit range past 180 degrees: saturated, every object placed rotated past 180 degrees was turned to 180 (the Observatory's Terrace and Fountain domes, M). |
 | `-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation` | CodeWarrior's model. JKRHeap's `operator new`/`delete` take every allocation; no kept code uses `dynamic_cast` or `typeid` (M). |
-| `-fno-threadsafe-statics` | All game C++ runs on the one simulation thread, so a function-local static needs no lock (docs/NATIVE_PERFORMANCE.md). |
 | `-fno-ms-compatibility -fno-delayed-template-parsing`; `-Wno-everything` then, as errors, `return-type`, the pointer/int truncation casts, calls without a prototype, int/pointer conversions, mismatched function pointer types, returned addresses of locals and constant out-of-bounds indexes | Windows reports the errors every other host reports. Strict mode found 15 lookup/goto sites hidden by the MSVC-compatible defaults (M). `-w` would also silence the `-Werror=` checks (M). Each error class is one the audits found silently miscompiled natively (see Audits). No function falls off its end (M). |
 | floating-point contraction on (default) | CodeWarrior contracts to `fmadds`. Results aren't bit-exact with the console in any case. |
 
@@ -52,20 +50,8 @@ Status:
 - Under `TARGET_PC` the base types are the same fundamental types on every host (`types.h`): `s32` is `int`, `u32` is `unsigned int`, `s64` is `long long`. `int32_t` would be `long` on some hosts and change overload resolution.
 - The console's `s32`/`u32` were `long`. The game passes `long` literals (`0L`, `1UL`) to s32/u32 overload sets. `NebulaLongCall` in `types.h` gives exactly those calls a forwarding template. Plain `long` overloads would have made `int` arguments ambiguous (M).
 - Explicit `long` in kept code was respelled `s32`/`u32` (1,990 sites, `native/tools/long_sweep.py`). These are identical types on the console and 64-bit on LP64 hosts otherwise.
-- `nullptr` stays MSL's `0`: the code was written for it (`bool b = nullptr`, integer contexts).
 
-### MSL interface (`native/msl`)
-
-The host C library is used where it behaves like MSL. Where it doesn't, the prelude maps the name to MSL's behaviour:
-
-| name | MSL behaviour kept |
-|---|---|
-| `abs` | `int abs(int)` only. UCRT adds `long`/`long long` overloads, so `abs(f32)` would no longer truncate as on the console (M). |
-| `stricmp`, `strcasecmp` | "C"-locale lower case, signed char comparison, -1/0/1 (D). |
-| `wcslen`, `wcscmp`, `wcsncpy`, `wcschr`, `swprintf`, `vswprintf` | 16-bit `wchar_t` and MSL's wide formatter: progress per call, -1 when the result doesn't fit, invalid conversions copied verbatim (D, `wprintf.c`). |
-| `__fpclassifyf`/`d` | MSL's class codes: NaN is 1, as `MathUtil.cpp` tests (D). glibc's codes differ. |
-| `cctype`, `locale.h` | "C" locale with MSL's results: the class bit, and 0 outside 0..0xFF instead of undefined behaviour (D). |
-| `cmath` | MSL's float `M_PI` and degree macros (`DEG_TO_RAD` evaluates in float). |
+Math calls with float arguments take the host's float overloads (`<cmath>`).
 
 ## Console-only code
 
@@ -90,10 +76,10 @@ Every console-only construct was found by tool, not by reading:
 
 ## Module layout
 
-- **Game module** (shared library): Petari's kept code, the MSL interface, and the SDK layer. It is built with the flags above and no host C++ library.
+- **Game module** (shared library): Petari's kept code, built with the flags above against the host's C and C++ libraries.
 - **Nebula host**: renderer, audio, input, files, settings and window. It uses the host C++ library.
 - Between the two sits a C function table.
-- They are separate modules because MSL's `std::` templates and the host's mangle identically: one `std::sort` or `std::pair<int,int>` would silently replace the other in a shared image.
+- They are separate modules so the game's `operator new` (JKRHeap's) stays out of the host.
 - JKRHeap's global `operator new` stays module-local: a DLL's own definition on Windows, hidden visibility on ELF and Mach-O.
 
 ## Audits
@@ -124,13 +110,13 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   - Object sizes the game fixed for 32-bit pointers: the root heap's header (0x90), fixed heap sizes (JKRNativeHeapSize gives twice the room where the parent has it), FunctionAsyncExecutor's unit heap units, copies and messages sized by console struct sizes (wave archive and stream tasks, oscillator copies, movie audio buffers), GXTexObj too small for GX's record (now 40 bytes; every GX record asserted to fit).
   - operator new memory 16-byte aligned (the compiler zeroes new objects with aligned SSE stores).
   - The unit heap's allocation table read as little-endian words (two objects in one unit).
-  - MSL's narrow formatter natively too: the host's printed "(null)" for a null string, which broke archive paths.
+  - A null string in a format prints nothing (`nebula_snprintf`): the host's C library prints "(null)", which broke archive paths.
   - A layout name pointing into a buffer whose scope had ended (LayoutManager).
   - Interrupts that arrive while enabled are delivered before the next disable as well as at the next enable, as the console takes them when they arrive (M: 1.47-1.60 ns per disable/restore pair, unchanged).
 - AddressSanitizer (`-DNEBULA_SANITIZE=address`, `port/tools/build_asan.ps1`): stack switches are fiber switches it is told of; the JKR heaps, built uninstrumented, keep their free space and block headers poisoned and unpoison each block they hand out, so overflows and uses after free inside the game's own heaps are reported too. Boot to the title screen and 60 s of its loop run clean (M, 2026-10-18). Found and fixed:
   - `OSClearStack` cleared below its own frame through a `memset` call whose frame was in the cleared range (volatile stores now).
   - `JKRThread`'s message buffers were `count * 4` bytes for 8-byte messages: every JKR thread's queue overran the next allocation.
-  - MSL's `std::sort` placed its pivots at `len / sizeof(iterator)`: 8 natively put the second pivot past the end of short ranges, and its swaps overwrote the next heap header (the stationed heap lost its 10.7 MB tail). Now the console's 4.
+  - The game's sort (`MR::sort`) placed its pivots at `len / sizeof(iterator)`: 8 natively put the second pivot past the end of short ranges, and its swaps overwrote the next heap header (the stationed heap lost its 10.7 MB tail). Now the console's 4.
   - A 4x4 projection constructed from a 3x4 identity read 16 bytes past it (StarPointerDirector).
   - Layout animations' file names: the string table's offsets read in host order (`GetStrTableStr`).
   - A buffer read past its block (FileRipper's header) and a single-character string read one past its end by the text writer's look-ahead (picture glyphs).
@@ -140,7 +126,7 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   - Sizes written as numbers for types larger natively (`size_audit.py`: allocations, copies, clears, byte-offset casts): JPA's seven function-pointer tables (`count * 4`), JASBasicBank's instrument table cleared by half, JASTaskThread's call-stack headers.
   - Raw memory viewed as host-order numbers (`endian_audit.py`, 191 casts) and objects reached through `void*` then read at console offsets (`void_flow_audit.py`, flow to a fixpoint over 2,318 slots): XanimeResource read a `J3DAnmBase`'s attribute and frame count at the console's byte offsets 4 and 6, inside the 8-byte vtable pointer.
   - 3x4 matrices given 4x4 parameters (`mtx_rows_audit.py`, by declared type): none left.
-  - `sizeof` of a pointer used as a number, and `int` shifts widened to 64 bits: MSL's `bitset` masks (`1 << n` for bits 32-63).
+  - `sizeof` of a pointer used as a number, and `int` shifts widened to 64 bits (bit masks past bit 31).
 - The Microsoft ABI sizes a member pointer by its class's inheritance where the class is complete: SystemUtil defined `callMethodAllSceneNameObj` with `NameObj` incomplete, a different size from its callers. `-fcomplete-member-pointers` now makes any such site an error (one existed).
 - Game threads run on native stacks from a pool at the top of MEM2 (256 KB each, 1 MB under ASan; guarded): the buffers the game gives are sized for PowerPC frames. The deepest measured, boot to the title screen, is 13.5 KB (M).
 - `nebula_game_debug_dump` reports every game thread with the module addresses on its stack and how deep the stack has been (`native/tools/symbolize_dump.py` names them). An out-of-memory panic lists the heap's largest blocks, children and uncovered spans.
@@ -208,7 +194,6 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   | NWC24 | 13 |
   | ARC | 10 |
   | KPAD | 9 |
-  | MSL (Nebula) | 9 |
   | MEM | 7 |
   | MTX/VEC/QUAT | 13 |
   | AI | 6 |
@@ -229,9 +214,9 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 - **Display shape**: as v1.0.1's dynamic aspect, the host latches the output's shape at each retrace once the frame is presented (`display_extent`), and the game draws for it (`native/sdk/vi/display_native.c`, `MR::getDisplay`): 4:3 to 32:9; `MR::getScreenWidth` (832 at 16:9, even units), `CameraContext::getAspect`, the NW4R canvas (`setupDrawForNW4RLayout`, both screen/layout conversions; height fit under 16:9), the star-select sky and perspective. Layouts follow v1.0.1's repairs (`LayoutAspect`: full-screen backings, HUD panes on the canvas edges, cinema bars), plus the pause menu's counters (they moved in from the HUD's corners on pausing) and the spin, ball and tilt guidance under the names the game creates them by (v1.0.1's rules named their "Replace" archives) (`native/tools/layout_edge_audit.py` over `GALAXY_TEST_DUMP_LAYOUTS=1` logs: the 38 layouts the tour and menus reach; what it lists is window parts and anchors); UI keeps its 16:9 size against the height when wider and fits the width when narrower, CollisionShadow's capture keeps 832, and the strap screen's white reaches the borders (`scene_surround`). These were site hooks on recompiled code in v1.0.1; natively they are the game's source.
 - **Options**: text speed (TalkBalloon, Rosalina's storybook) and the language setting, as v1.0.1.
 - **Crash reports**: a fatal exception in the module or the host, or the game's fatal call, writes a minidump (stacks and what they point at, about 150 KB) from a thread kept for it, and logs the module offset and the game's threads (`GALAXY_CRASH_DUMP_DIR`; else `%LOCALAPPDATA%\Nebula\crashes` for NebulaNative and `crashes\` for the headless host; `GALAXY_CRASH_TEST=1` checks the path). Every exception in the process passes the exception handlers, so theirs are small, uninstrumented frames.
-- **Thread stacks**: an exiting thread's stack slot is freed by the switch that leaves it (it still runs the reschedule and idle interrupts on it); a thread within 8 KB of its stack's end is logged at a switch. The switch keeps the TIB's stack fields with each stack (`context_switch.c`).
+- **Thread stacks**: each game thread is a host thread with its own stack, at least 256 KB and guarded by the OS.
 - **Tests**: `GALAXY_TEST_GALAXY_TOUR` and `GALAXY_TEST_TELEPORT` as in v1.0.1, and `GALAXY_TEST_EVENTS=kill@frame/...` (a miss through `MR::forceKillPlayerByAbyss`; five reach game over); the host decides, the game acts through `MR::requestChangeStageInGameMoving` and `MR::setPlayerPos` once per scene frame (`test_scene_frame`). `GALAXY_TEST_HOME_ROW` picks a HOME Menu row by its keys. Other events: `star@`, `grandstar@` (taken once the scene plays), `movieN@`, `luigi@`/`mario@` (the file's player from the next scene), `defeat:<model>@` (that model's live actors killed), `wait@`; frames count from the last tour stop. `GALAXY_TEST_DISC_DELAY_US` makes every disc read take that long, `GALAXY_TEST_NAND_DELAY_US` every NAND operation (saves); `GALAXY_TEST_CPU_AFFINITY` (hex mask) limits the processors; `GALAXY_TRACE_THREAD_CPU=1` logs each thread's CPU time per second by name. `GALAXY_TEST_SHADER_KEY_CAPTURE=<file>` appends every shader key the session resolves, for `galaxy_vk_shader_tests <file>`. `GALAXY_TEST_BLOOM_ROUTE=0|1|2` forces the game's bloom route (0 its own chains as the console's, 1 NATIVE, 2 ENHANCED); `GALAXY_TEST_RT_EFFECT_AB=reflections|water|sun_rays|lens_bloom` turns that ray-traced effect off in frames that end in an odd present (at 60 fps every other frame). `GALAXY_TEST_CURVED_AB=1` draws curved surfaces flat in the same frames.
-- **Threads**: the console runs one thread at a time, by priority, and the game relies on it (an interrupt-disabled section used as a lock). The game's threads, mutexes, message queues, thread queues and alarms are Nebula's kernel (`Game/System/NebulaKernel`), which keeps the console's scheduling rules (tested in `native/sdk/os/tests/kernel_tests.cpp`); every game thread runs on one host thread, the simulation thread, and a switch is a stack switch (`native/sdk/os/context_switch.c`). Host events (disc, frame clock, controllers, audio DMA, the timer) reach the game only at the kernel's scheduling points. Parallelism lives in the host: renderer, audio mixer, input, disc.
+- **Threads**: every game thread is a host thread (`Game/System/GameThreads`). One at a time changes the game world, under the world lock: the main thread first when it wants to, the scene and archive loaders otherwise, first come first served; a thread lets go of it when it blocks. File loaders and the audio task threads work beside it under their own mutexes. Sound runs on the host's audio clock thread: `excludeAudio` keeps it out of a section. A frame's work runs on a thread of its own, under the world lock. Test mode keeps every thread under the world lock and moves the clock only when no thread can run, so two runs take the same steps.
 
 ## Open
 

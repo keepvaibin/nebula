@@ -1,8 +1,7 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 
 // In host order as the importer cooks models and animations.
 struct ResNTAB {

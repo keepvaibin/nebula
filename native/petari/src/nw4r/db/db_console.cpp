@@ -1,6 +1,6 @@
 #include "nw4r/db/console.h"
-#include "Game/System/NebulaKernel.hpp"
-#include <va_list.h>
+#include "Game/System/GameThreads.hpp"
+#include <cstdarg>
 
 namespace nw4r {
     namespace db {
@@ -35,9 +35,9 @@ namespace nw4r {
 
         s32 Console_GetTotalLines(ConsoleHandle console) {
             s32 count;
-            BOOL enabled = NebulaKernel::disableInterrupts();
+            BOOL enabled = GameThreads::excludeAudio();
             count = console->ringTopLineCnt + GetActiveLines_(console);
-            NebulaKernel::restoreInterrupts(enabled);
+            GameThreads::restoreAudio(enabled);
             return count;
         }
     };  // namespace db

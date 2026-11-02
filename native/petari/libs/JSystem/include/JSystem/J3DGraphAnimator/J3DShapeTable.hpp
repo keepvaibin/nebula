@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
-#include <revolution/types.h>
 
 class JUTNameTab;
 

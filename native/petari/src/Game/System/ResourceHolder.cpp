@@ -1,5 +1,5 @@
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/MaterialAnmBuffer.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -11,8 +11,7 @@
 #include <cstdio>
 #include <cstring>
 #include <NebulaGpu.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <nebula_math.h>
 #include "Game/Util/MotionSignal.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
@@ -136,7 +135,7 @@ s32 ResourceHolder::count(JKRArchive* pArchive, const char* pExtName, const char
         if (finder->mFileIsFolder) {
             if (finder->mName[0] != '.') {
                 char path[128];
-                sprintf(path, "%s%s%s", pPath, "/", finder->mName);
+                nebula_sprintf(path, "%s%s%s", pPath, "/", finder->mName);
                 num += count(pArchive, pExtName, path);
             }
         } else {
@@ -158,7 +157,7 @@ void ResourceHolder::mount(JKRArchive* pArchive, char* pPath) {
         if (finder->mFileIsFolder) {
             if (finder->mName[0] != '.') {
                 char path[128];
-                snprintf(path, 128, "%s/%s", pPath, finder->mName);
+                nebula_snprintf(path, 128, "%s/%s", pPath, finder->mName);
                 mount(pArchive, path);
             }
         } else {

@@ -149,11 +149,15 @@ void EffectKeeper::forceDeleteEmitter(const char* pParam1) {
 }
 
 void EffectKeeper::deleteEmitterAll() {
-    std::for_each(_C.begin(), _C.end(), std::mem_func(&MultiEmitter::deleteEmitter));
+    for (auto& item : _C) {
+        item->deleteEmitter();
+    }
 }
 
 void EffectKeeper::forceDeleteEmitterAll() {
-    std::for_each(_C.begin(), _C.end(), std::mem_func(&MultiEmitter::forceDeleteEmitter));
+    for (auto& item : _C) {
+        item->forceDeleteEmitter();
+    }
 }
 
 MultiEmitter* EffectKeeper::getEmitter(const char* pParam1) const {
@@ -161,10 +165,10 @@ MultiEmitter* EffectKeeper::getEmitter(const char* pParam1) const {
 
     if (_30 && !MR::isEqualSubString(pParam1, ::cAttributeEffectTag) && isTypeAttributeEffect(pParam1)) {
         const char* attributeName = MR::Effect::getEffectAttributeName(_28);
-        snprintf(buf, sizeof(buf), "%s%s%s", pParam1, ::cAttributeEffectTag, attributeName);
+        nebula_snprintf(buf, sizeof(buf), "%s%s%s", pParam1, ::cAttributeEffectTag, attributeName);
 
         if (!isRegisteredEmitter(buf)) {
-            snprintf(buf, sizeof(buf), "%s%s%s", pParam1, ::cAttributeEffectTag, "Default");
+            nebula_snprintf(buf, sizeof(buf), "%s%s%s", pParam1, ::cAttributeEffectTag, "Default");
         }
 
         pParam1 = buf;
@@ -286,15 +290,21 @@ void EffectKeeper::updateAttributeEffect() {
 }
 
 void EffectKeeper::stopEmitterOnClipped() {
-    std::for_each(_C.begin(), _C.end(), std::mem_func(&MultiEmitter::stopEmitterOnClipped));
+    for (auto& item : _C) {
+        item->stopEmitterOnClipped();
+    }
 }
 
 void EffectKeeper::playEmitterOffClipped() {
-    std::for_each(_C.begin(), _C.end(), std::mem_func(&MultiEmitter::playEmitterOffClipped));
+    for (auto& item : _C) {
+        item->playEmitterOffClipped();
+    }
 }
 
 void EffectKeeper::clear() {
-    std::for_each(_C.begin(), _C.end(), std::mem_func(&MultiEmitter::playCalcAndDeleteForeverEmitter));
+    for (auto& item : _C) {
+        item->playCalcAndDeleteForeverEmitter();
+    }
 }
 
 void EffectKeeper::changeBck() {
@@ -304,13 +314,15 @@ void EffectKeeper::changeBck() {
 }
 
 void EffectKeeper::onDraw() {
-    std::for_each(_C.begin(), _C.end(),
-                  std::binder2nd< std::mem_fun1_t< void, MultiEmitter, s32 >, s32 >(std::mem_func(&MultiEmitter::playDrawParticle), -1));
+    for (auto& item : _C) {
+        item->playDrawParticle(-1);
+    }
 }
 
 void EffectKeeper::offDraw() {
-    std::for_each(_C.begin(), _C.end(),
-                  std::binder2nd< std::mem_fun1_t< void, MultiEmitter, s32 >, s32 >(std::mem_func(&MultiEmitter::stopDrawParticle), -1));
+    for (auto& item : _C) {
+        item->stopDrawParticle(-1);
+    }
 }
 
 void EffectKeeper::enableSort() {
@@ -390,7 +402,7 @@ void EffectKeeper::updateFloorCode(const Triangle* pTriangle) {
 
 bool EffectKeeper::isTypeAttributeEffect(const char* pParam1) const {
     char buf[256];
-    snprintf(buf, sizeof(buf), "%s%s", pParam1, ::cAttributeEffectTag);
+    nebula_snprintf(buf, sizeof(buf), "%s%s", pParam1, ::cAttributeEffectTag);
 
     for (MultiEmitter* const* it = _C.begin(); it != _C.end(); it++) {
         if ((*it)->_28 == nullptr) {

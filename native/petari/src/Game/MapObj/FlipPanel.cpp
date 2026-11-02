@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/MapObj/FlipPanel.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActorGroupArray.hpp"

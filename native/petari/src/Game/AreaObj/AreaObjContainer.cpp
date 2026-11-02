@@ -11,7 +11,7 @@
 #include <cstring>
 
 namespace {
-    struct IsManagerName : std::binary_function< AreaObjMgr*, const char*, bool > {
+    struct IsManagerName {
         bool operator()(const AreaObjMgr* pManager, const char* pName) const {
             const char* pMatch = strstr(pName, pManager->mName);
             return pMatch != nullptr && pMatch == pName;
@@ -378,7 +378,7 @@ void AreaObjContainer::init(const JMapInfoIter& rIter) {
 }
 
 AreaObjMgr* AreaObjContainer::getManager(const char* pName) const {
-    return *std::find_if(mManagerArray, mManagerArray + mNumManagers, std::binder2nd< IsManagerName, const char* >(IsManagerName(), pName));
+    return *std::find_if(mManagerArray, mManagerArray + mNumManagers, [&](const auto& item) { return IsManagerName()(item, pName); });
 }
 
 AreaObj* AreaObjContainer::getAreaObj(const char* pName, const TVec3f& rVec) const {

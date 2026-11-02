@@ -1,8 +1,8 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRDisposer.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/GameThreads.hpp"
 
 class JKRArcFinder;
 
@@ -32,7 +32,7 @@ public:
 
     static JSUList< JKRFileLoader > sVolumeList;
     static JKRFileLoader* sCurrentVolume;
-    static NebulaMutex sVolumeListMutex;
+    static GameMutex sVolumeListMutex;
 
     /* 0x18 */ JSULink< JKRFileLoader > mLoaderLink;
     /* 0x28 */ char* mLoaderName;

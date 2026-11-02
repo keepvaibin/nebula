@@ -3,7 +3,6 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "revolution/types.h"
 
 void JetTurtle_FORCE_MATCH_STRINGS() {
     MR::isEqualString("Koura", "Koura");

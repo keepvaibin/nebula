@@ -42,7 +42,7 @@ void NebulaPauseSettingsButton::init(const JMapInfoIter& rIter) {
         pGroup->mScale = nw4r::math::VEC2(cScale, cScale);
         pGroup->mTranslate.y = cBandMiddle - pLower->mTranslate.y * cScale;
     }
-    wchar_t label[64];
+    char16_t label[64];
     NebulaText::get(label, 64, "SettingsTitle");
     MR::setTextBoxMessageRecursive(this, "NBackDown", label);
 

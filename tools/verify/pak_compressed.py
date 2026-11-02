@@ -3,6 +3,8 @@ lists any that is still compressed (a Yaz0/Yay0 magic, or a compressed flag on a
 import struct
 import sys
 
+import pakfiles
+
 COMPRESSED = (b"Yaz0", b"Yay0")
 FLAG_FILE = 0x01
 FLAG_COMPRESSED = 0x04
@@ -49,26 +51,10 @@ def scan_archive(name, data, report):
 def main():
     report = Report()
     with open(sys.argv[1], "rb") as pak:
-        pak.seek(0x424)
-        fst_at, fst_size = (v << 2 for v in struct.unpack(">II", pak.read(8)))
-        pak.seek(fst_at)
-        fst = pak.read(fst_size)
-        count = struct.unpack_from(">I", fst, 8)[0]
-        names = count * 12
-        folders = []
-        for n in range(1, count):
-            while folders and n >= folders[-1][1]:
-                folders.pop()
-            word0, a, b = struct.unpack_from(">III", fst, n * 12)
-            at = names + (word0 & 0xFFFFFF)
-            label = fst[at : fst.index(b"\0", at)].decode("latin-1")
-            if word0 >> 24:
-                folders.append((label, b))
-                continue
-            path = "/".join([f for f, _ in folders] + [label])
-            pak.seek(a << 2)
+        for path, (position, size) in pakfiles.files(pak).items():
+            pak.seek(position)
             report.files += 1
-            scan_bytes(path, pak.read(b), report)
+            scan_bytes(path, pak.read(size), report)
     print(f"{sys.argv[1]}: {report.files} files, {report.archives} archives, {report.members} members, "
           f"{len(report.bad)} compressed")
     for line in report.bad[:50]:

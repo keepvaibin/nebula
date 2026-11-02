@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/Screen/LayoutActor.hpp"
 
 class ValueControl;
@@ -38,7 +40,7 @@ public:
     bool isResetAcceptAudio() const;
 
     /* 0x24 */ ValueControl* mFadeinoutControl;
-    /* 0x58 */ volatile s32 mResetOperation;
+    /* 0x58 */ NebulaAtomic< s32 > mResetOperation;
     /* 0x5C */ bool _5C;
     /* 0x5E */ bool _5E;
 };

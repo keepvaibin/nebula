@@ -11,7 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {
@@ -109,7 +108,7 @@ namespace {
     const s32 cNameLength = 64;
 
     struct Waiting {
-        wchar_t mName[cNameLength];
+        char16_t mName[cNameLength];
         const NebulaAchievementIcon* mIcon;
     };
 
@@ -159,7 +158,7 @@ namespace {
                                                          "KoopaJrShipLv1Galaxy", "KoopaBattleVs2Galaxy", "FloaterOtaKingGalaxy",
                                                          "KoopaBattleVs3Galaxy"};
         char flag[24];
-        snprintf(flag, sizeof(flag), "SpecialStarGrand%d", n);
+        nebula_snprintf(flag, sizeof(flag), "SpecialStarGrand%d", n);
         return GameDataFunction::isOnGameEventFlag(flag) || hasStar(cGrandStarGalaxies[n - 1], 1);
     }
 
@@ -177,11 +176,11 @@ namespace {
     }
 
     // Its name in the played language: NebulaText's Achievement.<id>, or Achievement.<id>.Luigi on a Luigi file.
-    s32 getEntryName(wchar_t* pDst, s32 capacity, const char* pId) {
+    s32 getEntryName(char16_t* pDst, s32 capacity, const char* pId) {
         char textId[64];
-        snprintf(textId, sizeof(textId), "Achievement.%s.Luigi", pId);
+        nebula_snprintf(textId, sizeof(textId), "Achievement.%s.Luigi", pId);
         if (GameDataFunction::isDataMario() || !NebulaText::has(textId)) {
-            snprintf(textId, sizeof(textId), "Achievement.%s", pId);
+            nebula_snprintf(textId, sizeof(textId), "Achievement.%s", pId);
         }
         return NebulaText::get(pDst, capacity, textId);
     }
@@ -232,7 +231,7 @@ namespace {
         Galaxies result = {false, true, true, true, true, true, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         s32 comets = 0, daredevil = 0, cosmic = 0, speedy = 0, purpleCoins = 0, hidden = 0;
         JMapInfo galaxies;
-        galaxies.attach(NebulaDiscTables::getGalaxyInfoTable());
+        galaxies.attach(NebulaDataTables::getGalaxyInfoTable());
         for (s32 i = 0; i < galaxies.getNumEntries(); i++) {
             const char* pPane = nullptr;
             const char* pName = nullptr;
@@ -320,7 +319,7 @@ namespace {
         s32 count = 0;
         for (s32 i = 1; i <= 3; i++) {
             char flag[32];
-            snprintf(flag, sizeof(flag), "SpecialStarGreen%d", i);
+            nebula_snprintf(flag, sizeof(flag), "SpecialStarGreen%d", i);
             count += GameDataFunction::isOnGameEventFlag(flag) ? 1 : 0;
         }
         return count;
@@ -407,15 +406,15 @@ namespace NebulaAchievements {
         if (unlocked >= cBatchMin) {
             sQueued = queuedBefore;
             Waiting& rWaiting = sQueue[sQueued++];
-            wchar_t pattern[cNameLength];
+            char16_t pattern[cNameLength];
             NebulaText::get(pattern, cNameLength, "AchievementsUnlocked");
             char digits[8];
-            snprintf(digits, sizeof(digits), "%d", unlocked);
+            nebula_snprintf(digits, sizeof(digits), "%d", unlocked);
             s32 length = 0;
-            for (const wchar_t* q = pattern; *q != 0 && length + 1 < cNameLength; q++) {
-                if (q[0] == L'{' && q[1] == L'n' && q[2] == L'}') {
+            for (const char16_t* q = pattern; *q != 0 && length + 1 < cNameLength; q++) {
+                if (q[0] == u'{' && q[1] == u'n' && q[2] == u'}') {
                     for (const char* d = digits; *d != 0 && length + 1 < cNameLength; d++) {
-                        rWaiting.mName[length++] = static_cast< wchar_t >(*d);
+                        rWaiting.mName[length++] = static_cast< char16_t >(*d);
                     }
                     q += 2;
                 } else {
@@ -452,7 +451,7 @@ namespace NebulaAchievements {
         }
     }
 
-    const wchar_t* getWaiting(const NebulaAchievementIcon** ppIcon) {
+    const char16_t* getWaiting(const NebulaAchievementIcon** ppIcon) {
         if (sQueued == 0) {
             return nullptr;
         }
@@ -490,7 +489,7 @@ namespace NebulaAchievements {
         return index >= 0 && index < cEntryNum ? cEntries[index].mId : nullptr;
     }
 
-    s32 getName(wchar_t* pDst, s32 capacity, const char* pId) {
+    s32 getName(char16_t* pDst, s32 capacity, const char* pId) {
         return getEntryName(pDst, capacity, pId);
     }
 

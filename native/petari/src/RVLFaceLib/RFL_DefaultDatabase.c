@@ -14,7 +14,7 @@ static const Mii_CharInfo scDefaultInfo[] = {
         .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
         .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
         .body = {.height = 64, .build = 64},
-        .personal = {.name = L"no name", .creator = L"", .sex = 0, .bmonth = 0, .bday = 0, .color = 4, .favorite = 0, .localOnly = 1},
+        .personal = {.name = u"no name", .creator = u"", .sex = 0, .bmonth = 0, .bday = 0, .color = 4, .favorite = 0, .localOnly = 1},
         .createID = {{0x80, 0x00, 0x00, 0x00, 0xEC, 0xFF, 0x82, 0xD2}},
     },
     // "Guest B"
@@ -29,7 +29,7 @@ static const Mii_CharInfo scDefaultInfo[] = {
         .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
         .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
         .body = {.height = 64, .build = 64},
-        .personal = {.name = L"no name", .creator = L"", .sex = 0, .bmonth = 0, .bday = 0, .color = 5, .favorite = 0, .localOnly = 1},
+        .personal = {.name = u"no name", .creator = u"", .sex = 0, .bmonth = 0, .bday = 0, .color = 5, .favorite = 0, .localOnly = 1},
         .createID = {{0x80, 0x00, 0x00, 0x01, 0xEC, 0xFF, 0x82, 0xD2}},
     },
     // "Guest C"
@@ -44,7 +44,7 @@ static const Mii_CharInfo scDefaultInfo[] = {
         .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
         .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
         .body = {.height = 64, .build = 64},
-        .personal = {.name = L"no name", .creator = L"", .sex = 0, .bmonth = 0, .bday = 0, .color = 0, .favorite = 0, .localOnly = 1},
+        .personal = {.name = u"no name", .creator = u"", .sex = 0, .bmonth = 0, .bday = 0, .color = 0, .favorite = 0, .localOnly = 1},
         .createID = {{0x80, 0x00, 0x00, 0x02, 0xEC, 0xFF, 0x82, 0xD2}},
     },
     // "Guest D"
@@ -59,7 +59,7 @@ static const Mii_CharInfo scDefaultInfo[] = {
         .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
         .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
         .body = {.height = 64, .build = 64},
-        .personal = {.name = L"no name", .creator = L"", .sex = 1, .bmonth = 0, .bday = 0, .color = 2, .favorite = 0, .localOnly = 1},
+        .personal = {.name = u"no name", .creator = u"", .sex = 1, .bmonth = 0, .bday = 0, .color = 2, .favorite = 0, .localOnly = 1},
         .createID = {{0x80, 0x00, 0x00, 0x03, 0xEC, 0xFF, 0x82, 0xD2}},
     },
     // "Guest E"
@@ -74,7 +74,7 @@ static const Mii_CharInfo scDefaultInfo[] = {
         .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
         .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
         .body = {.height = 64, .build = 64},
-        .personal = {.name = L"no name", .creator = L"", .sex = 1, .bmonth = 0, .bday = 0, .color = 6, .favorite = 0, .localOnly = 1},
+        .personal = {.name = u"no name", .creator = u"", .sex = 1, .bmonth = 0, .bday = 0, .color = 6, .favorite = 0, .localOnly = 1},
         .createID = {{0x80, 0x00, 0x00, 0x04, 0xEC, 0xFF, 0x82, 0xD2}},
     },
     // "Guest F"
@@ -89,7 +89,7 @@ static const Mii_CharInfo scDefaultInfo[] = {
         .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
         .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
         .body = {.height = 64, .build = 64},
-        .personal = {.name = L"no name", .creator = L"", .sex = 1, .bmonth = 0, .bday = 0, .color = 7, .favorite = 0, .localOnly = 1},
+        .personal = {.name = u"no name", .creator = u"", .sex = 1, .bmonth = 0, .bday = 0, .color = 7, .favorite = 0, .localOnly = 1},
         .createID = {{0x80, 0x00, 0x00, 0x05, 0xEC, 0xFF, 0x82, 0xD2}},
     },
 };

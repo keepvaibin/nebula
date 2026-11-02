@@ -1,6 +1,8 @@
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 
+u32 J3DMaterialAnm::sNextDrawSlot;
+
 void J3DMaterialAnm::initialize() {
     for (int i = 0; i < ARRAY_SIZE(mMatColorAnm); i++) {
         mMatColorAnm[i].setAnmFlag(false);

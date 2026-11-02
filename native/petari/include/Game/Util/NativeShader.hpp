@@ -9,7 +9,6 @@
 #include <JSystem/JUtility/JUTPalette.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
-#include <revolution/types.h>
 #include <cstring>
 
 extern "C" const NebulaHostServices* nebula_host(void);

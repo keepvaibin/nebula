@@ -14,7 +14,7 @@ class JKRArchive : public JKRFileLoader {
 public:
     enum EMountDirection { MOUNT_DIRECTION_1 = 1 };
 
-    enum EMountMode { MOUNT_MODE_0 = 0, MOUNT_MODE_MEM = 1, MOUNT_MODE_ARAM = 2, MOUNT_MODE_DVD = 3, MOUNT_MODE_COMP = 4 };
+    enum EMountMode { MOUNT_MODE_0 = 0, MOUNT_MODE_MEM = 1 };
 
     enum EFileFlag {
         FILE_FLAG_FILE_SHIFT = 0,
