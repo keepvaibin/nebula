@@ -73,7 +73,7 @@ std::vector<std::uint8_t> store_of(const std::vector<Item>& items) {
     out.insert(out.end(), names.begin(), names.end());
     std::vector<std::uint8_t> header;
     header.insert(header.end(), galaxy::disc::kStoreMagic, galaxy::disc::kStoreMagic + 8);
-    put<std::uint32_t>(header, 1u);
+    put<std::uint32_t>(header, galaxy::disc::kStoreVersion);
     put<std::uint32_t>(header, static_cast<std::uint32_t>(items.size()));
     put<std::uint64_t>(header, nodes);
     put<std::uint64_t>(header, hashes_at);

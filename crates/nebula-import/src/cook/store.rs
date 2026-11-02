@@ -15,7 +15,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 pub const MAGIC: &[u8; 8] = b"NBSTORE\0";
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 /// The files start past this.
 pub const HEADER: u64 = 64;
 
