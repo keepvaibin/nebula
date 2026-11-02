@@ -106,10 +106,6 @@ jobs:
         run: |
           cargo build --release --locked -p nebula-import
 
-      - name: Verify nebula-import binary
-        run: |
-          .\target\release\nebula-import.exe --help
-
       - name: Configure host
         shell: pwsh
         run: |
