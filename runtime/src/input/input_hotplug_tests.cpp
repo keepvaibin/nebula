@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/live_controls_engine.h"
 #include <array>
+#include <cmath>
 #include <iostream>
 
 #if defined(_WINDOWS_) || defined(_INC_WINDOWS)
@@ -105,8 +106,44 @@ int focus_release_and_reacquire() {
     return first && !lost.input.buttons.a && !lost.rumble.device && !lost.input.pointer_on &&
         !resumed.input.buttons.a && explicit_background.input.buttons.a && !explicit_background.rumble.focused ? 0 : 1;
 }
+int motion_after_suspension() {
+    int failures = 0;
+    for (const bool touch : {false,true}) {
+        auto config = default_controls_config();
+        const auto scheme = ControlScheme::SwitchPro;
+        config.tune(scheme).gyro_pointer = !touch;
+        config.tune(scheme).touch_pointer = touch;
+        LivePad pad; pad.sample.connected = true; pad.sample.scheme = scheme; pad.device_slot = 0;
+        pad.imu_live = !touch; pad.touch_live = touch;
+        LiveControlsFrame frame{config}; frame.pads = std::span(&pad,1);
+        frame.use_pads = true; frame.window_focused = true;
+        LiveControlsEngine engine; Host host;
+        (void)engine.sample(frame,host);
+        pad.gyro_x = touch ? 0.0f : 0.1f; pad.touch_dx = touch ? 0.05f : 0.0f;
+        host.clock += 16'667;
+        const auto warm = engine.sample(frame,host).input;
+        frame.window_focused = false; host.clock += 16'667;
+        const auto lost = engine.sample(frame,host).input;
+        // The native worker kept accumulating motion until the next consuming read.
+        pad.gyro_x = touch ? 0.0f : 3.0f; pad.touch_dx = touch ? 0.8f : 0.0f;
+        pad.shake_remote = true;
+        frame.window_focused = true; host.clock += 16'667;
+        const auto resumed = engine.sample(frame,host).input;
+        pad.gyro_x = touch ? 0.0f : 0.02f; pad.touch_dx = touch ? 0.01f : 0.0f;
+        pad.shake_remote = false; host.clock += 16'667;
+        const auto fresh = engine.sample(frame,host).input;
+        const bool retained = std::fabs(resumed.pointer_x-warm.pointer_x) < 0.00001f;
+        const bool advanced = fresh.pointer_x > resumed.pointer_x;
+        std::cout << (touch ? "touch_resume" : "gyro_resume") << "\twarm=" << warm.pointer_x
+                  << "\tlost_visible=" << lost.pointer_on << "\tresumed=" << resumed.pointer_x
+                  << "\tstale_shake=" << resumed.shake << "\tfresh=" << fresh.pointer_x << '\n';
+        if (!warm.pointer_on || lost.pointer_on || !resumed.pointer_on || !retained || resumed.shake || !advanced) ++failures;
+    }
+    return failures;
+}
 }
 int main() {
-    const int failures = replacement_hysteresis() + rumble_fallback() + reorder_and_reconnect() + focus_release_and_reacquire();
+    const int failures = replacement_hysteresis() + rumble_fallback() + reorder_and_reconnect() +
+        focus_release_and_reacquire() + motion_after_suspension();
     return failures ? 1 : 0;
 }
