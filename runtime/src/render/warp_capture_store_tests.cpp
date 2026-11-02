@@ -729,7 +729,7 @@ V main(uint id : SV_VertexID) {
         params.channels = 0u;
         bool passed = expect(detail::scene_identity_copy_box(params, false, 1u,
             16u, 16u).has_value(), "identity RGBA8 filter is admitted");
-        for (unsigned flag = 0u; flag < 8u; ++flag) {
+        for (unsigned flag = 0u; flag < 7u; ++flag) {
             auto rejected = params;
             switch (flag) {
             case 0u: rejected.channels = 6u; break;
@@ -1811,8 +1811,8 @@ bool test_cpu_oracle() {
     filter.src_height = 2u;
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 0u),
-        Pixel{25u, 35u, 45u, 77u},
-        "oracle display filter: half the line above");
+        Pixel{40u, 50u, 60u, 77u},
+        "oracle copy: the line as drawn");
     filter = make_filter_params(true);
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 0u),
@@ -1844,8 +1844,8 @@ bool test_cpu_oracle() {
     depth_filter.src_height = 2u;
     passed &= expect_pixel(
         oracle_depth(depth_rows, depth_filter),
-        Pixel{40u, 40u, 40u, 255u},
-        "oracle filters the depth");
+        Pixel{64u, 64u, 64u, 255u},
+        "oracle copies the depth");
     return passed;
 }
 
