@@ -483,7 +483,7 @@ s32 JASSeqParser::cmdEnvScaleSet(JASTrack* track, u32* args) {
 }
 
 s32 JASSeqParser::cmdEnvSet(JASTrack* track, u32* args) {
-    track->setOscTable(args[0], (const JASOscillator::Point*)((u8*)track->getSeqCtrl()->getAddr(args[1])));
+    track->setOscTable(args[0], static_cast< const u8* >(track->getSeqCtrl()->getAddr(args[1])));
     return 0;
 }
 
@@ -560,7 +560,7 @@ s32 JASSeqParser::cmdNop(JASTrack* track, u32* args) {
 }
 
 s32 JASSeqParser::cmdFIRSet(JASTrack* track, u32* args) {
-    track->setFIR((NEBULA_BE(s16)*)track->getSeqCtrl()->getAddr(args[0]));
+    track->setFIR(static_cast< const u8* >(track->getSeqCtrl()->getAddr(args[0])));
     return 0;
 }
 
