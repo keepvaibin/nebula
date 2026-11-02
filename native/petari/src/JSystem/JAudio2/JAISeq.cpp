@@ -2,7 +2,7 @@
 #include "JSystem/JAudio2/JAIAudience.hpp"
 #include "JSystem/JAudio2/JAISeqMgr.hpp"
 #include "JSystem/JAudio2/JAISoundChild.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 
 namespace {
 
@@ -189,7 +189,7 @@ bool JAISeq::JAISound_tryDie_() {
     mStatus.mState.flags.flag1 = true;
 
     {
-        JASCriticalSection cs;
+        GameAudioExclusion cs;
         inner_.outputTrack.stopSeq();
     }
 

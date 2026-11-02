@@ -24,7 +24,7 @@
 #include <JSystem/JAudio2/JAIStreamDataMgr.hpp>
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JAudio2/JASStream.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASDriverIF.hpp>
 #include <JSystem/JAudio2/JASSoundParams.hpp>
 #include <JSystem/JAudio2/JAUAudioArcLoader.hpp>
@@ -64,7 +64,7 @@ namespace {
         initJAS.heapSize_ = AudParams::workAreaSize;
         initJAS.field_0x1c = AudParams::numFreeTracks;
         initJAS.field_0x20 = AudParams::numFreeTrackChannels;
-        initJAS.dspLevel_ = AudParams::outputGain;
+        initJAS.outputLevel_ = AudParams::outputGain;
         initJAS.initJASystem(pHeap);
 
         JAU_JAIInitializer initJAI;
@@ -363,7 +363,7 @@ void AudSystem::switchToLuigi(JAISoundID soundID, JAISoundHandle* pHandle) {
         return;
     }
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
 
     JASTrack* track = pHandle->mSound->getTrack();
     if (track != nullptr) {

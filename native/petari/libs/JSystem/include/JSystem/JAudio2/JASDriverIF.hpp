@@ -6,10 +6,10 @@
 typedef s32 (*DriverCallback)(void*);
 
 namespace JASDriver {
-    void setDSPLevel(f32);
+    void setOutputLevel(f32);
     u16 getChannelLevel_dsp();
     f32 getChannelLevel();
-    f32 getDSPLevel();
+    f32 getOutputLevel();
     void setOutputMode(u32);
     u32 getOutputMode();
     void waitSubFrame();
@@ -19,7 +19,7 @@ namespace JASDriver {
     bool registerSubFrameCallback(DriverCallback, void*);
     void subframeCallback();
     void syncCallback();
-    void updateDacCallback();
+    void updateFrameCallback();
 
     extern JASCallbackMgr sSyncCallback;
     extern JASCallbackMgr sSubFrameCallback;

@@ -1008,7 +1008,7 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
 
         JASDvd::createThread(0x100, 0x8000);
         JASDriver::startAudio();
-        JASDriver::setDSPLevel(dspLevel_);
+        JASDriver::setOutputLevel(outputLevel_);
     }
 
     if (waveArcDir_ != nullptr) {

@@ -15,11 +15,7 @@ class JASSoundParams;
 class JASChannel;
 class JASDefaultBankTable;
 
-namespace JASDsp {
-    struct TChannel;
-
-    extern const u32 FILTER_MODE_IIR;
-}  // namespace JASDsp
+struct JASVoice;
 
 struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     static const int CHANNEL_MGR_MAX = 4;
@@ -127,13 +123,13 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     void setTempo(u16);
     void setTempoRate(f32);
     void setTimebase(u16);
-    void updateChannel(JASChannel*, JASDsp::TChannel*);
+    void updateChannel(JASChannel*, JASVoice*);
     JASTrack* getRootTrack();
     s32 getChannelCount() const;
     int tickProc();
     s32 seqMain();
 
-    static void channelUpdateCallback(u32, JASChannel*, JASDsp::TChannel*, void*);
+    static void channelUpdateCallback(u32, JASChannel*, JASVoice*, void*);
 
     static JASOscillator::Point const sAdsTable[4];
     static JASOscillator::Data const sEnvOsc;

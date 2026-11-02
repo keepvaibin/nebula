@@ -2,7 +2,7 @@
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Speaker/SpkSpeakerCtrl.hpp"
 #include "Game/Speaker/SpkSystem.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 
 void SpkSoundHandle::releaseSound() {
@@ -36,7 +36,7 @@ void SpkSoundVolume::setRelease(s32 release) {
 }
 
 void SpkSoundVolume::setFadeOut(s32 fadeOut) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
 
     if (fadeOut > 0) {
         mFadeOutRate = 1.0f / fadeOut;
@@ -267,13 +267,13 @@ bool SpkSoundHolder::startSound(s32 padChannel, s32 waveID, SpkSoundHandle* pHan
         return false;
     }
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mSoundList[padChannel].append(sound);
     return true;
 }
 
 bool SpkSoundHolder::update(s32 padChannel) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     bool ret = updateEachSound(padChannel);
     return ret;
 }
@@ -305,7 +305,7 @@ void SpkSoundHolder::freeDeadSound(s32 padChannel) {
 }
 
 void SpkSoundHolder::framework() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
 
     for (int i = 0; i < 4; i++) {
         for (JSULink< SpkSound >* sound = mSoundList[i].getFirst(); sound != mSoundList[i].getEnd(); sound = sound->getNext()) {

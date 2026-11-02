@@ -2,8 +2,8 @@
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASBankTable.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
@@ -192,13 +192,13 @@ void JASTrack::setSeqData(void* data, u32 offset) {
 }
 
 void JASTrack::startSeq() {
-    JASCriticalSection lock;
+    GameAudioExclusion lock;
     sTrackList.append(this);
     mStatus = STATUS_RUN;
 }
 
 void JASTrack::stopSeq() {
-    JASCriticalSection lock;
+    GameAudioExclusion lock;
     mIsStopped = true;
 }
 
@@ -457,7 +457,7 @@ void JASTrack::updateTrack(f32 num) {
 
 void JASTrack::updateTempo() {
     if (!mParent) {
-        f32 rate = JASDriver::getDacRate();
+        f32 rate = JASDriver::getSoundRate();
         mSampleInterval = mTempoRate * (1.33333337307f * (mTimebase * mTempo) / rate);
     } else {
         mTempo = mParent->mTempo;
@@ -669,7 +669,7 @@ void JASTrack::setTimebase(u16 timebase) {
     updateTempo();
 }
 
-void JASTrack::updateChannel(JASChannel* channel, JASDsp::TChannel* dspChannel) {
+void JASTrack::updateChannel(JASChannel* channel, JASVoice* dspChannel) {
     channel->setVibrate(mVibDepth, mVibPitch);
     channel->setTremolo(mTremDepth, mTremPitch);
     if (mFilterMode & 0x20) {
@@ -683,7 +683,7 @@ void JASTrack::updateChannel(JASChannel* channel, JASDsp::TChannel* dspChannel) 
     dspChannel->setFilterMode(mFilterMode);
 }
 
-void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASDsp::TChannel* dspChannel, void* data) {
+void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASVoice* dspChannel, void* data) {
     TChannelMgr* mgr = (TChannelMgr*)data;
     JASTrack* track = mgr->mTrack;
     switch (a) {
@@ -710,7 +710,7 @@ void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASDsp::TChanne
 }
 
 s32 JASTrack::getChannelCount() const {
-    JASCriticalSection lock;
+    GameAudioExclusion lock;
     s32 count = 0;
     for (s32 i = 0; i < mChannelMgrCount; i++) {
         if (mChannelMgrs[i]) {

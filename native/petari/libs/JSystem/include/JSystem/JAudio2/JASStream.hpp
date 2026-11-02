@@ -9,9 +9,7 @@
 class JASChannel;
 class JAISound;
 
-namespace JASDsp {
-    struct TChannel;
-};  // namespace JASDsp
+struct JASVoice;
 
 // A streamed piece of music or sound: its whole file is read into memory, then each channel is a voice looping over its samples.
 class JASStream {
@@ -49,8 +47,8 @@ public:
     static void finishTask(void*);
     void load();
     static s32 channelProcCallback(void*);
-    static void channelCallback(u32, JASChannel*, JASDsp::TChannel*, void*);
-    void updateChannel(u32, JASChannel*, JASDsp::TChannel*);
+    static void channelCallback(u32, JASChannel*, JASVoice*, void*);
+    void updateChannel(u32, JASChannel*, JASVoice*);
     s32 channelProc();
     void channelStart();
     void channelStop(u16);
@@ -125,6 +123,6 @@ public:
     f32 mChannelFxMix[CHANNEL_MAX];
     f32 mChannelDolby[CHANNEL_MAX];
     u16 mMixConfig[6];
-    // The sound playing this stream, for the host's volume categories (JASDSPChannel::nameSound).
+    // The sound playing this stream, for the host's volume categories (JASVoiceSlot::nameSound).
     JAISound* mNebulaOwner;
 };

@@ -13,7 +13,7 @@
 #include <JSystem/JAudio2/JAISound.hpp>
 #include <JSystem/JAudio2/JAISoundChild.hpp>
 #include <JSystem/JAudio2/JAISoundInfo.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 AudBgm::AudBgm() : mVolumeController() {
 }
@@ -267,7 +267,7 @@ void AudMultiBgm::sendToSyncStream() {
         u32 loopEndSamples = AudBgmSetting::getLoopEndSamplesForMultiBgm(mBgmId);
         JAIStream* stream = mHandle->asStream();
 
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         adjuster->setInfo(beatMul, introBeats, loopBeats, loopStartSamples, loopEndSamples);
         adjuster->setStream(stream);
     }
@@ -277,7 +277,7 @@ void AudMultiBgm::rejectFromSyncStream() {
     AudRhythmMeSystem* meSystem = AudRhythmMeSystem::getInstance();
     s32 idx = mRhythmStrategy.mBgmIdx;
     if (idx >= 0) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         AudBgmTempoAdjuster* adjuster = meSystem->getSeqParser(idx)->getTempoAdjuster();
         adjuster->reject();
     }

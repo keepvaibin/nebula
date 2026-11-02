@@ -4,7 +4,7 @@
 #include "Game/RhythmLib/AudMeSeqCtrl.hpp"
 #include "Game/RhythmLib/AudMeTrackCallback.hpp"
 #include <JSystem/JAudio2/JASBankTable.hpp>
-#include <JSystem/JAudio2/JASDspInterface.hpp>
+#include <JSystem/JAudio2/JASVoice.hpp>
 #include <JSystem/JGadget/linklist.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JAudio2/JASOscillator.hpp>
@@ -106,7 +106,7 @@ public:
     bool noteOff(u32, u16);
     void noteOffAll(u16);
     void startNote();
-    static void channelUpdateCallback(u32, JASChannel*, JASDsp::TChannel*, void*);
+    static void channelUpdateCallback(u32, JASChannel*, JASVoice*, void*);
     static void initRegister();
     void overwriteOsc(JASChannel*);
     void setOscAdsr(s16, s16, s16, s16, u16);

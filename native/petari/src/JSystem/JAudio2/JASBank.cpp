@@ -9,7 +9,7 @@ static JASOscillator::Point const OSC_RELEASE_TABLE[] = {
     {0x000F, 0x0000, 0x0000},
 };
 
-JASChannel* JASBank::noteOnOsc(int progNo, u8 pitch, u8 velocity, u16 priority, void (*param_4)(u32, JASChannel*, JASDsp::TChannel*, void*),
+JASChannel* JASBank::noteOnOsc(int progNo, u8 pitch, u8 velocity, u16 priority, void (*param_4)(u32, JASChannel*, JASVoice*, void*),
                                void* param_5) {
     static const JASOscillator::Data OSC_ENV = {0, 1.0f, nullptr, OSC_RELEASE_TABLE, 1.0f, 0.0f};
 
@@ -20,7 +20,7 @@ JASChannel* JASBank::noteOnOsc(int progNo, u8 pitch, u8 velocity, u16 priority, 
     channel->setPriority(priority);
     channel->mProgNo = progNo;
     channel->mChannelType = JASChannel::CH_OSC;
-    channel->setInitPitch(16736.016f / JASDriver::getDacRate());
+    channel->setInitPitch(16736.016f / JASDriver::getSoundRate());
     channel->setKey(pitch - channel->mWaveInfo.mBaseKey);
     channel->setVelocity(velocity);
     channel->setOscInit(0, &OSC_ENV);

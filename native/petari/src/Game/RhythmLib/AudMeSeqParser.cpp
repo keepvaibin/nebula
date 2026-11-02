@@ -1,6 +1,6 @@
 #include "Game/RhythmLib/AudMeSeqParser.hpp"
 #include "Game/RhythmLib/AudMeTrack.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 #define ARG_U8 0
 #define ARG_U16 1
@@ -207,7 +207,7 @@ s32 AudMeSeqParser::cmdSimpleAdsr(AudMeTrack* pTrack, u32* pArgs) {
 s32 AudMeSeqParser::cmdOpenTrack(AudMeTrack* pTrack, u32* pArgs) {
     s32 trackNo = pArgs[0];
     u32 addr = pArgs[1];
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     AudMeTrack* child = pTrack->newChild(trackNo);
     if (child == nullptr) {
         return 0;

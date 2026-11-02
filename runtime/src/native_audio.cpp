@@ -321,7 +321,7 @@ struct NativeGameAudio::State {
 NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
 NativeGameAudio::~NativeGameAudio() = default;
 
-void NativeGameAudio::setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
+void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
                             const void* sound_memory, std::uint32_t sound_memory_size, bool device) {
     State& s = *state_;
     std::uint32_t rate = 48000u;
