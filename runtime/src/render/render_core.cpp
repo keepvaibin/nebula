@@ -763,6 +763,40 @@ void RenderCore::reset_monotonic_cadence(
     accumulator.published_last_sample_ns.store(0, std::memory_order_relaxed);
 }
 
+// GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
+void RenderCore::trace_memory() {
+    static const bool enabled = read_env_u64("GALAXY_TRACE_MEMORY", 0u) != 0u;
+    static std::uint64_t frames = 0u;
+    if (!enabled || ++frames % 600u != 0u) {
+        return;
+    }
+    std::uint64_t arrays = 0u;
+    for (const auto& [key, entry] : shape_arrays_) {
+        arrays += entry.array->floats.capacity() * sizeof(float) + entry.array->colors.capacity() * sizeof(std::uint32_t);
+    }
+    std::uint64_t geometry = 0u;
+    std::uint64_t vertices = 0u;
+    std::uint64_t split = 0u;
+    for (const auto& [key, shape] : record_shapes_) {
+        if (shape.geometry != nullptr) {
+            geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
+        }
+        vertices += shape.vertices.capacity() * sizeof(RenderVertex);
+        split += shape.split_indices.capacity() * sizeof(std::uint16_t);
+    }
+    const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
+    std::fprintf(stderr,
+                 "[memory] shape arrays %.1f (%zu), groups %.1f, expanded vertices %.1f, split indices %.1f (%zu shapes), images %.1f, decoded %.1f, "
+                 "upload arenas %.1f, texture pool %.1f, curved %.1f, record pool %.1f\n",
+                 mb(arrays), shape_arrays_.size(), mb(geometry), mb(vertices), mb(split), record_shapes_.size(), mb(texture_cache_.image_bytes()),
+                 mb(texture_cache_.decoded_map_stats().resident_bytes), mb(texture_cache_.upload_arena_bytes()), mb(texture_cache_.pool_bytes()),
+                 mb(curved::memory_bytes()),
+                 mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
+#if defined(NEBULA_HOST_D3D12)
+    renderer_.trace_rings();
+#endif
+}
+
 void RenderCore::report_frame_tail_window() noexcept {
     static const bool enabled=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
     if(!enabled) return;
@@ -883,6 +917,7 @@ void RenderCore::record_presented_display_copy(
             std::memory_order_relaxed);
         record_monotonic_cadence_sample(display_first_serial_present_cadence_);
         report_frame_tail_window();
+        trace_memory();
         if (event.below_high_water) {
             ++stat_display_out_of_order_serial_requests_;
         }

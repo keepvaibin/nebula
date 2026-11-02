@@ -550,6 +550,17 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // EFBs', live and sub-frame: 10). TextureCache's own SRV indices are independent of this prefix.
 static constexpr unsigned    kPersistentSrvDescriptors = 10u;
 
+void RendererD3D12::trace_rings() const {
+    const auto line = [](const char* name, const UploadRing& ring) {
+        std::fprintf(stderr, "[memory] ring %s %.1f MB, a frame took at most %.1f MB\n", name, static_cast<double>(ring.capacity()) / (1024.0 * 1024.0),
+                     static_cast<double>(ring.high_water()) / (1024.0 * 1024.0));
+    };
+    line("vertex", vertex_ring_);
+    line("index", index_ring_);
+    line("constant", constant_ring_);
+    line("matrix", matrix_ring_);
+}
+
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), val);
