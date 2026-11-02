@@ -11,8 +11,6 @@ namespace AudParams {
     extern const int aramAddr;
     extern const int aramSize;
     extern const int workAreaSize;
-    extern const int dvdThreadSwitchID;
-    extern const int audioThreadSwitchID;
     extern const int numFreeTracks;
     extern const int numFreeTrackChannels;
     extern const int streamBlockSize;

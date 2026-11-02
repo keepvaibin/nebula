@@ -12,15 +12,8 @@ extern "C" {
 #endif
 
 int nebula_memory_init(void);
-uint8_t* nebula_arena_base(void);
-/* The module's own image (its code and data), for diagnostics. */
-void nebula_image_range(uintptr_t* base, uintptr_t* size);
 
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
-/* The arena span game threads' native stacks come from (above the MEM2 arena the OS hands out). */
-uint8_t* nebula_stack_pool(size_t* size);
-/* Makes [p, p + size) inaccessible (a stack's guard), whole pages. */
-void nebula_memory_guard(void* p, size_t size);
 
 /* The host's services (sdk/core.c); NULL before nebula_game_attach. */
 const struct NebulaHostServices* nebula_host(void);
