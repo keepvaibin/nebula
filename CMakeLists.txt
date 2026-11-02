@@ -486,6 +486,8 @@ galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${r
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 
 galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp LIBS shell32)
+
+galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
 
 set(gxs runtime/src/render)
