@@ -207,8 +207,8 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
     }
 }
 
-bool isTexNoReg(void* pDL) {
-    u8 r31 = ((u8*)pDL)[1];
+bool isTexNoReg(void* pList) {
+    u8 r31 = ((u8*)pList)[1];
     if (r31 >= 0x80 && r31 <= 0xbb) {
         return true;
     }

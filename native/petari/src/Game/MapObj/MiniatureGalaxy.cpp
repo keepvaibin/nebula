@@ -360,8 +360,8 @@ void MiniatureGalaxy::initPartsModel() {
     ::initGalaxyPart(mUnknownModel);
 
     mShadowModel = ::createGalaxyPart("\211\145\203\202\203\146\203\213" /* 影モデル */, "MiniatureGalaxyShadow", mShadowBaseMtx, true);
-    mProjmapEffectMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(mShadowModel);
-    MR::newDifferedDLBuffer(mShadowModel);
+    mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(mShadowModel);
+    MR::newDifferedMaterials(mShadowModel);
     ::initGalaxyPart(mShadowModel);
 
     mSelectModel = ::createGalaxyPart("\221\111\221\360\216\236\203\202\203\146\203\213" /* 選択時モデル */, "MiniatureGalaxySelect", mPosMtx, false);
@@ -376,13 +376,13 @@ void MiniatureGalaxy::initPartsModel() {
     s32 powerStarNum = MR::getPowerStarNumToOpenGalaxy(mGalaxyName);
 
     if (powerStarNum < 10) {
-        MR::initDLMakerTexMtx(mStarPlateModel, "StarNumber1")->setTexMtx(0, &mOnesTexMtx);
+        MR::initMaterialTexMtx(mStarPlateModel, "StarNumber1")->setTexMtx(0, &mOnesTexMtx);
 
         MR::hideMaterial(mStarPlateModel, "StarNumber01");
         MR::hideMaterial(mStarPlateModel, "StarNumber10");
     } else {
-        MR::initDLMakerTexMtx(mStarPlateModel, "StarNumber01")->setTexMtx(0, &mOnesTexMtx);
-        MR::initDLMakerTexMtx(mStarPlateModel, "StarNumber10")->setTexMtx(0, &mTensTexMtx);
+        MR::initMaterialTexMtx(mStarPlateModel, "StarNumber01")->setTexMtx(0, &mOnesTexMtx);
+        MR::initMaterialTexMtx(mStarPlateModel, "StarNumber10")->setTexMtx(0, &mTensTexMtx);
 
         MR::hideMaterial(mStarPlateModel, "StarNumber1");
     }
@@ -390,7 +390,7 @@ void MiniatureGalaxy::initPartsModel() {
     mOnesTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum % 10 * 0.1f;
     mTensTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum / 10 * 0.1f;
 
-    MR::newDifferedDLBuffer(mStarPlateModel);
+    MR::newDifferedMaterials(mStarPlateModel);
     ::initGalaxyPart(mStarPlateModel);
 }
 

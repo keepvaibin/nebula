@@ -59,7 +59,7 @@ struct JPAEmitterWorkData {
     /* 0x200 */ u32 mDirType;
     /* 0x204 */ u32 mRotType;
     /* 0x208 */ u32 mPlaneType;
-    /* 0x20C */ u32 mDLType;
+    /* 0x20C */ u32 mListType;
     /* 0x210 */ u32 mPrjType;
     /* 0x214 */ s16 mClrKeyFrame;
     /* 0x216 */ u8 mDrawCount;

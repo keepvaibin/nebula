@@ -121,11 +121,11 @@ namespace MR {
     bool isExistBva(const LiveActor*, const char*);
     bool isExistTexture(const LiveActor*, const char*);
 
-    void newDifferedDLBuffer(LiveActor*);
-    void initDLMakerFog(LiveActor*, bool);
-    void initDLMakerMatColor0(LiveActor*, const char*, const J3DGXColor*);
-    void initDLMakerChangeTex(LiveActor*, const char*);
-    TexMtxCtrl* initDLMakerTexMtx(LiveActor*, const char*);
+    void newDifferedMaterials(LiveActor*);
+    void initMaterialFog(LiveActor*, bool);
+    void initMaterialColor0(LiveActor*, const char*, const J3DGXColor*);
+    void initMaterialChangeTex(LiveActor*, const char*);
+    TexMtxCtrl* initMaterialTexMtx(LiveActor*, const char*);
 
     void startAction(const LiveActor*, const char*);
     bool isActionEnd(const LiveActor*);
@@ -135,7 +135,7 @@ namespace MR {
     void startAllAnim(const LiveActor*, const char*);
     bool tryStartAllAnim(const LiveActor*, const char*);
 
-    ProjmapEffectMtxSetter* initDLMakerProjmapEffectMtxSetter(LiveActor*);
+    ProjmapEffectMtxSetter* initMaterialProjmapEffectMtxSetter(LiveActor*);
 
     void startBck(const LiveActor*, const char*, const char* pBrkName = nullptr);
     void startBckWithInterpole(const LiveActor*, const char*, s32);

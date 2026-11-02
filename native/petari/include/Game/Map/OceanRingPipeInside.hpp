@@ -15,7 +15,7 @@ public:
     virtual void movement();
     virtual void draw() const;
 
-    void initDisplayList();
+    void initMesh();
     void loadMaterial() const;
     void sendGD();
 

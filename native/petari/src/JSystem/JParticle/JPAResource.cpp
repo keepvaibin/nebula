@@ -797,8 +797,8 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
 
     work->mDirType = mpBaseShape->getDirType();
     work->mRotType = mpBaseShape->getRotType();
-    work->mDLType = mpBaseShape->getType() == 4 || mpBaseShape->getType() == 8;
-    work->mPlaneType = work->mDLType ? 2 : mpBaseShape->getBasePlaneType();
+    work->mListType = mpBaseShape->getType() == 4 || mpBaseShape->getType() == 8;
+    work->mPlaneType = work->mListType ? 2 : mpBaseShape->getBasePlaneType();
     work->mPrjType = mpBaseShape->isPrjTex() ? (mpBaseShape->isTexCrdAnm() ? 2 : 1) : 0;
 
     work->mpAlivePtcl = &work->mpEmtr->mAlivePtclBase;
@@ -861,8 +861,8 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
 
     work->mDirType = mpChildShape->getDirType();
     work->mRotType = mpChildShape->getRotType();
-    work->mDLType = mpChildShape->getType() == 4 || mpChildShape->getType() == 8;
-    work->mPlaneType = work->mDLType ? 2 : mpChildShape->getBasePlaneType();
+    work->mListType = mpChildShape->getType() == 4 || mpChildShape->getType() == 8;
+    work->mPlaneType = work->mListType ? 2 : mpChildShape->getBasePlaneType();
     work->mPrjType = 0;
 
     work->mpAlivePtcl = &work->mpEmtr->mAlivePtclChld;

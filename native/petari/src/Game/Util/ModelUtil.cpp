@@ -146,8 +146,8 @@ namespace MR {
         return pModelData->getMaterialName()->getName(idx);
     }
 
-    void updateModelDiffDL(LiveActor* pActor) {
-        pActor->mModelManager->updateDL(true);
+    void updateModelDiffMaterials(LiveActor* pActor) {
+        pActor->mModelManager->updateList(true);
     }
 
     bool isEnvelope(J3DMaterial* pMaterial) {
@@ -385,7 +385,7 @@ namespace MR {
             for (j = 0; j < materialNum; j++) {
                 J3DShapePacket* shapePacketModel1 = pModel1->getShapePacket(j);
                 if (shapePacketModel1->getShape()->getMaterial()->getIndex() == idx) {
-                    shapePacketModel1->setDisplayListObj(shapePacketModel2->getDisplayListObj());
+                    shapePacketModel1->setSnapshot(shapePacketModel2->getSnapshot());
                     break;
                 }
             }
@@ -531,7 +531,7 @@ namespace MR {
         (MR::MutexHolder< 0 >::sMutex).unlock();
         if (modelData->getModelDataType() == 0) {
             (MR::MutexHolder< 0 >::sMutex).lock();
-            newModel->makeDL();
+            newModel->makeMesh();
             (MR::MutexHolder< 0 >::sMutex).unlock();
         }
 

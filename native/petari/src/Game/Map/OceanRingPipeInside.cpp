@@ -36,7 +36,7 @@ OceanRingPipeInside::OceanRingPipeInside(const OceanRingPipe* pPipe)
 
 void OceanRingPipeInside::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeInside);
-    initDisplayList();
+    initMesh();
     MR::invalidateClipping(this);
     mWaterPipeInsideTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeInside.bti"));
     makeActorAppeared();
@@ -49,7 +49,7 @@ void OceanRingPipeInside::movement() {
     mTexV1 = MR::repeat(mTexV1 + ::sTexSpeedV1, 0.0f, 1.0f);
 }
 
-void OceanRingPipeInside::initDisplayList() {
+void OceanRingPipeInside::initMesh() {
     mMesh.init(NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1, 2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
     mMesh.useArray(NativeMesh::SLOT_POSITION, mRingPipe->_A0);
     sendGD();

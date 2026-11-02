@@ -1965,36 +1965,36 @@ void MarioActor::calcAnim() {
         case 4:
             _9E4->mPosition.set(mPosition);
 
-            MR::updateModelDiffDL(_9E4);
+            MR::updateModelDiffMaterials(_9E4);
             break;
         case 3:
             _9C0->mPosition.set(mPosition);
 
-            MR::updateModelDiffDL(_9C0);
-            MR::updateModelDiffDL(_A40);
-            MR::updateModelDiffDL(_A44);
+            MR::updateModelDiffMaterials(_9C0);
+            MR::updateModelDiffMaterials(_A40);
+            MR::updateModelDiffMaterials(_A44);
             break;
         case 1:
             _9C8->mPosition.set(mPosition);
 
-            MR::updateModelDiffDL(_9C8);
-            MR::updateModelDiffDL(_A50);
-            MR::updateModelDiffDL(_A54);
+            MR::updateModelDiffMaterials(_9C8);
+            MR::updateModelDiffMaterials(_A50);
+            MR::updateModelDiffMaterials(_A54);
             break;
         case 5:
             _A00->mPosition.set(mPosition);
 
-            MR::updateModelDiffDL(_A00);
+            MR::updateModelDiffMaterials(_A00);
             break;
         default:
             if (mCurrModel != 1) {
-                MR::updateModelDiffDL(this);
+                MR::updateModelDiffMaterials(this);
             }
 
             break;
         }
     } else if (mCurrModel == 0) {
-        MR::updateModelDiffDL(this);
+        MR::updateModelDiffMaterials(this);
     }
 
     if (MR::isHiddenModel(this) && _482 == 0) {

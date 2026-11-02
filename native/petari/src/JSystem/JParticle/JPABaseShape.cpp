@@ -784,7 +784,7 @@ void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
         NebulaMtxConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
         setParticleMtx(auStack_88);
         p_prj[param_0->mPrjType](param_0, auStack_88);
-        JPADrawQuad(param_0->mDLType);
+        JPADrawQuad(param_0->mListType);
     }
 }
 

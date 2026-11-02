@@ -16,13 +16,13 @@ class ResourceHolder;
 class TexMtxCtrl;
 class ViewProjmapEffectMtxSetter;
 
-class DisplayListMaker {
+class MaterialUpdater {
 public:
-    DisplayListMaker(J3DModel*, const ResourceHolder*);
+    MaterialUpdater(J3DModel*, const ResourceHolder*);
 
     void update();
     void diff();
-    void newDifferedDisplayList();
+    void newDifferedSnapshot();
     bool isValidDiff();
     void onPrgFlag(u16, u32);
     void onCurFlag(u16, u32);

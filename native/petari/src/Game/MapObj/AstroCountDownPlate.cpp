@@ -34,7 +34,7 @@ void AstroCountDownPlate::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("AstroCountDownPlate", nullptr, true);
     initTextureAtNumLeftStar();
-    MR::newDifferedDLBuffer(this);
+    MR::newDifferedMaterials(this);
     MR::connectToSceneMapObj(this);
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);
@@ -107,8 +107,8 @@ void AstroCountDownPlate::exeCountToZero() {
 }
 
 void AstroCountDownPlate::initTextureAtNumLeftStar() {
-    MR::initDLMakerTexMtx(this, ::cMaterialName01)->setTexMtx(0, &_8C);
-    MR::initDLMakerTexMtx(this, ::cMaterialName10)->setTexMtx(0, &_120);
+    MR::initMaterialTexMtx(this, ::cMaterialName01)->setTexMtx(0, &_8C);
+    MR::initMaterialTexMtx(this, ::cMaterialName10)->setTexMtx(0, &_120);
     setNumLeftStar();
 }
 

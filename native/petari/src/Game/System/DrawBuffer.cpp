@@ -40,7 +40,7 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 }
 
 void DrawBufferShapeDrawer::draw() const {
-    J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture, mMatPacket->mpDisplayListObj);
+    J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture, mMatPacket->mpSnapshot);
 
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
     firstPacket->mpShape->loadPreDrawSetting();
@@ -56,8 +56,8 @@ void DrawBufferShapeDrawer::draw() const {
         }
 
         if ((packet->mpShape->mFlags & 1) == 0) {
-            if (packet->mpDisplayListObj != nullptr) {
-                J3DNativeMaterial::sendDiffered(packet->mpDisplayListObj);
+            if (packet->mpSnapshot != nullptr) {
+                J3DNativeMaterial::sendDiffered(packet->mpSnapshot);
             }
             packet->drawFast();
         }

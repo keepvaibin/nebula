@@ -25,8 +25,8 @@ struct J3DShapeMtxInitData {
 };
 
 struct J3DShapeDrawInitData {
-    /* 0x00 */ u32 mDisplayListSize;
-    /* 0x04 */ u32 mDisplayListIndex;
+    /* 0x00 */ u32 mShapeDrawSize;
+    /* 0x04 */ u32 mShapeDrawIndex;
 };
 
 struct J3DShapeFactory {
@@ -40,7 +40,7 @@ struct J3DShapeFactory {
     /* 0x00 */ J3DShapeInitData* mShapeInitData;
     /* 0x04 */ u16* mIndexTable;
     /* 0x0C */ u16* mMtxTable;
-    /* 0x10 */ u8* mDisplayListData;
+    /* 0x10 */ u8* mShapeDrawData;
     /* 0x14 */ J3DShapeMtxInitData* mMtxInitData;
     /* 0x18 */ J3DShapeDrawInitData* mDrawInitData;
 

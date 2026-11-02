@@ -9,7 +9,7 @@
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeResource.hpp"
-#include "Game/LiveActor/DisplayListMaker.hpp"
+#include "Game/LiveActor/MaterialUpdater.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MutexHolder.hpp"
@@ -19,7 +19,7 @@
 
 ModelManager::ModelManager()
     : mBtkPlayer(), mBrkPlayer(), mBtpPlayer(), mBpkPlayer(), mBvaPlayer(), mXanimeResourceTable(), mXanimePlayer(), mModel(), mModelResourceHolder(),
-      mDisplayListMaker() {
+      mMaterialUpdater() {
 }
 
 void ModelManager::update() {
@@ -53,7 +53,7 @@ void ModelManager::update() {
 
 void ModelManager::calcAnim() {
     calc();
-    updateDL(true);
+    updateList(true);
 }
 
 void ModelManager::calcView() {
@@ -64,17 +64,17 @@ void ModelManager::entry() {
     getJ3DModel()->entry();
 }
 
-void ModelManager::newDifferedDLBuffer() {
-    mDisplayListMaker->newDifferedDisplayList();
+void ModelManager::newDifferedMaterials() {
+    mMaterialUpdater->newDifferedSnapshot();
 }
 
-void ModelManager::updateDL(bool isDiffDL) {
+void ModelManager::updateList(bool isDiffMaterials) {
     (MR::MutexHolder< 0 >::sMutex).lock();
 
-    bool isUpdateDL = mDisplayListMaker != nullptr && mDisplayListMaker->isValidDiff();
+    bool isUpdateMaterials = mMaterialUpdater != nullptr && mMaterialUpdater->isValidDiff();
 
-    if (isUpdateDL) {
-        mDisplayListMaker->update();
+    if (isUpdateMaterials) {
+        mMaterialUpdater->update();
 
         if (mBtkPlayer != nullptr) {
             mBtkPlayer->beginDiff();
@@ -95,9 +95,9 @@ void ModelManager::updateDL(bool isDiffDL) {
 
     getJ3DModel()->calcMaterial();
 
-    if (isUpdateDL) {
-        if (isDiffDL) {
-            mDisplayListMaker->diff();
+    if (isUpdateMaterials) {
+        if (isDiffMaterials) {
+            mMaterialUpdater->diff();
         }
 
         if (mBtkPlayer != nullptr) {
@@ -135,25 +135,25 @@ void ModelManager::startBckWithInterpole(const char* pBckName, s32 interpole) {
 void ModelManager::startBtk(const char* pBtkName) {
     stopBtk();
     mBtkPlayer->start(pBtkName);
-    mDisplayListMaker->onCurFlagBtk(mBtkPlayer->mAnmRes);
+    mMaterialUpdater->onCurFlagBtk(mBtkPlayer->mAnmRes);
 }
 
 void ModelManager::startBrk(const char* pBrkName) {
     stopBrk();
     mBrkPlayer->start(pBrkName);
-    mDisplayListMaker->onCurFlagBrk(mBrkPlayer->mAnmRes);
+    mMaterialUpdater->onCurFlagBrk(mBrkPlayer->mAnmRes);
 }
 
 void ModelManager::startBtp(const char* pBtpName) {
     stopBtp();
     mBtpPlayer->start(pBtpName);
-    mDisplayListMaker->onCurFlagBtp(mBtpPlayer->mAnmRes);
+    mMaterialUpdater->onCurFlagBtp(mBtpPlayer->mAnmRes);
 }
 
 void ModelManager::startBpk(const char* pBpkName) {
     stopBpk();
     mBpkPlayer->start(pBpkName);
-    mDisplayListMaker->onCurFlagBpk(mBpkPlayer->mAnmRes);
+    mMaterialUpdater->onCurFlagBpk(mBpkPlayer->mAnmRes);
 }
 
 void ModelManager::startBva(const char* pBvaName) {
@@ -163,28 +163,28 @@ void ModelManager::startBva(const char* pBvaName) {
 
 void ModelManager::stopBtk() {
     if (mBtkPlayer->mAnmRes != nullptr) {
-        mDisplayListMaker->offCurFlagBtk(mBtkPlayer->mAnmRes);
+        mMaterialUpdater->offCurFlagBtk(mBtkPlayer->mAnmRes);
         mBtkPlayer->stop();
     }
 }
 
 void ModelManager::stopBrk() {
     if (mBrkPlayer->mAnmRes != nullptr) {
-        mDisplayListMaker->offCurFlagBrk(mBrkPlayer->mAnmRes);
+        mMaterialUpdater->offCurFlagBrk(mBrkPlayer->mAnmRes);
         mBrkPlayer->stop();
     }
 }
 
 void ModelManager::stopBtp() {
     if (mBtpPlayer->mAnmRes != nullptr) {
-        mDisplayListMaker->offCurFlagBtp(mBtpPlayer->mAnmRes);
+        mMaterialUpdater->offCurFlagBtp(mBtpPlayer->mAnmRes);
         mBtpPlayer->stop();
     }
 }
 
 void ModelManager::stopBpk() {
     if (mBpkPlayer->mAnmRes != nullptr) {
-        mDisplayListMaker->offCurFlagBpk(mBpkPlayer->mAnmRes);
+        mMaterialUpdater->offCurFlagBpk(mBpkPlayer->mAnmRes);
         mBpkPlayer->stop();
     }
 }
@@ -401,7 +401,7 @@ void ModelManager::changeBckSetting(const char* pBckName, const char* pActorAnim
     }
 }
 
-void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferDisplayList) {
+void ModelManager::init(const char* pModelName, const char* pAnimationName, bool deferMaterials) {
     char modelArchive[64];
     nebula_snprintf(modelArchive, sizeof(modelArchive), "%s.arc", pModelName);
     ResourceHolder* modelHolder = MR::createAndAddResourceHolder(modelArchive);
@@ -415,10 +415,10 @@ void ModelManager::init(const char* pModelName, const char* pAnimationName, bool
     }
 
     bool hasMaterialAnm = animationHolder->isExistMaterialAnm();
-    bool hasDiffMaterial = DisplayListMaker::isExistDiffMaterial(static_cast< J3DModelData* >(modelHolder->mModelResTable->getRes(pModelName)));
-    J3DMdlFlag flags = J3DMdlFlag_UseSharedDL;
-    if (deferDisplayList || hasMaterialAnm || hasDiffMaterial) {
-        flags = static_cast< J3DMdlFlag >(flags | J3DMdlFlag_DifferedDLBuffer);
+    bool hasDiffMaterial = MaterialUpdater::isExistDiffMaterial(static_cast< J3DModelData* >(modelHolder->mModelResTable->getRes(pModelName)));
+    J3DMdlFlag flags = J3DMdlFlag_UseSharedSnapshot;
+    if (deferMaterials || hasMaterialAnm || hasDiffMaterial) {
+        flags = static_cast< J3DMdlFlag >(flags | J3DMdlFlag_DifferedSnapshots);
     }
 
     initModelAndAnimation(modelHolder, pModelName, animationHolder, flags);
@@ -427,10 +427,10 @@ void ModelManager::init(const char* pModelName, const char* pAnimationName, bool
         initMaterialAnm();
     }
 
-    if (flags & J3DMdlFlag_DifferedDLBuffer) {
-        mDisplayListMaker = new DisplayListMaker(getJ3DModel(), getResourceHolder());
-        if (!deferDisplayList) {
-            mDisplayListMaker->newDifferedDisplayList();
+    if (flags & J3DMdlFlag_DifferedSnapshots) {
+        mMaterialUpdater = new MaterialUpdater(getJ3DModel(), getResourceHolder());
+        if (!deferMaterials) {
+            mMaterialUpdater->newDifferedSnapshot();
         }
     }
 }

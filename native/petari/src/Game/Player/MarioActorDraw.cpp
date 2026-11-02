@@ -1,10 +1,10 @@
-#include "Game/LiveActor/DisplayListMaker.hpp"
+#include "Game/LiveActor/MaterialUpdater.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
-#include "Game/Player/DLchanger.hpp"
+#include "Game/Player/StateListChanger.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Player/MarioActor.hpp"
@@ -72,8 +72,8 @@ void MarioActor::initDrawAndModel() {
 
     ::initExtraMtxBuffer(baseModel);
 
-    MR::initDLMakerFog(this, true);
-    MR::newDifferedDLBuffer(this);
+    MR::initMaterialFog(this, true);
+    MR::newDifferedMaterials(this);
 
     mModels[0] = baseModel;
     _9E4 = nullptr;
@@ -104,15 +104,15 @@ void MarioActor::initDrawAndModel() {
 
     initFace();
 
-    mDL[0].reserve(16);
-    mDL[1].reserve(16);
-    mCurrDL = 0;
+    mLists[0].reserve(16);
+    mLists[1].reserve(16);
+    mCurrList = 0;
 
-    mDLchanger = new DLchanger(2, 16);
+    mListChanger = new StateListChanger(2, 16);
     _1A4 = 0.0f;
 
     swapTextureInit();
-    createRainbowDL();
+    createRainbowMesh();
 
     {
         MR::CurrentHeapRestorer restorer(static_cast< JKRHeap* >(MR::getSceneHeap()));
@@ -164,8 +164,8 @@ void MarioActor::initBeeMario() {
     model = static_cast< J3DModelX* >(MR::getJ3DModel(_9E4));
     model->copyExtraMtxBuffer(mModels[0]);
 
-    MR::initDLMakerFog(_9E4, true);
-    MR::newDifferedDLBuffer(_9E4);
+    MR::initMaterialFog(_9E4, true);
+    MR::newDifferedMaterials(_9E4);
 
     mModels[2] = model;
     _9E4->kill();
@@ -207,8 +207,8 @@ void MarioActor::initHopperMario() {
     model = static_cast< J3DModelX* >(MR::getJ3DModel(_A00));
     model->copyExtraMtxBuffer(mModels[0]);
 
-    MR::initDLMakerFog(_A00, true);
-    MR::newDifferedDLBuffer(_A00);
+    MR::initMaterialFog(_A00, true);
+    MR::newDifferedMaterials(_A00);
 
     mModels[5] = model;
     _A00->kill();
@@ -242,8 +242,8 @@ void MarioActor::initIceMario() {
     model->copyExtraMtxBuffer(mModels[0]);
     model->copyAnmMtxBuffer(mModels[0]);
 
-    MR::initDLMakerFog(_9C0, true);
-    MR::newDifferedDLBuffer(_9C0);
+    MR::initMaterialFog(_9C0, true);
+    MR::newDifferedMaterials(_9C0);
 
     mModels[3] = model;
     _9C0->kill();
@@ -285,8 +285,8 @@ void MarioActor::initInvincibleMario() {
     model->copyExtraMtxBuffer(mModels[0]);
     model->copyAnmMtxBuffer(mModels[0]);
 
-    MR::initDLMakerFog(_9C8, true);
-    MR::newDifferedDLBuffer(_9C8);
+    MR::initMaterialFog(_9C8, true);
+    MR::newDifferedMaterials(_9C8);
 
     mModels[4] = model;
     _9C8->kill();
@@ -341,8 +341,8 @@ void MarioActor::initBoneMario() {
     J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(_A04));
     model->copyExtraMtxBuffer(mModels[0]);
 
-    MR::initDLMakerFog(_A04, true);
-    MR::newDifferedDLBuffer(_A04);
+    MR::initMaterialFog(_A04, true);
+    MR::newDifferedMaterials(_A04);
 
     mModels[1] = model;
     _A04->kill();
@@ -355,7 +355,7 @@ void MarioActor::changeDisplayMode(u8 mode) {
     mMarioAnim->mXanimePlayer->setModel(mModels[mCurrModel]);
     mMarioAnim->mXanimePlayerUpper->setModel(mModels[mCurrModel]);
 
-    mModelManager->mDisplayListMaker->mModel = mModels[mCurrModel];
+    mModelManager->mMaterialUpdater->mModel = mModels[mCurrModel];
 
     if (_494 != nullptr) {
         MtxPtr handMtx = MR::getJointMtx(this, "HandR");
@@ -485,16 +485,16 @@ void MarioActor::drawMarioModel() const {
                 return;
             }
 
-            mDLchanger->addDL(model);
+            mListChanger->addList(model);
 
             MR::showJoint(model, "HandR0");
             MR::showJoint(model, "HandL0");
             MR::showJoint(model, "Face0");
         } else {
             if (mCurrModel == 4) {
-                model->setDynamicDL(nullptr);
+                model->setDynamicList(nullptr);
             } else {
-                model->setDynamicDL(&mDL[mCurrDL]);
+                model->setDynamicList(&mLists[mCurrList]);
             }
         }
 
@@ -518,7 +518,7 @@ void MarioActor::drawMarioModel() const {
 
     if (!MR::isHiddenModel(_A5C)) {
         J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
-        cool->setDynamicDL(&mDL[mCurrDL]);
+        cool->setDynamicList(&mLists[mCurrList]);
         cool->directDraw(nullptr);
     }
 
@@ -548,7 +548,7 @@ void MarioActor::swapTextureInit() {
         _B64[i] = MR::getResTIMG(this, i);
     }
 
-    _B6C = new DLholder[12];
+    _B6C = new StateListHolder[12];
 
     u16 texNo = 0;
     for (u16 i = 0; i < textureCount; i++) {
@@ -561,10 +561,10 @@ void MarioActor::swapTextureInit() {
     }
 
     _B70 = texNo;
-    createTextureDL(&_B6C[0], 0, texNo);
-    createTextureDL(&_B6C[1], 0, texNo + 1);
-    createTextureDL(&_B6C[2], 0, texNo + 2);
-    createTextureDL(&_B6C[3], 0, texNo + 3);
+    createTextureList(&_B6C[0], 0, texNo);
+    createTextureList(&_B6C[1], 0, texNo + 1);
+    createTextureList(&_B6C[2], 0, texNo + 2);
+    createTextureList(&_B6C[3], 0, texNo + 3);
 
     if (_9E4 != nullptr) {
         J3DModelData* beeData = MR::getJ3DModelData(_9E4);
@@ -583,10 +583,10 @@ void MarioActor::swapTextureInit() {
             _B64[i] = MR::getResTIMG(_9E4, i);
         }
 
-        createTextureDL(&_B6C[4], 0, texNo);
-        createTextureDL(&_B6C[5], 0, texNo + 1);
-        createTextureDL(&_B6C[6], 0, texNo + 2);
-        createTextureDL(&_B6C[7], 0, texNo + 3);
+        createTextureList(&_B6C[4], 0, texNo);
+        createTextureList(&_B6C[5], 0, texNo + 1);
+        createTextureList(&_B6C[6], 0, texNo + 2);
+        createTextureList(&_B6C[7], 0, texNo + 3);
     }
 
     if (_A00 != nullptr) {
@@ -606,10 +606,10 @@ void MarioActor::swapTextureInit() {
             _B64[i] = MR::getResTIMG(_A00, i);
         }
 
-        createTextureDL(&_B6C[8], 0, texNo);
-        createTextureDL(&_B6C[9], 0, texNo + 1);
-        createTextureDL(&_B6C[10], 0, texNo + 2);
-        createTextureDL(&_B6C[11], 0, texNo + 3);
+        createTextureList(&_B6C[8], 0, texNo);
+        createTextureList(&_B6C[9], 0, texNo + 1);
+        createTextureList(&_B6C[10], 0, texNo + 2);
+        createTextureList(&_B6C[11], 0, texNo + 3);
     }
 
     initBlink();
@@ -626,8 +626,8 @@ void MarioActor::initFace() {
         _A5C = new ModelHolder("MarioFace", true);
     }
 
-    MR::initDLMakerFog(_A5C, true);
-    MR::newDifferedDLBuffer(_A5C);
+    MR::initMaterialFog(_A5C, true);
+    MR::newDifferedMaterials(_A5C);
 
     MR::getJ3DModelData(_A5C)->mMaterialTable.mTexture = MR::getJ3DModelData(this)->mMaterialTable.mTexture;
     MR::getJ3DModelData(_A5C)->mMaterialTable.mTextureName = MR::getJ3DModelData(this)->mMaterialTable.mTextureName;
@@ -809,9 +809,9 @@ void MarioActor::drawIndirectModel() const {
                 return;
             }
 
-            mDLchanger->addDL(model);
+            mListChanger->addList(model);
         } else {
-            model->setDynamicDL(&mDL[mCurrDL]);
+            model->setDynamicList(&mLists[mCurrList]);
         }
 
         MR::showJoint(model, "Face0");
@@ -856,7 +856,7 @@ void MarioActor::drawReflectModel() const {
 
     if ((_468 == 0 ? nullptr : _428[0]) != nullptr) {
         if (isUseScreenBox()) {
-            mDLchanger->addDL(static_cast< J3DModelX* >(MR::getJ3DModel(_9A0)));
+            mListChanger->addList(static_cast< J3DModelX* >(MR::getJ3DModel(_9A0)));
         }
 
         _9A0->drawType0();
@@ -871,10 +871,10 @@ void MarioActor::drawReflectModel() const {
         model->directDraw(nullptr);
         model->mFlags._1A = false;
         model->mFlags._1D = true;
-        mDLchanger->addDL(model);
+        mListChanger->addList(model);
     } else {
         if (isUseScreenBox()) {
-            mDLchanger->addDL(model);
+            mListChanger->addList(model);
         }
 
         model->mFlags._14 = true;
@@ -933,14 +933,14 @@ void MarioActor::drawModelBlur() const {
         }
 
 
-        _94[idx + ((i - 1) << 3)]->addDL(model);
+        _94[idx + ((i - 1) << 3)]->addList(model);
         model->directDraw(nullptr);
     }
 
     model->mFlags._13 = false;
 }
 
-void MarioActor::createTextureDL(DLholder* pHolder, u16 texMapID, u16 texIndex) {
+void MarioActor::createTextureList(StateListHolder* pHolder, u16 texMapID, u16 texIndex) {
     ResTIMG* texture = _B64[texIndex];
     pHolder->mList.reserve(1);
     pHolder->mList.setTexImgPtr(static_cast< GpuTexMapID >(texMapID), reinterpret_cast< u8* >(texture) + texture->mImageDataOffset);
@@ -969,7 +969,7 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
     J3DModelData* modelData = MR::getJ3DModelData(this);
     u16 materialNo = MR::getMaterialNo(modelData, pMaterialName);
 
-    const DLholder* holder = _B6C;
+    const StateListHolder* holder = _B6C;
     const u8 modelIdx = mCurrModel;
     const J3DStateList* dl = holder[texNo].mList.isEmpty() ? nullptr : &holder[texNo].mList;
     J3DModelX* model = mModels[modelIdx];
@@ -1004,7 +1004,7 @@ void MarioActor::copyMaterial(J3DModel* pModel, u16 materialNo, s32 packetIndex)
         matPacket->mpInitShapePacket = shapePacket;
         matPacket->addShapePacket(shapePacket);
         matPacket->mpTexture = modelData->mMaterialTable.mTexture;
-        matPacket->mpDisplayListObj = modelData->getMaterialNodePointer(materialIndex)->mSharedDLObj;
+        matPacket->mpSnapshot = modelData->getMaterialNodePointer(materialIndex)->mSharedSnapshot;
     }
 }
 
@@ -1025,11 +1025,11 @@ void J3DModelX::swapDrawBuffer(u32 drawBuffer) {
     _DC = drawBuffer;
 }
 
-void DLchanger::addDL(J3DModelX* pModel) {
-    DLholder* buffer = &mBuffers[mCurrentBuffer];
-    pModel->setDynamicDL(&buffer->mList);
+void StateListChanger::addList(J3DModelX* pModel) {
+    StateListHolder* buffer = &mBuffers[mCurrentBuffer];
+    pModel->setDynamicList(&buffer->mList);
 }
 
-void J3DModelX::setDynamicDL(const J3DStateList* pList) {
+void J3DModelX::setDynamicList(const J3DStateList* pList) {
     _1B8 = pList;
 }

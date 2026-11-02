@@ -91,20 +91,20 @@ void J3DMaterial::initialize() {
     mPEBlock = NULL;
     mpOrigMaterial = NULL;
     mMaterialAnm = NULL;
-    mSharedDLObj = NULL;
+    mSharedSnapshot = NULL;
     mNativeMaterial = NULL;
 }
 
 
-void J3DMaterial::makeDisplayList() {
+void J3DMaterial::makeSnapshot() {
     if (!j3dSys.getMatPacket()->isLocked()) {
         j3dSys.getMatPacket()->mDiffFlag = mDiffFlag;
-        J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture, j3dSys.getMatPacket()->getDisplayListObj());
+        J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture, j3dSys.getMatPacket()->getSnapshot());
     }
 }
 
-void J3DMaterial::makeSharedDisplayList() {
-    J3DNativeMaterial::capture(this, j3dSys.getTexture(), mSharedDLObj);
+void J3DMaterial::makeSharedSnapshot() {
+    J3DNativeMaterial::capture(this, j3dSys.getTexture(), mSharedSnapshot);
 }
 
 void J3DMaterial::load() {
@@ -114,24 +114,24 @@ void J3DMaterial::load() {
     }
 }
 
-void J3DMaterial::loadSharedDL() {
+void J3DMaterial::loadSharedMaterial() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(2)) {
-        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedDLObj);
+        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedSnapshot);
         loadNBTScale(*mTexGenBlock->getNBTScale());
     }
 }
 
 void J3DMaterial::patch() {
     j3dSys.getMatPacket()->mDiffFlag = mDiffFlag;
-    J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture, j3dSys.getMatPacket()->getDisplayListObj());
+    J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture, j3dSys.getMatPacket()->getSnapshot());
 }
 
 void J3DMaterial::diff(u32 diffFlags) {
     // An instance's animated values, into its shape packet's differed snapshot (the parts `diffFlags` names).
     if (j3dSys.getMatPacket()->isEnabled_Diff()) {
         J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture,
-                                   j3dSys.getMatPacket()->mpInitShapePacket->getDisplayListObj(), diffFlags);
+                                   j3dSys.getMatPacket()->mpInitShapePacket->getSnapshot(), diffFlags);
     }
 }
 
@@ -196,14 +196,14 @@ void J3DMaterial::change() {
     }
 }
 
-s32 J3DMaterial::newSharedDisplayList() {
-    if (mSharedDLObj == NULL) {
-        mSharedDLObj = new J3DDisplayListObj();
-        if (mSharedDLObj == NULL) {
+s32 J3DMaterial::newSharedSnapshot() {
+    if (mSharedSnapshot == NULL) {
+        mSharedSnapshot = new J3DMaterialSnapshot();
+        if (mSharedSnapshot == NULL) {
             return kJ3DError_Alloc;
         }
 
-        s32 ret = mSharedDLObj->newDisplayList();
+        s32 ret = mSharedSnapshot->newSnapshot();
         if (ret != kJ3DError_Success) {
             return ret;
         }
@@ -217,10 +217,10 @@ void J3DPatchedMaterial::initialize() {
     J3DMaterial::initialize();
 }
 
-void J3DPatchedMaterial::makeDisplayList() {
+void J3DPatchedMaterial::makeSnapshot() {
 }
 
-void J3DPatchedMaterial::makeSharedDisplayList() {
+void J3DPatchedMaterial::makeSharedSnapshot() {
 }
 
 void J3DPatchedMaterial::load() {
@@ -230,10 +230,10 @@ void J3DPatchedMaterial::load() {
     }
 }
 
-void J3DPatchedMaterial::loadSharedDL() {
+void J3DPatchedMaterial::loadSharedMaterial() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(0x02)) {
-        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedDLObj);
+        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedSnapshot);
     }
 }
 
@@ -247,10 +247,10 @@ void J3DLockedMaterial::initialize() {
     J3DMaterial::initialize();
 }
 
-void J3DLockedMaterial::makeDisplayList() {
+void J3DLockedMaterial::makeSnapshot() {
 }
 
-void J3DLockedMaterial::makeSharedDisplayList() {
+void J3DLockedMaterial::makeSharedSnapshot() {
 }
 
 void J3DLockedMaterial::load() {
@@ -260,10 +260,10 @@ void J3DLockedMaterial::load() {
     }
 }
 
-void J3DLockedMaterial::loadSharedDL() {
+void J3DLockedMaterial::loadSharedMaterial() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(0x02)) {
-        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedDLObj);
+        J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedSnapshot);
     }
 }
 
