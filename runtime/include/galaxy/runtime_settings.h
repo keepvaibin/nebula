@@ -63,6 +63,8 @@ struct RuntimeSettings {
     // Discord shows what the player is doing (galaxy, star, Power Stars) while Discord runs.
     bool discord_status = true;
     ButtonIcons button_icons = ButtonIcons::Auto;
+    // Co-star mode: with two controllers attached, the second plays player 2.
+    bool co_star = false;
 
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };

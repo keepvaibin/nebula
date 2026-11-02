@@ -9,7 +9,7 @@
 #include "galaxy/input_bindings.h"
 #include "galaxy/audio_mixer.h"
 #include "galaxy/native_audio.h"
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
 #include "galaxy/native_input.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"

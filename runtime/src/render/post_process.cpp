@@ -1,5 +1,6 @@
 // PostProcessor: the D3D12 presentation chain (post_process.h).
 #include "galaxy/render/post_process.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/render/renderer_d3d12.h"
 
 #include <algorithm>
@@ -163,7 +164,7 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 bool test_fault(const char* name) noexcept {
     char value[64]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_POST_FAULT") != 0 || length <= 1u) {
+    if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_POST_FAULT")) != 0 || length <= 1u) {
         return false;
     }
     const std::size_t n = std::strlen(name);
@@ -951,7 +952,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     static const bool deband_ab = [] {
         char value[8]{};
         std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_DEBAND_AB") == 0 && length > 1u && value[0] == '1';
+        return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_DEBAND_AB")) == 0 && length > 1u && value[0] == '1';
     }();
     const bool deband_in_window = deband && !(deband_ab && (frame_index & 1u) != 0u) &&
         target_width < source_width && target_height < source_height &&

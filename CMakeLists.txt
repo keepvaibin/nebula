@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.1 LANGUAGES C CXX)
 
+# A build for players: the test switches' names are left out (galaxy/test_hooks.h).
+option(NEBULA_RELEASE "Leave the test hooks out" OFF)
+if(NEBULA_RELEASE)
+    add_compile_definitions(NEBULA_RELEASE=1)
+endif()
+
 # The Windows build: NebulaNative (D3D12) and, with NEBULA_VULKAN, NebulaNativeVk. The game module is
 # native/CMakeLists.txt; Android and Linux build from platform/sdl.
 if(NOT WIN32)
@@ -133,7 +139,7 @@ target_include_directories(galaxy_audio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR
 galaxy_host_options(galaxy_audio_mixer)
 
 add_library(galaxy_native_host STATIC
-    runtime/src/native_host.cpp
+    runtime/src/game_paths.cpp
     runtime/src/host_env.cpp
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
