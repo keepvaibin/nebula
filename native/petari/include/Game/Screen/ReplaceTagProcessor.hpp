@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdarg>
-#include <revolution/types.h>
 
 class MessageEditorMessageTag;
 

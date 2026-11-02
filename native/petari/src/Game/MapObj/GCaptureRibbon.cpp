@@ -11,7 +11,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <NebulaGpuEnums.h>
-#include <revolution/types.h>
 
 GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture(), _990(), _994() {
 }

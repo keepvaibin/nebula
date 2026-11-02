@@ -2,7 +2,6 @@
 
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include <cmath>
-#include <revolution/types.h>
 
 namespace JGeometry {
     template < typename T >

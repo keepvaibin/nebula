@@ -2,7 +2,6 @@
 
 #include <JSystem/JGeometry/TVec.hpp>
 #include <nebula_game_api.h>
-#include <revolution/types.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
 

@@ -6,7 +6,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/RumbleCalculator.hpp"
 #include "math_types.hpp"
-#include <revolution/types.h>
 
 
 JointRumbler::JointRumbler(LiveActor* pActor, const char* pJointName, f32 a3, f32 a4, u32 a5, bool a6, s32 a7)

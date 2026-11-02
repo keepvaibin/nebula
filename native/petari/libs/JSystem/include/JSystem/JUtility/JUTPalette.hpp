@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 enum JUTTransparency { UNK0, UNK1 };
 

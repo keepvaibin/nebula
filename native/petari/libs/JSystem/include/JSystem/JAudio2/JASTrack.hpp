@@ -2,7 +2,6 @@
 
 #include "Game/System/NebulaAtomic.hpp"
 
-#include <revolution/types.h>
 
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"

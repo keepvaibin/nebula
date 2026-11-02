@@ -4,7 +4,6 @@
 
 #include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
-#include <revolution/types.h>
 
 #ifdef __cplusplus
 extern "C" {

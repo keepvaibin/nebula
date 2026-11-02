@@ -6,7 +6,6 @@
 #include "JSystem/JMath/JMath.hpp"
 #include <math_types.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 namespace JGeometry {
     inline void negateInternal(const f32* rSrc, f32* rDest) {
@@ -729,7 +728,7 @@ namespace JGeometry {
         f32 angle(const TVec3& rB) const {
             f32 crossPart = cross(rB).length();
             f32 dotPart = dot(rB);
-            return __fabsf(JMAATan2(crossPart, dotPart));
+            return fabsf(JMAATan2(crossPart, dotPart));
         }
 
         f32 turnRate(const TVec3& rB, f32 maxAngle) const {

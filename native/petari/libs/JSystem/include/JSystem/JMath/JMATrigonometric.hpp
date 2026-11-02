@@ -1,7 +1,6 @@
 #pragma once
 
 #include <math_types.hpp>
-#include <revolution/types.h>
 
 namespace JMath {
 

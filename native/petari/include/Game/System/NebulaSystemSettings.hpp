@@ -2,7 +2,6 @@
 
 // The system settings the game reads (I-09: the host's settings, not the console's SYSCONF).
 
-#include <revolution/types.h>
 
 namespace NebulaSystemSettings {
     enum SoundMode {

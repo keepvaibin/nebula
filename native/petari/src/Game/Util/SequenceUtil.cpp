@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/System/GalaxyMoveArgument.hpp"

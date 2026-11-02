@@ -15,7 +15,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 void BossStinkBugActionBase_FORCE_MATCH_SDATA2() {
     (void)15.0f;

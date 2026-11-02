@@ -5,7 +5,6 @@
 #include "Game/Player/RushEndInfo.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include <revolution/types.h>
 
 void MarioActor::addRushSensor(HitSensor* pSensor, bool myBool) {
     if (!MR::isSensorAutoRush(pSensor) && !MR::isSensorRush(pSensor)) {

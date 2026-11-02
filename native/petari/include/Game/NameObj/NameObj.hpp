@@ -2,7 +2,6 @@
 
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/JMapInfo.hpp"
-#include <revolution/types.h>
 
 
 /// @brief The most basic form of an object.

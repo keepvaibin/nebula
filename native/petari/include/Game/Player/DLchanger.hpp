@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/J3DGraphBase/J3DStateList.hpp>
-#include <revolution/types.h>
 
 class J3DModelX;
 

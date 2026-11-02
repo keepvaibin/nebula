@@ -3,7 +3,6 @@
 #include "Game/Util/JMapInfo.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 class JMapIdInfo {
 public:

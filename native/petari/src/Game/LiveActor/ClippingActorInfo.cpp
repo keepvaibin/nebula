@@ -3,7 +3,6 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
-#include <revolution/os.h>
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
 

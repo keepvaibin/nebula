@@ -59,6 +59,7 @@ static inline int nebula_stricmp(const char* s1, const char* s2) {
     }
 }
 
+#include "nebula_types.h"
 #include "nebula_float_cast.h"
 #include "nebula_format.h"
 

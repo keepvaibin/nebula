@@ -6,7 +6,6 @@
 #include <nw4r/lyt/window.h>
 #include <nw4r/ut/Font.h>
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 
 class NebulaPaneKit;
 

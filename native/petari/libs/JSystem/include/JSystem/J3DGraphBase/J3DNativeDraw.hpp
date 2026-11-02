@@ -3,7 +3,6 @@
 #include <nebula_game_api.h>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 #ifdef __cplusplus
 // Vertices the game draws as it sends them, as typed values (nebula_game_api.h immediate): a primitive (GpuBegin's)

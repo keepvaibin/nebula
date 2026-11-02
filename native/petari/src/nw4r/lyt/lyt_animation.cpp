@@ -1,6 +1,5 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 #include "nw4r/lyt/animation.h"
 #include "nw4r/lyt/common.h"

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct J2DataManageLink {
     /* 0x00 */ void* mData;

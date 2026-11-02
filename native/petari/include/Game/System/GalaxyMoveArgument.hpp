@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/JMapIdInfo.hpp"
-#include <revolution/types.h>
 
 class GalaxyMoveArgument {
 public:

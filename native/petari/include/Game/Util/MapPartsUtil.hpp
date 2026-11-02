@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/types.h>
 
 class HitSensor;
 class JMapInfoIter;

@@ -590,7 +590,7 @@ struct J3DIndTexMtx : public J3DIndTexMtxInfo {
     }
 
     J3DIndTexMtx(const J3DIndTexMtx& other) {
-        __memcpy(this, &other, sizeof(J3DIndTexMtx));
+        memcpy(this, &other, sizeof(J3DIndTexMtx));
     }
 
     ~J3DIndTexMtx() {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <revolution/types.h>
 
 namespace nw4r {
     namespace lyt {

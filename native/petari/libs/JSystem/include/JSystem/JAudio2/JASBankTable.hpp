@@ -5,7 +5,6 @@
 
 #include "JSystem/JAudio2/JASBankList.hpp"
 
-#include <revolution/types.h>
 
 template < u32 LEN >
 class JASBankTable : public JASBankList {

@@ -10,7 +10,6 @@
 #include <emmintrin.h>
 #endif
 
-#include <revolution/types.h>
 
 #ifdef __cplusplus
 extern "C" {

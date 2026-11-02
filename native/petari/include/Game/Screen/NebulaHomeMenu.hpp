@@ -4,7 +4,6 @@
 // keys and controller buttons) and the game drives and draws it (HomeButtonLayout, NebulaSettingsMenu). On the console
 // it was Nintendo's HOME button library, a module on the disc the game linked at run time.
 
-#include <revolution/types.h>
 
 namespace NebulaHomeMenu {
     enum Choice {

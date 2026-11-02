@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 namespace MR {
     /// @brief Appends `pChild` to `pParent` as a new component to the path.

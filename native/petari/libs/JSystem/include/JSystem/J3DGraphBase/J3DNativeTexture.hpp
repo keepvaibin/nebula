@@ -4,7 +4,6 @@
 #include <nebula_game_api.h>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 // A texture as the game sets it up (GpuTexObj's values, held in a GpuTexObj): GpuInitTexObj*'s settings, loaded as state
 // records (nebula_game_api.h NEBULA_STATE_TEX_LOOKUP, _TEX_IMAGE: the image names its texture record).

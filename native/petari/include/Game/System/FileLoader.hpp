@@ -11,7 +11,6 @@
 #include <cstdio>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 class JKRArchive;
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 // The sound table in host order, as the importer cooks it (native_data.rs speaker).
 struct SpkParameters {

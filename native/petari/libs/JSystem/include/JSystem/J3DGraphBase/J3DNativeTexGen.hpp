@@ -1,7 +1,6 @@
 #pragma once
 
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 
 // A texture coordinate's generation as the renderer takes it (nebula_game_api.h NebulaMaterialProgram::tex_gen,
 // NEBULA_STATE_TEX_COORD_GEN, NebulaShapeTexGen): GX's type and source as two bytes, its post-transform as a row.

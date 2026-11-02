@@ -3,7 +3,6 @@
 #include <JSystem/JMath/random.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 namespace JMath {
     struct TRandom_fast_;

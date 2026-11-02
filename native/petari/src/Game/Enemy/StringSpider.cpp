@@ -26,7 +26,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 void StringSpider_FORCE_MATCH_SDATA2() {
     (void)1.0f;

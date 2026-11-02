@@ -1,7 +1,6 @@
 #ifndef RVL_FACE_LIBRARY_INTERNAL_NAND_LOADER_H
 #define RVL_FACE_LIBRARY_INTERNAL_NAND_LOADER_H
 #include "RFLi_Types.h"
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

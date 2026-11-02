@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 #include "Game/System/GameThreads.hpp"
 
 class JKRHeap;

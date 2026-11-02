@@ -12,7 +12,6 @@
 #include <nw4r/lyt/material.h>
 #include <nw4r/ut/Font.h>
 #include <nw4r/ut/Rect.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace NebulaUi {

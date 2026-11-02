@@ -1,5 +1,4 @@
 #include "RVLFaceLibInternal.h"
-#include <revolution/types.h>
 
 const Mii_CoordinateData scCoordinate = {1, 2, 0, FALSE, FALSE, FALSE};
 

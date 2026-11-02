@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 /// @brief Stores archive names of NameObjs.
 class NameObjArchiveListCollector {

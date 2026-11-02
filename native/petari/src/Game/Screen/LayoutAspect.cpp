@@ -5,7 +5,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
 #include "Game/System/NebulaHost.hpp"

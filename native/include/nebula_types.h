@@ -104,6 +104,14 @@ typedef int BOOL;
 #define FALSE 0
 #endif
 
+#ifndef ASSERT
+#define ASSERT(exp) ((void)0)
+#endif
+
+#ifndef ASSERTMSG
+#define ASSERTMSG(exp, msg) ((void)0)
+#endif
+
 #define ROUND_UP(x, align) (((x) + (align) - 1) & (-(align)))
 #define ROUND_UP_PTR(x, align) ((void*)((((uintptr_t)(x)) + (align) - 1) & (~((uintptr_t)(align) - 1))))
 
@@ -124,20 +132,5 @@ typedef int BOOL;
 // required to match the original assembly.
 #define IS_REF_NULL(r) (0)
 #define IS_REF_NONNULL(r) (1)
-
-/* just some common intrinsics */
-
-// The game follows the reciprocal square root estimate with a Newton step wherever it uses it, so natively it is the
-// host's estimate (docs/NATIVE_PERFORMANCE.md: half the latency of 1/sqrtf, the same accuracy after the step): SSE's
-#include <math.h>
-#include <string.h>
-static inline u32 __cntlzw(u32 x) { return x != 0u ? (u32)__builtin_clz(x) : 32u; }
-static inline s32 __abs(s32 x) { return x < 0 ? -x : x; }
-// glibc declares its own __fabsf and __fabs (math.h, included above): the console's intrinsics take other names.
-#define __fabsf __nebula_fabsf
-#define __fabs __nebula_fabs
-static inline f32 __fabsf(f32 x) { return fabsf(x); }
-static inline f64 __fabs(f64 x) { return fabs(x); }
-static inline void* __memcpy(void* d, const void* s, int n) { return memcpy(d, s, (size_t)n); }
 
 #endif  // TYPES_H

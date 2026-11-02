@@ -4,9 +4,6 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution/types.h>
-#include <revolution/os.h>
-#include <revolution/types.h>
 
 struct JASDisposer;
 class JKRHeap;

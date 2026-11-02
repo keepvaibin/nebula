@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/SystemUtil.hpp"
 

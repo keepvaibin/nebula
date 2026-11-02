@@ -27,7 +27,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMath.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 namespace {
     const char* sSensorNameList[] = {"Body", "BodyHipDrop"};

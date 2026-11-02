@@ -10,7 +10,6 @@
 #include <cstring>
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/Rect.h>
-#include <revolution/os.h>
 
 namespace {
 #include "NebulaTextTable.inc"

@@ -2,7 +2,6 @@
 
 #include "Game/Util/Array.hpp"
 #include <JSystem/JGeometry.hpp>
-#include <revolution/types.h>
 
 namespace nw4r {
     namespace lyt {

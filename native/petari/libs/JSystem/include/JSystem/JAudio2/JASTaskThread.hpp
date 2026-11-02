@@ -3,7 +3,6 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
-#include <revolution/os.h>
 
 typedef void (*JASThreadCallback)(void*);
 

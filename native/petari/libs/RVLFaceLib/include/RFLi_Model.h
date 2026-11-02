@@ -4,7 +4,6 @@
 #include "RFLi_Types.h"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

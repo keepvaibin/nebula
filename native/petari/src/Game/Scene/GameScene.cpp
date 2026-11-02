@@ -24,7 +24,6 @@
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/NebulaFrameGen.hpp"
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/AudioLib/AudSceneMgr.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"

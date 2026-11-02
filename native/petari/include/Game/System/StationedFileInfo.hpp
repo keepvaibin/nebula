@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace MR {
     struct StationedFileInfo {

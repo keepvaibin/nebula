@@ -2,7 +2,6 @@
 #define RVL_FACE_LIBRARY_INTERNAL_MAKE_TEX_H
 #include "RFLi_Types.h"
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

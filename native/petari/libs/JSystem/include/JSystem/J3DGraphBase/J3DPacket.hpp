@@ -5,7 +5,6 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 #include <stdint.h>
 
 class J3DMatPacket;

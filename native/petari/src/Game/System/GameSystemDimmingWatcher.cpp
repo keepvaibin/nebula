@@ -2,7 +2,6 @@
 #include "Game/Util/TriggerChecker.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemDimmingWatcher::GameSystemDimmingWatcher() : mChecker(nullptr), _4(true), _5(false) {

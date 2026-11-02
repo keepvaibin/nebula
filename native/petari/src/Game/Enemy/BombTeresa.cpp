@@ -28,7 +28,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMath.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 void BombTeresa_FORCE_MATCH_SDATA2() {
     (void)70.0f;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <NebulaGpuTypes.h>
-#include <revolution/types.h>
 
 class FogCtrl;
 

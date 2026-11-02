@@ -2,7 +2,6 @@
 
 #include "Game/System/NebulaAtomic.hpp"
 
-#include <revolution/types.h>
 
 enum JASOutputRate {
     OUTPUT_RATE_0,

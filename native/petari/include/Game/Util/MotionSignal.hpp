@@ -2,7 +2,6 @@
 
 #include <JSystem/JGeometry/TVec.hpp>
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/types.h>
 
 class J3DMatPacket;
 class J3DModel;

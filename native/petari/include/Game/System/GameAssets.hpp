@@ -5,7 +5,6 @@
 // The game's files: the asset store as the host serves it (asset_find, asset_child, asset_read). Paths from its root
 // ("/StageData/EggStarGalaxy.arc"); a file's entry names it as the game's tables do.
 
-#include <revolution/types.h>
 
 class JKRHeap;
 

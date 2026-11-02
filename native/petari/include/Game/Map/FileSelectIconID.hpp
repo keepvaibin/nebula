@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 /// @brief The identifier of a File Selection Screen icon.
 class FileSelectIconID {

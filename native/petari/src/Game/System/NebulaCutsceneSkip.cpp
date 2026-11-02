@@ -23,7 +23,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstring>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 
 namespace {

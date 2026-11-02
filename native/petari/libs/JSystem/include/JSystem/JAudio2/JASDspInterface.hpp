@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <revolution/types.h>
 
 #include <nebula_game_api.h>
 

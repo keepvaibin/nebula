@@ -3,7 +3,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 class J3DMaterial;
 class J3DShapeMtx;

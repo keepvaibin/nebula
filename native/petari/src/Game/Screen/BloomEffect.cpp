@@ -19,7 +19,6 @@
 #include <nebula_game_api.h>
 #include <cstring>
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

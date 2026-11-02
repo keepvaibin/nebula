@@ -3,7 +3,6 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "revolution/os.h"
 
 void FORCE_MATCH_INIT_STRING() {
     JUTNativeLog("Wait");

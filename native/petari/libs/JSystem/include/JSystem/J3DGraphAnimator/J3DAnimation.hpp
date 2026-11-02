@@ -6,7 +6,6 @@
 #include "JSystem/JUtility/JUTNameTab.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 // J3D animations as the importer cooks them (crates/nebula-import cook/native_data.rs j3d_animation): host-order
 // numbers; the magic, type and block kinds read as their character constants; offsets from the block.

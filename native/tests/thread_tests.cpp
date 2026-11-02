@@ -6,7 +6,6 @@
 #include <string.h>
 #include <time.h>
 
-#include <revolution/os.h>
 
 #include "nebula_threads.h"
 #include "Game/System/GameThreads.hpp"

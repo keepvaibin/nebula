@@ -1,4 +1,3 @@
-#include <revolution/types.h>
 
 f32 JMAAcosRadian(f32) NO_INLINE;
 

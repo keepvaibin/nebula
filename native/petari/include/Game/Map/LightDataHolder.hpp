@@ -3,7 +3,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 struct LightInfo {
     /* 0x00 */ NebulaColor8 mColor;

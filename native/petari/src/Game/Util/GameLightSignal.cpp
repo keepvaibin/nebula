@@ -9,7 +9,6 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

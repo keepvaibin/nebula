@@ -2,7 +2,6 @@
 
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class J3DAnmTransform;
 class J3DModel;

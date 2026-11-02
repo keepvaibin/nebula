@@ -2,7 +2,6 @@
 
 #include "Game/Map/RailPart.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class JMapInfo;
 class JMapInfoIter;

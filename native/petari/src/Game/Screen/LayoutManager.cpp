@@ -27,7 +27,6 @@
 #include <nw4r/ut/Rect.h>
 #include <nw4r/ut/RuntimeTypeInfo.h>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 namespace {
     namespace Local {

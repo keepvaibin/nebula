@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include <revolution/types.h>
 
 struct JAUAudibleParam {
     JAUAudibleParam() {

@@ -17,7 +17,6 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
-#include <revolution/os.h>
 
 JAU_JASInitializer::JAU_JASInitializer() {
     audioMemory_ = 0;

@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
-#include <revolution/os.h>
 
 void JPARegistChildPrmEnv(JPAEmitterWorkData* work) {
     JPAChildShape* csp = work->mpRes->getCsp();

@@ -6,7 +6,6 @@ extern "C" {
 #endif
 
 #include <NebulaGpuEnums.h>
-#include "revolution/types.h"
 #include <nebula_color.h>
 
 // The game's colours are the native types (nebula_color.h); these names remain for the SDK's own prototypes.

@@ -5,7 +5,6 @@
 #include "JSystem/JKernel/JKRMemArchive.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 #include "Game/System/GameAssets.hpp"
 
 JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {
