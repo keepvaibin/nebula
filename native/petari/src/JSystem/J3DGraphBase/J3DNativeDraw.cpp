@@ -3,6 +3,7 @@
 #include "JSystem/J3DGraphBase/J3DNativeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "Game/Util/RenderSignals.hpp"
+#include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -20,6 +21,9 @@ namespace {
     u32 sAttributes = 0;
     u32 sCount = 0;
     u32 sVertex = 0;
+    // Finished quads waiting at the front of the arrays; the primitive being sent follows them.
+    u32 sWaiting = 0;
+    NebulaPassState sWaitingPass;
     // The vertex's next value: 0 matrix, 1 position, 2 normal, 3-4 colours, 5-12 texture coordinates, 13 done.
     u32 sNext = 0;
 
@@ -44,12 +48,12 @@ namespace {
         NEBULA_PANIC("J3DNativeDraw: %s", pWhat);
     }
 
-    void send() {
+    void sendVertices(u32 count) {
         J3DNativeShape::flushState();
         NebulaImmediate draw = {};
         draw.primitive = sPrimitive;
         draw.attributes = sAttributes;
-        draw.count = sCount;
+        draw.count = count;
         draw.position = sPosition;
         draw.normal = (sAttributes & NEBULA_SHAPE_NORMAL) != 0 ? sNormal : nullptr;
         draw.color[0] = (sAttributes & NEBULA_SHAPE_COLOR0) != 0 ? sColor[0] : nullptr;
@@ -60,13 +64,13 @@ namespace {
         draw.position_matrix = (sAttributes & NEBULA_SHAPE_POSITION_MATRIX) != 0 ? sMatrix : nullptr;
         u32 places = 0;
         if (draw.position_matrix != nullptr) {
-            for (u32 v = 0; v < sCount; v++) {
+            for (u32 v = 0; v < count; v++) {
                 places |= 1u << sMatrix[v];
             }
         }
         draw.matrix_count = J3DNativeShape::positionMatrices(places, &draw.matrices);
-        const NebulaHostServices* pHost = nebula_host();
         draw.pass = *J3DNativeState::pass();
+        const NebulaHostServices* pHost = nebula_host();
         pHost->immediate(pHost->user, &draw);
     }
 
@@ -80,7 +84,13 @@ namespace {
         }
         sNext = 0;
         if (++sVertex == sCount) {
-            send();
+            if (sPrimitive == NEBULA_PRIMITIVE_QUADS) {
+                sWaiting += sCount;
+                sWaitingPass = *J3DNativeState::pass();
+                sVertex = 0;
+            } else {
+                sendVertices(sCount);
+            }
             sCount = 0;
             return;
         }
@@ -119,6 +129,19 @@ namespace J3DNativeDraw {
         pHost->immediate(pHost->user, &draw);
     }
 
+    void flush() {
+        if (sWaiting != 0) {
+            const u32 count = sWaiting;
+            sWaiting = 0;
+            sendVertices(count);
+        }
+    }
+
+    // Waiting quads end at a primitive of another kind or other values.
+    bool primitive_changed(u32 attributes) {
+        return sPrimitive != NEBULA_PRIMITIVE_QUADS || attributes != sAttributes;
+    }
+
     void begin(GpuPrimitive primitive, u16 count, u32 attributes) {
         if (sVertex < sCount) {
             fail("a primitive begun before the last one's vertices were all given");
@@ -153,6 +176,13 @@ namespace J3DNativeDraw {
         default:
             fail("a primitive of no kind the host draws");
         }
+        if (sWaiting != 0 && (primitive_changed(attributes) || sWaiting + count > kMaxVertices ||
+                              memcmp(&sWaitingPass, J3DNativeState::pass(), sizeof(sWaitingPass)) != 0)) {
+            const u8 next = sPrimitive;
+            sPrimitive = NEBULA_PRIMITIVE_QUADS;
+            flush();
+            sPrimitive = next;
+        }
         sAttributes = attributes;
         sCount = count;
         sVertex = 0;
@@ -169,12 +199,12 @@ namespace J3DNativeDraw {
         if (place >= J3DNativeShape::kPositions) {
             fail("a position matrix past place 9");
         }
-        sMatrix[sVertex] = place;
+        sMatrix[sWaiting + sVertex] = place;
         arrive(0);
     }
 
     void position(f32 x, f32 y, f32 z) {
-        f32* p = sPosition + 3 * sVertex;
+        f32* p = sPosition + 3 * (sWaiting + sVertex);
         p[0] = x;
         p[1] = y;
         p[2] = z;
@@ -182,7 +212,7 @@ namespace J3DNativeDraw {
     }
 
     void normal(f32 x, f32 y, f32 z) {
-        f32* p = sNormal + 3 * sVertex;
+        f32* p = sNormal + 3 * (sWaiting + sVertex);
         p[0] = x;
         p[1] = y;
         p[2] = z;
@@ -196,7 +226,7 @@ namespace J3DNativeDraw {
             fail("a colour where the vertex has none next");
             return;
         }
-        sColor[step - 3][sVertex] = rgba;
+        sColor[step - 3][sWaiting + sVertex] = rgba;
         arrive(step);
     }
 
@@ -210,7 +240,7 @@ namespace J3DNativeDraw {
             fail("a texture coordinate where the vertex has none next");
             return;
         }
-        f32* p = sTexCoord[step - 5] + 2 * sVertex;
+        f32* p = sTexCoord[step - 5] + 2 * (sWaiting + sVertex);
         p[0] = s;
         p[1] = t;
         arrive(step);

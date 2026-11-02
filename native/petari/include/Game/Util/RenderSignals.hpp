@@ -1,5 +1,7 @@
 #pragma once
 
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+
 // The renderer's signals from the game (galaxy/motion_signals.h): host markers (the game object whose drawing
 // follows, scene signals), bloom phases, scene target clear quads, scene bounds and JPA stripe particles. Each reaches the
 // host as a record in the order the game makes them, between its drawing records.
@@ -24,6 +26,7 @@ namespace NebulaRender {
 
     // A host marker, whatever the draw identities.
     inline void marker(uint8_t kind, uint16_t aux, uint64_t a, uint64_t b) {
+        J3DNativeDraw::flush();
         const NebulaHostServices* const host = nebula_host();
         host->marker(host->user, kind, aux, a, b);
     }

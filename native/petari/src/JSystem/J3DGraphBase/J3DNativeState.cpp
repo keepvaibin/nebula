@@ -74,6 +74,7 @@ namespace J3DNativeState {
     }
 
     void sendMaterial(const NebulaNativeMaterial* pMaterial) {
+        J3DNativeShape::flushState();
         // Its state comes with the material except when only its constants change, or where it keeps what was set.
         if ((pMaterial->constants_only & 1) == 0 && pMaterial->shader != NEBULA_SHADER_NONE) {
             if (pMaterial->blend_op != NEBULA_NATIVE_KEPT) {
@@ -452,6 +453,7 @@ namespace J3DNativeState {
     }
 
     void endFrame() {
+        J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
         pHost->frame_end(pHost->user);
     }
