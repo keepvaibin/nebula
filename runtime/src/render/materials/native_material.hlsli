@@ -289,23 +289,16 @@ struct NativeOut { float4 color : SV_Target0; };
 #endif
 
 NativeOut native_ps(NativeVaryings i) {
-    const float4 c0 = material_color(i);
-    // The pixel engine, as the renderer's GX path writes it (build_pixel_shader_key's 8-bit colour): an alpha of 1
-    // blends and writes as 0; the colour keeps 8 bits on every frame (no six-bit colour, no ordered pattern); the
-    // alpha six bits, or the constant destination alpha; the blender reads the 8-bit combiner alpha (SV_Target1 for
-    // dual-source blending).
+    // The material's colour as it is; the target rounds it once. A constant destination alpha replaces the alpha
+    // written; the blender reads the material's alpha (SV_Target1 for dual-source blending).
+    const float4 c0 = saturate(material_color(i));
     const uint pe = vs_header.z;
-    uint4 px = uint4(round(saturate(c0) * 255.0));
-    if (px.a == 1u) {
-        px.a = 0u;
+    const float stage_alpha = c0.a;
+    float4 c = c0;
+#if !NATIVE_REACTIVE
+    if ((pe & 0x100u) != 0u) {
+        c.a = float((pe >> 9u) & 0xFFu) / 255.0;
     }
-    const float stage_alpha = float(px.a) / 255.0;
-    float4 c;
-    c.rgb = float3(px.rgb) / 255.0;
-#if NATIVE_REACTIVE
-    c.a = stage_alpha;
-#else
-    c.a = (pe & 0x100u) != 0u ? float(((pe >> 9u) & 0xFFu) >> 2u) / 63.0 : float(px.a >> 2u) / 63.0;
 #endif
     NativeOut o;
     o.color = c;
