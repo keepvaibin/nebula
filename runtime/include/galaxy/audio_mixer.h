@@ -40,15 +40,7 @@ struct AudioMixerStats {
     std::uint64_t effect_subframes{};
     std::uint64_t stream_frames{};
     std::uint64_t unresolved_reads{};
-    std::uint64_t category_decisions{};
-    std::uint64_t category_unnamed{};
     std::uint64_t mix_ns{};
-};
-
-// A voice's volume category and the owner it was decided from.
-struct AudioVoiceCategory {
-    NativeAudioBusDecision decision{};
-    JAudioChannelOwner owner{};
 };
 
 // A first-in first-out delay of whole samples (the surround fold and the panner's effect sends).
@@ -104,9 +96,6 @@ public:
 
     [[nodiscard]] std::uint32_t rate() const noexcept { return rate_; }
     [[nodiscard]] bool configured() const noexcept { return voices_ != nullptr; }
-    [[nodiscard]] const AudioVoiceCategory& voice_category(std::uint32_t voice) const noexcept {
-        return categories_[voice < categories_.size() ? voice : 0u];
-    }
     [[nodiscard]] const AudioMixerStats& stats() const noexcept { return stats_; }
 
 private:
@@ -142,11 +131,8 @@ private:
         float category_gain{1.0f};
         float category_target{1.0f};
         std::uint32_t category_ramp{};
-        NativeAudioBus category_bus{NativeAudioBus::Sfx};
+        std::uint8_t category_bus{NEBULA_SOUND_EFFECT};
         bool category_set{};
-        std::uint32_t category_key_id{0xFFFFFFFFu};
-        std::uint16_t category_key_route{0xFFFFu};
-        std::uint16_t category_key_format{0xFFFFu};
     };
 
     struct EffectState {
@@ -176,7 +162,6 @@ private:
     };
 
     [[nodiscard]] float* bus(std::uint32_t index) noexcept;
-    void classify(std::uint32_t index, const NebulaVoice& voice);
     void render_voice(std::uint32_t index, NebulaVoice& voice);
     void render_source(VoiceState& state, NebulaVoice& voice, float* out);
     void decode_adpcm(VoiceState& state, NebulaVoice& voice, float* out, std::uint32_t count);
@@ -185,7 +170,7 @@ private:
     void render_oscillator(VoiceState& state, const NebulaVoice& voice, float* out);
     void apply_fir(VoiceState& state, const NebulaVoice& voice, float* samples);
     void apply_iir(VoiceState& state, const NebulaVoice& voice, float* samples);
-    void apply_category(std::uint32_t index, VoiceState& state, const NebulaVoice& voice, float* samples);
+    void apply_category(VoiceState& state, const NebulaVoice& voice, float* samples);
     void mix_sends(NebulaVoice& voice, const float* samples);
     void mix_panner(NebulaVoice& voice, const float* samples);
     // destination += source * (start + ramp over the first 4/5 of the subframe) / 65536
@@ -226,7 +211,6 @@ private:
 
     std::array<float, 5> category_gains_{1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
     bool category_gains_set_{};
-    std::array<AudioVoiceCategory, kVoices> categories_{};
     AudioMixerStats stats_{};
 };
 

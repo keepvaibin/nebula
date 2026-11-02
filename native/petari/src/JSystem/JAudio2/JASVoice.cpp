@@ -97,8 +97,8 @@ void JASVoice::init() {
     active = 0;
     panner = 0;
     restart = 0;
-    sound_route = 0;
-    sound_id = 0;
+    category = NEBULA_SOUND_EFFECT;
+    named = 0;
     initFilter();
 }
 

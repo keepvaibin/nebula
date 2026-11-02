@@ -186,7 +186,7 @@ void JASVoiceSlot::updateProc() {
                 mChannel->playStop();
             } else {
                 field_0xc++;
-                if (mChannel->sound_route == 0) {
+                if (mChannel->named == 0) {
                     nameSound();
                 }
             }
@@ -289,12 +289,58 @@ uint32_t voice_owner(JASVoiceSlot& dsp, uint32_t* route) {
 }
 }  // namespace
 
-// Names the voice's sound on the record once the channel's callback has run (its owner may link only then).
+// The volume setting of a sound: its ID holds the archive section in the high byte and the sound table's category in the next. False
+// when the ID does not say.
+static bool categoryOfSound(uint32_t id, u8* pCategory) {
+    const uint32_t section = (id >> 24) & 0xff;
+    const uint32_t category = (id >> 16) & 0xff;
+    if (section == 0x01 || section == 0x02) {
+        *pCategory = NEBULA_SOUND_MUSIC;
+        return true;
+    }
+
+    if (section != 0) {
+        return false;
+    }
+
+    switch (category) {
+    case 0x01:  // PLAYER_VOICE
+    case 0x03:  // BOSS_VOICE
+    case 0x08:  // ENEMY_VOICE
+    case 0x0a:  // SUPPORTER_VOICE
+        *pCategory = NEBULA_SOUND_VOICE;
+        return true;
+    case 0x06:  // ATMOSPHERE
+        *pCategory = NEBULA_SOUND_AMBIENCE;
+        return true;
+    case 0x07:  // DEMO (in-engine cutscenes)
+        *pCategory = NEBULA_SOUND_CUTSCENE;
+        return true;
+    case 0x00:  // SYSTEM
+    case 0x02:  // PLAYER_MOTION
+    case 0x04:  // BOSS_MOTION
+    case 0x05:  // OBJECT
+    case 0x09:  // ENEMY_MOTION
+    case 0x0b:  // SUPPORTER_MOTION
+    case 0x0c:  // REMIX_SEQ
+    case 0x0d:  // HOME_BUTTON_MENU
+        *pCategory = NEBULA_SOUND_EFFECT;
+        return true;
+    default:
+        return false;
+    }
+}
+
+// The voice's volume setting once the channel's callback has run (its owner may link only then). A voice nobody names follows its
+// source: the game's streams and sequence voices are PCM16.
 void JASVoiceSlot::nameSound() {
     if (mStatus != STATUS_ACTIVE || mChannel == NULL) {
         return;
     }
     uint32_t route = 0u;
-    mChannel->sound_id = voice_owner(*this, &route);
-    mChannel->sound_route = static_cast< u16 >(route);
+    const uint32_t id = voice_owner(*this, &route);
+    mChannel->named = route != 0u;
+    if (route == 0u || !categoryOfSound(id, &mChannel->category)) {
+        mChannel->category = mChannel->format == NEBULA_AUDIO_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
+    }
 }

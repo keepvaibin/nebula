@@ -3133,6 +3133,9 @@ void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t millis
 }
 
 void svc_audio_control(void*, uint32_t what, uint32_t value) {
+    if (std::getenv("GALAXY_TRACE_FILE_READS") != nullptr) {
+        std::fprintf(stderr, "[read] sound clock %u at retrace %llu\n", what, static_cast<unsigned long long>(gDeterministicRetraces.load()));
+    }
     {
         std::lock_guard<std::mutex> lock(gAiLock);
         if (what == NEBULA_AUDIO_START) {

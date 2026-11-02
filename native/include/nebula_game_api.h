@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 88u
+#define NEBULA_GAME_API_VERSION 89u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -69,6 +69,15 @@ enum {
     NEBULA_AUDIO_NOISE_B = 12,
 };
 
+/* The volume settings a voice can follow (NebulaVoice.category). */
+enum {
+    NEBULA_SOUND_MUSIC = 0,
+    NEBULA_SOUND_VOICE = 1,
+    NEBULA_SOUND_EFFECT = 2,
+    NEBULA_SOUND_AMBIENCE = 3,
+    NEBULA_SOUND_CUTSCENE = 4,
+};
+
 typedef struct NebulaAudioSend {
     uint16_t bus;    /* NEBULA_AUDIO_BUS_* */
     int16_t target;  /* volume reached over the next subframe */
@@ -108,9 +117,9 @@ typedef struct NebulaVoice {
     int16_t panner_send;     /* effect send */
     int16_t panner_volume;   /* now (the mixer's) */
     int16_t panner_target;   /* reached over the next subframe */
-    uint16_t sound_route;    /* what plays it, for the volume categories: 1 an effect, 2 a sequence, 3 a stream, 0
-                                none the game can name (the source's format decides) */
-    uint32_t sound_id;       /* that sound's JAudio ID */
+    uint8_t category;        /* NEBULA_SOUND_*: the volume setting it follows */
+    uint8_t named;           /* the game knows the sound playing it (else its source's format chose the category) */
+    uint16_t reserved_category;
 } NebulaVoice;
 
 /* One of the four effect lines: a delay of `subframes` subframes fed by its input bus, an 8-tap FIR over the delayed
