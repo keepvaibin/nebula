@@ -1,6 +1,6 @@
 /* The game's memory (docs/NATIVE_PORT.md, "Memory and the GPU's addresses"): one host reservation in the console's
    layout, MEM1 at offset 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte pointers.
-   nebula_image_range gives the game module's image (the kernel's stack reports). */
+   */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,9 +11,7 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-extern IMAGE_DOS_HEADER __ImageBase;
 #else
-#include <dlfcn.h>
 #include <sys/mman.h>
 #endif
 
@@ -23,36 +21,9 @@ enum {
     kMem2Physical = 0x10000000u,
     kMem2Size = 0x10000000u, /* 256 MB (the console's 64 MB plus room) */
     kReserveSize = 0x20000000u,
-    kImageSpan = 0x08000000u, /* the image's extent where the loader does not report it */
-    kStackPoolSize = 0x02000000u, /* 32 MB at the top of MEM2: game threads' native stacks */
 };
 
 static uint8_t* sArena;
-static uintptr_t sImageBase;
-static uintptr_t sImageSize;
-
-uint8_t* nebula_arena_base(void) {
-    return sArena;
-}
-
-void nebula_image_range(uintptr_t* base, uintptr_t* size) {
-    *base = sImageBase;
-    *size = sImageSize;
-}
-
-static void find_image(void) {
-#if defined(_WIN32)
-    const IMAGE_NT_HEADERS* nt = (const IMAGE_NT_HEADERS*)((const uint8_t*)&__ImageBase + __ImageBase.e_lfanew);
-    sImageBase = (uintptr_t)&__ImageBase;
-    sImageSize = nt->OptionalHeader.SizeOfImage;
-#else
-    Dl_info info;
-    if (dladdr((void*)&find_image, &info) != 0) {
-        sImageBase = (uintptr_t)info.dli_fbase;
-    }
-    sImageSize = kImageSpan;
-#endif
-}
 
 /* The arena is aligned to its own size, so an arena pointer's low 29 bits are its physical address: what the game
    derives from an address's low bits (hash slots, alignment tests) has the console's value. The reservation is address
@@ -86,34 +57,13 @@ int nebula_memory_init(void) {
         return 0;
     }
 #endif
-    find_image();
     return 1;
 }
 
-/* The arena the OS hands out (OSGetMEM1ArenaLo etc.): MEM1 past low memory, the boot stack and the console's
-   reserved first part; MEM2 below the stack pool. */
+/* The arena the OS hands out (OSGetMEM1ArenaLo etc.): MEM1 past the console's reserved first part; MEM2. */
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi) {
     *mem1Lo = sArena + 0x00100000u;
     *mem1Hi = sArena + kMem1Physical + kMem1Size;
     *mem2Lo = sArena + kMem2Physical;
-    *mem2Hi = sArena + kMem2Physical + kMem2Size - kStackPoolSize;
+    *mem2Hi = sArena + kMem2Physical + kMem2Size;
 }
-
-uint8_t* nebula_stack_pool(size_t* size) {
-    *size = kStackPoolSize;
-    return sArena + kMem2Physical + kMem2Size - kStackPoolSize;
-}
-
-void nebula_memory_guard(void* p, size_t size) {
-#if defined(_WIN32)
-    DWORD old;
-    if (!VirtualProtect(p, size, PAGE_NOACCESS, &old)) {
-        nebula_fatal("could not guard %p (+%zu)", p, size);
-    }
-#else
-    if (mprotect(p, size, PROT_NONE) != 0) {
-        nebula_fatal("could not guard %p (+%zu)", p, size);
-    }
-#endif
-}
-
