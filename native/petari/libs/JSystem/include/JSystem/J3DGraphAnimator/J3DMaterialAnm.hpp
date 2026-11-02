@@ -191,9 +191,13 @@ private:
 
 class J3DMaterialAnm {
 public:
-    J3DMaterialAnm() {
+    J3DMaterialAnm() : mDrawSlot(sNextDrawSlot++) {
         initialize();
     }
+
+    // Its place in a draw buffer: by the order they were made, not by address.
+    u32 mDrawSlot;
+    static u32 sNextDrawSlot;
 
     void initialize();
     void setMatColorAnm(int, J3DMatColorAnm*);
