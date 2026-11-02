@@ -3,8 +3,8 @@
 // The game's threads and their synchronisation (docs/NATIVE_PORT.md, "Platform boundary", Threads). Every game
 // thread is a host thread and they run one at a time: the highest-priority ready thread runs
 // (0 is the highest), equal priorities in the order they became ready, and a running thread keeps running until it
-// blocks, yields, or a higher-priority thread becomes ready. Host events (a finished disc read, the frame clock, an
-// audio block, a timer) reach the game only at the kernel's scheduling points: entering or leaving an interrupt
+// blocks, yields, or a higher-priority thread becomes ready. Host events (a finished disc read, the frame clock)
+// reach the game only at the kernel's scheduling points: entering or leaving an interrupt
 // guard, a block, a wake, a yield and NebulaKernel::poll. So code that makes no kernel call cannot be interrupted, and
 // a section guarded against host events only needs a guard when it makes one.
 
@@ -108,37 +108,7 @@ struct NebulaThread {
     void* arg;
 };
 
-struct NebulaAlarm;
-typedef void (*NebulaAlarmHandler)(NebulaAlarm* pAlarm);
-
-// A timer: its handler runs as a host event when the time base passes its time, once or every period.
-struct NebulaAlarm {
-    NebulaAlarmHandler handler;
-    uint32_t tag;
-    int64_t fire;
-    NebulaAlarm* prev;
-    NebulaAlarm* next;
-    int64_t period;
-    int64_t start;
-    void* userData;
-
-    void init();
-    // `ticks` time-base ticks from now.
-    void set(int64_t ticks, NebulaAlarmHandler pHandler);
-    // At `start` (a time-base time) and every `period` ticks after.
-    void setPeriodic(int64_t start, int64_t period, NebulaAlarmHandler pHandler);
-    void cancel();
-};
-
 namespace NebulaKernel {
-    // The time base: 60.75 MHz ticks (OS_TIMER_CLOCK).
-    int64_t time();
-    const int64_t cTicksPerSecond = 60750000;
-
-    inline int64_t ticksFromNanoseconds(int64_t ns) {
-        return ns * (cTicksPerSecond / 125000) / 8000;
-    }
-
     bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize, int32_t priority,
                 bool detached);
     NebulaThread* current();

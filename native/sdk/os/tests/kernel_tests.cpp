@@ -1,10 +1,11 @@
 // The kernel's order of events, which the game's timing depends on (Game/System/NebulaKernel.hpp): a higher-priority thread runs
-// as soon as it can (a resume, a message it waits for), a lower one only when the higher ones block, a sleep lets the
-// others run and wakes through the timer, alarms fire in deadline order, a thread waiting for a mutex lends its
-// priority to the owner, a jammed message is received first, and a cancelled thread never runs again.
+// as soon as it can (a resume, a message it waits for), a lower one only when the higher ones block, a thread waiting for a mutex lends its
+// priority to the owner, a jammed message is received first, a cancelled thread never runs again, and the audio thread
+// stays out of a section with host events disabled.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <revolution/os.h>
 
@@ -42,20 +43,20 @@ namespace {
         }
     }
 
-    // A sleep: an alarm resumes the suspended thread.
-    void onSleepAlarm(NebulaAlarm* pAlarm) {
-        NebulaKernel::resume(static_cast< NebulaThread* >(pAlarm->userData));
+    // Main (16) waits until every other thread able to run has run: the lowest-priority thread wakes it.
+    NebulaEvent sIdle;
+    NebulaThread sIdler;
+
+    void* idlerMain(void*) {
+        sIdle.signal();
+        return nullptr;
     }
 
-    void sleepTicks(int64_t ticks) {
-        const bool enabled = NebulaKernel::disableInterrupts();
-        NebulaAlarm alarm;
-        alarm.init();
-        alarm.userData = NebulaKernel::current();
-        alarm.set(ticks, onSleepAlarm);
-        NebulaKernel::suspend(NebulaKernel::current());
-        alarm.cancel();
-        NebulaKernel::restoreInterrupts(enabled);
+    void letOthersRun() {
+        sIdle.init();
+        NebulaKernel::create(&sIdler, idlerMain, nullptr, 0x4000, 31, true);
+        NebulaKernel::resume(&sIdler);
+        sIdle.wait();
     }
 
     NebulaMessageQueue sQueue;
@@ -84,34 +85,9 @@ namespace {
         NebulaKernel::resume(&sLow);  // lower: waits
         sQueue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('h')), true);  // wakes high, which runs at once
         note('n');
-        sleepTicks(OSMillisecondsToTicks(2));  // low runs while main sleeps
+        letOthersRun();  // low runs while main waits
         note('o');
         expectOrder("thread order", "HmhnLo");
-    }
-
-    NebulaAlarm sAlarms[3];
-
-    void onAlarm(NebulaAlarm* pAlarm) {
-        note(static_cast< char >('a' + (pAlarm - sAlarms)));
-    }
-
-    void alarmOrder() {
-        for (int i = 0; i < 3; i++) {
-            sAlarms[i].init();
-        }
-        sAlarms[0].set(OSMillisecondsToTicks(6), onAlarm);
-        sAlarms[1].set(OSMillisecondsToTicks(2), onAlarm);
-        sAlarms[2].set(OSMillisecondsToTicks(4), onAlarm);
-        sleepTicks(OSMillisecondsToTicks(10));
-        expectOrder("alarm order", "bca");
-
-        const int64_t before = NebulaKernel::time();
-        sleepTicks(OSMillisecondsToTicks(5));
-        const int64_t slept = NebulaKernel::time() - before;
-        if (slept < OSMillisecondsToTicks(5) || slept > OSMillisecondsToTicks(40)) {
-            printf("FAIL sleep(5 ms) took %lld ms\n", static_cast< long long >(OSTicksToMilliseconds(slept)));
-            sFailures++;
-        }
     }
 
     // A (20) owns the mutex and waits on a queue; B (12) blocks on the mutex and lends A its priority; A, woken, runs
@@ -144,7 +120,7 @@ namespace {
         NebulaKernel::create(&sOwner, ownerMain, nullptr, 0x4000, 20, true);
         NebulaKernel::create(&sWaiter, waiterMain, nullptr, 0x4000, 12, true);
         NebulaKernel::resume(&sOwner);  // lower than main: waits
-        sleepTicks(OSMillisecondsToTicks(1));  // the owner runs, locks, sleeps on the queue
+        letOthersRun();  // the owner runs, locks, sleeps on the queue
         note('m');
         NebulaKernel::resume(&sWaiter);  // runs at once, blocks on the mutex
         expect("owner's priority while B waits", sOwner.priority, 12);
@@ -152,7 +128,7 @@ namespace {
         sHold.wakeup();  // the owner, at 12, outranks main
         expect("owner's priority after unlocking", sOwner.priority, 20);
         note('z');
-        sleepTicks(OSMillisecondsToTicks(1));
+        letOthersRun();
         expectOrder("mutex inheritance", "AmBwabzu");
     }
 
@@ -192,65 +168,63 @@ namespace {
         NebulaKernel::cancel(&sCancelled);
         expect("cancelled thread terminated", NebulaKernel::isTerminated(&sCancelled), true);
         sNever.wakeup();
-        sleepTicks(OSMillisecondsToTicks(1));
+        letOthersRun();
         expectOrder("cancel", "c");
     }
 
-    // Costs of the hot paths and the timer's lateness, printed for docs/NATIVE_PERFORMANCE.md (not pass/fail).
-    volatile int64_t sFiredAt;
+    // The audio thread stays out of a section with host events disabled; what it sends wakes a waiting thread.
+    NebulaHostThread* sAudioHost;
+    volatile int sAudioEntered;
+    NebulaMessageQueue sAudioQueue;
+    void* sAudioSlots[1];
 
-    void onLateAlarm(NebulaAlarm*) {
-        sFiredAt = NebulaKernel::time();
+    void audioMain(void*) {
+        NebulaKernel::enterAudio();
+        sAudioEntered = 1;
+        sAudioQueue.send(reinterpret_cast< void* >(static_cast< uintptr_t >('w')), false);
+        NebulaKernel::leaveAudio();
+        nebula_host_thread_exit(sAudioHost);
     }
 
-    double ticksToNs(int64_t ticks) {
-        return static_cast< double >(ticks) * 1e9 / static_cast< double >(OS_TIMER_CLOCK);
+    void audioThread() {
+        sAudioQueue.init(sAudioSlots, 1);
+        const bool enabled = NebulaKernel::disableInterrupts();
+        sAudioHost = nebula_host_thread_create(audioMain, nullptr, 0x10000);
+        nebula_host_thread_pass(sAudioHost);
+        for (volatile int i = 0; i < 20000000; i++) {
+        }
+        expect("audio waits for a section with events disabled", sAudioEntered, 0);
+        NebulaKernel::restoreInterrupts(enabled);
+        void* message;
+        sAudioQueue.receive(&message, true);
+        expect("audio entered", sAudioEntered, 1);
+        note(static_cast< char >(reinterpret_cast< uintptr_t >(message)));
+        expectOrder("audio message", "w");
+    }
+
+    // Costs of the hot paths, printed for docs/NATIVE_PERFORMANCE.md (not pass/fail).
+    double seconds() {
+        struct timespec now;
+        timespec_get(&now, TIME_UTC);
+        return static_cast< double >(now.tv_sec) + static_cast< double >(now.tv_nsec) * 1e-9;
     }
 
     void measure() {
         const int kPairs = 10000000;
-        int64_t start = NebulaKernel::time();
+        double start = seconds();
         for (int i = 0; i < kPairs; i++) {
             NebulaKernel::restoreInterrupts(NebulaKernel::disableInterrupts());
         }
-        printf("perf: disableInterrupts+restoreInterrupts %.2f ns\n", ticksToNs(NebulaKernel::time() - start) / kPairs);
+        printf("perf: disableInterrupts+restoreInterrupts %.2f ns\n", (seconds() - start) * 1e9 / kPairs);
 
         NebulaMutex mutex;
         mutex.init();
-        start = NebulaKernel::time();
+        start = seconds();
         for (int i = 0; i < kPairs; i++) {
             mutex.lock();
             mutex.unlock();
         }
-        printf("perf: lock+unlock %.2f ns\n", ticksToNs(NebulaKernel::time() - start) / kPairs);
-
-        static const char* const kModes[] = {"busy", "asleep"};
-        for (int mode = 0; mode < 2; mode++) {
-            double worst = 0, sum = 0;
-            const int kRuns = 50;
-            for (int run = 0; run < kRuns; run++) {
-                NebulaAlarm alarm;
-                alarm.init();
-                sFiredAt = 0;
-                const int64_t due = NebulaKernel::time() + OSMicrosecondsToTicks(1000);
-                alarm.set(OSMicrosecondsToTicks(1000), onLateAlarm);
-                while (sFiredAt == 0) {
-                    if (mode == 1) {
-                        sleepTicks(OSMicrosecondsToTicks(5000));
-                        continue;
-                    }
-                    for (int i = 0; i < 100; i++) {
-                        NebulaKernel::restoreInterrupts(NebulaKernel::disableInterrupts());
-                    }
-                }
-                const double late = ticksToNs(sFiredAt - due) / 1000.0;
-                sum += late;
-                if (late > worst) {
-                    worst = late;
-                }
-            }
-            printf("perf: 1 ms alarm, thread %s: late mean %.1f us, worst %.1f us\n", kModes[mode], sum / kRuns, worst);
-        }
+        printf("perf: lock+unlock %.2f ns\n", (seconds() - start) * 1e9 / kPairs);
     }
 
     // The arena is aligned to its size and laid out as the console's memory (MEM1's arena past its first megabyte,
@@ -273,10 +247,10 @@ namespace {
     void gameMain() {
         checkArena();
         threadOrder();
-        alarmOrder();
         mutexInheritance();
         messageOrder();
         cancel();
+        audioThread();
         measure();
         printf(sFailures != 0 ? "%d failures\n" : "all passed\n", sFailures);
         fflush(stdout);
