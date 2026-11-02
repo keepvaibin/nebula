@@ -2131,61 +2131,73 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
         return;
     }
     const uint32_t n = draw->count;
-    auto imm = std::make_shared<shapes::Immediate>();
     static_assert(shapes::kQuads == NEBULA_PRIMITIVE_QUADS && shapes::kPoints == NEBULA_PRIMITIVE_POINTS &&
                   shapes::kTriangleFan == NEBULA_PRIMITIVE_TRIANGLE_FAN && shapes::kLineStrip == NEBULA_PRIMITIVE_LINE_STRIP);
-    imm->primitive = draw->primitive;
-    shapes::Geometry& g = imm->geometry;
-    // Its values are its own: geometry the game builds as it draws.
-    g.attributes = (draw->attributes & ~static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX) |
-                    (draw->position_matrix != nullptr ? static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX) : 0u)) |
-                   NEBULA_SHAPE_OWN_POSITIONS;
-    auto floats = [&](unsigned slot, shapes::ArrayKind kind, const float* values, uint32_t per) {
-        shapes::Array& a = imm->arrays[slot];
-        a.kind = kind;
-        a.count = n;
-        a.floats.assign(values, values + static_cast<size_t>(n) * per);
-        g.arrays[slot] = slot + 1u;
-    };
-    floats(0u, shapes::ArrayKind::Position, draw->position, 3u);
-    if ((draw->attributes & NEBULA_SHAPE_NORMAL) != 0u && draw->normal != nullptr) {
-        floats(1u, shapes::ArrayKind::Normal, draw->normal, 3u);
-    } else {
-        g.attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_NORMAL);
-    }
-    for (unsigned c = 0; c < 2u; ++c) {
-        const uint32_t bit = c == 0u ? NEBULA_SHAPE_COLOR0 : NEBULA_SHAPE_COLOR1;
-        if ((draw->attributes & bit) != 0u && draw->color[c] != nullptr) {
-            shapes::Array& a = imm->arrays[2u + c];
-            a.kind = shapes::ArrayKind::Color;
-            a.count = n;
-            a.colors.assign(draw->color[c], draw->color[c] + n);
-            g.arrays[2u + c] = 3u + c;
-        } else {
-            g.attributes &= ~bit;
-        }
-    }
-    for (unsigned t = 0; t < 8u; ++t) {
-        const uint32_t bit = static_cast<uint32_t>(NEBULA_SHAPE_TEXCOORD0) << t;
-        if ((draw->attributes & bit) != 0u && draw->texcoord[t] != nullptr) {
-            floats(4u + t, shapes::ArrayKind::TexCoord, draw->texcoord[t], 2u);
-        } else {
-            g.attributes &= ~bit;
-        }
-    }
-    g.corners.resize(n);
-    for (uint32_t i = 0; i < n; ++i) {
-        shapes::Corner& c = g.corners[i];
-        const auto e = static_cast<uint16_t>(i);
-        c.position = c.normal = c.color[0] = c.color[1] = e;
-        c.texcoord.fill(e);
-        c.position_matrix = draw->position_matrix != nullptr ? draw->position_matrix[i] : 0u;
-    }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Immediate;
+    record.primitive = draw->primitive;
     copy_draw_matrices(draw->matrices, draw->matrix_count, record);
     attach_pending_records();
-    record.immediate = std::move(imm);
+    // Its values are its own: geometry the game builds as it draws.
+    const bool has_normal = (draw->attributes & NEBULA_SHAPE_NORMAL) != 0u && draw->normal != nullptr;
+    const bool has_color[2] = {(draw->attributes & NEBULA_SHAPE_COLOR0) != 0u && draw->color[0] != nullptr,
+                               (draw->attributes & NEBULA_SHAPE_COLOR1) != 0u && draw->color[1] != nullptr};
+    uint32_t attributes = (draw->attributes & ~static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX)) |
+                          (draw->position_matrix != nullptr ? static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX) : 0u) |
+                          NEBULA_SHAPE_OWN_POSITIONS;
+    if (!has_normal) {
+        attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_NORMAL);
+    }
+    if (!has_color[0]) {
+        attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_COLOR0);
+    }
+    if (!has_color[1]) {
+        attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_COLOR1);
+    }
+    bool has_uv[8];
+    for (unsigned t = 0; t < 8u; ++t) {
+        const uint32_t bit = static_cast<uint32_t>(NEBULA_SHAPE_TEXCOORD0) << t;
+        has_uv[t] = (draw->attributes & bit) != 0u && draw->texcoord[t] != nullptr;
+        if (!has_uv[t]) {
+            attributes &= ~bit;
+        }
+    }
+    record.attributes = attributes;
+    galaxy::render::RenderVertex* out = galaxy::render::reserve_record_vertices(record, n);
+    std::memset(out, 0, sizeof(galaxy::render::RenderVertex) * n);
+    for (uint32_t i = 0; i < n; ++i) {
+        galaxy::render::RenderVertex& v = out[i];
+        std::memcpy(v.position, draw->position + static_cast<size_t>(i) * 3u, sizeof(v.position));
+        if (has_normal) {
+            std::memcpy(v.normal, draw->normal + static_cast<size_t>(i) * 3u, sizeof(v.normal));
+        }
+        if (has_color[0]) {
+            v.color0 = draw->color[0][i];
+        }
+        if (has_color[1]) {
+            v.color1 = draw->color[1][i];
+        }
+        for (unsigned t = 0; t < 8u; ++t) {
+            if (has_uv[t]) {
+                v.uv[t][0] = draw->texcoord[t][static_cast<size_t>(i) * 2u];
+                v.uv[t][1] = draw->texcoord[t][static_cast<size_t>(i) * 2u + 1u];
+            }
+        }
+        v.mtx_indices[0] = (draw->position_matrix != nullptr ? 3u * draw->position_matrix[i] : 0u) & 0xFFu;
+        // Texture matrices named by the attributes: place 0's row.
+        for (unsigned t = 0; t < 8u; ++t) {
+            if ((attributes & (shapes::kTextureMatrix0 << t)) != 0u) {
+                const uint32_t row = 30u;
+                if (t < 3u) {
+                    v.mtx_indices[0] |= row << (8u * (t + 1u));
+                } else if (t < 7u) {
+                    v.mtx_indices[1] |= row << (8u * (t - 3u));
+                } else {
+                    v.mtx_indices[2] |= row;
+                }
+            }
+        }
+    }
     galaxy::render::attach_shape_record(std::move(record));
 #else
     (void)draw;

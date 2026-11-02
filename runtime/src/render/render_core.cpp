@@ -1586,6 +1586,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         const std::size_t matrices = producer_record_pool_.matrices.size();
         const std::size_t ops = producer_record_pool_.ops.size();
         const std::size_t natives = producer_record_pool_.natives.size();
+        const std::size_t vertices = producer_record_pool_.vertices.size();
+        chunk.record_pool.vertices.swap(producer_record_pool_.vertices);
+        producer_record_pool_.vertices.reserve(vertices);
         chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
         chunk.record_pool.ops.swap(producer_record_pool_.ops);
         chunk.record_pool.natives.swap(producer_record_pool_.natives);
@@ -1600,6 +1603,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
                                       producer_record_pool_.matrices.end());
     chunk.record_pool.ops.insert(chunk.record_pool.ops.end(), producer_record_pool_.ops.begin(), producer_record_pool_.ops.end());
     const auto first_native = static_cast<std::uint32_t>(chunk.record_pool.natives.size());
+    const auto first_vertex = static_cast<std::uint32_t>(chunk.record_pool.vertices.size());
+    chunk.record_pool.vertices.insert(chunk.record_pool.vertices.end(), producer_record_pool_.vertices.begin(), producer_record_pool_.vertices.end());
+    producer_record_pool_.vertices.clear();
     chunk.record_pool.natives.insert(chunk.record_pool.natives.end(), producer_record_pool_.natives.begin(), producer_record_pool_.natives.end());
     producer_record_pool_.matrices.clear();
     producer_record_pool_.ops.clear();
@@ -1608,6 +1614,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     for (shapes::Record& record : producer_shape_records_) {
         record.matrix_first += first_matrix;
         record.op_first += first_op;
+        record.vertex_first += first_vertex;
         record.native_index += record.native_index != shapes::kNoNative ? first_native : 0u;
         chunk.shape_records.push_back(std::move(record));
     }
@@ -5706,7 +5713,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     case shapes::Record::Kind::Immediate:
         apply_record_matrices(record);
-        draw_record_immediate(*record.immediate);
+        draw_record_immediate(record);
         return;
     case shapes::Record::Kind::Marker:
         on_host_marker(static_cast<std::uint8_t>(record.key), static_cast<std::uint16_t>(record.marker_aux),
@@ -6136,22 +6143,17 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.sealed = true;
 }
 
-void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
+void RenderCore::draw_record_immediate(const shapes::Record& record) {
     display_copy_on_output_ = false;
-    const auto primitive = static_cast<Primitive>(immediate.primitive);
-    const shapes::Geometry& geometry = immediate.geometry;
-    const auto count = static_cast<std::uint32_t>(geometry.corners.size());
-    shapes::primitive_indices(immediate.primitive, count, immediate_indices_);
+    const auto primitive = static_cast<Primitive>(record.primitive);
+    const std::uint32_t count = record.vertex_count;
+    shapes::primitive_indices(record.primitive, count, immediate_indices_);
     if (immediate_indices_.empty() || count > 0x10000u) {
         return;
     }
-    shapes::DrawArrays arrays{};
-    for (unsigned i = 0; i < 12u; ++i) {
-        arrays[i] = geometry.arrays[i] != 0u ? &immediate.arrays[i] : nullptr;
-    }
     RecordVertexInputs inputs;
-    inputs.matrix_bits = (geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u;
-    inputs.colored = (geometry.attributes & shapes::kColor0) != 0u;
+    inputs.matrix_bits = (record.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u;
+    inputs.colored = (record.attributes & shapes::kColor0) != 0u;
     inputs.own_positions = true;
     struct RecordScope {
         RenderCore* backend = nullptr;
@@ -6178,11 +6180,6 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
         ++frame_draws_no_pso_;
         return;
     }
-    // Vertices without a position matrix of their own take the current one (as GX's direct vertices did).
-    const std::uint8_t position_matrix = draw_state_.position_matrix;
-    if (!shapes::expand(geometry, arrays, position_matrix, nullptr, immediate_vertices_)) {
-        return;
-    }
     const DrawCall& state_call = cached_draw_run_state_call_;
     // Consecutive draws with the same state share one GPU draw (as GX's direct draws batch): the vertices and indices
     // follow the batch's in the rings, the indices counted from its first vertex.
@@ -6195,7 +6192,15 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     cached_draw_run_batch_compatible_known_ = false;
     const UploadRing::Allocation vb =
         renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertex), 16u);
-    std::memcpy(vb.cpu, immediate_vertices_.data(), static_cast<std::size_t>(count) * sizeof(RenderVertex));
+    auto* const vertices = reinterpret_cast<RenderVertex*>(vb.cpu);
+    std::memcpy(vertices, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
+    // Vertices without a position matrix of their own take the current one.
+    if ((record.attributes & shapes::kPositionMatrix) == 0u) {
+        const std::uint32_t row = 3u * draw_state_.position_matrix;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            vertices[i].mtx_indices[0] = (vertices[i].mtx_indices[0] & ~0xFFu) | row;
+        }
+    }
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(
         static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));
