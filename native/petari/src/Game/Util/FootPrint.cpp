@@ -52,7 +52,7 @@ FootPrintInfo::FootPrintInfo() {
 }
 
 void FootPrint::setTexture(ResTIMG* img) {
-    MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(reinterpret_cast< JKRHeap* >(MR::getSceneHeapGDDR3()));
+    MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(reinterpret_cast< JKRHeap* >(MR::getSceneHeap()));
     _C = new JUTTexture(img, 0);
 }
 

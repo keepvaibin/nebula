@@ -138,7 +138,7 @@ void NormalMapBase::setupTexture() {
         }
     }
 
-    mImagePtr = new (MR::getSceneHeapGDDR3(), 0x20) u16[width * height];
+    mImagePtr = new (MR::getSceneHeap(), 0x20) u16[width * height];
     createGradTexture();
 }
 

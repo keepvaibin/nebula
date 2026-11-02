@@ -44,7 +44,7 @@ void ResourceHolderManager::removeIfIsEqualHeap(JKRHeap* pHeap) {
     }
 
     for (ResourceHolderManagerName2Resource* pIter = mResourceArray.begin(); pIter != mResourceArray.end(); pIter++) {
-        if (pIter->mHeap != pHeap && MR::getHeapNapa(pIter->mHeap) != pHeap && MR::getHeapGDDR3(pIter->mHeap) != pHeap) {
+        if (pIter->mHeap != pHeap) {
             continue;
         }
 

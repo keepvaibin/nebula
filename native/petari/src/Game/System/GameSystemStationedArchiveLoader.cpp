@@ -56,8 +56,8 @@ JKRHeap* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInf
 
 PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
-    mNapaHeap = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeapNapa());
-    JKRExpHeap* gddr = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeapGDDR3());
+    mNapaHeap = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeap());
+    JKRExpHeap* gddr = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeap());
     mGDDRHeap = gddr;
     condition->mNapaHeap = mNapaHeap;
     condition->mGDDRHeap = gddr;
@@ -217,7 +217,7 @@ void GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer(bool a1
 
 void GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers() {
     StationedArchiveLoader::loadResourcesFromTable(ConditionIfIsNotPlayer());
-    StationedArchiveLoader::loadScenarioData(MR::getStationedHeapGDDR3());
+    StationedArchiveLoader::loadScenarioData(MR::getStationedHeap());
 }
 
 void GameSystemStationedArchiveLoader::createAndAddPlayerArchives(bool isDataMario) {

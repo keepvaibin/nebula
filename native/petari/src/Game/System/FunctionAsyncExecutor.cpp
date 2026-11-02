@@ -67,7 +67,7 @@ void FunctionAsyncExecutorOnMainThread::update() {
 
 FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHolders(), _410(nullptr), _414(nullptr) {
     for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
-        FunctionAsyncExecutorThread* thread = new FunctionAsyncExecutorThread(MR::getStationedHeapNapa());
+        FunctionAsyncExecutorThread* thread = new FunctionAsyncExecutorThread(MR::getStationedHeap());
         mThreads[i] = thread;
         GameThreads::resume(thread->mThread);
     }

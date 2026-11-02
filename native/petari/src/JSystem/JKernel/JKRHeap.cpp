@@ -13,7 +13,6 @@ static bool byte_806B70B8;
 
 static bool byte_806B26D8 = true;
 // The DSP's ARAM-in-MEM2 base; natively the MEM2 arena address HeapMemoryWatcher sets before the DSP boots.
-uintptr_t ARALT_AramStartAdr = 0x90000000;
 
 #ifdef NEBULA_ASAN_HEAPS
 // AddressSanitizer test builds: a heap's free space and block headers are poisoned and each block it hands out is
@@ -88,27 +87,14 @@ u32 JKRNativeHeapSize(u32 size, JKRHeap* pParent, int alignment) {
     return size * 2 <= room ? size * 2 : size;
 }
 
-extern "C" void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
+extern "C" void nebula_memory_arena(void** pStart, void** pEnd);
 
-// The root heap takes the main memory the platform gives the game (MEM1's arena). The console's OS first kept a table of
-// `maxHeaps` 12-byte heap descriptors at the arena's start, which nothing here uses; the heaps still begin after it,
-// where they did, since values the game derives from addresses (J3DDrawBuffer's hash slots) depend on that.
-bool JKRHeap::initArena(char** memory, u32* size, int maxHeaps) {
-    void *arenaLo, *arenaHi, *mem2Lo, *mem2Hi;
-    nebula_memory_arenas(&arenaLo, &arenaHi, &mem2Lo, &mem2Hi);
-
-    JUTNativeLog("original arenaLo = %p arenaHi = %p\n", arenaLo, arenaHi);
-
-    if (arenaLo == arenaHi) {
-        return false;
-    }
-
-    const uintptr_t heapTableEnd = reinterpret_cast< uintptr_t >(arenaLo) + static_cast< uintptr_t >(maxHeaps) * 12;
-    void* ramStart = reinterpret_cast< void* >((heapTableEnd + 31) & ~static_cast< uintptr_t >(31));
-    void* ramEnd = reinterpret_cast< void* >(reinterpret_cast< uintptr_t >(arenaHi) & ~static_cast< uintptr_t >(31));
-
-    *memory = (char*)ramStart;
-    *size = (u32)((uintptr_t)ramEnd - (uintptr_t)ramStart);
+// The root heap takes all of the game's memory.
+bool JKRHeap::initArena(char** memory, u32* size, int) {
+    void *start, *end;
+    nebula_memory_arena(&start, &end);
+    *memory = static_cast< char* >(start);
+    *size = static_cast< u32 >(static_cast< char* >(end) - static_cast< char* >(start));
     return true;
 }
 
@@ -403,14 +389,6 @@ bool JKRHeap::state_compare(const TState& lhs, const TState& rhs) const {
 
 void JKRHeap::state_dump(const TState&) const {
     return;
-}
-
-void JKRHeap::setAltAramStartAdr(uintptr_t addr) {
-    ARALT_AramStartAdr = addr;
-}
-
-uintptr_t JKRHeap::getAltAramStartAdr() {
-    return ARALT_AramStartAdr;
 }
 
 s32 JKRHeap::do_changeGroupID(u8) {

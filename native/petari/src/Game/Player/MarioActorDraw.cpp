@@ -115,7 +115,7 @@ void MarioActor::initDrawAndModel() {
     createRainbowDL();
 
     {
-        MR::CurrentHeapRestorer restorer(static_cast< JKRHeap* >(MR::getSceneHeapGDDR3()));
+        MR::CurrentHeapRestorer restorer(static_cast< JKRHeap* >(MR::getSceneHeap()));
         _B7C = new JUTTexture(0x80, 0x40, GPU_TF_RGB565);
 
         for (u32 i = 0; i < 2; i++) {

@@ -29,7 +29,7 @@ GameSystemObjHolder::GameSystemObjHolder()
     initDvd();
     initNAND();
     initNameObj();
-    MR::createAndAddArchive(NebulaDiscTables::loadErrorMessageArchive(MR::getStationedHeapNapa()), MR::getStationedHeapNapa(),
+    MR::createAndAddArchive(NebulaDiscTables::loadErrorMessageArchive(MR::getStationedHeap()), MR::getStationedHeap(),
                             "ErrorMessageArchive.arc");
 }
 
@@ -117,7 +117,7 @@ void GameSystemObjHolder::initNAND() {
 }
 
 void GameSystemObjHolder::initAudio() {
-    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeapNapa());
+    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeap());
     mAudioSystem->requestResourceForInitialize();
 }
 

@@ -100,7 +100,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
     mWipe->initWithoutIter();
 
     {
-        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
+        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
         _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2, GPU_TF_RGB565);
     }

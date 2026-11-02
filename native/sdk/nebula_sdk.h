@@ -13,7 +13,7 @@ extern "C" {
 
 int nebula_memory_init(void);
 
-void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
+void nebula_memory_arena(void** pStart, void** pEnd);
 
 /* The host's services (sdk/core.c); NULL before nebula_game_attach. */
 const struct NebulaHostServices* nebula_host(void);

@@ -158,7 +158,7 @@ void GameSystemSceneController::destroyScene() {
     }
 
     GameSystemFunction::resetAllControllerRumble();
-    MR::removeResourceAndFileHolderIfIsEqualHeap(MR::getSceneHeapNapa());
+    MR::removeResourceAndFileHolderIfIsEqualHeap(MR::getSceneHeap());
 
     if (tryDestroyFileCacheHeap(false)) {
         SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
