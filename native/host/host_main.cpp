@@ -2499,6 +2499,14 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
     return disc_entry_out(disc_table().child(folder, child), out);
 }
 
+const void* svc_asset_map(void*, int32_t file) {
+    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    if (!entry || entry->folder) {
+        return nullptr;
+    }
+    return gPak.store.map(entry->position, static_cast<std::size_t>(entry->length));
+}
+
 void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst, uint32_t slot) {
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TRACE_FILE_READS=1: each read with the retrace it came on: two runs of deterministic mode compare by it.
@@ -3114,12 +3122,11 @@ void svc_speaker_samples(void*, uint32_t player, const int16_t* samples, uint32_
 }
 
 // The game's sound (native_audio.h), on its audio thread. Headless, nothing is mixed.
-void svc_audio_setup(void*, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects,
-                     const void* sound_memory, uint32_t sound_memory_size) {
+void svc_audio_setup(void*, NebulaVoice* voices, uint32_t count, const NebulaEffectLine* effects) {
 #if defined(NEBULA_HOST_RENDERER)
-    gAudio->setup(voices, count, effects, sound_memory, sound_memory_size, !deterministic_mode());
+    gAudio->setup(voices, count, effects, !deterministic_mode());
 #else
-    (void)voices, (void)count, (void)effects, (void)sound_memory, (void)sound_memory_size;
+    (void)voices, (void)count, (void)effects;
 #endif
 }
 
@@ -4010,6 +4017,7 @@ int main(int argc, char** argv) {
     services.asset_entry = svc_asset_entry;
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
+    services.asset_map = svc_asset_map;
     services.game_id = svc_game_id;
     services.frame_wait = svc_frame_wait;
     services.frame_begun = svc_frame_begun;

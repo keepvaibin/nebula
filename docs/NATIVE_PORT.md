@@ -27,7 +27,6 @@ clang 22 on every host, with the same flags everywhere:
 |---|---|
 | `-std=gnu++17`, C `-std=gnu11` | The code is C++03 for CodeWarrior. C++20 adds rewritten comparison candidates that can change which `operator==` runs, and makes clang's builtin `stddef.h` re-enter under `__has_feature(modules)` (M). |
 | The host's C and C++ libraries, force-included `nebula_prelude.h` | `MR::sort` (`SortUtil.hpp`) keeps the order of equal elements the same on every host; the collision binder depends on it (D). Text is UTF-16, `char16_t` (`TextString.hpp`). |
-| `-fsigned-char` | Console `char`. |
 | `-fno-strict-aliasing` | The decompiled code type-puns through pointer casts throughout. |
 | `-fno-math-errno` | No kept code reads `errno` (M). With it, `sqrtf` is one instruction instead of a compare and a library call on the negative path (M, assembly). |
 | `-fno-stack-protector` | Pinned off for every toolchain (some distribution compilers enable it by default), so the module performs the same everywhere. |

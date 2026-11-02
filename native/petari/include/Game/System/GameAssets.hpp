@@ -52,6 +52,8 @@ namespace GameAssets {
 
     // Reads `size` bytes at `offset` of the file: the calling thread sleeps while the host reads, the game's other threads run.
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset);
+    // The file's bytes in the mapped store, read-only, for the process's life; may wait for the drive.
+    const void* map(s32 entryNum);
     void readAsync(const File* pFile, Request* pRequest, void* pDst, s32 size, s32 offset, Callback callback);
     // A read cannot be withdrawn from the host: its callback gets cResultCanceled when it ends, and cancel() returns then.
     void cancel(Request* pRequest);

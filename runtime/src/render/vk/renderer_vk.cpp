@@ -1011,6 +1011,7 @@ UploadBuffer RendererVk::create_resident_vertices(std::size_t bytes, const char*
     }
     UploadBuffer out;
     out.cpu = buffer->mapped;
+    resident_mapped_ = out.cpu;
     out.gpu = buffer->address;
     out.buffer = std::move(buffer);
     return out;

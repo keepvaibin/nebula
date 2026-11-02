@@ -123,7 +123,7 @@ void JASBasicWaveBank::TWaveGroup::setWaveCount(u32 count, JKRHeap* heap) {
     mCtrlWaveArray = new (heap, 0) TWaveInfo[count];
 
     for (int i = 0; i < count; i++) {
-        mCtrlWaveArray[i].mWaveHandle.mHeap = &mHeap;
+        mCtrlWaveArray[i].mWaveHandle.mArc = this;
         mCtrlWaveArray[i].mWaveHandle.mWaveInfo._24 = &_48;
     }
 }
@@ -142,8 +142,12 @@ void JASBasicWaveBank::TWaveGroup::onEraseDone() {
     mBank->decWaveTable(this);
 }
 
+const u8* JASBasicWaveBank::TWaveHandle::getWaveLimit() const {
+    return mArc->getData() + mArc->getFileSize();
+}
+
 const u8* JASBasicWaveBank::TWaveHandle::getWavePtr() const {
-    const u8* base = static_cast< const u8* >(mHeap->getBase());
+    const u8* base = mArc->getData();
     if (base == nullptr) {
         return nullptr;
     }

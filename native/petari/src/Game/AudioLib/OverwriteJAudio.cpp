@@ -55,6 +55,7 @@ JASChannel* JASBank::noteOn(JASBank const* pBank, int progNo, u8 pitch, u8 veloc
     channel->setPriority(priority);
     channel->mWaveInfo = *waveInfo;
     channel->mWavePtr = wavePtr;
+    channel->mWaveLimit = waveHandle->getWaveLimit();
     channel->mChannelType = params.mChannelType;
     channel->setBankDisposeID(pBank);
     channel->setInitPitch(params.mPitch * (waveInfo->mSampleRate / JASDriver::getSoundRate()));
@@ -169,7 +170,7 @@ bool JASWaveArc::load(JASHeap* pHeap) {
         pHeap = JASWaveArcLoader::getRootHeap();
     }
 
-    if (mHeap.alloc(pHeap, mFileLength) == false) {
+    if (mHeap.alloc(pHeap, cAllocSize) == false) {
         return false;
     }
     return sendLoadCmd();

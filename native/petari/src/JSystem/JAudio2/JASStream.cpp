@@ -41,7 +41,6 @@ JASStream::JASStream() : mPosition(), mLoopCount(), mLoaded(), mCanceled() {
 }
 
 JASStream::~JASStream() {
-    free(mData);
 }
 
 void JASStream::init(StreamCallback i_callback, void* i_callbackData) {
@@ -118,8 +117,8 @@ void JASStream::load() {
         return;
     }
 
-    u8* data = static_cast< u8* >(malloc(mFile.mLength));
-    if (data == nullptr || GameAssets::read(&mFile, data, mFile.mLength, 0) < 0) {
+    const u8* const data = static_cast< const u8* >(GameAssets::map(mFile.mEntry));
+    if (data == nullptr) {
         NEBULA_PANIC("a stream of %u bytes cannot be loaded", mFile.mLength);
     }
 
@@ -129,9 +128,6 @@ void JASStream::load() {
         NEBULA_PANIC("a stream not cooked by this version of the importer");
     }
 
-    if (mData != nullptr) {
-        free(mData);
-    }
     mData = data;
     mHeader = header;
     mVolume = header.volume / 127.0f;

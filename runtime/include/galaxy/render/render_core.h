@@ -970,7 +970,6 @@ private:
             64u * 1024u * 1024u / sizeof(RenderVertex));
     ResidentVertexArena resident_vertices_;
     UploadBuffer resident_vertex_buffer_;
-    std::byte* resident_vertex_mapped_ = nullptr;
     gpu::Address resident_vertex_gpu_ = 0;
     gpu::Device* resident_vertex_device_ = nullptr;
     bool resident_vertex_buffer_failed_ = false;
@@ -1009,7 +1008,6 @@ private:
         std::uint8_t position_matrix = 0;
         std::shared_ptr<const curved::Model> curved;
         bool expanded = false;
-        std::vector<RenderVertex> vertices;
         ImmutableUploadToken index_upload_token;
         std::uint64_t resident_epoch = 0;
         std::uint32_t resident_offset = 0;
@@ -1020,6 +1018,7 @@ private:
         ImmutableUploadToken split_upload_token;
     };
     std::unordered_map<std::uint64_t, RecordShape> record_shapes_;
+    std::vector<RenderVertex> expand_scratch_;  // a group's vertices on their way to the resident buffer
     std::vector<shapes::Record> producer_shape_records_;
     shapes::RecordPool producer_record_pool_;
     const shapes::RecordPool* current_record_pool_ = nullptr;
