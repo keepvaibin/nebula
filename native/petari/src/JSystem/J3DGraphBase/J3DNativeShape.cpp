@@ -1,3 +1,4 @@
+#include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
@@ -709,7 +710,7 @@ namespace J3DNativeShape {
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), keyOf(j3dSys.getVtxPos()),
                           keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sRecord, count,
-                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
+                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount, J3DNativeState::pass());
         sCurrentSet = false;
         sTexGenCount = 0;
     }
@@ -718,7 +719,7 @@ namespace J3DNativeShape {
         const u32 count = gather(places != 0 ? places : 1u << sCurrentPosition, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, key, position, normal, color, sRecord, count, sCurrentSet ? &sCurrent : nullptr,
-                          sTexGens, sTexGenCount);
+                          sTexGens, sTexGenCount, J3DNativeState::pass());
         sCurrentSet = false;
         sTexGenCount = 0;
     }
@@ -730,7 +731,7 @@ namespace J3DNativeShape {
         const u32 count = gather(0, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, 0, 0, 0, 0, sRecord, count, sCurrentSet ? &sCurrent : nullptr, sTexGens,
-                          sTexGenCount);
+                          sTexGenCount, J3DNativeState::pass());
         sCurrentSet = false;
         sTexGenCount = 0;
     }

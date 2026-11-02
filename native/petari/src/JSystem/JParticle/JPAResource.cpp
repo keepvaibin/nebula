@@ -940,7 +940,7 @@ namespace {
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
         const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &rMaterial);
+    J3DNativeState::sendMaterial(&rMaterial);
         J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 

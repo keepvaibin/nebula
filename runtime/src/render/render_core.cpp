@@ -5395,6 +5395,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         curved::forget_models(record.key, record.position);
         return;
     case shapes::Record::Kind::Draw:
+        draw_state_.apply_pass(record.pass);
         draw_record_shape(record);
         return;
     case shapes::Record::Kind::NativeMaterial:
@@ -5425,6 +5426,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     case shapes::Record::Kind::Immediate:
         apply_record_matrices(record);
+        draw_state_.apply_pass(record.pass);
         draw_record_immediate(record);
         return;
     case shapes::Record::Kind::Marker:
@@ -5451,6 +5453,9 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         request.key = record.key;
         request.channels = record.target_channels < 7u ? record.target_channels : 0u;
         request.clear = (record.target_flags & 1u) != 0u;       // NEBULA_CAPTURE_CLEAR
+        request.clear_color = (record.target_flags & 32u) != 0u;
+        request.clear_alpha = (record.target_flags & 64u) != 0u;
+        request.clear_depth = (record.target_flags & 128u) != 0u;
         request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
         request.luma = (record.target_flags & 4u) != 0u;        // NEBULA_CAPTURE_LUMA
         request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
@@ -5531,37 +5536,6 @@ void RenderCore::apply_native_material(const material::Native* native) {
         native_material_ = &native_material_storage_;
         native_constants_dirty_ = true;
         return;
-    }
-    // The pipeline's state in the drawing state's terms (its colour factors name the other side's colour on each
-    // side: a source factor 2 is the destination's colour, a destination factor 2 the source's).
-    const auto factor = [](std::uint8_t f, bool) { return static_cast<BlendFactor>(f <= 9u ? f : 0u); };
-    BlendMode& blend = draw_state_.blend;
-    if (m.blend_op != material::kNativeKept) {
-        blend.blend_enable = m.blend_op == material::kNativeBlendAdd || m.blend_op == material::kNativeBlendSubtract;
-        blend.logic_op_enable = m.blend_op == material::kNativeBlendLogic;
-        blend.logic_mode = static_cast<std::uint8_t>(m.logic_op & 15u);
-        blend.subtract = m.blend_op == material::kNativeBlendSubtract;
-        blend.src_factor = factor(m.blend_src, true);
-        blend.dst_factor = factor(m.blend_dst, false);
-    }
-    // Colour and alpha writes: 0 off, 1 on, 2 as they were.
-    if (m.color_write != 2u) {
-        blend.color_update = m.color_write != 0u;
-    }
-    if (m.alpha_write != 2u) {
-        blend.alpha_update = m.alpha_write != 0u;
-    }
-    if (m.depth_test != material::kNativeKept) {
-        draw_state_.z.test_enable = m.depth_test != 0u;
-        draw_state_.z.func = static_cast<CompareFunc>(m.depth_func & 7u);
-        draw_state_.z.update_enable = m.depth_write != 0u;
-    }
-    // The game's faces in its own winding (GX's front faces), the drawing state's culling in the renderer's flipped
-    // one (drawing_state.cpp kCull: NEBULA_CULL_BACK is CullMode::Front).
-    if (m.cull != material::kNativeKept) {
-        draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Front
-                               : m.cull == material::kNativeCullFront ? CullMode::Back
-                                                                      : CullMode::None;
     }
     native_texture_mask_ = 0u;
     for (unsigned map = 0; map < 8u; ++map) {
@@ -6065,7 +6039,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         renderer_.clear_scene(
             0u,
             0x00FFFFFFu,
-            draw_state_.blend.color_update, draw_state_.blend.alpha_update, draw_state_.z.update_enable,
+            params.clear_color, params.clear_alpha, params.clear_depth,
             params.src_x, params.src_y,
             params.src_width, params.src_height,
             static_cast<std::uint8_t>(params.depth ? 0u : frame_format()));

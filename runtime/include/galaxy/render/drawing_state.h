@@ -5,6 +5,7 @@
 
 #include "galaxy/render/draw_types.h"
 #include "galaxy/render/native_material.h"
+#include "galaxy/render/native_shapes.h"
 #include "galaxy/render/native_state.h"
 
 
@@ -73,6 +74,8 @@ struct NativeDrawState {
     std::uint32_t dirty = ~0u;
 
     // A state op (galaxy/render/native_state.h, nebula_game_api.h NEBULA_STATE_*).
+    // A draw's blend, depth, culling and writes.
+    void apply_pass(const shapes::PassState& pass);
     void apply(const state::Op& op);
     [[nodiscard]] std::uint32_t consume_dirty() noexcept {
         const std::uint32_t d = dirty;

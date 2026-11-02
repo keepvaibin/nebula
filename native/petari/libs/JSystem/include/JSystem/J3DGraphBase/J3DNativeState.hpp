@@ -1,13 +1,20 @@
 #pragma once
 
+#include <nebula_game_api.h>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-// Drawing-state changes the game makes as it draws, each sent at once as a state record in its place in the stream
-// (nebula_game_api.h state). Each takes the arguments of the GX function it is named after and sets the whole
-// register that function sets.
+// Drawing-state changes the game makes as it draws: kept here and carried by the draws that follow (the pass), or sent
+// as a state record in their place in the stream (nebula_game_api.h state).
 #ifdef __cplusplus
 namespace J3DNativeState {
+    // What a draw does to the target: the blend, depth, culling and writes last set or last brought by a material. Each
+    // draw carries them; the host keeps none.
+    const NebulaPassState* pass();
+    // The pass changes among `count` state changes (J3DStateList::send).
+    void passChanges(const NebulaStateOp* pOps, u32 count);
+    // A material to the host; its blend, depth, culling and writes become the current ones.
+    void sendMaterial(const NebulaNativeMaterial* pMaterial);
     void setZMode(GpuBool compare, GpuCompare func, GpuBool update);
     void setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1);
     void setDstAlpha(GpuBool enable, u8 alpha);
