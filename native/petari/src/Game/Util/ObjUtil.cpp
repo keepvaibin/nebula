@@ -47,13 +47,6 @@
 #include <cstdio>
 #include <cstdarg>
 
-void ObjUtil_FORCE_MATCH_SDATA2() {
-    (void)57.2957802f;
-    (void)15.0f;
-    (void)100.0f;
-    (void)1000.0f;
-}
-
 namespace {
     static const TVec3f sDefaultPlayerPos = TVec3f(0, 0, 0);
 };  // namespace

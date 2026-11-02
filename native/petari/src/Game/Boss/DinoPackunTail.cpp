@@ -4,13 +4,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-void DinoPackunTail_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)1.1f;
-    (void)0.1f;
-    (void)0.9f;
-}
-
 void DinoPackunTail_FORCE_MATCH(TVec3f* pVec) {
     pVec[0] + pVec[1];
     pVec[2] + pVec[3];

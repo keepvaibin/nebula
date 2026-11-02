@@ -8,11 +8,6 @@
 #include "Game/Util.hpp"
 #include <cstdio>
 
-void BeamGoRoundPlanet_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)2700.0f;
-}
-
 BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("\203\162\201\133\203\200\203\123\201\133\203\211\203\105\203\223\203\150\203\162\201\133\203\200" /* ビームゴーラウンドビーム */) {
     mModelDrawer = nullptr;
     mBloomModel = nullptr;

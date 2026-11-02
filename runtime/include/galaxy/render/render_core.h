@@ -20,7 +20,7 @@
 //     -> the collected events bind to that fence
 //
 // A full queue (render_queue_depth chunks) blocks the producer. One chunk per retrace, parsed in
-// submission order, is the only synchronization: guest-memory reads during the parse (textures,
+// submission order, is the only synchronization: game-memory reads during the parse (textures,
 // vertex arrays) run a bounded number of frames behind the simulation, the window real GP
 // hardware has while the game respects GXDrawDone.
 //

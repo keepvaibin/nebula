@@ -13,10 +13,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void DodoryuDemo_FORCE_MATCH_SDATA2() {
-    (void)10.0f;
-}
-
 namespace {
     static const s32 sOpeningHideFrame = 60;
     // static const s32 sOpeningAppearFrame = _;

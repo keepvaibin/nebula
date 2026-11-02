@@ -127,7 +127,7 @@ void CShader::calc(J3DModel* pModel) {
         if (normalIndex != 0xFFFF && texCoordIndex != 0xFFFF) {
             u32 offset = i * 3;
             s32 normalOffset = normalIndex * 3;
-            f32 length;
+            f32 length = 0.0f;
 
             switch (_23) {
             case GPU_S16: {
@@ -345,7 +345,7 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
 
 CShader::CLengthMap::CLengthMap(const ResTIMG* pTimg) {
     _0 = pTimg;
-    _4 = reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG);
+    _4 = pTimg != nullptr ? reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG) : nullptr;
     setLengthMap(pTimg);
 }
 

@@ -2,18 +2,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
-void IKJoint_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)-1.0f;
-    (void)2.0f;
-    (void)3.0f;
-    (void)100.0f;
-    (void)-2.0f;
-    (void)0.01f;
-}
-
 IKJoint::IKJoint() : _0(), _30(), _60(), mRootBoneLength(100.0f), mMiddleBoneLength(100.0f) {
     _0.identity();
     _60.identity();

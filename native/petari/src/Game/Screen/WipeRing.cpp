@@ -8,14 +8,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 
-void WipeRing_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)PI;
-}
-
 namespace {
     static const s32 sAnimFrame = 60;
     static const char* sOutAnimName = "Out";

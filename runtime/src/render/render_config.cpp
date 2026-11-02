@@ -691,7 +691,7 @@ bool save_render_config_to_file() {
     if (!contents) {
         return false;
     }
-    if (!io::write_text_file_atomically(path, contents.str())) {
+    if (!io::write_file_atomically(path, contents.str())) {
         return false;
     }
     // This process's own write is not a change to take back in.
@@ -737,7 +737,7 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
                  << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
                  << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
                  << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
-        static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
+        static_cast<void>(io::write_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
     }
 }

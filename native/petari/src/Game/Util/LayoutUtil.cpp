@@ -32,12 +32,6 @@ template void JGeometry::TBox2< f32 >::set(const TVec2f&, const TVec2f&);
 
 
 
-void LayoutUtil_FORCE_MATCH_SDATA2() {
-    (void)255.0f;
-    (void)0.75f;
-    (void)4.0f;
-}
-
 namespace {
     void setInfluencedAlphaToChild(nw4r::lyt::Pane* pPane) {
         pPane->SetInfluencedAlpha(true);

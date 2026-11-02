@@ -19,7 +19,7 @@ constexpr float kCenterGain = 23170.0f / 32768.0f;
 
 // A forced stop's next gain: half, down to nothing below the 16-bit output's step.
 [[nodiscard]] float halved(float gain) noexcept {
-    return std::floor(gain * 32768.0f) / 65536.0f;
+    return gain < 1.0f / 32768.0f ? 0.0f : gain * 0.5f;
 }
 
 [[nodiscard]] double bessel_i0(double x) noexcept {
@@ -645,9 +645,9 @@ void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
             voice.finished = 1u;
         }
     }
-    const float left = pan_gain(127.0f / 128.0f - voice.pan);
+    const float left = pan_gain(1.0f - voice.pan);
     const float right = pan_gain(voice.pan);
-    const float front = pan_gain(127.0f / 128.0f - voice.rear);
+    const float front = pan_gain(1.0f - voice.rear);
     const float back = pan_gain(voice.rear);
     const std::array<float, 4> gains{left * front, right * front, left * back, right * back};
     const std::array<std::uint32_t, 4> dry{kLeft, kRight, kSurroundLeft, kSurroundRight};

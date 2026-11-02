@@ -2,10 +2,6 @@
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
 
-void ClippingJudge_FORCE_MATCH_SDATA2() {
-    0.0f;
-}
-
 ClippingJudge::ClippingJudge(const char* pName) : NameObj(pName), mFrustum() {
     for (s32 i = 0; i < 8; i++) {
         mClipDistances[i] = -1.0f;

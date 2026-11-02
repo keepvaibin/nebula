@@ -53,7 +53,7 @@ namespace JMath {
             mTable[i] = atan(static_cast< f64 >(i) / Len);
         }
         mTable[0] = 0.0f;
-        _1000 = TAngleConstant_< T >::RADIAN_DEG090() / 2;
+        mTable[Len] = TAngleConstant_< T >::RADIAN_DEG090() / 2;
     }
 
     template < s32 Len, typename T >

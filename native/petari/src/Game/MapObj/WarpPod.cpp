@@ -25,19 +25,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstdio>
 
-void WarpPod_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)MR::pi();
-    (void)2.0f;
-    (void)200.0f;
-    (void)(MR::pi() / 4.0f);
-    (void)30.0f;
-    (void)100.0f;
-}
-
 NebulaColor8 gGlowEffectEnvColor[] = {
     {0, 100, 200}, {44, 255, 42}, {255, 60, 60}, {196, 166, 0}, {0, 255, 0}, {255, 0, 255}, {255, 255, 0}, {255, 255, 255},
 };
@@ -271,7 +258,7 @@ void WarpPod::glowEffect() {
 void WarpPod::initPair() {
     mPairPod = MR::getWarpPodManager()->getPairPod(this);
 
-    bool someBool;
+    bool someBool = false;
 
     if (mPairPod->mPosition.x > mPosition.x) {
         someBool = true;

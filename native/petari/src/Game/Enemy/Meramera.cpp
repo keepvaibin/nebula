@@ -21,61 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
-void Meramera_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)2.0f;
-    (void)900.0f;
-    (void)55.0f;
-    (void)10.0f;
-    (void)70.0f;
-    (void)45.0f;
-    (void)50.0f;
-    (void)150.0f;
-    (void)300.0f;
-    (void)5.0f;
-    (void)35.0f;
-    (void)0.001f;
-    (void)200.0f;
-    (void)100.0f;
-    (void)3000.0f;
-    (void)1500.0f;
-    (void)130.0f;
-    (void)0.1f;
-    (void)15.0f;
-    (void)0.98f;
-    (void)0.05f;
-    (void)0.995f;
-    (void)0.2f;
-    (void)0.99f;
-    (void)0.97f;
-    (void)190.0f;
-    (void)20.0f;
-    (void)0.175f;
-    (void)0.3f;
-    (void)140.0f;
-    (void)1.2f;
-    (void)0.9f;
-    (void)12.0f;
-    (void)80.0f;
-    (void)250.0f;
-    (void)0.8f;
-    (void)(1 / 0.35f);
-    (void)1.4f;
-    (void)40.0f;
-    (void)180.0f;
-    (void)0.94f;
-    (void)25.0f;
-    (void)0.02f;
-    (void)500.0f;
-    (void)1000.0f;
-    (void)0.25f;
-    (void)600.0f;
-}
-
 enum { ElementType_Fire, ElementType_Ice };
 enum { EffectType_Null, EffectType_Wait, EffectType_Chase, EffectType_Escape };
 enum { BodyEffectType_Heat = 0x1, BodyEffectType_CoolDown = 0x2, BodyEffectType_Cold = 0x3 };

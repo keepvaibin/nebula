@@ -1,12 +1,6 @@
 #include "Game/AreaObj/AreaForm.hpp"
 #include "Game/Util.hpp"
 
-void AreaForm_FORCE_MATCH_SDATA2() {
-    (void)57.295780181884766f;
-    (void)1000.0f;
-    (void)500.0f;
-}
-
 AreaFormCube::AreaFormCube(int a1) {
     _8 = a1;
     mTranslation.x = 0.0f;

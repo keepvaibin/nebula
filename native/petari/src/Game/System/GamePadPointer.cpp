@@ -3,11 +3,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
-void GamePadPointer_FORCE_MATCH_SDATA2() {
-    (void)0.03f;
-    (void)0.0001f;
-}
-
 namespace {
     static const f32 sMoveJudgeSpeed = 0.0001f;
     static const s32 sIsValidInScreenTime = 5;

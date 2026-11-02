@@ -7,10 +7,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include <algorithm>
 
-void MapPartsRailGuideDrawer_FORCE_MATCH_SDATA2() {
-    (void)200.0f;
-}
-
 namespace NrvMapPartsRailGuideDrawer {
     NEW_NERVE(HostTypeHideAll, MapPartsRailGuideDrawer, HideAll);
     NEW_NERVE(HostTypeDrawAll, MapPartsRailGuideDrawer, DrawAll);

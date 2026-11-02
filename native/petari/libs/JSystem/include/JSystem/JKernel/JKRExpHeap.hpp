@@ -4,7 +4,7 @@
 
 class JKRExpHeap : public JKRHeap {
 public:
-    class CMemBlock {
+    class alignas(16) CMemBlock {
     public:
         void initiate(CMemBlock*, CMemBlock*, u32, u8, u8);
         CMemBlock* allocFore(u32, u8, u8, u8, u8);

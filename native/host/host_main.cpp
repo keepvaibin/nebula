@@ -37,6 +37,9 @@
 #include "galaxy/native_input.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/movie_video.h"
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+#include "galaxy/render/host_window_win32.h"
+#endif
 #include "galaxy/perf_hint.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
@@ -315,7 +318,7 @@ struct Module {
     decltype(&nebula_game_attach) attach;
     decltype(&nebula_game_run) run;
     decltype(&nebula_game_asset_complete) asset_complete;
-    decltype(&nebula_game_vi_retrace) vi_retrace;
+    decltype(&nebula_game_frame_tick) frame_tick;
     decltype(&nebula_game_sound_frame) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
@@ -439,7 +442,7 @@ void load_module(const fs::path& path) {
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
     gModule.asset_complete = reinterpret_cast<decltype(gModule.asset_complete)>(find_symbol(module, "nebula_game_asset_complete"));
-    gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
+    gModule.frame_tick = reinterpret_cast<decltype(gModule.frame_tick)>(find_symbol(module, "nebula_game_frame_tick"));
     gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_sound_frame"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
@@ -452,7 +455,7 @@ void load_module(const fs::path& path) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-void svc_gpu_coherent(void*, const void* address, uint32_t size);
+void svc_memory_rewritten(void*, const void* address, uint32_t size);
 
 #if defined(NEBULA_HOST_RENDERER)
 // The images handed to the renderer (texture_image), by address: one handed over again unchanged needs no
@@ -771,7 +774,7 @@ void vi_thread() {
         }
         // The last frame's work (the game and render threads' CPU time), to the performance hints (Android).
         [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_retrace();
-        gModule.vi_retrace();
+        gModule.frame_tick();
         if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
             period = display_period;
         }
@@ -820,7 +823,7 @@ void svc_test_frame_step(void*) {
         due_ns = 0.0;
     }
     gDeterministicRetraces.fetch_add(1, std::memory_order_relaxed);
-    gModule.vi_retrace();
+    gModule.frame_tick();
 }
 
 void svc_log(void*, const char* text) {
@@ -2461,7 +2464,7 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
     }
 }
 
-void svc_gpu_coherent(void*, const void* address, uint32_t size) {
+void svc_memory_rewritten(void*, const void* address, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
     forget_handed(reinterpret_cast<uint64_t>(address), size);
 #else
@@ -2548,8 +2551,7 @@ const char* svc_game_id(void*) {
 
 std::atomic<uint32_t> gRetraces{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
-void svc_vi_frame(void*, uint32_t display_picture, int black, uint32_t retrace) {
-    (void)display_picture;
+void svc_frame_started(void*, int black, uint32_t retrace) {
     gRetraces.store(retrace, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     frame_hash_retrace(retrace);
@@ -2564,7 +2566,7 @@ void svc_vi_frame(void*, uint32_t display_picture, int black, uint32_t retrace) 
 #endif
 #if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)
-    galaxy::timeline::record(galaxy::timeline::Event::GuestFrame, retrace, display_picture);
+    galaxy::timeline::record(galaxy::timeline::Event::GameFrame, retrace, 0u);
 #endif
     if (retrace >= kBootRetraces) {
         end_boot_fast("start's retraces run out");
@@ -3133,6 +3135,11 @@ void svc_audio_mix(void*, float gain) {
 }
 
 void svc_audio_frame(void*) {
+    static const bool trace_frames = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    if (trace_frames) {
+        std::fprintf(stderr, "[read] sound frame %llu at retrace %llu\n", static_cast<unsigned long long>(gAiBlocks.load(std::memory_order_relaxed)),
+                     static_cast<unsigned long long>(gDeterministicRetraces.load(std::memory_order_relaxed)));
+    }
 #if defined(NEBULA_HOST_RENDERER)
     gAudio->frame();
 #endif
@@ -3464,6 +3471,33 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 // A restart starts this executable again with the same arguments (the game's boot, as the console's reset); the
 // other power events close the game.
 // Every way out of the game: pending saves written (bounded: a dead drive does not hold the game), counters flushed.
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+// One game per data folder, so two never write the same saves. A second start brings the first's window forward and ends. Hidden test
+// runs have their own folders and may run side by side; GALAXY_TEST_ONE_GAME=1 tests this.
+HANDLE gOneGame = nullptr;
+
+bool one_game_at_a_time() {
+    if (galaxy::host::read_env_flag_uncached("GALAXY_HIDE_WINDOW", false) &&
+        !galaxy::host::read_env_flag_uncached(NEBULA_TEST_ENV("GALAXY_TEST_ONE_GAME"), false)) {
+        return false;
+    }
+    std::wstring name = L"Local\\NebulaGame-";
+    for (const wchar_t c : galaxy::runtime_settings_folder().wstring()) {
+        name += c == L'\\' || c == L':' ? L'_' : c;
+    }
+    gOneGame = CreateMutexW(nullptr, TRUE, name.c_str());
+    if (gOneGame == nullptr || GetLastError() != ERROR_ALREADY_EXISTS) {
+        return false;
+    }
+    log_line("host:", "the game is already running");
+    if (HWND window = FindWindowW(galaxy::render::host_window::kWindowClass, nullptr)) {
+        ShowWindow(window, IsIconic(window) ? SW_RESTORE : SW_SHOW);
+        SetForegroundWindow(window);
+    }
+    return true;
+}
+#endif
+
 [[noreturn]] void finish_and_exit(bool restart) {
     log_line("host:", restart ? "restart" : "the game ended");
     for (int waited = 0; gSavesPending.load(std::memory_order_acquire) != 0 && waited < 500; waited++) {
@@ -3479,6 +3513,11 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     std::fflush(stdout);
 #if defined(_WIN32)
     if (restart) {
+#if defined(NEBULA_HOST_RENDERER)
+        if (gOneGame != nullptr) {
+            CloseHandle(gOneGame);  // the new process takes it
+        }
+#endif
         wchar_t path[MAX_PATH];
         if (GetModuleFileNameW(nullptr, path, MAX_PATH) != 0) {
             STARTUPINFOW startup{};
@@ -3738,6 +3777,9 @@ int main(int argc, char** argv) {
     if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
         return show_crash_report_dialog();
     }
+    if (one_game_at_a_time()) {
+        return 0;
+    }
 #endif
 #if defined(NEBULA_HOST_SDL)
     if (!galaxy::sdl::start()) {
@@ -3971,7 +4013,7 @@ int main(int argc, char** argv) {
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
     services.game_id = svc_game_id;
-    services.vi_frame = svc_vi_frame;
+    services.frame_started = svc_frame_started;
     services.save_request = svc_save_request;
     services.system_setting = svc_system_setting;
     services.input_read = svc_input_read;
@@ -3985,7 +4027,7 @@ int main(int argc, char** argv) {
     services.sound_clock = svc_audio_control;
     services.hbm = svc_hbm;
     services.movie_video_decode = svc_movie_video_decode;
-    services.gpu_coherent = svc_gpu_coherent;
+    services.memory_rewritten = svc_memory_rewritten;
     services.game_context = svc_game_context;
     services.app_exit = svc_app_exit;
     services.app_restart = svc_app_restart;
@@ -4022,7 +4064,7 @@ int main(int argc, char** argv) {
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");
-    // While the start runs ahead, the retraces' presents alone reach the screen (svc_vi_frame).
+    // While the start runs ahead, the retraces' presents alone reach the screen (svc_frame_started).
     galaxy::render::set_frame_end_presents(!gBootFast.load(std::memory_order_relaxed));
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the audio clock is detached)
     // The live controls' links to the window: the mouse as the pointer, keyboard capture and controller navigation

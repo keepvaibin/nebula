@@ -10,23 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void FallDownBridge_FORCE_MATCH_SDATA2() {
-    (void)1250.0f;
-    (void)90.0f;
-    (void)2600.0f;
-    (void)9.090276718139648f;
-    (void)0.01745329238474369f;
-    (void)-2607.594482421875f;
-    (void)2607.594482421875f;
-    (void)0.05999999865889549f;
-    (void)-0.5f;
-    (void)0.10000000149011612f;
-    (void)0.9900000095367432f;
-    (void)0.44999998807907104f;
-    (void)0.30000001192092896f;
-    (void)400.0f;
-}
-
 namespace {
     const TVec3f sBaseClipCentor = TVec3f(0.0f, 1250.0f, 0.0f);
     // const f32 sBlockDepth = 0.0f;

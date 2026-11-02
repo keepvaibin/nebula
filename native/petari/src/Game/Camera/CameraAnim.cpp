@@ -4,12 +4,6 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraAnim_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::pi();
-}
-
 void CamAnmDataAccessor::set(void* pInfo, void* pValues) {
     mInfo = reinterpret_cast< CanmFrameInfo* >(pInfo);
     mValues = reinterpret_cast< f32* >(pValues);

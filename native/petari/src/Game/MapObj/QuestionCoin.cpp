@@ -6,13 +6,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void NrvQuestionCoin_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)MR::epsilon();
-    (void)0.0f;
-    (void)2.0f;
-}
-
 namespace {
     // cPoseTypeString
     // cShadowDropLengthType

@@ -17,37 +17,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void MarioTeresa_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)10.0f;
-    (void)0.00100000005f;
-    (void)0.00999999978f;
-    (void)120.0f;
-    (void)110.0f;
-    (void)-0.100000001f;
-    (void)0.100000001f;
-    (void)50.0f;
-    (void)0.939999998f;
-    (void)1.5f;
-    (void)0.200000003f;
-    (void)200.0f;
-    (void)0.99000001f;
-    (void)60.0f;
-    (void)-2.0f;
-    (void)-0.400000006f;
-    (void)-0.25f;
-    (void)0.25f;
-    (void)0.75f;
-    (void)-0.5f;
-    (void)0.0399999991f;
-    (void)0.300000012f;
-    (void)20.0f;
-    (void)-2607.59448f;
-    (void)2607.59448f;
-    (void)0.707000017f;
-    (void)-10.0f;
-}
-
 void Mario::startTeresaMode() {
     _418 = 0;
     _428 = 0;

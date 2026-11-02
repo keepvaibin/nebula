@@ -68,12 +68,13 @@ bool AssetStore::parse(const std::uint8_t* header, const std::uint8_t* index, st
     }
     const auto* const node_table = reinterpret_cast<const Node*>(index + (nodes - index_at));
     const auto* const hash_table = reinterpret_cast<const Hash*>(index + (hashes - index_at));
-    // Every index the table holds is inside the store, so a damaged file is refused here and nothing below checks again.
+    // Every index the table holds is inside it, so a damaged file is refused here and nothing below checks again (read checks each
+    // read against the store's size).
     for (std::uint32_t i = 0u; i < count; ++i) {
         const Node& node = node_table[i];
-        const std::uint64_t limit = (node.flags & 1u) != 0u ? count : size;
-        if (node.name >= names_size || node.parent >= count || node.position > limit || node.size > limit - node.position ||
-            hash_table[i].node >= count) {
+        const bool folder = (node.flags & 1u) != 0u;
+        if (node.name >= names_size || node.parent >= count || hash_table[i].node >= count ||
+            (folder && (node.position > count || node.size > count - node.position))) {
             return false;
         }
     }

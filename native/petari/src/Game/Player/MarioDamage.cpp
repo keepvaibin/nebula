@@ -30,19 +30,6 @@ namespace {
     const char sBackDamageLandAnimation[] = "\222\206\214\343\203\137\203\201\201\133\203\127\222\205\222\156" /* 中後ダメージ着地 */;
 };  // namespace
 
-void MarioDamage_FORCE_MATCH_SDATA2() {
-    (void)10.0f;
-    (void)5.0f;
-    (void)0.949999988f;
-    (void)30.0f;
-    (void)20.0f;
-    (void)50.0f;
-    (void)-10.0f;
-    (void)0.699999988f;
-    (void)0.100000001f;
-    (void)0.25f;
-}
-
 bool Mario::isDamaging() const {
     if (isAnimationRun("\220\205\217\343\203\137\203\201\201\133\203\127\222\206" /* 水上ダメージ中 */)) {
         return true;

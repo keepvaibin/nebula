@@ -1,7 +1,7 @@
 #pragma once
 
 // The host's frame clock (B-01: the game no longer calls the console's video interface). The host owns the display:
-// it calls nebula_game_vi_retrace once per frame it shows (any thread), and the clock delivers it to the game on the
+// it calls nebula_game_frame_tick once per frame it shows (any thread), and the clock delivers it to the game on the
 // simulation thread: the frame count, what to show (the game's picture or black, committed by
 // show() and taking effect at the next frame), the host told what it shows, and waitFrame's sleepers woken.
 

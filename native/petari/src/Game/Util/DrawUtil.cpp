@@ -25,17 +25,6 @@
 #include <NebulaGpuTypes.h>
 #include "Game/Util/RenderSignals.hpp"
 
-void DrawUtil_FORCE_MATCH_SDATA2() {
-    (void)-10000.0f;
-    (void)10000.0f;
-    (void)608.0f;
-    (void)-1000.0f;
-    (void)1000.0f;
-    (void)-0.5f;
-    (void)-30000.0f;
-    (void)30000.0f;
-}
-
 namespace {
     GpuTexObj clear_z_tobj;
 

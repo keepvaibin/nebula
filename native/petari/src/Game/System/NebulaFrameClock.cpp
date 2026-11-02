@@ -78,7 +78,7 @@ namespace {
             sNextPicture = true;
         }
         sPicture = sNextPicture;
-        nebula_host()->vi_frame(nebula_host()->user, 0, sPicture ? 0 : 1, sFrames);
+        nebula_host()->frame_started(nebula_host()->user, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
         sGate.advance();
     }
@@ -93,7 +93,7 @@ namespace {
     }
 }  // namespace
 
-extern "C" NEBULA_GAME_API void nebula_game_vi_retrace(void) {
+extern "C" NEBULA_GAME_API void nebula_game_frame_tick(void) {
     sRetrace.signal();
 }
 

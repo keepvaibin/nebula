@@ -3,7 +3,7 @@
 
 class JASRegisterParam {
 public:
-    enum RegID { REG_A, REG_B, REG_S, REG_F, REG_X, REG_Y };
+    enum RegID : u32 { REG_A, REG_B, REG_S, REG_F, REG_X, REG_Y };
 
     JASRegisterParam();
 

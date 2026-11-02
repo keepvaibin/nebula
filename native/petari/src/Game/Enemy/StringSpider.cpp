@@ -27,15 +27,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <nebula_math.h>
 
-void StringSpider_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    MR::pi();
-    (void)2.0f;
-}
-
 namespace {
     // hPointerPunchAddVel
     // hPointerPunchMinScVel

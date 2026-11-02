@@ -13,16 +13,6 @@
 #include "Game/Util/VectorUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void CameraFollow_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)MR::epsilon();
-    (void)JGeometry::TUtil< f32 >::PI();
-    (void)(JGeometry::TUtil< f32 >::PI() / 2.0f);
-    (void)(-JGeometry::TUtil< f32 >::PI() / 2.0f);
-}
-
 namespace {
     static const f32 sCameraRadius = 15.0f;  // TODO: check if this makes sense as this const
     static const f32 sSlopeFrontDist = 500.0f;

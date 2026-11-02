@@ -22,7 +22,7 @@ CameraTargetObj* CameraSpiral::calc() {
     const s32 timer = mTimer;
     f32 easeTime = timer < mStartTime ? 0.0f : timer - mStartTime;
 
-    f32 rate;
+    f32 rate = 0.0f;
     switch (mEaseType) {
     case EaseType_Linear: {
         f32 t = easeTime / getInterval();

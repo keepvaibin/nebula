@@ -2,12 +2,6 @@
 #include "Game/AreaObj/MercatorTransformCube.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraShakePatternImpl_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)(MR::pi() * 0.5f);
-}
-
 namespace {
     static const s32 sSinglyMaxFrame = 25;
 };  // namespace

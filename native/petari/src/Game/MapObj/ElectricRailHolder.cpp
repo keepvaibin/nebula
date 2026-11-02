@@ -15,10 +15,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 
-void ElectricRailHolder_FORCE_MATCH_SDATA2() {
-    (void)30.0f;
-}
-
 namespace {
     const f32 cHitSensorRadius = 30.0f;
 

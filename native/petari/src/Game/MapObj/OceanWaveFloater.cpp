@@ -13,10 +13,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "math_types.hpp"
 
-void OceanWaveFloater_FORCE_MATCH_SDATA2() {
-    (void)0.01745329238474369f;
-}
-
 namespace {
     struct Param {
         /* 0x00 */ const char* const mObjectName;

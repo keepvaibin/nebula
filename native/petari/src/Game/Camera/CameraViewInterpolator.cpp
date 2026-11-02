@@ -11,16 +11,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
-void CameraViewInterpolator_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)2.0f;
-    (void)MR::epsilon();
-    (void)-1.0f;
-    (void)0.5f;
-    (void)3.0f;
-}
-
 namespace {
     static const f32 sCollisionBallRadius = 10000.0f;
     static const f32 sCollisionThroughDistance = 3400.0f;

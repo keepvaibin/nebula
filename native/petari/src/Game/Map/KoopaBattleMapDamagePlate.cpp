@@ -8,11 +8,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void FORCE_MATCH_KOOPABATTLEMAPDAMAGEPLATE_SDATA2() {
-    (void)-150.0f;
-    (void)250.0f;
-}
-
 namespace {
     const static s32 sBreakStep = 180;
     const static s32 sBreakStepToAttack = 30;

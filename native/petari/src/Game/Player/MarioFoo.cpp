@@ -18,40 +18,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-void MarioFoo_FORCE_MATCH_SDATA2() {
-    (void)0.52359879f;
-    (void)0.100000001f;
-    (void)120.0f;
-    (void)0.125f;
-    (void)10.0f;
-    (void)100.0f;
-    (void)0.0500000007f;
-    (void)5.0f;
-    (void)1.04719758f;
-    (void)1.10000002f;
-    (void)-0.100000001f;
-    (void)0.00999999978f;
-    (void)25.0f;
-    (void)0.980000019f;
-    (void)1.01999998f;
-    (void)0.899999976f;
-    (void)1.20000005f;
-    (void)50.0f;
-    (void)1.5f;
-    (void)12.0f;
-    (void)2.09439516f;
-    (void)0.314159274f;
-    (void)0.785398185f;
-    (void)0.25f;
-    (void)30.0f;
-    (void)0.015625f;
-    (void)70.0f;
-    (void)2000.0f;
-    (void)255.0f;
-    (void)1.00010002f;
-    (void)6.0f;
-}
-
 void MarioFoo_FORCE_MATCH(TVec3f& rVec, f32 a, f32 b, f32 c) {
     rVec.setLength(a);
     rVec.setLength(b);
@@ -229,7 +195,7 @@ bool MarioFoo::update() {
     }
 
     f32 blend;
-    f32 targetAngle;
+    f32 targetAngle = 0.0f;
     if (MR::isNearZero(getStickY(), 0.1f)) {
         f32 ratio = _1C / 120.0f;
         if (ratio > 1.0f) {

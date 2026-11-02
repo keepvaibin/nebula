@@ -15,10 +15,6 @@
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
 
-void MarioActorRush_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-}
-
 void MarioActor::settingRush() {
     rushDropThrowMemoSensor();
 

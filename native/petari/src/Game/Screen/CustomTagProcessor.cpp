@@ -14,20 +14,6 @@
 #include <nw4r/ut/TextWriterBase.h>
 
 
-void CustomTagProcessor_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)2.0f;
-    (void)255.0f;
-    (void)nw4r::math::F_MAX;
-    (void)-2.0f;
-    (void)0.75f;
-    (void)1.5f;
-    (void)0.175f;
-}
-
 namespace {
     const f32 mRubyBaseLineOffset = 3.0f;
     const f32 mRubyCharSpace = 2.0f;

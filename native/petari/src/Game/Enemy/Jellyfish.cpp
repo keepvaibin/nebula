@@ -21,21 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
-void Jellyfish_FORCE_MATCH_SDATA2() {
-    (void)5.0f;
-    (void)30.0f;
-    (void)100.0f;
-    (void)130.0f;
-    (void)1900.0f;
-    (void)500.0f;
-    (void)0.9999f;
-    (void)-45.511112f;
-    (void)45.511112f;
-    (void)0.2f;
-    (void)-0.2f;
-    (void)1500.0f;
-}
-
 namespace NrvJellyfish {
     NEW_NERVE(JellyfishNrvWait, Jellyfish, Wait);
     NEW_NERVE(JellyfishNrvWaitWithRightTurn, Jellyfish, WaitWithRightTurn);

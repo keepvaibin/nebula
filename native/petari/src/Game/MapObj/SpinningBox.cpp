@@ -66,15 +66,6 @@ namespace NrvSpinningBox {
     NEW_NERVE_ONEND(HostTypeNrvPointed, SpinningBox, Pointed, Pointed);
 };  // namespace NrvSpinningBox
 
-void SpinningBox_FORCE_MATCH_SDATA2() {
-    f32 f1 = 1.0f;
-    f32 f2 = 0.0f;
-    f32 f3 = MR::epsilon();
-    f32 f4 = 0.5f;
-    f32 f5 = 3.0f;
-    f32 f6 = 2.0f;
-}
-
 SpinningBox::SpinningBox(const char* pName)
     : LiveActor(pName), mRotate(0.0f, 0.0f, 0.0f, 1.0f), mRotateSpeed(0.0f), mSlideSpeed(0.0f), mSlideDir(1.0f, 0.0f, 0.0f), mIsOnGround(false),
       mIsIceBox(false), mSpinAngle(0.0f) {

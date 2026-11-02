@@ -158,11 +158,6 @@ void ArrowSwitchMulti::exeWait() {
     }
 }
 
-void ArrowSwitchMulti_FORCE_MATCH_SDATA2_2() {
-    // TODO: why?
-    (void)360.0f;
-}
-
 void ArrowSwitchMulti::exeRotate() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_ARROW_SWITCH_ON");

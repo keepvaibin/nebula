@@ -18,20 +18,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 
-void BrightObj_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)0.25f;
-    (void)0.4f;
-    (void)0.7f;
-    (void)1.1f;
-    (void)100.0f;
-    (void)100000.0f;
-    (void)3000.0f;
-    (void)-0.999f;
-    (void)180.0f;
-    (void)57.295776f;
-}
-
 namespace {
     const static f32 sSunRadius = 3000.0f;
     const static f32 sSunModelScale = 100.0f;

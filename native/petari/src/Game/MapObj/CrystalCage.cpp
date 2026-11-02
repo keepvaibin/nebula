@@ -8,13 +8,6 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JMath.hpp>
 
-void CrystalCage_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)HALF_PI;
-    (void)2.0f;
-}
-
 namespace NrvCrystalCage {
     NEW_NERVE(CrystalCageNrvWait, CrystalCage, Wait);
     NEW_NERVE(CrystalCageNrvBreak, CrystalCage, Break);

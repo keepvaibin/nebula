@@ -9,18 +9,6 @@
 #include <nebula_math.h>
 
 
-void MathUtil_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-    (void)(MR::pi() / 2.0f);
-    (void)2.0f;
-}
-
 void MathUtil_DUMMY() {
     TVec3f vec;
     vec.setLength(1.0f);
@@ -64,6 +52,9 @@ namespace MR {
     }
 
     f32 acosEx(f32 x) {
+        if (x != x) {
+            return 0.0f;
+        }
         if (MR::abs(x) < 0.98f) {
             return JMAAcosRadian(x);
         } else if (x < 0.0f) {

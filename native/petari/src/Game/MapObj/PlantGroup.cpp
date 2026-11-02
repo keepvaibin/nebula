@@ -27,19 +27,6 @@ namespace {
     const f32 hWeakDist = 500.0f;
 };  // namespace
 
-void PlantGroup_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)3.8146973e-06f;
-    (void)-3.8146973e-06f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)PI;
-    (void)HALF_PI;
-    (void)2.0f;
-    (void)-HALF_PI;
-}
-
 namespace NrvPlantMember {
     NEW_NERVE(HostTypeNrvWait, PlantMember, Wait);
     NEW_NERVE(HostTypeNrvHint, PlantMember, Hint);

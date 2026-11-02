@@ -100,7 +100,7 @@ namespace MR {
         char* pExtSeparator = strrchr(pDst, '.');
         char* pDirSeparator = strrchr(pDst, '/');
 
-        if (pExtSeparator < pDirSeparator || pDirSeparator + 1 == pExtSeparator) {
+        if (pExtSeparator < pDirSeparator || (pDirSeparator != nullptr && pDirSeparator + 1 == pExtSeparator)) {
             return pDirSeparator;
         }
 
