@@ -3,6 +3,8 @@
 // the recorded upload of their levels.
 #pragma once
 
+#include "galaxy/render/texel_format.h"
+
 #include "galaxy/render/vk/vk_context.h"
 
 #include <cstdint>
@@ -40,7 +42,9 @@ public:
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
     [[nodiscard]] gpu::TextureRef create_texture(
-        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey = false);
+        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
+        TexelFormat format = TexelFormat::Rgba8);
+    [[nodiscard]] static bool supports_bc1();
     [[nodiscard]] static bool poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
     void record_upload(vk::Texture* texture, bool reused, const UploadChunk& staging, std::uint64_t offset,

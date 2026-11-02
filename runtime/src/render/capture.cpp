@@ -63,9 +63,9 @@ constexpr std::uint32_t kPictures = 3u;
 
 }  // namespace
 
-bool SceneCopyManager::initialize(gpu::Device* device, unsigned scene_target_scale) {
+bool SceneCopyManager::initialize(gpu::Device* device, const FrameMap& map) {
     device_ = device;
-    map_ = FrameMap(std::clamp(scene_target_scale, 1u, kMaxSceneScale));
+    map_ = map;
     return device_ != nullptr;
 }
 
@@ -294,26 +294,24 @@ const DisplayTexture* SceneCopyManager::picture(std::uint32_t slot) const {
 
 
 std::optional<SceneCopyRect> scene_identity_copy_rect(
-    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
+    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
     unsigned dest_width, unsigned dest_height) noexcept {
     if (is_depth_copy || params.display || params.channels != kCopyLayoutRgba ||
         params.luma || params.half_scale ||
         params.src_width == 0u || params.src_height == 0u ||
         static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
-        static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {
+        static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight ||
+        params.filtered) {
         return std::nullopt;
     }
-    if (params.filtered) {
+    const auto left = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_x) * map.sx));
+    const auto top = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_y) * map.sy));
+    const auto right = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_x + params.src_width) * map.sx));
+    const auto bottom = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_y + params.src_height) * map.sy));
+    if (dest_width != right - left || dest_height != bottom - top) {
         return std::nullopt;
     }
-    const unsigned scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
-    if (dest_width != params.src_width * scale ||
-        dest_height != params.src_height * scale) {
-        return std::nullopt;
-    }
-    const std::uint32_t left = params.src_x * scale;
-    const std::uint32_t top = params.src_y * scale;
-    return SceneCopyRect{left, top, left + dest_width, top + dest_height};
+    return SceneCopyRect{left, top, right, bottom};
 }
 
 }  // namespace galaxy::render

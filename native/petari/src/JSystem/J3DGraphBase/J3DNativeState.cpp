@@ -64,33 +64,11 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setChanCtrl(GpuChannelID chan, GpuBool enable, GpuColorSrc ambSrc, GpuColorSrc matSrc, u32 lightMask,
-                     GpuDiffuseFn diffFn, GpuAttnFn attnFn) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setChanCtrl(chan, enable, ambSrc, matSrc, lightMask, diffFn, attnFn);
-        list.send();
-    }
-
-    void setTevDirect(GpuTevStageID stage) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevDirect(stage);
-        list.send();
-    }
-
     void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setFog(type, start, end, nearZ, farZ, color);
         op.a[5] = 1;
-        list.send();
-    }
-
-    void setClipMode(GpuClipMode mode) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setClipMode(mode);
         list.send();
     }
 
@@ -116,62 +94,6 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setTevColorIn(GpuTevStageID stage, GpuTevColorArg a, GpuTevColorArg b, GpuTevColorArg c, GpuTevColorArg d) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevColorIn(stage, a, b, c, d);
-        list.send();
-    }
-
-    void setTevAlphaIn(GpuTevStageID stage, GpuTevAlphaArg a, GpuTevAlphaArg b, GpuTevAlphaArg c, GpuTevAlphaArg d) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevAlphaIn(stage, a, b, c, d);
-        list.send();
-    }
-
-    void setTevColorOp(GpuTevStageID stage, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevColorOp(stage, op, bias, scale, clamp, out);
-        list.send();
-    }
-
-    void setTevAlphaOp(GpuTevStageID stage, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevAlphaOp(stage, op, bias, scale, clamp, out);
-        list.send();
-    }
-
-    void setTevKColorSel(GpuTevStageID stage, GpuTevKColorSel sel) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevKColorSel(stage, sel);
-        list.send();
-    }
-
-    void setTevKAlphaSel(GpuTevStageID stage, GpuTevKAlphaSel sel) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevKAlphaSel(stage, sel);
-        list.send();
-    }
-
-    void setTevSwapMode(GpuTevStageID stage, GpuTevSwapSel rasSwap, GpuTevSwapSel texSwap) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevSwapMode(stage, rasSwap, texSwap);
-        list.send();
-    }
-
-    void setTevSwapModeTable(GpuTevSwapSel table, GpuTevColorChan red, GpuTevColorChan green, GpuTevColorChan blue, GpuTevColorChan alpha) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevSwapModeTable(table, red, green, blue, alpha);
-        list.send();
-    }
-
     void setColorUpdate(GpuBool enable) {
         NebulaStateOp ops[1];
         J3DStateList list(ops, 1);
@@ -183,20 +105,6 @@ namespace J3DNativeState {
         NebulaStateOp ops[1];
         J3DStateList list(ops, 1);
         list.setAlphaUpdate(enable);
-        list.send();
-    }
-
-    void setDither(GpuBool enable) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setDither(enable);
-        list.send();
-    }
-
-    void setTevOp(GpuTevStageID stage, GpuTevMode mode) {
-        NebulaStateOp ops[4];
-        J3DStateList list(ops, 4);
-        list.setTevOp(stage, mode);
         list.send();
     }
 
@@ -223,67 +131,11 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setNumTexGens(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumTexGens(count);
-        list.send();
-    }
-
-    void setNumChans(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumChans(count);
-        list.send();
-    }
-
-    void setNumTevStages(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumTevStages(count);
-        list.send();
-    }
-
-    void setNumIndStages(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumIndStages(count);
-        list.send();
-    }
-
-    void setCoPlanar(GpuBool enable) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCoPlanar(enable);
-        list.send();
-    }
-
     void setCurrentMtx(u32 id) {
         J3DNativeShape::setCurrentPosition(id / 3);
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setCurrentMtx(id);
-        list.send();
-    }
-
-    void setTevIndirect(GpuTevStageID stage, GpuIndTexStageID indStage, GpuIndTexFormat format, GpuIndTexBiasSel bias, GpuIndTexMtxID matrix, GpuIndTexWrap wrapS, GpuIndTexWrap wrapT, GpuBool addPrev, GpuBool utcLod, GpuIndTexAlphaSel alpha) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevIndirect(stage, indStage, format, bias, matrix, wrapS, wrapT, addPrev, utcLod, alpha);
-        list.send();
-    }
-
-    void setTevIndWarp(GpuTevStageID stage, GpuIndTexStageID indStage, GpuBool signedOffset, GpuBool replaceMode, GpuIndTexMtxID matrix) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevIndWarp(stage, indStage, signedOffset, replaceMode, matrix);
-        list.send();
-    }
-
-    void setIndTexCoordScale(GpuIndTexStageID indStage, GpuIndTexScale scaleS, GpuIndTexScale scaleT) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setIndTexCoordScale(indStage, scaleS, scaleT);
         list.send();
     }
 
@@ -473,7 +325,6 @@ namespace J3DNativeState {
             setTexCoordGen2(static_cast< GpuTexCoordID >(i), GX_TG_MTX2x4, static_cast< GpuTexGenSrc >(GPU_TG_TEX0 + i),
                             GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
         }
-        setNumTexGens(1);
         setLineWidth(6, GPU_TO_ZERO);
         setPointSize(6, GPU_TO_ZERO);
         for (u32 i = 0; i < 8; i++) {
@@ -490,15 +341,10 @@ namespace J3DNativeState {
         J3DNativeView::setViewport(0.0f, 0.0f, cDefaultWidth, cDefaultHeight, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
-        setCoPlanar(GPU_FALSE);
         setCullMode(GPU_CULL_BACK);
-        setClipMode(GPU_CLIP_ENABLE);
         J3DNativeView::setScissor(0, 0, cDefaultWidth, cDefaultHeight);
-        setNumChans(0);
-        setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_VTX, GPU_LIGHT_NULL, GPU_DF_NONE, GPU_AF_NONE);
         setChanAmbColor(GPU_COLOR0A0, black);
         setChanMatColor(GPU_COLOR0A0, white);
-        setChanCtrl(GPU_COLOR1A1, GPU_FALSE, GPU_SRC_REG, GPU_SRC_VTX, GPU_LIGHT_NULL, GPU_DF_NONE, GPU_AF_NONE);
         setChanAmbColor(GPU_COLOR1A1, black);
         setChanMatColor(GPU_COLOR1A1, white);
 
@@ -509,41 +355,13 @@ namespace J3DNativeState {
             J3DNativeTexture::load(&sDefaultTexture, static_cast< GpuTexMapID >(i));
         }
 
-        for (u32 i = 0; i < 8; i++) {
-            setTevOrder(static_cast< GpuTevStageID >(i), static_cast< GpuTexCoordID >(i), static_cast< GpuTexMapID >(i),
-                        GPU_COLOR0A0);
-        }
-        for (u32 i = 8; i < 16; i++) {
-            setTevOrder(static_cast< GpuTevStageID >(i), GPU_TEXCOORD_NULL, GPU_TEXMAP_NULL, GPU_COLOR_NULL);
-        }
-        setNumTevStages(1);
-        setTevOp(GPU_TEVSTAGE0, GPU_REPLACE);
         setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
-        setZTexture(GPU_ZT_DISABLE, GPU_TF_Z8, 0);
-        for (u32 i = 0; i < 16; i++) {
-            setTevKColorSel(static_cast< GpuTevStageID >(i), GPU_TEV_KCSEL_1_4);
-            setTevKAlphaSel(static_cast< GpuTevStageID >(i), GPU_TEV_KASEL_1);
-            setTevSwapMode(static_cast< GpuTevStageID >(i), GPU_TEV_SWAP0, GPU_TEV_SWAP0);
-        }
-        setTevSwapModeTable(GPU_TEV_SWAP0, GPU_CH_RED, GPU_CH_GREEN, GPU_CH_BLUE, GPU_CH_ALPHA);
-        setTevSwapModeTable(GPU_TEV_SWAP1, GPU_CH_RED, GPU_CH_RED, GPU_CH_RED, GPU_CH_ALPHA);
-        setTevSwapModeTable(GPU_TEV_SWAP2, GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_GREEN, GPU_CH_ALPHA);
-        setTevSwapModeTable(GPU_TEV_SWAP3, GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_BLUE, GPU_CH_ALPHA);
-        for (u32 i = 0; i < 16; i++) {
-            setTevDirect(static_cast< GpuTevStageID >(i));
-        }
-        setNumIndStages(0);
-        for (u32 i = 0; i < 4; i++) {
-            setIndTexCoordScale(static_cast< GpuIndTexStageID >(i), GPU_ITS_1, GPU_ITS_1);
-        }
 
         setFog(GPU_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, black);
-        setFogRangeAdj(GPU_FALSE, 0, nullptr);
         setBlendMode(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR);
         setColorUpdate(GPU_TRUE);
         setAlphaUpdate(GPU_TRUE);
         setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-        setDither(GPU_TRUE);
         setDstAlpha(GPU_FALSE, 0);
         setFrameAlpha(false);
     }
@@ -557,34 +375,6 @@ namespace J3DNativeState {
     void endFrame() {
         const NebulaHostServices* pHost = nebula_host();
         pHost->frame_end(pHost->user);
-    }
-
-    void setZTexture(GpuZTexOp op, GpuTexFmt format, u32 bias) {
-        NebulaStateOp storage;
-        J3DStateList list(&storage, 1);
-        list.setZTexture(op, format, bias);
-        list.send();
-    }
-
-    void setFogRangeAdj(GpuBool enable, u16 center, const GpuFogAdjTable* pTable) {
-        NebulaStateOp ops[6];
-        J3DStateList list(ops, 6);
-        list.setFogRangeAdj(enable, center, pTable);
-        list.send();
-    }
-
-    void setTevOrder(GpuTevStageID stage, GpuTexCoordID coord, GpuTexMapID map, GpuChannelID color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevStageOrder(stage, coord, map, color);
-        list.send();
-    }
-
-    void setIndTexOrder(GpuIndTexStageID stage, GpuTexCoordID coord, GpuTexMapID map) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setIndTexOrder(stage, coord, map);
-        list.send();
     }
 
     void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points) {
@@ -610,40 +400,8 @@ void J3DNativeStateSetTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuT
     J3DNativeState::setTexCoordGen2(coord, type, src, mtx, normalize, postMtx);
 }
 
-void J3DNativeStateSetNumTexGens(u8 count) {
-    J3DNativeState::setNumTexGens(count);
-}
-
-void J3DNativeStateSetNumChans(u8 count) {
-    J3DNativeState::setNumChans(count);
-}
-
-void J3DNativeStateSetNumTevStages(u8 count) {
-    J3DNativeState::setNumTevStages(count);
-}
-
-void J3DNativeStateSetNumIndStages(u8 count) {
-    J3DNativeState::setNumIndStages(count);
-}
-
-void J3DNativeStateSetCoPlanar(GpuBool enable) {
-    J3DNativeState::setCoPlanar(enable);
-}
-
 void J3DNativeStateSetCurrentMtx(u32 id) {
     J3DNativeState::setCurrentMtx(id);
-}
-
-void J3DNativeStateSetTevIndirect(GpuTevStageID stage, GpuIndTexStageID indStage, GpuIndTexFormat format, GpuIndTexBiasSel bias, GpuIndTexMtxID matrix, GpuIndTexWrap wrapS, GpuIndTexWrap wrapT, GpuBool addPrev, GpuBool utcLod, GpuIndTexAlphaSel alpha) {
-    J3DNativeState::setTevIndirect(stage, indStage, format, bias, matrix, wrapS, wrapT, addPrev, utcLod, alpha);
-}
-
-void J3DNativeStateSetTevIndWarp(GpuTevStageID stage, GpuIndTexStageID indStage, GpuBool signedOffset, GpuBool replaceMode, GpuIndTexMtxID matrix) {
-    J3DNativeState::setTevIndWarp(stage, indStage, signedOffset, replaceMode, matrix);
-}
-
-void J3DNativeStateSetIndTexCoordScale(GpuIndTexStageID indStage, GpuIndTexScale scaleS, GpuIndTexScale scaleT) {
-    J3DNativeState::setIndTexCoordScale(indStage, scaleS, scaleT);
 }
 
 void J3DNativeStateSetLineWidth(u8 width, GpuTexOffset texOffsets) {
@@ -664,14 +422,6 @@ void J3DNativeStateInitLightPos(GpuLightObj* pObj, f32 x, f32 y, f32 z) {
 
 void J3DNativeStateLoadLightObjImm(const GpuLightObj* pObj, GpuLightID id) {
     J3DNativeState::loadLightObjImm(pObj, id);
-}
-
-void J3DNativeStateSetTevOrder(GpuTevStageID stage, GpuTexCoordID coord, GpuTexMapID map, GpuChannelID color) {
-    J3DNativeState::setTevOrder(stage, coord, map, color);
-}
-
-void J3DNativeStateSetIndTexOrder(GpuIndTexStageID stage, GpuTexCoordID coord, GpuTexMapID map) {
-    J3DNativeState::setIndTexOrder(stage, coord, map);
 }
 
 void J3DNativeStateEnableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points) {
@@ -714,52 +464,12 @@ void J3DNativeStateSetTevKColor(GpuTevKColorID id, NebulaColor8 color) {
     J3DNativeState::setTevKColor(id, color);
 }
 
-void J3DNativeStateSetChanCtrl(GpuChannelID chan, GpuBool enable, GpuColorSrc ambSrc, GpuColorSrc matSrc, u32 lightMask, GpuDiffuseFn diffFn, GpuAttnFn attnFn) {
-    J3DNativeState::setChanCtrl(chan, enable, ambSrc, matSrc, lightMask, diffFn, attnFn);
-}
-
-void J3DNativeStateSetTevDirect(GpuTevStageID stage) {
-    J3DNativeState::setTevDirect(stage);
-}
-
 void J3DNativeStateSetFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
     J3DNativeState::setFog(type, start, end, nearZ, farZ, color);
 }
 
 void J3DNativeStateSetBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op) {
     J3DNativeState::setBlendMode(type, src, dst, op);
-}
-
-void J3DNativeStateSetTevColorIn(GpuTevStageID stage, GpuTevColorArg a, GpuTevColorArg b, GpuTevColorArg c, GpuTevColorArg d) {
-    J3DNativeState::setTevColorIn(stage, a, b, c, d);
-}
-
-void J3DNativeStateSetTevAlphaIn(GpuTevStageID stage, GpuTevAlphaArg a, GpuTevAlphaArg b, GpuTevAlphaArg c, GpuTevAlphaArg d) {
-    J3DNativeState::setTevAlphaIn(stage, a, b, c, d);
-}
-
-void J3DNativeStateSetTevColorOp(GpuTevStageID stage, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out) {
-    J3DNativeState::setTevColorOp(stage, op, bias, scale, clamp, out);
-}
-
-void J3DNativeStateSetTevAlphaOp(GpuTevStageID stage, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out) {
-    J3DNativeState::setTevAlphaOp(stage, op, bias, scale, clamp, out);
-}
-
-void J3DNativeStateSetTevKColorSel(GpuTevStageID stage, GpuTevKColorSel sel) {
-    J3DNativeState::setTevKColorSel(stage, sel);
-}
-
-void J3DNativeStateSetTevKAlphaSel(GpuTevStageID stage, GpuTevKAlphaSel sel) {
-    J3DNativeState::setTevKAlphaSel(stage, sel);
-}
-
-void J3DNativeStateSetTevSwapMode(GpuTevStageID stage, GpuTevSwapSel rasSwap, GpuTevSwapSel texSwap) {
-    J3DNativeState::setTevSwapMode(stage, rasSwap, texSwap);
-}
-
-void J3DNativeStateSetTevSwapModeTable(GpuTevSwapSel table, GpuTevColorChan red, GpuTevColorChan green, GpuTevColorChan blue, GpuTevColorChan alpha) {
-    J3DNativeState::setTevSwapModeTable(table, red, green, blue, alpha);
 }
 
 void J3DNativeStateSetColorUpdate(GpuBool enable) {
@@ -770,6 +480,3 @@ void J3DNativeStateSetAlphaUpdate(GpuBool enable) {
     J3DNativeState::setAlphaUpdate(enable);
 }
 
-void J3DNativeStateSetDither(GpuBool enable) {
-    J3DNativeState::setDither(enable);
-}

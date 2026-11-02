@@ -59,8 +59,6 @@ void BigBubbleDrawer::setUpTevStage() const {
 void BigBubbleDrawer::setUpPixelFormat() const {
     J3DNativeState::setColorUpdate(1);
     J3DNativeState::setAlphaUpdate(0);
-    J3DNativeState::setCoPlanar(0);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void BigBubbleDrawer::setUpMaterial() const {

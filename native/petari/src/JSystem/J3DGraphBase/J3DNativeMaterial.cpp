@@ -183,39 +183,9 @@ namespace {
     // Whether a state change alters what the current native material's shader computes (its stages, channels,
     // coordinates, fog type or alpha test) rather than a value it takes or its fixed-function state.
     bool changesProgram(const NebulaStateOp& rOp) {
-        switch (rOp.kind) {
-        case NEBULA_STATE_GEN_MODE:
-        case NEBULA_STATE_GEN_MODE2:
-        case NEBULA_STATE_NUM_TEX_GENS:
-        case NEBULA_STATE_NUM_CHANS:
-        case NEBULA_STATE_NUM_TEV_STAGES:
-        case NEBULA_STATE_NUM_IND_STAGES:
-        case NEBULA_STATE_CHANNEL:
-        case NEBULA_STATE_TEV_COLOR_CALC:
-        case NEBULA_STATE_TEV_ALPHA_CALC:
-        case NEBULA_STATE_TEV_DIRECT:
-        case NEBULA_STATE_TEV_INDIRECT:
-        case NEBULA_STATE_TEV_ORDER:
-        case NEBULA_STATE_TEV_COLOR_IN:
-        case NEBULA_STATE_TEV_ALPHA_IN:
-        case NEBULA_STATE_TEV_COLOR_OP:
-        case NEBULA_STATE_TEV_ALPHA_OP:
-        case NEBULA_STATE_TEV_KCOLOR_SEL:
-        case NEBULA_STATE_TEV_KALPHA_SEL:
-        case NEBULA_STATE_TEV_SWAP_MODE:
-        case NEBULA_STATE_TEV_SWAP_TABLE:
-        case NEBULA_STATE_TEV_STAGE_ORDER:
-        case NEBULA_STATE_IND_TEX_SCALE:
-        case NEBULA_STATE_IND_TEX_ORDER:
-        case NEBULA_STATE_Z_TEXTURE:
-            return true;
-        case NEBULA_STATE_ALPHA_COMPARE:
-            return sCurrentKind == CURRENT_J3D &&
-                   (rOp.a[0] != sCurrentSetup->alpha_compare.comp0 || rOp.a[2] != sCurrentSetup->alpha_compare.op ||
-                    rOp.a[3] != sCurrentSetup->alpha_compare.comp1);
-        default:
-            return false;
-        }
+        return rOp.kind == NEBULA_STATE_ALPHA_COMPARE && sCurrentKind == CURRENT_J3D &&
+               (rOp.a[0] != sCurrentSetup->alpha_compare.comp0 || rOp.a[2] != sCurrentSetup->alpha_compare.op ||
+                rOp.a[3] != sCurrentSetup->alpha_compare.comp1);
     }
 
     // The current material ends: the draws that follow have none (the host draws nothing without one) until the next.

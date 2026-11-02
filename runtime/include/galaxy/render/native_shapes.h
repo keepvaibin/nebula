@@ -102,6 +102,15 @@ struct Immediate {
 // odd triangles turned, fans around vertex 0, line strips as line lists, triangles, lines and points as they are.
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
 
+inline constexpr std::uint32_t kNoNative = 0xFFFFFFFFu;
+
+// What a chunk's records point into: one allocation a frame, not one a record.
+struct RecordPool {
+    std::vector<Matrix> matrices;
+    std::vector<state::Op> ops;
+    std::vector<material::Native> natives;
+};
+
 // The game's records, in the order it made them (render_core.h attach_shape_record).
 struct Record {
     enum class Kind : std::uint8_t {
@@ -116,18 +125,20 @@ struct Record {
     std::shared_ptr<const Geometry> geometry;
     // A material program (MaterialProgram) and a material's values (Material), both under `key`: the program's.
     // A native material (NativeMaterial): a shader compiled at build with its constants, textures and state.
-    std::shared_ptr<const material::Native> native;
-    std::vector<state::Op> state;  // drawing-state changes outside materials, in order
+    std::uint32_t native_index = kNoNative;
+    // Drawing-state changes outside materials, in order: their place in the frame's pool (RecordPool::ops).
+    std::uint32_t op_first = 0, op_count = 0;
     std::shared_ptr<const Immediate> immediate;
     // An image's bytes (TextureImage), at `key`: its physical address.
     std::shared_ptr<const std::vector<std::byte>> image;
     // A draw's (or an immediate's) matrices, and the places its corners take when they carry none (position, texture
     // coordinates 0-7) when the game set them since its last draw.
-    std::vector<Matrix> matrices;
+    std::uint32_t matrix_first = 0, matrix_count = 0;  // their place in the frame's pool (RecordPool::matrices)
     bool has_current = false;
     std::array<std::uint8_t, 9> current{};
     // Texture coordinates generated differently from the material: coord, type, source, normalize, post matrix id.
-    std::vector<std::array<std::uint8_t, 5>> texgens;
+    std::array<std::array<std::uint8_t, 5>, 8> texgens{};
+    std::uint8_t texgen_count = 0;
     // A host marker (Marker, its kind at `key`): aux, then a and b (a draw identity's objects by address).
     std::uint32_t marker_aux = 0;
     std::array<std::uint64_t, 2> marker{};

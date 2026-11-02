@@ -108,12 +108,10 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
     J3DNativeState::setCullMode(GPU_CULL_NONE);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     J3DNativeState::setColorUpdate(GPU_TRUE);
     J3DNativeState::setAlphaUpdate(GPU_FALSE);
     J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
     J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
-    J3DNativeState::setDither(GPU_FALSE);
     sMode = 0;
 }
 

@@ -92,6 +92,7 @@ public:
                     const std::function<VkSurfaceKHR(VkInstance)>& create_surface = {},
                     VkSurfaceKHR* surface = nullptr);
     void shutdown() noexcept;
+    [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
     // Why the last initialize failed (for the player's error message).
     [[nodiscard]] const std::string& failure() const noexcept { return failure_; }

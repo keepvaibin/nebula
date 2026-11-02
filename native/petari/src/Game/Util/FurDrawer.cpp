@@ -104,7 +104,6 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         useSpecular = true;
     }
 
-    J3DNativeState::setCoPlanar(GPU_FALSE);
     NativeShader::init(sMaterial, NEBULA_SHADER_FUR, mAdditive ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA,
                        NEBULA_COMPARE_LEQUAL, mZWrite != 0,
                        mCullMode == GPU_CULL_BACK ? NEBULA_CULL_BACK : mCullMode == GPU_CULL_FRONT ? NEBULA_CULL_FRONT
@@ -157,7 +156,6 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
         J3DNativeShape::setTexture(2, indirectMtx, 2);
     }
 
-    J3DNativeState::setClipMode(GPU_CLIP_DISABLE);
 
     u32 sources;
     u32 mask0 = 0;

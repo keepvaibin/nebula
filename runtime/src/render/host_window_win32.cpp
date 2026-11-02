@@ -65,14 +65,12 @@ std::string native_settings_content_root;
 std::atomic<std::uintptr_t> settings_window{0};
 std::atomic<bool> borderless_active{false};
 std::atomic<bool> exclusive_fullscreen_active{false};
-std::atomic<unsigned> scene_target_scale_rejected{0u};
 std::atomic<std::uintptr_t> pointer_hwnd{0};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
-std::atomic<bool> follow_window_rearm{false};
 // RendererD3D12::suspend_temporal_interpolation (the FRAME RATE row says so).
 std::atomic<bool> temporal_interp_suspended{false};
 // The session's GPU is an NVIDIA RTX (RendererD3D12::initialize): DLSS can be offered.
@@ -80,7 +78,6 @@ std::atomic<bool> rtx_adapter{false};
 
 }  // namespace host_window
 
-using host_window::display_scene_target_scale_cap;
 using host_window::flush_native_settings_if_dirty;
 using host_window::poll_render_config_file;
 using host_window::hidden_window_mode_enabled;
@@ -473,7 +470,6 @@ void sanitize_settings_draft(RenderConfig& render) {
             render.window_height = std::min(render.window_height, largest.second);
         }
     }
-    render.scene_target_scale = std::clamp(render.scene_target_scale, 1u, settings_scale_cap(render));
 }
 
 unsigned controls_changes();
@@ -524,8 +520,6 @@ unsigned pending_settings_changes() {
     changes += d.display_mode == kDisplayWindowed &&
         (d.window_width != live.window_width || d.window_height != live.window_height);
     changes += d.aspect_mode != live.aspect_mode;
-    changes += d.internal_follow_window != live.internal_follow_window ||
-        (!d.internal_follow_window && d.scene_target_scale != live.scene_target_scale);
     changes += d.vsync_interval != live.vsync_interval;
     changes += d.max_fps != live.max_fps;
     changes += d.frame_generation != live.frame_generation;
@@ -982,8 +976,6 @@ void apply_native_settings_draft() {
     applied.window_width = next.window_width;
     applied.window_height = next.window_height;
     applied.aspect_mode = next.aspect_mode;
-    applied.internal_follow_window = next.internal_follow_window;
-    applied.scene_target_scale = next.scene_target_scale;
     applied.vsync_interval = next.vsync_interval;
     applied.max_fps = next.max_fps;
     applied.frame_generation = next.frame_generation;
@@ -1021,17 +1013,7 @@ void apply_native_settings_draft() {
     if (runtime_draft_changes(&runtime) != 0u) {
         set_runtime_settings(runtime);
     }
-    if (applied.internal_follow_window) {
-        // The draft's scale is the one the menu opened with; the live scale
-        // may have followed the window since.
-        applied.scene_target_scale = live.scene_target_scale;
-    }
     set_render_config(applied);
-    if (!applied.internal_follow_window) {
-        stage_next_start_scene_target_scale(applied.scene_target_scale);
-    } else {
-        host_window::follow_window_rearm.store(true, std::memory_order_release);
-    }
     s_settings_draft = get_render_config();
     reset_runtime_draft();
     if (dlss_asked) {
@@ -2169,11 +2151,7 @@ public:
     ui::GraphicsPageState query(const RenderConfig& render) const override {
         ui::GraphicsPageState state;
         state.upscalers = available_upscalers();
-        state.scale_cap = settings_scale_cap(render);
-        const unsigned internal = std::clamp(render.scene_target_scale, 1u, state.scale_cap);
-        state.render_scale = upscaler_render_scale(render, internal);
-        state.logical_width = kFrameWidth;
-        state.logical_height = kFrameHeight;
+        state.render_scale = upscaler_render_scale(render, settings_scale_cap(render));
         state.dlss_supported = streamline::dlss_supported();
         state.dlss_installed = dlss_installed_now();
         state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
@@ -3370,43 +3348,6 @@ NativeSettingsStatus dlss_status(std::uint64_t now_ms) {
 
 namespace host_window {
 
-// The internal resolution that fills the display: the smallest scale whose 640x456 game picture covers the monitor's
-// current mode, or the swap chain in exclusive fullscreen. Higher scales cost GPU time and memory without adding
-// pixels the display can show.
-unsigned display_scene_target_scale_cap() {
-    UINT width = 0u;
-    UINT height = 0u;
-    if (host_window::exclusive_fullscreen_active.load(std::memory_order_acquire)) {
-        width = host_window::backbuffer_width;
-        height = host_window::backbuffer_height;
-    } else {
-        const HWND window = reinterpret_cast<HWND>(
-            host_window::settings_window.load(std::memory_order_acquire));
-        const HMONITOR monitor = window != nullptr
-            ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST)
-            : MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
-        MONITORINFOEXW info{};
-        info.cbSize = sizeof(info);
-        if (monitor != nullptr && GetMonitorInfoW(monitor, &info)) {
-            DEVMODEW mode{};
-            mode.dmSize = sizeof(mode);
-            if (EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode) &&
-                mode.dmPelsWidth != 0u && mode.dmPelsHeight != 0u) {
-                width = mode.dmPelsWidth;
-                height = mode.dmPelsHeight;
-            } else {
-                width = static_cast<UINT>(info.rcMonitor.right - info.rcMonitor.left);
-                height = static_cast<UINT>(info.rcMonitor.bottom - info.rcMonitor.top);
-            }
-        }
-    }
-    if (width == 0u || height == 0u) {
-        return kMaxSceneScale;
-    }
-    const double needed = std::max(width / static_cast<double>(kFrameWidth), height / 456.0);
-    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxSceneScale);
-}
-
 // DXR 1.1 with shader model 6.6 and resource binding tier 3 on an adapter with dedicated memory (the RAY TRACING row).
 std::atomic<bool> ray_tracing_offered{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
@@ -3444,13 +3385,6 @@ void poll_render_config_file() {
     const std::string gpu_before = next_start_gpu();
     if (!reload_render_config_if_changed()) {
         return;
-    }
-    RenderConfig after = get_render_config();
-    if (after.internal_follow_window) {
-        // The window decides the scale, as when the menu turns Match Output on.
-        after.scene_target_scale = before.scene_target_scale;
-        set_render_config(after);
-        host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
     std::cerr << "[settings] config.ini reloaded\n";
     if (const std::string gpu = next_start_gpu(); gpu != gpu_before) {

@@ -105,15 +105,9 @@ constexpr std::uint32_t bit(unsigned group) {
 std::uint32_t op_groups(std::uint8_t kind) {
     switch (kind) {
     case state::kBlendEtc: case state::kBlend: case state::kDstAlpha: case state::kColorUpdate:
-    case state::kAlphaUpdate: case state::kDither:
-        return bit(kBlend);
+    case state::kAlphaUpdate: return bit(kBlend);
     case state::kZMode: return bit(kZ);
-    case state::kCull: case state::kGenMode: case state::kGenMode2: case state::kNumTexGens: case state::kNumChans:
-    case state::kNumTevStages: case state::kNumIndStages: case state::kCoPlanar:
-        return bit(kGen);
-    case state::kChannel: return bit(kChannel);
-    case state::kMaterialColor: return bit(kMaterialColor);
-    case state::kAmbientColor: return bit(kAmbientColor);
+    case state::kCull: return bit(kGen);
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
     case state::kTexLookup: case state::kTexImage:
         return bit(kTexture);
@@ -174,63 +168,17 @@ void NativeDrawState::set_op(const state::Op& op) {
     case state::kCull:
         gen.cull = kCull[a[0] & 3u];
         break;
-    case state::kGenMode:
-        gen.num_texgens = static_cast<std::uint8_t>(a[0] & 15u);
-        gen.num_color_chans = static_cast<std::uint8_t>(a[1] & 7u);
-        gen.num_tev_stages = static_cast<std::uint8_t>(((a[2] - 1u) & 15u) + 1u);
-        break;
-    case state::kGenMode2:
-        gen.num_texgens = static_cast<std::uint8_t>(a[0] & 15u);
-        gen.num_color_chans = static_cast<std::uint8_t>(a[1] & 7u);
-        gen.num_tev_stages = static_cast<std::uint8_t>(((a[2] - 1u) & 15u) + 1u);
-        gen.num_ind_stages = static_cast<std::uint8_t>(a[3] & 7u);
-        gen.cull = kCull[a[4] & 3u];
-        break;
     case state::kColorUpdate:
         blend.color_update = a[0] != 0u;
         break;
     case state::kAlphaUpdate:
         blend.alpha_update = a[0] != 0u;
         break;
-    case state::kDither:
-        blend.dither = a[0] != 0u;
-        break;
     case state::kFrameAlpha:
         if (a[0] != 0u) {
             frame_alpha = a[1] != 0u;
         }
         break;
-    case state::kNumTexGens:
-        gen.num_texgens = static_cast<std::uint8_t>(a[0] & 15u);
-        break;
-    case state::kNumChans:
-        gen.num_color_chans = static_cast<std::uint8_t>(a[0] & 7u);
-        break;
-    case state::kNumTevStages:
-        gen.num_tev_stages = static_cast<std::uint8_t>(((a[0] - 1u) & 15u) + 1u);
-        break;
-    case state::kNumIndStages:
-        gen.num_ind_stages = static_cast<std::uint8_t>(a[0] & 7u);
-        break;
-    case state::kChannel: {
-        // Channel 0 or 1; a[7]: 1 its colour (channel[n]), 2 its alpha (channel[2 + n]).
-        const ChannelControl channel_ctrl = make_channel(a[3], a[1], a[4], a[2], a[5], a[6]);
-        if ((a[7] & 1u) != 0u) {
-            channel[a[0] & 1u] = channel_ctrl;
-        }
-        if ((a[7] & 2u) != 0u) {
-            channel[2u + (a[0] & 1u)] = channel_ctrl;
-        }
-        break;
-    }
-    case state::kMaterialColor:
-    case state::kAmbientColor: {
-        std::uint8_t* colour = op.kind == state::kMaterialColor ? material_color[a[0] & 1u] : ambient_color[a[0] & 1u];
-        for (unsigned c = 0; c < 4u; ++c) {  // the channel's whole colour
-            colour[c] = a[1u + c];
-        }
-        break;
-    }
     case state::kTexCoordGen: {
         TexGen made = material::tex_gen(a[1], a[2]);
         if (a[5] != 0u && made.type != TexGenType::EmbossMap) {

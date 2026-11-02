@@ -39,7 +39,6 @@ extern std::string native_settings_content_root;
 extern std::atomic<bool> borderless_active;
 extern std::atomic<bool> exclusive_fullscreen_active;
 // The last internal resolution refused for the video-memory budget (0: none).
-extern std::atomic<unsigned> scene_target_scale_rejected;
 // The window is being moved or sized.
 extern std::atomic<bool> move_size_active;
 // The window was closed.
@@ -49,7 +48,6 @@ extern std::atomic<bool> quit_request;
 // that owns it.
 extern std::atomic<std::uint64_t> pending_resize_extent;
 // Set by the overlay when Match Output is switched on, so the render thread derives the scale for the current window.
-extern std::atomic<bool> follow_window_rearm;
 // The window's drawing surface is withdrawn (Android: the activity out of sight, or a fold moving it to the other
 // display). The platform sets surface_withdrawn and then takes surface_use, which the renderer holds from acquiring a
 // swap-chain image until it is presented, so once the platform holds it no present uses the surface. The renderer
@@ -58,8 +56,6 @@ extern std::atomic<bool> follow_window_rearm;
 extern std::atomic<bool> surface_withdrawn;
 extern std::timed_mutex surface_use;
 
-// The internal resolution that fills the display.
-[[nodiscard]] unsigned display_scene_target_scale_cap();
 // Saves changed settings; false (kept dirty for a retry) when a file could not be written.
 bool flush_native_settings_if_dirty();
 // Takes a config.ini that Nebula Settings changed while the game runs.

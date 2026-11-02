@@ -79,27 +79,34 @@ void TextureBackend::release_upload_chunk(UploadChunk& chunk) noexcept {
     chunk.resource.reset();
 }
 
+bool TextureBackend::supports_bc1() {
+    return vk::Context::get().bc_textures();
+}
+
 gpu::TextureRef TextureBackend::create_texture(
-    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey) {
+    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, TexelFormat format) {
+    const VkFormat vk_format = format == TexelFormat::R8    ? VK_FORMAT_R8_UNORM
+                               : format == TexelFormat::Rg8 ? VK_FORMAT_R8G8_UNORM
+                               : format == TexelFormat::Bc1 ? VK_FORMAT_BC1_RGBA_UNORM_BLOCK
+                                                            : VK_FORMAT_R8G8B8A8_UNORM;
     auto texture = vk::Context::get().create_texture(
-        width, height, levels, grey ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false, nullptr);
+        width, height, levels, vk_format, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false, nullptr);
     if (!texture) {
         throw std::runtime_error("[TextureCache] create default texture failed");
     }
-    if (grey) {
-        // The value in every channel, as GX expands an I8 texture.
+    if (format == TexelFormat::R8 || format == TexelFormat::Rg8) {
+        // The value in every colour channel, alpha the value or the second byte.
         const VkDevice device = vk::Context::get().device();
         VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
         view_info.image = texture->image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format = VK_FORMAT_R8_UNORM;
+        view_info.format = vk_format;
         view_info.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R,
-                                VK_COMPONENT_SWIZZLE_R};
+                                format == TexelFormat::R8 ? VK_COMPONENT_SWIZZLE_R : VK_COMPONENT_SWIZZLE_G};
         view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, levels, 0, 1};
         VkImageView view = VK_NULL_HANDLE;
         if (vkCreateImageView(device, &view_info, nullptr, &view) != VK_SUCCESS) {
-            throw std::runtime_error("[TextureCache] create grey texture view failed");
+            throw std::runtime_error("[TextureCache] create texture view failed");
         }
         vkDestroyImageView(device, texture->view, nullptr);
         texture->view = view;
@@ -135,7 +142,11 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
         VkBufferImageCopy& region = regions[l];
         region = {};
         region.bufferOffset = offset + offsets[l];
-        region.bufferRowLength = pitches[l] / (texture->format == VK_FORMAT_R8_UNORM ? 1u : 4u);  // in texels
+        // In texels: a block format's rows hold 4 texels per 8 bytes.
+        region.bufferRowLength = texture->format == VK_FORMAT_R8_UNORM          ? pitches[l]
+                                 : texture->format == VK_FORMAT_R8G8_UNORM      ? pitches[l] / 2u
+                                 : texture->format == VK_FORMAT_BC1_RGBA_UNORM_BLOCK ? pitches[l] / 2u
+                                                                                : pitches[l] / 4u;
         region.bufferImageHeight = 0;
         region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
         region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};

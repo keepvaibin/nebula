@@ -52,10 +52,8 @@ void MainLoopFramework::prepareCopyDisp() {
 void MainLoopFramework::preGX() {
     if (mUseAlpha) {
         J3DNativeState::setFrameAlpha(true);
-        J3DNativeState::setDither(GPU_TRUE);
     } else {
         J3DNativeState::setFrameAlpha(false);
-        J3DNativeState::setDither(GPU_FALSE);
     }
 }
 

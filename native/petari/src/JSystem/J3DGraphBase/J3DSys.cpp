@@ -77,10 +77,7 @@ void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
 void J3DSys::drawInit() {
     J3DNativeState::setCurrentMtx(GPU_PNMTX0);
     J3DNativeState::setCullMode(GPU_CULL_BACK);
-    J3DNativeState::setCoPlanar(GPU_FALSE);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setDither(GPU_TRUE);
     J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
     J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
     J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
@@ -113,7 +110,6 @@ void J3DSys::drawInit() {
 
 void J3DSys::reinitGX() {
     J3DNativeState::setCullMode(GPU_CULL_BACK);
-    J3DNativeState::setCoPlanar(GPU_FALSE);
     reinitLighting();
     reinitTransform();
     reinitTexture();
@@ -160,8 +156,6 @@ void J3DSys::reinitPixelProc() {
     J3DNativeState::setColorUpdate(GPU_TRUE);
     // SMG1 change -- GPU_FALSE to GPU_TRUE
     J3DNativeState::setAlphaUpdate(GPU_TRUE);
-    J3DNativeState::setDither(GPU_TRUE);
     J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, ColorBlack);
-    J3DNativeState::setFogRangeAdj(GPU_FALSE, 0, nullptr);
     J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
 }

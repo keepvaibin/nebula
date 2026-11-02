@@ -181,7 +181,6 @@ void NormalMapBase::draw() const {
         MR::loadActorLight(this);
         MR::loadViewMtx();
         MR::loadProjectionMtx();
-        J3DNativeState::setDither(GPU_FALSE);
         const TPos3f& rCameraViewMtx = MR::getCameraViewMtx();
         TPos3f lightMtx;
         Mtx mtx;
@@ -195,7 +194,6 @@ void NormalMapBase::draw() const {
         drawSetting(lightMtx);
         shapeAnalyzeDraw(MR::getJ3DModel(this));
         standardDraw(MR::getJ3DModel(this));
-        J3DNativeState::setDither(GPU_TRUE);
     }
 }
 
@@ -467,7 +465,6 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     NebulaMtxScale(scale_mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(scale_mtx, 0.5f, 0.5f, 0.0f);
     J3DNativeShape::setTexture(1, scale_mtx, 2);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 
     // Channel 0: lit by the hard light mask with the ambient colour from the material and the material colour from
     // the vertex; else by no lights from the material's colours (the model's light registers) or the vertex's. Its

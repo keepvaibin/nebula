@@ -387,6 +387,39 @@ static void expand_record_levels(
     }
 }
 
+// The format a record is sampled in without expanding it. Upload filters need texels; a block with a transparent colour
+// is expanded, BC1 making that colour black where the record's blocks keep it for filtering.
+static TexelFormat sampled_format(const NebulaTexture& record) {
+    if ((record.flags & NEBULA_TEXTURE_FILTER_AT_UPLOAD) != 0u) {
+        return TexelFormat::Rgba8;
+    }
+    switch (record.layout) {
+    case NEBULA_TEXTURE_L8: return TexelFormat::R8;
+    case NEBULA_TEXTURE_LA8: return TexelFormat::Rg8;
+    case NEBULA_TEXTURE_BLOCK4:
+        return (record.flags & NEBULA_TEXTURE_OPAQUE_BLOCKS) != 0u && TextureBackend::supports_bc1() ? TexelFormat::Bc1
+                                                                                                    : TexelFormat::Rgba8;
+    default: return TexelFormat::Rgba8;
+    }
+}
+
+// A record's levels, as they are, into their placed footprints in mapped staging memory.
+static void copy_record_levels(const NebulaTexture& record, TexelFormat format, std::uint8_t* dst_base, unsigned levels,
+                               const std::uint64_t* offsets, const std::uint32_t* pitches) {
+    const auto* src = reinterpret_cast<const std::uint8_t*>(&record) + NEBULA_TEXTURE_HEADER;
+    for (unsigned l = 0; l < levels; ++l) {
+        const std::uint32_t lw = std::max<std::uint32_t>(1u, record.width >> l);
+        const std::uint32_t lh = std::max<std::uint32_t>(1u, record.height >> l);
+        const std::uint32_t row = texel_row_bytes(format, lw);
+        const std::uint32_t rows = texel_rows(format, lh);
+        std::uint8_t* dst = dst_base + offsets[l];
+        for (std::uint32_t y = 0; y < rows; ++y) {
+            std::memcpy(dst + static_cast<std::size_t>(y) * pitches[l], src + static_cast<std::size_t>(y) * row, row);
+        }
+        src += static_cast<std::size_t>(rows) * row;
+    }
+}
+
 // Copies decoded levels into their placed footprints in mapped staging memory.
 static void write_staging_levels(
     std::uint8_t* dst_base,
@@ -1159,7 +1192,7 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
                     retire(std::move(old));
                 }
                 std::uint64_t bytes = 0;
-                plane.texture = backend_.create_texture(w, h, 1u, bytes, true);
+                plane.texture = backend_.create_texture(w, h, 1u, bytes, TexelFormat::R8);
                 plane.width = w;
                 plane.height = h;
                 plane.uploaded = false;
@@ -1376,14 +1409,16 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                       << '\n';
         }
     }
+    // A record the GPU can sample as it is goes up as it is.
+    const TexelFormat format = record != nullptr && !pack_dump && !generated_mips ? sampled_format(*record) : TexelFormat::Rgba8;
     // Only the pixel fill moves off-thread. Texture-pack dumps, which read the decoded pixels here, and unknown
     // formats, which must throw here, stay synchronous.
-    const bool async_decode = async_decode_allowed_ && record != nullptr && !pack_dump;
+    const bool async_decode = async_decode_allowed_ && record != nullptr && !pack_dump && format == TexelFormat::Rgba8;
     if (level_pixels_scratch_.size() < levels) {
         level_pixels_scratch_.resize(levels);
     }
     auto& level_pixels = level_pixels_scratch_;
-    if (!async_decode) {
+    if (!async_decode && format == TexelFormat::Rgba8) {
         if (record != nullptr) {
             expand_record_levels(record, source_levels, levels, generated_mips, level_pixels);
         } else {
@@ -1420,9 +1455,9 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             ~static_cast<std::uint64_t>(TextureBackend::kPlacementAlignment - 1u);
         level_offset[l] = staging_size;
         level_pitch[l] =
-            (lw * 4u + TextureBackend::kPitchAlignment - 1u) &
+            (texel_row_bytes(format, lw) + TextureBackend::kPitchAlignment - 1u) &
             ~(TextureBackend::kPitchAlignment - 1u);
-        staging_size += static_cast<std::uint64_t>(level_pitch[l]) * lh;
+        staging_size += static_cast<std::uint64_t>(level_pitch[l]) * texel_rows(format, lh);
     }
 
     const UploadAllocation staging = allocate_upload_bytes(
@@ -1460,6 +1495,8 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             });
         async_decode_pending_ = true;
         ++async_decode_jobs_;
+    } else if (format != TexelFormat::Rgba8) {
+        copy_record_levels(*record, format, dst_base, levels, level_offset.data(), level_pitch.data());
     } else {
         write_staging_levels(
             dst_base, w, h, levels, level_offset.data(), level_pitch.data(),
@@ -1471,9 +1508,9 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
 
     gpu::TextureRef resource;
     std::uint64_t allocation_bytes = 0;
-    const bool reused_resource = take_pooled_texture(w, h, levels, resource, allocation_bytes);
+    const bool reused_resource = format == TexelFormat::Rgba8 && take_pooled_texture(w, h, levels, resource, allocation_bytes);
     if (!reused_resource) {
-        resource = backend_.create_texture(w, h, levels, allocation_bytes);
+        resource = backend_.create_texture(w, h, levels, allocation_bytes, format);
     }
     const auto resource_end = trace_stalls
         ? std::chrono::steady_clock::now()

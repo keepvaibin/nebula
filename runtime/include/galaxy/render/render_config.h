@@ -2,7 +2,7 @@
 
 // The rendering settings (config.ini), set before galaxy::render::initialize() and changed at run time through
 // set_render_config(); the render thread takes a snapshot at each frame boundary and applies changes there
-// (scene_target_scale re-creates the scene target targets). Window dimensions change through the window itself. Settings the renderer
+// Window dimensions change through the window itself. Settings the renderer
 // does not implement are clamped off.
 
 #include <algorithm>
@@ -28,9 +28,6 @@ inline constexpr unsigned kBloomNative = 0;
 inline constexpr unsigned kBloomEnhanced = 1;
 
 struct RenderConfig {
-    // scene target resolution multiplier, 1..kMaxSceneScale (2: 1280x912, supersampling the game's 640x456 frame). 1 is the Wii's
-    // own resolution.
-    unsigned scene_target_scale           = 1;
 
     // DXGI Present sync interval: 0 off, 1 every vblank, 2 every other vblank. 1 can back-pressure the command
     // stream through DWM and lower the frame rate on some systems.
@@ -81,13 +78,6 @@ struct RenderConfig {
     unsigned bloom_mode          = kBloomEnhanced;
     unsigned bloom               = 100;
 
-    // Match Output: after a resize settles (not during an edge drag), scene_target_scale becomes the smallest scale whose game
-    // picture covers the window; the renderer re-creates its targets once, at a frame boundary. Off by default: the
-    // internal resolution is the player's setting.
-    bool     internal_follow_window = false;
-    // Match Output may step its scale down while the GPU stays above 80% busy (RendererD3D12::update_gpu_budget).
-    // Off by default: it would change what the player chose.
-    bool     gpu_budget = false;
     // The 2D layer (HUD, menus, text) renders at the window's resolution over the resampled 3D scene when the
     // internal resolution is lower. Off by default: the scene then takes two resamples (to the integer output
     // scale, then to the window) instead of one.
@@ -301,7 +291,6 @@ void set_rt_effect_frame(std::uint64_t frame) noexcept;
 
 // The scene target scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.
-void stage_next_start_scene_target_scale(unsigned scene_target_scale);
 [[nodiscard]] RenderFeatureCaps get_render_feature_caps();
 void set_render_feature_caps(const RenderFeatureCaps& caps);
 

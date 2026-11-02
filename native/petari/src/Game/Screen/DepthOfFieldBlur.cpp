@@ -110,7 +110,6 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
     J3DNativeState::setCurrentMtx(GPU_PNMTX0);
-    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
     J3DNativeState::setColorUpdate(GPU_TRUE);
     J3DNativeState::setAlphaUpdate(GPU_FALSE);
     J3DNativeState::setLineWidth(12, GPU_TO_ZERO);
