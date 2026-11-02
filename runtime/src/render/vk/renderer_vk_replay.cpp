@@ -1062,16 +1062,10 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
         return;
     }
     if (copy.display) {
-        // Display copies never convert to intensity; gamma and the copy filter apply.
-        record_conversion_blit(target, copy.width, copy.height, copy.params, false, false, true, kCopyLayoutDisplay, copy.geometry[0],
-                               copy.geometry[1], copy.geometry[2], copy.geometry[3], copy.geometry[4]);
+        record_conversion_blit(target, copy.width, copy.height, false, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
         return;
     }
-    // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
-    const bool keep_alpha = copy.params.channels == kCopyLayoutIntensityAlpha;
-    record_conversion_blit(target, copy.width, copy.height, copy.params, copy.depth, false, keep_alpha,
-                           copy.params.channels, copy.geometry[0], copy.geometry[1], copy.geometry[2],
-                           copy.geometry[3], copy.geometry[4]);
+    record_conversion_blit(target, copy.width, copy.height, copy.depth, copy.params.channels, copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3]);
 }
 
 // The playing log into `list`'s command buffer, with the sequence's constants: draws read the evaluated blocks, copies

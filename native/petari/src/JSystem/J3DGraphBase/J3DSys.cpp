@@ -33,10 +33,6 @@ static NebulaColor8 ColorBlack = {0x00, 0x00, 0x00, 0x00};
 static NebulaColor8 ColorWhite = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DSys::J3DSys() {
-    makeTexCoordTable();
-    makeTevSwapTable();
-    makeAlphaCmpTable();
-    makeZModeTable();
 
     mFlags = 0;
     NebulaMtxIdentity(mViewMtx);

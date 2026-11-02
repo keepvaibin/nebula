@@ -193,7 +193,7 @@ J3DMaterial* J3DMaterialFactory::createPatchedMaterial(J3DMaterial* i_material, 
 
     u8 indFlag = (i_flags & 0x3000000) != 0 ? static_cast< u8 >(1) : static_cast< u8 >(0);
     i_material->mColorBlock = J3DMaterial::createColorBlock(0x40000000);
-    i_material->mTexGenBlock = new J3DTexGenBlockPatched();
+    i_material->mTexGenBlock = new J3DTexGenBlock(8, false);
     i_material->mTevBlock = new J3DTevBlock(8, true, true);
     i_material->mIndBlock = J3DMaterial::createIndBlock(indFlag);
     i_material->mPEBlock = J3DMaterial::createPEBlock(0x10000000, getMaterialMode(i_idx));

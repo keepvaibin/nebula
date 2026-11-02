@@ -216,7 +216,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
 
     s32 override = -1;
     for (u32 i = 0; i <= 15; i++) {
-        if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
+        if (mFlags.word() & (1 << i)) {
             if (i == 6) {
                 J3DNativeMaterial::overrideCoordinate(MR::getScreenResTIMG()->image(), MR::getScreenWidth(),
                                                       NebulaFrameClock::cCanvasHeight);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string.h>
 #include <JSystem/JGeometry/TVec.hpp>
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
@@ -36,11 +37,16 @@ public:
 
     struct Flags {
         inline void clear() {
-            *(u32*)this = 0;
+            memset(this, 0, sizeof(*this));
         }
 
-        // directDraw reads the flags as one word (bit i selects display list i): declared last-first, so each
-        // flag has the console's bit.
+        // Flag i is bit i of the word.
+        u32 word() const {
+            u32 bits;
+            memcpy(&bits, this, sizeof(bits));
+            return bits;
+        }
+
         unsigned _1F : 1;
         unsigned _1E : 1;
         unsigned _1D : 1;

@@ -5,34 +5,20 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 
 J3DColorBlock* J3DMaterial::createColorBlock(u32 flags) {
-    J3DColorBlock* rv = NULL;
     switch (flags) {
     case 0:
-        rv = new J3DColorBlockLightOff();
-        break;
+        return new J3DColorBlock(J3DColorBlock::Kind_LightOff);
     case 0x40000000:
-        rv = new J3DColorBlockLightOn();
-        break;
+        return new J3DColorBlock(J3DColorBlock::Kind_LightOn);
     case 0x80000000:
-        rv = new J3DColorBlockAmbientOn();
-        break;
+        return new J3DColorBlock(J3DColorBlock::Kind_AmbientOn);
+    default:
+        return NULL;
     }
-
-    return rv;
 }
 
 J3DTexGenBlock* J3DMaterial::createTexGenBlock(u32 flags) {
-    J3DTexGenBlock* rv = NULL;
-    switch (flags) {
-    case 0x8000000:
-        rv = new J3DTexGenBlock4();
-        break;
-    case 0:
-    default:
-        rv = new J3DTexGenBlockBasic();
-    }
-
-    return rv;
+    return flags == 0x8000000 ? new J3DTexGenBlock(4, true) : new J3DTexGenBlock(8, true);
 }
 
 J3DTevBlock* J3DMaterial::createTevBlock(int tevStageNum) {
@@ -56,21 +42,21 @@ J3DPEBlock* J3DMaterial::createPEBlock(u32 flags, u32 materialMode) {
     J3DPEBlock* rv = NULL;
     if (flags == 0) {
         if (materialMode & 1) {
-            rv = new J3DPEBlockOpa();
+            rv = new J3DPEBlock(J3DPEBlock::Kind_Opaque);
             return rv;
         } else if (materialMode & 2) {
-            rv = new J3DPEBlockTexEdge();
+            rv = new J3DPEBlock(J3DPEBlock::Kind_TexEdge);
             return rv;
         } else if (materialMode & 4) {
-            rv = new J3DPEBlockXlu();
+            rv = new J3DPEBlock(J3DPEBlock::Kind_Translucent);
             return rv;
         }
     }
 
     if (flags == 0x10000000) {
-        rv = new J3DPEBlockFull();
+        rv = new J3DPEBlock(J3DPEBlock::Kind_Full);
     } else if (flags == 0x20000000) {
-        rv = new J3DPEBlockFogOff();
+        rv = new J3DPEBlock(J3DPEBlock::Kind_FogOff);
     }
 
     return rv;
