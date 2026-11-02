@@ -26,6 +26,8 @@ void SpkSpeakerCtrl::setMixingBuffer(SpkMixingBuffer* pMixingBuffer) {
 
 void SpkSpeakerCtrl::setup() {
     for (int i = 0; i < WPAD_MAX_CONTROLLERS; i++) {
+        // A controller can connect before this runs (on the audio init's thread): it stays connected.
+        const bool connected = sSpeakerInfo[i].mIsConnected;
         sSpeakerInfo[i].mIsConnected = false;
         sSpeakerInfo[i].mIsPlaying = false;
         sSpeakerInfo[i].mIsUpdated = true;
@@ -36,6 +38,9 @@ void SpkSpeakerCtrl::setup() {
         sSpeakerInfo[i].mExtensionTimer = 0;
         SpkSpeakerCtrl::initReconnect(i);
         sSpeakerInfo[i].mUsingTimeOut = -1;
+        if (connected) {
+            SpkSpeakerCtrl::connect(i);
+        }
     }
 
     sSpeakerAlarm.init();

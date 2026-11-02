@@ -186,6 +186,13 @@ namespace NebulaMaterialSweep {
         }
         buildChains();
         sweepFolder("/ObjectData", false);
+        // Each stage's own archives: its map, the Observatory's among them.
+        for (u32 i = 0; NebulaDisc::folderEntry("/StageData", i, &entry); i++) {
+            if (entry.mIsFolder) {
+                snprintf(path, sizeof(path), "/StageData/%s", entry.mName);
+                sweepFolder(path, false);
+            }
+        }
         JUTNativeLog("material sweep: %u layouts, %u materials, %u model archives, %u archives skipped\n", sLayouts, sMaterials, sModels, sSkipped);
     }
 }  // namespace NebulaMaterialSweep
