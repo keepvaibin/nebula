@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The scene camera (scene_camera.h): the wide scene target back to the display at the 3D scene's end.
 //
-// MeterCS: reads a grid of the picture, finds how much light it holds past white, and moves the exposure toward what
-// that asks for by the time that passed (scene_camera_shape.h). CameraVS/CameraPS: every pixel (every sample of a
+// MeterCS: reads a grid of the picture, finds how much light the world holds past white (the sky, nothing in the depth, is
+// no light on it), and moves the exposure toward what that asks for by the time that passed (scene_camera_shape.h).
+// CameraVS/CameraPS: every pixel (every sample of a
 // multisampled scene, so an edge against a highlight blends as its parts look) under the exposure and the shoulder. The
 // game's colours are display values; the shoulder works in linear light, as the enhanced lighting that goes past white.
 // Numbers: scene_camera_shape.h.
@@ -35,6 +36,7 @@ Texture2D<float4> t_wide : register(t0);
 #endif
 Texture2D<float> t_exposure : register(t1);
 #if defined(CAMERA_METER)
+Texture2D<float> t_depth : register(t2);  // reversed: 0 at the far plane
 CAMERA_FORMAT(r32f) RWTexture2D<float> u_exposure : register(u0);
 
 [numthreads(1, 1, 1)]
@@ -43,8 +45,10 @@ void MeterCS() {
     for (uint row = 0u; row < kMeterRows; ++row) {
         for (uint column = 0u; column < kMeterColumns; ++column) {
             const float2 place = (float2(column, row) + 0.5f) / float2(kMeterColumns, kMeterRows) * g_size;
-            const float3 wide = t_wide.Load(int3(int2(place), 0)).rgb;
-            over += max(pow(max(max(wide.r, wide.g), max(wide.b, 0.0f)), 2.2f) - 1.0f, 0.0f);
+            if (t_depth.Load(int3(int2(place), 0)) > 1e-5f) {
+                const float3 wide = t_wide.Load(int3(int2(place), 0)).rgb;
+                over += max(pow(max(max(wide.r, wide.g), max(wide.b, 0.0f)), 2.2f) - 1.0f, 0.0f);
+            }
         }
     }
     over /= float(kMeterColumns * kMeterRows);
