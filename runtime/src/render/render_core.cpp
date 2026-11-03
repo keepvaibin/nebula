@@ -3704,7 +3704,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // with the copy's clear values). One initial clear (depth = far) seeds the targets.
     if (!scene_seeded_) {
         scene_seeded_ = true;
-        renderer_.clear_scene(0u, 0x00FFFFFFu, true, true, true);
+        renderer_.clear_scene(0u, true, true, true);
     }
 
     const std::uint64_t diagnostic_parse_start_ns =
@@ -4851,7 +4851,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::FrameClear: {
         // The values as the game gave them (alpha 255 on a frame without alpha).
         flush_pending_draw_batch();
-        renderer_.clear_scene(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+        renderer_.clear_scene(record.target_clear_rgba, (record.target_channels & 1u) != 0u,
                             (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
                             record.target_y, record.target_width, record.target_height,
                             frame_format());
@@ -4860,7 +4860,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::TargetClear:
         if (renderer_.target_pass_active()) {
             flush_pending_draw_batch();
-            renderer_.clear_scene(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+            renderer_.clear_scene(record.target_clear_rgba, (record.target_channels & 1u) != 0u,
                                 (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u,
                                 target_pass_size_[0], target_pass_size_[1], frame_format());
         }
@@ -4883,7 +4883,7 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
     }
     target_pass_size_ = {record.target_width, record.target_height};
     frame_bindings_dirty_ = true;
-    renderer_.clear_scene(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
+    renderer_.clear_scene(record.target_clear_rgba, true, true, true, 0u, 0u,
                         record.target_width, record.target_height, frame_format());
 }
 

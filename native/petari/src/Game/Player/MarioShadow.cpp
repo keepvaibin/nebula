@@ -422,7 +422,7 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     // Mario's silhouette, a pass into the shadow texture.
     const ResTIMG* image = _300->getTexInfo();
     const void* destination = image->image();
-    J3DNativeTarget::begin(destination, _2FC, _2FE, 0, 0xFFFFFF);
+    J3DNativeTarget::begin(destination, _2FC, _2FE, 0);
 
     if (!(_308 & 2)) {
         setViewMtx(_24);

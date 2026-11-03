@@ -1687,9 +1687,9 @@ bool test_clear_precision() {
             static_cast<std::uint8_t>(std::lround(v.color[2] * 255.0f)),
             static_cast<std::uint8_t>(std::lround(v.color[3] * 255.0f))};
     };
-    passed &= expect_pixel(bytes(galaxy::render::make_scene_clear_values(0x13579b7fu, 0x123456u, 0u)),
+    passed &= expect_pixel(bytes(galaxy::render::make_scene_clear_values(0x13579b7fu, 0u)),
         {19u, 87u, 155u, 255u}, "RGB8 clears preserve each full 8-bit color channel");
-    passed &= expect_pixel(bytes(galaxy::render::make_scene_clear_values(0x13579b7fu, 0x123456u, 1u)),
+    passed &= expect_pixel(bytes(galaxy::render::make_scene_clear_values(0x13579b7fu, 1u)),
         {19u, 87u, 155u, 127u}, "clears of a frame with alpha keep the values as given");
     return passed;
 }

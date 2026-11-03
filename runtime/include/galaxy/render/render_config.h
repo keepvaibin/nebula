@@ -137,9 +137,6 @@ struct RenderConfig {
     // GPU that is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Set at start-up from
     // config.ini (GALAXY_GPU overrides) and kept for the session; see next_start_gpu().
     std::array<char, 32> gpu{};
-    unsigned fullscreen_width    = 0;
-    unsigned fullscreen_height   = 0;
-    unsigned fullscreen_refresh_hz = 0;
     // Game picture aspect, an index of kAspectRatios (0 follows the window's shape). Applied at the next video
     // frame.
     unsigned aspect_mode         = 0;
@@ -172,7 +169,6 @@ inline unsigned interpolated_frames_per_game_frame(double rate) {
 
 inline constexpr unsigned kDisplayWindowed = 0u;
 inline constexpr unsigned kDisplayBorderless = 1u;
-inline constexpr unsigned kDisplayExclusive = 2u;
 inline constexpr unsigned kAspectModeCount = 7u;
 // Width:height of each aspect_mode (0 = follow the window), narrowest first.
 inline constexpr unsigned kAspectRatios[kAspectModeCount][2] = {

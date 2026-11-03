@@ -136,13 +136,12 @@ void FallOutFieldDraw::draw() const {
     const NebulaColor8 white = {255, 255, 255, 255};
     ImageEffectLocalUtil::setMode(_C ? ImageEffectLocalUtil::Mode_MaskAbove : ImageEffectLocalUtil::Mode_MaskBelow, constantAlpha,
                                   white);
-    J3DNativeTarget::begin(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, 0xFFFFFF);
+    J3DNativeTarget::begin(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0);
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture2, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(mMask->mImage, NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, constantAlpha, ::sEdgeColor);
-    J3DNativeTarget::begin(pScreenAlphaTexture3->mImage, pScreenAlphaTexture3->getWidth(), pScreenAlphaTexture3->getHeight(), 0,
-                           0xFFFFFF);
+    J3DNativeTarget::begin(pScreenAlphaTexture3->mImage, pScreenAlphaTexture3->getWidth(), pScreenAlphaTexture3->getHeight(), 0);
     ImageEffectLocalUtil::drawTexture(mMask, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(pScreenAlphaTexture3->mImage, NEBULA_TARGET_ALPHA);
 
