@@ -29,7 +29,7 @@ struct NebulaMaterialParts {
 namespace {
     // The register file as the J3D materials' constants lay it out (j3d_material.hlsli MaterialConstants): what the
     // J3D materials and the game's state changes set last. A native J3D material takes the parts its program does not
-    // load from here (the TEV register PREV always: J3D loads registers 1-3).
+    // load from here (the output register always: J3D loads registers 1-3).
     f32 sRegisters[84];
 
     // The native material the draws use now (J3D: sCurrent, its program and values; or a site's own), and the state
@@ -64,7 +64,7 @@ namespace {
 
     // The parts `rSetup` loads (J3D_LOADS_*), into the register file. An instance's differed list
     // (diff_flags) loads only the parts its flags name, as J3D's list does and the drawing state takes it
-    // (draw_state.cpp set_material): TEV and konst colours under TevReg, material colours under MatColor, fog under
+    // (draw_state.cpp set_material): register and constant colours under TevReg, material colours under MatColor, fog under
     // Fog; never the ambient colours, indirect matrices or alpha references, which stay as the shared list and the
     // state changes since left them (an actor's light loader sets the ambient colour between the two lists).
     void loadRegisters(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
@@ -75,7 +75,7 @@ namespace {
         if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_TEV_COLOR) != 0) {
             for (u32 r = 0; r < 3; r++) {
                 for (u32 c = 0; c < 4; c++) {
-                    pC[4 + r * 4 + c] = rValues.tev_color[r][c] / 255.0f;
+                    pC[4 + r * 4 + c] = rValues.register_color[r][c] / 255.0f;
                 }
             }
         }
@@ -399,7 +399,7 @@ namespace J3DNativeMaterial {
                          : mode == J3D_CULL_ALL ? NEBULA_CULL_ALL : NEBULA_CULL_NONE;
         }
 
-        // The null TEV block has no textures or orders.
+        // The null register block has no textures or orders.
         const bool tev = pTev->hasTextures();
         // Textures first: their sizes fill the coordinate scale table.
         u16 sizes[16];
@@ -417,15 +417,15 @@ namespace J3DNativeMaterial {
                 coordScale(pVal, k, pParts->cooked->coord_map[k]);
             }
         }
-        // The parts a TEV block variant keeps (J3DTevBlock1 has no colours): left as set before.
+        // The parts a register block variant keeps (the one-stage variant has no colours): left as set before.
         if (pTev->getRegisterColor(0) != NULL) {
             pOut->loads |= J3D_LOADS_TEV_COLOR;
             for (u32 i = 0; i < 3; i++) {
                 const J3DColorWide& rColor = *pTev->getRegisterColor(i);
-                pVal->tev_color[i][0] = rColor.r;
-                pVal->tev_color[i][1] = rColor.g;
-                pVal->tev_color[i][2] = rColor.b;
-                pVal->tev_color[i][3] = rColor.a;
+                pVal->register_color[i][0] = rColor.r;
+                pVal->register_color[i][1] = rColor.g;
+                pVal->register_color[i][2] = rColor.b;
+                pVal->register_color[i][3] = rColor.a;
             }
         }
         if (pTev->getConstantColor(0) != NULL) {

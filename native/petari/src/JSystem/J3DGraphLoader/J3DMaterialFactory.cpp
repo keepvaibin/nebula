@@ -31,7 +31,7 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
     mpTexNo = JSUConvertOffsetToPtr< u16 >(&i_block, i_block.mpTexNo);
     mpRegisterColor = JSUConvertOffsetToPtr< NebulaColor16 >(&i_block, i_block.mpRegisterColor);
     mpConstantColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpConstantColor);
-    mpTevStageNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpTevStageNum);
+    mpStageCount = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpStageCount);
     mpFogInfo = JSUConvertOffsetToPtr< J3DFogInfo >(&i_block, i_block.mpFogInfo);
     mpAlphaCompInfo = JSUConvertOffsetToPtr< J3DAlphaCompInfo >(&i_block, i_block.mpAlphaCompInfo);
     mpBlendInfo = JSUConvertOffsetToPtr< J3DBlendInfo >(&i_block, i_block.mpBlendInfo);
@@ -71,8 +71,8 @@ u32 J3DMaterialFactory::countStages(int i_idx) const {
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     u32 count1 = 0;
     u32 count2 = 0;
-    if (mtl_init_data->mTevStageNumIdx != 0xff) {
-        count2 = mpTevStageNum[mtl_init_data->mTevStageNumIdx];
+    if (mtl_init_data->mStageCountIdx != 0xff) {
+        count2 = mpStageCount[mtl_init_data->mStageCountIdx];
     }
 
     for (int i = 0; i < 8; i++) {
@@ -107,9 +107,9 @@ J3DMaterial* J3DMaterialFactory::create(J3DMaterial* i_material, MaterialType i_
 
 J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, int i_idx, u32 i_flags) const {
     const u32 stages = countStages(i_idx);
-    u32 tev_stage_num = getMdlDataFlag_TevStageNum(i_flags);
-    u32 tev_stage_num_max = (stages > tev_stage_num ? stages : tev_stage_num);
-    u32 tex_num = tev_stage_num_max > 8 ? 8 : tev_stage_num_max;
+    u32 stage_count = getMdlDataFlag_StageCount(i_flags);
+    u32 stage_count_max = (stages > stage_count ? stages : stage_count);
+    u32 tex_num = stage_count_max > 8 ? 8 : stage_count_max;
     u32 texgens = countTexGens(i_idx);
     u32 texgen_flag = texgens > 4 ? getMdlDataFlag_TexGenFlag(0) : getMdlDataFlag_TexGenFlag(i_flags);
     u32 color_flag = getMdlDataFlag_ColorFlag(i_flags);
@@ -121,7 +121,7 @@ J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, i
 
     i_material->mColorBlock = J3DMaterial::createColorBlock(color_flag);
     i_material->mTexGenBlock = J3DMaterial::createTexGenBlock(texgen_flag);
-    i_material->mRegisterBlock = J3DMaterial::createRegisterBlock((u16)tev_stage_num_max);
+    i_material->mRegisterBlock = J3DMaterial::createRegisterBlock((u16)stage_count_max);
     i_material->mIndBlock = J3DMaterial::createIndBlock(ind_flag);
     i_material->mOutputBlock = J3DMaterial::createOutputBlock(pe_flag, getMaterialMode(i_idx));
     i_material->mIndex = i_idx;

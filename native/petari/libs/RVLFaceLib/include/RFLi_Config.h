@@ -119,7 +119,7 @@ static const u8 MII_I_EYEBROW_ROT_OFFSET[MII_I_MAX_EYEBROW_TYPE + 1] = {
     27, 27, 26, 26, 25, 25, 26, 26, 27, 26, 25, 27};
 
 /**
- * Colors for TEV
+ * Colors for the stages
  */
 static const NebulaColor8 MII_I_MOLE_COLOR0 = {18, 15, 15, 255};
 

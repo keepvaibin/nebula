@@ -29,7 +29,7 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_DoBdlMaterialCalc = 0x00002000,
     J3DMLF_15 = 0x00004000,
     J3DMLF_16 = 0x00008000,
-    J3DMLF_TevNumShift = 0x00010000,
+    J3DMLF_StageCountShift = 0x00010000,
     J3DMLF_18 = 0x00020000,
     J3DMLF_UseSingleSharedSnapshot = 0x00040000,
     J3DMLF_20 = 0x00080000,
@@ -124,7 +124,7 @@ struct J3DMaterialBlock : public J3DModelBlock {
     u32 mpTevOrderInfo;
     u32 mpRegisterColor;
     u32 mpConstantColor;
-    u32 mpTevStageNum;
+    u32 mpStageCount;
     u32 mpTevStageInfo;
     u32 mpTevSwapModeInfo;
     u32 mpTevSwapModeTableInfo;
@@ -211,7 +211,7 @@ public:
     static J3DModelData* loadBinaryMaterials(const void*, u32);
 };
 
-static inline u32 getMdlDataFlag_TevStageNum(u32 flags) {
+static inline u32 getMdlDataFlag_StageCount(u32 flags) {
     return (flags & 0x001f0000) >> 0x10;
 }
 
