@@ -543,10 +543,12 @@ inline constexpr const char* trace_file_reads_name() noexcept { return "GALAXY_T
 inline constexpr const wchar_t* trace_file_reads_wide_name() noexcept { return L"GALAXY_TRACE_FILE_READS"; }
 #endif
 #if defined(NEBULA_RELEASE)
+inline const char* test_mods_screen() noexcept { return nullptr; }
 inline const char* trace_loads() noexcept { return nullptr; }
 inline constexpr const char* trace_loads_name() noexcept { return ""; }
 inline constexpr const wchar_t* trace_loads_wide_name() noexcept { return L""; }
 #else
+inline const char* test_mods_screen() noexcept { return std::getenv("GALAXY_TEST_MODS_SCREEN"); }
 inline const char* trace_loads() noexcept { return std::getenv("GALAXY_TRACE_LOADS"); }
 inline constexpr const char* trace_loads_name() noexcept { return "GALAXY_TRACE_LOADS"; }
 inline constexpr const wchar_t* trace_loads_wide_name() noexcept { return L"GALAXY_TRACE_LOADS"; }

@@ -3805,11 +3805,7 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
 #if defined(NEBULA_HOST_RENDERER)
         // The game's own screen while they cook; then it starts again with them, so that they are there from its first file.
         // A hidden test run cooks first, as its measurements start from the game with its mods.
-        bool screen = ::galaxy::run_options().hide_window == nullptr;
-#if !defined(NEBULA_RELEASE)
-        screen = screen || std::getenv("GALAXY_TEST_MODS_SCREEN") != nullptr;
-#endif
-        if (screen) {
+        if (::galaxy::run_options().hide_window == nullptr || ::galaxy::run_options().test_mods_screen != nullptr) {
             gModsProgressFile = overlay;
             gModsProgressFile.replace_extension("progress");
             gModsPreparing.store(2u, std::memory_order_release);
