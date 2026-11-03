@@ -1121,9 +1121,16 @@ struct GlyphPlace {
 };
 
 GlyphPlace glyph_of(InputSource source) noexcept {
-    if (source.kind == SourceKind::AxisPositive) {
-        if (source.code == static_cast<std::uint8_t>(PadAxis::LeftTrigger)) return {ButtonGlyph::Trigger, 0u};
-        if (source.code == static_cast<std::uint8_t>(PadAxis::RightTrigger)) return {ButtonGlyph::Trigger, 1u};
+    if (source.kind == SourceKind::AxisPositive || source.kind == SourceKind::AxisNegative) {
+        const bool positive = source.kind == SourceKind::AxisPositive;
+        switch (static_cast<PadAxis>(source.code)) {
+        case PadAxis::LeftTrigger: return positive ? GlyphPlace{ButtonGlyph::Trigger, 0u} : GlyphPlace{};
+        case PadAxis::RightTrigger: return positive ? GlyphPlace{ButtonGlyph::Trigger, 1u} : GlyphPlace{};
+        case PadAxis::LeftY: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{0u} : std::uint8_t{1u}};
+        case PadAxis::LeftX: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{3u} : std::uint8_t{2u}};
+        case PadAxis::RightY: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{4u} : std::uint8_t{5u}};
+        case PadAxis::RightX: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{7u} : std::uint8_t{6u}};
+        }
         return {};
     }
     if (source.kind != SourceKind::Button) return {};
@@ -1143,6 +1150,14 @@ GlyphPlace glyph_of(InputSource source) noexcept {
     case pad::kDpadDownBit:
     case pad::kDpadLeftBit:
     case pad::kDpadRightBit: return {ButtonGlyph::Dpad, 0u};
+    case pad::kCaptureBit: return {ButtonGlyph::Capture, 0u};
+    case pad::kChatBit: return {ButtonGlyph::Chat, 0u};
+    case pad::kGripLeftBit: return {ButtonGlyph::Grip, 0u};
+    case pad::kGripRightBit: return {ButtonGlyph::Grip, 1u};
+    case pad::kGripLeft2Bit: return {ButtonGlyph::Grip, 2u};
+    case pad::kGripRight2Bit: return {ButtonGlyph::Grip, 3u};
+    case pad::kLeftPadBit: return {ButtonGlyph::Trackpad, 0u};
+    case pad::kRightPadBit: return {ButtonGlyph::Trackpad, 1u};
     default: return {};
     }
 }
@@ -1271,11 +1286,16 @@ ButtonIconSpec keyboard_icon_spec(const BindingTable& table, bool menu) noexcept
 
 }  // namespace
 
-ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept {
+ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu,
+                                ButtonIconModel model) noexcept {
     if (style == ButtonIconStyle::Keyboard) return keyboard_icon_spec(table, menu);
     ButtonIconSpec spec;
     spec.style = style;
     if (style == ButtonIconStyle::Game) return spec;
+    if ((model == ButtonIconModel::Sixaxis && style == ButtonIconStyle::PlayStation) ||
+        (model == ButtonIconModel::GameCube && style == ButtonIconStyle::Nintendo)) {
+        spec.model = model;
+    }
     // HOME and the Control Pad look alike on every controller: the game's own stay (Keep).
     static constexpr GameInput kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
         GameInput::A, GameInput::B, GameInput::C, GameInput::Z, GameInput::One, GameInput::Two, GameInput::Plus,

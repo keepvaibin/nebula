@@ -330,6 +330,15 @@ bool library() {
     ok &= expect(!std::filesystem::exists(root / "miis" / "a (2).mii"), "a file in the folder not copied again");
     (void)galaxy::host::take_mii_installs();
 
+    // A file past the size limit is not read.
+    const std::filesystem::path huge = root / "elsewhere" / "huge.mii";
+    write_file(huge, mii(14u));
+    std::filesystem::resize_file(huge, (std::uintmax_t{64} << 20u) + 1u, error);
+    const auto from_huge = galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&huge, 1u), &message);
+    ok &= expect(from_huge.added == 0u && message.find("1 FILE(S) NOT MII DATA") != std::string::npos &&
+                     !std::filesystem::exists(root / "miis" / "huge.mii"),
+                 "a huge file is not read");
+
     // A damaged library file is left alone.
     write_file(file, std::vector<std::byte>(3u, std::byte{'?'}));
     galaxy::host::set_mii_library(file, console, root / "miis", {});

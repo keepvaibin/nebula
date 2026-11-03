@@ -27,6 +27,7 @@ struct ControllerInfo {
     bool sensors = true;
     bool gyro = true;
     bool touch = true;
+    ButtonIconModel icons = ButtonIconModel::Standard;
 };
 
 inline constexpr std::uint8_t kKeyboardSlot = 0xff;

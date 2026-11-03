@@ -47,7 +47,11 @@ s32 StarPieceAlmsStorage::serialize(u8* pData, u32) const {
     return 32;
 }
 
-s32 StarPieceAlmsStorage::deserialize(const u8* pData, u32) {
+s32 StarPieceAlmsStorage::deserialize(const u8* pData, u32 dataSize) {
+    if (dataSize < 16 * sizeof(u16)) {
+        return -1;
+    }
+
     for (s32 idx = 0; idx < 16; idx++) {
         mValueArray[idx] = MR::loadSaveU16(pData + idx * sizeof(u16));
     }

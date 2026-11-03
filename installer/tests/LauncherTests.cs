@@ -556,6 +556,32 @@ namespace Nebula.Launcher
             return bytes;
         }
 
+        // A save as the native game writes it: version 3, little-endian.
+        static byte[] NativeGameData(int seed)
+        {
+            byte[] bytes = Noise(SaveFormat.GameDataSize, seed);
+            PutLe32(bytes, 4, 3);
+            PutLe32(bytes, 8, 19);
+            PutLe32(bytes, 12, SaveFormat.GameDataSize);
+            for (int i = 0; i < SaveFormat.GameDataNames.Length; i++)
+            {
+                int info = 0x10 + i * 0x10;
+                Array.Clear(bytes, info, 12);
+                Encoding.ASCII.GetBytes(SaveFormat.GameDataNames[i]).CopyTo(bytes, info);
+                PutLe32(bytes, info + 12, SaveFormat.GameDataOffsets[i]);
+            }
+            PutLe32(bytes, 0, SaveFormat.GameDataChecksum(bytes, false));
+            return bytes;
+        }
+
+        static void PutLe32(byte[] bytes, int offset, uint value)
+        {
+            bytes[offset] = (byte)value;
+            bytes[offset + 1] = (byte)(value >> 8);
+            bytes[offset + 2] = (byte)(value >> 16);
+            bytes[offset + 3] = (byte)(value >> 24);
+        }
+
         static byte[] Banner(int seed)
         {
             byte[] bytes = Noise(SaveFormat.BannerSize, seed);
@@ -880,6 +906,30 @@ namespace Nebula.Launcher
 
             FileUtil.WriteNamedStream(SaveArchive.HostPath(saves, SaveArchive.GameDataPath), "galaxy.isfs.meta.pending", Noise(18, 5));
             Check(Failure(delegate { SaveArchive.Export(work); }) is InvalidOperationException, "export is refused while a save is unfinished");
+
+            // A native save (version 3) exports and imports; the copy of the old one kept beside it stays behind.
+            byte[] native = NativeGameData(6);
+            Check(SaveFormat.IsGameData(native) && SaveFormat.IsGameData(GameData(6)), "version 3 (little-endian) and version 2 (big-endian) saves are valid");
+            byte[] damagedNative = (byte[])native.Clone();
+            damagedNative[0x200] ^= 1;
+            byte[] wrongOrder = NativeGameData(6);
+            PutBe32(wrongOrder, 4, 3);
+            byte[] littleOld = NativeGameData(6);
+            PutLe32(littleOld, 4, 2);
+            PutLe32(littleOld, 0, SaveFormat.GameDataChecksum(littleOld, false));
+            Check(!SaveFormat.IsGameData(damagedNative) && !SaveFormat.IsGameData(wrongOrder) && !SaveFormat.IsGameData(littleOld),
+                  "a damaged native save, a big-endian version 3 and a little-endian version 2 are not");
+            FileUtil.DeleteTree(saves);
+            string nativeSave = SaveArchive.HostPath(saves, SaveArchive.GameDataPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(nativeSave));
+            File.WriteAllBytes(nativeSave, native);
+            File.WriteAllBytes(nativeSave + ".v2", GameData(6));
+            string nativeZip = SaveArchive.Export(work);
+            using (ZipArchive archive = ZipFile.OpenRead(nativeZip))
+                Check(archive.Entries.All(e => !e.FullName.EndsWith(".v2", StringComparison.Ordinal)), "export leaves out GameData.bin.v2");
+            FileUtil.DeleteTree(saves);
+            SaveArchive.Import(nativeZip, null);
+            Check(File.ReadAllBytes(nativeSave).SequenceEqual(native), "a native save survives export and import");
 
             FileUtil.DeleteTree(saves);
             foreach (string backup in Directory.GetDirectories(parent, "saves-backup-*")) FileUtil.DeleteTree(backup);

@@ -30,7 +30,7 @@ namespace Nebula.Setup
         public SetupForm(Dictionary<string, string> options)
         {
             this.options = options;
-            Text = "Nebula Setup " + BuildInfo.Version;
+            Text = NebulaText.Of("Nebula Setup") + " " + BuildInfo.Version;
             Font = new Font("Segoe UI", 9.5f);
 
             AutoScaleMode = AutoScaleMode.None;
@@ -49,12 +49,13 @@ namespace Nebula.Setup
             UiScale.Apply(this);
             UpdateChoices();
             clockTimer.Interval = 1000;
-            clockTimer.Tick += delegate { elapsed.Text = "Elapsed " + clock.Elapsed.ToString(@"hh\:mm\:ss"); };
+            clockTimer.Tick += delegate { elapsed.Text = NebulaText.Of("Elapsed {0}", clock.Elapsed.ToString(@"hh\:mm\:ss")); };
             Shown += delegate
             {
                 if (options.ContainsKey("uninstall")) { modeUninstall.Checked = true; }
                 if (options.ContainsKey("update")) CheckForUpdate();
-                else if (options.ContainsKey("apply-update") && installed != null) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
+                // An update that needs the disc stays on this page, which asks for it.
+                else if (options.ContainsKey("apply-update") && installed != null && InstallEngine.RetainedGameValid(layout)) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
             };
         }
 
@@ -62,8 +63,8 @@ namespace Nebula.Setup
         private void UpdateChoices()
         {
             InstallMode mode = installed == null ? InstallMode.Install : InstallIntent.ForPackage(installed.Version, BuildInfo.Version);
-            start.Text = installed == null ? "Install" : modeRestore.Checked ? "Restore" : modeUninstall.Checked ? "Uninstall" :
-                mode == InstallMode.Update ? "Update" : "Repair";
+            start.Text = installed == null ? NebulaText.Of("Install") : modeRestore.Checked ? NebulaText.Of("Restore") : modeUninstall.Checked ? NebulaText.Of("Uninstall") :
+                mode == InstallMode.Update ? NebulaText.Of("Update") : NebulaText.Of("Repair");
         }
 
         private Label AddLabel(Control parent, string text, int x, int y, int width, int height)
@@ -78,19 +79,19 @@ namespace Nebula.Setup
             choose.Dock = DockStyle.Fill;
             var title = AddLabel(choose, "Nebula", 20, 14, 700, 34);
             title.Font = new Font("Segoe UI Semibold", 17f);
-            AddLabel(choose, "Unofficial native PC port of Super Mario Galaxy (North America, Europe and Japan).", 20, 50, 720, 40);
+            AddLabel(choose, NebulaText.Of("Unofficial native PC port of Super Mario Galaxy (North America, Europe and Japan)."), 20, 50, 720, 40);
 
             int y = 98;
             if (installed != null)
             {
-                AddLabel(choose, "Installed: Nebula " + installed.Version + (installed.Previous != null ? " (previous " + installed.Previous + " kept)" : ""), 20, y, 720, 22);
+                AddLabel(choose, NebulaText.Of("Installed: Nebula {0}", installed.Version) + (installed.Previous != null ? NebulaText.Of(" (previous {0} kept)", installed.Previous) : ""), 20, y, 720, 22);
                 y += 26;
                 modeRepair.Text = InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update
-                    ? "Update to Nebula " + BuildInfo.Version + " (keeps saves and settings)"
-                    : "Install or repair Nebula " + BuildInfo.Version;
+                    ? NebulaText.Of("Update to Nebula {0} (keeps saves and settings)", BuildInfo.Version)
+                    : NebulaText.Of("Install or repair Nebula {0}", BuildInfo.Version);
                 modeRepair.Checked = true;
-                modeRestore.Text = "Restore the previous version (" + installed.Previous + ")";
-                modeUninstall.Text = "Uninstall (keeps saves and settings)";
+                modeRestore.Text = NebulaText.Of("Restore the previous version ({0})", installed.Previous);
+                modeUninstall.Text = NebulaText.Of("Uninstall (keeps saves and settings)");
                 foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
                 {
                     if (radio == modeRestore && installed.Previous == null) continue;
@@ -99,7 +100,7 @@ namespace Nebula.Setup
                     choose.Controls.Add(radio);
                     y += 26;
                 }
-                var update = new Button { Text = "Check for updates…", Location = new Point(28, y + 2), Size = new Size(170, 30) };
+                var update = new Button { Text = NebulaText.Of("Check for updates…"), Location = new Point(28, y + 2), Size = new Size(170, 30) };
                 update.Click += delegate { CheckForUpdate(); };
                 choose.Controls.Add(update);
                 y += 42;
@@ -112,23 +113,23 @@ namespace Nebula.Setup
             // An install keeps its packed game; the game is asked for only when that is gone.
             if (installed == null || !InstallEngine.RetainedGameValid(layout))
             {
-                AddLabel(choose, installed == null ? "Your game: ISO, RVZ or extracted folder."
-                                                   : "Your game: ISO, RVZ or extracted folder (the copy Setup kept is missing).",
+                AddLabel(choose, installed == null ? NebulaText.Of("Your game: ISO, RVZ or extracted folder.")
+                                                   : NebulaText.Of("Your game: ISO, RVZ or extracted folder (this version needs to read it again)."),
                          20, y, 720, 22);
                 y += 24;
                 input.Location = new Point(20, y);
                 input.Size = new Size(470, 26);
                 choose.Controls.Add(input);
-                var file = new Button { Text = "Image file…", Location = new Point(498, y - 1), Size = new Size(116, 28) };
+                var file = new Button { Text = NebulaText.Of("Image file…"), Location = new Point(498, y - 1), Size = new Size(116, 28) };
                 file.Click += delegate
                 {
-                    using (var dialog = new OpenFileDialog { Title = "Choose your Super Mario Galaxy disc image", Filter = "Wii disc images (*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz)|*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz|All files (*.*)|*.*" })
+                    using (var dialog = new OpenFileDialog { Title = NebulaText.Of("Choose your Super Mario Galaxy disc image"), Filter = NebulaText.Of("Wii disc images (*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz)|*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz|All files (*.*)|*.*") })
                         if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.FileName;
                 };
-                var folder = new Button { Text = "Folder…", Location = new Point(620, y - 1), Size = new Size(116, 28) };
+                var folder = new Button { Text = NebulaText.Of("Folder…"), Location = new Point(620, y - 1), Size = new Size(116, 28) };
                 folder.Click += delegate
                 {
-                    using (var dialog = new FolderBrowserDialog { Description = "Choose the extracted game folder" })
+                    using (var dialog = new FolderBrowserDialog { Description = NebulaText.Of("Choose the extracted game folder") })
                         if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.SelectedPath;
                 };
                 choose.Controls.Add(file);
@@ -139,15 +140,15 @@ namespace Nebula.Setup
             root.Text = layout.Root;
             if (installed == null)
             {
-                AddLabel(choose, "Install folder:", 20, y, 720, 22);
+                AddLabel(choose, NebulaText.Of("Install folder:"), 20, y, 720, 22);
                 y += 24;
                 root.Location = new Point(20, y);
                 root.Size = new Size(594, 26);
                 choose.Controls.Add(root);
-                var browse = new Button { Text = "Browse…", Location = new Point(620, y - 1), Size = new Size(116, 28) };
+                var browse = new Button { Text = NebulaText.Of("Browse…"), Location = new Point(620, y - 1), Size = new Size(116, 28) };
                 browse.Click += delegate
                 {
-                    using (var dialog = new FolderBrowserDialog { Description = "Choose where to install Nebula" })
+                    using (var dialog = new FolderBrowserDialog { Description = NebulaText.Of("Choose where to install Nebula") })
                         if (dialog.ShowDialog(this) == DialogResult.OK) root.Text = Path.Combine(dialog.SelectedPath, "Nebula");
                 };
                 choose.Controls.Add(browse);
@@ -155,11 +156,11 @@ namespace Nebula.Setup
             }
             else
             {
-                AddLabel(choose, "Install folder: " + layout.Root, 20, y, 720, 22);
+                AddLabel(choose, NebulaText.Of("Install folder: {0}", layout.Root), 20, y, 720, 22);
                 y += 32;
             }
 
-            desktop.Text = "Create a desktop shortcut";
+            desktop.Text = NebulaText.Of("Create a desktop shortcut");
             desktop.Location = new Point(20, y);
             desktop.Size = new Size(700, 24);
             choose.Controls.Add(desktop);
@@ -167,7 +168,7 @@ namespace Nebula.Setup
 
             if (RayTracingPreparation.Offered())
             {
-                prepareRayTracing.Text = "Prepare ray tracing shaders";
+                prepareRayTracing.Text = NebulaText.Of("Prepare ray tracing shaders");
                 prepareRayTracing.Location = new Point(20, y);
                 prepareRayTracing.Size = new Size(700, 24);
                 choose.Controls.Add(prepareRayTracing);
@@ -176,12 +177,12 @@ namespace Nebula.Setup
 
             if (DlssPackage.RtxAdapterPresent() && !DlssPackage.Installed())
             {
-                dlss.Text = "Install NVIDIA DLSS (" + FileUtil.FormatBytes(DlssPackage.DownloadBytes) + " download from NVIDIA)";
+                dlss.Text = NebulaText.Of("Install NVIDIA DLSS ({0} download from NVIDIA)", FileUtil.FormatBytes(DlssPackage.DownloadBytes));
                 dlss.Location = new Point(20, y);
                 dlss.Size = new Size(620, 24);
                 choose.Controls.Add(dlss);
                 y += 26;
-                dlssLicense.Text = "I accept the NVIDIA RTX SDKs license";
+                dlssLicense.Text = NebulaText.Of("I accept the NVIDIA RTX SDKs license");
                 dlssLicense.Location = new Point(40, y);
                 dlssLicense.Size = new Size(600, 24);
                 dlssLicense.Enabled = false;
@@ -192,7 +193,7 @@ namespace Nebula.Setup
                     if (!dlss.Checked) { dlssLicense.Checked = false; dlssLicense.ForeColor = SystemColors.ControlText; }
                 };
                 choose.Controls.Add(dlssLicense);
-                var dlssLink = new LinkLabel { Text = "Read license", Location = new Point(644, y + 3), Size = new Size(100, 22) };
+                var dlssLink = new LinkLabel { Text = NebulaText.Of("Read license"), Location = new Point(644, y + 3), Size = new Size(100, 22) };
                 dlssLink.LinkClicked += delegate { using (var dialog = new DlssInstallDialog(true)) dialog.ShowDialog(this); };
                 choose.Controls.Add(dlssLink);
                 y += 32;
@@ -200,8 +201,7 @@ namespace Nebula.Setup
 
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
-            summary.Text = "Requires Windows 10 or 11 (64-bit), 8 GB of RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) +
-                " of free disk space and a DirectX 12 GPU.";
+            summary.Text = NebulaText.Of("Requires Windows 10 or 11 (64-bit), 8 GB of RAM, {0} of free disk space and a DirectX 12 GPU.", FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes));
             choose.Controls.Add(summary);
             foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
                 radio.CheckedChanged += delegate { UpdateChoices(); };
@@ -209,7 +209,7 @@ namespace Nebula.Setup
             start.Location = new Point(530, 596);
             start.Size = new Size(100, 32);
             start.Click += delegate { OnStart(); };
-            var close = new Button { Text = "Close", Location = new Point(640, 596), Size = new Size(100, 32) };
+            var close = new Button { Text = NebulaText.Of("Close"), Location = new Point(640, 596), Size = new Size(100, 32) };
             close.Click += delegate { Close(); };
             choose.Controls.Add(start);
             choose.Controls.Add(close);
@@ -236,19 +236,19 @@ namespace Nebula.Setup
             log.ReadOnly = true;
             log.ScrollBars = ScrollBars.Vertical;
             log.Font = new Font("Consolas", 8.5f);
-            cancelButton.Text = "Cancel";
+            cancelButton.Text = NebulaText.Of("Cancel");
             cancelButton.Location = new Point(640, 596);
             cancelButton.Size = new Size(100, 32);
             cancelButton.Click += delegate
             {
-                if (cancel != null && MessageBox.Show(this, "Cancel setup?", "Nebula Setup", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                if (cancel != null && MessageBox.Show(this, NebulaText.Of("Cancel setup?"), NebulaText.Of("Nebula Setup"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     cancel.Cancel();
                     cancelButton.Enabled = false;
-                    step.Text = "Canceling…";
+                    step.Text = NebulaText.Of("Canceling…");
                 }
             };
-            launch.Text = "Play Nebula";
+            launch.Text = NebulaText.Of("Play Nebula");
             launch.Location = new Point(530, 596);
             launch.Size = new Size(100, 32);
             launch.Visible = false;
@@ -258,7 +258,7 @@ namespace Nebula.Setup
                     Process.Start(new ProcessStartInfo(Path.Combine(engine.InstalledVersionDir, "Nebula.exe")) { WorkingDirectory = engine.InstalledVersionDir });
                 Close();
             };
-            openLog.Text = "Open log";
+            openLog.Text = NebulaText.Of("Open log");
             openLog.Location = new Point(20, 596);
             openLog.Size = new Size(100, 32);
             openLog.Click += delegate { if (engine != null) Process.Start("notepad.exe", "\"" + engine.LogPath + "\""); };
@@ -271,18 +271,17 @@ namespace Nebula.Setup
             {
                 if (installed != null && modeUninstall.Checked)
                 {
-                    var answer = MessageBox.Show(this, "Uninstall Nebula?\r\n\r\nYour saves, settings and shader cache in " + NebulaPaths.DataRoot +
-                        " are kept. Choose No to also delete them.", "Uninstall Nebula", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+                    var answer = MessageBox.Show(this, NebulaText.Of("Uninstall Nebula?") + "\r\n\r\n" + NebulaText.Of("Your saves, settings and shader cache in {0} are kept. Choose No to also delete them.", NebulaPaths.DataRoot), NebulaText.Of("Uninstall Nebula"), MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
                     if (answer == DialogResult.Cancel) return;
                     Integration.Uninstall(layout, answer == DialogResult.No);
-                    MessageBox.Show(this, "Nebula was uninstalled.", "Nebula Setup");
+                    MessageBox.Show(this, NebulaText.Of("Nebula was uninstalled."), NebulaText.Of("Nebula Setup"));
                     Close();
                     return;
                 }
                 if (installed != null && modeRestore.Checked)
                 {
                     string version = Integration.Rollback(layout);
-                    MessageBox.Show(this, "Nebula " + version + " is active again.", "Nebula Setup");
+                    MessageBox.Show(this, NebulaText.Of("Nebula {0} is active again.", version), NebulaText.Of("Nebula Setup"));
                     Close();
                     return;
                 }
@@ -290,20 +289,20 @@ namespace Nebula.Setup
                 installed = InstalledInfo.Read(layout);
                 StartWork(InstallIntent.ForPackage(installed == null ? null : installed.Version, BuildInfo.Version));
             }
-            catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            catch (Exception error) { MessageBox.Show(this, error.Message, NebulaText.Of("Nebula Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
 
         private void StartWork(InstallMode mode)
         {
             string game = input.Text.Trim();
             if (game.Length == 0) game = null;
-            if (mode == InstallMode.Install && game == null) { Fail("Choose your Super Mario Galaxy ISO, RVZ or extracted folder."); return; }
-            if (game != null && !File.Exists(game) && !Directory.Exists(game)) { Fail("The selected game was not found: " + game); return; }
+            if (mode == InstallMode.Install && game == null) { Fail(NebulaText.Of("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.")); return; }
+            if (game != null && !File.Exists(game) && !Directory.Exists(game)) { Fail(NebulaText.Of("The selected game was not found: {0}", game)); return; }
             if (dlss.Checked && !dlssLicense.Checked)
             {
                 dlssLicense.ForeColor = Color.Firebrick;
                 dlssLicense.Focus();
-                Fail("Accept the NVIDIA RTX SDKs license to install DLSS, or clear the DLSS option."); return;
+                Fail(NebulaText.Of("Accept the NVIDIA RTX SDKs license to install DLSS, or clear the DLSS option.")); return;
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
@@ -335,17 +334,17 @@ namespace Nebula.Setup
         private void Finished(Exception failure)
         {
             clockTimer.Stop();
-            cancelButton.Text = "Close";
+            cancelButton.Text = NebulaText.Of("Close");
             cancelButton.Enabled = true;
             cancel = null;
             cancelButton.Click += delegate { Close(); };
             if (failure == null)
             {
-                step.Text = "Nebula " + BuildInfo.Version + " is installed.";
+                step.Text = NebulaText.Of("Nebula {0} is installed.", BuildInfo.Version);
                 if (prepareRayTracing.Checked) RayTracingPreparation.Request();
                 if (engine.DlssFailure != null)
-                    MessageBox.Show(this, "NVIDIA DLSS was not installed: " + engine.DlssFailure + "\r\n\r\nYou can install it later from the game's graphics settings.",
-                        "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show(this, NebulaText.Of("NVIDIA DLSS was not installed: {0}", engine.DlssFailure) + "\r\n\r\n" + NebulaText.Of("You can install it later from the game's graphics settings."),
+                        NebulaText.Of("Nebula Setup"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 overall.Value = overall.Maximum;
                 launch.Visible = true;
                 if (options.ContainsKey("launch") && engine.InstalledVersionDir != null)
@@ -356,11 +355,11 @@ namespace Nebula.Setup
                 return;
             }
             bool canceled = failure is OperationCanceledByUserException || failure is OperationCanceledException;
-            step.Text = canceled ? "Canceled." : "Setup failed.";
-            if (!canceled) MessageBox.Show(this, failure.Message, "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            step.Text = canceled ? NebulaText.Of("Canceled.") : NebulaText.Of("Setup failed.");
+            if (!canceled) MessageBox.Show(this, failure.Message, NebulaText.Of("Nebula Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        private void Fail(string message) { MessageBox.Show(this, message, "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        private void Fail(string message) { MessageBox.Show(this, message, NebulaText.Of("Nebula Setup"), MessageBoxButtons.OK, MessageBoxIcon.Warning); }
 
         private void CheckForUpdate()
         {
@@ -369,11 +368,11 @@ namespace Nebula.Setup
                 Cursor = Cursors.WaitCursor;
                 var release = Updater.FindNewer();
                 Cursor = Cursors.Default;
-                if (release == null) { MessageBox.Show(this, "Nebula " + BuildInfo.Version + " is the newest release.", "Nebula Update"); return; }
+                if (release == null) { MessageBox.Show(this, NebulaText.Of("Nebula {0} is the newest release.", BuildInfo.Version), NebulaText.Of("Nebula Update")); return; }
                 string notes = ReleaseNotes.Plain(release.Notes, 1200);
-                if (MessageBox.Show(this, "Nebula " + release.Version + (release.Prerelease ? " (prerelease)" : "") + " is available. You have " +
-                    BuildInfo.Version + ".\r\n\r\n" + notes + "\r\n\r\nDownload and install it? Your current version stays available until the new one is ready.",
-                    "Nebula Update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+                if (MessageBox.Show(this, (release.Prerelease ? NebulaText.Of("Nebula {0} (prerelease) is available. You have {1}.", release.Version, BuildInfo.Version) : NebulaText.Of("Nebula {0} is available. You have {1}.", release.Version, BuildInfo.Version)) +
+                    "\r\n\r\n" + notes + "\r\n\r\n" + NebulaText.Of("Download and install it? Your current version stays available until the new one is ready."),
+                    NebulaText.Of("Nebula Update"), MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
                 Cursor = Cursors.WaitCursor;
                 string exe = Updater.Download(release, layout.Staging, null, CancellationToken.None);
                 Cursor = Cursors.Default;
@@ -383,7 +382,7 @@ namespace Nebula.Setup
             catch (Exception error)
             {
                 Cursor = Cursors.Default;
-                MessageBox.Show(this, "Could not check for updates: " + error.Message, "Nebula Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, NebulaText.Of("Could not check for updates: {0}", error.Message), NebulaText.Of("Nebula Update"), MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -413,7 +412,7 @@ namespace Nebula.Setup
         {
             return (bool)Invoke((Func<bool>)delegate
             {
-                return MessageBox.Show(this, message, "Nebula Setup", MessageBoxButtons.RetryCancel, MessageBoxIcon.Warning) == DialogResult.Retry;
+                return MessageBox.Show(this, message, NebulaText.Of("Nebula Setup"), MessageBoxButtons.RetryCancel, MessageBoxIcon.Warning) == DialogResult.Retry;
             });
         }
     }

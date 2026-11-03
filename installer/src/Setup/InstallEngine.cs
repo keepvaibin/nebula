@@ -54,8 +54,8 @@ namespace Nebula.Setup
         /// texture records, archives expanded); a format-1 folder is cooked on update without the disc. 3: the game's data in
         /// host order (B-02); a format-2 folder cannot be cooked again: it needs the disc.</summary>
         public const int ContentFormatVersion = 6;
-        /// <summary>The content format nebula-import's cook command converts from.</summary>
-        private const int CookableContentFormatVersion = 1;
+        /// <summary>The content format nebula-import's cook command converts from; a version of it reads only version 2 saves.</summary>
+        internal const int CookableContentFormatVersion = 1;
 
         /// <summary>The instruction set NebulaNative.exe and smg_game.dll are built for.</summary>
         private const string NativeIsa = "AVX2";
@@ -108,17 +108,17 @@ namespace Nebula.Setup
             if (Environment.OSVersion.Version.Major < 10) problems.Add("Nebula needs Windows 10 or 11.");
             // Without AVX2 the game would stop at its first AVX2 instruction (an illegal-instruction fault), not here.
             if (!HostSupportsAvx2())
-                problems.Add("This package's runtime was built for AVX2, which this CPU does not expose.");
+                problems.Add(NebulaText.Of("This package's runtime was built for AVX2, which this CPU does not expose."));
             try
             {
                 string fs = FileUtil.FileSystemName(installRoot);
                 if (!string.Equals(fs, "NTFS", StringComparison.OrdinalIgnoreCase))
-                    problems.Add("The install folder must be on an NTFS drive (this one is " + fs + ").");
+                    problems.Add(NebulaText.Of("The install folder must be on an NTFS drive (this one is {0}).", fs));
                 long free = FileUtil.FreeBytes(installRoot);
                 if (free < RequiredFreeBytes)
-                    problems.Add("Setup needs " + FileUtil.FormatBytes(RequiredFreeBytes) + " free; the drive has " + FileUtil.FormatBytes(free) + ".");
+                    problems.Add(NebulaText.Of("Setup needs {0} free; the drive has {1}.", FileUtil.FormatBytes(RequiredFreeBytes), FileUtil.FormatBytes(free)));
             }
-            catch (Exception error) { problems.Add("Cannot inspect the install folder: " + error.Message); }
+            catch (Exception error) { problems.Add(NebulaText.Of("Cannot inspect the install folder: {0}", error.Message)); }
             return problems;
         }
 
@@ -187,24 +187,25 @@ namespace Nebula.Setup
         private void Install(InstalledInfo current, Thread dlss)
         {
             bool reuseContent = request.GameInput == null && ContentValid(layout);
-            bool cookContent = request.GameInput == null && !reuseContent && ContentCookable(layout);
-            if (!reuseContent && !cookContent && request.GameInput == null)
-                throw new InvalidOperationException("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.");
-            Log("Reuse the packed game: " + reuseContent + "; cook it: " + cookContent);
-            if (cookContent)
+            string keptContent = request.GameInput == null && !reuseContent ? KeptCurrentContent(layout) : null;
+            string cookSource = request.GameInput == null && !reuseContent && keptContent == null ? CookSource(layout) : null;
+            if (!reuseContent && keptContent == null && cookSource == null && request.GameInput == null)
+                throw new InvalidOperationException(NebulaText.Of("Choose your Super Mario Galaxy ISO, RVZ or extracted folder."));
+            Log("Reuse the packed game: " + reuseContent + "; kept for this version: " + keptContent + "; cook from: " + cookSource);
+            if (cookSource != null)
             {
-                Stage(0.00, 0.70, "Converting the game files");
-                Cook(layout.Content, Path.Combine(staging, "content"));
+                Stage(0.00, 0.70, NebulaText.Of("Converting the game files"));
+                Cook(cookSource, Path.Combine(staging, "content"));
             }
-            else if (!reuseContent)
+            else if (!reuseContent && keptContent == null)
             {
-                Stage(0.00, 0.02, "Checking your game");
+                Stage(0.00, 0.02, NebulaText.Of("Checking your game"));
                 Identify(request.GameInput);
-                Stage(0.02, 0.68, "Packing the game files");
+                Stage(0.02, 0.68, NebulaText.Of("Packing the game files"));
                 Import(request.GameInput, Path.Combine(staging, "content"));
             }
 
-            Stage(0.75, 0.15, "Installing Nebula " + BuildInfo.Version);
+            Stage(0.75, 0.15, NebulaText.Of("Installing Nebula {0}", BuildInfo.Version));
             string app = Path.Combine(staging, "app");
             Directory.CreateDirectory(app);
             foreach (var name in NativeFiles) Payload.Extract(name, Path.Combine(app, name));
@@ -228,25 +229,29 @@ namespace Nebula.Setup
 
             if (dlss != null && dlss.IsAlive)
             {
-                Stage(0.90, 0.04, "Downloading NVIDIA DLSS");
+                Stage(0.90, 0.04, NebulaText.Of("Downloading NVIDIA DLSS"));
                 waitingForDlss = true;
                 while (!dlss.Join(200)) cancel.ThrowIfCancellationRequested();
                 waitingForDlss = false;
             }
-            Stage(0.94, 0.06, "Switching to the new version");
+            Stage(0.94, 0.06, NebulaText.Of("Switching to the new version"));
             // The versions it replaces are removed: nothing may run from this install meanwhile.
             while (true)
             {
                 string running = Running.Find(layout.Root, Running.Programs);
                 if (running == null) break;
                 Log("Waiting for " + running + " to close.");
-                if (!progress.AskToClose("Nebula is running (" + running + "). Close the game, the Nebula launcher and Nebula " +
-                        "Settings, then choose Retry to finish installing Nebula " + BuildInfo.Version + "."))
-                    throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
+                if (!progress.AskToClose(NebulaText.Of("Nebula is running ({0}). Close the game, the Nebula launcher and Nebula Settings, then choose Retry to finish installing Nebula {1}.", running, BuildInfo.Version)))
+                    throw new InvalidOperationException(NebulaText.Of("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again."));
             }
-            Commit(app, current);
+            RemoveOtherVersions(Commit(app, current, keptContent));
             RemoveRecompiledGame();
-            Report(1.0, "Nebula " + BuildInfo.Version + " is installed.", 1);
+            var installed = InstalledInfo.Read(layout);
+            PruneKeptContent(layout, installed != null ? installed.Previous : null, Log);
+            // Over a version rolled back to: the save set aside for this one returns.
+            try { SaveRollback.To(ContentFormatVersion, NebulaPaths.Saves); }
+            catch (Exception error) { Log("Could not restore the save kept for this version: " + error.Message); }
+            Report(1.0, NebulaText.Of("Nebula {0} is installed.", BuildInfo.Version), 1);
             Log(string.Format("Completed in {0:mm\\:ss}.", clock.Elapsed));
         }
 
@@ -300,7 +305,7 @@ namespace Nebula.Setup
             Log(json);
             Dictionary<string, object> identity;
             try { identity = Json.Parse(json.Substring(Math.Max(0, json.IndexOf('{')))); }
-            catch (Exception) { throw new InvalidOperationException(lines.Count > 0 ? lines[lines.Count - 1] : "The selected file could not be read."); }
+            catch (Exception) { throw new InvalidOperationException(lines.Count > 0 ? lines[lines.Count - 1] : NebulaText.Of("The selected file could not be read.")); }
             if (code != 0 || !Json.Bool(identity, "supported"))
                 throw new InvalidOperationException(Json.Str(identity, "message"));
         }
@@ -321,7 +326,7 @@ namespace Nebula.Setup
                 if (line.StartsWith("STEP ")) StepProgress(line.Substring(line.IndexOf(' ', 5) + 1), -1);
                 Log(line);
             });
-            if (code != 0) throw new InvalidOperationException("nebula-import import failed (exit " + code + "). See the setup log.");
+            if (code != 0) throw new InvalidOperationException(NebulaText.Of("Reading the game failed (exit {0}). See the setup log.", code));
         }
 
         /// <summary>A format-1 content folder cooked into this version's format (D-07): the same output lines as an import.</summary>
@@ -338,63 +343,98 @@ namespace Nebula.Setup
                 if (line.StartsWith("STEP ")) StepProgress(line.Substring(line.IndexOf(' ', 5) + 1), -1);
                 Log(line);
             });
-            if (code != 0) throw new InvalidOperationException("nebula-import cook failed (exit " + code + "). See the setup log.");
+            if (code != 0) throw new InvalidOperationException(NebulaText.Of("Packing the game failed (exit {0}). See the setup log.", code));
         }
 
-        /// <summary>The packed game an install keeps is intact (or can be cooked from), so an update or repair needs no game.</summary>
+        /// <summary>The packed game an install keeps is intact, kept aside or can be cooked from, so an update or repair needs no game.</summary>
         public static bool RetainedGameValid(InstallLayout layout)
         {
-            return ContentValid(layout) || ContentCookable(layout);
+            return ContentValid(layout) || KeptCurrentContent(layout) != null || CookSource(layout) != null;
         }
 
-        private static long ContentFormatOf(string content)
+        /// <summary>A content folder's format; -1 without its marker or its game.pak.</summary>
+        internal static long ContentFormatOf(string content)
         {
             string marker = Path.Combine(content, "content.json");
-            if (!File.Exists(marker)) return -1;
+            if (!File.Exists(marker) || !File.Exists(Path.Combine(content, "game.pak"))) return -1;
             try { return Json.Long(Json.Load(marker), "formatVersion"); }
             catch (Exception) { return -1; }
         }
 
-        private static long ContentFormat(InstallLayout layout)
+        /// <summary>The content format a version folder reads; 0 when it does not say, -1 when it cannot be read.</summary>
+        internal static long VersionContentFormat(string versionDir)
         {
-            string marker = Path.Combine(layout.Content, "content.json");
-            if (!File.Exists(marker) || !File.Exists(Path.Combine(layout.Content, "game.pak"))) return -1;
-            try { return Json.Long(Json.Load(marker), "formatVersion"); }
+            try { return Json.Long(Json.Load(Path.Combine(versionDir, "install.json")), "contentFormatVersion"); }
             catch (Exception) { return -1; }
         }
 
         private static bool ContentValid(InstallLayout layout)
         {
-            return ContentFormat(layout) == ContentFormatVersion;
+            return ContentFormatOf(layout.Content) == ContentFormatVersion;
         }
 
-        private static bool ContentCookable(InstallLayout layout)
+        /// <summary>This version's content, set aside by a rollback; null when there is none.</summary>
+        internal static string KeptCurrentContent(InstallLayout layout)
         {
-            return ContentFormat(layout) == CookableContentFormatVersion;
+            string kept = layout.KeptContent(ContentFormatVersion);
+            return ContentFormatOf(kept) == ContentFormatVersion ? kept : null;
         }
 
-        private void Commit(string app, InstalledInfo current)
+        /// <summary>The format-1 content to cook from: the installed one, or the one an earlier cook kept. Null: the disc is needed.</summary>
+        internal static string CookSource(InstallLayout layout)
+        {
+            foreach (var content in new[] { layout.Content, layout.KeptContent(CookableContentFormatVersion) })
+                if (ContentFormatOf(content) == CookableContentFormatVersion) return content;
+            return null;
+        }
+
+        /// <summary>The content an update replaced, by its format, beside the new.</summary>
+        internal static void KeepReplacedContent(InstallLayout layout, string old, Action<string> log)
+        {
+            long format = ContentFormatOf(old);
+            if (format <= 0 || format == ContentFormatVersion) return;
+            string kept = layout.KeptContent(format);
+            try
+            {
+                FileUtil.DeleteTree(kept);
+                FileUtil.MoveDirectoryInPlace(old, kept);
+                log("Kept the previous content for rollback in " + kept);
+            }
+            catch (Exception error) { log("Could not keep " + old + ": " + error.Message); }
+        }
+
+        /// <summary>Of the kept content, format 1 (cooked from) and the format the previous version reads stay.</summary>
+        internal static void PruneKeptContent(InstallLayout layout, string previous, Action<string> log)
+        {
+            long reads = previous != null ? VersionContentFormat(layout.VersionDir(previous)) : -1;
+            foreach (var dir in Directory.GetDirectories(layout.Root, InstallLayout.KeptContentPrefix + "*"))
+            {
+                long format;
+                if (!long.TryParse(Path.GetFileName(dir).Substring(InstallLayout.KeptContentPrefix.Length), out format) ||
+                    format == CookableContentFormatVersion || format == reads) continue;
+                try { FileUtil.DeleteTree(dir); log("Removed " + dir); }
+                catch (IOException error) { log("Could not remove " + dir + ": " + error.Message); }
+                catch (UnauthorizedAccessException error) { log("Could not remove " + dir + ": " + error.Message); }
+            }
+        }
+
+        /// <summary>Switches to the new version and returns the one kept for rollback. Nothing old is deleted here.</summary>
+        private string Commit(string app, InstalledInfo current, string keptContent)
         {
             string versionDir = layout.VersionDir(BuildInfo.Version);
-            WaitUntilClosed(Directory.Exists(versionDir), Directory.Exists(Path.Combine(staging, "content")));
+            string newContent = keptContent ?? Path.Combine(staging, "content");
+            WaitUntilClosed(Directory.Exists(versionDir), Directory.Exists(newContent));
             Directory.CreateDirectory(layout.Versions);
             string replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
             Swap(app, versionDir, replaced, Log);
 
-            string newContent = Path.Combine(staging, "content");
             if (Directory.Exists(newContent))
             {
-                Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-                Swap(newContent, layout.Content, Path.Combine(staging, "content-old"), Log);
-                // The content the previous version (kept for rollback) reads, when this one cooked it: beside the new.
+                if (keptContent == null)
+                    Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
                 string old = Path.Combine(staging, "content-old");
-                if (ContentFormatOf(old) == CookableContentFormatVersion)
-                {
-                    string kept = layout.Content + "-format" + CookableContentFormatVersion;
-                    TryDeleteTree(kept);
-                    try { FileUtil.MoveDirectoryInPlace(old, kept); Log("Kept the previous content for rollback in " + kept); }
-                    catch (Exception error) { Log("Could not keep " + old + ": " + error.Message); }
-                }
+                Swap(newContent, layout.Content, old, Log);
+                KeepReplacedContent(layout, old, Log);
             }
 
             string previous = current != null && current.Version != BuildInfo.Version ? current.Version : (current != null ? current.Previous : null);
@@ -403,8 +443,20 @@ namespace Nebula.Setup
                 { "version", BuildInfo.Version },
                 { "previous", previous }
             });
-            // Nebula is installed from here on: what follows is tidying and shortcuts, and does not fail the install.
-            // Keep exactly one previous version for rollback; a folder still held is removed by a later install.
+            // Nebula is installed from here on: what follows is shortcuts, and does not fail the install.
+            string self = Assembly.GetExecutingAssembly().Location;
+            if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
+                CopySetup(self);
+            foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
+                Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
+            InstalledVersionDir = versionDir;
+            Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
+            return previous;
+        }
+
+        /// <summary>Once the new version is in place: exactly one previous version stays for rollback; a folder still held is removed by a later install.</summary>
+        private void RemoveOtherVersions(string previous)
+        {
             foreach (var dir in Directory.GetDirectories(layout.Versions))
             {
                 string name = Path.GetFileName(dir);
@@ -415,13 +467,6 @@ namespace Nebula.Setup
                     catch (UnauthorizedAccessException error) { Log("Could not remove " + dir + ": " + error.Message); }
                 }
             }
-            string self = Assembly.GetExecutingAssembly().Location;
-            if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
-                CopySetup(self);
-            foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
-                Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
-            InstalledVersionDir = versionDir;
-            Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
         }
 
         /// <summary>
@@ -437,9 +482,8 @@ namespace Nebula.Setup
                 if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "NebulaRuntime", "NebulaNative");
                 if (running == null) return;
                 Log("Waiting for " + running + " to close.");
-                if (!progress.AskToClose("Nebula is running (" + running + "). Close the game, the Nebula launcher and Nebula " +
-                        "Settings, then choose Retry to finish installing Nebula " + BuildInfo.Version + "."))
-                    throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
+                if (!progress.AskToClose(NebulaText.Of("Nebula is running ({0}). Close the game, the Nebula launcher and Nebula Settings, then choose Retry to finish installing Nebula {1}.", running, BuildInfo.Version)))
+                    throw new InvalidOperationException(NebulaText.Of("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again."));
             }
         }
 

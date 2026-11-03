@@ -489,6 +489,12 @@ void run_requests() {
         s_captured = captured;
         call_activity(captured ? "menuOpened" : "menuClosed");
     }
+    // The controls follow the game to and from a pointer screen.
+    static bool s_pointer_screen = false;
+    if (const bool pointer_screen = g_menu_context.load(std::memory_order_relaxed); pointer_screen != s_pointer_screen) {
+        s_pointer_screen = pointer_screen;
+        call_activity("menuContextChanged");
+    }
 #endif
     const std::uint32_t pad = g_rumble_pad.load(std::memory_order_relaxed);
     const std::uint32_t level = g_rumble_level.load(std::memory_order_relaxed);

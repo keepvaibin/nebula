@@ -39,7 +39,7 @@ u32 BinaryDataChunkHolder::makeFileBinary(u8* pData, u32 a2) {
 bool BinaryDataChunkHolder::loadFromFileBinary(const u8* pData, u32 dataSize) {
     s32 offset = 0;
 
-    if (dataSize < calcBinarySize(pData)) {
+    if (dataSize < calcBinarySize(pData, dataSize)) {
         return false;
     }
 
@@ -75,7 +75,8 @@ bool BinaryDataChunkHolder::loadFromFileBinary(const u8* pData, u32 dataSize) {
     }
 
     bool success = true;
-    if (hashError) {
+    // An old save being converted keeps its contents whatever its hashes.
+    if (hashError && !gOldSaveOrder) {
         success = false;
     }
 
@@ -112,10 +113,25 @@ BinaryDataChunkBase* BinaryDataChunkHolder::findFromSignature(u32 signature) con
     return nullptr;
 }
 
-u32 BinaryDataChunkHolder::calcBinarySize(const u8* pData) {
-    s32 size = 4;
+// The file's size by its chunks' sizes; past any dataSize when a chunk does not lie in dataSize bytes.
+u32 BinaryDataChunkHolder::calcBinarySize(const u8* pData, u32 dataSize) {
+    const u32 cDamaged = 0xFFFFFFFF;
+    if (dataSize < 4) {
+        return cDamaged;
+    }
+
+    u32 size = 4;
     for (s32 idx = 0; idx < pData[1]; idx++) {
-        size += MR::loadSaveU32(&pData[size] + BinaryDataChunk::cSize);
+        if (dataSize - size < BinaryDataChunk::cDataOffset) {
+            return cDamaged;
+        }
+
+        const u32 chunkSize = MR::loadSaveU32(&pData[size] + BinaryDataChunk::cSize);
+        if (chunkSize < BinaryDataChunk::cDataOffset || chunkSize > dataSize - size) {
+            return cDamaged;
+        }
+
+        size += chunkSize;
     }
     return size;
 }

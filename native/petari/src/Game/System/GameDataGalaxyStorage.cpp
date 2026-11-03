@@ -15,6 +15,12 @@ namespace {
         MR::storeSaveU16(pData, value);
         return sizeof(value);
     }
+
+    // An attribute the file's header places inside the record, or one it does not list.
+    inline bool isAttributeInRecord(const BinaryDataContentAccessor& rAccessor, const char* pName, u32 size, u8* pRecord, u32 recordSize) {
+        const u8* ptr = static_cast< const u8* >(rAccessor.getPointer(pName, pRecord));
+        return ptr == nullptr || static_cast< u32 >(ptr - pRecord) + size <= recordSize;
+    }
 };  // namespace
 
 bool GameDataSomeScenarioAccessor::hasPowerStar() const {
@@ -172,15 +178,37 @@ u32 GameDataAllGalaxyStorage::getSignature() const {
 }
 
 s32 GameDataAllGalaxyStorage::deserialize(const u8* pData, u32 dataSize) {
+    // The galaxy count, then the header's two counts.
+    if (dataSize < 6) {
+        return -1;
+    }
+
     s32 attributeNum = MR::loadSaveU16(pData + 0);
     const char* name;
     BinaryDataContentAccessor accessor((u8*)(pData + 2));
     u32 readOffset = accessor.getHeaderSize() + 2;
+    const u32 recordSize = accessor.getDataSize();
+
+    if (readOffset > dataSize) {
+        return -1;
+    }
+
+    u8* first = (u8*)(pData + readOffset);
+    name = "mGalaxyName";
+    if (accessor.getPointer(name, first) == nullptr || !isAttributeInRecord(accessor, name, sizeof(u16), first, recordSize) ||
+        !isAttributeInRecord(accessor, "mPowerStarFlag", sizeof(u8), first, recordSize) ||
+        !isAttributeInRecord(accessor, "mFirstPlayFlag", sizeof(u8), first, recordSize) ||
+        !isAttributeInRecord(accessor, "mMaxCoinNum", sizeof(u16) * 8, first, recordSize)) {
+        return -1;
+    }
 
     bool readError = false;
 
     for (s32 idx = 0; idx < attributeNum; idx++) {
-        name = "mGalaxyName";
+        if (recordSize > dataSize - readOffset) {
+            return -1;
+        }
+
         u8* ptr = (u8*)(pData + readOffset);
         s32 galaxyIndex = findIndex(MR::loadSaveU16(accessor.getPointer(name, ptr)));
         if (galaxyIndex >= 0) {

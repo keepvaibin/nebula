@@ -250,10 +250,13 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     // The pads attached: read once a second and when the last input's device changes (the roster asks XInput's empty
     // slots, which is slow).
     static std::array<ControlScheme, input::kMaxControllers> s_attached{};
+    static std::array<std::uint8_t, input::kMaxControllers> s_attached_slot{};
+    static std::array<input::ButtonIconModel, input::kMaxControllers> s_attached_icons{};
     static std::size_t s_attached_count = 0u;
     static std::uint64_t s_attached_checked_ms = 0u;
     static std::optional<input::DeviceKey> s_device;
     static std::optional<ControlScheme> s_pad;
+    static std::uint8_t s_pad_slot = 0u;
     const std::optional<input::DeviceKey> device = last_input_device();
     const std::uint64_t now_ms = GetTickCount64();
     if (device != s_device || now_ms - s_attached_checked_ms >= 1000u) {
@@ -261,7 +264,11 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
         s_attached_checked_ms = now_ms;
         std::array<input::ControllerInfo, input::kMaxControllers> attached{};
         s_attached_count = connected_controllers(attached);
-        for (std::size_t i = 0; i < s_attached_count; ++i) s_attached[i] = attached[i].scheme;
+        for (std::size_t i = 0; i < s_attached_count; ++i) {
+            s_attached[i] = attached[i].scheme;
+            s_attached_slot[i] = attached[i].slot;
+            s_attached_icons[i] = attached[i].icons;
+        }
     }
     const auto attached = [](ControlScheme scheme) {
         return std::find(s_attached.begin(), s_attached.begin() + s_attached_count, scheme) !=
@@ -271,14 +278,25 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     // pad attached, else none.
     if (device.has_value() && input::scheme_is_gamepad(device->scheme) && attached(device->scheme)) {
         s_pad = device->scheme;
+        s_pad_slot = device->slot;
     } else if (s_pad.has_value() && !attached(*s_pad)) {
         s_pad = s_attached_count != 0u ? std::optional<ControlScheme>(s_attached[0]) : std::nullopt;
+        s_pad_slot = s_attached_slot[0];
     }
     const std::optional<ControlScheme> pad = s_pad;
+    // That pad's own model, else that of the first of its family attached.
+    input::ButtonIconModel model = input::ButtonIconModel::Standard;
+    bool model_found = false;
+    for (std::size_t i = 0; pad.has_value() && i < s_attached_count; ++i) {
+        if (s_attached[i] == *pad && (!model_found || s_attached_slot[i] == s_pad_slot)) {
+            model = s_attached_icons[i];
+            model_found = true;
+        }
+    }
     // Auto's: a real Wii Remote's own while one is in use; the keyboard's while it is (a key or a mouse button pressed
     // since a controller's last input; with no controller attached and none used, from the start), and always in the
-    // keyboard and mouse input mode, never in the controller one; else the controller's family (one of no known
-    // family shows the game's). Moving the mouse alone leaves them (a controller's player may aim with it).
+    // keyboard and mouse input mode, never in the controller one; else the controller's family. Moving the mouse alone
+    // leaves them (a controller's player may aim with it).
     const RuntimeInputMode mode = get_runtime_settings().input_mode;
     const bool keyboard_last = device.has_value() ? device->scheme == ControlScheme::Keyboard : !pad.has_value();
     const bool keyboard = mode == RuntimeInputMode::KeyboardMouse ||
@@ -288,15 +306,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     } else if (keyboard) {
         auto_style = ButtonIconStyle::Keyboard;
     } else {
-        switch (pad.value_or(ControlScheme::Keyboard)) {
-        case ControlScheme::Xbox:
-        case ControlScheme::Steam: auto_style = ButtonIconStyle::Xbox; break;
-        case ControlScheme::SwitchPro:
-        case ControlScheme::SwitchPro2: auto_style = ButtonIconStyle::Nintendo; break;
-        case ControlScheme::PlayStation: auto_style = ButtonIconStyle::PlayStation; break;
-        case ControlScheme::Keyboard:
-        case ControlScheme::Generic: break;
-        }
+        auto_style = input::button_icon_style(pad.value_or(ControlScheme::Keyboard));
     }
     g_auto_icon_style.store(auto_style, std::memory_order_relaxed);
     ButtonIconStyle style = auto_style;
@@ -319,21 +329,24 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     static std::uint64_t s_generation = ~std::uint64_t{0};
     static ButtonIconStyle s_style = ButtonIconStyle::Game;
     static ControlScheme s_scheme = ControlScheme::Keyboard;
+    static input::ButtonIconModel s_model = input::ButtonIconModel::Standard;
     static bool s_menu = false;
     static HKL s_key_layout = nullptr;
     static input::ButtonIconSpec s_spec;
     const std::uint64_t generation = input::controls_config_generation();
     const HKL key_layout = g_keyboard_layout.load(std::memory_order_acquire);
-    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu || key_layout != s_key_layout) {
+    if (generation != s_generation || style != s_style || scheme != s_scheme || model != s_model || menu != s_menu ||
+        key_layout != s_key_layout) {
         s_generation = generation;
         s_style = style;
         s_scheme = scheme;
+        s_model = model;
         s_menu = menu;
         s_key_layout = key_layout;
         auto bindings = input::get_controls_config().table(scheme);
         if (scheme == ControlScheme::Keyboard)
             bindings = input::key_position_labels(bindings, keyboard_position_map(key_layout));
-        s_spec = input::button_icon_spec(style, bindings, menu);
+        s_spec = input::button_icon_spec(style, bindings, menu, model);
     }
     if (style == ButtonIconStyle::Keyboard) s_spec.layout = keyboard_layout_labels();
     return s_spec;

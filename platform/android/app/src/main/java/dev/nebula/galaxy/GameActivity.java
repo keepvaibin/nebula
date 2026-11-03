@@ -259,6 +259,15 @@ public class GameActivity extends SDLActivity {
     }
 
     // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
+    public void menuContextChanged() {
+        runOnUiThread(() -> {
+            if (controls != null) {
+                controls.syncMenuContext();
+            }
+        });
+    }
+
+    // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
     public void menuClosed() {
         runOnUiThread(() -> {
             menuOpen = false;

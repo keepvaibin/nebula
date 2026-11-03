@@ -120,12 +120,21 @@
         }
         // In a stride through the list, so each stop visits actors of every part of the level; dead ones are skipped.
         static LiveActor* sTarget = nullptr;
+        static const char* sVisited[256];
+        static s32 sVisitedNum = 0;
         const s32 total = pGroup->getObjNum();
+        // A scene that restarted (the player's death) took the target and the visited names with it.
+        bool targetHere = sTarget == nullptr;
+        for (s32 i = 0; i < total && !targetHere; ++i) {
+            targetHere = pGroup->getActor(i) == sTarget;
+        }
+        if (!targetHere) {
+            sTarget = nullptr;
+            sVisitedNum = 0;
+        }
         if (fresh) {
             // Each kind of actor once a scene while kinds remain; the player's own models are not places.
             static const AllLiveActorGroup* sVisitedGroup = nullptr;
-            static const char* sVisited[256];
-            static s32 sVisitedNum = 0;
             if (sVisitedGroup != pGroup) {
                 sVisitedGroup = pGroup;
                 sVisitedNum = 0;

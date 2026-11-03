@@ -74,10 +74,15 @@ bool system_clutter(const std::string& name) {
     return n == "thumbs.db" || n == "desktop.ini" || n == ".ds_store" || n == "__macosx" || n.starts_with("._");
 }
 
+// Past these an archive is refused: counted as extracted, since a header's sizes can lie. Texture packs reach tens of
+// gigabytes and a hundred thousand files.
+constexpr std::uint64_t kImportByteLimit = std::uint64_t{256} << 30u;
+constexpr std::uint64_t kImportEntryLimit = 1000000u;
+
 // An entry's path inside the staging folder; empty when it would leave it (absolute, a drive, `..`) or is clutter.
 fs::path safe_relative(std::string name) {
     std::replace(name.begin(), name.end(), '\\', '/');
-    if (name.empty() || name.front() == '/' || (name.size() >= 2u && name[1] == ':')) return {};
+    if (name.empty() || name.front() == '/') return {};
     fs::path out;
     std::size_t at = 0;
     while (at <= name.size()) {
@@ -85,7 +90,7 @@ fs::path safe_relative(std::string name) {
         const std::string part = name.substr(at, slash - at);
         at = slash + 1u;
         if (part.empty() || part == ".") continue;
-        if (part == ".." || system_clutter(part)) return {};
+        if (!safe_path_part(part) || system_clutter(part)) return {};
         out /= from_utf8(part);
     }
     return out;
@@ -189,12 +194,17 @@ bool extract_archive(const fs::path& source, Writer& writer, ImportResult& resul
     writer.state.total = fs::file_size(source, error);
     std::vector<char> buffer(1u << 20);
     archive_entry* entry = nullptr;
+    std::uint64_t entries = 0;
     for (;;) {
         const int next = archive_read_next_header(reader, &entry);
         if (next == ARCHIVE_EOF) break;
         if (next == ARCHIVE_FATAL || next == ARCHIVE_FAILED) {
             const char* why = archive_error_string(reader);
             result.message = std::string("THE ARCHIVE IS DAMAGED OR UNSUPPORTED: ") + (why ? why : "");
+            return false;
+        }
+        if (++entries > kImportEntryLimit) {
+            result.message = "THE ARCHIVE HOLDS TOO MANY FILES";
             return false;
         }
         if (writer.cancelled()) {
@@ -251,6 +261,10 @@ bool extract_archive(const fs::path& source, Writer& writer, ImportResult& resul
                 return false;
             }
             result.bytes += static_cast<std::uint64_t>(read);
+            if (result.bytes > kImportByteLimit) {
+                result.message = "THE ARCHIVE UNPACKS TO TOO MUCH DATA";
+                return false;
+            }
             writer.state.done = static_cast<std::uint64_t>(archive_filter_bytes(reader, -1));
             writer.report();
             if (writer.cancelled()) {

@@ -96,6 +96,7 @@ if ($hadSettings) { Move-Item -LiteralPath $fake $runner }
 $bin = Join-Path $root "versions\$New"
 $appdata = Join-Path $base 'localappdata'
 New-Item -ItemType Directory -Force $appdata, (Join-Path $base 'nand') | Out-Null
+$env:NEBULA_WORK = $base; $env:NEBULA_APPDATA = $appdata; $env:NEBULA_NAND = Join-Path $base 'nand'; $env:NEBULA_SETTINGS = Join-Path $base 'settings'
 $env:GALAXY_HIDE_WINDOW = '1'; $env:GALAXY_XINPUT_REQUIRE_FOCUS = '1'; $env:LOCALAPPDATA = $appdata
 $env:GALAXY_AUDIO_WAV_DUMP_ONLY = '1'; $env:GALAXY_AUDIO_WAV_DUMP = Join-Path $base 'audio.wav'
 $env:GALAXY_RENDER_CONFIG_PATH = Join-Path $base 'config.ini'; $env:GALAXY_RUNTIME_SETTINGS_PATH = Join-Path $base 'runtime_settings.ini'
