@@ -85,13 +85,14 @@ SIGNALS = [
      "Wii Remote report model"),
     ("dsp_program", r"\bDSP data memory\b|\bIRAM\b|\bDRAM\b|\bucode\b|\bCH_BUF\b|\bFX_BUF\b|\bDSPRES_FILTER\b|"
                     r"\baudio_dsp\b|\bai_dma\b", "DSP program model"),
+    ("test_seam", r"\bnebula_switch::|tools/test_driver/", "call into the test driver, compiled out of a release"),
     ("test_hook", r"\bGALAXY_(?:TEST|TRACE|EXPORT|DEBUG|DUMP)_[A-Z0-9_]+|\bNEBULA_TEST_[A-Z0-9_]+",
      "test/trace hook (release hygiene)"),
     ("decomp_residue", r"\bTARGET_PC\b|\b__MWERKS__\b|\basm\s*\{|\b__asm\b|\bnofralloc\b|\bfralloc\b",
      "decompilation residue: console/native dual paths, CodeWarrior assembly"),
 ]
 COMPILED = [(k, re.compile(p), d) for k, p, d in SIGNALS]
-HYGIENE = {"test_hook", "os_report"}
+HYGIENE = {"test_hook", "test_seam", "os_report"}
 SOURCE_EXT = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inc", ".hlsl", ".hlsli", ".glsl", ".metal",
               ".rs", ".cs", ".kt", ".java", ".py", ".ps1", ".sh", ".cmake", ".txt", ".kts", ".gradle"}
 
