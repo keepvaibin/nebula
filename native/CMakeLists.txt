@@ -29,6 +29,12 @@ add_library(smg_game SHARED
     math/src/nebula_libc.c
     $<$<PLATFORM_ID:Windows>:math/src/nebula_runtime_win.c>)
 
+if(WIN32)
+    enable_language(RC)
+    include(../cmake/nebula_file_details.cmake)
+    nebula_file_details(smg_game smg_game.dll "Super Mario Galaxy on PC, the game")
+endif()
+
 target_include_directories(smg_game BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
