@@ -14,6 +14,9 @@ namespace J3DNativeView {
     const f32 cUnitsDown = NEBULA_FRAME_UNITS / 456.0f;
 
     void setPerspective(const f32 (*pMtx)[4]);
+    // What setPerspective and setViewport would hand the host for these values, the state left as it is: the six
+    // projection terms, then the viewport's six values.
+    void hostView(const f32 (*pMtx)[4], f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, f32* pOut);
     void setOrthographic(const f32 (*pMtx)[4]);
     void setProjectionv(const f32* pValues);
     void getProjectionv(f32* pValues);

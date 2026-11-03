@@ -25,7 +25,9 @@ enum NativeShaderVariant : unsigned {
     kNativeVariantLayer = 2u,     // + the reactive mask and the effects layer's targets
     kNativeVariantMotion = 3u,    // + the motion vector
     kNativeVariantDual = 4u,      // + the material alpha for dual-source blending (render state bit 27)
-    kNativeVariants = 5u,
+    kNativeVariantSample = 5u,      // an alpha-tested material under MSAA: base, per sample
+    kNativeVariantSampleDual = 6u,  // dual, per sample
+    kNativeVariants = 7u,
 };
 
 [[nodiscard]] constexpr unsigned native_shader_variant(std::uint32_t blend_bits) noexcept {
@@ -37,6 +39,11 @@ enum NativeShaderVariant : unsigned {
 }
 
 // `shader` (NebulaShaderId)'s vertex (pixel false) or pixel shader in `variant`; empty when the build has none.
+// `variant` in a target of 2^samples_log2 samples: an alpha-tested material shades per sample there, where it has that
+// variant and the device can (allowed), so its cut-out edges are antialiased as a triangle's are.
+[[nodiscard]] unsigned native_sample_variant(std::uint32_t shader, unsigned variant, unsigned samples_log2,
+                                             bool allowed) noexcept;
+
 [[nodiscard]] NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
 
 // The curved surfaces' hull (domain false) or domain stage for every native material (native_curved.hlsl), by

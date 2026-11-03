@@ -12,12 +12,15 @@ set(galaxy_native_materials whirlpool ocean_bowl screen_blur flat_color clip_fil
     vertex_color dd_texture dd_texture_color tex_vertex_alpha tex_alpha_lerp
     trample_star tex_const_alpha font_text j2d_picture fur particle ocean_bowl_bloom mii_face mii_texture image_effect gaussian_blur dof_final normal_map
     movie water_camera frame_ripple frame_depth)
-set(galaxy_native_variants base reactive layer motion dual)
+set(galaxy_native_variants base reactive layer motion dual sample sample_dual)
 set(galaxy_native_defines_base "")
 set(galaxy_native_defines_reactive "NATIVE_REACTIVE")
 set(galaxy_native_defines_layer "NATIVE_REACTIVE;NATIVE_LAYER")
 set(galaxy_native_defines_motion "NATIVE_MOTION")
 set(galaxy_native_defines_dual "NATIVE_DUAL")
+# An alpha-tested material under MSAA: only the pixel stage differs (its inputs per sample), the vertex stage is base's.
+set(galaxy_native_defines_sample "NATIVE_SAMPLE")
+set(galaxy_native_defines_sample_dual "NATIVE_SAMPLE;NATIVE_DUAL")
 get_filename_component(galaxy_native_cmake_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(galaxy_native_material_dir "${galaxy_native_cmake_root}/runtime/src/render/materials")
 set(galaxy_j3d_materials "")
@@ -29,14 +32,29 @@ endif()
 # row to `rows` (in the caller's scope).
 macro(galaxy_native_material_rules material source)
     set(row "    {")
+    file(STRINGS "${source}" material_discards REGEX "discard")
     foreach(variant IN LISTS galaxy_native_variants)
-        # Feature outputs wait for section W; keep their ABI slots empty.
-        if(NOT variant STREQUAL "base" AND NOT variant STREQUAL "dual")
+        # Feature outputs wait for section W; keep their ABI slots empty. Only an alpha-tested material shades per sample.
+        if((variant STREQUAL "sample" OR variant STREQUAL "sample_dual") AND material_discards STREQUAL "")
+            string(APPEND row "{}, ")
+            continue()
+        endif()
+        if(variant STREQUAL "reactive" OR variant STREQUAL "layer" OR variant STREQUAL "motion")
             string(APPEND row "{}, ")
             continue()
         endif()
         set(entries "")
         foreach(stage vs ps)
+            if(stage STREQUAL "vs" AND variant STREQUAL "sample")
+                set(base_vs "g_native_${material}_base_vs")
+                string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
+                continue()
+            endif()
+            if(stage STREQUAL "vs" AND variant STREQUAL "sample_dual")
+                set(base_vs "g_native_${material}_dual_vs")
+                string(APPEND entries "${base_vs}, sizeof(${base_vs}), ")
+                continue()
+            endif()
             set(name "g_native_${material}_${variant}_${stage}")
             set(header "${dir}/${material}_${variant}_${stage}.h")
             if(backend STREQUAL "dxil")
@@ -167,6 +185,14 @@ ${curved_rows}};
 NativeShaderBytes native_curved_bytes(bool motion, bool domain) noexcept {
     const Pair& p = kCurved[motion ? 1 : 0];
     return domain ? NativeShaderBytes{p.ps, p.ps_size} : NativeShaderBytes{p.vs, p.vs_size};
+}
+
+unsigned native_sample_variant(std::uint32_t shader, unsigned variant, unsigned samples_log2, bool allowed) noexcept {
+    if (!allowed || samples_log2 == 0u || (variant != kNativeVariantBase && variant != kNativeVariantDual)) {
+        return variant;
+    }
+    const unsigned sample = variant == kNativeVariantBase ? kNativeVariantSample : kNativeVariantSampleDual;
+    return native_shader_bytes(shader, sample, true).size != 0u ? sample : variant;
 }
 
 NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept {

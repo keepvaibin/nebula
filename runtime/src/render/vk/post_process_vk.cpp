@@ -194,7 +194,8 @@ VkShaderModule PostProcessorVk::module(Program program) const {
 // stencil: 0 none, 1 writes 1 where the pixel shader keeps the pixel, 2 draws only where the stencil is 1 (SMAA's
 // edge mask).
 VkPipeline PostProcessorVk::create_pipeline(Program vs_program, Program ps_program, VkRenderPass pass,
-                                            VkColorComponentFlags write_mask, int stencil) const {
+                                            VkColorComponentFlags write_mask, int stencil,
+                                            VkSampleCountFlagBits samples) const {
     if (pass == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;
     }
@@ -221,7 +222,7 @@ VkPipeline PostProcessorVk::create_pipeline(Program vs_program, Program ps_progr
         raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
         raster.lineWidth = 1.0f;
         VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-        multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisample.rasterizationSamples = samples;
         VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
         if (stencil != 0) {
             depth.stencilTestEnable = VK_TRUE;
@@ -352,6 +353,12 @@ void PostProcessorVk::destroy_pipelines() noexcept {
         return;
     }
     const VkDevice device = context.device();
+    for (auto& pass : scene_pass_ms_) {
+        for (VkPipeline& pipeline : pass) {
+            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+            pipeline = VK_NULL_HANDLE;
+        }
+    }
     for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_, deband_,
                                 deband_reduce_, deband_smooth_, to_color_.easu, to_color_.rcas, to_color_.rcas_scaled,
                                 to_color_.resample, to_color_.deband_apply, to_present_.easu, to_present_.rcas,
@@ -616,7 +623,7 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
 }
 
 void PostProcessorVk::finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
-                                      const SetAllocator& allocate) {
+                                      const SetAllocator& allocate, VkRenderPass scene_pass, unsigned samples_log2) {
     if (pass == AaRun::kNone) {
         return;
     }
@@ -624,10 +631,29 @@ void PostProcessorVk::finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsi
     PostConstants c{};
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
-        draw(commands, fxaa_rgb_, {antialiased_.texture->view}, full, c, allocate);
+        draw(commands, scene_pass_pipeline(false, scene_pass, samples_log2), {antialiased_.texture->view}, full, c, allocate);
     } else {
-        draw(commands, smaa_blend_rgb_, {antialiased_.texture->view, weights_.texture->view}, full, c, allocate);
+        draw(commands, scene_pass_pipeline(true, scene_pass, samples_log2),
+             {antialiased_.texture->view, weights_.texture->view}, full, c, allocate);
     }
+}
+
+// The last pass of the scene's AA, in the scene target pass: over MSAA every sample takes the result. Those are made at
+// first use.
+VkPipeline PostProcessorVk::scene_pass_pipeline(bool smaa, VkRenderPass pass, unsigned samples_log2) {
+    if (samples_log2 == 0u) {
+        return smaa ? smaa_blend_rgb_ : fxaa_rgb_;
+    }
+    const unsigned index = std::min(samples_log2, 3u);
+    VkPipeline& out = scene_pass_ms_[smaa ? 1u : 0u][index];
+    if (out == VK_NULL_HANDLE) {
+        constexpr VkColorComponentFlags kRgb =
+            VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        const auto samples = static_cast<VkSampleCountFlagBits>(1u << index);
+        out = smaa ? create_pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, pass, kRgb, 0, samples)
+                   : create_pipeline(kFullscreenVs, kFxaaPs, pass, kRgb, 0, samples);
+    }
+    return out;
 }
 
 void PostProcessorVk::hold_scene_targets(std::vector<std::shared_ptr<Texture>>& held) const {

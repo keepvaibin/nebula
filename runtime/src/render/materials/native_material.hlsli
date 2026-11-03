@@ -7,7 +7,8 @@
 // the material's constants, t0-t7/s0-s7 its textures, t3 space1 the matrix rows.
 //
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
-// effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector).
+// effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
+// (inputs per sample: an alpha test decides each sample of a multisampled target).
 
 cbuffer NativeDraw : register(b0) {
     row_major float4x4 projection : packoffset(c0);  // row-major, as every draw constant (VertexConstants)
@@ -140,8 +141,13 @@ struct NativeVertex {
 #else
 #define NATIVE_MOTION_MEMBERS
 #endif
+#if NATIVE_SAMPLE
+#define NATIVE_PER_SAMPLE sample
+#else
+#define NATIVE_PER_SAMPLE
+#endif
 #define NATIVE_VARYING_MEMBERS \
-    float4 pos : SV_Position; float4 color : COLOR0; float4 color1 : COLOR1; float4 uv[8] : TEXCOORD; \
+    float4 pos : SV_Position; NATIVE_PER_SAMPLE float4 color : COLOR0; NATIVE_PER_SAMPLE float4 color1 : COLOR1; NATIVE_PER_SAMPLE float4 uv[8] : TEXCOORD; \
     NATIVE_MOTION_MEMBERS
 
 // What the pixel stage reads (and the curved surfaces' domain stage writes).

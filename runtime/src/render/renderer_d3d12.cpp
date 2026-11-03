@@ -7222,13 +7222,14 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
 void RendererD3D12::record_scene_aa() {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::SceneAa};
-    if (!post_process_.ready() || output_scene_active_ || scene_temporal_ || !scene_color_ || scene_msaa_.samples > 1u ||
+    if (!post_process_.ready() || output_scene_active_ || scene_temporal_ || !scene_color_ ||
         post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SceneAa, 0u});
     }
+    resolve_scene(false, true);
     // The picture the display copy takes decides AUTO.
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
@@ -7239,7 +7240,10 @@ void RendererD3D12::record_scene_aa() {
         command_list_.Get(), srv_ring_, scene_color_.Get(), scene_rtv_, static_cast<unsigned>(desc.Width),
         desc.Height, frame_.width, frame_.height,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
-        frame_index_, kFramesInFlight));
+        frame_index_, kFramesInFlight, scene_msaa_.samples));
+    if (scene_msaa_.samples > 1u) {
+        scene_msaa_.color_dirty = true;
+    }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
     bound_rt_aux_ = 0xFFu;
@@ -7270,7 +7274,6 @@ void RendererD3D12::record_scene_ao() {
     in.depth = scene_depth_.Get();
     in.width = static_cast<unsigned>(desc.Width);
     in.height = desc.Height;
-    in.occlusion_divisor = static_cast<unsigned>(std::lround(frame_.height / kAuthoredLines));
     in.color_rtv = scene_rtv_;
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;

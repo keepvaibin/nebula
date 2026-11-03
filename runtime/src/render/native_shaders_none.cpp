@@ -5,6 +5,10 @@
 
 namespace galaxy::render {
 
+unsigned native_sample_variant(std::uint32_t, unsigned variant, unsigned, bool) noexcept {
+    return variant;
+}
+
 NativeShaderBytes native_shader_bytes(std::uint32_t, unsigned, bool) noexcept {
     return {};
 }

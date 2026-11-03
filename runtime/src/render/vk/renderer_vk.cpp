@@ -219,6 +219,9 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
             post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_);
+            if (!ao_.initialize()) {
+                std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+            }
             post_.set_present_pass(present_pass_);
         } else {
             PostProcessStatus off{};

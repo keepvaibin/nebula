@@ -523,6 +523,7 @@ void GameScene::draw3D() const {
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);
+    MR::sceneOpaqueEnd();
     SceneFunction::executeDrawBufferListNormalXlu();
     SceneFunction::executeDrawListXlu();
     CategoryList::drawXlu(MR::DrawBufferType_UNK_0x18);

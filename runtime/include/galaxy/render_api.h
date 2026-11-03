@@ -60,6 +60,7 @@ enum class SceneMarker : std::uint8_t {
     SceneEnd,
     Scene2DBegin,
     Scene2DEnd,
+    SceneOpaqueEnd,  // the game's opaque surfaces are drawn; the lists that blend follow
 };
 
 
@@ -95,6 +96,8 @@ void attach_scene_marker(SceneMarker marker);
 // world-to-eye matrix (row-major 3x4) for that scene, the player's up in the
 // world (null when unknown: the enhanced sky then takes the view's up), and
 // the stage being played (null when the game does not say).
+// The next SceneOpaqueEnd's six projection terms and viewport (left, top, width, height, near and far depth).
+void attach_scene_opaque(const float view[12]) noexcept;
 void attach_scene_view(const float view[12], const float* up = nullptr, const char* stage = nullptr) noexcept;
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
