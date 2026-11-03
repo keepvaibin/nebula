@@ -66,6 +66,9 @@ namespace Nebula
         public string Versions { get { return Path.Combine(root, "versions"); } }
         public string Current { get { return Path.Combine(root, "current.json"); } }
         public string Content { get { return Path.Combine(root, "content"); } }
+        /// <summary>Content of another format, kept for the version that reads it or to cook from.</summary>
+        public string KeptContent(long format) { return Path.Combine(root, KeptContentPrefix + format); }
+        public const string KeptContentPrefix = "content-format";
         /// <summary>The compiler and the Nebula source of installs that compiled the game; an install removes them.</summary>
         public string Toolchains { get { return Path.Combine(root, "toolchain"); } }
         public string Sources { get { return Path.Combine(root, "source"); } }

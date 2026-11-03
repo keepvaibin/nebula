@@ -3,6 +3,7 @@
 // settings menu asks of its platform (host_window.h).
 
 #include "galaxy/render/host_window_win32.h"
+#include "galaxy/windows_power.h"
 #include "galaxy/run_options.h"
 #include "galaxy/path_text.h"
 #include "galaxy/controller_hid.h"
@@ -64,6 +65,26 @@ UINT backbuffer_height = 720;
 std::atomic<std::uintptr_t> settings_window{0};
 std::atomic<bool> borderless_active{false};
 std::atomic<std::uintptr_t> pointer_hwnd{0};
+std::atomic<bool> display_changed{false};
+namespace {
+std::atomic<bool> s_minimized{false};
+}
+bool is_minimized() noexcept {
+    return s_minimized.load(std::memory_order_relaxed);
+}
+static UINT monitor_dpi(const MonitorInfo& monitor) noexcept {
+    const HMONITOR handle = MonitorFromPoint(
+        POINT{monitor.bounds.left + 1, monitor.bounds.top + 1}, MONITOR_DEFAULTTONEAREST);
+    UINT dpi_x = 96u;
+    UINT dpi_y = 96u;
+    using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
+    static const auto get_dpi = reinterpret_cast<GetDpiForMonitorFn>(
+        GetProcAddress(LoadLibraryW(L"shcore.dll"), "GetDpiForMonitor"));
+    if (get_dpi == nullptr || FAILED(get_dpi(handle, 0, &dpi_x, &dpi_y))) {
+        dpi_x = GetDpiForSystem();
+    }
+    return std::max<UINT>(96u, dpi_x);
+}
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0};
@@ -408,17 +429,7 @@ namespace host_window {
 RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
                               unsigned height) {
     RECT frame{0, 0, 0, 0};
-    const HMONITOR handle = MonitorFromPoint(
-        POINT{monitor.bounds.left + 1, monitor.bounds.top + 1}, MONITOR_DEFAULTTONEAREST);
-    UINT dpi_x = 96u;
-    UINT dpi_y = 96u;
-    using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
-    static const auto get_dpi = reinterpret_cast<GetDpiForMonitorFn>(
-        GetProcAddress(LoadLibraryW(L"shcore.dll"), "GetDpiForMonitor"));
-    if (get_dpi == nullptr || FAILED(get_dpi(handle, 0, &dpi_x, &dpi_y))) {
-        dpi_x = GetDpiForSystem();
-    }
-    (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, dpi_x);
+    (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, monitor_dpi(monitor));
     const long frame_w = frame.right - frame.left;
     const long frame_h = frame.bottom - frame.top;
     const long work_w = monitor.work_area.right - monitor.work_area.left;
@@ -600,6 +611,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_DISPLAYCHANGE) {
         store_monitor_cache(enumerate_monitors());
+        display_changed.store(true, std::memory_order_release);
     }
     if (msg == kTestResizeMessage) {
         RECT rect{0, 0, static_cast<LONG>(wp), static_cast<LONG>(lp)};
@@ -801,13 +813,21 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_DPICHANGED) {
+        // Borderless fills its monitor: only a window takes the rectangle suggested for the new scale.
         const auto* suggested=reinterpret_cast<const RECT*>(lp);
-        if (suggested) SetWindowPos(hwnd,nullptr,suggested->left,suggested->top,
-            suggested->right-suggested->left,suggested->bottom-suggested->top,
-            SWP_NOZORDER|SWP_NOACTIVATE);
+        if (suggested && !borderless_active.load(std::memory_order_relaxed)) {
+            SetWindowPos(hwnd,nullptr,suggested->left,suggested->top,
+                suggested->right-suggested->left,suggested->bottom-suggested->top,
+                SWP_NOZORDER|SWP_NOACTIVATE);
+        }
         return 0;
     }
+    if (msg == WM_ACTIVATEAPP) {
+        // The 1 ms timer only while in front: it costs a laptop's battery for every program.
+        galaxy::host::hold_high_resolution_timer(wp != FALSE);
+    }
     if (msg == WM_SIZE) {
+        s_minimized.store(wp == SIZE_MINIMIZED, std::memory_order_relaxed);
         seed_pointer_from_client(hwnd, false);
         // Minimizing reports a 0x0 (or near-0) client, which ResizeBuffers would refuse.
         if (wp != SIZE_MINIMIZED) {
@@ -1218,11 +1238,10 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
 namespace host_window {
 
 std::vector<SettingsMonitor> settings_monitors() {
-    RECT frame{0, 0, 0, 0};
-    const UINT dpi = std::max<UINT>(96u, GetDpiForSystem());
-    (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, dpi);
     std::vector<SettingsMonitor> out;
     for (const MonitorInfo& monitor : cached_monitors()) {
+        RECT frame{0, 0, 0, 0};
+        (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, monitor_dpi(monitor));
         SettingsMonitor entry;
         entry.id = narrow_utf8(monitor.device);
         entry.name = monitor.name;

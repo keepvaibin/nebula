@@ -40,7 +40,7 @@ namespace Nebula.Launcher
         {
             var form = new Form
             {
-                Text = "Nebula recording", FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false,
+                Text = NebulaText.Of("Nebula recording"), FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false,
                 StartPosition = FormStartPosition.CenterScreen, ShowInTaskbar = true, AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink, Font = SystemFonts.MessageBoxFont, Padding = new Padding(12)
             };
@@ -51,7 +51,7 @@ namespace Nebula.Launcher
                 Margin = new Padding(0, 0, 12, 12)
             };
             string text = message;
-            if (saved.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) text += "\r\n\r\nAttach this ZIP file to your report.";
+            if (saved.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) text += "\r\n\r\n" + NebulaText.Of("Attach this ZIP file to your report.");
             var label = new Label { Text = text, AutoSize = true, MaximumSize = new Size(720, 0), Margin = new Padding(0, 4, 0, 16) };
             var buttons = new FlowLayoutPanel
             {
@@ -59,13 +59,13 @@ namespace Nebula.Launcher
                 Anchor = AnchorStyles.Right, Margin = Padding.Empty
             };
             var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(96, 0) };
-            var open = new Button { Text = "Open folder", AutoSize = true, MinimumSize = new Size(96, 0) };
+            var open = new Button { Text = NebulaText.Of("Open folder"), AutoSize = true, MinimumSize = new Size(96, 0) };
             open.Click += delegate
             {
                 try { Process.Start(FolderCommand(saved)); }
                 catch (Exception error)
                 {
-                    MessageBox.Show(form, "Could not open the folder: " + error.Message + "\r\n" + saved, "Nebula recording",
+                    MessageBox.Show(form, NebulaText.Of("Could not open the folder: {0}", error.Message) + "\r\n" + saved, NebulaText.Of("Nebula recording"),
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }

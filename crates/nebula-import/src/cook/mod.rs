@@ -85,8 +85,15 @@ pub struct StoreItem {
     pub bytes: Option<Vec<u8>>,
 }
 
+/// Archives inside archives past this are refused (the game's own go one level down): each level can expand again.
+const ARCHIVE_DEPTH_MAX: usize = 8;
+
 /// One source file as the store holds it: itself cooked, or, an archive, a folder of its members cooked, side by side.
 pub fn cook_entry(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
+    cook_entry_at(name, bytes, 0, stats)
+}
+
+fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) -> Result<Vec<StoreItem>> {
     let mut bytes = bytes;
     if archive::is_compressed(&bytes) {
         bytes = archive::expand(&bytes).with_context(|| format!("{name} cannot be expanded"))?;
@@ -96,13 +103,16 @@ pub fn cook_entry(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Vec<S
         let cooked = cook_file(name, bytes.clone(), stats)?.unwrap_or(bytes);
         return Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]);
     }
+    if depth >= ARCHIVE_DEPTH_MAX {
+        bail!("{name}: archives inside archives more than {ARCHIVE_DEPTH_MAX} deep");
+    }
     let mut items = Vec::new();
     for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
         let file = member.path.rsplit('/').next().unwrap_or(&member.path);
         if tool_leftover(file) {
             continue;
         }
-        for item in cook_entry(&format!("{name}/{file}"), member.bytes, stats)? {
+        for item in cook_entry_at(&format!("{name}/{file}"), member.bytes, depth + 1, stats)? {
             let path = if item.path.is_empty() { member.path.clone() } else { format!("{}/{}", member.path, item.path) };
             items.push(StoreItem { path, order: member.offset, bytes: item.bytes });
         }
@@ -385,7 +395,11 @@ pub fn pak_system_area(pak: &mut File) -> Result<SystemArea> {
             dol_end = dol_end.max(dol + offset + size);
         }
     }
-    let end = (fst_offset + fst_max).max(dol_end);
+    // The boot header's words stay readable in the area; its numbers are compared to the file before any is allocated.
+    let end = (fst_offset + fst_max).max(dol_end).max(boot.len());
+    if end as u64 > pak.metadata()?.len() {
+        bail!("game.pak ends inside its system files");
+    }
     let mut bytes = vec![0u8; end];
     pak.seek(SeekFrom::Start(0))?;
     pak.read_exact(&mut bytes).context("game.pak ends inside its system files")?;
@@ -402,9 +416,13 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
     let system = pak_system_area(&mut pak)?;
     fs::create_dir_all(output).with_context(|| format!("{} cannot be created", output.display()))?;
     let mut stats = Stats::default();
+    let source_len = pak.metadata()?.len();
     let result = (|| {
         let target = output.join("game.pak");
         let mut read = |file: &PakFile| -> Result<Vec<u8>> {
+            if file.offset + file.length > source_len {
+                bail!("{} lies past game.pak's end", file.path);
+            }
             let mut bytes = vec![0u8; file.length as usize];
             pak.seek(SeekFrom::Start(file.offset))?;
             pak.read_exact(&mut bytes).with_context(|| format!("{} cannot be read from game.pak", file.path))?;

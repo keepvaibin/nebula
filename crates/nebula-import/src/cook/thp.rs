@@ -114,6 +114,10 @@ pub fn movie(bytes: &[u8]) -> Result<Vec<u8>> {
     if tracks == 0 && components > 1 {
         bail!("an audio component with no tracks");
     }
+    // Each is at least a frame's header in the file; a file's tracks are few.
+    if tracks > 16 || frames > bytes.len() / (8 + components * 4) {
+        bail!("{frames} frames of {tracks} tracks in a movie of {} bytes", bytes.len());
+    }
 
     let mut out = vec![0u8; HEADER];
     out.reserve(bytes.len());
@@ -132,6 +136,10 @@ pub fn movie(bytes: &[u8]) -> Result<Vec<u8>> {
         let cooked_audio = if tracks != 0 { 4 + samples * 4 } else { 0 };
         let total = FRAME_HEADER + video + cooked_audio * tracks;
         let start = out.len();
+        // A mono record's 8 bytes give 56; past that its header's sample counts are wrong.
+        if start + align32(total) > bytes.len().saturating_mul(16) + (1 << 20) {
+            bail!("frame {frame}: audio sample counts past what the movie holds");
+        }
         out.resize(start + align32(total), 0);
         sizes.push(align32(total));
         out[start + 4..start + 8].copy_from_slice(&(video as u32).to_le_bytes());
@@ -214,6 +222,23 @@ mod tests {
         assert_eq!(u32::from_le_bytes(audio[..4].try_into().unwrap()), 1);
         assert_eq!(i16::from_le_bytes([audio[4], audio[5]]), 1);
         assert_eq!(i16::from_le_bytes([audio[6], audio[7]]), 1);
+    }
+
+    fn header_only(frames: u32, tracks: u32) -> Vec<u8> {
+        let mut thp = vec![0u8; 0x60];
+        thp[..4].copy_from_slice(b"THP\0");
+        put(&mut thp, 0x14, frames);
+        put(&mut thp, 0x20, 0x30);
+        put(&mut thp, 0x30, 2);
+        thp[0x35] = 1;
+        put(&mut thp, 0x50 + 12, tracks);
+        thp
+    }
+
+    #[test]
+    fn header_counts_are_refused_before_their_allocations() {
+        assert!(movie(&header_only(u32::MAX, 1)).unwrap_err().to_string().contains("frames of"));
+        assert!(movie(&header_only(1, u32::MAX)).unwrap_err().to_string().contains("frames of"));
     }
 
     #[test]

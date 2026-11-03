@@ -26,7 +26,8 @@
 // controller shows; the A bubble's two pictures are ours only while it draws. Every picture of ours is a texture record
 // (nebula_cooked_texture.h) of RGBA8 rows, as the cooked picture font's sheets are. The game's textures keep their
 // names (a texture pack's replacements of them still apply) and ours are the same every run, so a pack names them by
-// their texels too (GALAXY_EXPORT_ART writes one, eight times their size).
+// their texels too (GALAXY_EXPORT_ART writes one, eight times their size). Each of ours drawn is also painted at that
+// size and replaces itself (NebulaHostServices::texture_hd), so it stays sharp at any window size.
 namespace {
     // Glyph sheets (texture records) handed to the renderer after they are painted, one image each.
     void handOverSheets(const u8* pFirst, s32 count, s32 sheetBytes, s32 width, s32 height) {
@@ -56,22 +57,27 @@ namespace {
         return c;
     }
 
-    // A picture being drawn, straight alpha; `mScale` its pixels to one of the game's.
+    // A picture being drawn, straight alpha; `mScale` its pixels to one of the game's. `mBandRows` rows from `mBandTop`
+    // are drawn, all that `mPixels` holds (none: the whole picture).
     struct Canvas {
         Rgba* mPixels;
         s32 mWidth;
         s32 mHeight;
         f32 mScale;
+        s32 mBandTop;
+        s32 mBandRows;
 
-        void clear() { memset(mPixels, 0, sizeof(Rgba) * mWidth * mHeight); }
+        s32 top() const { return mBandRows != 0 ? mBandTop : 0; }
+        s32 bottom() const { return mBandRows != 0 ? mBandTop + mBandRows : mHeight; }
+        void clear() { memset(mPixels, 0, sizeof(Rgba) * mWidth * (bottom() - top())); }
 
         // Straight alpha over what is drawn, `cover` of a pixel.
         void blend(s32 x, s32 y, const Rgba& rColor, f32 cover) {
             cover *= rColor.a;
-            if (cover <= 0.0f) {
+            if (cover <= 0.0f || y < top() || y >= bottom()) {
                 return;
             }
-            Rgba& rDst = mPixels[y * mWidth + x];
+            Rgba& rDst = mPixels[(y - top()) * mWidth + x];
             const f32 a = cover + rDst.a * (1.0f - cover);
             const f32 keep = rDst.a * (1.0f - cover);
             rDst.r = (rColor.r * cover + rDst.r * keep) / a;
@@ -107,7 +113,7 @@ namespace {
 
     // `rShape` ringed `ring` wide in `rRing`, its face from `rTop` at its top to `rBottom` at its foot.
     void drawShape(Canvas& rCanvas, const Shape& rShape, const Rgba& rRing, f32 ring, const Rgba& rTop, const Rgba& rBottom) {
-        for (s32 y = 0; y < rCanvas.mHeight; y++) {
+        for (s32 y = rCanvas.top(); y < rCanvas.bottom(); y++) {
             const f32 t = NebulaUi::clamp((y + 0.5f - (rShape.mY - rShape.mHalfHeight)) / (rShape.mHalfHeight * 2.0f), 0.0f, 1.0f);
             const Rgba face = {rTop.r + (rBottom.r - rTop.r) * t, rTop.g + (rBottom.g - rTop.g) * t, rTop.b + (rBottom.b - rTop.b) * t,
                                rTop.a + (rBottom.a - rTop.a) * t};
@@ -147,7 +153,7 @@ namespace {
         const f32 rise = side * 0.866f;
         const f32 apex = y - rise * 0.6f;
         const f32 base = apex + rise;
-        for (s32 py = 0; py < rCanvas.mHeight; py++) {
+        for (s32 py = rCanvas.top(); py < rCanvas.bottom(); py++) {
             for (s32 px = 0; px < rCanvas.mWidth; px++) {
                 const f32 fx = px + 0.5f;
                 const f32 fy = py + 0.5f;
@@ -631,10 +637,10 @@ namespace {
 
     // `pText` (letters of cLetters) in `rInk`, its ink centred on (x, y), `capital` pixels tall.
     void drawText(Canvas& rCanvas, const char* pText, f32 x, f32 y, f32 capital, const Rgba& rInk) {
-        const Letter* letters[4];
+        const Letter* letters[8];
         s32 count = 0;
         f32 width = 0.0f;
-        for (const char* p = pText; *p != 0 && count < 4; p++) {
+        for (const char* p = pText; *p != 0 && count < 8; p++) {
             letters[count] = findLetter(static_cast< u8 >(*p));
             if (letters[count] != nullptr) {
                 width += (count > 0 ? cLetterGap : 0.0f) + letters[count]->mAdvance;
@@ -649,8 +655,8 @@ namespace {
             const f32 margin = capital * cStrokeHalf + 1.0f;
             const s32 x0 = static_cast< s32 >(NebulaUi::clamp(left - margin, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
             const s32 x1 = static_cast< s32 >(NebulaUi::clamp(left + rLetter.mAdvance * capital + margin + 1.0f, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
-            const s32 y0 = static_cast< s32 >(NebulaUi::clamp(top - margin, 0.0f, static_cast< f32 >(rCanvas.mHeight)));
-            const s32 y1 = static_cast< s32 >(NebulaUi::clamp(top + capital + margin + 1.0f, 0.0f, static_cast< f32 >(rCanvas.mHeight)));
+            const s32 y0 = static_cast< s32 >(NebulaUi::clamp(top - margin, static_cast< f32 >(rCanvas.top()), static_cast< f32 >(rCanvas.bottom())));
+            const s32 y1 = static_cast< s32 >(NebulaUi::clamp(top + capital + margin + 1.0f, static_cast< f32 >(rCanvas.top()), static_cast< f32 >(rCanvas.bottom())));
             for (s32 py = y0; py < y1; py++) {
                 for (s32 px = x0; px < x1; px++) {
                     const f32 d = letterDistance(rLetter, (px + 0.5f - left) / capital, (py + 0.5f - top) / capital) * capital;
@@ -681,15 +687,26 @@ namespace {
     // 40, centred, its shading reversed).
     enum { LookText, LookUp, LookPressed };
 
-    // The icon of `glyph` at `place` in `style` on the canvas (cleared first); false when the game's own shows.
-    bool paint(Canvas& rCanvas, s32 style, s32 glyph, s32 place, s32 look) {
+    // The icon of `glyph` at `place` in `style`, of `model`'s where that has its own, on the canvas (cleared first); false
+    // when the game's own shows, or the model is another family's.
+    bool paint(Canvas& rCanvas, s32 style, s32 glyph, s32 place, s32 look, s32 model = NEBULA_ICON_MODEL_STANDARD) {
         static const char* const cNintendoFaces[4] = {"B", "A", "Y", "X"};
         static const char* const cXboxLetters[4] = {"A", "B", "X", "Y"};
         static const char* const cShoulders[3][2] = {{"LB", "RB"}, {"L", "R"}, {"L1", "R1"}};
         static const char* const cTriggers[3][2] = {{"LT", "RT"}, {"ZL", "ZR"}, {"L2", "R2"}};
         static const char* const cSticks[3][2] = {{"LS", "RS"}, {"L", "R"}, {"L3", "R3"}};
+        static const char* const cGrips[3][4] = {{"L4", "R4", "L5", "R5"}, {"GL", "GR", "GL2", "GR2"}, {"LB", "RB", "L5", "R5"}};
+        static const char* const cTrackpads[2] = {"LP", "RP"};
+        // The GameCube pad's analog L and R are its triggers, its ZL and Z its shoulders.
+        static const char* const cGameCubeShoulders[2] = {"ZL", "Z"};
+        static const char* const cGameCubeTriggers[2] = {"L", "R"};
         const s32 family = style == NEBULA_ICON_STYLE_XBOX ? 0 : style == NEBULA_ICON_STYLE_NINTENDO ? 1 : 2;
         const bool xbox = family == 0;
+        const bool sixaxis = model == NEBULA_ICON_MODEL_SIXAXIS;
+        const bool gameCube = model == NEBULA_ICON_MODEL_GAMECUBE;
+        if ((sixaxis && family != 2) || (gameCube && family != 1)) {
+            return false;
+        }
         const s32 width = rCanvas.mWidth;
         const s32 height = rCanvas.mHeight;
         const f32 side = static_cast< f32 >(width < height ? width : height);
@@ -711,7 +728,7 @@ namespace {
             const Shape shadow = {cx + diameter * 0.07f, cy + diameter * 0.07f, diameter * 0.5f, diameter * 0.5f, diameter * 0.5f};
             const Rgba dark = {0.0f, 0.0f, 0.0f, 0.4f};
             const f32 soft = 2.0f * rCanvas.mScale;
-            for (s32 y = 0; y < height; y++) {
+            for (s32 y = rCanvas.top(); y < rCanvas.bottom(); y++) {
                 for (s32 x = 0; x < width; x++) {
                     rCanvas.blend(x, y, dark, NebulaUi::clamp((rCanvas.mScale - shadow.distance(x + 0.5f, y + 0.5f)) / soft, 0.0f, 1.0f));
                 }
@@ -741,21 +758,27 @@ namespace {
         }
         case NEBULA_ICON_SHOULDER:
             drawShape(rCanvas, pill, ringColor, ring, faceTop, faceBottom);
-            drawText(rCanvas, cShoulders[family][place & 1], cx, cy, diameter * 0.3f, ink);
+            drawText(rCanvas, gameCube ? cGameCubeShoulders[place & 1] : cShoulders[family][place & 1], cx, cy, diameter * 0.3f, ink);
             return true;
         case NEBULA_ICON_TRIGGER:
             drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
-            drawText(rCanvas, cTriggers[family][place & 1], cx, cy, diameter * 0.3f, ink);
+            drawText(rCanvas, gameCube ? cGameCubeTriggers[place & 1] : cTriggers[family][place & 1], cx, cy, diameter * 0.3f, ink);
             return true;
         case NEBULA_ICON_STICK: {
             // The stick's cap and its rim.
             drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
             const Shape rim = {cx, cy, diameter * 0.36f, diameter * 0.36f, diameter * 0.36f};
             drawShape(rCanvas, rim, rgba(xbox ? 0x6A6E78FF : 0xB8C0D0FF), ring * 0.7f, faceTop, faceBottom);
-            drawText(rCanvas, cSticks[family][place & 1], cx, cy, diameter * (family == 1 ? 0.32f : 0.24f), ink);
+            // The GameCube pad's right stick is its C stick.
+            drawText(rCanvas, gameCube && (place & 1) != 0 ? "C" : cSticks[family][place & 1], cx, cy, diameter * (family == 1 ? 0.32f : 0.24f), ink);
             return true;
         }
         case NEBULA_ICON_START:
+            if (sixaxis || gameCube) {
+                drawShape(rCanvas, pill, ringColor, ring, faceTop, faceBottom);
+                drawText(rCanvas, "START", cx, cy, diameter * 0.17f, ink);
+                return true;
+            }
             if (family == 1) {
                 return false;  // Plus: the game's own
             }
@@ -766,6 +789,11 @@ namespace {
             }
             return true;
         case NEBULA_ICON_BACK:
+            if (sixaxis) {
+                drawShape(rCanvas, pill, ringColor, ring, faceTop, faceBottom);
+                drawText(rCanvas, "SELECT", cx, cy, diameter * 0.15f, ink);
+                return true;
+            }
             if (family == 1) {
                 return false;  // Minus: the game's own
             }
@@ -783,6 +811,34 @@ namespace {
                 }
             }
             return true;
+        case NEBULA_ICON_CAPTURE: {
+            static const char* const cCaptures[3] = {"SHARE", "CAP", "PAD"};
+            drawShape(rCanvas, pill, ringColor, ring, faceTop, faceBottom);
+            drawText(rCanvas, cCaptures[family], cx, cy, diameter * (family == 0 ? 0.17f : 0.26f), ink);
+            return true;
+        }
+        case NEBULA_ICON_CHAT: {
+            static const char* const cChats[3] = {"CHAT", "C", "MUTE"};
+            drawShape(rCanvas, family == 1 ? circle : pill, ringColor, ring, faceTop, faceBottom);
+            drawText(rCanvas, cChats[family], cx, cy, diameter * (family == 1 ? 0.44f : 0.2f), ink);
+            return true;
+        }
+        case NEBULA_ICON_GRIP:
+            drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
+            drawText(rCanvas, cGrips[family][place & 3], cx, cy, diameter * 0.26f, ink);
+            return true;
+        case NEBULA_ICON_TRACKPAD:
+            drawShape(rCanvas, box, ringColor, ring, faceTop, faceBottom);
+            drawText(rCanvas, cTrackpads[place & 1], cx, cy, diameter * 0.3f, ink);
+            return true;
+        case NEBULA_ICON_STICK_AXIS: {
+            // The stick's cap, the way it is pushed, and which stick.
+            static const char* const cArrows[4] = {"\x01", "\x02", "\x03", "\x04"};
+            drawShape(rCanvas, circle, ringColor, ring, faceTop, faceBottom);
+            drawText(rCanvas, cArrows[place & 3], cx, cy - diameter * 0.1f, diameter * 0.3f, ink);
+            drawText(rCanvas, (place & 4) != 0 ? "R" : "L", cx, cy + diameter * 0.24f, diameter * 0.18f, ink);
+            return true;
+        }
         default:
             return false;
         }
@@ -949,8 +1005,8 @@ namespace {
             const f32 margin = capital * cStrokeHalf + 1.0f;
             const s32 x0 = static_cast< s32 >(NebulaUi::clamp(left - margin, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
             const s32 x1 = static_cast< s32 >(NebulaUi::clamp(left + pLetter->mAdvance * capital + margin + 1.0f, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
-            const s32 y0 = static_cast< s32 >(NebulaUi::clamp(top + inkTop * capital - margin, 0.0f, static_cast< f32 >(rCanvas.mHeight)));
-            const s32 y1 = static_cast< s32 >(NebulaUi::clamp(top + inkFoot * capital + margin + 1.0f, 0.0f, static_cast< f32 >(rCanvas.mHeight)));
+            const s32 y0 = static_cast< s32 >(NebulaUi::clamp(top + inkTop * capital - margin, static_cast< f32 >(rCanvas.top()), static_cast< f32 >(rCanvas.bottom())));
+            const s32 y1 = static_cast< s32 >(NebulaUi::clamp(top + inkFoot * capital + margin + 1.0f, static_cast< f32 >(rCanvas.top()), static_cast< f32 >(rCanvas.bottom())));
             for (s32 py = y0; py < y1; py++) {
                 for (s32 px = x0; px < x1; px++) {
                     const f32 d = letterDistance(*pLetter, (px + 0.5f - left) / capital, (py + 0.5f - top) / capital) * capital;
@@ -1231,23 +1287,45 @@ namespace {
         }
     }
 
-    // Each family's icons, one to a cell: face buttons by place, shoulders, triggers, sticks, Start, Back.
+    // Each family's icons, one to a cell: face buttons by place, shoulders, triggers, sticks, Start, Back, the rarer
+    // buttons, then the ones only a model of the family draws (paint leaves those of another family out).
     const s32 cFamilies = 3;  // Xbox, Nintendo, PlayStation: NEBULA_ICON_STYLE_* - 1
     const char* const cFamilyNames[cFamilies] = {"Xbox", "Nintendo", "PlayStation"};
     struct AtlasIcon {
         u8 mGlyph;
         u8 mPlace;
         const char* mName;
+        u8 mModel;
     };
     const AtlasIcon cAtlas[] = {
         {NEBULA_ICON_FACE, 0, "face-south"},          {NEBULA_ICON_FACE, 1, "face-east"},       {NEBULA_ICON_FACE, 2, "face-west"},
         {NEBULA_ICON_FACE, 3, "face-north"},          {NEBULA_ICON_SHOULDER, 0, "shoulder-left"}, {NEBULA_ICON_SHOULDER, 1, "shoulder-right"},
         {NEBULA_ICON_TRIGGER, 0, "trigger-left"},     {NEBULA_ICON_TRIGGER, 1, "trigger-right"}, {NEBULA_ICON_STICK, 0, "stick-left"},
         {NEBULA_ICON_STICK, 1, "stick-right"},        {NEBULA_ICON_START, 0, "start"},           {NEBULA_ICON_BACK, 0, "back"},
+        {NEBULA_ICON_CAPTURE, 0, "capture"},          {NEBULA_ICON_CHAT, 0, "chat"},             {NEBULA_ICON_GRIP, 0, "grip-left"},
+        {NEBULA_ICON_GRIP, 1, "grip-right"},          {NEBULA_ICON_GRIP, 2, "grip-left-2"},      {NEBULA_ICON_GRIP, 3, "grip-right-2"},
+        {NEBULA_ICON_TRACKPAD, 0, "trackpad-left"},   {NEBULA_ICON_TRACKPAD, 1, "trackpad-right"},
+        {NEBULA_ICON_STICK_AXIS, 0, "left-up"},       {NEBULA_ICON_STICK_AXIS, 1, "left-down"},  {NEBULA_ICON_STICK_AXIS, 2, "left-left"},
+        {NEBULA_ICON_STICK_AXIS, 3, "left-right"},    {NEBULA_ICON_STICK_AXIS, 4, "right-up"},   {NEBULA_ICON_STICK_AXIS, 5, "right-down"},
+        {NEBULA_ICON_STICK_AXIS, 6, "right-left"},    {NEBULA_ICON_STICK_AXIS, 7, "right-right"},
+        {NEBULA_ICON_START, 0, "sixaxis-start", NEBULA_ICON_MODEL_SIXAXIS},
+        {NEBULA_ICON_BACK, 0, "sixaxis-select", NEBULA_ICON_MODEL_SIXAXIS},
+        {NEBULA_ICON_SHOULDER, 0, "gamecube-zl", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_SHOULDER, 1, "gamecube-z", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_TRIGGER, 0, "gamecube-l", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_TRIGGER, 1, "gamecube-r", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_START, 0, "gamecube-start", NEBULA_ICON_MODEL_GAMECUBE},
+        {NEBULA_ICON_STICK, 1, "gamecube-c", NEBULA_ICON_MODEL_GAMECUBE},
     };
     const s32 cAtlasIcons = sizeof(cAtlas) / sizeof(cAtlas[0]);
 
-    s32 atlasSlot(s32 glyph, s32 place) {
+    s32 atlasSlot(s32 glyph, s32 place, s32 model) {
+        // A model's own, where it has one.
+        for (s32 k = 0; model != NEBULA_ICON_MODEL_STANDARD && k < cAtlasIcons; k++) {
+            if (cAtlas[k].mModel == model && cAtlas[k].mGlyph == glyph && cAtlas[k].mPlace == place) {
+                return k;
+            }
+        }
         switch (glyph) {
         case NEBULA_ICON_FACE:
             return place & 3;
@@ -1261,6 +1339,16 @@ namespace {
             return 10;
         case NEBULA_ICON_BACK:
             return 11;
+        case NEBULA_ICON_CAPTURE:
+            return 12;
+        case NEBULA_ICON_CHAT:
+            return 13;
+        case NEBULA_ICON_GRIP:
+            return 14 + (place & 3);
+        case NEBULA_ICON_TRACKPAD:
+            return 18 + (place & 1);
+        case NEBULA_ICON_STICK_AXIS:
+            return 20 + (place & 7);
         default:
             return -1;
         }
@@ -1437,7 +1525,7 @@ namespace {
         }
         Canvas canvas = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
         for (s32 k = 0; k < cAtlasIcons; k++) {
-            sFont.mPainted[family][k] = paint(canvas, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText);
+            sFont.mPainted[family][k] = paint(canvas, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
             if (sFont.mPainted[family][k]) {
                 u8* pSheet;
                 s32 x, y;
@@ -1452,6 +1540,134 @@ namespace {
 
     u16 keyGlyph(s32 slot) {
         return static_cast< u16 >(sFont.mKeyFirstSheet * sFont.mCells + sFont.mKeyCell[slot]);
+    }
+
+    // Each of our sheets once it has been drawn from, painted eight times larger, a band of rows per update and with
+    // mip levels for a small window, and handed over to stand in for it (NebulaHostServices::texture_hd). A sheet painted
+    // again loses its large one until it is drawn from again.
+    const s32 cHdSheets = 64;
+    const s32 cHdBandRows = 32;
+    const s32 cHdLevels = 4;
+    bool sHdWanted[cHdSheets];
+    bool sHdDone[cHdSheets];
+    struct HdPainting {
+        u8* mRecord;
+        Rgba* mBand;
+        s32 mSheet;
+        s32 mCell;
+        s32 mRow;
+    };
+    HdPainting sHd = {nullptr, nullptr, -1, 0, 0};
+
+    void forgetHdSheet(s32 sheet) {
+        if (sheet < cHdSheets) {
+            sHdWanted[sheet] = false;
+            if (sHdDone[sheet]) {
+                NebulaHost::textureHd(sFont.mSheets + sheet * sFont.mSheetBytes, nullptr);
+            }
+            sHdDone[sheet] = false;
+            if (sHd.mSheet == sheet) {
+                sHd.mSheet = -1;
+            }
+        }
+    }
+
+    // What the keyboard's cells show now, in `rCanvas`: false when the cell is empty.
+    bool paintKeyCell(Canvas& rCanvas, s32 cell);
+
+    // Cell `cell` of `sheet`, as drawFamily and drawKeys draw it: false when it is empty.
+    bool paintHdCell(Canvas& rCanvas, s32 sheet, s32 cell) {
+        if (sheet >= sFont.mKeyFirstSheet) {
+            return paintKeyCell(rCanvas, (sheet - sFont.mKeyFirstSheet) * sFont.mCells + cell);
+        }
+        const s32 family = (sheet - sFont.mFirstSheet) / sFont.mFamilySheets;
+        const s32 k = (sheet - sFont.mFirstSheet - family * sFont.mFamilySheets) * sFont.mCells + cell;
+        return k < cAtlasIcons && sFont.mPainted[family][k] &&
+               paint(rCanvas, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
+    }
+
+    // Each level from the one above: four texels' colours by their alpha, as a smaller picture of straight alpha needs.
+    void makeHdLevels(u8* pRecord, s32 width, s32 height) {
+        u8* pSource = texelsOf(pRecord);
+        for (s32 level = 1; level < cHdLevels; level++) {
+            const s32 w = width >> level;
+            const s32 h = height >> level;
+            const s32 sourceWidth = width >> (level - 1);
+            u8* pOut = pSource + static_cast< size_t >(sourceWidth) * (height >> (level - 1)) * 4;
+            for (s32 y = 0; y < h; y++) {
+                for (s32 x = 0; x < w; x++) {
+                    u32 sum[3] = {0, 0, 0};
+                    u32 alpha = 0;
+                    for (s32 i = 0; i < 4; i++) {
+                        const u8* pIn = pSource + ((y * 2 + (i >> 1)) * sourceWidth + x * 2 + (i & 1)) * 4;
+                        alpha += pIn[3];
+                        for (s32 c = 0; c < 3; c++) {
+                            sum[c] += pIn[c] * static_cast< u32 >(pIn[3]);
+                        }
+                    }
+                    u8* pTexel = pOut + (y * w + x) * 4;
+                    for (s32 c = 0; c < 3; c++) {
+                        pTexel[c] = alpha != 0 ? static_cast< u8 >(sum[c] / alpha) : 0;
+                    }
+                    pTexel[3] = static_cast< u8 >((alpha + 2) / 4);
+                }
+            }
+            pSource = pOut;
+        }
+    }
+
+    void paintHdBand() {
+        const s32 width = sFont.mSheetWidth * cHdScale;
+        const s32 height = sFont.mSheetHeight * cHdScale;
+        if (width > cHdSheetMax || height > cHdSheetMax) {
+            return;
+        }
+        if (sHd.mSheet < 0) {
+            const s32 sheets = sFont.mKeyFirstSheet + sFont.mKeySheets;
+            for (s32 sheet = sFont.mFirstSheet; sheet < sheets && sheet < cHdSheets && sHd.mSheet < 0; sheet++) {
+                if (sHdWanted[sheet] && !sHdDone[sheet]) {
+                    sHd.mSheet = sheet;
+                }
+            }
+            if (sHd.mSheet < 0) {
+                return;
+            }
+            if (sHd.mRecord == nullptr) {
+                const size_t bytes = NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, cHdLevels, NEBULA_TEXTURE_RGBA8);
+                sHd.mRecord = static_cast< u8* >(malloc(bytes));
+                sHd.mBand = static_cast< Rgba* >(malloc(sizeof(Rgba) * sFont.mGlyphWidth * cHdScale * cHdBandRows));
+            }
+            nebula_texture_init(sHd.mRecord, static_cast< u16 >(width), static_cast< u16 >(height), cHdLevels, NEBULA_TEXTURE_RGBA8,
+                                NEBULA_TEXTURE_FILTER_AT_UPLOAD);
+            memset(sHd.mRecord + NEBULA_TEXTURE_HEADER, 0, nebula_texture_level_bytes(width, height, cHdLevels, NEBULA_TEXTURE_RGBA8));
+            sHd.mCell = 0;
+            sHd.mRow = 0;
+        }
+        const s32 cellHeight = sFont.mGlyphHeight * cHdScale;
+        Canvas canvas = {sHd.mBand, sFont.mGlyphWidth * cHdScale, cellHeight, static_cast< f32 >(cHdScale), sHd.mRow, cHdBandRows};
+        if (cellHeight - sHd.mRow < cHdBandRows) {
+            canvas.mBandRows = cellHeight - sHd.mRow;
+        }
+        if (paintHdCell(canvas, sHd.mSheet, sHd.mCell)) {
+            const s32 cellX = (sHd.mCell % sFont.mRow) * (sFont.mCellWidth + 1) + 1;
+            const s32 cellY = (sHd.mCell / sFont.mRow) * (sFont.mCellHeight + 1) + 1;
+            Canvas band = {sHd.mBand, canvas.mWidth, canvas.mBandRows, canvas.mScale};
+            paintInto(band, sHd.mRecord, width, cellX * cHdScale, cellY * cHdScale + sHd.mRow);
+            sHd.mRow += cHdBandRows;
+        } else {
+            sHd.mRow = cellHeight;
+        }
+        if (sHd.mRow < cellHeight) {
+            return;
+        }
+        sHd.mRow = 0;
+        if (++sHd.mCell < sFont.mCells) {
+            return;
+        }
+        makeHdLevels(sHd.mRecord, width, height);
+        NebulaHost::textureHd(sFont.mSheets + sHd.mSheet * sFont.mSheetBytes, sHd.mRecord);
+        sHdDone[sHd.mSheet] = true;
+        sHd.mSheet = -1;
     }
 
     // The keyboard's cells: its fixed keys the first time they show; the keys that follow the layout, the Control Pad
@@ -1494,12 +1710,29 @@ namespace {
             cellOf(keyGlyph(slot), &pSheet, &x, &y);
             paintInto(canvas, pSheet, sFont.mSheetWidth, x, y);
         }
+        // The sheets holding keys that follow are painted again.
+        for (s32 slot = 0; slot < cKeyCells; slot++) {
+            if (keyFollows(slot) && keyHasCell(slot)) {
+                forgetHdSheet(sFont.mKeyFirstSheet + sFont.mKeyCell[slot] / sFont.mCells);
+            }
+        }
         memcpy(sFont.mKeyLayout, pShownLayout, sizeof(sFont.mKeyLayout));
         memcpy(sFont.mKeyPad, pShownPad, sizeof(sFont.mKeyPad));
         memcpy(sFont.mKeyNames, pShownNames, sizeof(sFont.mKeyNames));
         sFont.mKeysFollowing = true;
         handOverSheets(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, sFont.mKeySheets, sFont.mSheetBytes, sFont.mSheetWidth,
                        sFont.mSheetHeight);
+    }
+
+    bool paintKeyCell(Canvas& rCanvas, s32 cell) {
+        for (s32 slot = 0; slot < cKeyCells; slot++) {
+            if (keyHasCell(slot) && sFont.mKeyCell[slot] == cell) {
+                paintKey(rCanvas, slot, LookText, keyFollows(slot) ? sFont.mKeyLayout : nullptr, keyFollows(slot) ? sFont.mKeyPad : nullptr,
+                         slot >= cKeyNamed ? sFont.mKeyNames[slot - cKeyNamed] : nullptr);
+                return true;
+            }
+        }
+        return false;
     }
 
     // The glyph icon `icon` shows on the keyboard: its key's (a key without its own icon: the icon's named cell), the
@@ -1516,11 +1749,11 @@ namespace {
 
     // The glyph icon `icon` shows: ours, the game's icon in its place (Plus, Minus, HOME or the Control Pad, which a Nintendo
     // controller's look like), or its own.
-    u16 shownGlyph(s32 family, s32 icon, s32 glyph, s32 place) {
+    u16 shownGlyph(s32 family, s32 icon, s32 glyph, s32 place, s32 model = NEBULA_ICON_MODEL_STANDARD) {
         if (family < 0 || glyph == NEBULA_ICON_KEEP) {
             return originalGlyph(icon);
         }
-        const s32 slot = atlasSlot(glyph, place);
+        const s32 slot = atlasSlot(glyph, place, model);
         if (slot >= 0 && sFont.mPainted[family][slot]) {
             return atlasGlyph(family, slot);
         }
@@ -1560,14 +1793,14 @@ namespace {
     }
 
     // The A bubble's picture `k` of the icon at A's code (a keyboard's key: family cFamilies).
-    void drawPicture(s32 k, s32 family, s32 glyph, s32 place) {
+    void drawPicture(s32 k, s32 family, s32 glyph, s32 place, s32 model) {
         Canvas canvas = {sCanvasPixels, cPictureSizes[k], cPictureSizes[k], 1.0f};
         if (family == cFamilies) {
             const bool named = !keyHasCell(place);
             paintKey(canvas, named ? cKeyNamed : place, cPictureLooks[k], sFont.mKeyLayout, sFont.mKeyPad,
                      named ? sFont.mKeyNames[0] : nullptr);
-        } else if (!paint(canvas, family + 1, glyph, place, cPictureLooks[k])) {
-            paintFromGlyph(canvas, shownGlyph(family, 0, glyph, place));
+        } else if (!paint(canvas, family + 1, glyph, place, cPictureLooks[k], model)) {
+            paintFromGlyph(canvas, shownGlyph(family, 0, glyph, place, model));
         }
         initRecord(sPictures[k].mRecord, cPictureSizes[k], cPictureSizes[k]);
         paintInto(canvas, sPictures[k].mRecord, cPictureSizes[k], 0, 0);
@@ -1611,11 +1844,11 @@ namespace {
                     s32 x, y;
                     cellOf(atlasGlyph(family, k), &pSheet, &x, &y);
                     Canvas hd = {pHdPixels, sFont.mGlyphWidth * scale, sFont.mGlyphHeight * scale, static_cast< f32 >(scale)};
-                    paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText);
+                    paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
                     canvasToRgba8(hd, pHdSheet, hdSheetWidth, x * scale, y * scale);
                     // The icon alone, as text shows it.
                     Canvas native = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
-                    paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText);
+                    paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, LookText, cAtlas[k].mModel);
                     canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                     nebula_snprintf(name, sizeof(name), "%s/%s", cFamilyNames[family], cAtlas[k].mName);
@@ -1634,11 +1867,11 @@ namespace {
                 for (s32 look = 0; look < 2 && sFont.mPainted[family][k]; look++) {
                     const s32 size = cPictureSizes[look];
                     Canvas native = {sCanvasPixels, size, size, 1.0f};
-                    paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look]);
+                    paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look], cAtlas[k].mModel);
                     initRecord(sExportPicture.mRecord, size, size);
                     paintInto(native, sExportPicture.mRecord, size, 0, 0);
                     Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
-                    paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look]);
+                    paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look], cAtlas[k].mModel);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                     nebula_snprintf(name, sizeof(name), "%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
                     const u8* pTexels = texelsOf(sExportPicture.mRecord);
@@ -2056,6 +2289,9 @@ namespace NebulaIcons {
         NebulaHost::buttonIcons(&now);
         // The Wii Remote's pictures follow the remote even when the icons cannot be drawn.
         sShown.wii_remote = now.wii_remote;
+        if (sFontState == FontReady) {
+            paintHdBand();
+        }
         if (sFontState != FontReady || memcmp(&now, &sShown, sizeof(now)) == 0) {
             return;
         }
@@ -2069,14 +2305,24 @@ namespace NebulaIcons {
         }
         for (s32 i = 0; i < NEBULA_BUTTON_ICONS; i++) {
             sFont.mMap->mapInfo[cCodes[i] - cMapFirst] =
-                keyboard ? keyboardGlyph(i, now.glyphs[i], now.places[i]) : shownGlyph(family, i, now.glyphs[i], now.places[i]);
+                keyboard ? keyboardGlyph(i, now.glyphs[i], now.places[i]) : shownGlyph(family, i, now.glyphs[i], now.places[i], now.model);
         }
         // The A bubble's two frames, as the font's A.
         sPicturesShown = family >= 0 && (keyboard ? now.glyphs[0] == NEBULA_ICON_KEY : now.glyphs[0] != NEBULA_ICON_KEEP);
         for (s32 k = 0; k < 2 && sPicturesShown; k++) {
-            drawPicture(k, family, now.glyphs[0], now.places[0]);
+            drawPicture(k, family, now.glyphs[0], now.places[0], now.model);
         }
         sShown = now;
+    }
+
+    void noteDrawn(const void* pSheet) {
+        if (sFontState != FontReady || sFont.mSheetBytes == 0 || pSheet < sFont.mSheets) {
+            return;
+        }
+        const s32 sheet = static_cast< s32 >((static_cast< const u8* >(pSheet) - sFont.mSheets) / sFont.mSheetBytes);
+        if (sheet >= sFont.mFirstSheet && sheet < sFont.mKeyFirstSheet + sFont.mKeySheets && sheet < cHdSheets) {
+            sHdWanted[sheet] = true;
+        }
     }
 
     bool wiiRemoteInUse() {

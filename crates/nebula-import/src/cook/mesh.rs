@@ -40,6 +40,11 @@ fn w32(b: &mut [u8], at: usize, v: u32) {
     b[at..at + 4].copy_from_slice(&v.to_le_bytes());
 }
 
+/// A fixed-point array's scale; a fraction past any type's bits still gives a number.
+fn fraction_scale(frac: u32) -> f32 {
+    1.0 / 2f32.powi(frac as i32)
+}
+
 #[derive(Clone, Copy)]
 struct Format {
     cnt: u32,
@@ -123,7 +128,8 @@ fn pad32(out: &mut Vec<u8>) {
 /// VTX1 as values: J3D's strides for each array, the file's dequantisation (a position or texture coordinate by its fraction,
 /// a normal by its type).
 fn vertices(b: &[u8]) -> Result<Vertices> {
-    let size = r32(b, 4)? as usize;
+    // A last block's size may count padding the file does not have.
+    let size = (r32(b, 4)? as usize).min(b.len());
     let mut formats = Vec::new();
     let list = r32(b, 8)? as usize;
     if list != 0 {
@@ -173,7 +179,7 @@ fn vertices(b: &[u8]) -> Result<Vertices> {
             0 => {
                 let f = format_of(&formats, 9);
                 let stride = if f.kind == 4 { 12 } else { 6 };
-                let scale = 1.0 / (1u32 << f.frac) as f32;
+                let scale = fraction_scale(f.frac);
                 let (bytes, n) = (type_bytes(f.kind), if f.cnt == 1 { 3 } else { 2 });
                 count = region.len() / stride;
                 for i in 0..count {
@@ -197,7 +203,7 @@ fn vertices(b: &[u8]) -> Result<Vertices> {
                 let bytes = type_bytes(f.kind);
                 let vectors = if nbt || f.cnt != 0 { 3 } else { 1 };
                 count = region.len() / stride;
-                let whole = &b[start..size];
+                let whole = b.get(start..size).context("vertex array past its block")?;
                 for i in 0..count {
                     for v in 0..vectors {
                         for c in 0..3 {
@@ -210,7 +216,7 @@ fn vertices(b: &[u8]) -> Result<Vertices> {
             _ => {
                 let f = format_of(&formats, 13 + array as u32 - 5);
                 let stride = if f.kind == 4 { 8 } else { 4 };
-                let scale = 1.0 / (1u32 << f.frac) as f32;
+                let scale = fraction_scale(f.frac);
                 let (bytes, n) = (type_bytes(f.kind), if f.cnt == 1 { 2 } else { 1 });
                 count = region.len() / stride;
                 for i in 0..count {
@@ -394,7 +400,7 @@ fn mesh(list: &[u8], l: &Layout) -> Result<Vec<u8>> {
     let mut places = 0u32;
     if l.offset[ATTR_PNMTX] >= 0 {
         for c in &corners {
-            places |= 1 << c[28];
+            places |= 1u32.checked_shl(u32::from(c[28])).unwrap_or(0);
         }
     }
     let mut out = Vec::with_capacity(16 + corners.len() * CORNER_BYTES + indices.len() * 2);
@@ -413,20 +419,24 @@ fn mesh(list: &[u8], l: &Layout) -> Result<Vec<u8>> {
 
 /// SHP1 with meshes for display lists; the other tables keep their place.
 fn shapes(b: &[u8], formats: &[(u32, Format)]) -> Result<Vec<u8>> {
-    let size = r32(b, 4)? as usize;
+    // A last block's size may count padding the file does not have.
+    let size = (r32(b, 4)? as usize).min(b.len());
     let (init, descs, lists, draw) = (r32(b, 0xC)? as usize, r32(b, 0x18)? as usize, r32(b, 0x20)? as usize, r32(b, 0x28)? as usize);
     if init == 0 || descs == 0 || lists == 0 || draw == 0 {
         return Ok(b.to_vec());
+    }
+    if lists < 0x2C {
+        bail!("display lists inside the block's header");
     }
     let mut starts: Vec<usize> = (0xC..0x2C).step_by(4).map(|o| r32(b, o).unwrap_or(0) as usize).filter(|&v| v != 0).collect();
     starts.sort_unstable();
     starts.dedup();
     let bound = |s: usize| starts.iter().copied().find(|&x| x > s).unwrap_or(size);
-    let mut out = b[..bound(lists).min(lists)].to_vec();
+    let mut out = b.get(..lists).context("display lists past the block")?.to_vec();
     // The tables after the lists move up to where the lists were.
     let tail = bound(lists);
-    let moved = tail - lists;
-    out.extend_from_slice(&b[tail..size]);
+    let moved = tail.checked_sub(lists).context("display lists past the block")?;
+    out.extend_from_slice(b.get(tail..size).context("display lists past the block")?);
     for o in (0xC..0x2C).step_by(4) {
         let v = r32(b, o)? as usize;
         if v > lists {
@@ -478,6 +488,9 @@ fn shapes(b: &[u8], formats: &[(u32, Format)]) -> Result<Vec<u8>> {
             };
             made.insert(key, (at, n));
             let out_entry = draw_at + 8 * (first_draw + g);
+            if out_entry + 8 > out.len() {
+                bail!("a draw entry in the display lists' place");
+            }
             w32(&mut out, out_entry, n);
             w32(&mut out, out_entry + 4, at);
         }

@@ -15,8 +15,10 @@ namespace NebulaIcons {
     // Once the stationed resources are loaded (the picture font among them), before the stationed heaps shrink to fit:
     // the font's sheets, widths and code map of ours.
     void init();
-    // Each frame: the icons again when the host's choice changed.
+    // Each frame: the icons again when the host's choice changed, and a little more of their larger paintings.
     void update();
+    // A glyph sheet is being drawn from (CharWriter): ours are painted larger from the first time.
+    void noteDrawn(const void* pSheet);
     // `pActor` (an IconAButton) drawn with the A button over people and signs as the icons have it: ours in place of
     // its own two pictures while it draws, its own after.
     void drawWithIcons(const LayoutActor* pActor);

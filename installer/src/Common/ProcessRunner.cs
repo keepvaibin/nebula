@@ -11,7 +11,7 @@ namespace Nebula
     /// <summary>Thrown when the user cancels a running operation.</summary>
     internal sealed class OperationCanceledByUserException : Exception
     {
-        public OperationCanceledByUserException() : base("The operation was canceled.") { }
+        public OperationCanceledByUserException() : base(NebulaText.Of("The operation was canceled.")) { }
     }
 
     /// <summary>

@@ -135,6 +135,10 @@ public:
     // An image's bytes the game handed over (texture_image): textures at `address` decode from this copy from now
     // on; entries decoded from earlier bytes there are retired.
     void register_image(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> bytes);
+    // A built-in replacement (texture_hd): `record`, the game's larger painting of the image handed over at `address`,
+    // bound as a texture pack's is, unless a pack names the image. It replaces the one there was for `address`; no
+    // record: that one goes. Its texels leave with its upload.
+    void register_replacement(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> record);
     // Forgets what `key` held, a capture having replaced it: the record handed over there and the textures made
     // from it (retired; the count is returned).
     std::size_t forget(std::uint64_t key);
@@ -346,6 +350,15 @@ private:
     // Loader-staged upload buffers by frame slot, released when the slot comes round again (its copies are done).
     std::vector<std::vector<TextureBackend::UploadChunk>> pack_staging_;
     bool stager_set_ = false;
+    struct BuiltInReplacement {
+        std::shared_ptr<const std::vector<std::byte>> record;  // until it is uploaded
+        std::uint32_t source_width = 0;
+        TextureReplacement replacement;
+    };
+    // By the image's address.
+    std::unordered_map<std::uint64_t, BuiltInReplacement> built_in_replacements_;
+    // On the GPU through this frame's staging; false when it could not be (the original stays).
+    [[nodiscard]] bool upload_built_in(BuiltInReplacement& built_in);
     struct MoviePlane {
         gpu::TextureRef texture;
         std::uint32_t srv_index = ~0u;

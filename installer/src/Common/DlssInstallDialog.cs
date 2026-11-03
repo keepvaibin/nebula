@@ -23,7 +23,7 @@ namespace Nebula
         public DlssInstallDialog(bool licenseOnly)
         {
             this.licenseOnly = licenseOnly;
-            Text = licenseOnly ? "NVIDIA RTX SDKs license" : "NVIDIA DLSS";
+            Text = licenseOnly ? NebulaText.Of("NVIDIA RTX SDKs license") : "NVIDIA DLSS";
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
             ClientSize = new Size(640, 540);
@@ -37,8 +37,7 @@ namespace Nebula
             {
                 Controls.Add(new Label
                 {
-                    Text = "Nebula downloads DLSS from NVIDIA's Streamline 2.14.1 release on GitHub (" +
-                           FileUtil.FormatBytes(DlssPackage.DownloadBytes) + "). The game uses it the next time it starts.",
+                    Text = NebulaText.Of("Nebula downloads DLSS from NVIDIA's Streamline 2.14.1 release on GitHub ({0}). The game uses it the next time it starts.", FileUtil.FormatBytes(DlssPackage.DownloadBytes)),
                     Location = new Point(16, y), Size = new Size(608, 42)
                 });
                 y += 48;
@@ -50,13 +49,13 @@ namespace Nebula
             license.Font = new Font("Segoe UI", 9f);
             license.Location = new Point(16, y);
             license.Size = new Size(608, licenseOnly ? 470 : 350);
-            license.Text = "Loading the license from GitHub…";
+            license.Text = NebulaText.Of("Loading the license from GitHub…");
             Controls.Add(license);
             y += license.Height + 10;
 
             if (!licenseOnly)
             {
-                accept.Text = "I accept the NVIDIA RTX SDKs license (required)";
+                accept.Text = NebulaText.Of("I accept the NVIDIA RTX SDKs license (required)");
                 accept.Location = new Point(16, y);
                 accept.Size = new Size(608, 24);
                 accept.Enabled = false;
@@ -72,7 +71,7 @@ namespace Nebula
                 bar.Maximum = 1000;
                 bar.Visible = false;
                 Controls.Add(bar);
-                install.Text = "Install";
+                install.Text = NebulaText.Of("Install");
                 install.Location = new Point(418, 496);
                 install.Size = new Size(100, 30);
                 install.Enabled = false;
@@ -80,7 +79,7 @@ namespace Nebula
                 Controls.Add(install);
                 AcceptButton = install;
             }
-            close.Text = licenseOnly ? "Close" : "Cancel";
+            close.Text = licenseOnly ? NebulaText.Of("Close") : NebulaText.Of("Cancel");
             close.Location = new Point(524, 496);
             close.Size = new Size(100, 30);
             close.Click += delegate { Close(); };
@@ -96,7 +95,7 @@ namespace Nebula
                     // The download stops at its next read; the window closes then.
                     e.Cancel = true;
                     close.Enabled = false;
-                    status.Text = "Canceling…";
+                    status.Text = NebulaText.Of("Canceling…");
                 }
             };
         }
@@ -113,7 +112,7 @@ namespace Nebula
                 {
                     if (text == null)
                     {
-                        license.Text = "The license could not be loaded: " + error + "\r\n\r\nCheck the internet connection and try again.";
+                        license.Text = NebulaText.Of("The license could not be loaded: {0}", error) + "\r\n\r\n" + NebulaText.Of("Check the internet connection and try again.");
                         return;
                     }
                     license.Text = text.Replace("\r\n", "\n").Replace("\n", "\r\n");
@@ -131,7 +130,7 @@ namespace Nebula
             {
                 accept.ForeColor = Color.Firebrick;
                 status.ForeColor = Color.Firebrick;
-                status.Text = "Accept the license to install DLSS.";
+                status.Text = NebulaText.Of("Accept the license to install DLSS.");
                 accept.Focus();
                 return;
             }
@@ -139,7 +138,7 @@ namespace Nebula
             accept.Enabled = false;
             bar.Visible = true;
             status.ForeColor = SystemColors.ControlText;
-            status.Text = "Downloading…";
+            status.Text = NebulaText.Of("Downloading…");
             worker = new Thread(delegate()
             {
                 Exception failure = null;
@@ -148,7 +147,7 @@ namespace Nebula
                     DlssPackage.Install((done, total) => Post(delegate
                     {
                         bar.Value = total > 0 ? (int)Math.Min(1000, done * 1000 / total) : 0;
-                        status.Text = "Downloading… " + FileUtil.FormatBytes(done) + " of " + FileUtil.FormatBytes(total);
+                        status.Text = NebulaText.Of("Downloading… {0} of {1}", FileUtil.FormatBytes(done), FileUtil.FormatBytes(total));
                     }), cancel.Token);
                 }
                 catch (Exception error) { failure = error; }
@@ -164,8 +163,8 @@ namespace Nebula
                     if (failure is OperationCanceledException) { Close(); return; }
                     bar.Visible = false;
                     status.ForeColor = Color.Firebrick;
-                    status.Text = "Download failed: " + failure.Message;
-                    install.Text = "Retry";
+                    status.Text = NebulaText.Of("Download failed: {0}", failure.Message);
+                    install.Text = NebulaText.Of("Retry");
                     install.Enabled = true;
                     accept.Enabled = true;
                 });

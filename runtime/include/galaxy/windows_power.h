@@ -10,6 +10,7 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
+#include <atomic>
 
 #include <cstddef>
 #include <cstdio>
@@ -39,6 +40,18 @@ inline void lower_current_thread_priority() noexcept {
 // This does not select a core or override thermal/power limits. The timer flag
 // requires a newer OS than execution-speed control, so retry the older policy
 // if the combined request is rejected. Unsupported OS versions may reject both.
+// timeBeginPeriod(1) while held; repeated calls with the same value do nothing.
+inline void hold_high_resolution_timer(bool hold) noexcept {
+    static std::atomic<bool> held{false};
+    if (held.exchange(hold, std::memory_order_acq_rel) == hold) return;
+    if (HMODULE winmm = LoadLibraryW(L"winmm.dll")) {
+        using PeriodFn = UINT(WINAPI*)(UINT);
+        if (auto call = reinterpret_cast<PeriodFn>(GetProcAddress(winmm, hold ? "timeBeginPeriod" : "timeEndPeriod"))) {
+            (void)call(1);
+        }
+    }
+}
+
 inline void opt_out_of_power_throttling_process() noexcept {
     PROCESS_POWER_THROTTLING_STATE state{};
     state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;

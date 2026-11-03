@@ -12,13 +12,13 @@ namespace Nebula.Launcher
     /// </summary>
     internal sealed class GeneralSettings
     {
-        public static readonly string[] TextSpeeds = { "1x (original)", "2x", "3x", "Instant" };
+        public static readonly string[] TextSpeeds = { NebulaText.Of("1x (original)"), "2x", "3x", NebulaText.Of("Instant") };
 
         /// <summary>The game's languages as runtime_settings.ini names them, each in its own name, and the language
         /// its disc folders hold (UsEnglish, EuEnglish: English). Automatic: the system's language where the disc has it,
         /// else English, else the disc's own (runtime_settings.cpp game_language_resolved).</summary>
         public static readonly string[] LanguageKeys = { "auto", "english", "german", "french", "spanish", "italian", "dutch", "japanese" };
-        public static readonly string[] LanguageNames = { "Automatic", "English", "Deutsch", "Fran\u00E7ais", "Espa\u00F1ol", "Italiano", "Nederlands", "\u65E5\u672C\u8A9E" };
+        public static readonly string[] LanguageNames = { NebulaText.Of("Automatic"), "English", "Deutsch", "Fran\u00E7ais", "Espa\u00F1ol", "Italiano", "Nederlands", "\u65E5\u672C\u8A9E" };
         private static readonly string[] FolderLanguages = { null, "English", "German", "French", "Spanish", "Italian", "Dutch", "Japanese" };
 
         /// <summary>The languages a game.pak offers, as indices into <see cref="LanguageKeys"/>: Automatic, then those its

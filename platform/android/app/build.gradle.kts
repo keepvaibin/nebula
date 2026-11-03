@@ -31,7 +31,7 @@ android {
         versionCode = 11
         versionName = "2.0.0-test1"
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += ((project.findProperty("nebulaAbis") as String?) ?: "arm64-v8a").split(",")
         }
     }
 

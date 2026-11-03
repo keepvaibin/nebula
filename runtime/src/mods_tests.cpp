@@ -99,6 +99,13 @@ bool importing() {
           {"Cool Mod v1/Cool/a.arc", "A"},
           {"readme.txt", "hi"},
           {"../evil.txt", "evil"},
+          {"Cool Mod v1/C:../C:../evil.dll", "evil"},
+          {"Cool Mod v1/D:/evil.dll", "evil"},
+          {"D:/evil.dll", "evil"},
+          {"/evil.dll", "evil"},
+          {"Cool Mod v1/a.arc:evil", "evil"},
+          {"Cool Mod v1/.. /evil.dll", "evil"},
+          {"Cool Mod v1/NUL.dll", "evil"},
           {"Cool Mod v1/__MACOSX/x", "x"}});
     make(root / "Pack.7z", ARCHIVE_FORMAT_7ZIP, {{"RMG/tex1_8x8_0123456789abcdef_1.png", "png"}});
     write(root / "fake.zip", "not an archive");
@@ -114,6 +121,19 @@ bool importing() {
                  "its one top folder lifted, its notes kept");
     ok &= expect(!fs::exists(root / "evil.txt") && !fs::exists(root / "mods" / "evil.txt"),
                  "a path that leaves is refused");
+    bool evil = false;
+    for (const auto& entry : fs::recursive_directory_iterator(root / "mods", ec)) {
+        const std::string name = entry.path().filename().string();
+        evil = evil || name.find("evil") != std::string::npos || name.starts_with("NUL");
+    }
+    ok &= expect(!evil && !fs::exists(root / "evil.dll"), "drive, stream, dot and device paths are refused");
+    for (const char* unsafe : {"", ".", "..", "...", ".. ", "C:..", "a:b", "a/b", "a\\b", "con", "CON.txt", "Aux.arc", "nul .x",
+                               "com1", "LPT9.arc", "lpt\xC2\xB9", "conin$"}) {
+        ok &= expect(!galaxy::mods::safe_path_part(unsafe), unsafe);
+    }
+    for (const char* safe : {"a.arc", ".hidden", "com", "com0", "com10", "console.txt", "auxiliary", "Mario.arc"}) {
+        ok &= expect(galaxy::mods::safe_path_part(safe), safe);
+    }
     ok &= expect(!fs::exists(root / "mods" / "Cool Mod" / "__MACOSX"), "system clutter skipped");
     const galaxy::mods::ImportResult again = galaxy::mods::import_mod(root / "Cool Mod.zip", root / "mods");
     ok &= expect(again.ok && again.replaced, "the same mod again: updated in place");

@@ -561,6 +561,12 @@ struct HidCandidate {
     ProductInfo info{};
 };
 
+input::ButtonIconModel icon_model(simple::Layout layout, bool gamecube) noexcept {
+    return layout == simple::Layout::Sixaxis ? input::ButtonIconModel::Sixaxis
+           : gamecube                        ? input::ButtonIconModel::GameCube
+                                             : input::ButtonIconModel::Standard;
+}
+
 // USB interface number from "&mi_NN" in a device path (-1: not a composite device).
 int interface_number(const std::wstring& path) {
     std::wstring lower = path;
@@ -1689,6 +1695,7 @@ private:
             published.info.sensors = !device.no_motion && (!playstation || device.ps_caps.sensors);
             published.info.gyro = published.info.sensors && simple::has_gyro(device.simple);
             published.info.touch = device.simple == simple::Layout::None && (!playstation || device.ps_caps.touchpad);
+            published.info.icons = icon_model(device.simple, device.gamecube);
             ReleaseSRWLockExclusive(&hub().lock);
         }
         if (device.scheme == ControlScheme::Steam && device.simple == simple::Layout::None) {
@@ -2590,6 +2597,8 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
             info.slot = static_cast<std::uint8_t>(count);
             info.link = link_of(candidate);
             info.model = candidate.info.name;
+            info.icons = icon_model(candidate.info.simple, candidate.vendor == sw::kNintendoVendorId &&
+                                                               candidate.product == sw::kGameCubeProductId);
             ++count;
         }
     } catch (...) {

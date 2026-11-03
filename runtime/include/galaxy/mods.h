@@ -23,9 +23,14 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace galaxy::mods {
+
+// Whether one part of a path a mod names stays one plain name inside its folder: no drive or stream (':'), separator,
+// name of only dots and spaces, or device name.
+[[nodiscard]] bool safe_path_part(std::string_view part);
 
 // A Riivolution option (its XML's options): its choices; `selected` 0 is off, else a choice (1-based).
 struct ModOption {

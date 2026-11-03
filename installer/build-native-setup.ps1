@@ -82,16 +82,17 @@ namespace Nebula
 
     $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     $common = @(Get-ChildItem (Join-Path $installer 'src\Common\*.cs') | ForEach-Object FullName) + $buildInfoPath
+    $textTable = "/resource:$(Join-Path $repo 'localization\NebulaText.tsv'),NebulaText.tsv"
     $references = @('/r:System.Web.Extensions.dll', '/r:System.IO.Compression.dll', '/r:System.IO.Compression.FileSystem.dll',
         '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Core.dll')
     $manifestFile = Join-Path $installer 'app.manifest'
     $iconFile = Join-Path $installer 'assets\nebula.ico'
     $launcherSources = @(Get-ChildItem (Join-Path $installer 'src\Launcher\*.cs') | ForEach-Object FullName)
     $launcher = Join-Path $work 'Nebula.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common + $launcherSources)
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $textTable + $common + $launcherSources)
     # The same program; it always opens the settings.
     $settingsApp = Join-Path $work 'NebulaSettings.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common + $launcherSources)
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $textTable + $common + $launcherSources)
 
     $resources = [ordered]@{
         'NebulaNative.exe' = (Join-Path $Bin 'NebulaNative.exe'); 'smg_game.dll' = (Join-Path $Bin 'smg_game.dll')
@@ -103,7 +104,7 @@ namespace Nebula
     }
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
     $setup = Join-Path $OutputDirectory $SetupName
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $textTable + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $installer 'src\Setup\*.cs') | ForEach-Object FullName))
     $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "$SetupName $Version ($commit) $hash"

@@ -516,6 +516,9 @@ bool RendererVk::create_swapchain() {
     if (extent.width == UINT32_MAX) {
         extent = {host_window::backbuffer_width, host_window::backbuffer_height};
     }
+    if (caps.maxImageExtent.width == 0u || caps.maxImageExtent.height == 0u) {
+        return false;  // minimised: try again later
+    }
     extent.width = std::clamp(extent.width, std::max(1u, caps.minImageExtent.width), caps.maxImageExtent.width);
     extent.height = std::clamp(extent.height, std::max(1u, caps.minImageExtent.height), caps.maxImageExtent.height);
     if (extent.width == 0u || extent.height == 0u) {

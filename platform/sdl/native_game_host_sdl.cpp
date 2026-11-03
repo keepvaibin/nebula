@@ -42,6 +42,8 @@ constexpr std::uint64_t kTapHoverFrames = 8;
 constexpr std::uint64_t kTapPressFrames = 3;
 // An on-screen button's press reaches the game for at least this many of its frames, however quick the finger.
 constexpr std::uint64_t kTouchPressFrames = 3;
+// The game's star pointer mode on the title (StarPointerMode_Title): its prompt asks for A and B, so the controls stay.
+constexpr std::int32_t kStarPointerModeTitle = 4;
 constexpr float kTriggerThreshold = 96.0f / 255.0f;  // the Windows host's XInput trigger threshold
 
 const in::ControlsConfig& live_controls() {
@@ -108,7 +110,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         : star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
         : in::PlayContext::Play;
-    sdl::set_menu_context(context == in::PlayContext::Menu);
+    sdl::set_menu_context(context == in::PlayContext::Menu && (captured || star_pointer_mode != kStarPointerModeTitle));
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;

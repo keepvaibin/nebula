@@ -267,11 +267,28 @@ namespace Nebula.Setup
             return true;
         }
 
-        static void WriteVersion(InstallLayout layout, string version)
+        static void WriteVersion(InstallLayout layout, string version, int format = InstallEngine.ContentFormatVersion)
         {
             string dir = layout.VersionDir(version);
             Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, "install.json"), "{\"schema\":\"nebula.install.v1\",\"version\":\"" + version + "\",\"files\":{}}");
+            File.WriteAllText(Path.Combine(dir, "install.json"), "{\"schema\":\"nebula.install.v1\",\"version\":\"" + version + "\",\"contentFormatVersion\":" + format + ",\"files\":{}}");
+        }
+
+        static void WriteContent(string folder, int format, string text)
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(folder, "content.json"), "{\"formatVersion\":" + format + "}");
+            File.WriteAllText(Path.Combine(folder, "game.pak"), text);
+        }
+
+        static string Pak(string folder) { return File.ReadAllText(Path.Combine(folder, "game.pak")); }
+
+        // A save's first bytes: only its version word (at 4) matters here.
+        static byte[] Save(byte[] versionWord, int seed)
+        {
+            byte[] bytes = Payload(64, seed);
+            versionWord.CopyTo(bytes, 4);
+            return bytes;
         }
 
         static void CheckRollback()
@@ -279,6 +296,7 @@ namespace Nebula.Setup
             var layout = new InstallLayout(Path.Combine(scratch, "install"));
             WriteVersion(layout, "2.0.7-beta.1");
             WriteVersion(layout, "2.0.8-beta.1");
+            WriteContent(layout.Content, InstallEngine.ContentFormatVersion, "cooked");
             File.WriteAllText(layout.Current, "{\"version\":\"2.0.8-beta.1\",\"previous\":\"2.0.7-beta.1\"}");
             Check(Integration.Rollback(layout) == "2.0.7-beta.1", "rollback switches to the previous version");
             var info = InstalledInfo.Read(layout);
@@ -315,6 +333,104 @@ namespace Nebula.Setup
             Check(InstallEngine.HoldsRecompiledGame(recompiled) && InstallEngine.HoldsRecompiledGame(modules) &&
                   !InstallEngine.HoldsRecompiledGame(layout.VersionDir("2.0.7-beta.1")),
                   "the recompiled game's versions are told from native ones");
+
+            // 1.x cannot come back: an update removes it, and one still there is refused.
+            File.WriteAllText(layout.Current, "{\"version\":\"2.0.8-beta.1\",\"previous\":\"1.0.1\"}");
+            Throws<InvalidOperationException>(() => Integration.Rollback(layout), "a recompiled previous version: rollback refuses");
+            Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked", "and changes nothing");
+        }
+
+        // Rollback between content formats: the game files and the save each version reads.
+        static void CheckFormatRollback()
+        {
+            int newest = InstallEngine.ContentFormatVersion;
+            var layout = new InstallLayout(Path.Combine(scratch, "install-formats"));
+            WriteVersion(layout, "2.0.0-beta.1", 1);
+            WriteVersion(layout, "2.0.8-beta.1", newest);
+            WriteContent(layout.Content, newest, "cooked");
+            string keptOld = layout.KeptContent(1), keptNew = layout.KeptContent(newest);
+            WriteContent(keptOld, 1, "raw");
+            File.WriteAllText(layout.Current, "{\"version\":\"2.0.8-beta.1\",\"previous\":\"2.0.0-beta.1\"}");
+            string saveFolder = Path.Combine(NebulaPaths.Saves, "title", "00010000", "524d4745", "data");
+            Directory.CreateDirectory(saveFolder);
+            string save = Path.Combine(saveFolder, "GameData.bin"), v2 = save + ".v2", v3 = save + ".v3";
+            byte[] oldWord = { 0, 0, 0, 2 }, nativeWord = { 3, 0, 0, 0 };
+            byte[] oldSave = Save(oldWord, 10), nativeSave = Save(nativeWord, 11), playedOld = Save(oldWord, 12);
+            File.WriteAllBytes(v2, oldSave);
+            File.WriteAllBytes(save, nativeSave);
+
+            Check(Integration.Rollback(layout) == "2.0.0-beta.1" && Pak(layout.Content) == "raw" && Pak(keptNew) == "cooked" && !Directory.Exists(keptOld),
+                  "rollback to a format-1 version swaps its game files in and keeps the newer ones");
+            Check(FileEquals(save, oldSave) && FileEquals(v3, nativeSave), "its save is the old one again; the native one waits");
+            Check(Integration.Rollback(layout) == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && Pak(keptOld) == "raw" && !Directory.Exists(keptNew),
+                  "forward again swaps them back");
+            Check(FileEquals(save, nativeSave) && !File.Exists(v3) && FileEquals(v2, oldSave), "and the native save returns");
+
+            // The older version saved meanwhile: its save is the newest, and the next native save keeps it.
+            Integration.Rollback(layout);
+            File.WriteAllBytes(save, playedOld);
+            Integration.Rollback(layout);
+            Check(FileEquals(save, playedOld) && !File.Exists(v2) && FileEquals(v3, nativeSave), "a save the older version wrote stays");
+
+            // Only ever a native save: the older version finds none, and it returns.
+            File.WriteAllBytes(save, nativeSave);
+            File.Delete(v3);
+            Integration.Rollback(layout);
+            Check(!File.Exists(save) && FileEquals(v3, nativeSave), "a native save with no old one waits aside");
+            Integration.Rollback(layout);
+            Check(FileEquals(save, nativeSave) && !File.Exists(v3), "and returns");
+
+            // Back on the older version, this version's folder is reused by an update.
+            Integration.Rollback(layout);
+            Check(InstallEngine.KeptCurrentContent(layout) == keptNew && InstallEngine.RetainedGameValid(layout), "this version's game files are found aside");
+            Integration.Rollback(layout);
+
+            // A file held in the kept folder: the content returns and nothing has changed.
+            File.WriteAllBytes(v2, oldSave);
+            using (new FileStream(Path.Combine(keptOld, "game.pak"), FileMode.Open, FileAccess.Read, FileShare.Read))
+                Throws<IOException>(() => Integration.Rollback(layout), "kept game files that cannot move in: rollback fails");
+            Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && Pak(keptOld) == "raw" &&
+                  !Directory.Exists(keptNew) && FileEquals(save, nativeSave), "and everything is as it was");
+
+            // The kept game files gone: refused, nothing changed.
+            FileUtil.DeleteTree(keptOld);
+            Throws<InvalidOperationException>(() => Integration.Rollback(layout), "the previous version's game files not kept: rollback refuses");
+            Check(InstalledInfo.Read(layout).Version == "2.0.8-beta.1" && Pak(layout.Content) == "cooked" && FileEquals(save, nativeSave), "and changes nothing");
+
+            // A version that does not say what it reads: refused.
+            string dir = layout.VersionDir("2.0.0-beta.1");
+            File.WriteAllText(Path.Combine(dir, "install.json"), "{\"version\":\"2.0.0-beta.1\",\"files\":{}}");
+            Throws<InvalidOperationException>(() => Integration.Rollback(layout), "a previous version without its content format: rollback refuses");
+
+            // What an update reads its game from, without the disc.
+            var update = new InstallLayout(Path.Combine(scratch, "install-update"));
+            WriteContent(update.Content, 3, "format 3");
+            Check(InstallEngine.CookSource(update) == null && !InstallEngine.RetainedGameValid(update), "format 3 alone: the disc is needed");
+            WriteContent(update.KeptContent(1), 1, "raw");
+            Check(InstallEngine.CookSource(update) == update.KeptContent(1) && InstallEngine.RetainedGameValid(update), "format 3 with format 1 kept: cooked from the kept folder");
+            FileUtil.DeleteTree(update.Content);
+            WriteContent(update.Content, 1, "raw 2");
+            Check(InstallEngine.CookSource(update) == update.Content, "format 1 installed: cooked from it");
+            FileUtil.DeleteTree(update.Content);
+            WriteContent(update.Content, newest, "current");
+            Check(InstallEngine.RetainedGameValid(update), "the current format: reused");
+
+            // What an update keeps of what it replaced.
+            var logged = new List<string>();
+            string old = Path.Combine(scratch, "content-old");
+            WriteContent(old, 3, "format 3");
+            InstallEngine.KeepReplacedContent(update, old, logged.Add);
+            Check(Pak(update.KeptContent(3)) == "format 3" && !Directory.Exists(old), "replaced content is kept by its format");
+            WriteContent(old, newest, "same");
+            InstallEngine.KeepReplacedContent(update, old, logged.Add);
+            Check(!Directory.Exists(update.KeptContent(newest)) && Directory.Exists(old), "content of this version's own format is not");
+            WriteContent(update.KeptContent(4), 4, "format 4");
+            WriteVersion(update, "2.0.3-beta.1", 3);
+            InstallEngine.PruneKeptContent(update, "2.0.3-beta.1", logged.Add);
+            Check(Directory.Exists(update.KeptContent(1)) && Directory.Exists(update.KeptContent(3)) && !Directory.Exists(update.KeptContent(4)),
+                  "format 1 and what the previous version reads stay; other formats go");
+            InstallEngine.PruneKeptContent(update, null, logged.Add);
+            Check(Directory.Exists(update.KeptContent(1)) && !Directory.Exists(update.KeptContent(3)), "with no previous version only format 1 stays");
         }
 
         public static int Main(string[] args)
@@ -333,6 +449,7 @@ namespace Nebula.Setup
             {
                 CheckDownloads();
                 CheckRollback();
+                CheckFormatRollback();
             }
             catch (Exception error)
             {
