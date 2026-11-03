@@ -3309,7 +3309,7 @@ void svc_audio_frame(void*) {
 // The movie's sound: headless, every frame is taken and dropped.
 int svc_movie_audio(void*, const void* record, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
-    return gAudio->movie_audio(record, size) ? 1 : 0;
+    return gAudio->movie_audio(record, size);
 #else
     (void)record, (void)size;
     return 1;

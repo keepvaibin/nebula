@@ -353,6 +353,34 @@ void test_movie_record() {
     expect(near(out[2], 0.25, 1e-4), "left, next", out[2]);
 }
 
+// The room the player paces its pictures by; once started, the last frame plays out; a dry queue waits for two again.
+void test_movie_room() {
+    galaxy::audio::MovieAudio movie;
+    movie.open(false);
+    const std::vector<std::uint8_t> record = thp_record(100u, 2048, -2048);
+    expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames, "an empty queue has all its room");
+    expect(movie.push(record.data(), record.size()), "the first frame queues");
+    expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames - 1u, "one frame less room");
+    std::vector<float> out(2u * 150u, 0.0f);
+    movie.pull(out.data(), 150u);
+    expect(out[0] == 0.0f, "one frame waiting: silent", out[0]);
+    expect(movie.push(record.data(), record.size()), "the second frame queues");
+    movie.pull(out.data(), 150u);
+    expect(out[0] != 0.0f, "two frames waiting: it starts", out[0]);
+    std::fill(out.begin(), out.end(), 0.0f);
+    movie.pull(out.data(), 50u);
+    expect(out[0] != 0.0f, "the last frame plays out", out[0]);
+    expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames, "the queue is dry");
+    expect(movie.push(record.data(), record.size()), "another frame queues");
+    std::fill(out.begin(), out.end(), 0.0f);
+    movie.pull(out.data(), 40u);
+    expect(out[0] == 0.0f, "after running dry, one frame waits again", out[0]);
+    for (std::size_t i = movie.room(); i != 0u; --i) {
+        expect(movie.push(record.data(), record.size()), "room for a frame");
+    }
+    expect(movie.room() == 0u && !movie.push(nullptr, 0u), "a full queue has no room");
+}
+
 // The movie's sound at 48 kHz: its level through the player's volume (a square law), and silent until the frame
 // after the current one is decoded too.
 void test_stream() {
@@ -421,6 +449,7 @@ int main() {
     test_square();
     test_categories();
     test_movie_record();
+    test_movie_room();
     test_stream();
     test_forced_stop();
     if (g_failures != 0) {
