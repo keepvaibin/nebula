@@ -279,7 +279,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.per_pixel_lighting = false;
     cfg.enhanced_lighting = false;
     cfg.ambient_occlusion = false;
-    cfg.texture_packs = false;
     cfg.hud_output_resolution = false;
     if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {
         cfg.max_fps = 60.0f;  // no interpolated frames
@@ -711,6 +710,7 @@ RunFolder run_folder_movie_dir() {
 
 std::mutex s_mod_folders_mutex;
 std::vector<std::filesystem::path> s_mod_folders;
+std::vector<std::uint32_t> s_mod_categories_off;
 std::atomic<std::uint64_t> s_mod_folders_generation{0};
 std::vector<std::filesystem::path> s_movie_folders;
 std::atomic<std::uint64_t> s_movie_folders_generation{0};
@@ -733,9 +733,11 @@ std::filesystem::path texture_dump_directory() {
     return data_folder(run_folder_texture_dump_dir(), "TextureDumps");
 }
 
-void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders) {
+void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders, std::vector<std::uint32_t> categories_off) {
     const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
     s_mod_folders = std::move(folders);
+    categories_off.resize(s_mod_folders.size(), 0u);
+    s_mod_categories_off = std::move(categories_off);
     s_mod_folders_generation.fetch_add(1u, std::memory_order_release);
 }
 
@@ -752,6 +754,11 @@ std::string texture_pack_game_id() {
 std::vector<std::filesystem::path> texture_pack_mod_folders() {
     const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
     return s_mod_folders;
+}
+
+std::vector<std::uint32_t> texture_pack_mod_categories_off() {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    return s_mod_categories_off;
 }
 
 std::uint64_t texture_pack_mod_folders_generation() noexcept {

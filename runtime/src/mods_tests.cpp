@@ -1,3 +1,4 @@
+#include <string_view>
 // SPDX-License-Identifier: GPL-3.0-only
 // Mods (mods.h, virtual_disc.h, mod_xml.h): the XML reader, the disc's patching and reads, Riivolution mods, files
 // mods, load order, saved choices, savegames, main.dol's memory patches, the mods' layouts and languages, and importing.
@@ -155,7 +156,57 @@ bool importing() {
 }  // namespace
 
 // A patch by the disc file's offsets into a file the import cooked is refused and reported; the game's file stays.
+// Each kind of game file goes to the category a player would look for it in.
+void test_texture_categories() {
+    using galaxy::textures::Category;
+    using galaxy::textures::category_of_path;
+    const auto is = [](std::string_view path, Category category) {
+        expect(category_of_path(path) == category, std::string(path).c_str());
+    };
+    is("ObjectData/Mario.arc/Mario.bdl", Category::MarioLuigi);
+    is("ObjectData/BeeMario.arc/BeeMario.bdl", Category::MarioLuigi);
+    is("ObjectData/Kuribo.arc/Kuribo.bdl", Category::Enemies);
+    is("ObjectData/BasaBasaHang.arc/x.bdl", Category::Enemies);
+    is("ObjectData/Rosetta.arc/Rosetta.bdl", Category::Characters);
+    is("ObjectData/TicoFat.arc/TicoFat.bdl", Category::Characters);
+    is("ObjectData/Dodoryu.arc/Dodoryu.bdl", Category::Bosses);
+    is("ObjectData/BossKameck.arc/BossKameck.bdl", Category::Bosses);
+    is("ObjectData/KinokoOneUp.arc/x.bdl", Category::Items);
+    is("ObjectData/PowerStar.arc/PowerStar.bdl", Category::Items);
+    is("ObjectData/Coin.arc/Coin.bdl", Category::Items);
+    is("ObjectData/HeavensDoorMiddlePlanet.arc/x.bdl", Category::Planets);
+    is("ObjectData/HeavensDoorMiddlePlanetLow.arc/x.bdl", Category::Planets);
+    is("ObjectData/GalaxySky.arc/GalaxySky.bdl", Category::Skies);
+    is("ObjectData/HomeAir.arc/HomeAir.bdl", Category::Skies);
+    is("ObjectData/AstroBaseA.arc/x.bdl", Category::Objects);
+    is("ParticleData/Effect.arc/x.jpc", Category::Particles);
+    is("LayoutData/Font.arc/x", Category::Fonts);
+    is("LayoutData/Icon.arc/x", Category::Icons);
+    is("LayoutData/BackButton.arc/x", Category::Icons);
+    is("LayoutData/PictureBook.arc/x", Category::Story);
+    is("LayoutData/PeachLetter.arc/x", Category::Story);
+    is("LayoutData/MapGalaxyBg.arc/x", Category::GalaxyMap);
+    is("LayoutData/StarCounter.arc/x", Category::Hud);
+    is("LayoutData/TalkBalloonEvent.arc/x", Category::Hud);
+    is("LayoutData/PauseMenu.arc/x", Category::Menus);
+    is("LayoutData/FileSelect.arc/x", Category::Menus);
+    is("UsEnglish/LayoutData/Font.arc/x", Category::Fonts);
+    is("StageData/HeavensDoorGalaxy.arc/x", Category::Planets);
+    is("opening.bnr", Category::Other);
+    using galaxy::textures::category_of_pack_folder;
+    expect(category_of_pack_folder("Bighead/Characters/Mario") == Category::MarioLuigi, "a pack's Mario folder");
+    expect(category_of_pack_folder("HUD and UI") == Category::Hud, "a pack's HUD folder");
+    expect(category_of_pack_folder("Particles Effects") == Category::Particles, "a pack's particles folder");
+    expect(!category_of_pack_folder("Bighead/misc").has_value(), "words that say nothing");
+    expect(!category_of_pack_folder("Mainstream").has_value(), "no word inside another");
+    using galaxy::textures::hash_of_pack_name;
+    expect(hash_of_pack_name("tex1_64x64_m_0123456789abcdef_14") == 0x0123456789abcdefull, "a name's hash");
+    expect(hash_of_pack_name("tex1_8x8_00000000000000ff_$_9") == 0xffull, "a palette texture's hash");
+    expect(!hash_of_pack_name("notes").has_value(), "not a texture name");
+}
+
 int main() {
+    test_texture_categories();
     const bool ok = xml() & importing();
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';
     return ok ? 0 : 1;

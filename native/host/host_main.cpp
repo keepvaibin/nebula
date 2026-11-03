@@ -484,10 +484,12 @@ void mark_written(const void* dst, uint32_t size) {
 struct Pak {
     char id[7] = {};  // the game id
     galaxy::disc::AssetStore store;
+    fs::path store_file;
 };
 Pak gPak;
 
 void open_pak(const fs::path& path) {
+    gPak.store_file = path;
     if (!gPak.store.open(path)) {
         die("%s is not a game store: import the game again", utf8_of(path.filename()).c_str());
     }
@@ -3895,10 +3897,16 @@ int main(int argc, char** argv) {
         gSaveDataPath = std::string("/title/00010000/") + title + "/data";
         fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!settings_folder.empty()) {
-#if !defined(NEBULA_RELEASE)  // mods return with their feature
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
-#endif
+            galaxy::mods::set_mods_store_file(gPak.store_file);
+            {
+                // The mods mods.ini has on: their packs and movies from the first frame.
+                const std::vector<galaxy::mods::ModInfo> mods = galaxy::mods::scan_mods();
+                galaxy::render::set_texture_pack_mod_folders(galaxy::mods::texture_folders(mods),
+                                                             galaxy::mods::texture_folder_categories_off(mods));
+                galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
+            }
         }
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.

@@ -1230,6 +1230,7 @@ private:
     bool texture_pack_settings_applied_ = false;
     std::uint64_t texture_pack_mods_generation_ = ~0ull;
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
+    std::vector<std::uint32_t> texture_pack_mod_categories_off_;
     std::unordered_map<
         TextureHandleKey,
         TextureHandle,

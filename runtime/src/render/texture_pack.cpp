@@ -2,6 +2,7 @@
 // texture_pack.cpp: the texture-pack index, loaders, resident replacements and dump writer (texture_pack.h).
 
 #include "galaxy/render/texture_pack.h"
+#include "galaxy/texture_categories.h"
 
 #include "galaxy/crash_report.h"
 
@@ -378,7 +379,8 @@ void TexturePacks::worker_main() {
 void TexturePacks::configure(const TexturePackSettings& settings) {
     const bool enable = settings.enabled && !settings.packs.empty();
     const bool was_enabled = configured_ && settings_.enabled && !settings_.packs.empty();
-    const bool reindex = enable && (!was_enabled || settings.packs != settings_.packs);
+    const bool reindex = enable && (!was_enabled || settings.packs != settings_.packs ||
+                                    settings.pack_categories_off != settings_.pack_categories_off);
     const bool disable = !enable && (was_enabled || !configured_);
     // Dumping covers textures decoded from now on: the cache decodes everything again.
     changed_ = changed_ || (configured_ && settings.dump != settings_.dump);
@@ -398,9 +400,10 @@ void TexturePacks::configure(const TexturePackSettings& settings) {
     }
     // The new index replaces the old one at a later pump; the old slots serve until then.
     const std::vector<std::filesystem::path> packs = settings_.packs;
+    const std::vector<std::uint32_t> categories_off = settings_.pack_categories_off;
     const std::uint64_t generation = ++generation_;
-    submit([this, packs, generation] {
-        std::shared_ptr<Index> index = build_index(packs, generation);
+    submit([this, packs, categories_off, generation] {
+        std::shared_ptr<Index> index = build_index(packs, categories_off, generation);
         std::lock_guard<std::mutex> lock(mutex_);
         built_ = std::move(index);
     });
@@ -416,6 +419,7 @@ void TexturePacks::clear_slots() noexcept {
 }
 
 std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const std::filesystem::path> packs,
+                                                               std::span<const std::uint32_t> categories_off,
                                                                std::uint64_t generation) {
     const auto start = std::chrono::steady_clock::now();
     auto index = std::make_shared<Index>();
@@ -431,6 +435,10 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     std::vector<Found> found;
     for (std::size_t f = 0; f < packs.size(); ++f) {
         const std::filesystem::path& root = packs[f];
+        const std::uint32_t off = f < categories_off.size() ? categories_off[f] : 0u;
+        if (off != 0u) {
+            (void)galaxy::textures::wait_for_index();  // what is off is decided by the game's own sorting
+        }
         std::error_code error;
         if (!std::filesystem::is_directory(root, error)) continue;
         ++index->folders;
@@ -472,6 +480,13 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
                 ++index->files;
                 const std::string stem = ascii_name(it->path().stem());
                 const auto name = parse_texture_pack_name(stem);
+                if (name && off != 0u) {
+                    const std::string folder = it->path().parent_path().lexically_relative(game).generic_string();
+                    if ((off & galaxy::textures::category_bit(
+                                   galaxy::textures::category_of_pack_texture(name->hash, folder))) != 0u) {
+                        continue;
+                    }
+                }
                 if (name) {
                     found.push_back({it->path(), *name, dds, priority});
                     if (texture_pack_name(*name) != stem) ++index->corrected;
