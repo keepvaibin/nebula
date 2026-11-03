@@ -4013,8 +4013,7 @@ int run_mods_tool() {
                    ",\"order\":" + std::to_string(mod.order) + ",\"riivolution\":" + (mod.riivolution ? "true" : "false") +
                    ",\"files\":" + ((mod.files || mod.loose) ? "true" : "false") + ",\"textures\":" +
                    (mod.textures ? "true" : "false") + ",\"movies\":" + (mod.movies ? "true" : "false") +
-                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"native_patches\":" +
-                   std::to_string(mod.native_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
+                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
             for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
             out += "],\"options\":[";
             for (std::size_t o = 0; o < mod.options.size(); ++o) {
@@ -4280,7 +4279,6 @@ int main(int argc, char** argv) {
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
     services.shape_forget = svc_shape_forget;
-    services.code_patch = [](void*, uint32_t, uint32_t*) -> int { return 0; };  // mods are out until section W
     services.shape_draw = svc_shape_draw;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
