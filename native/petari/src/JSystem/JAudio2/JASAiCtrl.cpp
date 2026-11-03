@@ -33,11 +33,11 @@ namespace {
 extern "C" NEBULA_GAME_API void nebula_game_sound_frame(void) {
     __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
     GameThreads::enterAudio();
-    NebulaArena* const previous = NebulaArena::sCurrentHeap;
-    NebulaArena::sCurrentHeap = NebulaArena::sSystemHeap;
+    NebulaArena* const previous = NebulaArena::currentSlot();
+    NebulaArena::setCurrentSlot(NebulaArena::sSystemHeap);
     JASDriver::updateFrame();
     JASDriver::updateFrameCallback();
-    NebulaArena::sCurrentHeap = previous;
+    NebulaArena::setCurrentSlot(previous);
     GameThreads::leaveAudio();
 }
 

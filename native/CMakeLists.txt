@@ -24,7 +24,10 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
 
 add_library(smg_game SHARED
     ${game_sources}
-    math/src/nebula_math.c)
+    math/src/nebula_math.c
+    math/src/nebula_libm.c
+    math/src/nebula_libc.c
+    $<$<PLATFORM_ID:Windows>:math/src/nebula_runtime_win.c>)
 
 target_include_directories(smg_game BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
@@ -106,6 +109,13 @@ target_compile_options(smg_game PRIVATE
     # a unit seeing just a declaration would use another size than its callers.
     $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:CXX>>:-fcomplete-member-pointers>
     -Wno-register -Wno-c++11-narrowing)
+
+set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/src/nebula_runtime_win.c PROPERTIES COMPILE_OPTIONS -fno-builtin)
+target_compile_definitions(smg_game PRIVATE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
+# No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime needs the C runtime.
+if(WIN32 AND NOT NEBULA_SANITIZE)
+    target_link_options(smg_game PRIVATE -nostdlib "LINKER:/NOENTRY")
+endif()
 
 if(WIN32)
     # The DLL's own operator new/delete are NebulaArena's; the host process keeps its own.

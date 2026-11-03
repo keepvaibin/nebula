@@ -7,7 +7,7 @@
 #include "Game/System/NebulaArena.hpp"
 
 FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, const char* pName)
-    : mFunc(pFunc), mStarterHeap(NebulaArena::sCurrentHeap), mName(pName), mIsEnd(false) {
+    : mFunc(pFunc), mStarterHeap(NebulaArena::currentSlot()), mName(pName), mIsEnd(false) {
     mQueue.init(&mMessage, 1);
 }
 
@@ -18,7 +18,7 @@ FunctionAsyncExecInfo::~FunctionAsyncExecInfo() {
 void FunctionAsyncExecInfo::execute() {
     NebulaArena* const previous = mStarterHeap->becomeCurrentHeap();
     (*mFunc)();
-    NebulaArena::sCurrentHeap = previous;
+    NebulaArena::setCurrentSlot(previous);
 }
 
 FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(NebulaArena* pHeap)
