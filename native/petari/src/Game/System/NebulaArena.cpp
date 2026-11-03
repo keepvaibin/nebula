@@ -159,11 +159,12 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
 }
 
 void NebulaArena::destroy(NebulaArena* pArena) {
+    // Its objects first: one that owns a child arena destroys it itself.
+    pArena->dispose();
+
     while (pArena->mFirstChild != nullptr) {
         destroy(pArena->mFirstChild);
     }
-
-    pArena->dispose();
 
     // What the renderer and the file views hold from this arena go with it.
     const NebulaHostServices* const host = nebula_host();
@@ -286,11 +287,11 @@ void NebulaArena::free(void* pData) {
 }
 
 void NebulaArena::freeAll() {
+    dispose();
+
     while (mFirstChild != nullptr) {
         destroy(mFirstChild);
     }
-
-    dispose();
 
     const NebulaHostServices* const host = nebula_host();
     host->shape_forget(host->user, reinterpret_cast< uintptr_t >(mStart), reinterpret_cast< uintptr_t >(mNext));
