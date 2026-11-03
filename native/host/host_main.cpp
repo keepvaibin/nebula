@@ -920,6 +920,10 @@ void crash_writer() {
         }
         report_crash_facts(fs::path(path));
         SetEvent(gCrashDone);
+        // The dump and report are written: whatever the crashed thread still does (the module's thread report, a flush
+        // behind a lock another thread held when it stopped) never keeps the process alive.
+        Sleep(5000);
+        TerminateProcess(GetCurrentProcess(), 4);
     }
 }
 
@@ -956,6 +960,7 @@ void report_crash(EXCEPTION_POINTERS* info) {
     gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == GetModuleHandleW(L"smg_game.dll"),
                        code == EXCEPTION_STACK_OVERFLOW);
     report_crash(info);
+    TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
 
@@ -1068,6 +1073,7 @@ void abort_handler(int) {
         EXCEPTION_POINTERS pointers{&record, &context};
         report_crash(&pointers);
     }
+    TerminateProcess(GetCurrentProcess(), 3);
     std::_Exit(3);
 }
 
@@ -1096,6 +1102,7 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
                        !cpp && owner != nullptr && owner == GetModuleHandleW(L"smg_game.dll"),
                        info->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW);
     report_crash(info);
+    TerminateProcess(GetCurrentProcess(), 4);
     std::_Exit(4);
 }
 
