@@ -355,6 +355,10 @@ namespace {
     };
 };  // namespace
 
+namespace {
+    ListItem sListItems[MAX_ITEMS];
+}  // namespace
+
 void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     if (pageNumber >= 0) {
         mPageNo = pageNumber;
@@ -384,7 +388,7 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
         MR::hidePaneRecursive(this, ::cSeparatorPaneTable[idx]);
     }
 
-    ListItem listItems[MAX_ITEMS];
+    ListItem* const listItems = sListItems;
 
     s32 itemCount = ::getSortedList(listItems);
     mPageNum = (itemCount - 1) / ITEMS_PER_PAGE + 1;

@@ -71,28 +71,12 @@ struct JAUAudibleParam {
         return 1 << ((mAudibleSw >> 4) & 3);
     }
 
-    // raw is the console's word: mAudibleSw in the high half. Natively the halves are declared low first so the union
-    // keeps that; the byte/bit view below is the console's only.
+    // raw holds mAudibleSw in its high half.
     union {
         struct {
             u16 _f1;
             u16 mAudibleSw;
         };
-        struct {
-            u8 b0_0 : 4;
-            u8 b0_4 : 1;
-            u8 b0_5 : 1;
-            u8 b0_6 : 1;
-            u8 b0_7 : 1;
-            u8 b1_0 : 1;
-            u8 b1_1 : 1;
-            u8 mVolDistSetting : 2;
-            u8 b1_4_7 : 4;
-            u8 b2;
-            u8 b3;
-        }
-        consoleBits
-        ;
         u32 raw;
     };
 };

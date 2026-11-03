@@ -321,7 +321,7 @@ namespace {
     }
 
     // NebulaText's `pId` with its {n} or {0}... as the arguments.
-    void getExpanded(char16_t* pDst, s32 capacity, const char* pId, const char16_t* const* ppArgs, s32 argCount) {
+    __attribute__((noinline)) void getExpanded(char16_t* pDst, s32 capacity, const char* pId, const char16_t* const* ppArgs, s32 argCount) {
         char16_t pattern[256];
         NebulaText::get(pattern, 256, pId);
         expand(pDst, capacity, pattern, ppArgs, argCount);
@@ -374,7 +374,7 @@ namespace {
     // A host text's entry in the played language: its NebulaText id is "S." and the text with each space as _ and each
     // number as #, and the entry names the numbers {0} to {3} in their order ("S.#_FPS" = "{0} FPS"). False when the
     // table has none.
-    bool lookUp(char16_t* pDst, s32 capacity, const char* pText) {
+    __attribute__((noinline)) bool lookUp(char16_t* pDst, s32 capacity, const char* pText) {
         char id[160] = "S.";
         s32 idLength = 2;
         char16_t numbers[4][16];
@@ -431,7 +431,7 @@ namespace {
     // a closing "(...)" and those inside it, then its sentences, the words before ": " and after it, a list's items
     // ("8X (OFF WITH DLSS / FSR 3)", "RIIVOLUTION, FILES. TEXT: ENGLISH"), joined as the language joins them. A name
     // only whole (the keyboard's "Keyboard and mouse"); words the table does not have as the host gives them.
-    void translate(char16_t* pDst, s32 capacity, const char* pText, bool name) {
+    __attribute__((noinline)) void translate(char16_t* pDst, s32 capacity, const char* pText, bool name) {
         pDst[0] = 0;
         if (pText == nullptr || pText[0] == 0 || lookUp(pDst, capacity, pText)) {
             return;
@@ -827,6 +827,7 @@ private:
     s32 mJoyConBits;     // the Pair Joy-Con screen's status_number this frame (NEBULA_JOYCON_*)
     f32 mQuestionInk;    // the question text's height from its first capitals' tops to its last baseline
 
+    NebulaSettingsView mRead;   // the host's view this step
     NebulaSettingsView mShown;  // the host's view as drawn
     f32 mOpen;                  // 0 away, 1 in place
     bool mClosing;
@@ -1202,7 +1203,7 @@ void NebulaSettingsScreen::fillButton(Button& rButton, const char* pWordId) {
 
 // The texts in the played language, again for whatever changed from `pShown` (all of them when it is null): the page
 // names, the rows, the line under the page, the hints and the question.
-void NebulaSettingsScreen::fillTexts(const NebulaSettingsView& rView, const NebulaSettingsView* pShown) {
+__attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSettingsView& rView, const NebulaSettingsView* pShown) {
     char16_t text[256];
     f32 width = 0.0f;
     f32 height = 0.0f;
@@ -2560,7 +2561,7 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     }
     // The Pair Joy-Con screen's halves change with every press: its picture follows them each frame, its text only what
     // it says (which halves are here, paired).
-    NebulaSettingsView view;
+    NebulaSettingsView& view = mRead;
     memcpy(&view, &rView, sizeof(view));
     mJoyConBits = view.status == NEBULA_SETTINGS_STATUS_JOYCON ? view.status_number : 0;
     if (view.status == NEBULA_SETTINGS_STATUS_JOYCON) {
