@@ -6,6 +6,7 @@
 #include <string.h>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Util/NativeShader.hpp"
 #include "nw4r/lyt/layout.h"
 #include "nw4r/lyt/material.h"
 #include "nw4r/lyt/resourceAccessor.h"
@@ -494,6 +495,25 @@ namespace nw4r {
         }
 
         bool Material::Setup(bool modulate, u8 alpha) {
+            // A picture made in code has no material in a layout file, so no shader from the cook: J2DPicture's own.
+            if (mNativeShaders[0] == 0 && mNum.texMap != 0) {
+                J3DNativeTexObj texObj;
+                GetTexMapAry()[0].Get(&texObj);
+                NebulaNativeMaterial material;
+                NativeShader::init(material, NEBULA_SHADER_J2D_PICTURE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS,
+                                   false, NEBULA_CULL_NONE);
+                NativeShader::setColor(material, 12, 255, 255, 255, 255);
+                material.constants[16] = 1.0f;
+                material.constants[17] = 1.0f;
+                material.textures[0].image = reinterpret_cast< uintptr_t >(texObj.mImage);
+                material.textures[0].repeat_s = texObj.mWrapS;
+                material.textures[0].repeat_t = texObj.mWrapT;
+                material.textures[0].mag_linear = 1;
+                material.textures[0].min_linear = 1;
+                NativeShader::send(material);
+                return true;
+            }
+
             // The material's setup and values, drawn by the shader the cook chose (mNativeShaders). Stored until the next
             // material.
             static J3DMaterialSetup sSetup;

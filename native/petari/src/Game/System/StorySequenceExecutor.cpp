@@ -1,4 +1,5 @@
 #include "Game/System/StorySequenceExecutor.hpp"
+#include "Game/Demo/DemoFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Demo/PrologueDirector.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -649,7 +650,12 @@ void StorySequenceExecutor::exePlayDemoSequence() {
 
     switch (pDemoInfo->_0) {
     case 0:
-        if (tryStartDemo(pDemoInfo->_4)) {
+        // A save whose progress this scene does not show has no such demo: the story goes on without it.
+        if (DemoFunction::findDemoExecutor(pDemoInfo->_4) == nullptr) {
+            _48[0]++;
+
+            setNerve(GET_NERVE_ANON(StorySequenceExecutorPlayDemoSequence));
+        } else if (tryStartDemo(pDemoInfo->_4)) {
             setNerve(GET_NERVE_ANON(StorySequenceExecutorWaitTimeKeepDemoEnd));
         }
 
