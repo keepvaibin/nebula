@@ -1658,7 +1658,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
 
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect, source->prerecorded_movie);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect, source->prerecorded_movie);
     const int bb_w = static_cast<int>(swapchain_.extent.width);
     const int bb_h = static_cast<int>(swapchain_.extent.height);
     galaxy::ContentViewport content = galaxy::fit_content_viewport(bb_w, bb_h, content_aspect);

@@ -545,7 +545,7 @@ bool RenderCore::initialize(int w, int h) {
     // The scene at the window's picture: its exact size, square pixels.
     const auto start_aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport start_content =
-        galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kWiiContentAspect);
+        galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kDesignContentAspect);
     const FrameMap start_frame = start_content.width > 0 && start_content.height > 0
                                      ? FrameMap(static_cast<unsigned>(start_content.width), static_cast<unsigned>(start_content.height))
                                      : FrameMap{};
@@ -4314,7 +4314,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << texture_cache_.decoded_map_stats().evicted_bytes
                   << " decoded-tex-entries="
                   << texture_cache_.decoded_map_stats().entries
-                  // scene target-copy destinations are allocated at the internal resolution (bytes grow with scene_target_scale^2).
+                  // scene target-copy destinations are allocated at the frame's size (bytes grow with its area).
                   << " frame-read-dest-bytes="
                   << renderer_.scene_copy_dest_bytes()
                   << " frame-read-dest-budget-bytes="

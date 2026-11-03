@@ -1681,7 +1681,7 @@ private:
         std::uint64_t bytes = 0;
     };
     // One texture per destination key, at the copy's scaled extent in kSceneColorFormat
-    // (a full 640x456 copy: 1.11 MB at 1x, 17.81 MB at 4x, 40.08 MB at 6x). Bounded in
+    // (a full frame copy). Bounded in
     // bytes, not entries, since an entry's cost varies with the copy extent and the
     // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
     // is well above a scene's working set (a few XFBs across a couple of formats plus one

@@ -209,7 +209,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         if (mFlags.word() & (1 << i)) {
             if (i == 6) {
                 J3DNativeMaterial::overrideCoordinate(MR::getScreenResTIMG()->image(), MR::getScreenWidth(),
-                                                      NebulaFrameClock::cCanvasHeight);
+                                                      NebulaFrameClock::cScreenUnitsDown);
                 continue;
             }
             sendFlagState(i);

@@ -102,18 +102,18 @@ namespace MR {
         }
     }
 
-    static bool sWiiScreenWidth;
+    static bool sDesignScreenWidth;
 
     void beginDesignScreenWidth() {
-        sWiiScreenWidth = true;
+        sDesignScreenWidth = true;
     }
 
     void endDesignScreenWidth() {
-        sWiiScreenWidth = false;
+        sDesignScreenWidth = false;
     }
 
     s32 getScreenWidth() {
-        if (isScreen16Per9() && getDisplay().wide && !sWiiScreenWidth) {
+        if (isScreen16Per9() && getDisplay().wide && !sDesignScreenWidth) {
             return getDisplay().screen_width;
         }
         return isScreen16Per9() ? 832 : 608;
@@ -137,7 +137,7 @@ namespace MR {
     }
 
     void convertCanvasPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rCanvasPos) {
-        f32 posRatio = rCanvasPos.x / getCanvasWidth();
+        f32 posRatio = rCanvasPos.x / getScreenUnitsAcross();
 
         pScreenPos->set(posRatio * getScreenWidth(), rCanvasPos.y);
     }
@@ -145,7 +145,7 @@ namespace MR {
     void convertScreenPosToCanvasPos(TVec2f* pCanvasPos, const TVec2f& rScreenPos) {
         f32 posRatio = rScreenPos.x / getScreenWidth();
 
-        pCanvasPos->set(posRatio * getCanvasWidth(), rScreenPos.y);
+        pCanvasPos->set(posRatio * getScreenUnitsAcross(), rScreenPos.y);
     }
 
     void startToCaptureScreen(const char* pParam1) {

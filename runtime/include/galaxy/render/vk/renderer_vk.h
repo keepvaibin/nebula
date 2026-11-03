@@ -530,7 +530,7 @@ private:
     VkDescriptorSet turn_source_ = VK_NULL_HANDLE;
     const vk::Texture* turn_source_image_ = nullptr;
     std::uint64_t turn_source_frame_ = ~std::uint64_t{0};
-    // The output scene target (begin_output_scene) and its scale; they trade places with scene_ and scene_target_scale_ while it is active.
+    // The output scene target (begin_output_scene) and its size; they trade places with scene_ and scene_target_scale_ while it is active.
     SceneSet alt_scene_;
     FrameMap alt_scene_map_{};
     // The open target pass's set (begin_target_pass) while the scene target holds it, and each key's set between passes

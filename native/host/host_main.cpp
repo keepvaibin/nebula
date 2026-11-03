@@ -2291,18 +2291,13 @@ void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_
 }
 
 // The frame shown (its display copy, host-made).
-void svc_frame_show(void*, uint16_t width, uint16_t height, uint32_t flags) {
+void svc_frame_show(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::FrameShow;
-    record.target_width = width;
-    record.target_height = height;
-    record.target_flags = static_cast<std::uint8_t>(flags);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)width, (void)height, (void)flags;
 #endif
 }
 

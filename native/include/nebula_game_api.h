@@ -521,7 +521,7 @@ typedef struct NebulaDisplay {
     int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
     int32_t screen_width;  /* MR::getScreenWidth in the 16:9 mode (832 at 16:9) */
-    float canvas_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
+    float layout_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
     float vertical_fit;    /* the layouts' height scale under 16:9 (1 at 16:9 and wider) */
 } NebulaDisplay;
 
@@ -1117,8 +1117,8 @@ typedef struct NebulaHostServices {
        viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits, far 0xFFFFFF). */
     void (*frame_clear)(void* user, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
                         uint32_t clear_z, uint32_t channels);
-    /* The frame drawn so far is the picture shown: its top left `width` x `height` (the viewport's units). */
-    void (*frame_show)(void* user, uint16_t width, uint16_t height, uint32_t flags);
+    /* The frame drawn so far is the picture shown. */
+    void (*frame_show)(void* user);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */
     void (*frame_end)(void* user);
     /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). A draw identity names its

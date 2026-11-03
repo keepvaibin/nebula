@@ -137,7 +137,7 @@ namespace {
     Extent getExtent() {
         Extent extent = {608.0f, 456.0f, 0.0f, 0.0f};
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
-            extent.mWidth = MR::getDisplay().canvas_width;
+            extent.mWidth = MR::getDisplay().layout_width;
             extent.mHeight = 456.0f * MR::getDisplay().vertical_fit;
             extent.mHorizontalDelta = (extent.mWidth - 608.0f) * 0.5f;
             extent.mVerticalDelta = (extent.mHeight - 456.0f) * 0.5f;
