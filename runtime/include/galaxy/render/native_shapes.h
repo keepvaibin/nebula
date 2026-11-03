@@ -136,7 +136,7 @@ struct PassState {
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear, Forget, Scene
+        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear, Forget, Scene, TextureHd
     };
     Kind kind = Kind::Draw;
     std::uint64_t key = 0;   // the array's or the group's
@@ -154,7 +154,8 @@ struct Record {
     std::uint32_t vertex_first = 0, vertex_count = 0, attributes = 0;
     PassState pass;  // Draw, Immediate
     std::uint8_t primitive = 0;
-    // An image's bytes (TextureImage), at `key`: its physical address.
+    // An image's bytes (TextureImage), at `key`: its physical address. TextureHd: the record the game painted larger of
+    // the image at `key`; none: it goes.
     std::shared_ptr<const std::vector<std::byte>> image;
     // A draw's (or an immediate's) matrices, and the places its corners take when they carry none (position, texture
     // coordinates 0-7) when the game set them since its last draw.

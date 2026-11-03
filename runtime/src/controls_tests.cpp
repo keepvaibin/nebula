@@ -1622,6 +1622,66 @@ void test_button_icons() {
     remapped[WiiTarget::A][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kNorthBit)};
     expect(icon(button_icon_spec(ButtonIconStyle::Xbox, remapped, false), ButtonIcon::A) == Glyph{ButtonGlyph::Face, 3u},
            "a rebound A shows the button it is bound to");
+
+    expect(button_icon_style(ControlScheme::Generic) == ButtonIconStyle::Xbox &&
+               button_icon_style(ControlScheme::Steam) == ButtonIconStyle::Xbox &&
+               button_icon_style(ControlScheme::SwitchPro2) == ButtonIconStyle::Nintendo &&
+               button_icon_style(ControlScheme::PlayStation) == ButtonIconStyle::PlayStation &&
+               button_icon_style(ControlScheme::Keyboard) == ButtonIconStyle::Game,
+           "each family's style: a generic controller's is Xbox's");
+    const ButtonIconSpec generic =
+        button_icon_spec(button_icon_style(ControlScheme::Generic), default_binding_table(ControlScheme::Generic), false);
+    expect(icon(generic, ButtonIcon::A) == Glyph{ButtonGlyph::Face, 0u}, "generic: A's south button shows by its place");
+
+    const auto bound_to = [&xbox, &icon](SourceKind kind, std::uint8_t code) {
+        BindingTable table = xbox;
+        table[WiiTarget::A] = {};
+        table[WiiTarget::A][0] = InputSource{kind, code};
+        return icon(button_icon_spec(ButtonIconStyle::Xbox, table, false), ButtonIcon::A);
+    };
+    const auto button_bound_to = [&bound_to](unsigned bit) {
+        return bound_to(SourceKind::Button, static_cast<std::uint8_t>(bit));
+    };
+    expect(button_bound_to(pad::kCaptureBit) == Glyph{ButtonGlyph::Capture, 0u}, "Capture, the touchpad's click: its own icon");
+    expect(button_bound_to(pad::kChatBit) == Glyph{ButtonGlyph::Chat, 0u}, "Chat and mute: its own icon");
+    expect(button_bound_to(pad::kGripLeftBit) == Glyph{ButtonGlyph::Grip, 0u} &&
+               button_bound_to(pad::kGripRightBit) == Glyph{ButtonGlyph::Grip, 1u} &&
+               button_bound_to(pad::kGripLeft2Bit) == Glyph{ButtonGlyph::Grip, 2u} &&
+               button_bound_to(pad::kGripRight2Bit) == Glyph{ButtonGlyph::Grip, 3u},
+           "the grips: their own icons");
+    expect(button_bound_to(pad::kLeftPadBit) == Glyph{ButtonGlyph::Trackpad, 0u} &&
+               button_bound_to(pad::kRightPadBit) == Glyph{ButtonGlyph::Trackpad, 1u},
+           "the trackpads' clicks: their own icons");
+    const auto axis_bound_to = [&bound_to](SourceKind kind, PadAxis axis) {
+        return bound_to(kind, static_cast<std::uint8_t>(axis));
+    };
+    expect(axis_bound_to(SourceKind::AxisPositive, PadAxis::LeftY) == Glyph{ButtonGlyph::StickAxis, 0u} &&
+               axis_bound_to(SourceKind::AxisNegative, PadAxis::LeftY) == Glyph{ButtonGlyph::StickAxis, 1u} &&
+               axis_bound_to(SourceKind::AxisNegative, PadAxis::LeftX) == Glyph{ButtonGlyph::StickAxis, 2u} &&
+               axis_bound_to(SourceKind::AxisPositive, PadAxis::LeftX) == Glyph{ButtonGlyph::StickAxis, 3u},
+           "the left stick's directions: up, down, left, right");
+    expect(axis_bound_to(SourceKind::AxisPositive, PadAxis::RightY) == Glyph{ButtonGlyph::StickAxis, 4u} &&
+               axis_bound_to(SourceKind::AxisNegative, PadAxis::RightY) == Glyph{ButtonGlyph::StickAxis, 5u} &&
+               axis_bound_to(SourceKind::AxisNegative, PadAxis::RightX) == Glyph{ButtonGlyph::StickAxis, 6u} &&
+               axis_bound_to(SourceKind::AxisPositive, PadAxis::RightX) == Glyph{ButtonGlyph::StickAxis, 7u},
+           "the right stick's directions");
+    expect(axis_bound_to(SourceKind::AxisPositive, PadAxis::RightTrigger) == Glyph{ButtonGlyph::Trigger, 1u} &&
+               axis_bound_to(SourceKind::AxisNegative, PadAxis::RightTrigger) == Glyph{ButtonGlyph::Keep, 0u},
+           "a trigger pulls one way");
+
+    const BindingTable pro2 = default_binding_table(ControlScheme::SwitchPro2);
+    const BindingTable playstation = default_binding_table(ControlScheme::PlayStation);
+    expect(button_icon_spec(ButtonIconStyle::PlayStation, playstation, false, ButtonIconModel::Sixaxis).model ==
+                   ButtonIconModel::Sixaxis &&
+               button_icon_spec(ButtonIconStyle::Nintendo, pro2, false, ButtonIconModel::GameCube).model ==
+                   ButtonIconModel::GameCube,
+           "a model's icons in its family's style");
+    expect(button_icon_spec(ButtonIconStyle::Xbox, playstation, false, ButtonIconModel::Sixaxis).model ==
+                   ButtonIconModel::Standard &&
+               button_icon_spec(ButtonIconStyle::PlayStation, pro2, false, ButtonIconModel::GameCube).model ==
+                   ButtonIconModel::Standard &&
+               button_icon_spec(ButtonIconStyle::Nintendo, pro2, false).model == ButtonIconModel::Standard,
+           "not in another's, nor without one");
 }
 
 // The keyboard's icons: every key and mouse button has one; each Wii button shows its input as it is reached for there.

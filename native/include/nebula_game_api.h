@@ -630,6 +630,12 @@ enum {
     NEBULA_ICON_STYLE_PLAYSTATION,
     NEBULA_ICON_STYLE_KEYBOARD, /* the keyboard and mouse: each icon a key (NEBULA_ICON_KEY) */
 };
+/* A model whose buttons are not its family's (galaxy::input::ButtonIconModel). */
+enum {
+    NEBULA_ICON_MODEL_STANDARD = 0,
+    NEBULA_ICON_MODEL_SIXAXIS,  /* PLAYSTATION: Select and Start */
+    NEBULA_ICON_MODEL_GAMECUBE, /* NINTENDO: analog L and R, ZL and Z, Start */
+};
 enum {
     NEBULA_ICON_KEEP = 0, /* the game's own icon */
     NEBULA_ICON_FACE,     /* place: 0 south, 1 east, 2 west, 3 north */
@@ -641,6 +647,11 @@ enum {
     NEBULA_ICON_HOME,
     NEBULA_ICON_DPAD,     /* KEYBOARD: the four keys of `pad_keys` */
     NEBULA_ICON_KEY,      /* place: NEBULA_KEY_* */
+    NEBULA_ICON_CAPTURE,  /* Capture, the touchpad's click, Steam's quick access */
+    NEBULA_ICON_CHAT,     /* Pro Controller 2 C, DualSense mute */
+    NEBULA_ICON_GRIP,     /* place: 0 left, 1 right, 2 and 3 the Steam Controller's second pair */
+    NEBULA_ICON_TRACKPAD, /* place: 0 left, 1 right */
+    NEBULA_ICON_STICK_AXIS, /* place: 0 up, 1 down, 2 left, 3 right; 4 on the right stick's */
 };
 /* The keys and mouse buttons a keyboard icon shows (NEBULA_ICON_KEY's place). Those from NEBULA_KEY_LAYOUT_FIRST print
    what the keyboard's layout puts on them (NebulaButtonIcons::layout); NEBULA_KEY_OTHER is any other key, unnamed. */
@@ -699,6 +710,7 @@ enum {
 #define NEBULA_KEY_LAYOUT_KEYS 13
 typedef struct NebulaButtonIcons {
     uint8_t style; /* NEBULA_ICON_STYLE_* */
+    uint8_t model; /* NEBULA_ICON_MODEL_* */
     uint8_t glyphs[NEBULA_BUTTON_ICONS]; /* NEBULA_ICON_KEEP... */
     uint8_t places[NEBULA_BUTTON_ICONS];
     uint8_t wii_remote; /* a real Wii Remote is in use: the game's pictures of one show */
@@ -1097,6 +1109,10 @@ typedef struct NebulaHostServices {
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);
+    /* `hd`: a texture record, the image handed over at `image` as the game painted it larger; the renderer draws it in
+       that image's place while the image's texels are what they are now (a texture pack's name for them wins). NULL:
+       what was handed over for `image` goes. The renderer takes a copy. */
+    void (*texture_hd)(void* user, const void* image, const void* hd);
     /* The Mii in a slot of the Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
        an empty slot. */
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);

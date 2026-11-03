@@ -22,6 +22,7 @@
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -460,6 +461,78 @@ void TextureCache::register_image(std::uint64_t address, std::shared_ptr<const s
     slot = std::move(bytes);
 }
 
+void TextureCache::register_replacement(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> record) {
+    built_in_replacements_.erase(address);
+    // The original draws until the replacement's first use; entries that bound the old one hold it until their fence.
+    (void)retire_key(address);
+    const NebulaTexture* const source = registered_record(address);
+    const NebulaTexture* const picture =
+        record != nullptr && record->size() >= NEBULA_TEXTURE_HEADER ? nebula_texture_record(record->data()) : nullptr;
+    if (source == nullptr || picture == nullptr || picture->size != record->size() ||
+        picture->layout != NEBULA_TEXTURE_RGBA8 || picture->levels == 0u || picture->levels > NEBULA_TEXTURE_MAX_LEVELS ||
+        NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(picture->width, picture->height, picture->levels,
+                                                           picture->layout) > record->size()) {
+        return;
+    }
+    BuiltInReplacement& built_in = built_in_replacements_[address];
+    built_in = {};
+    built_in.record = std::move(record);
+    built_in.source_width = source->width;
+}
+
+bool TextureCache::upload_built_in(BuiltInReplacement& built_in) {
+    if (built_in.replacement.texture) {
+        return true;
+    }
+    if (!backend_.has_upload_list()) {
+        return false;
+    }
+    const auto* const record = reinterpret_cast<const NebulaTexture*>(built_in.record->data());
+    const std::uint32_t width = record->width;
+    const std::uint32_t height = record->height;
+    const std::uint32_t levels = record->levels;
+    std::vector<std::uint64_t> offsets;
+    std::vector<std::uint32_t> pitches;
+    const std::uint64_t staging_size = texture_pack_staging_layout(width, height, levels, offsets, pitches);
+    try {
+        const UploadAllocation staging = allocate_upload_bytes(staging_size, TextureBackend::kPlacementAlignment);
+        if (staging.cpu_base == nullptr) {
+            return false;
+        }
+        std::uint8_t* const base = staging.cpu_base + staging.offset;
+        const auto* source = reinterpret_cast<const std::uint8_t*>(record) + NEBULA_TEXTURE_HEADER;
+        for (std::uint32_t l = 0; l < levels; ++l) {
+            const std::uint32_t lw = std::max<std::uint32_t>(1u, width >> l);
+            const std::uint32_t lh = std::max<std::uint32_t>(1u, height >> l);
+            for (std::uint32_t row = 0; row < lh; ++row) {
+                std::memcpy(base + offsets[l] + static_cast<std::uint64_t>(row) * pitches[l], source, lw * 4u);
+                source += lw * 4u;
+            }
+        }
+        std::uint64_t allocation_bytes = 0;
+        gpu::TextureRef texture = backend_.create_texture(width, height, levels, allocation_bytes);
+        if (!texture) {
+            return false;
+        }
+        backend_.record_upload(gpu::raw(texture), false, *staging.chunk, staging.offset, width, height, levels,
+                               offsets.data(), pitches.data());
+        built_in.replacement.texture = std::move(texture);
+        built_in.replacement.width = width;
+        built_in.replacement.height = height;
+        built_in.replacement.levels = levels;
+        built_in.replacement.bytes = allocation_bytes;
+        built_in.replacement.lod_shift_x16 = static_cast<std::uint8_t>(std::clamp(
+            std::lround(16.0 * std::log2(static_cast<double>(width) / static_cast<double>(built_in.source_width))), 0l,
+            128l));
+    } catch (const std::exception& error) {
+        // Out of video memory or staging: the original stays.
+        std::cerr << "[texture] built-in replacement upload failed: " << error.what() << '\n';
+        return false;
+    }
+    built_in.record.reset();
+    return true;
+}
+
 std::uint64_t TextureCache::image_bytes() const noexcept {
     std::uint64_t bytes = 0u;
     for (const auto& [address, image] : registered_images_) {
@@ -807,6 +880,7 @@ void TextureCache::shutdown() {
     finish_pending_decodes_noexcept();
     decode_pool_.reset();
     packs_.shutdown();
+    built_in_replacements_.clear();
     pack_waiters_.clear();
     pack_uploads_.clear();
     for (auto& slot : pack_staging_) {
@@ -1347,6 +1421,20 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                 }
                 return handle;
             }
+        }
+    }
+    // The game's larger painting of this image, unless a pack names it. A dump wants the image itself.
+    if (record != nullptr && !pack_dump && pack_slot == TexturePacks::kNone) {
+        const auto built_in = built_in_replacements_.find(texture);
+        if (built_in != built_in_replacements_.end() && upload_built_in(built_in->second)) {
+            Entry entry = make_replacement_entry(built_in->second.replacement, TexturePacks::kNone, image.width,
+                                                 image.height, generated_mips, total_source_size);
+            entry.handle.rt_material = rt_material;
+            entry.handle.pack = pack;
+            const TextureHandle handle = entry.handle;
+            entries_.emplace(key, std::move(entry));
+            decoded_lru_track(key);
+            return handle;
         }
     }
 
