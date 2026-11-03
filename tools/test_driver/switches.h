@@ -1019,6 +1019,11 @@ inline const char* vk_test_refuse() noexcept { return std::getenv("GALAXY_VK_TES
 inline constexpr const char* vk_test_refuse_name() noexcept { return "GALAXY_VK_TEST_REFUSE"; }
 inline constexpr const wchar_t* vk_test_refuse_wide_name() noexcept { return L"GALAXY_VK_TEST_REFUSE"; }
 #endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* test_path_guard_name() noexcept { return ""; }
+#else
+inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
+#endif
 }  // namespace nebula_switch
 
 #if defined(_MSC_VER)

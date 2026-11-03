@@ -80,7 +80,7 @@ final class HomeMenuView extends FrameLayout {
         final TextView quit = action("Quit to Nebula", 0x1FFFFFFF, 0xFFFFB4AB);
         quit.setOnClickListener(v -> choose(QUIT));
         card.addView(quit);
-        controls = action("", 0x00000000, 0xCCFFFFFF);
+        controls = action("", 0x00000000, Color.argb(204, 255, 255, 255));
         controls.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         controls.setOnClickListener(v -> {
             controlsShown = !controlsShown;
