@@ -8,6 +8,7 @@
 #define NOMINMAX
 #endif
 
+#include "galaxy/portable.h"
 #include "galaxy/render/texture_store.h"
 #include "galaxy/run_options.h"
 #include "galaxy/path_text.h"
@@ -50,7 +51,7 @@ std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 ||
+    if (::galaxy::env_read(&length, value, sizeof(value), name) != 0 ||
         length <= 1u || length > sizeof(value)) {
         return fallback;
     }

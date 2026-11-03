@@ -7,6 +7,7 @@
 #define NOMINMAX
 #endif
 #pragma warning(push, 0)
+#include "galaxy/portable.h"
 #include <Windows.h>
 #if !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
@@ -26,6 +27,7 @@
 #include "galaxy/perf_hint.h"
 
 #include "galaxy/render/present_clock.h"
+#include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/host_env.h"
@@ -139,7 +141,7 @@ std::string present_snapshot_path() {
     static const std::uint64_t first = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_first, 0u);
     static const std::uint64_t last = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_last, std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
-        char value[MAX_PATH]{};
+        char value[1024]{};
         std::size_t length = 0;
         return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().present_snapshot_dir) == 0 && length > 1u
             ? std::string(value) : std::string{};
@@ -157,7 +159,7 @@ std::string present_snapshot_path() {
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 || length == 0) {
+    if (::galaxy::env_read(&length, value, sizeof(value), name) != 0 || length == 0) {
         return fallback;
     }
     char* end = nullptr;

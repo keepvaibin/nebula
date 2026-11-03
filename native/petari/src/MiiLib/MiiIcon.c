@@ -7,7 +7,7 @@ static const f32 RAD_TO_DEG = 57.29578f;
 
 double atan2(double y, double x);
 
-inline float atan2f(float x, float y) {
+static inline float icon_atan2(float x, float y) {
     return atan2(x, y);
 }
 
@@ -88,9 +88,9 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
 
     aspect = (f32)setting->width / (f32)setting->height;
     if (setting->width < setting->height) {
-        fovy = 2 * (RAD_TO_DEG * atan2f(43.2f / aspect, 500.0f));
+        fovy = 2 * (RAD_TO_DEG * icon_atan2(43.2f / aspect, 500.0f));
     } else {
-        fovy = 2 * (RAD_TO_DEG * atan2f(43.2f, 500.0f));
+        fovy = 2 * (RAD_TO_DEG * icon_atan2(43.2f, 500.0f));
     }
 
     NebulaMtxPerspective(projMtx, fovy, aspect, 500.0f, 700.0f);

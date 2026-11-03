@@ -4,6 +4,11 @@
 cmake_minimum_required(VERSION 3.22)
 project(NebulaSDL LANGUAGES C CXX)
 
+option(NEBULA_RELEASE "Leave the test hooks out" OFF)
+if(NEBULA_RELEASE)
+    add_compile_definitions(NEBULA_RELEASE=1)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -19,51 +24,42 @@ set(NEBULA_VMA_DIR "${NEBULA_DEPS}/VulkanMemoryAllocator-v3.4.0" CACHE PATH "Vul
 set(NEBULA_GLSLANG_SOURCE_DIR "${NEBULA_DEPS}/glslang-src" CACHE PATH "glslang source (External/spirv-tools inside)")
 set(NEBULA_SDL_DIR "${NEBULA_DEPS}/SDL3-3.4.18" CACHE PATH "SDL3 source")
 
-# glslang with its HLSL front end and the SPIR-V optimizer, as the Windows build links it.
-set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
-set(ENABLE_HLSL ON CACHE BOOL "" FORCE)
-set(ENABLE_OPT ON CACHE BOOL "" FORCE)
-set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
-set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
-set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
-set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
-set(SPIRV_TOOLS_BUILD_STATIC ON CACHE BOOL "" FORCE)
-add_subdirectory("${NEBULA_GLSLANG_SOURCE_DIR}" glslang EXCLUDE_FROM_ALL)
-# The renderer includes glslang's headers in their installed layout (glslang/SPIRV/...).
-file(GLOB glslang_spirv_headers "${NEBULA_GLSLANG_SOURCE_DIR}/SPIRV/*.h" "${NEBULA_GLSLANG_SOURCE_DIR}/SPIRV/*.hpp")
-file(COPY ${glslang_spirv_headers} DESTINATION "${CMAKE_BINARY_DIR}/glslang-include/glslang/SPIRV")
-
 add_library(nebula_vulkan_deps INTERFACE)
 target_include_directories(nebula_vulkan_deps INTERFACE
-    "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include"
-    "${CMAKE_BINARY_DIR}/glslang-include" "${NEBULA_GLSLANG_SOURCE_DIR}"
-    "${NEBULA_GLSLANG_SOURCE_DIR}/External/spirv-tools/include")
+    "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include")
 target_compile_definitions(nebula_vulkan_deps INTERFACE NEBULA_GPU_VULKAN VK_NO_PROTOTYPES
     $<$<PLATFORM_ID:Android>:VK_USE_PLATFORM_ANDROID_KHR>)
-target_link_libraries(nebula_vulkan_deps INTERFACE glslang SPIRV glslang-default-resource-limits SPIRV-Tools-opt
-    SPIRV-Tools-static)
 
-# Uber shader sources become NUL-terminated char arrays, as in the root build.
-set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
-set(galaxy_uber_embed_body "")
-foreach(stage vs ps)
-    set(hlsl "${nebula_root}/runtime/src/render/uber_${stage}.hlsl")
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${hlsl}")
-    file(READ "${hlsl}" hex HEX)
-    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex "${hex}")
-    string(APPEND galaxy_uber_embed_body "extern const char galaxy_uber_${stage}_hlsl[] = {${hex}0x00};\n")
-endforeach()
-file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}" CONTENT "namespace galaxy::render {\n${galaxy_uber_embed_body}}\n" @ONLY)
-
-# The post-processing passes' sources (post_process_vk.cpp compiles them on the device).
-include("${nebula_root}/cmake/post_shader_sources.cmake")
-set(galaxy_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shader_embed.cpp")
-galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${nebula_root}")
+# Shaders are compiled at build time by the PC's tools (the Windows Vulkan build's galaxy_native_spirv and
+# galaxy_utility_spirv): a device compiles nothing.
+set(NEBULA_HOST_TOOLS "" CACHE PATH "Folder of galaxy_native_spirv and galaxy_utility_spirv for the build machine")
+if(NOT IS_DIRECTORY "${NEBULA_HOST_TOOLS}")
+    message(FATAL_ERROR "Set NEBULA_HOST_TOOLS to the Windows Vulkan build folder")
+endif()
+add_executable(galaxy_native_spirv IMPORTED)
+set_target_properties(galaxy_native_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_native_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
+add_executable(galaxy_utility_spirv IMPORTED)
+set_target_properties(galaxy_utility_spirv PROPERTIES IMPORTED_LOCATION "${NEBULA_HOST_TOOLS}/galaxy_utility_spirv${CMAKE_HOST_EXECUTABLE_SUFFIX}")
+include("${nebula_root}/cmake/native_materials.cmake")
+galaxy_native_material_sources(galaxy_native_spirv_sources spirv)
+set(galaxy_utility_spirv_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/utility_spirv")
+file(MAKE_DIRECTORY "${galaxy_utility_spirv_dir}")
+add_custom_command(OUTPUT "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
+    COMMAND galaxy_utility_spirv "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
+    DEPENDS galaxy_utility_spirv VERBATIM)
 
 set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_render_vk STATIC
     ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
+    ${rt}/ui/native_settings.cpp
+    ${rt}/ui/settings_model.cpp
+    ${rt}/ui/settings_system_page.cpp
+    ${rt}/ui/settings_advanced_page.cpp
+    ${rt}/ui/settings_display_page.cpp
+    ${rt}/ui/settings_general_page.cpp
+    ${rt}/ui/settings_graphics_page.cpp
+    ${rt}/ui/settings_save_model.cpp
     ${rt}/render/renderer_common.cpp
     ${rt}/render/gpu_upload_ring.cpp
     ${rt}/render/texture_store.cpp
@@ -75,12 +71,9 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/native_material.cpp
     ${rt}/render/drawing_state.cpp
     ${rt}/render/draw_matrices.cpp
-    ${rt}/render/shader_keys.cpp
+    ${rt}/render/render_state_key.cpp
     ${rt}/render/frame_pass.cpp
     ${rt}/render/line_point_params.cpp
-    ${rt}/render/shader_gen.cpp
-    ${rt}/render/uber_shaders.cpp
-    ${galaxy_uber_embed_cpp}
     ${rt}/render/post_process_settings.cpp
     ${rt}/render/transform_history.cpp
     ${rt}/render/render_core.cpp
@@ -88,26 +81,25 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/galaxy_select.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/interp_gpu.cpp
-    ${rt}/render/rt_surfaces.cpp
     ${rt}/render/rt_materials.cpp
-    ${rt}/render/enhanced_lighting.cpp
     ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
     ${rt}/render/game_asset_extract.cpp
     ${rt}/render/vk/vk_context.cpp
     ${rt}/render/vk/device_quirks_vk.cpp
     ${rt}/render/vk/vk_libraries.cpp
-    ${rt}/render/vk/shader_compile_vk.cpp
+    ${rt}/render/vk/utility_spirv.cpp
     ${rt}/render/vk/texture_backend_vk.cpp
     ${rt}/render/vk/pipeline_cache_vk.cpp
-    ${rt}/render/native_shaders_none.cpp
+    ${rt}/render/pipeline_seed.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
     ${rt}/render/vk/renderer_vk_scene.cpp
     ${rt}/render/vk/renderer_vk_replay.cpp
     ${rt}/render/vk/post_process_vk.cpp
     ${rt}/render/vk/game_bloom_vk.cpp
-    ${galaxy_post_embed_cpp}
+    "${galaxy_utility_spirv_dir}/utility_spirv_data.h"
+    ${galaxy_native_spirv_sources}
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test_driver/run_options.cpp
@@ -131,7 +123,9 @@ add_library(galaxy_render_vk STATIC
     ${rt}/mod_xml.cpp
     ${rt}/mods.cpp
     ${rt}/crash_report.cpp
-    ${rt}/discord_presence.cpp)
+    ${rt}/discord_presence.cpp
+    ${rt}/controller_roster.cpp
+    ${rt}/wiimote_speaker.cpp)
 # Mod import (archives) on the desktop systems; Android and iOS take no mods.
 if(NOT ANDROID AND NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")
@@ -140,8 +134,7 @@ if(NOT ANDROID AND NOT IOS)
     target_link_libraries(galaxy_render_vk PUBLIC nebula_archive)
 endif()
 target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
-target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include")
-target_compile_options(galaxy_render_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
+target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include" "${galaxy_native_include_dir_spirv}" "${galaxy_utility_spirv_dir}")
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
@@ -159,6 +152,7 @@ set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
     "${nebula_root}/runtime/src/movie_video.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/audio_device_sdl.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
@@ -174,6 +168,3 @@ target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
 
-# The vector kernels against their references on this platform's CPU (NEON on AArch64).
-add_executable(nebula_simd_kernel_tests "${nebula_root}/runtime/src/render/simd_kernel_tests.cpp")
-target_link_libraries(nebula_simd_kernel_tests PRIVATE galaxy_render_vk)

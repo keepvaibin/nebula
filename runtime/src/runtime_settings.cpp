@@ -1,3 +1,4 @@
+#include "galaxy/portable.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/run_options.h"
 #include "../../tools/test_driver/switches.h"
@@ -156,14 +157,14 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.discord_status = value[0] != '0';
     } else if (std::strcmp(key, "button_icons") == 0) {
         for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::Keyboard); ++i) {
-            if (_stricmp(value, button_icons_key(static_cast<ButtonIcons>(i))) == 0) {
+            if (::galaxy::text_iequal(value, button_icons_key(static_cast<ButtonIcons>(i)))) {
                 settings.button_icons = static_cast<ButtonIcons>(i);
             }
         }
     } else if (std::strcmp(key, "language") == 0) {
-        if (_stricmp(value, game_language_key(GameLanguage::Auto)) == 0) settings.language = GameLanguage::Auto;
+        if (::galaxy::text_iequal(value, game_language_key(GameLanguage::Auto))) settings.language = GameLanguage::Auto;
         for (const GameLanguage language : kGameLanguages) {
-            if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
+            if (::galaxy::text_iequal(value, game_language_key(language))) settings.language = language;
         }
     }
 }
