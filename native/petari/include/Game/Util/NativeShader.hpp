@@ -107,13 +107,11 @@ namespace NativeShader {
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
         J3DNativeState::sendMaterial(&rMaterial);
-        J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 
     inline void send(const NebulaNativeMaterial& rMaterial) {
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
         J3DNativeState::sendMaterial(&rMaterial);
-        J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 }  // namespace NativeShader

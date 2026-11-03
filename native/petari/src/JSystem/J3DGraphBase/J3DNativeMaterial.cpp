@@ -146,20 +146,6 @@ namespace {
         }
     }
 
-    // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the draws of the material whose native shader is the asked one (65535:
-    // every J3D material), on either path, for the renderer's input dump.
-    void dumpTag(u32 shader) {
-        static s32 sWanted = -1;
-        if (sWanted < 0) {
-            const NebulaHostServices* pHost = nebula_host();
-            sWanted = static_cast< s32 >(pHost->option(pHost->user, NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS));
-        }
-        if (sWanted != 0 &&
-            (shader == static_cast< u32 >(sWanted) || (sWanted == 65535 && shader >= NEBULA_SHADER_J3D_FIRST))) {
-            NebulaRender::dumpTag(shader);
-        }
-    }
-
     // Whether J3D materials draw as their native shaders (tests can limit them to a range).
     bool nativeDrawn(u32 shader) {
         const NebulaHostServices* pHost = nebula_host();
@@ -199,7 +185,6 @@ namespace {
         }
         endCurrent();
         watchMaterial(NULL);
-        dumpTag(shader);
     }
 
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
@@ -318,7 +303,6 @@ namespace {
         const NebulaHostServices* pHost = nebula_host();
         J3DNativeState::sendMaterial(&material);
         watchMaterial(&material);
-        dumpTag(shader);
         sCurrentSetup = &rSetup;
         sCurrentCooked = cooked;
         sCurrentPass = 0;
@@ -379,10 +363,6 @@ namespace J3DNativeMaterial {
             nebula_log("[cook-material] selecting cooked shader %u\n", desc->shader);
         }
         return NEBULA_SHADER_J3D_FIRST + desc->shader - 1;
-    }
-
-    void dumpTag(u32 shader) {
-        ::dumpTag(shader);
     }
 
     void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterialParts* pParts) {
@@ -693,7 +673,6 @@ namespace J3DNativeMaterial {
         const NebulaHostServices* host = nebula_host();
         J3DNativeState::sendMaterial(&sCurrent);
         watchMaterial(&sCurrent);
-        dumpTag(sCurrent.shader);
     }
 
     void setColorRegister(u32 index, NebulaColor8 color) {

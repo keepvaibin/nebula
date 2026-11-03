@@ -943,7 +943,6 @@ namespace {
         J3DNativeMaterial::watch(&rMaterial);
         const NebulaHostServices* pHost = nebula_host();
     J3DNativeState::sendMaterial(&rMaterial);
-        J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the

@@ -2901,13 +2901,6 @@ uint32_t svc_option(void*, uint32_t what) {
         }();
         return dump ? 1u : 0u;
     }
-    case NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS: {
-        static const uint32_t shader = [] {
-            const char* value = nebula_switch::dump_draw_inputs();
-            return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
-        }();
-        return shader;
-    }
     case NEBULA_OPTION_TEST_ARENA_FILL: {
         const char* value = nebula_switch::test_arena_fill();
         return value != nullptr ? 0x100u | (static_cast<uint32_t>(std::strtoul(value, nullptr, 16)) & 0xFFu) : 0u;

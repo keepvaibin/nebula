@@ -57,42 +57,6 @@ inline constexpr const char* crash_dump_dir_name() noexcept { return "GALAXY_CRA
 inline constexpr const wchar_t* crash_dump_dir_wide_name() noexcept { return L"GALAXY_CRASH_DUMP_DIR"; }
 #endif
 #if defined(NEBULA_RELEASE)
-inline constexpr const char* dump_draw_inputs() noexcept { return nullptr; }
-inline constexpr const char* dump_draw_inputs_name() noexcept { return ""; }
-inline constexpr const wchar_t* dump_draw_inputs_wide_name() noexcept { return L""; }
-#else
-inline const char* dump_draw_inputs() noexcept { return std::getenv("GALAXY_DUMP_DRAW_INPUTS"); }
-inline constexpr const char* dump_draw_inputs_name() noexcept { return "GALAXY_DUMP_DRAW_INPUTS"; }
-inline constexpr const wchar_t* dump_draw_inputs_wide_name() noexcept { return L"GALAXY_DUMP_DRAW_INPUTS"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* dump_draw_inputs_file() noexcept { return nullptr; }
-inline constexpr const char* dump_draw_inputs_file_name() noexcept { return ""; }
-inline constexpr const wchar_t* dump_draw_inputs_file_wide_name() noexcept { return L""; }
-#else
-inline const char* dump_draw_inputs_file() noexcept { return std::getenv("GALAXY_DUMP_DRAW_INPUTS_FILE"); }
-inline constexpr const char* dump_draw_inputs_file_name() noexcept { return "GALAXY_DUMP_DRAW_INPUTS_FILE"; }
-inline constexpr const wchar_t* dump_draw_inputs_file_wide_name() noexcept { return L"GALAXY_DUMP_DRAW_INPUTS_FILE"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* dump_draw_inputs_from() noexcept { return nullptr; }
-inline constexpr const char* dump_draw_inputs_from_name() noexcept { return ""; }
-inline constexpr const wchar_t* dump_draw_inputs_from_wide_name() noexcept { return L""; }
-#else
-inline const char* dump_draw_inputs_from() noexcept { return std::getenv("GALAXY_DUMP_DRAW_INPUTS_FROM"); }
-inline constexpr const char* dump_draw_inputs_from_name() noexcept { return "GALAXY_DUMP_DRAW_INPUTS_FROM"; }
-inline constexpr const wchar_t* dump_draw_inputs_from_wide_name() noexcept { return L"GALAXY_DUMP_DRAW_INPUTS_FROM"; }
-#endif
-#if defined(NEBULA_RELEASE)
-inline constexpr const char* dump_draw_inputs_max() noexcept { return nullptr; }
-inline constexpr const char* dump_draw_inputs_max_name() noexcept { return ""; }
-inline constexpr const wchar_t* dump_draw_inputs_max_wide_name() noexcept { return L""; }
-#else
-inline const char* dump_draw_inputs_max() noexcept { return std::getenv("GALAXY_DUMP_DRAW_INPUTS_MAX"); }
-inline constexpr const char* dump_draw_inputs_max_name() noexcept { return "GALAXY_DUMP_DRAW_INPUTS_MAX"; }
-inline constexpr const wchar_t* dump_draw_inputs_max_wide_name() noexcept { return L"GALAXY_DUMP_DRAW_INPUTS_MAX"; }
-#endif
-#if defined(NEBULA_RELEASE)
 inline constexpr const char* export_art() noexcept { return nullptr; }
 inline constexpr const char* export_art_name() noexcept { return ""; }
 inline constexpr const wchar_t* export_art_wide_name() noexcept { return L""; }

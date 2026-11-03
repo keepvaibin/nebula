@@ -915,12 +915,6 @@ private:
     std::uint64_t frame_curved_flat_triangles_ = 0;
     std::uint64_t frame_curved_patch_triangles_ = 0;
     std::uint64_t frame_curved_split_draws_ = 0;
-    // Tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): the tag of the material the draws use (motion::kMarkerDumpTag; 0
-    // none), the old path's last pixel constants, the draws dumped so far, and the dump (draw_input_dump.cpp).
-    std::uint32_t dump_tag_ = 0;
-    std::uint32_t dump_wanted_ = 0;
-    std::uint32_t dump_count_ = 0;
-    void dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_texmtx, std::uint64_t presents);
     std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;

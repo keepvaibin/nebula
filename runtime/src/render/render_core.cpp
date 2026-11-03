@@ -1443,10 +1443,6 @@ std::uint64_t RenderCore::record_identity() noexcept {
 }
 
 void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
-    if (kind == motion::kMarkerDumpTag) {
-        dump_tag_ = static_cast<std::uint32_t>(a);
-        return;
-    }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
         flush_pending_draw_batch();
@@ -5075,9 +5071,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
     }
 
-    if (dump_tag_ != 0u) [[unlikely]] {
-        dump_draw_inputs(native_pe, native_texmtx, g_snapshot_presents);
-    }
     frame_bindings_dirty_ = false;
     texture_bindings_dirty_ = false;
     // The frame's detail flag guards both endpoints. A zero on an ordinary
@@ -5408,7 +5401,6 @@ void RenderCore::apply_native_material(const material::Native* native) {
     }
     const material::Native& m = *native;
     if ((m.constants_only & 1u) == 0u) {
-        dump_tag_ = 0u;
     }
     if ((m.constants_only & 1u) != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
         native_material_storage_ = m;
