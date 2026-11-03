@@ -43,6 +43,10 @@ struct WindowPlacement {
 extern std::atomic<std::uintptr_t> settings_window;
 // The window the pointer belongs to (from WM_CREATE to WM_DESTROY).
 extern std::atomic<std::uintptr_t> pointer_hwnd;
+// The desktop's monitors changed: a borderless window's bounds are out of date.
+extern std::atomic<bool> display_changed;
+// The window is minimised, as the last message said.
+[[nodiscard]] bool is_minimized() noexcept;
 
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);

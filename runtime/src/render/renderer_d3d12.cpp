@@ -2557,7 +2557,8 @@ void RendererD3D12::reconcile_display_state() {
     const RenderConfig cfg = get_render_config();
     const unsigned mode = std::min(cfg.display_mode, kDisplayBorderless);
     AppliedDisplay& applied = applied_display_;
-    const bool same_display = applied.valid && applied.mode == mode && applied.monitor == cfg.monitor;
+    const bool same_display = !host_window::display_changed.exchange(false, std::memory_order_acq_rel) && applied.valid &&
+                              applied.mode == mode && applied.monitor == cfg.monitor;
     if (same_display) {
         if (mode != kDisplayWindowed ||
             (applied.window_width == cfg.window_width &&
