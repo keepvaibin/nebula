@@ -324,7 +324,7 @@ bool SuperSpinDriver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
 
     if (msg == ACTMES_RUSH_CANCEL) {
         if (isNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvShootStart)) ||
-            isNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvShoot)) && MR::isLessStep(this, 40)) {
+            (isNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvShoot)) && MR::isLessStep(this, 40))) {
             return false;
         }
 
@@ -897,7 +897,6 @@ void SuperSpinDriver::updateOperateRate() {
         if (MR::isLessStep(this, _154)) {
             rate = 0.0f;
         } else if (MR::isLessStep(this, _158)) {
-            s32 min = _154;
             rate = MR::normalize(getNerveStep(), _154, _154 + MR::min(5, _15C - _158));
         } else if (MR::isLessStep(this, _15C)) {
             rate = 1.0f - MR::normalize(getNerveStep(), _158, _15C);

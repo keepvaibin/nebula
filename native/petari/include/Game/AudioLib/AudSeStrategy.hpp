@@ -4,7 +4,7 @@
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 
 class JAISe;
-class JASSoundParams;
+struct JASSoundParams;
 
 class AudSeStrategy : public JAISoundStrategy< JAISe >, public JASPoolAllocObject< AudSeStrategy > {
 public:

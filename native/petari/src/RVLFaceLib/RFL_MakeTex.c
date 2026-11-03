@@ -72,8 +72,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
     u32 sw;
     u32 sh;
 
-    MII_I_MASKRSL max;
-    u32 size;
     u8* ptr;
 
     eyeSize = Mii_GetTexSize(Mii_PartsTex_Eye, 0);
@@ -332,8 +330,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         Mii_InitRFLTexture(&parts[i].mole.ngtobj);
     }
 
-    max = Mii_GetMaxMaskRsl(resolution);
-
     for (i = 0; i < MiiExp_Max; i++) {
         if (buffers[i] != NULL) {
             break;
@@ -341,12 +337,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
     }
 
     Mii_SetupTextureDraw();
-
-    size = Mii_GetMaskBufSize(resolution);
-    for (i = 0; i < MiiExp_Max; i++) {
-        if (buffers[i] != NULL) {
-        }
-    }
 
     J3DNativeViewGetScissor(&sx, &sy, &sw, &sh);
     for (i = 0; i < MiiExp_Max; i++) {

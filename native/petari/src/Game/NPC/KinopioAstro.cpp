@@ -29,8 +29,6 @@ namespace {
 
     const f32 sMessangerTalkDistance = 3000.0f;
     const f32 sGotMailSePlayAreaRadius = 1500.0f;
-    const char* sStaffLetterID = "StaffFinalLetter_000";
-    const char* sSenderID = "WiiMessageTitle";
 };  // namespace
 
 void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {

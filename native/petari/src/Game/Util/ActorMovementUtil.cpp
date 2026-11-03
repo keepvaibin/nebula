@@ -161,7 +161,7 @@ namespace MR {
         }
 
         TVec3f stack_8 = pActor->mPosition - *MR::getPlayerPos();
-        f32 f1 = vecKillElement(stack_8, pActor->mGravity, &stack_14);
+        vecKillElement(stack_8, pActor->mGravity, &stack_14);
         return (stack_14.squared() < distance * distance);
     }
 

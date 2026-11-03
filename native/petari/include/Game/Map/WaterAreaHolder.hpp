@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/Map/WaterInfo.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
@@ -24,15 +25,15 @@ public:
     void entryWhirlPoolAccelerator(WhirlPoolAccelerator*);
 
     s32 mNumOceanBowls;
-    OceanBowl** mOceanBowls;
+    MR::GrowTable< OceanBowl*, 8 > mOceanBowls;
     s32 mNumOceanRings;
-    OceanRing** mOceanRings;
+    MR::GrowTable< OceanRing*, 8 > mOceanRings;
     s32 mNumOceanSpheres;
-    OceanSphere** mOceanSpheres;
+    MR::GrowTable< OceanSphere*, 8 > mOceanSpheres;
     s32 mNumWhirlPools;
-    WhirlPool** mWhirlPools;
+    MR::GrowTable< WhirlPool*, 8 > mWhirlPools;
     s32 mNumWhirlPoolAccelerators;
-    WhirlPoolAccelerator** mWhirlPoolAccelerators;
+    MR::GrowTable< WhirlPoolAccelerator*, 8 > mWhirlPoolAccelerators;
     bool mCamInWater;
     WaterInfo mWaterInfo;
     WaterCameraFilter* mCameraFilter;

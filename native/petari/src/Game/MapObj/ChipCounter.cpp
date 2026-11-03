@@ -10,7 +10,6 @@
 
 namespace {
     static const char* sChipPainName[] = {"Chip1", "Chip2", "Chip3", "Chip4", "Chip5"};
-    static const s32 sShowTime = 0;
     static s32 sChipPainCount = ARRAY_SIZE(sChipPainName);
 };  // namespace
 

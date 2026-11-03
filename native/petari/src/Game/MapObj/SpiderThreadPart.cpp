@@ -333,7 +333,6 @@ void SpiderThreadPart::tryTouch(f32 radius, const TVec3f& rVel, s32 padChannel) 
         return;
     }
 
-    bool inBounds;
     TVec3f* pointerPos = &mPointerPosPad0;
     if (padChannel == PLAYER_2) {
         pointerPos = &mPointerPosPad1;
@@ -409,9 +408,7 @@ void SpiderThreadPart::updatePointPosHanging(s32 hangIndex) {
 }
 
 void SpiderThreadPart::updatePointVelocityTouch(s32 hangIndex, const TVec3f& rVel) {
-    SpiderThreadPoint* point = getPoint(hangIndex);
 
-    SpiderThreadPoint* hangPoint;
     for (s32 idx = 0; idx < hangIndex; idx++) {
         f32 t = MR::getEaseOutValue(static_cast< f32 >(idx + 1) / static_cast< f32 >(hangIndex + 1), 0.0f, 1.0f, 1.0f);
 

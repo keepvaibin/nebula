@@ -111,7 +111,6 @@ CameraTargetObj* CameraFooFighter::calc() {
         TVec3f targetSide = CameraLocalUtil::getTarget(this)->getSideVec();
         targetSide -= gravUp * gravUp.dot(targetSide);
         MR::normalize(&targetSide);
-        f32 angle = targetSide.angle(newSide);
 
         f32 rate = mAngleXRateMin * MR::abs(gravUp.dot(newFront));
         mAngleXRate *= 0.995f;

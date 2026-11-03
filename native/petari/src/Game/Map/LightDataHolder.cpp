@@ -5,7 +5,7 @@
 namespace {
     static const char* sDefaultAreaLightName = "\203\146\203\164\203\110\203\213\203\147" /* デフォルト */;
 
-    static LightInfoCoin sDefaultLightSetCoin = {{{0xFF, 0xFF, 0, 0}, {0.0f, 0.0f, 0.0f}, true}, {0xFF, 0xFF, 0xFF, 0, 65.0f}};
+    static LightInfoCoin sDefaultLightSetCoin = {{{0xFF, 0xFF, 0, 0}, {0.0f, 0.0f, 0.0f}, true}, {{0xFF, 0xFF, 0xFF, 0}, 65.0f}};
 };  // namespace
 
 LightDataHolder::LightDataHolder() {

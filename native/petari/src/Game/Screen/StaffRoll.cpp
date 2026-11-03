@@ -615,7 +615,6 @@ void StaffRoll::makeLine() {
     StaffRollLine* pLine;
     char16_t message[256];
     MR::getMessageLine(message, ARRAY_SIZE(message), mMsg, mMsgLine);
-    char16_t buffer[256] = {};
     const char16_t* pMessage = message;
     s32 columnCount = 0;
     char16_t columns[3][256] = {};

@@ -27,7 +27,6 @@ namespace {
     static const s32 sSpinAttackStepMin = 5;
     static const s32 sSpinAttackStepMax = 65;
     static const s32 sEvenStopSceneStep = 15;
-    static const f32 sEvenSpeed = 30.0f;
 };  // namespace
 
 namespace NrvKoopaStateAttackSpin {

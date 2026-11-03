@@ -65,7 +65,6 @@ void OceanRingPipeInside::draw() const {
     mMesh.draw();
 }
 
-const NebulaColor8 sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 void OceanRingPipeInside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());

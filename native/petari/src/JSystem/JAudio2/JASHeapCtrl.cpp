@@ -12,7 +12,7 @@ JASGenericMemPool::~JASGenericMemPool() {
     void* pChunk = _0;
     while (pChunk != nullptr) {
         void* pNextChunk = *(void**)pChunk;
-        delete[] pChunk;
+        delete[] static_cast< u8* >(pChunk);
         pChunk = pNextChunk;
     }
 }

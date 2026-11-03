@@ -125,7 +125,6 @@ namespace {
     // The current material ends: the draws that follow have none (the host draws nothing without one) until the next.
     void endCurrent() {
         static NebulaNativeMaterial sNone;
-        const NebulaHostServices* pHost = nebula_host();
         J3DNativeState::sendMaterial(&sNone);
         sCurrentKind = CURRENT_NONE;
     }
@@ -300,7 +299,6 @@ namespace {
             memcpy(material.light, rValues.light, sizeof(material.light));
         }
         J3DNativeShape::flushState();
-        const NebulaHostServices* pHost = nebula_host();
         J3DNativeState::sendMaterial(&material);
         watchMaterial(&material);
         sCurrentSetup = &rSetup;
@@ -607,7 +605,6 @@ namespace J3DNativeMaterial {
         pOverride[2] = a1;
         pOverride[3] = ref;
         sCurrent.constants_only = 1;
-        const NebulaHostServices* pHost = nebula_host();
         J3DNativeState::sendMaterial(&sCurrent);
         return true;
     }
@@ -637,7 +634,6 @@ namespace J3DNativeMaterial {
         sCurrent.textures[0].mag_linear = 1;
         sCurrent.textures[0].min_linear = 1;
         sCurrent.constants_only = 0;
-        const NebulaHostServices* pHost = nebula_host();
         J3DNativeState::sendMaterial(&sCurrent);
         return true;
     }
@@ -670,7 +666,6 @@ namespace J3DNativeMaterial {
             sCurrent.constants[80] = sCurrent.constants[81] = 0;
         }
         sCurrent.constants_only = 0;
-        const NebulaHostServices* host = nebula_host();
         J3DNativeState::sendMaterial(&sCurrent);
         watchMaterial(&sCurrent);
     }

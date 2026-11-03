@@ -284,7 +284,6 @@ namespace JGeometry {
         s16 x, y, z;
 
         TVec3() {
-            x = x;  // TODO: This shouldn't be here, but it's the only way to get a Ctor generated in OceanRingPipe.cpp
         }
 
         template < typename J >

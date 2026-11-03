@@ -2,7 +2,7 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-class GalaxyNamePlatePrioritied;
+struct GalaxyNamePlatePrioritied;
 
 class GalaxyNamePlate : public LayoutActor {
 public:

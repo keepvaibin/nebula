@@ -27,8 +27,6 @@ namespace {
     static const f32 sAimFollowRate = 0.1f;
     static const f32 sAimDistanceMin = 100.0f;
     static const f32 sAimDistanceMax = 300.0f;
-    static const f32 sAimRumbleDistanceWeak = sAimDistanceMin;
-    static const f32 sAimRumbleDistanceStrong = sAimDistanceMax;
     static const s32 sAimAnimInterpole = 10;
     static const f32 sAimDistanceToStretch = 300.0f;
     static const f32 sAimDistanceToWait = 200.0f;

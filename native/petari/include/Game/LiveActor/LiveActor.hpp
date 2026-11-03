@@ -33,9 +33,9 @@ public:
     /// @param rIter A reference to an iterator over a `JMapInfo`.
     virtual void init(const JMapInfoIter& rIter) override;
 
-    virtual void movement();
-    virtual void calcAnim();
-    virtual void calcViewAndEntry();
+    virtual void movement() override;
+    virtual void calcAnim() override;
+    virtual void calcViewAndEntry() override;
     virtual void appear();
     virtual void makeActorAppeared();
     virtual void kill();

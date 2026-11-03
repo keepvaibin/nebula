@@ -561,7 +561,7 @@ bool BigBubble::tryBreak() {
 }
 
 bool BigBubble::tryAutoBreak() {
-    if (!mIsObstruct && MR::isGreaterStep(this, ::sAutoBreakTime) || mIsExitLimitter) {
+    if ((!mIsObstruct && MR::isGreaterStep(this, ::sAutoBreakTime)) || mIsExitLimitter) {
         if (mRider != nullptr) {
             MR::endBindAndPlayerWeakGravityLimitJump(this, mVelocity);
             mRider = nullptr;

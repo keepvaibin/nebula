@@ -167,16 +167,6 @@ bool MarioFoo::update() {
     }
 
     if (!checkLvlA() && !checkLvlZ() && !_18 && _28 < ::cTurnMotionSpeed) {
-        f32 turnAngle = _2C;
-        if (_2C > 1.5707964f) {
-            turnAngle = 1.5707964f;
-        } else if (getStickY() > 0.0f) {
-            f32 angle = 0.5235988f + getStickY() * (JGeometry::TUtil< f32 >::PI() / 6.0f);
-            if (angle > _2C) {
-                turnAngle = angle;
-            }
-        }
-
         if (!_60) {
             _1C++;
         }
@@ -740,7 +730,6 @@ void MarioFoo::draw3D() const {
                 nextTexCoords[0].set(0.0f, textureY);
                 nextTexCoords[1].set(1.0f, textureY);
                 const TVec3f& rPosition = _B0[index];
-                TVec3f direction = rPosition - previous;
                 TVec3f width(_3B0[index]);
                 width.setLength(10.0f);
                 nextLeftEdge[0] = rPosition + width - _3B0[index] * ::cWidth;

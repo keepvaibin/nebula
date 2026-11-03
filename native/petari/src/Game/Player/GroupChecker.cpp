@@ -11,7 +11,6 @@ void GroupChecker::initAfterPlacement() {
 
 void GroupChecker::add(const NameObj* pObj) {
     const char* name = pObj->mName;
-    u32 hashCode = MR::getHashCode(name);
     mHashTable->add(name, 0, true);
 }
 

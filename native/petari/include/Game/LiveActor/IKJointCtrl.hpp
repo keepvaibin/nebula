@@ -4,7 +4,7 @@
 
 class IKJoint;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class LiveActor;
 
 struct IKJointCtrlParam {

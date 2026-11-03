@@ -81,7 +81,7 @@ void J3DTexGenBlock::reset(J3DTexGenBlock* pBlock) {
     for (u32 i = 0; i < mCapacity; i++) {
         mTexCoord[i] = *pBlock->getTexCoord(i);
         if (pBlock->getTexMtx(i) != NULL && mTexMtx[i] != NULL) {
-            memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
+            memcpy((void*)mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
         }
     }
     if (mHasScale && pBlock->mHasScale) {

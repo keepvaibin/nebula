@@ -13,7 +13,6 @@
 namespace {
     NEW_NERVE(GamePauseSequenceDeactive, GamePauseSequence, Deactive);
     NEW_NERVE(GamePauseSequenceActivePauseMenu, GamePauseSequence, ActivePauseMenu);
-    NEW_NERVE(GamePauseSequenceActivePowerStarList, GamePauseSequence, ActivePowerStarList);
     NEW_NERVE(GamePauseSequenceSceneInformation, GamePauseSequence, SceneInformation);
 };  // namespace
 

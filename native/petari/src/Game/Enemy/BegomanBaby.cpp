@@ -185,11 +185,11 @@ void BegomanBaby::control() {
         preventSwingby(1.0f);
     }
 
-    if (!isNerve(GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait)) &&
+    if ((!isNerve(GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait)) &&
             !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvSignAttack)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvPursue)) &&
             !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvTurn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBrake)) &&
             !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvReturn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvProvoke)) &&
-            !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvLaunchTurn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvKeepDistance)) ||
+            !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvLaunchTurn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvKeepDistance))) ||
         !BegomanBase::tryAndSetStarPointerBind(GET_NERVE(BegomanBaby, HostTypeNrvBindStarPointer))) {
         BegomanBase::control();
     }

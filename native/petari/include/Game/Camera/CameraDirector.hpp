@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/Camera/CameraHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
@@ -158,7 +159,7 @@ public:
     CameraManPause* mCameraManPause;
     CameraManSubjective* mCameraManSubjective;
     bool _58;
-    CameraEvent mEvents[2];
+    MR::GrowTable< CameraEvent, 2 > mEvents;
     u32 mEventNum;
     bool mIsStartCameraActive;
     s32 mStartTime;

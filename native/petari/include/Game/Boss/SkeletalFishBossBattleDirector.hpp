@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 
 class SkeletalFishBoss;
@@ -25,9 +26,9 @@ public:
     void killBirdLouse();
 
     SkeletalFishBoss* mFishBoss;
-    SubmarineVolcanoBigColumn* mColumns[0x20];
+    MR::GrowTable< SubmarineVolcanoBigColumn*, 0x20 > mColumns;
     s32 _90;
-    LiveActor* _94[0x10];
+    MR::GrowTable< LiveActor*, 0x10 > _94;
     s32 _D4;
     ModelObj* mGuardModels[4];
 };

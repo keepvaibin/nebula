@@ -300,7 +300,7 @@ bool TripodBossLeg::canCancelStep() const {
 
 bool TripodBossLeg::canWeighting() const {
     return isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold)) || isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvLanding)) ||
-           isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvLeaveOut)) && MR::isLessStep(this, 60);
+           (isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvLeaveOut)) && MR::isLessStep(this, 60));
 }
 
 void TripodBossLeg::exeDemo() {

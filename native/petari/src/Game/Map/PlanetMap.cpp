@@ -37,11 +37,6 @@ PlanetMap::PlanetMap(const char* pName, const char* pModelName)
 void PlanetMap::init(const JMapInfoIter& rIter) {
     MR::getObjectName(&mModelName, rIter);
     if (MR::isValidInfo(rIter)) {
-        f32 v11 = -1.0f;
-        MR::getJMapInfoArg0NoInit(rIter, &v11);
-        f32 v12 = -1.0f;
-        MR::getJMapInfoArg2NoInit(rIter, &v12);
-        f32 unknownUse = 0.0f > v11 ? 1.0f : -1.0f;
     }
 
     MR::initDefaultPos(this, rIter);

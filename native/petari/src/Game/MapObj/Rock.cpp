@@ -95,6 +95,8 @@ void Rock::init(const JMapInfoIter& rIter) {
             setName("\203\123\201\133\203\213\203\150\203\217\203\223\203\217\203\223" /* ゴールドワンワン */);
             MR::declarePowerStar(this);
             break;
+        default:
+            break;
         }
 
         mAppearTime = ::cAppearMoveFrame;

@@ -169,8 +169,9 @@ void WarpPod::init(const JMapInfoIter& rIter) {
     nebula_sprintf(eventCameraName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupId, arg0 + 65);
     MR::declareEventCamera(mCamInfo, eventCameraName);
 
-    mEventCameraName = new char[strlen(eventCameraName) + 1];
-    strcpy(mEventCameraName, eventCameraName);
+    const size_t eventCameraSize = strlen(eventCameraName) + 1;
+    mEventCameraName = new char[eventCameraSize];
+    memcpy(mEventCameraName, eventCameraName, eventCameraSize);
 
     if (mVisibilityState == 0) {
         MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
@@ -297,8 +298,9 @@ void WarpPod::initPair() {
     char buf[256];
     nebula_sprintf(buf, "wPod\217\157\214\273\203\112\203\201\203\211 %d" /* wPod出現カメラ %d */, mGroupId);
 
-    _9C = new char[strlen(buf) + 1];
-    strcpy(_9C, buf);
+    const size_t size = strlen(buf) + 1;
+    _9C = new char[size];
+    memcpy(_9C, buf, size);
 
     MR::declareEventCamera(mCamInfo, _9C);
 }

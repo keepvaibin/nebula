@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 
@@ -27,7 +28,7 @@ public:
     void noticeGet(ChipBase*);
     void receiveAppearRequest();
 
-    ChipEntry mChips[5];
+    MR::GrowTable< ChipEntry, 5 > mChips;
     StageSwitchCtrl* mSwitchCtrl;
     TVec3f mUIPos;
     s32 mGotCount;

@@ -260,7 +260,6 @@ void J3DMtxProjConcat(Mtx mtx1, Mtx mtx2, Mtx dst) {
     }
 }
 
-static f32 Unit01[2] = {0.0f, 1.0f};
 
 // mAB[i] = mA * mB[i] for consecutive 3x4 matrices with the implied (0, 0, 0, 1) row. Each product is complete
 // before it is stored, so mAB may be mB.

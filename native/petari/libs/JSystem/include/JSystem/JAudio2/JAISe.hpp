@@ -5,7 +5,7 @@
 
 class JAISeMgr;
 
-class JAISe : public JSULink< JAISe >, public JAISound, public JASPoolAllocObject< JAISe > {
+class JAISe final : public JSULink< JAISe >, public JAISound, public JASPoolAllocObject< JAISe > {
 public:
     class TInner {
     public:

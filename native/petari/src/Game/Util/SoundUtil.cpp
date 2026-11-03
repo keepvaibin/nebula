@@ -261,31 +261,7 @@ namespace MR {
             return -1;
         }
 
-        s32 groundCode = -1;
-        s32 wallCode = -1;
-        s32 roofCode = -1;
-        const Triangle* pGround = &pBinder->mGroundInfo.mParentTriangle;
-        if (pGround != nullptr) {
-            groundCode = getSoundCodeIndex(pGround->getAttributes());
-        } else if (&pBinder->mWallInfo.mParentTriangle != nullptr) {
-            wallCode = getSoundCodeIndex(pBinder->mWallInfo.mParentTriangle.getAttributes());
-        } else if (&pBinder->mRoofInfo.mParentTriangle != nullptr) {
-            roofCode = getSoundCodeIndex(pBinder->mRoofInfo.mParentTriangle.getAttributes());
-        }
-
-        if (groundCode >= 0) {
-            return groundCode;
-        }
-
-        if (roofCode >= 0) {
-            return roofCode;
-        }
-
-        if (wallCode >= 0) {
-            return wallCode;
-        }
-
-        return -1;
+        return getSoundCodeIndex(pBinder->mGroundInfo.mParentTriangle.getAttributes());
     }
 
     void setMapSondCodeGravity(const LiveActor* pActor, s32 code) {

@@ -9,7 +9,7 @@
 
 namespace {
     const PoltaSensorListEntry sCoreSensorList[] = {
-        "Core", "Tongue3", 150.0f, 0.0f, 0.0f, 0.0f,
+        {"Core", "Tongue3", 150.0f, 0.0f, 0.0f, 0.0f},
     };
 
     const PoltaSensorListEntry sBodySensorList[] = {{

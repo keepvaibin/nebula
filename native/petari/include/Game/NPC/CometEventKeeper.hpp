@@ -5,7 +5,7 @@
 
 class CometEventExecutorTimeLimit;
 class GalaxyCometScreenFilter;
-class GalaxyTimeLimitInfo;
+struct GalaxyTimeLimitInfo;
 
 class CometEventKeeper {
 public:

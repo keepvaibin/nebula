@@ -14,6 +14,7 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
+#include <nebula_format.h>
 
 namespace {
     FurParam sFurParam = {6,
@@ -162,8 +163,7 @@ namespace MR {
             if (strstr(pModelData->getMaterialName()->getName(i), "Fur")) {
                 shape = pModelData->getMaterialNodePointer(i)->getShape()->getIndex();
                 char name[256];
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Body");
+                nebula_snprintf(name, sizeof(name), "%sBody", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pBody;
 
                 if (isExistTexture(pActor, name)) {
@@ -172,24 +172,21 @@ namespace MR {
                     pBody = getResTIMG(pActor, 0);
                 }
 
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Length.bti");
+                nebula_snprintf(name, sizeof(name), "%sLength.bti", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pLength = nullptr;
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
                     pLength = static_cast< ResTIMG* >(getResourceHolder(pActor)->mFileInfoTable->getRes(name));
                 }
 
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Indirect.bti");
+                nebula_snprintf(name, sizeof(name), "%sIndirect.bti", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pIndirect = nullptr;
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
                     pIndirect = static_cast< ResTIMG* >(getResourceHolder(pActor)->mFileInfoTable->getRes(name));
                 }
 
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Density.bti");
+                nebula_snprintf(name, sizeof(name), "%sDensity.bti", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pDensity = nullptr;
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
@@ -198,8 +195,7 @@ namespace MR {
 
                 FurParam* pParam = new FurParam;
                 *pParam = ::sFurParam;
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, ".fur.txt");
+                nebula_snprintf(name, sizeof(name), "%s.fur.txt", pModelData->getMaterialName()->getName(i));
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
                     loadFurText(pActor, pParam, &dynamicParam, name);
@@ -218,7 +214,7 @@ namespace MR {
 };  // namespace MR
 
 void FurBank::regist(FurMulti* pMulti, u32 layer) {
-    mEntries[mCount] = pMulti;
-    mLayerMasks[mCount] |= 1 << layer;
+    mEntries.at(mCount) = pMulti;
+    mLayerMasks.at(mCount) |= 1 << layer;
     mCount++;
 }

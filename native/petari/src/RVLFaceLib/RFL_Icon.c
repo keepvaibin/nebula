@@ -26,7 +26,6 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     MiiCharModel model;                // sp+218
     void* modelBuf;                    // sp+84
     f32 vp[6];                         // sp+150
-    u32 byteSize;                      // sp+80
     Mtx viewMtx;                       // sp+1e8
     u32 scissorOffsetX;                // sp+7C
     u32 scissorOffsetY;                // sp+78
@@ -54,7 +53,6 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     // setting -> r30
 
     iconCoordData = (Mii_CoordinateData){1, 2, 0, FALSE, FALSE, FALSE};
-    byteSize = setting->width * setting->height * sizeof(u16);
     coordData = *Mii_GetCoordinateData();
     Mii_SetCoordinateData(&iconCoordData);
 

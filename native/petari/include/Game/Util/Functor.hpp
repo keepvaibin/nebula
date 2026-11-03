@@ -5,6 +5,9 @@
 namespace MR {
     class FunctorBase {
     public:
+        virtual ~FunctorBase() {
+        }
+
         virtual void operator()() const = 0;
         virtual FunctorBase* clone(NebulaArena*) const = 0;
     };
@@ -131,7 +134,7 @@ namespace MR {
         void (*mFunc)();
     };
 
-    static FunctorV0F Functor(void (*pFunction)()) {
+    inline FunctorV0F Functor(void (*pFunction)()) {
         return FunctorV0F(pFunction);
     }
 };  // namespace MR

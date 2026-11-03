@@ -20,7 +20,7 @@ void AllLiveActorGroup::initActorSystemInfo(const JMapInfoIter& rIter) {
         return;
     }
 
-    for (actorNum; actorNum < getObjNum(); actorNum++) {
+    for (; actorNum < getObjNum(); actorNum++) {
         LiveActor* pActor = getActor(mActorNum);
         MR::getClippingDirector()->initActorSystemInfo(pActor, rIter);
         mActorNum++;

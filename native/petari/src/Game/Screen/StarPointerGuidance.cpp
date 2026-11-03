@@ -285,7 +285,7 @@ s32 StarPointerGuidance::exeEndCore(Spine* pSpine, const char* pPaneName, u32 nu
 }
 
 bool StarPointerGuidance::request1PGuidance(const char* pMessageId, bool enableTimeOut) {
-    if (!MR::isConnectedInput(PLAYER_1) || !MR::isStarPointerValid(PLAYER_1) && !MR::isStarPointerModeMarioLauncher()) {
+    if (!MR::isConnectedInput(PLAYER_1) || (!MR::isStarPointerValid(PLAYER_1) && !MR::isStarPointerModeMarioLauncher())) {
         return false;
     }
 

@@ -220,7 +220,7 @@ void Kabokuri::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if ((MR::isSensorPlayer(pReceiver) && !isEnableAttack() || MR::isSensorEnemy(pReceiver)) && isEnablePush()) {
+    if (((MR::isSensorPlayer(pReceiver) && !isEnableAttack()) || MR::isSensorEnemy(pReceiver)) && isEnablePush()) {
         MR::sendMsgPush(pReceiver, pSender);
     }
 }

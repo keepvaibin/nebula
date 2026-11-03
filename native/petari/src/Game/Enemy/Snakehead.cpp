@@ -44,9 +44,6 @@ namespace {
     static const s32 sStepForRestBigRace = 100;
     static const s32 sStepForWaitSmallRace = 60;
     static const s32 sStepForRestSmallRace = 120;
-    static const f32 sBodySensorRadiusBig = 0.0f;
-    static const f32 sBodySensorRadiusSmall = 0.0f;
-    static const f32 sDefaultMoveStartRadius = 0.0f;
     static const f32 sStartCoord = 300.0f;
     // static const f32 sStepForShockStay = 0.0f;
     // static const f32 sCoordToGoalForSlowMove = 0.0f;

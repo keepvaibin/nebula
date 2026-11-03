@@ -5,7 +5,7 @@
 
 class CameraTargetMtx;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class ModelObj;
 class SkeletalFishGuard;
 class SkeletalFishGuardHolder;

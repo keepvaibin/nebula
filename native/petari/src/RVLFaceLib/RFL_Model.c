@@ -207,6 +207,8 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
         maxLod = 3.0f;
         mipmap = TRUE;
         break;
+    default:
+        break;
     }
 
     for (i = 0; i < MiiExp_Max; i++) {
@@ -655,7 +657,6 @@ void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info) {
 }
 
 void Mii_InitShapeRes(Mii_ShapeRes* shape) {
-    static const u32 csHeader[Mii_PartsShp_Max] = {'nose', 'frhd', 'face', 'hair', 'cap_', 'berd', 'nsln', 'mask', 'glas'};
 
     void* res;
     u8* ptr8;
@@ -850,6 +851,8 @@ void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file, voi
         break;
     case Mii_PartsShpTex_Glass:
         texSize = tex->height * tex->width;
+        break;
+    default:
         break;
     }
 

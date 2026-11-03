@@ -3,7 +3,7 @@
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 
-class JAISeqDataUser;
+struct JAISeqDataUser;
 
 class JAISoundHandles {
 public:

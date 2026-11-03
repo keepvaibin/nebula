@@ -158,15 +158,11 @@ void TrampleStar::init(const JMapInfoIter& rIter) {
                 }
             }
 
-            if (mVtxOverlap[vtxA] == -1 && mTexST[vtxA].x != 0.0f && mTexST[vtxA].y != 0.0f && mTexST[vtxA].x != 1.0f) {
-                // NOTE: this is a dummy to emit the above structure
-                f32 f1 = 0.0f;
-            }
         }
 
         toSphere(scale);
 
-        TrampleStarShare* shareStar = new TrampleStarShare(this);
+        new TrampleStarShare(this);
     }
 
     _A8 = new u8[mNumVtxs];

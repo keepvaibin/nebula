@@ -51,7 +51,6 @@ void SmallStone::initAfterPlacement() {
     TVec3f max;
     max.set(0, 0, 0);
     s32 i;
-    bool failed = false;
 
     for (i = 0; i < mMemberCount; i++) {
         SmallStoneMember* pMember = mMembers[i];
@@ -62,7 +61,7 @@ void SmallStone::initAfterPlacement() {
         TVec3f start(*getPosition());
         start.add(offset);
         start.sub(gravity);
-        failed |= !pMember->tryPlaceOnGround(start, gravity * ::hCheckLineLength);
+        pMember->tryPlaceOnGround(start, gravity * ::hCheckLineLength);
 
         if (mUseGravity) {
             MR::calcGravityVector(pMember, &pMember->mGravity, nullptr, 0);

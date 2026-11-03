@@ -6,8 +6,8 @@
 class HitSensor;
 class StarPiece;
 class StarPieceDirector;
-class StarPieceHostInfo;
-class StarPieceReceiverInfo;
+struct StarPieceHostInfo;
+struct StarPieceReceiverInfo;
 class StarPieceShooter;
 
 namespace MR {

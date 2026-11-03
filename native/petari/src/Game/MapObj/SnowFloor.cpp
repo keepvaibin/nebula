@@ -498,7 +498,7 @@ void SnowFloor::addCheckList(HitSensor* pSensor) {
         }
     }
 
-    mCheckList[mCheckCount] = pSensor;
+    mCheckList.at(mCheckCount) = pSensor;
     mCheckCount++;
 }
 
@@ -534,7 +534,7 @@ void SnowFloor::updateCheckList() {
         }
 
         if (!discovered) {
-            mCheckList[mCheckCount] = sensor;
+            mCheckList.at(mCheckCount) = sensor;
             mCheckCount++;
         }
     }

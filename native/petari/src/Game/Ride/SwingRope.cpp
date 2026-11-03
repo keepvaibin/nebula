@@ -38,8 +38,6 @@ namespace {
     static const f32 sHangPointGravityStretcn = 0.8f;
     static const f32 sHangPointFrictionRate = 0.995f;
     static const f32 sHangPointReboundRate = 0.7f;
-    static const f32 sPointSpeedToSlow = 10.0f;
-    static const f32 sPointNormalToSlow = 0.9999f;
     static const s32 sAnimInterpoleFrame = 10;
     static const s32 sAnimInterpoleFrameToSlowWait = 10;
     static const s32 sStepWaitAfterSwing = 0;
@@ -164,8 +162,6 @@ void SwingRope::exeFree() {
 
     SwingRopePoint* point;
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        f32 f1 = idx;
-        f32 f2 = mNumPoints - 1;
         point = mPoints[idx];
         point->updatePosAndAxis(front, calcFriction(idx));
         front.set(mPoints[idx]->mFront);
@@ -647,7 +643,6 @@ void SwingRope::updateHangLowerPoints() {
     s32 nextIndex = grabIndex + 1;
 
     if (nextIndex <= mNumPoints - 1) {
-        f32 f = nextIndex + 1;
         mPoints[nextIndex]->setPosAndAxis(mFootPos, mSledPoint->mSide, mSledPoint->mUp, mSledPoint->mFront);
 
         TVec3f up, front, side;

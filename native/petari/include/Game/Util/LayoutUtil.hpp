@@ -24,7 +24,7 @@ namespace nw4r {
 
     namespace ut {
         class Font;
-        class Rect;
+        struct Rect;
     };  // namespace ut
 };  // namespace nw4r
 

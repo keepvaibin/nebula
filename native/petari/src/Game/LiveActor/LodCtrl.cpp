@@ -68,8 +68,9 @@ void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimT
     }
     char name[0x100];
     nebula_snprintf(name, sizeof(name), "%sLow", res);
-    char* pObjName = new char[strlen(name) + 1];
-    strcpy(pObjName, name);
+    const size_t size = strlen(name) + 1;
+    char* pObjName = new char[size];
+    memcpy(pObjName, name, size);
     mFarModel = new ModelObj(pObjName, pObjName, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
     mFarModel->initWithoutIter();
     mFarModel->makeActorDead();

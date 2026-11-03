@@ -153,7 +153,6 @@ JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, NebulaAren
 
             case 'Perc': {
                 JASDrumSet* drump = new (heap, 0) JASDrumSet();
-                u32 pmap_count = data[1];
                 u32 count = *data++;
                 for (int j = 0; j < count; j++) {
                     u32 offset = *data++;

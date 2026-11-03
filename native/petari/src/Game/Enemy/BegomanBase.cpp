@@ -73,7 +73,6 @@ namespace {
     // static const _32 hLaunchDampVelGround = _;
     static const s32 hReceiveLimitTime = 2;
     static const s32 hPermitLimitTime = 30;
-    static const BegomanSound sound_baby = {"SE_EM_LV_BABYBEGO_DASH"};
     static const BegomanSound sound_normal = {"SE_EM_LV_BEGOMAN_DASH"};
     static const BegomanSound sound_boss = {"SE_BM_LV_BBEGO_DASH"};
 };  // namespace
@@ -250,9 +249,6 @@ void BegomanBase::exeNoCalcWaitCore(f32 tolerance, const Nerve* pNerve) {
     // has to be zero because it sets z first.
     mVelocity.zero();
     // incorrectly inlined
-    TVec3f playerPos(*MR::getPlayerPos());
-    playerPos.sub(mPosition);
-    f32 f2 = playerPos.squared();
 
     if (pNerve != nullptr) {
         if (MR::calcDistanceToPlayer(mPosition) < 1000.0f) {
