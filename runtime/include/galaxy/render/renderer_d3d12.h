@@ -178,16 +178,6 @@ namespace detail {
 create_scene_conversion_source_views(
     ID3D12Device* device, ID3D12Resource* color, ID3D12Resource* depth,
     DescriptorRing& ring);
-// Exact color/alpha identity only: rejects filtering, conversion, resampling
-// and any source rectangle that would require shader clamp behavior.
-[[nodiscard]] std::optional<D3D12_BOX> scene_identity_copy_box(
-    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
-    unsigned dest_width, unsigned dest_height) noexcept;
-// Source enters/leaves RENDER_TARGET; destination enters/leaves PSR. Neither
-// the copy nor its barriers changes any graphics binding on the command list.
-void record_scene_identity_copy(
-    ID3D12GraphicsCommandList* commands, ID3D12Resource* source,
-    ID3D12Resource* destination, const D3D12_BOX& source_box);
 
 }  // namespace detail
 
@@ -1036,8 +1026,6 @@ private:
         bool depth = false;
         std::uint8_t format = 0;
         float geometry[4]{};  // src x, y, step x, y
-        bool identity = false;
-        D3D12_BOX box{};
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample
     };
     struct ReplayClear {
@@ -1679,8 +1667,6 @@ private:
     // Payload bytes are copied pixels, not a device allocation-size estimate.
     std::uint64_t scene_copy_requests_ = 0;
     std::uint64_t scene_shader_copies_ = 0;
-    std::uint64_t scene_identity_copies_ = 0;
-    std::uint64_t scene_identity_payload_bytes_ = 0;
     using RetiredResourceList =
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>

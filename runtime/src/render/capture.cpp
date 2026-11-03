@@ -252,16 +252,6 @@ const DisplayTexture* SceneCopyManager::picture(std::uint32_t slot) const {
 }
 
 
-std::optional<SceneCopyRect> scene_identity_copy_rect(
-    const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
-    unsigned dest_width, unsigned dest_height) noexcept {
-    if (is_depth_copy || params.display || params.channels != kCopyLayoutRgba ||
-        params.half_scale || dest_width != map.width || dest_height != map.height) {
-        return std::nullopt;
-    }
-    return SceneCopyRect{0u, 0u, map.width, map.height};
-}
-
 }  // namespace galaxy::render
 
 #if !defined(NEBULA_GPU_VULKAN)
