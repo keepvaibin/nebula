@@ -16,7 +16,7 @@ namespace GameSystemFunction {
     bool isOccurredSystemWarning();
     bool isResetProcessing();
     void setResetOperationApplicationReset();
-    void setResetOperationReturnToMenu();
+    void setResetOperationQuit();
     void requestResetGameSystem(bool);
     void requestQuitGame(bool);
     void forceToDeactivateHomeButtonLayout();
@@ -32,7 +32,7 @@ namespace GameSystemFunction {
     void resumeResetAudioSystem();
     void resetAllControllerRumble();
     void setInputSleepTime(bool);
-    bool setPermissionToCheckInputAndScreenDimming(bool);
+    bool setPermissionToCheckInput(bool);
     void onPauseBeginAllRumble();
     void onPauseEndAllRumble();
     void onHomeButtonMenuBeginAllRumble();

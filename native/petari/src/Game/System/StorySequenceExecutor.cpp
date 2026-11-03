@@ -713,9 +713,9 @@ void StorySequenceExecutor::exePlayDemoSequence() {
         break;
     case 11:
         if (pDemoInfo->_2 == 15) {
-            GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
+            GameSystemFunction::setPermissionToCheckInput(false);
         } else if (pDemoInfo->_2 == 16) {
-            GameSystemFunction::setPermissionToCheckInputAndScreenDimming(true);
+            GameSystemFunction::setPermissionToCheckInput(true);
         }
 
         _48[0]++;

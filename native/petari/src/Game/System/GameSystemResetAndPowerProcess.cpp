@@ -22,7 +22,7 @@ namespace {
 };  // namespace
 
 namespace NrvGameSystemResetAndPowerProcess {
-    NEW_NERVE(GameSystemResetAndPowerProcessPolling, GameSystemResetAndPowerProcess, Polling);
+    NEW_NERVE(GameSystemResetAndPowerProcessIdle, GameSystemResetAndPowerProcess, Idle);
     NEW_NERVE(GameSystemResetAndPowerProcessWaitResetPermitted, GameSystemResetAndPowerProcess, WaitResetPermitted);
     NEW_NERVE(GameSystemResetAndPowerProcessPrepareReset, GameSystemResetAndPowerProcess, PrepareReset);
     NEW_NERVE(GameSystemResetAndPowerProcessReset, GameSystemResetAndPowerProcess, Reset);
@@ -31,7 +31,7 @@ namespace NrvGameSystemResetAndPowerProcess {
 };  // namespace NrvGameSystemResetAndPowerProcess
 
 void GameSystemResetAndPowerProcess::init(const JMapInfoIter& rIter) {
-    initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
+    initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
     appear();
 }
 
@@ -47,15 +47,15 @@ void GameSystemResetAndPowerProcess::draw() const {
 }
 
 bool GameSystemResetAndPowerProcess::isActive() const {
-    return !isNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
+    return !isNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
 }
 
 void GameSystemResetAndPowerProcess::setResetOperationApplicationReset() {
     mResetOperation = ResetOperation_ApplicationReset;
 }
 
-void GameSystemResetAndPowerProcess::setResetOperationReturnToMenu() {
-    mResetOperation = ResetOperation_ReturnToMenu;
+void GameSystemResetAndPowerProcess::setResetOperationQuit() {
+    mResetOperation = ResetOperation_Quit;
 }
 
 void GameSystemResetAndPowerProcess::requestReset(bool param1) {
@@ -69,25 +69,13 @@ void GameSystemResetAndPowerProcess::requestReset(bool param1) {
 void GameSystemResetAndPowerProcess::requestQuitGame(bool param1) {
     if (tryPermitReset()) {
         _5E = param1;
-        setResetOperationReturnToMenu();
+        setResetOperationQuit();
         setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitResetPermitted));
     }
 }
 
-void GameSystemResetAndPowerProcess::notifyCheckDiskResult(bool param1) {
-    _5C = true;
-
-    if (param1) {
-        return;
-    }
-
-    if (mResetOperation == ResetOperation_ApplicationReset) {
-        setResetOperationReturnToMenu();
-    }
-}
-
 // Resets come from the HOME Menu (requestReset, requestQuitGame).
-void GameSystemResetAndPowerProcess::exePolling() {
+void GameSystemResetAndPowerProcess::exeIdle() {
 }
 
 void GameSystemResetAndPowerProcess::exeWaitResetPermitted() {
@@ -134,18 +122,10 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
 }
 
 void GameSystemResetAndPowerProcess::exeReset() {
-    if (MR::isFirstStep(this)) {
-        _5C = false;
+    GameSystemFunction::setPermissionToCheckInput(false);
 
-        notifyCheckDiskResult(true);
-    }
-
-    if (_5C) {
-        GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
-
-        if (mResetOperation != ResetOperation_ApplicationReset) {
-            exitApplication();
-        }
+    if (mResetOperation != ResetOperation_ApplicationReset) {
+        exitApplication();
     }
 
     MR::setNerveAtStep(this, GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitPrepareFadein), ::sResetWaitFrame);
@@ -174,20 +154,20 @@ void GameSystemResetAndPowerProcess::exeFadein() {
 
     if (mFadeinoutControl->mFrame == mFadeinoutControl->mMaxFrame) {
         GameSystemFunction::restartSceneController();
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
+        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
     }
 }
 
 void GameSystemResetAndPowerProcess::exitApplication() {
     // The counts Nebula's achievements hold for the host (jumps, coins, play time), before the game ends.
     NebulaAchievements::flushStats();
-    MainLoopFramework::setForOSResetSystem();
+    MainLoopFramework::prepareForExit();
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
 
     // The host closes the game for "leave the game", or starts it again; it does not return.
     const NebulaHostServices* const host = nebula_host();
-    if (mResetOperation == ResetOperation_ReturnToMenu) {
+    if (mResetOperation == ResetOperation_Quit) {
         host->app_exit(host->user);
     } else {
         host->app_restart(host->user);

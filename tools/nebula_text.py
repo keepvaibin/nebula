@@ -48,7 +48,7 @@ def c_wide(text):
             parts.append('\\u%04X' % code)
         else:
             raise ValueError('outside the 16-bit range: %r' % ch)
-    return 'L"' + ''.join(parts) + '"'
+    return 'u"' + ''.join(parts) + '"'
 
 
 def generate():
@@ -78,7 +78,7 @@ def generate():
            'const s32 cNebulaTextLanguageNum = %d;' % len(languages),
            'struct NebulaTextRow {',
            '    const char* mId;',
-           '    const wchar_t* mText[cNebulaTextLanguageNum];  // null: the language\'s fallback',
+           '    const char16_t* mText[cNebulaTextLanguageNum];  // null: the language\'s fallback',
            '};',
            'const char* const cNebulaTextLanguages[cNebulaTextLanguageNum] = {',
            '    ' + ', '.join('"%s"' % name for name in languages) + ',',

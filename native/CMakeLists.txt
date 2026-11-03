@@ -65,7 +65,7 @@ if(NEBULA_AUDIT_FLOAT_CASTS AND Python3_Interpreter_FOUND)
         VERBATIM)
 endif()
 
-# Audit builds (docs/NATIVE_PORT.md, "Audits"), not for shipping: these diagnostics in place of -Wno-everything
+# Audit builds, not for shipping: these diagnostics in place of -Wno-everything
 # (which no later -W option undoes), e.g. -Wshorten-64-to-32 for tools/narrowing.py.
 set(NEBULA_AUDIT_FLAGS "" CACHE STRING "Diagnostics for an audit build")
 if(NEBULA_AUDIT_FLAGS)

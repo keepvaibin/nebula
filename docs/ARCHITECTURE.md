@@ -3,8 +3,7 @@
 Nebula runs Super Mario Galaxy's releases for North America (`RMGE01`), Europe (`RMGP01`) and Japan (`RMGJ01`),
 revision 0, as native code. The game's code is the Petari decompilation compiled for the PC, once for all three: where
 their code differs (Petari's `VERSION` switches between them, five places), the module follows the disc's game id
-(`NebulaRegion.hpp`). The user's disc supplies only the game's files. Nothing translates
-or interprets PowerPC instructions at any point.
+(`NebulaRegion.hpp`). The user's disc supplies only the game's files.
 
 ## Repository layout
 
@@ -29,7 +28,7 @@ natively.
 
 - **Threads**: every game thread is a host thread; one at a time changes the game world (`GameThreads.hpp`). The host's renderer, audio,
   input and file threads run free of it.
-- **Memory**: the game's heaps sit on host memory; no console-sized limit survives.
+- **Memory**: the game's heaps sit on host memory; only the machine's memory limits them.
 - **Graphics**: typed records ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)).
 - **Audio**: the game writes each voice's settings in floats and hertz; the host's mixer plays them.
 
