@@ -40,6 +40,7 @@ constexpr Info kCatalogue[] = {
     {"speedy", Group::Challenge, "Beat the Clock"},
     {"purplecoins", Group::Challenge, "Purple Reign"},
     {"hidden", Group::Challenge, "Hidden Treasures"},
+    {"wayfarer", Group::Challenge, "Galactic Wayfarer"},
     {"greenstars", Group::Challenge, "Going Green"},
     {"trials", Group::Challenge, "Trial Run"},
     {"lumas", Group::Challenge, "All You Can Eat"},
