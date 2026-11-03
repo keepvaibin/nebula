@@ -123,6 +123,7 @@ add_library(galaxy_native_input STATIC
     runtime/src/native_input.cpp
     runtime/src/playstation_controller.cpp
     runtime/src/simple_pads.cpp
+    runtime/src/switch2_ble.cpp
     runtime/src/pointer_control.cpp
     runtime/src/rumble.cpp
     runtime/src/steam_controller.cpp
@@ -158,6 +159,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
     runtime/src/controller_hid.cpp
+    runtime/src/switch2_ble_win.cpp
     runtime/src/wiimote_hid.cpp)
 target_link_libraries(galaxy_native_host
     PUBLIC
@@ -170,6 +172,7 @@ target_link_libraries(galaxy_native_host
         nebula_archive
         shell32
         bcrypt
+        windowsapp
         hid
         ole32
         setupapi

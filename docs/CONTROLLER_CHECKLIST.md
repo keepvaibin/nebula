@@ -45,7 +45,7 @@ real hardware unless it says so; the checks above are what prove it.
 | Joy-Con 2 (L), (R) | 057e:2067, 2066 | USB vendor interface (WinUSB), report 0x05; a pair is one pad | right half's motion | report 0x01 | decoder tested, unproven on a real pad |
 | Joy-Con 2, grip id | 057e:2068 | as a Pro Controller 2 | motion | report 0x02 | no source shows hardware with this id |
 | GameCube (Switch 2) | 057e:2073 | USB vendor interface, report 0x05, triggers at 61, 62 | none | on or off, pulsed | decoder tested, unproven on a real pad |
-| Joy-Con 2, Pro 2, GameCube over Bluetooth | | not HID: custom GATT | | | not read |
+| Joy-Con 2, Pro 2, GameCube over Bluetooth | 057e:2067, 2066, 2069, 2073 by their advertising | custom GATT, Windows' GATT API; the USB report without its id | as over USB | vibration characteristic | frames decoder tested; the link never run on a real pad. Connects while the pad is in pairing mode (hold its sync button): no reconnecting by itself |
 | DualShock 4 adapter | 054c:0ba0 | as DualShock 4; neutral with no pad | gyro, touchpad | yes | decoder tested, unproven on a real pad |
 | DualSense Access Controller | 054c:0e5f | as DualSense | none | none | decoder tested, unproven on a real pad |
 | Licensed DS4 and DualSense pads | Hori, Razer, Nacon, PDP, Backbone, ... (playstation_controller.cpp) | as DS4 or DualSense, capabilities from feature 0x03 | what the pad reports | what the pad reports | decoder tested, unproven on a real pad |
@@ -63,6 +63,8 @@ real hardware unless it says so; the checks above are what prove it.
 | Steam Controller (2015), Bluetooth | 28de:1105, 1106 | report 0x03 in segments | gyro, right pad | pad pulses | decoder tested, unproven on a real pad |
 | Wii U Pro | 057e:0330 named RVL-CNT-01-UC | report 0x3d, extension bytes | none | yes | decoder tested, unproven on a real pad; the name test unproven |
 | Xbox over XInput | | XInput: four pads; no paddles, Share or trigger motors | none | two motors | as before |
+
+Not read, on any device: Joy-Con 2's optical mouse sensor, the magnetometer, a second finger on a touchpad, a Steam pad's left trackpad as a pointer, Elite paddles.
 
 The log lines to look for start with `[controller]`: the scan, each controller connected or disconnected, and a
 Joy-Con pair made.

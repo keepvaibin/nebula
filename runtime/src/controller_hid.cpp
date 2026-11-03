@@ -5,6 +5,7 @@
 #include "galaxy/generic_hid.h"
 #include "galaxy/playstation_controller.h"
 #include "galaxy/simple_pads.h"
+#include "galaxy/switch2_ble.h"
 #include "galaxy/wiimote_hid.h"
 #include "galaxy/rumble.h"
 #include "galaxy/steam_controller.h"
@@ -50,6 +51,7 @@ namespace {
 namespace sw = input::switch_hid;
 namespace ps = input::playstation;
 namespace simple = input::simple_pads;
+namespace ble = input::switch2_ble;
 namespace wm = input::wiimote;
 namespace sv = input::steam;
 namespace gh = input::generic_hid;
@@ -156,6 +158,7 @@ struct Device {
     USHORT product = 0;
     ControlScheme scheme = ControlScheme::SwitchPro;
     const char* model_name = "";
+    std::shared_ptr<ble::Link> ble;  // over Bluetooth LE: no handle
     simple::Layout simple = simple::Layout::None;
     simple::ReportState simple_state{};
     bool simple_started = false;
@@ -570,6 +573,7 @@ bool bluetooth_path(const std::wstring& path) {
 }
 
 ControllerLink link_of(const HidCandidate& candidate) {
+    if (ble::is_path(candidate.path)) return ControllerLink::Bluetooth;
     if (candidate.info.scheme == ControlScheme::Steam) {
         if (sv::is_receiver_product(candidate.product)) return ControllerLink::Wireless;
         return candidate.product == sv::kControllerBleProductId || candidate.product == sv::kClassicBleProductId ||
@@ -1376,6 +1380,9 @@ public:
             SetThreadDescription(GetCurrentThread(), L"nebula-controller-setup");
             setup_main(stop, rescan);
         });
+        // A test session (a hidden window) never takes the player's controllers over Bluetooth LE.
+        const bool ble_wanted = !env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
+        if (ble_wanted) ble::start(rescan);
         service_device_timers();
         for (;;) {
             std::array<HANDLE, 3 + 2 * kMaxHidPads> waits{};
@@ -1420,6 +1427,7 @@ public:
         }
         SetEvent(stop);  // the setup thread too
         setup_.join();
+        if (ble_wanted) ble::stop();
         stop_xinput_rumble();
         for (auto& device : devices_) close_device(*device);
         devices_.clear();
@@ -1449,7 +1457,12 @@ private:
                 if (result != WAIT_OBJECT_0 + 1 && result != WAIT_TIMEOUT) return;
             }
             const std::uint64_t scan_start = steady_us();
-            const auto candidates = enumerate_hid_pads();
+            auto candidates = enumerate_hid_pads();
+            for (const ble::Found& pad : ble::found()) {
+                if (const auto product = find_product(sw::kNintendoVendorId, pad.product)) {
+                    candidates.push_back({pad.path, sw::kNintendoVendorId, pad.product, *product});
+                }
+            }
             std::cerr << "[controller] scan " << candidates.size() << " controller interface(s) in "
                       << (steady_us() - scan_start) / 1000u << " ms\n";
             const auto listed = [&](const std::wstring& path) {
@@ -1592,6 +1605,22 @@ private:
         device->gamecube = nintendo && candidate.product == sw::kGameCubeProductId;
         device->simple = candidate.info.simple;
         device->no_motion = candidate.info.no_motion;
+        if (ble::is_path(candidate.path)) {
+            device->ble = ble::link(candidate.path);
+            if (!device->ble) return nullptr;
+            const ble::Calibration& calibration = device->ble->calibration();
+            device->left = calibration.left;
+            device->right = calibration.right;
+            device->switch2_imu.gyro_bias = calibration.gyro_bias;
+            device->gamecube_zero = calibration.gamecube_zero;
+            device->buffer.resize(sw::kSwitch2ReportBytes);
+            device->output_length = sw::kSwitch2ReportBytes;
+            device->bluetooth = true;
+            device->read_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            device->write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            device->ble->set_event(device->read_event.get());
+            return device;
+        }
         device->handle.reset(CreateFileW(candidate.path.c_str(), GENERIC_READ | GENERIC_WRITE,
                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                          FILE_FLAG_OVERLAPPED, nullptr));
@@ -1784,7 +1813,7 @@ private:
         stop_device_rumble(device);
         finish_post(device, true);
         device.outputs.clear();
-        if (device.read_pending && !device.resume) {
+        if (device.read_pending && !device.resume && !device.ble) {
             CancelIoEx(device.handle.get(), &device.read_ov);
             DWORD done = 0;
             GetOverlappedResult(device.handle.get(), &device.read_ov, &done, TRUE);
@@ -1802,6 +1831,20 @@ private:
     }
 
     void issue_read(Device& device) {
+        if (device.ble) {
+            ResetEvent(device.read_event.get());
+            device.read_pending = true;
+            std::array<std::uint8_t, sw::kSwitch2ReportBytes> report{};
+            while (device.ble->next_report(report)) {
+                std::copy(report.begin(), report.end(), device.buffer.begin());
+                handle_report(device, static_cast<DWORD>(report.size()));
+            }
+            if (device.ble->lost()) {
+                device.read_pending = false;
+                device.failed = true;
+            }
+            return;
+        }
         // A synchronous completion is processed inline; bound the loop so
         // a device flooding reports cannot starve the other waits.
         for (int burst = 0; burst < 8; ++burst) {
@@ -1829,6 +1872,10 @@ private:
 
     void complete_read(Device& device) {
         device.read_pending = false;
+        if (device.ble) {
+            issue_read(device);
+            return;
+        }
         if (device.resume) {
             device.resume = false;
             issue_read(device);
@@ -2159,7 +2206,7 @@ private:
     // the write gap (the worker keeps its timer).
     bool service_switch_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
         const bool pro2 = device.scheme == ControlScheme::SwitchPro2;
-        if (device.failed || (pro2 && device.bluetooth)) level = 0u;
+        if (device.failed || (pro2 && device.bluetooth && !device.ble)) level = 0u;
         const bool want = level != 0u;
         if (!want && !device.rumble_on) return false;
         const bool changed = want != device.rumble_on ||
@@ -2167,6 +2214,15 @@ private:
         const std::uint64_t since = now - device.rumble_sent_us;
         if (!changed && since < (pro2 ? kSwitch2RumbleRefreshUs : kSwitchRumbleRefreshUs)) return true;
         if (!pro2 && device.rumble_sent_us != 0u && since < kSwitchRumbleGapUs) return true;
+        if (device.ble) {
+            const auto value = ble::motor_value(device.rumble_sequence++, level, strength);
+            device.ble->send_motor(value);
+            device.rumble_sent_us = now;
+            device.rumble_on = want;
+            device.rumble_level = level;
+            device.rumble_strength = strength;
+            return want;
+        }
         if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         std::array<std::uint8_t, 128> report{};
         const std::size_t length = std::min<std::size_t>(device.output_length, report.size());
