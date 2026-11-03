@@ -2570,13 +2570,15 @@ namespace MR {
 
     LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        MR::setClippingFar(pActor, farClip);
+        pLod->createFarModel(MR::DrawBufferType_PlanetLow, -1, MR::DrawBufferType_Sky);
+        pLod->setFarClipping(farClip);
         return pLod;
     }
 
     LodCtrl* createLodCtrlMapObj(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        MR::setClippingFar(pActor, farClip);
+        pLod->createFarModel(MR::DrawBufferType_MapObj, -1, MR::DrawBufferType_PlanetLow);
+        pLod->setFarClipping(farClip);
         return pLod;
     }
 
