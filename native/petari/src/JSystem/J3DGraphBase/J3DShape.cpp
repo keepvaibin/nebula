@@ -39,7 +39,9 @@ void J3DShape::addTexMtxIndex(u32 coord, u32 valueBase) {
         pMesh->mAttributes |= static_cast< u32 >(NEBULA_SHAPE_TEXTURE_MATRIX0) << coord;
         NebulaShapeCorner* pCorners = pMesh->corners();
         for (u32 c = 0; c < pMesh->mCornerCount; c++) {
-            pCorners[c].texture_matrix[coord] = valueBase >= 30 ? pCorners[c].position_matrix : NEBULA_CORNER_POSITION_MATRIX;
+            pCorners[c].texture_matrix[coord] = valueBase == cTexMtxBasePlaceZero ? 0
+                                                : valueBase >= 30                ? pCorners[c].position_matrix
+                                                                                 : NEBULA_CORNER_POSITION_MATRIX;
         }
     }
 }

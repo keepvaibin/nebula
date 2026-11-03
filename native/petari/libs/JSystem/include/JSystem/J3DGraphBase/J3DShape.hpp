@@ -111,6 +111,7 @@ public:
     void initialize();
     // Each corner carries a texture matrix place for coordinate `coord`: `valueBase` (0 position matrices, 30 texture
     // matrices, in their ids) plus its position matrix's id.
+    static const u32 cTexMtxBasePlaceZero = 0xFFFFFFFFu;  // addTexMtxIndex: every corner at texture place 0
     void addTexMtxIndex(u32 coord, u32 valueBase);
     void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
     u16 countBumpMtxNum() const;
