@@ -1,5 +1,6 @@
 #include "galaxy/wiimote_hid.h"
 
+#include <cwchar>
 #include <algorithm>
 #include <initializer_list>
 
@@ -107,6 +108,10 @@ Ack parse_ack(std::span<const std::uint8_t> report) noexcept {
 
 std::uint8_t battery_level(std::uint8_t battery) noexcept {
     return battery > 0x54u ? 4u : battery > 0x43u ? 3u : battery > 0x32u ? 2u : battery > 0x02u ? 1u : 0u;
+}
+
+bool is_wii_u_pro_name(const wchar_t* name) noexcept {
+    return name != nullptr && std::wcsstr(name, L"RVL-CNT-01-UC") != nullptr;
 }
 
 bool is_nunchuk(std::span<const std::uint8_t> id) noexcept {

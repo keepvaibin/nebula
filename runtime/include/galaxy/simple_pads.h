@@ -5,6 +5,7 @@
 #include "galaxy/input_bindings.h"
 #include "galaxy/switch_controller.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -12,7 +13,7 @@
 
 namespace galaxy::input::simple_pads {
 
-enum class Layout : std::uint8_t { None, SwitchInputOnly, Stadia, LunaUsb, LunaBluetooth, HoriSteam, Sixaxis };
+enum class Layout : std::uint8_t { None, SwitchInputOnly, Stadia, LunaUsb, LunaBluetooth, HoriSteam, Sixaxis, WiiUPro };
 
 struct Product {
     Layout layout = Layout::None;
@@ -21,9 +22,12 @@ struct Product {
 };
 [[nodiscard]] std::optional<Product> find_product(std::uint16_t vendor, std::uint16_t product) noexcept;
 
-// What arrives in a report of its own: Luna's Home over Bluetooth.
+// What outlives a report: Luna's Home over Bluetooth, which arrives in one of its own; a Wii U Pro's sticks' centres,
+// taken from its first report.
 struct ReportState {
     bool home = false;
+    bool centred = false;
+    std::array<std::uint16_t, 4> centre{};
 };
 
 // Byte 0 is the report id (Windows' 0x00 for a device without ids). False for other reports.
@@ -39,5 +43,6 @@ struct ReportState {
 inline constexpr std::uint8_t kSixaxisFeatureInit = 0xf2;
 inline constexpr std::uint8_t kSixaxisFeatureAddress = 0xf5;
 inline constexpr std::size_t kSixaxisReportBytes = 49;
+inline constexpr std::uint8_t kWiiUProReport = 0x3d;
 
 }  // namespace galaxy::input::simple_pads

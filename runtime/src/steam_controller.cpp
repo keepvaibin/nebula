@@ -295,6 +295,41 @@ bool decode_deck_report(std::span<const std::uint8_t> r, switch_hid::DecodedStat
     return true;
 }
 
+namespace {
+
+constexpr std::uint32_t kClassicLeftPadClick = 0x00020000;
+constexpr std::uint32_t kClassicRightPadFinger = 0x00100000;
+constexpr std::uint32_t kClassicStickClick = 0x00400000;
+
+std::uint32_t classic_buttons(std::uint32_t word) noexcept {
+    static constexpr ButtonMap kMap[] = {
+        {0x00000004, pad::kRightShoulderBit}, {0x00000008, pad::kLeftShoulderBit}, {0x00000010, pad::kNorthBit},
+        {0x00000020, pad::kEastBit},          {0x00000040, pad::kWestBit},         {0x00000080, pad::kSouthBit},
+        {0x00000100, pad::kDpadUpBit},        {0x00000200, pad::kDpadRightBit},    {0x00000400, pad::kDpadLeftBit},
+        {0x00000800, pad::kDpadDownBit},      {0x00001000, pad::kBackBit},         {0x00002000, pad::kHomeBit},
+        {0x00004000, pad::kStartBit},         {0x00008000, pad::kGripLeftBit},     {0x00010000, pad::kGripRightBit},
+        {kClassicLeftPadClick, pad::kLeftPadBit}, {0x00040000, pad::kRightStickBit}, {kClassicStickClick, pad::kLeftStickBit},
+    };
+    return map_buttons(word, kMap);
+}
+
+// The right pad sits turned: 15 degrees back to level.
+void put_turned_right_pad(int raw_x, int raw_y, switch_hid::DecodedState& out) noexcept {
+    constexpr float kCos = 0.96592583f;
+    constexpr float kSin = 0.25881905f;
+    const float x = static_cast<float>(raw_x);
+    const float y = static_cast<float>(raw_y);
+    out.axes[2] = unit(static_cast<int>(kCos * x - kSin * y));
+    out.axes[3] = unit(static_cast<int>(kSin * x + kCos * y));
+}
+
+// A trigger's byte spread over its 0..26000 travel.
+float classic_trigger(std::uint8_t value) noexcept {
+    return std::clamp(static_cast<float>((value << 7) | value) / 26000.0f, 0.0f, 1.0f);
+}
+
+}  // namespace
+
 bool decode_classic_report(std::span<const std::uint8_t> r, ClassicState& state, switch_hid::DecodedState& out) noexcept {
     const std::optional<std::size_t> at = valve_payload(r, kMessageClassicState, kClassicPayloadBytes);
     if (!at) return false;
@@ -319,37 +354,83 @@ bool decode_classic_report(std::span<const std::uint8_t> r, ClassicState& state,
         // An older firmware clicks the stick as the pad while the pad is not in use.
         if ((word & kPadAndStick) == 0u && (word & kLeftPadClick) != 0u) word = (word & ~kLeftPadClick) | kStickClick;
     }
-    static constexpr ButtonMap kMap[] = {
-        {0x00000004, pad::kRightShoulderBit}, {0x00000008, pad::kLeftShoulderBit}, {0x00000010, pad::kNorthBit},
-        {0x00000020, pad::kEastBit},          {0x00000040, pad::kWestBit},         {0x00000080, pad::kSouthBit},
-        {0x00000100, pad::kDpadUpBit},        {0x00000200, pad::kDpadRightBit},    {0x00000400, pad::kDpadLeftBit},
-        {0x00000800, pad::kDpadDownBit},      {0x00001000, pad::kBackBit},         {0x00002000, pad::kHomeBit},
-        {0x00004000, pad::kStartBit},         {0x00008000, pad::kGripLeftBit},     {0x00010000, pad::kGripRightBit},
-        {kLeftPadClick, pad::kLeftPadBit},    {0x00040000, pad::kRightStickBit},   {kStickClick, pad::kLeftStickBit},
-    };
     out = switch_hid::DecodedState{};
     out.normalized = true;
-    out.buttons = map_buttons(word, kMap);
+    out.buttons = classic_buttons(word);
     out.axes[0] = unit(state.stick[0]);
     out.axes[1] = unit(state.stick[1]);
-    if ((word & kRightPadFinger) != 0u) {
-        // The right pad sits turned: 15 degrees back to level.
-        constexpr float kCos = 0.96592583f;
-        constexpr float kSin = 0.25881905f;
-        const float x = static_cast<float>(s16(p + 16));
-        const float y = static_cast<float>(s16(p + 18));
-        out.axes[2] = unit(static_cast<int>(kCos * x - kSin * y));
-        out.axes[3] = unit(static_cast<int>(kSin * x + kCos * y));
-    }
-    // A trigger's byte spread over its 0..26000 travel.
-    const auto trigger = [](std::uint8_t value) {
-        return std::clamp(static_cast<float>((value << 7) | value) / 26000.0f, 0.0f, 1.0f);
-    };
-    out.axes[4] = trigger(p[7]);
-    out.axes[5] = trigger(p[8]);
+    if ((word & kRightPadFinger) != 0u) put_turned_right_pad(s16(p + 16), s16(p + 18), out);
+    out.axes[4] = classic_trigger(p[7]);
+    out.axes[5] = classic_trigger(p[8]);
     put_touch((word & kRightPadFinger) != 0u, s16(p + 16), s16(p + 18), out);
     put_sensors(p + 24, p + 30, 1.0f, out);
     return true;
+}
+
+bool decode_classic_ble_report(std::span<const std::uint8_t> r, ClassicState& state, switch_hid::DecodedState& out) noexcept {
+    constexpr std::uint8_t kReportNumber = 0x03;
+    constexpr std::uint8_t kData = 0x80;
+    constexpr std::uint8_t kLast = 0x40;
+    constexpr std::size_t kPayload = 18;
+    if (r.size() < 2u + kPayload || r[0] != kReportNumber || (r[1] & kData) == 0u) return false;
+    const unsigned segment = r[1] & 0x07u;
+    if (segment != state.next_segment) {
+        state.next_segment = 0;
+        if (segment != 0u) return false;
+    }
+    std::copy_n(r.begin() + 2, kPayload, state.message.begin() + segment * kPayload);
+    if ((r[1] & kLast) == 0u) {
+        state.next_segment = segment + 1u;
+        return false;
+    }
+    state.next_segment = 0;
+    const std::size_t size = (segment + 1u) * kPayload;
+    const std::uint8_t* m = state.message.data();
+    constexpr std::uint8_t kStateMessage = 4;
+    if ((m[0] & 0x0fu) != kStateMessage) return false;
+    const unsigned mask = (m[0] & 0xf0u) | (static_cast<unsigned>(m[1]) << 8);
+    std::size_t at = 2;
+    const auto chunk = [&](unsigned bit, std::size_t bytes) -> const std::uint8_t* {
+        if ((mask & bit) == 0u) return nullptr;
+        const std::uint8_t* p = at + bytes <= size ? m + at : nullptr;
+        at += bytes;
+        return p;
+    };
+    if (const std::uint8_t* p = chunk(0x10u, 3)) state.buttons = u32(p) & 0x00ffffffu;
+    if (const std::uint8_t* p = chunk(0x20u, 2)) state.triggers = {p[0], p[1]};
+    (void)chunk(0x40u, 3);  // no button of this controller
+    if (const std::uint8_t* p = chunk(0x80u, 4)) state.stick = {static_cast<std::int16_t>(s16(p)), static_cast<std::int16_t>(s16(p + 2))};
+    (void)chunk(0x100u, 4);  // the left pad: its click is the button
+    if (const std::uint8_t* p = chunk(0x200u, 4)) state.right_pad = {static_cast<std::int16_t>(s16(p)), static_cast<std::int16_t>(s16(p + 2))};
+    if (const std::uint8_t* p = chunk(0x400u, 6)) std::copy_n(p, 6, state.accel.begin());
+    if (const std::uint8_t* p = chunk(0x800u, 6)) std::copy_n(p, 6, state.gyro.begin());
+    out = switch_hid::DecodedState{};
+    out.normalized = true;
+    out.buttons = classic_buttons(state.buttons);
+    out.axes[0] = unit(state.stick[0]);
+    out.axes[1] = unit(state.stick[1]);
+    const bool finger = (state.buttons & kClassicRightPadFinger) != 0u;
+    if (finger) put_turned_right_pad(state.right_pad[0], state.right_pad[1], out);
+    out.axes[4] = classic_trigger(state.triggers[0]);
+    out.axes[5] = classic_trigger(state.triggers[1]);
+    put_touch(finger, state.right_pad[0], state.right_pad[1], out);
+    put_sensors(state.accel.data(), state.gyro.data(), 1.0f, out);
+    return true;
+}
+
+std::size_t build_classic_ble_segment(std::span<const std::uint8_t> feature, unsigned index,
+                                      std::span<std::uint8_t> out) noexcept {
+    constexpr std::size_t kPayload = 18;
+    if (feature.size() < 3u || out.size() < kClassicBleSegmentBytes) return 0;
+    const std::size_t size = std::min<std::size_t>(2u + feature[2], feature.size() - 1u);  // type, length, payload
+    const std::size_t from = index * kPayload;
+    if (from >= size) return 0;
+    std::fill(out.begin(), out.begin() + kClassicBleSegmentBytes, std::uint8_t{0});
+    const std::size_t count = std::min(kPayload, size - from);
+    out[0] = 0x03;
+    out[1] = static_cast<std::uint8_t>(0x80u | (from + count >= size ? 0x40u : 0u) | (index & 0x07u));
+    std::copy_n(feature.begin() + 1 + from, count, out.begin() + 2);
+    return kClassicBleSegmentBytes;
 }
 
 WirelessEvent decode_classic_wireless_event(std::span<const std::uint8_t> r) noexcept {

@@ -83,6 +83,12 @@ public:
         return true;
     }
 
+    bool is_wii_u_pro() const {
+        std::array<wchar_t, 64> name{};
+        return HidD_GetProductString(handle_, name.data(), static_cast<ULONG>((name.size() - 1u) * sizeof(wchar_t))) &&
+               wm::is_wii_u_pro_name(name.data());
+    }
+
     void close() {
         if (handle_ == INVALID_HANDLE_VALUE) return;
         if (pending_) {
@@ -188,6 +194,10 @@ public:
                 const std::uint16_t products[] = {wm::kProductId, wm::kProductIdTr};
                 for (const std::wstring& path : hid_interface_paths(wm::kVendorId, products)) {
                     if (!remote_.open(path)) continue;
+                    if (remote_.is_wii_u_pro()) {  // a controller (controller_hid.cpp)
+                        remote_.close();
+                        continue;
+                    }
                     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
                     if (initialise()) {
                         answered = true;

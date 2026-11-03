@@ -1,5 +1,7 @@
 #include "galaxy/simple_pads.h"
 
+#include "galaxy/wiimote_hid.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -203,6 +205,37 @@ bool decode_sixaxis(std::span<const std::uint8_t> r, sw::DecodedState& out) noex
     return true;
 }
 
+bool decode_wii_u_pro(std::span<const std::uint8_t> r, ReportState& state, sw::DecodedState& out) noexcept {
+    if (r.size() < 12u || r[0] != kWiiUProReport) return false;
+    const std::uint8_t* e = r.data() + 1;
+    std::array<std::uint16_t, 4> raw{};
+    for (std::size_t i = 0; i < raw.size(); ++i) raw[i] = static_cast<std::uint16_t>(e[i * 2] | (e[i * 2 + 1] << 8));
+    if (!state.centred) {
+        state.centre = raw;
+        state.centred = true;
+    }
+    // Held bits read 0.
+    static constexpr std::array<std::uint8_t, 8> kFirst{kNo, kRightShoulderBit, kStartBit, kHomeBit, kBackBit,
+                                                        kLeftShoulderBit, kDpadDownBit, kDpadRightBit};
+    static constexpr std::array<std::uint8_t, 8> kSecond{kDpadUpBit, kDpadLeftBit, kNo, kNorthBit, kEastBit, kWestBit,
+                                                         kSouthBit, kNo};
+    static constexpr std::array<std::uint8_t, 2> kThird{kRightStickBit, kLeftStickBit};
+    out.buttons = bits_of(static_cast<std::uint8_t>(~e[8]), kFirst) | bits_of(static_cast<std::uint8_t>(~e[9]), kSecond) |
+                  bits_of(static_cast<std::uint8_t>(~e[10]), kThird);
+    out.normalized = true;
+    constexpr float kTravel = 1000.0f;
+    const auto axis = [&](std::size_t i) {
+        return std::clamp((static_cast<float>(raw[i]) - static_cast<float>(state.centre[i])) / kTravel, -1.0f, 1.0f);
+    };
+    out.axes[0] = axis(0);
+    out.axes[2] = axis(1);
+    out.axes[1] = axis(2);
+    out.axes[3] = axis(3);
+    out.axes[4] = (e[9] & 0x80u) == 0u ? 1.0f : 0.0f;
+    out.axes[5] = (e[9] & 0x04u) == 0u ? 1.0f : 0.0f;
+    return true;
+}
+
 }  // namespace
 
 std::optional<Product> find_product(std::uint16_t vendor, std::uint16_t product) noexcept {
@@ -222,6 +255,7 @@ bool decode_report(Layout layout, std::span<const std::uint8_t> report, ReportSt
     case Layout::LunaBluetooth: return decode_luna_bluetooth(report, state, out);
     case Layout::HoriSteam: return decode_hori_steam(report, out);
     case Layout::Sixaxis: return decode_sixaxis(report, out);
+    case Layout::WiiUPro: return decode_wii_u_pro(report, state, out);
     case Layout::None: break;
     }
     return false;
@@ -256,6 +290,7 @@ std::size_t build_motor_report(Layout layout, std::uint16_t speed, std::span<std
         out[5] = static_cast<std::uint8_t>(speed >> 8);
         return kSixaxisReportBytes;
     }
+    case Layout::WiiUPro: return wiimote::build_rumble(speed != 0u, out);
     default: return 0;
     }
 }

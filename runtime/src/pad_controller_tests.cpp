@@ -11,6 +11,7 @@
 #include "galaxy/simple_pads.h"
 #include "galaxy/steam_controller.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/wiimote_hid.h"
 
 #include <array>
 #include <cmath>
@@ -1051,8 +1052,6 @@ void test_input_only_switch() {
            "hat 8 is centred");
     r[0] = 0x05;
     expect(!simple::decode_report(simple::Layout::SwitchInputOnly, r, report_state, state), "a report with an id is not this layout");
-    const PadSample sample = sw::pad_sample_from(state, ControlScheme::SwitchPro, {}, {}, 0.0f, 0.0f);
-    (void)sample;
 }
 
 void test_stadia() {
@@ -1171,6 +1170,110 @@ void test_sixaxis() {
     Bytes out(49, 0xcc);
     expect(simple::build_motor_report(simple::Layout::Sixaxis, 0xff00, out) == 49u && out[0] == 0x01u && out[2] == 0xffu && out[5] == 0xffu && out[10] == 0x02u,
            "DualShock 3 motor and player light");
+}
+
+void test_wii_u_pro() {
+    namespace sw = galaxy::input::switch_hid;
+    namespace wm = galaxy::input::wiimote;
+    expect(wm::is_wii_u_pro_name(L"Nintendo RVL-CNT-01-UC") && !wm::is_wii_u_pro_name(L"Nintendo RVL-CNT-01-TR") &&
+               !wm::is_wii_u_pro_name(L"Nintendo RVL-CNT-01"),
+           "a Wii U Pro by its name, not a remote");
+    Bytes r(22, 0xff);
+    r[0] = simple::kWiiUProReport;
+    const auto put_axes = [&](int lx, int rx, int ly, int ry) {
+        put16(r, 1, lx);
+        put16(r, 3, rx);
+        put16(r, 5, ly);
+        put16(r, 7, ry);
+    };
+    put_axes(2000, 2000, 2000, 2000);
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::WiiUPro, r, report_state, state) && state.buttons == 0u && state.axes[0] == 0.0f,
+           "Wii U Pro at rest: held bits read 0, the first report is the centre");
+    put_axes(3000, 2000, 1000, 2500);
+    r[9] = static_cast<std::uint8_t>(~0x02u);   // R
+    r[10] = static_cast<std::uint8_t>(~(0x40u | 0x80u | 0x04u));  // B, ZL, ZR
+    r[11] = static_cast<std::uint8_t>(~0x02u);  // L3
+    expect(simple::decode_report(simple::Layout::WiiUPro, r, report_state, state), "Wii U Pro report");
+    expect(state.buttons == (bit(pad::kRightShoulderBit) | bit(pad::kSouthBit) | bit(pad::kLeftStickBit)), "Wii U Pro buttons");
+    expect(close_to(state.axes[0], 1.0f) && close_to(state.axes[1], -1.0f) && close_to(state.axes[2], 0.0f) && close_to(state.axes[3], 0.5f),
+           "Wii U Pro sticks: x, x, y, y; up positive");
+    expect(close_to(state.axes[4], 1.0f) && close_to(state.axes[5], 1.0f), "Wii U Pro's digital triggers");
+    Bytes out(22, 0xcc);
+    expect(simple::build_motor_report(simple::Layout::WiiUPro, 1000, out) != 0u && out[0] == wm::kOutRumble && (out[1] & 1u) == 1u, "its motor");
+    expect(simple::build_motor_report(simple::Layout::WiiUPro, 0, out) != 0u && (out[1] & 1u) == 0u, "its motor off");
+}
+
+void test_steam_classic_ble() {
+    namespace sw = galaxy::input::switch_hid;
+    expect(sv::model_of_product(0x1105) == sv::Model::Classic && sv::model_of_product(0x1106) == sv::Model::Classic, "Bluetooth ids of the 2015 controller");
+    // A state message over two segments: buttons, triggers, stick, right pad, accel, gyro.
+    Bytes message;
+    const unsigned mask = 0x10u | 0x20u | 0x80u | 0x200u | 0x400u | 0x800u;
+    message.push_back(static_cast<std::uint8_t>(4u | (mask & 0xf0u)));
+    message.push_back(static_cast<std::uint8_t>(mask >> 8));
+    message.insert(message.end(), {0x80, 0x00, 0x10});  // A, right pad finger
+    message.insert(message.end(), {0xcc, 0x00});        // left trigger, right trigger
+    const auto add16 = [&](int v) {
+        message.push_back(static_cast<std::uint8_t>(v & 0xff));
+        message.push_back(static_cast<std::uint8_t>((v >> 8) & 0xff));
+    };
+    add16(20000);
+    add16(0);  // stick
+    add16(0);
+    add16(0);  // right pad centred
+    add16(100);
+    add16(200);
+    add16(300);  // accel
+    add16(400);
+    add16(500);
+    add16(600);  // gyro
+    message.resize(36, 0);
+    const auto segment = [&](unsigned index, bool last) {
+        Bytes r(20, 0);
+        r[0] = 0x03;
+        r[1] = static_cast<std::uint8_t>(0x80u | (last ? 0x40u : 0u) | index);
+        std::copy_n(message.begin() + index * 18, 18, r.begin() + 2);
+        return r;
+    };
+    sv::ClassicState classic;
+    sw::DecodedState state;
+    expect(!sv::decode_classic_ble_report(segment(0, false), classic, state), "the first segment alone is no state");
+    expect(sv::decode_classic_ble_report(segment(1, true), classic, state), "the last completes it");
+    expect(state.buttons == bit(pad::kSouthBit) && state.touch_surface && state.touch_down, "its buttons and finger");
+    expect(close_to(state.axes[0], 20000.0f / 32767.0f) && state.axes[4] > 0.9f && state.axes[5] == 0.0f, "its axes");
+    expect(state.imu_count == 1u, "its motion");
+
+    Bytes only{};
+    only.resize(36, 0);
+    only[0] = static_cast<std::uint8_t>(4u | 0x20u);
+    only[2] = 0x00;
+    only[3] = 0xcc;
+    Bytes triggers(20, 0);
+    triggers[0] = 0x03;
+    triggers[1] = 0x80u | 0x40u;
+    std::copy_n(only.begin(), 18, triggers.begin() + 2);
+    expect(sv::decode_classic_ble_report(triggers, classic, state) && state.buttons == bit(pad::kSouthBit) && state.axes[5] > 0.9f && state.axes[4] == 0.0f,
+           "a chunk carries what changed; the rest stays");
+
+    Bytes bad = segment(1, true);
+    sv::ClassicState fresh;
+    expect(!sv::decode_classic_ble_report(bad, fresh, state), "a stray later segment is dropped");
+    Bytes empty(20, 0);
+    empty[0] = 0x03;
+    expect(!sv::decode_classic_ble_report(empty, fresh, state), "an empty segment is ignored");
+
+    Bytes feature(sv::kValveFeatureBytes, 0);
+    feature[1] = 0x87;
+    feature[2] = 30;
+    feature[3] = 0xaa;
+    feature[32] = 0xbb;
+    Bytes out(20, 0xcc);
+    expect(sv::build_classic_ble_segment(feature, 0, out) == 20u && out[0] == 0x03u && out[1] == 0x80u && out[2] == 0x87u && out[3] == 30u && out[4] == 0xaau,
+           "a feature's first segment");
+    expect(sv::build_classic_ble_segment(feature, 1, out) == 20u && out[1] == (0x80u | 0x40u | 1u) && out[2 + 13] == 0xbbu, "and its last");
+    expect(sv::build_classic_ble_segment(feature, 2, out) == 0u, "and no more");
 }
 
 void test_licensed_playstation() {
@@ -1350,6 +1453,8 @@ int main() {
     test_luna();
     test_hori_steam();
     test_sixaxis();
+    test_wii_u_pro();
+    test_steam_classic_ble();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;

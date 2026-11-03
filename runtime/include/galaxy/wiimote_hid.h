@@ -92,6 +92,8 @@ struct Ack {
     std::uint8_t error = 0;
 };
 [[nodiscard]] Ack parse_ack(std::span<const std::uint8_t> report) noexcept;
+// The Wii U Pro Controller: a Wii Remote's product id and protocol under its own name.
+[[nodiscard]] bool is_wii_u_pro_name(const wchar_t* product_string) noexcept;
 // A Nunchuk's 6 id bytes end a4 20 00 00.
 [[nodiscard]] bool is_nunchuk(std::span<const std::uint8_t> id) noexcept;
 // The status report's battery byte (0xc8 full) as WPAD's level, 0 (empty) to 4, by the SDK's thresholds.
