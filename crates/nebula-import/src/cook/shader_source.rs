@@ -52,12 +52,12 @@ impl Stage<'_> {
 struct Program<'a>(&'a [u8]);
 
 impl Program<'_> {
-    fn tev_stages(&self) -> usize { self.0[0] as usize }
+    fn stage_count(&self) -> usize { self.0[0] as usize }
     fn tex_gens(&self) -> usize { (self.0[1] as usize).min(8) }
     fn channels(&self) -> usize { self.0[2] as usize }
     fn ind_stages(&self) -> usize { (self.0[3] as usize).min(4) }
     fn stages(&self) -> Vec<Stage<'_>> {
-        (0..self.tev_stages().min(16)).map(|i| Stage(&self.0[STAGES_AT + i * STAGE_BYTES..STAGES_AT + (i + 1) * STAGE_BYTES])).collect()
+        (0..self.stage_count().min(16)).map(|i| Stage(&self.0[STAGES_AT + i * STAGE_BYTES..STAGES_AT + (i + 1) * STAGE_BYTES])).collect()
     }
     fn swap(&self, table: u8) -> &[u8] {
         let at = 560 + 4 * (table as usize & 3);
