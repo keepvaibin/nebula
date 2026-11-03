@@ -43,8 +43,7 @@ public:
         mID.mComposite = -1;
     }
 
-    // The id is the console's word 0xSSGGWWWW (section, group, wave): natively its parts come from the value, not
-    // from the bytes the union overlays on it.
+    // The id is 0xSSGGWWWW (section, group, wave): its parts come from the value.
     u8 getSectionID() const {
         return (u8)(mID.mComposite >> 24);
     }

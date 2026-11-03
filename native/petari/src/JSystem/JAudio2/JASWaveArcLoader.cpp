@@ -8,15 +8,6 @@
 #include <stdint.h>
 #include "Game/System/GameAssets.hpp"
 
-JASHeap* JASWaveArcLoader::sSoundHeap;
-
-JASHeap* JASWaveArcLoader::getRootHeap() {
-    if (JASWaveArcLoader::sSoundHeap) {
-        return JASWaveArcLoader::sSoundHeap;
-    }
-    return JASKernel::getSoundHeap();
-}
-
 char JASWaveArcLoader::sCurrentDir[DIR_MAX] = "/AudioRes/Waves/";
 
 void JASWaveArcLoader::setCurrentDir(char const* dir) {
@@ -38,7 +29,7 @@ void JASWaveArc::waitLoadDone() {
     sLoadDone.wait();
 }
 
-JASWaveArc::JASWaveArc() : mHeap(this) {
+JASWaveArc::JASWaveArc() {
     _48 = 0;
     mStatus = 0;
     _58 = 0;
@@ -105,7 +96,7 @@ bool JASWaveArc::sendLoadCmd() {
     commandInfo._C = ++_58;
 
     if (JASLoad::getThreadPointer()->sendCmdMsg(loadCallback, &commandInfo, sizeof(commandInfo)) == 0) {
-        mHeap.free();
+        eraseSetup();
         return false;
     }
     return true;
@@ -113,13 +104,15 @@ bool JASWaveArc::sendLoadCmd() {
 
 
 bool JASWaveArc::erase() {
-    return mHeap.free();
-}
+    JASMutexLock mutexLock(&mMutex);
+    if (mStatus == 0) {
+        return false;
+    }
 
-void JASWaveArc::onDispose() {
     if (eraseSetup()) {
         onEraseDone();
     }
+    return true;
 }
 
 void JASWaveArc::setEntryNum(s32 entryNum) {

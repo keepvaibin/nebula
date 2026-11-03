@@ -33,6 +33,8 @@ extern "C" {
 
 typedef struct NebulaHostThread NebulaHostThread;
 
+#define NEBULA_THREAD_SLOTS 4
+
 /* Audio (the host's mixer): the game's voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
    its filters into mix buses or the surround panner; the game writes its settings, the mixer advances its playback.
@@ -551,6 +553,8 @@ enum {
                                           going back */
     NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
                                           (from 1) drawn, the others not; 0 all */
+    NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
+    NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
     NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS, /* tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): the native shader id whose
                                             material's draws the game tags on both paths (0 none) */
 };
@@ -896,6 +900,12 @@ typedef struct NebulaHostServices {
     /* The game cannot go on (an OSPanic, a JUTException panic, a native-layer error): the host reports `text` with
        its own diagnostics and ends the process. Does not return. */
     void (*fatal)(void* user, const char* text);
+    /* The module's own bookkeeping memory, outside its arenas. */
+    void* (*heap_alloc)(void* user, size_t size);
+    void* (*heap_realloc)(void* user, void* data, size_t size);
+    void (*heap_free)(void* user, void* data);
+    /* This thread's slots (NEBULA_THREAD_SLOTS of them, null at first) for the module's per-thread values. */
+    void** (*thread_slots)(void* user);
 
     /* A scene bound (NEBULA_SCENE_*) after the records so far; the 3D scene's begin carries 16 floats: the
        camera's world-to-eye matrix (row-major 3x4), then the player's up in the world (against its gravity) and 1, or
@@ -1018,9 +1028,6 @@ typedef struct NebulaHostServices {
        video's frame of the same time in place of the planes. Called on the simulation thread. */
     void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, const void* y, const void* u,
                         const void* v, uint32_t width, uint32_t height);
-    /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
-       else 0. Fixed for the session. */
-    int (*code_patch)(void* user, uint32_t id, uint32_t* value);
     /* What the player is doing, for Discord: the galaxy and the star (UTF-16, the game's own text in the played
        language; either may be NULL) and the Power Stars collected (-1: not in a file). Reported when it changes. */
     void (*presence)(void* user, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars);
@@ -1151,24 +1158,6 @@ typedef struct NebulaHostServices {
 enum {
     NEBULA_MOVIE_NONE = -1,
     NEBULA_MOVIE_OPENING = -2,
-};
-
-/* Native equivalents of mods' code patches: the host's mods
-   layer recognises each by its exact bytes for this disc and the game asks code_patch for it. */
-enum {
-    NEBULA_PATCH_FLIP_PANEL_GROUP = 1,       /* value: a FlipPanel group's size (joinToGroupArray's 0x20) */
-    NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP,  /* value: the same for FlipPanelObserver */
-    NEBULA_PATCH_WATER_BAZOOKA_SHOT_FLAG,    /* WaterBazooka::tryShotBullet: shotWaterBullet's last flag set */
-    NEBULA_PATCH_KAMECK_BARRIER_OFFSET_Y,    /* value: float bits added to BossKameckBarrier's height at init */
-    NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, /* SkeletalFishBaby::damage releases no air bubble */
-    NEBULA_PATCH_DODORYU_SHELL_ONLY,         /* Dodoryu (Lv1, Lv2) is hurt by a shell alone (isMsgJetTurtleAttack) */
-    NEBULA_PATCH_MISS_STAR_PIECES,           /* value: star bits added after a miss (s32; -999: all lost) */
-    NEBULA_PATCH_NO_HIDDEN_STAR_TABLE,       /* getPlacedHiddenStarScenarioNo skips its table */
-    NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU,    /* isStageSuddenDeathDodoryu is false */
-    NEBULA_PATCH_BEGOMAN_FIRE_PROOF,         /* Begoman Baby, Spike and Spring survive fire ground */
-    NEBULA_PATCH_MESSENGER_ALWAYS_EX,        /* KinopioAstro (the 1-up messenger) gives its larger supply */
-    NEBULA_PATCH_MESSENGER_EX_ONE_UPS,       /* value: that supply's 1-ups (20) */
-    NEBULA_PATCH_COUNT
 };
 
 enum {

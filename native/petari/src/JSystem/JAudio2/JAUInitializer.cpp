@@ -17,8 +17,6 @@
 #include "Game/System/NebulaArena.hpp"
 
 JAU_JASInitializer::JAU_JASInitializer() {
-    audioMemory_ = 0;
-    audioMemSize_ = 0;
     heapSize_ = 0x1000;
     field_0x1c = 0x80;
     outputLevel_ = 1.0f;

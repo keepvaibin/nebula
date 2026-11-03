@@ -142,7 +142,7 @@ public:
     }
 
     u16 mNumSounds;
-    // A runtime pointer in the console's 4-byte slot of the file header; BAS files hold 0 there.
+    // BAS files hold 0 here.
     u32 mControlSlot;
     static constexpr JAUSoundAnimationControl* mControl = nullptr;
     JAUSoundAnimationSound mSounds;

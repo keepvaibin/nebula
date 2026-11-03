@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Game/System/ConsoleSave.hpp"
+#include "Game/System/OldSave.hpp"
 #include <nebula_types.h>
 
-// A save's scalars: host order (version 3); an old one's come through saveScalar (ConsoleSave.hpp).
+// A save's scalars: host order (version 3); an old one's come through saveScalar (OldSave.hpp).
 namespace MR {
     inline u16 loadSaveU16(const void* pSrc) {
         u16 value;

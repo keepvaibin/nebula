@@ -3,9 +3,9 @@
 #include "Game/System/NebulaArena.hpp"
 
 GameThread::GameThread(u32 stackSize, int messageCount, NebulaArena* pHeap) {
-    mStartCurrentHeap = NebulaArena::sCurrentHeap;
+    mStartCurrentHeap = NebulaArena::currentSlot();
     if (pHeap == nullptr) {
-        pHeap = NebulaArena::sCurrentHeap;
+        pHeap = NebulaArena::currentSlot();
     }
 
     initHeapSpecified(pHeap, stackSize);
@@ -41,7 +41,7 @@ void GameThread::initHeapSpecified(NebulaArena* pHeap, u32 stackSize) {
 
 void* GameThread::start(void* pArg) {
     GameThread* self = static_cast< GameThread* >(pArg);
-    NebulaArena::sCurrentHeap = self->mStartCurrentHeap;
+    NebulaArena::setCurrentSlot(self->mStartCurrentHeap);
     return self->run();
 }
 

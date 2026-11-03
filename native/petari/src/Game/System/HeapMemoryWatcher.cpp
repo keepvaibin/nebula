@@ -4,7 +4,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/GameAssets.hpp"
-#include "Game/AudioLib/AudParams.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaArena.hpp"
@@ -73,7 +72,6 @@ void HeapMemoryWatcher::createHeaps() {
     MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(NebulaArena::sRootHeap);
     ::createArena(NebulaArena::sRootHeap)->becomeSystemHeap();
     mAudSystemHeap = ::createArena(NebulaArena::sRootHeap);
-    mSoundMemory = NebulaArena::alloc(AudParams::soundMemorySize, 32, NebulaArena::sRootHeap);
     mStationedHeap = ::createArena(NebulaArena::sRootHeap);
     createGameHeap();
 }

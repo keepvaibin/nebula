@@ -51,7 +51,7 @@ namespace nw4r {
 
             void TexCoordAry::SetSize(u8 num) {
                 if (mData != nullptr && num <= mCap) {
-                    static const math::VEC2 texCoords[] = {math::VEC2(0.0f, 0.0f), math::VEC2(1.0f, 0.0f), math::VEC2(0.0f, 1.0f),
+                    const math::VEC2 texCoords[] = {math::VEC2(0.0f, 0.0f), math::VEC2(1.0f, 0.0f), math::VEC2(0.0f, 1.0f),
                                                            math::VEC2(1.0f, 1.0f)};
 
                     for (int j = mNum; j < num; j++) {

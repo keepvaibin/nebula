@@ -57,29 +57,12 @@ struct ModInfo {
     bool loose = false;                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
-    unsigned code_patches = 0;                // patches over the game's code with no native equivalent
-    unsigned native_patches = 0;              // patches over the game's code that run natively
+    unsigned code_patches = 0;                // patches over the console's code: the mod stays off (problem says so)
     unsigned changed_files = 0;               // disc files it changes (its choices as they stand)
     unsigned changed_textures = 0;            // textures its packs replace
     std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures
     std::vector<ModOption> options;
     std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
-};
-
-// nebula_game_api.h's NEBULA_PATCH_*: native equivalents of the code patches mods.cpp recognises.
-enum : std::uint32_t {
-    kPatchFlipPanelGroup = 1,
-    kPatchFlipPanelObserverGroup,
-    kPatchWaterBazookaShotFlag,
-    kPatchKameckBarrierOffsetY,
-    kPatchSkeletalFishBabyNoBubble,
-    kPatchDodoryuShellOnly,
-    kPatchMissStarPieces,
-    kPatchNoHiddenStarTable,
-    kPatchNoSuddenDeathDodoryu,
-    kPatchBegomanFireProof,
-    kPatchMessengerAlwaysEx,
-    kPatchMessengerExOneUps,
 };
 
 // Whether a mod changes the game's disc (its files, main.dol, saves): such changes take a restart.
@@ -94,9 +77,6 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
 [[nodiscard]] std::filesystem::path mods_folder();
 // The game set_mods_folder named (boot.bin's six characters; empty before).
 [[nodiscard]] std::string mods_game_id();
-// main.dol as this game has it, for scans before apply_mods (which sets it too): a patch's `original` bytes tell
-// another release's patches from this one's.
-void set_game_dol(std::span<const std::uint8_t> dol);
 // The mods found and their saved choices (Riivolution defaults where none is saved): the enabled ones in load order
 // (the first wins), then the disabled ones by name; for the game set_mods_folder named when `game_id` is empty.
 [[nodiscard]] std::vector<ModInfo> scan_mods(const std::string& game_id = {});

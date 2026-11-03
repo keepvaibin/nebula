@@ -23,7 +23,7 @@ namespace {
 };  // namespace
 
 // The file table keeps its system entry so a save stays the size every older save is (and that older builds read): nothing lives in it
-// now. What the console kept there (when the PAL60 reminder last showed, mail sent) has no reader. An empty file: its version, no chunks.
+// now. An empty file: its version, no chunks.
 static void emptyFile(u8* pData, u32 size) {
     MR::zeroMemory(pData, size);
     pData[0] = 1;
@@ -70,24 +70,24 @@ void SaveDataHandler::requestLoadSaveData(int copy) {
 }
 
 bool SaveDataHandler::requestVerifyAfterLoadGameDataFile() {
-    // Wii saves are big-endian version 2; Switch saves are little-endian version 2, laid out as Nebula's version 3.
+    // Old saves are version 2, big-endian or little-endian; a little-endian one is laid out as version 3.
     NebulaSaveFormat::Header header;
     const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(_14, _C, header);
     if (error != NebulaSaveFormat::Error::None) {
         JUTNativeLog("save: %s\n", NebulaSaveFormat::message(error));
         return false;
     }
-    const bool consoleOrder = header.format == NebulaSaveFormat::Format::Wii2;
-    gSaveConsoleOrder = consoleOrder;
-    JUTNativeLog("save: read a %s save\n", consoleOrder ? "Wii" : header.format == NebulaSaveFormat::Format::Switch2 ? "Switch" : "Nebula");
+    const bool oldOrder = header.format == NebulaSaveFormat::Format::Wii2;
+    gOldSaveOrder = oldOrder;
+    JUTNativeLog("save: read a %s save\n", oldOrder ? "old order" : header.format == NebulaSaveFormat::Format::Switch2 ? "Switch" : "Nebula");
 
     SaveDataFileAccessor file(_14);
     if (!isCorrectFileHeader(_14)) {
-        gSaveConsoleOrder = false;
+        gOldSaveOrder = false;
         return false;
     }
 
-    if (consoleOrder) {
+    if (oldOrder) {
         convertFileHeader(_14);
     } else {
         file.setVersion(cSaveFileVersion);
@@ -95,14 +95,14 @@ bool SaveDataHandler::requestVerifyAfterLoadGameDataFile() {
 
     copySaveDataEachFile(_18, _14);
 
-    if (consoleOrder) {
+    if (oldOrder) {
         convertUserFiles(_18);
     }
 
     return true;
 }
 
-// The header and file table of a version 2 file (read in the console's order) in host order; its file's contents are
+// The header and file table of a version 2 file (read in the old order) in host order; its file's contents are
 // converted after they are copied.
 void SaveDataHandler::convertFileHeader(u8* pBuffer) {
     SaveDataFileAccessor file(pBuffer);
@@ -113,7 +113,7 @@ void SaveDataHandler::convertFileHeader(u8* pBuffer) {
         offsets[i] = file.getFileOffset(i);
     }
     const u32 checkSum = file.getCheckSum();
-    gSaveConsoleOrder = false;
+    gOldSaveOrder = false;
     file.setCheckSum(checkSum);
     file.setVersion(cSaveFileVersion);
     file.setUserFileInfoNum(num);
@@ -123,7 +123,7 @@ void SaveDataHandler::convertFileHeader(u8* pBuffer) {
     }
 }
 
-// Each user file of a version 2 save, read in the console's order and written back in host order. The next save writes
+// Each user file of a version 2 save, read in the old order and written back in host order. The next save writes
 // version 3.
 void SaveDataHandler::convertUserFiles(u8* pBuffer) {
     SaveDataFileAccessor file(pBuffer);
@@ -139,17 +139,17 @@ void SaveDataHandler::convertUserFiles(u8* pBuffer) {
         }
 
         pUserFile->resetAllData();
-        gSaveConsoleOrder = true;
+        gOldSaveOrder = true;
         if (info.mKind == 0) {
             pUserFile->loadFromGameDataBinary(pName, info.mData, info.mDataSize);
-            gSaveConsoleOrder = false;
+            gOldSaveOrder = false;
             pUserFile->makeGameDataBinary(info.mData, info.mDataSize);
         } else if (info.mKind == 1) {
             pUserFile->loadFromConfigDataBinary(pName, info.mData, info.mDataSize);
-            gSaveConsoleOrder = false;
+            gOldSaveOrder = false;
             pUserFile->makeConfigDataBinary(info.mData, info.mDataSize);
         } else {
-            gSaveConsoleOrder = false;
+            gOldSaveOrder = false;
             emptyFile(info.mData, info.mDataSize);
         }
     }

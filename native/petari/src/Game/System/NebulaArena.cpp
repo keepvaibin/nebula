@@ -21,7 +21,15 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #define UNPOISON_BLOCK(p, n)
 #endif
 
-thread_local NebulaArena* NebulaArena::sCurrentHeap;
+NebulaArena* NebulaArena::currentSlot() {
+    const NebulaHostServices* const pHost = nebula_host();
+    return static_cast< NebulaArena* >(pHost->thread_slots(pHost->user)[0]);
+}
+
+void NebulaArena::setCurrentSlot(NebulaArena* pArena) {
+    const NebulaHostServices* const pHost = nebula_host();
+    pHost->thread_slots(pHost->user)[0] = pArena;
+}
 NebulaArena* NebulaArena::sRootHeap;
 NebulaArena* NebulaArena::sSystemHeap;
 
@@ -127,7 +135,7 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
     if (pParent == nullptr) {
         sRootHeap = pArena;
         sSystemHeap = pArena;
-        sCurrentHeap = pArena;
+        setCurrentSlot(pArena);
         return pArena;
     }
 
@@ -143,8 +151,8 @@ NebulaArena* NebulaArena::create(NebulaArena* pParent) {
     if (sSystemHeap == sRootHeap) {
         sSystemHeap = pArena;
     }
-    if (sCurrentHeap == sRootHeap) {
-        sCurrentHeap = pArena;
+    if (currentSlot() == sRootHeap) {
+        setCurrentSlot(pArena);
     }
 
     return pArena;
@@ -174,8 +182,8 @@ void NebulaArena::destroy(NebulaArena* pArena) {
     NebulaArena* const pNext = sRootHeap->mFirstChild;
     sListMutex.unlock();
 
-    if (sCurrentHeap == pArena) {
-        sCurrentHeap = pNext != nullptr ? pNext : sRootHeap;
+    if (currentSlot() == pArena) {
+        setCurrentSlot(pNext != nullptr ? pNext : sRootHeap);
     }
     if (sSystemHeap == pArena) {
         sSystemHeap = pNext != nullptr ? pNext : sRootHeap;
@@ -239,9 +247,14 @@ void* NebulaArena::alloc(u32 size, int alignment) {
 
 #if !defined(NEBULA_RELEASE)
     // Tests (GALAXY_TEST_ARENA_FILL=a5): every block starts as this byte, so what reads a field left unset shows in a picture.
-    static const char* const pFill = getenv("GALAXY_TEST_ARENA_FILL");
-    if (pFill != nullptr) {
-        memset(pBlock, static_cast< int >(strtol(pFill, nullptr, 16)), rounded);
+    static u32 sFill = 0;
+    static bool sFillRead = false;
+    if (!sFillRead) {
+        sFill = nebula_host()->option(nebula_host()->user, NEBULA_OPTION_TEST_ARENA_FILL);
+        sFillRead = true;
+    }
+    if (sFill != 0) {
+        memset(pBlock, static_cast< int >(sFill & 0xFF), rounded);
     }
 #endif
 
@@ -299,8 +312,8 @@ NebulaArena* NebulaArena::becomeSystemHeap() {
 }
 
 NebulaArena* NebulaArena::becomeCurrentHeap() {
-    NebulaArena* const pPrevious = sCurrentHeap;
-    sCurrentHeap = this;
+    NebulaArena* const pPrevious = currentSlot();
+    setCurrentSlot(this);
     return pPrevious;
 }
 
@@ -316,7 +329,7 @@ void* NebulaArena::alloc(u32 size, int alignment, NebulaArena* pArena) {
         return pArena->alloc(size, alignment);
     }
 
-    return sCurrentHeap != nullptr ? sCurrentHeap->alloc(size, alignment) : nullptr;
+    return currentSlot() != nullptr ? currentSlot()->alloc(size, alignment) : nullptr;
 }
 
 void NebulaArena::free(void* pData, NebulaArena* pArena) {

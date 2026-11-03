@@ -414,9 +414,9 @@ namespace TDDraw {
     }
 
     void cameraInit2D() {
-        static TVec3f camLoc(MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, -30.0f);
-        static TVec3f objPt(MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
-        static TVec3f up(0, -10, 0);
+        const TVec3f camLoc(MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, -30.0f);
+        const TVec3f objPt(MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
+        const TVec3f up(0, -10, 0);
 
         f32 width, nearZ, farZ, height;
         nearZ = 0.0f;

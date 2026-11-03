@@ -6,12 +6,27 @@
 
 #include <stdarg.h>
 #include <stdatomic.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 void nebula_game_main(void); /* Game/System/GameSystem.cpp: the game's main */
 
 static const NebulaHostServices* sHost;
+
+#if defined(_WIN32) && !defined(NEBULA_SANITIZE_BUILD)
+void nebula_run_constructors(void);
+
+void* malloc(size_t size) {
+    return sHost->heap_alloc(sHost->user, size);
+}
+
+void* realloc(void* data, size_t size) {
+    return sHost->heap_realloc(sHost->user, data, size);
+}
+
+void free(void* data) {
+    sHost->heap_free(sHost->user, data);
+}
+#endif
 
 const NebulaHostServices* nebula_host(void) {
     return sHost;
@@ -22,6 +37,9 @@ NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host) {
         return 0;
     }
     sHost = host;
+#if defined(_WIN32) && !defined(NEBULA_SANITIZE_BUILD)
+    nebula_run_constructors();
+#endif
     return NEBULA_GAME_API_VERSION;
 }
 
@@ -34,7 +52,7 @@ NEBULA_GAME_API void nebula_game_run(void) {
     nebula_fatal("the game's main returned");
 }
 
-/* The host's log takes whole lines (stderr before the host attaches): a report without its newline waits for the rest
+/* The host's log takes whole lines (dropped before the host attaches): a report without its newline waits for the rest
    of its line. */
 static char sLogLine[1024];
 static size_t sLogLength;
@@ -45,10 +63,6 @@ static void log_emit(void) {
     sLogLine[sLogLength] = '\0';
     if (host != NULL && host->log != NULL) {
         host->log(host->user, sLogLine);
-    } else {
-        fputs(sLogLine, stderr);
-        fputc('\n', stderr);
-        fflush(stderr);
     }
     sLogLength = 0;
 }
@@ -84,9 +98,8 @@ static void __attribute__((noreturn)) fatal_text(const char* text) {
     if (host != NULL && host->fatal != NULL) {
         host->fatal(host->user, text);
     }
-    fprintf(stderr, "Nebula: fatal: %s\n", text);
-    fflush(stderr);
-    abort();
+    (void)text;
+    __builtin_trap();
 }
 
 void nebula_panic(const char* file, int line, const char* format, ...) {

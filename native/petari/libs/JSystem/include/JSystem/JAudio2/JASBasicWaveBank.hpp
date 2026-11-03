@@ -38,10 +38,6 @@ struct JASBasicWaveBank : public JASWaveBank {
         virtual const u8* getWavePtr() const;
         virtual const u8* getWaveLimit() const;
 
-        bool compareHeap(JASHeap* heap) const {
-            return mArc != nullptr && mArc->getHeap() == heap;
-        }
-
         JASWaveInfo mWaveInfo;
         JASWaveArc* mArc;
     };

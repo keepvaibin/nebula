@@ -311,7 +311,7 @@ bool JAUSection::loadWaveArc(u32 bankNo, u32 param_1) {
             for (u32 i = 0; i < waveBank->getArcCount(); i++) {
                 if (param_1 & 1 << i) {
                     JASWaveArc* waveArc = waveBank->getWaveArc(i);
-                    waveArc->load(nullptr);
+                    waveArc->load();
                 }
             }
 
@@ -329,7 +329,7 @@ bool JAUSection::loadWaveArc(u32 bankNo) {
         if (waveBank) {
             for (u32 i = 0; i < waveBank->getArcCount(); i++) {
                 JASWaveArc* waveArc = waveBank->getWaveArc(i);
-                waveArc->load(nullptr);
+                waveArc->load();
             }
 
             return true;

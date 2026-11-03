@@ -7,6 +7,7 @@
 #include <cstdlib>
 
 #include "Game/Player/MarioAccess.hpp"
+#include "Game/System/NebulaHost.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -20,9 +21,12 @@ namespace {
 #if defined(NEBULA_RELEASE)
         static const bool sEnabled = false;
 #else
-        static const bool sEnabled = getenv("GALAXY_TRACE_LOADS") != nullptr;
+        static s32 sEnabled = -1;
+        if (sEnabled < 0) {
+            sEnabled = nebula_host()->option(nebula_host()->user, NEBULA_OPTION_TEST_TRACE_LOADS) != 0 ? 1 : 0;
+        }
 #endif
-        return sEnabled;
+        return sEnabled != 0;
     }
 
     void change(const char* pName, bool value, bool& rLast) {

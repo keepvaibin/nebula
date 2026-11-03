@@ -205,8 +205,13 @@ void LensFlareDirector::pauseOff() {
 
 void LensFlareDirector::setDrawSyncToken() {
     // What the last finished probes saw; then this picture's points.
-    NebulaScreenProbe probes[16 * BrightObjBase::cProbeCount];
     const u32 count = mBrightObjCount * BrightObjBase::cProbeCount;
+    if (count > mProbeCapacity) {
+        delete[] mProbes;
+        mProbes = new NebulaScreenProbe[count];
+        mProbeCapacity = count;
+    }
+    NebulaScreenProbe* const probes = mProbes;
     const u32 done = J3DNativeView::screenProbeResults(BrightObjBase::cReadbackChannel, probes, count);
     for (u32 i = 0; i < mBrightObjCount && (i + 1) * BrightObjBase::cProbeCount <= done; i++) {
         const NebulaScreenProbe* pProbes = &probes[i * BrightObjBase::cProbeCount];
@@ -317,6 +322,10 @@ namespace MR {
         }
 
         LensFlareDirector* pDirector = ::getLensFlareDirector();
+        if (pDirector->mBrightObjCount == static_cast< u32 >(pDirector->mBrightObjArray.size())) {
+            pDirector->mBrightObjArray.grow();
+        }
+
         pDirector->mBrightObjArray[pDirector->mBrightObjCount++] = pBrightObj;
     }
 

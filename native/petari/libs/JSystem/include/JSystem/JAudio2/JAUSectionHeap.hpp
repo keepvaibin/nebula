@@ -5,7 +5,21 @@
 #include "JSystem/JAudio2/JAUSeqDataBlockMgr.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 
-#include <bitset>
+
+struct JAUBits255 {
+    u32 mWords[8] = {};
+
+    bool test(u32 bit) const {
+        return (mWords[bit >> 5] >> (bit & 31)) & 1;
+    }
+    void set(u32 bit, bool value = true) {
+        const u32 mask = 1u << (bit & 31);
+        mWords[bit >> 5] = value ? mWords[bit >> 5] | mask : mWords[bit >> 5] & ~mask;
+    }
+    void reset(u32 bit) {
+        set(bit, false);
+    }
+};
 
 struct JAISeqData;
 struct JAISeqDataMgr;
@@ -29,8 +43,8 @@ public:
 
         JAUDynamicSeqDataBlocks field_0x00;
         JSUList< JAUSeqDataBlock > field_0x28;
-        std::bitset< 255 > registeredWaveBankTables;
-        std::bitset< 255 > registeredBankTables;
+        JAUBits255 registeredWaveBankTables;
+        JAUBits255 registeredBankTables;
         JAUBankTableDictionary field_0x74;
         JAISeqDataMgr* field_0x80;
         const void* mBstDst;

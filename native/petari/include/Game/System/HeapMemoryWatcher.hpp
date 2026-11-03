@@ -30,7 +30,6 @@ public:
         return mAudSystemHeap;
     }
 
-    void* mSoundMemory;  // the root of the wave archives' places in their sections (JASKernel::setupSoundHeap)
     NebulaArena* mStationedHeap;
     NebulaArena* mGameHeap;
     NebulaArena* mFileCacheHeap;
