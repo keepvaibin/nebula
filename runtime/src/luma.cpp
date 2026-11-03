@@ -398,8 +398,14 @@ std::optional<Manifest> parse_manifest(std::string_view text) {
     if (const Value* save = root->get("save"); save != nullptr && save->object() != nullptr) {
         out.save_path = text_field(*save, "path");
         if (!path_stays_inside(out.save_path)) out.save_path.clear();
-        out.save_copy = text_field(*save, "start") == "copy";
+        const std::string mode = text_field(*save, "mode");
+        out.save_mode = mode == "own" ? SaveMode::Own : mode == "copy" ? SaveMode::Copy : SaveMode::Shared;
+        out.save_tag = text_field(*save, "tag");
+        const Value* change = save->get("player_can_change");
+        const bool* can = change != nullptr ? std::get_if<bool>(&change->data) : nullptr;
+        out.save_player_can_change = can != nullptr && *can;
     }
+    if (out.save_tag.empty()) out.save_tag = out.id;
     if (const Value* plugins = root->get("plugins"); plugins != nullptr && plugins->array() != nullptr) {
         out.has_plugins = !plugins->array()->empty();
     }

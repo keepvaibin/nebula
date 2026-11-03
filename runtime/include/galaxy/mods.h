@@ -173,6 +173,7 @@ struct DiscPlan {
     std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to
     std::filesystem::path save_folder;
     bool save_clone = true;
+    std::filesystem::path save_start;  // files its saves begin from
 };
 // The language played, for a .luma's translated text: as language_folder takes it.
 void set_played_language(unsigned language) noexcept;

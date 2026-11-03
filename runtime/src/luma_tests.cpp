@@ -38,7 +38,7 @@ constexpr const char* kGood = R"({
     { "path": "layers/jp", "when": { "version": ["J"], "language": ["JpJapanese"], "platform": ["android", "windows"] } },
     { "when": { "someday": true } }
   ],
-  "save": { "path": "save", "start": "copy" }
+  "save": { "mode": "copy", "path": "save", "tag": "family", "player_can_change": true }
 })";
 
 }  // namespace
@@ -61,7 +61,9 @@ int main() {
     check(m.options.size() == 2u && m.options[0].fallback == "one", "options");
     check(m.options[1].fallback == "first", "a default that isn't a choice falls back to the first");
     check(m.layers.size() == 4u && m.layers[0].switches.at("miss_star_pieces") == 4294966297u, "a switch's value");
-    check(m.save_path == "save" && m.save_copy, "save");
+    check(m.save_path == "save" && m.save_mode == SaveMode::Copy && m.save_tag == "family" && m.save_player_can_change, "save");
+    const std::optional<Manifest> plain = parse_manifest(R"({"format":1,"id":"a","name":"b","game":"RMG","layers":[]})");
+    check(plain && plain->save_mode == SaveMode::Shared && plain->save_tag == "a" && !plain->save_player_can_change, "normal saves unless it says");
 
     Situation s;
     s.version = "E";

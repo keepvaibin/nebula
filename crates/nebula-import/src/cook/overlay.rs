@@ -76,7 +76,11 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
     }
     let mut placed = Vec::new();
     let mut failed = Vec::new();
-    for change in changes {
+    let progress = PROGRESS.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for (done, change) in changes.iter().enumerate() {
+        if let Some(file) = &progress {
+            let _ = fs::write(file, format!("{done} {}\n", changes.len()));
+        }
         let lower = change.path.to_ascii_lowercase();
         super::material::MOD_FILE_NEEDS_PASSES.set(lower.contains("mario") || lower.contains("luigi"));
         let result = fs::read(&change.source)
@@ -104,15 +108,20 @@ pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, out
     Ok(failed)
 }
 
+/// While set, how far a cook has got goes in this file: "<done> <of>".
+static PROGRESS: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+
 /// A plan file into a store: the C entry of Android and the command of the desktop program.
 pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, String)>)> {
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
     let mut stats = Stats::default();
+    *PROGRESS.lock().unwrap_or_else(|e| e.into_inner()) = Some(output.with_extension("progress"));
     // A material this build lacks takes its number from its key, as in a .luma's own shaders.
     *super::material::MOD_MATERIALS.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::collections::BTreeMap::new());
     let result = write_overlay(&game_id, &changes, plan_base(&text).as_deref(), output, &mut stats);
     let materials = super::material::MOD_MATERIALS.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
+    let _ = fs::remove_file(output.with_extension("progress"));
     let failed = result?;
     // What those materials need, for shaders the mod didn't bring or brought for another build.
     let list = output.with_extension("materials");
