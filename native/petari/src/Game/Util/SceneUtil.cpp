@@ -150,9 +150,6 @@ namespace MR {
     }
 
     bool isStageSuddenDeathDodoryu() {
-        if (NebulaHost::codePatch(NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU, nullptr)) {
-            return false;
-        }
         return isEqualStageName("CosmosGardenGalaxy") && getCurrentScenarioNo() == 4;
     }
 
@@ -269,9 +266,7 @@ namespace MR {
 
     s32 getPlacedHiddenStarScenarioNo(const char* pStageName, s32 starId) {
         GalaxyStatusAccessor accessor = makeGalaxyStatusAccessor(pStageName);
-        s32 scenarioNo = NebulaHost::codePatch(NEBULA_PATCH_NO_HIDDEN_STAR_TABLE, nullptr)
-                             ? 0
-                             : getPlacedHiddenStarScenarioNoFromTable(pStageName, starId);
+        s32 scenarioNo = getPlacedHiddenStarScenarioNoFromTable(pStageName, starId);
         if (scenarioNo > 0) {
             return scenarioNo;
         }

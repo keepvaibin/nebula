@@ -45,9 +45,6 @@ namespace MR {
         argument._C = pSceneController->getCurrentSelectedScenarioNo();
 
         GameSequenceFunction::requestGalaxyMove(argument);
-        if (u32 pieces = 0; NebulaHost::codePatch(NEBULA_PATCH_MISS_STAR_PIECES, &pieces)) {
-            GameDataFunction::addStarPiece(static_cast< s32 >(pieces));
-        }
     }
 
     void requestChangeStageInGameMoving(const char* pStageName, s32 scenarioNo, const JMapIdInfo& rInfo) {
