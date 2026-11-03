@@ -69,8 +69,9 @@ reports reaching play and reconnecting; it shows nothing about a real pad's timi
 | Steam Controller (2015), Bluetooth | 28de:1105, 1106 | report 0x03 in segments | gyro, right pad | pad pulses | decoder tested, unproven on a real pad |
 | Wii U Pro | 057e:0330 named RVL-CNT-01-UC | report 0x3d, extension bytes | none | yes | decoder tested, unproven on a real pad; the name test unproven |
 | DualShock 4 | 054c:05c4 | report 0x01 | gyro, touchpad | yes | decoder tested; virtual pad: connects, calibrates, reads, leaves and returns, Controller and Auto; not on a real pad in this work |
-| Xbox over XInput | | XInput: four pads; no paddles, Share or trigger motors | none | two motors | virtual pad: its input reaches play in Auto; XInput logs no connection; not on a real pad in this work |
-| Switch Pro, Joy-Con, DualSense, Steam controllers, Deck | | their own reports | as listed under Families | as listed | decoder tested; not on a real pad in this work |
+| Xbox over XInput | | XInput: four pads; no paddles, Share or trigger motors | none | two motors | virtual pad: its input reaches play in Auto; XInput logs no connection. Real pad, Bluetooth LE 045e:0b13, by hand (`realpad_hands`): every button, the D-pad, both stick clicks, sticks to full travel, both triggers reach the game's sample. The motor command is accepted (`realpad_x`); nobody reported feeling it. XInput shows no Guide button |
+| Switch Pro over Bluetooth | 057e:2009 | report 0x30 | gyro | HD rumble | real pad: connects, 66.7 reports a second, none lost; motion on, sticks centred; the game's motor felt by its own accelerometer, peak 0.05 g to 0.09 g (`realpad_c`); no drift at rest; report mode and motion recover after another program changes them (`realpad_g`, `realpad_h`). By hand (`realpad_hands`): every button, the D-pad, both stick clicks, sticks to full travel, ZL and ZR reach the game's sample; Home reaches the decoder and is taken before the sample; one shake counted. Tilt by hand and USB not run |
+| Joy-Con, DualSense, Steam controllers, Deck | | their own reports | as listed under Families | as listed | decoder tested; not on a real pad in this work |
 
 Not read, on any device: Joy-Con 2's optical mouse sensor, the magnetometer, a second finger on a touchpad, a Steam pad's left trackpad as a pointer, Elite paddles.
 

@@ -188,6 +188,10 @@ struct Device {
     sw::ImuCal imu{};
     sw::Switch2ImuState switch2_imu{};
     sw::SwitchMotion motion{};
+    sw::ReportModeWatch mode_watch{};
+    bool mode_lost_logged = false;
+    std::uint8_t mode_commands_left = 0;
+    std::uint64_t mode_command_us = 0;
     std::uint64_t last_report_us = 0;
     std::uint64_t imu_reports = 0;
     // Motion since the last [controller-motion] line (log_motion): peak acceleration away from 1 g, peak turn
@@ -1895,6 +1899,37 @@ private:
         issue_read(device);
     }
 
+    // One command per kModeCommandGapUs: a Pro Controller drops one that follows another within a report or two.
+    void ask_report_mode(Device& device, std::uint8_t report_id, std::size_t imu_count) {
+        constexpr std::uint64_t kModeCommandGapUs = 30'000;
+        const std::uint64_t now = steady_us();
+        if (device.mode_watch.update(report_id, imu_count, !device.no_motion, now)) {
+            device.mode_commands_left = 3u;
+            if (!device.mode_lost_logged) {
+                device.mode_lost_logged = true;
+                std::cerr << "[controller] " << device.model_name << ": report mode or motion lost, asking again\n";
+            }
+        }
+        if (device.mode_commands_left == 0u || now - device.mode_command_us < kModeCommandGapUs) return;
+        const std::uint8_t vibration = rumble_output_disabled() ? 0 : 1;
+        const std::array<std::pair<std::uint8_t, std::uint8_t>, 3> commands{{
+            {sw::kSubcommandSetReportMode, sw::kReportFullState},
+            {sw::kSubcommandEnableImu, std::uint8_t{1}},
+            {sw::kSubcommandEnableVibration, vibration},
+        }};
+        const auto& [id, value] = commands[commands.size() - device.mode_commands_left];
+        --device.mode_commands_left;
+        device.mode_command_us = now;
+        std::array<std::uint8_t, 128> report{};
+        const std::size_t length = std::min<std::size_t>(device.output_length, report.size());
+        const std::span<std::uint8_t> out(report.data(), length);
+        const std::size_t built = sw::build_subcommand(device.packet++, id, std::span(&value, 1), out);
+        if (device.vendor == sw::kNintendoVendorId && device.product == sw::kN64ProductId) {
+            sw::silence_neutral_rumble(out);
+        }
+        queue_output(device, report.data(), built, false, false);
+    }
+
     // The [controller-motion] log line: after a shake starts (at most once a second), and every 10 s while the
     // controller moves, with the shake thresholds of the sensitivity set and the peaks seen. A log then shows
     // whether the controller's motion arrives and whether it starts shakes.
@@ -1966,6 +2001,9 @@ private:
         sw::DecodedState decoded{};
         if (!decode(device, report, decoded)) return;
         if (device.no_motion) decoded.imu_count = 0;
+        if (device.scheme == ControlScheme::SwitchPro && device.simple == simple::Layout::None) {
+            ask_report_mode(device, report[0], decoded.imu_count);
+        }
         if (device.simple == simple::Layout::Sixaxis && !device.simple_started) {
             // Its first motor report also stops its lights blinking.
             device.simple_started = true;

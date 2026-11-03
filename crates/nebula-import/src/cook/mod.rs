@@ -67,6 +67,16 @@ pub fn cooks(name: &str) -> bool {
     matches!(extension(name).as_str(), "arc" | "szs" | "gst" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
 }
 
+/// A disc file only a console reads: the channel banner, the HOME menu's loadable module and the module list.
+fn console_only(path: &str) -> bool {
+    path == "opening.bnr" || path.starts_with("ModuleData/")
+}
+
+/// An archive member left behind by the tools that made the game; no code opens one.
+fn tool_leftover(file: &str) -> bool {
+    matches!(extension(file).as_str(), "ini" | "prj" | "xnim" | "dvw" | "dvmat" | "dck" | "dtp" | "backup" | "csv#")
+}
+
 /// What a source file (or a part of one) becomes in the store: bytes at a path below it, or a folder with no files.
 pub struct StoreItem {
     pub path: String,
@@ -89,6 +99,9 @@ pub fn cook_entry(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Vec<S
     let mut items = Vec::new();
     for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
         let file = member.path.rsplit('/').next().unwrap_or(&member.path);
+        if tool_leftover(file) {
+            continue;
+        }
         for item in cook_entry(&format!("{name}/{file}"), member.bytes, stats)? {
             let path = if item.path.is_empty() { member.path.clone() } else { format!("{}/{}", member.path, item.path) };
             items.push(StoreItem { path, order: member.offset, bytes: item.bytes });
@@ -295,6 +308,10 @@ pub fn write_cooked_pak(
     let mut order: Vec<&PakFile> = files.iter().collect();
     order.sort_by_key(|f| f.offset);
     for file in order {
+        if console_only(&file.path) {
+            done += file.length;
+            continue;
+        }
         let bytes = read(file)?;
         if bytes.len() as u64 != file.length {
             bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
