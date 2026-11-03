@@ -3235,7 +3235,7 @@ void RenderCore::render_thread_main() {
 #endif
     {
         // Opt the process out of EcoQoS throttling, so hybrid CPUs do not park the
-        // simulation, render or DSP threads on efficiency cores.
+        // simulation, render or audio threads on efficiency cores.
         static std::once_flag power_throttling_once;
         std::call_once(power_throttling_once, [] {
             galaxy::host::opt_out_of_power_throttling_process();

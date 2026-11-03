@@ -106,7 +106,7 @@ int main() {
     expect(startup("the renderer did not start: no adapter") == "NEB-S04", "no renderer");
     expect(startup("the settings did not load: bad value") == "NEB-S05", "settings");
     expect(startup("unknown option --x") == "NEB-S06", "options");
-    expect(startup("a GX span does not continue the last") == "NEB-N04", "another startup stop");
+    expect(startup("a span does not continue the last") == "NEB-N04", "another startup stop");
 
     // The disc thread's note and the activity of this thread.
     char line[256];
