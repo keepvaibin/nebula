@@ -23,6 +23,9 @@ namespace NebulaFrameClock {
     u32 count();
     // The main thread sleeps until the next frame and begins it.
     void waitFrame();
+    // The same in two steps, for a frame that updates between them.
+    void sleepUntilFrame();
+    void beginFrame();
     // What the screen shows from the next frame: the game's picture (true) or black.
     void show(bool picture);
 

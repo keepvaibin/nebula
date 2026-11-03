@@ -83,7 +83,15 @@ namespace NebulaFrameClock {
     }
 
     void waitFrame() {
+        sleepUntilFrame();
+        beginFrame();
+    }
+
+    void sleepUntilFrame() {
         GameThreads::waitFrame();
+    }
+
+    void beginFrame() {
         onFrame();
     }
 

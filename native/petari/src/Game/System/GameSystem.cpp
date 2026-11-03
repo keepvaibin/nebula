@@ -64,6 +64,8 @@ extern "C" void nebula_game_main(void) {
 
     GameSystem* pGameSystem = SingletonHolder< GameSystem >::get();
 
+    pGameSystem->drawFrame();
+
     while (true) {
         pGameSystem->frameLoop();
     }
@@ -173,9 +175,8 @@ void GameSystem::initAfterStationedResourceLoaded() {
 
 void GameSystem::frameLoop() {
     NebulaLoadTrace::frame();
-    MainLoopFramework::sManager->beginRender();
-    draw();
-    MainLoopFramework::sManager->endRender();
+    // The frame's wait comes before its update, so the input it reads is drawn at once, not a frame later.
+    NebulaFrameClock::sleepUntilFrame();
     update();
     calcAnim();
     // A skipped cutscene runs on unseen: more of the game's steps while they fit in this frame.
@@ -184,8 +185,15 @@ void GameSystem::frameLoop() {
         calcAnim();
     }
     mObjHolder->captureIfAllowForScreenPreserver();
+    NebulaFrameClock::beginFrame();
+    drawFrame();
+}
+
+void GameSystem::drawFrame() {
+    MainLoopFramework::sManager->beginRender();
+    draw();
+    MainLoopFramework::sManager->endRender();
     MainLoopFramework::sManager->endFrame();
-    NebulaFrameClock::waitFrame();
 }
 
 void GameSystem::draw() {

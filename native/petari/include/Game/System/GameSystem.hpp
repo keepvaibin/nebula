@@ -33,6 +33,7 @@ public:
     void prepareReset();
     bool isPreparedReset() const;
     void frameLoop();
+    void drawFrame();
     void draw();
     void update();
     void updateSceneController();
