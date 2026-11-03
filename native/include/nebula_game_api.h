@@ -537,8 +537,6 @@ enum {
                                           (from 1) drawn, the others not; 0 all */
     NEBULA_OPTION_TEST_ARENA_FILL,     /* tests (GALAXY_TEST_ARENA_FILL=<hex byte>): 0x100 | the byte every arena block starts as; 0 without it */
     NEBULA_OPTION_TEST_TRACE_LOADS,    /* tests (GALAXY_TRACE_LOADS): 1 logs what each scene change loads */
-    NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS, /* tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): the native shader id whose
-                                            material's draws the game tags on both paths (0 none) */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

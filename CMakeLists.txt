@@ -380,7 +380,6 @@ add_library(galaxy_gx STATIC
     runtime/src/render/interp_gpu.cpp
     runtime/src/render/display_modes.cpp
     runtime/src/render/render_core.cpp
-    runtime/src/render/draw_input_dump.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
     runtime/src/render/game_asset_extract.cpp
@@ -640,7 +639,6 @@ if(NEBULA_VULKAN)
         runtime/src/render/transform_history.cpp
         runtime/src/render/display_modes.cpp
             runtime/src/render/render_core.cpp
-            runtime/src/render/draw_input_dump.cpp
         runtime/src/render/game_lights.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/render/frame_interpolation.cpp
@@ -687,10 +685,10 @@ if(NEBULA_VULKAN)
         target_link_libraries(galaxy_gx_vk PRIVATE mfplat mfreadwrite mfuuid d3d11)
     endif()
 
-    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/movie_video.cpp)
+    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/frame_phase.cpp runtime/src/movie_video.cpp)
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
-    target_link_libraries(NebulaNativeVk PRIVATE galaxy_gx_vk galaxy_save_files galaxy_disc_files)
+    target_link_libraries(NebulaNativeVk PRIVATE dwmapi galaxy_gx_vk galaxy_save_files galaxy_disc_files)
     if(MSVC)
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
