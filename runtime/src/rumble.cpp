@@ -113,6 +113,34 @@ std::size_t build_switch2_rumble_report(std::uint8_t sequence, std::uint8_t leve
     return kSwitch2RumbleReportBytes;
 }
 
+std::size_t build_joycon2_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
+                                        std::span<std::uint8_t> out) noexcept {
+    const std::size_t built = build_switch2_rumble_report(sequence, level, strength, out);
+    if (built == 0u) return 0;
+    out[0] = 0x01;
+    std::fill(out.begin() + 0x11, out.begin() + 0x17, std::uint8_t{0});
+    return built;
+}
+
+std::size_t build_gamecube_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
+                                         std::uint16_t& error, std::span<std::uint8_t> out) noexcept {
+    if (out.size() < kSwitch2RumbleReportBytes) return 0;
+    std::fill(out.begin(), out.end(), std::uint8_t{0});
+    out[0] = 0x03;
+    out[1] = static_cast<std::uint8_t>(0x50u | (sequence & 0x0Fu));
+    if (level == 0u || strength == 0u) {
+        error = 0u;
+        out[2] = 2u;
+        return kSwitch2RumbleReportBytes;
+    }
+    error = static_cast<std::uint16_t>(error + std::lround(256.0f * switch_low_amplitude(level, strength)));
+    if (error >= 256u) {
+        error = static_cast<std::uint16_t>(error - 256u);
+        out[2] = 1u;
+    }
+    return kSwitch2RumbleReportBytes;
+}
+
 XInputMotors xinput_motor_speeds(std::uint8_t level, std::uint8_t strength) noexcept {
     if (level == 0u || strength == 0u) return {};
     const float speed = level_fraction(level) * (kXInputSpeedMin + (1.0f - kXInputSpeedMin) * strength_fraction(strength));

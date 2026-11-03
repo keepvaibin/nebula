@@ -4,6 +4,7 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/generic_hid.h"
 #include "galaxy/playstation_controller.h"
+#include "galaxy/simple_pads.h"
 #include "galaxy/rumble.h"
 #include "galaxy/steam_controller.h"
 
@@ -47,6 +48,7 @@ namespace {
 
 namespace sw = input::switch_hid;
 namespace ps = input::playstation;
+namespace simple = input::simple_pads;
 namespace sv = input::steam;
 namespace gh = input::generic_hid;
 using input::ControlScheme;
@@ -148,8 +150,18 @@ struct WinUsbPipes {
 
 struct Device {
     std::wstring path;
+    USHORT vendor = 0;
+    USHORT product = 0;
     ControlScheme scheme = ControlScheme::SwitchPro;
     const char* model_name = "";
+    simple::Layout simple = simple::Layout::None;
+    simple::ReportState simple_state{};
+    bool simple_started = false;
+    bool no_motion = false;
+    // The GameCube pad's triggers at rest and its motor's pulse train.
+    bool gamecube = false;
+    std::array<std::uint8_t, 2> gamecube_zero{};
+    std::uint16_t gamecube_error = 0;
     ControllerLink link = ControllerLink::Unknown;
     bool bluetooth = false;
     // Visible to the input consumer. A Steam Controller puck interface stays
@@ -188,6 +200,7 @@ struct Device {
     ps::Model ps_model = ps::Model::DualShock4;
     ps::Transport ps_transport = ps::Transport::Usb;
     ps::ImuCal ps_cal{};
+    ps::Capabilities ps_caps{};
     ps::SensorClock ps_clock{};
     bool ps_full_range_rumble = true;
     // Steady-clock microsecond of the light bar write (0: none pending).
@@ -258,6 +271,11 @@ enum class OffKind : std::uint8_t {
     None,
     SwitchPro,
     SwitchPro2,
+    JoyCon2,
+    GameCube,
+    Stadia,
+    LunaBluetooth,
+    Sixaxis,
     DualShock4Usb,
     DualShock4Bluetooth,
     DualSenseUsb,
@@ -350,9 +368,43 @@ struct ProductInfo {
     ControlScheme scheme = ControlScheme::SwitchPro;
     const char* name = "";
     ps::Model ps_model = ps::Model::DualShock4;
+    simple::Layout simple = simple::Layout::None;
+    bool bluetooth_only = false;  // over USB it charges and says nothing
+    bool no_motion = false;
+};
+
+// Pads speaking the Pro Controller's protocol.
+struct SwitchProtocolPad {
+    USHORT vendor;
+    USHORT product;
+    const char* name;
+    bool bluetooth_only;
+    bool no_motion;
+};
+constexpr SwitchProtocolPad kSwitchProtocolPads[] = {
+    {sw::kNintendoVendorId, 0x2017, "SNES Controller", false, true},
+    {sw::kNintendoVendorId, sw::kN64ProductId, "N64 Controller", false, true},
+    {sw::kNintendoVendorId, 0x201e, "Genesis Controller", false, true},
+    {0x0f0d, 0x00f6, "HORI Wireless Switch Pad", true, false},
+    {0x0e6f, 0x0186, "PDP Afterglow Wireless", true, false},
+    {0x0e6f, 0x018b, "PDP Afterglow Wave Wireless", true, false},
+    {0x0e6f, 0x018c, "PDP REALMz Wireless", true, true},
 };
 
 std::optional<ProductInfo> find_product(USHORT vendor, USHORT product) noexcept {
+    for (const SwitchProtocolPad& pad : kSwitchProtocolPads) {
+        if (pad.vendor == vendor && pad.product == product) {
+            ProductInfo info{ControlScheme::SwitchPro, pad.name, {}};
+            info.bluetooth_only = pad.bluetooth_only;
+            info.no_motion = pad.no_motion;
+            return info;
+        }
+    }
+    if (const auto pad = simple::find_product(vendor, product)) {
+        ProductInfo info{pad->scheme, pad->name, {}};
+        info.simple = pad->layout;
+        return info;
+    }
     if (vendor == sw::kNintendoVendorId) {
         if (product == sw::kProControllerProductId) return ProductInfo{ControlScheme::SwitchPro, "Switch Pro Controller", {}};
         // Joy-Con: one controller per pair, read as a Pro Controller's halves.
@@ -361,6 +413,14 @@ std::optional<ProductInfo> find_product(USHORT vendor, USHORT product) noexcept 
         if (product == sw::kChargingGripProductId) return ProductInfo{ControlScheme::SwitchPro, "Joy-Con", {}};
         if (product == sw::kPro2ControllerProductId) {
             return ProductInfo{ControlScheme::SwitchPro2, "Switch 2 Pro Controller", {}};
+        }
+        if (product == sw::kJoyCon2LeftProductId) return ProductInfo{ControlScheme::SwitchPro2, "Joy-Con 2 (L)", {}};
+        if (product == sw::kJoyCon2RightProductId) return ProductInfo{ControlScheme::SwitchPro2, "Joy-Con 2 (R)", {}};
+        if (product == sw::kJoyCon2GripProductId) return ProductInfo{ControlScheme::SwitchPro2, "Joy-Con 2", {}};
+        if (product == sw::kGameCubeProductId) {
+            ProductInfo info{ControlScheme::SwitchPro2, "GameCube Controller", {}};
+            info.no_motion = true;
+            return info;
         }
         return std::nullopt;
     }
@@ -596,6 +656,8 @@ std::vector<HidCandidate> enumerate_hid_pads() {
         const std::optional<HIDD_ATTRIBUTES> attributes = hid_attributes(path, &probe);
         if (!attributes) return;
         if (sv::listed_device(steam_input_devices(), attributes->VendorID, attributes->ProductID)) return;
+        // PDP's id for a wireless pad on its charging cable.
+        if (attributes->VendorID == 0x0e6f && attributes->ProductID == 0x018a) return;
         auto product = find_product(attributes->VendorID, attributes->ProductID);
         if (!product) product = find_generic(probe.get(), attributes->VendorID, path);
         if (!product) return;
@@ -604,14 +666,18 @@ std::vector<HidCandidate> enumerate_hid_pads() {
             !sv::is_controller_interface(attributes->ProductID, interface_number(path))) {
             return;
         }
-        found.push_back({path, attributes->VendorID, attributes->ProductID, *product});
+        const HidCandidate candidate{path, attributes->VendorID, attributes->ProductID, *product};
+        if (product->bluetooth_only && link_of(candidate) != ControllerLink::Bluetooth) return;
+        found.push_back(candidate);
     });
     return found;
 }
 
 // The Pro Controller 2's vendor interface (USB interface 1) bound to WinUSB:
 // read the interface GUID WinUSB registered for that device instance.
-std::unique_ptr<WinUsbPipes> open_switch2_vendor_interface() {
+std::unique_ptr<WinUsbPipes> open_switch2_vendor_interface(USHORT product) {
+    wchar_t wanted[32]{};
+    swprintf(wanted, 32, L"VID_057E&PID_%04X&MI_01", static_cast<unsigned>(product));
     const HDEVINFO set = SetupDiGetClassDevsW(nullptr, L"USB", nullptr, DIGCF_ALLCLASSES | DIGCF_PRESENT);
     if (set == INVALID_HANDLE_VALUE) return nullptr;
     std::unique_ptr<WinUsbPipes> result;
@@ -621,7 +687,7 @@ std::unique_ptr<WinUsbPipes> open_switch2_vendor_interface() {
         wchar_t instance[MAX_DEVICE_ID_LEN]{};
         if (CM_Get_Device_IDW(info.DevInst, instance, MAX_DEVICE_ID_LEN, 0) != CR_SUCCESS) continue;
         const std::wstring id = instance;
-        if (!contains_ci(id, L"VID_057E&PID_2069&MI_01")) continue;
+        if (!contains_ci(id, wanted)) continue;
         HKEY key = SetupDiOpenDevRegKey(set, &info, DICS_FLAG_GLOBAL, 0, DIREG_DEV, KEY_READ);
         if (key == INVALID_HANDLE_VALUE) continue;
         wchar_t guids[512]{};
@@ -685,10 +751,10 @@ bool flash_read_switch2(WinUsbPipes& pipes, std::uint32_t address, std::array<st
 }
 
 void init_switch2(Device& device) {
-    device.winusb = open_switch2_vendor_interface();
+    device.winusb = open_switch2_vendor_interface(device.product);
     if (!device.winusb) {
         device.needs_driver = true;
-        std::cerr << "[controller] pro controller 2 (usb): interface 1 has no WinUSB driver; "
+        std::cerr << "[controller] " << device.model_name << " (usb): interface 1 has no WinUSB driver; "
                      "input needs the vendor init command (docs/KEYBOARD_CONTROLS.md)\n";
         return;
     }
@@ -713,10 +779,13 @@ void init_switch2(Device& device) {
     if (flash_read_switch2(pipes, 0x1fc080, block) && block[0] == 0xb2 && block[1] == 0xa1) {
         device.right = sw::parse_switch2_stick_cal(std::span<const std::uint8_t, 9>(block.data() + 2, 9));
     }
+    if (device.gamecube && flash_read_switch2(pipes, 0x13140, block)) {
+        device.gamecube_zero = {block[0], block[1]};
+    }
     std::array<std::uint8_t, 64> reply{};
     for (const sw::Switch2Command& cmd : sw::switch2_init_sequence()) {
         if (!pipes.send(cmd)) {
-            std::cerr << "[controller] pro controller 2: init command failed\n";
+            std::cerr << "[controller] " << device.model_name << ": init command failed\n";
             return;
         }
         (void)pipes.receive(reply.data(), reply.size());
@@ -736,6 +805,9 @@ bool subcommand(Device& device, OverlappedIo& io, std::uint8_t& packet, std::uin
             size = sw::build_spi_read(packet++, spi_address, data.empty() ? 0 : data[0], out);
         } else {
             size = sw::build_subcommand(packet++, id, data, out);
+        }
+        if (device.vendor == sw::kNintendoVendorId && device.product == sw::kN64ProductId) {
+            sw::silence_neutral_rumble(out);
         }
         if (size == 0 || !io.write(out.data(), device.output_length, 200)) continue;
         const std::uint64_t deadline = GetTickCount64() + 150u;
@@ -778,7 +850,7 @@ void init_switch_pro(Device& device) {
     // A Joy-Con names its side (a charging grip's interface holds whichever is in it): by USB status before the
     // handshake, else by the device info subcommand after it. An interface that names none (an empty grip slot) stays
     // no controller.
-    const bool joycon = device.grip || device.joycon != sw::JoyConSide::None;
+    bool joycon = device.grip || device.joycon != sw::JoyConSide::None;
     sw::JoyConSide side = sw::JoyConSide::None;
     if (joycon && !device.bluetooth && usb_command(device, io, sw::kUsbStatus, true, &data) && data.size() >= 4u) {
         side = sw::joycon_side_of_type(data[3]);
@@ -798,6 +870,12 @@ void init_switch_pro(Device& device) {
     if (joycon && side == sw::JoyConSide::None &&
         subcommand(device, io, packet, sw::kSubcommandDeviceInfo, {}, 0, &data) && data.size() >= 3u) {
         side = sw::joycon_side_of_type(data[2]);
+        if (sw::is_famicom_type(data[2]) || sw::is_nes_type(data[2])) {
+            joycon = false;
+            device.joycon = sw::JoyConSide::None;
+            device.no_motion = true;
+            device.model_name = sw::is_nes_type(data[2]) ? "NES Controller" : "Famicom Controller";
+        }
     }
     if (joycon) {
         device.joycon = side != sw::JoyConSide::None ? side : device.joycon;
@@ -849,7 +927,7 @@ void init_switch_pro(Device& device) {
     device.packet = packet;
     std::cerr << "[controller] " << (device.joycon == sw::JoyConSide::Left    ? "joy-con (l)"
                                      : device.joycon == sw::JoyConSide::Right ? "joy-con (r)"
-                                                                              : "switch pro")
+                                                                              : device.model_name)
               << " (" << (device.bluetooth ? "bluetooth" : "usb")
               << ") report 0x30 " << (mode_ok ? "on" : "unconfirmed") << ", imu "
               << (imu_ok ? "on" : "unconfirmed") << '\n';
@@ -897,6 +975,24 @@ DWORD get_feature_report(HANDLE handle, HANDLE event, std::uint8_t* buffer, DWOR
 
 constexpr std::size_t kLargestOutputReport = 600;
 
+// The DualShock 3 sends nothing until asked, by reading these features.
+void init_sixaxis(Device& device) {
+    if (device.bluetooth) {
+        std::array<std::uint8_t, 5> start{0xf4, 0x42, 0x03, 0x00, 0x00};
+        (void)HidD_SetFeature(device.handle.get(), start.data(), static_cast<ULONG>(start.size()));
+        return;
+    }
+    std::array<std::uint8_t, 64> feature{};
+    feature[0] = simple::kSixaxisFeatureInit;
+    if (get_feature_report(device.handle.get(), device.read_event.get(), feature.data(), 18, 200) == 0u) {
+        std::cerr << "[controller] " << device.model_name << ": no answer to its start request\n";
+        return;
+    }
+    feature = {};
+    feature[0] = simple::kSixaxisFeatureAddress;
+    (void)get_feature_report(device.handle.get(), device.read_event.get(), feature.data(), 9, 200);
+}
+
 // The motor-off report for a HID controller.
 bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, OffKind kind) noexcept {
     std::array<std::uint8_t, kLargestOutputReport> report{};
@@ -911,6 +1007,23 @@ bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, 
         break;
     case OffKind::SwitchPro2:
         built = input::rumble::build_switch2_rumble_report(0, 0, 0, out);
+        break;
+    case OffKind::JoyCon2:
+        built = input::rumble::build_joycon2_rumble_report(0, 0, 0, out);
+        break;
+    case OffKind::GameCube: {
+        std::uint16_t error = 0;
+        built = input::rumble::build_gamecube_rumble_report(0, 0, 0, error, out);
+        break;
+    }
+    case OffKind::Stadia:
+        built = simple::build_motor_report(simple::Layout::Stadia, 0, out);
+        break;
+    case OffKind::LunaBluetooth:
+        built = simple::build_motor_report(simple::Layout::LunaBluetooth, 0, out);
+        break;
+    case OffKind::Sixaxis:
+        built = simple::build_motor_report(simple::Layout::Sixaxis, 0, out);
         break;
     case OffKind::DualShock4Usb:
         built = ps::build_output_report(ps::Model::DualShock4, ps::Transport::Usb, stop, out);
@@ -939,9 +1052,19 @@ bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, 
 }
 
 OffKind off_kind_of(const Device& device) noexcept {
+    switch (device.simple) {
+    case simple::Layout::None: break;
+    case simple::Layout::Stadia: return OffKind::Stadia;
+    case simple::Layout::LunaBluetooth: return OffKind::LunaBluetooth;
+    case simple::Layout::Sixaxis: return OffKind::Sixaxis;
+    default: return OffKind::None;
+    }
     switch (device.scheme) {
     case ControlScheme::SwitchPro: return OffKind::SwitchPro;
-    case ControlScheme::SwitchPro2: return OffKind::SwitchPro2;
+    case ControlScheme::SwitchPro2:
+        return device.gamecube                         ? OffKind::GameCube
+               : device.joycon != sw::JoyConSide::None ? OffKind::JoyCon2
+                                                       : OffKind::SwitchPro2;
     case ControlScheme::Steam:
         return device.steam_model == sv::Model::Deck      ? OffKind::SteamDeck
                : device.steam_model == sv::Model::Classic ? OffKind::None  // its pulses end by themselves
@@ -1088,6 +1211,10 @@ void queue_output(Device& device, const std::uint8_t* report, std::size_t built,
 }
 
 bool send_playstation_effects(Device& device, ps::Effects effects) {
+    if (!device.ps_caps.effects || (effects.apply_led && !device.ps_caps.lightbar) ||
+        (effects.apply_rumble && !device.ps_caps.vibration)) {
+        return false;
+    }
     effects.sequence = device.ps_sequence++;
     std::array<std::uint8_t, kLargestOutputReport> report{};
     const std::size_t built = ps::build_output_report(device.ps_model, device.ps_transport, effects, report);
@@ -1105,13 +1232,23 @@ void read_playstation_features(Device& device) {
                                   static_cast<DWORD>(feature.size()), 200);
     };
     const bool bluetooth = device.ps_transport == ps::Transport::Bluetooth;
+    device.ps_caps = ps::capabilities_of_product(device.vendor, device.product);
+    if (!device.ps_caps.official) {
+        // A licensed pad's own calibration is not read: it states its scales, if it has sensors at all.
+        const DWORD size = read(ps::kFeatureCapabilities);
+        ps::apply_capability_report(device.ps_model, device.vendor, device.product,
+                                    std::span<const std::uint8_t>(feature.data(), size), device.ps_caps, device.ps_cal);
+        return;
+    }
     if (device.ps_model == ps::Model::DualShock4) {
         // Over Bluetooth the second report also switches the controller from
         // short to full input reports.
         if (bluetooth) (void)read(ps::kFeatureDualShock4CalibrationUsb);
         const DWORD size = read(bluetooth ? ps::kFeatureDualShock4CalibrationBluetooth
                                           : ps::kFeatureDualShock4CalibrationUsb);
-        if (size != 0) device.ps_cal = ps::parse_calibration(std::span<const std::uint8_t>(feature.data(), size), bluetooth);
+        // The USB adapter orders them as Bluetooth does.
+        const bool plus_first = bluetooth || device.ps_caps.dongle;
+        if (size != 0) device.ps_cal = ps::parse_calibration(std::span<const std::uint8_t>(feature.data(), size), plus_first);
     } else {
         const DWORD size = read(ps::kFeatureDualSenseCalibration);
         if (size != 0) device.ps_cal = ps::parse_calibration(std::span<const std::uint8_t>(feature.data(), size), false);
@@ -1390,10 +1527,16 @@ private:
         device->model_name = candidate.info.name;
         device->ps_model = candidate.info.ps_model;
         device->link = link_of(candidate);
+        device->vendor = candidate.vendor;
+        device->product = candidate.product;
         device->puck = sv::is_receiver_product(candidate.product);
         device->steam_model = sv::model_of_product(candidate.product).value_or(sv::Model::Controller);
-        device->joycon = sw::joycon_side_of_product(candidate.product);
-        device->grip = candidate.vendor == sw::kNintendoVendorId && candidate.product == sw::kChargingGripProductId;
+        const bool nintendo = candidate.vendor == sw::kNintendoVendorId;
+        device->joycon = nintendo ? sw::joycon_side_of_product(candidate.product) : sw::JoyConSide::None;
+        device->grip = nintendo && candidate.product == sw::kChargingGripProductId;
+        device->gamecube = nintendo && candidate.product == sw::kGameCubeProductId;
+        device->simple = candidate.info.simple;
+        device->no_motion = candidate.info.no_motion;
         device->handle.reset(CreateFileW(candidate.path.c_str(), GENERIC_READ | GENERIC_WRITE,
                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                          FILE_FLAG_OVERLAPPED, nullptr));
@@ -1422,13 +1565,17 @@ private:
         device->bluetooth = device->link == ControllerLink::Bluetooth;
         device->read_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         device->write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        if (device->simple != simple::Layout::None) {
+            if (device->simple == simple::Layout::Sixaxis) init_sixaxis(*device);
+            return device;
+        }
         switch (device->scheme) {
         case ControlScheme::SwitchPro:
             init_switch_pro(*device);
             break;
         case ControlScheme::SwitchPro2:
             if (device->bluetooth) {
-                std::cerr << "[controller] pro controller 2 over bluetooth is not a HID device on Windows; "
+                std::cerr << "[controller] " << device->model_name << " over bluetooth is not a HID device on Windows; "
                              "connect it by USB\n";
             } else {
                 init_switch2(*device);
@@ -1455,6 +1602,10 @@ private:
         return device;
     }
 
+    static const char* pair_name(const Device& device) noexcept {
+        return device.scheme == ControlScheme::SwitchPro2 ? "Joy-Con 2 (L/R)" : "Joy-Con (L/R)";
+    }
+
     void publish_device(Device& device) {
         const std::uint64_t now = steady_us();
         device.published = true;
@@ -1476,16 +1627,16 @@ private:
             published.info.link = device.partner != nullptr && device.partner->link == ControllerLink::Bluetooth
                                       ? ControllerLink::Bluetooth
                                       : device.link;
-            published.info.model = device.partner != nullptr ? "Joy-Con (L/R)" : device.model_name;
+            published.info.model = device.partner != nullptr ? pair_name(device) : device.model_name;
             published.info.note = device.needs_driver ? "needs WinUSB" : nullptr;
             ReleaseSRWLockExclusive(&hub().lock);
         }
-        if (device.scheme == ControlScheme::Steam) {
+        if (device.scheme == ControlScheme::Steam && device.simple == simple::Layout::None) {
             device.steam_settings_due_us = now;
             device.steam_configured = false;
         }
         std::cerr << "[controller] connected " << input::control_scheme_id(device.scheme) << ' '
-                  << (device.partner != nullptr ? "Joy-Con (L/R)" : device.model_name)
+                  << (device.partner != nullptr ? pair_name(device) : device.model_name)
                   << (device.bluetooth ? " bluetooth" : device.puck ? " wireless" : " usb") << '\n';
     }
 
@@ -1660,12 +1811,17 @@ private:
     }
 
     bool decode(Device& device, std::span<const std::uint8_t> report, sw::DecodedState& decoded) {
+        if (device.simple != simple::Layout::None) {
+            return simple::decode_report(device.simple, report, device.simple_state, decoded);
+        }
         switch (device.scheme) {
         case ControlScheme::SwitchPro2:
-            return sw::decode_switch2_report(report, device.switch2_imu, decoded);
+            if (!sw::decode_switch2_report(report, device.switch2_imu, decoded)) return false;
+            if (device.gamecube) sw::apply_gamecube_triggers(report, device.gamecube_zero, decoded);
+            return true;
         case ControlScheme::PlayStation:
             return ps::decode_report(device.ps_model, device.ps_transport, report, device.ps_cal, device.ps_clock,
-                                     decoded);
+                                     decoded, device.ps_caps);
         case ControlScheme::Steam: {
             const bool classic = device.steam_model == sv::Model::Classic;
             switch (classic ? sv::decode_classic_wireless_event(report) : sv::decode_wireless_event(report)) {
@@ -1697,6 +1853,12 @@ private:
         const std::span<const std::uint8_t> report(device.buffer.data(), size);
         sw::DecodedState decoded{};
         if (!decode(device, report, decoded)) return;
+        if (device.no_motion) decoded.imu_count = 0;
+        if (device.simple == simple::Layout::Sixaxis && !device.simple_started) {
+            // Its first motor report also stops its lights blinking.
+            device.simple_started = true;
+            queue_simple_motor(device, 0u);
+        }
         // A Joy-Con half keeps its state for its pair, which publishes in the right half's slot; the pointer and the
         // tilt follow the right half alone, a shake of either counts .
         Device* target = &device;
@@ -1704,7 +1866,8 @@ private:
         sw::DecodedState moved = decoded;  // the motion this report carries (a Joy-Con half's own)
         if (device.joycon != sw::JoyConSide::None) {
             const bool left = device.joycon == sw::JoyConSide::Left;
-            if (!left) sw::turn_right_joycon_imu(decoded);
+            // A Joy-Con 2's sensors read the same way up on either side.
+            if (!left && device.scheme == ControlScheme::SwitchPro) sw::turn_right_joycon_imu(decoded);
             device.joycon_state = decoded;
             const bool held =
                 (decoded.buttons & input::pad::bit(left ? input::pad::kLeftShoulderBit : input::pad::kRightShoulderBit)) != 0u;
@@ -1735,7 +1898,7 @@ private:
                               ? static_cast<float>(now - device.last_report_us) * 1e-6f : 0.0f;
         dt_report = std::clamp(dt_report, 0.0f, 0.05f);
         device.last_report_us = now;
-        if (device.scheme == ControlScheme::PlayStation) {
+        if (device.scheme == ControlScheme::PlayStation && device.simple == simple::Layout::None) {
             if (device.ps_transport == ps::Transport::Usb || report[0] != ps::kReportState) {
                 schedule_light_bar(device, now);
             } else if (device.ps_mode_attempts < kPlayStationModeAttempts && now >= device.ps_mode_next_us) {
@@ -1799,6 +1962,7 @@ private:
             state.gyro_x = std::clamp(state.gyro_x + gyro_x, -4.0f, 4.0f);
             state.gyro_y = std::clamp(state.gyro_y + gyro_y, -4.0f, 4.0f);
             state.imu_live = decoded.imu_count != 0u;
+            state.gyro_missing = !simple::has_gyro(device.simple);
             state.gyro_rest_windows = device.motion.rest_windows();
             state.gravity = device.motion.gravity();
             state.gravity_valid = device.motion.gravity_ready();
@@ -1883,6 +2047,7 @@ private:
     }
 
     bool service_hid_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
+        if (device.simple != simple::Layout::None) return service_simple_rumble(device, level, strength, now);
         switch (device.scheme) {
         case ControlScheme::PlayStation: return service_playstation_rumble(device, level, strength, now);
         case ControlScheme::Steam: return service_steam_rumble(device, level, strength, now);
@@ -1897,6 +2062,36 @@ private:
         h.hid_rumble_lengths[device.slot].store(static_cast<std::uint16_t>(length), std::memory_order_release);
         h.hid_rumble_off[device.slot].store(static_cast<std::uint8_t>(kind), std::memory_order_release);
         h.hid_rumble_handles[device.slot].store(device.handle.get(), std::memory_order_release);
+    }
+
+    bool queue_simple_motor(Device& device, std::uint16_t speed) {
+        std::array<std::uint8_t, kLargestOutputReport> report{};
+        const std::size_t built = simple::build_motor_report(device.simple, speed, report);
+        if (built == 0u || built > device.output_length || device.output_length > report.size()) return false;
+        queue_output(device, report.data(), device.output_length, false, true);
+        return true;
+    }
+
+    // The pads of simple_pads.h run a motor until told otherwise; a held rumble is repeated now and then.
+    bool service_simple_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
+        if (device.failed) level = 0u;
+        const std::uint16_t speed = input::rumble::xinput_motor_speeds(level, strength).right;
+        const bool want = speed != 0u;
+        if (!want && !device.rumble_on) return false;
+        const bool changed = want != device.rumble_on || (want && speed != device.rumble_value);
+        const std::uint64_t since = now - device.rumble_sent_us;
+        if (!changed && since < kPlayStationRumbleRefreshUs) return true;
+        if (device.rumble_sent_us != 0u && since < kPlayStationRumbleGapUs) return true;
+        if (want) arm_crash_stop(device, device.output_length, off_kind_of(device));
+        if (!queue_simple_motor(device, speed)) {
+            device.rumble_on = false;
+            return false;
+        }
+        device.rumble_sent_us = now;
+        device.rumble_on = want;
+        device.rumble_value = speed;
+        if (!want) hub().hid_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
+        return want;
     }
 
     // One Switch controller; true while its motor runs or a change waits for
@@ -1916,7 +2111,11 @@ private:
         const std::size_t length = std::min<std::size_t>(device.output_length, report.size());
         const std::span<std::uint8_t> out(report.data(), length);
         const std::size_t built =
-            pro2 ? input::rumble::build_switch2_rumble_report(device.rumble_sequence++, level, strength, out)
+            device.gamecube ? input::rumble::build_gamecube_rumble_report(device.rumble_sequence++, level, strength,
+                                                                          device.gamecube_error, out)
+            : pro2 && device.joycon != sw::JoyConSide::None
+                ? input::rumble::build_joycon2_rumble_report(device.rumble_sequence++, level, strength, out)
+            : pro2 ? input::rumble::build_switch2_rumble_report(device.rumble_sequence++, level, strength, out)
                  : input::rumble::build_switch_pro_rumble_report(
                        device.packet++, input::rumble::switch_pro_motor_rumble(level, strength), out);
         if (built == 0u) {
@@ -1946,9 +2145,15 @@ private:
         const std::uint64_t since = now - device.rumble_sent_us;
         if (!changed && since < kPlayStationRumbleRefreshUs) return true;
         if (device.rumble_sent_us != 0u && since < kPlayStationRumbleGapUs) return true;
+        if (!device.ps_caps.effects || !device.ps_caps.vibration) return false;
         ps::Effects effects;
         effects.rumble_right = motor;
         effects.apply_rumble = true;
+        // A licensed pad takes both or neither.
+        if (!device.ps_caps.official && device.ps_caps.lightbar) {
+            effects.led = kLightBarColor;
+            effects.apply_led = true;
+        }
         effects.full_range_rumble = device.ps_full_range_rumble;
         effects.sequence = device.ps_sequence++;
         std::array<std::uint8_t, kLargestOutputReport> report{};

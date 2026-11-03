@@ -106,7 +106,7 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
             }
             previous->seen = true;
             const galaxy::input::SchemeTuning& tuning = config.tune(pad.sample.scheme);
-            const bool gyro_pointing = tuning.gyro_pointer && pad.imu_live;
+            const bool gyro_pointing = tuning.gyro_pointer && pad.imu_live && !pad.gyro_missing;
             const bool touch_pointing = tuning.touch_pointer && pad.touch_live;
             galaxy::input::LogicalInput pad_logic = galaxy::input::evaluate_pad_bindings(
                 config.table(pad.sample.scheme), pad.sample, trigger_threshold,
