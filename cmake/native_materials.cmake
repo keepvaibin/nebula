@@ -18,7 +18,8 @@ set(galaxy_native_defines_reactive "NATIVE_REACTIVE")
 set(galaxy_native_defines_layer "NATIVE_REACTIVE;NATIVE_LAYER")
 set(galaxy_native_defines_motion "NATIVE_MOTION")
 set(galaxy_native_defines_dual "NATIVE_DUAL")
-set(galaxy_native_material_dir "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/materials")
+get_filename_component(galaxy_native_cmake_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(galaxy_native_material_dir "${galaxy_native_cmake_root}/runtime/src/render/materials")
 set(galaxy_j3d_materials "")
 if(EXISTS "${galaxy_native_material_dir}/j3d/list.cmake")
     include("${galaxy_native_material_dir}/j3d/list.cmake")
@@ -185,9 +186,9 @@ NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bo
 }  // namespace galaxy::render
 ")
     add_custom_command(OUTPUT "${table}"
-        COMMAND "${Python3_EXECUTABLE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/dev/pack_native_shaders.py"
+        COMMAND "${Python3_EXECUTABLE}" -I "${galaxy_native_cmake_root}/tools/dev/pack_native_shaders.py"
                 "${table}.in" "${table}"
-        DEPENDS "${table}.in" ${outputs} "${CMAKE_CURRENT_SOURCE_DIR}/tools/dev/pack_native_shaders.py"
+        DEPENDS "${table}.in" ${outputs} "${galaxy_native_cmake_root}/tools/dev/pack_native_shaders.py"
         VERBATIM)
     set(${out_var} ${outputs} "${table}" PARENT_SCOPE)
     set(galaxy_native_include_dir_${backend} "${dir}" PARENT_SCOPE)

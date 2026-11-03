@@ -3818,8 +3818,10 @@ int main(int argc, char** argv) {
         gSaveDataPath = std::string("/title/00010000/") + title + "/data";
         fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!settings_folder.empty()) {
+#if !defined(NEBULA_RELEASE)  // mods return with their feature
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+#endif
         }
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.

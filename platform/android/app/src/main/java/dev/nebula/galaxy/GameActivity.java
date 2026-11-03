@@ -42,16 +42,14 @@ public class GameActivity extends SDLActivity {
     static native void nativeTouchControls(int buttons, float stickX, float stickY);
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
-    static native void nativeHomeChoice(int choice);
     static native void nativeSetVisible(boolean visible);
     static native void nativeSurfaceWithdrawn();
     static native void nativeSurfaceReturned();
 
     private TouchControlsView controls;
-    private HomeMenuView homeMenu;
+    private boolean menuOpen;
     private String controlsMode = "auto";
     private boolean controlsWanted = true;   // the player's choice in the HOME Menu
-    private float menuAxis;                  // a controller stick's last direction in the HOME Menu
 
     @Override
     protected String[] getLibraries() {
@@ -180,23 +178,9 @@ public class GameActivity extends SDLActivity {
         mLayout.addView(controls, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        homeMenu = new HomeMenuView(this, new HomeMenuView.Listener() {
-            @Override
-            public void onHomeChoice(int choice) {
-                nativeHomeChoice(choice);
-                applyControlsVisibility();
-            }
-
-            @Override
-            public void onTouchControlsToggled(boolean shown) {
-                controlsWanted = shown;
-            }
-        });
-        mLayout.addView(homeMenu, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
         controlsWanted = !"never".equals(controlsMode) && !("auto".equals(controlsMode) && controllerConnected());
-        homeMenu.setControlsShown(controlsWanted);
         applyControlsVisibility();
         final InputManager input = getSystemService(InputManager.class);
         input.registerInputDeviceListener(new InputManager.InputDeviceListener() {
@@ -259,29 +243,24 @@ public class GameActivity extends SDLActivity {
     }
 
     // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
-    public void showHomeMenu() {
+    public void menuOpened() {
         runOnUiThread(() -> {
-            if (homeMenu != null) {
-                controls.setControlsShown(false);
-                homeMenu.setControlsShown(controlsWanted);
-                homeMenu.show();
-            }
+            menuOpen = true;
+            applyControlsVisibility();
         });
     }
 
     // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
-    public void hideHomeMenu() {
+    public void menuClosed() {
         runOnUiThread(() -> {
-            if (homeMenu != null) {
-                homeMenu.hide();
-                applyControlsVisibility();
-            }
+            menuOpen = false;
+            applyControlsVisibility();
         });
     }
 
     private void applyControlsVisibility() {
         if (controls != null) {
-            controls.setControlsShown(controlsWanted && (homeMenu == null || !homeMenu.showing()));
+            controls.setControlsShown(controlsWanted && !menuOpen);
         }
     }
 
@@ -325,9 +304,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (homeMenu != null && homeMenu.showing()) {
-            return homeMenu.handleKey(event);
-        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }
@@ -336,22 +312,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (homeMenu != null && homeMenu.showing()) {
-            // A stick or hat pad moves the menu's focus, once per push.
-            if (fromController(event.getSource()) && event.getAction() == MotionEvent.ACTION_MOVE) {
-                float axis = event.getAxisValue(MotionEvent.AXIS_HAT_Y);
-                if (Math.abs(axis) < 0.5f) {
-                    axis = event.getAxisValue(MotionEvent.AXIS_Y);
-                }
-                final float direction = axis > 0.6f ? 1.0f : axis < -0.6f ? -1.0f : 0.0f;
-                if (direction != 0.0f && direction != menuAxis) {
-                    final int code = direction > 0 ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_UP;
-                    homeMenu.handleKey(new KeyEvent(KeyEvent.ACTION_DOWN, code));
-                }
-                menuAxis = direction;
-            }
-            return true;
-        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }

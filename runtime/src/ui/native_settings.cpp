@@ -204,6 +204,31 @@ bool restart_asking() {
 // The pages, in order.
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
                                                    "ADVANCED"};
+// The pages shown. GRAPHICS and MODS come back as their features are built natively.
+constexpr unsigned kShownTabs[] = {0u, 2u, 3u, 4u, 6u, 7u};
+constexpr unsigned kShownTabCount = static_cast<unsigned>(std::size(kShownTabs));
+
+unsigned shown_position(unsigned tab) {
+    for (unsigned i = 0; i < kShownTabCount; ++i) {
+        if (kShownTabs[i] == tab) return i;
+    }
+    return 0u;
+}
+
+// Rows of the shown pages for what is not there yet or not on this platform.
+bool row_hidden(const char* label) {
+    static constexpr const char* kHidden[] = {
+        "INTERFACE", "HUD RESOLUTION", "RAY TRACING HARDWARE", "NVIDIA STREAMLINE", "NVIDIA REFLEX", "DLSS", "DLSS FRAME GENERATION",
+#if defined(__ANDROID__)
+        "MONITOR", "DISPLAY MODE", "RESOLUTION", "REFRESH RATE", "VSYNC", "DISCORD STATUS", "MIIS", "IMPORT MIIS", "YOUR MIIS", "MIIS FOLDER",
+        "GRAPHICS CARD", "DIAGNOSTICS",
+#endif
+    };
+    for (const char* hidden : kHidden) {
+        if (std::strcmp(label, hidden) == 0) return true;
+    }
+    return false;
+}
 
 // Settings menu draft. Display and graphics rows edit s_settings_draft, the game's settings (the audio mix, text
 // speed, button icons, language, Discord status) s_runtime_draft; Enter (Y on a controller) applies them, Backspace
@@ -1160,13 +1185,12 @@ void cycle_native_settings_tab(int delta) {
     end_controls_capture();
     s_native_settings_button_row.store(~0u, std::memory_order_relaxed);
     s_settings_first_row = 0u;
-    int tab = static_cast<int>(
-        s_native_settings_tab.load(std::memory_order_relaxed) %
-        kNativeSettingsTabCount);
-    tab = (tab + delta) % static_cast<int>(kNativeSettingsTabCount);
-    if (tab < 0) {
-        tab += static_cast<int>(kNativeSettingsTabCount);
+    int place = static_cast<int>(shown_position(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount));
+    place = (place + delta) % static_cast<int>(kShownTabCount);
+    if (place < 0) {
+        place += static_cast<int>(kShownTabCount);
     }
+    const int tab = static_cast<int>(kShownTabs[place]);
     s_native_settings_tab.store(
         static_cast<unsigned>(tab), std::memory_order_relaxed);
     unsigned first = 0u;
@@ -2520,15 +2544,18 @@ std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
 
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
                                        const RenderFeatureCaps& caps) {
+    std::vector<SettingsRow> rows;
     switch (tab % kNativeSettingsTabCount) {
-    case 0: return display_page(draft);
-    case 1: return graphics_page(draft);
-    case 4: return game_page(runtime);
-    case 5: return mods_page(draft);
-    case 6: return system_page(caps);
-    case 7: return advanced_page();
-    default: return {};
+    case 0: rows = display_page(draft); break;
+    case 1: rows = graphics_page(draft); break;
+    case 4: rows = game_page(runtime); break;
+    case 5: rows = mods_page(draft); break;
+    case 6: rows = system_page(caps); break;
+    case 7: rows = advanced_page(); break;
+    default: break;
     }
+    std::erase_if(rows, [](const SettingsRow& row) { return row_hidden(std::string(row.label).c_str()); });
+    return rows;
 }
 
 std::string native_settings_row_text(
@@ -3219,8 +3246,10 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
 // selection and what the line under the page says, in the order the overlay always chose it. Takes the menu's lock.
 NativeSettingsView build_native_settings_view() {
     NativeSettingsView view;
-    view.pages.assign(std::begin(kNativeSettingsTabNames), std::end(kNativeSettingsTabNames));
-    view.controls_page = kControlsTab;
+    for (const unsigned shown : kShownTabs) {
+        view.pages.push_back(kNativeSettingsTabNames[shown]);
+    }
+    view.controls_page = shown_position(kControlsTab);
     // The hints show the buttons the icons do: a chosen style whatever is in hand (the keyboard's: its keys), else what
     // the player last used.
     const ButtonIcons icons = get_runtime_settings().button_icons;
@@ -3237,7 +3266,7 @@ NativeSettingsView build_native_settings_view() {
     }
     view.open = s_native_settings_visible.load(std::memory_order_relaxed);
     const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
-    view.page = tab;
+    view.page = shown_position(tab);
     if (!view.open) {
         return view;
     }
@@ -3587,23 +3616,14 @@ bool native_settings_wheel(int delta) {
     return true;
 }
 
-// Dropped files: mod archives and folders into the mods folder (the MODS page opens), anything else to the Mii import.
+// Dropped files go to the Mii import.
 void native_settings_files_dropped(std::vector<std::filesystem::path> files) {
-    std::vector<std::filesystem::path> mods;
     std::vector<std::filesystem::path> miis;
     for (std::filesystem::path& path : files) {
         std::error_code error;
-        if (std::filesystem::is_directory(path, error) || galaxy::mods::is_mod_archive(path)) {
-            mods.push_back(std::move(path));
-        } else {
+        if (!std::filesystem::is_directory(path, error)) {
             miis.push_back(std::move(path));
         }
-    }
-    if (!mods.empty()) {
-        run_mod_imports(std::move(mods));
-        s_native_settings_tab.store(5u, std::memory_order_relaxed);
-        s_native_settings_row.store(1u, std::memory_order_relaxed);
-        set_native_settings_visible(true);
     }
     if (!miis.empty()) {
         std::thread([miis = std::move(miis)] {
@@ -3664,8 +3684,8 @@ void native_settings_input(NativeSettingsInput input, int arg) {
     }
     switch (input) {
     case NativeSettingsInput::SelectPage: {
-        const int current = static_cast<int>(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount);
-        if (arg >= 0 && arg < static_cast<int>(kNativeSettingsTabCount) && arg != current) {
+        const int current = static_cast<int>(shown_position(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount));
+        if (arg >= 0 && arg < static_cast<int>(kShownTabCount) && arg != current) {
             cycle_native_settings_tab(arg - current);
         }
         return;

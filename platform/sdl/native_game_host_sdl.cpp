@@ -3,6 +3,7 @@
 // audio stream, player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (with the
 // same bindings and tuning as Windows), vibration, and the device data the game reads.
 
+#include "galaxy/render_api.h"
 #include "sdl_host.h"
 
 #include "galaxy/content_viewport.h"
@@ -83,7 +84,7 @@ bool project_window_point(const sdl::InputState& state, float x, float y, float&
     }
     const in::NativeMousePointerProjection projection = in::project_native_mouse_pointer({
         state.window_focused, true, true, static_cast<int>(x), static_cast<int>(y), state.window_width,
-        state.window_height, content->viewport, 1.0f, 1.0f});
+        state.window_height, content->viewport});
     if (!projection.visible) {
         return false;
     }
@@ -98,6 +99,11 @@ float g_rumble_strength = 1.0f;
 }  // namespace
 
 in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
+    // A menu that takes the screen takes the input: the game sees nothing held.
+    if (galaxy::render::native_window_input_captured()) {
+        (void)sdl::take_input_state();
+        return {};
+    }
     const in::PlayContext context =
         star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
@@ -106,7 +112,7 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
-    const sdl::InputState state = sdl::input_state();
+    const sdl::InputState state = sdl::take_input_state();
     const in::ControlsConfig& config = live_controls();
     in::PlayerInput snapshot{};
 
@@ -114,6 +120,12 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
     static std::array<std::uint32_t, sdl::kMaxPads> s_previous{};
     in::LogicalInput pads{};
     float pad_pointer_speed = 0.0f;
+    float motion_x = 0.0f;
+    float motion_y = 0.0f;  // down positive, as the pointer's
+    bool shake_remote = false;
+    bool shake_nunchuk = false;
+    const in::tilt::Vec3* controller_up = nullptr;
+    const std::uint64_t motion_now_us = galaxy::steady_ms() * 1000u;
     for (std::size_t i = 0; i < sdl::kMaxPads; ++i) {
         in::PadSample sample = state.pads[i];
         if (!sample.connected) {
@@ -121,6 +133,22 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
             continue;
         }
         const in::SchemeTuning& tuning = config.tune(sample.scheme);
+        const sdl::PadMotion& motion = state.motion[i];
+        if (tuning.gyro_pointer && motion.imu_live) {
+            motion_x += motion.gyro_x;
+            motion_y -= tuning.invert_pointer_y ? -motion.gyro_y : motion.gyro_y;
+        }
+        if (tuning.touch_pointer && motion.touch_live) {
+            motion_x += motion.touch_dx * 2.0f * tuning.touch_sensitivity;
+            motion_y += (tuning.invert_pointer_y ? -motion.touch_dy : motion.touch_dy) * 2.0f * tuning.touch_sensitivity;
+        }
+        if (motion.shake_until_us != 0u && motion_now_us < motion.shake_until_us) {
+            shake_remote = shake_remote || tuning.motion_shake == in::MotionShake::Remote;
+            shake_nunchuk = shake_nunchuk || tuning.motion_shake == in::MotionShake::Nunchuk;
+        }
+        if (controller_up == nullptr && motion.gravity_valid) {
+            controller_up = &motion.gravity;
+        }
         const in::StickVector left = in::apply_radial_deadzone(sample.axes[0], sample.axes[1], tuning.stick_deadzone);
         const in::StickVector right =
             in::apply_radial_deadzone(sample.axes[2], sample.axes[3], tuning.pointer_deadzone);
@@ -198,6 +226,12 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
         s_pointer_ms = now;
         s_hold_ms = kStickPointerHoldMs;
     }
+    if (motion_x != 0.0f || motion_y != 0.0f) {
+        s_pointer_x = std::clamp(s_pointer_x + motion_x, -1.0f, 1.0f);
+        s_pointer_y = std::clamp(s_pointer_y + motion_y, -1.0f, 1.0f);
+        s_pointer_ms = now;
+        s_hold_ms = kStickPointerHoldMs;
+    }
     // A tap in a menu points there and presses A.
     static std::uint64_t s_taps = state.taps;
     static std::uint8_t s_tap_reports = 0;
@@ -225,13 +259,13 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
 
     // Tilt sections steer with the stick.
     static in::tilt::Tilt s_tilt{};
-    const in::tilt::Tilt::Output tilt = s_tilt.update(section, nullptr, logic.stick_x, logic.stick_y, false);
+    const in::tilt::Tilt::Output tilt = s_tilt.update(section, controller_up, logic.stick_x, logic.stick_y, false);
     if (tilt.active) {
         snapshot.gravity = tilt.game;
     }
     snapshot.pointer_on = snapshot.pointer_on && in::remote_faces_screen(snapshot.gravity);
-    snapshot.shake = held(in::GameInput::Shake);
-    snapshot.nunchuk_shake = held(in::GameInput::NunchukShake);
+    snapshot.shake = held(in::GameInput::Shake) || shake_remote;
+    snapshot.nunchuk_shake = held(in::GameInput::NunchukShake) || shake_nunchuk;
     return snapshot;
 }
 

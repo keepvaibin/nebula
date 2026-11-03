@@ -3,6 +3,8 @@
 // (tools/test_driver/run_options.cpp), once, and a release does not contain that file.
 #pragma once
 
+#include "galaxy/portable.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>

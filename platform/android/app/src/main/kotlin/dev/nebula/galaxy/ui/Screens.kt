@@ -355,7 +355,7 @@ private fun HomeScreen(model: LauncherModel, onPlay: () -> Unit) {
                 PrimaryAction("Play", Icons.Rounded.PlayArrow, onPlay, Modifier.fillMaxWidth(), tall = true)
                 Gap(20.dp)
                 GlassCard(Modifier.fillMaxWidth(), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 6.dp)) {
-                    NavigationRow(Icons.Rounded.Tune, "Settings", "Graphics, touch controls, storage") { model.screen = Screen.Settings }
+                    NavigationRow(Icons.Rounded.Tune, "Settings", "Touch controls, storage") { model.screen = Screen.Settings }
                     HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp))
                     NavigationRow(Icons.Rounded.Info, "About Nebula", "Version ${BuildConfig.VERSION_NAME}, licenses") { model.screen = Screen.About }
                 }
@@ -428,79 +428,11 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
 @Composable
 private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLog: () -> Unit) {
     var confirmRemove by remember { mutableStateOf(false) }
-    val graphics = model.graphics
     val controls = model.controls
     Column(Modifier.fillMaxSize()) {
         TopBar("Settings") { model.back() }
         Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 680.dp).fillMaxWidth().padding(bottom = 32.dp)) {
-                SectionTitle("Graphics")
-                GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
-                    Text(
-                        "Internal resolution",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
-                    )
-                    SwitchRow("Menus and HUD at the screen's resolution", "Sharp text at any internal resolution",
-                        graphics.hudAtScreen) {
-                        model.updateGraphics(graphics.copy(hudAtScreen = it))
-                    }
-                    val refresh = LocalView.current.display?.let { DisplayRate.fastestMode(it).refreshRate.roundToInt() } ?: 60
-                    if (refresh > 61) {
-                        HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-                        Text(
-                            "Frame rate",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
-                        )
-                        ChoiceRow("60 fps", "The game's own rate", !graphics.displayRate) {
-                            model.updateGraphics(graphics.copy(displayRate = false))
-                        }
-                        ChoiceRow("$refresh fps", "Frames in between are drawn from the game's motion. More power.", graphics.displayRate) {
-                            model.updateGraphics(graphics.copy(displayRate = true))
-                        }
-                    }
-                    HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-                    Text(
-                        "Anti-aliasing",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
-                    )
-                    val msaa = graphics.msaa > 1
-                    ChoiceRow("Off", null, graphics.aa == "off" && !msaa) {
-                        model.updateGraphics(graphics.copy(aa = "off", msaa = 1))
-                    }
-                    ChoiceRow("FXAA", "Lightest", graphics.aa == "fxaa" && !msaa) {
-                        model.updateGraphics(graphics.copy(aa = "fxaa", msaa = 1))
-                    }
-                    ChoiceRow("SMAA", "Cleaner edges", graphics.aa == "smaa" && !msaa) {
-                        model.updateGraphics(graphics.copy(aa = "smaa", msaa = 1))
-                    }
-                    ChoiceRow("MSAA 2x", "Geometry edges sampled twice. More power.", graphics.msaa == 2) {
-                        model.updateGraphics(graphics.copy(aa = "off", msaa = 2))
-                    }
-                    ChoiceRow("MSAA 4x", "Smoothest geometry edges. Most power.", graphics.msaa == 4) {
-                        model.updateGraphics(graphics.copy(aa = "off", msaa = 4))
-                    }
-                    HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-                    Text(
-                        "Enlarging to the screen",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
-                    )
-                    ChoiceRow("Bilinear", null, !graphics.fsr) { model.updateGraphics(graphics.copy(fsr = false)) }
-                    ChoiceRow("FSR 1", "Sharper edges when enlarging", graphics.fsr) {
-                        model.updateGraphics(graphics.copy(fsr = true))
-                    }
-                    SliderRow("Sharpening", graphics.sharpness / 100f, 0f..1f, { "${(it * 100).roundToInt()}%" }) {
-                        model.updateGraphics(graphics.copy(sharpness = (it * 100).roundToInt()))
-                    }
-                    HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-                    SwitchRow("VSync", "Frames wait for the display. Off lowers latency.", graphics.vsync) {
-                        model.updateGraphics(graphics.copy(vsync = it))
-                    }
-                }
-
                 SectionTitle("Touch controls")
                 GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
                     ChoiceRow("Automatic", "Hidden while a controller is used; touch the screen to bring them back", controls.mode == "auto") {

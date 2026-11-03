@@ -1,5 +1,6 @@
 // The rendering settings: config.ini loading and saving, the GALAXY_<KEY> overrides, and the data folders beside
 // config.ini.
+#include "galaxy/portable.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/run_options.h"
 #include "../../../tools/test_driver/switches.h"
@@ -116,7 +117,7 @@ static unsigned parse_choice(const char* v, const char* const (&names)[N], unsig
     const unsigned index = parse_uint(v, N);
     if (index < N) return index;
     for (std::size_t i = 0; i < N; ++i) {
-        if (_stricmp(v, names[i]) == 0) return static_cast<unsigned>(i);
+        if (::galaxy::text_iequal(v, names[i])) return static_cast<unsigned>(i);
     }
     return def;
 }
@@ -128,7 +129,7 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
     const unsigned index = parse_uint(v, kAspectModeCount);
     if (index < std::size(kBefore3To2)) return kBefore3To2[index];
     for (unsigned i = 0; i < kAspectModeCount; ++i) {
-        if (_stricmp(v, kAspectNames[i]) == 0) return i;
+        if (::galaxy::text_iequal(v, kAspectNames[i])) return i;
     }
     return def;
 }
@@ -262,6 +263,28 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
+#if defined(NEBULA_RELEASE)
+    // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
+    cfg.ray_tracing_enabled = false;
+    cfg.upscaler = 0u;
+    cfg.spatial_quality = 0u;
+    cfg.temporal_quality = 0u;
+    cfg.sharpness = 0u;
+    cfg.frame_generation = 0u;
+    cfg.aa_mode = 0u;
+    cfg.msaa_samples = 1u;
+    cfg.anisotropic_filtering = 1u;
+    cfg.enhanced_mipmaps = false;
+    cfg.curved_surfaces = false;
+    cfg.per_pixel_lighting = false;
+    cfg.enhanced_lighting = false;
+    cfg.ambient_occlusion = false;
+    cfg.texture_packs = false;
+    cfg.hud_output_resolution = false;
+    if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {
+        cfg.max_fps = 60.0f;  // no interpolated frames
+    }
+#endif
 }
 
 static void sanitize_feature_status(RenderFeatureStatus& status) {
