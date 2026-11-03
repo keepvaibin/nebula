@@ -3647,6 +3647,8 @@ std::string json_text(std::string_view text) {
 
 // The mods' disc files, cooked once into a store the game reads over its own (cook/overlay.rs): by the cooker beside
 // this program, again when what they change has changed. A failure leaves the game as it is and says why in the log.
+void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id);
+
 void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id) {
     const std::string language = galaxy::mods::language_folder(
         game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
@@ -3669,6 +3671,15 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
     for (const std::string& note : plan.notes) {
         log_line("mods:", note.c_str());
     }
+    cook_mod_files(plan, settings_folder, game_id);
+    // Converted mods over the rest, the top of the list last.
+    for (const fs::path& store : plan.stores) {
+        const std::string text = "package " + utf8_of(store.parent_path().filename()) + (gPak.store.attach_overlay(store) ? " applied" : " could not be read");
+        log_line("mods:", text.c_str());
+    }
+}
+
+void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings_folder, const std::string& game_id) {
     if (plan.files.empty()) {
         return;
     }

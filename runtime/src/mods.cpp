@@ -443,7 +443,11 @@ constexpr const char* kDiscFolders[] = {"AudioRes", "LayoutData", "MapPartsData"
                                          "UsSpanish", "EuEnglish", "EuFrench", "EuGerman", "EuItalian", "EuSpanish",
                                          "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese", "HomeButton2"};
 
+// The package format this build reads (LumaLink's PACKAGE_FORMAT); old ones keep working.
+constexpr long long kPackageFormat = 1;
+
 struct ModLayout {
+    fs::path package;  // nebula-mod.json of a converted mod
     fs::path sd_root;           // Riivolution: where riivolution/ is
     fs::path riivolution_dir;
     std::vector<fs::path> xmls;
@@ -591,9 +595,67 @@ void read_pack(ModInfo& mod, const fs::path& textures) {
     }
 }
 
+// A whole number field of a package's manifest, at the top of the file; `fallback` when it has none.
+long long json_number(const std::string& text, std::string_view field, long long fallback) {
+    const std::string key = '"' + std::string(field) + '"';
+    std::size_t at = text.find(key);
+    if (at == std::string::npos) return fallback;
+    at = text.find(':', at + key.size());
+    if (at == std::string::npos) return fallback;
+    ++at;
+    while (at < text.size() && (text[at] == ' ' || text[at] == '\t' || text[at] == '\r' || text[at] == '\n')) ++at;
+    long long value = 0;
+    bool any = false;
+    for (; at < text.size() && text[at] >= '0' && text[at] <= '9'; ++at) {
+        value = value * 10 + (text[at] - '0');
+        any = true;
+    }
+    return any ? value : fallback;
+}
+
+bool json_true(const std::string& text, std::string_view field) {
+    const std::string key = '"' + std::string(field) + '"';
+    std::size_t at = text.find(key);
+    if (at == std::string::npos) return false;
+    at = text.find(':', at + key.size());
+    return at != std::string::npos && text.find("true", at) == text.find_first_not_of(" \t\r\n", at + 1u);
+}
+
+// A package's native switches: "native_patches": { "5": 1, ... }.
+std::map<std::uint32_t, std::uint32_t> package_patches(const std::string& text) {
+    std::map<std::uint32_t, std::uint32_t> out;
+    std::size_t at = text.find("\"native_patches\"");
+    if (at == std::string::npos) return out;
+    at = text.find('{', at);
+    const std::size_t end = at == std::string::npos ? at : text.find('}', at);
+    if (end == std::string::npos) return out;
+    while (true) {
+        const std::size_t open = text.find('"', at);
+        if (open == std::string::npos || open > end) break;
+        const std::size_t close = text.find('"', open + 1u);
+        const std::size_t colon = close == std::string::npos ? close : text.find(':', close);
+        if (colon == std::string::npos || colon > end) break;
+        std::uint64_t id = 0;
+        for (std::size_t i = open + 1u; i < close && text[i] >= '0' && text[i] <= '9'; ++i) id = id * 10u + static_cast<unsigned>(text[i] - '0');
+        std::size_t v = colon + 1u;
+        while (v < end && (text[v] == ' ' || text[v] == '\r' || text[v] == '\n')) ++v;
+        std::uint64_t value = 0;
+        for (; v < end && text[v] >= '0' && text[v] <= '9'; ++v) value = value * 10u + static_cast<unsigned>(text[v] - '0');
+        out[static_cast<std::uint32_t>(id)] = static_cast<std::uint32_t>(value);
+        at = v;
+    }
+    return out;
+}
+
 ModLayout layout_of(const fs::path& mod) {
     ModLayout layout;
     std::error_code error;
+    if (std::optional<fs::path> manifest = child_any_case(mod, "nebula-mod.json", false)) {
+        // A converted mod: everything is where the package put it.
+        layout.package = *manifest;
+        if (std::optional<fs::path> textures = child_any_case(mod, "textures", true)) layout.textures = *textures;
+        return layout;
+    }
     // riivolution/ in the mod, or one folder down (an archive's own top folder).
     std::vector<fs::path> roots{mod};
     for (const auto& entry : fs::directory_iterator(mod, error)) {
@@ -917,6 +979,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.textures = !layout.textures.empty();
         mod.movies = !layout.movies.empty();
         mod.loose = !layout.loose.empty();
+        mod.package = !layout.package.empty();
         const auto it = saved.find(mod.id);
         const SavedMod* s = it != saved.end() ? &it->second : nullptr;
         mod.enabled = s == nullptr || s->enabled;
@@ -998,17 +1061,30 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                 }
             }
         }
+        if (mod.package) {
+            const std::string manifest = read_text(layout.package);
+            const std::string title = json_string(manifest, "name");
+            if (!title.empty()) mod.pack_title = title;
+            mod.native_patches = static_cast<unsigned>(package_patches(manifest).size());
+            mod.changed_files = static_cast<unsigned>(json_number(manifest, "files", 0));
+            const std::string for_game = json_string(manifest, "game_id");
+            if (json_number(manifest, "format", 1) > kPackageFormat) {
+                mod.problem = "UPDATE NEBULA TO USE THIS MOD";
+            } else if (!game_id.empty() && !for_game.empty() && for_game != game_id) {
+                mod.problem = "THIS MOD IS FOR ANOTHER VERSION OF THE GAME";
+            }
+        }
         mod.languages.assign(languages.begin(), languages.end());
         if (!layout.files_root.empty()) list_files(layout.files_root, std::string(), changed_paths[mod.id]);
         for (const fs::path& loose_file : layout.loose) changed_paths[mod.id].insert("name:" + lower(utf8_name(loose_file)));
         if (!layout.textures.empty()) list_textures(layout.textures, changed_textures[mod.id]);
-        mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
+        if (!mod.package) mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
         if (mod.code_patches != 0u) {
             // Its files apply; the game cannot run patches written for the console's code.
             mod.problem = std::to_string(mod.code_patches) + " CODE PATCHES HAVE NO NATIVE VERSION: THE REST OF THE MOD APPLIES";
         }
-        if (!mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
+        if (!mod.package && !mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
             mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";
         }
         mods.push_back(std::move(mod));
@@ -1214,6 +1290,21 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         if (!mod.enabled) continue;
         active.push_back(mod.id);
         plan.code_patches += mod.code_patches;
+        if (mod.package) {
+            if (!mod.problem.empty()) {
+                plan.notes.push_back(mod.id + ": " + mod.problem);
+                continue;
+            }
+            const std::string manifest = read_text(mod.path / "nebula-mod.json");
+            std::error_code ec;
+            if (fs::is_regular_file(mod.path / "files.pak", ec)) plan.stores.push_back(mod.path / "files.pak");
+            for (const auto& [id, value] : package_patches(manifest)) plan.native_patches[id] = value;
+            if (json_true(manifest, "has_save")) {
+                plan.save_folder = mod.path / "save";
+                plan.save_clone = json_true(manifest, "save_clone");
+            }
+            continue;
+        }
         if (!changes_disc(mod)) continue;
         const ModLayout layout = layout_of(mod.path);
         std::vector<Placed> placed;
