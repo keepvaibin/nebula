@@ -120,7 +120,7 @@ int main() {
     expect(current_activity(file, sizeof(file)) == Activity::None && file[0] == '\0', "no activity");
     {
         ScopedActivity activity(Activity::Movie, "C:/m/PrologueA.mp4");
-        expect(current_activity(file, sizeof(file)) == Activity::Movie && std::string(file) == "C:/m/PrologueA.mp4",
+        expect(current_activity(file, sizeof(file)) == Activity::Movie && std::string(file) == "PrologueA.mp4",
                "the thread's activity");
         Activity other = Activity::TexturePack;
         std::thread([&] { other = current_activity(nullptr, 0); }).join();

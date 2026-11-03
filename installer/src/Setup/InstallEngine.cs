@@ -55,7 +55,7 @@ namespace Nebula.Setup
         /// <summary>Bump when nebula-import's content folder changes shape. 2: the game's files cooked (textures as
         /// texture records, archives expanded); a format-1 folder is cooked on update without the disc. 3: the game's data in
         /// host order (B-02); a format-2 folder cannot be cooked again: it needs the disc.</summary>
-        public const int ContentFormatVersion = 5;
+        public const int ContentFormatVersion = 6;
         /// <summary>The content format nebula-import's cook command converts from.</summary>
         private const int CookableContentFormatVersion = 1;
 
