@@ -425,11 +425,11 @@ endif()
 
 # The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
 # (smg_game.dll, beside the executable or --module) on Nebula's renderer.
-add_executable(NebulaNative native/host/host_main.cpp runtime/src/movie_video.cpp)
+add_executable(NebulaNative native/host/host_main.cpp runtime/src/movie_video.cpp runtime/src/frame_phase.cpp)
 target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
-target_link_libraries(NebulaNative PRIVATE galaxy_gx galaxy_save_files galaxy_disc_files)
+target_link_libraries(NebulaNative PRIVATE galaxy_gx galaxy_save_files galaxy_disc_files dwmapi)
 if(MSVC)
     # Symbols for crash dumps and the thread profiler; code generation is unchanged.
     target_compile_options(NebulaNative PRIVATE /Zi)
@@ -510,6 +510,7 @@ galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS ga
 galaxy_test(galaxy_movie_video_tests SOURCES ${rt}/movie_video_tests.cpp ${rt}/movie_video.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_motion_signals_tests SOURCES ${rt}/motion_signals_tests.cpp)
+galaxy_test(galaxy_frame_phase_tests SOURCES ${rt}/frame_phase_tests.cpp ${rt}/frame_phase.cpp)
 galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
     LIBS galaxy_atomic_file)

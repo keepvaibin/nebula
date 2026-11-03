@@ -12,6 +12,11 @@
 #define NOMINMAX
 #endif
 #endif
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
+#include <dwmapi.h>
+#endif
+#include "galaxy/frame_phase.h"
+#include "galaxy/render/present_clock.h"
 #include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
 
@@ -664,6 +669,44 @@ void audio_frame_tick() {
     }
 }
 
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
+// The display's retraces by the compositor's clock, looked at twice a second.
+std::optional<galaxy::host::Retraces> display_retraces() {
+    static std::optional<galaxy::host::Retraces> known;
+    static int64_t earlier_vblank_ns = 0;
+    static uint32_t frames = 0;
+    if (frames++ % 30u != 0u) return known;
+    known.reset();
+    DWM_TIMING_INFO timing{};
+    timing.cbSize = sizeof(timing);
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    if (SUCCEEDED(DwmGetCompositionTimingInfo(nullptr, &timing)) && timing.qpcRefreshPeriod != 0u) {
+        const auto to_ns = [&](uint64_t qpc) {
+            const uint64_t whole = qpc / static_cast<uint64_t>(frequency.QuadPart);
+            const uint64_t part = qpc % static_cast<uint64_t>(frequency.QuadPart);
+            return static_cast<int64_t>(whole * 1000000000ull + part * 1000000000ull / static_cast<uint64_t>(frequency.QuadPart));
+        };
+        const galaxy::host::Retraces now{to_ns(timing.qpcVBlank), to_ns(timing.qpcRefreshPeriod)};
+        if (earlier_vblank_ns != 0 && galaxy::host::retraces_in_step(earlier_vblank_ns, now)) known = now;
+        earlier_vblank_ns = now.vblank_ns;
+    }
+    return known;
+}
+
+// The next frame's start after the one due at `start` (frame_phase.h).
+Clock::time_point next_frame_start(Clock::time_point start, std::chrono::nanoseconds period) {
+    static galaxy::host::FramePhase phase;
+    static int64_t previous_ns = 0;
+    const int64_t start_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(start.time_since_epoch()).count();
+    const int64_t present_ns = galaxy::render::g_last_present_ns.load(std::memory_order_relaxed);
+    const int64_t work_ns = previous_ns != 0 && present_ns > previous_ns ? present_ns - previous_ns : 0;
+    previous_ns = start_ns;
+    const int64_t next_ns = phase.next_start(start_ns, work_ns, period.count(), display_retraces());
+    return start + std::chrono::nanoseconds(next_ns - start_ns);
+}
+#endif
+
 // The display's frame at 60 Hz: 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
 // wake-up skips the fields it missed, as a display does, rather than delivering them back to back. On Android the
 // frame follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
@@ -697,7 +740,11 @@ void svc_frame_wait(void*) {
         if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
             period = display_period;
         }
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER) && !defined(NEBULA_HOST_SDL)
+        next = next_frame_start(next, period);
+#else
         next += period;
+#endif
         const auto now = Clock::now();
         if (now >= next) {
             next = now + period;
