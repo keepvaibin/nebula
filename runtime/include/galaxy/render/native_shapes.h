@@ -46,6 +46,8 @@ struct Corner {
 };
 
 // Geometry::attributes (as nebula_game_api.h's NEBULA_SHAPE_*).
+// Corner::texture_matrix: the coordinate starts from the corner's own position matrix (as NEBULA_CORNER_POSITION_MATRIX).
+inline constexpr std::uint8_t kCornerPositionMatrix = 0xFFu;
 inline constexpr std::uint32_t kNormal = 1u << 0;
 inline constexpr std::uint32_t kColor0 = 1u << 1;
 inline constexpr std::uint32_t kColor1 = 1u << 2;
