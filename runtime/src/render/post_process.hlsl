@@ -322,13 +322,13 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 // second ring twice as far with half the threshold, where the first one smoothed. A pixel more than two levels from
 // one of its four neighbours is an edge or texture already, and stays without the far taps. The four pixels of a 2x2
 // quad share their taps' angle and distance (their reads fall in the same cache lines). Where that leaves a value
-// between two levels, a triangular dither of one level (Wannamaker 1992) keeps the 8-bit target from stepping it
+// between two levels, a triangular grain of one level (Wannamaker 1992) keeps the 8-bit target from stepping it
 // again; whole levels (flat colour, black, the HUD) stay exact.
 //
 // From 1080 lines the steps are wider than the reach needs to resolve, and the rings' arithmetic for every pixel is
 // most of the frame on a small GPU: the rings run on the picture reduced by a box (PASS_DEBAND_REDUCE, then
 // PASS_DEBAND_SMOOTH at the reduced size), and each pixel (PASS_DEBAND_APPLY) keeps its own edge test, takes the
-// smoothed picture where it lies within the threshold of it, and is dithered. g_params.zw scale a pixel position to
+// smoothed picture where it lies within the threshold of it, and is grained. g_params.zw scale a pixel position to
 // the smoothed picture's coordinates.
 Texture2D inputTex : register(t0);
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }

@@ -916,7 +916,7 @@ fn anm_block(kind: &[u8]) -> Option<AnmBlock> {
                 },
             }
         }
-        // TEV register keys (BRK): colour and constant register sets.
+        // Register colour keys (BRK): colour and constant register sets.
         b"TRK1" => AnmBlock {
             halves: &[0xA, 0xC, 0xE, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1A, 0x1C, 0x1E],
             words: &[],
@@ -1111,7 +1111,7 @@ pub fn is_j3d_model(bytes: &[u8]) -> bool {
 /// RGBA8 colours stay bytes); SHP1's shape data, index and matrix tables, vertex descriptors, matrix and draw
 /// entries, and in its display lists each primitive's count and 16-bit indices (the layout as J3DNativeShape reads
 /// it); MAT3's tables by record (material entries' indices, IDs, cull modes, lights, texture matrices, texture
-/// numbers, TEV colours, fog, NBT scales, indirect matrices; byte records stay); MDL3's list entries, patching
+/// numbers, register colours, fog, NBT scales, indirect matrices; byte records stay); MDL3's list entries, patching
 /// offsets and matrix registers (its command lists stay bytes, unread); TEX1's image headers (host_timg).
 pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 8 && &bytes[0..4] == b"2D3J" {
@@ -1397,7 +1397,7 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                     (0x40, 0x64, TEX_MTX),                             // texture matrices
                     (0x44, 0x64, TEX_MTX),                             // post-transform texture matrices
                     (0x48, 2, &[(0, 2, 2)]),                           // texture numbers
-                    (0x50, 8, &[(0, 8, 2)]),                           // TEV colours (s16 x4)
+                    (0x50, 8, &[(0, 8, 2)]),                           // register colours (s16 x4)
                     (0x68, 0x2C, &[(0x2, 0x4, 2), (0x4, 0x14, 4), (0x18, 0x2C, 2)]), // fog
                     (0x80, 0x10, &[(0x4, 0x10, 4)]),                   // NBT scales
                 ];

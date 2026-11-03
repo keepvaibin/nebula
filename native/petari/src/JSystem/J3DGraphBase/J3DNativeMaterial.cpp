@@ -72,7 +72,7 @@ namespace {
         const u32 diff = rSetup.diff_flags;
         const bool whole = diff == 0;
         const u16 loads = rSetup.loads;
-        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_TEV_COLOR) != 0) {
+        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_REGISTER_COLOR) != 0) {
             for (u32 r = 0; r < 3; r++) {
                 for (u32 c = 0; c < 4; c++) {
                     pC[4 + r * 4 + c] = rValues.register_color[r][c] / 255.0f;
@@ -419,7 +419,7 @@ namespace J3DNativeMaterial {
         }
         // The parts a register block variant keeps (the one-stage variant has no colours): left as set before.
         if (pTev->getRegisterColor(0) != NULL) {
-            pOut->loads |= J3D_LOADS_TEV_COLOR;
+            pOut->loads |= J3D_LOADS_REGISTER_COLOR;
             for (u32 i = 0; i < 3; i++) {
                 const J3DColorWide& rColor = *pTev->getRegisterColor(i);
                 pVal->register_color[i][0] = rColor.r;

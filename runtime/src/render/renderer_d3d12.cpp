@@ -6147,7 +6147,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::Clear: {
                 const ReplayClear& c = run_clears_[op.index];
-                clear_scene(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+                clear_scene(c.rgba, c.depth24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
                 break;
             }
             case ReplayKind::Copy: {
@@ -7672,7 +7672,7 @@ void RendererD3D12::bind_scene() {
 }
 
 void RendererD3D12::clear_scene(
-    std::uint32_t clear_rgba, std::uint32_t clear_z24,
+    std::uint32_t clear_rgba, std::uint32_t clear_depth,
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
@@ -7681,10 +7681,10 @@ void RendererD3D12::clear_scene(
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
-        replay_clears_.push_back({clear_rgba, clear_z24, color_enable, alpha_enable,
+        replay_clears_.push_back({clear_rgba, clear_depth, color_enable, alpha_enable,
                                   depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
-        log_start_clear_ = {clear_rgba, clear_z24, color_enable, alpha_enable,
+        log_start_clear_ = {clear_rgba, clear_depth, color_enable, alpha_enable,
                             depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format};
         log_start_clear_valid_ = true;
     }
@@ -7717,7 +7717,7 @@ void RendererD3D12::clear_scene(
         const bool rgba = color_enable && (alpha_enable || pixel_format != 1u);
         restore_owed_scene(rgba ? &rect : nullptr);
     }
-    const auto clear = make_scene_clear_values(clear_rgba, clear_z24, pixel_format);
+    const auto clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
     if (color_enable || alpha_enable) {
         if (pixel_format != 1u) alpha_enable = true;
         const float* col = clear.color.data();
@@ -7745,7 +7745,7 @@ void RendererD3D12::clear_scene(
         }
     }
     if (depth_enable) {
-        // REVERSED-Z buffer: console z24 (near=0, far=2^24) inverts into the D3D depth value.
+        // REVERSED-Z buffer: console depth24 (near=0, far=2^24) inverts into the D3D depth value.
         // GX_MAX_Z24 (0xFFFFFF = "clear to farthest") becomes about 0.0 here, which the flipped
         // GEQUAL-style funcs pass.
         command_list_->ClearDepthStencilView(

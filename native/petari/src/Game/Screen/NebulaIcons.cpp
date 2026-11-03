@@ -1529,7 +1529,7 @@ namespace {
     }
 
     // The A button over people and signs: IconAButton's two pictures (the button up, 48 pixels square, and pressed, 40;
-    // IA4) give way to ours (records), drawn as the font's A is, while it draws.
+    // small) give way to ours (records), drawn as the font's A is, while it draws.
     struct Picture {
         alignas(32) u8 mRecord[NEBULA_TEXTURE_HEADER + cCellMax * cCellMax * 4];
     };

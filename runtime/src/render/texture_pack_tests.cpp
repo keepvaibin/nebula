@@ -39,7 +39,7 @@ namespace {
 struct TestImage {
     std::uint16_t width;
     std::uint16_t height;
-    galaxy::render::TexFormat format;
+    galaxy::render::TexturePackFormat format;
     std::uint64_t address;
 };
 
@@ -90,12 +90,12 @@ void test_names() {
     expect(!parse_texture_pack_name("tex1_128x128_cf175626cca47369_142").has_value(), "format 142 does not exist");
     const auto m = parse_texture_pack_name("tex1_256x256_m_123c307fab917b99_1");
     expect(m && m->width == 256u && m->height == 256u && m->mipmapped && m->format == 1u &&
-               m->hash == 0x123c307fab917b99ull && m->tlut == 0u && !m->any_tlut,
+               m->hash == 0x123c307fab917b99ull && m->palette == 0u && !m->any_palette,
            "fields of a mipmapped I8 name");
     const auto c4 = parse_texture_pack_name("tex1_200x40_63f3408997969cd6_9a81ceb434acb873_8");
-    expect(c4 && c4->format == 8u && c4->tlut == 0x9a81ceb434acb873ull, "palette hash of a C4 name");
+    expect(c4 && c4->format == 8u && c4->palette == 0x9a81ceb434acb873ull, "palette hash of a C4 name");
     const auto any = parse_texture_pack_name("tex1_48x51_53403146169829a2_$_9");
-    expect(any && any->any_tlut && any->width == 48u && any->height == 51u, "palette wildcard");
+    expect(any && any->any_palette && any->width == 48u && any->height == 51u, "palette wildcard");
     const auto mip = parse_texture_pack_name("tex1_36x36_4653193aaa14d048_14_mip2");
     expect(mip && mip->level == 2u && mip->format == 14u, "custom level suffix");
     const auto arb = parse_texture_pack_name("tex1_128x128_m_02b5073505a48fb4_0_arb_mip7");
@@ -332,7 +332,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     TexturePackName png{};
     png.width = 32u;
     png.height = 32u;
-    png.format = static_cast<std::uint8_t>(TexFormat::RGBA8);
+    png.format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
     png.hash = hash_of(texels.data(), texels.size());
     std::vector<std::uint8_t> big(128u * 128u * 4u);
     for (std::size_t i = 0; i < big.size(); ++i) big[i] = static_cast<std::uint8_t>(i * 13u);
@@ -350,7 +350,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     TexturePackName dds{};
     dds.width = 16u;
     dds.height = 16u;
-    dds.format = static_cast<std::uint8_t>(TexFormat::CMPR);
+    dds.format = static_cast<std::uint8_t>(TexturePackFormat::Block4);
     dds.hash = 0x0123456789abcdefull;
     std::vector<std::uint8_t> bc1 = dds_header(64u, 64u, 7u, fourcc("DXT1"), 0u);
     bc1.resize(bc1.size() + 2048u + 512u + 128u + 32u + 8u + 8u + 8u, 0x11u);
@@ -365,7 +365,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     TexturePackName mod_name{};
     mod_name.width = 8u;
     mod_name.height = 8u;
-    mod_name.format = static_cast<std::uint8_t>(TexFormat::I8);
+    mod_name.format = static_cast<std::uint8_t>(TexturePackFormat::Gray8);
     mod_name.hash = 0x1111222233334444ull;
     std::vector<std::uint8_t> mod_pixels(16u * 16u * 4u, 0x22u);
     expect(write_png(mod / (texture_pack_name(mod_name) + ".png"), 16u, 16u, mod_pixels.data()), "mod PNG written");
@@ -383,19 +383,19 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     expect(packs.stats().names == 4u && packs.stats().files == 7u && packs.stats().folders == 2u &&
                packs.stats().levels == 1u,
            "four textures (one custom level) among seven files in two folders");
-    expect(packs.may_match(32u, 32u, TexFormat::RGBA8) && !packs.may_match(32u, 32u, TexFormat::RGB565),
+    expect(packs.may_match(32u, 32u, TexturePackFormat::Rgba8) && !packs.may_match(32u, 32u, TexturePackFormat::Rgb565),
            "size and format prefilter");
-    const std::uint32_t png_slot = packs.find(32u, 32u, TexFormat::RGBA8, png.hash, 0u);
-    const std::uint32_t dds_slot = packs.find(16u, 16u, TexFormat::CMPR, dds.hash, 0u);
-    const std::uint32_t mod_slot = packs.find(8u, 8u, TexFormat::I8, mod_name.hash, 0u);
+    const std::uint32_t png_slot = packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash, 0u);
+    const std::uint32_t dds_slot = packs.find(16u, 16u, TexturePackFormat::Block4, dds.hash, 0u);
+    const std::uint32_t mod_slot = packs.find(8u, 8u, TexturePackFormat::Gray8, mod_name.hash, 0u);
     expect(png_slot != TexturePacks::kNone && dds_slot != TexturePacks::kNone && mod_slot != TexturePacks::kNone,
            "every name found");
     expect(packs.file(dds_slot).extension() == ".dds", "a DDS wins over a PNG of the same name");
-    const std::uint32_t png_m_slot = packs.find(32u, 32u, TexFormat::RGBA8, png.hash, 0u, true);
+    const std::uint32_t png_m_slot = packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash, 0u, true);
     expect(png_m_slot != TexturePacks::kNone && png_m_slot != png_slot, "the _m variant is its own texture");
-    expect(packs.find(8u, 8u, TexFormat::I8, mod_name.hash, 0u, true) == mod_slot,
+    expect(packs.find(8u, 8u, TexturePackFormat::Gray8, mod_name.hash, 0u, true) == mod_slot,
            "a texture used with mipmaps finds the pack's file named without");
-    expect(packs.find(32u, 32u, TexFormat::RGBA8, png.hash ^ 1u, 0u) == TexturePacks::kNone, "other hash misses");
+    expect(packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash ^ 1u, 0u) == TexturePacks::kNone, "other hash misses");
     packs.add_user(png_slot);
     packs.add_user(dds_slot);
     std::vector<std::pair<std::uint32_t, TexturePackPixels>> loaded;
@@ -445,7 +445,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     TexturePackName dumped{};
     dumped.width = 4u;
     dumped.height = 4u;
-    dumped.format = static_cast<std::uint8_t>(TexFormat::IA8);
+    dumped.format = static_cast<std::uint8_t>(TexturePackFormat::GrayAlpha8);
     dumped.hash = 0xfedcba9876543210ull;
     std::vector<std::uint8_t> pixels(64u);
     for (std::size_t i = 0; i < pixels.size(); ++i) pixels[i] = static_cast<std::uint8_t>(i * 4u);
@@ -472,7 +472,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     packs.configure(settings);
     packs.begin_frame();
     expect(packs.pump(uploads) && !packs.enabled() &&
-               packs.find(32u, 32u, TexFormat::RGBA8, png.hash, 0u) == TexturePacks::kNone,
+               packs.find(32u, 32u, TexturePackFormat::Rgba8, png.hash, 0u) == TexturePacks::kNone,
            "turning packs off drops the index");
     packs.shutdown();
 }
@@ -483,7 +483,7 @@ void test_priority(const std::filesystem::path& root) {
     TexturePackName shared{};
     shared.width = 16u;
     shared.height = 16u;
-    shared.format = static_cast<std::uint8_t>(TexFormat::RGBA8);
+    shared.format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
     shared.hash = 0x5555aaaa5555aaaaull;
     TexturePackName only_a = shared;
     only_a.hash = 0x1234ull;
@@ -529,7 +529,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     image.address = kAddress;
     image.width = 32u;
     image.height = 32u;
-    image.format = TexFormat::RGBA8;
+    image.format = TexturePackFormat::Rgba8;
     TextureSampler mode{};
     mode.wrap_s = TexWrap::Repeat;
     mode.wrap_t = TexWrap::Repeat;
@@ -538,12 +538,12 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     TexturePackName name{};
     name.width = 32u;
     name.height = 32u;
-    name.format = static_cast<std::uint8_t>(TexFormat::RGBA8);
+    name.format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
     name.hash = hash_of(reinterpret_cast<const std::uint8_t*>(texels.data()) + NEBULA_TEXTURE_HEADER,
                         texels.size() - NEBULA_TEXTURE_HEADER);
     {
         auto* const record = reinterpret_cast<NebulaTexture*>(texels.data());
-        record->disc_format = static_cast<std::uint8_t>(TexFormat::RGBA8);
+        record->disc_format = static_cast<std::uint8_t>(TexturePackFormat::Rgba8);
         record->pack_hash = name.hash;
     }
     std::vector<std::uint8_t> big(96u * 96u * 4u, 0x80u);

@@ -45,12 +45,12 @@ SamplerState s_lin : register(s0);
 SamplerState s_pt  : register(s1);
 struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 uint4 pack_depth(float depth_sample) {
-    uint z24 = uint(clamp(
+    uint depth24 = uint(clamp(
         (1.0 - depth_sample) * 16777216.0, 0.0, 16777215.0));
     return uint4(
-        (z24 >> 16) & 255u,
-        (z24 >> 8) & 255u,
-        z24 & 255u,
+        (depth24 >> 16) & 255u,
+        (depth24 >> 8) & 255u,
+        depth24 & 255u,
         255u);
 }
 float4 main(V v) : SV_Target {
@@ -315,14 +315,14 @@ SceneConversionShaderConstants make_screen_probe_constants(float x, float y, con
 }
 
 SceneClearValues make_scene_clear_values(std::uint32_t rgba,
-    std::uint32_t z24, std::uint8_t frame_format) noexcept {
+    std::uint32_t depth24, std::uint8_t frame_format) noexcept {
     const std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
     const std::uint32_t b = (rgba >> 8u) & 255u;
     const std::uint32_t a = (frame_format & 1u) != 0u ? rgba & 255u : 255u;
-    z24 &= 0xffffffu;
+    depth24 &= 0xffffffu;
     return {{{static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
               static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f}},
-            1.0f - static_cast<float>(z24) / 16777216.0f};
+            1.0f - static_cast<float>(depth24) / 16777216.0f};
 }
 
 std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const noexcept {
