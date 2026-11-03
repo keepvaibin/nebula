@@ -8,7 +8,6 @@ Environment variables for testing and debugging the runtime. None of them is nee
 |---|---|
 | `GALAXY_HIDE_WINDOW=1` | Runs without showing the game window; controllers never vibrate |
 | `GALAXY_RENDER_CONFIG_PATH`, `GALAXY_RUNTIME_SETTINGS_PATH` | Use these settings files instead of the ones in `%LOCALAPPDATA%\Nebula` |
-| `GALAXY_NAND_ROOT` | Save folder |
 | `GALAXY_INSTANCE_LEASE` | Private single-instance lock name, so test sessions can run side by side |
 | `GALAXY_AUDIO_WAV_DUMP=<path>`, `GALAXY_AUDIO_WAV_DUMP_ONLY=1` | Write the mixed audio to a WAV file, optionally without opening the sound device |
 | `GALAXY_PRESENT_SNAPSHOT_DIR`, `GALAXY_PRESENT_SNAPSHOT_EVERY`, `_FIRST`, `_LAST` | Save every Nth presented frame as a PPM image |

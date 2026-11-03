@@ -34,7 +34,7 @@ namespace NameObjFactory {
 
     CreatorFuncPtr getCreator(const char*);
     void requestMountObjectArchives(const char*, const JMapInfoIter&);
-    bool isReadResourceFromDVD(const char*, const JMapInfoIter&);
+    bool isReadResourceFromStore(const char*, const JMapInfoIter&);
     bool isPlayerArchiveLoaderObj(const char*);
     const Name2CreateFunc* getName2CreateFunc(const char*, const Name2CreateFunc*);
     void getMountObjectArchiveList(NameObjArchiveListCollector*, const char*, const JMapInfoIter&);

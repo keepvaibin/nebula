@@ -51,15 +51,15 @@ const char* test_data_paths_error(int argc, char** argv) {
         }
     }
     for (int i = 1; i + 1 < argc; ++i) {
-        if (std::strcmp(argv[i], "--nand") == 0) {
+        if (std::strcmp(argv[i], "--saves") == 0 || std::strcmp(argv[i], "--nand") == 0) {
             int count = 0;
             LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count);
-            const std::filesystem::path nand = wide != nullptr && i + 1 < count ? std::filesystem::path(wide[i + 1])
+            const std::filesystem::path saves = wide != nullptr && i + 1 < count ? std::filesystem::path(wide[i + 1])
                                                                                 : std::filesystem::path(argv[i + 1]);
             if (wide != nullptr) {
                 LocalFree(wide);
             }
-            if (!path_is_within(nand, *work)) {
+            if (!path_is_within(saves, *work)) {
                 return "the test save path must be inside NEBULA_WORK";
             }
         }

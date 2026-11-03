@@ -14,5 +14,5 @@ struct Model2CreateFunc {
 namespace MR {
     CreatorFuncPtr getModelChangableObjCreator(const char*);
     void requestMountModelChangableObjArchives(const char*, s32);
-    bool isReadResourceFromDVDAtModelChangableObj(const char*, s32);
+    bool isReadResourceFromStoreAtModelChangableObj(const char*, s32);
 };  // namespace MR

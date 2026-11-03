@@ -1350,7 +1350,7 @@ gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
             got.Flags != desc.Flags || got.SampleDesc.Count != 1u) {
             throw std::runtime_error("handed-over scene target replacement has another description");
         }
-        // Released XFBs are kept as shader resources.
+        // Released pictures are kept as shader resources.
         D3D12_RESOURCE_BARRIER& b = barriers[barrier_count++];
         b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         b.Transition.pResource = fresh.Get();
@@ -1367,7 +1367,7 @@ gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
                                                    D3D12_RESOURCE_STATE_RENDER_TARGET, &clear, IID_PPV_ARGS(&fresh)),
                   "Create scene target colour for a handover");
     }
-    // The picture becomes an display picture: a shader resource, as presentation reads XFBs.
+    // The picture becomes an display picture: a shader resource, as presentation reads pictures.
     D3D12_RESOURCE_BARRIER& picture_barrier = barriers[barrier_count++];
     picture_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     picture_barrier.Transition.pResource = scene_color_.Get();

@@ -1658,7 +1658,7 @@ private:
     // (a full frame copy). Bounded in
     // bytes, not entries, since an entry's cost varies with the copy extent and the
     // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
-    // is well above a scene's working set (a few XFBs across a couple of formats plus one
+    // is well above a scene's working set (a few pictures across a couple of formats plus one
     // bloom workspace).
     std::unordered_map<std::uint64_t, SceneCopyDest> scene_copy_dests_;
     std::uint64_t scene_copy_dests_tick_ = 0;
