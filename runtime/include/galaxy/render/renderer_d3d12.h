@@ -32,6 +32,7 @@
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/ambient_occlusion.h"
+#include "galaxy/render/scene_camera.h"
 #include "galaxy/render/game_bloom.h"
 #include "galaxy/render/interp_types.h"
 #include "galaxy/render/rt_types.h"
@@ -90,8 +91,8 @@ private:
 }  // namespace detail
 
 inline constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-// The ray tracer's HDR scene scene target (RendererD3D12::begin_hdr_scene): unclamped traced light, sRGB-encoded above 1 as
-// below, until the camera pass at the scene's end resolves it into the RGBA8 scene target.
+// The wide 3D scene's target (RendererD3D12::begin_wide_scene): light past white stays, display-encoded above 1 as below,
+// until the camera at the scene's end brings it into the RGBA8 scene target.
 inline constexpr DXGI_FORMAT kSceneHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
@@ -255,6 +256,10 @@ public:
     // The scene's anti-aliasing (post_process.h) in the render scene target at the end of the 3D scene,
     // before the 2D layer and begin_output_scene. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
+    // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera.h);
+    // sub-frames replay both.
+    void begin_wide_scene(bool wanted);
+    void end_wide_scene();
     // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
     // after the opaque phases, before the translucent ones; sub-frames replay it.
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
@@ -796,7 +801,7 @@ private:
     // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
     // list; the time to the next mark (or the list's end) is that pass's.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Camera, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
@@ -1116,19 +1121,19 @@ private:
     SceneTargetSet replay_scene_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_scene_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_scene_dsv_heap_;
-    // The HDR scene scene target (begin_hdr_scene) of the live frames and of the sub-frames (a later frame's scene may be open
-    // while they play).
+    // The wide scene's colour targets (begin_wide_scene), over the scene target's own depth: the live frames' and the
+    // sub-frames'.
     SceneTargetSet hdr_scene_scene_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_scene_rtv_heap_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_scene_dsv_heap_;
     SceneTargetSet replay_hdr_scene_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_rtv_heap_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_dsv_heap_;
-    // The live scene target is an HDR set (swapped with the set that held it).
+    // The live scene target is the wide set (swapped with the set that held it).
     bool scene_hdr_ = false;
+    bool ensure_wide_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap);
     void record_hdr_begin();
-    // `slot`: the light slot of the frame the picture shows (the replay's ReplayKind::HdrEnd keeps it, index + 1).
-    void record_hdr_end(int slot);
+    void record_hdr_end();
+    SceneCamera camera_pass_;
+    std::chrono::steady_clock::time_point camera_metered_{};
     // The output-resolution scene target of a sub-frame whose log switches to it.
     SceneTargetSet replay_output_scene_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_scene_rtv_heap_;

@@ -1691,7 +1691,8 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
             scene_stage_known_ = true;
         }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
-        const std::uint32_t known = (sky_up_known ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u);
+        const bool wide = enhanced_lighting_ && get_render_config().wide_scene;
+        const std::uint32_t known = (sky_up_known ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
             cpu_vs_constants_.sky_up = sky_up;
             cpu_vs_constants_.sky_up_known = known;
@@ -1792,11 +1793,15 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
     bool switched = false;
     display_copy_on_output_ = false;
     if (marker == SceneMarker::SceneEnd) {
+        renderer_.end_wide_scene();
         renderer_.record_scene_aa();
         switched = renderer_.begin_output_scene();
     } else if (renderer_.output_scene_active()) {
         renderer_.end_output_scene();
         switched = true;
+    }
+    if (marker == SceneMarker::SceneBegin) {
+        renderer_.begin_wide_scene(enhanced_lighting_ && get_render_config().wide_scene);
     }
     if (switched) {
         display_pictures_.set_frame_map(renderer_.frame_map());

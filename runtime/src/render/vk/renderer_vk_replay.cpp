@@ -1173,6 +1173,12 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         case ReplayKind::SceneAo:
             record_scene_ao();
             break;
+        case ReplayKind::WideBegin:
+            record_wide_begin();
+            break;
+        case ReplayKind::WideEnd:
+            record_wide_end();
+            break;
         case ReplayKind::Bloom:
             record_game_bloom(run_log_.blooms[op.index]);
             break;

@@ -228,8 +228,8 @@ unsigned shown_position(unsigned tab) {
 bool graphics_row_hidden(const char* label) {
     static constexpr const char* kHidden[] = {
         "RESOLUTION", "UPSCALING", "QUALITY MODE", "DLSS MODE", "FSR 3 MODE", "SHARPENING", "RAY TRACING", "RAY TRACING QUALITY",
-        "FRAME RATE", "INTERPOLATION", "FRAME RATE LIMIT", "TARGET FRAME RATE", "TEXTURE FILTERING", "MIPMAPS",
-        "CURVED SURFACES", "  INTENSITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "MOVIES",
+        "FRAME RATE", "INTERPOLATION", "FRAME RATE LIMIT", "TARGET FRAME RATE",
+        "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "MOVIES",
     };
     for (const char* hidden : kHidden) {
         if (std::strcmp(label, hidden) == 0) return true;
