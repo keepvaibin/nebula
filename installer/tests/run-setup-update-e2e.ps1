@@ -50,7 +50,7 @@ New-Item -ItemType Directory -Force $root, $data | Out-Null
 New-Item -ItemType HardLink -Path (Join-Path $root 'content\game.pak') -Target (Join-Path $source 'content\game.pak') | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $data 'nand\title\00010000\524d4745\data'), (Join-Path $data 'settings') | Out-Null
 [IO.File]::WriteAllBytes((Join-Path $data 'nand\title\00010000\524d4745\data\GameData.bin'), [byte[]](1..200))
-[IO.File]::WriteAllText((Join-Path $data 'settings\config.ini'), "efb_scale = 2`n")
+[IO.File]::WriteAllText((Join-Path $data 'settings\config.ini'), "bloom = 140`n")
 $dataBefore = (Hash-Tree (Join-Path $data 'nand')) + (Hash-Tree (Join-Path $data 'settings'))
 "installed: $old; updating to $New"
 
