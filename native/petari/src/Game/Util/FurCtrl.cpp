@@ -231,7 +231,7 @@ void FurCtrl::setupFurClone(J3DModel* pModel, FurCtrl* pOther) {
 }
 
 namespace MR {
-    void initFurParamFromDvd(FurParam* pParam, DynamicFurParam* pDynamic, char* pText, u32 size) {
+    void initFurParamFromFile(FurParam* pParam, DynamicFurParam* pDynamic, char* pText, u32 size) {
         char line[256];
         FurLightParam* pLight = pDynamic->mLightParam;
         s32 lightMask = 0;

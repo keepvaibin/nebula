@@ -128,7 +128,7 @@ namespace {
     void loadFurText(LiveActor* pActor, FurParam* pParam, DynamicFurParam* pDynamic, const char* pName) {
         char* pText = static_cast< char* >(MR::getResourceHolder(pActor)->mFileInfoTable->getRes(pName));
         ResFileInfo* pInfo = MR::getResourceHolder(pActor)->mFileInfoTable->findFileInfo(pName);
-        MR::initFurParamFromDvd(pParam, pDynamic, pText, pInfo->_4);
+        MR::initFurParamFromFile(pParam, pDynamic, pText, pInfo->_4);
     }
 };  // namespace
 

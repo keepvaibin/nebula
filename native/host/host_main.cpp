@@ -6,7 +6,7 @@
 //   - On SDL platforms (platform/sdl, NEBULA_HOST_SDL): the same with the Vulkan renderer, SDL's window, sound and
 //     input; on Android SDL's activity calls SDL_main.
 //
-//   <host> --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]
+//   <host> --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N]
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -556,7 +556,7 @@ private:
 Worker gFs(L"Nebula Host Saves");
 
 // The save folder's root: the game's paths under it, each checked.
-fs::path gNandRoot;
+fs::path gSaveRoot;
 
 // The game's save folder under it (title/00010000/<the game's four-character code in hex>/data, as an install has it).
 std::string gSaveDataPath;
@@ -565,7 +565,7 @@ bool nand_path(const char* path, fs::path* out) {
     if (path == nullptr || path[0] != '/') {
         return false;
     }
-    fs::path result = gNandRoot;
+    fs::path result = gSaveRoot;
     for (const fs::path& part : fs::path(path + 1)) {
         if (part == ".." || part == ".") {
             return false;
@@ -1968,10 +1968,10 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
 // The Mii library's file (mii_import.h) in the data folder; a save folder's database (or an earlier Nebula's) is
 // where it starts the first time, so the Miis it holds stay in their slots. The game reads the slots as typed records.
 fs::path mii_library_path() {
-    return gNandRoot / "nebula-miis.txt";
+    return gSaveRoot / "nebula-miis.txt";
 }
 fs::path console_mii_database_path() {
-    return gNandRoot / "shared2/menu/FaceLib/RFL_DB.dat";
+    return gSaveRoot / "shared2/menu/FaceLib/RFL_DB.dat";
 }
 
 NebulaMii nebula_mii(const galaxy::host::MiiFields& f) {
@@ -2906,7 +2906,7 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
               "save results are the game's");
 
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
-// (gSaveDataPath under the NAND root, or a mod's save folder).
+// (gSaveDataPath under the save folder, or a mod's save folder).
 std::atomic<int> gSavesPending{0};
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
@@ -3738,7 +3738,7 @@ int main(int argc, char** argv) {
     }
 #endif
     boot_mark("main");
-    fs::path pak, nand, module;
+    fs::path pak, saves, module;
     // A path in the command line: argv is in the system's code page, which cannot hold every folder name.
     const auto arg_path = [&](int index) {
 #if defined(_WIN32)
@@ -3756,8 +3756,12 @@ int main(int argc, char** argv) {
         const std::string key = argv[i];
         if (key == "--pak") {
             pak = arg_path(i + 1);
-        } else if (key == "--nand") {
-            nand = arg_path(i + 1);
+        } else if (key == "--saves"
+#if !defined(NEBULA_RELEASE)
+                   || key == "--nand"
+#endif
+        ) {
+            saves = arg_path(i + 1);
         } else if (key == "--module") {
             module = arg_path(i + 1);
         } else if (key == "--seconds") {
@@ -3766,8 +3770,8 @@ int main(int argc, char** argv) {
             die("unknown option %s", key.c_str());
         }
     }
-    if (pak.empty() || nand.empty()) {
-        die("usage: nebula_native_host --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]");
+    if (pak.empty() || saves.empty()) {
+        die("usage: nebula_native_host --pak <game.pak> --saves <dir> [--module <smg_game.dll>] [--seconds N]");
     }
     if (module.empty()) {
 #if defined(_WIN32)
@@ -3778,7 +3782,7 @@ int main(int argc, char** argv) {
         module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
 #endif
     }
-    gNandRoot = nand;
+    gSaveRoot = saves;
     std::error_code error;
     open_pak(pak);
     boot_mark("disc opened");
@@ -3822,7 +3826,7 @@ int main(int argc, char** argv) {
         char title[9];
         std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", (unsigned char)gPak.id[0], (unsigned char)gPak.id[1], (unsigned char)gPak.id[2], (unsigned char)gPak.id[3]);
         gSaveDataPath = std::string("/title/00010000/") + title + "/data";
-        fs::create_directories(gNandRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        fs::create_directories(gSaveRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);

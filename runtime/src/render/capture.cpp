@@ -85,12 +85,12 @@ void SceneCopyManager::begin_frame(
     unsigned frame_slot,
     unsigned frames_in_flight) {
     if (frames_in_flight == 0u || frame_slot >= frames_in_flight) {
-        throw std::runtime_error("[EfbCopyManager] invalid frame slot");
+        throw std::runtime_error("[frame-read] invalid frame slot");
     }
     if (retired_textures_.empty()) {
         retired_textures_.resize(frames_in_flight);
     } else if (retired_textures_.size() != frames_in_flight) {
-        throw std::runtime_error("[EfbCopyManager] frame count changed");
+        throw std::runtime_error("[frame-read] frame count changed");
     }
     recycle_retired_textures(frame_slot);
     current_frame_slot_ = frame_slot;
@@ -102,7 +102,7 @@ void SceneCopyManager::retire_texture(DisplayTexture& texture) {
     }
     if (retired_textures_.empty()) {
         throw std::runtime_error(
-            "[EfbCopyManager] texture retired before begin_frame");
+            "[frame-read] texture retired before begin_frame");
     }
     // Reserve ownership storage before moving the live registry resource.
     // A vector allocation failure must not release an in-flight display picture.
@@ -208,7 +208,7 @@ DisplayTexture* SceneCopyManager::acquire_display(
     entry.texture = gpu::create_render_texture(device_.Get(), wanted_w, wanted_h);
     if (!entry.texture) {
         std::ostringstream message;
-        message << "[EfbCopyManager] picture texture allocation failed"
+        message << "[frame-read] picture texture allocation failed"
                 << " slot=" << slot
                 << " size=" << std::dec << wanted_w << "x" << wanted_h;
         throw std::runtime_error(message.str());

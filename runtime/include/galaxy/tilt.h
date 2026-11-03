@@ -11,7 +11,7 @@
 // WASD); elsewhere it stays at rest.
 //
 // The game's vector is the remote's acceleration as the game reads it
-// (PlayerInput::gravity, WPadAcceleration), the gravity reaction in the
+// (PlayerInput::gravity, the remote's acceleration), the gravity reaction in the
 // remote frame: +X out of the left side, +Y toward the expansion port, +Z out
 // of the A face (Wiibrew calibration poses).
 // - Star Ball: held upright like a joystick (TamakoroTutorial waits for

@@ -1482,7 +1482,7 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
 /// (host_timg: Mii_Texture has ResTIMG's layout) and each shape's numbers (a face line's nine 32-bit values; then
 /// positions, normals and, but for the forehead, hair, beard and nose, texture coordinates: a count and its 16-bit
 /// values). Texels, palettes and the shapes' primitive bytes stay bytes. The rules are the ones the Mii library
-/// applied at load before (RFL_NANDLoader's former cookArchive_).
+/// applied at load before .
 pub fn rfl_res_host(bytes: &[u8]) -> Result<Vec<u8>> {
     const SECTIONS: usize = 18; // Mii_ArcID_Max
     const TEXTURES: [usize; 9] = [1, 2, 4, 7, 10, 11, 12, 15, 17]; // Eye, Eyebrow, FaceTex, GlassTex, Mole, Mouth, Mustache, NlineTex, CapTex

@@ -223,7 +223,7 @@ static inline u32 getMdlDataFlag_ColorFlag(u32 flags) {
     return flags & (3u << 30);
 }
 
-static inline u32 getMdlDataFlag_PEFlag(u32 flags) {
+static inline u32 getMdlDataFlag_OutputFlag(u32 flags) {
     return flags & 0x30000000;
 }
 
