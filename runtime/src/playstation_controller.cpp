@@ -100,14 +100,103 @@ float clock_delta(SensorClock& clock, std::uint32_t ticks, std::uint32_t mask, f
 
 }  // namespace
 
+namespace {
+struct LicensedProduct {
+    std::uint16_t vendor;
+    std::uint16_t product;
+    Model model;
+};
+
+constexpr LicensedProduct kLicensedProducts[] = {
+    {0x054c, 0x05c5, Model::DualShock4}, {0x054c, 0x0e5f, Model::DualSense},
+    {0x0079, 0x181b, Model::DualShock4}, {0x044f, 0xd00e, Model::DualShock4}, {0x046d, 0xc260, Model::DualShock4},
+    {0x0738, 0x8250, Model::DualShock4}, {0x0738, 0x8384, Model::DualShock4}, {0x0738, 0x8480, Model::DualShock4},
+    {0x0738, 0x8481, Model::DualShock4}, {0x0c12, 0x0e10, Model::DualShock4}, {0x0c12, 0x0e13, Model::DualShock4},
+    {0x0c12, 0x0e15, Model::DualShock4}, {0x0c12, 0x0e20, Model::DualShock4}, {0x0c12, 0x0ef6, Model::DualShock4},
+    {0x0c12, 0x1cf6, Model::DualShock4}, {0x0c12, 0x1e10, Model::DualShock4}, {0x0c12, 0x2e18, Model::DualShock4},
+    {0x0e6f, 0x0203, Model::DualShock4}, {0x0e6f, 0x0207, Model::DualShock4}, {0x0e6f, 0x020a, Model::DualShock4},
+    {0x0f0d, 0x0055, Model::DualShock4}, {0x0f0d, 0x005e, Model::DualShock4}, {0x0f0d, 0x0066, Model::DualShock4},
+    {0x0f0d, 0x0084, Model::DualShock4}, {0x0f0d, 0x0087, Model::DualShock4}, {0x0f0d, 0x008a, Model::DualShock4},
+    {0x0f0d, 0x009c, Model::DualShock4}, {0x0f0d, 0x00a0, Model::DualShock4}, {0x0f0d, 0x00ee, Model::DualShock4},
+    {0x0f0d, 0x011c, Model::DualShock4}, {0x0f0d, 0x0123, Model::DualShock4}, {0x0f0d, 0x0162, Model::DualShock4},
+    {0x11c0, 0x4001, Model::DualShock4}, {0x146b, 0x0d01, Model::DualShock4}, {0x146b, 0x0d02, Model::DualShock4},
+    {0x146b, 0x0d06, Model::DualShock4}, {0x146b, 0x0d08, Model::DualShock4}, {0x146b, 0x0d09, Model::DualShock4},
+    {0x146b, 0x0d10, Model::DualShock4}, {0x146b, 0x0d13, Model::DualShock4}, {0x146b, 0x1103, Model::DualShock4},
+    {0x1532, 0x1000, Model::DualShock4}, {0x1532, 0x1004, Model::DualShock4}, {0x1532, 0x1007, Model::DualShock4},
+    {0x1532, 0x1008, Model::DualShock4}, {0x1532, 0x1009, Model::DualShock4}, {0x1532, 0x100a, Model::DualShock4},
+    {0x1532, 0x1100, Model::DualShock4}, {0x20d6, 0x792a, Model::DualShock4}, {0x2c22, 0x2000, Model::DualShock4},
+    {0x2c22, 0x2300, Model::DualShock4}, {0x2c22, 0x2500, Model::DualShock4}, {0x3285, 0x0d16, Model::DualShock4},
+    {0x3285, 0x0d17, Model::DualShock4}, {0x7545, 0x0104, Model::DualShock4}, {0x7545, 0x1122, Model::DualShock4},
+    {0x9886, 0x0025, Model::DualShock4},
+    {0x0e6f, 0x0209, Model::DualSense},  {0x0f0d, 0x0163, Model::DualSense},  {0x0f0d, 0x0184, Model::DualSense},
+    {0x1532, 0x100b, Model::DualSense},  {0x1532, 0x100c, Model::DualSense},  {0x1532, 0x1012, Model::DualSense},
+    {0x1532, 0x1024, Model::DualSense},  {0x1532, 0x1026, Model::DualSense},  {0x3285, 0x0d18, Model::DualSense},
+    {0x3285, 0x0d19, Model::DualSense},  {0x358a, 0x0104, Model::DualSense},  {0x358a, 0x0304, Model::DualSense},
+};
+}  // namespace
+
 std::optional<Model> model_for_product(std::uint16_t vendor, std::uint16_t product) noexcept {
-    if (vendor != kSonyVendorId) return std::nullopt;
-    switch (product) {
-    case kDualShock4ProductId:
-    case kDualShock4SlimProductId: return Model::DualShock4;
-    case kDualSenseProductId: return Model::DualSense;
-    case kDualSenseEdgeProductId: return Model::DualSenseEdge;
-    default: return std::nullopt;
+    if (vendor == kSonyVendorId) {
+        switch (product) {
+        case kDualShock4ProductId:
+        case kDualShock4SlimProductId:
+        case kDualShock4DongleProductId: return Model::DualShock4;
+        case kDualSenseProductId: return Model::DualSense;
+        case kDualSenseEdgeProductId: return Model::DualSenseEdge;
+        default: break;
+        }
+    }
+    for (const LicensedProduct& known : kLicensedProducts) {
+        if (known.vendor == vendor && known.product == product) return known.model;
+    }
+    return std::nullopt;
+}
+
+Capabilities capabilities_of_product(std::uint16_t vendor, std::uint16_t product) noexcept {
+    Capabilities caps;
+    caps.official = vendor == kSonyVendorId;
+    caps.dongle = caps.official && product == kDualShock4DongleProductId;
+    if (!caps.official) {
+        caps.sensors = caps.touchpad = caps.lightbar = caps.vibration = false;
+    }
+    // These two hang when sent effects.
+    if (vendor == 0x0e6f && (product == 0x0203 || product == 0x0207)) caps.effects = false;
+    return caps;
+}
+
+void apply_capability_report(Model model, std::uint16_t vendor, std::uint16_t product,
+                             std::span<const std::uint8_t> feature, Capabilities& caps, ImuCal& cal) noexcept {
+    if (caps.official) return;
+    const bool dualsense = model != Model::DualShock4;
+    if (feature.size() >= kCapabilityReportBytes && feature[2] == (dualsense ? 0x28u : 0x27u)) {
+        caps.sensors = (feature[4] & 0x02u) != 0u;
+        caps.lightbar = (feature[4] & 0x04u) != 0u;
+        caps.vibration = (feature[4] & 0x08u) != 0u;
+        caps.touchpad = (feature[4] & 0x40u) != 0u;
+        caps.alternate_layout = dualsense;
+        if (!dualsense) {
+            const auto ratio = [&](std::size_t at) -> float {
+                const unsigned top = feature[at] | (static_cast<unsigned>(feature[at + 1u]) << 8u);
+                const unsigned bottom = feature[at + 2u] | (static_cast<unsigned>(feature[at + 3u]) << 8u);
+                return top != 0u && bottom != 0u ? static_cast<float>(top) / static_cast<float>(bottom) : 0.0f;
+            };
+            const float gyro = ratio(10);
+            const float accel = ratio(14);
+            for (std::size_t i = 0; i < 3; ++i) {
+                if (gyro != 0.0f) cal.scale[i] = gyro * kPi / 180.0f;
+                if (accel != 0.0f) cal.scale[3 + i] = accel;
+            }
+        }
+        return;
+    }
+    // Razer's pads do not answer the query.
+    if (vendor != kRazerVendorId) return;
+    if (!dualsense) {
+        caps.vibration = caps.touchpad = true;
+    } else if (product == 0x100b || product == 0x100c) {
+        caps.sensors = caps.touchpad = caps.alternate_layout = true;
+    } else {
+        caps.touchpad = caps.alternate_layout = true;
     }
 }
 
@@ -183,7 +272,7 @@ bool bluetooth_crc_valid(std::span<const std::uint8_t> report) noexcept {
 }
 
 bool decode_report(Model model, Transport transport, std::span<const std::uint8_t> r, const ImuCal& cal,
-                   SensorClock& clock, switch_hid::DecodedState& out) noexcept {
+                   SensorClock& clock, switch_hid::DecodedState& out, const Capabilities& caps) noexcept {
     if (r.empty()) return false;
     const bool dualsense = model != Model::DualShock4;
     Layout layout{};
@@ -205,6 +294,8 @@ bool decode_report(Model model, Transport transport, std::span<const std::uint8_
     const std::uint8_t* p = r.data() + layout.base;
     out = switch_hid::DecodedState{};
     out.normalized = true;
+    // A USB adapter with no pad connected keeps reporting: nothing is held.
+    if (caps.dongle && r.size() > layout.base + 30u && (p[30] & 0x04u) != 0u) return true;
     out.axes[0] = stick_axis(p[0], false);
     out.axes[1] = stick_axis(p[1], true);
     out.axes[2] = stick_axis(p[2], false);
@@ -222,8 +313,9 @@ bool decode_report(Model model, Transport transport, std::span<const std::uint8_
 
     // The touchpad's first finger: its counter's bit 7 is set while it is lifted; 12-bit x and y over 1920 x 920 (a
     // DualShock 4, SDL's span) or 1920 x 1070 (a DualSense).
-    if (r.size() >= layout.base + 36u) {
-        const std::uint8_t* touch = p + 32;
+    const std::size_t touch_offset = !dualsense ? 34u : caps.alternate_layout ? 31u : 32u;
+    if (caps.touchpad && r.size() >= layout.base + touch_offset + 4u) {
+        const std::uint8_t* touch = p + touch_offset;
         out.touch_surface = true;
         out.touch_down = (touch[0] & 0x80u) == 0u;
         if (out.touch_down) {
@@ -243,9 +335,10 @@ bool decode_report(Model model, Transport transport, std::span<const std::uint8_
         raw[3 + i] = s16(accel + i * 2);
     }
     for (std::int16_t value : raw) any |= value != 0;
-    const float dt = dualsense ? clock_delta(clock, u32(p + 27), 0xffffffffu, 1.0f / 3.0e6f)
-                               : clock_delta(clock, u16(p + 9), 0xffffu, 16.0f / 3.0f * 1e-6f);
-    if (!any) return true;
+    const float dt = caps.alternate_layout ? clock_delta(clock, u16(p + 27), 0xffffu, 1e-6f)
+                     : dualsense           ? clock_delta(clock, u32(p + 27), 0xffffffffu, 1.0f / 3.0e6f)
+                                           : clock_delta(clock, u16(p + 9), 0xffffu, 16.0f / 3.0f * 1e-6f);
+    if (!any || !caps.sensors) return true;
     switch_hid::ImuSample& sample = out.imu[0];
     for (std::size_t i = 0; i < 3; ++i) {
         sample.gyro[i] = static_cast<float>(raw[i] - cal.bias[i]) * cal.scale[i];

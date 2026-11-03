@@ -122,6 +122,7 @@ add_library(galaxy_native_input STATIC
     runtime/src/input/wiimote_input.cpp
     runtime/src/native_input.cpp
     runtime/src/playstation_controller.cpp
+    runtime/src/simple_pads.cpp
     runtime/src/pointer_control.cpp
     runtime/src/rumble.cpp
     runtime/src/steam_controller.cpp

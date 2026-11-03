@@ -21,6 +21,11 @@ inline constexpr std::uint16_t kPro2ControllerProductId = 0x2069;
 inline constexpr std::uint16_t kJoyConLeftProductId = 0x2006;
 inline constexpr std::uint16_t kJoyConRightProductId = 0x2007;
 inline constexpr std::uint16_t kChargingGripProductId = 0x200e;  // a Joy-Con per HID interface
+inline constexpr std::uint16_t kJoyCon2LeftProductId = 0x2067;
+inline constexpr std::uint16_t kJoyCon2RightProductId = 0x2066;
+inline constexpr std::uint16_t kJoyCon2GripProductId = 0x2068;
+inline constexpr std::uint16_t kGameCubeProductId = 0x2073;
+inline constexpr std::uint16_t kN64ProductId = 0x2019;
 
 // Input report ids (Switch Pro Controller).
 inline constexpr std::uint8_t kReportSubcommandReply = 0x21;
@@ -135,6 +140,11 @@ std::size_t build_usb_command(std::uint8_t command, std::span<std::uint8_t> out)
 enum class JoyConSide : std::uint8_t { None, Left, Right };
 [[nodiscard]] JoyConSide joycon_side_of_type(std::uint8_t type) noexcept;
 [[nodiscard]] JoyConSide joycon_side_of_product(std::uint16_t product) noexcept;
+// The device info types of the Bluetooth Famicom (7, 8) and NES (9, 10) pads, which also use a Joy-Con's product id.
+[[nodiscard]] constexpr bool is_famicom_type(std::uint8_t type) noexcept { return type == 7u || type == 8u; }
+[[nodiscard]] constexpr bool is_nes_type(std::uint8_t type) noexcept { return type == 9u || type == 10u; }
+// A subcommand report's neutral vibration at zero amplitude: pads with an N64 pad's id buzz on the standard one.
+void silence_neutral_rumble(std::span<std::uint8_t> subcommand_report) noexcept;
 
 // A right Joy-Con's sensor sits turned half a turn from the left one's and the Pro Controller's: its first two axes
 // (decode_pro_report's frame) are negated, so both halves read alike.
@@ -199,6 +209,9 @@ struct Switch2ImuState {
 
 // Decodes a report-id-5 packet. IMU fills `out.imu[0]` once the timestamp
 // rate has been identified (100 samples).
+// The GameCube pad's analog triggers past half way read as its triggers. `zero`: its resting values.
+void apply_gamecube_triggers(std::span<const std::uint8_t> report, std::array<std::uint8_t, 2> zero,
+                             DecodedState& state) noexcept;
 [[nodiscard]] bool decode_switch2_report(std::span<const std::uint8_t> report, Switch2ImuState& imu,
                                          DecodedState& out) noexcept;
 

@@ -14,6 +14,7 @@ struct LivePad {
     bool shake_remote = false;
     bool shake_nunchuk = false;
     bool imu_live = false;
+    bool gyro_missing = false;
     float gyro_x = 0.0f;
     float gyro_y = 0.0f;
     // The touch surface's finger travel this sample (its width and height 1 each) and whether the controller has one.

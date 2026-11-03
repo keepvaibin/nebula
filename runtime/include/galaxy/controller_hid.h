@@ -40,6 +40,8 @@ struct HidPadState {
     float gyro_y = 0.0f;
     // The last report carried IMU samples.
     bool imu_live = false;
+    // Those samples have no turn rate: tilt and shake without a pointer.
+    bool gyro_missing = false;
     // The touch surface (DecodedState::touch_*): the finger's travel since the previous consuming read (the
     // surface's width and height are 1 each; a finger put down moves nothing), whether one is down, and whether the
     // controller reports a surface.

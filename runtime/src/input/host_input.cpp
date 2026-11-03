@@ -681,6 +681,7 @@ std::size_t collect_hid_pads(const galaxy::input::ControlsConfig& config,
         live.sample.axes[2] = right.x;
         live.sample.axes[3] = right.y;
         live.imu_live = pads[i].imu_live;
+        live.gyro_missing = pads[i].gyro_missing;
         const bool shaking = pads[i].shake_until_us != 0u && now_us < pads[i].shake_until_us;
         live.shake_remote = shaking && tuning.motion_shake == galaxy::input::MotionShake::Remote;
         live.shake_nunchuk = shaking && tuning.motion_shake == galaxy::input::MotionShake::Nunchuk;
