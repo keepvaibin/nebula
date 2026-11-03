@@ -36,7 +36,11 @@ namespace ImageEffectLocalUtil {
     void setupDrawTexture();
     void drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType);
     void sendTextureVertex(s32 divisions, s32 tile);
-    void blurTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u32 sampleCount, f32 radius, f32 intensity);
+    // A Gaussian standing for a ring of `radius` (fractions of the screen), one pass across into `pScratch`, one down
+    // into `pTarget`, all of the picture's size (a quarter of the screen). An alpha picture's result is times `alphaGain`,
+    // clamped.
+    void blurTexture(JUTTexture* pSource, JUTTexture* pScratch, JUTTexture* pTarget, f32 radius, NebulaTargetChannels channels,
+                     f32 alphaGain = 1.0f);
 };  // namespace ImageEffectLocalUtil
 
 namespace MR {

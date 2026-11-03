@@ -306,15 +306,13 @@ namespace LayoutAspect {
         }
         // The owning layout and exact names identify each backing: generic Base and PicBG panes elsewhere stay.
         const Extent extent = getExtent();
-        bool safety = false;
         bool title = false;
         for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-            safety |= isNamed(&*it, "WiiRemoteStrap");
             title |= isNamed(&*it, "SMGTitleLogo");
         }
         for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
             nw4r::lyt::Pane* pPane = &*it;
-            if ((safety && isNamed(pPane, "PicBG")) || (title && isNamed(pPane, "PicFlash"))) {
+            if (title && isNamed(pPane, "PicFlash")) {
                 pPane->mSize.width = extent.mWidth;
                 pPane->mSize.height = extent.mHeight;
             } else if (isNamed(pPane, "CinemaFrame")) {

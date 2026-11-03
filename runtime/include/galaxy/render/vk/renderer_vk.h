@@ -740,7 +740,6 @@ private:
         std::unordered_map<std::uint64_t, std::array<VkImageView, kMaxTextureMaps>> tables;
         unsigned segment = 0;
         std::uint64_t serial = 0;
-        float surround = 0.0f;  // the display copy's display picture: its surround and movie flag (the sub-frame display picture's)
         bool movie = false;
         // Copy textures this log read before rewriting them, as they were at its start (the replay reads these).
         std::vector<std::pair<VkImageView, gpu::TextureRef>> snapshots;

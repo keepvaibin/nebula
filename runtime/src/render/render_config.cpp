@@ -149,7 +149,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "curved_surfaces") == 0) cfg.curved_surfaces = parse_bool(val, cfg.curved_surfaces);
     else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "ambient_occlusion") == 0) cfg.ambient_occlusion = parse_bool(val, cfg.ambient_occlusion);
-    else if (std::strcmp(key, "bloom_mode") == 0) cfg.bloom_mode = std::min(parse_uint(val, cfg.bloom_mode), kBloomEnhanced);
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
@@ -260,7 +259,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_CURVED_SURFACES", "curved_surfaces");
     apply_env(cfg, "GALAXY_ENHANCED_LIGHTING", "enhanced_lighting");
     apply_env(cfg, "GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion");
-    apply_env(cfg, "GALAXY_BLOOM_MODE", "bloom_mode");
     apply_env(cfg, "GALAXY_BLOOM", "bloom");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
     apply_env(cfg, "GALAXY_HUD_OUTPUT_RESOLUTION", "hud_output_resolution");
@@ -656,7 +654,6 @@ bool save_render_config_to_file() {
              << (cfg.enhanced_lighting ? 1u : 0u) << '\n'
              << "ambient_occlusion="
              << (cfg.ambient_occlusion ? 1u : 0u) << '\n'
-             << "bloom_mode=" << std::min(cfg.bloom_mode, kBloomEnhanced) << '\n'
              << "bloom=" << std::min(cfg.bloom, kMaxBloom) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'

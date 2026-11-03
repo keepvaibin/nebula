@@ -1074,7 +1074,6 @@ void RenderCore::render_frame(
     take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
-    chunk.safety_surround=producer_safety_surround_;
     chunk.movie_frame=producer_movie_frame_;
     chunk.services = services;
     chunk.present_swap_chain = present_swap_chain;
@@ -3699,7 +3698,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     pipeline_cache_.merge_prepared();
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
-    render_safety_surround_=chunk.safety_surround;
     render_movie_frame_=chunk.movie_frame;
     const bool trace_stalls_cached = trace_stalls_enabled();
     // Per-draw clock reads run on stall-traced and sampled frames only.
@@ -5921,7 +5919,6 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             }
             display_picture->pointer_response=render_pointer_response_;
             display_picture->prerecorded_movie=render_movie_content_;
-            display_picture->safety_surround=render_safety_surround_;
             scene_copies_.mark_display_copied(*display_picture, frame_index_);
             ++stat_display_copies_;
             ++frame_display_copies_;

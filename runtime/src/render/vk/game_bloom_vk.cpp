@@ -376,7 +376,6 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     if (restore) {
         // Kind 0: the scene alone, the levels unread.
         composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = keep_.get();
-        composite_constants_.params[3] = 1.0f;  // the RGBA8 scene target
         pending_ = true;
         return true;
     }
@@ -517,7 +516,6 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     c.params[0] = static_cast<float>(std::min(p.intensity, 255u)) / 255.0f;
     c.params[1] = std::max(p.strength, 0.0f);
     c.params[2] = normal ? 1.0f : 2.0f;
-    c.params[3] = 1.0f;  // the RGBA8 scene target: the bloom rounded stochastically
     c.uv[0] = 1.0f / static_cast<float>(s.f * s.w1);
     c.uv[1] = 1.0f / static_cast<float>(s.f * s.h1);
     c.uv[2] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.w2, 1u));

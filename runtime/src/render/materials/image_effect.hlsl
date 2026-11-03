@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's screen texture passes (Game/Screen/ImageEffectLocalUtil.cpp drawTexture / blurTexture, and their callers:
-// bloom, the fall-out field's mask, CameraCover): texture 0 over a screen tile, moved by the blur's offset, combined as
+// The game's screen texture passes (Game/Screen/ImageEffectLocalUtil.cpp drawTexture, and their callers:
+// bloom, the fall-out field's mask, CameraCover): texture 0 over a screen tile, combined as
 // the pass's mode names, in one stage:
 //   mode (params.x): 0 modulate, tex x the material colour; 1 threshold, white where the texture's red is above the
 //   material colour's (COMP_R8_GT), alpha 1; 2 mask below, the edge colour (register 0) where the texture's alpha is
@@ -12,13 +12,13 @@ struct MaterialConstants {
     float4 color;   // the material colour (rgba, 0-1)
     float4 constant;   // the constant compared with (mask modes: its alpha)
     float4 edge;    // the edge colour
-    float4 params;  // x the mode, y 1 drawn only where the alpha is above 0, zw the coordinates' offset (the blur's)
+    float4 params;  // x the mode, y 1 drawn only where the alpha is above 0
 };
 
 #include "native_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.uv[0] = float4(v.uv[0] + material.params.zw, 1.0, 0.0);
+    o.uv[0] = float4(v.uv[0], 1.0, 0.0);
 }
 
 float4 material_color(NativeVaryings i) {

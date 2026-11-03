@@ -80,6 +80,11 @@ DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     mQuarter->mWrapT = NEBULA_WRAP_CLAMP;
     mQuarter->mMinType = NEBULA_FILTER_LINEAR;
     mQuarter->mMagType = NEBULA_FILTER_LINEAR;
+    mBlurScratch = new JUTTexture(_24->getWidth(), _24->getHeight());
+    mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
+    mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
+    mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
+    mBlurScratch->mMagType = NEBULA_FILTER_LINEAR;
 }
 
 void DepthOfFieldBlur::draw() const {
@@ -156,9 +161,7 @@ void DepthOfFieldBlur::createBlurTexture() const {
     J3DNativeTarget::begin(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, 0xFFFFFF);
     ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);
-    J3DNativeTarget::begin(_24->mImage, _24->getWidth(), _24->getHeight(), 0, 0xFFFFFF);
-    ImageEffectLocalUtil::blurTexture(mQuarter, 4, 0, 4, mIntensity * get_10() * 0.005f, 1.0f);
-    J3DNativeTarget::end(_24->mImage, NEBULA_TARGET_RGB);
+    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, _24, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
 }
 
 void DepthOfFieldBlur::drawFinal() const {

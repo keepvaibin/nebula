@@ -2860,14 +2860,6 @@ uint32_t svc_display_extent(void*) {
 #endif
 }
 
-void svc_scene_surround(void*, float intensity) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::set_safety_scene_surround(intensity);
-#else
-    (void)intensity;
-#endif
-}
-
 // The game's lights (NEBULA_LIGHT_*) into the renderer's light registry (game_lights.cpp), which the ray tracer reads.
 void svc_game_light(void*, uint32_t kind, uint64_t id, const float* v) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -2926,6 +2918,16 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
+    case NEBULA_OPTION_INPUT_MODE:
+#if defined(NEBULA_HOST_RENDERER)
+        switch (galaxy::get_runtime_input_mode_state().mode) {
+        case galaxy::RuntimeInputMode::Controller: return NEBULA_INPUT_MODE_CONTROLLER;
+        case galaxy::RuntimeInputMode::RealWiimote: return NEBULA_INPUT_MODE_WII_REMOTE;
+        case galaxy::RuntimeInputMode::Auto: return NEBULA_INPUT_MODE_AUTO;
+        case galaxy::RuntimeInputMode::KeyboardMouse: break;
+        }
+#endif
+        return NEBULA_INPUT_MODE_KEYBOARD_MOUSE;
     case NEBULA_OPTION_BLOOM:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::render::bloom_route();
@@ -3126,11 +3128,11 @@ std::atomic<uint8_t> gInputNunchuk{1};
 std::atomic<uint8_t> gInputBattery{4};
 std::atomic<uint8_t> gInputConnected{1};
 
-// The controller that last gave input is no longer attached, and nothing has been used since: the game shows its message
-// (GameSystemErrorWatcher) until one is back or another device is used. Looked at ten times a second.
-bool input_device_lost() {
+// The chosen input mode has nothing to play with: the game shows its message (GameSystemErrorWatcher) until that changes.
+// Looked at ten times a second.
+bool input_device_missing(bool wii_remote) {
     static unsigned tick = 0;
-    static bool lost = false;
+    static bool missing = false;
     static const char* const test_ms = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_INPUT_LOST_AT_MS"));
     if (test_ms != nullptr) {
         // Tests: lost for ten seconds from this long after the first look.
@@ -3140,24 +3142,13 @@ bool input_device_lost() {
         return ms >= at && ms < at + 10000;
     }
     if (++tick % 10u != 0u) {
-        return lost;
-    }
-    const std::optional<galaxy::input::DeviceKey> last = galaxy::host::last_input_device();
-    if (!last.has_value() || last->scheme == galaxy::input::ControlScheme::Keyboard) {
-        lost = false;
-        return lost;
+        return missing;
     }
     std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
-    const std::size_t count = galaxy::host::connected_controllers(connected);
-    galaxy::input::DeviceList list;
-    galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count), last, list);
-    lost = true;
-    for (std::size_t i = 0; i < list.count; ++i) {
-        if (list.entries[i].active) {
-            lost = false;
-        }
-    }
-    return lost;
+    const bool controller = galaxy::host::connected_controllers(connected) != 0u;
+    missing = galaxy::input_missing(galaxy::get_runtime_input_mode_state().mode, controller, wii_remote,
+                                    galaxy::host::keyboard_or_mouse_attached());
+    return missing;
 }
 
 // The controls now (under gInputSampleLock). Each sample renews the motor's state (a stale one stops).
@@ -3263,11 +3254,13 @@ void input_thread() {
     galaxy::input::wiimote::Reader reader;
     bool real = false;
     std::optional<galaxy::input::DeviceKey> device_when_real;
-    bool remote_lost = false;
-    std::optional<galaxy::input::DeviceKey> device_at_loss;
     const auto use_remote = [&](bool on) {
         if (on == real || (on && !remote.has_value())) return;
         real = on;
+        if (on) {
+            galaxy::host::set_input_missing_shown(false);
+            gInputConnected.store(1u, std::memory_order_relaxed);
+        }
         galaxy::host::real_wiimote_set_active(on);
         gControlsInput.store(!on, std::memory_order_release);
         gInputNunchuk.store(on ? (remote->nunchuk ? 1u : 0u) : 1u, std::memory_order_relaxed);
@@ -3295,7 +3288,6 @@ void input_thread() {
         const bool wii_remote_mode =
             galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote;
         if (event == galaxy::host::RealWiimoteEvent::Connected) {
-            remote_lost = false;
             remote = real_connection;
             reader.connect(real_connection.eeprom, real_connection.extension_calibration, real_connection.nunchuk);
             galaxy::host::real_wiimote_set_report(real_connection.nunchuk ? 0x37 : 0x33);
@@ -3308,8 +3300,6 @@ void input_thread() {
             continue;
         }
         if (event == galaxy::host::RealWiimoteEvent::Disconnected) {
-            remote_lost = real;
-            device_at_loss = galaxy::host::last_input_device();
             use_remote(false);
             remote.reset();
             continue;
@@ -3349,13 +3339,13 @@ void input_thread() {
             }
             use_remote(false);
         }
-        if (remote_lost && galaxy::host::last_input_device() != device_at_loss) {
-            remote_lost = false;
-        }
+        const bool wii_remote = remote.has_value();
 #else
-        constexpr bool remote_lost = false;
+        constexpr bool wii_remote = false;
 #endif
-        gInputConnected.store(!remote_lost && !input_device_lost() ? 1u : 0u, std::memory_order_relaxed);
+        const bool missing = input_device_missing(wii_remote);
+        galaxy::host::set_input_missing_shown(missing);
+        gInputConnected.store(missing ? 0u : 1u, std::memory_order_relaxed);
         gInputSamples.push(sample);
     }
 }
@@ -4340,7 +4330,6 @@ int main(int argc, char** argv) {
     services.app_restart = svc_app_restart;
     services.test_scene_frame = svc_test_scene_frame;
     services.display_extent = svc_display_extent;
-    services.scene_surround = svc_scene_surround;
     services.option = svc_option;
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;

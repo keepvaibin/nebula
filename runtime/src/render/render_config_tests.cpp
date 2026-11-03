@@ -241,9 +241,8 @@ int main() {
                 "frame-rate caps survive exact float round trips");
         }
         {
-            // The bloom's mode and strength and the ray-traced effects, each away from its default.
+            // The bloom's strength and the ray-traced effects, each away from its default.
             galaxy::render::RenderConfig original{};
-            original.bloom_mode = galaxy::render::kBloomNative;
             original.bloom = 140u;
             original.rt_reflections = false;
             original.rt_lens_bloom = false;
@@ -254,15 +253,15 @@ int main() {
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
             galaxy::render::load_render_config_from_file();
             const auto loaded = galaxy::render::get_render_config();
-            passed &= expect(loaded.bloom_mode == galaxy::render::kBloomNative && loaded.bloom == 140u &&
+            passed &= expect(loaded.bloom == 140u &&
                                  !loaded.rt_reflections && !loaded.rt_lens_bloom && !loaded.rt_sun_rays &&
                                  !loaded.rt_water,
-                             "the bloom's mode and strength and the ray-traced effects survive a save");
+                             "the bloom's strength and the ray-traced effects survive a save");
             const galaxy::render::RenderConfig defaults{};
-            passed &= expect(defaults.bloom_mode == galaxy::render::kBloomEnhanced && defaults.rt_reflections &&
+            passed &= expect(defaults.rt_reflections &&
                                  defaults.rt_lens_bloom &&
                                  defaults.rt_sun_rays && defaults.rt_water,
-                             "enhanced bloom and every ray-traced effect by default");
+                             "every ray-traced effect by default");
         }
         {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);
