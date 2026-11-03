@@ -224,7 +224,7 @@ void BigBubble::calcAnim() {
 
 void BigBubble::draw() const {
     if (isDraw()) {
-        J3DPass::materialColor(1, mWarningColor);
+        J3DPass::registerColor(J3D_REGISTER_1, mWarningColor);
         mSurface->draw();
     }
 }

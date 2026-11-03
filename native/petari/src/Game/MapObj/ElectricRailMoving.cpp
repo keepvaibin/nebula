@@ -76,7 +76,7 @@ void ElectricRailMoving::draw() const {
     if (MR::isValidDraw(this)) {
         J3DPass::textureMatrix(1, 1);
         J3DNativeShape::setTexture(1, _9C, 2);
-        J3DPass::materialColor(1, Color8(0xFF, 0xFF, 0xFF, _CC));
+        J3DPass::registerColor(J3D_REGISTER_1, Color8(0xFF, 0xFF, 0xFF, _CC));
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {
             mMesh.draw();
