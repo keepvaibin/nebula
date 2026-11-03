@@ -5,52 +5,10 @@
 #include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 
-struct JASDisposer;
 class NebulaArena;
 class NebulaArena;
 
 extern NebulaArena* JASDram;
-
-class JASHeap {
-public:
-    JASHeap(JASDisposer* disposer = nullptr);
-
-    void initRootHeap(void*, u32);
-    bool alloc(JASHeap*, u32);
-    bool free();
-    void insertChild(JASHeap*, JASHeap*, void*, u32, bool);
-    JASHeap* getTailHeap();
-    u32 getTailOffset();
-    u32 getCurOffset();
-
-    void* getBase() {
-        return mBase;
-    }
-    bool isAllocated() const {
-        return mBase != nullptr;
-    }
-    u32 getSize() const {
-        return mSize;
-    }
-
-    JSUTree< JASHeap >* getFirstChild() {
-        return mTree.getFirstChild();
-    }
-    JSUTree< JASHeap >* getEndChild() {
-        return mTree.getEndChild();
-    }
-
-    GameMutex& getMutex() {
-        return mMutex;
-    }
-
-    JSUTree< JASHeap > mTree;
-    GameMutex mMutex;
-    JASDisposer* mDisposer;
-    u8* mBase;
-    u32 mSize;
-    JASHeap* mHeap;
-};
 
 class JASGenericMemPool {
 public:
@@ -276,12 +234,6 @@ namespace JASKernel {
     void setupRootHeap(NebulaArena*, u32);
     NebulaArena* getSystemHeap();
     JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* getCommandHeap();
-    void setupSoundHeap(u32, u32);
-    JASHeap* getSoundHeap();
-    u32 getSoundFreeSize();
-    u32 getSoundSize();
-
-    extern JASHeap soundHeap;
     extern NebulaArena* sSystemHeap;
     extern JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* sCommandHeap;
 };  // namespace JASKernel
