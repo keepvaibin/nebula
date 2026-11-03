@@ -17,7 +17,9 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/RenderSignals.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <cstdio>
 
@@ -117,6 +119,13 @@ namespace MR {
     f32 calcCameraDistanceZ(const TVec3f& rPos) {
         const TPos3f& viewMtx = getCameraViewMtx();
         return MR::abs(rPos.x * viewMtx.get(2, 0) + rPos.y * viewMtx.get(2, 1) + rPos.z * viewMtx.get(2, 2) + 1.0f * viewMtx.get(2, 3));
+    }
+
+    void sceneOpaqueEnd() {
+        f32 view[3][4];
+        J3DNativeView::hostView(::getCameraContext()->mProjection, 0.0f, 0.0f, MR::getScreenUnitsAcross(),
+                                MR::getScreenHeight(), 0.0f, 1.0f, &view[0][0]);
+        NebulaRender::sceneMarker(NEBULA_SCENE_3D_OPAQUE_END, view);
     }
 
     void loadProjectionMtx() {

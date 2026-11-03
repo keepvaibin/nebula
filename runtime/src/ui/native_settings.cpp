@@ -204,8 +204,8 @@ bool restart_asking() {
 // The pages, in order.
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
                                                    "ADVANCED"};
-// The pages shown. GRAPHICS and MODS come back as their features are built natively.
-constexpr unsigned kShownTabs[] = {0u, 2u, 3u, 4u, 6u, 7u};
+// The pages shown. MODS comes back with its feature.
+constexpr unsigned kShownTabs[] = {0u, 1u, 2u, 3u, 4u, 6u, 7u};
 constexpr unsigned kShownTabCount = static_cast<unsigned>(std::size(kShownTabs));
 
 unsigned shown_position(unsigned tab) {
@@ -213,6 +213,19 @@ unsigned shown_position(unsigned tab) {
         if (kShownTabs[i] == tab) return i;
     }
     return 0u;
+}
+
+// The GRAPHICS page's rows for what is not built natively yet. Each goes with its feature.
+bool graphics_row_hidden(const char* label) {
+    static constexpr const char* kHidden[] = {
+        "RESOLUTION", "UPSCALING", "QUALITY MODE", "DLSS MODE", "FSR 3 MODE", "SHARPENING", "RAY TRACING", "RAY TRACING QUALITY",
+        "FRAME RATE", "INTERPOLATION", "FRAME RATE LIMIT", "TARGET FRAME RATE", "TEXTURE FILTERING", "MIPMAPS",
+        "CURVED SURFACES", "LIGHTING", "  INTENSITY", "TEXTURE PACKS", "  REPLACEMENTS", "DUMP TEXTURES", "MOVIES",
+    };
+    for (const char* hidden : kHidden) {
+        if (std::strcmp(label, hidden) == 0) return true;
+    }
+    return false;
 }
 
 // Rows of the shown pages for what is not there yet or not on this platform.
@@ -2547,7 +2560,10 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
     std::vector<SettingsRow> rows;
     switch (tab % kNativeSettingsTabCount) {
     case 0: rows = display_page(draft); break;
-    case 1: rows = graphics_page(draft); break;
+    case 1:
+        rows = graphics_page(draft);
+        std::erase_if(rows, [](const SettingsRow& row) { return graphics_row_hidden(std::string(row.label).c_str()); });
+        break;
     case 4: rows = game_page(runtime); break;
     case 5: rows = mods_page(draft); break;
     case 6: rows = system_page(caps); break;

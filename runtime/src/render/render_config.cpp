@@ -271,14 +271,11 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.temporal_quality = 0u;
     cfg.sharpness = 0u;
     cfg.frame_generation = 0u;
-    cfg.aa_mode = 0u;
-    cfg.msaa_samples = 1u;
     cfg.anisotropic_filtering = 1u;
     cfg.enhanced_mipmaps = false;
     cfg.curved_surfaces = false;
     cfg.per_pixel_lighting = false;
     cfg.enhanced_lighting = false;
-    cfg.ambient_occlusion = false;
     cfg.texture_packs = false;
     cfg.hud_output_resolution = false;
     if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {

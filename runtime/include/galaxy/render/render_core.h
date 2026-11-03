@@ -122,9 +122,18 @@ public:
             info.sky_up = producer_scene_sky_up_;
             info.sky_up_valid = producer_scene_sky_up_known_;
         }
+        if (marker == SceneMarker::SceneOpaqueEnd) {
+            info.view = producer_scene_opaque_;
+            info.view_valid = true;
+            attach_shape_record(std::move(record));
+            return;
+        }
         info.stage = producer_scene_stage_;
         producer_scene_view_valid_ = false;
         attach_shape_record(std::move(record));
+    }
+    void attach_scene_opaque(const float view[12]) noexcept {
+        for (unsigned i = 0; i < 12u; ++i) producer_scene_opaque_[i] = view[i];
     }
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
@@ -346,6 +355,7 @@ private:
     bool black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::array<float, 12> producer_scene_view_{};
+    std::array<float, 12> producer_scene_opaque_{};
     bool producer_scene_view_valid_ = false;
     std::uint32_t producer_scene_sky_up_ = 0u;
     bool producer_scene_sky_up_known_ = false;
@@ -461,15 +471,12 @@ private:
     static constexpr std::uint32_t kLitTranslucentKey = 0x4C495431u;
     bool lit_late_ = false;             // a lit late opaque draw (output_flags bit 7: its light at most 1.15)
     // Ambient occlusion (RenderConfig::ambient_occlusion, without traced lighting), sampled at each frame start; the
-    // scene's view is set (note_scene_ao_view) and the occlusion drawn (apply_scene_ao).
     bool ambient_occlusion_ = false;
-    bool ao_view_set_ = false;
-    bool ao_scene_applied_ = true;
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
-    [[nodiscard]] RtView scene_depth_view(const ScaledViewport& viewport) const;
+    [[nodiscard]] RtView scene_depth_view(const float terms[6], const ScaledViewport& viewport) const;
     // The scene's occlusion, once, before its first translucent phase (or at its end).
-    void apply_scene_ao();
+    void apply_scene_ao(const std::array<float, 12>& view);
     // The open scene's candidate key lights: the world-fixed light 0 of its lit draws, by world
     // direction and colour, with the draws using each and the sum of their ambient registers (0-1)
     // over those taking it from the register (traced).

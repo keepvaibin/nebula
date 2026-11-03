@@ -373,7 +373,8 @@ ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const Rende
         return nullptr;
     }
     const RenderStateKey rs = native_render_state(render_state);
-    const unsigned variant = native_shader_variant(rs.blend_bits);
+    const unsigned variant = native_sample_variant(shader, native_shader_variant(rs.blend_bits),
+                                                   rs.samples_log2 & kSceneVariantSamplesMask, true);
     const std::uint32_t id = shader * kNativeVariants + variant;
     const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
     auto& bucket = native_psos_[hash];

@@ -887,7 +887,7 @@ VkDescriptorSet RendererVk::allocate_post_set(VkDescriptorSetLayout layout) {
 // SMAA or FXAA of the 3D scene at its end, before the 2D layer draws: the scene target pass ends for the passes that read
 // a copy of the scene, then the result is drawn into it again.
 void RendererVk::record_scene_aa() {
-    if (!post_.ready() || !scene_.color || post_.settings().aa == PostProcessSettings::Aa::kOff || scene_.samples > 1u) {
+    if (!post_.ready() || !scene_.color || post_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
     const GpuPassScope pass{*this, GpuPass::SceneAa};
@@ -908,9 +908,46 @@ void RendererVk::record_scene_aa() {
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
         allocate);
     begin_scene_pass();
-    post_.finish_scene_aa(commands_, ran, color.width, color.height, allocate);
+    post_.finish_scene_aa(commands_, ran, color.width, color.height, allocate,
+                          draw_layout_.pass_for(scene_samples_log2(), false), scene_samples_log2());
     if (replay_list_ != nullptr && ran != AaRun::kNone) {
         post_.hold_scene_targets(replay_list_->held);
+    }
+    reset_draw_bindings();
+}
+
+// The occlusion of the opaque scene: the scene target pass ends for its compute passes, which read the depth, and the
+// multiply draws in it again.
+void RendererVk::record_scene_ao() {
+    if (!ao_.ready() || !scene_.color || !scene_.depth) {
+        return;
+    }
+    const GpuPassScope pass{*this, GpuPass::SceneAo};
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SceneAo, 0u});
+    }
+    end_scene_pass();
+    settle_owed_scene();
+    if (scene_.samples > 1u) {
+        resolve_scene_depth(commands_);
+    }
+    const VkImageAspectFlags aspects = depth_aspects(depth_format_);
+    image_barrier(commands_, scene_.depth->image, aspects, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                  kDepthSampleLayout, VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT);
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
+    const bool made = ao_.prepare(commands_, *scene_.depth, kDepthSampleLayout, scene_ao_view_, allocate);
+    image_barrier(commands_, scene_.depth->image, aspects, kDepthSampleLayout,
+                  VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0,
+                  VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                  VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    begin_scene_pass();
+    if (made) {
+        ao_.finish(commands_, draw_layout_.pass_for(scene_samples_log2(), false), scene_samples_log2(), allocate);
+        if (replay_list_ != nullptr) {
+            ao_.hold(replay_list_->held);
+        }
     }
     reset_draw_bindings();
 }

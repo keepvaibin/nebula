@@ -27,6 +27,7 @@
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/gpu_upload_ring.h"
+#include "galaxy/render/vk/ambient_occlusion_vk.h"
 #include "galaxy/render/vk/game_bloom_vk.h"
 #include "galaxy/render/vk/post_process_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
@@ -108,10 +109,10 @@ public:
     [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
     // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (PostProcessorVk).
     void record_scene_aa();
-    // Ambient occlusion (D3D12's ambient_occlusion.h) is not on Vulkan yet.
-    [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return false; }
-    void set_scene_ao_view(const RtView&) noexcept {}
-    void record_scene_ao() noexcept {}
+    // Ambient occlusion of the opaque scene (ambient_occlusion_vk.h).
+    [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ao_.ready(); }
+    void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    void record_scene_ao();
     // The game's bloom through the renderer (galaxy/motion_signals.h kMarkerBloom; game_bloom_vk.h): until its
     // passes have compiled, the game draws its own chains.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
@@ -432,6 +433,8 @@ private:
     // Presentation post-processing: SMAA or FXAA of the scene, FSR 1 or the box resample, RCAS.
     vk::PostProcessorVk post_;
     vk::GameBloomVk bloom_;
+    vk::AmbientOcclusionVk ao_;
+    RtView scene_ao_view_{};
     void sync_post_process();
     // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
     gpu::TextureRef oriented_;
@@ -704,7 +707,7 @@ private:
     // OutputSceneBegin: the scene resampled into the output scene target at the op's scale; SwapSceneSets: the scene target and the output
     // scene target trade places.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindScene, Clear, Copy, SceneAa, OutputSceneBegin, SwapSceneSets, Bloom
+        Draw, BindScene, Clear, Copy, SceneAa, SceneAo, OutputSceneBegin, SwapSceneSets, Bloom
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;

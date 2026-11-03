@@ -82,7 +82,7 @@ public:
                           ID3D12Resource* color, D3D12_CPU_DESCRIPTOR_HANDLE color_rtv,
                           unsigned width, unsigned height, unsigned picture_width,
                           unsigned picture_height, unsigned display_width, unsigned display_height,
-                          std::uint64_t frame_index, unsigned frames_in_flight);
+                          std::uint64_t frame_index, unsigned frames_in_flight, unsigned samples = 1u);
 
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
 
@@ -110,7 +110,7 @@ private:
     bool create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
                          DXGI_FORMAT format, int stencil,
                          Microsoft::WRL::ComPtr<ID3D12PipelineState>& out,
-                         UINT8 write_mask = D3D12_COLOR_WRITE_ENABLE_ALL);
+                         UINT8 write_mask = D3D12_COLOR_WRITE_ENABLE_ALL, UINT samples = 1u);
     bool create_smaa_pipelines(unsigned quality,
                                Microsoft::WRL::ComPtr<ID3D12PipelineState>& edges,
                                Microsoft::WRL::ComPtr<ID3D12PipelineState>& weights);
@@ -159,6 +159,9 @@ private:
     // The scene passes' last step into the scene target: colour only.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_blend_rgb_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> fxaa_rgb_;
+    // FXAA's, SMAA's: per sample count (log2).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> scene_pass_ms_[2][4];
+    [[nodiscard]] ID3D12PipelineState* scene_pass_pipeline(bool smaa, unsigned samples);
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_;
     // RCAS and the resample run into intermediates and into the back buffer;
     // both use RGBA8, so one pipeline each serves every target.

@@ -19,6 +19,8 @@ namespace MR {
 
     f32 calcCameraDistanceZ(const TVec3f&);
     void loadProjectionMtx();
+    // The scene's opaque surfaces are drawn: tells the renderer, with the camera's projection and the screen.
+    void sceneOpaqueEnd();
     void loadViewMtx();
     const TPos3f& getCameraViewMtx();
     const TPos3f& getCameraInvViewMtx();

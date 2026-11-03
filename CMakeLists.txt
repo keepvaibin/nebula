@@ -274,7 +274,7 @@ endforeach()
 set(galaxy_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/ambient_occlusion.hlsl")
 set(galaxy_ao_headers "")
 foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
-        apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
+        upsample_cs:UpsampleCS:cs_5_0 apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
     string(REPLACE ":" ";" galaxy_ao_pair "${galaxy_ao_pass}")
     list(GET galaxy_ao_pair 0 galaxy_ao_name)
     list(GET galaxy_ao_pair 1 galaxy_ao_entry)
@@ -286,7 +286,7 @@ foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoi
     endif()
     add_custom_command(OUTPUT "${galaxy_ao_header}"
         COMMAND "${GALAXY_FXC}" /nologo /T ${galaxy_ao_profile} /E ${galaxy_ao_entry} /O3 /Ges ${galaxy_ao_stage}
-            /Vn g_ao_${galaxy_ao_name} /Fh "${galaxy_ao_header}" "${galaxy_ao_hlsl}"
+            /DAO_PASS_${galaxy_ao_name}=1 /Vn g_ao_${galaxy_ao_name} /Fh "${galaxy_ao_header}" "${galaxy_ao_hlsl}"
         DEPENDS "${galaxy_ao_hlsl}"
         VERBATIM)
     list(APPEND galaxy_ao_headers "${galaxy_ao_header}")
@@ -673,6 +673,7 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/renderer_vk_replay.cpp
         runtime/src/render/vk/post_process_vk.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
+        runtime/src/render/vk/ambient_occlusion_vk.cpp
         ${galaxy_native_spirv_sources}
         runtime/src/render/vk/surface_win32.cpp)
     target_include_directories(galaxy_render_vk PUBLIC runtime/include)

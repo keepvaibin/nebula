@@ -1619,9 +1619,13 @@ void svc_scene_marker(void*, uint32_t marker, const float* view) {
         galaxy::render::attach_scene_view(view, view[15] != 0.0f ? view + 12 : nullptr,
                                       gSceneStage.empty() ? nullptr : gSceneStage.c_str());
     }
+    if (marker == NEBULA_SCENE_3D_OPAQUE_END && view != nullptr) {
+        galaxy::render::attach_scene_opaque(view);
+    }
     static constexpr galaxy::render::SceneMarker kMarkers[] = {
         galaxy::render::SceneMarker::SceneBegin, galaxy::render::SceneMarker::SceneEnd,
-        galaxy::render::SceneMarker::Scene2DBegin, galaxy::render::SceneMarker::Scene2DEnd};
+        galaxy::render::SceneMarker::Scene2DBegin, galaxy::render::SceneMarker::Scene2DEnd,
+        galaxy::render::SceneMarker::SceneOpaqueEnd};
     if (marker < std::size(kMarkers)) {
         galaxy::render::attach_scene_marker(kMarkers[marker]);
     }
