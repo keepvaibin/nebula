@@ -32,6 +32,10 @@ public:
     void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
     bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+
+#if !defined(NEBULA_RELEASE)
+    void testHit(HitSensor* pPlayer);
+#endif
     void startMainAttack();
     bool tryJumpAway();
 

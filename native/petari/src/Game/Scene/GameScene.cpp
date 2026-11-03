@@ -74,6 +74,14 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
+#if !defined(NEBULA_RELEASE)
+#include "Game/Boss/Koopa.hpp"
+#include "Game/Boss/KoopaSequencer.hpp"
+#include "Game/Player/MarioAccess.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Map/StageSwitch.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#endif
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"

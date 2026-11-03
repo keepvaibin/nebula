@@ -74,6 +74,8 @@
                         events.push_back({NEBULA_TEST_SHAKE_CAMERA, frame, 0});
                     } else if (kind == "actors") {
                         events.push_back({NEBULA_TEST_LIST_ACTORS, frame, 0});
+                    } else if (kind == "koopahit") {
+                        events.push_back({NEBULA_TEST_KOOPA_HIT, frame, 0});
                     } else if (kind.rfind("appear:", 0) == 0) {
                         events.push_back({NEBULA_TEST_APPEAR_ACTOR, frame, 0, kind.substr(7)});
                     } else if (kind.rfind("defeat:", 0) == 0) {

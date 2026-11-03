@@ -154,5 +154,13 @@ bool KoopaSequencerVs2::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* 
     return false;
 }
 
+#if !defined(NEBULA_RELEASE)
+void KoopaSequencerVs2::testHit(HitSensor* pPlayer) {
+    if (isNerve(GET_NERVE(KoopaSequencerVs2, KoopaSequencerVs2NrvBattle)) && !mSubSequenceBattle->isDemo()) {
+        mBattleMain->testHit(pPlayer);
+    }
+}
+#endif
+
 KoopaSequencerVs2::~KoopaSequencerVs2() {
 }
