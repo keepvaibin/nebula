@@ -2,16 +2,13 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-#if NATIVE_PIXEL_LIT
     const uint nq = v.pn_row & 31u;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
+#if NATIVE_PIXEL_LIT
     o.lit_eye = v.eye;
     o.lit_nrm = nrm;
 #endif
-    const uint nq = v.pn_row & 31u;
-    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
-    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
     o.color.rgb = v.color0.rgb;
     o.color.a = material.mat_color[0].a;
     o.color1.rgb = material.mat_color[1].rgb * saturate((material.amb_color[1].rgb * 255.0 + 0.0) / 255.0);

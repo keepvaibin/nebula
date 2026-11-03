@@ -77,8 +77,11 @@ def pixel_lit(text):
         text = text[:first] + vertex + text[last:]
     else:
         # An unlit environment map: only the variant needs the normal.
-        at = text.index("{\n", head) + 2
-        text = (text[:at] + "#if NATIVE_PIXEL_LIT\n" + NORMAL_ROWS + "    o.lit_eye = v.eye;\n    o.lit_nrm = nrm;\n#endif\n" + text[at:])
+        # (A channel enabled with no lights has the rows already, for every variant.)
+        has_rows = NORMAL_ROWS in text
+        at = text.index(NORMAL_ROWS) + len(NORMAL_ROWS) if has_rows else text.index("{\n", head) + 2
+        text = (text[:at] + "#if NATIVE_PIXEL_LIT\n" + ("" if has_rows else NORMAL_ROWS)
+                + "    o.lit_eye = v.eye;\n    o.lit_nrm = nrm;\n#endif\n" + text[at:])
     text = text[:head] + block + text[head:]
     begin = (f"#if NATIVE_PIXEL_LIT\n    j3d_pixel_begin(i);\n"
              + ("    j3d_pixel_channels(i);\n" if lit else f"    if (j3d_enhanced()) enh_key_highlight(g_enh, i.lit_eye);\n")
