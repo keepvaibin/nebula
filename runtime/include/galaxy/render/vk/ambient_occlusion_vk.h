@@ -3,12 +3,14 @@
 
 // Ambient occlusion on Vulkan: ambient_occlusion.cpp's passes with Vulkan's resources (ambient_occlusion.hlsl).
 
-#include "galaxy/render/ambient_occlusion_shape.h"
+#include "galaxy/render/ambient_occlusion_objects.h"
+#include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/vk_context.h"
 
 #include <array>
 #include <functional>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace galaxy::render::vk {
@@ -30,14 +32,14 @@ public:
     // Outside a render pass, the scene's single-sample depth readable as `depth_layout`: the colour multiplier of each
     // scene target pixel. False: nothing to multiply.
     bool prepare(VkCommandBuffer commands, const Texture& depth, VkImageLayout depth_layout, const RtView& view,
-                 const SetAllocator& allocate);
+                 bool ssao, std::span<const ao::ObjectOccluder> objects, UploadRing& ring, const SetAllocator& allocate);
     // Inside a scene target pass of 2^samples_log2 samples: the multiply.
     void finish(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const SetAllocator& allocate);
     // What the frame's commands read stays alive with its submission (recorded frames that replay).
     void hold(std::vector<std::shared_ptr<Texture>>& held) const;
 
 private:
-    enum Pass : unsigned { kDistance, kOcclusion, kDenoise, kUpsample, kPassCount };
+    enum Pass : unsigned { kDistance, kOcclusion, kDenoise, kUpsample, kSsao, kPassCount };
     [[nodiscard]] VkShaderModule module(unsigned index) const;
     [[nodiscard]] VkPipeline apply_pipeline(VkRenderPass pass, unsigned samples_log2);
     [[nodiscard]] bool ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format,
@@ -57,6 +59,10 @@ private:
     std::shared_ptr<Texture> denoised_;
     std::shared_ptr<Texture> scale_;
     ao::Constants constants_{};
+    std::vector<float> object_values_;
+    std::vector<std::uint32_t> object_tiles_;
+    VkDescriptorBufferInfo objects_{};
+    VkDescriptorBufferInfo tiles_{};
 };
 
 }  // namespace galaxy::render::vk

@@ -1668,6 +1668,9 @@ void RenderCore::apply_scene_ao(const std::array<float, 12>& view) {
     }
     flush_pending_draw_batch();
     renderer_.set_scene_ao_view(scene_depth_view(view.data(), viewport));
+    ao_objects_.finish();
+    collect_ao_objects_ = false;
+    renderer_.set_scene_ao_objects(ao_objects_.list());
     renderer_.record_scene_ao();
 }
 
@@ -1707,6 +1710,10 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
     if (marker == SceneMarker::SceneBegin) {
+        collect_ao_objects_ = ambient_occlusion_ && side_layer_ == kSceneLayer;
+        if (collect_ao_objects_) {
+            ao_objects_.begin(view != nullptr ? view->data() : nullptr);
+        }
         temporal_scene_ = renderer_.scene_temporal_begin(
             scene_jitter_px_[0], scene_jitter_px_[1]);
         // A temporal scene writes the motion, and so does one the ray tracing engine lights (its histories follow
@@ -5087,6 +5094,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.position_matrix = position_matrix;
             shape.split_built = false;
             shape.split_indices.clear();
+            shape.object_slots_built = false;
         }
         // The block holds the vertices and, behind them, the indices: both written once, for every draw of the shape.
         const auto expanded_units = static_cast<std::uint32_t>(expand_scratch_.size());
@@ -5112,6 +5120,36 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         shape.resident_vertices = expanded_units;
     }
     const std::uint32_t units = shape.resident_vertices;
+
+    // The scene's opaque models (the depth and colour they leave) cast the occlusion its pass reads.
+    if (collect_ao_objects_ && record.pass.depth_write != 0u && record.pass.color_write != 0u && record.pass.blend_op == 0u &&
+        (geometry.attributes & shapes::kOwnPositions) == 0u) {
+        if (!shape.object_slots_built) {
+            shape.object_slots_built = true;
+            shape.object_slots.clear();
+            if (shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_)) {
+                for (const RenderVertex& v : expand_scratch_) {
+                    const std::uint32_t row = v.mtx_indices[0] & 0xFFu;
+                    auto slot = std::find_if(shape.object_slots.begin(), shape.object_slots.end(),
+                                             [row](const ao::ObjectSlot& s) { return s.row == row; });
+                    if (slot == shape.object_slots.end()) {
+                        ao::ObjectSlot made;
+                        made.row = row;
+                        std::copy_n(v.position, 3u, made.min);
+                        std::copy_n(v.position, 3u, made.max);
+                        shape.object_slots.push_back(made);
+                        slot = std::prev(shape.object_slots.end());
+                    }
+                    for (unsigned i = 0u; i < 3u; ++i) {
+                        slot->min[i] = std::min(slot->min[i], v.position[i]);
+                        slot->max[i] = std::max(slot->max[i], v.position[i]);
+                    }
+                }
+            }
+        }
+        ao_objects_.add(keys[0], shape.object_slots,
+                        [this](std::uint32_t row, std::uint32_t column) { return matrices_.matrix_value(row, column); });
+    }
 
     RecordVertexInputs inputs;
     inputs.matrix_bits = ((geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u) |

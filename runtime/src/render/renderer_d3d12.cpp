@@ -7444,6 +7444,9 @@ void RendererD3D12::record_scene_ao() {
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;
     in.view = scene_ao_view_;
+    in.ssao = get_render_config().ambient_occlusion_ssao;
+    in.objects = &scene_ao_objects_;
+    in.ring = &matrix_ring_;
     static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);

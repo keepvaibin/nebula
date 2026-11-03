@@ -10,6 +10,8 @@
 // from the eye distance there:
 // DepthCS: the eye distance of each occlusion pixel's centre scene target pixel (0 for the far plane) into u0.
 // AoCS: occlusion and eye distance from t2 (DepthCS's output) into u0.
+// SsaoCS: the same by Scalable Ambient Obscurance (McGuire, Mara and Luebke, HPG 2012), instead of AoCS: a spiral of
+// samples, each darkening by how far it stands above the surface's plane, falling off to nothing at the radius.
 // DenoiseCS: the depth-weighted tent of t1 into u0.
 // UpsampleCS: per scene target pixel the denoised occlusion (depth-weighted bilinear) as the colour multiplier, into u0.
 // ApplyVS/ApplyPS: that multiplier in a multiplicative blend; it reads no depth, so it can draw in the scene's own pass.
@@ -18,11 +20,11 @@ cbuffer AoConstants : register(b0) {
     float4 g_ray;         // an scene target pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
     float4 g_depth;       // RtView z_scale, z_offset, min_depth, max_depth
     float4 g_viewport;    // the scene viewport in scene target pixels: x, y, width, height
-    float4 g_params;      // radius (eye units), visibility exponent, strength, largest radius in occlusion pixels
+    float4 g_params;      // radius (eye units), visibility exponent, display exponent, largest radius in occlusion pixels
     uint4 g_size;         // occlusion target width, height; scene target pixels per occlusion pixel; 1: show the occlusion
 };
 
-#if defined(AO_PASS_distance_cs) || defined(AO_PASS_occlusion_cs) || defined(AO_PASS_denoise_cs) || defined(AO_PASS_upsample_cs)
+#if defined(AO_PASS_distance_cs) || defined(AO_PASS_occlusion_cs) || defined(AO_PASS_ssao_cs) || defined(AO_PASS_denoise_cs) || defined(AO_PASS_upsample_cs)
 #ifndef AO_COMPUTE
 #define AO_COMPUTE 1
 #endif
@@ -46,15 +48,18 @@ AO_FORMAT(rgba16f) RWTexture2D<float4> u_occlusion : register(u0);
 #endif
 
 static const float kPi = 3.14159265f;
-static const uint kSlices = 2u;
-static const uint kSteps = 3u;
+static const uint kSlices = 3u;
+static const uint kSteps = 4u;
 // XeGTAO's falloff: full weight to 38.5% of the radius, then linearly to none at the radius.
 static const float kFalloffRange = 0.615f;
-// XeGTAO's thin occluder compensation: a surface far in front along the view (a leaf, an ear's other sheet) weighs less
-// than one beside the point: depth alone cannot tell a sheet from a wall.
-static const float kThinOccluder = 1.5f;
+// How much a surface far in front along the view (a leaf, an ear's other sheet) weighs less than one beside the point: depth
+// alone cannot tell a sheet from a wall, and a sheet's silhouette on what lies behind it would be a detached ghost.
+static const float kThinOccluder = 8.0f;
+// Visibility from here up counts as open: the slight angle between a low-poly surface's facets is not a crease, and the
+// power would draw its polygons on the ground.
+static const float kOpenVisibility = 0.94f;
 // The game's worlds are lit for a stylised picture: a deep crease darkens, it does not turn black.
-static const float kLeastVisibility = 0.2f;
+static const float kLeastVisibility = 0.3f;
 
 float depth_to_eye_z(float depth) {
     const float ndc = (depth - g_depth.z) / max(g_depth.w - g_depth.z, 1e-7f);
@@ -77,6 +82,12 @@ float2 scene_centre(int2 o) {
 
 float3 eye_position(float2 pixel, float distance) {
     return float3(pixel.x * g_ray.x + g_ray.y, pixel.y * g_ray.z + g_ray.w, -1.0f) * distance;
+}
+
+// Where the radius nears two occlusion pixels nothing is resolved: the occlusion fades out over the last two, so that no
+// line shows across the world where it stops, and far surfaces do not flicker with it.
+float distance_fade(float screen_radius) {
+    return saturate((screen_radius - 2.0f) * 0.5f);
 }
 
 // XeGTAO_FastACos (Eberly's first-order fit): within 0.0007 rad.
@@ -139,6 +150,47 @@ float3 surface_normal(int2 o, float3 p) {
 // 4x4 Bayer order: each of 16 slice rotations and step offsets once per 4x4 block.
 static const uint kBayer[16] = {0u, 8u, 2u, 10u, 12u, 4u, 14u, 6u, 3u, 11u, 1u, 9u, 15u, 7u, 13u, 5u};
 
+// What the scene's models let through to a point (ambient_occlusion_objects.h): per ellipsoid in reach the cosine towards its
+// centre, in the ellipsoid's space, full at its surface and falling smoothly to none at the reach. A surface facing away from
+// it takes none, so a model does not darken its own outside.
+#if defined(AO_PASS_occlusion_cs) || defined(AO_PASS_ssao_cs)
+StructuredBuffer<float4> t_objects : register(t3);
+StructuredBuffer<uint> t_object_tiles : register(t4);
+static const float kObjectReach = 3.0f;
+static const float kObjectFalloff = 2.0f;
+// Inside its ellipsoid a point is mostly the model's own surface, already shaded by the depth occlusion: a white ear should
+// not turn grey. Models together leave at least this much light on what they stand over.
+static const float kObjectInside = 0.45f;
+static const float kObjectLeast = 0.45f;
+
+float object_visibility(uint2 id, float3 p, float3 n) {
+    const uint2 tile = id >> 5u;
+    const uint at = 2u + 2u * (tile.y * t_object_tiles[0] + tile.x);
+    const uint first = t_object_tiles[at];
+    const uint count = t_object_tiles[at + 1u];
+    float visibility = 1.0f;
+    for (uint i = 0u; i < count; ++i) {
+        const uint o = t_object_tiles[first + i] * 4u;
+        const float4 a0 = t_objects[o];
+        const float4 a1 = t_objects[o + 1u];
+        const float4 a2 = t_objects[o + 2u];
+        const float4 c = t_objects[o + 3u];
+        const float3 d = c.xyz - p;
+        const float3 q = float3(dot(d, a0.xyz), dot(d, a1.xyz), dot(d, a2.xyz));
+        const float l2 = dot(q, q);
+        if (l2 < kObjectReach * kObjectReach) {
+            const float3 m = float3(dot(a0.xyz, n) * a0.w, dot(a1.xyz, n) * a1.w, dot(a2.xyz, n) * a2.w);
+            const float l = sqrt(l2);
+            const float cosine = saturate(dot(m, q) / max(sqrt(dot(m, m)) * l, 1e-6f));
+            const float occlusion = cosine * pow(saturate((kObjectReach - l) / (kObjectReach - 1.0f)), kObjectFalloff) *
+                                    lerp(kObjectInside, 1.0f, smoothstep(0.7f, 1.0f, l));
+            visibility *= 1.0f - c.w * occlusion;
+        }
+    }
+    return max(visibility, kObjectLeast);
+}
+#endif
+
 #ifdef AO_PASS_occlusion_cs
 [numthreads(8, 8, 1)]
 void AoCS(uint3 id : SV_DispatchThreadID) {
@@ -154,11 +206,11 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
     // The radius in occlusion pixels; below two nothing is resolved.
     const float radius = g_params.x;
     const float screen_radius = min(radius / (g_ray.x * -p.z * float(g_size.z)), g_params.w);
+    const float3 n = surface_normal(o, p);
     if (screen_radius < 2.0f) {
-        u_occlusion[id.xy] = float4(1.0f, -p.z, 0.0f, 0.0f);
+        u_occlusion[id.xy] = float4(max(object_visibility(id.xy, p, n), kLeastVisibility), -p.z, 0.0f, 0.0f);
         return;
     }
-    const float3 n = surface_normal(o, p);
     const float3 v = normalize(-p);
     const float falloff_mul = -1.0f / (kFalloffRange * radius);
     const float falloff_add = (1.0f - kFalloffRange) / kFalloffRange + 1.0f;
@@ -219,8 +271,61 @@ void AoCS(uint3 id : SV_DispatchThreadID) {
         visibility += projected_length * (arc0 + arc1);
         direction = float2(direction.x * turn.x - direction.y * turn.y, direction.x * turn.y + direction.y * turn.x);
     }
-    visibility = max(pow(saturate(visibility / float(kSlices)), g_params.y), kLeastVisibility);
-    u_occlusion[id.xy] = float4(visibility, -p.z, 0.0f, 0.0f);
+    visibility = pow(saturate(visibility / (float(kSlices) * kOpenVisibility)), g_params.y);
+    visibility = lerp(1.0f, visibility, distance_fade(screen_radius)) * object_visibility(id.xy, p, n);
+    u_occlusion[id.xy] = float4(max(visibility, kLeastVisibility), -p.z, 0.0f, 0.0f);
+}
+#endif
+
+#ifdef AO_PASS_ssao_cs
+static const uint kSsaoSamples = 16u;
+static const float kSsaoTurns = 7.0f;  // the least discrepancy for this count (McGuire et al.)
+
+[numthreads(8, 8, 1)]
+void SsaoCS(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= g_size.x || id.y >= g_size.y) {
+        return;
+    }
+    const int2 o = int2(id.xy);
+    float3 p;
+    if (!point_at(o, p)) {
+        u_occlusion[id.xy] = float4(1.0f, 0.0f, 0.0f, 0.0f);
+        return;
+    }
+    const float radius = g_params.x;
+    const float screen_radius = min(radius / (g_ray.x * -p.z * float(g_size.z)), g_params.w);
+    const float3 n = surface_normal(o, p);
+    if (screen_radius < 2.0f) {
+        u_occlusion[id.xy] = float4(max(object_visibility(id.xy, p, n), kLeastVisibility), -p.z, 0.0f, 0.0f);
+        return;
+    }
+    const uint2 cell = id.xy & 3u;
+    const float phase = (float(kBayer[cell.y * 4u + cell.x]) + 0.5f) / 16.0f * 2.0f * kPi;
+    const float r2 = radius * radius;
+    // Past the facets of a low-poly surface: the normal comes from the depth, and a neighbour facet's small rise is no occluder.
+    const float bias = 0.12f * radius;
+    const float epsilon = 0.01f * r2;
+    float sum = 0.0f;
+    [unroll]
+    for (uint i = 0u; i < kSsaoSamples; ++i) {
+        const float alpha = (float(i) + 0.5f) / float(kSsaoSamples);
+        const float angle = alpha * kSsaoTurns * 2.0f * kPi + phase;
+        float2 unit;
+        sincos(angle, unit.y, unit.x);
+        const int2 offset = int2(round(unit * (alpha * screen_radius + 1.0f)));
+        float3 q;
+        if (point_at(o + offset, q)) {
+            const float3 delta = q - p;
+            const float3 reach = float3(delta.xy, delta.z * (1.0f + kThinOccluder));
+            const float vv = dot(reach, reach);
+            const float f = max(r2 - vv, 0.0f);
+            sum += f * f * f * max((dot(delta, n) - bias) / (epsilon + vv), 0.0f);
+        }
+    }
+    const float obscurance = sum * 5.0f * radius / (r2 * r2 * r2 * float(kSsaoSamples));
+    const float visibility = lerp(1.0f, pow(saturate(1.0f - obscurance), g_params.y), distance_fade(screen_radius)) *
+                             object_visibility(id.xy, p, n);
+    u_occlusion[id.xy] = float4(max(visibility, kLeastVisibility), -p.z, 0.0f, 0.0f);
 }
 #endif
 
@@ -276,18 +381,9 @@ ApplyOut ApplyVS(uint vertex : SV_VertexID) {
     return o;
 }
 
-// Jimenez et al.'s multiple-bounce fit for an albedo of 0.5 (the scene's colour is lit, not its albedo): light
-// bouncing inside a crease brightens it.
-float multi_bounce(float visibility) {
-    const float a = 2.0404f * 0.5f - 0.3324f;
-    const float b = -4.7951f * 0.5f + 0.6417f;
-    const float c = 2.7552f * 0.5f + 0.6903f;
-    return max(visibility, ((visibility * a + b) * visibility + c) * visibility);
-}
-
-// The colour multiplier of a visibility, display-encoded (the scene target's colour): it rises with the visibility.
+// The colour multiplier of a visibility on the scene target's display values.
 float ao_scale(float visibility) {
-    return pow(max(lerp(1.0f, multi_bounce(saturate(visibility)), g_params.z), 0.0f), 1.0f / 2.2f);
+    return pow(saturate(visibility), g_params.z);
 }
 
 #ifdef AO_PASS_upsample_cs
@@ -327,8 +423,7 @@ void UpsampleCS(uint3 id : SV_DispatchThreadID) {
 }
 #endif
 
-// The occlusion scales light, linear; the scene target holds display-encoded colour. A pixel it would change by less
-// than half a level (8-bit) keeps its colour without a write.
+// A pixel the occlusion would change by less than half a level (8-bit) keeps its colour without a write.
 float4 ApplyPS(ApplyOut i) : SV_Target {
     const float scale = t_occlusion.Load(int3(int2(i.position.xy), 0)).x;
     if (scale > 1.0f - 0.5f / 255.0f) {

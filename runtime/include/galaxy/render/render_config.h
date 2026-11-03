@@ -65,6 +65,8 @@ struct RenderConfig {
     bool     wide_scene          = false;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
+    // Which: SSAO instead of GTAO.
+    bool     ambient_occlusion_ssao = false;
     // The game's bloom (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
     unsigned bloom               = 100;
 

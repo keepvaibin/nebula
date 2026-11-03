@@ -1056,7 +1056,8 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         // Patched texture tables and the replay's constants sets (constants_set).
         list.descriptors =
             create_pool(device, kFrameSets,
-                        constants_sets(64u, {.images = kFrameSets * 8u, .storage_images = vk_detail::kPassStorageImages}));
+                        constants_sets(64u, {.images = kFrameSets * 8u, .storage = vk_detail::kPassStorageBuffers,
+                                             .storage_images = vk_detail::kPassStorageImages}));
     }
     // The scene scene target's scale (the output scene target's place while the live frame's 2D layer is in it).
     const FrameMap scene_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
