@@ -402,10 +402,10 @@ void FileSelector::offerFilesToMenuFocus() {
 // The quit question; true while it holds the file select.
 bool FileSelector::updateQuitQuestion() {
     if (mQuitFrames >= 0) {
-        // The picture and sound fade as the cutscene skip's do; then the game's own way out (the HOME Menu's Wii
-        // Menu), its screen already black.
+        // The picture and sound fade as the cutscene skip's do; then the game's own way out, its screen already
+        // black.
         if (++mQuitFrames >= 2 && !MR::isSystemWipeActive()) {
-            GameSystemFunction::requestGoWiiMenu(true);
+            GameSystemFunction::requestQuitGame(true);
         }
         return true;
     }

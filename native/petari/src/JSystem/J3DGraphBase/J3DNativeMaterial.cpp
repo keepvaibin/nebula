@@ -169,13 +169,13 @@ namespace {
         return sRange == 0 || (number >= (sRange >> 16) && number <= (sRange & 0xFFFF));
     }
 
-    u8 nativeFactor(u8 gx, bool source) {
-        // the console's colour factors name the other side's colour (a source factor 2 is the destination's colour).
-        if (gx == 2 || gx == 3) {
-            return source ? static_cast< u8 >(gx == 2 ? NEBULA_FACTOR_DST_COLOR : NEBULA_FACTOR_INV_DST_COLOR)
-                          : static_cast< u8 >(gx == 2 ? NEBULA_FACTOR_SRC_COLOR : NEBULA_FACTOR_INV_SRC_COLOR);
+    u8 nativeFactor(u8 stored, bool source) {
+        // The file's colour factors name the other side's colour (a source factor 2 is the destination's colour).
+        if (stored == 2 || stored == 3) {
+            return source ? static_cast< u8 >(stored == 2 ? NEBULA_FACTOR_DST_COLOR : NEBULA_FACTOR_INV_DST_COLOR)
+                          : static_cast< u8 >(stored == 2 ? NEBULA_FACTOR_SRC_COLOR : NEBULA_FACTOR_INV_SRC_COLOR);
         }
-        return gx;
+        return stored;
     }
 
     // A material with no shader in the set:
@@ -254,7 +254,7 @@ namespace {
         }
         loadRegisters(rSetup, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
-        // Each coordinate's console scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
+        // Each coordinate's scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
         // of map m at c's scale over m's size.
         for (u32 k = 0; k < 8; k++) {
             f32* pScale = material.constants + 84 + k * 4;

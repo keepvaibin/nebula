@@ -19,7 +19,7 @@ namespace {
 
     // VI_DM_DEFAULT: 5 minutes of NTSC fields.
 
-    // The Wii's picture: 16:9 at the game's 832 screen units.
+    // The design's picture: 16:9 at the game's 832 screen units.
     const f64 cWiiAspect = 16.0 / 9.0;
     const NebulaDisplay cWiiDisplay = {0, 16.0f / 9.0f, 832, 608.0f, 1.0f};
     NebulaDisplay sDisplay = cWiiDisplay;

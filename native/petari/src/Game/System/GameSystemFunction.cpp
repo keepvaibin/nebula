@@ -114,8 +114,8 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystemResetAndPowerProcess >::get()->requestReset(param1);
     }
 
-    void requestGoWiiMenu(bool param1) {
-        SingletonHolder< GameSystemResetAndPowerProcess >::get()->requestGoWiiMenu(param1);
+    void requestQuitGame(bool param1) {
+        SingletonHolder< GameSystemResetAndPowerProcess >::get()->requestQuitGame(param1);
     }
 
     void forceToDeactivateHomeButtonLayout() {

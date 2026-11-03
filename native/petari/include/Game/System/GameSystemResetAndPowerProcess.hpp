@@ -27,7 +27,7 @@ public:
     void setResetOperationApplicationReset();
     void setResetOperationReturnToMenu();
     void requestReset(bool);
-    void requestGoWiiMenu(bool);
+    void requestQuitGame(bool);
     void notifyCheckDiskResult(bool);
     void exePolling();
     void exeWaitResetPermitted();

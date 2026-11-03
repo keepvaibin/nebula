@@ -105,7 +105,7 @@ void InputSwing::updateCentrifugal() {
 
 // A shake button (a controller without motion sensors, or a key) swings directly, the frame it is pressed: each press is
 // a new swing (the flag drops for one frame first if a press's swing is still up), held for cNebulaShakeSwingFrames.
-// Without presses the accelerometer decides, as on the console.
+// Without presses the accelerometer decides.
 bool InputSwing::updateNebulaShake() {
     mNebulaShakePresses += mPad->mReadInfo->takeShakePresses(mChannel == INPUT_HAND_MAIN ? 0 : 1);
     if (mNebulaShakeFrames == 0 && mNebulaShakePresses == 0 && !mIsNebulaShaking) {

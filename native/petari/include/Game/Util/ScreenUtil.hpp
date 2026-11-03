@@ -11,14 +11,14 @@ namespace MR {
     f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
     // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
-    // aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
+    // aspect and the layout canvas follow it (wide == 0: 16:9).
     inline const NebulaDisplay& getDisplay() {
         return NebulaFrameClock::display();
     }
-    // Between these, getScreenWidth keeps the Wii's 832: CollisionShadow sizes its softening circle in screen units but
+    // Between these, getScreenWidth keeps the design's 832: CollisionShadow sizes its softening circle in screen units but
     // draws it into a fixed 160x160 region.
-    void beginWiiScreenWidth();
-    void endWiiScreenWidth();
+    void beginDesignScreenWidth();
+    void endDesignScreenWidth();
     inline s32 getScreenHeight() {
         return NebulaFrameClock::cCanvasHeight;
     }

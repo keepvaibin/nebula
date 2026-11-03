@@ -545,7 +545,7 @@ public:
     };
     struct DrawStates {
         // Code reads these as a word (_1C_WORD masks): fields from the least significant value bit up, so each has
-        // the console's bit (CodeWarrior allocates bitfields from the most significant bit).
+        // the bit those masks name.
         unsigned _1F : 1;
         unsigned _1E : 1;
         unsigned _1D : 1;

@@ -15,8 +15,7 @@ struct SoundList {
         u32 _0;
         u8 _4[4];
 
-        // The console's first byte of the word (its play kind and water variant): _4[0] on the big-endian console, the
-        // word's last byte on a little-endian host.
+        // The word's top byte: its play kind and water variant.
         u8 kind() const {
             return static_cast< u8 >(_0 >> 24);
         }
