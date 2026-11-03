@@ -99,7 +99,7 @@ void J3DSys::drawInit() {
         J3DPass::constantColor(i, j3dDefaultConstantColor);
 
     for (i = 0; i < 4; i++)
-        J3DPass::materialColorWide(i, j3dDefaultRegisterColor);
+        J3DPass::registerColorWide(static_cast< J3DRegister >(i), j3dDefaultRegisterColor);
 
 
 }
@@ -130,9 +130,9 @@ void J3DSys::reinitTexture() {
 }
 
 void J3DSys::reinitTevStages() {
-    J3DPass::materialColor(0, ColorWhite);
-    J3DPass::materialColor(1, ColorWhite);
-    J3DPass::materialColor(2, ColorWhite);
+    J3DPass::registerColor(J3D_REGISTER_0, ColorWhite);
+    J3DPass::registerColor(J3D_REGISTER_1, ColorWhite);
+    J3DPass::registerColor(J3D_REGISTER_2, ColorWhite);
     J3DPass::constantColor(0, ColorWhite);
     J3DPass::constantColor(1, ColorWhite);
     J3DPass::constantColor(2, ColorWhite);
