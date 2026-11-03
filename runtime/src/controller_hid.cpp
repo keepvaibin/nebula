@@ -1381,7 +1381,7 @@ public:
             setup_main(stop, rescan);
         });
         // A test session (a hidden window) never takes the player's controllers over Bluetooth LE.
-        const bool ble_wanted = !env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
+        const bool ble_wanted = !hidden_test_session();
         if (ble_wanted) ble::start(rescan);
         service_device_timers();
         for (;;) {
