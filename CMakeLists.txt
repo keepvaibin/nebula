@@ -173,7 +173,7 @@ target_link_libraries(galaxy_native_host
         nebula_archive
         shell32
         bcrypt
-        windowsapp
+        runtimeobject
         hid
         ole32
         setupapi
