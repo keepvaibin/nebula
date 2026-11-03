@@ -485,11 +485,6 @@ std::vector<std::uint64_t> TextureCache::forget_range(std::uint64_t start, std::
 
 std::size_t TextureCache::forget(std::uint64_t key) {
     if (const auto it = registered_images_.find(key); it != registered_images_.end()) {
-        static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
-        if (log_drops) {
-            std::fprintf(stderr, "[texture] handed-over image dropped: %llX (%zu bytes) by a capture\n",
-                         static_cast<unsigned long long>(key), it->second->size());
-        }
         replaced_images_.push_back(std::move(it->second));
         registered_images_.erase(it);
     }
@@ -948,7 +943,7 @@ namespace {
 
 // GALAXY_TEXTURE_PACK_TRACE=1: each replacement bound or swapped in, with its address and file.
 bool trace_texture_packs_enabled() {
-    static const bool enabled = read_env_u64("GALAXY_TEXTURE_PACK_TRACE", 0u) != 0u;
+    static const bool enabled = read_env_u64(nebula_switch::texture_pack_trace_name(), 0u) != 0u;
     return enabled;
 }
 

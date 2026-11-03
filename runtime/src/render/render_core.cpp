@@ -2355,16 +2355,8 @@ void RenderCore::advance_interp_sequence(bool flush) {
                 renderer_.set_subframe_capture(true);
                 renderer_.set_capture_waits(true);
             }
-            // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
-            // reproduce the frame, 0 the frame before).
-            static const double force_t = [] {
-                char value[32]{};
-                std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
-                    ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
-            }();
             const std::int64_t subframe_start = galaxy::qpc_now();
-            const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
+            const bool presented = render_interp_subframe(static_cast<float>(t));
             interp_subframe_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - subframe_start);
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
@@ -2377,7 +2369,6 @@ void RenderCore::advance_interp_sequence(bool flush) {
                 ++interp_presented_;
                 interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
                 note_present_vblank(slot);
-                note_interp_timeline(slot, force_t >= 0.0 ? force_t : t, false);
             } else {
                 ++interp_failed_;
             }
@@ -2392,7 +2383,6 @@ void RenderCore::advance_interp_sequence(bool flush) {
         interp_presenting_real_ = true;
         present_cached_display_on_thread(false, false, true, sequence.picture_slot);
         note_present_vblank(slot);
-        note_interp_timeline(slot, 1.0, true);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
         renderer_.set_capture_waits(false);
@@ -2431,32 +2421,6 @@ void RenderCore::note_present_vblank(std::int64_t slot) {
     }
     interp_slot_to_vblank_min_ms_ = std::min(interp_slot_to_vblank_min_ms_, slot_to_vblank_ms);
     interp_slot_to_vblank_max_ms_ = std::max(interp_slot_to_vblank_max_ms_, slot_to_vblank_ms);
-}
-
-// The line: the slot's time and the present's (QPC ticks), the game frame shown (the played log's serial; t
-// between the frame before, 0, and it, 1), whether it was the game's own frame, and the sequence's camera: whether
-// it cut (by the game's flag or the thresholds), how far it moved and turned, and whether it chained past skipped logs.
-void RenderCore::note_interp_timeline(std::int64_t slot, double t, bool real) {
-    static std::FILE* const file = [] {
-        char path[MAX_PATH]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, path, sizeof(path), "GALAXY_INTERP_TIMELINE") != 0 || length <= 1u) {
-            return static_cast<std::FILE*>(nullptr);
-        }
-        std::FILE* opened = nullptr;
-        if (fopen_s(&opened, path, "w") == 0 && opened != nullptr) {
-            std::fprintf(opened, "slot_qpc,present_qpc,frame,t,real,frequency,cut,game_cut,moved,turn,chained\n");
-        }
-        return opened;
-    }();
-    if (file == nullptr) {
-        return;
-    }
-    std::fprintf(file, "%lld,%lld,%llu,%.6f,%d,%lld,%d,%d,%.1f,%.2f,%d\n", static_cast<long long>(slot),
-                 static_cast<long long>(galaxy::qpc_now()), static_cast<unsigned long long>(interp_last_played_serial_),
-                 t, real ? 1 : 0, static_cast<long long>(galaxy::qpc_frequency()), interp_camera_.cut ? 1 : 0,
-                 interp_camera_game_cut_ ? 1 : 0, static_cast<double>(interp_camera_.moved),
-                 static_cast<double>(interp_camera_.turn_degrees), interp_sequence_.chained ? 1 : 0);
 }
 
 // A game frame presented while interpolating, without sub-frames: why.
@@ -4091,7 +4055,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // those in the log every 65,536 (GALAXY_LOG_NATIVE_MATERIALS=1).
     if (native_material_ == nullptr) [[unlikely]] {
         galaxy::loss::note(galaxy::loss::Kind::DrawNoMaterial);
-        static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
+        static const bool log_native = read_env_u64(nebula_switch::log_native_materials_name(), 0u) != 0u;
         static std::uint64_t dropped = 0u;
         if (log_native && (dropped++ & 0xFFFFu) == 0u) {
             std::fprintf(stderr, "[native-material] %llu draws without a native material (not drawn)\n",
@@ -4267,7 +4231,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         // The native material's pipeline: its build-compiled shaders under the draw's render state.
         current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
-        static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
+        static const bool log_native = read_env_u64(nebula_switch::log_native_materials_name(), 0u) != 0u;
         if (log_native) [[unlikely]] {
             static std::set<std::pair<std::uint32_t, const void*>> logged;
             if (logged.emplace(native_material_->shader, current_pipeline_).second) {
@@ -4561,7 +4525,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         current_texture_map_mask_ = texture_map_mask;
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's maps as the texture cache resolved them (once per map
         // and image).
-        if (native_material_ != nullptr && read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u) [[unlikely]] {
+        if (native_material_ != nullptr && read_env_u64(nebula_switch::log_native_materials_name(), 0u) != 0u) [[unlikely]] {
             static std::set<std::tuple<std::uint32_t, unsigned, std::uint64_t>> logged;
             for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
                 if ((texture_map_mask & (1u << m)) == 0u ||

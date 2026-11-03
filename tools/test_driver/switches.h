@@ -610,6 +610,186 @@ inline constexpr const char* test_path_guard_name() noexcept { return ""; }
 #else
 inline constexpr const char* test_path_guard_name() noexcept { return "GALAXY_TEST_PATH_GUARD"; }
 #endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* bloom_log() noexcept { return nullptr; }
+inline constexpr const char* bloom_log_name() noexcept { return ""; }
+inline constexpr const wchar_t* bloom_log_wide_name() noexcept { return L""; }
+#else
+inline const char* bloom_log() noexcept { return std::getenv("GALAXY_BLOOM_LOG"); }
+inline constexpr const char* bloom_log_name() noexcept { return "GALAXY_BLOOM_LOG"; }
+inline constexpr const wchar_t* bloom_log_wide_name() noexcept { return L"GALAXY_BLOOM_LOG"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* d3d_debug() noexcept { return nullptr; }
+inline constexpr const char* d3d_debug_name() noexcept { return ""; }
+inline constexpr const wchar_t* d3d_debug_wide_name() noexcept { return L""; }
+#else
+inline const char* d3d_debug() noexcept { return std::getenv("GALAXY_D3D_DEBUG"); }
+inline constexpr const char* d3d_debug_name() noexcept { return "GALAXY_D3D_DEBUG"; }
+inline constexpr const wchar_t* d3d_debug_wide_name() noexcept { return L"GALAXY_D3D_DEBUG"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* d3d_dred() noexcept { return nullptr; }
+inline constexpr const char* d3d_dred_name() noexcept { return ""; }
+inline constexpr const wchar_t* d3d_dred_wide_name() noexcept { return L""; }
+#else
+inline const char* d3d_dred() noexcept { return std::getenv("GALAXY_D3D_DRED"); }
+inline constexpr const char* d3d_dred_name() noexcept { return "GALAXY_D3D_DRED"; }
+inline constexpr const wchar_t* d3d_dred_wide_name() noexcept { return L"GALAXY_D3D_DRED"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* deband() noexcept { return nullptr; }
+inline constexpr const char* deband_name() noexcept { return ""; }
+inline constexpr const wchar_t* deband_wide_name() noexcept { return L""; }
+#else
+inline const char* deband() noexcept { return std::getenv("GALAXY_DEBAND"); }
+inline constexpr const char* deband_name() noexcept { return "GALAXY_DEBAND"; }
+inline constexpr const wchar_t* deband_wide_name() noexcept { return L"GALAXY_DEBAND"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* discord_client_id() noexcept { return nullptr; }
+inline constexpr const char* discord_client_id_name() noexcept { return ""; }
+inline constexpr const wchar_t* discord_client_id_wide_name() noexcept { return L""; }
+#else
+inline const char* discord_client_id() noexcept { return std::getenv("GALAXY_DISCORD_CLIENT_ID"); }
+inline constexpr const char* discord_client_id_name() noexcept { return "GALAXY_DISCORD_CLIENT_ID"; }
+inline constexpr const wchar_t* discord_client_id_wide_name() noexcept { return L"GALAXY_DISCORD_CLIENT_ID"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* gpu_draws() noexcept { return nullptr; }
+inline constexpr const char* gpu_draws_name() noexcept { return ""; }
+inline constexpr const wchar_t* gpu_draws_wide_name() noexcept { return L""; }
+#else
+inline const char* gpu_draws() noexcept { return std::getenv("GALAXY_GPU_DRAWS"); }
+inline constexpr const char* gpu_draws_name() noexcept { return "GALAXY_GPU_DRAWS"; }
+inline constexpr const wchar_t* gpu_draws_wide_name() noexcept { return L"GALAXY_GPU_DRAWS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* gpu_passes() noexcept { return nullptr; }
+inline constexpr const char* gpu_passes_name() noexcept { return ""; }
+inline constexpr const wchar_t* gpu_passes_wide_name() noexcept { return L""; }
+#else
+inline const char* gpu_passes() noexcept { return std::getenv("GALAXY_GPU_PASSES"); }
+inline constexpr const char* gpu_passes_name() noexcept { return "GALAXY_GPU_PASSES"; }
+inline constexpr const wchar_t* gpu_passes_wide_name() noexcept { return L"GALAXY_GPU_PASSES"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* gpu_preference() noexcept { return nullptr; }
+inline constexpr const char* gpu_preference_name() noexcept { return ""; }
+inline constexpr const wchar_t* gpu_preference_wide_name() noexcept { return L""; }
+#else
+inline const char* gpu_preference() noexcept { return std::getenv("GALAXY_GPU_PREFERENCE"); }
+inline constexpr const char* gpu_preference_name() noexcept { return "GALAXY_GPU_PREFERENCE"; }
+inline constexpr const wchar_t* gpu_preference_wide_name() noexcept { return L"GALAXY_GPU_PREFERENCE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* log_native_materials() noexcept { return nullptr; }
+inline constexpr const char* log_native_materials_name() noexcept { return ""; }
+inline constexpr const wchar_t* log_native_materials_wide_name() noexcept { return L""; }
+#else
+inline const char* log_native_materials() noexcept { return std::getenv("GALAXY_LOG_NATIVE_MATERIALS"); }
+inline constexpr const char* log_native_materials_name() noexcept { return "GALAXY_LOG_NATIVE_MATERIALS"; }
+inline constexpr const wchar_t* log_native_materials_wide_name() noexcept { return L"GALAXY_LOG_NATIVE_MATERIALS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* movie_dir() noexcept { return nullptr; }
+inline constexpr const char* movie_dir_name() noexcept { return ""; }
+inline constexpr const wchar_t* movie_dir_wide_name() noexcept { return L""; }
+#else
+inline const char* movie_dir() noexcept { return std::getenv("GALAXY_MOVIE_DIR"); }
+inline constexpr const char* movie_dir_name() noexcept { return "GALAXY_MOVIE_DIR"; }
+inline constexpr const wchar_t* movie_dir_wide_name() noexcept { return L"GALAXY_MOVIE_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* no_pipeline_prepare() noexcept { return nullptr; }
+inline constexpr const char* no_pipeline_prepare_name() noexcept { return ""; }
+inline constexpr const wchar_t* no_pipeline_prepare_wide_name() noexcept { return L""; }
+#else
+inline const char* no_pipeline_prepare() noexcept { return std::getenv("GALAXY_NO_PIPELINE_PREPARE"); }
+inline constexpr const char* no_pipeline_prepare_name() noexcept { return "GALAXY_NO_PIPELINE_PREPARE"; }
+inline constexpr const wchar_t* no_pipeline_prepare_wide_name() noexcept { return L"GALAXY_NO_PIPELINE_PREPARE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* pipeline_seed_out() noexcept { return nullptr; }
+inline constexpr const char* pipeline_seed_out_name() noexcept { return ""; }
+inline constexpr const wchar_t* pipeline_seed_out_wide_name() noexcept { return L""; }
+#else
+inline const char* pipeline_seed_out() noexcept { return std::getenv("GALAXY_PIPELINE_SEED_OUT"); }
+inline constexpr const char* pipeline_seed_out_name() noexcept { return "GALAXY_PIPELINE_SEED_OUT"; }
+inline constexpr const wchar_t* pipeline_seed_out_wide_name() noexcept { return L"GALAXY_PIPELINE_SEED_OUT"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* render_config_path() noexcept { return nullptr; }
+inline constexpr const char* render_config_path_name() noexcept { return ""; }
+inline constexpr const wchar_t* render_config_path_wide_name() noexcept { return L""; }
+#else
+inline const char* render_config_path() noexcept { return std::getenv("GALAXY_RENDER_CONFIG_PATH"); }
+inline constexpr const char* render_config_path_name() noexcept { return "GALAXY_RENDER_CONFIG_PATH"; }
+inline constexpr const wchar_t* render_config_path_wide_name() noexcept { return L"GALAXY_RENDER_CONFIG_PATH"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* rt_log_glows() noexcept { return nullptr; }
+inline constexpr const char* rt_log_glows_name() noexcept { return ""; }
+inline constexpr const wchar_t* rt_log_glows_wide_name() noexcept { return L""; }
+#else
+inline const char* rt_log_glows() noexcept { return std::getenv("GALAXY_RT_LOG_GLOWS"); }
+inline constexpr const char* rt_log_glows_name() noexcept { return "GALAXY_RT_LOG_GLOWS"; }
+inline constexpr const wchar_t* rt_log_glows_wide_name() noexcept { return L"GALAXY_RT_LOG_GLOWS"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* runtime_settings_path() noexcept { return nullptr; }
+inline constexpr const char* runtime_settings_path_name() noexcept { return ""; }
+inline constexpr const wchar_t* runtime_settings_path_wide_name() noexcept { return L""; }
+#else
+inline const char* runtime_settings_path() noexcept { return std::getenv("GALAXY_RUNTIME_SETTINGS_PATH"); }
+inline constexpr const char* runtime_settings_path_name() noexcept { return "GALAXY_RUNTIME_SETTINGS_PATH"; }
+inline constexpr const wchar_t* runtime_settings_path_wide_name() noexcept { return L"GALAXY_RUNTIME_SETTINGS_PATH"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* texture_dump_dir() noexcept { return nullptr; }
+inline constexpr const char* texture_dump_dir_name() noexcept { return ""; }
+inline constexpr const wchar_t* texture_dump_dir_wide_name() noexcept { return L""; }
+#else
+inline const char* texture_dump_dir() noexcept { return std::getenv("GALAXY_TEXTURE_DUMP_DIR"); }
+inline constexpr const char* texture_dump_dir_name() noexcept { return "GALAXY_TEXTURE_DUMP_DIR"; }
+inline constexpr const wchar_t* texture_dump_dir_wide_name() noexcept { return L"GALAXY_TEXTURE_DUMP_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* texture_pack_dir() noexcept { return nullptr; }
+inline constexpr const char* texture_pack_dir_name() noexcept { return ""; }
+inline constexpr const wchar_t* texture_pack_dir_wide_name() noexcept { return L""; }
+#else
+inline const char* texture_pack_dir() noexcept { return std::getenv("GALAXY_TEXTURE_PACK_DIR"); }
+inline constexpr const char* texture_pack_dir_name() noexcept { return "GALAXY_TEXTURE_PACK_DIR"; }
+inline constexpr const wchar_t* texture_pack_dir_wide_name() noexcept { return L"GALAXY_TEXTURE_PACK_DIR"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* texture_pack_trace() noexcept { return nullptr; }
+inline constexpr const char* texture_pack_trace_name() noexcept { return ""; }
+inline constexpr const wchar_t* texture_pack_trace_wide_name() noexcept { return L""; }
+#else
+inline const char* texture_pack_trace() noexcept { return std::getenv("GALAXY_TEXTURE_PACK_TRACE"); }
+inline constexpr const char* texture_pack_trace_name() noexcept { return "GALAXY_TEXTURE_PACK_TRACE"; }
+inline constexpr const wchar_t* texture_pack_trace_wide_name() noexcept { return L"GALAXY_TEXTURE_PACK_TRACE"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* vulkan_validation() noexcept { return nullptr; }
+inline constexpr const char* vulkan_validation_name() noexcept { return ""; }
+inline constexpr const wchar_t* vulkan_validation_wide_name() noexcept { return L""; }
+#else
+inline const char* vulkan_validation() noexcept { return std::getenv("GALAXY_VULKAN_VALIDATION"); }
+inline constexpr const char* vulkan_validation_name() noexcept { return "GALAXY_VULKAN_VALIDATION"; }
+inline constexpr const wchar_t* vulkan_validation_wide_name() noexcept { return L"GALAXY_VULKAN_VALIDATION"; }
+#endif
+#if defined(NEBULA_RELEASE)
+inline constexpr const char* xinput_require_focus() noexcept { return nullptr; }
+inline constexpr const char* xinput_require_focus_name() noexcept { return ""; }
+inline constexpr const wchar_t* xinput_require_focus_wide_name() noexcept { return L""; }
+#else
+inline const char* xinput_require_focus() noexcept { return std::getenv("GALAXY_XINPUT_REQUIRE_FOCUS"); }
+inline constexpr const char* xinput_require_focus_name() noexcept { return "GALAXY_XINPUT_REQUIRE_FOCUS"; }
+inline constexpr const wchar_t* xinput_require_focus_wide_name() noexcept { return L"GALAXY_XINPUT_REQUIRE_FOCUS"; }
+#endif
 }  // namespace nebula_switch
 
 #if defined(_MSC_VER)
