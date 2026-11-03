@@ -162,8 +162,6 @@ namespace Nebula.Launcher
         public int WindowWidth = 1280, WindowHeight = 720;
         public int FullscreenWidth = 0, FullscreenHeight = 0, FullscreenRefresh = 0;
         public int Aspect = 0;
-        public int EfbScale = 2;
-        public bool MatchOutput = true;
         public bool VSync = false;
         public int FrameRate = 60;
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
@@ -226,9 +224,7 @@ namespace Nebula.Launcher
             settings.FullscreenHeight = Choice(values, "fullscreen_height", 16385, 0);
             settings.FullscreenRefresh = Choice(values, "fullscreen_refresh_hz", 1001, 0);
             settings.Aspect = AspectChoice(values, settings.Aspect);
-            settings.EfbScale = Math.Max(1, Choice(values, "efb_scale", 17, settings.EfbScale));
-            string follow, vsync;
-            if (values.TryGetValue("internal_follow_window", out follow)) settings.MatchOutput = follow.Trim() != "0";
+            string vsync;
             if (values.TryGetValue("vsync_interval", out vsync)) settings.VSync = vsync.Trim() != "0";
             string fps;
             double rate;
@@ -286,8 +282,6 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("fullscreen_height", n(FullscreenHeight)),
                 new KeyValuePair<string, string>("fullscreen_refresh_hz", n(FullscreenRefresh)),
                 new KeyValuePair<string, string>("aspect", AspectNames[Math.Max(0, Math.Min(Aspect, AspectNames.Length - 1))]),
-                new KeyValuePair<string, string>("efb_scale", n(EfbScale)),
-                new KeyValuePair<string, string>("internal_follow_window", MatchOutput ? "1" : "0"),
                 new KeyValuePair<string, string>("vsync_interval", VSync ? "1" : "0"),
                 new KeyValuePair<string, string>("max_fps", n(FrameRate)),
                 new KeyValuePair<string, string>("aa", n(AntiAliasing)),

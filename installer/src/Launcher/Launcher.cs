@@ -234,7 +234,7 @@ namespace Nebula.Launcher
                 { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", null }, { "monitoring", true },
                 { "recording", Recording.ToString() }, { "content", Content }, { "saves", saves },
                 { "app", App }, { "displayMode", graphics.DisplayMode }, { "window", graphics.WindowWidth + "x" + graphics.WindowHeight },
-                { "aspect", GraphicsSettings.AspectNames[graphics.Aspect] }, { "efbScale", graphics.MatchOutput ? 0 : graphics.EfbScale },
+                { "aspect", GraphicsSettings.AspectNames[graphics.Aspect] },
                 { "detailedRendererTimings", Recording == RecordingMode.Detailed },
                 { "launchFileSha256", launchFiles }, { "environment", launchEnvironment }
             };
@@ -298,7 +298,7 @@ namespace Nebula.Launcher
         private CaptureFilter captureFilter;
 
         private readonly ComboBox monitor = new ComboBox(), mode = new ComboBox(), resolution = new ComboBox(), refresh = new ComboBox();
-        private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
+        private readonly ComboBox aspect = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
         private readonly CheckBox askUpdates = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), msaa = new ComboBox(),
@@ -427,7 +427,6 @@ namespace Nebula.Launcher
             y = 16;
             Row(image, "Upscaling", upscaler, ref y);
             Row(image, "Upscaler quality", dlssQuality, ref y);
-            Row(image, "Internal resolution", internalScale, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -1048,7 +1047,6 @@ namespace Nebula.Launcher
             refresh.SelectedIndex = 0;
             refresh.Enabled = false;
             resolution.Enabled = mode.SelectedIndex != 1;
-            RefreshScaleChoices();
             RefreshFrameRateChoices();
             loading = false;
         }
@@ -1133,22 +1131,6 @@ namespace Nebula.Launcher
             frameRate.SelectedIndex = Math.Min(selected, frameRate.Items.Count - 1);
         }
 
-        // Internal resolution (an upscaler's output; its quality renders below it): matches the output,
-        // or 1x up to the scale that fills the selected display (the runtime applies the same limit).
-        private void RefreshScaleChoices()
-        {
-            var screen = SelectedMonitor;
-            int cap = DisplayInfo.ScaleCovering(screen.Width, screen.Height);
-            int previous = internalScale.SelectedIndex;
-            bool hadItems = internalScale.Items.Count > 0;
-            internalScale.Items.Clear();
-            internalScale.Items.Add("Match output");
-            for (int s = 1; s <= cap; s++)
-                internalScale.Items.Add(string.Format("{0}x ({1} × {2})", s, 640 * s, 528 * s));
-            int want = hadItems ? previous : (graphics.MatchOutput ? 0 : Math.Min(graphics.EfbScale, cap));
-            internalScale.SelectedIndex = Math.Max(0, Math.Min(want, internalScale.Items.Count - 1));
-        }
-
         private bool Commit()
         {
             try
@@ -1163,8 +1145,6 @@ namespace Nebula.Launcher
                     if (graphics.DisplayMode == 0) { graphics.WindowWidth = size.Width; graphics.WindowHeight = size.Height; }
                 }
                 graphics.Aspect = Math.Max(0, aspect.SelectedIndex);
-                graphics.MatchOutput = internalScale.SelectedIndex <= 0;
-                if (!graphics.MatchOutput) graphics.EfbScale = internalScale.SelectedIndex;
                 graphics.VSync = vsync.Checked;
                 if (frameRowsChosen || !LaunchSession.RuntimeLeaseHeld())
                 {
