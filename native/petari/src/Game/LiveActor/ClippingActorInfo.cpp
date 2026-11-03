@@ -1,4 +1,6 @@
 #include "Game/LiveActor/ClippingActorInfo.hpp"
+#include "Game/LiveActor/ClippingActorHolder.hpp"
+#include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -15,6 +17,8 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     mFarClipLevel = 6;
     _12 = -1;
     _14 = 0;
+    mGround = nullptr;
+    mGroundFound = false;
     setTypeToSphere(300.0f, 0);
 }
 
@@ -44,10 +48,22 @@ bool ClippingActorInfo::isJudgedToClip() const {
 // The level's distances say when an actor runs; the camera says whether it is seen. Past its distance and in view it
 // stays stopped and keeps its model, effects and parts, so nothing runs that the level did not expect and nothing pops
 // in or goes dark. Scenery always; coins, enemies and characters once they have run: a level may place them where only
-// another scenario uses them (Space Junk's web coins), relying on their staying clipped there.
+// another scenario uses them (Space Junk's web coins), relying on their staying clipped there. Never over a planet that
+// is not there: view cubes and switches hide a planet and leave what stands on it to its distance.
 bool ClippingActorInfo::isDrawnWhileClipped() const {
     return !_14->_4 && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
-           !MR::getClippingJudge()->isJudgedToClipFrustum(*_4, _8, 0);
+           !MR::getClippingJudge()->isJudgedToClipFrustum(*_4, _8, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
+}
+
+bool ClippingActorInfo::isGroundShown() {
+    if (!mGroundFound) {
+        mGroundFound = true;
+        mGround = MR::getClippingDirector()->mActorHolder->findGround(this);
+    }
+    if (mGround == nullptr) {
+        return true;
+    }
+    return !mGround->_14->_4 && !MR::isDead(mGround->mActor) && !MR::isHiddenModel(mGround->mActor);
 }
 
 void ClippingActorInfo::startClipped() {

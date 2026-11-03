@@ -41,6 +41,7 @@ namespace {
     const f32 cTabSize = 12.5f;
     const f32 cTabGap = 5.0f;
     const f32 cRowHeight = 52.0f;
+    const s32 cSwipeHoverFrames = 12;
     const f32 cRowGap = 3.0f;  // between two rows' frames
     const f32 cModHeight = 40.0f;  // a mod in the MODS page's lists
     const f32 cTextSize = 15.5f;
@@ -862,6 +863,7 @@ private:
     f32 mPressY;
     f32 mPressScroll;
     bool mScrollDrag;
+    s32 mSwipeFrames;  // a finger's swipe just moved the list: the row under it is not chosen yet
     s32 mDraggedAt;  // the selection when the list was last let go; it stays where it was dragged until another is chosen
     s32 mHoverArrow;    // the hovered row's arrow under the pointer: -1 back, 1 on; 0 none
     bool mHoverSlider;  // the hovered row's slider under the pointer
@@ -903,7 +905,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
       mQuestionText(nullptr), mChoiceCount(0), mJoyCon(nullptr), mJoyConPaired(false), mJoyConBits(0), mQuestionInk(0.0f), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
       mFocusButton(nullptr), mFrame(0), mScroll(0.0f),
       mScrollTarget(0.0f), mHighlightY(0.0f), mPointerMode(false), mPointerX(0.0f), mPointerY(0.0f), mPointerRow(-1), mHoverRow(-1),
-      mHoverTab(-1), mPressing(false), mPressRow(-1), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mDraggedAt(-1), mHoverArrow(0),
+      mHoverTab(-1), mPressing(false), mPressRow(-1), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mSwipeFrames(0), mDraggedAt(-1), mHoverArrow(0),
       mHoverSlider(false), mHeldArrow(0), mHeldFrames(0), mSliderRow(-1), mHoverRowButton(-1), mHoverButton(nullptr), mScaleX(1.0f), mWidth(0.0f), mHeight(0.0f), mPanelWidth(0.0f),
       mPanelHeight(0.0f), mLeft(0.0f), mRight(0.0f), mTitleY(0.0f), mTabY(0.0f), mListTop(0.0f), mListBottom(0.0f), mStatusY(0.0f),
       mHintsY(0.0f), mFooterY(0.0f), mValueRight(0.0f) {
@@ -1530,6 +1532,22 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     mHoverSlider = false;
     mHoverButton = nullptr;
     mHoverModButton = -1;
+    // A finger's swipe (host_window_sdl: a tenth of the window's height to a notch): the list follows the finger.
+    const s32 swipe = NebulaHost::pointerWheel();
+    if (mSwipeFrames > 0) {
+        mSwipeFrames--;
+    }
+    if (swipe != 0 && mFrame > 1 && !mHome) {
+        TVec2f edge, top, bottom;
+        edge.x = 0.0f;
+        edge.y = 0.0f;
+        MR::convertScreenPosToLayoutPos(&top, edge);
+        edge.y = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
+        MR::convertScreenPosToLayoutPos(&bottom, edge);
+        mScrollTarget -= static_cast< f32 >(swipe) * __builtin_fabsf(bottom.y - top.y) / 1200.0f;
+        mDraggedAt = static_cast< s32 >(rView.selected);
+        mSwipeFrames = cSwipeHoverFrames;
+    }
     // A binding that waits for an input takes the mouse's buttons itself, wherever the pointer is.
     if (!MR::isPointerInScreen(PLAYER_1) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
         rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_PAD) {
@@ -1580,7 +1598,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         }
         if (hasModLists(rView)) {
             readModsPointer(rView, x, y);
-        } else if (x >= mLeft && x <= mRight && y <= mListTop && y >= mListBottom && !mScrollDrag) {
+        } else if (x >= mLeft && x <= mRight && y <= mListTop && y >= mListBottom && !mScrollDrag && mSwipeFrames == 0) {
             const s32 row = static_cast< s32 >((mListTop - y + mScroll) / cRowHeight);
             const NebulaSettingsRow* pData = row >= 0 ? rowAt(rView, static_cast< u32 >(row)) : nullptr;
             if (pData != nullptr && (pData->flags & NEBULA_SETTINGS_ROW_HEADING) == 0) {

@@ -111,6 +111,7 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
         : in::PlayContext::Play;
     sdl::set_menu_context(context == in::PlayContext::Menu && (captured || star_pointer_mode != kStarPointerModeTitle));
+    sdl::set_title_screen(star_pointer_mode == kStarPointerModeTitle);
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
@@ -195,6 +196,15 @@ in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer
             pad_pointer_speed = tuning.pointer_speed;
         }
         pads = in::merge_logical_input(pads, logic);
+    }
+    // No pad in hand: the device's own sensors are the remote's.
+    if (std::none_of(state.pads.begin(), state.pads.end(), [](const in::PadSample& pad) { return pad.connected; })) {
+        if (state.device_motion.gravity_valid) {
+            controller_up = &state.device_motion.gravity;
+        }
+        if (state.device_motion.shake_until_us != 0u && motion_now_us < state.device_motion.shake_until_us) {
+            shake_remote = true;
+        }
     }
     in::LogicalInput keys = in::evaluate_keyboard_bindings(config.table(in::ControlScheme::Keyboard), state.keys);
     if (config.tune(in::ControlScheme::Keyboard).invert_pointer_y) {
