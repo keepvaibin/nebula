@@ -93,10 +93,10 @@ f32 AudBgmTempoAdjuster::calcAdjustRate(f32 syncSamples, f32 tempo) {
     bool early = false;
     if (rate < 0.0f) {
         early = true;
+        rate = -rate;
     }
 
-    rate *= rate;
-
+    // In proportion to the difference: it closes within the next beat. A square left a small difference for good.
     if (rate > 1.0f) {
         rate = 1.0f;
     }
