@@ -239,7 +239,8 @@ VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStat
 
 VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKey& render_state, bool pixel_lit) {
     const RenderStateKey rs = native_render_state(render_state);
-    const unsigned variant = native_draw_variant(shader, native_shader_variant(rs.blend_bits), rs.samples_log2, false, pixel_lit);
+    const unsigned variant = native_draw_variant(shader, native_shader_variant(rs.blend_bits), rs.samples_log2,
+                                                 vk::Context::get().sample_rate_shading(), pixel_lit);
     const std::uint32_t id = shader * kNativeVariants + variant;
     const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
     auto& bucket = native_pipelines_[hash];
