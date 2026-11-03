@@ -53,9 +53,9 @@ void HashSortTable::sort() {
         return;
     }
 
-    s32 originalIndices[0x400];
+    s32* const originalIndices = new s32[mCurrentLength];
     MR::sortSmall(mCurrentLength, mHashCodes, originalIndices);
-    HashSortValue swapArray[0x400];
+    HashSortValue* const swapArray = new HashSortValue[mCurrentLength];
 
     for (int i = 0; i < mCurrentLength; i++) {
         swapArray[i] = _8[originalIndices[i]];
@@ -64,6 +64,9 @@ void HashSortTable::sort() {
     for (int i = 0; i < mCurrentLength; i++) {
         _8[i] = swapArray[i];
     }
+
+    delete[] swapArray;
+    delete[] originalIndices;
 
     u32 counter2 = 0;
     u32 counter;

@@ -22,8 +22,7 @@ namespace nw4r {
                 *this = color;
             }
 
-            // The u32 form is 0xRRGGBBAA, the bytes r, g, b, a read big-endian (layout files, console
-            // colour arguments and the game's literals all use it).
+            // The u32 form is 0xRRGGBBAA: layout files, colour arguments and the game's literals all use it.
             Color& operator=(u32 color) {
                 r = u8(color >> 24);
                 g = u8(color >> 16);

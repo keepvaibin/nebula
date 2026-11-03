@@ -180,6 +180,10 @@ void Mario::doSwimmingHitCheck(const HitInfo* pHit, u32 type) {
     }
 }
 
+namespace {
+    Triangle sPunchTriangles[256];
+}  // namespace
+
 void Mario::doSpinPunchAroundPolygons() {
     if (!mActor->isPunching()) {
         return;
@@ -190,7 +194,7 @@ void Mario::doSpinPunchAroundPolygons() {
     }
 
     TVec3f center = mPosition + mVelocity + mHeadVec * 80.0f;
-    Triangle triangles[256];
+    Triangle* const triangles = sPunchTriangles;
     u32 count = MR::createAreaPolygonList(triangles, 256, center + mFrontVec * 120.0f + mSideVec * 120.0f + mHeadVec * 120.0f,
                                           center - mFrontVec * 120.0f - mSideVec * 120.0f - mHeadVec * 120.0f);
 

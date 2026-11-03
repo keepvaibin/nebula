@@ -114,7 +114,7 @@ set_source_files_properties(math/src/nebula_libm.c math/src/nebula_libc.c math/s
 target_compile_definitions(smg_game PRIVATE _USE_STD_VECTOR_ALGORITHMS=0 _ACRTIMP=)
 # No system library: everything the module uses it defines or asks the host for. A sanitizer's runtime needs the C runtime.
 if(WIN32 AND NOT NEBULA_SANITIZE)
-    target_link_options(smg_game PRIVATE -nostdlib "LINKER:/NOENTRY")
+    target_link_options(smg_game PRIVATE -nostdlib "LINKER:/NOENTRY" "LINKER:/NODEFAULTLIB")
 endif()
 
 if(WIN32)
