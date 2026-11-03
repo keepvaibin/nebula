@@ -1060,8 +1060,8 @@ VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
         return it->second;
     }
     const vk::Context& context = vk::Context::get();
-    const auto wrap = [](std::uint32_t gx) {
-        switch (gx) {
+    const auto wrap = [](std::uint32_t wrap) {
+        switch (wrap) {
         case 0: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         case 2: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         default: return VK_SAMPLER_ADDRESS_MODE_REPEAT;

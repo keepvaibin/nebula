@@ -37,7 +37,7 @@ bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcep
 [[nodiscard]] bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept;
 // The display's refresh rate: the vsync period the system states, else as its vsyncs measure it (0: not known).
 [[nodiscard]] double display_refresh_hz() noexcept;
-// Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the GX, host-main and
+// Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the render, host-main and
 // game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).
 void start_thread_sampler() noexcept;
 

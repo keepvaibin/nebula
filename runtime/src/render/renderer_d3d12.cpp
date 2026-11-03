@@ -1050,8 +1050,8 @@ bool RendererD3D12::create_root_signature() {
 D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     std::uint32_t key,
     const RenderConfig& cfg) noexcept {
-    auto to_d3d_wrap = [](std::uint32_t gx) -> D3D12_TEXTURE_ADDRESS_MODE {
-        switch (gx) {
+    auto to_d3d_wrap = [](std::uint32_t wrap) -> D3D12_TEXTURE_ADDRESS_MODE {
+        switch (wrap) {
         case 0:  return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
         case 1:  return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
         case 2:  return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;

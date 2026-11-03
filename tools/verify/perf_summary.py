@@ -19,7 +19,7 @@ for line in log[start:]:
         t = float(re.match(r"\[\s*([0-9.]+)\]", line).group(1))
         if t < t0 + 8:
             continue
-        r = re.search(r"Nebula GX Render ([0-9.]+)", line)
+        r = re.search(r"Nebula Render ([0-9.]+)", line)
         g = re.search(r"Nebula Game ([0-9.]+)", line)
         if r:
             render.append(float(r.group(1)))

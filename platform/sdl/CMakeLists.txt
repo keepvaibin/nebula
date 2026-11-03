@@ -1,4 +1,4 @@
-# The native game on SDL3 platforms (Android, Linux, SteamOS; docs/NATIVE_PORT.md "Platforms"): the shared GX layer
+# The native game on SDL3 platforms (Android, Linux, SteamOS; docs/NATIVE_PORT.md "Platforms"): the shared render layer
 # with the Vulkan renderer, the host's runtime pieces, and the SDL host. Dependencies are source checkouts named by
 # the cache paths below; the game module is native/CMakeLists.txt.
 cmake_minimum_required(VERSION 3.22)
@@ -61,7 +61,7 @@ set(galaxy_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shader_emb
 galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${nebula_root}")
 
 set(rt "${nebula_root}/runtime/src")
-add_library(galaxy_gx_vk STATIC
+add_library(galaxy_render_vk STATIC
     ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
     ${rt}/render/renderer_common.cpp
@@ -135,15 +135,15 @@ add_library(galaxy_gx_vk STATIC
 if(NOT ANDROID AND NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")
     include("${nebula_root}/cmake/archive_deps.cmake")
-    target_sources(galaxy_gx_vk PRIVATE ${rt}/mod_import.cpp)
-    target_link_libraries(galaxy_gx_vk PUBLIC nebula_archive)
+    target_sources(galaxy_render_vk PRIVATE ${rt}/mod_import.cpp)
+    target_link_libraries(galaxy_render_vk PUBLIC nebula_archive)
 endif()
-target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
-target_include_directories(galaxy_gx_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include")
-target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
+target_include_directories(galaxy_render_vk PUBLIC "${nebula_root}/runtime/include")
+target_include_directories(galaxy_render_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include")
+target_compile_options(galaxy_render_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
 # vk_mem_alloc.h leaves pointer nullability unannotated.
-target_compile_options(galaxy_gx_vk PRIVATE -Wno-nullability-completeness)
-target_link_libraries(galaxy_gx_vk PUBLIC nebula_vulkan_deps)
+target_compile_options(galaxy_render_vk PRIVATE -Wno-nullability-completeness)
+target_link_libraries(galaxy_render_vk PUBLIC nebula_vulkan_deps)
 
 # SDL3: the window, Vulkan surface, audio, gamepads and touch. Android loads libSDL3.so from SDL's Java activity.
 set(SDL_SHARED ON CACHE BOOL "" FORCE)
@@ -171,8 +171,8 @@ endif()
 target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebula_root}/runtime/include")
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(main PRIVATE galaxy_gx_vk SDL3::SDL3)
+target_link_libraries(main PRIVATE galaxy_render_vk SDL3::SDL3)
 
 # The vector kernels against their references on this platform's CPU (NEON on AArch64).
 add_executable(nebula_simd_kernel_tests "${nebula_root}/runtime/src/render/simd_kernel_tests.cpp")
-target_link_libraries(nebula_simd_kernel_tests PRIVATE galaxy_gx_vk)
+target_link_libraries(nebula_simd_kernel_tests PRIVATE galaxy_render_vk)

@@ -1350,7 +1350,7 @@ private:
 
         ComPtr<ID3D12RootSignature> draw_root;
         ComPtr<ID3D12PipelineState> draw_pipeline;
-        ComPtr<ID3D12Resource> gx_constants;
+        ComPtr<ID3D12Resource> draw_constants;
         const bool native_depth = source_format == galaxy::render::kSceneDepthResourceFormat;
         const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,
             source_width, source_height, native_depth

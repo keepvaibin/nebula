@@ -46,9 +46,9 @@ namespace JUtility {
             return (u32)r << 24 | (u32)g << 16 | (u32)b << 8 | a;
         }
 
-        void set(NebulaColor8 gxColor) {
+        void set(NebulaColor8 color) {
             NebulaColor8* temp = this;
-            *temp = gxColor;
+            *temp = color;
         }
     } ATTRIBUTE_ALIGN(4);
 };  // namespace JUtility
