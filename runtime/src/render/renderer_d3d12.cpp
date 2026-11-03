@@ -1565,7 +1565,7 @@ void RendererD3D12::apply_window_size() {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     if (content.width <= 0 || content.height <= 0) {
         return;
     }
@@ -6866,7 +6866,7 @@ bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
 FrameMap RendererD3D12::output_frame_for_window() const {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const double content_aspect =
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect;
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         content_aspect);
@@ -7432,11 +7432,11 @@ void RendererD3D12::record_scene_aa() {
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SceneAa, 0u});
     }
-    // The 640x456 picture the display copy takes decides AUTO.
+    // The picture the display copy takes decides AUTO.
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
     static_cast<void>(post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, scene_color_.Get(), scene_rtv_, static_cast<unsigned>(desc.Width),
@@ -8843,7 +8843,7 @@ bool RendererD3D12::present(
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
     bound_rt_aux_ = 0u;
     const auto content_aspect=galaxy::presentation_content_aspect(
-        ultrawide ? ultrawide->content_aspect : galaxy::kWiiContentAspect,source->prerecorded_movie);
+        ultrawide ? ultrawide->content_aspect : galaxy::kDesignContentAspect,source->prerecorded_movie);
     galaxy::ContentViewport content_viewport = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width),static_cast<int>(host_window::backbuffer_height),
         content_aspect);

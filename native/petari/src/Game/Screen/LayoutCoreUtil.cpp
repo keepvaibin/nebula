@@ -72,7 +72,7 @@ namespace MR {
         // The layout canvas setupDrawForNW4RLayout projects (pointer hit tests, panes following screen positions).
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
-            pLayoutPos->x = rScreenPos.x * display.canvas_width / MR::getScreenWidth() - display.canvas_width * 0.5f;
+            pLayoutPos->x = rScreenPos.x * display.layout_width / MR::getScreenWidth() - display.layout_width * 0.5f;
             pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f)) *
                             display.vertical_fit;
             return;
@@ -84,7 +84,7 @@ namespace MR {
     void convertLayoutPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rLayoutPos) {
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
-            pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.canvas_width + MR::getScreenWidth() * 0.5f;
+            pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.layout_width + MR::getScreenWidth() * 0.5f;
             pScreenPos->y = MR::getScreenHeight() * 0.5f +
                             -(rLayoutPos.y / display.vertical_fit) * MR::getScreenHeight() / MR::getScreenHeight();
             return;

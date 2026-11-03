@@ -22,7 +22,7 @@ namespace galaxy {
 // relation and changes the logical width. Camera and HUD follow one logical aspect, the policy of Dusklight's (CC0)
 // m_Do_graphic.cpp::updateRenderSize/setTvSize.
 struct ExperimentalUltrawideAspect {
-    double content_aspect = kWiiContentAspect;
+    double content_aspect = kDesignContentAspect;
     unsigned game_screen_width = 832;
 };
 
@@ -82,7 +82,7 @@ make_experimental_ultrawide_aspect(double content_aspect) noexcept {
     // An even number of units, as the game's own 608 and 832 (624 at 4:3 and narrower).
     const unsigned width = static_cast<unsigned>(
         std::lround(kWideLogicalWidth *
-                    (std::max(aspect, 4.0 / 3.0) / kWiiContentAspect) * 0.5)) * 2u;
+                    (std::max(aspect, 4.0 / 3.0) / kDesignContentAspect) * 0.5)) * 2u;
     if (width <= 608u || width > 1664u) {
         return std::nullopt;
     }

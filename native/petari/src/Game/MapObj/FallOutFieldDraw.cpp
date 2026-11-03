@@ -44,7 +44,7 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     MR::createScreenAlphaSceneObj(2, 0.5f);
     MR::createScreenAlphaSceneObj(3, 0.25f);
     MR::createScreenAlphaSceneObj(4, 0.25f);
-    mMask = new JUTTexture(MR::getCanvasWidth() / 2, MR::getCanvasHeight() / 2);
+    mMask = new JUTTexture(MR::getScreenUnitsAcross() / 2, MR::getScreenUnitsDown() / 2);
     mMask->mWrapS = NEBULA_WRAP_CLAMP;
     mMask->mWrapT = NEBULA_WRAP_CLAMP;
     mMask->mMinType = NEBULA_FILTER_LINEAR;

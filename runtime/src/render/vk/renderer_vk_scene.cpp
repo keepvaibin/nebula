@@ -284,7 +284,7 @@ void RendererVk::run_one_time(const std::function<void(VkCommandBuffer)>& record
 
 // The scale-dependent memory a new internal resolution adds must fit 90% of the device's budget (RendererD3D12's
 // rule): scene target colour and depth (8 bytes per pixel) and, at most, the display picture pair plus one full-picture copy (12 bytes per
-// pixel of the 640x456 picture).
+// pixel of the picture).
 bool RendererVk::scene_fits_memory(const FrameMap& map) const {
     std::uint64_t usage = 0u;
     std::uint64_t budget = 0u;
@@ -306,7 +306,7 @@ void RendererVk::apply_window_size() {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     if (content.width <= 0 || content.height <= 0) {
         return;
     }
@@ -606,7 +606,7 @@ FrameMap RendererVk::output_frame_for_window() const {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     if (content.width <= 0 || content.height <= 0) {
         return FrameMap{};
     }
@@ -898,11 +898,11 @@ void RendererVk::record_scene_aa() {
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::SceneAa, 0u});
     }
-    // The 640x456 picture the display copy takes, against its size on screen, decides AUTO.
+    // The picture the display copy takes, against its size on screen, decides AUTO.
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     end_scene_pass();
     settle_owed_scene();
     const vk::Texture& color = *scene_.color;
@@ -1497,7 +1497,7 @@ void RendererVk::draw(const DrawCall& call) {
         bound_.scissor_input = call.scissor;
         bound_.scissor_input_valid = true;
     }
-    // The game's viewport with its depth range (reversed, as D3D12: compute_scaled_viewport); y flipped by a
+    // The game's viewport with its depth range (reversed, as D3D12: viewport_pixels); y flipped by a
     // negative height so clip space matches D3D's.
     if (call.has_viewport) {
         const ScaledViewport scaled = viewport_pixels(call.viewport, scene_map_);

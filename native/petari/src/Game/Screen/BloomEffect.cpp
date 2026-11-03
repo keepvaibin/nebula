@@ -83,7 +83,7 @@ void BloomEffect::initDraw() const {
     J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getCanvasHeight(), 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenUnitsDown(), 0.0f, MR::getScreenUnitsAcross(), -10000.0f, 10000.0f);
     J3DNativeView::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();
