@@ -95,7 +95,7 @@ target_compile_options(smg_game PRIVATE
     "SHELL:-include nebula_prelude.h"
     # Source paths in the module (assertion messages) relative to the tree, not the build machine.
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
-    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti -fno-exceptions -fno-c++-static-destructors -fno-sized-deallocation -fno-aligned-allocation
 >
     # Every new-expression tests the allocation before constructing, as the console's compiler does: JKRHeap's
     # operator new and the sound pools' (JASPoolAllocObject) return null when full, and the game checks

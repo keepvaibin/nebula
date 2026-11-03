@@ -23,12 +23,18 @@ namespace {
 
 namespace NebulaDataTables {
     const void* getGalaxyInfoTable() {
-        static const u8* sTable = load("GalaxyInfoTable.bcsv");
+        static const u8* sTable = nullptr;
+        if (sTable == nullptr) {
+            sTable = load("GalaxyInfoTable.bcsv");
+        }
         return sTable;
     }
 
     const void* getStoryProgressTable() {
-        static const u8* sTable = load("StoryProgressTable.bcsv");
+        static const u8* sTable = nullptr;
+        if (sTable == nullptr) {
+            sTable = load("StoryProgressTable.bcsv");
+        }
         return sTable;
     }
 };  // namespace NebulaDataTables

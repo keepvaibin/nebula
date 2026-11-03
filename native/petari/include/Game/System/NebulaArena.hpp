@@ -70,7 +70,7 @@ public:
     }
 
     // Each thread's own; a new thread and an async function start with their starter's.
-    static thread_local NebulaArena* sCurrentHeap;
+    static __thread NebulaArena* sCurrentHeap;
     static NebulaArena* sRootHeap;
     static NebulaArena* sSystemHeap;
 

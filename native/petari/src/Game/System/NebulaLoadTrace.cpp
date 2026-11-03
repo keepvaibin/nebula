@@ -20,9 +20,12 @@ namespace {
 #if defined(NEBULA_RELEASE)
         static const bool sEnabled = false;
 #else
-        static const bool sEnabled = getenv("GALAXY_TRACE_LOADS") != nullptr;
+        static s32 sEnabled = -1;
+        if (sEnabled < 0) {
+            sEnabled = getenv("GALAXY_TRACE_LOADS") != nullptr ? 1 : 0;
+        }
 #endif
-        return sEnabled;
+        return sEnabled != 0;
     }
 
     void change(const char* pName, bool value, bool& rLast) {
