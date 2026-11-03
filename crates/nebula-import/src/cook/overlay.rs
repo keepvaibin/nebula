@@ -109,7 +109,19 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
     let mut stats = Stats::default();
-    let failed = write_overlay(&game_id, &changes, plan_base(&text).as_deref(), output, &mut stats)?;
+    // A material this build lacks takes its number from its key, as in a .luma's own shaders.
+    *super::material::MOD_MATERIALS.lock().unwrap_or_else(|e| e.into_inner()) = Some(std::collections::BTreeMap::new());
+    let result = write_overlay(&game_id, &changes, plan_base(&text).as_deref(), output, &mut stats);
+    let materials = super::material::MOD_MATERIALS.lock().unwrap_or_else(|e| e.into_inner()).take().unwrap_or_default();
+    let failed = result?;
+    // What those materials need, for shaders the mod didn't bring or brought for another build.
+    let list = output.with_extension("materials");
+    let mut bytes = Vec::new();
+    for (id, record) in &materials {
+        bytes.extend_from_slice(&id.to_le_bytes());
+        bytes.extend_from_slice(record);
+    }
+    fs::write(&list, bytes).with_context(|| format!("{} cannot be written", list.display()))?;
     Ok((stats, failed))
 }
 
