@@ -3,6 +3,7 @@
 // audio stream, player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (with the
 // same bindings and tuning as Windows), vibration, and the device data the game reads.
 
+#include "galaxy/render_api.h"
 #include "sdl_host.h"
 
 #include "galaxy/content_viewport.h"
@@ -54,22 +55,22 @@ const in::ControlsConfig& live_controls() {
 // The on-screen controls as the bindings' output.
 in::LogicalInput touch_logic(const sdl::InputState& state) {
     in::LogicalInput logic{};
-    const auto press = [&logic](in::WiiTarget target) { logic.pressed |= in::wii_target_bit(target); };
+    const auto press = [&logic](in::GameInput target) { logic.pressed |= in::game_input_bit(target); };
     const std::uint32_t b = state.touch_buttons;
-    if (b & sdl::kTouchA) press(in::WiiTarget::A);
-    if (b & sdl::kTouchB) press(in::WiiTarget::B);
-    if (b & sdl::kTouchZ) press(in::WiiTarget::Z);
-    if (b & sdl::kTouchC) press(in::WiiTarget::C);
-    if (b & sdl::kTouchShake) press(in::WiiTarget::Shake);
-    if (b & sdl::kTouchMinus) press(in::WiiTarget::Minus);
-    if (b & sdl::kTouchPlus) press(in::WiiTarget::Plus);
-    if (b & sdl::kTouchHome) press(in::WiiTarget::Home);
-    if (b & sdl::kTouchOne) press(in::WiiTarget::One);
-    if (b & sdl::kTouchTwo) press(in::WiiTarget::Two);
-    if (b & sdl::kTouchUp) press(in::WiiTarget::DpadUp);
-    if (b & sdl::kTouchDown) press(in::WiiTarget::DpadDown);
-    if (b & sdl::kTouchLeft) press(in::WiiTarget::DpadLeft);
-    if (b & sdl::kTouchRight) press(in::WiiTarget::DpadRight);
+    if (b & sdl::kTouchA) press(in::GameInput::A);
+    if (b & sdl::kTouchB) press(in::GameInput::B);
+    if (b & sdl::kTouchZ) press(in::GameInput::Z);
+    if (b & sdl::kTouchC) press(in::GameInput::C);
+    if (b & sdl::kTouchShake) press(in::GameInput::Shake);
+    if (b & sdl::kTouchMinus) press(in::GameInput::Minus);
+    if (b & sdl::kTouchPlus) press(in::GameInput::Plus);
+    if (b & sdl::kTouchHome) press(in::GameInput::Home);
+    if (b & sdl::kTouchOne) press(in::GameInput::One);
+    if (b & sdl::kTouchTwo) press(in::GameInput::Two);
+    if (b & sdl::kTouchUp) press(in::GameInput::DpadUp);
+    if (b & sdl::kTouchDown) press(in::GameInput::DpadDown);
+    if (b & sdl::kTouchLeft) press(in::GameInput::DpadLeft);
+    if (b & sdl::kTouchRight) press(in::GameInput::DpadRight);
     logic.stick_x = state.touch_stick_x;
     logic.stick_y = state.touch_stick_y;
     return logic;
@@ -83,7 +84,7 @@ bool project_window_point(const sdl::InputState& state, float x, float y, float&
     }
     const in::NativeMousePointerProjection projection = in::project_native_mouse_pointer({
         state.window_focused, true, true, static_cast<int>(x), static_cast<int>(y), state.window_width,
-        state.window_height, content->viewport, 1.0f, 1.0f});
+        state.window_height, content->viewport});
     if (!projection.visible) {
         return false;
     }
@@ -98,6 +99,11 @@ float g_rumble_strength = 1.0f;
 }  // namespace
 
 in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
+    // A menu that takes the screen takes the input: the game sees nothing held.
+    if (galaxy::render::native_window_input_captured()) {
+        (void)sdl::take_input_state();
+        return {};
+    }
     const in::PlayContext context =
         star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
@@ -106,7 +112,7 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
-    const sdl::InputState state = sdl::input_state();
+    const sdl::InputState state = sdl::take_input_state();
     const in::ControlsConfig& config = live_controls();
     in::PlayerInput snapshot{};
 
@@ -114,6 +120,12 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
     static std::array<std::uint32_t, sdl::kMaxPads> s_previous{};
     in::LogicalInput pads{};
     float pad_pointer_speed = 0.0f;
+    float motion_x = 0.0f;
+    float motion_y = 0.0f;  // down positive, as the pointer's
+    bool shake_remote = false;
+    bool shake_nunchuk = false;
+    const in::tilt::Vec3* controller_up = nullptr;
+    const std::uint64_t motion_now_us = galaxy::steady_ms() * 1000u;
     for (std::size_t i = 0; i < sdl::kMaxPads; ++i) {
         in::PadSample sample = state.pads[i];
         if (!sample.connected) {
@@ -121,6 +133,22 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
             continue;
         }
         const in::SchemeTuning& tuning = config.tune(sample.scheme);
+        const sdl::PadMotion& motion = state.motion[i];
+        if (tuning.gyro_pointer && motion.imu_live) {
+            motion_x += motion.gyro_x;
+            motion_y -= tuning.invert_pointer_y ? -motion.gyro_y : motion.gyro_y;
+        }
+        if (tuning.touch_pointer && motion.touch_live) {
+            motion_x += motion.touch_dx * 2.0f * tuning.touch_sensitivity;
+            motion_y += (tuning.invert_pointer_y ? -motion.touch_dy : motion.touch_dy) * 2.0f * tuning.touch_sensitivity;
+        }
+        if (motion.shake_until_us != 0u && motion_now_us < motion.shake_until_us) {
+            shake_remote = shake_remote || tuning.motion_shake == in::MotionShake::Remote;
+            shake_nunchuk = shake_nunchuk || tuning.motion_shake == in::MotionShake::Nunchuk;
+        }
+        if (controller_up == nullptr && motion.gravity_valid) {
+            controller_up = &motion.gravity;
+        }
         const in::StickVector left = in::apply_radial_deadzone(sample.axes[0], sample.axes[1], tuning.stick_deadzone);
         const in::StickVector right =
             in::apply_radial_deadzone(sample.axes[2], sample.axes[3], tuning.pointer_deadzone);
@@ -147,27 +175,27 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
         keys.pointer_y = -keys.pointer_y;
     }
     const in::LogicalInput logic = in::merge_logical_input(in::merge_logical_input(pads, keys), touch_logic(state));
-    const auto held = [&logic](in::WiiTarget target) { return logic.held(target); };
+    const auto held = [&logic](in::GameInput target) { return logic.held(target); };
 
-    snapshot.buttons.left = held(in::WiiTarget::DpadLeft);
-    snapshot.buttons.right = held(in::WiiTarget::DpadRight);
-    snapshot.buttons.down = held(in::WiiTarget::DpadDown);
-    snapshot.buttons.up = held(in::WiiTarget::DpadUp);
-    snapshot.buttons.plus = held(in::WiiTarget::Plus);
-    snapshot.buttons.minus = held(in::WiiTarget::Minus);
-    snapshot.buttons.one = held(in::WiiTarget::One);
-    snapshot.buttons.two = held(in::WiiTarget::Two);
-    snapshot.buttons.home = held(in::WiiTarget::Home);
+    snapshot.buttons.left = held(in::GameInput::DpadLeft);
+    snapshot.buttons.right = held(in::GameInput::DpadRight);
+    snapshot.buttons.down = held(in::GameInput::DpadDown);
+    snapshot.buttons.up = held(in::GameInput::DpadUp);
+    snapshot.buttons.plus = held(in::GameInput::Plus);
+    snapshot.buttons.minus = held(in::GameInput::Minus);
+    snapshot.buttons.one = held(in::GameInput::One);
+    snapshot.buttons.two = held(in::GameInput::Two);
+    snapshot.buttons.home = held(in::GameInput::Home);
     // A controller's B: jump while Mario is under control, back in menus.
     static in::JumpBackLatch s_jump_back{};
-    const in::JumpBackLatch::Output jump_back = s_jump_back.update(held(in::WiiTarget::JumpBack), context);
-    snapshot.buttons.a = held(in::WiiTarget::A) || jump_back.a;
-    snapshot.buttons.b = held(in::WiiTarget::B) || jump_back.b;
+    const in::JumpBackLatch::Output jump_back = s_jump_back.update(held(in::GameInput::JumpBack), context);
+    snapshot.buttons.a = held(in::GameInput::A) || jump_back.a;
+    snapshot.buttons.b = held(in::GameInput::B) || jump_back.b;
     const in::StickValue stick = in::nunchuk_stick(logic.stick_x, logic.stick_y);
     snapshot.stick_x = stick.x;
     snapshot.stick_y = stick.y;
-    snapshot.buttons.c = held(in::WiiTarget::C);
-    snapshot.buttons.z = held(in::WiiTarget::Z);
+    snapshot.buttons.c = held(in::GameInput::C);
+    snapshot.buttons.z = held(in::GameInput::Z);
 
     // The pointer: the finger (or mouse) on the picture where it is; a stick or keys move it at their speed.
     static float s_pointer_x = 0.0f;
@@ -198,6 +226,12 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
         s_pointer_ms = now;
         s_hold_ms = kStickPointerHoldMs;
     }
+    if (motion_x != 0.0f || motion_y != 0.0f) {
+        s_pointer_x = std::clamp(s_pointer_x + motion_x, -1.0f, 1.0f);
+        s_pointer_y = std::clamp(s_pointer_y + motion_y, -1.0f, 1.0f);
+        s_pointer_ms = now;
+        s_hold_ms = kStickPointerHoldMs;
+    }
     // A tap in a menu points there and presses A.
     static std::uint64_t s_taps = state.taps;
     static std::uint8_t s_tap_reports = 0;
@@ -225,13 +259,13 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
 
     // Tilt sections steer with the stick.
     static in::tilt::Tilt s_tilt{};
-    const in::tilt::Tilt::Output tilt = s_tilt.update(section, nullptr, logic.stick_x, logic.stick_y, false);
+    const in::tilt::Tilt::Output tilt = s_tilt.update(section, controller_up, logic.stick_x, logic.stick_y, false);
     if (tilt.active) {
         snapshot.gravity = tilt.game;
     }
     snapshot.pointer_on = snapshot.pointer_on && in::remote_faces_screen(snapshot.gravity);
-    snapshot.shake = held(in::WiiTarget::Shake);
-    snapshot.nunchuk_shake = held(in::WiiTarget::NunchukShake);
+    snapshot.shake = held(in::GameInput::Shake) || shake_remote;
+    snapshot.nunchuk_shake = held(in::GameInput::NunchukShake) || shake_nunchuk;
     return snapshot;
 }
 

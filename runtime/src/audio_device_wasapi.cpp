@@ -2,7 +2,7 @@
 // Windows' sound output (audio_device.h): WASAPI shared mode, event driven, on one MMCSS thread that also runs the game's
 // sound (the render callback). The default endpoint is followed; with none, the thread paces itself and retries.
 #include "galaxy/audio_device.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 
 #include <algorithm>
 #include <cstdlib>

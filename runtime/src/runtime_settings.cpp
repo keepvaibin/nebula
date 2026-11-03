@@ -1,5 +1,7 @@
+#include "galaxy/portable.h"
 #include "galaxy/runtime_settings.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
+#include "../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/platform_paths.h"
@@ -155,50 +157,37 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.discord_status = value[0] != '0';
     } else if (std::strcmp(key, "button_icons") == 0) {
         for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::Keyboard); ++i) {
-            if (_stricmp(value, button_icons_key(static_cast<ButtonIcons>(i))) == 0) {
+            if (::galaxy::text_iequal(value, button_icons_key(static_cast<ButtonIcons>(i)))) {
                 settings.button_icons = static_cast<ButtonIcons>(i);
             }
         }
     } else if (std::strcmp(key, "language") == 0) {
-        if (_stricmp(value, game_language_key(GameLanguage::Auto)) == 0) settings.language = GameLanguage::Auto;
+        if (::galaxy::text_iequal(value, game_language_key(GameLanguage::Auto))) settings.language = GameLanguage::Auto;
         for (const GameLanguage language : kGameLanguages) {
-            if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
+            if (::galaxy::text_iequal(value, game_language_key(language))) settings.language = language;
         }
     }
 }
 
 std::filesystem::path settings_path() {
 #if defined(_WIN32)
-    wchar_t* override_value = nullptr;
-    std::size_t override_length = 0u;
-    const int query_error = _wdupenv_s(
-        &override_value,
-        &override_length,
-        nebula_switch::runtime_settings_path_wide_name());
-    const std::unique_ptr<wchar_t, decltype(&std::free)> owned_override(
-        override_value, &std::free);
-    if (query_error != 0) {
-        throw std::runtime_error("cannot read GALAXY_RUNTIME_SETTINGS_PATH");
-    }
-    if (override_value != nullptr && override_length > 1u) {
-        if (override_length > MAX_PATH) {
-            throw std::runtime_error(
-                "GALAXY_RUNTIME_SETTINGS_PATH exceeds the supported path length");
-        }
+    if (const wchar_t* override_value = ::galaxy::run_options().runtime_settings_path_w; override_value != nullptr && override_value[0] != L'\0') {
         const std::filesystem::path path(override_value);
+        if (path.native().size() >= MAX_PATH) {
+            throw std::runtime_error("the settings path exceeds the supported path length");
+        }
         if (path.filename().empty()) {
-            throw std::runtime_error(
-                "GALAXY_RUNTIME_SETTINGS_PATH must name a settings file");
+            throw std::runtime_error("the settings path must name a settings file");
         }
         return path;
     }
 
 #else
-    if (const char* override_value = std::getenv(nebula_switch::runtime_settings_path_name());
+    if (const char* override_value = ::galaxy::run_options().runtime_settings_path;
         override_value != nullptr && override_value[0] != '\0') {
         const std::filesystem::path path(override_value);
         if (path.filename().empty()) {
-            throw std::runtime_error("GALAXY_RUNTIME_SETTINGS_PATH must name a settings file");
+            throw std::runtime_error("the settings path must name a settings file");
         }
         return path;
     }

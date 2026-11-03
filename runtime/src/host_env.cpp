@@ -1,7 +1,6 @@
-// Environment variables for the host's switches and test hooks (host_env.h).
+// Environment variables the host reads (host_env.h).
 #include "galaxy/host_env.h"
-#include "galaxy/test_hooks.h"
-#include "galaxy/test_data_paths.h"
+#include "galaxy/run_options.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -18,55 +17,6 @@
 #include <vector>
 
 namespace galaxy::host {
-#if defined(NEBULA_RELEASE)
-const char* test_data_paths_error(int, char**) {
-    return nullptr;
-}
-#else
-const char* test_data_paths_error(int argc, char** argv) {
-    bool test = read_env_flag_uncached(nebula_switch::hide_window_name(), false);
-    wchar_t* environment = GetEnvironmentStringsW();
-    if (!environment) return "cannot inspect the test environment";
-    for (const wchar_t* entry = environment; *entry; entry += std::wcslen(entry) + 1) {
-        if (_wcsnicmp(entry, nebula_switch::test__wide_name(), 12) == 0) test = true;
-    }
-    FreeEnvironmentStringsW(environment);
-    if (!test) return nullptr;
-    const auto work = get_env_path(L"NEBULA_WORK");
-    if (!work || !work->is_absolute()) return "tests require an absolute NEBULA_WORK";
-    wchar_t user_data[MAX_PATH]{};
-    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, user_data))) {
-        return "cannot locate the protected user data folder";
-    }
-    const auto protected_root = std::filesystem::path(user_data) / L"Nebula";
-    if (path_is_within(*work, protected_root) || path_is_within(protected_root, *work)) {
-        return "NEBULA_WORK overlaps the user data folder";
-    }
-    for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_NAND",
-                              L"LOCALAPPDATA", nebula_switch::runtime_settings_path_wide_name(),
-                              nebula_switch::render_config_path_wide_name(), nebula_switch::crash_dump_dir_wide_name()}) {
-        const auto path = get_env_path(name);
-        if (!path || !path_is_within(*path, *work) || path_is_within(*path, protected_root)) {
-            return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";
-        }
-    }
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::strcmp(argv[i], "--nand") == 0) {
-            int count = 0;
-            LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count);
-            const std::filesystem::path nand = wide != nullptr && i + 1 < count ? std::filesystem::path(wide[i + 1])
-                                                                                : std::filesystem::path(argv[i + 1]);
-            if (wide != nullptr) {
-                LocalFree(wide);
-            }
-            if (!path_is_within(nand, *work)) {
-                return "the test save path must be inside NEBULA_WORK";
-            }
-        }
-    }
-    return nullptr;
-}
-#endif
 
 namespace {
 std::atomic<bool> g_env_flag_cache_enabled{false};
@@ -92,7 +42,7 @@ bool read_env_flag_uncached(const char* name, bool default_value) {
            buffer[0] != 'n' && buffer[0] != 'N';
 }
 
-// The input report reads its script switches on every poll, and getenv_s scans the whole environment block each
+// Input polls read their script switches every time, and getenv_s scans the whole environment block each
 // time. Once set_env_flag_cache_enabled(true) runs, a value is read once per literal name (the pointer is the key).
 // Tests leave the cache off so the variables they change stay visible.
 namespace {
@@ -153,7 +103,7 @@ std::optional<std::string> read_env_string_uncached(const char* name) {
     return std::string(buffer.data(), length - 1u);
 }
 
-// The string counterpart of the flag cache, for the scripted input read on every report.
+// The string counterpart of the flag cache, for the scripted input read on every poll.
 namespace {
 struct EnvStringCacheSlot {
     std::atomic<const char*> name{nullptr};
@@ -195,6 +145,8 @@ std::optional<std::string> read_env_string(const char* name) {
 
 void set_env_flag_cache_enabled(bool enabled) noexcept {
     g_env_flag_cache_enabled.store(enabled, std::memory_order_release);
+    ::galaxy::set_run_options_final(enabled);
 }
+
 
 }  // namespace galaxy::host

@@ -3,7 +3,7 @@
 // under a render state, created on its first draw and kept for the session.
 
 #include "galaxy/render/pipeline_cache.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/pipeline_seed.h"
 #include "galaxy/windows_power.h"
 
@@ -389,10 +389,7 @@ ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const Rende
 }
 
 void PipelineCache::start_prepare() {
-    std::size_t env_length = 0;
-    char env_value[8] = {};
-    (void)getenv_s(&env_length, env_value, sizeof(env_value), nebula_switch::no_pipeline_prepare_name());
-    if (pipeline_seeds().empty() || env_length != 0u) {
+    if (pipeline_seeds().empty()) {
         return;
     }
     const auto prepare_started_at = std::chrono::steady_clock::now();

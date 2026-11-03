@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Mii faces (RVLFaceLib RFL_Model.c RFLDrawOpaCore / RFLDrawXluCore, and the stages the game adds for its Mii NPCs:
-// Game/NPC/MiiFacePartsHolder.cpp setTevOpa / setTevXlu). Stage 0 is the part's own form; the chain after it is RFL's
+// Mii faces (MiiLib MiiModel.c MiiDrawOpaCore / MiiDrawXluCore, and the stages the game adds for its Mii NPCs:
+// Game/NPC/MiiFacePartsHolder.cpp setTevOpa / setTevXlu). Stage 0 is the part's own form; the chain after it is Mii's
 // lit stage or the NPC holder's two stages, in the same form. Texture 0 at the part's own coordinates.
 //   form (params.x): 0 the constant colour (beard, nose, forehead, hair); 1 the cap, (K + K tex) / 2; 2 the face
 //     texture over the faceline colour, lerp(K, tex.rab, tex.g) (swap table N + 1: R, A, B, G); 3 the mask, tex;
 //     4 the nose line, black; 5 the glasses, K tex. Forms 0-2 are opaque (alpha 1: the constant's 8/8), 3-5 take the
 //     texture's alpha.
-//   chain (params.y): 0 none; 1 RFL's light, colour times the lit channel; 2 the holder's opaque stages; 3 the holder's
+//   chain (params.y): 0 none; 1 Mii's light, colour times the lit channel; 2 the holder's opaque stages; 3 the holder's
 //     translucent stages.
 //   The lit channel (chains 1-3): the material colour times the ambient plus lights (lights.x the colour channel's
 //     mask, lights.y its diffuse function, lights.z its attenuation form; chain 2 also the alpha channel, light 2,

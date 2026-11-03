@@ -10,7 +10,7 @@ Tracked files must not include:
   `.rvz`, `.wbfs`, `.szs`, `.thp`, and related disc/content formats.
 - Generated native game modules, executables, object files, libraries, PDBs, or
   release binaries.
-- Generated diagnostics, frame dumps, shader caches, NAND data, build trees, or
+- Generated diagnostics, frame dumps, shader caches, save data, build trees, or
   machine-local launch logs.
 - Files larger than 5 MiB, unless the policy is deliberately updated for a
   source-controlled vendor artifact.

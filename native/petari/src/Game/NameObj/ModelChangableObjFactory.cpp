@@ -117,7 +117,7 @@ namespace MR {
         MR::mountAsyncArchiveByObjectOrLayoutName(objectName, nullptr);
     }
 
-    bool isReadResourceFromDVDAtModelChangableObj(const char* pName, s32 a2) {
+    bool isReadResourceFromStoreAtModelChangableObj(const char* pName, s32 a2) {
         char objectName[128];
         char archiveName[128];
 

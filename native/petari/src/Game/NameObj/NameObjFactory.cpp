@@ -8119,7 +8119,7 @@ namespace NameObjFactory {
         }
     }
 
-    bool isReadResourceFromDVD(const char* pName, const JMapInfoIter& rIter) {
+    bool isReadResourceFromStore(const char* pName, const JMapInfoIter& rIter) {
         NameObjArchiveListCollector collector;
         getMountObjectArchiveList(&collector, pName, rIter);
 

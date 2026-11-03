@@ -4,7 +4,7 @@
 // optional features a driver refuses left out (learned per driver build in vk_compat.txt).
 
 #include "galaxy/render/vk/pipeline_cache_vk.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/pipeline_seed.h"
 #include "galaxy/windows_power.h"
 
@@ -59,7 +59,7 @@ struct TestRefusals {
 const TestRefusals& test_refusals() {
     static const TestRefusals refusals = [] {
         TestRefusals r;
-        const char* names = nebula_switch::vk_test_refuse();
+        const char* names = ::galaxy::run_options().vk_test_refuse;
         const std::string list = names != nullptr ? std::string(",") + names + "," : "";
         const auto has = [&](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
         r.dual_source = has("dual-source");
@@ -274,10 +274,7 @@ void PipelineCacheVk::stop_prepare() noexcept {
 }
 
 void PipelineCacheVk::start_prepare() {
-    std::size_t env_length = 0;
-    char env_value[8] = {};
-    (void)getenv_s(&env_length, env_value, sizeof(env_value), nebula_switch::no_pipeline_prepare_name());
-    if (pipeline_seeds().empty() || env_length != 0u) {
+    if (pipeline_seeds().empty()) {
         return;
     }
     const auto prepare_started_at = std::chrono::steady_clock::now();

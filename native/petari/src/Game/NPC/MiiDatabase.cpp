@@ -1,6 +1,6 @@
 #include "Game/NPC/MiiDatabase.hpp"
 #include "Game/Util/Array.hpp"
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 struct MiiDatabaseStoreData {
     MiiStoreData* mData;

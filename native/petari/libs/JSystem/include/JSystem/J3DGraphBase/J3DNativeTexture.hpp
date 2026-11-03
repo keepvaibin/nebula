@@ -22,7 +22,7 @@ namespace J3DNativeTexture {
 
 extern "C" {
 #endif
-// The same for the C sources (RVLFaceLib).
+// The same for the C sources (MiiLib).
 void J3DNativeTextureInit(J3DNativeTexObj* pObj, const void* pImage, u16 width, u16 height, u8 wrapS, u8 wrapT);
 void J3DNativeTextureSetFilter(J3DNativeTexObj* pObj, u8 minFilter, u8 magFilter, f32 minLod, f32 maxLod, f32 lodBias,
                                int edgeLod, u8 maxAniso);

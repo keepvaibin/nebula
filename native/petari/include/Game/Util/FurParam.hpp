@@ -53,5 +53,5 @@ public:
 };
 
 namespace MR {
-    void initFurParamFromDvd(FurParam*, DynamicFurParam*, char*, u32);
+    void initFurParamFromFile(FurParam*, DynamicFurParam*, char*, u32);
 };  // namespace MR

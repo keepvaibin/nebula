@@ -7,6 +7,7 @@
 #define NOMINMAX
 #endif
 #pragma warning(push, 0)
+#include "galaxy/portable.h"
 #include <Windows.h>
 #if !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
@@ -20,12 +21,13 @@
 #endif
 #endif
 #include "galaxy/loss_report.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
 
 #include "galaxy/render/present_clock.h"
+#include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/host_env.h"
@@ -135,21 +137,13 @@ std::atomic<unsigned> s_layer_2d_lines{0u};
 std::uint64_t g_snapshot_presents = 0u;
 
 std::string present_snapshot_path() {
-    const auto read_u64 = [](const char* name, std::uint64_t fallback) {
-        char value[32]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u
-            ? std::strtoull(value, nullptr, 10) : fallback;
-    };
-    static const std::uint64_t every = read_u64(nebula_switch::present_snapshot_every_name(), 0u);
-    static const std::uint64_t first = read_u64(nebula_switch::present_snapshot_first_name(), 0u);
-    static const std::uint64_t last = read_u64(
-        nebula_switch::present_snapshot_last_name(), std::numeric_limits<std::uint64_t>::max());
+    static const std::uint64_t every = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_every, 0u);
+    static const std::uint64_t first = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_first, 0u);
+    static const std::uint64_t last = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_last, std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
-        char value[MAX_PATH]{};
+        char value[1024]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                        nebula_switch::present_snapshot_dir_name()) == 0 && length > 1u
+        return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().present_snapshot_dir) == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
@@ -165,7 +159,7 @@ std::string present_snapshot_path() {
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 || length == 0) {
+    if (::galaxy::env_read(&length, value, sizeof(value), name) != 0 || length == 0) {
         return fallback;
     }
     char* end = nullptr;
@@ -414,7 +408,7 @@ bool RenderCore::initialize(int w, int h) {
     }
     boot_step("device rest");
 
-    if (!scene_copies_.initialize(renderer_.device(), start_frame)) {
+    if (!display_pictures_.initialize(renderer_.device(), start_frame)) {
         std::cerr << "[RenderCore] EfbCopyManager::initialize failed\n";
         renderer_.shutdown();
         return false;
@@ -422,14 +416,14 @@ bool RenderCore::initialize(int w, int h) {
 
     if (!texture_cache_.initialize(renderer_.device())) {
         std::cerr << "[RenderCore] TextureCache::initialize failed\n";
-        scene_copies_.shutdown();
+        display_pictures_.shutdown();
         renderer_.shutdown();
         return false;
     }
     if (!texture_cache_.preallocate_upload_arenas(kFramesInFlight)) {
         std::cerr << "[RenderCore] TextureCache upload preallocation failed\n";
         texture_cache_.shutdown();
-        scene_copies_.shutdown();
+        display_pictures_.shutdown();
         renderer_.shutdown();
         return false;
     }
@@ -447,7 +441,7 @@ bool RenderCore::initialize(int w, int h) {
 #endif
         std::cerr << "[RenderCore] PipelineCache::initialize failed\n";
         texture_cache_.shutdown();
-        scene_copies_.shutdown();
+        display_pictures_.shutdown();
         renderer_.shutdown();
         return false;
     }
@@ -544,7 +538,7 @@ void RenderCore::record_monotonic_cadence_sample(
             ? now_ns - accumulator.last_sample_ns
             : 0u;
     accumulator.last_sample_ns = now_ns;
-    static const bool monitor=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
+    static const bool monitor=::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
     if(monitor) {
         ++accumulator.monitor_intervals; accumulator.monitor_total_ns+=interval_ns;
         accumulator.monitor_max_ns=std::max(accumulator.monitor_max_ns,interval_ns);
@@ -601,7 +595,7 @@ void RenderCore::reset_monotonic_cadence(
 
 // GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
 void RenderCore::trace_memory() {
-    static const bool enabled = read_env_u64(nebula_switch::trace_memory_name(), 0u) != 0u;
+    static const bool enabled = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) != 0u;
     static std::uint64_t frames = 0u;
     if (!enabled || ++frames % 600u != 0u) {
         return;
@@ -630,7 +624,7 @@ void RenderCore::trace_memory() {
                  mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
 #if defined(_WIN32)
     // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
-    static const bool heaps = read_env_u64(nebula_switch::trace_memory_name(), 0u) == 2u;
+    static const bool heaps = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) == 2u;
     if (heaps) {
         HANDLE list[64];
         const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
@@ -670,7 +664,7 @@ void RenderCore::trace_memory() {
 }
 
 void RenderCore::report_frame_tail_window() noexcept {
-    static const bool enabled=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
+    static const bool enabled=::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
     if(!enabled) return;
     const auto now=display_first_serial_present_cadence_.last_sample_ns;
     if(!frame_tail_report_ns_) { frame_tail_report_ns_=now; return; }
@@ -707,7 +701,7 @@ void RenderCore::report_frame_tail_window() noexcept {
 }
 
 void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept {
-    static const bool enabled=read_env_u64("GALAXY_MONITOR_POINTER_LATENCY",0u)!=0u;
+    static const bool enabled=::galaxy::run_option_u64(::galaxy::run_options().monitor_pointer_latency, 0u)!=0u;
     if (!enabled) return;
     const auto& stamp=texture.pointer_response;
     if (!stamp.serial || !stamp.selected_ns || !stamp.drawn_ns ||
@@ -1807,7 +1801,7 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         switched = true;
     }
     if (switched) {
-        scene_copies_.set_frame_map(renderer_.frame_map());
+        display_pictures_.set_frame_map(renderer_.frame_map());
         frame_bindings_dirty_ = true;
     }
     if (marker == SceneMarker::SceneEnd) {
@@ -2070,7 +2064,7 @@ void RenderCore::restart_interp_governors() {
 
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    static const bool trace = read_env_u64(nebula_switch::trace_present_stats_name(), 0u) != 0u;
+    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
     // Since the frame before: the game's waits on the render thread, and the render thread's sub-frame time.
     const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
@@ -2258,22 +2252,6 @@ void RenderCore::supersede_interp_sequence() {
     ++interp_superseded_;
 }
 
-std::string RenderCore::interp_snapshot_path(const char* suffix) const {
-    static const std::string directory = [] {
-        char value[MAX_PATH]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), nebula_switch::interp_snapshot_dir_name()) == 0 &&
-                       length > 1u
-            ? std::string(value) : std::string{};
-    }();
-    static const std::uint64_t first = read_env_u64(nebula_switch::interp_snapshot_first_name(), 0u);
-    static const std::uint64_t last = read_env_u64(nebula_switch::interp_snapshot_last_name(), 0u);
-    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
-        return {};
-    }
-    return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
-}
-
 // t of the next slot in the playing sequence (see advance_interp_sequence).
 double RenderCore::interp_slot_t() const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
@@ -2345,11 +2323,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
         if (!flush && t < 1.0 - 1e-3 && sequence.next < 7u && sequence.subframes != 0u &&
             renderer_.replay_playing()) {
             const auto start = std::chrono::steady_clock::now();
-            std::string snapshot =
-                interp_snapshot_path(("sub" + std::to_string(sequence.next + 1u)).c_str());
-            if (snapshot.empty()) {
-                snapshot = present_snapshot_path();  // sub-frames count as presents
-            }
+            const std::string snapshot = present_snapshot_path();  // sub-frames count as presents
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
@@ -2378,15 +2352,11 @@ void RenderCore::advance_interp_sequence(bool flush) {
             return;
         }
         sequence.active = false;
-        interp_snapshot_path_ = interp_snapshot_path("real");
-        renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
         present_cached_display_on_thread(false, false, true, sequence.picture_slot);
         note_present_vblank(slot);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
-        renderer_.set_capture_waits(false);
-        interp_snapshot_path_.clear();
         ++interp_sequences_;
         report_interp_stats();
         return;
@@ -2398,7 +2368,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
 void RenderCore::note_present_vblank(std::int64_t slot) {
-    static const bool trace = read_env_u64(nebula_switch::trace_present_stats_name(), 0u) != 0u;
+    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     std::int64_t vblank = 0;
     std::int64_t period = 0;
     if (!trace || !renderer_.vblank_grid(vblank, period)) {
@@ -2439,7 +2409,7 @@ void RenderCore::note_interp_real_present() {
 }
 
 void RenderCore::report_interp_stats() {
-    static const bool trace = read_env_u64(nebula_switch::trace_present_stats_name(), 0u) != 0u;
+    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     if (!trace) {
         return;
     }
@@ -3345,7 +3315,7 @@ void RenderCore::poll_screen_probes() {
 }
 
 void RenderCore::present_vi_black(bool in_frame) {
-    const DisplayTexture* layout = scene_copies_.latest();
+    const DisplayTexture* layout = display_pictures_.latest();
     if (layout == nullptr || (black_shown_ && !native_settings_overlay_visible())) {
         return;
     }
@@ -3390,7 +3360,7 @@ void RenderCore::present_cached_display_on_thread(
         return;
     }
     black_shown_ = false;
-    const DisplayTexture* selected = slot ? scene_copies_.picture(*slot) : scene_copies_.latest();
+    const DisplayTexture* selected = slot ? display_pictures_.picture(*slot) : display_pictures_.latest();
     if (selected == nullptr) {
         if (sleep_if_missing) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -3412,8 +3382,7 @@ void RenderCore::present_cached_display_on_thread(
         record_skipped_duplicate_display_present(*selected);
         return;
     }
-    const std::string snapshot_path = !interp_snapshot_path_.empty() ? interp_snapshot_path_
-        : !count_game_display_present ? std::string{} : present_snapshot_path();
+    const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
         renderer_.set_capture_waits(true);
@@ -3442,7 +3411,7 @@ void RenderCore::present_cached_display_on_thread(
     }
     if (!replayed) {
         renderer_.begin_frame(true);
-        // Present-only frames acquire no display picture textures, so SceneCopyManager retirement advances with
+        // Present-only frames acquire no display picture textures, so DisplayPictures retirement advances with
         // render frames only; otherwise render-then-present would age pictures twice per frame.
         (void)renderer_.present(selected, !snapshot_path.empty());
     }
@@ -3463,9 +3432,9 @@ void RenderCore::present_cached_display_on_thread(
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1, processes): the card is lost at frame n.
-    static const std::uint64_t lose_at = read_env_u64(nebula_switch::test_gpu_lost_frame_name(), 0u);
+    static const std::uint64_t lose_at = ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
     if (lose_at != 0u && frame_index_ == lose_at) [[unlikely]] {
-        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < read_env_u64(nebula_switch::test_gpu_lost_times_name(), 1u)) {
+        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
             renderer_.test_lose_device();
         }
     }
@@ -3528,8 +3497,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         }
         // begin_frame() applies a pending internal-resolution change, so copies take the scale the scene target
         // has now, not the setting, which can change in between.
-        if (renderer_.frame_map() != scene_copies_.frame_map()) {
-            scene_copies_.set_frame_map(renderer_.frame_map());
+        if (renderer_.frame_map() != display_pictures_.frame_map()) {
+            display_pictures_.set_frame_map(renderer_.frame_map());
         }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
@@ -3554,7 +3523,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 resident_vertices_.advance_frame();
             }
         }
-        scene_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+        display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();
         if (retirement_revision != seen_texture_retirement_revision_) {
@@ -3658,7 +3627,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // will provide the actual values once its records run.
     renderer_.bind_scene();
 
-    // game keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_scene_copy,
+    // game keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_frame_output,
     // with the copy's clear values). One initial clear (depth = far) seeds the targets.
     if (!scene_seeded_) {
         scene_seeded_ = true;
@@ -3723,7 +3692,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     }
     const std::uint64_t current_present_epoch =
         presents ? present_epoch_ + 1u : present_epoch_;
-    const DisplayTexture* const selected_display = chunk.black ? nullptr : scene_copies_.latest();
+    const DisplayTexture* const selected_display = chunk.black ? nullptr : display_pictures_.latest();
     const bool duplicate_display_present =
         selected_display != nullptr &&
         selected_display->copy_serial ==
@@ -3942,7 +3911,7 @@ void RenderCore::invalidate_texture_binding_cache_key(std::uint64_t key) {
 }
 
 void RenderCore::mark_texture_binding_alias_dirty(
-    const CaptureRequest& params) {
+    const FramePassRequest& params) {
     DirtyTextureAlias dirty{};
     dirty.dependency.address = params.key;
     dirty.dependency.source_bytes = 1u;  // the picture is found by its key (the capture buffer) alone
@@ -4049,12 +4018,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // those in the log every 65,536 (GALAXY_LOG_NATIVE_MATERIALS=1).
     if (native_material_ == nullptr) [[unlikely]] {
         galaxy::loss::note(galaxy::loss::Kind::DrawNoMaterial);
-        static const bool log_native = read_env_u64(nebula_switch::log_native_materials_name(), 0u) != 0u;
-        static std::uint64_t dropped = 0u;
-        if (log_native && (dropped++ & 0xFFFFu) == 0u) {
-            std::fprintf(stderr, "[native-material] %llu draws without a native material (not drawn)\n",
-                         static_cast<unsigned long long>(dropped));
-        }
         return nullptr;
     }
     const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
@@ -4225,24 +4188,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         // The native material's pipeline: its build-compiled shaders under the draw's render state.
         current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
-        static const bool log_native = read_env_u64(nebula_switch::log_native_materials_name(), 0u) != 0u;
-        if (log_native) [[unlikely]] {
-            static std::set<std::pair<std::uint32_t, const void*>> logged;
-            if (logged.emplace(native_material_->shader, current_pipeline_).second) {
-                std::fprintf(stderr, "[native-material] shader=%u pipeline=%p blend=0x%08x z=0x%x cull=%u maps=0x%02x\n",
-                             native_material_->shader, static_cast<const void*>(current_pipeline_),
-                             render_state_key_.blend_bits, static_cast<unsigned>(render_state_key_.zmode_bits),
-                             static_cast<unsigned>(render_state_key_.cull), static_cast<unsigned>(native_texture_mask_));
-            }
-            // Native draws under a constant destination alpha (native pipelines write the shader's alpha instead).
-            if ((render_state_key_.blend_bits & ((1u << 28u) | kRenderStateZeroAlpha)) != 0u) {
-                static std::uint64_t constant_alpha_draws = 0u;
-                if ((constant_alpha_draws++ & 0x3FFu) == 0u) {
-                    std::fprintf(stderr, "[native-material] constant destination alpha: %llu draws (shader %u)\n",
-                                 static_cast<unsigned long long>(constant_alpha_draws), native_material_->shader);
-                }
-            }
-        }
         current_pso_key_valid_ = false;
         // A curved native draw goes whole through its patch stages (native_curved.hlsl).
         current_flat_pipeline_ = nullptr;
@@ -4519,23 +4464,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         current_texture_map_mask_ = texture_map_mask;
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's maps as the texture cache resolved them (once per map
         // and image).
-        if (native_material_ != nullptr && read_env_u64(nebula_switch::log_native_materials_name(), 0u) != 0u) [[unlikely]] {
-            static std::set<std::tuple<std::uint32_t, unsigned, std::uint64_t>> logged;
-            for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-                if ((texture_map_mask & (1u << m)) == 0u ||
-                    !logged.emplace(native_material_->shader, m, native_material_->textures[m].image).second) {
-                    continue;
-                }
-                const TextureHandle& h = current_texture_handles_[m];
-                std::fprintf(stderr,
-                             "[native-material] shader=%u map=%u image=%llx -> resource=%d %ux%u frame=%d\n",
-                             native_material_->shader, m,
-                             static_cast<unsigned long long>(native_material_->textures[m].image),
-                             h.resource != nullptr ? 1 : 0,
-                             static_cast<unsigned>(h.width), static_cast<unsigned>(h.height),
-                             h.from_capture ? 1 : 0);
-            }
-        }
         current_texture_binding_key_ = texture_binding_key;
         current_texture_binding_key_valid_ = true;
         current_texture_binding_key_mask_ = texture_map_mask;
@@ -4798,19 +4726,42 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::TargetEnd:
         end_target_pass(record);
         return;
-    case shapes::Record::Kind::TargetCapture: {
-        CaptureRequest request{};
+    case shapes::Record::Kind::FramePass: {
+        FramePassRequest request{};
         request.key = record.key;
         request.channels = record.target_channels < 7u ? record.target_channels : 0u;
-        request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
-        request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
-        on_scene_copy(request);
+        on_frame_output(request);
+        return;
+    }
+    case shapes::Record::Kind::FrameTake: {
+        // In the settings that cannot swap the target (MSAA, HDR, interpolation), a pass over the frame.
+        flush_pending_draw_batch();
+        FramePassRequest request{};
+        request.key = record.key;
+        bool changed = false;
+        if (renderer_.can_take_scene()) {
+            const FrameMap& map = renderer_.frame_map();
+            const auto width = static_cast<std::uint16_t>(map.width);
+            const auto height = static_cast<std::uint16_t>(map.height);
+            const bool forgot = texture_cache_.forget(record.key) != 0u;
+            gpu::TextureRef released;
+            changed = renderer_.take_scene(record.key, display_pictures_.take_idle_texture(width, height), texture_cache_, released);
+            display_pictures_.release_texture(std::move(released), width, height);
+            changed = changed || forgot;
+            frame_bindings_dirty_ = true;
+        } else {
+            changed = renderer_.draw_frame_pass(request, texture_cache_);
+        }
+        if (changed) {
+            mark_texture_binding_alias_dirty(request);
+            texture_bindings_dirty_ = true;
+        }
         return;
     }
     case shapes::Record::Kind::FrameShow: {
-        CaptureRequest request{};
+        FramePassRequest request{};
         request.display = true;
-        on_scene_copy(request);
+        on_frame_output(request);
         return;
     }
     case shapes::Record::Kind::FrameClear: {
@@ -4837,7 +4788,24 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
 // as the game asked.
 void RenderCore::begin_target_pass(const shapes::Record& record) {
     flush_pending_draw_batch();
+    // The frame sampled in the pass: its pictures come first, while the frame is still the scene target.
+    const bool over_frame = record.target_frame_key != 0u || record.target_depth_key != 0u;
+    if (over_frame) {
+        for (const std::uint64_t key : {record.target_frame_key, record.target_depth_key}) {
+            if (key != 0u) {
+                texture_cache_.forget(key);
+                FramePassRequest alias{};
+                alias.key = key;
+                mark_texture_binding_alias_dirty(alias);
+            }
+        }
+        renderer_.open_frame_for_pass(record.target_frame_key, record.target_channels, record.target_depth_key, texture_cache_);
+        texture_bindings_dirty_ = true;
+    }
     if (!renderer_.begin_target_pass(record.key, record.target_width, record.target_height)) {
+        if (over_frame) {
+            renderer_.close_frame_for_pass(texture_cache_);
+        }
         static bool warned = false;
         if (!warned) {
             warned = true;
@@ -4861,6 +4829,7 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
     flush_pending_draw_batch();
     renderer_.end_target_pass(record.target_channels, texture_cache_);
     frame_bindings_dirty_ = true;
+    texture_bindings_dirty_ = true;
 }
 
 void RenderCore::apply_native_material(const material::Native* native) {
@@ -5272,7 +5241,7 @@ void RenderCore::draw_record_immediate(const shapes::Record& record) {
     pending_draw_batch_.sealed = false;
 }
 
-void RenderCore::on_scene_copy(const CaptureRequest& params) {
+void RenderCore::on_frame_output(const FramePassRequest& params) {
     flush_pending_draw_batch();
     if (params.display) {
         galaxy::timeline::record(galaxy::timeline::Event::DisplayCopy, stat_display_copies_);
@@ -5281,7 +5250,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
 
 
     if (params.display) {
-        DisplayTexture* display_picture = scene_copies_.acquire_display(params, frame_index_);
+        DisplayTexture* display_picture = display_pictures_.acquire_display(params, frame_index_);
         if (display_picture != nullptr) {
             end_side_layer();
             mirror_opened_scene_ = false;
@@ -5293,8 +5262,8 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                 // Native presentation: the display picture takes the scene target's colour target, and the scene target continues on a texture of
                 // its size the display picture pool released.
                 const FrameMap& map = renderer_.frame_map();
-                scene_copies_.adopt_picture(
-                    *display_picture, renderer_.hand_over_scene_color(scene_copies_.take_idle_texture(
+                display_pictures_.adopt_picture(
+                    *display_picture, renderer_.hand_over_scene_color(display_pictures_.take_idle_texture(
                               static_cast<std::uint16_t>(map.width), static_cast<std::uint16_t>(map.height))));
             } else {
                 renderer_.copy_scene_to_display(params, *display_picture);
@@ -5304,25 +5273,24 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
             display_copy_on_output_ = renderer_.output_scene_active();
             if (renderer_.output_scene_active()) {
                 renderer_.end_output_scene();
-                scene_copies_.set_frame_map(renderer_.frame_map());
+                display_pictures_.set_frame_map(renderer_.frame_map());
                 frame_bindings_dirty_ = true;
             }
             display_picture->pointer_response=render_pointer_response_;
             display_picture->prerecorded_movie=render_movie_content_;
-            scene_copies_.mark_display_copied(*display_picture, frame_index_);
+            display_pictures_.mark_display_copied(*display_picture, frame_index_);
             ++stat_display_copies_;
             record_monotonic_cadence_sample(display_copy_production_cadence_);
         }
     } else {
         // The capture replaces what its buffer (the key) held: an image handed over there no longer describes it.
         const bool decoded_evicted = texture_cache_.forget(params.key) != 0u;
-        const bool is_depth_copy = params.depth;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
         // game's single scene target holds it, not the scene the output-resolution 2D layer was drawn over.
-        const bool from_display = display_copy_on_output_ && !is_depth_copy;
+        const bool from_display = display_copy_on_output_;
         const bool alias_updated = from_display
-            ? renderer_.copy_output_scene_to_texture(params, texture_cache_)
-            : renderer_.copy_scene_to_texture(params, texture_cache_, is_depth_copy);
+            ? renderer_.draw_frame_pass_from_output(params, texture_cache_)
+            : renderer_.draw_frame_pass(params, texture_cache_);
         if (alias_updated || decoded_evicted) {
             // One address can alternate between format-keyed GPU resources, and the game need not
             // rewrite the texture state after a copy, so the next draw refreshes every frame table

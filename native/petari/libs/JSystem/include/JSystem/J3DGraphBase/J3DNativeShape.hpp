@@ -61,7 +61,7 @@ namespace J3DNativeShape {
 
 extern "C" {
 #endif
-// The same for the C sources (RVLFaceLib).
+// The same for the C sources (MiiLib).
 void J3DNativeShapeSetPosition(u32 index, const f32 (*pMtx)[4]);
 void J3DNativeShapeSetNormal(u32 index, const f32 (*pMtx)[4]);
 #ifdef __cplusplus

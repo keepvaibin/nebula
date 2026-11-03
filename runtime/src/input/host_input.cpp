@@ -1,7 +1,7 @@
 // The host's controls: keyboard and mouse, controllers, the pointer and its sources, binding capture, button
 // icons, vibration, and the scripted and replayed test input, as the input the game reads.
 #include "galaxy/game_paths.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/host_env.h"
 
 #include "galaxy/platform_time.h"
@@ -66,7 +66,7 @@ namespace {
 
 bool xinput_requires_focus() {
     static const bool requires_focus =
-        read_env_flag(nebula_switch::xinput_require_focus_name(), true);
+        ::galaxy::run_option_flag(::galaxy::run_options().xinput_require_focus, true);
     return requires_focus;
 }
 
@@ -190,23 +190,9 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
 }
 
 namespace {
-// GALAXY_TEST_LAST_INPUT=<n>: input::ControlScheme n is the one in use whatever else gives input, as if attached (hidden
-// runs show the menus' buttons for each controller); -1 without it.
-int test_last_input_scheme() noexcept {
-    static const int s_test_scheme = [] {
-        const std::optional<std::string> scheme = read_env_string_uncached(nebula_switch::test_last_input_name());
-        const int value = scheme.has_value() ? std::atoi(scheme->c_str()) : -1;
-        return value >= 0 && value < static_cast<int>(input::kControlSchemeCount) ? value : -1;
-    }();
-    return s_test_scheme;
-}
 }  // namespace
 
 std::optional<input::DeviceKey> last_input_device() noexcept {
-    if (const int test_scheme = test_last_input_scheme(); test_scheme >= 0) {
-        return input::DeviceKey{static_cast<input::ControlScheme>(test_scheme),
-                                test_scheme == 0 ? input::kKeyboardSlot : std::uint8_t{0}};
-    }
     const std::uint32_t key = g_last_input.load(std::memory_order_relaxed);
     if (key == kLastInputNone) return std::nullopt;
     if (key == kLastInputKeyboard) return input::DeviceKey{input::ControlScheme::Keyboard, input::kKeyboardSlot};
@@ -240,19 +226,6 @@ const input::KeyPositionMap& keyboard_position_map(HKL layout) {
 std::array<std::uint16_t, input::kKeyIconLayoutCount> keyboard_layout_labels() noexcept {
     static std::array<std::uint16_t, input::kKeyIconLayoutCount> s_labels{};
     static std::uint64_t s_checked_ms = 0u;
-    static const std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>> s_test = [] {
-        const std::optional<std::string> value = read_env_string_uncached(nebula_switch::test_key_layout_name());
-        if (!value.has_value()) return std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>>{};
-        std::array<std::uint16_t, input::kKeyIconLayoutCount> labels{};
-        const char* p = value->c_str();
-        for (std::size_t i = 0; i < labels.size() && *p != '\0'; ++i) {
-            char* end = nullptr;
-            labels[i] = static_cast<std::uint16_t>(std::strtoul(p, &end, 16));
-            p = *end == ',' ? end + 1 : end;
-        }
-        return std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>>(labels);
-    }();
-    if (s_test.has_value()) return *s_test;
     const std::uint64_t now_ms = GetTickCount64();
     if (s_checked_ms != 0u && now_ms - s_checked_ms < 1000u) return s_labels;
     s_checked_ms = now_ms;
@@ -298,8 +271,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
         }
     }
     const auto attached = [](ControlScheme scheme) {
-        return static_cast<int>(scheme) == test_last_input_scheme() ||
-               std::find(s_attached.begin(), s_attached.begin() + s_attached_count, scheme) !=
+        return std::find(s_attached.begin(), s_attached.begin() + s_attached_count, scheme) !=
                    s_attached.begin() + s_attached_count;
     };
     // The pad in use while it is attached; else the family remembered while such a pad is attached, else the first
@@ -1038,7 +1010,7 @@ double dt_seconds_since_co_star() noexcept {
 
 void update_co_star(std::span<LivePad> pads, const galaxy::input::ControlsConfig& config, float seconds) {
     namespace in = galaxy::input;
-    using in::WiiTarget;
+    using in::GameInput;
     in::PlayerInput player{};
     bool on = false;
     if (galaxy::get_runtime_settings().co_star) {
@@ -1053,20 +1025,20 @@ void update_co_star(std::span<LivePad> pads, const galaxy::input::ControlsConfig
         if (connected >= 2u) {
             static float s_x = 0.0f, s_y = 0.0f;
             const in::LogicalInput logic = in::evaluate_pad_bindings(config.table(last->sample.scheme), last->sample, 0.5f);
-            const auto held = [&logic](WiiTarget target) { return logic.held(target); };
+            const auto held = [&logic](GameInput target) { return logic.held(target); };
             s_x = std::clamp(s_x + logic.pointer_x * seconds * 1.5f, -1.0f, 1.0f);
             s_y = std::clamp(s_y - logic.pointer_y * seconds * 1.5f, -1.0f, 1.0f);
             in::set_pointer(player, s_x, s_y, true);
-            player.buttons.a = held(WiiTarget::A);
-            player.buttons.b = held(WiiTarget::B);
-            player.buttons.one = held(WiiTarget::One);
-            player.buttons.two = held(WiiTarget::Two);
-            player.buttons.plus = held(WiiTarget::Plus);
-            player.buttons.minus = held(WiiTarget::Minus);
-            player.buttons.up = held(WiiTarget::DpadUp);
-            player.buttons.down = held(WiiTarget::DpadDown);
-            player.buttons.left = held(WiiTarget::DpadLeft);
-            player.buttons.right = held(WiiTarget::DpadRight);
+            player.buttons.a = held(GameInput::A);
+            player.buttons.b = held(GameInput::B);
+            player.buttons.one = held(GameInput::One);
+            player.buttons.two = held(GameInput::Two);
+            player.buttons.plus = held(GameInput::Plus);
+            player.buttons.minus = held(GameInput::Minus);
+            player.buttons.up = held(GameInput::DpadUp);
+            player.buttons.down = held(GameInput::DpadDown);
+            player.buttons.left = held(GameInput::DpadLeft);
+            player.buttons.right = held(GameInput::DpadRight);
             *last = {};
             on = true;
         }
@@ -1115,7 +1087,7 @@ galaxy::input::PlayerInput build_live_input(
     // A hidden test window (GALAXY_HIDE_WINDOW) is no keyboard or mouse source: no focus, key or cursor calls are
     // made, while controllers, replay and scripts still work.
     static const bool host_window_input_enabled =
-        !read_env_flag(nebula_switch::hide_window_name());
+        !::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
     HWND focused_window = nullptr;
     const bool window_focused =
         host_window_input_enabled &&
@@ -1257,20 +1229,6 @@ galaxy::input::PlayerInput build_live_input(
 }  // namespace
 
 bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept {
-    // GALAXY_TEST_P2=x,y[,buttons]: a player 2 who holds still there.
-    static const std::optional<std::string> test = read_env_string_uncached(nebula_switch::test_p2_name());
-    if (test.has_value()) {
-        char* end = nullptr;
-        const float x = std::strtof(test->c_str(), &end);
-        if (*end == ',') {
-            const float y = std::strtof(end + 1, &end);
-            const unsigned long buttons = *end == ',' ? std::strtoul(end + 1, nullptr, 10) : 0ul;
-            galaxy::input::set_pointer(*input, x, y, true);
-            input->buttons.a = (buttons & galaxy::input::kButtonA) != 0u;
-            input->buttons.b = (buttons & galaxy::input::kButtonB) != 0u;
-            return true;
-        }
-    }
     const std::lock_guard<std::mutex> lock(g_co_star_lock);
     if (!g_co_star_on) {
         return false;

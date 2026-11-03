@@ -113,7 +113,7 @@ void motion_context_and_instances() {
     const auto scheme = ControlScheme::SwitchPro;
     config.tune(scheme).gyro_pointer = true;
     config.tune(scheme).pointer_hide_seconds = 0;
-    config.table(scheme)[WiiTarget::PointerRecenter] = {InputSource{SourceKind::Button, pad::kRightShoulderBit}};
+    config.table(scheme)[GameInput::PointerRecenter] = {InputSource{SourceKind::Button, pad::kRightShoulderBit}};
     LivePad pad; pad.sample.connected = true; pad.sample.scheme = scheme; pad.device_slot = 0;
     pad.imu_live = true; pad.gyro_x = 0.1f;
     LiveControlsFrame frame{config}; frame.use_pads = true; frame.window_focused = true;
@@ -131,9 +131,9 @@ void motion_context_and_instances() {
     host.advance(); result = first.sample(frame, host);
     check(!result.input.pointer_on && result.input.gravity[1] < -0.8f, "native gravity drives upright tilt section");
 
-    config.table(scheme)[WiiTarget::A] = {};
-    config.table(scheme)[WiiTarget::B] = {};
-    config.table(scheme)[WiiTarget::JumpBack] = {InputSource{SourceKind::Button, pad::kEastBit}};
+    config.table(scheme)[GameInput::A] = {};
+    config.table(scheme)[GameInput::B] = {};
+    config.table(scheme)[GameInput::JumpBack] = {InputSource{SourceKind::Button, pad::kEastBit}};
     pad.sample.buttons = pad::bit(pad::kEastBit); frame.tilt_section = tilt::Section::None;
     LiveControlsEngine context;
     frame.context = PlayContext::Play; result = context.sample(frame, host);

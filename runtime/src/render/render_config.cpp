@@ -1,7 +1,9 @@
 // The rendering settings: config.ini loading and saving, the GALAXY_<KEY> overrides, and the data folders beside
 // config.ini.
+#include "galaxy/portable.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
+#include "../../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/platform_paths.h"
 
@@ -115,7 +117,7 @@ static unsigned parse_choice(const char* v, const char* const (&names)[N], unsig
     const unsigned index = parse_uint(v, N);
     if (index < N) return index;
     for (std::size_t i = 0; i < N; ++i) {
-        if (_stricmp(v, names[i]) == 0) return static_cast<unsigned>(i);
+        if (::galaxy::text_iequal(v, names[i])) return static_cast<unsigned>(i);
     }
     return def;
 }
@@ -127,7 +129,7 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
     const unsigned index = parse_uint(v, kAspectModeCount);
     if (index < std::size(kBefore3To2)) return kBefore3To2[index];
     for (unsigned i = 0; i < kAspectModeCount; ++i) {
-        if (_stricmp(v, kAspectNames[i]) == 0) return i;
+        if (::galaxy::text_iequal(v, kAspectNames[i])) return i;
     }
     return def;
 }
@@ -261,6 +263,28 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
+#if defined(NEBULA_RELEASE)
+    // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
+    cfg.ray_tracing_enabled = false;
+    cfg.upscaler = 0u;
+    cfg.spatial_quality = 0u;
+    cfg.temporal_quality = 0u;
+    cfg.sharpness = 0u;
+    cfg.frame_generation = 0u;
+    cfg.aa_mode = 0u;
+    cfg.msaa_samples = 1u;
+    cfg.anisotropic_filtering = 1u;
+    cfg.enhanced_mipmaps = false;
+    cfg.curved_surfaces = false;
+    cfg.per_pixel_lighting = false;
+    cfg.enhanced_lighting = false;
+    cfg.ambient_occlusion = false;
+    cfg.texture_packs = false;
+    cfg.hud_output_resolution = false;
+    if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {
+        cfg.max_fps = 60.0f;  // no interpolated frames
+    }
+#endif
 }
 
 static void sanitize_feature_status(RenderFeatureStatus& status) {
@@ -306,23 +330,13 @@ static void clamp_feature_caps(RenderFeatureCaps& caps) {
 }
 
 static std::filesystem::path config_path() {
-#if defined(_WIN32)
-    SetLastError(ERROR_SUCCESS);
-    const DWORD required = GetEnvironmentVariableW(nebula_switch::render_config_path_wide_name(), nullptr, 0);
-    if (required != 0u) {
-        std::wstring override_path(required, L'\0');
-        const DWORD copied = GetEnvironmentVariableW(nebula_switch::render_config_path_wide_name(),
-            override_path.data(), required);
-        if (copied == 0u || copied >= required) return {};
-        override_path.resize(copied);
-        return std::filesystem::path(override_path);
-    }
-    // An empty or unreadable override never falls back to the default config.ini.
-    if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
-
-#else
     // An empty override never falls back to the default config.ini.
-    if (const char* override_path = std::getenv(nebula_switch::render_config_path_name()); override_path != nullptr) {
+#if defined(_WIN32)
+    if (const wchar_t* override_path = ::galaxy::run_options().render_config_path_w; override_path != nullptr) {
+        return override_path[0] != L'\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
+    }
+#else
+    if (const char* override_path = ::galaxy::run_options().render_config_path; override_path != nullptr) {
         return override_path[0] != '\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
     }
 #endif
@@ -420,21 +434,6 @@ namespace {
 
 std::atomic<std::uint64_t> s_rt_effect_frame{0};
 
-// GALAXY_TEST_RT_EFFECT_AB's effect; -1 none.
-int rt_effect_ab() {
-    static const int effect = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value), nebula_switch::test_rt_effect_ab_name()) != 0 || length <= 1u) return -1;
-        static constexpr const char* kNames[] = {"reflections", "water", "sun_rays", "lens_bloom"};
-        for (int i = 0; i < 4; ++i) {
-            if (std::strcmp(value, kNames[i]) == 0) return i;
-        }
-        return -1;
-    }();
-    return effect;
-}
-
 }  // namespace
 
 bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
@@ -442,8 +441,7 @@ bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
                             : effect == RtEffect::Water     ? cfg.rt_water
                             : effect == RtEffect::SunRays   ? cfg.rt_sun_rays
                                                             : cfg.rt_lens_bloom;
-    return configured && !(rt_effect_ab() == static_cast<int>(effect) &&
-                           (s_rt_effect_frame.load(std::memory_order_relaxed) & 1u) != 0u);
+    return configured;
 }
 
 void set_rt_effect_frame(std::uint64_t frame) noexcept {
@@ -673,26 +671,42 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
 namespace {
 
 // A folder beside config.ini, or the environment's override (an empty override: none).
-std::filesystem::path data_folder(const char* override_name, const char* folder) {
 #if defined(_WIN32)
-    const std::wstring name(override_name, override_name + std::strlen(override_name));
-    SetLastError(ERROR_SUCCESS);
-    const DWORD required = GetEnvironmentVariableW(name.c_str(), nullptr, 0);
-    if (required != 0u) {
-        std::wstring value(required, L'\0');
-        const DWORD copied = GetEnvironmentVariableW(name.c_str(), value.data(), required);
-        if (copied == 0u || copied >= required) return {};
-        value.resize(copied);
-        return std::filesystem::path(value);
-    }
-    if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
+using RunFolder = const wchar_t*;
 #else
-    if (const char* value = std::getenv(override_name); value != nullptr) {
-        return value[0] != '\0' ? std::filesystem::path(value) : std::filesystem::path{};
-    }
+using RunFolder = const char*;
 #endif
+
+std::filesystem::path data_folder(RunFolder named, const char* folder) {
+    if (named != nullptr) {
+        return named[0] != 0 ? std::filesystem::path(named) : std::filesystem::path{};
+    }
     const std::filesystem::path config = config_path();
     return config.empty() ? std::filesystem::path{} : config.parent_path() / folder;
+}
+
+RunFolder run_folder_texture_pack_dir() {
+#if defined(_WIN32)
+    return ::galaxy::run_options().texture_pack_dir_w;
+#else
+    return ::galaxy::run_options().texture_pack_dir;
+#endif
+}
+
+RunFolder run_folder_texture_dump_dir() {
+#if defined(_WIN32)
+    return ::galaxy::run_options().texture_dump_dir_w;
+#else
+    return ::galaxy::run_options().texture_dump_dir;
+#endif
+}
+
+RunFolder run_folder_movie_dir() {
+#if defined(_WIN32)
+    return ::galaxy::run_options().movie_dir_w;
+#else
+    return ::galaxy::run_options().movie_dir;
+#endif
 }
 
 std::mutex s_mod_folders_mutex;
@@ -705,22 +719,18 @@ std::string s_texture_pack_game_id = "RMGE01";  // TexturePacks::kGameId until t
 }  // namespace
 
 std::filesystem::path texture_pack_directory() {
-    return data_folder(nebula_switch::texture_pack_dir_name(), "TexturePacks");
+    return data_folder(run_folder_texture_pack_dir(), "TexturePacks");
 }
 
 std::filesystem::path texture_pack_test_directory() {
     // Only the environment's: texture packs are mods (mods.h); tests name a pack folder directly.
-#if defined(_WIN32)
-    static const bool named = GetEnvironmentVariableW(nebula_switch::texture_pack_dir_wide_name(), nullptr, 0) != 0u;
-#else
-    static const bool named = std::getenv(nebula_switch::texture_pack_dir_name()) != nullptr;
-#endif
+    static const bool named = run_folder_texture_pack_dir() != nullptr;
     static const std::filesystem::path folder = named ? texture_pack_directory() : std::filesystem::path{};
     return folder;
 }
 
 std::filesystem::path texture_dump_directory() {
-    return data_folder(nebula_switch::texture_dump_dir_name(), "TextureDumps");
+    return data_folder(run_folder_texture_dump_dir(), "TextureDumps");
 }
 
 void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders) {
@@ -749,7 +759,7 @@ std::uint64_t texture_pack_mod_folders_generation() noexcept {
 }
 
 std::filesystem::path movie_directory() {
-    static const std::filesystem::path folder = data_folder(nebula_switch::movie_dir_name(), "Movies");
+    static const std::filesystem::path folder = data_folder(run_folder_movie_dir(), "Movies");
     return folder;
 }
 

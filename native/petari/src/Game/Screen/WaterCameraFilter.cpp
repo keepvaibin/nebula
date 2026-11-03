@@ -1,4 +1,5 @@
 #include "Game/Screen/WaterCameraFilter.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeTarget.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -29,8 +30,9 @@ namespace {
     // alpha where above zero, depth neither tested nor written.
     void sendFilterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const TMtx34f& rFilterMtx, const Color8& rWater) {
         NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_WATER_CAMERA, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+        NativeShader::init(material, NEBULA_SHADER_WATER_CAMERA, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
+        material.alpha_write = 1;
         NativeShader::setColor(material, 0, rWater.r, rWater.g, rWater.b, rWater.a);
         for (u32 row = 0; row < 2; row++) {
             for (u32 column = 0; column < 4; column++) {
@@ -128,7 +130,7 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    mScreenTex->frameColor(false);
+    J3DNativeTarget::take(mScreenTex->mImage);
     loadMaterial();
     TVec2f pos;
     pos.x = 0.0f;
@@ -162,7 +164,7 @@ void WaterCameraFilter::draw() const {
         J3DNativeDraw::texCoord(1.0f, 1.0f);
     }
 
-
+    J3DPass::writeAlpha(false);
     MR::loadProjectionMtx();
     MR::loadViewMtx();
 }

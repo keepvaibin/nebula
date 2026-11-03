@@ -1,4 +1,5 @@
 #include "Game/System/NebulaFrameClock.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Screen/GalaxyMapController.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/Nerve.hpp"
@@ -628,10 +629,12 @@ void GalaxyMapController::capture() {
     Mtx44 projectionMtx;
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
     f32 halfWidth = 304.0f;
-    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+    // A pass keeps the screen's scale and its target is half the screen: this projection puts the whole map in that half.
+    NebulaMtxOrtho(projectionMtx, halfHeight, -3.0f * halfHeight, -halfWidth, 3.0f * halfWidth, -1000.0f, 1000.0f);
+    J3DNativeTarget::begin(_38->mImage, _38->getWidth(), _38->getHeight(), 0);
     J3DNativeView::setOrthographic(projectionMtx);
     drawForCapture();
-    _38->frameColor(true);
+    J3DNativeTarget::end(_38->mImage, NEBULA_TARGET_RGB);
 }
 
 namespace MR {

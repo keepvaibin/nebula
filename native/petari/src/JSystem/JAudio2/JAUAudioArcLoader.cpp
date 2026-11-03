@@ -12,7 +12,7 @@ bool JAUAudioArcLoader::load(void const* pData) {
 }
 
 bool JAUAudioArcLoader::load(char const* pFileName) {
-    void const* data = mSection->loadDVDFile(pFileName, true);
+    void const* data = mSection->loadStoreFile(pFileName, true);
     return data != nullptr && load(data);
 }
 

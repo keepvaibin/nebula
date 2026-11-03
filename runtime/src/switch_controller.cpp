@@ -192,7 +192,7 @@ bool decode_pro_report(std::span<const std::uint8_t> r, const ImuCal& cal, Decod
         for (std::size_t i = 0; i < 3; ++i) {
             const std::uint8_t* s = &r[13 + i * 12];
             const int ax = s16(s), ay = s16(s + 2), az = s16(s + 4);
-            const int gx = s16(s + 6) - cal.gyro_offset[0];
+            const int gyro_x = s16(s + 6) - cal.gyro_offset[0];
             const int gy = s16(s + 8) - cal.gyro_offset[1];
             const int gz = s16(s + 10) - cal.gyro_offset[2];
             if (ax == 0 && ay == 0 && az == 0) continue;  // IMU not enabled yet
@@ -202,7 +202,7 @@ bool decode_pro_report(std::span<const std::uint8_t> r, const ImuCal& cal, Decod
                             -cal.accel_scale[0] * static_cast<float>(ax)};
             sample.gyro = {-cal.gyro_scale[1] * static_cast<float>(gy),
                            cal.gyro_scale[2] * static_cast<float>(gz),
-                           -cal.gyro_scale[0] * static_cast<float>(gx)};
+                           -cal.gyro_scale[0] * static_cast<float>(gyro_x)};
         }
     }
     return true;

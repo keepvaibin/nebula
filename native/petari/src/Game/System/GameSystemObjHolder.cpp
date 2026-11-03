@@ -27,7 +27,7 @@
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(),
       mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
-    initDvd();
+    initStore();
     initNAND();
     initNameObj();
     MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getStationedHeap()), MR::getStationedHeap(),
@@ -104,7 +104,7 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
     mScreenPreserver->captureIfAllow();
 }
 
-void GameSystemObjHolder::initDvd() {
+void GameSystemObjHolder::initStore() {
     SingletonHolder< FileLoader >::init();
 }
 

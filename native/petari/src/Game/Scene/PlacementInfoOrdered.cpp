@@ -32,14 +32,14 @@ void PlacementInfoOrdered::sort() {
             pSet->mPriority = 0;
         } else {
             const JMapInfoIter& rIter = static_cast< Index* >(pSet->mList.mHead->mValue)->mInfoIter;
-            bool fromDVD;
+            bool fromStore;
             if (pSet->mShapeId != -1) {
-                fromDVD = MR::isReadResourceFromDVDAtModelChangableObj(pSet->mName, pSet->mShapeId);
+                fromStore = MR::isReadResourceFromStoreAtModelChangableObj(pSet->mName, pSet->mShapeId);
             } else {
-                fromDVD = NameObjFactory::isReadResourceFromDVD(pSet->mName, rIter);
+                fromStore = NameObjFactory::isReadResourceFromStore(pSet->mName, rIter);
             }
 
-            pSet->mPriority = (fromDVD != false) + 1;
+            pSet->mPriority = (fromStore != false) + 1;
         }
     }
 

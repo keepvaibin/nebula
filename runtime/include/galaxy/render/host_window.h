@@ -5,13 +5,17 @@
 // it, its display's refresh rate, the settings overlay and HOME Menu drawing, and (Vulkan) its surface. Implemented by
 // host_window_win32.cpp (Windows) and the SDL host's window (platform/sdl).
 
+#include "galaxy/render/render_config.h"
 #include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/window_owner.h"
 
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #if defined(NEBULA_GPU_VULKAN)
@@ -62,7 +66,6 @@ void poll_render_config_file();
 // GALAXY_HIDE_WINDOW: a hidden test window.
 [[nodiscard]] bool hidden_window_mode_enabled();
 // GALAXY_TEST_SHOWN_WINDOW with it: 0 hidden, 1 one pixel on the main monitor, 2 whole in its corner (captures).
-[[nodiscard]] unsigned shown_test_window_mode();
 
 // The game window at the renderer's start, owned by `owner`. Sets backbuffer_width/height; a null window (logged)
 // when it cannot be created.
@@ -86,6 +89,41 @@ void show_window(NativeWindow window) noexcept;
                                 std::int64_t& now_ns) noexcept;
 
 void draw_native_settings_overlay(UiCanvas& renderer);
+
+// What the settings menu (runtime/src/ui/native_settings.cpp) asks of its platform.
+struct SettingsMonitor {
+    std::string id, name;  // id: the value of RenderConfig::monitor
+    unsigned width = 0, height = 0, refresh_hz = 0;
+    long max_client_width = 0, max_client_height = 0;  // the work area less the window's frame
+    bool primary = false;
+    std::vector<std::pair<unsigned, unsigned>> resolutions;
+};
+[[nodiscard]] std::vector<SettingsMonitor> settings_monitors();
+// A window menu is open or the window is being moved or sized: the game takes no input.
+[[nodiscard]] bool window_modal_active() noexcept;
+void test_resize_window(unsigned long width, unsigned long height) noexcept;
+enum class FilePick { Miis, ModArchives, ModFolders };
+// The platform's file picker; `done` runs off the window's thread with what was chosen.
+void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done);
+void open_folder(const std::filesystem::path& folder);
+struct UpscalerCaps {
+    bool dlss = false, frame_generation = false, frame_generation_dynamic = false;
+    unsigned frame_generation_max = 0, frames_presented = 1;
+};
+[[nodiscard]] UpscalerCaps upscaler_caps() noexcept;
+[[nodiscard]] unsigned dlss_min_width(unsigned quality, unsigned width, unsigned height) noexcept;
+[[nodiscard]] bool launcher_available();
+[[nodiscard]] bool dlss_files_present();
+[[nodiscard]] bool frame_generation_files_present();
+[[nodiscard]] bool start_dlss_install();
+enum class DlssInstall { Running, Succeeded, Closed, Failed };
+[[nodiscard]] DlssInstall poll_dlss_install();
+[[nodiscard]] bool restart_game(bool record);
+
+extern std::atomic<bool> ray_tracing_offered;  // the RAY TRACING row is offered
+extern std::atomic<bool> rtx_adapter;          // the session's GPU is an NVIDIA RTX (DLSS)
+[[nodiscard]] float upscaler_render_fraction(const RenderConfig& render, unsigned output_width, unsigned output_height);
+void save_native_settings_now();
 void draw_home_menu(UiCanvas& renderer);
 
 #if defined(NEBULA_GPU_VULKAN)

@@ -72,7 +72,7 @@ impl Format {
     }
 }
 
-/// A palette's entry format (GXTlutFmt).
+/// A palette's entry format (the file's format number).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PaletteFormat {
     Ia8 = 0,

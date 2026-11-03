@@ -286,7 +286,7 @@ std::string_view display_filter_shader_source() noexcept {
 }
 
 SceneConversionShaderConstants make_scene_conversion_constants(
-    bool is_depth_copy,
+    bool from_depth,
     std::uint8_t channels,
     float src_x,
     float src_y,
@@ -294,7 +294,7 @@ SceneConversionShaderConstants make_scene_conversion_constants(
     float step_y) noexcept {
     return SceneConversionShaderConstants{{
         src_x, src_y, step_x, step_y,
-        0.0f, 1.0f, is_depth_copy ? 1.0f : 0.0f, 0.0f,
+        0.0f, 1.0f, from_depth ? 1.0f : 0.0f, 0.0f,
         0.0f, 0.0f, 0.0f, 0.0f,
         0.0f, static_cast<float>(channels), 0.0f, 0.0f,
     }};
@@ -384,10 +384,6 @@ SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTa
     return {it->second, inserted};
 }
 
-std::uint64_t scene_copy_dest_budget_bytes() {
-    return UINT64_C(192) << 20;
-}
-
 PresentPacer::PresentPacer() noexcept : frequency_(galaxy::qpc_frequency()) {}
 
 PresentPacer::~PresentPacer() {
@@ -453,7 +449,7 @@ constexpr double kSmoothPresentMaxWaitUs = 2000.0;
 double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
     // Gameplay is paced by the frame clock. A bounded render-thread wait
     // smooths the handoff to DXGI when a frame edge arrives a little early; the cap
-    // keeps it from throttling the producer or hiding missing XFBs behind
+    // keeps it from throttling the producer or hiding missing pictures behind
     // duplicated presents.
     if (vsync_interval != 0u ||
         max_fps <= 0.0f ||

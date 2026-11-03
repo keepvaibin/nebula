@@ -201,7 +201,7 @@ void start_thread_sampler() noexcept {
         action.sa_flags = SA_SIGINFO | SA_RESTART;
         sigaction(SIGPROF, &action, nullptr);
         std::this_thread::sleep_for(std::chrono::seconds(delay));
-        for (const char* prefix : {"Nebula GX", "Nebula Host Mai", "Nebula Game"}) {
+        for (const char* prefix : {"Nebula Render", "Nebula Host Mai", "Nebula Game"}) {
             for (const auto& [tid, name] : threads_named(prefix)) {
                 sample(tid, name);
             }

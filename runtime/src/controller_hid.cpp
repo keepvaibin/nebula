@@ -1,5 +1,5 @@
 #include "galaxy/controller_hid.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/input/rumble_route.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/generic_hid.h"
@@ -1147,39 +1147,6 @@ bool env_flag(const char* name) noexcept {
     return !(text == "0" || text == "false" || text == "off" || text == "no");
 }
 
-// GALAXY_TEST_RUMBLE_TARGET=xinput:N, switch:N, playstation:N or steam:N,
-// honoured only while output is disabled: the controller the published request
-// names, with the window counted as focused (a hidden window never is).
-RumbleTarget test_rumble_target() noexcept {
-    static const RumbleTarget target = [] {
-        RumbleTarget parsed{};
-        char value[32]{};
-        const DWORD length = GetEnvironmentVariableA(nebula_switch::test_rumble_target_name(), value, sizeof(value));
-        if (length == 0 || length >= sizeof(value) || !rumble_output_disabled()) return parsed;
-        const std::string_view text(value, length);
-        const std::size_t colon = text.find(':');
-        if (colon == std::string_view::npos || colon + 2u != text.size()) return parsed;
-        const char digit = text[colon + 1u];
-        if (digit < '0' || digit > '3') return parsed;
-        const std::string_view kind = text.substr(0, colon);
-        if (kind == "xinput") {
-            parsed.kind = RumbleTarget::Kind::XInput;
-            parsed.scheme = ControlScheme::Xbox;
-        } else if (kind == "switch") {
-            parsed.kind = RumbleTarget::Kind::Hid;
-            parsed.scheme = ControlScheme::SwitchPro;
-        } else if (kind == "playstation") {
-            parsed.kind = RumbleTarget::Kind::Hid;
-            parsed.scheme = ControlScheme::PlayStation;
-        } else if (kind == "steam") {
-            parsed.kind = RumbleTarget::Kind::Hid;
-            parsed.scheme = ControlScheme::Steam;
-        }
-        parsed.slot = static_cast<std::uint8_t>(digit - '0');
-        return parsed;
-    }();
-    return target;
-}
 
 // The 0..255 speed of the light motor that PlayStation controllers are driven
 // with, as the Xbox light motor is.
@@ -2542,7 +2509,7 @@ std::uint64_t controller_hid_now_us() noexcept {
 }
 
 bool hidden_test_session() noexcept {
-    static const bool hidden = env_flag(nebula_switch::hide_window_name());
+    static const bool hidden = ::galaxy::run_option_flag(::galaxy::run_options().hide_window, false);
     return hidden;
 }
 
@@ -2571,22 +2538,6 @@ std::vector<std::wstring> hid_interface_paths(std::uint16_t vendor, std::span<co
 
 void publish_rumble_request(const RumbleRequest& published) noexcept {
     RumbleRequest request = published;
-    const RumbleTarget test_target = test_rumble_target();
-    if (test_target.kind != RumbleTarget::Kind::None) {
-        // The vibration setting of that controller type (a replayed session
-        // has no controller in use to take it from).
-        static std::uint64_t s_generation = 0;
-        static std::uint8_t s_strength = input::rumble::kDefaultStrength;
-        const std::uint64_t generation = input::controls_config_generation();
-        if (generation != s_generation) {
-            s_generation = generation;
-            const input::SchemeTuning& tuning = input::get_controls_config().tune(test_target.scheme);
-            s_strength = tuning.vibration ? tuning.rumble : 0u;
-        }
-        request.target = test_target;
-        request.strength = s_strength;
-        request.focused = true;
-    }
     Hub& h = hub();
     const std::uint64_t now = steady_us();
     AcquireSRWLockExclusive(&h.rumble_lock);

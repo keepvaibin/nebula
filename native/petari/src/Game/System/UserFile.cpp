@@ -3,7 +3,7 @@
 #include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 #define USER_NAME_SIZE (MII_NAME_LEN + 1)
 

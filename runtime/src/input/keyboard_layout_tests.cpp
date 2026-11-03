@@ -23,12 +23,12 @@ void layouts() {
     auto input = evaluate_keyboard_bindings(table, project_key_positions(levels, azerty));
     const auto old = evaluate_keyboard_bindings(legacy_binding_table(ControlScheme::Keyboard), levels);
     check(old.stick_x == 0 && old.stick_y == 0, "legacy character defaults miss AZERTY movement positions");
-    check(input.stick_y == 1 && input.stick_x == -1 && !input.held(WiiTarget::Z),
+    check(input.stick_y == 1 && input.stick_x == -1 && !input.held(GameInput::Z),
           "AZERTY physical movement positions without a false crouch");
     std::cout << "AZERTY fixture: old stick=0,0; position bindings=-1,1\n";
     const auto labels = key_position_labels(table, azerty);
-    check(labels[WiiTarget::StickUp][0] == InputSource{SourceKind::Key, 'Z'} &&
-          labels[WiiTarget::StickLeft][0] == InputSource{SourceKind::Key, 'Q'}, "AZERTY binding labels follow positions");
+    check(labels[GameInput::StickUp][0] == InputSource{SourceKind::Key, 'Z'} &&
+          labels[GameInput::StickLeft][0] == InputSource{SourceKind::Key, 'Q'}, "AZERTY binding labels follow positions");
 
     KeyPositionMap dvorak;
     dvorak.keys = {'A','X','J','E',keys::OEM_PERIOD,'U','I','D','C','H','T','N','M','B','R','L',
@@ -37,22 +37,22 @@ void layouts() {
     input = evaluate_keyboard_bindings(table, project_key_positions(levels, dvorak));
     const auto old_dvorak = evaluate_keyboard_bindings(legacy_binding_table(ControlScheme::Keyboard), levels);
     check(old_dvorak.stick_x == 0 && old_dvorak.stick_y == 0, "legacy character defaults miss Dvorak movement positions");
-    check(input.stick_y == 1 && input.stick_x == 1 && !input.held(WiiTarget::Shake),
+    check(input.stick_y == 1 && input.stick_x == 1 && !input.held(GameInput::Shake),
           "Dvorak punctuation and letter positions drive movement");
     std::cout << "Dvorak fixture: old stick=0,0; position bindings=1,1\n";
     const auto dvorak_labels = key_position_labels(table, dvorak);
-    check(dvorak_labels[WiiTarget::StickUp][0] == InputSource{SourceKind::Key, keys::OEM_COMMA},
+    check(dvorak_labels[GameInput::StickUp][0] == InputSource{SourceKind::Key, keys::OEM_COMMA},
           "Dvorak key label is the source at physical W");
 
     BindingTable custom;
-    custom[WiiTarget::A] = {InputSource{SourceKind::Key, 'W'}};
+    custom[GameInput::A] = {InputSource{SourceKind::Key, 'W'}};
     levels = {}; levels.set_key('W', true);
     input = evaluate_keyboard_bindings(custom, project_key_positions(levels, azerty));
-    check(input.held(WiiTarget::A) && !levels.position('W'), "custom logical key stays a character binding");
+    check(input.held(GameInput::A) && !levels.position('W'), "custom logical key stays a character binding");
     auto missing = azerty; missing.keys['W'-'A'] = 0;
     levels = {}; levels.set_key('Z', true);
     input = evaluate_keyboard_bindings(table, project_key_positions(levels, missing));
-    check(input.stick_y == 0 && key_position_labels(table, missing)[WiiTarget::StickUp][0].empty(),
+    check(input.stick_y == 0 && key_position_labels(table, missing)[GameInput::StickUp][0].empty(),
           "unmapped position is unavailable");
 }
 
@@ -71,21 +71,21 @@ void persistence() {
         std::cout << "Turkish C locale: ASCII position IDs passed\n";
     } else std::cout << "Turkish C locale unavailable; locale-specific check skipped\n";
     check(!parse_input_source(ControlScheme::Keyboard, "Position.1") &&
-          !binding_source_allowed(ControlScheme::Xbox, WiiTarget::A, position), "position source validation");
+          !binding_source_allowed(ControlScheme::Xbox, GameInput::A, position), "position source validation");
     auto config = default_controls_config();
     config.table(ControlScheme::Keyboard) = legacy_binding_table(ControlScheme::Keyboard);
-    config.table(ControlScheme::Keyboard)[WiiTarget::StickUp] = {InputSource{SourceKind::Key, 'T'}};
+    config.table(ControlScheme::Keyboard)[GameInput::StickUp] = {InputSource{SourceKind::Key, 'T'}};
     config.tune(ControlScheme::Xbox).pointer_hide_seconds = 5;
     config.tune(ControlScheme::Xbox).rumble = 50;
     const auto tuning = config.tune(ControlScheme::Xbox);
     check(migrate_legacy_controls(config, 5) > 0, "version five keyboard defaults migrate");
-    check(config.table(ControlScheme::Keyboard)[WiiTarget::StickUp][0] == InputSource{SourceKind::Key, 'T'} &&
-          config.table(ControlScheme::Keyboard)[WiiTarget::StickLeft][0] == InputSource{SourceKind::KeyPosition, 'A'},
+    check(config.table(ControlScheme::Keyboard)[GameInput::StickUp][0] == InputSource{SourceKind::Key, 'T'} &&
+          config.table(ControlScheme::Keyboard)[GameInput::StickLeft][0] == InputSource{SourceKind::KeyPosition, 'A'},
           "migration preserves custom keys and converts unchanged defaults");
     check(config.tune(ControlScheme::Xbox) == tuning, "keyboard migration leaves version-five controller tuning alone");
-    config.table(ControlScheme::Keyboard)[WiiTarget::StickUp] = {InputSource{SourceKind::Key, 'W'}};
+    config.table(ControlScheme::Keyboard)[GameInput::StickUp] = {InputSource{SourceKind::Key, 'W'}};
     check(migrate_legacy_controls(config, kControlsVersion) == 0 &&
-          config.table(ControlScheme::Keyboard)[WiiTarget::StickUp][0].kind == SourceKind::Key,
+          config.table(ControlScheme::Keyboard)[GameInput::StickUp][0].kind == SourceKind::Key,
           "current-version intentional logical defaults are preserved");
     auto loaded = default_controls_config();
     const auto text = format_controls_settings(config);

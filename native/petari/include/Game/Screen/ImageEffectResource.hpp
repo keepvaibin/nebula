@@ -14,7 +14,6 @@ public:
     JUTTexture* createTexture(f32);
 
     JUTTexture* _0;
-    JUTTexture* _4;
     JUTTexture* _8;
     JUTTexture* _C;
 };

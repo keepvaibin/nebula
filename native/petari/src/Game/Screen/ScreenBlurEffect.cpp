@@ -8,6 +8,7 @@
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
+#include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/Util/NativeShader.hpp"
@@ -42,6 +43,7 @@ ScreenBlurEffect::ScreenBlurEffect(const char* pName) : ImageEffectBase(pName), 
 
     _14 = MR::getImageEffectResource()->_0;
     _18 = MR::getImageEffectResource()->_8;
+    mFrameDepthKey = ImageEffectLocalUtil::createFrameKey();
 }
 
 void ScreenBlurEffect::calcAnimSub() {
@@ -100,5 +102,7 @@ void ScreenBlurEffect::drawBlur() const {
 
 void ScreenBlurEffect::captureBlur() const {
     _14->frameColorAlpha();
-    _18->frameDepth(true);
+    ImageEffectLocalUtil::drawFrameDepth(_18, mFrameDepthKey);
+    MR::loadProjectionMtx();
+    MR::loadViewMtx();
 }

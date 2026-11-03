@@ -22,7 +22,7 @@ struct Host final : LiveControlsHost {
 int replacement_hysteresis() {
     auto config = default_controls_config();
     config.table(ControlScheme::Xbox) = {};
-    config.table(ControlScheme::Xbox)[WiiTarget::A] = {InputSource{SourceKind::AxisPositive, 0}};
+    config.table(ControlScheme::Xbox)[GameInput::A] = {InputSource{SourceKind::AxisPositive, 0}};
     LivePad device;
     device.sample.connected = true; device.sample.scheme = ControlScheme::Xbox;
     device.device_slot = 0; device.sample.axes[0] = 0.9f;
@@ -59,7 +59,7 @@ int rumble_fallback() {
 int reorder_and_reconnect() {
     auto config = default_controls_config();
     config.table(ControlScheme::Xbox) = {};
-    config.table(ControlScheme::Xbox)[WiiTarget::A] = {InputSource{SourceKind::AxisPositive, 0}};
+    config.table(ControlScheme::Xbox)[GameInput::A] = {InputSource{SourceKind::AxisPositive, 0}};
     std::array<LivePad, 2> devices;
     devices[0].sample.connected = true; devices[0].sample.scheme = ControlScheme::Xbox;
     devices[0].device_slot = 0; devices[0].sample.axes[0] = 0.9f;
@@ -83,7 +83,7 @@ int reorder_and_reconnect() {
 int focus_release_and_reacquire() {
     auto config = default_controls_config();
     config.table(ControlScheme::Xbox) = {};
-    config.table(ControlScheme::Xbox)[WiiTarget::A] = {InputSource{SourceKind::AxisPositive, 0}};
+    config.table(ControlScheme::Xbox)[GameInput::A] = {InputSource{SourceKind::AxisPositive, 0}};
     LivePad pad; pad.sample.connected = true; pad.sample.scheme = ControlScheme::Xbox;
     pad.device_slot = 0; pad.sample.axes[0] = 0.9f;
     pad.sample.axes[1] = 0.8f;

@@ -176,9 +176,8 @@ named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the 
   (`NebulaNativeShapes::registerModel` from ResourceHolder, after ModelUtil's edits: texture-matrix indices added to
   lists, new vertex descriptions, position arrays halved) with its vertex description, the arrays J3DShape sets before
   each draw and its current matrix; a list registered nowhere is built from its first draw. Drawn by handle while the
-  list and vertex state match; the array bytes it was built from are compared with memory once per batch of guest
-  writes, as the decoded cache does; a changed list or state is built again once; arrays the game rewrites keep the GX
-  path. Shapes not drawn for 3,600 render chunks are dropped (the game frees models with their heaps, no destructors).
+  list and vertex state match; the array bytes it was built from are compared with memory once per batch of game
+  writes, as the decoded cache does; a changed list or state is built again once; arrays the game rewrites are built each frame. Shapes not drawn for 3,600 render chunks are dropped (the game frees models with their heaps, no destructors).
   Battlerock, stand-in at 1x, every render chunk counted: 1,008,899 shape draws native and 3 drawn the old way while built
   (first-draw building alone: 999,672 of 1,000,000); the parser's commands a frame 77 KB -> 28 KB; render thread
   84.0 / 84.2 / 84.4 -> 80.1 / 78.6 / 77.2 ms/s, GPU 4.96 / 4.99 / 5.03 -> 4.92 / 4.83 / 4.80 ms; boot's two frames over
@@ -190,7 +189,7 @@ named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the 
 - Display copies. SMG's copy to the picture filters every frame (weights 32, 32, 0: each row averaged with the one above,
   the Wii's deflicker), so it is a pass of its own: `display_filter_shader_source`, the general conversion's integer
   arithmetic for a 1:1 copy without gamma (rows loaded, not filtered by the sampler; truncated to 8 bits, weighted,
-  shifted down by six). Same run (`GALAXY_TEST_DISPLAY_FILTER_AB`, paused): identical pictures and XFBs. Stand-in at
+  shifted down by six). Same run (`GALAXY_TEST_DISPLAY_FILTER_AB`, paused): identical pictures and pictures. Stand-in at
   1x: Display copy 0.14 -> 0.10 ms; 4K at 5x: 3.65 -> 2.61 ms. Vulkan has the same pass.
 - A copy that changes nothing (the identity filter at boot, no gamma, the whole picture, one frame pixel to one picture
   pixel) is not copied: the frame's colour target becomes the picture (`can_hand_over_display_copy`), and the frame takes an

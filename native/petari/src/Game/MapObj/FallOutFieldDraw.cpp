@@ -41,9 +41,9 @@ namespace {
 FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
     MR::createClipAreaHolder();
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_FallOutFieldDraw);
-    MR::createScreenAlphaSceneObj(2, 0.5f);
     MR::createScreenAlphaSceneObj(3, 0.25f);
     MR::createScreenAlphaSceneObj(4, 0.25f);
+    mFrameKey = ImageEffectLocalUtil::createFrameKey();
     mMask = new JUTTexture(MR::getScreenUnitsAcross() / 2, MR::getScreenUnitsDown() / 2);
     mMask->mWrapS = NEBULA_WRAP_CLAMP;
     mMask->mWrapT = NEBULA_WRAP_CLAMP;
@@ -57,18 +57,19 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
 }
 
 namespace {
-    // The fill (runtime/src/render/materials/image_effect.hlsl mode 2 or 3): the fill colour where the screen's alpha
-    // mask (texture 0) is under or, by arg 0, over 1, nothing elsewhere; blended by its
-    // alpha, depth always passing and written, no culling.
-    void sendFillMaterial(bool textureFirst) {
+    // The fill (runtime/src/render/materials/image_effect.hlsl mode 3): the fill colour where the half-size mask (texture 0,
+    // 255 where the mask's test passed) is set, nothing elsewhere. Linear filtering spreads the mask: a test for under 1
+    // counts where all four texels passed, a test for over 1 where any did. Blended by its alpha, depth always passing and
+    // written, no culling.
+    void sendFillMaterial(bool textureFirst, JUTTexture* pMask) {
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_IMAGE_EFFECT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, true,
                            NEBULA_CULL_NONE);
-        NativeShader::setColor(material, 4, 0, 0, 0, 1);
+        NativeShader::setColor(material, 4, 0, 0, 0, textureFirst ? 1 : 254);
         NativeShader::setColor(material, 8, ::sFillColor.r, ::sFillColor.g, ::sFillColor.b, ::sFillColor.a);
-        material.constants[12] = textureFirst ? 3.0f : 2.0f;
+        material.constants[12] = 3.0f;
         material.constants[13] = 1.0f;
-        NativeShader::setTexture(material, 0, MR::getScreenAlphaTexture(2));
+        NativeShader::setTexture(material, 0, pMask);
         NativeShader::send(material);
     }
 }  // namespace
@@ -77,7 +78,7 @@ void FallOutFieldDraw::setUpFillScreen() const {
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
     J3DNativeView::setZScaleOffset(0.0f, 1.0f);
-    sendFillMaterial(_C);
+    sendFillMaterial(_C, mMask);
 }
 
 
@@ -120,11 +121,8 @@ void FallOutFieldDraw::draw() const {
 
     ImageEffectLocalUtil::setupDrawTexture();
 
-    JUTTexture* pScreenAlphaTexture2 = MR::getScreenAlphaTexture(2);
     JUTTexture* pScreenAlphaTexture3 = MR::getScreenAlphaTexture(3);
     JUTTexture* pScreenAlphaTexture4 = MR::getScreenAlphaTexture(4);
-
-    pScreenAlphaTexture2->frameAlpha(true);
 
     J3DPass::writeColor(false);
     J3DPass::writeAlpha(true);
@@ -136,8 +134,8 @@ void FallOutFieldDraw::draw() const {
     const NebulaColor8 white = {255, 255, 255, 255};
     ImageEffectLocalUtil::setMode(_C ? ImageEffectLocalUtil::Mode_MaskAbove : ImageEffectLocalUtil::Mode_MaskBelow, constantAlpha,
                                   white);
-    J3DNativeTarget::begin(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0);
-    ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture2, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    J3DNativeTarget::beginOverFrame(mMask->mImage, mMask->getWidth(), mMask->getHeight(), 0, mFrameKey->mImage, NEBULA_TARGET_ALPHA, nullptr);
+    ImageEffectLocalUtil::drawTexture(mFrameKey, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(mMask->mImage, NEBULA_TARGET_ALPHA);
 
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, constantAlpha, ::sEdgeColor);

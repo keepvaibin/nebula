@@ -87,9 +87,9 @@ namespace NrvFileSelector {
     NEW_NERVE(FileSelectorNrvWaitBind, FileSelector, WaitBind);
     NEW_NERVE(FileSelectorNrvTitle, FileSelector, Title);
     NEW_NERVE(FileSelectorNrvTitleEnd, FileSelector, TitleEnd);
-    NEW_NERVE(FileSelectorNrvRFLError, FileSelector, RFLError);
-    NEW_NERVE(FileSelectorNrvRFLWait, FileSelector, RFLWait);
-    NEW_NERVE(FileSelectorNrvRFLWaitEnd, FileSelector, RFLWaitEnd);
+    NEW_NERVE(FileSelectorNrvMiiDataError, FileSelector, MiiDataError);
+    NEW_NERVE(FileSelectorNrvMiiDataWait, FileSelector, MiiDataWait);
+    NEW_NERVE(FileSelectorNrvMiiDataWaitEnd, FileSelector, MiiDataWaitEnd);
     NEW_NERVE(FileSelectorNrvFileSelectStart, FileSelector, FileSelectStart);
     NEW_NERVE(FileSelectorNrvFileSelect, FileSelector, FileSelect);
     NEW_NERVE(FileSelectorNrvFileConfirmStart, FileSelector, FileConfirmStart);
@@ -1037,12 +1037,12 @@ void FileSelector::exeTitle() {
 
     if (::getMiiFacePartsHolder()->isInitEnd()) {
         if (::getMiiFacePartsHolder()->isError()) {
-            setNerve(GET_NERVE(FileSelector, FileSelectorNrvRFLError));
+            setNerve(GET_NERVE(FileSelector, FileSelectorNrvMiiDataError));
         } else {
             setNerve(GET_NERVE(FileSelector, FileSelectorNrvTitleEnd));
         }
     } else {
-        setNerve(GET_NERVE(FileSelector, FileSelectorNrvRFLWait));
+        setNerve(GET_NERVE(FileSelector, FileSelectorNrvMiiDataWait));
     }
 }
 
@@ -1064,7 +1064,7 @@ void FileSelector::exeTitleEnd() {
     }
 }
 
-void FileSelector::exeRFLError() {
+void FileSelector::exeMiiDataError() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->appear("MII_02", SysInfoWindow::Type_Key, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
     }
@@ -1074,7 +1074,7 @@ void FileSelector::exeRFLError() {
     }
 }
 
-void FileSelector::exeRFLWait() {
+void FileSelector::exeMiiDataWait() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindowMini->appear("MII_01", SysInfoWindow::Type_Blocking, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
     }
@@ -1087,10 +1087,10 @@ void FileSelector::exeRFLWait() {
         return;
     }
 
-    setNerve(GET_NERVE(FileSelector, FileSelectorNrvRFLWaitEnd));
+    setNerve(GET_NERVE(FileSelector, FileSelectorNrvMiiDataWaitEnd));
 }
 
-void FileSelector::exeRFLWaitEnd() {
+void FileSelector::exeMiiDataWaitEnd() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindowMini->disappear();
     }

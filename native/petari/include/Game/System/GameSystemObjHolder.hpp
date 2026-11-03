@@ -37,7 +37,7 @@ public:
     u16 getPictureSpan() const {
         return mPictureSpan;
     }
-    void initDvd();
+    void initStore();
     void initNAND();
     void initAudio();
     void initPicture();

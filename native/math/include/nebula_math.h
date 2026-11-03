@@ -8,6 +8,9 @@
 #include <math.h>
 #if defined(__SSE2__)
 #include <emmintrin.h>
+#elif defined(__ARM_NEON) || defined(_M_ARM64)
+#define NEBULA_MATH_NEON 1
+#include <arm_neon.h>
 #endif
 
 
@@ -83,6 +86,20 @@ static inline void NebulaMtxConcat(const Mtx a, const Mtx b, Mtx ab) {
     _mm_storeu_ps(ab[0], r[0]);
     _mm_storeu_ps(ab[1], r[1]);
     _mm_storeu_ps(ab[2], r[2]);
+#elif defined(NEBULA_MATH_NEON)
+    const float32x4_t b0 = vld1q_f32(b[0]), b1 = vld1q_f32(b[1]), b2 = vld1q_f32(b[2]);
+    const uint32x4_t lane3 = vsetq_lane_u32(0xFFFFFFFFu, vdupq_n_u32(0u), 3);
+    float32x4_t r[3];
+    for (int i = 0; i < 3; ++i) {
+        const float32x4_t ai = vld1q_f32(a[i]);
+        float32x4_t t = vmulq_laneq_f32(b0, ai, 0);
+        t = vaddq_f32(t, vmulq_laneq_f32(b1, ai, 1));
+        t = vaddq_f32(t, vmulq_laneq_f32(b2, ai, 2));
+        r[i] = vaddq_f32(t, vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(ai), lane3))); /* + a[i][3] in the translation column only */
+    }
+    vst1q_f32(ab[0], r[0]);
+    vst1q_f32(ab[1], r[1]);
+    vst1q_f32(ab[2], r[2]);
 #else
     f32 r[3][4];
     for (int i = 0; i < 3; i++) {
@@ -103,6 +120,13 @@ static inline void NebulaMtxApplyScale(const Mtx src, Mtx dst, f32 x, f32 y, f32
     _mm_storeu_ps(dst[0], r0);
     _mm_storeu_ps(dst[1], r1);
     _mm_storeu_ps(dst[2], r2);
+#elif defined(NEBULA_MATH_NEON)
+    const float scale[4] = {x, y, z, 1.0f};
+    const float32x4_t v = vld1q_f32(scale);
+    const float32x4_t r0 = vmulq_f32(vld1q_f32(src[0]), v), r1 = vmulq_f32(vld1q_f32(src[1]), v), r2 = vmulq_f32(vld1q_f32(src[2]), v);
+    vst1q_f32(dst[0], r0);
+    vst1q_f32(dst[1], r1);
+    vst1q_f32(dst[2], r2);
 #else
     for (int i = 0; i < 3; i++) {
         const f32 r0 = src[i][0] * x, r1 = src[i][1] * y, r2 = src[i][2] * z, r3 = src[i][3];

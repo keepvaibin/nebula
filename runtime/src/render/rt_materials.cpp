@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The ray tracer's material and stage sun tables (rt_materials.h) and the texture-pack hash.
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 
 #include "galaxy/platform_paths.h"
 
@@ -535,12 +535,7 @@ std::uint16_t g_stage_untextured = 0u;
 
 namespace {
 bool log_glows() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), nebula_switch::rt_log_glows_name()) == 0 && length > 1u && value[0] == '1';
-    }();
-    return enabled;
+    return false;
 }
 struct TextureName {
     std::uint64_t pack;

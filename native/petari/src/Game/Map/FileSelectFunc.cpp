@@ -2,7 +2,7 @@
 #include "Game/Map/FileSelectIconID.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 namespace {
     /// @brief The array of message identifiers corresponding to File Selection Screen icon names.
