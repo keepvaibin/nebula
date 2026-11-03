@@ -57,6 +57,14 @@ fn be16(bytes: &[u8], at: usize) -> Result<u16> {
     Ok(u16::from_be_bytes(bytes.get(at..at + 2).context("a field past the file's end")?.try_into().unwrap()))
 }
 
+fn byte(bytes: &[u8], at: usize) -> Result<u8> {
+    bytes.get(at).copied().context("a field past the file's end")
+}
+
+fn part(bytes: &[u8], from: usize, to: usize) -> Result<&[u8]> {
+    bytes.get(from..to).context("a field past the file's end")
+}
+
 /// The big-endian 32-bit field at `at` of `source`, written to `out` in host order.
 fn host32(source: &[u8], out: &mut [u8], at: usize) -> Result<u32> {
     let value = be32(source, at)?;
@@ -205,10 +213,10 @@ pub fn kcl(bytes: &[u8]) -> Result<Vec<u8>> {
     let roots = if be32(bytes, 0x34)? as i32 == -1 && be32(bytes, 0x30)? as i32 == -1 {
         1usize
     } else {
-        let side = |mask_at: usize| -> Result<usize> { Ok(((!be32(bytes, mask_at)?) >> shift) as usize + 1) };
-        side(0x20)? * side(0x24)? * side(0x28)?
+        let side = |mask_at: usize| -> Result<usize> { Ok((!be32(bytes, mask_at)?).checked_shr(shift).unwrap_or(0) as usize + 1) };
+        side(0x20)?.saturating_mul(side(0x24)?).saturating_mul(side(0x28)?)
     };
-    let mut walk = Octree { source: bytes, base: octree, done: HashSet::new() };
+    let mut walk = Octree { source: bytes, base: octree, done: HashSet::new(), walked: HashSet::new() };
     walk.block(&mut out, 0, roots, 0)?;
     Ok(out)
 }
@@ -219,12 +227,17 @@ struct Octree<'a> {
     source: &'a [u8],
     base: usize,
     done: HashSet<usize>,
+    /// Each block and list once (block or list, offset): words that point back would fan out 8 times a level.
+    walked: HashSet<(bool, usize)>,
 }
 
 impl Octree<'_> {
     fn block(&mut self, out: &mut [u8], offs: usize, count: usize, depth: u32) -> Result<()> {
         if depth > 64 {
             bail!("octree deeper than 64 levels at {offs:#x}");
+        }
+        if !self.walked.insert((true, offs)) {
+            return Ok(());
         }
         for i in 0..count {
             let word = self.base + offs + i * 4;
@@ -242,6 +255,9 @@ impl Octree<'_> {
     }
 
     fn list(&mut self, out: &mut [u8], offs: usize) -> Result<()> {
+        if !self.walked.insert((false, offs)) {
+            return Ok(());
+        }
         let mut at = offs + 2;
         loop {
             let unit = be16(self.source, self.base + at)?;
@@ -475,7 +491,7 @@ pub fn jpc_host(bytes: &[u8]) -> Result<Vec<u8>> {
                 }
                 b"ETX1" => host_words(bytes, &mut out, at, 0x8, 0x24)?,
                 b"KFA1" => {
-                    let keys = bytes[at + 9] as usize;
+                    let keys = byte(bytes, at + 9)? as usize;
                     host_words(bytes, &mut out, at, 0xC, 0xC + 16 * keys)?;
                 }
                 b"TDB1" => host_halves(bytes, &mut out, at, 0x8, size & !1)?,
@@ -502,7 +518,7 @@ pub fn jpc_host(bytes: &[u8]) -> Result<Vec<u8>> {
 fn host_timg(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
     host16(src, out, at + 2)?;
     host16(src, out, at + 4)?;
-    out[at + 8..at + 0x10].fill(0);
+    out.get_mut(at + 8..at + 0x10).context("an image header past the file's end")?.fill(0);
     host16(src, out, at + 0x1A)?;
     host32(src, out, at + 0x1C)?;
     Ok(())
@@ -535,7 +551,7 @@ fn host_text(src: &[u8], out: &mut [u8], at: usize, end: usize) -> Result<()> {
         if unit != 0x1A || p + 2 > end {
             continue;
         }
-        let tag_end = (p - 2 + src[p] as usize).min(end);
+        let tag_end = (p - 2 + byte(src, p)? as usize).min(end);
         let mut q = p + 2;
         while q + 2 <= tag_end {
             host16(src, out, q)?;
@@ -595,7 +611,7 @@ pub fn layout(bytes: &[u8]) -> Result<Vec<u8>> {
                 host_pane(bytes, &mut out, at)?;
                 host_floats(bytes, &mut out, at + 0x4C, 4)?; // vertex colours
                 host16(bytes, &mut out, at + 0x5C)?; // material
-                host_floats(bytes, &mut out, at + 0x60, 8 * bytes[at + 0x5E] as usize)?; // texture coordinates
+                host_floats(bytes, &mut out, at + 0x60, 8 * byte(bytes, at + 0x5E)? as usize)?; // texture coordinates
             }
             b"txt1" => {
                 host_pane(bytes, &mut out, at)?;
@@ -612,13 +628,13 @@ pub fn layout(bytes: &[u8]) -> Result<Vec<u8>> {
             b"wnd1" => {
                 host_pane(bytes, &mut out, at)?;
                 host_floats(bytes, &mut out, at + 0x4C, 4)?; // inflation
-                let frames = bytes[at + 0x5C] as usize;
+                let frames = byte(bytes, at + 0x5C)? as usize;
                 let content = host32(bytes, &mut out, at + 0x60)? as usize;
                 let table = host32(bytes, &mut out, at + 0x64)? as usize;
                 let c = at + content;
                 host_floats(bytes, &mut out, c, 4)?; // vertex colours
                 host16(bytes, &mut out, c + 0x10)?; // material
-                host_floats(bytes, &mut out, c + 0x14, 8 * bytes[c + 0x12] as usize)?;
+                host_floats(bytes, &mut out, c + 0x14, 8 * byte(bytes, c + 0x12)? as usize)?;
                 for f in 0..frames {
                     let frame = host32(bytes, &mut out, at + table + 4 * f)? as usize;
                     host16(bytes, &mut out, at + frame)?; // the frame's material
@@ -686,14 +702,14 @@ fn animation(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
     }
     for c in 0..contents {
         let content = at + host32(src, out, at + table + 4 * c)? as usize;
-        let infos = src[content + 20] as usize;
+        let infos = byte(src, content + 20)? as usize;
         for i in 0..infos {
             let info = content + host32(src, out, content + 24 + 4 * i)? as usize;
             host32(src, out, info)?; // kind (four characters read as a number)
-            let targets = src[info + 4] as usize;
+            let targets = byte(src, info + 4)? as usize;
             for t in 0..targets {
                 let target = info + host32(src, out, info + 8 + 4 * t)? as usize;
-                let curve = src[target + 2];
+                let curve = byte(src, target + 2)?;
                 let keys = host16(src, out, target + 4)? as usize;
                 let first = target + host32(src, out, target + 8)? as usize;
                 for k in 0..keys {
@@ -779,19 +795,19 @@ pub fn font_native(bytes: &[u8]) -> Result<Vec<u8>> {
         moved.insert(s, n);
         match &kind {
             b"FINF" => {
-                out.extend_from_slice(&bytes[s..s + 2]);
+                out.extend_from_slice(part(bytes, s, s + 2)?);
                 put16(&mut out, be16(bytes, s + 2)?);
-                out.extend_from_slice(&bytes[s + 4..s + 8]);
+                out.extend_from_slice(part(bytes, s + 4, s + 8)?);
                 for k in 0..3 {
                     let target = be32(bytes, s + 8 + 4 * k)? as usize;
                     slots.push((out.len(), target));
                     out.extend_from_slice(&[0u8; 8]);
                 }
-                out.extend_from_slice(&bytes[s + 0x14..s + 0x18]);
+                out.extend_from_slice(part(bytes, s + 0x14, s + 0x18)?);
                 out.resize(out.len() + 4, 0);
             }
             b"TGLP" => {
-                out.extend_from_slice(&bytes[s..s + 4]);
+                out.extend_from_slice(part(bytes, s, s + 4)?);
                 let sheet_size = be32(bytes, s + 4)?;
                 put32(&mut out, sheet_size);
                 for k in 0..6 {

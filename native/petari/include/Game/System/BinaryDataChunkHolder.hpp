@@ -29,7 +29,7 @@ public:
     bool loadFromFileBinary(const u8* pData, u32 dataSize);
     static u32 makeChunkData(u8* pData, u32 dataSize, const BinaryDataChunkBase*);
     BinaryDataChunkBase* findFromSignature(u32 signature) const;
-    static u32 calcBinarySize(const u8* pData);
+    static u32 calcBinarySize(const u8* pData, u32 dataSize);
 
     BinaryDataChunkBase** mChunks;
     s32 mMaxChunks;

@@ -140,14 +140,19 @@ void SaveDataHandler::convertUserFiles(u8* pBuffer) {
 
         pUserFile->resetAllData();
         gOldSaveOrder = true;
+        // A damaged file stays as it is, so its slot reads as damaged and not as an empty file.
         if (info.mKind == 0) {
             pUserFile->loadFromGameDataBinary(pName, info.mData, info.mDataSize);
             gOldSaveOrder = false;
-            pUserFile->makeGameDataBinary(info.mData, info.mDataSize);
+            if (!pUserFile->mIsGameDataCorrupted) {
+                pUserFile->makeGameDataBinary(info.mData, info.mDataSize);
+            }
         } else if (info.mKind == 1) {
             pUserFile->loadFromConfigDataBinary(pName, info.mData, info.mDataSize);
             gOldSaveOrder = false;
-            pUserFile->makeConfigDataBinary(info.mData, info.mDataSize);
+            if (!pUserFile->mIsConfigDataCorrupted) {
+                pUserFile->makeConfigDataBinary(info.mData, info.mDataSize);
+            }
         } else {
             gOldSaveOrder = false;
             emptyFile(info.mData, info.mDataSize);
@@ -371,12 +376,12 @@ void SaveDataHandler::copySaveDataEachFile(u8* pFileDst, const u8* pFileSrc) {
         dstFileAccessor.makeUserFileInfo(&dstUserFileInfo, pFileName);
 
         if (dstUserFileInfo.mData != nullptr) {
-            int deltaSize = dstUserFileInfo.mDataSize - srcUserFileInfo.mDataSize;
+            const u32 copySize = srcUserFileInfo.mDataSize < dstUserFileInfo.mDataSize ? srcUserFileInfo.mDataSize : dstUserFileInfo.mDataSize;
 
-            MR::copyMemory(dstUserFileInfo.mData, srcUserFileInfo.mData, dstUserFileInfo.mDataSize);
+            MR::copyMemory(dstUserFileInfo.mData, srcUserFileInfo.mData, copySize);
 
-            if (deltaSize > 0) {
-                MR::fillMemory(dstUserFileInfo.mData + dstUserFileInfo.mDataSize, 0, deltaSize);
+            if (copySize < dstUserFileInfo.mDataSize) {
+                MR::fillMemory(dstUserFileInfo.mData + copySize, 0, dstUserFileInfo.mDataSize - copySize);
             }
         }
     }

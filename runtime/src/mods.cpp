@@ -42,9 +42,18 @@ fs::path from_utf8(std::string_view s) {
     return fs::path(std::u8string(reinterpret_cast<const char8_t*>(s.data()), s.size()));
 }
 
+// A patch or settings file past this is not read: real ones are kilobytes.
+constexpr std::uintmax_t kTextFileLimit = 64u << 20u;
+
 std::string read_text(const fs::path& path) {
+    std::error_code error;
+    const std::uintmax_t size = fs::file_size(path, error);
+    if (error || size > kTextFileLimit) return {};
     std::ifstream in(path, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string text(static_cast<std::size_t>(size), '\0');
+    in.read(text.data(), static_cast<std::streamsize>(size));
+    text.resize(static_cast<std::size_t>(in.gcount()));
+    return text;
 }
 
 // A child of `dir` named `name` whatever its case (Riivolution assumes an SD card's case-insensitive names).
@@ -287,7 +296,7 @@ struct Loader {
                 result = result.parent_path();
                 continue;
             }
-            if (std::all_of(element.begin(), element.end(), [](char c) { return c == '.'; })) return std::nullopt;
+            if (!safe_path_part(element)) return std::nullopt;
             ++depth;
             std::error_code error;
             const fs::path exact = result / from_utf8(element);
@@ -695,6 +704,21 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
 }
 
 }  // namespace
+
+bool safe_path_part(std::string_view part) {
+    if (part.empty() || part.find_first_of(":/\\") != std::string_view::npos ||
+        part.find_first_not_of(". ") == std::string_view::npos) {
+        return false;
+    }
+    // A device whatever follows its name's first dot, on every platform: a mod is the same mod on all of them.
+    std::string stem = lower(part.substr(0, part.find('.')));
+    while (!stem.empty() && stem.back() == ' ') stem.pop_back();
+    if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul" || stem == "conin$" || stem == "conout$") return false;
+    if (!stem.starts_with("com") && !stem.starts_with("lpt")) return true;
+    const std::string_view number = std::string_view(stem).substr(3);
+    const bool digit = number.size() == 1u && number[0] >= '1' && number[0] <= '9';
+    return !digit && number != "\xC2\xB9" && number != "\xC2\xB2" && number != "\xC2\xB3";
+}
 
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id) {

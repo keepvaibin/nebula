@@ -3,7 +3,8 @@
 // tar and its compressions). The files go to a hidden staging folder inside the mods folder first and take the mod's
 // name only when complete, so a failed or cancelled import leaves nothing half there. An archive's single top folder
 // (with only notes beside it) is the mod's folder. A mod imported under a name already present replaces that mod and
-// keeps its settings (an update). Entries that would leave the folder (absolute or `..` paths) and links are refused.
+// keeps its settings (an update). Entries that would leave the folder (absolute, drive or `..` paths), device names and
+// links are refused, and so is an archive that unpacks past the importer's limits.
 #pragma once
 
 #include <atomic>
