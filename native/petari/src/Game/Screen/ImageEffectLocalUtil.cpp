@@ -82,7 +82,7 @@ void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rKonst, const
 
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getCanvasHeight(), 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenUnitsDown(), 0.0f, MR::getScreenUnitsAcross(), -10000.0f, 10000.0f);
     J3DNativeView::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();
@@ -108,8 +108,8 @@ void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, s32 divisions, s32 
 void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     s32 row = tile / divisions;
     s32 column = tile % divisions;
-    f32 width = static_cast< f32 >(MR::getCanvasWidth()) / divisions;
-    f32 height = static_cast< f32 >(MR::getCanvasHeight()) / divisions;
+    f32 width = static_cast< f32 >(MR::getScreenUnitsAcross()) / divisions;
+    f32 height = static_cast< f32 >(MR::getScreenUnitsDown()) / divisions;
     f32 left = column * width;
     f32 right = (column + 1) * width;
     f32 bottom = (row + 1) * height;

@@ -20,14 +20,14 @@ namespace MR {
     void beginDesignScreenWidth();
     void endDesignScreenWidth();
     inline s32 getScreenHeight() {
-        return NebulaFrameClock::cCanvasHeight;
+        return NebulaFrameClock::cScreenUnitsDown;
     }
     s32 getSafetyFrameWidth();
     s32 getSafetyFrameLeft();
     s32 getSafetyFrameRight();
-    s32 getCanvasWidth();
-    inline s32 getCanvasHeight() {
-        return NebulaFrameClock::cCanvasHeight;
+    s32 getScreenUnitsAcross();
+    inline s32 getScreenUnitsDown() {
+        return NebulaFrameClock::cScreenUnitsDown;
     }
     void convertCanvasPosToScreenPos(TVec2f*, const TVec2f&);
     void convertScreenPosToCanvasPos(TVec2f*, const TVec2f&);

@@ -23,7 +23,13 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 109u
+#define NEBULA_GAME_API_VERSION 110u
+
+/* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
+#define NEBULA_FRAME_UNITS 65536.0f
+
+/* A colour word, R << 24 | G << 16 | B << 8 | A. */
+#define NEBULA_RGBA(r, g, b, a) (((uint32_t)(r) << 24) | ((uint32_t)(g) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(a))
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -518,7 +524,7 @@ typedef struct NebulaDisplay {
     int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
     int32_t screen_width;  /* MR::getScreenWidth in the 16:9 mode (832 at 16:9) */
-    float canvas_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
+    float layout_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
     float vertical_fit;    /* the layouts' height scale under 16:9 (1 at 16:9 and wider) */
 } NebulaDisplay;
 
@@ -1031,9 +1037,8 @@ typedef struct NebulaHostServices {
     /* GALAXY_EXPORT_ART=<folder>: Nebula's own pictures written there (NebulaArtExport). NULL asks whether an export
        is on: 1, else 0 (the game then paints nothing for it). */
     uint32_t (*art_export)(void* user, const NebulaArtExport* art);
-    /* The scale the 2D layer was last drawn at: its 640 x 456 picture times this (the window's while sharp_2d is on);
-       0 before the first frame. */
-    uint32_t (*layer_2d_scale)(void* user);
+    /* The lines of the 2D layer as last drawn (the window's while sharp_2d is on); 0 before the first frame. */
+    uint32_t (*layer_2d_lines)(void* user);
     /* The mouse wheel's turn since the last call, in 120ths of a notch (positive away from the player), while no screen
        of the host's takes it: the achievement board scrolls by it. */
     int32_t (*pointer_wheel)(void* user);
@@ -1083,9 +1088,9 @@ typedef struct NebulaHostServices {
     /* Vertices drawn as the game sends them (NebulaImmediate). */
     void (*immediate)(void* user, const NebulaImmediate* draw);
     /* A pass into a texture target the renderer owns (E-07): the records until target_end draw into it, not the
-       frame; its top left `width` x `height` (in the units the game's viewport uses) cleared to `clear_rgba`
+       frame; its top left `width` x `height` (in NEBULA_FRAME_UNITS) cleared to `clear_rgba`
        (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits). */
-    void (*target_begin)(void* user, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba,
+    void (*target_begin)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba,
                          uint32_t clear_z);
     /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
        naming `key` reads it, whatever format it names), carrying `channels` (NebulaTargetChannels). */
@@ -1110,10 +1115,10 @@ typedef struct NebulaHostServices {
     uint32_t (*screen_probe_results)(void* user, uint32_t channel, NebulaScreenProbe* probes, uint32_t capacity);
     /* Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the
        viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits, far 0xFFFFFF). */
-    void (*frame_clear)(void* user, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
+    void (*frame_clear)(void* user, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
                         uint32_t clear_z, uint32_t channels);
-    /* The frame drawn so far is the picture shown: its top left `width` x `height` (the viewport's units). */
-    void (*frame_show)(void* user, uint16_t width, uint16_t height, uint32_t flags);
+    /* The frame drawn so far is the picture shown. */
+    void (*frame_show)(void* user);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */
     void (*frame_end)(void* user);
     /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). A draw identity names its

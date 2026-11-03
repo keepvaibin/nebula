@@ -1751,7 +1751,7 @@ private:
         motion.shake_sensitivity = tuning.shake_sensitivity;
         motion.gyro_pointer = tuning.gyro_pointer && pointing;
         motion.gyro_sensitivity = tuning.gyro_sensitivity;
-        motion.picture_aspect = static_cast<float>(galaxy::kWiiContentAspect);
+        motion.picture_aspect = static_cast<float>(galaxy::kDesignContentAspect);
         for (std::size_t i = 0; i < moved.imu_count; ++i) {
             // Switch Pro: three samples 5 ms apart; the others one per report,
             // timed by the controller's clock where it has one.

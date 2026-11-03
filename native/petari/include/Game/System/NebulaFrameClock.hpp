@@ -7,9 +7,10 @@
 #include <nebula_game_api.h>
 
 namespace NebulaFrameClock {
-    // The canvas: the units the game's viewports, 2D and effect passes count in. The renderer maps it to the window at any size.
-    const u16 cCanvasWidth = 640;
-    const u16 cCanvasHeight = 456;
+    // The game's screen units: viewports, 2D and effect passes count in them; J3DNativeView turns them into fractions of
+    // the frame.
+    const u16 cScreenUnitsAcross = 640;
+    const u16 cScreenUnitsDown = 456;
 
     // The game has its frame: two frames on, and two black ones, the picture shows.
     void startPicture();

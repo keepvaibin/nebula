@@ -25,7 +25,7 @@ namespace {
     const f32 cBarHeight = 8.0f;
     const f32 cBarInset = 36.0f;    // the bar from the window's sides
     const u32 cText = 0x4A5274FF;
-    const u32 cTrack = 0xCBD6EBFF;
+    const u32 cTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
     const u32 cFill = 0x6FA6EAFF;
 
     const s32 cAppearFrames = 18;

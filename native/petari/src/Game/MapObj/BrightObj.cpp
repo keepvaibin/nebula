@@ -49,7 +49,7 @@ namespace {
         }
 
         f32 width = MR::getScreenWidth();
-        f32 height = static_cast< s32 >(NebulaFrameClock::cCanvasHeight);
+        f32 height = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
         screenPos.set< f32 >(0.5f * width + 0.5f * (newPos.x * width), 0.5f * height + 0.5f * (-newPos.y * height), newPos.z);
 
         pDst->x = screenPos.x;

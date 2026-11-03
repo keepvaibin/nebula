@@ -101,8 +101,8 @@ void DepthOfFieldBlur::draw() const {
 
 void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(NebulaFrameClock::cCanvasHeight), 0.0f,
-               static_cast< s32 >(NebulaFrameClock::cCanvasWidth), -::sViewDistance, ::sViewDistance);
+    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown), 0.0f,
+               static_cast< s32 >(NebulaFrameClock::cScreenUnitsAcross), -::sViewDistance, ::sViewDistance);
     J3DNativeView::setOrthographic(projectionMtx);
     MR::loadViewMtxFor2DModel();
 

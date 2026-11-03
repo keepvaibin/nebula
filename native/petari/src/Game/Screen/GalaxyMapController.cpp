@@ -70,7 +70,7 @@ GalaxyMapController::GalaxyMapController()
 
 namespace {
     u16 getFbWidth() {
-        const u16& rWidth = NebulaFrameClock::cCanvasWidth;
+        const u16& rWidth = NebulaFrameClock::cScreenUnitsAcross;
         return rWidth;
     }
 };  // namespace

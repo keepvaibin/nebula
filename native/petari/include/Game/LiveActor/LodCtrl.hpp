@@ -3,9 +3,9 @@
 #include "Game/Util/JMapInfo.hpp"
 
 class LiveActor;
+class ModelObj;
 
-// Whether the level's view cubes hide an actor where the player stands. Every actor has one model: the middle and low
-// models and their switch distances are gone (see look-changes.tsv).
+// What the level's view cubes ask of an actor where the player stands: hidden, its near model or its far model.
 class LodCtrl {
 public:
     LodCtrl(LiveActor*, const JMapInfoIter&);
@@ -18,10 +18,15 @@ public:
     void setFarClipping(f32);
     void setClippingTypeSphereContainsModelBoundingBox(f32);
     void invalidateClipping();
-    void setHiddenPtr(const bool*);
+    void showNear();
+    void setViewCtrlPtr(const bool* pNear, const bool* pFar, const bool* pHidden);
+    void createFarModel(int drawBufferType, int movementType, int calcAnimType);
 
     LiveActor* mActor;
+    ModelObj* mFarModel;
     bool mFollowsView;
+    const bool* mNear;
+    const bool* mFar;
     const bool* mHidden;
     s16 mViewGroupID;
 };

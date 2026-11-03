@@ -1,6 +1,7 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeTarget.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include <nebula_game_api.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
@@ -10,7 +11,8 @@ namespace J3DNativeTarget {
         // State given before the pass (texture matrices, current matrices) goes first.
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->target_begin(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)), width, height,
+        pHost->target_begin(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)),
+                            static_cast< u32 >(width * J3DNativeView::cUnitsAcross), static_cast< u32 >(height * J3DNativeView::cUnitsDown),
                             clearRgba, clearZ & 0xFFFFFF);
     }
 
@@ -28,7 +30,8 @@ namespace J3DNativeTarget {
     void clearFrame(u16 left, u16 top, u16 width, u16 height, u32 clearRgba, u32 clearZ, u32 channels) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_clear(pHost->user, left, top, width, height, clearRgba, clearZ & 0xFFFFFF, channels);
+        pHost->frame_clear(pHost->user, static_cast< u32 >(left * J3DNativeView::cUnitsAcross), static_cast< u32 >(top * J3DNativeView::cUnitsDown),
+                           static_cast< u32 >(width * J3DNativeView::cUnitsAcross), static_cast< u32 >(height * J3DNativeView::cUnitsDown), clearRgba, clearZ & 0xFFFFFF, channels);
     }
 
     void read(const void* pKey, NebulaTargetChannels channels, u32 flags) {

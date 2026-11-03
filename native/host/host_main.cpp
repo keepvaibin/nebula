@@ -772,7 +772,7 @@ void report_thread_cpu(double tsc_hz) {
     std::vector<ThreadSample> threads;
     ULONG needed = 0;
     LONG status = system_query != nullptr ? system_query(5, buffer.data(), (ULONG)buffer.size(), &needed) : -1;
-    if (status == (LONG)0xC0000004 /* STATUS_INFO_LENGTH_MISMATCH */ && needed != 0) {
+    if (status == static_cast<LONG>((3u << 30) | 4u) /* STATUS_INFO_LENGTH_MISMATCH */ && needed != 0) {
         buffer.resize(needed + (1u << 20));
         status = system_query(5, buffer.data(), (ULONG)buffer.size(), &needed);
     }
@@ -1235,7 +1235,9 @@ bool retry_start_for_gpu_memory(const std::string& reason) {
     static const bool test_once = NEBULA_TEST_GETENV("GALAXY_TEST_START_NO_GPU_MEMORY") != nullptr;
     const char* before = std::getenv("NEBULA_GPU_START_RETRIES");
     const int count = before != nullptr ? std::atoi(before) : 0;
-    const bool wanted = reason.find("0x8007000E") != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
+    char out_of_memory[16];
+    std::snprintf(out_of_memory, sizeof(out_of_memory), "0x%08lX", static_cast<unsigned long>(E_OUTOFMEMORY));
+    const bool wanted = reason.find(out_of_memory) != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
                         reason.find("VkResult -1") != std::string::npos || reason.find("VkResult -2") != std::string::npos ||
                         (test_once && count == 0);
     if (!wanted || count >= 5) {
@@ -1617,9 +1619,9 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
 // GALAXY_EXPORT_ART=<folder>: Nebula's own pictures (NebulaIcons) as a texture pack, pack/RMG/tex1_..._5.png at their
 // HD size, named by the texture the game draws; previews in native/ and hd/; pack-names.txt pairs them.
 // The scale the renderer last drew the 2D layer at (render_core: the scene target in use when the scene ends).
-uint32_t svc_layer_2d_scale(void*) {
+uint32_t svc_layer_2d_lines(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    return galaxy::render::layer_2d_scale();
+    return galaxy::render::layer_2d_lines();
 #else
     return 0u;
 #endif
@@ -2208,7 +2210,7 @@ uint32_t svc_screen_probe_results(void*, uint32_t channel, NebulaScreenProbe* pr
 }
 
 // A pass into a texture target (E-07): its start and end as records in draw order.
-void svc_target_begin(void*, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba, uint32_t clear_z) {
+void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba, uint32_t clear_z) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
@@ -2270,7 +2272,7 @@ void svc_frame_read(void*, uint64_t key, uint32_t channels, uint32_t flags) {
 }
 
 // A clear of the frame's rectangle.
-void svc_frame_clear(void*, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
+void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
                      uint32_t clear_z, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -2291,18 +2293,13 @@ void svc_frame_clear(void*, uint16_t left, uint16_t top, uint16_t width, uint16_
 }
 
 // The frame shown (its display copy, host-made).
-void svc_frame_show(void*, uint16_t width, uint16_t height, uint32_t flags) {
+void svc_frame_show(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::FrameShow;
-    record.target_width = width;
-    record.target_height = height;
-    record.target_flags = static_cast<std::uint8_t>(flags);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
-#else
-    (void)width, (void)height, (void)flags;
 #endif
 }
 
@@ -4270,7 +4267,7 @@ int main(int argc, char** argv) {
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
     services.art_export = svc_art_export;
-    services.layer_2d_scale = svc_layer_2d_scale;
+    services.layer_2d_lines = svc_layer_2d_lines;
     services.pointer_wheel = svc_pointer_wheel;
     services.galaxy_select_stage = svc_galaxy_select_stage;
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;

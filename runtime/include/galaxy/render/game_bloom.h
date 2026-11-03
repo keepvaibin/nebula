@@ -69,10 +69,8 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};       // the scene target's render target (multisampled with MSAA)
         unsigned samples = 1;
         bool hdr = false;                        // the colour is the HDR scene scene target
-        unsigned frame_width = 0;                // the game's frame in scene target pixels (its 640 x 456 times the scale)
+        unsigned frame_width = 0;                // the frame in scene target pixels
         unsigned frame_height = 0;
-        unsigned logical_width = 640;            // the frame in the game's pixels
-        unsigned logical_height = 456;
         float scale = 1.0f;                      // scene target pixels per game pixel
     };
     // BloomEffect::preDraw, and BloomEffectSimple::draw with the game's own chain: the scene before the bloom's work

@@ -53,8 +53,8 @@ namespace NrvWaterCameraFilter {
 };  // namespace NrvWaterCameraFilter
 
 namespace {
-    s32 getCanvasWidth() {
-        return MR::getCanvasWidth();
+    s32 getScreenUnitsAcross() {
+        return MR::getScreenUnitsAcross();
     }
 
     s32 getScreenHeight() {
@@ -86,7 +86,7 @@ namespace {
 
 void WaterCameraFilter::initScreenTex() {
     MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-    mScreenTex = new JUTTexture(::getCanvasWidth(), ::getScreenHeight());
+    mScreenTex = new JUTTexture(::getScreenUnitsAcross(), ::getScreenHeight());
 }
 
 void WaterCameraFilter::exeAirToWater() {
@@ -154,7 +154,7 @@ void WaterCameraFilter::draw() const {
         J3DNativeDraw::texCoord(centerU - halfSize, centerV - halfSize);
         J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getCanvasWidth())), 0.0f, 0.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getScreenUnitsAcross())), 0.0f, 0.0f);
         J3DNativeDraw::texCoord(centerU + halfSize, centerV - halfSize);
         J3DNativeDraw::texCoord(1.0f, 0.0f);
 
@@ -163,7 +163,7 @@ void WaterCameraFilter::draw() const {
         J3DNativeDraw::texCoord(0.0f, 1.0f);
 
         s32 height = MR::getScreenHeight();
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getCanvasWidth())), static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getScreenUnitsAcross())), static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
         J3DNativeDraw::texCoord(centerU + halfSize, centerV + halfSize);
         J3DNativeDraw::texCoord(1.0f, 1.0f);
     }
@@ -176,7 +176,7 @@ void WaterCameraFilter::draw() const {
 void WaterCameraFilter::loadMaterial() const {
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
-    NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getScreenUnitsAcross(), -10000.0f, 10000.0f);
     J3DNativeView::setOrthographic(projection);
     TMtx34f modelView;
     modelView.identity();

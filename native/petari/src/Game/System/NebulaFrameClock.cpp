@@ -20,9 +20,9 @@ namespace {
     // VI_DM_DEFAULT: 5 minutes of NTSC fields.
 
     // The design's picture: 16:9 at the game's 832 screen units.
-    const f64 cWiiAspect = 16.0 / 9.0;
-    const NebulaDisplay cWiiDisplay = {0, 16.0f / 9.0f, 832, 608.0f, 1.0f};
-    NebulaDisplay sDisplay = cWiiDisplay;
+    const f64 cDesignAspect = 16.0 / 9.0;
+    const NebulaDisplay cDesignDisplay = {0, 16.0f / 9.0f, 832, 608.0f, 1.0f};
+    NebulaDisplay sDisplay = cDesignDisplay;
     u32 sDisplayExtent;
 
     // Every shape is held to 9:21 .. 32:9 (the presentation fits the rest). The screen width runs in even units from
@@ -36,7 +36,7 @@ namespace {
         }
 
         sDisplayExtent = extent;
-        sDisplay = cWiiDisplay;
+        sDisplay = cDesignDisplay;
         const u32 w = extent >> 16;
         const u32 h = extent & 0xFFFF;
         if (w <= 1 || h <= 1) {
@@ -44,7 +44,7 @@ namespace {
         }
 
         const f64 aspect = fmin(fmax(static_cast< f64 >(w) / h, 9.0 / 21.0), 32.0 / 9.0);
-        const long width = lround(832.0 * (fmax(aspect, 4.0 / 3.0) / cWiiAspect) * 0.5) * 2;
+        const long width = lround(832.0 * (fmax(aspect, 4.0 / 3.0) / cDesignAspect) * 0.5) * 2;
         if (width <= 608 || width > 1664) {
             return;
         }
@@ -52,8 +52,8 @@ namespace {
         sDisplay.wide = 1;
         sDisplay.content_aspect = static_cast< f32 >(aspect);
         sDisplay.screen_width = static_cast< s32 >(width);
-        sDisplay.canvas_width = static_cast< f32 >(608.0 * fmax(1.0, aspect / cWiiAspect));
-        sDisplay.vertical_fit = static_cast< f32 >(fmax(1.0, cWiiAspect / aspect));
+        sDisplay.layout_width = static_cast< f32 >(608.0 * fmax(1.0, aspect / cDesignAspect));
+        sDisplay.vertical_fit = static_cast< f32 >(fmax(1.0, cDesignAspect / aspect));
     }
 
     void onFrame() {

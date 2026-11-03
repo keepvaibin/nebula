@@ -10,7 +10,7 @@ J3DColorBlock* J3DMaterial::createColorBlock(u32 flags) {
         return new J3DColorBlock(J3DColorBlock::Kind_LightOff);
     case 0x40000000:
         return new J3DColorBlock(J3DColorBlock::Kind_LightOn);
-    case 0x80000000:
+    case 1u << 31:
         return new J3DColorBlock(J3DColorBlock::Kind_AmbientOn);
     default:
         return NULL;
