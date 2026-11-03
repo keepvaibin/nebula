@@ -226,7 +226,7 @@ void RingBeam::setRadius(f32 radius) {
         _a0->_20 = radius;
     }
     getSensor("Beam")->mRadius = radius;
-    char* str = "Spread";
+    const char* str = "Spread";
     MR::startBckNoInterpole(this, str);
     MR::startBckNoInterpole(mBloomModel, str);
     radius = (radius / 2000.0f) * MR::getBckFrameMax(this);
@@ -294,7 +294,7 @@ void RingBeam::exeSpread() {
         if (!MR::isPowerStarGetDemoActive()) {
             MR::startSound(this, "SE_EM_JUMPRING_APPEAR");
         }
-        char* str = "Spread";
+        const char* str = "Spread";
         MR::startBckNoInterpole(this, str);
         MR::startBckNoInterpole(mBloomModel, str);
         startBrk("Erase");

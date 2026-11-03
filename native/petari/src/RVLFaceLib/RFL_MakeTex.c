@@ -22,7 +22,7 @@ void Mii_SetupTextureDraw(void) {
 // the renderer's picture of the pass (J3DNativeTargetEnd), sampled where the game names `buffer`.
 void Mii_BeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
     Mii_SetupTextureDraw();
-    J3DNativeTargetBegin(buffer, width, height, clearRgba, 0xFFFFFF);
+    J3DNativeTargetBegin(buffer, width, height, clearRgba);
 }
 
 void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resolution) {
@@ -72,8 +72,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
     u32 sw;
     u32 sh;
 
-    MII_I_MASKRSL max;
-    u32 size;
     u8* ptr;
 
     eyeSize = Mii_GetTexSize(Mii_PartsTex_Eye, 0);
@@ -332,8 +330,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
         Mii_InitRFLTexture(&parts[i].mole.ngtobj);
     }
 
-    max = Mii_GetMaxMaskRsl(resolution);
-
     for (i = 0; i < MiiExp_Max; i++) {
         if (buffers[i] != NULL) {
             break;
@@ -341,12 +337,6 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
     }
 
     Mii_SetupTextureDraw();
-
-    size = Mii_GetMaskBufSize(resolution);
-    for (i = 0; i < MiiExp_Max; i++) {
-        if (buffers[i] != NULL) {
-        }
-    }
 
     J3DNativeViewGetScissor(&sx, &sy, &sw, &sh);
     for (i = 0; i < MiiExp_Max; i++) {
@@ -616,7 +606,7 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
 
     // The parts' colours stay; their alpha is drawn again on a cleared alpha channel.
     J3DPassWriteColor(0);
-    J3DNativeTargetClear(0x00000000, 0xFFFFFF, 2u | 4u);
+    J3DNativeTargetClear(0x00000000, 2u | 4u);
     J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_ONE);
 
     Mii_SetTev4Mustache(info->beard.color);

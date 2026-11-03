@@ -714,7 +714,6 @@ s32 JASSeqParser::cmdRegTblLoad(JASTrack* track, u32* args) {
 }
 
 s32 JASSeqParser::cmdDump(JASTrack* track, u32* args) {
-    JASSeqCtrl* seqCtrl = track->getSeqCtrl();
 
     return 0;
 }

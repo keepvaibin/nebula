@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 
 class ActorLightCtrl;
-class AreaLightInfo;
+struct AreaLightInfo;
 class LightDataHolder;
 class LightPointCtrl;
 class LightZoneDataHolder;

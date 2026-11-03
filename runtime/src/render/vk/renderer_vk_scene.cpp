@@ -346,7 +346,7 @@ void RendererVk::carry_over_scene_contents() {
     const VkCommandBuffer commands = commands_;
     if (scene_carry_clear_) {
         scene_carry_clear_ = false;
-        const SceneClearValues clear = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const SceneClearValues clear = make_scene_clear_values(0u, 0u);
         end_scene_pass();
         begin_scene_pass(&clear);
         end_scene_pass();
@@ -471,10 +471,10 @@ void RendererVk::bind_scene() {
     }
 }
 
-void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_depth,
+void RendererVk::clear_scene(std::uint32_t clear_rgba,
                            bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
                            unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
-    const ReplayClear logged{clear_rgba, clear_depth, color_enable, alpha_enable, depth_enable,
+    const ReplayClear logged{clear_rgba, color_enable, alpha_enable, depth_enable,
                              rect_x, rect_y, rect_w, rect_h, pixel_format};
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(recording_log_.clears.size())});
@@ -500,7 +500,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_depth
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
-    const SceneClearValues clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
+    const SceneClearValues clear = make_scene_clear_values(clear_rgba, pixel_format);
     // The whole scene target, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
     const bool has_alpha = pixel_format == 1u;
     if (scene_owed_ && !replaying_) [[unlikely]] {
@@ -842,7 +842,7 @@ bool RendererVk::enter_output_scene(const FrameMap& output) {
     alt_scene_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     swap_scene_sets();
     bind_scene();
-    clear_scene(0u, 0x00FFFFFFu, false, false, true);
+    clear_scene(0u, false, false, true);
     return true;
 }
 
@@ -954,7 +954,7 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
             gpu::TextureRef picture = hand_over_scene_color(bloom_.take_kept_image());
             scene_owed_.reset();
             bloom_.keep_picture(std::move(picture));
-            clear_scene(0u, 0x00FFFFFFu, true, true, false);
+            clear_scene(0u, true, true, false);
             return;
         }
         static_cast<void>(bloom_.keep(commands_, in));
@@ -1920,7 +1920,7 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
             scene_copy_dests_.erase(dest_key);
             static std::atomic<unsigned> reported{0u};
             if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
-                std::cerr << "[efb-copy] destination allocation failed size=" << w << 'x' << h
+                std::cerr << "[frame-read] destination allocation failed size=" << w << 'x' << h
                           << "; copy skipped\n";
             }
             return false;

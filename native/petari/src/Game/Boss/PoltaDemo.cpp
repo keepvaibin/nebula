@@ -17,7 +17,6 @@
 #include "Game/Util/SoundUtil.hpp"
 
 namespace {
-    static const s32 sBgmStartStep = 60;
     static const s32 sOpeningBlurStart = 300;
     static const s32 sOpeningBlurTime = 70;
     static const f32 sOpeningBlurOffset = 18.0f;

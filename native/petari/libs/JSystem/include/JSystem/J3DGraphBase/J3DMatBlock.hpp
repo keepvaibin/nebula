@@ -205,7 +205,7 @@ struct J3DIndTexMtx : public J3DIndTexMtxInfo {
     }
 
     J3DIndTexMtx(const J3DIndTexMtx& other) {
-        memcpy(this, &other, sizeof(J3DIndTexMtx));
+        memcpy((void*)this, &other, sizeof(J3DIndTexMtx));
     }
 
     ~J3DIndTexMtx() {

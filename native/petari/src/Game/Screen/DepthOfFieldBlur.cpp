@@ -93,7 +93,7 @@ void DepthOfFieldBlur::draw() const {
     }
 
     _1C->frameColor(true);
-    J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0, 0xFFFFFF);
+    J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0);
     drawZAlphaTex();
     J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
@@ -158,7 +158,7 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 }
 
 void DepthOfFieldBlur::createBlurTexture() const {
-    J3DNativeTarget::begin(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, 0xFFFFFF);
+    J3DNativeTarget::begin(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0);
     ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);
     ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, _24, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);

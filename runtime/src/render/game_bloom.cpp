@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GameBloom: the game's bloom at the internal resolution (game_bloom.h).
 #include "galaxy/render/game_bloom.h"
+#include "galaxy/test_hooks.h"
 
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -308,7 +309,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     static const unsigned log = [] {
         char value[8]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_BLOOM_LOG") == 0 && length > 1
+        return getenv_s(&length, value, sizeof(value), nebula_switch::bloom_log_name()) == 0 && length > 1
                    ? static_cast<unsigned>(value[0] - '0')
                    : 0u;
     }();

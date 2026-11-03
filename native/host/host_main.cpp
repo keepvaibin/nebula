@@ -2183,7 +2183,7 @@ uint32_t svc_screen_probe_results(void*, uint32_t channel, NebulaScreenProbe* pr
 }
 
 // A pass into a texture target (E-07): its start and end as records in draw order.
-void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba, uint32_t clear_z) {
+void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
@@ -2192,11 +2192,10 @@ void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint
     record.target_width = width;
     record.target_height = height;
     record.target_clear_rgba = clear_rgba;
-    record.target_clear_z = clear_z & 0xFFFFFFu;
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)key, (void)width, (void)height, (void)clear_rgba, (void)clear_z;
+    (void)key, (void)width, (void)height, (void)clear_rgba;
 #endif
 }
 
@@ -2214,18 +2213,17 @@ void svc_target_end(void*, uint64_t key, uint32_t channels) {
 #endif
 }
 
-void svc_target_clear(void*, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels) {
+void svc_target_clear(void*, uint32_t clear_rgba, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::TargetClear;
     record.target_clear_rgba = clear_rgba;
-    record.target_clear_z = clear_z & 0xFFFFFFu;
     record.target_channels = static_cast<std::uint8_t>(channels & 7u);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)clear_rgba, (void)clear_z, (void)channels;
+    (void)clear_rgba, (void)channels;
 #endif
 }
 
@@ -2246,7 +2244,7 @@ void svc_frame_read(void*, uint64_t key, uint32_t channels, uint32_t flags) {
 
 // A clear of the frame's rectangle.
 void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
-                     uint32_t clear_z, uint32_t channels) {
+                     uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
@@ -2256,12 +2254,11 @@ void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_
     record.target_width = width;
     record.target_height = height;
     record.target_clear_rgba = clear_rgba;
-    record.target_clear_z = clear_z & 0xFFFFFFu;
     record.target_channels = static_cast<std::uint8_t>(channels & 7u);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)left, (void)top, (void)width, (void)height, (void)clear_rgba, (void)clear_z, (void)channels;
+    (void)left, (void)top, (void)width, (void)height, (void)clear_rgba, (void)channels;
 #endif
 }
 
@@ -2755,11 +2752,9 @@ std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
-#endif
-#if defined(NEBULA_HOST_RENDERER)
-    // GALAXY_TRACE_VI_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
+    // GALAXY_TRACE_FRAME_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
     static const bool trace_vi = [] {
-        const char* value = nebula_switch::trace_vi_times();
+        const char* value = nebula_switch::trace_frame_times();
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }();
     if (trace_vi) std::fprintf(stderr, "[latency] retrace vi=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
@@ -2894,29 +2889,12 @@ uint32_t svc_option(void*, uint32_t what) {
     case NEBULA_OPTION_RT_PREPARE_PROGRESS:
         // The ray tracer is parked (no shaders to prepare): the game's preparation screen never shows.
         return 0;
-    case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
-        static const bool dump = [] {
-            const char* value = nebula_switch::test_dump_layouts();
-            return value != nullptr && value[0] == '1';
-        }();
-        return dump ? 1u : 0u;
-    }
     case NEBULA_OPTION_TEST_ARENA_FILL: {
         const char* value = nebula_switch::test_arena_fill();
         return value != nullptr ? 0x100u | (static_cast<uint32_t>(std::strtoul(value, nullptr, 16)) & 0xFFu) : 0u;
     }
     case NEBULA_OPTION_TEST_TRACE_LOADS:
         return nebula_switch::trace_loads() != nullptr ? 1u : 0u;
-    case NEBULA_OPTION_TEST_NATIVE_J3D: {
-        static const uint32_t range = [] {
-            const char* value = nebula_switch::test_native_j3d();
-            unsigned lo = 0, hi = 0;
-            return value != nullptr && std::sscanf(value, "%u-%u", &lo, &hi) == 2 && lo != 0u && hi >= lo
-                       ? (std::min(lo, 0xFFFFu) << 16u) | std::min(hi, 0xFFFFu)
-                       : 0u;
-        }();
-        return range;
-    }
     default:
         return 0;
     }
@@ -3138,12 +3116,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     }
 #if defined(NEBULA_HOST_RENDERER)
     gInputRead.store(true, std::memory_order_release);
-    // GALAXY_INPUT_READ_SAMPLE=0: only the 10 ms samples (the timing before samples followed the game's reads).
-    static const bool sample_on_read = [] {
-        const char* value = nebula_switch::input_read_sample();
-        return value == nullptr || value[0] != '0';
-    }();
-    if (sample_on_read && gControlsInput.load(std::memory_order_acquire)) {
+    if (gControlsInput.load(std::memory_order_acquire)) {
         const std::lock_guard<std::mutex> lock(gInputSampleLock);
         gInputSamples.push(controls_sample());
         gInputReadNs.store(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count(),
@@ -3564,60 +3537,6 @@ int32_t svc_movie_video_decode(void*, const void*, uint32_t, uint32_t, uint32_t,
 
 }  // namespace
 
-#if defined(NEBULA_HOST_RENDERER)
-// The renderer settings read from the environment, at their shipped values (installer/runtime-env.json) where the
-// environment does not set them.
-void apply_shipped_renderer_defaults() {
-    static const struct {
-        const char* name;
-        const char* value;
-    } kDefaults[] = {
-        {"GALAXY_ALLOW_TEARING", "0"},
-        {"GALAXY_ASYNC_RENDER_THREAD", "1"},
-        {"GALAXY_CAPTURE_MOUSE_BUTTONS", "1"},
-        {"GALAXY_D3D_DEBUG", "0"},
-        {"GALAXY_DISPLAY_LIST_DIRTY_INVALIDATE", "0"},
-        {"GALAXY_FLIP_DISCARD", "1"},
-        {"GALAXY_FRAME_RATE_DECOUPLE", "0"},
-        {"GALAXY_FRAME_TELEMETRY", "1"},
-        {"GALAXY_GPU_TIMESTAMPS", "1"},
-        {"GALAXY_GX_DECODED_VERTEX_CACHE", "1"},
-        {"GALAXY_GX_FRAME_TIMING_SAMPLE", "0"},
-        {"GALAXY_GX_PSO_CYCLES", "0"},
-        {"GALAXY_GX_SORTED_VERTEX_INVALIDATION", "1"},
-        {"GALAXY_GX_UBER", "1"},
-        {"GALAXY_HIDE_OS_CURSOR", "1"},
-        {"GALAXY_MOUSE_IR_CURSOR_POLL", "auto"},
-        {"GALAXY_MOUSE_IR_MESSAGE_RECENT_MS", "120"},
-        {"GALAXY_PE_EVENTS_GPU_FENCE", "1"},
-        {"GALAXY_PSO_PREWARM", "1"},
-        {"GALAXY_PSO_PREWARM_BLOCKING", "1"},
-        {"GALAXY_PSO_PREWARM_BLOCKING_MS", "30000"},
-        {"GALAXY_PSO_PREWARM_LIMIT", "4096"},
-        {"GALAXY_REALTIME_VI", "1"},
-        {"GALAXY_RENDER_IMMUTABLE_RANGE_OWNERSHIP", "0"},
-        {"GALAXY_RENDER_LIVE_MEMORY", "1"},
-        {"GALAXY_RENDER_LIVE_MEMORY_WAIT", "0"},
-        {"GALAXY_RENDER_MEMORY_SNAPSHOT", "0"},
-        {"GALAXY_RENDER_MEMORY_SNAPSHOT_COMPACT", "1"},
-        {"GALAXY_RENDER_QUEUE_DEPTH", "2"},
-        {"GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT", "0"},
-        {"GALAXY_SKIP_DUPLICATE_XFB_PRESENTS", "1"},
-        {"GALAXY_SMOOTH_REALTIME_PRESENT", "1"},
-        {"GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US", "2000"},
-        {"GALAXY_SWAP_CHAIN_FRAME_LATENCY", "1"},
-        {"GALAXY_VI_RENDER_FIFO_WAIT", "0"},
-        {"GALAXY_WAIT_FOR_FRAME_LATENCY", "0"},
-        {"GALAXY_XFB_MAX_PRESERVE_AGE", "30"},
-    };
-    for (const auto& setting : kDefaults) {
-        size_t length = 0;
-        if (getenv_s(&length, nullptr, 0, setting.name) != 0 || length == 0) {
-            _putenv_s(setting.name, setting.value);
-        }
-    }
-}
-#endif
 
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/mod_import.h"
@@ -3770,9 +3689,6 @@ int main(int argc, char** argv) {
     if (!galaxy::sdl::start()) {
         return 1;
     }
-#endif
-#if defined(NEBULA_HOST_RENDERER)
-    apply_shipped_renderer_defaults();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // A player's start has nowhere to print (a launcher with no terminal, or none): the log goes to logs/latest.log beside the
@@ -4059,7 +3975,7 @@ int main(int argc, char** argv) {
     galaxy::render::set_native_settings_content_root(utf8_of(galaxy::host::locate_game(pak).content_root));
     // Discord: never from a hidden test run, which must leave the player's status alone.
     if (const char* hidden = nebula_switch::hide_window(); hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
-        const char* id = std::getenv("GALAXY_DISCORD_CLIENT_ID");
+        const char* id = std::getenv(nebula_switch::discord_client_id_name());
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
         galaxy::discord::start(id != nullptr ? id : kDiscordClientId);
     }

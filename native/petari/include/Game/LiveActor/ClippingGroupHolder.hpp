@@ -41,4 +41,5 @@ public:
 
     s32 mNumGroups;
     ClippingInfoGroup** mInfoGroups;
+    s32 mMaxGroups = 0x40;
 };

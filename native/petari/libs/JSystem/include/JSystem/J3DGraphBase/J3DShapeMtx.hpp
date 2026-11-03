@@ -4,13 +4,6 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-inline J3DShapeMtx::~J3DShapeMtx() {
-}
-
-inline u32 J3DShapeMtx::getType() const {
-    return 'SMTX';
-}
-
 class J3DTexMtx;
 class J3DTexGenBlock;
 

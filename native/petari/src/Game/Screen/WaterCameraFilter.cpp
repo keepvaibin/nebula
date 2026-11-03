@@ -78,12 +78,6 @@ void WaterCameraFilter::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-namespace {
-    s32 getScreenTexHeight() {
-        return MR::getScreenHeight();
-    }
-};  // namespace
-
 void WaterCameraFilter::initScreenTex() {
     MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
     mScreenTex = new JUTTexture(::getScreenUnitsAcross(), ::getScreenHeight());

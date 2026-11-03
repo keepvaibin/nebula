@@ -10,7 +10,7 @@ class CameraTargetDemoActor;
 class CollisionParts;
 class ElectricPressureBullet;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class ModelObj;
 class MogucchiShooter;
 

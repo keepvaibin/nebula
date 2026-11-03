@@ -5,8 +5,8 @@
 // DownCS: the source's region in boxes of c_size.z x c_size.z texels (each texel clamped to 1, as the 8-bit scene target keeps
 // it) into u0.
 // BoxCS: a box of c_params.x texels along axis c_size.w (the game's 4 x 4 pixel workspace texel at the internal
-// resolution); with c_params.y >= 0 the selection after it: the colour where its intensity (GX_TF_I8) or channel
-// c_params.z (GX_CTF_R8/G8/B8) exceeds the threshold, else black.
+// resolution); with c_params.y >= 0 the selection after it: the colour where its intensity or channel
+// c_params.z (red, green or blue) exceeds the threshold, else black.
 // BlurCS: axis 0, up to three Gaussians (widths c_sigma.xyz in texels) of t0 into u0..u2; axis 1, the Gaussians of
 // t0..t2 summed, times c_params.x, clamped to 1 when c_params.y is 1, into u0.
 // CompositeVS/CompositePS: the kept scene plus the bloom (bilinear from its levels) over the game's frame.

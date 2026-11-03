@@ -49,7 +49,6 @@ namespace {
     NEW_NERVE(GalaxyMapControllerNewGalaxyDiscoverPhaseDisplayGalaxyMap, GalaxyMapController, NewGalaxyDiscoverPhaseDisplayGalaxyMap);
     NEW_NERVE(GalaxyMapControllerNewTicoGalaxyDiscoverPhaseAstroMap, GalaxyMapController, NewTicoGalaxyDiscoverPhaseAstroMap);
     NEW_NERVE(GalaxyMapControllerNewDomeDiscoverPhaseAstroMap, GalaxyMapController, NewDomeDiscoverPhaseAstroMap);
-    NEW_NERVE(GalaxyMapControllerTicoCometFadeoutWhite, GalaxyMapController, TicoCometFadeoutWhite);
     NEW_NERVE(GalaxyMapControllerTicoCometWaitWhite, GalaxyMapController, TicoCometWaitWhite);
     NEW_NERVE(GalaxyMapControllerTicoCometPray, GalaxyMapController, TicoCometPray);
     NEW_NERVE(GalaxyMapControllerChallengeGalaxyDiscoverPhaseAstroMap, GalaxyMapController, ChallengeGalaxyDiscoverPhaseAstroMap);

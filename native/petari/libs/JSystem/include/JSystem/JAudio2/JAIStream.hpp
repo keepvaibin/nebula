@@ -8,7 +8,7 @@
 
 class JAIStreamMgr;
 
-class JAIStream : public JAISound, public JSULink< JAIStream >, public JASPoolAllocObject< JAIStream > {
+class JAIStream final : public JAISound, public JSULink< JAIStream >, public JASPoolAllocObject< JAIStream > {
 public:
     struct TInner {
         JASStream mStream;

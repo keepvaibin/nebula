@@ -199,7 +199,7 @@ void Balloonfish::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
         return;
     }
 
-    if (isNerve(GET_NERVE(Balloonfish, HostTypeNrvWait)) && MR::isLessStep(this, ::hAttackBeginTime) ||
+    if ((isNerve(GET_NERVE(Balloonfish, HostTypeNrvWait)) && MR::isLessStep(this, ::hAttackBeginTime)) ||
         isNerve(GET_NERVE(Balloonfish, HostTypeNrvStarPointerBind))) {
         MR::sendMsgPush(pReceiver, pSender);
         return;

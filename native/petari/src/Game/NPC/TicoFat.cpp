@@ -405,9 +405,7 @@ void TicoFat::setScale(f32 scale) {
     }
 
     f32 v5 = (scale - 1.0f) / 0.9f;
-    if (1.0f >= v5) {
-        v5 = v5;
-    } else {
+    if (v5 > 1.0f) {
         v5 = 1.0f;
     }
 
@@ -417,17 +415,13 @@ void TicoFat::setScale(f32 scale) {
     MR::setSensorRadius(this, "Body", (100.0f * scale));
     MR::setStarPointerTargetRadius3d(this, 110.0f * scale);
     f32 v7 = 1.5f;
-    if (scale >= 1.5f) {
-        v7 = v7;
-    } else {
+    if (scale < 1.5f) {
         v7 = scale;
     }
 
     MR::setDistanceToTalk(mMsgCtrl, (280.0f * v7));
     f32 v8 = 1.5f;
-    if (scale >= 1.5f) {
-        v8 = v8;
-    } else {
+    if (scale < 1.5f) {
         v8 = scale;
     }
     MR::setDistanceToTalk(_16C, (280.0f * v8));
@@ -863,9 +857,7 @@ void TicoFat::exeFly() {
 
     MR::tryRumblePadVeryWeak(this, PLAYER_1);
     f32 v4 = _1F8 / mShootPath->getTotalLength();
-    if (1.0f >= v4) {
-        v4 = v4;
-    } else {
+    if (v4 > 1.0f) {
         v4 = 1.0f;
     }
 
@@ -878,7 +870,7 @@ void TicoFat::exeFly() {
         easeIn = (1.0f - MR::getEaseInValue((v6 * v6), 0.0f, 0.5f, 1.0f));
     }
 
-    TVec3f v8, shootPos, direction;
+    TVec3f shootPos, direction;
     mShootPath->calcPosition(&shootPos, easeIn);
     mShootPath->calcDirection(&direction, easeIn, 0.01f);
     TVec3f up;

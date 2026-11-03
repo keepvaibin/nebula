@@ -53,7 +53,7 @@ struct J3DFogInfo {
 
 struct J3DBlendInfo {
     void operator=(J3DBlendInfo const& other) {
-        memcpy(this, &other, sizeof(J3DBlendInfo));
+        memcpy((void*)this, &other, sizeof(J3DBlendInfo));
     }
 
     u8 mType;
@@ -132,7 +132,7 @@ struct J3DTexCoordInfo {
     u8 pad;
 
     J3DTexCoordInfo& operator=(const J3DTexCoordInfo& other) {
-        memcpy(this, &other, sizeof(u32));
+        memcpy((void*)this, &other, sizeof(u32));
         return *this;
     }
 } ATTRIBUTE_ALIGN(2);
@@ -146,7 +146,7 @@ struct J3DNBTScaleInfo {
 
 struct J3DTevOrderInfo {
     void operator=(const J3DTevOrderInfo& other) {
-        memcpy(this, &other, sizeof(J3DTevOrderInfo));
+        memcpy((void*)this, &other, sizeof(J3DTevOrderInfo));
     }
 
     u8 mTexCoord;
@@ -212,7 +212,7 @@ struct J3DIndTexOrderInfo {
     u8 field_0x3;
 
     void operator=(J3DIndTexOrderInfo const& other) {
-        memcpy(this, &other, sizeof(J3DIndTexOrderInfo));
+        memcpy((void*)this, &other, sizeof(J3DIndTexOrderInfo));
     }
 };
 
@@ -229,7 +229,7 @@ struct J3DIndTexCoordScaleInfo {
     u8 field_0x3;
 
     J3DIndTexCoordScaleInfo& operator=(const J3DIndTexCoordScaleInfo& other) {
-        memcpy(this, &other, sizeof(J3DIndTexCoordScaleInfo));
+        memcpy((void*)this, &other, sizeof(J3DIndTexCoordScaleInfo));
         return *this;
     }
 };
@@ -265,7 +265,7 @@ struct J3DColorWide : public NebulaColor16 {
     }
 
     J3DColorWide& operator=(const NebulaColor16& color) {
-        memcpy(this, &color, sizeof(NebulaColor16));
+        memcpy((void*)this, &color, sizeof(NebulaColor16));
         return *this;
     }
 };

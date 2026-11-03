@@ -2,7 +2,7 @@
 
 
 class GameDataHolder;
-class GameEventFlag;
+struct GameEventFlag;
 class GameEventFlagStorage;
 
 class GameEventFlagChecker {

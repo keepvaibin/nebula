@@ -47,7 +47,7 @@ bool GalaxyStatusAccessor::isValidNormalComet(s32 scenarioNo) const {
 }
 
 bool GalaxyStatusAccessor::isCometStar(s32 scenarioNo) const {
-    return isExistAnyComet() && scenarioNo == getNormalCometScenarioNo() || isValidCoin100(scenarioNo);
+    return (isExistAnyComet() && scenarioNo == getNormalCometScenarioNo()) || isValidCoin100(scenarioNo);
 }
 
 bool GalaxyStatusAccessor::isExistGrandStar() const {

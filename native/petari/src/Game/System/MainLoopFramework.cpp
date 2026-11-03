@@ -102,7 +102,7 @@ void MainLoopFramework::clearFrame(NebulaColor8 color) {
     J3DPass::cull(NEBULA_CULL_BACK);
     const u32 rgba = (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
                      (static_cast< u32 >(color.b) << 8) | color.a;
-    J3DNativeTarget::clearFrame(0, 0, frameWidth, frameHeight, rgba, 0xFFFFFF,
+    J3DNativeTarget::clearFrame(0, 0, frameWidth, frameHeight, rgba,
                                 NEBULA_CLEAR_COLOR | (mUseAlpha ? NEBULA_CLEAR_ALPHA : 0u) | NEBULA_CLEAR_DEPTH);
 }
 

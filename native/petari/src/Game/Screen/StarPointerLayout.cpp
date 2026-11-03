@@ -733,6 +733,8 @@ void StarPointerLayout::changeLayout(StarPointerKind pointerKind) {
         mCommandStream->hide();
         mRadius = ::sNormalRadius;
         break;
+    default:
+        break;
     }
 
     mPointerKind = pointerKind;
@@ -919,6 +921,8 @@ void StarPointerNumber::control() {
         break;
     case AnimType_StarPointer:
         startAnimPosition(1);
+        break;
+    default:
         break;
     }
 

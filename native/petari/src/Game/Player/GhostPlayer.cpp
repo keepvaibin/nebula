@@ -37,6 +37,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include <nebula_format.h>
 
 namespace {
     struct AnimSoundInfo {
@@ -111,8 +112,7 @@ namespace NrvGhostPlayer {
 
 void GhostPlayer::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
     char archiveName[256];
-    strcpy(archiveName, "GhostData");
-    strcat(archiveName, MR::getCurrentStageName());
+    nebula_snprintf(archiveName, sizeof(archiveName), "GhostData%s", MR::getCurrentStageName());
 
     pCollector->addArchive(archiveName);
 
@@ -146,9 +146,7 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
         const char* currentStageName = MR::getCurrentStageName();
         nebula_sprintf(gstPath, "%s.gst", currentStageName);
     }
-    strcpy(arcPath, "GhostData");
-    strcat(arcPath, MR::getCurrentStageName());
-    strcat(arcPath, ".arc");
+    nebula_snprintf(arcPath, sizeof(arcPath), "GhostData%s.arc", MR::getCurrentStageName());
 
     mCurrentPacket = static_cast< GhostPacket* >(MR::loadResourceFromArc(arcPath, gstPath));
 

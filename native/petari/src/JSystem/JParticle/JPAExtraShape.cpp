@@ -26,7 +26,6 @@ void JPACalcScaleY(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 }
 
 void JPACalcScaleCopy(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    JPAExtraShape* esp = work->mpRes->getEsp();
     ptcl->mParticleScaleY = ptcl->mParticleScaleX;
 }
 

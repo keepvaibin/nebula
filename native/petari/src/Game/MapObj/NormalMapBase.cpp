@@ -26,6 +26,7 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cmath>
 #include <cstring>
+#include <nebula_format.h>
 
 s16 sgrad_tex_thresh;
 
@@ -98,8 +99,7 @@ void NormalMapBase::setupLighting() {
     mAmbAlpha = 128;
     mMatAlpha = 255;
     char fileName[256];
-    strcpy(fileName, MR::getModelResName(this));
-    strcat(fileName, ".nrm.txt");
+    nebula_snprintf(fileName, sizeof(fileName), "%s.nrm.txt", MR::getModelResName(this));
     if (MR::getResourceHolder(this)->mFileInfoTable->isExistRes(fileName)) {
         const char* pData = static_cast< const char* >(MR::getResourceHolder(this)->mFileInfoTable->getRes(fileName));
         loadData(pData, MR::getResourceHolder(this)->mFileInfoTable->findFileInfo(fileName)->_4);
@@ -115,8 +115,7 @@ void NormalMapBase::setupTexture() {
         const char* pName = MR::getTextureName(this, i);
         if (strstr(pName, "Nswap_")) {
             char fileName[64];
-            strcpy(fileName, pName + 6);
-            strcat(fileName, ".bti");
+            nebula_snprintf(fileName, sizeof(fileName), "%s.bti", pName + 6);
             pImage = MR::getTexFromArc(fileName, this);
             mNormalTex = new JUTTexture(pImage);
             mTextures[i] = mNormalTex;

@@ -471,13 +471,13 @@ const NativeInputReplayLog* active_native_input_replay_log() {
 }
 
 const NativeInputReplaySample* native_input_replay_sample_for_vi(
-    std::uint64_t current_vi) {
+    std::uint64_t current_frame) {
     const NativeInputReplayLog* log = active_native_input_replay_log();
     if (log == nullptr) {
         return nullptr;
     }
-    const auto seconds = current_vi / 60u;
-    const auto fraction = (current_vi % 60u) * 1000u / 60u;
+    const auto seconds = current_frame / 60u;
+    const auto fraction = (current_frame % 60u) * 1000u / 60u;
     const auto maximum = std::numeric_limits<std::uint64_t>::max();
     const std::uint64_t target_ms = seconds > (maximum - fraction) / 1000u
         ? maximum : seconds * 1000u + fraction;
@@ -535,21 +535,6 @@ bool replay_xinput_has_input(const NativeInputReplaySample& sample) {
                0.001f;
 }
 
-// How long the mouse pointer stays shown through invalid cursor samples after its last sample inside the window.
-std::uint64_t script_pointer_live_mouse_grace_ms() {
-    const std::optional<std::uint64_t> override_ms =
-        read_env_u64_optional(nebula_switch::input_script_pointer_live_mouse_ms_name());
-    if (!override_ms.has_value()) {
-        return 250;
-    }
-    return static_cast<std::uint64_t>(
-        std::min<std::uint64_t>(*override_ms, 5000u));
-}
-
-bool script_pointer_force_enabled() {
-    return read_env_flag(nebula_switch::input_script_pointer_force_name());
-}
-
 void apply_script_buttons_to_input(
     galaxy::input::PlayerInput& input,
     const NativeInputScriptOverlay& script) {
@@ -578,11 +563,11 @@ std::string uppercase_ascii(std::string value) {
     return value;
 }
 
-bool vi_in_script_window(
-    std::uint64_t vi,
+bool frame_in_script_window(
+    std::uint64_t frame,
     std::uint64_t start,
     std::uint64_t duration) {
-    return duration != 0 && vi >= start && vi - start < duration;
+    return duration != 0 && frame >= start && frame - start < duration;
 }
 
 void apply_script_button_token(
@@ -645,38 +630,14 @@ void apply_script_buttons(
     }
 }
 
-void apply_autopress_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
-    const char* env_name,
-    const char* buttons,
-    std::uint64_t duration) {
-    const std::optional<std::uint64_t> start = read_env_u64_optional(env_name);
-    if (start.has_value() &&
-        vi_in_script_window(current_vi, *start, duration)) {
-        apply_script_buttons(overlay, buttons, env_name);
-    }
-}
-
-// GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL ends the script at the frame
-// GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI names.
 void apply_button_script_env(
     NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     const char* env_name,
     std::int64_t (*clock_ticks)() noexcept) {
     const std::optional<std::string> script = read_env_string(env_name);
     if (!script.has_value()) {
         return;
-    }
-    if (read_env_flag(
-            nebula_switch::input_autopress_script_stop_at_mario_control_name())) {
-        const std::optional<std::uint64_t> fallback_vi =
-            read_env_u64_optional(
-                nebula_switch::input_autopress_script_stop_fallback_vi_name());
-        if (fallback_vi.has_value() && current_vi >= *fallback_vi) {
-            return;
-        }
     }
     for (const std::string& segment :
          split_script_fields(*script, ';')) {
@@ -692,36 +653,29 @@ void apply_button_script_env(
         }
         const std::uint64_t start = parse_script_u64(fields[0], env_name);
         const std::uint64_t duration = parse_script_u64(fields[1], env_name);
-        if (vi_in_script_window(current_vi, start, duration)) {
+        if (frame_in_script_window(current_frame, start, duration)) {
             apply_script_buttons(overlay, fields[2], env_name);
             // A step's first sample is logged with its time, as a pointer jump is, for input-to-present measurements.
             static std::string logged;  // under the sample lock (host_main.cpp), as every sample is built
             const std::string step = fields[0] + ':' + fields[2];
-            if (current_vi == start && logged != step) {
+            if (current_frame == start && logged != step) {
                 logged = step;
-                std::cerr << "[latency] buttons " << fields[2] << " vi=" << current_vi << " qpc=" << (clock_ticks ? clock_ticks() : 0)
+                std::cerr << "[latency] buttons " << fields[2] << " frame=" << current_frame << " qpc=" << (clock_ticks ? clock_ticks() : 0)
                           << '\n';
             }
         }
     }
 }
 
-// GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL counts the script's times from the frame
-// GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI names.
 void apply_stick_script_env(
     NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     const char* env_name) {
     const std::optional<std::string> script = read_env_string(env_name);
     if (!script.has_value()) {
         return;
     }
-    std::uint64_t anchor = 0;
-    if (read_env_flag(nebula_switch::input_stick_script_relative_mario_control_name())) {
-        anchor = read_env_u64_optional(
-                     nebula_switch::input_stick_script_relative_fallback_vi_name())
-                     .value_or(0);
-    }
+    const std::uint64_t anchor = 0;
     for (const std::string& segment :
          split_script_fields(*script, ';')) {
         if (segment.empty()) {
@@ -743,7 +697,7 @@ void apply_stick_script_env(
                 env_name);
         }
         const std::uint64_t duration = parse_script_u64(fields[1], env_name);
-        if (vi_in_script_window(current_vi, start, duration)) {
+        if (frame_in_script_window(current_frame, start, duration)) {
             overlay.has_stick = true;
             overlay.stick_x = parse_script_float(fields[2], env_name);
             overlay.stick_y = parse_script_float(fields[3], env_name);
@@ -753,7 +707,7 @@ void apply_stick_script_env(
 
 void apply_shake_script_env(
     NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     const char* env_name) {
     const std::optional<std::string> script = read_env_string(env_name);
     if (!script.has_value()) {
@@ -773,7 +727,7 @@ void apply_shake_script_env(
         }
         const std::uint64_t start = parse_script_u64(fields[0], env_name);
         const std::uint64_t duration = parse_script_u64(fields[1], env_name);
-        if (vi_in_script_window(current_vi, start, duration)) {
+        if (frame_in_script_window(current_frame, start, duration)) {
             overlay.shake = true;
         }
     }
@@ -781,10 +735,10 @@ void apply_shake_script_env(
 
 void apply_pointer_pair_env(
     NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     const char* x_env,
     const char* y_env,
-    const char* vi_env,
+    const char* frame_env,
     const char* duration_env = nullptr) {
     const std::optional<float> x = read_env_float_optional(x_env);
     const std::optional<float> y = read_env_float_optional(y_env);
@@ -796,21 +750,21 @@ void apply_pointer_pair_env(
     if (!x.has_value()) {
         return;
     }
-    if (vi_env != nullptr) {
-        const std::optional<std::uint64_t> vi = read_env_u64_optional(vi_env);
-        if (!vi.has_value()) {
+    if (frame_env != nullptr) {
+        const std::optional<std::uint64_t> frame = read_env_u64_optional(frame_env);
+        if (!frame.has_value()) {
             throw std::runtime_error(
                 std::string("native input pointer waypoint is missing ") +
-                vi_env);
+                frame_env);
         }
-        if (current_vi < *vi) {
+        if (current_frame < *frame) {
             return;
         }
         if (duration_env != nullptr) {
             const std::optional<std::uint64_t> duration =
                 read_env_u64_optional(duration_env);
             if (duration.has_value() &&
-                !vi_in_script_window(current_vi, *vi, *duration)) {
+                !frame_in_script_window(current_frame, *frame, *duration)) {
                 return;
             }
         }
@@ -820,44 +774,17 @@ void apply_pointer_pair_env(
     overlay.pointer_y = *y;
 }
 
-void apply_pointer_sweep_env(
-    NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi) {
-    const std::optional<std::uint64_t> start =
-        read_env_u64_optional(nebula_switch::input_pointer_sweep_vi_name());
-    const std::optional<std::uint64_t> duration =
-        read_env_u64_optional(nebula_switch::input_pointer_sweep_duration_name());
-    if (start.has_value() != duration.has_value()) {
-        throw std::runtime_error(
-            "native input pointer sweep requires both frame and duration");
-    }
-    if (!start.has_value()) {
-        return;
-    }
-    if (!vi_in_script_window(current_vi, *start, *duration)) {
-        return;
-    }
-    const float phase =
-        *duration <= 1u
-            ? 0.5f
-            : static_cast<float>(current_vi - *start) /
-                  static_cast<float>(*duration - 1u);
-    overlay.has_pointer = true;
-    overlay.pointer_x = std::clamp(phase * 2.0f - 1.0f, -1.0f, 1.0f);
-    overlay.pointer_y = 0.0f;
-}
-
 struct PointerPathPoint {
-    std::uint64_t vi;
+    std::uint64_t frame;
     float x;
     float y;
 };
 
-// GALAXY_INPUT_POINTER_PATH "vi:x:y;vi:x:y;...": the pointer glides between those points (VIs ascending), on screen
+// GALAXY_INPUT_POINTER_PATH "frame:x:y;frame:x:y;...": the pointer glides between those points (frames ascending), on screen
 // from the first to the last. Parsed again only when the value changes.
 void apply_pointer_path_env(
     NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     std::int64_t (*clock_ticks)() noexcept) {
     const std::optional<std::string> script = read_env_string(nebula_switch::input_pointer_path_name());
     if (!script.has_value()) {
@@ -878,7 +805,7 @@ void apply_pointer_path_env(
             const PointerPathPoint point{parse_script_u64(fields[0], nebula_switch::input_pointer_path_name()),
                                          parse_script_float(fields[1], nebula_switch::input_pointer_path_name()),
                                          parse_script_float(fields[2], nebula_switch::input_pointer_path_name())};
-            if (!next.empty() && point.vi < next.back().vi) {
+            if (!next.empty() && point.frame < next.back().frame) {
                 throw std::runtime_error("native input pointer path VIs must ascend");
             }
             next.push_back(point);
@@ -886,17 +813,17 @@ void apply_pointer_path_env(
         points = std::move(next);
         parsed = *script;
     }
-    if (points.empty() || current_vi < points.front().vi || current_vi > points.back().vi) {
+    if (points.empty() || current_frame < points.front().frame || current_frame > points.back().frame) {
         return;
     }
     // The first point at or after this frame, and the one before it.
-    const auto after = std::lower_bound(points.begin(), points.end(), current_vi,
-                                        [](const PointerPathPoint& point, std::uint64_t vi) { return point.vi < vi; });
+    const auto after = std::lower_bound(points.begin(), points.end(), current_frame,
+                                        [](const PointerPathPoint& point, std::uint64_t frame) { return point.frame < frame; });
     float x = after->x;
     float y = after->y;
-    if (after != points.begin() && after->vi != current_vi) {
+    if (after != points.begin() && after->frame != current_frame) {
         const PointerPathPoint& before = *(after - 1);
-        const float t = static_cast<float>(current_vi - before.vi) / static_cast<float>(after->vi - before.vi);
+        const float t = static_cast<float>(current_frame - before.frame) / static_cast<float>(after->frame - before.frame);
         x = before.x + (after->x - before.x) * t;
         y = before.y + (after->y - before.y) * t;
     }
@@ -908,7 +835,7 @@ void apply_pointer_path_env(
     static float last_x = x;  // under the sample lock, as every sample is built
     static float last_y = y;
     if (std::fabs(x - last_x) + std::fabs(y - last_y) >= 0.5f) {
-        std::cerr << "[latency] pointer jump vi=" << current_vi << " x=" << x << " y=" << y << " qpc=" << (clock_ticks ? clock_ticks() : 0)
+        std::cerr << "[latency] pointer jump frame=" << current_frame << " x=" << x << " y=" << y << " qpc=" << (clock_ticks ? clock_ticks() : 0)
                   << '\n';
     }
     last_x = x;
@@ -917,68 +844,34 @@ void apply_pointer_path_env(
 
 void apply_pointer_script_envs(
     NativeInputScriptOverlay& overlay,
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     std::int64_t (*clock_ticks)() noexcept) {
     apply_pointer_pair_env(
         overlay,
-        current_vi,
+        current_frame,
         nebula_switch::input_pointer_x_name(),
         nebula_switch::input_pointer_y_name(),
         nullptr);
-    // Values are read at every sample, so a test can change them while the game runs; a later waypoint takes
-    // precedence over an earlier one.
-    static constexpr std::array<std::array<const char*, 4>, 5> kWaypoints{{
-        {nebula_switch::input_pointer2_x_name(), nebula_switch::input_pointer2_y_name(),
-         nebula_switch::input_pointer2_vi_name(), nebula_switch::input_pointer2_duration_name()},
-        {nebula_switch::input_pointer3_x_name(), nebula_switch::input_pointer3_y_name(),
-         nebula_switch::input_pointer3_vi_name(), nebula_switch::input_pointer3_duration_name()},
-        {nebula_switch::input_pointer4_x_name(), nebula_switch::input_pointer4_y_name(),
-         nebula_switch::input_pointer4_vi_name(), nebula_switch::input_pointer4_duration_name()},
-        {nebula_switch::input_pointer5_x_name(), nebula_switch::input_pointer5_y_name(),
-         nebula_switch::input_pointer5_vi_name(), nebula_switch::input_pointer5_duration_name()},
-        {nebula_switch::input_pointer6_x_name(), nebula_switch::input_pointer6_y_name(),
-         nebula_switch::input_pointer6_vi_name(), nebula_switch::input_pointer6_duration_name()},
-    }};
-    for (const auto& waypoint : kWaypoints) {
-        apply_pointer_pair_env(
-            overlay, current_vi, waypoint[0], waypoint[1],
-            waypoint[2], waypoint[3]);
-    }
-    apply_pointer_sweep_env(overlay, current_vi);
-    apply_pointer_path_env(overlay, current_vi, clock_ticks);
+    // A second position, read at every sample, so a test can change it while the game runs.
+    apply_pointer_pair_env(
+        overlay, current_frame, nebula_switch::input_pointer2_x_name(), nebula_switch::input_pointer2_y_name(),
+        nebula_switch::input_pointer2_frame_name(), nebula_switch::input_pointer2_duration_name());
+    apply_pointer_path_env(overlay, current_frame, clock_ticks);
 }
 
-NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_vi, const ScriptServices& services) {
+NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_frame, const ScriptServices& services) {
     NativeInputScriptOverlay overlay{};
-    const std::uint64_t a_duration =
-        read_env_u64_optional(nebula_switch::input_autopress_a_duration_name())
-            .value_or(12);
-    apply_autopress_env(
-        overlay, current_vi, nebula_switch::input_autopress_ab_name(), "A+B", a_duration);
-    constexpr std::array<const char*, 8> kAWindows{
-        nebula_switch::input_autopress_a_name(),
-        nebula_switch::input_autopress_a2_name(),
-        nebula_switch::input_autopress_a3_name(),
-        nebula_switch::input_autopress_a4_name(),
-        nebula_switch::input_autopress_a5_name(),
-        nebula_switch::input_autopress_a6_name(),
-        nebula_switch::input_autopress_a7_name(),
-        nebula_switch::input_autopress_a8_name()};
-    for (const char* name : kAWindows) {
-        apply_autopress_env(overlay, current_vi, name, "A", a_duration);
-    }
-    apply_button_script_env(overlay, current_vi, nebula_switch::input_autopress_script_name(), services.clock_ticks);
-    apply_stick_script_env(overlay, current_vi, nebula_switch::input_stick_script_name());
-    if (services.diagnostic_command) services.diagnostic_command(overlay);
+    apply_button_script_env(overlay, current_frame, nebula_switch::input_autopress_script_name(), services.clock_ticks);
+    apply_stick_script_env(overlay, current_frame, nebula_switch::input_stick_script_name());
     apply_shake_script_env(
-        overlay, current_vi, nebula_switch::input_shake_script_name());
-    apply_pointer_script_envs(overlay, current_vi, services.clock_ticks);
+        overlay, current_frame, nebula_switch::input_shake_script_name());
+    apply_pointer_script_envs(overlay, current_frame, services.clock_ticks);
     return overlay;
 }
 
 // GALAXY_INPUT_REPLAY_LOG: one recorded sample of window, keyboard, mouse and XInput state as the player's input.
 galaxy::input::PlayerInput build_replayed_input(
-    std::uint64_t current_vi,
+    std::uint64_t current_frame,
     const NativeInputReplaySample& replay,
     const NativeInputScriptOverlay& script,
     galaxy::RuntimeInputMode input_mode,
@@ -1072,11 +965,11 @@ galaxy::input::PlayerInput build_replayed_input(
         s_replay_mouse_x = s_replay_mouse_y = -1;
         s_replay_recenter = {};
     }
-    const float dt = s_replay_pointer_vi == 0u || current_vi <= s_replay_pointer_vi
+    const float dt = s_replay_pointer_vi == 0u || current_frame <= s_replay_pointer_vi
         ? 0.0f
-        : std::min(static_cast<float>(current_vi - s_replay_pointer_vi) / 60.0f, 0.05f);
-    s_replay_pointer_vi = current_vi;
-    const std::uint64_t now_us = current_vi * 1'000'000ull / 60u;
+        : std::min(static_cast<float>(current_frame - s_replay_pointer_vi) / 60.0f, 0.05f);
+    s_replay_pointer_vi = current_frame;
+    const std::uint64_t now_us = current_frame * 1'000'000ull / 60u;
     const bool keys_allowed = !force_controller;
     const bool pad_allowed = replay.xinput_connected &&
                              input_mode != galaxy::RuntimeInputMode::KeyboardMouse &&

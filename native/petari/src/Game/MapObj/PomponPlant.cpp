@@ -6,8 +6,6 @@
 namespace {
     const Vec sSensorOffset = {55.0f, 170.0f, -100.0f};
     const f32 sSensorRadius = 70.0f;
-    const f32 sItemSpeed = 20.0f;
-    const f32 sPlayerVelFactor = 0.7f;
 };  // namespace
 
 namespace NrvPomponPlant {
@@ -64,12 +62,6 @@ bool PomponPlant::tryGenItem() {
     if (!mCanGenItem) {
         return false;
     }
-
-    TVec3f gravity;
-    MR::calcGravityVector(this, &gravity, nullptr, 0);
-    TVec3f playerMove(*MR::getPlayerLastMove());
-    MR::vecKillElement(playerMove, -gravity, &playerMove);
-    TVec3f velocity(-gravity * ::sItemSpeed + playerMove * ::sPlayerVelFactor);
 
     if (mItemType == 0) {
         MR::appearStarPiece(this, getSensor("body")->mPosition, mItemCount, 10.0f, 40.0f, false);

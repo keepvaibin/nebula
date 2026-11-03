@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The ray tracer's material and stage sun tables (rt_materials.h) and the texture-pack hash.
 #include "galaxy/render/rt_materials.h"
+#include "galaxy/test_hooks.h"
 
 #include "galaxy/platform_paths.h"
 
@@ -211,15 +212,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
 }
 
 std::vector<std::string> table_paths() {
-    char value[4096]{};
-    std::size_t length = 0u;
     std::vector<std::string> paths;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_MATERIALS_FILE") == 0 && length > 1u) {
-        for (const std::string& path : split(value, ';')) {
-            if (!path.empty()) paths.push_back(path);
-        }
-        return paths;
-    }
     const std::filesystem::path dir = program_directory();
     return {galaxy::path_text(dir / "rt-materials.tsv"), galaxy::path_text(dir / "rt-materials-lights.tsv")};
 }
@@ -246,14 +239,7 @@ const RtMaterialTable& table() {
 const RtStageSunTable& suns() {
     static const RtStageSunTable loaded = [] {
         RtStageSunTable t;
-        char value[4096]{};
-        std::size_t length = 0u;
-        std::string path;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_SUNS_FILE") == 0 && length > 1u) {
-            path = value;
-        } else {
-            path = galaxy::path_text(program_directory() / "rt-suns.tsv");
-        }
+        const std::string path = galaxy::path_text(program_directory() / "rt-suns.tsv");
         std::ifstream file(galaxy::text_path(path));
         if (file) {
             const std::size_t rows = t.read(file);
@@ -552,7 +538,7 @@ bool log_glows() {
     static const bool enabled = [] {
         char value[8]{};
         std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_LOG_GLOWS") == 0 && length > 1u && value[0] == '1';
+        return getenv_s(&length, value, sizeof(value), nebula_switch::rt_log_glows_name()) == 0 && length > 1u && value[0] == '1';
     }();
     return enabled;
 }

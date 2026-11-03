@@ -18,6 +18,11 @@
 #include <vector>
 
 namespace galaxy::host {
+#if defined(NEBULA_RELEASE)
+const char* test_data_paths_error(int, char**) {
+    return nullptr;
+}
+#else
 const char* test_data_paths_error(int argc, char** argv) {
     bool test = read_env_flag_uncached(nebula_switch::hide_window_name(), false);
     wchar_t* environment = GetEnvironmentStringsW();
@@ -38,8 +43,8 @@ const char* test_data_paths_error(int argc, char** argv) {
         return "NEBULA_WORK overlaps the user data folder";
     }
     for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_NAND",
-                              L"LOCALAPPDATA", L"GALAXY_RUNTIME_SETTINGS_PATH",
-                              L"GALAXY_RENDER_CONFIG_PATH", nebula_switch::crash_dump_dir_wide_name()}) {
+                              L"LOCALAPPDATA", nebula_switch::runtime_settings_path_wide_name(),
+                              nebula_switch::render_config_path_wide_name(), nebula_switch::crash_dump_dir_wide_name()}) {
         const auto path = get_env_path(name);
         if (!path || !path_is_within(*path, *work) || path_is_within(*path, protected_root)) {
             return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";
@@ -61,6 +66,7 @@ const char* test_data_paths_error(int argc, char** argv) {
     }
     return nullptr;
 }
+#endif
 
 namespace {
 std::atomic<bool> g_env_flag_cache_enabled{false};

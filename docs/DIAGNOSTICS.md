@@ -34,9 +34,7 @@ Times are in video frames (60 per second) from the start of the session.
 | Variable | Format |
 |---|---|
 | `GALAXY_INPUT_AUTOPRESS_SCRIPT` | `start:duration:buttons;...`, for example `5400:120:A+B` |
-| `GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL` | `1` stops the button script when the player first controls Mario |
 | `GALAXY_INPUT_STICK_SCRIPT` | `start:duration:x:y;...`, axes from -1 to 1 |
-| `GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL` | `1` counts stick script times from the first frame the player controls Mario |
 | `GALAXY_INPUT_SHAKE_SCRIPT` | `start:duration;...`, Wii Remote shakes |
 | `GALAXY_INPUT_POINTER_X`, `GALAXY_INPUT_POINTER_Y` | Fixed pointer position, -1 to 1 |
 | `GALAXY_INPUT_REPLAY_LOG` | A recorded input log (TSV) replayed as host input |

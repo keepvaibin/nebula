@@ -11,7 +11,7 @@ CameraParamChunkID::CameraParamChunkID(const CameraParamChunkID& other) {
     mZoneID = other.mZoneID;
     u32 length = strlen(other.mName);
     char* buffer = getBuffer(length + 1);
-    strcpy(buffer, other.mName);
+    memcpy(buffer, other.mName, length + 1);
     mName = buffer;
 }
 
@@ -85,7 +85,7 @@ void CameraParamChunkID::createGroupID(s32 zoneID, const char* a2, u32 a3, u32 a
     u32 actualSize = strlen(&buffer[0]);
     char* buffer2 = getBuffer(actualSize + 1);
 
-    strcpy(buffer2, &buffer[0]);
+    memcpy(buffer2, buffer, actualSize + 1);
     mName = buffer2;
 }
 
@@ -98,7 +98,7 @@ void CameraParamChunkID::createOtherID(s32 zoneID, const char* a2) {
     u32 actualSize = strlen(&buffer[0]);
     char* buffer2 = getBuffer(actualSize + 1);
 
-    strcpy(buffer2, &buffer[0]);
+    memcpy(buffer2, buffer, actualSize + 1);
     mName = buffer2;
 }
 
@@ -111,7 +111,7 @@ void CameraParamChunkID::createEventID(s32 zoneID, const char* a2) {
     u32 actualSize = strlen(&buffer[0]);
     char* buffer2 = getBuffer(actualSize + 1);
 
-    strcpy(buffer2, &buffer[0]);
+    memcpy(buffer2, buffer, actualSize + 1);
     mName = buffer2;
 }
 
@@ -124,6 +124,6 @@ void CameraParamChunkID::createStartID(s32 zoneID, u16 id) {
     u32 actualSize = strlen(&buffer[0]);
     char* buffer2 = getBuffer(actualSize + 1);
 
-    strcpy(buffer2, &buffer[0]);
+    memcpy(buffer2, buffer, actualSize + 1);
     mName = buffer2;
 }

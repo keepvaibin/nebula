@@ -34,7 +34,6 @@ UFOBase::UFOBase(const char* pName) : LiveActor(pName) {
     mLODCtrl = nullptr;
     mModel = nullptr;
     mRailMover = nullptr;
-    f32 v1 = 1.0f;  // ???
     _9C.x = 0.0f;
     _9C.y = 0.0f;
     _9C.z = 1.0f;

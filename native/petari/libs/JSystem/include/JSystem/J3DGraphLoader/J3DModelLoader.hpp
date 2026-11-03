@@ -5,7 +5,7 @@
 
 class J3DModelData;
 class J3DMaterialTable;
-class J3DModelHierarchy;
+struct J3DModelHierarchy;
 
 enum J3DModelLoaderFlagTypes {
     J3DMLF_None = 0x00000000,

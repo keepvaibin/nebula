@@ -7,7 +7,7 @@
 class JAISeqMgr;
 struct JAISoundChild;
 
-class JAISeq : public JAISound, public JSULink< JAISeq >, public JASPoolAllocObject< JAISeq > {
+class JAISeq final : public JAISound, public JSULink< JAISeq >, public JASPoolAllocObject< JAISeq > {
 public:
     static const int MAX_OUTPUT_TRACK_CHILDREN = 2;
     static const int NUM_CHILDREN = MAX_OUTPUT_TRACK_CHILDREN * JASTrack::MAX_CHILDREN;

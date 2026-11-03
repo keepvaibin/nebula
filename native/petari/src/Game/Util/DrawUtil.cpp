@@ -178,7 +178,7 @@ namespace MR {
         J3DPass::writeAlpha(false);
         J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);
         J3DPass::cull(NEBULA_CULL_BACK);
-        J3DNativeTarget::clearFrame(0, 0, width, height, 0, 0xFFFFFF, NEBULA_CLEAR_DEPTH);
+        J3DNativeTarget::clearFrame(0, 0, width, height, 0, NEBULA_CLEAR_DEPTH);
         J3DPass::writeColor(true);
     }
 

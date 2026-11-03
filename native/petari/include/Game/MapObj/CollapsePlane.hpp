@@ -5,7 +5,7 @@
 
 class AnimScaleController;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class WalkerStateBindStarPointer;
 
 class CollapsePlane : public MapObjActor {

@@ -2,12 +2,12 @@
 
 
 class NebulaArena;
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 class JPABaseEmitter;
 class JPABaseParticle;
 
-class JPAKeyBlock;
-class JPABaseShape;
+struct JPAKeyBlock;
+struct JPABaseShape;
 class JPAExtraShape;
 class JPAChildShape;
 class JPAExTexShape;

@@ -837,43 +837,9 @@ namespace MR {
         MtxPtr mtxY = tmpMtxRotYRad(pRad->y);
         MtxPtr mtxZ = tmpMtxRotZRad(pRad->z);
 
-        MtxPtr first, second, third;
-
-        switch (order) {
-        case 0:
-            first = mtxY;
-            second = mtxX;
-            third = mtxZ;
-            break;
-        case 1:
-            second = mtxX;
-            first = mtxZ;
-            third = mtxY;
-            break;
-        case 2:
-            first = mtxX;
-            second = mtxY;
-            third = mtxZ;
-            break;
-        case 3:
-            first = mtxZ;
-            second = mtxY;
-            third = mtxX;
-            break;
-        case 4:
-            second = mtxZ;
-            first = mtxX;
-            third = mtxZ;
-            break;
-        case 5:
-            first = mtxY;
-            second = mtxZ;
-            third = mtxX;
-            break;
-        }
-
-        MR::multMtx(pDst, second, first);
-        MR::multMtx(pDst, pDst, third);
+        // Order 0 is Y, X, Z; order 5 is Y, Z, X.
+        MR::multMtx(pDst, order == 5 ? mtxZ : mtxX, mtxY);
+        MR::multMtx(pDst, pDst, order == 5 ? mtxX : mtxZ);
     }
 
     void rotAxisVecRad(const TVec3f& rAxis, const TVec3f& rVec, TVec3f* pOut, f32 rad) {

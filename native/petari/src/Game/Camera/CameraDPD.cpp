@@ -122,15 +122,6 @@ CameraTargetObj* CameraDPD::calc() {
 
     TPos3f panYMtx;
     panYMtx.identity();
-    if (mIsVertical) {
-        f32 f1 = mBlendPointPos.y * MR::max(mAngleYRange, mAngleYMin);
-        f32 f2;
-        if (mAngleYRange < mAngleYMin) {
-            f2 = f1 > mAngleYRange ? mAngleYRange : f1;
-        } else {
-            f2 = f1 < -mAngleYMin ? -mAngleYMin : f1;
-        }
-    }
     panYMtx.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mBlendPointPos.y * mAngleYRange);
 
     TPos3f panXMtx;

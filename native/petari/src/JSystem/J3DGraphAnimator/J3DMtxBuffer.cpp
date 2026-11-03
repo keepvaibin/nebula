@@ -175,7 +175,6 @@ s32 J3DMtxBuffer::createBumpMtxArray(J3DModelData* i_modelData, u32 mtxNum) {
     return kJ3DError_Success;
 }
 
-static f32 J3DUnit01[] = {0.0f, 1.0f};
 
 // Each weighted envelope matrix is the weighted sum of (joint world matrix * inverse bind matrix) over its mix, the
 // products and sums in the order of the original's paired-single code.
@@ -217,10 +216,6 @@ void J3DMtxBuffer::calcWeightEnvelopeMtx() {
 }
 
 void J3DMtxBuffer::calcDrawMtx(u32 mdlFlag, Vec const& param_1, Mtx const& param_2) {
-    Mtx *sp24, *sp20;
-    int sp1C = 0;
-    sp20 = mpAnmMtx;
-    sp24 = mpWeightEvlpMtx;
 
     MtxPtr viewMtx;
     Mtx viewBaseMtx;

@@ -5,7 +5,7 @@
 
 template < typename T >
 class JointControlDelegator;
-class JointControllerInfo;
+struct JointControllerInfo;
 
 class BossBegomanHead : public PartsModel {
 public:

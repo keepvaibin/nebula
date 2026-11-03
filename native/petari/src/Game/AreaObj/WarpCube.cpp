@@ -128,8 +128,9 @@ void WarpCube::init(const JMapInfoIter& rIter) {
 
     MR::declareEventCamera(mCameraInfo, eventName);
 
-    mEventName = new char[strlen(&eventName[0]) + 1];
-    strcpy(mEventName, &eventName[0]);
+    const size_t eventNameSize = strlen(eventName) + 1;
+    mEventName = new char[eventNameSize];
+    memcpy(mEventName, eventName, eventNameSize);
 
     MR::connectToScene(this, MR::MovementType_AreaObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
     mInvalidateTimer = 0;

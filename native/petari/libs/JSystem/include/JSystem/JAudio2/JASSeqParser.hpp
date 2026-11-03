@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JASTrack;
+struct JASTrack;
 
 class JASSeqParser {
 public:

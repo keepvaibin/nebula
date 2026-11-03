@@ -196,6 +196,8 @@ void StarPiece::appearFromGroup() {
     case groupType_RailMoveGroup:
         setNerve(GET_NERVE(StarPiece, HostTypeNrvRailMove));
         break;
+    default:
+        break;
     }
 }
 

@@ -1,4 +1,5 @@
 #include "Game/LiveActor/ClippingGroupHolder.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/LiveActor/ClippingActorInfo.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
@@ -111,6 +112,11 @@ void ClippingGroupHolder::createAndAdd(ClippingActorInfo* pInfo, const JMapInfoI
 ClippingInfoGroup* ClippingGroupHolder::createGroup(ClippingActorInfo* pInfo, const JMapInfoIter& rIter, int count) {
     ClippingInfoGroup* group = new ClippingInfoGroup(pInfo->mActor->mName, count);
     group->setGroupNo(rIter);
+    if (mNumGroups == mMaxGroups) {
+        mInfoGroups = MR::growArray(mInfoGroups, mMaxGroups);
+        mMaxGroups *= 2;
+    }
+
     mInfoGroups[mNumGroups] = group;
     mNumGroups++;
     return group;

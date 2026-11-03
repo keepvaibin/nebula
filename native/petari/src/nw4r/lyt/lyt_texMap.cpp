@@ -58,7 +58,6 @@ namespace nw4r {
             const u16 width = read16(header + 2);
             const u32 format = read32(header + 4);
             void* const image = const_cast< u8* >(file + read32(header + 8));
-            const u8 maxLOD = header[34];
             mImage = image;
             J3DNativeTexture::registerRecord(image);
             SetSize(width, height);

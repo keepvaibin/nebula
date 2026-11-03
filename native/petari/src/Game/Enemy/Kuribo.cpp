@@ -222,7 +222,7 @@ void Kuribo::calcAndSetBaseMtx() {
 }
 
 void Kuribo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if ((!MR::isSensorType(pSender, ATYPE_KURIBO) || (isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver) ||
+    if ((!MR::isSensorType(pSender, ATYPE_KURIBO) || ((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver)) ||
          !isEnablePushMove() || !MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender)) &&
         isEnableAttack() && MR::isSensorPlayer(pReceiver) && MR::isSensorEnemyAttack(pSender)) {
         if (!MR::isPlayerHipDropFalling() && MR::sendMsgEnemyAttack(pReceiver, pSender)) {

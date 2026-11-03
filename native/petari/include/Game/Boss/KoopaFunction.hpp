@@ -18,10 +18,6 @@ class ModelObjNpc;
 class NameObj;
 class PartsModel;
 
-namespace {
-    bool tryStartCameraDemo(Koopa*, const char*, const char* pName, const char* pDemoName, bool isMario);
-};  // namespace
-
 namespace MR {
     struct ActorSightParam {
         f32 _0;

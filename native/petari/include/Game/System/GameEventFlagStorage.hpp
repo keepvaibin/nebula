@@ -2,7 +2,7 @@
 
 #include "Game/System/BinaryDataChunkHolder.hpp"
 
-class GameEventFlag;
+struct GameEventFlag;
 
 namespace MR {
     class BitArray;

@@ -7,7 +7,7 @@ class DinoPackun;
 template < typename T >
 class JointControlDelegator;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 
 class DinoPackunTailNode : public LiveActor {
 public:

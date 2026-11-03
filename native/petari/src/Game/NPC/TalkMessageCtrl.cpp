@@ -499,7 +499,6 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
 
     if (!(MR::abs(f2) > distance) && v3.squared() < distance * distance) {
         TalkMessageInfo* info = &mNodeCtrl->mMessageInfo;
-        bool cond = info->mTalkType;
         if (mIsStartOnlyFront || info->isBalloonSign()) {
             TPos3f pos;
             pos.set(mHostActor->getBaseMtx());

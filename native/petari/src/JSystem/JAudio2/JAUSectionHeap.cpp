@@ -544,7 +544,6 @@ int JAUSectionHeap::newDynamicSeqBlocks(u32 size, int n) {
 }
 
 JAISeqDataMgr::SeqDataReturnValue JAUSectionHeap::getSeqData(JAISoundID param_0, JAISeqData* param_1) {
-    const int JAI_ASYNC_RESULT_RETRY = 1;
 
     for (JSULink< JAUSection >* link = mSectionList.getFirst(); link; link = link->getNext()) {
         s32 result = link->getObject()->data_.field_0x00.getSeqData(param_0, sectionHeapData_.seqDataUser, param_1, false);

@@ -170,11 +170,11 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             query_info.queryCount = kFramesInFlight * 2u;
             vk::check(vkCreateQueryPool(device, &query_info, nullptr, &timestamps_), "vkCreateQueryPool");
             timestamp_period_ns_ = vk::Context::get().properties().limits.timestampPeriod;
-            if (env_flag("GALAXY_GPU_DRAWS", false)) {
+            if (env_flag(nebula_switch::gpu_draws_name(), false)) {
                 query_info.queryCount = kFramesInFlight * kGpuDrawSlots;
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &draw_queries_), "vkCreateQueryPool");
             }
-            if (env_flag("GALAXY_GPU_PASSES", false)) {
+            if (env_flag(nebula_switch::gpu_passes_name(), false)) {
                 query_info.queryCount = kFramesInFlight * (kGpuPassSlots + 2u);
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &pass_queries_), "vkCreateQueryPool");
                 if (vk::Context::get().pipeline_statistics()) {
@@ -239,10 +239,10 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
 
 bool RendererVk::create_surface_and_device() {
     const bool prefer_integrated = [] {
-        const char* value = std::getenv("GALAXY_GPU_PREFERENCE");
+        const char* value = std::getenv(nebula_switch::gpu_preference_name());
         return value != nullptr && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M');
     }();
-    const bool validation = env_flag("GALAXY_VULKAN_VALIDATION", false);
+    const bool validation = env_flag(nebula_switch::vulkan_validation_name(), false);
     const host_window::NativeWindow window = window_;
     const auto make_surface = [window](VkInstance instance) {
         return host_window::create_vulkan_surface(instance, window);

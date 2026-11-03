@@ -43,7 +43,6 @@ namespace {
     static const f32 sDistanceBindInvalid = 300.0f;
     static const s32 sTouchTimerMax = 20;
     static const s32 sStepFreeInvalidMin = 5;
-    static const f32 sPlayerDistanceToHang = 100.0f;
     static const f32 sDistanceMax = 500.0f;
     static const f32 sFollowRate = 0.03f;
     static const f32 sAimDistanceMin = 100.0f;
@@ -148,7 +147,6 @@ void SpaceCocoon::init(const JMapInfoIter& rIter) {
         spawnPos.scale((mNumPoints - idx) * delta);
         spawnPos.add(mBasePos);
 
-        f32 f = MR::getEaseInValue(static_cast< f32 >(idx) / mNumPoints, 0.0f, 1.0f, 1.0f);
 
         f32 thickness = 1.0f;
         if ((mNumPoints - 1) - idx < ::sWidthBottomPointNum) {
@@ -520,10 +518,6 @@ bool SpaceCocoon::updateSpringPoint() {
 
 void SpaceCocoon::updateHang() {
     f32 dist = mPosition.distance(mNeutralPos);
-
-    if (MR::isStarPointerInScreen(mPadChannel) && ::sPlayerDistanceToHang > dist) {
-        f32 dummy = 0.0f;
-    }
 
     if (dist >= ::sAimRumbleDistanceStrong) {
         MR::startLevelSound(this, "SE_OJ_LV_SPACE_COCOON_DRAG3");

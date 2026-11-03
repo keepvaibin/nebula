@@ -254,7 +254,7 @@ bool LuigiNPC::trySetNerveArrested() {
 }
 
 bool LuigiNPC::isDeclarePowerStarType() {
-    return mType == Type_Afraid || mType >= Type_Event && mType < Type_Count;
+    return mType == Type_Afraid || (mType >= Type_Event && mType < Type_Count);
 }
 
 void LuigiNPC::exeWait() {

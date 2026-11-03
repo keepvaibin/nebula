@@ -4,7 +4,7 @@
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MarioState.hpp"
 
-class AreaInfo;
+struct AreaInfo;
 class HitInfo;
 class MarioActor;
 class MarineSnow;

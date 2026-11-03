@@ -135,7 +135,7 @@ namespace MR {
         bool isExistObjArc = makeObjectArchiveFileNameFromPrefix(objArcPath, sizeof(objArcPath), pFilePrefix, false);
 
         char layoutArcPath[256];
-        bool isExistLayoutArc = makeLayoutArchiveFileNameFromPrefix(layoutArcPath, sizeof(layoutArcPath), pFilePrefix, false);
+        makeLayoutArchiveFileNameFromPrefix(layoutArcPath, sizeof(layoutArcPath), pFilePrefix, false);
 
         if (isExistObjArc) {
             return isLoadedFile(objArcPath);

@@ -608,8 +608,6 @@ void OceanSphere::draw() const {
     drawSphere(false, nullptr);
 }
 
-const NebulaColor8 sOceanSphereFogFace = {0xFF, 0xFF, 0xFF, 0};
-const NebulaColor8 sOceanSphereFogBack = {0xFF, 0xFF, 0xFF, 0};
 
 void OceanSphere::loadMaterialFace() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());

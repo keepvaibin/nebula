@@ -14,7 +14,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 
 namespace {
-    static const s32 sAreaNumMax = 8;
 
     WaterAreaHolder* getWaterAreaHolder() {
         return MR::getSceneObj< WaterAreaHolder >(SceneObj_WaterAreaHolder);
@@ -22,8 +21,8 @@ namespace {
 };  // namespace
 
 WaterAreaHolder::WaterAreaHolder()
-    : NameObj("\220\205\203\107\203\212\203\101\225\333\216\235" /* 水エリア保持 */), mNumOceanBowls(0), mOceanBowls(nullptr), mNumOceanRings(0), mOceanRings(nullptr), mNumOceanSpheres(0),
-      mOceanSpheres(nullptr), mNumWhirlPools(0), mWhirlPools(nullptr), mNumWhirlPoolAccelerators(0), mWhirlPoolAccelerators(nullptr),
+    : NameObj("\220\205\203\107\203\212\203\101\225\333\216\235" /* 水エリア保持 */), mNumOceanBowls(0), mOceanBowls(), mNumOceanRings(0), mOceanRings(), mNumOceanSpheres(0),
+      mOceanSpheres(), mNumWhirlPools(0), mWhirlPools(), mNumWhirlPoolAccelerators(0), mWhirlPoolAccelerators(),
       mCamInWater(false), mCameraFilter(nullptr), mUseBloom(false) {
     mWaterInfo.clear();
 
@@ -32,47 +31,33 @@ WaterAreaHolder::WaterAreaHolder()
         mUseBloom = true;
     }
 
-    mOceanBowls = new OceanBowl*[::sAreaNumMax];
-    mOceanRings = new OceanRing*[::sAreaNumMax];
-    mOceanSpheres = new OceanSphere*[::sAreaNumMax];
-    mWhirlPools = new WhirlPool*[::sAreaNumMax];
-    mWhirlPoolAccelerators = new WhirlPoolAccelerator*[::sAreaNumMax];
-
-    for (s32 idx = 0; idx < ::sAreaNumMax; idx++) {
-        mOceanBowls[idx] = nullptr;
-        mOceanRings[idx] = nullptr;
-        mOceanSpheres[idx] = nullptr;
-        mWhirlPools[idx] = nullptr;
-        mWhirlPoolAccelerators[idx] = nullptr;
-    }
-
     MR::connectToSceneScreenEffectMovement(this);
     mCameraFilter = new WaterCameraFilter();
     mCameraFilter->initWithoutIter();
 }
 
 void WaterAreaHolder::entryOceanBowl(OceanBowl* pOceanBowl) {
-    mOceanBowls[mNumOceanBowls] = pOceanBowl;
+    mOceanBowls.at(mNumOceanBowls) = pOceanBowl;
     mNumOceanBowls++;
 }
 
 void WaterAreaHolder::entryOceanRing(OceanRing* pOceanRing) {
-    mOceanRings[mNumOceanRings] = pOceanRing;
+    mOceanRings.at(mNumOceanRings) = pOceanRing;
     mNumOceanRings++;
 }
 
 void WaterAreaHolder::entryOceanSphere(OceanSphere* pOceanSphere) {
-    mOceanSpheres[mNumOceanSpheres] = pOceanSphere;
+    mOceanSpheres.at(mNumOceanSpheres) = pOceanSphere;
     mNumOceanSpheres++;
 }
 
 void WaterAreaHolder::entryWhirlPool(WhirlPool* pWhirlPool) {
-    mWhirlPools[mNumWhirlPools] = pWhirlPool;
+    mWhirlPools.at(mNumWhirlPools) = pWhirlPool;
     mNumWhirlPools++;
 }
 
 void WaterAreaHolder::entryWhirlPoolAccelerator(WhirlPoolAccelerator* pWhirlPoolAccelerator) {
-    mWhirlPoolAccelerators[mNumWhirlPoolAccelerators] = pWhirlPoolAccelerator;
+    mWhirlPoolAccelerators.at(mNumWhirlPoolAccelerators) = pWhirlPoolAccelerator;
     mNumWhirlPoolAccelerators++;
 }
 

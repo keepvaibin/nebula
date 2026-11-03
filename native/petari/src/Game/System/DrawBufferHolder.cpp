@@ -7,7 +7,6 @@ namespace {
     // static const char* sDrawTypeCameraName = ;
     // static const char* sPermitMultiCategoryArciveName = ;
 
-    bool isExcludedCheckMultiRegistCategory(s32);
 };  // namespace
 
 DrawBufferHolder::DrawBufferHolder() : mTableInitialized() {

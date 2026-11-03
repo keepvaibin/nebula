@@ -335,9 +335,6 @@ int main() {
     const galaxy::render::RenderConfig defaults{};
     passed &= expect(
         defaults.vsync_interval == 0 &&
-            !defaults.wait_for_frame_latency &&
-            defaults.swap_chain_frame_latency == 2 &&
-            defaults.flip_discard &&
             defaults.max_fps == 60.0f,
         "default Release config keeps a 60 Hz cap for non-realtime-VI launches "
         "and the flip-discard swap chain");
@@ -354,7 +351,6 @@ int main() {
     config.rt_shadow_quality = 3;
     config.rt_ao_enabled = true;
     config.rt_reflections = false;
-    config.swap_chain_frame_latency = 99;
     galaxy::render::set_render_config(config);
 
     const galaxy::render::RenderConfig sanitized =
@@ -371,9 +367,6 @@ int main() {
             !sanitized.rt_ao_enabled &&
             !sanitized.rt_reflections,
         "set_render_config keeps ray tracing and its reflections choice, and clamps the reserved DXR keys off");
-    passed &= expect(
-        sanitized.swap_chain_frame_latency == 2,
-        "set_render_config clamps swap-chain latency to the frame ring");
 
     {
         const std::filesystem::path root =
@@ -577,28 +570,6 @@ int main() {
     passed &= expect(
         !quality.enhanced_mipmaps,
         "enhanced mipmaps env override is applied");
-
-    {
-        ScopedEnv wait("GALAXY_WAIT_FOR_FRAME_LATENCY", "0");
-        ScopedEnv latency("GALAXY_SWAP_CHAIN_FRAME_LATENCY", "99");
-        ScopedEnv tearing("GALAXY_ALLOW_TEARING", "1");
-        ScopedEnv discard("GALAXY_FLIP_DISCARD", "0");
-        galaxy::render::load_render_config_from_file();
-    }
-    const galaxy::render::RenderConfig pacing =
-        galaxy::render::get_render_config();
-    passed &= expect(
-        !pacing.wait_for_frame_latency,
-        "frame latency wait env override is applied");
-    passed &= expect(
-        pacing.swap_chain_frame_latency == 2,
-        "swap-chain latency env override is clamped to the supported range");
-    passed &= expect(
-        pacing.allow_tearing,
-        "allow tearing env override is applied");
-    passed &= expect(
-        !pacing.flip_discard,
-        "flip discard env override is applied");
 
     {
         ScopedEnv decouple("GALAXY_FRAME_RATE_DECOUPLE", "1");

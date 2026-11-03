@@ -138,11 +138,11 @@ void ImageEffectLocalUtil::blurTexture(JUTTexture* pSource, JUTTexture* pScratch
     const f32 widthX = __builtin_sqrtf(radius * radius / 2.0f + texelX * texelX / 6.0f);
     const f32 widthY = __builtin_sqrtf(verticalRadius * verticalRadius / 2.0f + texelY * texelY / 6.0f);
     const bool alphaAlone = channels == NEBULA_TARGET_ALPHA;
-    J3DNativeTarget::begin(pScratch->mImage, pScratch->getWidth(), pScratch->getHeight(), 0, 0xFFFFFF);
+    J3DNativeTarget::begin(pScratch->mImage, pScratch->getWidth(), pScratch->getHeight(), 0);
     sendGaussianMaterial(pSource, 1.0f, 0.0f, widthX, alphaAlone ? 1.0f : 0.0f);
     sendTextureVertex(4, 0);
     J3DNativeTarget::end(pScratch->mImage, channels);
-    J3DNativeTarget::begin(pTarget->mImage, pTarget->getWidth(), pTarget->getHeight(), 0, 0xFFFFFF);
+    J3DNativeTarget::begin(pTarget->mImage, pTarget->getWidth(), pTarget->getHeight(), 0);
     sendGaussianMaterial(pScratch, 0.0f, 1.0f, widthY, alphaAlone ? alphaGain : 0.0f);
     sendTextureVertex(4, 0);
     J3DNativeTarget::end(pTarget->mImage, channels);

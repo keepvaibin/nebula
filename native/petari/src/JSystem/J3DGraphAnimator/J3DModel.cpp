@@ -310,7 +310,6 @@ void J3DModel::prepareShapePackets() {
     u16 shapeNum = mModelData->getShapeNum();
 
     for (u16 i = 0; i < shapeNum; i++) {
-        J3DShape* shapeNode = mModelData->getShapeNodePointer(i);
         J3DShapePacket* shapePacket = &mShapePacket[i];
         shapePacket->setMtxBuffer(mMtxBuffer);
 

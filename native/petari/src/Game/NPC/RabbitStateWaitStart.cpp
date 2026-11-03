@@ -110,7 +110,7 @@ bool RabbitStateWaitStart::isEnableReaction() const {
     if (isNerve(GET_NERVE(RabbitStateWaitStart, RabbitStateWaitStartNrvWait)) ||
         isNerve(GET_NERVE(RabbitStateWaitStart, RabbitStateWaitStartNrvSmallTurn)) ||
         isNerve(GET_NERVE(RabbitStateWaitStart, RabbitStateWaitStartNrvTrample)) ||
-        isNerve(GET_NERVE(RabbitStateWaitStart, RabbitStateWaitStartNrvTalk)) && MR::isShortTalk(mTalkCtrl)) {
+        (isNerve(GET_NERVE(RabbitStateWaitStart, RabbitStateWaitStartNrvTalk)) && MR::isShortTalk(mTalkCtrl))) {
         return true;
     }
 

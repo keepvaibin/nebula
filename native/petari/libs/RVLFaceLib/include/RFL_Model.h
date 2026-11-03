@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct MiiMiddleDB;
+struct MiiMiddleDB;
 
 typedef enum {
     MiiCoordinateType_X = 0x01000000,

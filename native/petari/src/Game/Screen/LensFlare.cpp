@@ -244,7 +244,6 @@ s32 LensFlareDirector::checkArea() {
 bool LensFlareDirector::checkBrightObj(bool b1) {
     bool ret = false;
     if (b1 && mBrightObjCount != 0) {
-        TVec3f camPos = MR::getCamPos();
 
         s32 index = -1;
         for (u32 i = 0; i < mBrightObjCount; i++) {

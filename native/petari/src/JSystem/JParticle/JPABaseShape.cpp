@@ -753,9 +753,6 @@ static void basePlaneTypeX(MtxPtr param_0, f32 param_1, f32 param_2) {
 }
 
 typedef void (*dirTypeFunc)(JPAEmitterWorkData const*, JPABaseParticle const*, JGeometry::TVec3< f32 >*);
-__declspec(force_export) static dirTypeFunc p_direction[5] = {
-    dirTypeVel, dirTypePos, dirTypePosInv, dirTypeEmtrDir, dirTypePrevPtcl,
-};
 
 typedef void (*rotTypeFunc)(f32, f32, Mtx&);
 static rotTypeFunc p_rot[5] = {

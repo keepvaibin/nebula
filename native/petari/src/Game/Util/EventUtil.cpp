@@ -957,7 +957,7 @@ namespace MR {
         }
 
         if (GameDataFunction::isEqualJustPowerStarNum(powerStarNumTarget) ||
-            GameDataFunction::isOnJustGameEventFlag("SpecialStarGrand5") && powerStarLeft == 0) {
+            (GameDataFunction::isOnJustGameEventFlag("SpecialStarGrand5") && powerStarLeft == 0)) {
             powerStarLeft += 1;
         }
 

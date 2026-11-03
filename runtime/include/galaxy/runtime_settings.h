@@ -87,7 +87,7 @@ void set_disc_languages(std::span<const std::string> folders) noexcept;
 // "auto", "wii", "xbox", "nintendo" or "playstation" (runtime_settings.ini).
 [[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
 
-// The generation changes only when the input mode changes, so device FIFOs can reject reports acquired
+// The generation changes only when the input mode changes, so device queues can reject reports acquired
 // under an older source.
 struct RuntimeInputModeState {
     RuntimeInputMode mode = RuntimeInputMode::KeyboardMouse;

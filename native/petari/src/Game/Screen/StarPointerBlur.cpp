@@ -64,7 +64,6 @@ void StarPointerBlur::hideAll() {
 
 void StarPointerBlur::movement() {
     s32 pastPointNum = StarPointerFunction::getPastPointNum(mPadChannel);
-    s32 nextPastPointNum = StarPointerFunction::getNextPastPointNum(mPadChannel);
 
     if (pastPointNum <= 0) {
         hide();
@@ -150,10 +149,6 @@ void StarPointerBlur::draw() const {
 }
 
 void StarPointerBlur::draw1() const {
-    // NOTE: im using this symbol to create a dummy TVec2f::TVec2f() call so the other does not get inlined.
-    // In reality, the contents of this function are stripped from the build.
-    TVec2f a(0.0f, 0.0f);
-    TVec2f b(a);
 }
 
 void StarPointerBlur::draw2() const {

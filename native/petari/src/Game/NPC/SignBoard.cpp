@@ -28,7 +28,7 @@ void SignBoard::init(const JMapInfoIter& rIter) {
 
     getSensor("Body")->setType(ATYPE_EYE);
 
-    FollowCollisionArea* area = new FollowCollisionArea(TVec3f(130.0f, 160.0f, 20.0f), getBaseMtx(), 80.0f);
+    new FollowCollisionArea(TVec3f(130.0f, 160.0f, 20.0f), getBaseMtx(), 80.0f);
 
     TVec3f up;
     MR::getUpVecFromQuat(&up, _A0);
