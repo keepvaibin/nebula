@@ -63,7 +63,8 @@ void StarPointerBlur::hideAll() {
 }
 
 void StarPointerBlur::movement() {
-    s32 pastPointNum = StarPointerFunction::getPastPointNum(mPadChannel);
+    // This frame's positions, as the cursor (StarPointerLayout::setPosition): its head stays on the cursor.
+    s32 pastPointNum = StarPointerFunction::getNextPastPointNum(mPadChannel);
 
     if (pastPointNum <= 0) {
         hide();
@@ -71,7 +72,7 @@ void StarPointerBlur::movement() {
     }
 
     for (s32 idx = pastPointNum - 1; idx >= 0; idx--) {
-        TVec2f pastPos = StarPointerFunction::getPastPosition(mPadChannel, idx);
+        TVec2f pastPos = StarPointerFunction::getNextPastPosition(mPadChannel, idx);
         StarPointerFunction::forceInsideScreenEdge(&pastPos);
         updatePoint(pastPos, false, nullptr);
     }
