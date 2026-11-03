@@ -25,6 +25,7 @@
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
 
+#include "galaxy/render/present_clock.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/host_env.h"
@@ -906,6 +907,8 @@ void RenderCore::record_presented_display_copy(
     const DisplayTexture& texture) noexcept {
     galaxy::timeline::record(galaxy::timeline::Event::DisplayPresented, texture.slot,
                          texture.copy_serial);
+    g_last_present_ns.store(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count(), std::memory_order_relaxed);
     record_pointer_response(texture);
     ++stat_display_present_presented_;
     const DisplaySerialAccountingEvent event =
