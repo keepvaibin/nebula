@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NPC/TalkMessageCtrl.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
 
 class TalkMessageHistory {
@@ -31,7 +32,7 @@ public:
 class RecursiveHelper {
 public:
     inline bool hasNode(const TalkNode*) const;
-    TalkNode* mStack[64];
+    MR::FixedArray< TalkNode*, 64 > mStack;
     s32 mIndex;
 };
 

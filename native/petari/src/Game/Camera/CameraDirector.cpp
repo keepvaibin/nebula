@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraDirector.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Boss/BossStinkBug.hpp"
 #include "Game/Camera/CameraCover.hpp"
 #include "Game/Camera/CameraHolder.hpp"
@@ -135,6 +136,11 @@ CameraTargetObj* CameraDirector::getTarget() {
 void CameraDirector::push(CameraMan* pMan) {
     if (mStack->mCount != 0) {
         getCurrentCameraMan()->deactivate(this);
+    }
+
+    if (mStack->mCount == mStack->mCapacity) {
+        mStack->mElements = MR::growArray(mStack->mElements, static_cast< s32 >(mStack->mCapacity));
+        mStack->mCapacity *= 2;
     }
 
     mStack->mElements[mStack->mCount++] = pMan;

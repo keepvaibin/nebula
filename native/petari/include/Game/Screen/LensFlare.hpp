@@ -89,7 +89,7 @@ public:
     LensFlareRing* mRing;
     LensFlareGlow* mGlow;
     LensFlareLine* mLine;
-    BrightObjBase* mBrightObjArray[16];
+    MR::FixedArray< BrightObjBase*, 16 > mBrightObjArray;
     u32 mBrightObjCount;
     TVec2f _60;
     f32 _68;

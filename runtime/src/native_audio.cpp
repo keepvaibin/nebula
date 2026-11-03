@@ -61,7 +61,7 @@ private:
     static std::uint32_t max_seconds() {
         static const std::uint32_t seconds = [] {
             unsigned long value = 15ul;
-            if (const char* const text = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP_SECONDS"))) {
+            if (const char* const text = NEBULA_TEST_GETENV("GALAXY_AUDIO_WAV_DUMP_SECONDS")) {
                 const unsigned long parsed = std::strtoul(text, nullptr, 10);
                 if (parsed > 0ul && parsed <= 3600ul) value = parsed;
             }
@@ -168,7 +168,7 @@ private:
         const wchar_t* const path = _wgetenv(NEBULA_TEST_ENV_W("GALAXY_AUDIO_WAV_DUMP"));
         if (path == nullptr || path[0] == L'\0') {
 #else
-        const char* const path = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP"));
+        const char* const path = NEBULA_TEST_GETENV("GALAXY_AUDIO_WAV_DUMP");
         if (path == nullptr || path[0] == '\0') {
 #endif
             disabled_ = true;
@@ -389,13 +389,13 @@ void NativeGameAudio::frame() {
         out[i * 2u + 1u] = samples[i * 2u + 1u] * gain;
     }
     galaxy::input::speaker::game_speaker().mix(out, s.mixer->rate(), audio.wiimote_speaker);
-    static const bool trace_first = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_FILE_READS")) != nullptr;
+    static const bool trace_first = NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr;
     static bool first_sound = false;
     if (trace_first && !first_sound && std::any_of(out.begin(), out.end(), [](float value) { return value != 0.0f; })) {
         first_sound = true;
         std::fprintf(stderr, "[read] first sound\n");
     }
-    static const bool dump = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP")) != nullptr;
+    static const bool dump = NEBULA_TEST_GETENV("GALAXY_AUDIO_WAV_DUMP") != nullptr;
     if (dump) {
         s.wav_block.resize(frames * 4u);
         for (std::size_t i = 0; i < frames * 2u; ++i) {

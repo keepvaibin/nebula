@@ -473,6 +473,10 @@ void RaceManager::prepBind() {
 }
 
 void RaceManager::entry(AbstractRacer* pRacer) {
+    if (mRacerNum == static_cast< u32 >(mRacer.size())) {
+        mRacer.grow();
+    }
+
     mRacer[mRacerNum++] = pRacer;
 }
 
@@ -489,6 +493,10 @@ void RaceManager::entry(PlayerRacer* pRacer) {
 }
 
 void RaceManager::entry(AbstractAudience* pAudience) {
+    if (mAudienceNum == static_cast< u32 >(mAudience.size())) {
+        mAudience.grow();
+    }
+
     mAudience[mAudienceNum++] = pAudience;
 }
 

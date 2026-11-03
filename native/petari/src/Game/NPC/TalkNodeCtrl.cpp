@@ -329,6 +329,10 @@ void TalkNodeCtrl::initNodeRecursive(TalkMessageCtrl* pMsgCtrl, const JMapInfoIt
         return;
     }
 
+    if (pHelper->mIndex == pHelper->mStack.size()) {
+        pHelper->mStack.grow();
+    }
+
     pHelper->mStack[pHelper->mIndex++] = currentNode;
 
     if (mMessageInfo.isCameraEvent()) {
