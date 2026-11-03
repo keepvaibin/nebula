@@ -83,6 +83,10 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
         loop_end,
         bytes[0x28] as u32,
     ];
+    // The blocks hold the samples: a count past twice the file is the header's alone, not worth its allocation.
+    if samples as u64 * 2 * channels as u64 > bytes.len() as u64 * 2 {
+        bail!("{samples} samples in a stream of {} bytes", bytes.len());
+    }
     let mut out = vec![0u8; STREAM_HEADER + samples * 2 * channels];
     for (i, value) in header.iter().enumerate() {
         out[i * 4..i * 4 + 4].copy_from_slice(&value.to_le_bytes());
@@ -104,7 +108,7 @@ pub fn ast(bytes: &[u8]) -> Result<Vec<u8>> {
             per_channel = bytes.len().saturating_sub(data + size * (channels - 1));
         }
         for channel in 0..channels {
-            let source = &bytes[data + size * channel..data + size * channel + per_channel];
+            let source = bytes.get(data + size * channel..data + size * channel + per_channel).with_context(|| format!("a block at {at:#x} past the stream's end"))?;
             let take = per_channel.min((samples * 2).saturating_sub(written));
             let target = STREAM_HEADER + samples * 2 * channel + written;
             out[target..target + take].copy_from_slice(&source[..take]);
@@ -240,6 +244,10 @@ fn decode_adpcm(data: &[u8], block_bytes: usize, samples: usize, out: &mut [u8])
 /// An AW file with every wave PCM16 in host order, at the places of its layout (a wave's range past the file is refused).
 pub fn wave_archive(bytes: &[u8], places: &[WavePlace]) -> Result<Vec<u8>> {
     let size = places.iter().map(|w| w.new_offset + w.new_length).max().unwrap_or(0);
+    // Two-bit ADPCM, the most a byte can grow, is 32 bytes from 5; past that the wave systems' counts are wrong.
+    if size as u64 > bytes.len() as u64 * 8 + (1 << 20) {
+        bail!("wave systems that make {size} bytes from a wave archive of {} bytes", bytes.len());
+    }
     let mut out = vec![0u8; size];
     for w in places {
         let data = bytes.get(w.offset..w.offset + w.length).with_context(|| format!("a wave at {:#x} past the file's end", w.offset))?;
@@ -300,6 +308,39 @@ mod tests {
         s[9] = FORMAT_PCM16;
         s[0xC..0xE].copy_from_slice(&1u16.to_be_bytes());
         assert!(ast(&s).is_err());
+    }
+
+    #[test]
+    fn a_header_sized_stream_is_refused_before_its_allocation() {
+        let mut s = vec![0u8; AST_HEADER];
+        s[..4].copy_from_slice(b"STRM");
+        s[9] = FORMAT_PCM16;
+        s[0xC..0xE].copy_from_slice(&6u16.to_be_bytes());
+        s[0x14..0x18].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert!(ast(&s).unwrap_err().to_string().contains("samples in a stream"));
+    }
+
+    #[test]
+    fn a_block_past_the_end_is_an_error() {
+        // Two channels of 40 bytes: the file ends inside the first, within the overrun a last block is allowed.
+        let mut s = vec![0u8; AST_HEADER + AST_BLOCK_HEADER + 16];
+        s[..4].copy_from_slice(b"STRM");
+        s[9] = FORMAT_PCM16;
+        s[0xC..0xE].copy_from_slice(&2u16.to_be_bytes());
+        s[AST_HEADER..AST_HEADER + 4].copy_from_slice(b"BLCK");
+        s[AST_HEADER + 4..AST_HEADER + 8].copy_from_slice(&40u32.to_be_bytes());
+        assert!(ast(&s).is_err());
+        // The block's header cut short.
+        let mut cut = vec![0u8; AST_HEADER + 8];
+        cut[..AST_HEADER].copy_from_slice(&s[..AST_HEADER]);
+        cut[AST_HEADER..AST_HEADER + 4].copy_from_slice(b"BLCK");
+        assert!(ast(&cut).is_err());
+    }
+
+    #[test]
+    fn wave_systems_cannot_ask_for_more_than_the_file_makes() {
+        let place = WavePlace { offset: 0, length: 2, format: WAVE_PCM16, samples: 1 << 40, new_offset: 0, new_length: 1 << 41 };
+        assert!(wave_archive(&[1, 2], &[place]).is_err());
     }
 
     fn place(offset: usize, length: usize, format: u8, samples: usize, new_offset: usize) -> WavePlace {

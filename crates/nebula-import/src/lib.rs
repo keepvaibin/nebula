@@ -1188,6 +1188,29 @@ mod tests {
     }
 
     #[test]
+    fn a_format_1_content_folder_cooks_without_the_disc() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut compressed = b"Yaz0".to_vec();
+        compressed.extend_from_slice(&4u32.to_be_bytes());
+        compressed.extend_from_slice(&[0; 8]);
+        compressed.extend_from_slice(&[0xF0, b'a', b'b', b'c', b'd']);
+        let mut partition = table_partition(
+            &directory.path().join("data"),
+            &[("LayoutData/FileSelect.arc", 0x21000, b"archive"), ("small.szs", 0x21020, &compressed)],
+        );
+        let old = directory.path().join("content-format1");
+        partition.write_pak(&old.join("game.pak"), &mut |_, _| true).unwrap();
+        let output = directory.path().join("content");
+        let stats = cook::cook_content(&old, &output, &mut |_, _| true).unwrap();
+        assert_eq!(stats.expanded_files, 1);
+        let read = |path: &str| cook::store::read_file(&output.join("game.pak"), path).unwrap();
+        assert_eq!(read("small.szs"), b"abcd");
+        assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
+        assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
+        assert!(cook::cook_content(&old, &output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[test]
     fn input_identity_messages_and_json() {
         let other = InputIdentity::new("ISO".into(), "RMCP01".into(), "Mario \"Kart\"\n".into(), 0, None, Vec::new());
         assert!(!other.supported);

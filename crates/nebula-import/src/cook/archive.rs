@@ -136,9 +136,19 @@ pub fn members(bytes: &[u8]) -> Result<Vec<Member>> {
     let mut out = Vec::new();
     if folder_count != 0 {
         let layout = Layout { data_start, folders_at, folder_count, entry_at, entry_count, strings_at };
-        walk(bytes, &layout, 0, "", 0, &mut out)?;
+        let mut walked = Walked { folders: vec![false; folder_count], bytes: 0 };
+        walk(bytes, &layout, 0, "", 0, &mut walked, &mut out)?;
     }
     Ok(out)
+}
+
+/// Past this an archive's members are refused: entries can share bytes, so the table alone can ask for any amount.
+const MEMBERS_MAX: usize = 4 << 30;
+
+/// What a walk has been through: each folder once, however the entries point at them, and the members' bytes.
+struct Walked {
+    folders: Vec<bool>,
+    bytes: usize,
 }
 
 struct Layout {
@@ -150,8 +160,8 @@ struct Layout {
     strings_at: usize,
 }
 
-fn walk(bytes: &[u8], layout: &Layout, folder: usize, prefix: &str, depth: usize, out: &mut Vec<Member>) -> Result<()> {
-    if folder >= layout.folder_count || depth > 32 {
+fn walk(bytes: &[u8], layout: &Layout, folder: usize, prefix: &str, depth: usize, walked: &mut Walked, out: &mut Vec<Member>) -> Result<()> {
+    if folder >= layout.folder_count || depth > 32 || std::mem::replace(&mut walked.folders[folder], true) {
         bail!("an archive's folders do not form a tree");
     }
     let at = layout.folders_at + folder * 0x10;
@@ -172,7 +182,7 @@ fn walk(bytes: &[u8], layout: &Layout, folder: usize, prefix: &str, depth: usize
         let path = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
         let offset = be32(bytes, at + 8)? as usize;
         if flags & FLAG_FOLDER != 0 {
-            walk(bytes, layout, offset, &path, depth + 1, out)?;
+            walk(bytes, layout, offset, &path, depth + 1, walked, out)?;
             continue;
         }
         let size = be32(bytes, at + 12)? as usize;
@@ -180,6 +190,10 @@ fn walk(bytes: &[u8], layout: &Layout, folder: usize, prefix: &str, depth: usize
         let mut member = bytes.get(start..start + size).with_context(|| format!("{name} lies past the archive's end"))?.to_vec();
         if flags & FLAG_COMPRESSED != 0 || is_compressed(&member) {
             member = expand(&member).with_context(|| format!("{name} cannot be expanded"))?;
+        }
+        walked.bytes += member.len();
+        if walked.bytes > MEMBERS_MAX {
+            bail!("an archive whose files come to more than {MEMBERS_MAX} bytes");
         }
         out.push(Member { path, offset, bytes: member });
     }
@@ -226,6 +240,32 @@ mod tests {
         let members = members(&small_archive()).unwrap();
         let listed: Vec<(&str, usize, &[u8])> = members.iter().map(|m| (m.path.as_str(), m.offset, m.bytes.as_slice())).collect();
         assert_eq!(listed, [("a.bin", 16, &b"aa"[..]), ("sub/b.bin", 0, &b"bbb"[..])]);
+    }
+
+    #[test]
+    fn folders_that_list_each_other_are_refused_at_once() {
+        // Each of 32 folders' two entries points at the next: 2^32 walks if a folder could be walked twice.
+        let folders = 32usize;
+        let (folders_at, entries_at) = (0x40usize, 0x40 + folders * 0x10);
+        let strings_at = entries_at + folders * 2 * 0x14;
+        let data_at = strings_at + 0x10;
+        let mut out = vec![0u8; data_at];
+        out[..4].copy_from_slice(b"RARC");
+        for (at, value) in [(0x0C, data_at - 0x20), (0x20, folders), (0x24, folders_at - 0x20), (0x28, folders * 2), (0x2C, entries_at - 0x20), (0x34, strings_at - 0x20)] {
+            put32(&mut out, at, value as u32);
+        }
+        out[strings_at..strings_at + 2].copy_from_slice(b"d\0");
+        for folder in 0..folders {
+            let at = folders_at + folder * 0x10;
+            out[at + 0x0B] = 2;
+            put32(&mut out, at + 0x0C, (folder * 2) as u32);
+            for entry in 0..2 {
+                let at = entries_at + (folder * 2 + entry) * 0x14;
+                put32(&mut out, at + 4, 0x02 << 24);
+                put32(&mut out, at + 8, ((folder + 1) % folders) as u32);
+            }
+        }
+        assert!(members(&out).err().unwrap().to_string().contains("do not form a tree"));
     }
 
     #[test]

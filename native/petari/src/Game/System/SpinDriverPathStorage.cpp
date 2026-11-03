@@ -158,6 +158,11 @@ s32 SpinDriverPathStorageScenario::deserialize(const u8* pData, u32 dataSize) {
             return 0;
         }
 
+        // The size, what is read so far and the next byte lie in the block.
+        if (static_cast< u32 >(readOffset) + 3 > dataSize) {
+            return 0;
+        }
+
         u8 val = *(pData + readOffset + 2);
         if (val != SpinDriverScenarioDataFlag_EndOfData) {
             if ((val & SpinDriverScenarioDataFlag_ZoneDataStart) == SpinDriverScenarioDataFlag_ZoneDataStart) {
@@ -167,6 +172,10 @@ s32 SpinDriverPathStorageScenario::deserialize(const u8* pData, u32 dataSize) {
             }
 
             if (zoneId < 0) {
+                return 0;
+            }
+
+            if ((val & SpinDriverDataFlag_Interrupted) != 0 && static_cast< u32 >(readOffset) + 4 > dataSize) {
                 return 0;
             }
 
@@ -287,18 +296,33 @@ s32 SpinDriverPathStorage::serialize(u8* pData, u32 maxBufferSize) const {
 s32 SpinDriverPathStorage::deserialize(const u8* pData, u32 maxBufferSize) {
     s32 readError = 0;
 
+    if (maxBufferSize == 0) {
+        return -1;
+    }
+
     JSUMemoryInputStream stream(pData, maxBufferSize);
     u8 numEntries = stream.readU8();
 
     for (s32 idx = 0; idx < numEntries; idx++) {
+        // A block's header and its whole size in what is left of the chunk.
+        const u32 remaining = maxBufferSize - stream.mPosition;
+        if (remaining < 6) {
+            return -1;
+        }
+
         u8* readPtr = (u8*)stream.mBuffer + stream.mPosition;
+        const u32 blockSize = MR::loadSaveU16(readPtr + 2);
+        if (blockSize < 6 || blockSize > remaining) {
+            return -1;
+        }
+
         SpinDriverPathStorageGalaxy* storage = findFromHashCode(MR::loadSaveU16(readPtr));
         if (storage != nullptr) {
-            storage->deserialize((u8*)stream.mBuffer + stream.mPosition, maxBufferSize - stream.mPosition);
+            storage->deserialize(readPtr, blockSize);
         } else {
             readError = 1;
         }
-        stream.seek(MR::loadSaveU16(readPtr + 2), SEEK_FROM_POSITION);
+        stream.seek(blockSize, SEEK_FROM_POSITION);
     }
 
     return readError ? 1 : 0;

@@ -135,14 +135,22 @@ void set_create_id(MiiFields& mii, std::uint32_t mii_part) {
     }
 }
 
+// The folder is read every start; a file past this holds no Miis (the largest database is 2 MB). Reads as empty.
+constexpr std::uintmax_t kMiiFileLimit = 64u << 20u;
+
 std::vector<std::byte> read_file(const std::filesystem::path& path) {
+    std::error_code error;
+    const std::uintmax_t size = std::filesystem::file_size(path, error);
+    if (error || size > kMiiFileLimit) {
+        return {};
+    }
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         return {};
     }
-    std::vector<char> chars((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    std::vector<std::byte> bytes(chars.size());
-    std::transform(chars.begin(), chars.end(), bytes.begin(), [](char c) { return static_cast<std::byte>(c); });
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
+    bytes.resize(static_cast<std::size_t>(in.gcount()));
     return bytes;
 }
 
