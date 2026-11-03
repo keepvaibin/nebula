@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 115u
+#define NEBULA_GAME_API_VERSION 116u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -958,10 +958,12 @@ typedef struct NebulaHostServices {
     void (*voices_frame)(void* user);
     /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,
        u32, then the samples, PCM16, left and right in turn, of the track played) for the mixer; 0 when the queue is full (null asks only that).
-       sound at 32 kHz; 0 when 20 frames already wait (nothing taken). A null record only asks for room.
-       movie_audio_control: NEBULA_MOVIE_AUDIO_*. */
+       sound at 32 kHz; 0 when NEBULA_MOVIE_AUDIO_QUEUE_FRAMES already wait (nothing taken). A null record asks for the frames there is room for.
+       movie_audio_control: NEBULA_MOVIE_AUDIO_*. movie_audio_position: where the output has reached in the sound since the movie opened or was
+       reset, in frames and the fraction of the one being heard. */
     int (*movie_audio)(void* user, const void* record, uint32_t size);
     void (*movie_audio_control)(void* user, uint32_t what, int32_t value, int32_t milliseconds);
+    double (*movie_audio_position)(void* user);
     void (*sound_clock)(void* user, uint32_t what, uint32_t value);
 
     /* The HOME Menu (NEBULA_HBM_*). */
@@ -1148,6 +1150,8 @@ enum {
     NEBULA_CONTEXT_CAMERA_WATER,          /* each frame: the camera's depth under water in units, at least 1 (0: out
                                              of water; MR::isCameraInWater): ray tracing's water medium */
 };
+
+#define NEBULA_MOVIE_AUDIO_QUEUE_FRAMES 20
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */
 NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
