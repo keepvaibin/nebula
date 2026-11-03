@@ -66,7 +66,7 @@ void GameSystemResetAndPowerProcess::requestReset(bool param1) {
     }
 }
 
-void GameSystemResetAndPowerProcess::requestGoWiiMenu(bool param1) {
+void GameSystemResetAndPowerProcess::requestQuitGame(bool param1) {
     if (tryPermitReset()) {
         _5E = param1;
         setResetOperationReturnToMenu();
@@ -86,8 +86,7 @@ void GameSystemResetAndPowerProcess::notifyCheckDiskResult(bool param1) {
     }
 }
 
-// The console's power and reset buttons started a reset from here. A PC has neither: resets come from the HOME Menu
-// (requestReset, requestGoWiiMenu).
+// Resets come from the HOME Menu (requestReset, requestQuitGame).
 void GameSystemResetAndPowerProcess::exePolling() {
 }
 
@@ -138,7 +137,6 @@ void GameSystemResetAndPowerProcess::exeReset() {
     if (MR::isFirstStep(this)) {
         _5C = false;
 
-        // The console checked the disc was still in (its answer came before the check returned); the game's files are.
         notifyCheckDiskResult(true);
     }
 

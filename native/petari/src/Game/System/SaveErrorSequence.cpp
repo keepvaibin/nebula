@@ -99,7 +99,7 @@ void SaveErrorSequence::exeError() {
     }
 
     if (MR::isDead(mSysInfoWindow)) {
-        GameSystemFunction::requestGoWiiMenu(false);
+        GameSystemFunction::requestQuitGame(false);
     }
 }
 

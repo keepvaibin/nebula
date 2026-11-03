@@ -242,8 +242,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         J3DNativeMaterial::swapImage(0, _1C4[index]);
     }
     if (override >= 0) {
-        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (the console's: one
-        // stage of the colour register, no textures), with the blending, depth and culling the lists set.
+        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (no textures), with the blending, depth and culling the lists set.
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
                            false, NEBULA_CULL_NONE);

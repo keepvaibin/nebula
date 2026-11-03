@@ -71,7 +71,7 @@ namespace J3DNativeState {
         rLight.direction[2] = -nz;
     }
 
-    // the console's distance for a light at infinity.
+    // The distance of a light at infinity.
     const f32 cInfiniteLightDistance = 1.0e18f;
 
     void initSpecularDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz) {

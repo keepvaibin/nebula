@@ -159,8 +159,8 @@ void DynamicCollisionObj::createCollision() {
     u16* u16array = new (4) u16[v + 3];
     mKCLFile->mOctree = u16array;
 
-    // One leaf octree entry, 0x80000002: the list two bytes on. The console's halves were its big-endian s32; the
-    // native KCollisionServer reads entries in host order (KCLOctreeSwap converts the disc's), so the s32 is written.
+    // One leaf octree entry, 0x80000002: the list two bytes on. KCollisionServer reads entries in host order, so the s32
+    // is written.
     writeBytes< s32 >(u16array, static_cast< s32 >(0x80000002));
 
     s32 count = v;

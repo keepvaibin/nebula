@@ -138,9 +138,8 @@ void DemoRabbit::updateStopVelocity() {
     MR::addVelocityToGravityOrGround(this, ::sGroundGravityAccel);
     MR::reboundVelocityFromCollision(this);
 
-    // With no ground within 10 units the console leaves `normal` as whatever its stack slot holds; natively that can be
-    // a long vector, which makes the kept part of the velocity grow each frame until the binder steps through the
-    // ground. No ground: the up vector (the fall kept, the drift stopped).
+    // No ground within 10 units: the up vector (the fall kept, the drift stopped). Left unset, `normal` can be a long
+    // vector, which makes the kept part of the velocity grow each frame until the binder steps through the ground.
     TVec3f normal(-mGravity);
     MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * 10.0f, nullptr, nullptr);
     MR::vecKillElement(mVelocity, normal, &normal);

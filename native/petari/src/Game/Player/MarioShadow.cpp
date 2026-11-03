@@ -452,12 +452,12 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     }
 
     if (!(_308 & 4)) {
-        MR::beginWiiScreenWidth();
+        MR::beginDesignScreenWidth();
         // runtime/src/render/materials/vertex_color.hlsl into the alpha: the shadow faded to the edge of a circle (the
         // alpha times the circle's).
         NebulaNativeMaterial circle;
         TDDraw::setupNative(&circle, 0, 1, 2);
-        MR::endWiiScreenWidth();
+        MR::endDesignScreenWidth();
         circle.color_write = 0;
         circle.alpha_write = 1;
         NativeShader::setBlend(circle, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ZERO);
@@ -466,9 +466,9 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         f32 y = _2FE / 2;
         f32 x = _2FC / 2;
         TVec3f center(x, y, 0.0f);
-        MR::beginWiiScreenWidth();
+        MR::beginDesignScreenWidth();
         TDDraw::fix2Dpos(&center);
-        MR::endWiiScreenWidth();
+        MR::endDesignScreenWidth();
         TDDraw::drawFillCircle(center, _2FC / 2, 0xFFFFFFC0, 0, 16);
     }
 

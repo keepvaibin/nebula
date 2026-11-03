@@ -104,11 +104,11 @@ namespace MR {
 
     static bool sWiiScreenWidth;
 
-    void beginWiiScreenWidth() {
+    void beginDesignScreenWidth() {
         sWiiScreenWidth = true;
     }
 
-    void endWiiScreenWidth() {
+    void endDesignScreenWidth() {
         sWiiScreenWidth = false;
     }
 

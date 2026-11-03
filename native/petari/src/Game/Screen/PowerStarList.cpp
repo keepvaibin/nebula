@@ -219,7 +219,7 @@ void PowerStarList::init(const JMapInfoIter& rIter) {
 
     mArrowUpButtonCtrl = createButtonController("ArrowUpButton", "BoxButton1_00");
     mArrowDownButtonCtrl = createButtonController("ArrowDownButton", "BoxButton1_01");
-    // The Wii Message Board's capture button: no message board (B-31, Q5).
+    // No message board (B-31, Q5), no capture button.
     MR::hidePaneRecursive(this, "Capture");
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayoutOnPause(mSysInfoWindow);

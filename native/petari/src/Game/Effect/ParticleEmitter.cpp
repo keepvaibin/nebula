@@ -32,7 +32,7 @@ void ParticleEmitter::pauseOff() {
     }
 }
 
-// No source in the decompilation; written from the RMGE01 assembly (0x800C9FE8): an emitter with no frame limit.
+// An emitter with no frame limit.
 bool ParticleEmitter::isContinuousParticle() const {
     if (mEmitter == nullptr) {
         return false;

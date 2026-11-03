@@ -33,7 +33,7 @@ void SurfingGuidance::init(const JMapInfoIter& rIter) {
 }
 
 void SurfingGuidance::activate() {
-    // Pictures of a Wii Remote (tilting it) only with one in hand; the tutorial runs on without them.
+    // Pictures of the remote (tilting it) only with one in hand; the tutorial runs on without them.
     if (!NebulaIcons::wiiRemoteInUse()) {
         return;
     }

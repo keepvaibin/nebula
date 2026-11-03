@@ -248,7 +248,7 @@ namespace nw4r {
                     return u8(detail::GetBits(u32(bits), 15, 3));
                 }
 
-                u8 GetTevStageNum() const {
+                u8 GetStageCount() const {
                     return u8(detail::GetBits(u32(bits), 18, 5));
                 }
 
