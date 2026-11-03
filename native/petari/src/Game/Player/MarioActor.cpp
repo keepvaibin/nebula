@@ -1098,6 +1098,11 @@ bool MarioActor::doRush() {
         mMario->updateGroundInfo();
         mMario->updateCubeCode();
         mMario->decDamageAfterTimer();
+        // Those can end the rush (what it held let go, a place that ends it): nothing is held from here.
+        if (!_934) {
+            return false;
+        }
+
         if (selectWaterInOutRush(_924)) {
             WaterInfo stack_44;
             if (!MR::getWaterAreaObj(&stack_44, mPosition)) {
@@ -1126,7 +1131,7 @@ bool MarioActor::doRush() {
             }
         }
 
-        if (mMario->isForceStopRush()) {
+        if (_934 && mMario->isForceStopRush()) {
             bool received = _924->receiveMessage(ACTMES_RUSH_DAMAGE_CANCEL, getSensor("body"));
             if (_934 && received) {
                 RushEndInfo stack_20(nullptr, 4, TVec3f(0.0f, 0.0f, 0.0f), false, 0);
