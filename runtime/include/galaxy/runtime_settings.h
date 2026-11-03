@@ -35,7 +35,7 @@ struct RuntimeAudioSettings {
 // not know), or one style always.
 enum class ButtonIcons : std::uint8_t { Auto, Wii, Xbox, Nintendo, PlayStation, Keyboard };
 
-// The game's languages, as the Wii's SC language codes SCGetLanguage returns; the disc's release picks each one's
+// The game's languages, by the game's language codes; the disc's release picks each one's
 // folder (UsEnglish on North America's disc, EuEnglish on Europe's, JpJapanese on Japan's). Auto: the system's language
 // where the disc has it, else English, else the disc's first (game_language_resolved).
 enum class GameLanguage : std::uint8_t {

@@ -70,7 +70,7 @@ typedef struct NebulaTexture {
     uint16_t width, height; /* level 0, in texels */
     uint8_t levels;         /* 1 .. NEBULA_TEXTURE_MAX_LEVELS */
     uint8_t layout;         /* NEBULA_TEXTURE_RGBA8, _L8 or _LA8 */
-    uint8_t disc_format;    /* the GX format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
+    uint8_t disc_format;    /* the format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
     uint8_t flags;          /* NEBULA_TEXTURE_FILTER_AT_UPLOAD */
     /* Texture packs name a texture by these: xxh64 of the disc's level-0 bytes, and of the

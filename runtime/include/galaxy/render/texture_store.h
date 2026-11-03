@@ -58,7 +58,7 @@ void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
                              std::vector<RGBA8>& dest,
                              std::uint32_t dest_width, std::uint32_t dest_height);
 // A level of at least 4x4 texels that alternates two values on every texel is a grain the game painted for
-// the Wii's 6-bit framebuffer (the sky's DotNoise, the white and red plastics). In 8-bit colour it only shows,
+// a low-precision framebuffer (the sky's DotNoise, the white and red plastics). In 8-bit colour it only shows,
 // magnified, as a grid of dots; it becomes the two values' rounded average. Returns whether it was one.
 bool flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
 // A level whose texel-scale detail is a one-texel checker over its content: the art's ordered grain, baked in before

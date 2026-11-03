@@ -61,18 +61,18 @@ inline constexpr std::uint8_t kMarkerStarPointer = 11u;  // aux kLayoutIn2D | kS
 inline constexpr std::uint8_t kMarkerMaterial = 12u;     // a the material's identity (rt_material_identity; 0 unknown)
 inline constexpr std::uint8_t kMarkerEffect = 13u;       // a the emitter's effect identity ("Effect/<particle name>")
 // 14: unused (was the ray tracer's trace-only draws).
-// The game's bloom through the renderer (galaxy/render/game_bloom.h; NEBULA_OPTION_BLOOM), aux the phase: kBloomKeep the
+// The game's bloom through the renderer (galaxy/render/game_bloom.h; NEBULA_OPTION_BLOOM), aux the phase: kBloomHold the
 // scene before the bloom works over it (BloomEffect::preDraw; BloomEffectSimple::draw's start with its own chain);
 // kBloomNormal BloomEffect::postDraw drawn by the renderer, a the threshold, the two blurs' tap weights and the
 // intensity (8 bits each, low first), b the rings' horizontal radius per unit (float bits: 1 / the camera's aspect);
 // kBloomSimple BloomEffectSimple::draw drawn by the renderer, a the threshold, the channel (0 intensity, 1-3 red,
-// green, blue), the tap weight and the intensity, b the ring's vertical radius per unit; kBloomRestore the game's own
+// green, blue), the tap weight and the intensity, b the ring's vertical radius per unit; kBloomResume the game's own
 // chain drawing its kept scene back (the kept one instead).
 inline constexpr std::uint8_t kMarkerBloom = 15u;
 // Tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): a the native shader id of the material the draws up to the next
 // material use, on the native and the old path alike (J3DNativeMaterial), so the two paths' inputs can be compared.
 inline constexpr std::uint8_t kMarkerDumpTag = 17u;
-inline constexpr std::uint16_t kBloomKeep = 1u;
+inline constexpr std::uint16_t kBloomHold = 1u;
 inline constexpr std::uint16_t kBloomNormal = 2u;
 inline constexpr std::uint16_t kBloomSimple = 3u;
 

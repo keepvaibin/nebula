@@ -35,7 +35,7 @@
 //! - J3D models and material tables (BMD, BDL, BMT; j3d_model): headers, block headers, INF1, JNT1, EVP1, DRW1 and
 //!   the name tables, VTX1 (format list, arrays by their component type), SHP1 (shape data, tables, vertex
 //!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
-//!   tables (its console command lists stay: the game does not read them), TEX1's image headers.
+//!   tables (its command lists stay: the game does not read them), TEX1's image headers.
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 //! - BAS (sound animations): counts, ids, times, pitches, flags (bas).
 //! - BRS/BME/BMT (rhythm library remix and ME files): words, tables, parameters (rhythm).
@@ -1313,7 +1313,7 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                         if descs == 0 || draw == 0 || lists == 0 {
                             continue;
                         }
-                        // The vertex layout: attributes in GX's order, NBT as the normal; matrix indices one byte,
+                        // The vertex layout: attributes in the file's order, NBT as the normal; matrix indices one byte,
                         // indices one or two (three normal indices for an NBT3 shape).
                         let mut kinds = [0u32; 21];
                         let mut nbt = normal_count != 0;

@@ -43,7 +43,7 @@ void BloomEffect::preDraw() const {
     if (sBloomRoute == 0) {
         return;
     }
-    NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
+    NebulaRender::bloomMarker(NebulaRender::kBloomHold, 0, 0);
 
     MR::fillScreen(Color8(0, 0, 0, 0xFF).mRGBA);
     MR::loadViewMtx();

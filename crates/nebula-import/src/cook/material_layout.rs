@@ -286,14 +286,14 @@ pub fn programs(source: &[u8]) -> Result<[[u8; PROGRAM_BYTES]; 4]> {
                            channel: u8,
                            color: [u8; 4],
                            alpha: [u8; 4],
-                           konst: Option<u8>| {
+                           constant: Option<u8>| {
                 let b = 16 + n * 34;
                 p[b..b + 3].copy_from_slice(&[coord, map, channel]);
                 p[b + 3..b + 7].copy_from_slice(&color);
                 p[b + 12..b + 16].copy_from_slice(&alpha);
                 p[b + 10] = 1;
                 p[b + 19] = 1;
-                if let Some(k) = konst {
+                if let Some(k) = constant {
                     p[b + 23] = k;
                     p[b + 24] = k;
                 }

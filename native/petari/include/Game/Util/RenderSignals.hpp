@@ -43,7 +43,7 @@ namespace NebulaRender {
     // and values).
     enum {
         kMarkerBloom = 15,
-        kBloomKeep = 1,
+        kBloomHold = 1,
         kBloomNormal = 2,
         kBloomSimple = 3,
     };

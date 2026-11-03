@@ -167,7 +167,7 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 // part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
 // copies turn the taps into separate offset images. Full-size captures stay scaled. After Super Mario
 
-// Present pacing with vsync off and a frame-rate cap. The VI paces presents; the pacer smooths one that arrives
+// Present pacing with vsync off and a frame-rate cap. The game's frame clock paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,
 // then yields.
 class PresentPacer {

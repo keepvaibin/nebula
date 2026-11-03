@@ -24,8 +24,8 @@ class DescriptorRing;
 // draws them through scene target copies at fixed sizes: BloomEffect draws its glowing models over black, takes their colour
 // where its intensity passes a threshold at a quarter of the frame, blurs it with two rings of 6 taps (level 1), blurs
 // that at an eighth with three rings of 12 (level 2) and adds both to the scene it kept; BloomEffectSimple takes the
-// scene's own colour past a threshold and blurs it with one ring of 8. At the Wii's resolution each tap's bilinear
-// footprint smooths the rings; scaled up they come apart into separate offset images, and copies kept at the Wii's
+// scene's own colour past a threshold and blurs it with one ring of 8. At 456 lines each tap's bilinear
+// footprint smooths the rings; scaled up they come apart into separate offset images, and copies kept at that
 // size are stretched over the screen. Here the same chain runs on the internal resolution: the threshold over the
 // game's own 4 x 4 pixel footprint, each ring replaced by the Gaussian of its spread (a ring of radius r spreads r^2 / 2
 // along each axis, plus what the game's bilinear taps and resampling add at its resolution, less what this chain's own

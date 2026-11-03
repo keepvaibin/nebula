@@ -575,9 +575,9 @@ if(MSVC)
     endforeach()
 endif()
 
-# The Vulkan GX backend (docs/VULKAN.md): NebulaNativeVk, its library and tests; dependencies from
+# The Vulkan backend (docs/VULKAN.md): NebulaNativeVk, its library and tests; dependencies from
 # cmake/vulkan_deps.cmake.
-option(NEBULA_VULKAN "Build the Vulkan GX backend" OFF)
+option(NEBULA_VULKAN "Build the Vulkan backend" OFF)
 if(NEBULA_VULKAN)
     include(cmake/vulkan_deps.cmake)
 
@@ -602,7 +602,7 @@ if(NEBULA_VULKAN)
         DEPENDS galaxy_utility_spirv VERBATIM)
 
 
-    # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
+    # galaxy_gx on Vulkan: the API-neutral renderer sources with the Vulkan renderer, pipeline cache and texture backend.
     add_library(galaxy_gx_vk STATIC
         runtime/src/render/render_api.cpp
             runtime/src/render/render_config.cpp
