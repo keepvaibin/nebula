@@ -609,10 +609,10 @@ namespace nw4r {
             }
 
             for (u32 r = 0; r < 3; r++) {
-                rValues.tev_color[r][0] = mRegisterColors[r].r;
-                rValues.tev_color[r][1] = mRegisterColors[r].g;
-                rValues.tev_color[r][2] = mRegisterColors[r].b;
-                rValues.tev_color[r][3] = mRegisterColors[r].a;
+                rValues.register_color[r][0] = mRegisterColors[r].r;
+                rValues.register_color[r][1] = mRegisterColors[r].g;
+                rValues.register_color[r][2] = mRegisterColors[r].b;
+                rValues.register_color[r][3] = mRegisterColors[r].a;
             }
             for (u32 k = 0; k < 4; k++) {
                 rValues.konst_color[k][0] = mConstantColors[k].r;
