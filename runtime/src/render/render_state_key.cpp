@@ -2,6 +2,10 @@
 
 #include "galaxy/render/render_state_key.h"
 
+#include "galaxy/render/pso_key.h"
+
+#include <atomic>
+
 #include "galaxy/render/drawing_state.h"
 
 #include <algorithm>
@@ -34,6 +38,29 @@ namespace {
 }
 
 }  // namespace
+
+namespace {
+std::atomic<bool> s_dual_source_blending{true};
+}  // namespace
+
+void set_dual_source_blending(bool available) noexcept {
+    s_dual_source_blending.store(available, std::memory_order_relaxed);
+}
+
+bool dual_source_blending() noexcept {
+    return s_dual_source_blending.load(std::memory_order_relaxed);
+}
+
+RenderStateKey for_device_blending(RenderStateKey key) noexcept {
+    if (!dual_source_blending() && (key.blend_bits & (1u << 27u)) != 0u) {
+        const bool constant_alpha = (key.blend_bits & (1u << 28u)) != 0u;
+        key.blend_bits &= ~((1u << 27u) | (1u << 28u));
+        if (constant_alpha) {
+            key.blend_bits |= kRenderStateZeroAlpha;
+        }
+    }
+    return key;
+}
 
 RenderStateKey build_render_state_key(const NativeDrawState& state) {
     RenderStateKey key{};

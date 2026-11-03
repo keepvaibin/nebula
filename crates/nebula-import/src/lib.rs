@@ -293,36 +293,6 @@ fn refuse_images() -> Result<()> {
     Ok(())
 }
 
-/// The key disc images open with, which Nebula does not hold: `key` is its 32 hexadecimal digits, or a file holding those or the
-/// 16 bytes themselves.
-pub fn set_disc_key(key: &std::ffi::OsStr) -> Result<()> {
-    refuse_images()?;
-    let hex = |text: &[u8]| -> Option<[u8; 16]> {
-        let digits: Vec<u8> = text.iter().copied().filter(|b| !b.is_ascii_whitespace()).collect();
-        if digits.len() != 32 || !digits.iter().all(u8::is_ascii_hexdigit) {
-            return None;
-        }
-        let value = |b: u8| (b as char).to_digit(16).unwrap() as u8;
-        let mut out = [0u8; 16];
-        for (i, pair) in digits.chunks_exact(2).enumerate() {
-            out[i] = value(pair[0]) << 4 | value(pair[1]);
-        }
-        Some(out)
-    };
-    let bytes = match key.to_str().and_then(|text| hex(text.as_bytes())) {
-        Some(bytes) => bytes,
-        None => {
-            let file = fs::read(key).with_context(|| format!("the key file {} cannot be read", Path::new(key).display()))?;
-            match (hex(&file), <[u8; 16]>::try_from(file.as_slice())) {
-                (Some(bytes), _) | (None, Ok(bytes)) => bytes,
-                _ => bail!("the key file {} holds neither 16 bytes nor 32 hexadecimal digits", Path::new(key).display()),
-            }
-        }
-    };
-    nod::set_common_key(bytes);
-    Ok(())
-}
-
 fn open_disc(disc: DiscFile) -> Result<Disc> {
     refuse_images()?;
     Disc::new_stream_with_options(Box::new(disc), &OpenOptions { rebuild_encryption: false, validate_hashes: true })

@@ -19,7 +19,11 @@ namespace {
     // The label in the played language (NebulaText; the game's own Yes and No answer the question).
     const char16_t* getLabel() {
         static char16_t label[64];
+#if defined(__ANDROID__)
+        NebulaText::get(label, 64, "Quit");  // no desktop to quit to
+#else
         NebulaText::get(label, 64, "QuitToDesktop");
+#endif
         return label;
     }
 

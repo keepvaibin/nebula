@@ -89,7 +89,6 @@ struct InputState {
     std::uint64_t taps = 0;
     float tap_x = 0.0f;
     float tap_y = 0.0f;
-    std::uint64_t tap_down_ms = 0;
     // When the finger last touched or moved (steady milliseconds; 0: never).
     std::uint64_t finger_ms = 0;
     int window_width = 0;

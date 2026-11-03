@@ -371,10 +371,13 @@ GameLanguage game_language_resolved(GameLanguage setting) noexcept {
 GameLanguage game_language_for_boot() noexcept {
     std::uint8_t running = s_running_language.load(std::memory_order_acquire);
     if (running == kNotAsked) {
-        std::uint8_t expected = kNotAsked;
         const auto chosen = static_cast<std::uint8_t>(game_language_resolved(get_runtime_settings().language));
-        running = s_running_language.compare_exchange_strong(expected, chosen, std::memory_order_acq_rel)
-            ? chosen : expected;
+        // An exchange that fails with the value still kNotAsked has chosen nothing: it is not an answer.
+        std::uint8_t expected = kNotAsked;
+        while (!s_running_language.compare_exchange_weak(expected, chosen, std::memory_order_acq_rel) &&
+               expected == kNotAsked) {
+        }
+        running = expected != kNotAsked ? expected : chosen;
     }
     return static_cast<GameLanguage>(running);
 }

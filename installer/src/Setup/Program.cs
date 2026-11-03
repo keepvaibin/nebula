@@ -50,7 +50,6 @@ namespace Nebula.Setup
                     Mode = current == null ? InstallMode.Install :
                         (options.ContainsKey("apply-update") ? InstallMode.Update : InstallIntent.ForPackage(current.Version, BuildInfo.Version)),
                     GameInput = options.ContainsKey("input") ? options["input"] : null,
-                    DiscKey = options.ContainsKey("key") ? options["key"] : null,
                     InstallRoot = root,
                     DesktopShortcut = options.ContainsKey("desktop-shortcut")
                 };

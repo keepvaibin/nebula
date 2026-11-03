@@ -1,7 +1,6 @@
 # Nebula
 
-Nebula runs **Super Mario Galaxy** natively on Windows. Nebula contains no Nintendo code or assets; you need your
-own copy of the game.
+Nebula runs **Super Mario Galaxy** natively on Windows. You need your own copy of the game.
 
 > **The released version is 1.0.2.** This branch (`main`) is **Nebula 2, in development and not released**: much
 > of this page describes it. [What 1.0.2 has](#in-the-released-version-102) and
