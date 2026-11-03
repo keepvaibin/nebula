@@ -538,7 +538,7 @@ void RenderCore::record_monotonic_cadence_sample(
             ? now_ns - accumulator.last_sample_ns
             : 0u;
     accumulator.last_sample_ns = now_ns;
-    static const bool monitor=::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
+    static const bool monitor=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
     if(monitor) {
         ++accumulator.monitor_intervals; accumulator.monitor_total_ns+=interval_ns;
         accumulator.monitor_max_ns=std::max(accumulator.monitor_max_ns,interval_ns);
@@ -664,7 +664,7 @@ void RenderCore::trace_memory() {
 }
 
 void RenderCore::report_frame_tail_window() noexcept {
-    static const bool enabled=::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
+    static const bool enabled=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
     if(!enabled) return;
     const auto now=display_first_serial_present_cadence_.last_sample_ns;
     if(!frame_tail_report_ns_) { frame_tail_report_ns_=now; return; }
@@ -701,7 +701,7 @@ void RenderCore::report_frame_tail_window() noexcept {
 }
 
 void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept {
-    static const bool enabled=::galaxy::run_option_u64(::galaxy::run_options().monitor_pointer_latency, 0u)!=0u;
+    static const bool enabled=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_pointer_latency, 0u)!=0u;
     if (!enabled) return;
     const auto& stamp=texture.pointer_response;
     if (!stamp.serial || !stamp.selected_ns || !stamp.drawn_ns ||

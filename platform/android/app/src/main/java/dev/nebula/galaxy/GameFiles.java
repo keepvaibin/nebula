@@ -52,6 +52,7 @@ final class GameFiles {
     static final String CONTROLS_OPACITY = "opacity";    // 0.2 .. 1
     static final String CONTROLS_SCALE = "scale";        // 0.75 .. 1.4
     static final String CONTROLS_HAPTICS = "haptics";
+    static final String RECORD_NEXT_RUN = "recordNextRun";  // the next run records diagnostics in its log
 
     static SharedPreferences controls(Context context) {
         return context.getSharedPreferences(CONTROLS, Context.MODE_PRIVATE);

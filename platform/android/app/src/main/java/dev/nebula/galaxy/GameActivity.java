@@ -68,10 +68,17 @@ public class GameActivity extends SDLActivity {
     @Override
     protected String[] getArguments() {
         passLocale();
+        // The launcher's Record diagnostics: this run only.
+        final SharedPreferences prefs = GameFiles.controls(this);
+        final boolean record = prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
+        if (record) {
+            prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
+        }
         return new String[] {
             "--pak", GameFiles.pak(this).getPath(),
             "--saves", GameFiles.nand(this).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
+            "--diagnostics", record ? "1" : "0",
         };
     }
 

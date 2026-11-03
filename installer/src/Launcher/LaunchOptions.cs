@@ -18,7 +18,8 @@ namespace Nebula.Launcher
         public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
             var game = new ProcessStartInfo(Path.Combine(app, "NebulaNative.exe"),
-                "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --saves " + ProcessRunner.Quote(saves));
+                "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --saves " + ProcessRunner.Quote(saves) +
+                (recording != RecordingMode.None ? " --diagnostics 1" : ""));
             game.UseShellExecute = false;
             game.CreateNoWindow = true;
             game.WorkingDirectory = app;

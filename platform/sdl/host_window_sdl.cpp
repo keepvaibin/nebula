@@ -752,6 +752,9 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouc
     JNIEnv*, jclass, jint buttons, jfloat stick_x, jfloat stick_y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
     const auto held = static_cast<std::uint32_t>(buttons);
+    if ((held & ~galaxy::sdl::g_input.touch_buttons) != 0u) {
+        galaxy::sdl::g_last_input.store(galaxy::sdl::kLastNone, std::memory_order_relaxed);
+    }
     galaxy::sdl::g_touch_pressed |= held & ~galaxy::sdl::g_input.touch_buttons;
     galaxy::sdl::g_input.touch_buttons = held;
     galaxy::sdl::g_input.touch_stick_x = std::clamp(stick_x, -1.0f, 1.0f);
@@ -763,6 +766,9 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouc
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePointer(
     JNIEnv*, jclass, jint action, jint id, jfloat x, jfloat y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    if (action == 0) {
+        galaxy::sdl::g_last_input.store(galaxy::sdl::kLastNone, std::memory_order_relaxed);
+    }
     galaxy::sdl::finger_event(static_cast<std::uint64_t>(id), x, y, action == 0, action == 2);
 }
 

@@ -3769,6 +3769,11 @@ int main(int argc, char** argv) {
     }
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    for (int i = 1; i + 1 < argc; i += 2) {
+        if (std::strcmp(argv[i], "--diagnostics") == 0) {
+            galaxy::g_diagnostics_recording = argv[i + 1][0] == '1';
+        }
+    }
     // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), written at exit.
     galaxy::timeline::initialize_from_environment();
 #endif
@@ -3824,6 +3829,8 @@ int main(int argc, char** argv) {
             saves = arg_path(i + 1);
         } else if (key == "--module") {
             module = arg_path(i + 1);
+        } else if (key == "--diagnostics") {
+            // Read above, before the timeline starts.
         } else if (key == "--seconds") {
             seconds = std::atof(argv[i + 1]);
         } else {

@@ -14,6 +14,11 @@
 
 namespace galaxy {
 
+// A run the player asked to record (--diagnostics 1, in a release too): the frame and pointer monitors and the timeline.
+// Set once, before the threads that read it start.
+inline bool g_diagnostics_recording = false;
+[[nodiscard]] inline bool diagnostics_recording() noexcept { return g_diagnostics_recording; }
+
 struct RunOptions {
     const char* frame_timeline = nullptr;
     const char* frame_timeline_events = nullptr;
