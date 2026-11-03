@@ -343,8 +343,7 @@ namespace JGeometry {
             z = 0;
         }
 
-        inline TVec3() {
-        }
+        inline TVec3() = default;
 
         operator Vec*() {
             return (Vec*)&x;

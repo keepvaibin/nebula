@@ -21,7 +21,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #define UNPOISON_BLOCK(p, n)
 #endif
 
-thread_local NebulaArena* NebulaArena::sCurrentHeap;
+__thread NebulaArena* NebulaArena::sCurrentHeap;
 NebulaArena* NebulaArena::sRootHeap;
 NebulaArena* NebulaArena::sSystemHeap;
 
@@ -239,7 +239,12 @@ void* NebulaArena::alloc(u32 size, int alignment) {
 
 #if !defined(NEBULA_RELEASE)
     // Tests (GALAXY_TEST_ARENA_FILL=a5): every block starts as this byte, so what reads a field left unset shows in a picture.
-    static const char* const pFill = getenv("GALAXY_TEST_ARENA_FILL");
+    static const char* pFill = nullptr;
+    static bool sFillRead = false;
+    if (!sFillRead) {
+        pFill = getenv("GALAXY_TEST_ARENA_FILL");
+        sFillRead = true;
+    }
     if (pFill != nullptr) {
         memset(pBlock, static_cast< int >(strtol(pFill, nullptr, 16)), rounded);
     }

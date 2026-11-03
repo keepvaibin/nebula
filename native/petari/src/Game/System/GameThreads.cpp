@@ -11,8 +11,8 @@
 #include "nebula_module.h"
 
 namespace {
-    thread_local GameThreadRecord* tSelf;
-    thread_local bool tAudioExcluded;
+    __thread GameThreadRecord* tSelf;
+    __thread bool tAudioExcluded;
 
     GameThreadRecord sMainThread;
     GameThreadRecord sAudioThread;
@@ -449,7 +449,7 @@ namespace GameThreads {
     void enterAudio() {
         // In test mode this runs on the thread stepping the clock: its record stands aside.
         // The output device may change its thread (SDL's does when it reopens).
-        static thread_local NebulaHostThread* tAudioHost;
+        static __thread NebulaHostThread* tAudioHost;
         if (tAudioHost == nullptr && !sTestMode) {
             tAudioHost = nebula_host_thread_adopt();
         }
