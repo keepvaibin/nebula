@@ -1714,6 +1714,10 @@ private:
                                       : device.link;
             published.info.model = device.partner != nullptr ? pair_name(device) : device.model_name;
             published.info.note = device.needs_driver ? "needs WinUSB" : nullptr;
+            const bool playstation = device.scheme == ControlScheme::PlayStation && device.simple == simple::Layout::None;
+            published.info.sensors = !device.no_motion && (!playstation || device.ps_caps.sensors);
+            published.info.gyro = published.info.sensors && simple::has_gyro(device.simple);
+            published.info.touch = device.simple == simple::Layout::None && (!playstation || device.ps_caps.touchpad);
             ReleaseSRWLockExclusive(&hub().lock);
         }
         if (device.scheme == ControlScheme::Steam && device.simple == simple::Layout::None) {
