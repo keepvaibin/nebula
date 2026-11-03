@@ -143,6 +143,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/host_env.cpp
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
+    tools/test_driver/scripted_input.cpp
     runtime/src/input/live_controls_engine.cpp
     runtime/src/input/key_positions_win32.cpp
     runtime/src/input/raw_mouse_win32.cpp

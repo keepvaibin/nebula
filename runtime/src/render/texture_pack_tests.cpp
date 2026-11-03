@@ -102,7 +102,7 @@ void test_names() {
     expect(arb && arb->arbitrary && arb->level == 7u && arb->mipmapped, "arbitrary level suffix");
     const char* invalid[] = {
         "tex1_64x64_0123456789abcde_14",                    // 15 hex digits
-        "tex1_64x64_0123456789abcdef_7",                    // no GX format 7
+        "tex1_64x64_0123456789abcdef_7",                    // no format 7
         "tex1_64x64_0123456789abcdef_1234567890abcdef_14",  // palette hash on a direct format
         "efb1_n000007_160x120_6",                           // scene target copies are never replaced
         "tex1_0x64_0123456789abcdef_14",
