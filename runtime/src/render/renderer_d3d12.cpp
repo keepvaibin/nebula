@@ -7388,7 +7388,7 @@ void RendererD3D12::record_hdr_end() {
         return;
     }
     const GpuPassScope pass{*this, GpuPass::Camera};
-    resolve_scene(false, true);
+    resolve_scene(true, true);
     SceneTargetSet& set = replay_playing_ ? replay_hdr_scene_ : hdr_scene_scene_;
     swap_scene_with(set);
     scene_msaa_.depth_dirty = set.msaa.depth_dirty;
@@ -7399,6 +7399,7 @@ void RendererD3D12::record_hdr_end() {
     SceneCamera::Inputs in{};
     in.wide = set.color.Get();
     in.wide_ms = set.msaa.samples > 1u ? set.msaa.color.Get() : nullptr;
+    in.depth = scene_depth_.Get();
     in.rtv = scene_rtv_;
     in.width = static_cast<unsigned>(desc.Width);
     in.height = desc.Height;

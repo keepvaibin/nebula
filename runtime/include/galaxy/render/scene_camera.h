@@ -35,6 +35,7 @@ public:
     struct Inputs {
         ID3D12Resource* wide = nullptr;     // single-sample, resolved, in RENDER_TARGET
         ID3D12Resource* wide_ms = nullptr;  // the multisampled target, or null, in RENDER_TARGET
+        ID3D12Resource* depth = nullptr;     // the scene's single-sample depth, in the depth-write state
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};  // the scene target
         unsigned width = 0u, height = 0u, samples = 1u;
         float seconds = 0.0f;  // since the last meter; below zero the eye starts open

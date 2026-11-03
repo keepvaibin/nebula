@@ -109,7 +109,7 @@ inline std::string ao_source() {
 }
 
 // scene_camera.hlsl's registers: t0-t1 sampled and u0 a storage image in set 0, the constants pushed.
-constexpr RegisterBinding kCameraBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"u0", 0, 2}};
+constexpr RegisterBinding kCameraBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"u0", 0, 2}, {"t2", 0, 3}};
 
 inline std::string camera_source() {
     return "#define CAMERA_STORAGE_FORMAT 1\n" + annotate(reinterpret_cast<const char*>(galaxy_post_scene_camera_hlsl), kCameraBindings);
