@@ -75,7 +75,7 @@ DriverVersion decode(DriverKind kind, std::uint32_t raw) {
 // GALAXY_VK_SIMULATE_DRIVER=<kind>:<major>.<minor>.<patch> (kind: qualcomm, arm, imagination, samsung) presents this
 // device as that driver to the table, so a desktop run exercises a mobile driver's workarounds.
 void apply_simulation(DeviceIdentity& identity) {
-    const char* value = NEBULA_TEST_GETENV("GALAXY_VK_SIMULATE_DRIVER");
+    const char* value = nebula_switch::vk_simulate_driver();
     if (value == nullptr || value[0] == '\0') {
         return;
     }

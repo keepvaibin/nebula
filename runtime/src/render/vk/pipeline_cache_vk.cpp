@@ -59,7 +59,7 @@ struct TestRefusals {
 const TestRefusals& test_refusals() {
     static const TestRefusals refusals = [] {
         TestRefusals r;
-        const char* names = NEBULA_TEST_GETENV("GALAXY_VK_TEST_REFUSE");
+        const char* names = nebula_switch::vk_test_refuse();
         const std::string list = names != nullptr ? std::string(",") + names + "," : "";
         const auto has = [&](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
         r.dual_source = has("dual-source");

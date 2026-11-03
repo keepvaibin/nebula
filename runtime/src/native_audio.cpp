@@ -61,7 +61,7 @@ private:
     static std::uint32_t max_seconds() {
         static const std::uint32_t seconds = [] {
             unsigned long value = 15ul;
-            if (const char* const text = NEBULA_TEST_GETENV("GALAXY_AUDIO_WAV_DUMP_SECONDS")) {
+            if (const char* const text = nebula_switch::audio_wav_dump_seconds()) {
                 const unsigned long parsed = std::strtoul(text, nullptr, 10);
                 if (parsed > 0ul && parsed <= 3600ul) value = parsed;
             }
@@ -165,10 +165,10 @@ private:
         open_attempted_ = true;
 
 #if defined(_WIN32)
-        const wchar_t* const path = _wgetenv(NEBULA_TEST_ENV_W("GALAXY_AUDIO_WAV_DUMP"));
+        const wchar_t* const path = _wgetenv(nebula_switch::audio_wav_dump_wide_name());
         if (path == nullptr || path[0] == L'\0') {
 #else
-        const char* const path = NEBULA_TEST_GETENV("GALAXY_AUDIO_WAV_DUMP");
+        const char* const path = nebula_switch::audio_wav_dump();
         if (path == nullptr || path[0] == '\0') {
 #endif
             disabled_ = true;
@@ -334,7 +334,7 @@ void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const Nebu
     std::uint32_t rate = 48000u;
     if (device) {
         // GALAXY_AUDIO_WAV_DUMP_ONLY: the clock pulls, nothing reaches a device.
-        s.device = read_env_flag(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP_ONLY")) ? open_null_audio_device(rate) : open_audio_device();
+        s.device = read_env_flag(nebula_switch::audio_wav_dump_only_name()) ? open_null_audio_device(rate) : open_audio_device();
         rate = s.device->rate();
     }
     s.mixer = std::make_unique<galaxy::audio::AudioMixer>(rate);
@@ -389,13 +389,13 @@ void NativeGameAudio::frame() {
         out[i * 2u + 1u] = samples[i * 2u + 1u] * gain;
     }
     galaxy::input::speaker::game_speaker().mix(out, s.mixer->rate(), audio.wiimote_speaker);
-    static const bool trace_first = NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr;
+    static const bool trace_first = nebula_switch::trace_file_reads() != nullptr;
     static bool first_sound = false;
     if (trace_first && !first_sound && std::any_of(out.begin(), out.end(), [](float value) { return value != 0.0f; })) {
         first_sound = true;
         std::fprintf(stderr, "[read] first sound\n");
     }
-    static const bool dump = NEBULA_TEST_GETENV("GALAXY_AUDIO_WAV_DUMP") != nullptr;
+    static const bool dump = nebula_switch::audio_wav_dump() != nullptr;
     if (dump) {
         s.wav_block.resize(frames * 4u);
         for (std::size_t i = 0; i < frames * 2u; ++i) {

@@ -141,15 +141,15 @@ std::string present_snapshot_path() {
         return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
-    static const std::uint64_t every = read_u64(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_EVERY"), 0u);
-    static const std::uint64_t first = read_u64(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_FIRST"), 0u);
+    static const std::uint64_t every = read_u64(nebula_switch::present_snapshot_every_name(), 0u);
+    static const std::uint64_t first = read_u64(nebula_switch::present_snapshot_first_name(), 0u);
     static const std::uint64_t last = read_u64(
-        NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_LAST"), std::numeric_limits<std::uint64_t>::max());
+        nebula_switch::present_snapshot_last_name(), std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
         return getenv_s(&length, value, sizeof(value),
-                        NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_DIR")) == 0 && length > 1u
+                        nebula_switch::present_snapshot_dir_name()) == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
@@ -176,7 +176,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
 // GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
 // cycles ([rt-actor-light]); =2: the aim of every scene.
 std::uint64_t actor_light_trace_level() {
-    static const std::uint64_t level = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_LIGHTS"), 0u);
+    static const std::uint64_t level = read_env_u64(nebula_switch::trace_lights_name(), 0u);
     return level;
 }
 
@@ -201,7 +201,7 @@ bool trace_stalls_enabled() {
                    &length,
                    value,
                    sizeof(value),
-                   NEBULA_TEST_ENV("GALAXY_TRACE_GX_STALLS")) == 0 &&
+                   nebula_switch::trace_gx_stalls_name()) == 0 &&
                length > 1 && value[0] != '0';
     }();
     return enabled;
@@ -298,7 +298,7 @@ struct GameWaitTimer {
 
 std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
-        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_RENDER_STALL_US"), 1000u);
+        read_env_u64(nebula_switch::trace_render_stall_us_name(), 1000u);
     return threshold;
 }
 
@@ -707,7 +707,7 @@ void RenderCore::reset_monotonic_cadence(
 
 // GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
 void RenderCore::trace_memory() {
-    static const bool enabled = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_MEMORY"), 0u) != 0u;
+    static const bool enabled = read_env_u64(nebula_switch::trace_memory_name(), 0u) != 0u;
     static std::uint64_t frames = 0u;
     if (!enabled || ++frames % 600u != 0u) {
         return;
@@ -736,7 +736,7 @@ void RenderCore::trace_memory() {
                  mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
 #if defined(_WIN32)
     // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
-    static const bool heaps = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_MEMORY"), 0u) == 2u;
+    static const bool heaps = read_env_u64(nebula_switch::trace_memory_name(), 0u) == 2u;
     if (heaps) {
         HANDLE list[64];
         const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
@@ -2202,7 +2202,7 @@ void RenderCore::restart_interp_governors() {
 
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    static const bool trace = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), 0u) != 0u;
+    static const bool trace = read_env_u64(nebula_switch::trace_present_stats_name(), 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
     // Since the frame before: the game's waits on the render thread, and the render thread's sub-frame time.
     const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
@@ -2394,12 +2394,12 @@ std::string RenderCore::interp_snapshot_path(const char* suffix) const {
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_DIR")) == 0 &&
+        return getenv_s(&length, value, sizeof(value), nebula_switch::interp_snapshot_dir_name()) == 0 &&
                        length > 1u
             ? std::string(value) : std::string{};
     }();
-    static const std::uint64_t first = read_env_u64(NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_FIRST"), 0u);
-    static const std::uint64_t last = read_env_u64(NEBULA_TEST_ENV("GALAXY_INTERP_SNAPSHOT_LAST"), 0u);
+    static const std::uint64_t first = read_env_u64(nebula_switch::interp_snapshot_first_name(), 0u);
+    static const std::uint64_t last = read_env_u64(nebula_switch::interp_snapshot_last_name(), 0u);
     if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
         return {};
     }
@@ -2484,7 +2484,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
             }
             // GALAXY_TEST_CAPTURE_NO_WAIT=1: a sub-frame is saved only when the last save's readback is done (else
             // skipped), never waited for: waiting holds the CPU behind the GPU and hides what a race between them shows.
-            static const bool capture_no_wait = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_CAPTURE_NO_WAIT"), 0u) != 0u;
+            static const bool capture_no_wait = read_env_u64(nebula_switch::test_capture_no_wait_name(), 0u) != 0u;
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
@@ -2543,7 +2543,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
 void RenderCore::note_present_vblank(std::int64_t slot) {
-    static const bool trace = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), 0u) != 0u;
+    static const bool trace = read_env_u64(nebula_switch::trace_present_stats_name(), 0u) != 0u;
     std::int64_t vblank = 0;
     std::int64_t period = 0;
     if (!trace || !renderer_.vblank_grid(vblank, period)) {
@@ -2610,7 +2610,7 @@ void RenderCore::note_interp_real_present() {
 }
 
 void RenderCore::report_interp_stats() {
-    static const bool trace = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), 0u) != 0u;
+    static const bool trace = read_env_u64(nebula_switch::trace_present_stats_name(), 0u) != 0u;
     if (!trace) {
         return;
     }
@@ -3238,7 +3238,7 @@ void RenderCore::render_thread_main() {
 #endif
     {
         // Opt the process out of EcoQoS throttling, so hybrid CPUs do not park the
-        // simulation, render or DSP threads on efficiency cores.
+        // simulation, render or audio threads on efficiency cores.
         static std::once_flag power_throttling_once;
         std::call_once(power_throttling_once, [] {
             galaxy::host::opt_out_of_power_throttling_process();
@@ -3640,9 +3640,9 @@ void RenderCore::present_cached_display_on_thread(
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1, processes): the card is lost at frame n.
-    static const std::uint64_t lose_at = read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_GPU_LOST_FRAME"), 0u);
+    static const std::uint64_t lose_at = read_env_u64(nebula_switch::test_gpu_lost_frame_name(), 0u);
     if (lose_at != 0u && frame_index_ == lose_at) [[unlikely]] {
-        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < read_env_u64(NEBULA_TEST_ENV("GALAXY_TEST_GPU_LOST_TIMES"), 1u)) {
+        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < read_env_u64(nebula_switch::test_gpu_lost_times_name(), 1u)) {
             renderer_.test_lose_device();
         }
     }

@@ -594,7 +594,7 @@ galaxy::host::JoyConStatus joycon_status_now() {
         std::vector<Step> steps;
         char value[128]{};
         std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_JOYCON")) != 0 || length <= 1u) return steps;
+        if (getenv_s(&length, value, sizeof(value), nebula_switch::test_joycon_name()) != 0 || length <= 1u) return steps;
         for (const char* p = value; *p != '\0';) {
             Step step;
             step.bits = std::atoi(p);
@@ -3390,7 +3390,7 @@ bool hidden_window_mode_enabled() {
         std::size_t length = 0;
         return getenv_s(
                    &length, value, sizeof(value),
-                   NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW")) == 0 &&
+                   nebula_switch::hide_window_name()) == 0 &&
                length > 1 && value[0] != '0' && value[0] != 'n' &&
                value[0] != 'N';
     }();
@@ -3402,7 +3402,7 @@ unsigned shown_test_window_mode() {
         char value[16]{};
         std::size_t length = 0;
         if (!hidden_window_mode_enabled() ||
-            getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_SHOWN_WINDOW")) != 0 || length <= 1) {
+            getenv_s(&length, value, sizeof(value), nebula_switch::test_shown_window_name()) != 0 || length <= 1) {
             return 0u;
         }
         return std::strcmp(value, "corner") == 0 ? 2u : std::strcmp(value, "edge") == 0 ? 1u : 0u;
@@ -3968,7 +3968,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         static const bool test_read = [] {
             char value[32]{};
             std::size_t length = 0u;
-            if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_SETTINGS_OPEN")) == 0 && length > 1u) {
+            if (getenv_s(&length, value, sizeof(value), nebula_switch::test_settings_open_name()) == 0 && length > 1u) {
                 char* end = nullptr;
                 test_page = static_cast<int>(std::strtol(value, &end, 10));
                 if (end != nullptr && *end == ':') test_present = std::strtoul(end + 1, nullptr, 10);
@@ -3992,7 +3992,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             std::vector<std::pair<unsigned long, WPARAM>> keys;
             static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
             std::size_t length = 0u;
-            if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_SETTINGS_KEYS")) != 0 || length <= 1u) return keys;
+            if (getenv_s(&length, value, sizeof(value), nebula_switch::test_settings_keys_name()) != 0 || length <= 1u) return keys;
             static constexpr std::pair<std::string_view, WPARAM> kNames[] = {
                 {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
                 {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
@@ -4028,7 +4028,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             std::vector<TestSize> sizes;
             char value[512]{};
             std::size_t length = 0u;
-            if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_WINDOW_SIZES")) != 0 || length <= 1u) return sizes;
+            if (getenv_s(&length, value, sizeof(value), nebula_switch::test_window_sizes_name()) != 0 || length <= 1u) return sizes;
             for (char* item = value; item != nullptr && *item != '\0';) {
                 char* end = nullptr;
                 TestSize size{std::strtoul(item, &end, 10), 0u, 0u};

@@ -66,8 +66,6 @@ object Storage {
 
 /** The renderer's settings, config.ini in the data folder (runtime/src/gx/render_config.cpp reads it). */
 data class GraphicsSettings(
-    val scale: Int,
-    val matchScreen: Boolean,
     val vsync: Boolean,
     val displayRate: Boolean,
     val aa: String,         // config.ini's aa: "off", "fxaa" or "smaa"
@@ -77,19 +75,16 @@ data class GraphicsSettings(
     val hudAtScreen: Boolean,  // hud_output_resolution: menus and HUD drawn at the screen's resolution
 ) {
     companion object {
-        // The runtime's defaults: 1x, VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
+        // The runtime's defaults: VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
         // from the game's motion), no anti-aliasing, bilinear enlarging, no sharpening.
         val Default = GraphicsSettings(
-            scale = 1, matchScreen = false, vsync = true, displayRate = false, aa = "off", msaa = 1, fsr = false,
+            vsync = true, displayRate = false, aa = "off", msaa = 1, fsr = false,
             sharpness = 0, hudAtScreen = false,
         )
-        const val MAX_SCALE = 4
 
         fun read(context: Context): GraphicsSettings {
             val values = readIni(GameFiles.renderConfig(context))
             return GraphicsSettings(
-                scale = values["efb_scale"]?.toIntOrNull()?.coerceIn(1, MAX_SCALE) ?: Default.scale,
-                matchScreen = values["internal_follow_window"]?.let { it == "1" } ?: Default.matchScreen,
                 vsync = values["vsync_interval"]?.let { it != "0" } ?: Default.vsync,
                 displayRate = values["max_fps"]?.toFloatOrNull()?.let { it == 0f } ?: Default.displayRate,
                 aa = values["aa"]?.takeIf { it == "fxaa" || it == "smaa" } ?: Default.aa,
@@ -117,8 +112,6 @@ data class GraphicsSettings(
     fun write(context: Context) {
         val file = GameFiles.renderConfig(context)
         val values = readIni(file)
-        values["efb_scale"] = scale.toString()
-        values["internal_follow_window"] = if (matchScreen) "1" else "0"
         values["vsync_interval"] = if (vsync) "1" else "0"
         values["max_fps"] = if (displayRate) "0" else "60"
         values["aa"] = aa

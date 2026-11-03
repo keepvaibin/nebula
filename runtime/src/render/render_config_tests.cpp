@@ -345,7 +345,7 @@ int main() {
     const galaxy::render::RenderTimingConfig& timing = galaxy::render::get_frame_timing_config();
     passed &= expect(
         timing.render_queue_depth == 2,
-        "GX timing is the shipped profile: queue depth 2");
+        "the timing is the shipped profile: queue depth 2");
 
     galaxy::render::RenderConfig config{};
     config.msaa_samples = 8;

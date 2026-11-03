@@ -485,7 +485,7 @@ int rt_effect_ab() {
     static const int effect = [] {
         char value[16]{};
         std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value), NEBULA_TEST_ENV("GALAXY_TEST_RT_EFFECT_AB")) != 0 || length <= 1u) return -1;
+        if (getenv_s(&length, value, sizeof(value), nebula_switch::test_rt_effect_ab_name()) != 0 || length <= 1u) return -1;
         static constexpr const char* kNames[] = {"reflections", "water", "sun_rays", "lens_bloom"};
         for (int i = 0; i < 4; ++i) {
             if (std::strcmp(value, kNames[i]) == 0) return i;

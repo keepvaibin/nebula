@@ -676,26 +676,12 @@ std::atomic<std::int32_t> pointer_wheel{0};
 std::string native_settings_content_root;
 std::atomic<bool> borderless_active{true};
 std::atomic<bool> exclusive_fullscreen_active{false};
-std::atomic<unsigned> efb_scale_rejected{0u};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
 std::atomic<bool> follow_window_rearm{false};
-
-unsigned display_efb_scale_cap() {
-    // The internal resolution whose picture covers the display the window is on.
-    const SDL_DisplayID display = galaxy::sdl::g_window != nullptr ? SDL_GetDisplayForWindow(galaxy::sdl::g_window)
-                                                                   : SDL_GetPrimaryDisplay();
-    const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(display);
-    if (mode == nullptr || mode->w <= 0 || mode->h <= 0) {
-        return kMaxEfbScale;
-    }
-    const float density = mode->pixel_density > 0.0f ? mode->pixel_density : 1.0f;
-    return efb_scale_covering(static_cast<unsigned>(static_cast<float>(mode->w) * density),
-                              static_cast<unsigned>(static_cast<float>(mode->h) * density), kMaxEfbScale);
-}
 
 bool flush_native_settings_if_dirty() {
     return true;  // the app's settings screens write the files

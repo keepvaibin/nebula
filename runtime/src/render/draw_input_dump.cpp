@@ -38,17 +38,17 @@ void write_words(std::FILE* f, const char* name, const void* data, std::size_t b
 
 void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_texmtx, std::uint64_t presents) {
     if (dump_wanted_ == 0u) {
-        const auto value = host::read_env_string(NEBULA_TEST_ENV("GALAXY_DUMP_DRAW_INPUTS"));
+        const auto value = host::read_env_string(nebula_switch::dump_draw_inputs_name());
         dump_wanted_ = value ? static_cast<std::uint32_t>(std::strtoul(value->c_str(), nullptr, 10)) : ~0u;
     }
     // The draws of the one present GALAXY_DUMP_DRAW_INPUTS_FROM names, or the run's first: up to
     // GALAXY_DUMP_DRAW_INPUTS_MAX (64; a shader many sites share draws more in one present).
     static const std::uint64_t from = [] {
-        const auto value = host::read_env_string(NEBULA_TEST_ENV("GALAXY_DUMP_DRAW_INPUTS_FROM"));
+        const auto value = host::read_env_string(nebula_switch::dump_draw_inputs_from_name());
         return value ? std::strtoull(value->c_str(), nullptr, 10) : 0ull;
     }();
     static const std::uint32_t most = [] {
-        const auto value = host::read_env_string(NEBULA_TEST_ENV("GALAXY_DUMP_DRAW_INPUTS_MAX"));
+        const auto value = host::read_env_string(nebula_switch::dump_draw_inputs_max_name());
         return value ? static_cast<std::uint32_t>(std::strtoul(value->c_str(), nullptr, 10)) : 64u;
     }();
     // 65535: every J3D material's draws (shader ids from kNativeShaderJ3DFirst).
@@ -57,7 +57,7 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     if (!wanted || dump_count_ >= most || presents < from || (from != 0u && presents > from)) {
         return;
     }
-    const auto path = host::read_env_string(NEBULA_TEST_ENV("GALAXY_DUMP_DRAW_INPUTS_FILE"));
+    const auto path = host::read_env_string(nebula_switch::dump_draw_inputs_file_name());
     std::FILE* f = nullptr;
     if (fopen_s(&f, path ? path->c_str() : "draw_inputs.txt", dump_count_ == 0u ? "w" : "a") != 0 || f == nullptr) {
         return;

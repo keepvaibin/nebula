@@ -33,7 +33,7 @@ std::optional<galaxy::input::RawMouseMotion> decode_native_raw_mouse(std::span<c
 }
 
 bool install_native_raw_mouse(std::uintptr_t window) noexcept {
-    if (read_env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"))) return false;
+    if (read_env_flag(nebula_switch::hide_window_name())) return false;
     const auto hwnd = reinterpret_cast<HWND>(window);
     if (!own_window(hwnd)) return false;
     if (const auto previous = registered_window.load(); previous != nullptr && previous != hwnd) return false;

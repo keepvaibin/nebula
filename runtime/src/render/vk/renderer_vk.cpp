@@ -45,7 +45,7 @@ bool env_flag(const char* name, bool fallback) {
 }
 
 bool trace_present_stats_enabled() {
-    static const bool enabled = env_flag(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), false);
+    static const bool enabled = env_flag(nebula_switch::trace_present_stats_name(), false);
     return enabled;
 }
 
