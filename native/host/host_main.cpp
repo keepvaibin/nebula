@@ -653,15 +653,7 @@ void ai_thread() {
 // The device asks for the game's next frame of sound, on its thread.
 void audio_frame_tick() {
     gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
-    // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and its sound
-    // pools fill; it must refuse new sounds, not crash.
-    static const uint64_t stall_after = [] {
-        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_AI_STALL_AFTER");
-        return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
-    }();
-    if (stall_after == 0 || gSoundBlocks.load(std::memory_order_relaxed) < stall_after) {
-        gModule.audio_tick();
-    }
+    gModule.audio_tick();
 }
 
 // The display's frame at 60 Hz: 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
@@ -1239,14 +1231,12 @@ bool restart_after_gpu_loss(const char* what) {
 // five times, two seconds apart; after that it is a fault to report.
 bool retry_start_for_gpu_memory(const std::string& reason) {
 #if defined(_WIN32)
-    static const bool test_once = NEBULA_TEST_GETENV("GALAXY_TEST_START_NO_GPU_MEMORY") != nullptr;
     const char* before = std::getenv("NEBULA_GPU_START_RETRIES");
     const int count = before != nullptr ? std::atoi(before) : 0;
     char out_of_memory[16];
     std::snprintf(out_of_memory, sizeof(out_of_memory), "0x%08lX", static_cast<unsigned long>(E_OUTOFMEMORY));
     const bool wanted = reason.find(out_of_memory) != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
-                        reason.find("VkResult -1") != std::string::npos || reason.find("VkResult -2") != std::string::npos ||
-                        (test_once && count == 0);
+                        reason.find("VkResult -1") != std::string::npos || reason.find("VkResult -2") != std::string::npos;
     if (!wanted || count >= 5) {
         return false;
     }
@@ -1689,78 +1679,7 @@ std::mutex gShapeLock;
 std::vector<galaxy::render::shapes::Record> gShapePending;
 std::atomic<bool> gShapePendingAny{false};
 
-// GALAXY_TEST_FRAME_HASH=<file> (1: frame_hash.txt in GALAXY_PRESENT_SNAPSHOT_DIR): per frame, a line "frame records hash reads" for the records the game sent since
-// the last frame (hash: the sum of each record's kind, matrices, target and clear values, image size, so addresses
-// and the order loading threads interleave in do not count) and the disc reads completed so far. Two runs of one build
-// diffed find the first game frame that differs and what moved (deterministic test mode).
-struct FrameHash {
-    std::FILE* file = nullptr;
-    std::mutex lock;
-    uint64_t sum = 0;
-    uint64_t records = 0;
-    std::atomic<uint64_t> reads{0};
-};
-FrameHash& frame_hash() {
-    static FrameHash h;
-    static const bool opened = [] {
-        const char* path = NEBULA_TEST_GETENV("GALAXY_TEST_FRAME_HASH");
-        if (path != nullptr && path[0] != '\0') {
-            const char* dir = NEBULA_TEST_GETENV("GALAXY_PRESENT_SNAPSHOT_DIR");
-            const std::string file = std::strcmp(path, "1") == 0 && dir != nullptr
-                                         ? std::string(dir) + "\\frame_hash.txt"
-                                         : std::string(path);
-            h.file = std::fopen(file.c_str(), "w");
-        }
-        return true;
-    }();
-    (void)opened;
-    return h;
-}
-uint64_t fnv1a(uint64_t h, const void* data, std::size_t bytes) {
-    const auto* p = static_cast<const uint8_t*>(data);
-    for (std::size_t i = 0; i < bytes; i++) {
-        h = (h ^ p[i]) * 0x100000001B3ull;
-    }
-    return h;
-}
-void frame_hash_record(const galaxy::render::shapes::Record& r) {
-    FrameHash& fh = frame_hash();
-    if (fh.file == nullptr) {
-        return;
-    }
-    uint64_t h = 0xCBF29CE484222325ull;
-    h = fnv1a(h, &r.kind, sizeof(r.kind));
-    const galaxy::render::shapes::Matrix* pool = galaxy::render::producer_record_matrices(r);
-    for (uint32_t i = 0; i < r.matrix_count; ++i) {
-        const auto& m = pool[i];
-        h = fnv1a(h, &m.kind, sizeof(m.kind));
-        h = fnv1a(h, m.values.data(), sizeof(m.values));
-    }
-    const uint32_t target[] = {r.target_width, r.target_height, r.target_clear_rgba, r.target_clear_z,
-                               r.target_channels, r.target_x, r.target_y, r.target_flags};
-    h = fnv1a(h, target, sizeof(target));
-    const uint64_t image = r.image != nullptr ? r.image->size() : 0u;
-    h = fnv1a(h, &image, sizeof(image));
-    std::lock_guard guard(fh.lock);
-    fh.sum += h;
-    fh.records++;
-}
-void frame_hash_line(uint32_t frame) {
-    FrameHash& fh = frame_hash();
-    if (fh.file == nullptr) {
-        return;
-    }
-    std::lock_guard guard(fh.lock);
-    std::fprintf(fh.file, "%u %llu %016llx %llu\n", frame, static_cast<unsigned long long>(fh.records),
-                 static_cast<unsigned long long>(fh.sum),
-                 static_cast<unsigned long long>(fh.reads.load(std::memory_order_relaxed)));
-    std::fflush(fh.file);
-    fh.sum = 0;
-    fh.records = 0;
-}
-
 void queue_shape_record(galaxy::render::shapes::Record record) {
-    frame_hash_record(record);
     std::lock_guard guard(gShapeLock);
     gShapePending.push_back(std::move(record));
     gShapePendingAny.store(true, std::memory_order_release);
@@ -2776,7 +2695,6 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
 #if defined(NEBULA_HOST_RENDERER)
     // A read writes memory the GPU sees.
     mark_written(dst, size);
-    frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
 #endif
     return static_cast<int32_t>(size);
 }
@@ -2790,7 +2708,6 @@ std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_
 void svc_frame_begun(void*, int black, uint32_t frame) {
     gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
-    frame_hash_line(frame);
 #endif
 #if defined(NEBULA_HOST_RENDERER)
     // GALAXY_TRACE_VI_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
@@ -2818,21 +2735,6 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
         }
         // The renderer's newest picture, or black while the game shows black.
         submit_frame(present, black != 0);
-    }
-    // GALAXY_TEST_MII_IMPORT=<frame>:<file>: imports the file at that frame, as the settings do.
-    {
-        static const char* const test_import = NEBULA_TEST_GETENV("GALAXY_TEST_MII_IMPORT");
-        static bool test_imported = false;
-        if (test_import != nullptr && !test_imported) {
-            const char* const colon = std::strchr(test_import, ':');
-            if (colon != nullptr && frame >= std::strtoul(test_import, nullptr, 10)) {
-                test_imported = true;
-                const std::filesystem::path file(colon + 1);
-                std::string message;
-                (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&file, 1u), &message);
-                std::fprintf(stderr, "[mii] test import at %u: %s\n", frame, message.c_str());
-            }
-        }
     }
     // Miis imported from the settings while the game runs: the game reads its slots again.
     if (const auto placed = galaxy::host::take_mii_installs(); !placed.empty()) {
@@ -2991,20 +2893,11 @@ std::atomic<int> gSavesPending{0};
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
     gSaveOps.fetch_add(1, std::memory_order_relaxed);
-    // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each operation takes this long), so the windows that open
-    // and close around a save are exercised as on a busy disk.
-    static const uint32_t test_delay_us = [] {
-        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_NAND_DELAY_US");
-        return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
-    }();
     *request->status = NEBULA_SAVE_PENDING;
     gSavesPending.fetch_add(1, std::memory_order_acq_rel);
     const NebulaSaveRequest r = *request;
     const std::string name = r.name != nullptr ? r.name : "";
     auto operation = [r, name] {
-        if (test_delay_us != 0) {
-            std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
-        }
         fs::path folder;
         galaxy::saves::Result result = galaxy::saves::kFailed;
         if (nand_path(gSaveDataPath.c_str(), &folder)) {
@@ -3146,14 +3039,6 @@ std::atomic<uint8_t> gInputConnected{1};
 bool input_device_missing(bool wii_remote) {
     static unsigned tick = 0;
     static bool missing = false;
-    static const char* const test_ms = NEBULA_TEST_GETENV("GALAXY_TEST_INPUT_LOST_AT_MS");
-    if (test_ms != nullptr) {
-        // Tests: lost for ten seconds from this long after the first look.
-        static const auto first = std::chrono::steady_clock::now();
-        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - first).count();
-        const long long at = std::atoll(test_ms);
-        return ms >= at && ms < at + 10000;
-    }
     if (++tick % 10u != 0u) {
         return missing;
     }
@@ -4376,10 +4261,8 @@ int main(int argc, char** argv) {
     galaxy::host::set_env_flag_cache_enabled(true);
     const galaxy::render::RenderConfig render_config = galaxy::render::get_render_config();
     gNative.log = native_log;
-    if (const bool started = galaxy::render::initialize(static_cast<int>(render_config.window_width),
-                                                        static_cast<int>(render_config.window_height));
-        !started || (NEBULA_TEST_GETENV("GALAXY_TEST_START_NO_GPU_MEMORY") != nullptr &&
-                     std::getenv("NEBULA_GPU_START_RETRIES") == nullptr)) {
+    if (!galaxy::render::initialize(static_cast<int>(render_config.window_width),
+                                    static_cast<int>(render_config.window_height))) {
         const std::string reason = galaxy::render::startup_failure();
         if (retry_start_for_gpu_memory(reason)) {
             finish_and_exit(true);

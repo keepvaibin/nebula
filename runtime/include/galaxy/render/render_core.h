@@ -1032,7 +1032,6 @@ private:
     // null where the order of a draw's triangles could show (blending, a logic op, no depth test or write) or while
     // it compiles.
     gpu::Pipeline* current_flat_pipeline_ = nullptr;
-    bool curved_split_ = true;
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;

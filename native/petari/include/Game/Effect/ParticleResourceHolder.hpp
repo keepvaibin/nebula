@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 
 class JMapInfo;
 class JPAResourceManager;
@@ -29,6 +31,6 @@ public:
     JPAResourceManager* mResourceMgr;
     JMapInfo* mAutoEffectList;
     JMapInfo* mParticleNames;
-    EffectNum* mEffectNums[1024];
+    MR::GrowTable< EffectNum*, 1024 > mEffectNums;
     int mNumEffectNums;
 };

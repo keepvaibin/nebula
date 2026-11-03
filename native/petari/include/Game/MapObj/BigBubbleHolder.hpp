@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 
 class BigBubble;
@@ -22,7 +24,7 @@ public:
     BigBubbleDrawer* mDrawer;
     BigBubble* mBubbles[16];
     BigBubble* mDrawBubbles[16];
-    BigBubbleMoveLimitter* mLimitters[64];
+    MR::GrowTable< BigBubbleMoveLimitter*, 64 > mLimitters;
     s32 mNumLimitters;
     s32 mNumBubbles;
     bool mIsMarioBinded;

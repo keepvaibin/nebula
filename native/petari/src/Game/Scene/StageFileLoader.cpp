@@ -32,7 +32,7 @@ void StageFileLoader::makeStageArchiveNameList() {
         char path[0x100];
         nebula_snprintf(path, sizeof(path), "/StageData/%s.arc", zoneName);
         u32 len = strlen(path) + 1;
-        mStageFiles[i] = new char[len];
+        mStageFiles.at(i) = new char[len];
         MR::copyString(mStageFiles[i], path, len);
     }
 }
