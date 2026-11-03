@@ -90,7 +90,7 @@ void ScrewSwitch::exeScrew() {
     }
     if (MR::isStep(this, ::sStepToRumbleCamera)) {
         MR::startSound(this, "SE_OJ_SCREW_SWITCH_ON");
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
     if (MR::isBckStopped(this)) {

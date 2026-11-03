@@ -1,4 +1,5 @@
 #include "Game/Map/OceanSphere.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -14,23 +15,22 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/NativeMesh.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-GXColor sOceanSphereTevReg0Face = {0x48, 0x80, 0xBE, 0x1C};
-GXColor sOceanSphereTevReg1FrontDefault = {0x00, 0x51, 0x70, 0x6F};
-GXColor sOceanSphereTevReg1FrontTear = {0x00, 0x64, 0xFF, 0x6F};
-GXColor sOceanSphereTevReg2Face = {0xFF, 0xFF, 0xFF, 0xFF};
-GXColor sOceanSphereKColor0Face = {0x78, 0xFF, 0xFF, 0x00};
-GXColor sOceanSphereTevReg0Back = {0x48, 0x80, 0xBE, 0x1C};
-GXColor sOceanSphereTevReg1BackDefault = {0x00, 0x51, 0x70, 0x6F};
-GXColor sOceanSphereTevReg1BackTear = {0x00, 0xC3, 0xFF, 0x6F};
-GXColor sOceanSphereTevReg2Back = {0xFF, 0xFF, 0xFF, 0xFF};
-GXColor sOceanSphereKColor0Back = {0x78, 0xFF, 0xFF, 0x00};
-GXColor sOceanSphereTevReg0Env = {0x00, 0x69, 0xB8, 0x14};
-GXColor sOceanSphereTevReg1Env = {0x00, 0x00, 0x00, 0xFF};
+NebulaColor8 sOceanSphereTevReg0Face = {0x48, 0x80, 0xBE, 0x1C};
+NebulaColor8 sOceanSphereTevReg1FrontDefault = {0x00, 0x51, 0x70, 0x6F};
+NebulaColor8 sOceanSphereTevReg1FrontTear = {0x00, 0x64, 0xFF, 0x6F};
+NebulaColor8 sOceanSphereTevReg2Face = {0xFF, 0xFF, 0xFF, 0xFF};
+NebulaColor8 sOceanSphereKColor0Face = {0x78, 0xFF, 0xFF, 0x00};
+NebulaColor8 sOceanSphereTevReg0Back = {0x48, 0x80, 0xBE, 0x1C};
+NebulaColor8 sOceanSphereTevReg1BackDefault = {0x00, 0x51, 0x70, 0x6F};
+NebulaColor8 sOceanSphereTevReg1BackTear = {0x00, 0xC3, 0xFF, 0x6F};
+NebulaColor8 sOceanSphereTevReg2Back = {0xFF, 0xFF, 0xFF, 0xFF};
+NebulaColor8 sOceanSphereKColor0Back = {0x78, 0xFF, 0xFF, 0x00};
+NebulaColor8 sOceanSphereTevReg0Env = {0x00, 0x69, 0xB8, 0x14};
+NebulaColor8 sOceanSphereTevReg1Env = {0x00, 0x00, 0x00, 0xFF};
 
 namespace NrvOceanSphere {
     NEW_NERVE(OceanSphereNrvRiseUp, OceanSphere, RiseUp);
@@ -52,9 +52,9 @@ namespace {
     void beginDrawPolygon(int idx, s32 pointCount, NativeMesh* pMesh, u32 attributes) {
         const u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
         if (pMesh != nullptr) {
-            pMesh->begin(GX_TRIANGLESTRIP, vtxCount);
+            pMesh->begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, vtxCount);
         } else {
-            J3DNativeDraw::begin(GX_TRIANGLESTRIP, vtxCount, attributes);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, vtxCount, attributes);
         }
     }
 };  // namespace
@@ -139,13 +139,13 @@ OceanSphere::OceanSphere(const char* pName)
     : LiveActor(pName), mRadius(), mRadiusTarget(), mPointCount(), mAxisPointPX(), mAxisPointNX(), mAxisPointPY(), mAxisPointNY(), mAxisPointPZ(),
       mAxisPointNZ(), mPlaneLeftUpper(), mPlaneRightUpper(), mPlaneLeftLower(), mPlaneRightLower(), mEdge0(), mEdge1(), mEdge2(), mEdge3(), mEdge4(),
       mEdge5(), mEdge6(), mEdge7(), mWaveTime1(), mWaveTime2(), mTexOffs0X(), mTexOffs0Y(), mTexOffs1X(), mTexOffs1Y(), mWaterTex(), mWaterEnvTex() {
-    GXColor front = sOceanSphereTevReg1FrontDefault;
+    NebulaColor8 front = sOceanSphereTevReg1FrontDefault;
     mTevReg1Front = front;
 
-    GXColor back = sOceanSphereTevReg1BackDefault;
+    NebulaColor8 back = sOceanSphereTevReg1BackDefault;
     mTevReg1Back = back;
 
-    mUseDisplayList = false;
+    mUseMesh = false;
     mAlwaysUseRealDrawing = false;
     mIsCameraInside = false;
     mIsStartPosCamera = true;
@@ -160,11 +160,11 @@ void OceanSphere::init(const JMapInfoIter& rIter) {
     mRadiusTarget = mRadius;
     initPoints();
     updatePoints();
-    initDisplayList();
+    initMesh();
     WaterAreaFunction::entryOceanSphere(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphere.bti"), 0);
-    mWaterEnvTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphereEnvRef.bti"), 0);
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphere.bti"));
+    mWaterEnvTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "OceanSphereEnvRef.bti"));
 
     MR::setClippingTypeSphere(this, mRadius);
     MR::setClippingFarMax(this);
@@ -179,13 +179,13 @@ void OceanSphere::init(const JMapInfoIter& rIter) {
         mIsTearDrop = true;
         mAlwaysUseRealDrawing = true;
         mIsStartPosCamera = false;
-        GXColor front;
-        GXColor back;
-        GXColor frontTear = sOceanSphereTevReg1FrontTear;
+        NebulaColor8 front;
+        NebulaColor8 back;
+        NebulaColor8 frontTear = sOceanSphereTevReg1FrontTear;
         front = frontTear;
         mTevReg1Front = front;
 
-        GXColor backTear = sOceanSphereTevReg1BackTear;
+        NebulaColor8 backTear = sOceanSphereTevReg1BackTear;
         back = backTear;
         mTevReg1Back = back;
     }
@@ -224,8 +224,6 @@ bool OceanSphere::isInWater(const TVec3f& rPos) const {
     return rPos.distance(mPosition) <= mRadius;
 }
 
-#pragma push
-#pragma opt_propagation off
 bool OceanSphere::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const {
     const TVec3f& rPosition = mPosition;
     const f32 radius = mRadius;
@@ -241,7 +239,6 @@ bool OceanSphere::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, Wate
     pInfo->mSurfacePos.set(rPosition + normal * radius);
     return true;
 }
-#pragma pop
 
 void OceanSphere::initPoints() {
     if (mRadius <= 300.0f) {
@@ -305,7 +302,7 @@ void OceanSphere::initPoints() {
     mEdge7 = new OceanSpherePlaneEdge(mPointCount, &mPosition, -::sPosAxisZ, ::sPosAxisX, TVec2f(0.0f, 0.0f), TVec2f(1.0f, 0.0f));
 }
 
-void OceanSphere::initDisplayList() {
+void OceanSphere::initMesh() {
     // The face's corners carry the sphere's normals too (loadMaterialFace), the back's only them.
     const u32 corners = 8 * mPointCount * (mPointCount + 1);
     mMeshFace.init(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1, corners);
@@ -331,9 +328,9 @@ void OceanSphere::control() {
     mWaveTime2 += -0.1f;
 
     if (!mAlwaysUseRealDrawing && MR::calcDistanceToPlayer(this) > 10000.0f) {
-        mUseDisplayList = true;
+        mUseMesh = true;
     } else {
-        mUseDisplayList = false;
+        mUseMesh = false;
         updatePoints();
     }
 
@@ -549,6 +546,23 @@ OceanSpherePoint* OceanSphere::getPlanePointRightLower(int row, int col) const {
     return mEdge7->mPoints[row - 1];
 }
 
+namespace {
+    // runtime/src/render/materials/ocean_sphere.hlsl with its four colours: blended by alpha, depth tested and not
+    // written, `cull` (NEBULA_CULL_*), no fog.
+    void sendFaceMaterial(JUTTexture* pTexture, const NebulaColor8& rHighlight, const NebulaColor8& rDeep, const NebulaColor8& rShallow,
+                          const NebulaColor8& rTint, u8 cull) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_OCEAN_SPHERE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
+                           cull);
+        NativeShader::setColor(material, 0, rHighlight.r, rHighlight.g, rHighlight.b, rHighlight.a);
+        NativeShader::setColor(material, 4, rDeep.r, rDeep.g, rDeep.b, rDeep.a);
+        NativeShader::setColor(material, 8, rShallow.r, rShallow.g, rShallow.b, rShallow.a);
+        NativeShader::setColor(material, 12, rTint.r, rTint.g, rTint.b, rTint.a);
+        NativeShader::setTexture(material, 0, pTexture);
+        NativeShader::send(material);
+    }
+}  // namespace
+
 void OceanSphere::draw() const {
     if (!MR::isValidDraw(this)) {
         return;
@@ -557,7 +571,7 @@ void OceanSphere::draw() const {
     if (mIsStartPosCamera && !mIsCameraInside) {
         loadMaterialBack();
 
-        if (mUseDisplayList) {
+        if (mUseMesh) {
             mMeshBack.draw();
         } else {
             drawSphere(true, nullptr);
@@ -568,10 +582,11 @@ void OceanSphere::draw() const {
 
     if (mIsStartPosCamera) {
         if (mIsCameraInside) {
-            J3DNativeState::setCullMode(GX_CULL_FRONT);
+            sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face,
+                             sOceanSphereKColor0Face, NEBULA_CULL_FRONT);
         }
 
-        if (mUseDisplayList) {
+        if (mUseMesh) {
             mMeshFace.draw();
         } else {
             drawSphere(false, nullptr);
@@ -580,105 +595,49 @@ void OceanSphere::draw() const {
         return;
     }
 
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
+    sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face, sOceanSphereKColor0Face,
+                     NEBULA_CULL_FRONT);
     drawSphere(false, nullptr);
 
     if (mIsCameraInside) {
         return;
     }
 
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setTevColor(GX_TEVREG0, sOceanSphereTevReg0Back);
-    J3DNativeState::setTevColor(GX_TEVREG1, mTevReg1Back);
-    J3DNativeState::setTevColor(GX_TEVREG2, sOceanSphereTevReg2Back);
-    J3DNativeState::setTevKColor(GX_KCOLOR0, sOceanSphereKColor0Back);
+    sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Back, mTevReg1Back, sOceanSphereTevReg2Back, sOceanSphereKColor0Back,
+                     NEBULA_CULL_BACK);
     drawSphere(false, nullptr);
 }
 
-const GXColor sOceanSphereFogFace = {0xFF, 0xFF, 0xFF, 0};
-const GXColor sOceanSphereFogBack = {0xFF, 0xFF, 0xFF, 0};
 
 void OceanSphere::loadMaterialFace() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    // The face's vertices carry the sphere's normals (unlit: the picture is unchanged), so ray tracing shades the
-    // water as the sphere it is rather than as its flat triangles.
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX3x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX3x4, GX_TG_TEX1, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-    mWaterTex->load(GX_TEXMAP0);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setNumTevStages(4);
-    J3DNativeState::setTevColor(GX_TEVREG0, sOceanSphereTevReg0Face);
-    J3DNativeState::setTevColor(GX_TEVREG1, mTevReg1Front);
-    J3DNativeState::setTevColor(GX_TEVREG2, sOceanSphereTevReg2Face);
-    J3DNativeState::setTevKColor(GX_KCOLOR0, sOceanSphereKColor0Face);
-    J3DNativeState::setTevKColorSel(GX_TEVSTAGE0, GX_TEV_KCSEL_K0);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_KONST, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE2, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE2, GX_CC_CPREV, GX_CC_A0, GX_CC_C0, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE2, GX_TEV_COMP_R8_EQ, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE3, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE3, GX_CC_C1, GX_CC_C2, GX_CC_CPREV, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE3, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE3, GX_CA_A1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE3, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, sOceanSphereFogFace);
+    J3DNativeShape::setCurrentIdentity();
+    sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face, sOceanSphereKColor0Face,
+                     NEBULA_CULL_BACK);
 }
 
 void OceanSphere::loadMaterialBack() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(0);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_NRM, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-
     TPos3f pos;
     pos.set(MR::getCameraViewMtx());
     pos.zeroTrans();
     pos.scale(0.779175f);
     J3DNativeShape::setTexture(0, pos.toMtxPtr(), 2);
-
-    mWaterEnvTex->load(GX_TEXMAP0);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevColor(GX_TEVREG0, sOceanSphereTevReg0Env);
-    J3DNativeState::setTevColor(GX_TEVREG1, sOceanSphereTevReg1Env);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, sOceanSphereFogBack);
+    static const u8 kPlaces[8] = {0, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
+    // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereTevReg0Env
+    // toward sOceanSphereTevReg1Env; opaque, depth tested and written, front faces culled, no fog.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_SPHERE_ENV, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_FRONT);
+    const NebulaColor8& rLow = sOceanSphereTevReg0Env;
+    const NebulaColor8& rHigh = sOceanSphereTevReg1Env;
+    NativeShader::setColor(material, 0, rLow.r, rLow.g, rLow.b, rLow.a);
+    NativeShader::setColor(material, 4, rHigh.r, rHigh.g, rHigh.b, rHigh.a);
+    NativeShader::setTexture(material, 0, mWaterEnvTex);
+    NativeShader::send(material);
 }
 
 void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {

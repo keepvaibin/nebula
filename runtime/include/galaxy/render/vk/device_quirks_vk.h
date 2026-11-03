@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Which GPU and driver the Vulkan backend runs on, and what that driver is known to get wrong (docs/VULKAN.md,
-// "Driver compatibility"). The known-bug table is the part of Dolphin's DriverDetails, ANGLE's vk_renderer features and
+// "Driver compatibility"). The known-bug table is the part of known driver tables, ANGLE's vk_renderer features and
 // Dawn's Vulkan toggles that touches what Nebula uses; each entry in device_quirks_vk.cpp names its source.
 // PipelineCacheVk's self-test adds what this device's driver refuses (PipelineCompat), kept per driver.
 #pragma once
@@ -55,10 +55,7 @@ struct DeviceIdentity {
 // Workarounds the table turns on. Everything Nebula needs from the device beyond these is a capability the device
 // reports (features, extensions, formats): the context enables only what the device has.
 struct DeviceQuirks {
-    // Specialised TEV stages take a zero colour input A or B from a constant instead of a literal (Qualcomm compilers
-    // fold the literal wrongly).
-    bool tev_zero_from_constant = false;
-    // EFB clears drawn instead of vkCmdClearAttachments (which races with draws on older Qualcomm drivers).
+    // scene target clears drawn instead of vkCmdClearAttachments (which races with draws on older Qualcomm drivers).
     bool clear_with_draw = false;
     // Readback buffers in host-coherent memory (cached memory reads back slower on Mali and Adreno).
     bool coherent_readback = false;
@@ -67,8 +64,6 @@ struct DeviceQuirks {
     bool linear_readback = false;
     // Render passes clear by command, not by load op (PowerVR's load-op clears are broken).
     bool clear_by_command = false;
-    // No tessellation, so no curved surfaces (NVIDIA's Vulkan compiler crashes building their pipelines).
-    bool no_tessellation = false;
 };
 
 [[nodiscard]] DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties);

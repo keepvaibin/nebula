@@ -3,28 +3,28 @@
 #include "Game/RhythmLib/AudBgmTempoAdjuster.hpp"
 #include <JSystem/JAudio2/JASSeqParser.hpp>
 
-class JASTrack;
+struct JASTrack;
 
 class AudRhythmSeqParser : public JASSeqParser {
 public:
     static const int MAX_CHANNELS = 8;
 
     struct NoteInfo {
-        /* 0x00 */ bool mIsOn;
-        /* 0x04 */ u32 mNoteOff;
-        /* 0x08 */ u32 mPitch;
-        /* 0x0C */ u32 mVelocity;
-        /* 0x10 */ s64 mTime;
+        bool mIsOn;
+        u32 mNoteOff;
+        u32 mPitch;
+        u32 mVelocity;
+        s64 mTime;
     };
 
     typedef void (*NoteOnFunc)(u32, u32);
     typedef void (*NoteOffFunc)();
 
     struct NoteOnInfo {
-        /* 0x0 */ s32 mChannel;
-        /* 0x4 */ s32 _4;
-        /* 0x8 */ NoteOnFunc mNoteOnFunc;
-        /* 0xC */ NoteOffFunc mNoteOffFunc;
+        s32 mChannel;
+        s32 _4;
+        NoteOnFunc mNoteOnFunc;
+        NoteOffFunc mNoteOffFunc;
     };
 
     enum RhythmType {
@@ -71,22 +71,22 @@ public:
         return &mTempoAdjuster;
     }
 
-    /* 0x004 */ f32 mTempo;
-    /* 0x008 */ f32 mModifiedTempo;
-    /* 0x00C */ u8 mChordId;
-    /* 0x00D */ u8 mScaleId;
-    /* 0x010 */ NoteInfo mNoteInfo[8];
-    /* 0x0D0 */ u8 mRhythmType0;
-    /* 0x0D1 */ u8 mRhythmType1;
-    /* 0x0D2 */ u8 mRhythmType2;
-    /* 0x0D3 */ u8 mRhythmType3;
-    /* 0x0D4 */ u8 mRhythmType4;
-    /* 0x0D8 */ AudBgmTempoAdjuster mTempoAdjuster;
-    /* 0x100 */ u32 mCallDepth;
-    /* 0x104 */ u8* mCallStack[8];
-    /* 0x124 */ NoteOnInfo mNoteOnInfo[8];
-    /* 0x1A4 */ s32 _1A4;
-    /* 0x1A8 */ bool mIsUsed;
-    /* 0x1A9 */ bool mIsActive;
-    /* 0x1AC */ u32 _1AC;
+    f32 mTempo;
+    f32 mModifiedTempo;
+    u8 mChordId;
+    u8 mScaleId;
+    NoteInfo mNoteInfo[8];
+    u8 mRhythmType0;
+    u8 mRhythmType1;
+    u8 mRhythmType2;
+    u8 mRhythmType3;
+    u8 mRhythmType4;
+    AudBgmTempoAdjuster mTempoAdjuster;
+    u32 mCallDepth;
+    u8* mCallStack[8];
+    NoteOnInfo mNoteOnInfo[8];
+    s32 _1A4;
+    bool mIsUsed;
+    bool mIsActive;
+    u32 _1AC;
 };

@@ -2,16 +2,16 @@
 
 #include "JSystem/JAudio2/JASBasicInst.hpp"
 
-struct JKRHeap;
+class NebulaArena;
 
 const int PERC_MAX = 0x80;
 
 struct JASDrumSet : public JASInst {
     struct TVelomap {
-        /* 0x00 */ s32 _0;
-        /* 0x04 */ s32 _4;
-        /* 0x08 */ f32 mVolume;
-        /* 0x0C */ f32 mPitch;
+        s32 _0;
+        s32 _4;
+        f32 mVolume;
+        f32 mPitch;
     };
 
     struct TPerc {
@@ -28,7 +28,7 @@ struct JASDrumSet : public JASInst {
             mPan = pan;
         }
 
-        void setVeloRegionCount(u32, JKRHeap*);
+        void setVeloRegionCount(u32, NebulaArena*);
         TVelomap* getVeloRegion(int);
         const TVelomap* getVeloRegion(int) const;
 
@@ -38,25 +38,25 @@ struct JASDrumSet : public JASInst {
 
         void appendEffect(JASPtrListAdaptor< JASInstEffect >*);
 
-        /* 0x00 */ f32 mVolume;
-        /* 0x04 */ f32 mPitch;
-        /* 0x08 */ f32 mPan;
-        /* 0x0C */ u16 mRelease;
-        /* 0x0E */ u16 field_0xe;
-        /* 0x10 */ JASPtrList< JASInstEffect > mEffects;
-        /* 0x14 */ s32 mVelomapCount;
-        /* 0x18 */ TVelomap* mVelomap;
+        f32 mVolume;
+        f32 mPitch;
+        f32 mPan;
+        u16 mRelease;
+        u16 field_0xe;
+        JASPtrList< JASInstEffect > mEffects;
+        s32 mVelomapCount;
+        TVelomap* mVelomap;
     };
 
     JASDrumSet();
     virtual ~JASDrumSet();
-    void newPercArray(u8, JKRHeap*);
+    void newPercArray(u8, NebulaArena*);
     virtual bool getParam(int, int, JASInstParam*) const;
     void setPerc(int, JASDrumSet::TPerc*);
     virtual u32 getType() const {
         return 'PERC';
     }
 
-    /* 0x4 */ TPerc* mPercArray[PERC_MAX];
-    /* 0x8 */  // u8 mPercNumMax;
+    TPerc* mPercArray[PERC_MAX];
+     // u8 mPercNumMax;
 };

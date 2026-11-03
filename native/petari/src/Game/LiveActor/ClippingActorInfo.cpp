@@ -1,11 +1,11 @@
 #include "Game/LiveActor/ClippingActorInfo.hpp"
+#include "Game/LiveActor/ClippingActorHolder.hpp"
+#include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/LiveActor/ClippingJudge.hpp"
+#include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
-#ifdef TARGET_PC
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
-#include <revolution/os.h>
-#endif
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
 
@@ -17,22 +17,20 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     mFarClipLevel = 6;
     _12 = -1;
     _14 = 0;
-#ifdef TARGET_PC
-    mKeptForLight = false;
-    mLightReach = -1.0f;
-#endif
+    mGround = nullptr;
+    mGroundFound = false;
     setTypeToSphere(300.0f, 0);
 }
 
 void ClippingActorInfo::judgeClipping() {
     if (isJudgedToClip()) {
         if (!MR::isClipped(mActor)) {
-            mActor->startClipped();
+            startClipped();
+        } else {
+            updateDrawnClipped();
         }
-    } else {
-        if (MR::isClipped(mActor)) {
-            mActor->endClipped();
-        }
+    } else if (MR::isClipped(mActor)) {
+        endClipped();
     }
 }
 
@@ -44,41 +42,77 @@ bool ClippingActorInfo::isJudgedToClip() const {
 
     f32 val = _8;
     ClippingJudge* judge = MR::getClippingJudge();
-#ifdef TARGET_PC
-    // Ray-traced light draws the whole stage to the camera's far plane: an actor's own draw distance (5,000 to 60,000
-    // units by its clip level) was the console's budget, and with it objects stood in the sky without the planet they
-    // sit on, and the traced light lost whatever lay beyond.
-    if (judge->isLightSourcesWanted()) {
-        farClipLevel = 0;
-    }
-    if (!judge->isJudgedToClipFrustum(*_4, val, farClipLevel)) {
-        mKeptForLight = false;
-        return false;
-    }
-    // Ray-traced light: an actor out of view whose shadow, or whose light, reaches it stays unclipped. Drawn while
-    // clipped it showed frozen where the game stopped it, or in its bind pose if it never moved (a Toad standing in a
-    // T-pose in the light of the plaza).
-    mKeptForLight = isWantedForLight(farClipLevel);
-    return !mKeptForLight;
-#else
     return judge->isJudgedToClipFrustum(*_4, val, farClipLevel);
-#endif
 }
 
-#ifdef TARGET_PC
-bool ClippingActorInfo::isWantedForLight(s32 farClipLevel) const {
-    const ClippingJudge* judge = MR::getClippingJudge();
-    if (!judge->isLightSourcesWanted() || MR::isDead(mActor) || MR::isNoEntryDrawBuffer(mActor)) {
-        return false;
-    }
-    if (mLightReach < 0.0f) {
-        // Asked once, while ray-traced light is on: the reach of the model's light (0: none).
-        mLightReach = mActor->mModelManager != nullptr ? NebulaHost::lightReach(MR::getModelResName(mActor), _8) : 0.0f;
-    }
-    return judge->isShadowCasterInView(*_4, _8, farClipLevel) ||
-           (mLightReach > 0.0f && judge->isLightInView(*_4, _8 + mLightReach));
+// The level's distances say when an actor runs; the camera says whether it is seen. Past its distance and in view it
+// stays stopped and keeps its model, effects and parts, so nothing runs that the level did not expect and nothing pops
+// in or goes dark. Scenery always; coins, enemies and characters once they have run: a level may place them where only
+// another scenario uses them (Space Junk's web coins), relying on their staying clipped there. Never over a planet that
+// is not there: view cubes and switches hide a planet and leave what stands on it to its distance.
+bool ClippingActorInfo::isDrawnWhileClipped() const {
+    return !_14->_4 && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor, mActor->mFlag.mHasPose) &&
+           !MR::getClippingJudge()->isJudgedToClipFrustum(*_4, _8, 0) && const_cast< ClippingActorInfo* >(this)->isGroundShown();
 }
-#endif
+
+bool ClippingActorInfo::isGroundShown() {
+    if (!mGroundFound) {
+        mGroundFound = true;
+        mGround = MR::getClippingDirector()->mActorHolder->findGround(this);
+    }
+    if (mGround == nullptr) {
+        return true;
+    }
+    return !mGround->_14->_4 && !MR::isDead(mGround->mActor) && !MR::isHiddenModel(mGround->mActor);
+}
+
+void ClippingActorInfo::startClipped() {
+    if (!isDrawnWhileClipped()) {
+        mActor->startClipped();
+        return;
+    }
+
+    const bool neverRun = !mActor->mFlag.mHasPose;
+    mActor->mFlag.mIsDrawnClipped = true;
+    mActor->prepareDrawClipped();
+    LiveActor::sClipScope = LiveActor::ClipScope_Run;
+    mActor->startClipped();
+    if (neverRun) {
+        // Seen before it has ever run: what it shows when it wakes (a torch's flame, a block's glow), its model already
+        // connected.
+        LiveActor::sClipScope = LiveActor::ClipScope_Seen;
+        mActor->endClipped();
+    }
+    LiveActor::sClipScope = LiveActor::ClipScope_All;
+}
+
+void ClippingActorInfo::endClipped() {
+    if (mActor->mFlag.mIsDrawnClipped) {
+        mActor->mFlag.mIsDrawnClipped = false;
+        LiveActor::sClipScope = LiveActor::ClipScope_Run;
+        mActor->endClipped();
+        LiveActor::sClipScope = LiveActor::ClipScope_All;
+    } else {
+        mActor->endClipped();
+    }
+}
+
+void ClippingActorInfo::updateDrawnClipped() {
+    const bool drawn = isDrawnWhileClipped();
+    if (drawn == mActor->mFlag.mIsDrawnClipped) {
+        return;
+    }
+
+    mActor->mFlag.mIsDrawnClipped = drawn;
+    LiveActor::sClipScope = LiveActor::ClipScope_Seen;
+    if (drawn) {
+        mActor->prepareDrawClipped();
+        mActor->endClipped();
+    } else {
+        mActor->startClipped();
+    }
+    LiveActor::sClipScope = LiveActor::ClipScope_All;
+}
 
 bool ClippingActorInfo::isGroupClipping() const {
     return mInfo;
@@ -110,6 +144,16 @@ ClippingActorInfoList::ClippingActorInfoList(int a1) {
 }
 
 void ClippingActorInfoList::add(ClippingActorInfo* pInfo) {
+    if (_4 >= _0) {
+        const s32 grown = _0 * 2;
+        ClippingActorInfo** pList = new ClippingActorInfo*[grown]();
+        for (s32 i = 0; i < _4; i++) {
+            pList[i] = mClippingActorList[i];
+        }
+        delete[] mClippingActorList;
+        mClippingActorList = pList;
+        _0 = grown;
+    }
     mClippingActorList[_4] = pInfo;
     _4++;
 }

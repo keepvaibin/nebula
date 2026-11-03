@@ -3,55 +3,6 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
-#include "revolution/types.h"
-
-void JetTurtle_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("Koura", "Koura");
-    MR::isEqualString("KouraShine", "KouraShine");
-    MR::isEqualString("body", "body");
-    MR::isEqualString("SE_OJ_TURTLE_JET_LAUNCH_W", "SE_OJ_TURTLE_JET_LAUNCH_W");
-    MR::isEqualString("SE_OJ_TURTLE_JET_LAUNCH_L", "SE_OJ_TURTLE_JET_LAUNCH_L");
-    MR::isEqualString("BrakeLamp", "BrakeLamp");
-    MR::isEqualString("Vanish", "Vanish");
-    MR::isEqualString("VanishRed", "VanishRed");
-    MR::isEqualString("VanishGold", "VanishGold");
-    MR::isEqualString("SpinBlur", "SpinBlur");
-    MR::isEqualString("SpinBlurRed", "SpinBlurRed");
-    MR::isEqualString("SpinBlurGold", "SpinBlurGold");
-    MR::isEqualString("Glow", "Glow");
-    MR::isEqualString("Wait", "Wait");
-    MR::isEqualString("HandyGlow", "HandyGlow");
-    MR::isEqualString("SwimFlutterboard", "SwimFlutterboard");
-    MR::isEqualString("SwimBubble", "SwimBubble");
-    MR::isEqualString("SwimBubbleRed", "SwimBubbleRed");
-    MR::isEqualString("SE_OJ_LV_JET_TURTLE_G_LIGHT", "SE_OJ_LV_JET_TURTLE_G_LIGHT");
-    MR::isEqualString("CarryWait", "CarryWait");
-    MR::isEqualString("WaterExplosion", "WaterExplosion");
-    MR::isEqualString("Star", "Star");
-    MR::isEqualString("Explosion", "Explosion");
-    MR::isEqualString("ExplosionRed", "ExplosionRed");
-    MR::isEqualString("ExplosionGold", "ExplosionGold");
-    MR::isEqualString("SE_OJ_TURTLE_JET_BREAK_W", "SE_OJ_TURTLE_JET_BREAK_W");
-    MR::isEqualString("SE_OJ_TURTLE_JET_BREAK_L", "SE_OJ_TURTLE_JET_BREAK_L");
-    MR::isEqualString("Ignition", "Ignition");
-    MR::isEqualString("BulletWater", "BulletWater");
-    MR::isEqualString("WaterBlur", "WaterBlur");
-    MR::isEqualString("SE_PV_THROW", "SE_PV_THROW");
-    MR::isEqualString("Bullet", "Bullet");
-    MR::isEqualString("Blur", "Blur");
-    MR::isEqualString("BlurRed", "BlurRed");
-    MR::isEqualString("BlurGold", "BlurGold");
-    MR::isEqualString("SE_SY_GET_TURTLE_JET", "SE_SY_GET_TURTLE_JET");
-    MR::isEqualString("SE_PV_CATCH", "SE_PV_CATCH");
-    MR::isEqualString("AppearLight", "AppearLight");
-    MR::isEqualString("SE_EM_LV_NOKOLAND_REVIVE_EFFECT", "SE_EM_LV_NOKOLAND_REVIVE_EFFECT");
-    MR::isEqualString("KouraRevival", "KouraRevival");
-    MR::isEqualString("SE_EM_NOKOLAND_REVIVE_APPEAR", "SE_EM_NOKOLAND_REVIVE_APPEAR");
-    MR::isEqualString("BulletSearch", "BulletSearch");
-    MR::isEqualString("Drop", "Drop");
-    MR::isEqualString("YRotation", "YRotation");
-    MR::isEqualString("SE_EM_TURTLE_SHELL_TRAMPLE", "SE_EM_TURTLE_SHELL_TRAMPLE");
-}
 
 namespace {
     static const f32 sThrowSpdStraight[] = {30.0f, 20.0f, 30.0f};

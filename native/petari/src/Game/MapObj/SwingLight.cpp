@@ -30,7 +30,7 @@ namespace {
 LightCylinder::LightCylinder(const char* pName, MtxPtr pHostMtx, const Color8& rColor)
     : MapObjActor(pName), mHostMtx(pHostMtx), mLightVolume(), mColor() {
     if (rColor == 0) {
-        GXColor color = {255, 218, 100, 160};
+        NebulaColor8 color = {255, 218, 100, 160};
         mColor.set(color);
     } else {
         mColor.set(rColor);
@@ -63,7 +63,7 @@ void LightCylinder::initLightCylinderByOwner(const JMapInfoIter& rIter) {
 
 void LightCylinder::initLightVolume(const char* pName) {
     char modelName[0x100];
-    snprintf(modelName, sizeof(modelName), "%sLightVolume", pName ? pName : mObjectName);
+    nebula_snprintf(modelName, sizeof(modelName), "%sLightVolume", pName ? pName : mObjectName);
     VolumeModelDrawer* lightVolume = new VolumeModelDrawer("\214\365" /* 光 */, modelName, mHostMtx ? mHostMtx : getBaseMtx());
     mLightVolume = lightVolume;
     lightVolume->mColor.set(mColor);

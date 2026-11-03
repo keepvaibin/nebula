@@ -8,11 +8,6 @@
 #include "Game/Util.hpp"
 #include <cstdio>
 
-void BeamGoRoundPlanet_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)2700.0f;
-}
-
 BeamGoRoundBeam::BeamGoRoundBeam(MtxPtr pMtx) : LiveActor("\203\162\201\133\203\200\203\123\201\133\203\211\203\105\203\223\203\150\203\162\201\133\203\200" /* ビームゴーラウンドビーム */) {
     mModelDrawer = nullptr;
     mBloomModel = nullptr;
@@ -104,7 +99,7 @@ void BeamGoRoundPlanet::initBeam() {
 
     for (s32 i = 0; i < 16; i++) {
         char buf[256];
-        snprintf(buf, sizeof(buf), "beam%d", i + 1);
+        nebula_snprintf(buf, sizeof(buf), "beam%d", i + 1);
         MtxPtr jointMtx = MR::getJointMtx(this, buf);
         mBeams[i] = new BeamGoRoundBeam(jointMtx);
         mBeams[i]->initWithoutIter();

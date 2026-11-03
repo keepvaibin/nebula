@@ -6,14 +6,6 @@
 #include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
 #include <JSystem/JMath/JMath.hpp>
 
-TVec3f (TVec3f::* XanimeCore_FORCE_EMIT())(const TVec3f&) const {
-    (void)1.0f;
-    (void)0.0f;
-    TVec3f* pVectors = new TVec3f[1];
-    delete[] pVectors;
-    return &TVec3f::operator-;
-}
-
 void XanimeTrack::init() {
     _0 = nullptr;
     mWeight = 0.0f;
@@ -204,7 +196,7 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
             *pScale += reinterpret_cast< const TVec3f& >(transform.mScale) * weight;
             *pTranslate += reinterpret_cast< const TVec3f& >(transform.mTranslate) * weight;
             accumulatedWeight += weight;
-            JMAQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
+            NebulaQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
         }
     }
 
@@ -221,7 +213,7 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
         XjointInfo& rJoint = mJointList[joint];
         *pScale = *pFrozenScale * (1.0f - blend) + *pScale * blend;
         *pTranslate = *pFrozenTranslate * (1.0f - blend) + *pTranslate * blend;
-        JMAQuatLerp(&rJoint._0.mRotation, &rotation, blend, &rotation);
+        NebulaQuatLerp(&rJoint._0.mRotation, &rotation, blend, &rotation);
     }
 
     if (_20 != 1.0f) {
@@ -230,7 +222,7 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
         XjointInfo& rJoint = mJointList[joint];
         *pScale = *pPreviousScale * (1.0f - _20) + *pScale * _20;
         *pTranslate = *pPreviousTranslate * (1.0f - _20) + *pTranslate * _20;
-        JMAQuatLerp(&rJoint._28.mRotation, &rotation, _20, &rotation);
+        NebulaQuatLerp(&rJoint._28.mRotation, &rotation, _20, &rotation);
     }
 
     mJointList[joint]._28._0 = *pScale;
@@ -268,7 +260,7 @@ void XanimeCore::calcSingle(TVec3f* pScale, TVec3f* pTranslate) {
         XjointInfo* pJoints = mJointList;
         MR::vecBlend(pJoints[joint]._0._0, *pScale, pScale, blend);
         MR::vecBlend(pJoints[joint]._0._C, *pTranslate, pTranslate, blend);
-        JMAQuatLerp(&pJoints[joint]._0.mRotation, &rotation, blend, &rotation);
+        NebulaQuatLerp(&pJoints[joint]._0.mRotation, &rotation, blend, &rotation);
     }
 
     mJointList[joint]._28._0 = *pScale;
@@ -317,7 +309,7 @@ void XanimeCore::calcBlendSpecial() {
             scale += reinterpret_cast< const TVec3f& >(transform.mScale) * weight;
             translate += reinterpret_cast< const TVec3f& >(transform.mTranslate) * weight;
             accumulatedWeight += weight;
-            JMAQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
+            NebulaQuatLerp(&rotation, &trackRotation, weight / accumulatedWeight, &rotation);
         }
     }
 
@@ -340,7 +332,7 @@ void XanimeCore::calcBlendSpecial() {
         XjointInfo& rJoint = mJointList[joint];
         scale = *pFrozenScale * (1.0f - blend) + scale * blend;
         translate = *pFrozenTranslate * (1.0f - blend) + translate * blend;
-        JMAQuatLerp(&rJoint._0.mRotation, &rotation, blend, &rotation);
+        NebulaQuatLerp(&rJoint._0.mRotation, &rotation, blend, &rotation);
     }
 
     if (_20 != 1.0f) {
@@ -349,7 +341,7 @@ void XanimeCore::calcBlendSpecial() {
         XjointInfo& rJoint = mJointList[joint];
         scale = *pPreviousScale * (1.0f - _20) + scale * _20;
         translate = *pPreviousTranslate * (1.0f - _20) + translate * _20;
-        JMAQuatLerp(&rJoint._28.mRotation, &rotation, _20, &rotation);
+        NebulaQuatLerp(&rJoint._28.mRotation, &rotation, _20, &rotation);
     }
 
     mJointList[joint]._28._0 = scale;
@@ -421,26 +413,26 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
         pMtxBuffer->setScaleFlag(joint, 1);
     } else {
         pMtxBuffer->setScaleFlag(joint, 0);
-        JMAMTXApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
+        NebulaMtxApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
     }
 
     if (mTransformList != nullptr && mTransformList[joint]._4 != 0xFFFF) {
         if (mTransformList[mTransformList[joint]._4].mScale.x != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(mTransformList[mTransformList[joint]._4].mScale.x);
+            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.x;
             pMtx[0][0] *= inverseScale;
             pMtx[0][1] *= inverseScale;
             pMtx[0][2] *= inverseScale;
         }
 
         if (mTransformList[mTransformList[joint]._4].mScale.y != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(mTransformList[mTransformList[joint]._4].mScale.y);
+            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.y;
             pMtx[1][0] *= inverseScale;
             pMtx[1][1] *= inverseScale;
             pMtx[1][2] *= inverseScale;
         }
 
         if (mTransformList[mTransformList[joint]._4].mScale.z != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(mTransformList[mTransformList[joint]._4].mScale.z);
+            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.z;
             pMtx[2][0] *= inverseScale;
             pMtx[2][1] *= inverseScale;
             pMtx[2][2] *= inverseScale;
@@ -449,21 +441,21 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
 
     if (pJoint->getScaleCompensate() == 1) {
         if (J3DSys::mParentS.x != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.x);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.x;
             pMtx[0][0] *= inverseScale;
             pMtx[0][1] *= inverseScale;
             pMtx[0][2] *= inverseScale;
         }
 
         if (J3DSys::mParentS.y != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.y);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.y;
             pMtx[1][0] *= inverseScale;
             pMtx[1][1] *= inverseScale;
             pMtx[1][2] *= inverseScale;
         }
 
         if (J3DSys::mParentS.z != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.z);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.z;
             pMtx[2][0] *= inverseScale;
             pMtx[2][1] *= inverseScale;
             pMtx[2][2] *= inverseScale;
@@ -515,26 +507,26 @@ void XanimeCore::calcScaleBlendMayaNoTransform(const TVec3f& rScale, const TVec3
         pMtxBuffer->setScaleFlag(joint, 1);
     } else {
         pMtxBuffer->setScaleFlag(joint, 0);
-        JMAMTXApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
+        NebulaMtxApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
     }
 
     if (pJoint->getScaleCompensate() == 1) {
         if (J3DSys::mParentS.x != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.x);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.x;
             pMtx[0][0] *= inverseScale;
             pMtx[0][1] *= inverseScale;
             pMtx[0][2] *= inverseScale;
         }
 
         if (J3DSys::mParentS.y != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.y);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.y;
             pMtx[1][0] *= inverseScale;
             pMtx[1][1] *= inverseScale;
             pMtx[1][2] *= inverseScale;
         }
 
         if (J3DSys::mParentS.z != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.z);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.z;
             pMtx[2][0] *= inverseScale;
             pMtx[2][1] *= inverseScale;
             pMtx[2][2] *= inverseScale;
@@ -578,26 +570,26 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
         pMtxBuffer->setScaleFlag(joint, 1);
     } else {
         pMtxBuffer->setScaleFlag(joint, 0);
-        JMAMTXApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
+        NebulaMtxApplyScale(pMtx, pMtx, scale.x, scale.y, scale.z);
     }
 
     if (mTransformList != nullptr && mTransformList[joint]._4 != 0xFFFF) {
         if (mTransformList[mTransformList[joint]._4].mScale.x != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(mTransformList[mTransformList[joint]._4].mScale.x);
+            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.x;
             pMtx[0][0] *= inverseScale;
             pMtx[0][1] *= inverseScale;
             pMtx[0][2] *= inverseScale;
         }
 
         if (mTransformList[mTransformList[joint]._4].mScale.y != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(mTransformList[mTransformList[joint]._4].mScale.y);
+            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.y;
             pMtx[1][0] *= inverseScale;
             pMtx[1][1] *= inverseScale;
             pMtx[1][2] *= inverseScale;
         }
 
         if (mTransformList[mTransformList[joint]._4].mScale.z != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(mTransformList[mTransformList[joint]._4].mScale.z);
+            f32 inverseScale = 1.0f / mTransformList[mTransformList[joint]._4].mScale.z;
             pMtx[2][0] *= inverseScale;
             pMtx[2][1] *= inverseScale;
             pMtx[2][2] *= inverseScale;
@@ -606,21 +598,21 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
 
     if (pJoint->getScaleCompensate() == 1) {
         if (J3DSys::mParentS.x != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.x);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.x;
             pMtx[0][0] *= inverseScale;
             pMtx[0][1] *= inverseScale;
             pMtx[0][2] *= inverseScale;
         }
 
         if (J3DSys::mParentS.y != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.y);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.y;
             pMtx[1][0] *= inverseScale;
             pMtx[1][1] *= inverseScale;
             pMtx[1][2] *= inverseScale;
         }
 
         if (J3DSys::mParentS.z != 1.0f) {
-            f32 inverseScale = JMath::fastReciprocal(J3DSys::mParentS.z);
+            f32 inverseScale = 1.0f / J3DSys::mParentS.z;
             pMtx[2][0] *= inverseScale;
             pMtx[2][1] *= inverseScale;
             pMtx[2][2] *= inverseScale;
@@ -648,7 +640,7 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
         NebulaMtxCopy(J3DSys::mCurrentMtx, pMtx);
     } else {
         pMtxBuffer->setScaleFlag(joint, 0);
-        JMAMTXApplyScale(J3DSys::mCurrentMtx, pMtx, rCurrentScale.x, rCurrentScale.y, rCurrentScale.z);
+        NebulaMtxApplyScale(J3DSys::mCurrentMtx, pMtx, rCurrentScale.x, rCurrentScale.y, rCurrentScale.z);
         pMtx[0][3] = J3DSys::mCurrentMtx[0][3];
         pMtx[1][3] = J3DSys::mCurrentMtx[1][3];
         pMtx[2][3] = J3DSys::mCurrentMtx[2][3];
@@ -680,7 +672,7 @@ void XanimeCore::calcScaleBlendBasic(const TVec3f& rScale, const TVec3f& rTransl
         pMtxBuffer->setScaleFlag(joint, 1);
     } else {
         pMtxBuffer->setScaleFlag(joint, 0);
-        JMAMTXApplyScale(pMtx, pMtx, rScale.x, rScale.y, rScale.z);
+        NebulaMtxApplyScale(pMtx, pMtx, rScale.x, rScale.y, rScale.z);
     }
 
     NebulaMtxConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);

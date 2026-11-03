@@ -1,7 +1,4 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#endif
 #include "Game/Boss/DodoryuStateLv2.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -11,11 +8,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include <cmath>
 #include "Game/System/NebulaHost.hpp"
-
-void DodoryuStateLv2_FORCE_MATCH(TPos3f* pMtx, TVec3f* pVec) {
-    pMtx->getYDir(*pVec);
-    pMtx->getYDir(*pVec);
-}
 
 namespace {
     static const f32 sKnockSpeed = 10.0f;
@@ -120,7 +112,7 @@ void DodoryuStateLv2::exeReadyChase() {
         MR::stopBck(mHost);
         MR::emitEffect(mHost, "AttackSign");
         MR::startSound(mHost, "SE_BM_DODORYU_SAND_SPLASH");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormal();
         mHost->shiftMoveStateNull();
     }
@@ -392,7 +384,7 @@ void DodoryuStateLv2::exeKnockDown() {
         knockOver();
     }
 
-    if (mChaseParam->mKnockDownStep >= 0 && MR::isGreaterEqualStep(this, mChaseParam->mKnockDownStep) ||
+    if ((mChaseParam->mKnockDownStep >= 0 && MR::isGreaterEqualStep(this, mChaseParam->mKnockDownStep)) ||
         (mChaseParam->mKnockDownStep < 0 && MR::isBckOneTimeAndStopped(mHost))) {
         mHost->endSpinOutCamera();
         mHost->nextState();
@@ -695,12 +687,8 @@ bool DodoryuStateLv2::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         return true;
     }
 
-#ifdef TARGET_PC
     if (NebulaHost::codePatch(NEBULA_PATCH_DODORYU_SHELL_ONLY, nullptr) ? MR::isMsgJetTurtleAttack(msg)
                                                                       : MR::isMsgPlayerHitAll(msg)) {
-#else
-    if (MR::isMsgPlayerHitAll(msg)) {
-#endif
         TVec3f attackDir = pReceiver->mPosition;
         attackDir.sub(pSender->mPosition);
         _A0.set(attackDir);
@@ -711,7 +699,7 @@ bool DodoryuStateLv2::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         }
 
         turnToward(-_A0, 180.0f);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::stopScene(::sStopSceneFrame);
         setNerve(GET_NERVE_ANON(DodoryuStateLv2NrvKnockDown));
 
@@ -1027,12 +1015,3 @@ void DodoryuStateLv2::startLeadHillBck(const DodoryuAnimSet& rAnim) {
     }
 }
 
-void DodoryuStateLv2_DUMMY() {
-    // NOTE: to emit TPos3f::makeRotate, TVec3f::setLength, TRot3f::mult33
-    TVec3f a;
-    a.setLength(2.0f);
-    TPos3f m;
-    m.makeRotate(a, 3.0f);
-    TVec3f b;
-    m.mult33(b);
-}

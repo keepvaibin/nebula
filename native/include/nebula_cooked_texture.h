@@ -41,9 +41,11 @@ enum {
 };
 
 enum {
-    /* The renderer runs its dither-checker filters on each level as it uploads it (the game's own images: the filters
+    /* The renderer runs its grain-checker filters on each level as it uploads it (the game's own images: the filters
        ran on every image before textures were cooked, and the cooker has already run them on the disc's). */
     NEBULA_TEXTURE_FILTER_AT_UPLOAD = 1u << 0,
+    /* NEBULA_TEXTURE_BLOCK4 whose blocks use no transparent colour, whose size is whole blocks. */
+    NEBULA_TEXTURE_OPAQUE_BLOCKS = 1u << 1,
 };
 
 /* The layout of texels handed over as NEBULA_TEXTURE_LINEAR_L8 / _LA8 / _RGBA8. */
@@ -68,10 +70,10 @@ typedef struct NebulaTexture {
     uint16_t width, height; /* level 0, in texels */
     uint8_t levels;         /* 1 .. NEBULA_TEXTURE_MAX_LEVELS */
     uint8_t layout;         /* NEBULA_TEXTURE_RGBA8, _L8 or _LA8 */
-    uint8_t disc_format;    /* the GX format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
+    uint8_t disc_format;    /* the format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
                                names one by nebula_texture_linear_code and its level-0 texels) */
     uint8_t flags;          /* NEBULA_TEXTURE_FILTER_AT_UPLOAD */
-    /* Texture packs name a texture by these (Dolphin's convention): xxh64 of the disc's level-0 bytes, and of the
+    /* Texture packs name a texture by these: xxh64 of the disc's level-0 bytes, and of the
        palette entries a colour-indexed one used (0 for the others). 0 and 0 for an image the game makes. */
     uint64_t pack_hash;
     uint64_t pack_palette_hash;
@@ -88,6 +90,18 @@ _Static_assert(sizeof(NebulaTexture) == NEBULA_TEXTURE_HEADER, "the texture head
 static inline uint32_t nebula_texture_texel_bytes(uint8_t layout) {
     return layout == NEBULA_TEXTURE_RGBA8 ? 4u : layout == NEBULA_TEXTURE_LA8 ? 2u : 1u;
 }
+
+/* How a texture wraps and filters, as texture headers and layouts store them. A minifying filter also says how it uses
+   levels: the first only (nearest, linear), the nearest level, or between levels. */
+enum { NEBULA_WRAP_CLAMP = 0, NEBULA_WRAP_REPEAT = 1, NEBULA_WRAP_MIRROR = 2 };
+enum {
+    NEBULA_FILTER_NEAREST = 0,
+    NEBULA_FILTER_LINEAR = 1,
+    NEBULA_FILTER_NEAREST_NEAREST_LEVEL = 2,
+    NEBULA_FILTER_LINEAR_NEAREST_LEVEL = 3,
+    NEBULA_FILTER_NEAREST_BETWEEN_LEVELS = 4,
+    NEBULA_FILTER_LINEAR_BETWEEN_LEVELS = 5,
+};
 
 /* The bytes of `levels` levels of a width x height texture in `layout`, header excluded. */
 static inline uint32_t nebula_texture_level_bytes(uint32_t width, uint32_t height, uint32_t levels, uint8_t layout) {

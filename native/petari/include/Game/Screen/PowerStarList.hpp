@@ -13,8 +13,8 @@ public:
         /// @brief Creates a new `Separator`.
         Separator();
 
-        /* 0x00 */ f32 _0;
-        /* 0x04 */ TVec2f _4;
+        f32 _0;
+        TVec2f _4;
     };
 
     /// @brief Creates a new `PowerStarList`.
@@ -30,19 +30,17 @@ public:
     void resetButtonAll();
     void updateButtonAppearance();
     void updateList(s32, bool);
-    wchar_t* makeGalaxyNameText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeStarNumText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeCoinText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeCrownText(wchar_t*, const GalaxyStatusAccessor*, bool) const;
-    wchar_t* makeRaceNameText(wchar_t*, int, bool) const;
-    wchar_t* makeRaceTimeText(wchar_t*, int, bool) const;
+    char16_t* makeGalaxyNameText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeStarNumText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeCoinText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeCrownText(char16_t*, const GalaxyStatusAccessor*, bool) const;
+    char16_t* makeRaceNameText(char16_t*, int, bool) const;
+    char16_t* makeRaceTimeText(char16_t*, int, bool) const;
     void startScrollAnimNext(bool);
     void startScrollAnimPrev();
     bool tryShowSeparator(s32, f32);
     void setSeparatorPaneSize();
     
-#if (VERSION == RMGK01)
-#endif
 
     void exeAppear();
     void exeWait();
@@ -51,10 +49,10 @@ public:
     void exePagePrev();
 
 private:
-    /* 0x20 */ ButtonPaneController* mArrowUpButtonCtrl;
-    /* 0x24 */ ButtonPaneController* mArrowDownButtonCtrl;
-    /* 0x2C */ SysInfoWindow* mSysInfoWindow;
-    /* 0x30 */ s32 mPageNo;
-    /* 0x34 */ s32 mPageNum;
-    /* 0x38 */ Separator* mSeparatorArray;
+    ButtonPaneController* mArrowUpButtonCtrl;
+    ButtonPaneController* mArrowDownButtonCtrl;
+    SysInfoWindow* mSysInfoWindow;
+    s32 mPageNo;
+    s32 mPageNum;
+    Separator* mSeparatorArray;
 };

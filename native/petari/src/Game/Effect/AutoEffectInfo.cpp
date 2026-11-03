@@ -2,34 +2,30 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-#ifdef TARGET_PC
 #include <cstdlib>
-#else
-extern "C" u32 strtoul(const char*, char**, int);
-#endif
 
 namespace {
-    u32 str2Color(const char* pStr) NO_INLINE {
+    u32 str2Color(const char* pStr) {
         return strtoul(pStr + 1, nullptr, 16) * 256;
     }
 
-    bool isValueOnR(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    bool isValueOnR(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 
         return strchr(value, 'R') != nullptr;
     }
 
-    bool isValueOnS(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    bool isValueOnS(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 
         return strchr(value, 'S') != nullptr;
     }
 
-    bool isValueOnT(const JMapInfoIter& rIter, const char* pName) NO_INLINE;
+    bool isValueOnT(const JMapInfoIter& rIter, const char* pName);
 
-    const char* getStringValue(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    const char* getStringValue(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 
@@ -43,8 +39,8 @@ namespace {
 
 namespace {
     struct DrawOrderData {
-        /* 0x00 */ s32 _0;
-        /* 0x04 */ const char* _4;
+        s32 _0;
+        const char* _4;
     };
 
     static const DrawOrderData sDrawOrderDataTable[] = {
@@ -76,9 +72,9 @@ namespace {
 AutoEffectInfo::AutoEffectInfo()
     : mGroupName(), mAnimName(), mUniqueName(), mEffectName(), mParentName(), mJointName(), mFlag(), mOffset(), mStartFrame(), mEndFrame(-1),
       mScaleValue(1.0f), mRateValue(1.0f), mLightAffectValue(), mDrawOrder() {
-    mPrmColor.mColor = 0;
+    mPrmColor.set(0, 0, 0, 0);
     mIsValidPrmColor = false;
-    mEnvColor.mColor = 0;
+    mEnvColor.set(0, 0, 0, 0);
     mIsValidEnvColor = false;
 }
 
@@ -172,7 +168,7 @@ const char* AutoEffectInfo::getName() const {
 }
 
 namespace {
-    bool isValueOnT(const JMapInfoIter& rIter, const char* pName) NO_INLINE {
+    bool isValueOnT(const JMapInfoIter& rIter, const char* pName) {
         const char* value = "";
         rIter.getValue(pName, &value);
 

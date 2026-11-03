@@ -22,12 +22,6 @@ namespace NrvBirikyu {
     NEW_NERVE(HostTypeStopPointing, Birikyu, StopPointing);
 };  // namespace NrvBirikyu
 
-void Birikyu_FORCE_MATCH(const TVec3f& rVec) {
-    TVec3f vec(rVec);
-    vec * 1.0f;
-    vec + TVec3f(1.0f);
-}
-
 Birikyu::Birikyu(const char* pName)
     : LiveActor(pName), _8C(), _90(gZeroVec), _9C(gZeroVec), _A8(), _A9(), _AC(0.0f, 1.0f, 0.0f), _B8(0.0f, 0.0f, 1.0f), _C4(), _C8(10.0f) {
 }
@@ -85,7 +79,7 @@ f32 Birikyu::getHitRadius() const {
     return 120.0f;
 }
 
-char* Birikyu::getCenterJointName() const {
+const char* Birikyu::getCenterJointName() const {
     return "Root";
 }
 
@@ -318,6 +312,6 @@ f32 BirikyuWithFace::getHitRadius() const {
     return 50.0f;
 }
 
-char* BirikyuWithFace::getCenterJointName() const {
+const char* BirikyuWithFace::getCenterJointName() const {
     return "Center";
 }

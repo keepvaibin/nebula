@@ -2,18 +2,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
-void IKJoint_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)-1.0f;
-    (void)2.0f;
-    (void)3.0f;
-    (void)100.0f;
-    (void)-2.0f;
-    (void)0.01f;
-}
-
 IKJoint::IKJoint() : _0(), _30(), _60(), mRootBoneLength(100.0f), mMiddleBoneLength(100.0f) {
     _0.identity();
     _60.identity();
@@ -133,7 +121,7 @@ s32 IKJoint::updateByUpVector(const TVec3f& rRootPosition, const TVec3f& rTarget
 s32 IKJoint::updateByDistanceOnly(f32 distance) {
     s32 result = checkReachIKTarget(distance, mRootBoneLength, mMiddleBoneLength);
     f32 cosine = calcIKRootAngleCosign(distance, mRootBoneLength, mMiddleBoneLength);
-    f32 sine = MR::fastSqrtf(1.0f - cosine * cosine);
+    f32 sine = NebulaSqrt(1.0f - cosine * cosine);
     TVec3f rootSide(cosine, sine, 0.0f);
     TVec3f rootUp(-sine, cosine, 0.0f);
     _30.identity();

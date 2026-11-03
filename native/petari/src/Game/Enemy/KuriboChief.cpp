@@ -32,8 +32,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/os.h>
-#include <revolution/types.h>
 
 namespace {
     static const f32 sBinderSize = 300.0f;
@@ -198,10 +196,6 @@ void KuriboChief::makeArchiveList(NameObjArchiveListCollector* pCollector, const
     }
 }
 
-void KuriboChief_FORCE_MATCH_DATA() {
-    JUTNativeLog("head");
-}
-
 void KuriboChief::kill() {
     if (MR::isValidSwitchDead(this)) {
         MR::onSwitchDead(this);
@@ -231,7 +225,7 @@ void KuriboChief::calcAndSetBaseMtx() {
 
 void KuriboChief::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (pSender != getSensor("Punch") &&
-        ((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver) ||
+        (((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver)) ||
          !MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender)) &&
         isEnableAttack() && MR::isSensorPlayer(pReceiver) && !MR::sendMsgEnemyAttack(pReceiver, pSender)) {
         MR::sendMsgPush(pReceiver, pSender);

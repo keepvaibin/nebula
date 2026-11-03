@@ -1,11 +1,12 @@
 #include "Game/Screen/ScreenAlphaCapture.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     ScreenAlphaCapture* getScreenAlphaCapture() {
@@ -23,22 +24,17 @@ void ScreenAlphaCapture::init(const JMapInfoIter& rIter) {
 }
 
 void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-    mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(JUTVideo::getManager()->getFbWidth()) * screenScale,
-                                            static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()) * screenScale, GX_TF_I8);
-    mTexture[textureIndex]->mWrapS = GX_CLAMP;
-    mTexture[textureIndex]->mWrapT = GX_CLAMP;
-    mTexture[textureIndex]->mMinType = GX_LINEAR;
-    mTexture[textureIndex]->mMagType = GX_LINEAR;
+    mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(NebulaFrameClock::cScreenUnitsAcross) * screenScale, static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) * screenScale);
+    mTexture[textureIndex]->mWrapS = NEBULA_WRAP_CLAMP;
+    mTexture[textureIndex]->mWrapT = NEBULA_WRAP_CLAMP;
+    mTexture[textureIndex]->mMinType = NEBULA_FILTER_LINEAR;
+    mTexture[textureIndex]->mMagType = NEBULA_FILTER_LINEAR;
 }
 
 void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
-    mTexture[textureIndex]->capture(0, 0, GX_CTF_A8, false, 0);
-}
-
-void ScreenAlphaCapture::loadScreenTexture(s32 index, GXTexMapID id) {
-    mTexture[index]->load(id);
+    J3DNativeTarget::take(mTexture[textureIndex]->mImage);
 }
 
 JUTTexture* ScreenAlphaCapture::getTexture(s32 index) {
@@ -53,10 +49,6 @@ namespace MR {
 
     void captureScreenAlpha(s32 textureIndex) {
         ::getScreenAlphaCapture()->captureScreenAlpha(textureIndex);
-    }
-
-    void loadScreenAlphaTexture(s32 index, GXTexMapID id) {
-        ::getScreenAlphaCapture()->loadScreenTexture(index, id);
     }
 
     JUTTexture* getScreenAlphaTexture(s32 index) {

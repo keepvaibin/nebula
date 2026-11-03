@@ -16,24 +16,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstring>
 
-void MarioActorSensor_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)2000.0f;
-    (void)80.0f;
-    (void)60.0f;
-    (void)600.0f;
-    (void)1000.0f;
-    (void)2400.0f;
-    (void)3000.0f;
-    (void)300.0f;
-    (void)0.0872664675f;
-    (void)2607.59448f;
-    (void)200.0f;
-    (void)40.0f;
-    (void)1.20000005f;
-    (void)1.5f;
-}
-
 void MarioActor::setupSensors() {
     initHitSensor(4);
 
@@ -217,11 +199,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
     }
 
     if (getMario()->isStatusActive(MarioStatus_Wall)) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
         mMario->closeStatus(nullptr);
-#elif (VERSION == RMGK01)
-        mMario->closeStatus(mMario->mWall);
-#endif
     }
 
     mMario->_402 = getConst().getTable()->mAirWalkTimeTornado;
@@ -231,7 +209,7 @@ void MarioActor::doTrampleJump(HitSensor* pSensor) {
         _988 = 0;
         trampleJump(getConst().getTable()->mTrampleBegoma, getConst().getTable()->mTrampleLong);
         changeAnimationNonStop("\203\167\203\212\203\122\203\166\203\136\201\133\203\127\203\203\203\223\203\166" /* ヘリコプタージャンプ */);
-        mMario->startPadVib(2UL);
+        mMario->startPadVib(2u);
         playSound("\203\167\203\212\203\122\203\166\203\136\201\133\203\127\203\203\203\223\203\166" /* ヘリコプタージャンプ */, -1);
         mMario->startRotationTask(4);
         mMario->_430 = 11;
@@ -322,7 +300,7 @@ void MarioActor::trampleJump(f32 normal, f32 extra) {
 
     playSound("\220\272\223\245\202\335" /* 声踏み */, -1);
     playEffect("\202\323\202\335\202\302\202\324\202\265" /* ふみつぶし */);
-    mMario->startPadVib(0UL);
+    mMario->startPadVib(0u);
     mMario->mMovementStates._2F = false;
     mMario->mMovementStates._22 = false;
     mMario->mMovementStates._3E = 0;

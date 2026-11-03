@@ -77,7 +77,7 @@ bool PlayerRacer::updateRacer(const RaceManager* pRaceManager) {
 
     if (MR::fabs(mRailCoord - railLength) < 100.0f) {
         if (pRaceManager->isGoal(this)) {
-            MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadVeryStrong(this, PLAYER_1);
             return true;
         }
         return false;
@@ -130,20 +130,20 @@ void PlayerRacer::prepRacer(const RaceManager* pRaceManager) {
         MR::getFirstPolyOnLineToWaterSurface(&pos, nullptr, s, grav * 1000.0f);
         pos -= grav * 15.0f;
         MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);
-        MR::startBckPlayer("SwimDrift", 1L);
+        MR::startBckPlayer("SwimDrift", 1);
         break;
     }
     case RaceID_TeresaPhantom: {
         pos = mPosition;
         MR::convertPosOnGround(&pos, grav * 1000.0f);
         MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);
-        MR::startBckPlayer("BattleWait", 1L);
+        MR::startBckPlayer("BattleWait", 1);
         break;
     }
     case RaceID_TeresaDeathPromenade: {
         pos = mPosition;
         MR::makeMtxFrontUpPos(&mtx, MR::getRailDirection(this), -grav, pos);
-        MR::startBckPlayer("Wait", 1L);
+        MR::startBckPlayer("Wait", 1);
         MR::onFollowDemoEffect();
         break;
     }
@@ -163,14 +163,14 @@ void PlayerRacer::resetRacer(const RaceManager* pRaceManager) {
     case RaceID_TeresaPhantom:
     case RaceID_SurfingTrial:
     case RaceID_SurfingChallenge:
-        MR::startBckPlayer("Watch", 0L);
+        MR::startBckPlayer("Watch", 0);
         break;
     case RaceID_TeresaDeathPromenade:
         MR::onFollowDemoEffect();
         if (pRaceManager->mRank != 1) {
-            MR::startBckPlayer("Sad", 0L);
+            MR::startBckPlayer("Sad", 0);
         } else {
-            MR::startBckPlayer("Wait", 0L);
+            MR::startBckPlayer("Wait", 0);
         }
         break;
     }

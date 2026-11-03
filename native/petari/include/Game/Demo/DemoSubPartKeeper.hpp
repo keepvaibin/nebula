@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class DemoExecutor;
 
@@ -8,11 +7,11 @@ class DemoSubPartInfo {
 public:
     DemoSubPartInfo();
 
-    /* 0x00 */ const char* mSubPartName;
-    /* 0x04 */ s32 mSubPartTotalStep;
-    /* 0x08 */ const char* mMainPartName;
-    /* 0x0C */ s32 mMainPartStep;
-    /* 0x10 */ s32 _10;
+    const char* mSubPartName;
+    s32 mSubPartTotalStep;
+    const char* mMainPartName;
+    s32 mMainPartStep;
+    s32 _10;
 };
 
 class DemoSubPartKeeper {
@@ -26,7 +25,7 @@ public:
     s32 getDemoPartTotalStep(const char*) const;
     DemoSubPartInfo* findSubPart(const char*) const;
 
-    /* 0x0 */ const DemoExecutor* mExecutor;
-    /* 0x4 */ s32 mNumSubPartInfos;
-    /* 0x8 */ DemoSubPartInfo* mSubPartInfos;
+    const DemoExecutor* mExecutor;
+    s32 mNumSubPartInfos;
+    DemoSubPartInfo* mSubPartInfos;
 };

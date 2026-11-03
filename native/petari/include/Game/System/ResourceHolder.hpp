@@ -2,9 +2,8 @@
 
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/System/ResourceInfo.hpp"
-#include <JSystem/JKernel/JKRArchive.hpp>
-#include <JSystem/JKernel/JKRFileFinder.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/AssetFolder.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 class MaterialAnmBuffer;
 class J3DModelData;
@@ -13,7 +12,7 @@ typedef const char* ArchiveName;
 
 class ResourceHolder {
 public:
-    ResourceHolder(JKRArchive&);
+    ResourceHolder(AssetFolder&);
 
     const char* getMotionName(u32) const;
     bool isExistMaterialAnm() const;
@@ -21,12 +20,11 @@ public:
     void newBckCtrl();
 
     Mtx44& getInitEffectMtx(int, int) const;
-    void initializeArc(JKRArchive&);
-    static JKRFileFinder* getFileFinder(JKRArchive*, const char*);
-    u32 initEachResTable(ResTable**, JKRArchive*, const ArchiveName*);
+    void initializeArc(AssetFolder&);
+    u32 initEachResTable(ResTable**, AssetFolder*, const ArchiveName*);
 
-    static s32 count(JKRArchive*, const char*, const char*);
-    void mount(JKRArchive*, char*);
+    static s32 count(AssetFolder*, const char*, s32);
+    void mount(AssetFolder*, s32);
 
     ResFileInfo* createAndRegisterObject(const char*, void*);
     void backupInitMaterialData(const J3DModelData*);
@@ -71,23 +69,23 @@ public:
         return mModelResTable->getResName(static_cast<u32>(0));
     }
 
-    /* 0x00 */ ResTable* mModelResTable;
-    /* 0x04 */ ResTable* mMotionResTable;
-    /* 0x08 */ ResTable* mBtkResTable;
-    /* 0x0C */ ResTable* mBpkResTable;
-    /* 0x10 */ ResTable* mBtpResTable;
-    /* 0x14 */ ResTable* mBlkResTable;
-    /* 0x18 */ ResTable* mBrkResTable;
-    /* 0x1C */ ResTable* mBasResTable;
-    /* 0x20 */ ResTable* mBmtResTable;
-    /* 0x24 */ ResTable* mBvaResTable;
-    /* 0x28 */ ResTable* mBanmtResTable;
-    /* 0x2C */ ResTable* mFileInfoTable;
-    /* 0x30 */ ResTable mDefaultTable;
-    /* 0x38 */ MaterialAnmBuffer* mMaterialBuf;
-    /* 0x3C */ BckCtrl* mBckCtrl;
-    /* 0x40 */ Mtx44* mBackupMaterialData;
-    /* 0x44 */ JKRArchive* mArchive;
-    /* 0x48 */ JKRHeap* mHeap;
-    /* 0x4C */ u32 mTotalResourceSize;
+    ResTable* mModelResTable;
+    ResTable* mMotionResTable;
+    ResTable* mBtkResTable;
+    ResTable* mBpkResTable;
+    ResTable* mBtpResTable;
+    ResTable* mBlkResTable;
+    ResTable* mBrkResTable;
+    ResTable* mBasResTable;
+    ResTable* mBmtResTable;
+    ResTable* mBvaResTable;
+    ResTable* mBanmtResTable;
+    ResTable* mFileInfoTable;
+    ResTable mDefaultTable;
+    MaterialAnmBuffer* mMaterialBuf;
+    BckCtrl* mBckCtrl;
+    Mtx44* mBackupMaterialData;
+    AssetFolder* mArchive;
+    NebulaArena* mHeap;
+    u32 mTotalResourceSize;
 };

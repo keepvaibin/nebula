@@ -5,13 +5,13 @@
 
 class AnimScaleController;
 class BegomanBaby;
-class JointControllerInfo;
+struct JointControllerInfo;
 template < typename T >
 class JointControlDelegator;
 class WalkerStateBindStarPointer;
 
 namespace MR {
-    class ActorMoveParam;
+    struct ActorMoveParam;
     class FunctorBase;
 };  // namespace MR
 
@@ -37,8 +37,6 @@ public:
     virtual const Nerve* getNerveWait() = 0;
     virtual void addVelocityOnPushedFromElectricRail(const TVec3f&, const TVec3f&);
     virtual bool requestAttack();
-
-    const BegomanSound* getSoundBaby();
     const BegomanSound* getSoundNormal();
     const BegomanSound* getSoundBoss();
 
@@ -99,28 +97,28 @@ public:
     bool incAndCheckTiredCounter();
     bool isInWaterAndSetWaterNerve(const Nerve*, TPos3f*);
 
-    /* 0x8C */ JointControlDelegator< BegomanBase >* mBaseDelegator;
+    JointControlDelegator< BegomanBase >* mBaseDelegator;
 
-    /* 0x90 */ TVec3f mFaceVec;
-    /* 0x9C */ TVec3f mTargetVec;
+    TVec3f mFaceVec;
+    TVec3f mTargetVec;
 
-    /* 0xA8 */ TVec3f _A8;
-    /* 0xB4 */ TVec3f _B4;
+    TVec3f _A8;
+    TVec3f _B4;
 
-    /* 0xC0 */ TQuat4f _C0;
-    /* 0xD0 */ TQuat4f _D0;
+    TQuat4f _C0;
+    TQuat4f _D0;
 
-    /* 0xE0 */ s32 mTiredCounter;
-    /* 0xE4 */ s32 mElectricCounter;
+    s32 mTiredCounter;
+    s32 mElectricCounter;
 
-    /* 0xE8 */ TVec3f mInitPos;
+    TVec3f mInitPos;
 
-    /* 0xF4 */ AnimScaleController* mScaleControler;
-    /* 0xF8 */ WalkerStateBindStarPointer* mStarPointBind;
+    AnimScaleController* mScaleControler;
+    WalkerStateBindStarPointer* mStarPointBind;
 
-    /* 0xFC */ bool mIsTouchElectricRail;
-    /* 0xFD */ bool mCanTrySetReturn;
-    /* 0xFE */ bool mInvertSideVec;
+    bool mIsTouchElectricRail;
+    bool mCanTrySetReturn;
+    bool mInvertSideVec;
 };
 
 class BegomanAttackPermitter : public LiveActor {
@@ -136,10 +134,10 @@ public:
     void exeReceive();
     inline void exePermit();
 
-    /* 0x8C */ BegomanBase* _8C;
-    /* 0x90 */ BegomanBase* mBegoman;
+    BegomanBase* _8C;
+    BegomanBase* mBegoman;
 
-    /* 0x94 */ f32 mDistToPlayer;
+    f32 mDistToPlayer;
 
-    /* 0x98 */ bool _98;
+    bool _98;
 };

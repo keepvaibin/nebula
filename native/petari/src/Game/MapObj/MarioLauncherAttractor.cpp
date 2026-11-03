@@ -12,7 +12,7 @@ MarioLauncherAttractor::MarioLauncherAttractor(const char* pName) : LiveActor(pN
 
 void MarioLauncherAttractor::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
-    initModelManagerWithAnm("MarioLauncherAttractor", nullptr, nullptr);
+    initModelManagerWithAnm("MarioLauncherAttractor", nullptr, false);
 
     // Create and initialize gravity
     mGravityCreator = new PointGravityCreator();

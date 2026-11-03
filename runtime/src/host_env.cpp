@@ -1,17 +1,23 @@
-// Environment variables for the host's switches and test hooks (host_env.h).
+// Environment variables the host reads (host_env.h).
 #include "galaxy/host_env.h"
+#include "galaxy/run_options.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <Shlobj.h>
+#include <shellapi.h>
 
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <cwchar>
 #include <stdexcept>
 #include <vector>
 
 namespace galaxy::host {
+
 namespace {
 std::atomic<bool> g_env_flag_cache_enabled{false};
 }  // namespace
@@ -36,7 +42,7 @@ bool read_env_flag_uncached(const char* name, bool default_value) {
            buffer[0] != 'n' && buffer[0] != 'N';
 }
 
-// The input report reads its script switches on every poll, and getenv_s scans the whole environment block each
+// Input polls read their script switches every time, and getenv_s scans the whole environment block each
 // time. Once set_env_flag_cache_enabled(true) runs, a value is read once per literal name (the pointer is the key).
 // Tests leave the cache off so the variables they change stay visible.
 namespace {
@@ -97,7 +103,7 @@ std::optional<std::string> read_env_string_uncached(const char* name) {
     return std::string(buffer.data(), length - 1u);
 }
 
-// The string counterpart of the flag cache, for the scripted input read on every report.
+// The string counterpart of the flag cache, for the scripted input read on every poll.
 namespace {
 struct EnvStringCacheSlot {
     std::atomic<const char*> name{nullptr};
@@ -139,6 +145,8 @@ std::optional<std::string> read_env_string(const char* name) {
 
 void set_env_flag_cache_enabled(bool enabled) noexcept {
     g_env_flag_cache_enabled.store(enabled, std::memory_order_release);
+    ::galaxy::set_run_options_final(enabled);
 }
+
 
 }  // namespace galaxy::host

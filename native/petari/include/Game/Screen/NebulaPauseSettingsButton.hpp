@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 
 class ButtonPaneController;
@@ -22,4 +21,3 @@ public:
 private:
     ButtonPaneController* mButton;
 };
-#endif

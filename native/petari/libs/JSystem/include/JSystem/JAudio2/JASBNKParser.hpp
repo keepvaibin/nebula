@@ -3,185 +3,184 @@
 #include "JSystem/JAudio2/JASBasicInst.hpp"
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
-#include <revolution/types.h>
 
 class JASBank;
 class JASBasicBank;
-class JKRHeap;
+class NebulaArena;
 
+// Banks (IBNK version 1) in host order, as the importer cooks the audio archive (native_data.rs bank).
 namespace JASBNKParser {
     struct TFileHeader {
-        /* 0x0 */ NEBULA_BE(s32) id;
-        /* 0x4 */ NEBULA_BE(u32) mSize;
-        /* 0x8 */ u8 _08[4];
-        /* 0xC */ NEBULA_BE(u32) mVersion;
+        s32 id;
+        u32 mSize;
+        u8 _08[4];
+        u32 mVersion;
     };
 
     namespace Ver1 {
         struct TOsc {
-            /* 0x00 */ NEBULA_BE(u32) id;
-            /* 0x04 */ u8 mTarget;
-            /* 0x08 */ NEBULA_BE(f32) _08;
-            /* 0x0C */ NEBULA_BE(u32) mTableOffset;
-            /* 0x10 */ NEBULA_BE(u32) _10;
-            /* 0x14 */ NEBULA_BE(f32) mScale;
-            /* 0x18 */ NEBULA_BE(f32) _18;
+            u32 id;
+            u8 mTarget;
+            f32 _08;
+            u32 mTableOffset;
+            u32 _10;
+            f32 mScale;
+            f32 _18;
         };
 
         struct TPercData {
-            /* 0x00 */ NEBULA_BE(f32) mVolume;
-            /* 0x04 */ NEBULA_BE(f32) mPitch;
-            /* 0x08 */ u8 mPan;
-            /* 0x0A */ NEBULA_BE(u16) mRelease;
-            /* 0x0C */ NEBULA_BE(u32) field_0xc;
+            f32 mVolume;
+            f32 mPitch;
+            u8 mPan;
+            u16 mRelease;
+            u32 field_0xc;
         };
 
         struct TChunk {
-            /* 0x0 */ NEBULA_BE(u32) mID;
-            /* 0x4 */ NEBULA_BE(u32) mSize;
+            u32 mID;
+            u32 mSize;
         };
 
         struct TEnvtChunk : TChunk {
-            /* 0x8 */ u8 mData[0];
+            u8 mData[0];
         };
 
         struct TOscChunk : TChunk {
-            /* 0x8 */ NEBULA_BE(u32) mCount;
-            /* 0xC */ TOsc mOsc[0];
+            u32 mCount;
+            TOsc mOsc[0];
         };
 
         struct TListChunk : TChunk {
-            /* 0x8 */ NEBULA_BE(u32) count;
-            /* 0xC */ NEBULA_BE(u32) mOffsets[0];
+            u32 count;
+            u32 mOffsets[0];
         };
 
         struct TRandData {
-            /* 0x00 */ u8 mType;
-            /* 0x04 */ NEBULA_BE(f32) mBase;
-            /* 0x08 */ NEBULA_BE(f32) mRange;
+            u8 mType;
+            f32 mBase;
+            f32 mRange;
         };
 
         struct TSenseData {
-            /* 0x00 */ u8 mType;
-            /* 0x01 */ u8 mSenseType;
-            /* 0x02 */ u8 mMaxPoint;
-            /* 0x04 */ NEBULA_BE(f32) mStartLvl;
-            /* 0x08 */ NEBULA_BE(f32) mEndLvl;
+            u8 mType;
+            u8 mSenseType;
+            u8 mMaxPoint;
+            f32 mStartLvl;
+            f32 mEndLvl;
         };
 
         struct TVeloData {
-            /* 0x00 */ u8 _0;
-            /* 0x04 */ NEBULA_BE(u32) _4;
-            /* 0x08 */ NEBULA_BE(f32) mVolume;
-            /* 0x0C */ NEBULA_BE(f32) mPitch;
+            u8 _0;
+            u32 _4;
+            f32 mVolume;
+            f32 mPitch;
         };
 
         struct TInstData {
-            /* 0x00 */ NEBULA_BE(f32) mVolume;
-            /* 0x04 */ NEBULA_BE(f32) mPitch;
+            f32 mVolume;
+            f32 mPitch;
         };
 
         TChunk* findChunk(void const*, u32);
-        JASInstEffect* createEffector(void const*, JKRHeap*);
-        JASBasicBank* createBasicBank(void const*, JKRHeap*);
+        JASInstEffect* createEffector(void const*, NebulaArena*);
+        JASBasicBank* createBasicBank(void const*, NebulaArena*);
     };  // namespace Ver1
 
     namespace Ver0 {
         template < typename T >
         struct TOffset {
-            /* 0x0 */ NEBULA_BE(u32) offset;
+            u32 offset;
             T* ptr(void const* stream) const {
                 return JSUConvertOffsetToPtr< T >(stream, offset);
             }
         };
 
         struct TOsc {
-            /* 0x00 */ u8 mTarget;
-            /* 0x04 */ NEBULA_BE(f32) field_0x4;
-            /* 0x08 */ TOffset< JASOscillator::Point > mPointOffset;
-            /* 0x0C */ TOffset< JASOscillator::Point > field_0xc;
-            /* 0x10 */ NEBULA_BE(f32) mScale;
-            /* 0x14 */ NEBULA_BE(f32) field_0x14;
+            u8 mTarget;
+            f32 field_0x4;
+            TOffset< JASOscillator::Point > mPointOffset;
+            TOffset< JASOscillator::Point > field_0xc;
+            f32 mScale;
+            f32 field_0x14;
         };
 
         struct TVmap {
-            /* 0x00 */ u8 _0;
-            /* 0x04 */ NEBULA_BE(u32) _4;
-            /* 0x08 */ NEBULA_BE(f32) mVolume;
-            /* 0x0C */ NEBULA_BE(f32) mPitch;
+            u8 _0;
+            u32 _4;
+            f32 mVolume;
+            f32 mPitch;
         };
 
         struct TRandEffect {
-            /* 0x00 */ u8 mType;
-            /* 0x04 */ NEBULA_BE(f32) mBaseValue;
-            /* 0x08 */ NEBULA_BE(f32) mRange;
+            u8 mType;
+            f32 mBaseValue;
+            f32 mRange;
         };
 
         struct TSenseEffect {
-            /* 0x00 */ u8 mType;
-            /* 0x01 */ u8 mSenseType;
-            /* 0x02 */ u8 mMaxPoint;
-            /* 0x04 */ NEBULA_BE(f32) mStartLvl;
-            /* 0x08 */ NEBULA_BE(f32) mEndLvl;
+            u8 mType;
+            u8 mSenseType;
+            u8 mMaxPoint;
+            f32 mStartLvl;
+            f32 mEndLvl;
         };
 
         struct TKeymap {
-            /* 0x00 */ u8 mHighKey;
-            /* 0x04 */ NEBULA_BE(u32) mVeloRegionCount;
-            /* 0x08 */ TOffset< TVmap > mVmapOffset[0];
+            u8 mHighKey;
+            u32 mVeloRegionCount;
+            TOffset< TVmap > mVmapOffset[0];
         };
 
         struct TInst {
-            /* 0x00 */ u8 field_0x0[8];
-            /* 0x08 */ NEBULA_BE(f32) mVolume;
-            /* 0x0C */ NEBULA_BE(f32) mPitch;
-            /* 0x10 */ TOffset< TOsc > mOscOffset[2];
-            /* 0x18 */ TOffset< TRandEffect > mRandOffset[2];
-            /* 0x20 */ TOffset< TSenseEffect > mSenseOffset[2];
-            /* 0x28 */ NEBULA_BE(u32) mKeyRegionCount;
-            /* 0x2C */ TOffset< TKeymap > mKeymapOffset[0];
+            u8 field_0x0[8];
+            f32 mVolume;
+            f32 mPitch;
+            TOffset< TOsc > mOscOffset[2];
+            TOffset< TRandEffect > mRandOffset[2];
+            TOffset< TSenseEffect > mSenseOffset[2];
+            u32 mKeyRegionCount;
+            TOffset< TKeymap > mKeymapOffset[0];
         };
 
         struct TPmap {
-            /* 0x00 */ NEBULA_BE(f32) mVolume;
-            /* 0x04 */ NEBULA_BE(f32) mPitch;
-            /* 0x08 */ TOffset< TRandEffect > mRandOffset[2];
-            /* 0x10 */ NEBULA_BE(u32) mVeloRegionCount;
-            /* 0x14 */ TOffset< TVmap > mVmapOffset[0];
+            f32 mVolume;
+            f32 mPitch;
+            TOffset< TRandEffect > mRandOffset[2];
+            u32 mVeloRegionCount;
+            TOffset< TVmap > mVmapOffset[0];
         };
 
         struct TPerc {
-            /* 0x000 */ NEBULA_BE(u32) mMagic;
-            /* 0x004 */ u8 _4[0x84];
-            /* 0x088 */ TOffset< TPmap > mPmapOffset[0x80];
-            /* 0x288 */ s8 mPan[0x80];
-            /* 0x308 */ NEBULA_BE(u16) mRelease[0x80];
+            u32 mMagic;
+            u8 _4[0x84];
+            TOffset< TPmap > mPmapOffset[0x80];
+            s8 mPan[0x80];
+            u16 mRelease[0x80];
         };
 
         struct TOffsetData {
-            /* 0x000 */ u8 field_0x20[4];
-            /* 0x004 */ TOffset< TInst > mInstOffset[0x80];
-            /* 0x204 */ u8 field_0x204[0x190];
-            /* 0x394 */ TOffset< TPerc > mPercOffset[12];
+            u8 field_0x20[4];
+            TOffset< TInst > mInstOffset[0x80];
+            u8 field_0x204[0x190];
+            TOffset< TPerc > mPercOffset[12];
         };
 
         struct THeader {
-            /* 0x00 */ u8 field_0x0[0x20];
-            /* 0x20 */ TOffsetData mOffsets;
+            u8 field_0x0[0x20];
+            TOffsetData mOffsets;
         };
 
-        JASBasicBank* createBasicBank(void const*, JKRHeap*);
+        JASBasicBank* createBasicBank(void const*, NebulaArena*);
         inline JASOscillator::Data* findOscPtr(JASBasicBank*, THeader const*, TOsc const*);
         JASOscillator::Point const* getOscTableEndPtr(JASOscillator::Point const*);
     };  // namespace Ver0
 
-    JASBank* createBank(void const*, JKRHeap*);
-    JASBasicBank* createBasicBank(void const*, JKRHeap*);
+    JASBank* createBank(void const*, NebulaArena*);
+    JASBasicBank* createBasicBank(void const*, NebulaArena*);
 
     inline u32 getBankNumber(const void* param_0) {
-        NEBULA_BE(u32)* ptr = (NEBULA_BE(u32)*)param_0;
+        u32* ptr = (u32*)param_0;
         return ptr[2];
     }
 
-    extern u32 sUsedHeapSize;
 };  // namespace JASBNKParser

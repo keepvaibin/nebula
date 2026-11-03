@@ -52,7 +52,7 @@ void Banekiti::exeWait() {
 
 void Banekiti::exeRepel() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::shakeCameraWeak();
         MR::startBck(this, "Repel");
         MR::startSound(this, "SE_OJ_BANEKITI_REPEL");

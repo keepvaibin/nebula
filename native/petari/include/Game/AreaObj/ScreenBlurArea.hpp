@@ -16,5 +16,5 @@ public:
         return mIsPlayerSync;
     }
 
-    /* 0x40 */ bool mIsPlayerSync;
+    bool mIsPlayerSync;
 };

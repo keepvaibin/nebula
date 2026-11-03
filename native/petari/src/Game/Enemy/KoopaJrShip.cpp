@@ -71,12 +71,6 @@ namespace NrvKoopaJrShip {
     NEW_NERVE(HostTypeTurnFront, KoopaJrShip, TurnFront);
 };  // namespace NrvKoopaJrShip
 
-void KoopaJrShip_float_ordering0() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)2.0f;
-}
-
 KoopaJrShip::KoopaJrShip(const char* pName)
     : LiveActor(pName), mShellHolder(nullptr), mMainShellHolder(nullptr), mJr(nullptr), mShipBreakModel(nullptr), mPodModel(nullptr), _D0(5),
       _D4(gZeroVec), _E0(0.0f, 0.0f, 1.0f), _EC(0), mPropRotateSpeed(20.0f), _184(0.0f), _188(0), _1EC(::sKoopaJrPos), _1F8(gZeroVec) {
@@ -252,10 +246,6 @@ s32 KoopaJrShip::getNumShootShells() const {
     return isNerve(GET_NERVE(KoopaJrShip, HostTypeShoot2)) != 0 ? 5 : 0;
 }
 
-void KoopaJrShip_float_ordering1() {
-    (void)4.0f;
-}
-
 f32 KoopaJrShip::getPropellerRotSpeed() const {
     if (isNerve(GET_NERVE(KoopaJrShip, HostTypeBreakStart))) {
         return (40.0f * (1.0f - MR::calcNerveRate(this, 60)));
@@ -265,7 +255,7 @@ f32 KoopaJrShip::getPropellerRotSpeed() const {
         return 0.0f;
     }
 
-    if (isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp)) || 2 >= _D0 && !isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage))) {
+    if (isNerve(GET_NERVE(KoopaJrShip, HostTypePowerUp)) || (2 >= _D0 && !isNerve(GET_NERVE(KoopaJrShip, HostTypeDamage)))) {
         return 40.0f;
     }
 
@@ -273,10 +263,6 @@ f32 KoopaJrShip::getPropellerRotSpeed() const {
 }
 
 void KoopaJrShip::updateCoordSpeed() {
-    switch (_D0) {
-    case 2:
-        0.0f;
-    }
     f32 rate = 0.0f;
     MR::calcRailRateToNextPoint(&rate, this);
 
@@ -308,7 +294,7 @@ void KoopaJrShip::updateCoordSpeed() {
     }
 }
 
-void KoopaJrShip::calcLauncherInfo(TVec3f* a1, TVec3f* a2, s32 idx) const NO_INLINE {
+void KoopaJrShip::calcLauncherInfo(TVec3f* a1, TVec3f* a2, s32 idx) const {
     TPos3f mtx;
     mtx.set(MR::getJointMtx(this, ::cJointNameCannon[idx]));
     mtx.getTrans(*a1);
@@ -388,11 +374,11 @@ void KoopaJrShip::shootKillersAfterDamage() {
 }
 
 bool KoopaJrShip::isExistActiveKiller() const {
-    return std::find_if(mKillers.begin(), mKillers.end(), std::not1(std::ptr_fun(&MR::isDead))) != mKillers.end();
+    return std::find_if(mKillers.begin(), mKillers.end(), [&](const auto& item) { return !MR::isDead(item); }) != mKillers.end();
 }
 
 bool KoopaJrShip::isExistActiveKameck() const {
-    return std::find_if(mKamecks.begin(), mKamecks.end(), std::not1(std::ptr_fun(&MR::isDead))) != mKamecks.end();
+    return std::find_if(mKamecks.begin(), mKamecks.end(), [&](const auto& item) { return !MR::isDead(item); }) != mKamecks.end();
 }
 
 void KoopaJrShip::shootMainShells() {
@@ -642,7 +628,7 @@ void KoopaJrShip::exeDamage() {
         emitDamageSmokeEffect();
         emitDamageHitEffect();
         MR::shakeCameraNormal();
-        MR::tryRumbleDefaultHit(this, WPAD_CHAN0);
+        MR::tryRumbleDefaultHit(this, PLAYER_1);
         MR::stopScene(12);
     }
 
@@ -683,7 +669,7 @@ void KoopaJrShip::exeBreakStart() {
         mJr->setStateShipBattleShipDamage();
         emitDamageHitEffect();
         MR::shakeCameraNormal();
-        MR::tryRumbleDefaultHit(this, WPAD_CHAN0);
+        MR::tryRumbleDefaultHit(this, PLAYER_1);
         MR::stopScene(12);
     }
 
@@ -719,7 +705,7 @@ void KoopaJrShip::exeBreakStart() {
 void KoopaJrShip::exeBreak() {
     if (MR::isFirstStep(this)) {
         MR::deleteEffect(this, "EyeLight");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_S");
         mJr->setStateShipBattleEscape();
@@ -744,7 +730,7 @@ void KoopaJrShip::exeBreak() {
 
     if (MR::isStep(this, 300)) {
         MR::shakeCameraNormal();
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::startSound(this, "SE_BM_KOOPAJR_SHIP_BREAK_L");
     }
 
@@ -769,7 +755,9 @@ void KoopaJrShip::exeTurnFront() {
         }
 
         mKamecks[0]->makeActorDeadForce();
-        std::for_each(mKillers.begin(), mKillers.end(), std::mem_func(&HomingKiller::makeActorDead));
+        for (auto& item : mKillers) {
+            item->makeActorDead();
+        }
     }
 
     MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_3RD_DEMO");

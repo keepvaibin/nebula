@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace MR {
 
@@ -13,10 +12,10 @@ namespace MR {
         BothDirPtrLink(void*);
         ~BothDirPtrLink();
 
-        /* 0x0 */ void* mValue;
-        /* 0x4 */ BothDirPtrList* mList;
-        /* 0x8 */ BothDirPtrLink* mPrevLink;
-        /* 0xC */ BothDirPtrLink* mNextLink;
+        void* mValue;
+        BothDirPtrList* mList;
+        BothDirPtrLink* mPrevLink;
+        BothDirPtrLink* mNextLink;
     };
 
     class BothDirPtrList {
@@ -33,9 +32,9 @@ namespace MR {
         bool append(BothDirPtrLink*);
         bool remove(BothDirPtrLink*);
 
-        /* 0x0 */ BothDirPtrLink* mHead;
-        /* 0x4 */ BothDirPtrLink* mTail;
-        /* 0x8 */ u32 mCount;
+        BothDirPtrLink* mHead;
+        BothDirPtrLink* mTail;
+        u32 mCount;
     };
 
     template < class T >
@@ -68,7 +67,7 @@ namespace MR {
                 return mLink == nullptr;
             }
 
-            /* 0x00 */ BothDirPtrLink* mLink;
+            BothDirPtrLink* mLink;
         };
 
         iterator begin() const {

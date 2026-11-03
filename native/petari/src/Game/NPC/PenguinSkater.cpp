@@ -96,7 +96,7 @@ void PenguinSkater::initAfterPlacement() {
                     mSwitchRail = static_cast< NPCSupportRail* >(actor);
                 }
             } else {
-                mSwitchRails[mNumRails++] = static_cast< NPCSupportRail* >(actor);
+                mSwitchRails.at(mNumRails++) = static_cast< NPCSupportRail* >(actor);
             }
         }
         mRail = mCurrentRail;
@@ -112,7 +112,7 @@ bool PenguinSkater::isAttackable() const {
 bool PenguinSkater::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgPlayerSpinAttack(msg)) {
         if (isAttackable()) {
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             setNerve(GET_NERVE(PenguinSkater, PenguinSkaterNrvCaught));
         }
     }
@@ -123,7 +123,7 @@ bool PenguinSkater::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSenso
 void PenguinSkater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver)) {
         if (isAttackable()) {
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             setNerve(GET_NERVE(PenguinSkater, PenguinSkaterNrvCaught));
         }
     }

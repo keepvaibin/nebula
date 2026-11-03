@@ -1,52 +1,18 @@
 #pragma once
 
-#include "Inline.hpp"
 #include "JSystem/JGeometry/TUtil.hpp"
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JMath/JMath.hpp"
 #include <math_types.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace JGeometry {
-#ifdef __MWERKS__
-    inline void negateInternal(register const f32* rSrc, register f32* rDest) {
-        register f32 xy;
-        __asm {
-            psq_l xy, 0(rSrc), 0, 0
-            ps_neg xy, xy
-            psq_st xy, 0(rDest), 0, 0
-        }
-
-        rDest[2] = -rSrc[2];
-    }
-
-#elif defined(TARGET_PC)
     inline void negateInternal(const f32* rSrc, f32* rDest) {
         rDest[0] = -rSrc[0];
         rDest[1] = -rSrc[1];
         rDest[2] = -rSrc[2];
     }
-#else
-    inline void negateInternal(const f32* rSrc, f32* rDest);
-#endif
 
-#ifdef __MWERKS__
-    inline static void subInternal(register const f32* vec1, register const f32* vec2, register f32* dst) {
-        register f32 xy2, z1, xy1, z2;
-        __asm {
-            psq_l xy1, 0(vec1), 0, 0
-            psq_l xy2, 0(vec2), 0, 0
-            psq_l z1, 8(vec1), 1, 0
-            ps_sub xy1, xy1, xy2
-            psq_st xy1, 0(dst), 0, 0
-            psq_l z2, 8(vec2), 1, 0
-            ps_sub z1, z2, z1
-            psq_st z1, 8(dst), 1, 0
-        }
-    }
-
-#elif defined(TARGET_PC)
     // As the original: x and y are vec1 - vec2, z is vec2 - vec1.
     inline static void subInternal(const f32* vec1, const f32* vec2, f32* dst) {
         const f32 z = vec2[2] - vec1[2];
@@ -54,32 +20,12 @@ namespace JGeometry {
         dst[1] = vec1[1] - vec2[1];
         dst[2] = z;
     }
-#else
-    static void subInternal(const f32* vec1, const f32* vec2, f32* dst);
-#endif
 
-#ifdef __MWERKS__
-    ALWAYS_INLINE inline void mulInternal(register const f32* vec1, register const f32* vec2, register f32* dst) {
-        register f32 xy1, xy2, res;
-        __asm {
-                psq_l xy1, 0(vec1), 0, 0
-                psq_l xy2, 0(vec2), 0, 0
-                ps_mul res, xy1, xy2
-                psq_st res, 0(dst), 0, 0
-        }
-
-        dst[2] = vec1[2] * vec2[2];
-    }
-
-#elif defined(TARGET_PC)
     inline void mulInternal(const f32* vec1, const f32* vec2, f32* dst) {
         dst[0] = vec1[0] * vec2[0];
         dst[1] = vec1[1] * vec2[1];
         dst[2] = vec1[2] * vec2[2];
     }
-#else
-    void mulInternal(const f32* vec1, const f32* vec2, f32* dst);
-#endif
 
     template < typename T >
     struct TVec2 {
@@ -114,7 +60,7 @@ namespace JGeometry {
 
         /* General operations */
         template < typename A >
-        void set(const JGeometry::TVec2< A >& rSrc) NO_INLINE {
+        void set(const JGeometry::TVec2< A >& rSrc) {
             x = rSrc.x;
             y = rSrc.y;
         }
@@ -280,7 +226,6 @@ namespace JGeometry {
     inline TVec2< f32 >::TVec2() {
     }
 
-#ifdef TARGET_PC
     template < typename T >
     struct TVec3IntArg {
         typedef int Type;
@@ -290,7 +235,6 @@ namespace JGeometry {
     struct TVec3IntArg< int > {
         struct Type {};
     };
-#endif
 
     template < typename T >
     struct TVec3 {
@@ -307,7 +251,6 @@ namespace JGeometry {
             z = _z;
         }
 
-#ifdef TARGET_PC
         // The game's member template TVec3<f32>::TVec3<int>(int, int, int): each component converted. TVec3<int>
         // has it as (T, T, T), where s32 is int.
         TVec3< T >(typename TVec3IntArg< T >::Type _x, typename TVec3IntArg< T >::Type _y, typename TVec3IntArg< T >::Type _z) {
@@ -315,9 +258,6 @@ namespace JGeometry {
             y = _y;
             z = _z;
         }
-#else
-        TVec3< T >(int x, int y, int Z);
-#endif
 
         inline TVec3(T val) {
             x = val;
@@ -344,7 +284,6 @@ namespace JGeometry {
         s16 x, y, z;
 
         TVec3() {
-            x = x;  // TODO: This shouldn't be here, but it's the only way to get a Ctor generated in OceanRingPipe.cpp
         }
 
         template < typename J >
@@ -353,8 +292,8 @@ namespace JGeometry {
         }
 
         TVec3& operator=(const TVec3& b) {
-            // Force copies to use lwz/lha
-            *((s32*)this) = *((s32*)&b);
+            x = b.x;
+            y = b.y;
             z = b.z;
             return *this;
         }
@@ -368,59 +307,16 @@ namespace JGeometry {
 
     template <>
     struct TVec3< f32 > : public Vec {
-#ifdef __MWERKS__
-        TVec3(const Vec& vec) {
-            const register Vec* v_a = &vec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-                psq_l a_x, 0(v_a), 0, 0
-                lfs b_x, 8(v_a)
-                psq_st a_x, 0(v_b), 0, 0
-                stfs b_x, 8(v_b)
-            }
-            ;
-        }
-
-#elif defined(TARGET_PC)
         TVec3(const Vec& vec) {
             x = vec.x;
             y = vec.y;
             z = vec.z;
         }
-#else
-        TVec3(const Vec& vec);
-#endif
-#ifdef __MWERKS__
-        // Used inlined and non-inlined?
-        TVec3(const TVec3< f32 >& vec) {
-            const register Vec* v_a = &vec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-                psq_l a_x, 0(v_a), 0, 0
-                lfs b_x, 8(v_a)
-                psq_st a_x, 0(v_b), 0, 0
-                stfs b_x, 8(v_b)
-            }
-            ;
-        }
-
-#elif defined(TARGET_PC)
         TVec3(const TVec3< f32 >& vec) {
             x = vec.x;
             y = vec.y;
             z = vec.z;
         }
-#else
-        TVec3(const TVec3< f32 >& vec);
-#endif
 
         template < typename T >
         TVec3(T _x, T _y, T _z) {
@@ -446,8 +342,7 @@ namespace JGeometry {
             z = 0;
         }
 
-        inline TVec3() {
-        }
+        inline TVec3() = default;
 
         operator Vec*() {
             return (Vec*)&x;
@@ -462,25 +357,9 @@ namespace JGeometry {
         }
 
         void operator=(const TVec3& vec) {
-#ifdef TARGET_PC
             x = vec.x;
             y = vec.y;
             z = vec.z;
-#elif defined(__MWERKS__)
-            const register Vec* v_a = &vec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-            psq_l a_x, 0(v_a), 0, 0
-            lfs b_x, 8(v_a)
-            psq_st a_x, 0(v_b), 0, 0
-            stfs b_x, 8(v_b)
-            }
-            ;
-#endif
         }
 
         template < typename T >
@@ -491,7 +370,7 @@ namespace JGeometry {
         }
 
         template < typename T >
-        void set(T _x, T _y, T _z) NO_INLINE {
+        void set(T _x, T _y, T _z) {
             x = _x;
             y = _y;
             z = _z;
@@ -516,7 +395,7 @@ namespace JGeometry {
         }
 
         template < typename T >
-        void setAll(f32 value) NO_INLINE {
+        void setAll(f32 value) {
             x = value;
             y = value;
             z = value;
@@ -583,7 +462,6 @@ namespace JGeometry {
             scale(1.0f / scalar);
         }
 
-        // appears to be needed in RingBeam to match stack in some places
         TVec3 scaleInline(f32 scalar) const {
             const TVec3& rSelf = *this;
             TVec3 ret(rSelf);
@@ -597,7 +475,7 @@ namespace JGeometry {
             this->z = this->z * scalar;
         }
 
-        void scale(f32 scalar, const TVec3& rVec) NO_INLINE {
+        void scale(f32 scalar, const TVec3& rVec) {
             this->x = rVec.x * scalar;
             this->y = rVec.y * scalar;
             this->z = rVec.z * scalar;
@@ -645,7 +523,7 @@ namespace JGeometry {
         }
 
         inline void lerp(const TVec3& a, const TVec3& b, f32 t) {
-            JMAVECLerp(&a, &b, this, t);
+            NebulaVecLerp(&a, &b, this, t);
         }
 
         bool operator==(const TVec3& rVec) const {
@@ -673,66 +551,22 @@ namespace JGeometry {
         }
 
 #ifdef JGEOMETRY_VEC3_ZERO_NOINLINE
-        void zero() NO_INLINE {
+        void zero() {
 #else
         void zero() {
 #endif
             x = y = z = 0;
         }
 
-#ifdef __MWERKS__
-        inline void setPSZeroVec() {
-            const register Vec* v_a = &gZeroVec;
-            register Vec* v_b = this;
-
-            register f32 b_x;
-            register f32 a_x;
-
-            asm {
-                psq_l a_x, 0(v_a), 0, 0
-                lfs b_x, 8(v_a)
-                psq_st a_x, 0(v_b), 0, 0
-                stfs b_x, 8(v_b)
-            }
-            ;
-        }
-
-#elif defined(TARGET_PC)
         inline void setPSZeroVec() {
             x = gZeroVec.x;
             y = gZeroVec.y;
             z = gZeroVec.z;
         }
-#else
-        void setPSZeroVec();
-#endif
-        f32 dot(const TVec3& rOther) const NO_INLINE {
+        f32 dot(const TVec3& rOther) const {
             // TODO: this is *never* uninlined except in the specific
             // case of TQuat4f::setRotate(const TVec3f&, const TVec3f&)
-#ifdef TARGET_PC
             return (x * rOther.x + y * rOther.y) + z * rOther.z;
-#elif defined(__MWERKS__)
-            const register Vec* b = &rOther;
-            const register Vec* a = this;
-
-            register f32 _fp5, _fp4, _fp3, _fp2, _fp1;
-
-            asm {
-
-                psq_l    _fp2, 4(a), 0, 0;
-                psq_l    _fp3, 4(b), 0, 0;
-
-                ps_mul   _fp2, _fp2, _fp3;
-
-                psq_l    _fp5, 0(a), 0, 0;
-                psq_l    _fp4, 0(b), 0, 0;
-
-                ps_madd  _fp3, _fp5, _fp4, _fp2;
-                ps_sum0  _fp1, _fp3, _fp2, _fp2;
-            }
-
-            return _fp1;
-#endif
         }
 
         bool epsilonEquals(const TVec3< f32 >& a1, f32 a2) const {
@@ -750,31 +584,13 @@ namespace JGeometry {
         }
 
         void scaleAdd(register f32 scale, const TVec3& src) {
-#ifdef __MWERKS__
-            register TVec3* dest = this;
-            register const TVec3* source = &src;
-            register f32 srcXY, destXY, srcZ, destZ;
-
-            asm {
-                psq_l srcXY, 0(source), 0, 0
-                psq_l srcZ, 8(source), 1, 0
-                psq_l destXY, 0(dest), 0, 0
-                psq_l destZ, 8(dest), 1, 0
-                ps_madds0 destXY, srcXY, scale, destXY
-                ps_madds0 destZ, srcZ, scale, destZ
-                psq_st destXY, 0(dest), 0, 0
-                psq_st destZ, 8(dest), 1, 0
-            }
-
-#else
             x += src.x * scale;
             y += src.y * scale;
             z += src.z * scale;
-#endif
         }
 
         void scaleAdd(f32 sc, const TVec3& a, const TVec3& b) {
-            JMAVECScaleAdd(a, b, this, sc);
+            NebulaVecScaleAdd(a, b, this, sc);
         }
 
         TVec3 killElement(const TVec3& rKillDir) const {
@@ -785,24 +601,24 @@ namespace JGeometry {
 
         void killElement(const TVec3& rVec, const TVec3& rKillDir) {
             const TVec3& kill = rKillDir;
-            JMAVECScaleAdd(kill, rVec, this, -kill.dot(rVec));
+            NebulaVecScaleAdd(kill, rVec, this, -kill.dot(rVec));
         }
 
         void killElement2(const TVec3& rVec, const TVec3& rKillDir) {
             // TODO: sometimes this pattern specifically is used?
             // is this just written directly instead?
-            JMAVECScaleAdd(rKillDir, rVec, this, -rKillDir.dot(rVec));
+            NebulaVecScaleAdd(rKillDir, rVec, this, -rKillDir.dot(rVec));
         }
 
         void orthogonalize(const TVec3& rKillDir) {
             const TVec3& kill = rKillDir;
-            JMAVECScaleAdd(kill, this, this, -kill.dot(*this));
+            NebulaVecScaleAdd(kill, this, this, -kill.dot(*this));
         }
 
         void orthogonalize2(const TVec3& rKillDir) {
             // TODO: sometimes this pattern specifically is used?
             // is this just written directly instead?
-            JMAVECScaleAdd(rKillDir, this, this, -rKillDir.dot(*this));
+            NebulaVecScaleAdd(rKillDir, this, this, -rKillDir.dot(*this));
         }
 
         TVec3 getOrthogonal(const TVec3& rVec) const {
@@ -844,43 +660,10 @@ namespace JGeometry {
             return reinterpret_cast< const f32* >(this);
         }
 
-#ifdef __MWERKS__
-        // this theoretically should just forward NebulaVecSquareDistance,
-        // however using the exact same asm causes mismatches. Keeping it here instead
-        // keeps the exact matches, and even allows for more use cases that match.
-        f32 squared(const TVec3& rB) const {
-            const register Vec* a = this;
-            const register Vec* b = &rB;
-
-            register f32 sqdist, dxy, dyz;
-            register f32 v1xy, v0xy, v1yz, v0yz;
-
-            asm
-            {
-                psq_l    v0yz, 4(a), 0, 0 
-                psq_l    v1yz, 4(b), 0, 0
-                ps_sub   dyz, v0yz, v1yz
-            
-                psq_l    v0xy, 0(a), 0, 0
-                psq_l    v1xy, 0(b), 0, 0
-                
-                ps_mul   dyz, dyz, dyz
-                ps_sub   dxy, v0xy, v1xy
-            
-                ps_madd  sqdist, dxy, dxy, dyz
-                ps_sum0  sqdist, sqdist, dyz, dyz
-            }
-
-            return sqdist;
-        };
-#elif defined(TARGET_PC)
         f32 squared(const TVec3& rB) const {
             const f32 dx = x - rB.x, dy = y - rB.y, dz = z - rB.z;
             return (dx * dx + dy * dy) + dz * dz;
         }
-#else
-        f32 squared(const TVec3& rB) const;
-#endif
 
         bool isZero() const {
             return squared() <= JGeometry::TUtil< f32 >::epsilon();
@@ -941,7 +724,7 @@ namespace JGeometry {
         f32 angle(const TVec3& rB) const {
             f32 crossPart = cross(rB).length();
             f32 dotPart = dot(rB);
-            return __fabsf(JMAATan2(crossPart, dotPart));
+            return fabsf(JMAATan2(crossPart, dotPart));
         }
 
         f32 turnRate(const TVec3& rB, f32 maxAngle) const {
@@ -991,14 +774,14 @@ namespace JGeometry {
         }
 
         template < typename A >
-        void set(A _x, A _y, A _z, A _w) NO_INLINE {
+        void set(A _x, A _y, A _z, A _w) {
             x = _x;
             y = _y;
             z = _z;
             w = _w;
         }
 
-        void scale(T val) NO_INLINE {
+        void scale(T val) {
             x *= val;
             y *= val;
             z *= val;
@@ -1064,7 +847,7 @@ namespace JGeometry {
             TVec4< T >::scale(lengthinv);
         }
 
-        void normalize(const TQuat4< T >& rSrc) NO_INLINE {
+        void normalize(const TQuat4< T >& rSrc) {
             f32 length = rSrc.squared();
 
             if (length <= TUtil< f32 >::epsilon()) {
@@ -1075,8 +858,7 @@ namespace JGeometry {
                 if (length <= 0.0f) {
                     inverse = length;
                 } else {
-                    f32 estimate = __frsqrte(length);
-                    inverse = (0.5f * estimate) * (3.0f - length * (estimate * estimate));
+                    inverse = 1.0f / sqrtf(length);
                 }
 
                 this->x = rSrc.x * inverse;
@@ -1101,7 +883,7 @@ namespace JGeometry {
                                     1.0f - this->x * this->x * 2.0f - this->y * this->y * 2.0f);
         }
 
-        void getEuler(TVec3< T >& rDest) const NO_INLINE {
+        void getEuler(TVec3< T >& rDest) const {
             f32 m20 = 2.0f * (this->x * this->z - this->w * this->y);
 
             if (m20 - 1.0f >= -TUtil< f32 >::epsilon()) {
@@ -1125,7 +907,7 @@ namespace JGeometry {
             }
         }
 
-        void setEuler(T _x, T _y, T _z) NO_INLINE {
+        void setEuler(T _x, T _y, T _z) {
             f32 cx = cos(0.5f * _x);
             f32 cy = cos(0.5f * _y);
             f32 cz = cos(0.5f * _z);
@@ -1207,7 +989,7 @@ namespace JGeometry {
             }
         }
 
-        void setRotate(const TVec3< T >& rA, const TVec3< T >& rB) NO_INLINE {
+        void setRotate(const TVec3< T >& rA, const TVec3< T >& rB) {
             TVec3< T > dir = rA.cross(rB);
             f32 crossPart = dir.length();
 
@@ -1252,7 +1034,7 @@ namespace JGeometry {
             TVec3< T >::scale(scalar, rVec);
         }
 
-        void slerp(const TQuat4< T >& rOther, T ratio) NO_INLINE {
+        void slerp(const TQuat4< T >& rOther, T ratio) {
             TQuat4< T > a;
             TQuat4< T > b;
             a.normalize(*this);
@@ -1360,33 +1142,6 @@ namespace JGeometry {
     };
 
 };  // namespace JGeometry
-
-#ifdef TARGET_PC
-#include "nebula_disc.hpp"
-
-// Vectors in files (JPA blocks): big-endian components.
-template <>
-struct BEData< JGeometry::TVec3< f32 > > {
-    BE< f32 > x, y, z;
-
-    operator JGeometry::TVec3< f32 >() const {
-        JGeometry::TVec3< f32 > v;
-        v.x = x;
-        v.y = y;
-        v.z = z;
-        return v;
-    }
-};
-
-template <>
-struct BEData< JGeometry::TVec3< s16 > > {
-    BE< s16 > x, y, z;
-
-    operator JGeometry::TVec3< s16 >() const {
-        return JGeometry::TVec3< s16 >((s16)x, (s16)y, (s16)z);
-    }
-};
-#endif
 
 typedef JGeometry::TVec2< s16 > TVec2s;
 typedef JGeometry::TVec2< f32 > TVec2f;

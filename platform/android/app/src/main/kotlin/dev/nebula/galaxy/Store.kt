@@ -6,6 +6,16 @@ import android.os.StatFs
 import java.io.File
 import java.util.Properties
 
+private const val STORE_MAGIC = "NBSTORE"
+
+/** False only when the file was read and is something else: a read that fails removes nothing. */
+private fun isGameStore(file: File): Boolean = runCatching {
+    file.inputStream().use { input ->
+        val head = ByteArray(STORE_MAGIC.length)
+        input.read(head) == head.size && String(head, Charsets.US_ASCII) == STORE_MAGIC
+    }
+}.getOrDefault(true)
+
 /** What setup installed: written after game.pak is complete, so its presence means a playable game. */
 data class Install(
     val gameId: String,
@@ -18,6 +28,12 @@ data class Install(
     companion object {
         fun read(context: Context): Install? {
             if (!GameFiles.installed(context)) return null
+            // A game file from before the native store cannot run: it goes, the saves stay, and setup makes a new one.
+            if (!isGameStore(GameFiles.pak(context))) {
+                GameFiles.pak(context).delete()
+                GameFiles.install(context).delete()
+                return null
+            }
             val properties = Properties()
             return runCatching {
                 GameFiles.install(context).inputStream().use { properties.load(it) }
@@ -50,7 +66,7 @@ data class Install(
 
 object Storage {
     /** game.pak of the North American release (crates/nebula-import), and room to spare beside it. */
-    const val GAME_BYTES = 3_391_676_376L
+    const val GAME_BYTES = 3_913_558_602L
     const val MARGIN_BYTES = 256L * 1024 * 1024
 
     fun freeBytes(context: Context): Long = StatFs(GameFiles.data(context).path).availableBytes
@@ -66,8 +82,6 @@ object Storage {
 
 /** The renderer's settings, config.ini in the data folder (runtime/src/gx/render_config.cpp reads it). */
 data class GraphicsSettings(
-    val scale: Int,
-    val matchScreen: Boolean,
     val vsync: Boolean,
     val displayRate: Boolean,
     val aa: String,         // config.ini's aa: "off", "fxaa" or "smaa"
@@ -77,19 +91,16 @@ data class GraphicsSettings(
     val hudAtScreen: Boolean,  // hud_output_resolution: menus and HUD drawn at the screen's resolution
 ) {
     companion object {
-        // The runtime's defaults: 1x, VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
+        // The runtime's defaults: VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
         // from the game's motion), no anti-aliasing, bilinear enlarging, no sharpening.
         val Default = GraphicsSettings(
-            scale = 1, matchScreen = false, vsync = true, displayRate = false, aa = "off", msaa = 1, fsr = false,
+            vsync = true, displayRate = false, aa = "off", msaa = 1, fsr = false,
             sharpness = 0, hudAtScreen = false,
         )
-        const val MAX_SCALE = 4
 
         fun read(context: Context): GraphicsSettings {
             val values = readIni(GameFiles.renderConfig(context))
             return GraphicsSettings(
-                scale = values["efb_scale"]?.toIntOrNull()?.coerceIn(1, MAX_SCALE) ?: Default.scale,
-                matchScreen = values["internal_follow_window"]?.let { it == "1" } ?: Default.matchScreen,
                 vsync = values["vsync_interval"]?.let { it != "0" } ?: Default.vsync,
                 displayRate = values["max_fps"]?.toFloatOrNull()?.let { it == 0f } ?: Default.displayRate,
                 aa = values["aa"]?.takeIf { it == "fxaa" || it == "smaa" } ?: Default.aa,
@@ -117,8 +128,6 @@ data class GraphicsSettings(
     fun write(context: Context) {
         val file = GameFiles.renderConfig(context)
         val values = readIni(file)
-        values["efb_scale"] = scale.toString()
-        values["internal_follow_window"] = if (matchScreen) "1" else "0"
         values["vsync_interval"] = if (vsync) "1" else "0"
         values["max_fps"] = if (displayRate) "0" else "60"
         values["aa"] = aa

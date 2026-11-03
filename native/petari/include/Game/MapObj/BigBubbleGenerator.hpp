@@ -25,13 +25,13 @@ public:
     void exeNonActive();
     void exeActive();
 
-    /* 0x8C */ s32 mSpawnTimer;
-    /* 0x90 */ f32 mMinSize;
-    /* 0x94 */ f32 mMaxSize;
-    /* 0x98 */ s32 mIsObstruct;  // NOTE: is a bool but stored as s32
-    /* 0x9C */ s32 mShape;
-    /* 0xA0 */ s32 mLimitterID;
-    /* 0xA4 */ BigBubble* mAttachedBubble;
+    s32 mSpawnTimer;
+    f32 mMinSize;
+    f32 mMaxSize;
+    s32 mIsObstruct;  // NOTE: is a bool but stored as s32
+    s32 mShape;
+    s32 mLimitterID;
+    BigBubble* mAttachedBubble;
 };
 
 namespace MR {

@@ -23,7 +23,7 @@ public:
     virtual void control() {
     }
 
-    /* 0x8 */ bool mIsDead;
+    bool mIsDead;
 };
 
 template < typename T >
@@ -36,5 +36,5 @@ public:
         return mHost;
     }
 
-    /* 0xC */ T* mHost;
+    T* mHost;
 };

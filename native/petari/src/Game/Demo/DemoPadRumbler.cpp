@@ -7,7 +7,7 @@ DemoPadRumbler::DemoPadRumbler(const char* pName) : mNumPadRumbleEntries(), mPad
         return;
 
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "MoviePadRumble%s.arc", pName);
+    nebula_snprintf(buf, sizeof(buf), "MoviePadRumble%s.arc", pName);
     JMapInfo* map = MR::createCsvParser(buf, "PadRumbleData.bcsv");
 
     mNumPadRumbleEntries = MR::getCsvDataElementNum(map);
@@ -25,7 +25,7 @@ void DemoPadRumbler::update(s32 frame) {
     for (int i = 0; i < mNumPadRumbleEntries; i++) {
         PadRumbleInfo* rumble = &mPadRumbleEntries[i];
         if (rumble->mStartFrame == frame) {
-            MR::tryRumblePad(this, rumble->mName, WPAD_CHAN0);
+            MR::tryRumblePad(this, rumble->mName, PLAYER_1);
         }
     }
 }

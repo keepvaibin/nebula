@@ -1,205 +1,9 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASMutex.hpp"
-#include "JSystem/JAudio2/JASWaveArcLoader.hpp"
-#include "JSystem/JKernel/JKRExpHeap.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
-#include "Game/System/NebulaAuxMemory.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaClock.hpp"
-
-JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mBase(), mSize(), mHeap() {
-    mMutex.init();
-}
-
-void JASHeap::initRootHeap(void* pBase, u32 size) {
-    mMutex.lock();
-    mBase = (u8*)NebulaAlignUp32(pBase);
-    mHeap = nullptr;
-    mSize = size - (u32)(mBase - static_cast< u8* >(pBase));
-    mMutex.unlock();
-}
-
-bool JASHeap::alloc(JASHeap* pParent, u32 size) {
-    JASMutexLock lock(&mMutex);
-    if (isAllocated()) {
-        return false;
-    }
-
-    if (!pParent->isAllocated()) {
-        return false;
-    }
-
-    size = NebulaAlignUp32(size);
-    u32 curOffset = pParent->getCurOffset();
-    u32 tailOffset = pParent->getTailOffset();
-    if (curOffset + size <= tailOffset) {
-        pParent->insertChild(this, pParent->getTailHeap(), pParent->mBase + curOffset, size, false);
-        return true;
-    }
-
-    s32 smallestGap = -1;
-    u8* pCurrent = pParent->mBase;
-    bool found = false;
-    JASHeap* pNext = nullptr;
-    void* pAddress;
-    JSUTreeIterator< JASHeap > it(nullptr);
-    for (it = pParent->mTree.getFirstChild(); it != pParent->mTree.getEndChild(); ++it) {
-        if (pCurrent >= pParent->mBase + tailOffset) {
-            break;
-        }
-
-        u32 gapSize = (u32)(uintptr_t(it->mBase) - uintptr_t(pCurrent));
-        if (gapSize >= size && gapSize < smallestGap) {
-            pNext = &*it;
-            pAddress = pCurrent;
-            smallestGap = gapSize;
-            found = true;
-        }
-
-        u32 childSize = it->mSize;
-        pCurrent = (u8*)it->mBase + childSize;
-    }
-
-    if (pCurrent != pParent->mBase && pCurrent < pParent->mBase + tailOffset) {
-        u32 gapSize = pParent->mBase + pParent->mSize - pCurrent;
-        if (gapSize >= size && gapSize < smallestGap) {
-            pNext = nullptr;
-            pAddress = pCurrent;
-            smallestGap = gapSize;
-            found = true;
-        }
-    }
-
-    if (!found) {
-        return false;
-    }
-
-    pParent->insertChild(this, pNext, pAddress, size, false);
-    return true;
-}
-
-bool JASHeap::allocTail(JASHeap* pParent, u32 size) {
-    JASMutexLock lock(&mMutex);
-    if (isAllocated()) {
-        return false;
-    }
-
-    if (!pParent->isAllocated()) {
-        return false;
-    }
-
-    u32 alignedSize = (size + 0x1f) & ~0x1f;
-    u32 curOffset = pParent->getCurOffset();
-    u32 tailOffset = pParent->getTailOffset();
-    if (curOffset + alignedSize > tailOffset) {
-        return false;
-    }
-
-    pParent->insertChild(this, pParent->getTailHeap(), pParent->mBase + tailOffset - alignedSize, alignedSize, true);
-    return true;
-}
-
-bool JASHeap::free() {
-    JASMutexLock lock(&mMutex);
-    if (!isAllocated()) {
-        return false;
-    }
-
-    JSUTreeIterator< JASHeap > next(nullptr);
-    for (JSUTreeIterator< JASHeap > it(mTree.getFirstChild()); it != mTree.getEndChild(); it = next) {
-        next = it;
-        ++next;
-        it->free();
-    }
-
-    JSUTree< JASHeap >* pParentTree = mTree.getParent();
-    if (pParentTree != nullptr) {
-        JASHeap* pParent = pParentTree->getObject();
-        if (pParent->mHeap == this) {
-            JSUTreeIterator< JASHeap > prev(mTree.getPrevChild());
-            if (prev != mTree.getEndChild()) {
-                pParent->mHeap = &*prev;
-            } else {
-                pParent->mHeap = nullptr;
-            }
-        }
-
-        pParentTree->removeChild(&mTree);
-    }
-
-    mBase = nullptr;
-    mHeap = nullptr;
-    mSize = 0;
-    if (mDisposer != nullptr) {
-        mDisposer->onDispose();
-    }
-
-    return true;
-}
-
-void JASHeap::insertChild(JASHeap* pHeap, JASHeap* pNext, void* pBase, u32 size, bool fromTail) {
-    JASMutexLock lock(&mMutex);
-    if (!fromTail) {
-        JSUTreeIterator< JASHeap > it;
-        if (pNext == nullptr) {
-            it = mTree.getLastChild();
-        } else {
-            it = pNext->mTree.getPrevChild();
-        }
-
-        JASHeap* pPrev = it != mTree.getEndChild() ? it.getObject() : nullptr;
-        if (mHeap == pPrev) {
-            mHeap = pHeap;
-        }
-    }
-
-    pHeap->mBase = (u8*)pBase;
-    pHeap->mSize = size;
-    pHeap->mHeap = nullptr;
-    mTree.insertChild(&pNext->mTree, &pHeap->mTree);
-}
-
-JASHeap* JASHeap::getTailHeap() {
-    JASMutexLock lock(&mMutex);
-    JSUTreeIterator< JASHeap > it;
-    if (mHeap == nullptr) {
-        it = mTree.getFirstChild();
-    } else {
-        it = mHeap->mTree.getNextChild();
-    }
-
-    if (it == mTree.getEndChild()) {
-        return nullptr;
-    }
-
-    return it.getObject();
-}
-
-u32 JASHeap::getTailOffset() {
-    u32 offset = 0;
-    JASMutexLock lock(&mMutex);
-    JASHeap* pHeap = getTailHeap();
-    if (pHeap == nullptr) {
-        offset = mSize;
-    } else {
-        offset = pHeap->mBase - mBase;
-    }
-
-    return offset;
-}
-
-u32 JASHeap::getCurOffset() {
-    u32 offset = 0;
-    JASMutexLock lock(&mMutex);
-    if (mHeap == nullptr) {
-        offset = 0;
-    } else {
-        offset = mHeap->mBase + mHeap->mSize - mBase;
-    }
-
-    return offset;
-}
 
 JASGenericMemPool::JASGenericMemPool() : _0(), mFreeMemCount(), mTotalMemCount(), mUsedMemCount() {
 }
@@ -208,12 +12,12 @@ JASGenericMemPool::~JASGenericMemPool() {
     void* pChunk = _0;
     while (pChunk != nullptr) {
         void* pNextChunk = *(void**)pChunk;
-        delete[] pChunk;
+        delete[] static_cast< u8* >(pChunk);
         pChunk = pNextChunk;
     }
 }
 
-JKRSolidHeap* JASDram;
+NebulaArena* JASDram;
 
 void JASGenericMemPool::newMemPool(u32 size, int n) {
     void* pChunk;
@@ -228,8 +32,17 @@ void JASGenericMemPool::newMemPool(u32 size, int n) {
 }
 
 void* JASGenericMemPool::alloc(u32 size) {
+    // Empty: as many again, from memory that lasts as long as the sound system.
     if (_0 == nullptr) {
-        return nullptr;
+        const int num = mTotalMemCount != 0 ? mTotalMemCount : 16;
+        for (int i = 0; i < num; i++) {
+            void* pChunk = new (NebulaArena::sRootHeap, 0) u8[size];
+            *(void**)pChunk = _0;
+            _0 = pChunk;
+        }
+
+        mFreeMemCount += num;
+        mTotalMemCount += num;
     }
 
     void* pChunk = _0;
@@ -253,32 +66,20 @@ void JASGenericMemPool::free(void* pMemory, u32 size) {
     mFreeMemCount++;
 }
 
-JKRHeap* JASKernel::sSystemHeap;
+NebulaArena* JASKernel::sSystemHeap;
 
 JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::sCommandHeap;
 
-void JASKernel::setupRootHeap(JKRSolidHeap* pHeap, u32 size) {
-    sSystemHeap = JKRExpHeap::create(size, pHeap, false);
+void JASKernel::setupRootHeap(NebulaArena* pHeap, u32 size) {
+    sSystemHeap = NebulaArena::create(pHeap);
     sCommandHeap = new (pHeap, 0) JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >();
     JASDram = pHeap;
 }
 
-JKRHeap* JASKernel::getSystemHeap() {
+NebulaArena* JASKernel::getSystemHeap() {
     return JASKernel::sSystemHeap;
 }
 
 JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getCommandHeap() {
     return JASKernel::sCommandHeap;
-}
-
-JASHeap JASKernel::audioAramHeap;
-
-// The sound memory (wave archives and stream buffers): `size` bytes of the auxiliary memory past its reserved start,
-// handed out as pointers the mixer reads.
-void JASKernel::setupAramHeap(u32, u32 size) {
-    audioAramHeap.initRootHeap(NebulaAuxMemory::base() + NebulaAuxMemory::cReserved, size);
-}
-
-JASHeap* JASKernel::getAramHeap() {
-    return &audioAramHeap;
 }

@@ -8,7 +8,7 @@
 namespace {
     inline void addRailToGraph(RailGraph* pGraph, JMapInfoIter currentRail, const JMapInfo* pPoints) {
         s32 pointCount = pPoints->getNumEntries();
-        s32 firstNode;
+        s32 firstNode = 0;
         s32 previousNode = -1;
         RailGraphEdge edge;
 
@@ -58,10 +58,6 @@ namespace MR {
         return pGraph;
     }
 
-    void RailGraphUtil_FORCE_EMIT(const RailGraphIter& rIter) {
-        RailGraphIter copy(rIter);
-    }
-
     RailGraphIter* createRailGraphIter(const RailGraph* pGraph) {
         return new RailGraphIter(pGraph->getIterator());
     }
@@ -78,10 +74,6 @@ namespace MR {
         s32 next = pRailGraphIter->mSelectedEdge;
         pRailGraphIter->moveNodeNext();
         pRailGraphIter->selectEdge(next);
-    }
-
-    void calcNextEdgeVector(const RailGraphIter* pIter, TVec3f* pEdge) {
-        pEdge->set(pIter->getNextNode()->_0 - pIter->getCurrentNode()->_0);
     }
 
     bool isSelectedEdge(const RailGraphIter* pRailGraphIter) {

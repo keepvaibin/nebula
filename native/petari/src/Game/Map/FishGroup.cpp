@@ -1,7 +1,7 @@
 #include "Game/Map/FishGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -9,12 +9,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-
-void FishGroup_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-}
 
 namespace {
     static const s32 sDefaultFishNum = 10;
@@ -169,7 +163,7 @@ void Fish::control() {
         MR::setBckRate(this, mVelocity.length() * ::sAnimFrameRate);
     }
 
-    if (mCanEscape && MR::isPadSwing(WPAD_CHAN0)) {
+    if (mCanEscape && MR::isSpin(PLAYER_1)) {
         if (!isNerve(GET_NERVE(Fish, FishNrvEscape)) && MR::calcDistanceToPlayer(this) < ::sDistanceToSpinEscape) {
             mEscapePos = MR::getPlayerPos();
             setNerve(GET_NERVE(Fish, FishNrvEscape));

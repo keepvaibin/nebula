@@ -34,17 +34,13 @@ namespace nw4r {
             ORIGINTYPE_MAX
         };
 
-#if defined(__MWERKS__) || defined(TARGET_PC)
         typedef ut::LinkList< AnimTransform, offsetof(AnimTransform, mLink) > AnimTransformList;
-#else
-        typedef ut::LinkList< AnimTransform, 0 > AnimTransformList;
-#endif
 
         class Layout {
         public:
             Layout();
 
-            // From the game's current heap (the console took an allocator the game set; it always set new/delete).
+            // From the game's current heap.
             static void* AllocMemory(u32 size) { return new u8[size]; }
 
             static void FreeMemory(void* mem) { delete[] static_cast< u8* >(mem); }
@@ -61,7 +57,7 @@ namespace nw4r {
             virtual void CalculateMtx(const DrawInfo&);
             virtual void Draw(const DrawInfo&);
             virtual void Animate(u32);
-            virtual void SetTagProcessor(ut::TagProcessorBase< wchar_t >*);
+            virtual void SetTagProcessor(ut::TagProcessorBase< char16_t >*);
 
             const ut::Rect GetLayoutRect() const;
 

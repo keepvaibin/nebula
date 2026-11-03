@@ -2,7 +2,6 @@
 
 #include "Game/Util/MessageUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class JMapInfoIter;
 class LiveActor;
@@ -71,7 +70,7 @@ namespace MR {
     void registerAnimeFunc(TalkMessageCtrl*, const TalkMessageFuncBase&);
     void registerKillFunc(TalkMessageCtrl*, const TalkMessageFuncBase&);
     void setMessageArg(TalkMessageCtrl*, int);
-    void setMessageArg(TalkMessageCtrl*, const wchar_t*);
+    void setMessageArg(TalkMessageCtrl*, const char16_t*);
     TalkMessageCtrl* createTalkCtrl(LiveActor*, const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
     TalkMessageCtrl* createTalkCtrlDirect(LiveActor*, const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);
     TalkMessageCtrl* createTalkCtrlDirectOnRootNodeAutomatic(LiveActor*, const JMapInfoIter&, const char*, const TVec3f&, MtxPtr);

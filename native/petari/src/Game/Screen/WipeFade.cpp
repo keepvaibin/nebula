@@ -36,10 +36,10 @@ void WipeFade::draw() const {
         alpha = 1.0f - alpha;
     }
 
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
+    J3DPass::writeColor(true);
+    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
 
-    GXColor fillColor;
+    NebulaColor8 fillColor;
     fillColor.r = mFillColor.r;
     fillColor.g = mFillColor.g;
     fillColor.b = mFillColor.b;

@@ -1,4 +1,5 @@
 #include "Game/AreaObj/WarpCube.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -83,9 +84,10 @@ void WarpCube::movement() {
 }
 
 void WarpCube::draw() const {
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     TVec3f cubeRotate;
     TVec3f up(0.0f, 1.0f, 0.0f);
@@ -122,12 +124,13 @@ void WarpCube::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0WithInit(rIter, &arg0);
 
     char eventName[0x100];
-    sprintf(eventName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupID, arg0 + 65);
+    nebula_sprintf(eventName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupID, arg0 + 65);
 
     MR::declareEventCamera(mCameraInfo, eventName);
 
-    mEventName = new char[strlen(&eventName[0]) + 1];
-    strcpy(mEventName, &eventName[0]);
+    const size_t eventNameSize = strlen(eventName) + 1;
+    mEventName = new char[eventNameSize];
+    memcpy(mEventName, eventName, eventNameSize);
 
     MR::connectToScene(this, MR::MovementType_AreaObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_WarpPodPath);
     mInvalidateTimer = 0;

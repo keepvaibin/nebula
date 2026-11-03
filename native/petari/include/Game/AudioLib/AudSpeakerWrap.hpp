@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace AudSpeakerWrap {
     const char* getResName();

@@ -31,7 +31,7 @@ public:
     void reactDPD();
     void reactStringForce();
     bool isOverStringLength(TVec3f*, f32*);
-    TVec3f calcToRootVector() NO_INLINE;
+    TVec3f calcToRootVector();
     void calcPosture(f32, bool);
     void tearDownDpdGripped();
     void extendString();
@@ -55,18 +55,18 @@ public:
     void exeDpdGripped();
     void endDpdGripped();
 
-    /* 0x8C */ SpinHitController* mSpinHitController;
-    /* 0x90 */ AnimScaleController* mScaleController;
-    /* 0x94 */ AnimStampController* mStampController;
-    /* 0x98 */ StringSpiderString* mString;
-    /* 0x9C */ FixedPosition* mFixedPos;
-    /* 0xA0 */ TQuat4f _A0;
-    /* 0xB0 */ f32 _B0;
-    /* 0xB4 */ f32 _B4;
-    /* 0xB8 */ bool _B8;
-    /* 0xBC */ s32 _BC;
-    /* 0xC0 */ TVec3f* _C0;
-    /* 0xC4 */ TVec3f* _C4;
+    SpinHitController* mSpinHitController;
+    AnimScaleController* mScaleController;
+    AnimStampController* mStampController;
+    StringSpiderString* mString;
+    FixedPosition* mFixedPos;
+    TQuat4f _A0;
+    f32 _B0;
+    f32 _B4;
+    bool _B8;
+    s32 _BC;
+    TVec3f* _C0;
+    TVec3f* _C4;
 };
 
 class StringSpiderString : public LiveActor {
@@ -75,6 +75,6 @@ public:
 
     virtual void calcAndSetBaseMtx();
 
-    /* 0x8C */ TQuat4f _8C;
-    /* 0x9C */ TVec3f _9C;
+    TQuat4f _8C;
+    TVec3f _9C;
 };

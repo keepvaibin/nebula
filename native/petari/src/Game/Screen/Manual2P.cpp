@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BackButton.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -26,7 +26,7 @@ namespace {
         char messageID[0x80];
 
         do {
-            snprintf(messageID, sizeof(messageID), "%s%03d", pName, count + 1);
+            nebula_snprintf(messageID, sizeof(messageID), "%s%03d", pName, count + 1);
             count++;
         } while (MR::isExistGameMessage(messageID));
 
@@ -53,12 +53,10 @@ void Manual2P::init(const JMapInfoIter& rIter) {
 
     mBackButton = new BackButton("\203\175\203\152\203\205\203\101\203\213\202\314\226\337\202\351\203\173\203\136\203\223" /* マニュアルの戻るボタン */, true);
     mBackButton->initWithoutIter();
-#ifdef TARGET_PC
     // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
     mLeftPaneCtrl->mIsNebulaFocusable = false;
     mRightPaneCtrl->mIsNebulaFocusable = false;
     mBackButton->mPaneCtrl->mIsNebulaFocusable = false;
-#endif
 
     initNerve(GET_NERVE_ANON(Manual2PNrvAppear));
     MR::connectToSceneLayout(this);
@@ -111,7 +109,7 @@ void Manual2P::exeWait() {
             return;
         }
 
-        if (MR::testSubPadStickTriggerLeft(WPAD_CHAN0) || MR::testCorePadTriggerLeft(WPAD_CHAN0)) {
+        if (MR::isMoveStickPressedLeft(PLAYER_1) || MR::isPressedLeft(PLAYER_1)) {
             mLeftPaneCtrl->_24 = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");
@@ -129,7 +127,7 @@ void Manual2P::exeWait() {
             return;
         }
 
-        if (MR::testSubPadStickTriggerRight(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0)) {
+        if (MR::isMoveStickPressedRight(PLAYER_1) || MR::isPressedRight(PLAYER_1)) {
             mRightPaneCtrl->_24 = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");
@@ -237,19 +235,19 @@ void Manual2P::reflectPageIndex() {
     MR::setAnimFrameAndStop(this, mPageIndex, 1);
 
     char messageID[0x80];
-    snprintf(messageID, sizeof(messageID), "2PGuidance%03d", mPageIndex + 1);
+    nebula_snprintf(messageID, sizeof(messageID), "2PGuidance%03d", mPageIndex + 1);
 
     if (MR::isExistGameMessage(messageID)) {
         MR::setTextBoxGameMessageRecursive(this, "Text", messageID);
     }
 
-    snprintf(messageID, sizeof(messageID), "2PGuidanceTitle%03d", mPageIndex + 1);
+    nebula_snprintf(messageID, sizeof(messageID), "2PGuidanceTitle%03d", mPageIndex + 1);
 
     if (MR::isExistGameMessage(messageID)) {
         MR::setTextBoxGameMessageRecursive(this, "Title", messageID);
     }
 
-    MR::setTextBoxFormatRecursive(this, "PageNumber", L"%d/%d", mPageIndex + 1, mPageNum);
+    MR::setTextBoxFormatRecursive(this, "PageNumber", u"%d/%d", mPageIndex + 1, mPageNum);
 
     if (mPageIndex == 0) {
         ButtonPaneController* pPaneCtrl = mLeftPaneCtrl;

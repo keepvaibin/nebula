@@ -12,9 +12,9 @@ public:
     public:
         BlurPoint();
 
-        /* 0x00 */ TVec2f mPos;
-        /* 0x08 */ TVec2f mDir;
-        /* 0x10 */ bool mIsHidden;
+        TVec2f mPos;
+        TVec2f mDir;
+        bool mIsHidden;
     };
 
     StarPointerBlur(JUTTexture* pTexture);
@@ -29,29 +29,29 @@ public:
     void hideAll();
     void updatePoint(const TVec2f&, bool, TVec2f*);
     u16 findDrawPointRange(u16*, u16*) const;
-    void draw0(GXColor) const;
+    void draw0(NebulaColor8) const;
     void draw1() const;
     void draw2() const;
     void initDraw() const;
 
-    void setPortAndColor(s32 padChannel, const GXColor* pMainColor, const GXColor* pSubColor) NO_INLINE {
+    void setPortAndColor(s32 padChannel, const NebulaColor8* pMainColor, const NebulaColor8* pSubColor) {
         mPadChannel = padChannel;
         mMainColor = pMainColor;
         mSubColor = pSubColor;
     }
 
-    /* 0x0C */ JUTTexture* mTexture;
-    /* 0x10 */ s32 mPadChannel;
-    /* 0x14 */ const GXColor* mMainColor;
-    /* 0x18 */ const GXColor* mSubColor;
-    /* 0x1C */ BlurPoint* mBlurPoints;
-    /* 0x20 */ f32* mBlurThicks;
-    /* 0x24 */ f32* mBlurTexCoords;
-    /* 0x28 */ s32 mNumHiddenPoints;
-    /* 0x2C */ bool _2C;
-    /* 0x2C */ bool _2D;
-    /* 0x30 */ f32 _30;
-    /* 0x34 */ f32 _34;
-    /* 0x38 */ f32 _38;
-    /* 0x3C */ f32 _3C;
+    JUTTexture* mTexture;
+    s32 mPadChannel;
+    const NebulaColor8* mMainColor;
+    const NebulaColor8* mSubColor;
+    BlurPoint* mBlurPoints;
+    f32* mBlurThicks;
+    f32* mBlurTexCoords;
+    s32 mNumHiddenPoints;
+    bool _2C;
+    bool _2D;
+    f32 _30;
+    f32 _34;
+    f32 _38;
+    f32 _3C;
 };

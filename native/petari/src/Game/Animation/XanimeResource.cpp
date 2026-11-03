@@ -3,11 +3,8 @@
 #include "Game/System/ResourceInfo.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#ifdef TARGET_PC
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#endif
 #include <cstring>
-#include <revolution/types.h>
 
 static bool unknownByte;
 XanimeResourceTable::XanimeResourceTable(ResourceHolder* pArg) {
@@ -195,18 +192,11 @@ u32 XanimeResourceTable::initGroupInfo(ResourceHolder* pResourceHolder, XanimeGr
             entry->mLoop = 0.0f;
             entry->mAttribute = 0;
         } else {
-#ifdef TARGET_PC
-            // A J3DAnmBase (ResourceHolder loads every .bck): its fields, which the console read at byte offsets 4
-            // and 6, past a 4-byte vtable pointer.
+            // A J3DAnmBase (ResourceHolder loads every .bck): its fields, read through the class.
             const J3DAnmBase* pAnm = static_cast< const J3DAnmBase* >(entry->_20[0]);
             entry->mAttribute = pAnm->getAttribute();
             entry->mLoop = 0.0f;
             entry->mEnd = static_cast< f32 >(pAnm->getFrameMax());
-#else
-            entry->mAttribute = static_cast< u8* >(entry->_20[0])[4];
-            entry->mLoop = 0.0f;
-            entry->mEnd = static_cast< f32 >(reinterpret_cast< const s16* >(entry->_20[0])[3]);
-#endif
         }
 
         XanimeBckTable* ofsTables[1];

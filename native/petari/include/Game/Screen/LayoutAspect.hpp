@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
-#include <revolution/types.h>
 
 class LayoutManager;
 
@@ -14,4 +12,3 @@ namespace LayoutAspect {
     // After the matrices and their copies: moves and scales panes by the canvas, then copies the moved matrices again.
     void fit(LayoutManager* pManager);
 };  // namespace LayoutAspect
-#endif

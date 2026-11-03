@@ -1,4 +1,5 @@
 #include "Game/Player/Mario.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -46,54 +47,6 @@
 #include "Game/Player/MarioWarp.hpp"
 #include "Game/Util.hpp"
 
-void Mario_FORCE_MATCH_SDATA2() {
-    (void)0.00100000005f;
-    (void)0.800000012f;
-    (void)-0.514999986f;
-    (void)200.0f;
-    (void)28000.0f;
-    (void)2499.0f;
-    (void)0.104719758f;
-    (void)0.707000017f;
-    (void)300.0f;
-    (void)1.42857146f;
-    (void)0.300000012f;
-    (void)0.100000001f;
-    (void)150.0f;
-    (void)40.0f;
-    (void)160.0f;
-    (void)80.0f;
-    (void)90.0f;
-    (void)5.0f;
-    (void)1.49599659f;
-    (void)170.0f;
-    (void)0.785398185f;
-    (void)0.99000001f;
-    (void)30.0f;
-    (void)15.0f;
-    (void)45.0f;
-    (void)60.0f;
-    (void)290.0f;
-    (void)260.0f;
-    (void)1.04719758f;
-    (void)0.200000003f;
-    (void)0.0245436933f;
-    (void)0.0174532924f;
-    (void)0.00999999978f;
-    (void)32.0f;
-    (void)0.125f;
-    (void)100.0f;
-    (void)35.0f;
-    (void)50.0f;
-    (void)0.00390625f;
-    (void)120.0f;
-    (void)0.0199999996f;
-    (void)1.5f;
-    (void)2607.59448f;
-    (void)-2607.59448f;
-    (void)-150.0f;
-}
-
 Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     initMember();
     mVelocity.zero();
@@ -111,7 +64,6 @@ Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     _290 = mSideVec;
     mAirGravityVec.set(0.0f, -1.0f, 0.0f);
     _1E4.zero();
-    bool nearZero = MR::isNearZero(mAirGravityVec);
     mHeadVec = -mAirGravityVec;
     _1FC = mHeadVec;
     _938 = mHeadVec;
@@ -446,12 +398,11 @@ void Mario::checkKeyLock() {
         mMovementStates._22 = false;
     }
 
-    if (MR::testSubPadButtonC(WPAD_CHAN0)) {
+    if (MR::isHeldCamera(PLAYER_1)) {
         mDrawStates._7 = true;
     }
 }
 
-// Regswap
 void Mario::updateTimers() {
     if (mMovementStates._1) {
         _3CE++;
@@ -1061,7 +1012,7 @@ void Mario::fixFrontVecByGravity() {
     }
 
     TVec3f front = _344.cross(up);
-    if (MR::normalizeOrZero(&front) == nullptr) {
+    if (MR::normalizeOrZero(&front) == false) {
         setFrontVec(front);
         _22C = mFrontVec;
         f32 _328mag = _328.length();
@@ -1219,7 +1170,7 @@ void Mario::setFrontVecKeepSide(const TVec3f& rFront) {
     }
 
     headVec.cross(mFrontVec, mSideVec);
-    if (MR::normalizeOrZero(&headVec) != nullptr) {
+    if (MR::normalizeOrZero(&headVec) != false) {
         const TVec3f* gravity = getGravityVec();
         TVec3f up = -(*gravity);
         mHeadVec = up;
@@ -1260,11 +1211,12 @@ void Mario::forceSetHeadVecKeepSide(const TVec3f& rVec) {
     _750 = 0;
 }
 
-// float regswap + bad stack ordering
 void Mario::draw() const {
     if (mDrawStates._1) {
         TDDraw::cameraInit3D();
-        TDDraw::setup(0, 1, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 1, 0);
+        NativeShader::send(material);
         TDDraw::drawCylinder(mPosition, mShadowPos - mActor->_2A0, 32.0f, 0xffff0010, 0xff000004, 8);
         TVec3f diff2A0_31C(mActor->_2A0 - mShadowPos);
         f32 diffMag = diff2A0_31C.length();
@@ -2274,10 +2226,6 @@ void Mario::touchWater() {
     if (mActor->isActionOk("\220\205\211\360\217\234" /* 水解除 */) && mMorphResetTimer == 0) {
         mMorphResetTimer = 10;
     }
-}
-
-XjointTransform* (XanimeCore::*Mario_FORCE_MATCH_JOINT_TRANSFORM())(u32) {
-    return &XanimeCore::getJointTransform;
 }
 
 void MarioState::draw3D() const {

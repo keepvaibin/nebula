@@ -14,7 +14,7 @@
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataConst.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -39,9 +39,6 @@ namespace {
 
 GalaxyMap::GalaxyMap()
     : LayoutActor("\203\115\203\203\203\211\203\116\203\126\201\133\201\105\223\126\225\266\221\344\203\175\203\142\203\166" /* ギャラクシー・天文台マップ */, true), mMarioIcon1(), mMarioIcon2(), mGalaxyPlain(), mGalaxyDetail(), mPointingIcon(), mGalaxyName(),
-#if (VERSION == RMGK01)
-      mIconAButton(),
-#endif
       _70(), _71(true) {
 }
 
@@ -78,12 +75,6 @@ void GalaxyMap::init(const JMapInfoIter& rIter) {
     mTitle = new GalaxyMapTitle();
     mTitle->initWithoutIter();
 
-#if (VERSION == RMGK01)
-    mIconAButton = new IconAButton(false, false);
-    mIconAButton->initWithoutIter();
-    mIconAButton->setFollowActorPane(this, "AButtonPosition");
-    mIconAButton->kill();
-#endif
 
     kill();
 }
@@ -91,10 +82,18 @@ void GalaxyMap::init(const JMapInfoIter& rIter) {
 void GalaxyMap::appear() {
     LayoutActor::appear();
 
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&LayoutActor::appear));
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&LayoutActor::appear));
-    std::for_each(mCometIcon.begin(), mCometIcon.end(), std::mem_func(&LayoutActor::appear));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&LayoutActor::appear));
+    for (auto& item : mDomeIcon) {
+        item->appear();
+    }
+    for (auto& item : mIcon) {
+        item->appear();
+    }
+    for (auto& item : mCometIcon) {
+        item->appear();
+    }
+    for (auto& item : mTicoIcon) {
+        item->appear();
+    }
 
     mMarioIcon1->showBlink();
 
@@ -108,18 +107,23 @@ void GalaxyMap::appear() {
 void GalaxyMap::kill() {
     LayoutActor::kill();
 
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&LayoutActor::kill));
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&LayoutActor::kill));
-    std::for_each(mCometIcon.begin(), mCometIcon.end(), std::mem_func(&LayoutActor::kill));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&LayoutActor::kill));
+    for (auto& item : mDomeIcon) {
+        item->kill();
+    }
+    for (auto& item : mIcon) {
+        item->kill();
+    }
+    for (auto& item : mCometIcon) {
+        item->kill();
+    }
+    for (auto& item : mTicoIcon) {
+        item->kill();
+    }
 
     mGalaxyPlain->kill();
     mGalaxyDetail->kill();
     mMarioIcon1->kill();
     mTitle->kill();
-#if (VERSION == RMGK01)
-    mIconAButton->kill();
-#endif
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->kill();
@@ -130,10 +134,18 @@ void GalaxyMap::movement() {
     LayoutActor::movement();
 
     if (!isNerve(GET_NERVE_ANON(GalaxyMapShowDetail))) {
-        std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&LayoutActor::movement));
-        std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&LayoutActor::movement));
-        std::for_each(mCometIcon.begin(), mCometIcon.end(), std::mem_func(&LayoutActor::movement));
-        std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&LayoutActor::movement));
+        for (auto& item : mDomeIcon) {
+            item->movement();
+        }
+        for (auto& item : mIcon) {
+            item->movement();
+        }
+        for (auto& item : mCometIcon) {
+            item->movement();
+        }
+        for (auto& item : mTicoIcon) {
+            item->movement();
+        }
 
         mMarioIcon1->movement();
 
@@ -145,26 +157,28 @@ void GalaxyMap::movement() {
     mGalaxyDetail->movement();
     mGalaxyPlain->movement();
     mTitle->movement();
-#if (VERSION == RMGK01)
-    mIconAButton->movement();
-#endif
 }
 
 void GalaxyMap::calcAnim() {
     LayoutActor::calcAnim();
 
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&LayoutActor::calcAnim));
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&LayoutActor::calcAnim));
-    std::for_each(mCometIcon.begin(), mCometIcon.end(), std::mem_func(&LayoutActor::calcAnim));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&LayoutActor::calcAnim));
+    for (auto& item : mDomeIcon) {
+        item->calcAnim();
+    }
+    for (auto& item : mIcon) {
+        item->calcAnim();
+    }
+    for (auto& item : mCometIcon) {
+        item->calcAnim();
+    }
+    for (auto& item : mTicoIcon) {
+        item->calcAnim();
+    }
 
     mMarioIcon1->calcAnim();
     mGalaxyDetail->calcAnim();
     mGalaxyPlain->calcAnim();
     mTitle->calcAnim();
-#if (VERSION == RMGK01)
-    mIconAButton->calcAnim();
-#endif
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->calcAnim();
@@ -178,23 +192,26 @@ void GalaxyMap::draw() const {
 
     LayoutActor::draw();
 
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&GalaxyMapDomeIcon::draw));
+    for (auto& item : mDomeIcon) {
+        item->draw();
+    }
     mMarioIcon1->draw();
     drawGalaxyIconWithOrder(1);
     mTitle->draw();
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&GalaxyMapTicoIcon::draw));
+    for (auto& item : mTicoIcon) {
+        item->draw();
+    }
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->draw();
     }
 
     drawGalaxyIconWithOrder(3);
-    std::for_each(mCometIcon.begin(), mCometIcon.end(), std::mem_func(&GalaxyMapCometIcon::draw));
+    for (auto& item : mCometIcon) {
+        item->draw();
+    }
     drawGalaxyIconWithOrder(2);
 
-#if (VERSION == RMGK01)
-    mIconAButton->draw();
-#endif
 }
 
 void GalaxyMap::movementForCapture() {
@@ -206,70 +223,110 @@ void GalaxyMap::movementForCapture() {
         return;
     }
 
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::movement));
-    std::for_each(mCometIcon.begin(), mCometIcon.end(), std::mem_func(&GalaxyMapCometIcon::movement));
+    for (auto& item : mIcon) {
+        item->movement();
+    }
+    for (auto& item : mCometIcon) {
+        item->movement();
+    }
 }
 
 void GalaxyMap::calcAnimForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
     MR::calcAnimLayoutWithDrawInfo(this, rDrawInfo);
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(),
-                  std::binder2nd< std::mem_fun1_t< void, GalaxyMapDomeIcon, const nw4r::lyt::DrawInfo& >, const nw4r::lyt::DrawInfo& >(
-                      std::mem_func(&GalaxyMapDomeIcon::calcAnimForCapture), rDrawInfo));
-    std::for_each(mIcon.begin(), mIcon.end(),
-                  std::binder2nd< std::mem_fun1_t< void, GalaxyMapIcon, const nw4r::lyt::DrawInfo& >, const nw4r::lyt::DrawInfo& >(
-                      std::mem_func(&GalaxyMapIcon::calcAnimForCapture), rDrawInfo));
-    std::for_each(mCometIcon.begin(), mCometIcon.end(),
-                  std::binder2nd< std::mem_fun1_t< void, GalaxyMapCometIcon, const nw4r::lyt::DrawInfo& >, const nw4r::lyt::DrawInfo& >(
-                      std::mem_func(&GalaxyMapCometIcon::calcAnimForCapture), rDrawInfo));
+    for (auto& item : mDomeIcon) {
+        item->calcAnimForCapture(rDrawInfo);
+    }
+    for (auto& item : mIcon) {
+        item->calcAnimForCapture(rDrawInfo);
+    }
+    for (auto& item : mCometIcon) {
+        item->calcAnimForCapture(rDrawInfo);
+    }
 }
 
 void GalaxyMap::drawForCapture(const nw4r::lyt::DrawInfo& rDrawInfo) {
     MR::drawLayoutWithDrawInfoWithoutProjectionSetup(this, rDrawInfo);
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::bind2nd(std::ptr_fun(MR::drawLayoutWithDrawInfoWithoutProjectionSetup), rDrawInfo));
-    std::for_each(mIcon.begin(), mIcon.end(), std::bind2nd(std::ptr_fun(MR::drawLayoutWithDrawInfoWithoutProjectionSetup), rDrawInfo));
-    std::for_each(mCometIcon.begin(), mCometIcon.end(), std::bind2nd(std::ptr_fun(MR::drawLayoutWithDrawInfoWithoutProjectionSetup), rDrawInfo));
+    for (auto& item : mDomeIcon) {
+        MR::drawLayoutWithDrawInfoWithoutProjectionSetup(item, rDrawInfo);
+    }
+    for (auto& item : mIcon) {
+        MR::drawLayoutWithDrawInfoWithoutProjectionSetup(item, rDrawInfo);
+    }
+    for (auto& item : mCometIcon) {
+        MR::drawLayoutWithDrawInfoWithoutProjectionSetup(item, rDrawInfo);
+    }
 }
 
 void GalaxyMap::setModeNormal() {
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::setModeNormal));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&GalaxyMapTicoIcon::setModeNormal));
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&GalaxyMapDomeIcon::setModeNormal));
+    for (auto& item : mIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mTicoIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mDomeIcon) {
+        item->setModeNormal();
+    }
     mTitle->setModeNormal();
 
     _71 = true;
 }
 
 void GalaxyMap::setModeNewGalaxyDiscover() {
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::setModeNewGalaxyDiscover));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&GalaxyMapTicoIcon::setModeNormal));
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&GalaxyMapDomeIcon::setModeNormal));
+    for (auto& item : mIcon) {
+        item->setModeNewGalaxyDiscover();
+    }
+    for (auto& item : mTicoIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mDomeIcon) {
+        item->setModeNormal();
+    }
     mTitle->setModeHideInformation();
 
     _71 = false;
 }
 
 void GalaxyMap::setModeNewTicoGalaxyDiscover() {
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::setModeNormal));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&GalaxyMapTicoIcon::setModeDiscover));
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&GalaxyMapDomeIcon::setModeNormal));
+    for (auto& item : mIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mTicoIcon) {
+        item->setModeDiscover();
+    }
+    for (auto& item : mDomeIcon) {
+        item->setModeNormal();
+    }
     mTitle->setModeHideInformation();
 
     _71 = false;
 }
 
 void GalaxyMap::setModeNewDomeDiscover() {
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::setModeNormal));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&GalaxyMapTicoIcon::setModeNormal));
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&GalaxyMapDomeIcon::setModeNewDomeDiscover));
+    for (auto& item : mIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mTicoIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mDomeIcon) {
+        item->setModeNewDomeDiscover();
+    }
     mTitle->setModeHideInformation();
 
     _71 = false;
 }
 
 void GalaxyMap::setModeTicoCometPray() {
-    std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::setModeNormal));
-    std::for_each(mTicoIcon.begin(), mTicoIcon.end(), std::mem_func(&GalaxyMapTicoIcon::setModeNormal));
-    std::for_each(mDomeIcon.begin(), mDomeIcon.end(), std::mem_func(&GalaxyMapDomeIcon::setModeNormal));
+    for (auto& item : mIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mTicoIcon) {
+        item->setModeNormal();
+    }
+    for (auto& item : mDomeIcon) {
+        item->setModeNormal();
+    }
     mTitle->setModeHideInformation();
 
     _71 = false;
@@ -282,9 +339,6 @@ void GalaxyMap::setModeCapture() {
 
     mTitle->kill();
     mMarioIcon1->kill();
-#if (VERSION == RMGK01)
-    mIconAButton->kill();
-#endif
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->kill();
@@ -312,11 +366,6 @@ bool GalaxyMap::isShowDetail() const {
     return !MR::isDead(this) && isNerve(GET_NERVE_ANON(GalaxyMapShowDetail));
 }
 
-#if (VERSION == RMGK01)
-void GalaxyMap::dispIconAButton() {
-    mIconAButton->openWithoutMessage();
-}
-#endif
 
 void GalaxyMap::changeToGalaxyMap() {
     appear();
@@ -402,11 +451,15 @@ void GalaxyMap::exeFadeinAstroMap() {
 void GalaxyMap::exeShowDetail() {
     if (MR::isFirstStep(this)) {
         mGalaxyDetail->startDisplay(mGalaxyName, _70);
-        std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::deactivatePointing));
+        for (auto& item : mIcon) {
+            item->deactivatePointing();
+        }
     }
 
     if (MR::isDead(mGalaxyDetail)) {
-        std::for_each(mIcon.begin(), mIcon.end(), std::mem_func(&GalaxyMapIcon::activatePointing));
+        for (auto& item : mIcon) {
+            item->activatePointing();
+        }
         setNerve(GET_NERVE_ANON(GalaxyMapIdle));
     }
 }
@@ -421,7 +474,7 @@ namespace {
 
 void GalaxyMap::initPaneCtrlPointing() {
     JMapInfo galaxyInfo;
-    galaxyInfo.attach(NebulaDiscTables::getGalaxyInfoTable());
+    galaxyInfo.attach(NebulaDataTables::getGalaxyInfoTable());
     ::initIconArray(mIcon, new GalaxyMapIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     ::initIconArray(mCometIcon, new GalaxyMapCometIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     initPointingTarget(galaxyInfo.getNumEntries());
@@ -514,7 +567,7 @@ void GalaxyMap::initTicoIcon() {
     mTicoIcon.init(exclamationGalaxyNum);
 
     for (s32 i = 0; i < exclamationGalaxyNum; i++) {
-        snprintf(exclamationGalaxyName, sizeof(exclamationGalaxyName), "Tico%1d", i + 1);
+        nebula_snprintf(exclamationGalaxyName, sizeof(exclamationGalaxyName), "Tico%1d", i + 1);
 
         ticoIcon = new GalaxyMapTicoIcon(i, GameEventFlagTable::getExclamationGalaxyNameFromIndex(i), this, exclamationGalaxyName);
         ticoIcon->initWithoutIter();
@@ -556,7 +609,7 @@ bool GalaxyMap::tryFocusIn() {
         return true;
     }
 
-    if (pointingGalaxyIcon != nullptr && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (pointingGalaxyIcon != nullptr && MR::isPressedJump(PLAYER_1)) {
         setNerve(GET_NERVE_ANON(GalaxyMapShowDetail));
 
         return true;

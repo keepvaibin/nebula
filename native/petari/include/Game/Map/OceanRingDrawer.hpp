@@ -3,9 +3,8 @@
 #include "Game/Util/NativeMesh.hpp"
 #include <JSystem/JGeometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class OceanRing;
 
@@ -13,23 +12,23 @@ class OceanRingPartDrawer {
 public:
     OceanRingPartDrawer(const OceanRing*, int, int, bool, f32*, f32*, f32*);
 
-    void initDisplayList(f32*, f32*, f32*);
+    void initMesh(f32*, f32*, f32*);
     void draw() const;
     void drawGD(f32*, f32*, f32*);
     void drawDynamic() const;
     void drawDynamicBloom() const;
 
-    /* 0x00 */ const OceanRing* mOceanRing;
-    /* 0x04 */ TVec3f mPosition;
-    /* 0x10 */ int _10;
-    /* 0x14 */ int _14;
-    /* 0x18 */ bool _18;
-    /* 0x19 */ u8 _19;
-    /* 0x1A */ u8 _1A;
-    /* 0x1B */ u8 _1B;
-    /* 0x1C */ f32 _1C;
-    /* 0x20 */ f32 _20;
-    /* 0x24 */ f32 _24;
+    const OceanRing* mOceanRing;
+    TVec3f mPosition;
+    int _10;
+    int _14;
+    bool _18;
+    u8 _19;
+    u8 _1A;
+    u8 _1B;
+    f32 _1C;
+    f32 _20;
+    f32 _24;
     // The ring's surface as the renderer draws it from far away.
     NativeMesh mMesh;
 };
@@ -42,7 +41,7 @@ public:
     void draw() const;
     void drawBloom() const;
     void initParts();
-    void initDisplayList();
+    void initMesh();
     void drawGD();
     void loadMaterial() const;
     void loadMaterialBloom() const;
@@ -55,17 +54,17 @@ public:
         return (a1 - a2) / a3;
     }
 
-    /* 0x00 */ const OceanRing* mRing;
-    /* 0x04 */ s32 mDrawerCount;
-    /* 0x08 */ OceanRingPartDrawer** mPartDrawers;
-    /* 0x0C */ f32 _C;
-    /* 0x10 */ f32 _10;
-    /* 0x14 */ f32 _14;
-    /* 0x18 */ f32 _18;
-    /* 0x1C */ f32 _1C;
-    /* 0x20 */ f32 _20;
-    /* 0x24 */ JUTTexture* mWaterTex;
-    /* 0x28 */ JUTTexture* mWaterIndTex;
+    const OceanRing* mRing;
+    s32 mDrawerCount;
+    OceanRingPartDrawer** mPartDrawers;
+    f32 _C;
+    f32 _10;
+    f32 _14;
+    f32 _18;
+    f32 _1C;
+    f32 _20;
+    JUTTexture* mWaterTex;
+    JUTTexture* mWaterIndTex;
     // The ring's surface as the renderer draws it from far away.
     NativeMesh mMesh;
 };

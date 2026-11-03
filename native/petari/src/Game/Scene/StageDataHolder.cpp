@@ -12,8 +12,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRFileFinder.hpp>
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <cstdio>
 
 template JMapInfoIter JMapInfo::findElement< s32 >(const char*, s32, int) const;
@@ -21,17 +20,11 @@ template JMapInfoIter JMapInfo::findElement< const char* >(const char*, const ch
 
 // for some reason these two strings only emit here
 // shrug
-void StageDataHolder_FORCE_MATCH_JMAP(const JMapInfo* pInfo) {
-    pInfo->findElement< s32 >("", 0, 0);
-    pInfo->findElement< const char* >("", "", 0);
-    pInfo->end() == pInfo->end();
-}
-
 namespace {
     static const char* cLayerDirName[0x11] = {"Common", "LayerA", "LayerB", "LayerC", "LayerD", "LayerE", "LayerF", "LayerG", "LayerH",
                                               "LayerI", "LayerJ", "LayerK", "LayerL", "LayerM", "LayerN", "LayerO", "LayerP"};
 
-    static bool isPrioPlacementObjInfo(const char* pName) NO_INLINE {
+    static bool isPrioPlacementObjInfo(const char* pName) {
         return MR::isEqualStringCase(pName, "AreaObjInfo") || MR::isEqualStringCase(pName, "PlanetObjInfo") ||
                MR::isEqualStringCase(pName, "DemoObjInfo") || MR::isEqualStringCase(pName, "CameraCubeInfo");
     }
@@ -42,7 +35,7 @@ namespace {
         return commonLayers | scenarioLayers;
     }
 
-    static void calcPlacementInfoNum(int* pPriorityCount, int* pNormalCount, const MR::AssignableArray< JMapInfo >& rArray) NO_INLINE {
+    static void calcPlacementInfoNum(int* pPriorityCount, int* pNormalCount, const MR::AssignableArray< JMapInfo >& rArray) {
         *pPriorityCount = 0;
         *pNormalCount = 0;
 
@@ -72,7 +65,7 @@ namespace {
     }
 
     static void attachJmpInfoToPlacementInfoOrdered(PlacementInfoOrdered* pPriorityInfo, PlacementInfoOrdered* pNormalInfo,
-                                                    PlacementInfoOrdered* pDeferredInfo, const MR::AssignableArray< JMapInfo >& rArray) NO_INLINE {
+                                                    PlacementInfoOrdered* pDeferredInfo, const MR::AssignableArray< JMapInfo >& rArray) {
         for (const JMapInfo* pInfo = rArray.begin(); pInfo != rArray.end(); pInfo++) {
             if (::isPrioPlacementObjInfo(pInfo->getName())) {
                 pPriorityInfo->attach(pInfo, nullptr);
@@ -86,7 +79,6 @@ namespace {
 StageDataHolder::StageDataHolder(const char* pStageName, int zoneID, bool loadCommon)
     : NameObj("StageDataHolder"), mObjNameTbl(), mStageDataHolderCount(), mArchive(MR::getStageArchive(pStageName)), _A8(pStageName), mZoneID(zoneID),
       _E0(loadCommon), _E4(), _E8(), _FC(), _100(), _104(), _108(), _10C() {
-    MR::zeroMemory(mStageDataArray, sizeof(mStageDataArray));
     mPlacementMtx.identity();
 }
 
@@ -129,19 +121,11 @@ void StageDataHolder::initAfterScenarioSelected() {
     initAllLayerJmpInfo(&mPlacementObjs, "/jmp/Placement", "/jmp/MapParts");
     initAllLayerJmpInfo(&mStartObjs, "/jmp/Start");
 
-    s32 generalPosFileCount = mArchive->countFile("/jmp/GeneralPos");
-    generalPosFileCount -= 2;
-    s32 isValidGeneralPosCount = (generalPosFileCount > 0) ? generalPosFileCount : 0;
-
-    if (isValidGeneralPosCount > 0) {
+    if (mArchive->countFile("/jmp/GeneralPos") > 0) {
         initAllLayerJmpInfo(&mGeneralPosObjs, "/jmp/GeneralPos");
     }
 
-    s32 childObjFileCount = mArchive->countFile("/jmp/ChildObj");
-    childObjFileCount -= 2;
-    s32 isValidChildObjCount = (childObjFileCount > 0) ? childObjFileCount : 0;
-
-    if (isValidChildObjCount > 0) {
+    if (mArchive->countFile("/jmp/ChildObj") > 0) {
         initAllLayerJmpInfo(&mChildObjs, "/jmp/ChildObj");
     }
 
@@ -186,17 +170,9 @@ JMapInfoIter StageDataHolder::getCommonPathPointInfo(const JMapInfo** ppOut, int
 JMapInfoIter StageDataHolder::getCommonPathPointInfoFromRailDataIndex(const JMapInfo** ppInfo, int idx) const {
     const JMapInfo* pInfo = findJmpInfoFromArray(&mPathObjs, "CommonPathInfo");
     char buf[128];
-    snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
+    nebula_snprintf(buf, sizeof(buf), "CommonPathPointInfo.%d", idx);
     *ppInfo = findJmpInfoFromArray(&mPathObjs, buf);
     return JMapInfoIter(pInfo, idx);
-}
-
-void StageDataHolder_FORCE_MATCH_DATA(const char* pName) {
-    MR::isEqualStringCase(pName, "StageInfo");
-    MR::isEqualStringCase(pName, "MultiFileName");
-    MR::isEqualStringCase(pName, "All_mul");
-    MR::isEqualStringCase(pName, "ChangeSceneListInfo");
-    MR::isEqualStringCase(pName, "SceneNo");
 }
 
 s32 StageDataHolder::getCommonPathInfoElementNum() const {
@@ -395,7 +371,7 @@ const char* StageDataHolder::getJapaneseObjectName(const char* pName) const {
 }
 
 void* StageDataHolder::getStageArchiveResource(const char* pName) {
-    return mArchive->getResource('????', pName);
+    return mArchive->getResource(pName);
 }
 
 s32 StageDataHolder::getStageArchiveResourceSize(void* pData) {
@@ -445,8 +421,7 @@ JMapInfoIter StageDataHolder::makeCurrentMarioJMapInfoIter() const {
 }
 
 void StageDataHolder::initJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, const char* pName) {
-    s32 fileCount = mArchive->countFile(pName) - 2;
-    s32 count = fileCount > 0 ? fileCount : 0;
+    const u32 count = mArchive->countFile(pName);
 
     if (count != 0) {
         JMapInfo* pInfoArray = new JMapInfo[count];
@@ -463,9 +438,8 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo
 
     for (u32 i = 0; i < 0x11; i++) {
         if ((mask & (1 << i)) != 0) {
-            snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
-            s32 fileCount = mArchive->countFile(buf) - 2;
-            count += fileCount > 0 ? fileCount : 0;
+            nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
+            count += mArchive->countFile(buf);
         }
     }
 
@@ -476,7 +450,7 @@ void StageDataHolder::initAllLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo
 
         for (u32 i = 0; i < 0x11; i++) {
             if ((mask & (1 << i)) != 0) {
-                snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
+                nebula_snprintf(buf, sizeof(buf), "%s/%s", pName, ::cLayerDirName[i]);
                 pInfoArray = attachJmpInfoToArray(pInfoArray, buf);
             }
         }
@@ -494,12 +468,10 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, c
 
     for (u32 i = 0; i < 0x11; i++) {
         if (layerMask & (1 << i)) {
-            snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
-            s32 fileCount = mArchive->countFile(path) - 2;
-            count += fileCount > 0 ? fileCount : 0;
-            snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
-            fileCount = mArchive->countFile(path) - 2;
-            count += fileCount > 0 ? fileCount : 0;
+            nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
+            count += mArchive->countFile(path);
+            nebula_snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
+            count += mArchive->countFile(path);
         }
     }
 
@@ -509,9 +481,9 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, c
         pInfo->mArr = pCurrent;
         for (u32 i = 0; i < 0x11; i++) {
             if (layerMask & (1 << i)) {
-                snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
+                nebula_snprintf(path, sizeof(path), "%s/%s", pPlacementDir, ::cLayerDirName[i]);
                 pCurrent = attachJmpInfoToArray(pCurrent, path);
-                snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
+                nebula_snprintf(path, sizeof(path), "%s/%s", pMapPartsDir, ::cLayerDirName[i]);
                 pCurrent = attachJmpInfoToArray(pCurrent, path);
             }
         }
@@ -519,26 +491,22 @@ void StageDataHolder::initLayerJmpInfo(MR::AssignableArray< JMapInfo >* pInfo, c
 }
 
 JMapInfo* StageDataHolder::attachJmpInfoToArray(JMapInfo* pInfo, const char* pDirectory) {
-    s32 fileCount = mArchive->countFile(pDirectory) - 2;
-    s32 count = fileCount > 0 ? fileCount : 0;
-
-    if (count == 0) {
+    const s32 folder = mArchive->findFolder(pDirectory);
+    if (folder < 0) {
         return pInfo;
     }
 
-    JKRArcFinder* pFinder = mArchive->getFirstFile(pDirectory);
-
-    for (u32 i = 0; i < count; i++, pInfo++, pFinder->findNextFile()) {
-        pInfo->attach(mArchive->getIdxResource(pFinder->mDirIndex));
-        pInfo->setName(pFinder->mName);
+    AssetFolder::Item item;
+    for (u32 i = 0; mArchive->getItem(folder, i, &item); i++, pInfo++) {
+        pInfo->attach(item.mData);
+        pInfo->setName(item.mName);
     }
 
-    delete pFinder;
     return pInfo;
 }
 
 void StageDataHolder::initTableData() {
-    void* tableFile = MR::receiveArchive("/StageData/ObjNameTable.arc")->getResource('????', "ObjNameTable.tbl");
+    void* tableFile = MR::receiveArchive("/StageData/ObjNameTable.arc")->getResource("ObjNameTable.tbl");
 
     mObjNameTbl = new JMapInfo();
     mObjNameTbl->attach(tableFile);
@@ -665,7 +633,7 @@ void StageDataHolder::createLocalStageDataHolder(const MR::AssignableArray< JMap
                 const char* pStageName = "";
                 MR::getObjectName(&pStageName, iter);
                 s32 zoneID = MR::makeCurrentGalaxyStatusAccessor().getZoneId(pStageName);
-                mStageDataArray[mStageDataHolderCount] = new StageDataHolder(pStageName, zoneID, loadCommon);
+                mStageDataArray.at(mStageDataHolderCount) = new StageDataHolder(pStageName, zoneID, loadCommon);
                 mStageDataArray[mStageDataHolderCount]->initWithoutIter();
                 mStageDataArray[mStageDataHolderCount]->calcPlacementMtx(iter);
                 mStageDataHolderCount++;

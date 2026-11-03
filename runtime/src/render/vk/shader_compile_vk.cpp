@@ -16,12 +16,13 @@
 #include <map>
 #include <mutex>
 #include <optional>
+#include <set>
 
 namespace galaxy::render::vk {
 
 namespace {
 
-constexpr RegisterBinding kGxDrawBindings[] = {
+constexpr RegisterBinding kDrawBindings[] = {
     {"b0", 0, 0},
     {"b1", 0, 1},
     {"t0, space1", 0, 2},
@@ -46,6 +47,9 @@ constexpr std::uint32_t kOpDecorate = 71;
 constexpr std::uint32_t kOpDecorateId = 332;
 constexpr std::uint32_t kOpDecorateString = 5632;
 constexpr std::uint32_t kOpMemberDecorateString = 5633;
+constexpr std::uint32_t kDecorationBuiltIn = 11;
+constexpr std::uint32_t kDecorationPatch = 15;
+constexpr std::uint32_t kBuiltInTessCoord = 13;
 constexpr std::uint32_t kDecorationLocation = 30;
 constexpr std::uint32_t kDecorationIndex = 32;
 constexpr std::uint32_t kDecorationHlslCounterBuffer = 5634;
@@ -136,6 +140,15 @@ bool assign_semantic_locations(std::vector<std::uint32_t>& spirv, ShaderStage st
     }
     std::vector<std::uint32_t> out(spirv.begin(), spirv.begin() + 5);
     out.reserve(spirv.size());
+    // glslang decorates HLSL's SV_DomainLocation Patch as well as TessCoord, which is no patch variable; NVIDIA's compiler
+    // (nvgpucomp64.dll, driver 610) crashes inside vkCreateGraphicsPipelines on it.
+    std::set<std::uint32_t> tess_coords;
+    for (std::size_t at = 5; at < spirv.size(); at += spirv[at] >> 16u) {
+        if ((spirv[at] & 0xffffu) == kOpDecorate && (spirv[at] >> 16u) == 4u && spirv[at + 2] == kDecorationBuiltIn &&
+            spirv[at + 3] == kBuiltInTessCoord) {
+            tess_coords.insert(spirv[at + 1]);
+        }
+    }
     for (std::size_t at = 5; at < spirv.size();) {
         const std::uint32_t count = spirv[at] >> 16u;
         const std::uint32_t op = spirv[at] & 0xffffu;
@@ -149,6 +162,8 @@ bool assign_semantic_locations(std::vector<std::uint32_t>& spirv, ShaderStage st
                    (spirv[at + 2u + (op == kOpMemberDecorateString ? 1u : 0u)] == kDecorationUserSemantic ||
                     spirv[at + 2u + (op == kOpMemberDecorateString ? 1u : 0u)] == kDecorationUserType)) {
         } else if (op == kOpDecorateId && count >= 3u && spirv[at + 2] == kDecorationHlslCounterBuffer) {
+        } else if (op == kOpDecorate && count == 3u && spirv[at + 2] == kDecorationPatch &&
+                   tess_coords.contains(spirv[at + 1])) {
         } else if (op == kOpDecorate && count == 4u && spirv[at + 2] == kDecorationLocation &&
                    storage.contains(spirv[at + 1])) {
             const std::uint32_t variable = spirv[at + 1];
@@ -256,8 +271,8 @@ EShLanguage language(ShaderStage stage) {
 
 }  // namespace
 
-std::span<const RegisterBinding> gx_draw_bindings() noexcept {
-    return kGxDrawBindings;
+std::span<const RegisterBinding> draw_bindings() noexcept {
+    return kDrawBindings;
 }
 
 std::string with_point_size(std::string_view vertex_hlsl) {
@@ -363,6 +378,8 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     // Every resource carries an explicit [[vk::binding]] (annotate()); stage inputs and outputs take provisional
     // locations, replaced by their semantics' after compiling.
     shader.setAutoMapLocations(true);
+    // SV_Position.w is w in a pixel shader, as on D3D12; SPIR-V's FragCoord.w is 1/w (fog reads it).
+    shader.setDxPositionW(true);
     const auto messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules | EShMsgReadHlsl |
                                                    EShMsgHlslOffsets | EShMsgHlslLegalization);
     if (!shader.parse(GetDefaultResources(), 100, false, messages)) {

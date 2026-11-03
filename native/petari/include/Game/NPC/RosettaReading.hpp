@@ -22,5 +22,5 @@ public:
     void exePictureBookAfter();
 
 private:
-    /* 0x8C */ PictureBookLayout* mPictureBookLayout;
+    PictureBookLayout* mPictureBookLayout;
 };

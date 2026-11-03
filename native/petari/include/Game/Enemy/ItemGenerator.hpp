@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class LiveActor;
 
@@ -16,8 +15,8 @@ public:
     void setTypeCoin(s32);
     void setTypeStarPeace(s32);
     void generate(const LiveActor*);
-    bool isUseFarSE() const NO_INLINE;
+    bool isUseFarSE() const;
 
-    /* 0x0 */ s32 mNumType;
-    /* 0x4 */ u8 mType;
+    s32 mNumType;
+    u8 mType;
 };

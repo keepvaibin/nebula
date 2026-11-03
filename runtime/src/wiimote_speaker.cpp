@@ -78,7 +78,29 @@ void store_le16(std::byte* sample, std::int32_t value) noexcept {
 
 }  // namespace
 
-void Speaker::mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept {
+void Speaker::push(std::span<const std::int16_t> samples, std::uint32_t rate) noexcept {
+    if (!listening_.load(std::memory_order_relaxed) || rate == 0u) {
+        return;
+    }
+    sample_rate_.store(rate, std::memory_order_relaxed);
+    std::uint32_t head = head_.load(std::memory_order_relaxed);
+    const std::uint32_t tail = tail_.load(std::memory_order_acquire);
+    for (const std::int16_t sample : samples) {
+        if (head - tail >= kRingSamples) {
+            break;
+        }
+        ring_[head & kRingMask] = static_cast<float>(sample);
+        ++head;
+    }
+    head_.store(head, std::memory_order_release);
+}
+
+Speaker& game_speaker() noexcept {
+    static Speaker speaker;
+    return speaker;
+}
+
+void Speaker::mix(std::span<float> stereo, std::uint32_t output_rate, float gain) noexcept {
     if (!(gain > 0.0f)) {
         if (listening_.load(std::memory_order_relaxed)) listening_.store(false, std::memory_order_relaxed);
         return;
@@ -102,7 +124,7 @@ void Speaker::mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, flo
     last_head_ = head;
     if (!playing_ && available == 0u) return;
     const std::uint32_t rate = sample_rate_.load(std::memory_order_relaxed);
-    const std::size_t frames = stereo_le.size() / 4u;
+    const std::size_t frames = stereo.size() / 2u;
     if (rate == 0u || output_rate == 0u || frames == 0u) return;
     const std::uint32_t most = std::max(rate * kMostBufferedMilliseconds / 1000u, 4u * kTaps);
     if (available > most) {
@@ -118,8 +140,8 @@ void Speaker::mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, flo
         }
         playing_ = true;
     }
-    std::byte* sample = stereo_le.data();
-    for (std::size_t frame = 0; frame < frames; ++frame, sample += 4) {
+    float* sample = stereo.data();
+    for (std::size_t frame = 0; frame < frames; ++frame, sample += 2) {
         for (; owed_shifts_ != 0u; --owed_shifts_) {
             float next = 0.0f;
             if (available != 0u) {
@@ -143,9 +165,9 @@ void Speaker::mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, flo
         const Row& row = kFilter[fraction_ >> (32u - kPhaseBits)];
         float value = 0.0f;
         for (std::uint32_t tap = 0; tap < kTaps; ++tap) value += window_[tap] * row[tap];
-        const auto add = static_cast<std::int32_t>(std::lrint(value * gain));
-        store_le16(sample, std::clamp(load_le16(sample) + add, -32768, 32767));
-        store_le16(sample + 2u, std::clamp(load_le16(sample + 2u) + add, -32768, 32767));
+        const float add = value * gain / 32768.0f;
+        sample[0] += add;
+        sample[1] += add;
         const std::uint64_t position = static_cast<std::uint64_t>(fraction_) + step;
         fraction_ = static_cast<std::uint32_t>(position);
         owed_shifts_ = static_cast<std::uint32_t>(position >> 32u);

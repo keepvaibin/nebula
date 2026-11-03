@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class AudBgm;
 class AudBgmMgr;
@@ -35,5 +34,4 @@ namespace AudWrap {
     AudRemixMgr* getRemixMgr();
     AudRemixSequencer* getRemixSequencer();
     AudSoundObject* getRemixSeqObject();
-    AudSoundNameConverter* getSoundNameConverter();
 };  // namespace AudWrap

@@ -6,6 +6,8 @@ function(galaxy_embed_post_sources output root)
     foreach(entry
             "post_process_hlsl=runtime/src/render/post_process.hlsl"
             "game_bloom_hlsl=runtime/src/render/game_bloom.hlsl"
+            "ambient_occlusion_hlsl=runtime/src/render/ambient_occlusion.hlsl"
+            "scene_camera_hlsl=runtime/src/render/scene_camera.hlsl"
             "smaa_hlsl=third_party/smaa/SMAA.hlsl"
             "ffx_a_h=third_party/fidelityfx-fsr1/ffx_a.h"
             "ffx_fsr1_h=third_party/fidelityfx-fsr1/ffx_fsr1.h")

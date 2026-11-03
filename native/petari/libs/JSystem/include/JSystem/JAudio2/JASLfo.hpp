@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct JASLfo {
     JASLfo();
@@ -24,11 +23,11 @@ struct JASLfo {
 
     static JASLfo sFreeRunLfo;
 
-    /* 0x00 */ u32 _0;
-    /* 0x04 */ u32 _4;
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ f32 mDepth;
-    /* 0x10 */ f32 mPitch;
-    /* 0x14 */ u16 mDelay;
-    /* 0x16 */ u16 _16;
+    u32 _0;
+    u32 _4;
+    f32 _8;
+    f32 mDepth;
+    f32 mPitch;
+    u16 mDelay;
+    u16 _16;
 };

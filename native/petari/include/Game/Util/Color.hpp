@@ -1,14 +1,14 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/types.h>
+#include <NebulaGpu.h>
 
 class Color8 {
 public:
-    Color8() : mColor(-1) {
+    Color8() {
+        set(255, 255, 255, 255);
     }
 
-    Color8(GXColor color) {
+    Color8(NebulaColor8 color) {
         set(color);
     }
 
@@ -16,20 +16,22 @@ public:
         set(r, g, b, a);
     }
 
+    // 0xRRGGBBAA, on any machine.
     Color8(u32 color) {
-        mColor = color;
+        set(static_cast< u8 >(color >> 24), static_cast< u8 >(color >> 16), static_cast< u8 >(color >> 8),
+            static_cast< u8 >(color));
     }
 
-    inline operator GXColor() const {
-        return mGXColor;
+    inline operator NebulaColor8() const {
+        return mRGBA;
     }
 
     inline operator u32() const {
-        return mColor;
+        return static_cast< u32 >(r) << 24 | static_cast< u32 >(g) << 16 | static_cast< u32 >(b) << 8 | a;
     }
 
-    inline const Color8& operator=(const GXColor& rOther) {
-        mGXColor = rOther;
+    inline const Color8& operator=(const NebulaColor8& rOther) {
+        mRGBA = rOther;
         return *this;
     }
 
@@ -48,8 +50,8 @@ public:
         a = _a;
     }
 
-    void set(GXColor color) {
-        GXColor* const pColor = &mGXColor;
+    void set(NebulaColor8 color) {
+        NebulaColor8* const pColor = &mRGBA;
         *pColor = color;
     }
 
@@ -60,8 +62,7 @@ public:
             u8 b;
             u8 a;
         };
-        u32 mColor;
-        GXColor mGXColor;
+        NebulaColor8 mRGBA;
     };
 };
 
@@ -70,7 +71,7 @@ public:
     Color10() : r(0x3FF), g(0x3FF), b(0x3FF), a(0x3FF) {
     }
 
-    operator GXColorS10() const {
+    operator NebulaColor16() const {
         return mColor;
     }
 
@@ -81,6 +82,6 @@ public:
             u16 b;
             u16 a;
         };
-        GXColorS10 mColor;
+        NebulaColor16 mColor;
     };
 };

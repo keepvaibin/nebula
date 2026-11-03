@@ -15,6 +15,13 @@ calibration, its battery level, and drives its motor; the game's pictures of a W
 With INPUT on auto it takes over at its first button press and hands back when a key, a mouse button or a controller
 is used; INPUT on Wii Remote uses it alone. Its speaker's sounds play from the PC. A test session never opens it.
 
+## Input modes
+
+CONTROLS > INPUT: Keyboard and mouse (the default), Auto, Controller, Wii Remote. Keyboard and mouse takes nothing from
+controllers; the settings menu still answers them. If the chosen mode has nothing to play with (Controller with no
+controller, Wii Remote with no remote, Auto with nothing attached at all) the game stops and says so until one is
+back. F1 or Enter opens the settings menu from there to choose another mode.
+
 ## Default maps
 
 Controllers follow Super Mario Galaxy on Nintendo Switch (3D All-Stars; the
@@ -41,16 +48,17 @@ ZR/RT/R2 as a spin button and ZL/LT/L2 as crouch.
 
 The game's button icons (A, B, C, Z, 1, 2, Plus and Minus in its text: the title screen, dialogue, tutorials, menus)
 show the button each is bound to on the controller in use: Xbox's in their colours, Switch and PlayStation buttons
-white, shoulders, triggers and stick clicks by name. A keyboard or a controller of no known family shows the Wii's.
+white, shoulders, triggers and stick clicks by name. A generic controller shows Xbox's by place; a DualShock 3 its Select
+and Start, a GameCube pad its L, R, ZL, Z and Start.
 General > Button icons keeps one style (Wii, Xbox, Nintendo Switch, PlayStation) whatever is in use; Xbox, Nintendo
 Switch and PlayStation show in the settings menu's hints too (with Wii and Auto they follow what was last used).
 
 The icons are textures of Nebula's own beside the game's, which keep their content: a texture pack's replacements of the
-game's icons still show with the Wii style, and Nebula's show as drawn unless a pack names them. The Nebula HD Button
-Icons pack has them at eight times their size; `GALAXY_EXPORT_ART=<folder>` writes it again (`pack/`, with previews in
-`native/` and `hd/`).
+game's icons still show with the Wii style, and Nebula's show as drawn unless a pack names them. Nebula paints each of its
+sheets at eight times its size the first time it is drawn; `GALAXY_EXPORT_ART=<folder>` writes those paintings as a pack
+(`pack/`, with previews in `native/` and `hd/`).
 
-A tap of Plus or Minus pauses (the console waited for the button to be held 12 frames and for the remote to be still);
+A tap of Plus or Minus pauses;
 a press made while A or B is held pauses once they are let go.
 
 B (controllers) never shoots Star Bits: it is Wii B (back) only while a
@@ -327,7 +335,7 @@ mod's options, open the mods folder and read it again. Changes wait for Apply, w
 at the start); removing a mod is in Nebula Settings. Texture packs, texture dumps and the movies folder are on the
 Graphics page.
 
-On Switch controllers the menu uses the console's meaning: A changes, B closes. PlayStation: Cross changes, Circle
+On Switch controllers: A changes, B closes. PlayStation: Cross changes, Circle
 closes, Square clears, Triangle applies. Pages: Display, Graphics, Controls, Audio, General (text speed, button
 icons, language, Discord, Miis), Mods and System. Every change waits for Apply, the mix and text speed included;
 closing the menu or Undo drops what was not applied. A new language applies when Nebula next starts, as the game
@@ -338,10 +346,10 @@ close or at shutdown.
 ## HOME Menu
 
 Home (`H`; Home on Switch, PS on PlayStation, Steam on Steam controllers) opens the HOME Menu over the paused game:
-Return to game, Reset and Quit to desktop (the console's Wii Menu); Reset and Quit ask first, as the console does. Up
+Return to game, Reset and Quit to desktop; Reset and Quit ask first. Up
 and Down (or Left and Right) select, `Enter`/`Space`/A chooses, `Esc`/`Backspace`/B goes back (from the list: closes
 it); the pointer selects what it is over and a click chooses it. The game draws it in its own style, in
-the played language, with the console HOME Menu's sounds.
+the played language, with its own sounds.
 
 Diagnostic environment variables for input and audio are listed in
 [DIAGNOSTICS.md](DIAGNOSTICS.md).

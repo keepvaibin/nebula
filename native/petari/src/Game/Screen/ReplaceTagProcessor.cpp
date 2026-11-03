@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
 #include "Game/Util/EventUtil.hpp"
@@ -5,13 +6,12 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
-extern "C" int swprintf(wchar_t*, size_t, const wchar_t*, ...);
 
 namespace ReplaceTagProcessor {
     namespace Impl {
         struct GroupFunctionInfo {
             u8 mGroup;
-            u32 (*mFunction)(wchar_t*, const MessageEditorMessageTag&);
+            u32 (*mFunction)(char16_t*, const MessageEditorMessageTag&);
         };
 
         const GroupFunctionInfo sGroupFunctionTable[] = {{5, exeLocalizeGroup}, {9, exeRaceTimeGroup}, {3, exePictureGroup}, {0, nullptr}};
@@ -30,7 +30,7 @@ namespace ReplaceTagProcessor {
     namespace ImplArgs {
         struct GroupFunctionInfo {
             u8 mGroup;
-            u32 (*mFunction)(wchar_t*, const MessageEditorMessageTag&, va_list);
+            u32 (*mFunction)(char16_t*, const MessageEditorMessageTag&, va_list);
         };
 
         const GroupFunctionInfo sGroupFunctionTable[] = {{7, exeStringGroup}, {6, exeNumberGroup}, {0, nullptr}};
@@ -46,8 +46,8 @@ namespace ReplaceTagProcessor {
         }
     };  // namespace ImplArgs
 
-    u32 Replace(wchar_t* pDst, const wchar_t* pSrc) {
-        wchar_t* pStart = pDst;
+    u32 Replace(char16_t* pDst, const char16_t* pSrc) {
+        char16_t* pStart = pDst;
         while (*pSrc != 0) {
             if (MR::isMessageEditorNextTag(pSrc)) {
                 *pDst = 0;
@@ -60,7 +60,7 @@ namespace ReplaceTagProcessor {
                 if (pInfo != nullptr) {
                     pDst += pInfo->mFunction(pDst, tag);
                 } else {
-                    MR::copyMemory(pDst, pSrc, (tag.getSkipLength() + 1) * sizeof(wchar_t));
+                    MR::copyMemory(pDst, pSrc, (tag.getSkipLength() + 1) * sizeof(char16_t));
                     pDst += tag.getSkipLength() + 1;
                 }
 
@@ -76,8 +76,8 @@ namespace ReplaceTagProcessor {
         return pDst - pStart;
     }
 
-    u32 ReplaceArgs(wchar_t* pDst, const wchar_t* pSrc, va_list args) {
-        wchar_t* pStart = pDst;
+    u32 ReplaceArgs(char16_t* pDst, const char16_t* pSrc, va_list args) {
+        char16_t* pStart = pDst;
         while (*pSrc != 0) {
             if (MR::isMessageEditorNextTag(pSrc)) {
                 *pDst = 0;
@@ -90,7 +90,7 @@ namespace ReplaceTagProcessor {
                 if (pInfo != nullptr) {
                     pDst += pInfo->mFunction(pDst, tag, args);
                 } else {
-                    MR::copyMemory(pDst, pSrc, (tag.getSkipLength() + 1) * sizeof(wchar_t));
+                    MR::copyMemory(pDst, pSrc, (tag.getSkipLength() + 1) * sizeof(char16_t));
                     pDst += tag.getSkipLength() + 1;
                 }
 
@@ -106,7 +106,7 @@ namespace ReplaceTagProcessor {
         return pDst - pStart;
     }
 
-    u32 exePictureGroup(wchar_t* pDst, const MessageEditorMessageTag& rTag) {
+    u32 exePictureGroup(char16_t* pDst, const MessageEditorMessageTag& rTag) {
         struct PictureTag {
             u8 mLength;
             u8 mGroup;
@@ -115,7 +115,7 @@ namespace ReplaceTagProcessor {
         tag.mLength = rTag.getTagLength() + 2;
         tag.mGroup = rTag.getGroup();
         tag.mTag = rTag.getTag();
-        if (static_cast< wchar_t >(rTag.getTag() + 0x30) == 0x5B) {
+        if (static_cast< char16_t >(rTag.getTag() + 0x30) == 0x5B) {
             if (MR::isPlayerLuigi()) {
                 tag.mTag = 0x1C;
             } else {
@@ -128,31 +128,23 @@ namespace ReplaceTagProcessor {
         return rTag.getTagLength() / 2 + 1;
     }
 
-    u32 exeStringGroup(wchar_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
+    u32 exeStringGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
         va_list copy;
-        const wchar_t* pString = nullptr;
-#ifdef TARGET_PC
-        // A va_list is a pointer natively, not the console's one-element array.
+        const char16_t* pString = nullptr;
+        // A va_list is a pointer.
         va_copy(copy, args);
-#else
-        *copy = *args;
-#endif
         for (u32 i = 0; i <= rTag.getParam32(1); i++) {
-            pString = va_arg(copy, const wchar_t*);
+            pString = va_arg(copy, const char16_t*);
         }
         va_end(copy);
 
-        return swprintf(pDst, 0x100, L"%ls", pString);
+        return MR::formatText(pDst, 0x100, u"%ls", pString);
     }
 
-    u32 exeNumberGroup(wchar_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
+    u32 exeNumberGroup(char16_t* pDst, const MessageEditorMessageTag& rTag, va_list args) {
         va_list copy;
         int number = 0;
-#ifdef TARGET_PC
         va_copy(copy, args);
-#else
-        *copy = *args;
-#endif
         for (u32 i = 0; i <= rTag.getParam32(1); i++) {
             number = va_arg(copy, int);
         }
@@ -160,21 +152,21 @@ namespace ReplaceTagProcessor {
 
         switch (rTag.getTag()) {
         case 5:
-            return swprintf(pDst, 0x100, L"%02d", number);
+            return MR::formatText(pDst, 0x100, u"%02d", number);
         case 6:
-            return swprintf(pDst, 0x100, L"%03d", number);
+            return MR::formatText(pDst, 0x100, u"%03d", number);
         case 7:
-            return swprintf(pDst, 0x100, L"%04d", number);
+            return MR::formatText(pDst, 0x100, u"%04d", number);
         case 8:
-            return swprintf(pDst, 0x100, L"%05d", number);
+            return MR::formatText(pDst, 0x100, u"%05d", number);
         case 9:
-            return swprintf(pDst, 0x100, L"%06d", number);
+            return MR::formatText(pDst, 0x100, u"%06d", number);
         default:
-            return swprintf(pDst, 0x100, L"%d", number);
+            return MR::formatText(pDst, 0x100, u"%d", number);
         }
     }
 
-    u32 exeLocalizeGroup(wchar_t* pDst, const MessageEditorMessageTag& rTag) {
+    u32 exeLocalizeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag) {
         switch (rTag.getTag()) {
         case 0:
             return exeLocalizeGroupPlayerName(pDst, rTag.getParam8(0));
@@ -183,21 +175,21 @@ namespace ReplaceTagProcessor {
         return 0;
     }
 
-    u32 exeLocalizeGroupPlayerName(wchar_t* pDst, u8 form) {
+    u32 exeLocalizeGroupPlayerName(char16_t* pDst, u8 form) {
         char name[0x100];
         if (MR::isPlayerLuigi()) {
-            snprintf(name, sizeof(name), "System_PlayerName1%02d", form);
+            nebula_snprintf(name, sizeof(name), "System_PlayerName1%02d", form);
         } else {
-            snprintf(name, sizeof(name), "System_PlayerName0%02d", form);
+            nebula_snprintf(name, sizeof(name), "System_PlayerName0%02d", form);
         }
 
-        const wchar_t* pMessage = MR::getGameMessageDirect(name);
+        const char16_t* pMessage = MR::getGameMessageDirect(name);
         int length = MR::getStringLengthWithMessageTag(pMessage);
         MR::copyString(pDst, pMessage, length + 1);
         return length;
     }
 
-    u32 exeRaceTimeGroup(wchar_t* pDst, const MessageEditorMessageTag& rTag) {
+    u32 exeRaceTimeGroup(char16_t* pDst, const MessageEditorMessageTag& rTag) {
         if (rTag.getTag() == 5) {
             MR::makeRaceCurrentTimeString(pDst);
         } else {
@@ -208,8 +200,8 @@ namespace ReplaceTagProcessor {
     }
 };  // namespace ReplaceTagProcessor
 
-u32 ReplaceTagFunction::ReplaceArgs(wchar_t* pDst, s32 length, const wchar_t* pFormat, ...) {
-    wchar_t buffer[0x200];
+u32 ReplaceTagFunction::ReplaceArgs(char16_t* pDst, s32 length, const char16_t* pFormat, ...) {
+    char16_t buffer[0x200];
     va_list args;
     va_start(args, pFormat);
     s32 result = ReplaceTagProcessor::ReplaceArgs(buffer, pFormat, args);

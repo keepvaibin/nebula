@@ -47,7 +47,7 @@ bool GalaxyMapSelectButton::isPointingAnything() const {
 }
 
 bool GalaxyMapSelectButton::isDecidedList() const {
-    return mPaneCtrl->mIsSelected != nullptr && mPaneCtrl->isDecidedWait();
+    return mPaneCtrl->mIsSelected != false && mPaneCtrl->isDecidedWait();
 }
 
 void GalaxyMapSelectButton::changeToStarList() {

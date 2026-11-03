@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct JASSoundParams {
     void clamp();
@@ -88,9 +87,9 @@ struct JASSoundParams {
         return mDolby;
     }
 
-    /* 0x00 */ f32 mVolume;
-    /* 0x04 */ f32 mFxMix;
-    /* 0x08 */ f32 mPitch;
-    /* 0x0C */ f32 mPan;
-    /* 0x10 */ f32 mDolby;
+    f32 mVolume;
+    f32 mFxMix;
+    f32 mPitch;
+    f32 mPan;
+    f32 mDolby;
 };

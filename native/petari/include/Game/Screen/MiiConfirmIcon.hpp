@@ -17,7 +17,7 @@ public:
     virtual void init(const JMapInfoIter& rIter);
     virtual void appear();
 
-    void appear(nw4r::lyt::TexMap*, const wchar_t*);
+    void appear(nw4r::lyt::TexMap*, const char16_t*);
     void disappear();
     void exeAppear();
     void exeWait();

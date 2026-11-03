@@ -187,14 +187,14 @@ void SpringWaterFloaterSpot::exeFloatEnd() {
 
         MR::startSound(this, "SE_OJ_SPR_FLOATER_FLOAT_ED");
 
-        mFloatTimer = MR::getRandom(60l, 120l);
+        mFloatTimer = MR::getRandom(60, 120);
     }
 
     mFloatTimer--;
 
     if (mFloatTimer <= 0) {
         MR::startSound(this, "SE_OJ_SPR_FLOATER_RIPPLE");
-        mFloatTimer = MR::getRandom(60l, 120l);
+        mFloatTimer = MR::getRandom(60, 120);
     }
 
     if (isNeedsForBound()) {

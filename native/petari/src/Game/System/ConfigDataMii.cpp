@@ -2,7 +2,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JSupport/JSUMemoryInputStream.hpp>
 #include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
-#include <RFL_Types.h>
+#include <MiiTypes.h>
 
 #define FLAG_UNK1 0x1
 #define FLAG_UNK2 0x2
@@ -15,19 +15,19 @@
 #define ICON_ID_PEACH 5
 
 ConfigDataMii::ConfigDataMii() : mFlag(), mIconId(ICON_ID_MARIO), mMiiId() {
-    mMiiId = new u8[sizeof(RFLCreateID)];
+    mMiiId = new u8[sizeof(MiiCreateID)];
 
     initializeData();
 }
 
 void ConfigDataMii::setMiiOrIconId(const void* pMiiId, const u32* pIconId) {
     if (pMiiId != nullptr) {
-        MR::copyMemory(mMiiId, pMiiId, sizeof(RFLCreateID));
+        MR::copyMemory(mMiiId, pMiiId, sizeof(MiiCreateID));
 
         mFlag |= FLAG_UNK2;
         mIconId = ICON_ID_MII;
     } else {
-        MR::fillMemory(mMiiId, 0, sizeof(RFLCreateID));
+        MR::fillMemory(mMiiId, 0, sizeof(MiiCreateID));
 
         mIconId = *pIconId;
     }
@@ -40,7 +40,7 @@ bool ConfigDataMii::getIconId(u32* pIconId) const {
 }
 
 bool ConfigDataMii::getMiiId(void* pMiiId) const {
-    MR::copyMemory(pMiiId, mMiiId, sizeof(RFLCreateID));
+    MR::copyMemory(pMiiId, mMiiId, sizeof(MiiCreateID));
 
     return mIconId == ICON_ID_MII;
 }
@@ -59,7 +59,7 @@ s32 ConfigDataMii::serialize(u8* pBuffer, u32 size) const {
     u8 flag = mFlag;
     stream.write(&flag, sizeof(mFlag));
 
-    stream.write(mMiiId, sizeof(RFLCreateID));
+    stream.write(mMiiId, sizeof(MiiCreateID));
 
     u8 iconId = mIconId;
     stream.write(&iconId, sizeof(mIconId));
@@ -76,7 +76,7 @@ s32 ConfigDataMii::deserialize(const u8* pBuffer, u32 size) {
     stream.read(&flag, sizeof(mFlag));
     mFlag = flag;
 
-    stream.read(mMiiId, sizeof(RFLCreateID));
+    stream.read(mMiiId, sizeof(MiiCreateID));
 
     if (stream.getAvailable() == 0) {
         if ((mFlag & FLAG_UNK1) != 0) {
@@ -93,5 +93,5 @@ void ConfigDataMii::initializeData() {
     mFlag = 0;
     mIconId = ICON_ID_MARIO;
 
-    MR::zeroMemory(mMiiId, sizeof(RFLCreateID));
+    MR::zeroMemory(mMiiId, sizeof(MiiCreateID));
 }

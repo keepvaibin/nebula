@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraParamChunkHolder.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Camera/CameraHolder.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraParamChunk.hpp"
@@ -6,7 +7,7 @@
 #include "Game/Camera/DotCamParams.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
 #define CHUNK_CAPACITY 0x400
@@ -19,7 +20,7 @@ CameraParamChunkHolder::CameraParamChunkHolder(CameraHolder* pCameraHolder, cons
 CameraParamChunkHolder::~CameraParamChunkHolder() {
 }
 
-CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, JKRHeap* pHeap) {
+CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& rID, NebulaArena* pHeap) {
     if (isNewAttribute(rID)) {
         char firstChar = rID.mName[0];
         CameraParamChunk* chunk;
@@ -30,6 +31,11 @@ CameraParamChunk* CameraParamChunkHolder::createChunk(const CameraParamChunkID& 
             chunk = new (pHeap, 0) CameraParamChunkGame(mCameraHolder, rID);
         } else {
             chunk = new (pHeap, 0) CameraParamChunk(mCameraHolder, rID);
+        }
+
+        if (mNrChunks == mChunkCapacity) {
+            mChunks = MR::growArray(mChunks, static_cast< s32 >(mNrChunks));
+            mChunkCapacity *= 2;
         }
 
         mChunks[mNrChunks++] = chunk;

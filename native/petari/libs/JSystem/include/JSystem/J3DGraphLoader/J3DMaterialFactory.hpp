@@ -2,119 +2,103 @@
 
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
+struct NebulaCookedMaterial;
 
+// MAT3 and MDL3 records in host order, as the importer cooks them (native_data.rs j3d_model).
 struct J3DMaterialInitData {
-    /* 0x000 */ u8 mMaterialMode;
-    /* 0x001 */ u8 mCullModeIdx;
-    /* 0x002 */ u8 mColorChanNumIdx;
-    /* 0x003 */ u8 mTexGenNumIdx;
-    /* 0x004 */ u8 mTevStageNumIdx;
-    /* 0x005 */ u8 mZCompLocIdx;
-    /* 0x006 */ u8 mZModeIdx;
-    /* 0x007 */ u8 mDitherIdx;
-    /* 0x008 */ NEBULA_BE(u16) mMatColorIdx[2];
-    /* 0x00C */ NEBULA_BE(u16) mColorChanIdx[4];
-    /* 0x014 */ NEBULA_BE(u16) mAmbColorIdx[2];
-    /* 0x018 */ u8 field_0x018[0x10];
-    /* 0x028 */ NEBULA_BE(u16) mTexCoordIdx[8];
-    /* 0x038 */ u8 field_0x038[0x10];
-    /* 0x048 */ NEBULA_BE(u16) mTexMtxIdx[8];
-    /* 0x058 */ u8 field_0x058[0x2c];
-    /* 0x084 */ NEBULA_BE(u16) mTexNoIdx[8];
-    /* 0x094 */ NEBULA_BE(u16) mTevKColorIdx[4];
-    /* 0x09C */ u8 mTevKColorSel[0x10];
-    /* 0x0AC */ u8 mTevKAlphaSel[0x10];
-    /* 0x0BC */ NEBULA_BE(u16) mTevOrderIdx[0x10];
-    /* 0x0DC */ NEBULA_BE(u16) mTevColorIdx[4];
-    /* 0x0E4 */ NEBULA_BE(u16) mTevStageIdx[0x10];
-    /* 0x104 */ NEBULA_BE(u16) mTevSwapModeIdx[0x10];
-    /* 0x124 */ NEBULA_BE(u16) mTevSwapModeTableIdx[4];
-    /* 0x12C */ u8 field_0x12c[0x18];
-    /* 0x144 */ NEBULA_BE(u16) mFogIdx;
-    /* 0x146 */ NEBULA_BE(u16) mAlphaCompIdx;
-    /* 0x148 */ NEBULA_BE(u16) mBlendIdx;
-    /* 0x14A */ NEBULA_BE(u16) mNBTScaleIdx;
-};  // size 0x14C
+    u8 mMaterialMode;
+    u8 mCullModeIdx;
+    u8 mColorChanNumIdx;
+    u8 mTexGenNumIdx;
+    u8 mStageCountIdx;
+    u8 mZCompLocIdx;
+    u8 mZModeIdx;
+    u8 mUnused7Idx;
+    u16 mMatColorIdx[2];
+    u16 mColorChanIdx[4];
+    u16 mAmbColorIdx[2];
+    u8 field_0x018[0x10];
+    u16 mTexCoordIdx[8];
+    u8 field_0x038[0x10];
+    u16 mTexMtxIdx[8];
+    u8 field_0x058[0x2c];
+    u16 mTexNoIdx[8];
+    u16 mTevKColorIdx[4];
+    u8 mTevKColorSel[0x10];
+    u8 mTevKAlphaSel[0x10];
+    u16 mTevOrderIdx[0x10];
+    u16 mTevColorIdx[4];
+    u16 mTevStageIdx[0x10];
+    u16 mTevSwapModeIdx[0x10];
+    u16 mTevSwapModeTableIdx[4];
+    u8 field_0x12c[0x18];
+    u16 mFogIdx;
+    u16 mAlphaCompIdx;
+    u16 mBlendIdx;
+    u16 mNBTScaleIdx;
+};
 
 struct J3DIndInitData {
-    /* 0x000 */ bool mEnabled;
-    /* 0x001 */ u8 mIndTexStageNum;
-    /* 0x002 */ u8 field_0x002[2];
-    /* 0x004 */ J3DIndTexOrderInfo mIndTexOrderInfo[3];
-    /* 0x010 */ u8 field_0x010[4];
-    /* 0x014 */ NEBULA_DISC(J3DIndTexMtxInfo) mIndTexMtxInfo[3];
-    /* 0x068 */ J3DIndTexCoordScaleInfo mIndTexCoordScaleInfo[3];
-    /* 0x074 */ u8 field_0x074[4];
-    /* 0x078 */ J3DIndTevStageInfo mIndTevStageInfo[0x10];
-};  // size 0x138
+    bool mEnabled;
+    u8 mIndTexStageNum;
+    u8 field_0x002[2];
+    J3DIndTexOrderInfo mIndTexOrderInfo[3];
+    u8 field_0x010[4];
+    J3DIndTexMtxInfo mIndTexMtxInfo[3];
+    J3DIndTexCoordScaleInfo mIndTexCoordScaleInfo[3];
+    u8 field_0x074[4];
+    J3DIndTevStageInfo mIndTevStageInfo[0x10];
+};
 
 struct J3DPatchingInfo {
-    /* 0x0 */ NEBULA_BE(u16) mMatColorOffset;
-    /* 0x2 */ NEBULA_BE(u16) mColorChanOffset;
-    /* 0x4 */ NEBULA_BE(u16) mTexMtxOffset;
-    /* 0x6 */ NEBULA_BE(u16) mTexNoOffset;
-    /* 0x8 */ NEBULA_BE(u16) mTevRegOffset;
-    /* 0xA */ NEBULA_BE(u16) mFogOffset;
-    /* 0xC */ u8 field_0xc[4];
-};  // size 0x10
+    u16 mMatColorOffset;
+    u16 mColorChanOffset;
+    u16 mTexMtxOffset;
+    u16 mTexNoOffset;
+    u16 mTevRegOffset;
+    u16 mFogOffset;
+    u8 field_0xc[4];
+};
 
-struct J3DDisplayListInit {
-    /* 0x0 */ NEBULA_BE(u32) mOffset;
-    /* 0x4 */ NEBULA_BE(u32) field_0x4;
+struct J3DShapeDrawInit {
+    u32 mOffset;
+    u32 field_0x4;
 };  // size 8
 
 struct J3DTexCoord2Info;
-struct J3DCurrentMtxInfo;
+class J3DCurrentMtxInfo;
 class J3DMaterial;
 
 class J3DMaterialFactory {
 public:
     enum MaterialType {
         MATERIAL_TYPE_NORMAL = 0,
-        MATERIAL_TYPE_LOCKED = 1,
-        MATERIAL_TYPE_PATCHED = 2,
     };
 
-    J3DMaterialFactory(J3DMaterialDLBlock const&);
     J3DMaterialFactory(J3DMaterialBlock const&);
     u16 countUniqueMaterials();
     u32 countTexGens(int) const;
     u32 countStages(int) const;
     J3DMaterial* create(J3DMaterial*, MaterialType, int, u32) const;
     J3DMaterial* createNormalMaterial(J3DMaterial*, int, u32) const;
-    J3DMaterial* createPatchedMaterial(J3DMaterial*, int, u32) const;
-    void modifyPatchedCurrentMtx(J3DMaterial*, int) const;
-    J3DMaterial* createLockedMaterial(J3DMaterial*, int, u32) const;
-    u32 calcSize(J3DMaterial*, MaterialType, int, u32) const;
-    u32 calcSizeNormalMaterial(J3DMaterial*, int, u32) const;
-    u32 calcSizePatchedMaterial(J3DMaterial*, int, u32) const;
-    u32 calcSizeLockedMaterial(J3DMaterial*, int, u32) const;
-    J3DGXColor newMatColor(int, int) const;
+    J3DColor newMatColor(int, int) const;
     const u8 newColorChanNum(int) const;
     J3DColorChan newColorChan(int, int) const;
-    J3DGXColor newAmbColor(int, int) const;
+    J3DColor newAmbColor(int, int) const;
     u32 newTexGenNum(int) const;
     J3DTexCoord newTexCoord(int, int) const;
     J3DTexMtx* newTexMtx(int, int) const;
     u8 newCullMode(int) const;
     u16 newTexNo(int, int) const;
-    J3DTevOrder newTevOrder(int, int) const;
-    J3DGXColorS10 newTevColor(int, int) const;
-    J3DGXColor newTevKColor(int, int) const;
-    const u8 newTevStageNum(int) const;
-    J3DTevStage newTevStage(int, int) const;
-    J3DTevSwapModeTable newTevSwapModeTable(int, int) const;
+    J3DColorWide newRegisterColor(int, int) const;
+    J3DColor newConstantColor(int, int) const;
     u8 newIndTexStageNum(int) const;
-    J3DIndTexOrder newIndTexOrder(int, int) const;
     J3DIndTexMtx newIndTexMtx(int, int) const;
-    J3DIndTevStage newIndTevStage(int, int) const;
-    J3DIndTexCoordScale newIndTexCoordScale(int, int) const;
     J3DFog newFog(int) const;
     J3DAlphaComp newAlphaComp(int) const;
     J3DBlend newBlend(int) const;
     J3DZMode newZMode(int) const;
     const u8 newZCompLoc(int) const;
-    const u8 newDither(int) const;
     J3DNBTScale newNBTScale(int) const;
 
     u16 getMaterialID(int idx) const {
@@ -124,38 +108,35 @@ public:
         return mpMaterialInitData[mpMaterialID[idx]].mMaterialMode;
     }
 
-    /* 0x00 */ u16 mMaterialNum;
-    /* 0x04 */ J3DMaterialInitData* mpMaterialInitData;
-    /* 0x08 */ NEBULA_BE(u16)* mpMaterialID;
-    /* 0x0C */ J3DIndInitData* mpIndInitData;
-    /* 0x10 */ GXColor* mpMatColor;
-    /* 0x14 */ u8* mpColorChanNum;
-    /* 0x18 */ J3DColorChanInfo* mpColorChanInfo;
-    /* 0x1C */ GXColor* mpAmbColor;
-    /* 0x20 */ NEBULA_DISC(J3DLightInfo)* mpLightInfo;
-    /* 0x24 */ u8* mpTexGenNum;
-    /* 0x28 */ J3DTexCoordInfo* mpTexCoordInfo;
-    /* 0x2C */ J3DTexCoord2Info* mpTexCoord2Info;
-    /* 0x30 */ NEBULA_DISC(J3DTexMtxInfo)* mpTexMtxInfo;
-    /* 0x34 */ NEBULA_DISC(J3DTexMtxInfo)* field_0x34;
-    /* 0x38 */ NEBULA_BE(u16)* mpTexNo;
-    /* 0x3C */ NEBULA_BE(GXCullMode)* mpCullMode;
-    /* 0x40 */ J3DTevOrderInfo* mpTevOrderInfo;
-    /* 0x44 */ NEBULA_DISC(GXColorS10)* mpTevColor;
-    /* 0x48 */ GXColor* mpTevKColor;
-    /* 0x4C */ u8* mpTevStageNum;
-    /* 0x50 */ J3DTevStageInfo* mpTevStageInfo;
-    /* 0x54 */ J3DTevSwapModeInfo* mpTevSwapModeInfo;
-    /* 0x58 */ J3DTevSwapModeTableInfo* mpTevSwapModeTableInfo;
-    /* 0x5C */ NEBULA_DISC(J3DFogInfo)* mpFogInfo;
-    /* 0x60 */ J3DAlphaCompInfo* mpAlphaCompInfo;
-    /* 0x64 */ J3DBlendInfo* mpBlendInfo;
-    /* 0x68 */ J3DZModeInfo* mpZModeInfo;
-    /* 0x6C */ u8* mpZCompLoc;
-    /* 0x70 */ u8* mpDither;
-    /* 0x74 */ NEBULA_DISC(J3DNBTScaleInfo)* mpNBTScaleInfo;
-    /* 0x78 */ J3DDisplayListInit* mpDisplayListInit;
-    /* 0x7C */ J3DPatchingInfo* mpPatchingInfo;
-    /* 0x80 */ NEBULA_DISC(J3DCurrentMtxInfo)* mpCurrentMtxInfo;
-    /* 0x84 */ u8* mpMaterialMode;
+    u16 mMaterialNum;
+    J3DMaterialInitData* mpMaterialInitData;
+    u16* mpMaterialID;
+    J3DIndInitData* mpIndInitData;
+    NebulaColor8* mpMatColor;
+    u8* mpColorChanNum;
+    J3DColorChanInfo* mpColorChanInfo;
+    NebulaColor8* mpAmbColor;
+    J3DLightInfo* mpLightInfo;
+    u8* mpTexGenNum;
+    J3DTexCoordInfo* mpTexCoordInfo;
+    J3DTexCoord2Info* mpTexCoord2Info;
+    J3DTexMtxInfo* mpTexMtxInfo;
+    J3DTexMtxInfo* field_0x34;
+    u16* mpTexNo;
+    u32* mpCullMode;
+    NebulaColor16* mpRegisterColor;
+    NebulaColor8* mpConstantColor;
+    u8* mpStageCount;
+    J3DFogInfo* mpFogInfo;
+    J3DAlphaCompInfo* mpAlphaCompInfo;
+    J3DBlendInfo* mpBlendInfo;
+    J3DZModeInfo* mpZModeInfo;
+    u8* mpZCompLoc;
+    u8* mpDither;
+    J3DNBTScaleInfo* mpNBTScaleInfo;
+    J3DShapeDrawInit* mpShapeDrawInit;
+    J3DPatchingInfo* mpPatchingInfo;
+    J3DCurrentMtxInfo* mpCurrentMtxInfo;
+    u8* mpMaterialMode;
+    const NebulaCookedMaterial* mpNativeMaterials;
 };

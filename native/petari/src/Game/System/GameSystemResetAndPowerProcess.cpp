@@ -1,7 +1,5 @@
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaAchievements.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemFunction.hpp"
@@ -13,7 +11,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/ValueControl.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 
@@ -25,7 +22,7 @@ namespace {
 };  // namespace
 
 namespace NrvGameSystemResetAndPowerProcess {
-    NEW_NERVE(GameSystemResetAndPowerProcessPolling, GameSystemResetAndPowerProcess, Polling);
+    NEW_NERVE(GameSystemResetAndPowerProcessIdle, GameSystemResetAndPowerProcess, Idle);
     NEW_NERVE(GameSystemResetAndPowerProcessWaitResetPermitted, GameSystemResetAndPowerProcess, WaitResetPermitted);
     NEW_NERVE(GameSystemResetAndPowerProcessPrepareReset, GameSystemResetAndPowerProcess, PrepareReset);
     NEW_NERVE(GameSystemResetAndPowerProcessReset, GameSystemResetAndPowerProcess, Reset);
@@ -34,7 +31,7 @@ namespace NrvGameSystemResetAndPowerProcess {
 };  // namespace NrvGameSystemResetAndPowerProcess
 
 void GameSystemResetAndPowerProcess::init(const JMapInfoIter& rIter) {
-    initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
+    initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
     appear();
 }
 
@@ -43,27 +40,22 @@ void GameSystemResetAndPowerProcess::draw() const {
         return;
     }
 
-    J2DOrthoGraphSimple graph;
-    graph.setPort();
+    MR::setupScreen2D();
 
     u8 alpha = MR::lerp(255, 0, mFadeinoutControl->getValue());
-    graph.setColor(static_cast< const GXColor& >(GXColor(Color8(0, 0, 0, alpha))));
-
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
-    f32 width = MR::getScreenWidth();
-    graph.fillBox(TBox2f(0.0f, 0.0f, width, height));
+    MR::drawScreenColor(Color8(0, 0, 0, alpha));
 }
 
-bool GameSystemResetAndPowerProcess::isActive() const NO_INLINE {
-    return !isNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
+bool GameSystemResetAndPowerProcess::isActive() const {
+    return !isNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
 }
 
 void GameSystemResetAndPowerProcess::setResetOperationApplicationReset() {
     mResetOperation = ResetOperation_ApplicationReset;
 }
 
-void GameSystemResetAndPowerProcess::setResetOperationReturnToMenu() {
-    mResetOperation = ResetOperation_ReturnToMenu;
+void GameSystemResetAndPowerProcess::setResetOperationQuit() {
+    mResetOperation = ResetOperation_Quit;
 }
 
 void GameSystemResetAndPowerProcess::requestReset(bool param1) {
@@ -74,29 +66,16 @@ void GameSystemResetAndPowerProcess::requestReset(bool param1) {
     }
 }
 
-void GameSystemResetAndPowerProcess::requestGoWiiMenu(bool param1) {
+void GameSystemResetAndPowerProcess::requestQuitGame(bool param1) {
     if (tryPermitReset()) {
         _5E = param1;
-        setResetOperationReturnToMenu();
+        setResetOperationQuit();
         setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitResetPermitted));
     }
 }
 
-void GameSystemResetAndPowerProcess::notifyCheckDiskResult(bool param1) {
-    _5C = true;
-
-    if (param1) {
-        return;
-    }
-
-    if (mResetOperation == ResetOperation_ApplicationReset) {
-        setResetOperationReturnToMenu();
-    }
-}
-
-// The console's power and reset buttons started a reset from here. A PC has neither: resets come from the HOME Menu
-// (requestReset, requestGoWiiMenu).
-void GameSystemResetAndPowerProcess::exePolling() {
+// Resets come from the HOME Menu (requestReset, requestQuitGame).
+void GameSystemResetAndPowerProcess::exeIdle() {
 }
 
 void GameSystemResetAndPowerProcess::exeWaitResetPermitted() {
@@ -143,19 +122,10 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
 }
 
 void GameSystemResetAndPowerProcess::exeReset() {
-    if (MR::isFirstStep(this)) {
-        _5C = false;
+    GameSystemFunction::setPermissionToCheckInput(false);
 
-        // The console checked the disc was still in (its answer came before the check returned); the game's files are.
-        notifyCheckDiskResult(true);
-    }
-
-    if (_5C) {
-        GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
-
-        if (mResetOperation != ResetOperation_ApplicationReset) {
-            exitApplication();
-        }
+    if (mResetOperation != ResetOperation_ApplicationReset) {
+        exitApplication();
     }
 
     MR::setNerveAtStep(this, GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitPrepareFadein), ::sResetWaitFrame);
@@ -183,27 +153,28 @@ void GameSystemResetAndPowerProcess::exeFadein() {
     }
 
     if (mFadeinoutControl->mFrame == mFadeinoutControl->mMaxFrame) {
-        GameSystemFunction::restartControllerLeaveWatcher();
         GameSystemFunction::restartSceneController();
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
+        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessIdle));
     }
 }
 
 void GameSystemResetAndPowerProcess::exitApplication() {
-#ifdef TARGET_PC
     // The counts Nebula's achievements hold for the host (jumps, coins, play time), before the game ends.
     NebulaAchievements::flushStats();
-#endif
-    MainLoopFramework::setForOSResetSystem();
+    MainLoopFramework::prepareForExit();
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
 
-    // The host starts the game again, or closes it for "leave the game" (the Wii Menu); it does not return.
+    // The host closes the game for "leave the game", or starts it again; it does not return.
     const NebulaHostServices* const host = nebula_host();
-    host->power(host->user, mResetOperation == ResetOperation_ReturnToMenu ? NEBULA_POWER_MENU : NEBULA_POWER_RESTART);
+    if (mResetOperation == ResetOperation_Quit) {
+        host->app_exit(host->user);
+    } else {
+        host->app_restart(host->user);
+    }
 }
 
-bool GameSystemResetAndPowerProcess::tryPermitReset() NO_INLINE {
+bool GameSystemResetAndPowerProcess::tryPermitReset() {
     return !isActive();
 }
 

@@ -1,8 +1,10 @@
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.hpp"
+#include "JSystem/J3DGraphAnimator/J3DMaterialAnm.hpp"
+#include <nebula_cooked_texture.h>
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 void J3DDrawBuffer::initialize() {
     mDrawMode = J3DDrawBufDrawMode_Head;
@@ -48,7 +50,10 @@ int J3DDrawBuffer::entryMatSort(J3DMatPacket* pMatPacket) {
     if (texNo == 0xFFFF) {
         hash = 0;
     } else {
-        hash = (reinterpret_cast< uintptr_t >(pTexture->getResTIMG(texNo)) + pTexture->getResTIMG(texNo)->mImageDataOffset) >> 5;
+        // The same image, the same slot, wherever it was loaded: draw order does not depend on memory layout.
+        const ResTIMG* pTimg = pTexture->getResTIMG(texNo);
+        const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
+        hash = pRecord != nullptr ? static_cast< u32 >(pRecord->pack_hash) : 0;
     }
     u32 slot = hash & (mEntryTableSize - 1);
 
@@ -72,11 +77,11 @@ int J3DDrawBuffer::entryMatSort(J3DMatPacket* pMatPacket) {
 
 int J3DDrawBuffer::entryMatAnmSort(J3DMatPacket* pMatPacket) {
     J3DMaterialAnm* pMaterialAnm = pMatPacket->mpMaterialAnm;
-    u32 slot = reinterpret_cast< uintptr_t >(pMaterialAnm) & (mEntryTableSize - 1);
-
     if (pMaterialAnm == nullptr) {
         return entryMatSort(pMatPacket);
     }
+
+    u32 slot = pMaterialAnm->mDrawSlot & (mEntryTableSize - 1);
 
     pMatPacket->drawClear();
     pMatPacket->getShapePacket()->drawClear();

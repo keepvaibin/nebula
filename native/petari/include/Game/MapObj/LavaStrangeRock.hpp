@@ -7,10 +7,10 @@ class LodCtrl;
 class LavaStrangeRock : public LiveActor {
 public:
     enum Type {
-        /* 0x00 */ Type_0,
-        /* 0x01 */ Type_1,
-        /* 0x02 */ Type_2,
-        /* 0x03 */ Type_3,
+        Type_0,
+        Type_1,
+        Type_2,
+        Type_3,
     };
 
     /// @brief Creates a new `LavaStrangeRock`.
@@ -25,7 +25,7 @@ public:
     void initEffect();
     void exeWait();
 
-    /* 0x8C */ s32 mRockType;
-    /* 0x90 */ s32 _90;
-    /* 0x94 */ LodCtrl* mLodCtrlPlanet;
+    s32 mRockType;
+    s32 _90;
+    LodCtrl* mLodCtrlPlanet;
 };

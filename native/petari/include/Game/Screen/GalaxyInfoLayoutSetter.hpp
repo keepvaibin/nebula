@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class IconComet;
 class LayoutActor;
@@ -35,8 +34,8 @@ public:
     void showCometWindow(int);
     void hideCometWindow();
 
-    /* 0x00 */ LayoutActor* mHost;
-    /* 0x04 */ nw4r::lyt::TexMap** mReplaceTexture;
-    /* 0x08 */ nw4r::lyt::TexMap* mUnknownTexture;
-    /* 0x0C */ IconComet* mIconComet;
+    LayoutActor* mHost;
+    nw4r::lyt::TexMap** mReplaceTexture;
+    nw4r::lyt::TexMap* mUnknownTexture;
+    IconComet* mIconComet;
 };

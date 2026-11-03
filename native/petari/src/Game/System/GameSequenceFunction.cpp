@@ -17,11 +17,11 @@
 #include "Game/Util/StringUtil.hpp"
 
 namespace {
-    GameSequenceProgress* getGameSequenceProgress() NO_INLINE {
+    GameSequenceProgress* getGameSequenceProgress() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameSequenceProgress;
     }
 
-    SaveDataHandleSequence* getSaveDataHandleSequence() NO_INLINE {
+    SaveDataHandleSequence* getSaveDataHandleSequence() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
     }
 
@@ -250,7 +250,7 @@ namespace GameSequenceFunction {
     }
 
 
-    void reserveUserName(const wchar_t* pUserName) {
+    void reserveUserName(const char16_t* pUserName) {
         ::getSaveDataHandleSequence()->getCurrentUserFile()->setUserName(pUserName);
     }
 
@@ -281,10 +281,8 @@ namespace GameSequenceFunction {
             ::getSaveDataHandleSequence()->startSave(isConfirmRemind, isSaveAndQuitMsg);
         }
     }
-#ifdef TARGET_PC
 
     void setGameDataSaveWindowFollows() {
         ::getSaveDataHandleSequence()->setWindowFollows(true);
     }
-#endif
 };  // namespace GameSequenceFunction

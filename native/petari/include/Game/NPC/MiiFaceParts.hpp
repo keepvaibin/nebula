@@ -6,8 +6,8 @@
 
 class FixedPosition;
 class MiiFaceRecipe;
-struct RFLCharModel;
-struct RFLDrawCoreSetting;
+struct MiiCharModel;
+struct MiiDrawCoreSetting;
 
 class MiiFaceParts : public LiveActor {
 public:
@@ -18,8 +18,8 @@ public:
     virtual void calcAnim();
     virtual void calcViewAndEntry();
 
-    void drawOpa(const RFLDrawCoreSetting* pSetting) const;
-    void drawXlu(const RFLDrawCoreSetting* pSetting) const;
+    void drawOpa(const MiiDrawCoreSetting* pSetting) const;
+    void drawXlu(const MiiDrawCoreSetting* pSetting) const;
     void initFixedPosition(MtxPtr, const TVec3f&, const TVec3f&);
     void changeExpressionNormal();
     void changeExpressionBlink();
@@ -27,12 +27,12 @@ public:
     void initFaceModel();
     bool tryChangeExpression(u32 expression);
 
-    /* 0x8C */ RFLCharModel* mCharModel;
-    /* 0x90 */ void* _90;
-    /* 0x94 */ MiiFaceRecipe* mRecipe;
-    /* 0x98 */ TPos3f _98;
-    /* 0xC8 */ MtxPtr _C8;
-    /* 0xCC */ FixedPosition* _CC;
-    /* 0xD0 */ bool _D0;
-    /* 0xD1 */ bool _D1;
+    MiiCharModel* mCharModel;
+    void* _90;
+    MiiFaceRecipe* mRecipe;
+    TPos3f _98;
+    MtxPtr _C8;
+    FixedPosition* _CC;
+    bool _D0;
+    bool _D1;
 };

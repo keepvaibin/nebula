@@ -56,7 +56,7 @@ public:
     void endBindByFireDamage();
     void calcBindActorPose();
     void updateBindActorMatrix();
-    bool canRequestTarget() const NO_INLINE;
+    bool canRequestTarget() const;
     bool canCancelBind() const;
     void upTractPower();
     void downTractPower();
@@ -81,27 +81,27 @@ public:
     void exeHold();
     void exeBreak();
 
-    /* 0x8C */ TPos3f _8C;
-    /* 0xBC */ TQuat4f _BC;
-    /* 0xCC */ TVec3f mEffectPos;
-    /* 0xD8 */ TVec3f _D8;
-    /* 0xE4 */ TVec3f _E4;
-    /* 0xF0 */ TVec3f _F0;
-    /* 0xFC */ TVec3f _FC;
-    /* 0x108 */ LiveActor* _108;
-    /* 0x10C */ GCaptureTargetable* mTarget;
-    /* 0x110 */ GCaptureTargetable* _110;
-    /* 0x114 */ GCaptureRibbon* mCaptureRibbon;
-    /* 0x118 */ CameraTargetMtx* mTargetMtx;
-    /* 0x11C */ SpringValue* mSpringValue;
-    /* 0x120 */ f32 mTractPower;
-    /* 0x124 */ f32 _124;
-    /* 0x128 */ f32 _128;
-    /* 0x12C */ s32 _12C;
-    /* 0x130 */ f32 _130;
-    /* 0x134 */ s32 mGuidanceTime;
-    /* 0x138 */ bool mIsStarPointerPointing;  // useless
-    /* 0x139 */ bool _139;                    // useless
+    TPos3f _8C;
+    TQuat4f _BC;
+    TVec3f mEffectPos;
+    TVec3f _D8;
+    TVec3f _E4;
+    TVec3f _F0;
+    TVec3f _FC;
+    LiveActor* _108;
+    GCaptureTargetable* mTarget;
+    GCaptureTargetable* _110;
+    GCaptureRibbon* mCaptureRibbon;
+    CameraTargetMtx* mTargetMtx;
+    SpringValue* mSpringValue;
+    f32 mTractPower;
+    f32 _124;
+    f32 _128;
+    s32 _12C;
+    f32 _130;
+    s32 mGuidanceTime;
+    bool mIsStarPointerPointing;  // useless
+    bool _139;                    // useless
 };
 
 namespace MR {

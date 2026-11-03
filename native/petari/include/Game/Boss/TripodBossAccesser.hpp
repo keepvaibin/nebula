@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/Boss/TripodBoss.hpp"
 
 class TripodBossAccesser : public NameObj {
@@ -19,9 +21,9 @@ public:
     static TripodBossAccesser* createSceneObj();
 
 private:
-    /* 0x00C */ TripodBoss* mBoss;
-    /* 0x010 */ LiveActor* mParts[256];
-    /* 0x410 */ s32 mPartsNum;
+    TripodBoss* mBoss;
+    MR::GrowTable< LiveActor*, 256 > mParts;
+    s32 mPartsNum;
 };
 
 namespace MR {
@@ -49,8 +51,8 @@ namespace MR {
     void requestStartTripodBossStepSequence(s32);
     void addTripodBossStepPoint(TripodBossStepPoint*);
     void getTripodBossJointMatrix(TPos3f*, s32);
-    void getTripodBossAttachJointMatrix(TPos3f*, s32) NO_INLINE;
+    void getTripodBossAttachJointMatrix(TPos3f*, s32);
     void concatTripodBossAttachJointMatrix(TPos3f*, s32);
-    bool isSteppingTripodBossLegID(s32) NO_INLINE;
+    bool isSteppingTripodBossLegID(s32);
     bool isSteppingTripodBossJointID(s32);
 };  // namespace MR

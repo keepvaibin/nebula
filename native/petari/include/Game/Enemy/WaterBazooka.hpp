@@ -10,7 +10,7 @@ class CameraTargetDemoActor;
 class CollisionParts;
 class ElectricPressureBullet;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class ModelObj;
 class MogucchiShooter;
 
@@ -85,20 +85,20 @@ public:
         MR::startBrk(mCapsule, pName);
     }
 
-    /* 0x8C */ MogucchiShooter* mShooter;
-    /* 0x90 */ WaterBazookaCapsule* mCapsule;
-    /* 0x94 */ ModelObj* mBreakModel;
-    /* 0x98 */ CameraTargetDemoActor* mDemoActor;
-    /* 0x9C */ ActorCameraInfo* mCameraInfo;
-    /* 0xA0 */ s32 mAlreadyDoneFlag;
-    /* 0xA4 */ s32 mLife;
-    /* 0xA8 */ s32 mShotNum;
-    /* 0xAC */ CollisionParts* mCannonCollisionParts;
-    /* 0xB0 */ JointController* mJointCtrl;
-    /* 0xB4 */ TPos3f mBaseMtx;
-    /* 0xE4 */ bool mIsPinchBGMStarted;
-    /* 0xE5 */ bool mHasPowerStar;
-    /* 0xE6 */ bool mIsElectric;
-    /* 0xE8 */ ElectricPressureBullet** mBullets;
-    /* 0xEC */ s32 mElectricTime;
+    MogucchiShooter* mShooter;
+    WaterBazookaCapsule* mCapsule;
+    ModelObj* mBreakModel;
+    CameraTargetDemoActor* mDemoActor;
+    ActorCameraInfo* mCameraInfo;
+    s32 mAlreadyDoneFlag;
+    s32 mLife;
+    s32 mShotNum;
+    CollisionParts* mCannonCollisionParts;
+    JointController* mJointCtrl;
+    TPos3f mBaseMtx;
+    bool mIsPinchBGMStarted;
+    bool mHasPowerStar;
+    bool mIsElectric;
+    ElectricPressureBullet** mBullets;
+    s32 mElectricTime;
 };

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class ResFileInfo {
 public:
@@ -12,12 +11,11 @@ public:
         return mHashCode == hash;
     }
 
-    /* 0x00 */ void* mResource;
-    /* 0x04 */ u32 _4;
-    /* 0x08 */ void* _8;
-    /* 0x0C */ u32 _C;
-    /* 0x10 */ char* mName;
-    /* 0x14 */ u32 mHashCode;
+    void* mResource;
+    u32 _4;
+    void* _8;
+    char* mName;
+    u32 mHashCode;
 };
 
 class ResTable {
@@ -27,13 +25,6 @@ public:
     void newFileInfoTable(u32);
     ResFileInfo* add(const char*, void*, bool);
     const char* getResName(u32) const;
-#ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< const char*, L >::Type getResName(L index) const {
-        return getResName((u32)index);
-    }
-#endif
     void* getRes(u32) const;
     void* getRes(const char*) const;
     ResFileInfo* findFileInfo(const char*) const;
@@ -43,8 +34,8 @@ public:
     const char* findResName(const void*) const;
     const char* getResName(const void*) const;
 
-    /* 0x0 */ ResFileInfo* mFileInfoTable;
-    /* 0x4 */ u32 mCount;
+    ResFileInfo* mFileInfoTable;
+    u32 mCount;
 
 private:
     void* findRes(const char*) const;

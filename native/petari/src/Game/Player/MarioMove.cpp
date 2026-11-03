@@ -9,8 +9,7 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 void Mario::mainMove() {
     TVec3f vec1;
@@ -1089,7 +1088,7 @@ void Mario::doLockOnHoming() {
         if (getAnimator()->isAnimationStop()) {
             changeAnimation("\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */);
             if (!_750) {
-                setFrontVecKeepUp(direction, 15UL);
+                setFrontVecKeepUp(direction, 15u);
                 _334 = direction;
             }
         }

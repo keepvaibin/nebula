@@ -4,11 +4,10 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstddef>
-#include <revolution/types.h>
 
 
 namespace {
-    static char* const sPlaySoundNames[] = {nullptr, "SE_SY_GET_PRIZE_RING_5", "SE_SY_GET_PRIZE_RING_4", "SE_SY_GET_PRIZE_RING_3",
+    static const char* const sPlaySoundNames[] = {nullptr, "SE_SY_GET_PRIZE_RING_5", "SE_SY_GET_PRIZE_RING_4", "SE_SY_GET_PRIZE_RING_3",
                                             "SE_SY_GET_PRIZE_RING_2"};
     static const f32 sOnTriggerFlashFrames[] = {10.0f, 60.0f, 110.0f, 160.0f, 210.0f, 240.0f, 270.0f, 300.0f, -1.0f};
 };  // namespace
@@ -127,7 +126,7 @@ void PrizeRing::exePass() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "End");
         MR::startBrk(this, "End");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         playSound();
     }
 

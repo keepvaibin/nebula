@@ -1,6 +1,5 @@
 #include "Game/Screen/NebulaPaneKit.hpp"
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/LayoutHolder.hpp"
 #include <cstring>
@@ -108,7 +107,6 @@ nw4r::lyt::TextBox* NebulaPaneKit::makeText(const char* pName, const char* pNewN
     }
     nw4r::lyt::TextBox* pText = static_cast< nw4r::lyt::TextBox* >(pPane);
     LayoutCoreUtil::initTextBoxPane(pText, nullptr, length);
-    LayoutCoreUtil::setTextBoxMessage(pText, L"");
+    LayoutCoreUtil::setTextBoxMessage(pText, u"");
     return pText;
 }
-#endif

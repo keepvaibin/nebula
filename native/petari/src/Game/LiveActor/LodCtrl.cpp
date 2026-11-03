@@ -1,414 +1,136 @@
 #include "Game/LiveActor/LodCtrl.hpp"
-#include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
-#include "Game/Util/ActorMovementUtil.hpp"
-#include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include <cstdio>
-#ifdef TARGET_PC
+#include <cstring>
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#include "Game/System/NebulaHost.hpp"
-#endif
 
 namespace {
-    const f32 sDefaultDistanceToMiddle = 2000.0f;
-    const f32 sDefaultDistanceToLow = 3000.0f;
+    const bool sOff = false;
 
+    // The levels place view cubes for the actors that ship distance models, and only those follow them.
+    bool hasDistanceModels(const LiveActor* pActor) {
+        const char* res = MR::getModelResName(pActor);
+        char buf[0x100];
+        nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sMiddle.arc", res);
+        if (MR::isFileExist(buf, false)) {
+            return true;
+        }
+        nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", res);
+        return MR::isFileExist(buf, false);
+    }
 };  // namespace
 
-extern const bool def;
-
-LodCtrl::LodCtrl(LiveActor* pActor, const JMapInfoIter& rIter) {
-    _0 = ::sDefaultDistanceToMiddle;
-    _4 = ::sDefaultDistanceToLow;
-    _8 = pActor;
-    mActor = pActor;
-    _10 = nullptr;
-    _14 = nullptr;
-    _18 = 0;
-    _19 = 0;
-    _1A = 1;
-    _1B = 0;
-    mViewGroupID = -1;
-    mActorLightCtrl = nullptr;
-    _1C = &def;
-    _20 = &def;
-    _24 = &def;
-    _28 = &def;
+LodCtrl::LodCtrl(LiveActor* pActor, const JMapInfoIter& rIter)
+    : mActor(pActor), mFarModel(nullptr), mFollowsView(hasDistanceModels(pActor)), mNear(&sOff), mFar(&sOff), mHidden(&sOff),
+      mViewGroupID(-1) {
     MR::getClippingDirector()->entryLodCtrl(this, rIter);
-    mActorLightCtrl = mActor->mActorLightCtrl;
-}
-
-void LodCtrl::offSyncShadowHost() {
-    MR::offShadowVisibleSyncHostAll(mActor);
-    _1A = 0;
 }
 
 void LodCtrl::appear() {
-    MR::showModel(mActor);
-    mActorLightCtrl = mActor->mActorLightCtrl;
-
-    if (_10) {
-        if (!MR::isDead(_10)) {
-            _10->makeActorDead();
-        }
-    }
-
-    if (_14) {
-        if (!MR::isDead(_14)) {
-            _14->makeActorDead();
-        }
-    }
-
-    if (!_1A) {
-        MR::offShadowVisibleSyncHostAll(mActor);
-    }
+    showNear();
 }
 
 void LodCtrl::kill() {
-    MR::showModel(mActor);
-
-    if (_10) {
-        if (!MR::isDead(_10)) {
-            _10->makeActorDead();
-        }
-    }
-
-    if (_14) {
-        if (!MR::isDead(_14)) {
-            _14->makeActorDead();
-        }
-    }
-
-    if (!_1A) {
-        MR::onShadowVisibleSyncHostAll(mActor);
-    }
-
-    mActorLightCtrl = 0;
+    showNear();
 }
 
 void LodCtrl::validate() {
-    appear();
-    _18 = 1;
+    showNear();
+    mFollowsView = true;
 }
 
 void LodCtrl::invalidate() {
-    kill();
-    _18 = 0;
+    showNear();
+    mFollowsView = false;
+}
+
+void LodCtrl::showNear() {
+    MR::showModel(mActor);
+    if (mFarModel != nullptr && !MR::isDead(mFarModel)) {
+        mFarModel->makeActorDead();
+    }
+}
+
+void LodCtrl::createFarModel(int drawBufferType, int movementType, int calcAnimType) {
+    if (mViewGroupID < 0) {
+        return;
+    }
+    const char* res = MR::getModelResName(mActor);
+    char path[0x100];
+    nebula_snprintf(path, sizeof(path), "/ObjectData/%sLow.arc", res);
+    if (!MR::isFileExist(path, false)) {
+        return;
+    }
+    char name[0x100];
+    nebula_snprintf(name, sizeof(name), "%sLow", res);
+    const size_t size = strlen(name) + 1;
+    char* pObjName = new char[size];
+    memcpy(pObjName, name, size);
+    mFarModel = new ModelObj(pObjName, pObjName, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
+    mFarModel->initWithoutIter();
+    mFarModel->makeActorDead();
+    MR::setClippingTypeSphereContainsModelBoundingBox(mFarModel, 100.0f);
+    MR::copyTransRotateScale(mActor, mFarModel);
 }
 
 void LodCtrl::update() {
-    if (!MR::isDead(mActor) && _18) {
-        bool hasLod = _10 || _14;
-        if (!hasLod) {
-            if (*_28) {
-                hideAllModel();
-            } else {
-                showHighModel();
-            }
-
-            return;
+    if (MR::isDead(mActor) || !mFollowsView) {
+        return;
+    }
+    if (*mHidden) {
+        if (!MR::isHiddenModel(mActor)) {
+            MR::hideModelAndOnCalcAnim(mActor);
         }
-
-        f32 distance = calcDistanceToCamera();
-#ifdef TARGET_PC
-        // The console drew its 3D image in 456 lines and switched to the middle and low models where they show that
-        // few pixels; the same switch at an image of more lines comes as many times further away.
-        const u32 scale = NebulaHost::option(NEBULA_OPTION_LOD_SCALE);
-        if (scale > 1) {
-            distance /= static_cast< f32 >(scale);
+        if (mFarModel != nullptr && !MR::isDead(mFarModel)) {
+            mFarModel->makeActorDead();
         }
-#endif
-        f32 lowDistance = _4;
-        f32 middleDistance = _0;
-#ifdef TARGET_PC
-        // Ray-traced light shows every model at full detail: the middle and low models (a planet's few hundred
-        // triangles) light and shadow as the coarse shapes they are. The game's own choices below still hold.
-        if (NebulaHost::option(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
-            middleDistance = lowDistance = 3.4e38f;
+    } else if (mFarModel != nullptr && *mFar && !*mNear) {
+        if (!MR::isHiddenModel(mActor)) {
+            MR::hideModelAndOnCalcAnim(mActor);
         }
-        // Tests (GALAXY_TEST_LOD): a model chosen for every actor, or the high and middle models in turn.
-        static const u32 sTestLod = NebulaHost::option(NEBULA_OPTION_TEST_LOD);
-        if (sTestLod != 0 && !*_28) {
-            if (sTestLod == 1 && _10) {
-                showMiddleModel();
-            } else if (sTestLod == 2 && _14) {
-                showLowModel();
-            } else if (sTestLod == 3 && _10) {
-                _8 == mActor ? showMiddleModel() : showHighModel();
-            } else {
-                showHighModel();
-            }
-            if (_8 && _8 != mActor) {
-                MR::copyTransRotateScale(mActor, _8);
-            }
-            return;
+        if (MR::isDead(mFarModel)) {
+            mFarModel->makeActorAppeared();
         }
-#endif
-        if (*_28) {
-            hideAllModel();
-        } else if (*_1C) {
-            showHighModel();
-        } else if (_10 && *_20) {
-            showMiddleModel();
-        } else if (_14 && *_24) {
-            showLowModel();
-        } else if (distance < middleDistance) {
-            showHighModel();
-        } else if (!_10 && distance < lowDistance) {
-            showHighModel();
-        } else if (_10 && distance < lowDistance) {
-            showMiddleModel();
-        } else if (_14) {
-            showLowModel();
-        }
-
-        if (_8 && _8 != mActor) {
-            MR::copyTransRotateScale(mActor, _8);
-        }
+        MR::copyTransRotateScale(mActor, mFarModel);
+    } else {
+        showNear();
     }
 }
-
-bool LodCtrl::isShowLowModel() const {
-    return _14 != nullptr && _14 == _8;
-}
-
-void LodCtrl::setDistanceToMiddle(f32 dist) {
-    _0 = dist;
-}
-
-f32 LodCtrl::calcDistanceToCamera() const {
-    if (_1B) {
-        return MR::calcCameraDistanceZ(mActor->mPosition);
-    }
-
-    return MR::calcDistanceToPlayer(mActor);
-}
-
-void LodCtrl::setDistanceToLow(f32 dist) {
-    _4 = dist;
-}
-
-void LodCtrl::setDistanceToMiddleAndLow(f32 mid_dist, f32 low_dist) {
-    _0 = mid_dist;
-    _4 = low_dist;
-}
-
-namespace {
-    void LodFuntionCall(LodCtrl* pCtrl, void (*pFunc)(LiveActor*)) NO_INLINE {
-        pFunc(pCtrl->mActor);
-
-        if (pCtrl->_10) {
-            pFunc(pCtrl->_10);
-        }
-
-        if (pCtrl->_14) {
-            pFunc(pCtrl->_14);
-        }
-    }
-
-    template < typename T >
-    void LodFuntionCall(LodCtrl* pCtrl, void (*pFunc)(LiveActor*, T), T arg) NO_INLINE {
-        pFunc(pCtrl->mActor, arg);
-
-        if (pCtrl->_10) {
-            pFunc(pCtrl->_10, arg);
-        }
-
-        if (pCtrl->_14) {
-            pFunc(pCtrl->_14, arg);
-        }
-    }
-
-    template void LodFuntionCall< f32 >(LodCtrl*, void (*)(LiveActor*, f32), f32);
-};  // namespace
 
 void LodCtrl::setClippingTypeSphereContainsModelBoundingBox(f32 bounds) {
-    ::LodFuntionCall< f32 >(this, MR::setClippingTypeSphereContainsModelBoundingBox, bounds);
+    MR::setClippingTypeSphereContainsModelBoundingBox(mActor, bounds);
+    if (mFarModel != nullptr) {
+        MR::setClippingTypeSphereContainsModelBoundingBox(mFarModel, bounds);
+    }
 }
 
 void LodCtrl::setFarClipping(f32 clip) {
-    ::LodFuntionCall< f32 >(this, MR::setClippingFar, clip);
+    MR::setClippingFar(mActor, clip);
+    if (mFarModel != nullptr) {
+        MR::setClippingFar(mFarModel, clip);
+    }
 }
 
 void LodCtrl::invalidateClipping() {
-    ::LodFuntionCall(this, MR::invalidateClipping);
-}
-
-void LodCtrl::showHighModel() {
-    if (MR::isHiddenModel(mActor)) {
-        if (mActorLightCtrl) {
-            mActor->mActorLightCtrl->copy(mActorLightCtrl);
-        }
-
-        mActorLightCtrl = mActor->mActorLightCtrl;
-        MR::showModel(mActor);
-    } else {
-        if (_10) {
-            if (!MR::isDead(_10)) {
-                _10->makeActorDead();
-            }
-        }
-
-        if (_14) {
-            if (!MR::isDead(_14)) {
-                _14->makeActorDead();
-            }
-        }
-    }
-
-    _8 = mActor;
-}
-
-void LodCtrl::showMiddleModel() {
-    if (MR::isDead(_10)) {
-        if (mActorLightCtrl) {
-            _10->mActorLightCtrl->copy(mActorLightCtrl);
-        }
-
-        mActorLightCtrl = _10->mActorLightCtrl;
-        _10->makeActorAppeared();
-        MR::calcAnimDirect(mActor);
-    } else {
-        if (!MR::isHiddenModel(mActor)) {
-            MR::hideModelAndOnCalcAnim(mActor);
-        }
-
-        if (_14) {
-            if (!MR::isDead(_14)) {
-                _14->makeActorDead();
-            }
-        }
-    }
-
-    _8 = _10;
-}
-
-void LodCtrl::showLowModel() {
-    if (MR::isDead(_14)) {
-        if (mActorLightCtrl) {
-            _14->mActorLightCtrl->copy(mActorLightCtrl);
-        }
-
-        mActorLightCtrl = _14->mActorLightCtrl;
-        _14->makeActorAppeared();
-        MR::calcAnimDirect(mActor);
-    } else {
-        if (!MR::isHiddenModel(mActor)) {
-            MR::hideModelAndOnCalcAnim(mActor);
-        }
-
-        if (_10 && !MR::isDead(_10)) {
-            _10->makeActorDead();
-        }
-    }
-
-    _8 = _14;
-}
-
-void LodCtrl::hideAllModel() {
-    if (!MR::isHiddenModel(mActor)) {
-        MR::hideModelAndOnCalcAnim(mActor);
-    }
-
-    if (_10) {
-        if (!MR::isDead(_10)) {
-            _10->makeActorDead();
-        }
-    }
-
-    if (_14) {
-        if (!MR::isDead(_14)) {
-            _14->makeActorDead();
-        }
-    }
-
-    _8 = 0;
-}
-
-void LodCtrl::setViewCtrlPtr(const bool* pHigh, const bool* pMiddle, const bool* pLow, const bool* pHidden) {
-    _1C = pHigh;
-    _20 = pMiddle;
-    _24 = pLow;
-    _28 = pHidden;
-}
-
-void LodCtrl::createLodModel(int drawBufferType, int movementType, int calcAnimType) {
-    _10 = initLodModel(drawBufferType, movementType, calcAnimType, false);
-    _14 = initLodModel(drawBufferType, movementType, calcAnimType, true);
-
-    if (_10 || _14) {
-        appear();
-        _18 = 1;
-    } else {
-        kill();
-        _18 = 0;
+    MR::invalidateClipping(mActor);
+    if (mFarModel != nullptr) {
+        MR::invalidateClipping(mFarModel);
     }
 }
 
-void LodCtrl::syncMaterialAnimation() {
-    if (_10) {
-        MR::syncMaterialAnimation(_10, mActor);
-    }
-
-    if (_14) {
-        MR::syncMaterialAnimation(_14, mActor);
-    }
-}
-
-void LodCtrl::syncJointAnimation() {
-    if (_10) {
-        MR::syncJointAnimation(_10, mActor);
-    }
-
-    if (_14) {
-        MR::syncJointAnimation(_14, mActor);
-    }
-}
-
-void LodCtrl::initLightCtrl() {
-    if (_10) {
-        MR::initLightCtrl(_10);
-    }
-
-    if (_14) {
-        MR::initLightCtrl(_14);
-    }
-}
-
-ModelObj* LodCtrl::initLodModel(int drawBufferType, int movementType, int calcAnimType, bool isLowModel) const {
-    const char* res = MR::getModelResName(mActor);
-    const char* type = isLowModel ? "Low" : "Middle";
-    char buf[0x100];
-    snprintf(buf, sizeof(buf), "/ObjectData/%s%s.arc", res, type);
-
-    if (!MR::isFileExist(buf, false)) {
-        return nullptr;
-    }
-
-    const char* objName = isLowModel ? MR::createLowModelObjName(mActor) : MR::createMiddleModelObjName(mActor);
-    snprintf(buf, sizeof(buf), "%s%s", res, type);
-    ModelObj* obj = new ModelObj(objName, buf, mActor->getBaseMtx(), drawBufferType, movementType, calcAnimType, false);
-    obj->initWithoutIter();
-    obj->makeActorDead();
-    MR::setClippingTypeSphereContainsModelBoundingBox(obj, 100.0f);
-    MR::copyTransRotateScale(mActor, obj);
-    return obj;
+void LodCtrl::setViewCtrlPtr(const bool* pNear, const bool* pFar, const bool* pHidden) {
+    mNear = pNear;
+    mFar = pFar;
+    mHidden = pHidden;
 }
 
 bool LodCtrlFunction::isExistLodLowModel(const char* pName) {
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", pName);
+    nebula_snprintf(buf, sizeof(buf), "/ObjectData/%sLow.arc", pName);
     return MR::isFileExist(buf, false);
 }
-
-const char* LodCtrl_FORCE_MATCH_STRING() {
-    return "/ObjectData/%sMiddle.arc";
-}
-
-const bool def = false;

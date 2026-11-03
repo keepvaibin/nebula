@@ -13,7 +13,7 @@ public:
     }
     virtual CamTranslatorBase* createTranslator();
 
-    /* 0x4C */ TVec2f mAngleVel;
-    /* 0x54 */ TVec2f mAngle;
-    /* 0x5C */ TPos3f mMtx;
+    TVec2f mAngleVel;
+    TVec2f mAngle;
+    TPos3f mMtx;
 };

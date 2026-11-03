@@ -6,17 +6,16 @@
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/GameSequenceDirector.hpp"
 #include "Game/System/GameSystem.hpp"
-#include "Game/System/GameSystemDimmingWatcher.hpp"
 #include "Game/System/GameSystemErrorWatcher.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/GameSystemResetAndPowerProcess.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/GameSystemStationedArchiveLoader.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadHolder.hpp"
-#include "Game/System/WPadRumble.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
+#include "Game/System/InputRumble.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 
@@ -31,11 +30,11 @@ namespace {
         return pLogoScene;
     }
 
-    AudSystemWrapper* getAudSystemWrapper() NO_INLINE {
+    AudSystemWrapper* getAudSystemWrapper() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mAudioSystem;
     }
 
-    SaveDataHandleSequence* getSaveDataHandleSequence() NO_INLINE {
+    SaveDataHandleSequence* getSaveDataHandleSequence() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
     }
 };  // namespace
@@ -83,8 +82,8 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->requestChangeArchivePlayer(isPlayerMario);
     }
 
-    bool isEndChangeArchivePlayer() {
-        return SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->isDone();
+    void waitEndChangeArchivePlayer() {
+        SingletonHolder< GameSystem >::get()->mStationedArchiveLoader->waitDone();
     }
 
     void activateScreenPreserver() {
@@ -107,16 +106,16 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystemResetAndPowerProcess >::get()->setResetOperationApplicationReset();
     }
 
-    void setResetOperationReturnToMenu() {
-        SingletonHolder< GameSystemResetAndPowerProcess >::get()->setResetOperationReturnToMenu();
+    void setResetOperationQuit() {
+        SingletonHolder< GameSystemResetAndPowerProcess >::get()->setResetOperationQuit();
     }
 
     void requestResetGameSystem(bool param1) {
         SingletonHolder< GameSystemResetAndPowerProcess >::get()->requestReset(param1);
     }
 
-    void requestGoWiiMenu(bool param1) {
-        SingletonHolder< GameSystemResetAndPowerProcess >::get()->requestGoWiiMenu(param1);
+    void requestQuitGame(bool param1) {
+        SingletonHolder< GameSystemResetAndPowerProcess >::get()->requestQuitGame(param1);
     }
 
     void forceToDeactivateHomeButtonLayout() {
@@ -179,101 +178,78 @@ namespace GameSystemFunction {
         ::getAudSystemWrapper()->resumeReset();
     }
 
-    void stopControllerLeaveWatcher() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->stopLeaveWatcher();
-        }
-    }
-
-    void startControllerLeaveWatcher() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->startLeaveWatcher();
-        }
-    }
-
-    void restartControllerLeaveWatcher() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->restartLeaveWatcher();
-        }
-    }
-
     void resetAllControllerRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->registInstance();
-            MR::getWPad(chan)->_18->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->registInstance();
+            MR::getPlayerInput(chan)->_18->stop();
         }
     }
 
-    void setAutoSleepTimeWiiRemote(bool isLongAutoSleep) {
-        MR::setAutoSleepTimeWiiRemote(isLongAutoSleep);
+    void setInputSleepTime(bool isLongAutoSleep) {
+        MR::setInputSleepTime(isLongAutoSleep);
     }
 
-    bool setPermissionToCheckWiiRemoteConnectAndScreenDimming(bool permission) {
-        bool permissionPrev = SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateWiiRemoteStatus(permission);
-
-        SingletonHolder< GameSystem >::get()->mDimmingWatcher->_4 = permission;
-
-        return permissionPrev;
+    bool setPermissionToCheckInput(bool permission) {
+        return SingletonHolder< GameSystem >::get()->mErrorWatcher->setPermissionUpdateInputStatus(permission);
     }
 
     void onPauseBeginAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->stop();
-            MR::getWPad(chan)->_1C->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->stop();
+            MR::getPlayerInput(chan)->_1C->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onPauseEndAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuBeginAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->pause();
-            MR::getWPad(chan)->_1C->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->pause();
+            MR::getPlayerInput(chan)->_1C->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuCloseAllRumble() {
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            MR::getWPad(chan)->_18->registInstance();
-            MR::getWPad(chan)->_1C->stop();
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            MR::getPlayerInput(chan)->_18->registInstance();
+            MR::getPlayerInput(chan)->_1C->stop();
         }
     }
 
     void onHomeButtonMenuEndAllRumble() {
-        WPadRumble* pRumble;
+        InputRumble* pRumble;
 
-        for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
-            pRumble = MR::getWPad(chan)->_18;
+        for (s32 chan = PLAYER_1; chan < PLAYER_1 + MR::getPlayerMaxCount(); chan++) {
+            pRumble = MR::getPlayerInput(chan)->_18;
             pRumble->_BC = 200;
             pRumble->stop();
 
-            pRumble = MR::getWPad(chan)->_1C;
+            pRumble = MR::getPlayerInput(chan)->_1C;
             pRumble->_BC = 200;
             pRumble->stop();
         }
     }
 
     void prepareResetSystem() {
-        SingletonHolder< GameSystem >::get()->prepareReset();
         SingletonHolder< GameSystem >::get()->mSceneController->prepareReset();
     }
 
     bool isPreparedFadeinSystem() {
-        return SingletonHolder< GameSystem >::get()->isPreparedReset() && SingletonHolder< GameSystem >::get()->mSceneController->isPreparedReset();
+        return SingletonHolder< GameSystem >::get()->mSceneController->isPreparedReset();
     }
 
     void restartSceneController() {
         SingletonHolder< GameSystem >::get()->mSceneController->restartGameAfterResetting();
     }
 
-    bool isDisplayStrapRemineder() {
-        return MR::isEqualSceneName("Logo") && ::getLogoScene() != nullptr && ::getLogoScene()->isDisplayStrapRemineder();
+    bool isBeforeTitle() {
+        return MR::isEqualSceneName("Logo") && ::getLogoScene() != nullptr && ::getLogoScene()->isBeforeTitle();
     }
 };  // namespace GameSystemFunction

@@ -9,5 +9,5 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    /* 0x9C */ const char* _9C;
+    const char* _9C;
 };

@@ -9,18 +9,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 
-void MercatorTransformCube_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)0.000003814697265625f;
-    (void)3.141592653589793f;
-    (void)1.5707963267948966f;
-    (void)2.0f;
-    (void)-0.000003814697265625f;
-    (void)-1.5707963267948966f;
-}
-
 namespace {
     MercatorTransformCube* getMercatorCube() {
         return static_cast< MercatorTransformCube* >(MR::getAreaObjManager("MercatorCube")->getAreaObj(0));
@@ -34,11 +22,6 @@ namespace {
     }
 
 };  // namespace
-
-void MercatorTransformCube_FORCE_EMIT() {
-    TVec3f vec;
-    vec *= 0.0f;
-}
 
 MercatorTransformCube::MercatorTransformCube(int formType, const char* pName) : AreaObj(formType, pName) {
     _3C.identity();

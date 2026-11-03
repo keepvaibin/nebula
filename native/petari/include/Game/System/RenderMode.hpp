@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace MR {
     /// @brief Checks if the aspect ratio flag is set to 16:9.

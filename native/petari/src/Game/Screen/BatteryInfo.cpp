@@ -1,12 +1,12 @@
 #include "Game/Screen/BatteryInfo.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/System/WPad.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-#define WPAD_BATTERY_LEVEL_EMPTY -1
+#define INPUT_BATTERY_EMPTY -1
 
 namespace {
     static const s32 sDisplayFrameBatteryLow = 120;
@@ -41,11 +41,11 @@ void BatteryInfo::exeEnought() {
         MR::hidePane(mHost, mPaneName);
     }
 
-    if (MR::getWPad(mChannel)->getBattery() == WPAD_BATTERY_LEVEL_EMPTY) {
+    if (MR::getPlayerInput(mChannel)->getBattery() == INPUT_BATTERY_EMPTY) {
         setNerve(GET_NERVE_ANON(BatteryInfoNoneHide));
-    } else if (MR::getWPad(mChannel)->getBattery() == WPAD_BATTERY_LEVEL_CRITICAL) {
+    } else if (MR::getPlayerInput(mChannel)->getBattery() == INPUT_BATTERY_CRITICAL) {
         setNerve(GET_NERVE_ANON(BatteryInfoCriticalAppear));
-    } else if (MR::getWPad(mChannel)->getBattery() == WPAD_BATTERY_LEVEL_LOW) {
+    } else if (MR::getPlayerInput(mChannel)->getBattery() == INPUT_BATTERY_LOW) {
         setNerve(GET_NERVE_ANON(BatteryInfoLowAppear));
     }
 }
@@ -80,15 +80,15 @@ void BatteryInfo::exeLowHide() {
         MR::hidePane(mHost, mPaneName);
     }
 
-    if (MR::getWPad(mChannel)->getBattery() == WPAD_BATTERY_LEVEL_EMPTY) {
-        if (mChannel == WPAD_CHAN1) {
+    if (MR::getPlayerInput(mChannel)->getBattery() == INPUT_BATTERY_EMPTY) {
+        if (mChannel == PLAYER_2) {
             setNerve(GET_NERVE_ANON(BatteryInfoNoneAppear));
         } else {
             setNerve(GET_NERVE_ANON(BatteryInfoNoneHide));
         }
-    } else if (MR::getWPad(mChannel)->getBattery() == WPAD_BATTERY_LEVEL_CRITICAL) {
+    } else if (MR::getPlayerInput(mChannel)->getBattery() == INPUT_BATTERY_CRITICAL) {
         setNerve(GET_NERVE_ANON(BatteryInfoCriticalAppear));
-    } else if (MR::getWPad(mChannel)->getBattery() > WPAD_BATTERY_LEVEL_LOW) {
+    } else if (MR::getPlayerInput(mChannel)->getBattery() > INPUT_BATTERY_LOW) {
         setNerve(GET_NERVE_ANON(BatteryInfoEnought));
     } else if (MR::isGreaterStep(this, ::sLowIntervalFrame)) {
         setNerve(GET_NERVE_ANON(BatteryInfoLowAppear));
@@ -144,7 +144,7 @@ void BatteryInfo::exeNoneHide() {
         MR::hidePane(mHost, mPaneName);
     }
 
-    if (MR::getWPad(mChannel)->getBattery() != -1) {
+    if (MR::getPlayerInput(mChannel)->getBattery() != -1) {
         setNerve(GET_NERVE_ANON(BatteryInfoEnought));
     }
 }
@@ -166,18 +166,18 @@ bool BatteryInfo::exeStartAnimAndSetNerveIfStopped(const char* pAnimName, const 
 bool BatteryInfo::tryChangeNerveWithBatteryLeftAlreadyAppear() {
     const Nerve* pNerve;
 
-    switch (MR::getWPad(mChannel)->getBattery()) {
-    case WPAD_BATTERY_LEVEL_EMPTY:
-        if (mChannel == WPAD_CHAN1) {
+    switch (MR::getPlayerInput(mChannel)->getBattery()) {
+    case INPUT_BATTERY_EMPTY:
+        if (mChannel == PLAYER_2) {
             pNerve = GET_NERVE_ANON(BatteryInfoNoneAppear);
         } else {
             pNerve = GET_NERVE_ANON(BatteryInfoDisappear);
         }
         break;
-    case WPAD_BATTERY_LEVEL_CRITICAL:
+    case INPUT_BATTERY_CRITICAL:
         pNerve = GET_NERVE_ANON(BatteryInfoCritical);
         break;
-    case WPAD_BATTERY_LEVEL_LOW:
+    case INPUT_BATTERY_LOW:
         pNerve = GET_NERVE_ANON(BatteryInfoLow);
         break;
     default:

@@ -1,36 +1,24 @@
 #pragma once
 
-// RenderCore: owns the GX pipeline's subsystems and runs the per-frame loop behind the galaxy::render
-// API (renderer_api.h, through renderer_api.cpp).
+// RenderCore: runs the frame behind the galaxy::render API (render_api.h, through render_api.cpp).
 //
-// The simulation thread calls render_frame() once per VI retrace; it copies the frame's FIFO bytes
-// into a bounded queue and returns. The render thread consumes the chunks in order:
+// The game's thread attaches records (shapes, materials, passes, scene boundaries) and hands them over with render_frame;
+// the render thread consumes them in order:
 //
 //   render_frame_on_thread(chunk)
-//     -> renderer.begin_frame()            (drains PSO completions first)
+//     -> renderer.begin_frame()
 //     -> pipeline_cache.drain_completions()
-//     -> parser.run(fifo, ...)             (this object is the FifoSink)
-//          register loads  -> state_
-//          on_draw         -> dirty state to keys and constants, vertex_loader into the rings,
-//                             texture_cache lookups, renderer.draw()
-//          on_efb_copy     -> copy to an XFB or texture, copy-clear
-//          on_pe_*         -> collect the game-visible FINISH/TOKEN events
-//     -> renderer.present(efb_copies.latest())
+//     -> on_shape_record for each record   (drawing state, draws, target passes, captures)
+//     -> renderer.present()
 //     -> renderer.end_frame() returns the submission fence
-//     -> the collected events bind to that fence
 //
-// A full queue (render_queue_depth chunks) blocks the producer. One chunk per retrace, parsed in
-// submission order, is the only synchronization: guest-memory reads during the parse (textures,
-// vertex arrays) run a bounded number of frames behind the simulation, the window real GP
-// hardware has while the game respects GXDrawDone.
-//
-// A render-thread failure is rethrown from the next render_frame() call rather than leaving a
-// frozen display.
+// A full queue (render_queue_depth chunks) blocks the producer. A render-thread failure is rethrown from the next
+// render_frame() call rather than leaving a frozen display.
 
 #include "galaxy/render/actor_lights.h"
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/frame_cadence_diagnostics.h"
-#include "galaxy/render/draw_state.h"
+#include "galaxy/render/drawing_state.h"
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/movie_replacement.h"
 #include "galaxy/render/native_shapes.h"
@@ -45,16 +33,15 @@
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/rt_sky_sun.h"
 #include "galaxy/render/rt_types.h"
-#include "galaxy/render/shader_keys.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/pso_key.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/render/frame_interpolation.h"
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/transform_history.h"
-#include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
-#include "galaxy/render/vs_constants.h"
+#include "galaxy/render/draw_constants.h"
+#include "galaxy/render/draw_constants_fill.h"
 #include "galaxy/render/render_vertex.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/render/render_services.h"
 #include "galaxy/frame_telemetry.h"
 
@@ -79,20 +66,20 @@
 namespace galaxy::render {
 
 // lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the source size. The game's LOD
-// range moves by the shift (its base level is the replacement's level `shift`), except that a guest
-// range starting at its base level starts at the replacement's (close up, the guest magnifies its
-// base level: the replacement shows its own); a guest sampler without mips uses the replacement's
+// range moves by the shift (its base level is the replacement's level `shift`), except that a game
+// range starting at its base level starts at the replacement's (close up, the game magnifies its
+// base level: the replacement shows its own); a game sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
-// by index, as Dolphin does: the bias moves its LOD back to the game's at the console's resolution
-// (efb_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
+// by index: the bias moves its LOD back to the one its levels were painted for
+// (mip_lines_log2_x32: 32 x log2 of the frame's lines over kAuthoredLines), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
-    const TexMode& mode,
+    const TextureSampler& mode,
     bool generated_mips,
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16 = 0u,
     bool arbitrary = false,
-    std::uint8_t efb_scale_log2_x32 = 0u) noexcept;
+    std::uint8_t mip_lines_log2_x32 = 0u) noexcept;
 
 // FNV-1a step over a whole 64-bit word (seed with kMix64OffsetBasis). Only bucket selection:
 // each key's operator== decides identity.
@@ -113,41 +100,40 @@ public:
         const RenderServices* services,
         bool present_swap_chain = true,
         bool black = false);
-    void present_cached_xfb(
+    void present_cached_display(
         bool black,
         bool present_swap_chain = true);
     void wait_for_render_idle();
     void set_frame_end_presents(bool enabled) noexcept {
         frame_end_presents_.store(enabled, std::memory_order_relaxed);
     }
-    // Scene boundaries one render chunk carries (3D and 2D, two frames).
-    static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
     using SceneStage = std::array<char, 48>;
-    // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
-    void attach_fifo_marker(FifoMarker marker) noexcept {
-        if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
-            const std::uint8_t index = producer_fifo_marker_count_++;
-            producer_fifo_markers_[index] = marker;
-            producer_fifo_marker_serials_[index] = producer_shape_record_serial_;
-            producer_fifo_marker_views_[index] = producer_scene_view_;
-            producer_fifo_marker_sky_up_[index] = producer_scene_sky_up_;
-            if (producer_scene_view_valid_ && marker == FifoMarker::SceneBegin) {
-                producer_fifo_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
-            } else {
-                producer_fifo_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
-            }
-            if (producer_scene_view_valid_ && producer_scene_sky_up_known_ && marker == FifoMarker::SceneBegin) {
-                producer_fifo_marker_sky_up_mask_ |= static_cast<std::uint8_t>(1u << index);
-            } else {
-                producer_fifo_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
-            }
-            producer_fifo_marker_stages_[index] = producer_scene_stage_;
+    // Simulation thread: a scene boundary, a record in the stream like the draws around it.
+    void attach_scene_marker(SceneMarker marker) {
+        shapes::Record record;
+        record.kind = shapes::Record::Kind::Scene;
+        record.key = static_cast<std::uint64_t>(static_cast<int>(marker));
+        record.native_index = static_cast<std::uint32_t>(producer_record_pool_.scenes.size());
+        shapes::SceneInfo& info = producer_record_pool_.scenes.emplace_back();
+        if (marker == SceneMarker::SceneBegin && producer_scene_view_valid_) {
+            info.view = producer_scene_view_;
+            info.view_valid = true;
+            info.sky_up = producer_scene_sky_up_;
+            info.sky_up_valid = producer_scene_sky_up_known_;
         }
+        if (marker == SceneMarker::SceneOpaqueEnd) {
+            info.view = producer_scene_opaque_;
+            info.view_valid = true;
+            attach_shape_record(std::move(record));
+            return;
+        }
+        info.stage = producer_scene_stage_;
         producer_scene_view_valid_ = false;
+        attach_shape_record(std::move(record));
     }
-    [[nodiscard]] bool rt_shadow_casters_wanted() const noexcept {
-        return rt_shadow_casters_wanted_.load(std::memory_order_relaxed);
+    void attach_scene_opaque(const float view[12]) noexcept {
+        for (unsigned i = 0; i < 12u; ++i) producer_scene_opaque_[i] = view[i];
     }
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
@@ -175,7 +161,7 @@ public:
             producer_scene_sky_up_ = producer_scene_sky_up_known_ ? encode_octahedral(eye) : 0u;
         }
     }
-    // One particle of a JPA stripe at `stream_offset` of the live GX stream
+    // One particle of a JPA stripe at `stream_offset` of the live stream
     // (its two strip vertices follow); carried by the next submission.
     struct StripeParticleMark {
         std::size_t offset = 0;
@@ -190,8 +176,42 @@ public:
     // Simulation thread: a native shape record (native_shapes.h) the next submission carries, run when its parser
     // reaches the record's offset.
     void attach_shape_record(shapes::Record&& record) {
-        record.serial = producer_shape_record_serial_++;
         producer_shape_records_.push_back(std::move(record));
+    }
+    // Simulation thread: room for a record's matrices and state ops in the pool the next submission carries.
+    [[nodiscard]] shapes::Matrix* reserve_record_matrices(shapes::Record& record, std::uint32_t count) {
+        record.matrix_first = static_cast<std::uint32_t>(producer_record_pool_.matrices.size());
+        record.matrix_count = count;
+        producer_record_pool_.matrices.resize(producer_record_pool_.matrices.size() + count);
+        return producer_record_pool_.matrices.data() + record.matrix_first;
+    }
+    [[nodiscard]] state::Op* reserve_record_ops(shapes::Record& record, std::uint32_t count) {
+        record.op_first = static_cast<std::uint32_t>(producer_record_pool_.ops.size());
+        record.op_count = count;
+        producer_record_pool_.ops.resize(producer_record_pool_.ops.size() + count);
+        return producer_record_pool_.ops.data() + record.op_first;
+    }
+    [[nodiscard]] std::uint32_t reserve_record_native(const void* native, std::size_t bytes) {
+        const auto index = static_cast<std::uint32_t>(producer_record_pool_.natives.size());
+        producer_record_pool_.natives.emplace_back();
+        std::memcpy(&producer_record_pool_.natives.back(), native, bytes);
+        return index;
+    }
+    [[nodiscard]] ScreenProbe* reserve_record_probes(shapes::Record& record, std::uint32_t count) {
+        record.vertex_first = static_cast<std::uint32_t>(producer_record_pool_.probes.size());
+        record.vertex_count = count;
+        producer_record_pool_.probes.resize(producer_record_pool_.probes.size() + count);
+        return producer_record_pool_.probes.data() + record.vertex_first;
+    }
+    [[nodiscard]] RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t count) {
+        record.vertex_first = static_cast<std::uint32_t>(producer_record_pool_.vertices.size());
+        record.vertex_count = count;
+        producer_record_pool_.vertices.resize(producer_record_pool_.vertices.size() + count);
+        return producer_record_pool_.vertices.data() + record.vertex_first;
+    }
+    // Simulation thread: a record's matrices while the pool is still being filled.
+    [[nodiscard]] const shapes::Matrix* producer_record_matrices(const shapes::Record& record) const noexcept {
+        return producer_record_pool_.matrices.data() + record.matrix_first;
     }
     // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
     void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint64_t y, std::uint64_t u,
@@ -213,49 +233,34 @@ public:
         mark.width = static_cast<std::uint16_t>(width);
         mark.height = static_cast<std::uint16_t>(height);
     }
-    void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
-    // Simulation thread: answers a depth or color peek from an asynchronous EFB field. A peek made in
-    // a draw-sync token's callback (`token` nonzero) reads the field captured where the stream
-    // reached that token (the console stopped the GPU there with a breakpoint while the callback
-    // peeked); the field a frame earlier, as the capture completes asynchronously. Until that
-    // channel has a field, and for token 0, the latest field of the kind answers. The request is
-    // recorded so the render thread keeps producing fields while peeks continue.
-    [[nodiscard]] bool peek_efb_published(
-        std::uint16_t x,
-        std::uint16_t y,
-        EfbPeekKind kind,
-        std::uint16_t token,
-        std::uint32_t& value);
-    // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
-    [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
+    // Simulation thread: channel `channel`'s latest finished probes, at most `capacity`; how many.
+    [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
-    [[nodiscard]] std::uint64_t xfb_copy_count() const noexcept;
-    [[nodiscard]] XfbPresentStats xfb_present_stats() const noexcept;
+    [[nodiscard]] std::uint64_t display_copy_count() const noexcept;
+    [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 
 private:
 
     // Resolves draw state once for a run of `draw_count` draws (a native shape's); end_cached_draw_run follows
     // only when this returns true.
     [[nodiscard]] bool begin_cached_draw_run(
-        PrimitiveClass primitive,
+        Primitive primitive,
         std::uint8_t vtxfmt,
         std::size_t draw_count);
     void end_cached_draw_run();
-    // A copy (EFB to texture or display) with the pixel format it reads.
-    void on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format);
-    void on_invalidate_textures();
-    void on_invalidate_vertex_cache();
-    // A palette place took another address (NativeDrawState::palette_revision).
-    void on_palettes_changed();
-    // A light op's words (GXLoadLightObjImm's), into matrix memory.
+    // A copy (scene target to texture or display) with the pixel format it reads.
+    void on_frame_output(const FramePassRequest& params);
+    // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
+    [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
+    // A light op's words (the state), into matrix memory.
     void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
     void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
 
     // Consumes state_'s dirty bits: rebuilds the shader and render-state keys, writes
-    // VertexConstants/PixelConstants into the constant ring, snapshots the XF matrix palette into the
+    // VertexConstants/PixelConstants into the constant ring, snapshots the matrix palette into the
     // matrix ring and refreshes the texture tables of the sampled maps. Returns the draw's pipeline,
     // or nullptr when none is ready (the draw is skipped).
     gpu::Pipeline* flush_draw_state(
@@ -263,11 +268,9 @@ private:
     // Whether a triangle draw with vertex format `vtxfmt` is a curved surface (curved_surfaces.h): a perspective scene
     // draw of a model the game registered, its positions indexed, not bump mapped, while the setting is on.
     [[nodiscard]] bool curved_draw(std::uint8_t vtxfmt) const;
-    // The pipeline of a curved draw's flat triangles (current_flat_pipeline_) for the curved pipeline's key.
-    [[nodiscard]] gpu::Pipeline* resolve_flat_pipeline(const PsoKey& curved_key);
     // The topology a draw records: a curved surface's patches while its specialized pipeline draws it.
     [[nodiscard]] gpu::Topology draw_topology(gpu::Topology topology) const noexcept {
-        return current_curved_ && !current_pipeline_is_uber_ ? gpu::kTopologyTrianglePatches : topology;
+        return current_curved_ ? gpu::kTopologyTrianglePatches : topology;
     }
 
     struct PendingDrawBatch {
@@ -290,8 +293,6 @@ private:
         bool hidden = false;
         // Hidden but traced: a clear surface the engine traces (the table's `traced`), captured though not drawn.
         bool traced = false;
-        RtDrawInfo rt_info{};
-        std::uint64_t debake_model = 0u;   // an undecided model whose vertex colours this batch samples
         // Its indices are a native shape's own, apart from the frame's index ring: nothing extends it.
         bool sealed = false;
     };
@@ -302,63 +303,25 @@ private:
         bool lhs_indexed,
         bool rhs_indexed) noexcept;
     void flush_pending_draw_batch();
-    // Shader and PSO cache coverage, printed once per frame when the on-disk coverage changed.
-    void ReportPipelineCoverage();
-    std::size_t last_reported_shader_records_ = 0;
-    std::size_t last_reported_pso_records_ = 0;
 
 
 
 
-    struct EfbPeekRequest {
-        std::uint16_t x = 0;
-        std::uint16_t y = 0;
-        EfbPeekKind kind = EfbPeekKind::Color;
-        std::span<std::uint32_t> depth_pixels;
-        std::uint32_t value = 0;
-        bool success = false;
-        bool done = false;
-        std::exception_ptr error;
-        std::mutex mutex;
-        std::condition_variable cv;
-    };
-
-    // One queued frame: the FIFO bytes the simulation produced for a retrace and the memory and
-    // services the parser callbacks need. With memory_snapshot_active, `memory` points at
-    // memory_snapshot, so delayed parsing sees the arrays and textures of submission time.
+    // One queued frame: its records and what the game said about it.
     struct FrameChunk {
         PointerResponseStamp pointer_response{};
         bool prerecorded_movie{};
-        float safety_surround{};
         MovieFrameMark movie_frame{};
         const RenderServices* services = nullptr;
         std::uint64_t producer_wait_ns = 0;
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        bool efb_peek_only = false;
-        EfbPeekRequest* efb_peek_request = nullptr;
-        std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
-        // In-frame pointer field: recorded before the chunk's records.
-        bool pointer_depth_in_frame = false;
-        // Scene boundaries in this chunk, in the order the game made them (3D and 2D scenes of up to two frames).
-        std::array<FifoMarker, kFifoMarkersPerChunk> fifo_markers{};
-        // Per marker: how many shape records the game had made before it (their order at one offset).
-        std::array<std::uint64_t, kFifoMarkersPerChunk> fifo_marker_serials{};
-        std::uint8_t fifo_marker_count = 0;
-        // Game camera (world to eye) per SceneBegin marker; bit i of the
-        // mask marks marker i's view valid.
-        std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
-        std::uint8_t fifo_marker_view_mask = 0;
-        // The player's up per SceneBegin marker (VertexConstants::sky_up); bit i of the mask marks it known.
-        std::array<std::uint32_t, kFifoMarkersPerChunk> fifo_marker_sky_up{};
-        std::uint8_t fifo_marker_sky_up_mask = 0;
-        // The stage per SceneBegin marker (empty when the game did not say).
-        std::array<SceneStage, kFifoMarkersPerChunk> fifo_marker_stages{};
-        // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
+        // JPA stripe particles in this chunk (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
-        // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
+        // The chunk's records, in the order the game made them (attach_shape_record).
         std::vector<shapes::Record> shape_records;
+        shapes::RecordPool record_pool;
     };
 
     struct PendingFrameEffects {
@@ -368,57 +331,34 @@ private:
         const RenderServices* services = nullptr;
     };
 
-    // Starts one fresh GX command-stream session. Every parser, state and tail mirror resets
+    // Starts one fresh command-stream session. Every parser, state and tail mirror resets
     // together. Resetting only some of them can classify a receipt as event-free after shutdown
     // or reinitialize.
-    void reset_fifo_session_state();
+    void reset_session_state();
 
     void render_thread_main();
     void render_frame_on_thread(FrameChunk& chunk);
-    void execute_efb_peek_on_thread(FrameChunk& chunk);
-    void poll_completed_pointer_depth_capture();
-    void drain_pending_pointer_depth_capture();
     // Render owner: completes an in-flight asynchronous depth field into the
-    // next publication slot, and submits a new one after a rendered chunk
-    // while the simulation thread keeps peeking.
-    void poll_async_peek_fields();
-    void submit_async_peek_fields_if_requested();
+    // Render owner: the probes whose frames have finished become their channels' answers.
+    void poll_screen_probes();
     // Presents black, a named picture (`slot`) or the newest.
-    void present_cached_xfb_on_thread(
+    void present_cached_display_on_thread(
         bool black,
         bool sleep_if_missing,
-        bool count_game_xfb_present = true,
+        bool count_game_display_present = true,
         std::optional<std::uint32_t> slot = std::nullopt);
     void present_latest_frame_on_thread();
     // The output shows black (FrameChunk::black): one black present per black
     // run, repeated while the settings overlay is open. `in_frame`: inside a render chunk's
     // begin_frame/end_frame.
     void present_vi_black(bool in_frame);
-    bool vi_black_shown_ = false;
+    bool black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
-    std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
-    std::array<FifoMarker, kFifoMarkersPerChunk> producer_fifo_markers_{};
-    std::array<std::uint64_t, kFifoMarkersPerChunk> producer_fifo_marker_serials_{};
-    // Shape records made so far (attach_shape_record): each record's and marker's place among them.
-    std::uint64_t producer_shape_record_serial_ = 0;
-    // Render thread: where a chunk's stream is split (markers, the pointer depth field, shape records), reused.
-    struct StreamSplit {
-        std::uint64_t serial;
-        int marker;  // a FifoMarker; -1 the pointer depth field; kSplitShapeRecord a shape record
-        int view;    // the marker's index (its camera) or the record's, -1 none
-    };
-    static constexpr int kSplitShapeRecord = -2;
-    std::vector<StreamSplit> stream_splits_;
-    std::uint8_t producer_fifo_marker_count_ = 0;
-    std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
-    std::uint8_t producer_fifo_marker_view_mask_ = 0;
-    std::array<std::uint32_t, kFifoMarkersPerChunk> producer_fifo_marker_sky_up_{};
-    std::uint8_t producer_fifo_marker_sky_up_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
+    std::array<float, 12> producer_scene_opaque_{};
     bool producer_scene_view_valid_ = false;
     std::uint32_t producer_scene_sky_up_ = 0u;
     bool producer_scene_sky_up_known_ = false;
-    std::array<SceneStage, kFifoMarkersPerChunk> producer_fifo_marker_stages_{};
     SceneStage producer_scene_stage_{};
     // Render thread: the stage the game last reported, and whether it ever did.
     SceneStage scene_stage_{};
@@ -426,7 +366,7 @@ private:
     // Render thread: the scene's sky up changed; the next draw uploads its VS constants.
     bool sky_up_dirty_ = false;
     std::vector<StripeParticleMark> producer_stripe_particles_;
-    // Render thread: the chunk's stripe marks while its FIFO is parsed (log
+    // Render thread: the chunk's stripe marks while its records run (log
     // recording), and the stripe vertices of the pending draw batch.
     std::span<const StripeParticleMark> parse_stripes_{};
     std::size_t parse_stripe_next_ = 0;
@@ -440,9 +380,6 @@ private:
     // Render thread -> simulation thread: emit draw-identity markers.
     std::atomic<bool> draw_identity_wanted_{false};
     std::atomic<unsigned> bloom_route_{0u};
-    // RenderConfig::rt_water this render chunk: water draws join the traced water (rt_water_draw).
-    bool rt_water_wanted_ = true;
-    std::atomic<bool> rt_shadow_casters_wanted_{false};
     // Draw identity (on_host_marker): the key of the marker in force in the
     // open scene and the matrix-write count at it. A transform record's
     // identity is that key with the matrix writes since. Repeated markers of
@@ -455,7 +392,7 @@ private:
     // between them) are told apart by their order.
     std::uint64_t identity_last_base_ = 0;
     std::uint32_t identity_sub_index_ = 0;
-    // A render chunk began (FIFO streaming cuts frames mid-scene): its first
+    // A render chunk began (streaming cuts frames mid-scene): its first
     // VS upload re-states the bindings and may continue the open record.
     bool scene_chunk_restart_ = false;
     std::uint64_t interp_chunk_continues_ = 0;   // records continued across a chunk start
@@ -490,7 +427,7 @@ private:
     std::uint64_t motion_light_markers_ = 0;
     std::uint64_t motion_mirror_markers_ = 0;
     std::uint64_t motion_stripe_marks_ = 0;
-    // GameScene::draw2D began (FifoMarker::Scene2DBegin); 2D layers in the report window.
+    // GameScene::draw2D began (SceneMarker::Scene2DBegin); 2D layers in the report window.
     void on_scene_2d_begin();
     std::uint64_t window_2d_scenes_ = 0;
     std::uint64_t identity_signature_rejected_ = 0;
@@ -526,188 +463,21 @@ private:
     TransformHistory screen_history_;
     TransformHistory mirror_history_;
     unsigned side_layer_ = 0u;                 // kScreenLayer or kMirrorLayer while one records
-    // Ray tracing: the 3D scene's SceneFunction phase (motion::ScenePhase, from the phase
-    // markers), whether the draw state is traceable geometry (unblended, colour- and
-    // depth-writing perspective triangles; flush_draw_state) and whether the scene was traced.
-    std::uint8_t rt_phase_ = 0xFFu;
-    bool rt_state_eligible_ = false;
-    // The same, alpha-tested: traced as foliage cards where the material table names foliage.
-    bool rt_card_eligible_ = false;
-    // Additive blended triangles (glows) under a perspective projection.
-    bool rt_glow_eligible_ = false;
     // The glow exposure the PS constants carry: 0 none, 1 sprite, 2 model.
     std::uint8_t glow_kind_ = 0u;
     // Blended scene draws of the translucent phases under ray-traced lighting take its texture in
     // map 7 (output_flags bit 6); the texture binding key marks them in map 7's TEX_MODE0 word.
     bool lit_translucent_ = false;
     static constexpr std::uint32_t kLitTranslucentKey = 0x4C495431u;
-    bool rt_water_eligible_ = false;
-    bool rt_sprite_eligible_ = false;   // alpha-blended translucent triangles (light sprites, rt_sprite_light_draw)
     bool lit_late_ = false;             // a lit late opaque draw (output_flags bit 7: its light at most 1.15)
-    bool rt_scene_traced_ = true;
-    bool rt_view_set_ = false;
     // Ambient occlusion (RenderConfig::ambient_occlusion, without traced lighting), sampled at each frame start; the
-    // scene's view is set (note_scene_ao_view) and the occlusion drawn (apply_scene_ao).
     bool ambient_occlusion_ = false;
-    bool ao_view_set_ = false;
-    bool ao_scene_applied_ = true;
-    [[nodiscard]] bool rt_geometry_draw() const noexcept;
-    [[nodiscard]] bool rt_card_draw() const noexcept;
-    [[nodiscard]] bool rt_alpha_draw() const noexcept;
-    // Texture map `map` of the bound table as the ray tracer copies it (none for an empty map).
-    [[nodiscard]] RtTextureSource rt_texture_source(unsigned map) const noexcept;
-    // The loaded stage (note_rt_stage) and its fixed key (aim_rt_scene_lights): decided once per stage.
-    std::uint64_t rt_stage_hash_ = 0u;
-    std::uint64_t rt_fixed_key_stage_ = ~0ull;
-    std::uint32_t rt_fixed_key_scenes_ = 0u;
-    bool rt_fixed_key_on_ = false;
-    [[nodiscard]] bool rt_glow_draw() const noexcept;
-    [[nodiscard]] bool rt_late_draw() const noexcept;
-    [[nodiscard]] bool rt_water_draw() const noexcept;
-    [[nodiscard]] bool rt_ocean_water_draw() const noexcept;
-    [[nodiscard]] bool rt_sprite_light_draw() const noexcept;
-    void note_rt_phase(std::uint8_t phase);
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
-    [[nodiscard]] RtView scene_depth_view(const ScaledGxViewport& viewport) const;
-    void note_interp_rt_projection();
-    void note_scene_ao_view(const DrawCall& call);
+    [[nodiscard]] RtView scene_depth_view(const float terms[6], const ScaledViewport& viewport) const;
     // The scene's occlusion, once, before its first translucent phase (or at its end).
-    void apply_scene_ao();
-    void trace_rt_scene();
-    void trace_rt_water();
-    // GALAXY_RT_MATERIALS: the census line of a scene draw (rt_surfaces.h).
-    void note_rt_material();
-    // A stage was loaded: its name and its row of the sun table (rt_materials.h) for the ray tracer.
-    void note_rt_stage();
-    // The current draw is a light effect the traced lighting replaces (rt_materials.h hide).
-    [[nodiscard]] bool rt_hidden_draw() const noexcept;
-    // The draw is a clear surface the engine traces (the table's `traced`): not shown, still captured.
-    [[nodiscard]] bool rt_traced_clear_draw() const noexcept;
-    // The draw is a sprite of the table's `mist` effects while the ray tracer takes them as puffs (note_rt_mist).
-    [[nodiscard]] bool rt_mist_draw() const noexcept;
-    // Its puff for the ray tracer (SceneRayTracer::note_mist).
-    void note_rt_mist(const DrawCall& call);
-    // A traced clear solid's draw (the table's `traced solid`): unseen scene geometry, its game draw hidden.
-    [[nodiscard]] bool rt_traced_solid_draw() const noexcept;
-    // The current object's name (NameObj::mName) into `out`; its address, 0 for none.
-    std::uint64_t rt_object_name(char* out, std::size_t size);
-    [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
-                                                      const std::array<TextureHandle, kMaxTextureMaps>& handles,
-                                                      unsigned& map) noexcept;
-    std::uint64_t rt_object_ = 0u;   // the last NameObj marker's object
-    bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
-    bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
-    bool rt_trace_only_ = false;          // trace-only draws (motion::kMarkerTraceOnly): traced, never drawn
-    std::unordered_map<std::uint64_t, bool> rt_fake_shadow_cache_;
-    bool rt_fake_shadow_object(std::uint64_t object);
-    std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
-    // Its parts: the bound textures' entry, the J3D material's (motion::kMarkerMaterial; 0: none) over it, and for an
-    // emitter's particles its effect's (motion::kMarkerEffect; 0: none) over the textures'.
-    std::uint16_t texture_rt_material_ = 0u;
-    std::uint16_t rt_material_identity_ = 0u;
-    // The J3D material identity (FNV-1a "model/material") whose shapes draw now, 0 none (GALAXY_RT_LOG_GLOWS).
-    std::uint32_t rt_identity_seen_ = 0u;
-    std::uint16_t rt_effect_material_ = 0u;
-    // The traced draws' identity from frame to frame (RtDrawInfo.light_key): the last object, model shape, emitter or
-    // particle marker (a particle by its pool node and lifetime), the J3D material's after it, the draws since.
-    std::uint64_t rt_light_object_ = 0u;
-    std::uint32_t rt_light_material_ = 0u;
-    std::uint32_t rt_light_draws_ = 0u;
-    [[nodiscard]] std::uint32_t rt_light_key() noexcept;
-    void refresh_rt_material() noexcept {
-        current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_
-                               : rt_effect_material_ != 0u ? rt_effect_material_
-                                                           : texture_rt_material_;
-    }
-    unsigned current_rt_map_ = 0xFFu;  // its texture map (else the first bound one; 0xFF none)
-    std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
-    bool rt_sky_buffer_ = false;  // the draws are the game's sky lists' (kRtDrawSky) until the next category marker
-    bool rt_sun_buffer_ = false;   // the game's sun list (Sun 3): neither sky nor scene under physical light
-    // The draws are the game's own shadows (CategoryList::execute of MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27,
-    // AlphaShadow 0x29) until the next category marker: hidden under traced lighting (rt_hidden_draw).
-    bool rt_fake_shadow_list_ = false;
-    // The texture generator of the first TEV stage sampling texture map `map` (0xFF: none).
-    [[nodiscard]] unsigned rt_texgen_of_map(unsigned map) const noexcept;
-    // A draw of the game's sky lists: its record for the traced sky (kRtDrawSky).
-    void begin_rt_sky_batch(RtDrawInfo& info);
-    // The draw's TEV program, registers, colour channels (lit ones at `facing` of their lights) and textures for ray
-    // hits (RtDrawInfo.tev); its two texture slots.
-    void fill_rt_tev(RtDrawInfo& info, float facing);
-    // The program and its state alone (stages, registers, konstants, colour channels, alpha compare).
-    void build_rt_tev(RtTevMaterial& tev, RtTevStage* stages, float facing) const;
-    // debake_channels (bits 0-3) with each channel's neutral light (bits 8-15, 16-23: rt_tev_neutral_light), cached by
-    // the TEV state.
-    [[nodiscard]] std::uint32_t debake_state();
-    std::unordered_map<std::uint64_t, std::uint32_t> debake_levels_;
-    // De-baking by model (apply_debake_model): a model's vertex colours (its CP colour arrays CLR0 / CLR1), sampled the
-    // first frame it draws, decide whether they hold baked light (de-baked from the next frame) or paint (kept).
-    struct DebakeModel {
-        std::uint64_t frame = 0u;   // the frame (frame_index_ + 1) it first drew in
-        bool decided = false;
-        bool baked = false;
-        std::uint8_t level = 0u;    // its brightest vertex's value (0-255): the colour it is de-baked to
-        std::uint32_t vertices = 0u;
-        std::unordered_set<std::uint32_t> colours;   // distinct RGB8, at most kDebakeModelColours
-        // The light baked into its colours as a function of the surface's facing (fit_debake_light): its sampled
-        // vertices with a normal (object space) and their colours, at most kDebakeModelSamples.
-        std::vector<std::array<float, 6>> samples;
-        std::array<float, 27> sh{};      // the fitted light, nine spherical harmonics a channel (r, g, b)
-        std::array<float, 3> peak{};     // the fitted light at the most lit sampled facing
-        float fit_r2 = 0.0f;             // the share of the colours' luminance variance the facing explains
-        bool fitted = false;
-    };
-    static constexpr std::size_t kDebakeModelSamples = 4096u;
-    // Its baked light as a function of the facing (model.sh, peak, fit_r2) from its samples.
-    static void fit_debake_light(DebakeModel& model);
-    static constexpr std::size_t kDebakeModelColours = 4096u;
-    std::unordered_map<std::uint64_t, DebakeModel> debake_models_;
-    std::uint32_t debake_models_stage_ = 0u;
-    std::uint64_t debake_sample_key_ = 0u;   // the current state's undecided model: its batches are sampled
-    std::uint8_t debake_model_level_ = 0u;   // the current state's baked model's level (0: the program's neutral)
-    // The current state's model's facing fit (VertexConstants::debake_sh, debake_peak): the shaders de-bake by it.
-    bool debake_fit_active_ = false;
-    float debake_fit_sh_[7][4]{};
-    float debake_fit_peak_[4]{};
-    std::vector<std::uint64_t> debake_model_order_;   // GALAXY_RT_DEBAKE_CYCLE: the baked models in decision order
-    // The unlit channels (bits 0-1) of `channels` kept only where the model's colours are baked light.
-    [[nodiscard]] std::uint32_t apply_debake_model(std::uint32_t channels);
-    // A finished batch's vertex colours into its undecided model's sample.
-    void sample_debake_model(std::uint64_t key, const DrawCall& call);
-    // Physical ray tracing: the colour channels whose colour carries the art's baked light, in an opaque scene phase,
-    // outside the sky lists and the material table's emitters (whose colour is their light): unlit and taken from the
-    // vertices (bits 0-1: channel 0, 1), and lit (bits 2-3: their light at full, their vertex colour's shading).
-    // GALAXY_RT_DEBAKE=0: none.
-    [[nodiscard]] std::uint32_t debake_channels() const;
-    // Per object name (its address) the class its name gives (rt_named_class), + 1.
-    std::unordered_map<std::uint64_t, std::uint8_t> rt_named_;
-    // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
-    // the camera (projection and viewport) for rays through EFB pixels.
-    [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
-    void exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt);
-    // Actor lights (actor_lights.h): the open scene's aim and its serial; the scene's key light in
-    // world space (direction towards it), how far the lights are moved to it, its source (1 the
-    // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its
-    // colour (RGBA8); whether the scene is followed (the ray tracer lights it and its camera is
-    // known) and that camera; GX lights 0 and 1: those the hooked light loads left (known) and of
-    // them those following the camera, those whose loaded positions (rt_light_positions_) the next
-    // draw takes; the moved lights of the palette snapshot in use and of the flushed draw (serial
-    // << 8 | light bits).
-    ActorLightAim rt_light_aim_{};
-    std::uint32_t rt_light_serial_ = 0;
-    std::array<float, 3> rt_light_world_{};
-    float rt_light_blend_ = 0.0f;
-    std::uint8_t rt_key_source_ = 0;
-    std::uint32_t rt_light_key_color_ = 0;
-    bool rt_light_tracking_ = false;
-    std::array<float, 12> rt_scene_view_{};
-    std::uint8_t rt_known_lights_ = 0;
-    std::uint8_t rt_follow_lights_ = 0;
-    std::uint8_t rt_light_pending_ = 0;
-    std::array<std::array<float, 3>, 2> rt_light_positions_{};
-    std::uint32_t rt_palette_lights_ = 0;
-    std::uint32_t rt_draw_lights_ = 0;
-    // The open scene's candidate key lights: the world-fixed GX light 0 of its lit draws, by world
+    void apply_scene_ao(const std::array<float, 12>& view);
+    // The open scene's candidate key lights: the world-fixed light 0 of its lit draws, by world
     // direction and colour, with the draws using each and the sum of their ambient registers (0-1)
     // over those taking it from the register (traced).
     struct RtWorldKey {
@@ -717,34 +487,6 @@ private:
         std::array<float, 3> ambient{};
         std::uint32_t ambient_draws = 0;
     };
-    std::array<RtWorldKey, 8> rt_world_keys_{};
-    std::uint32_t rt_world_key_count_ = 0;
-    // The stage's last world key (none: no draws), until a stage load.
-    RtWorldKey rt_world_held_{};
-    // The game's player light rig as its draws load it (XF words, RGB): ambient, lights 0 and 1; per scene
-    // (aim_rt_scene_lights). rt_player_rig_draw: the draw is lit by it.
-    std::array<std::uint32_t, 3> rt_player_rig_{};
-    bool rt_player_rig_known_ = false;
-    [[nodiscard]] bool rt_player_rig_draw() const noexcept;
-    void note_rt_world_key() noexcept;
-    // A camera cut since the last scene's aim (and the most objects one reported); the game's sun
-    // count at the last cut, and whether one arrived since (the ray tracer holds it).
-    bool rt_scene_cut_ = false;
-    std::uint32_t rt_cut_objects_ = 0;
-    std::uint64_t rt_sun_cut_updates_ = 0;
-    bool rt_sun_held_ = false;
-    // GALAXY_TRACE_LIGHTS: snapshots with moved lights, snapshots added for them, TSC cycles of
-    // the actor-light work and its timed regions, and palette snapshots with the cycles of their
-    // allocation and copy.
-    std::uint64_t rt_light_uploads_ = 0;
-    std::uint64_t rt_light_forced_ = 0;
-    std::uint64_t rt_light_cycles_ = 0;
-    std::uint64_t rt_light_regions_ = 0;
-    std::uint64_t rt_snapshot_count_ = 0;
-    std::uint64_t rt_snapshot_cycles_ = 0;
-    void aim_rt_scene_lights(const std::array<float, 12>* view);
-    [[nodiscard]] std::uint32_t rt_aimed_lights() const noexcept;
-    void write_rt_lights(std::uint32_t* palette) noexcept;
     bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
     bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
     // A run of frames that draw no 3D scene (the pause menu over its captured picture): each is recorded as a screen
@@ -773,11 +515,9 @@ private:
     bool interp_recording_ = false;
     // Render thread: the chunk being rendered ended a game frame (a new picture), and the picture serial last
     // presented when its chunk ended (present_on_copy_enabled).
-    bool xfb_copied_in_chunk_ = false;
+    bool display_copied_in_chunk_ = false;
     std::atomic<bool> frame_end_presents_{true};  // set_frame_end_presents
     std::uint64_t copy_presented_serial_ = 0u;
-    // Sub-frames show between game frames now (interpolation on and its governors allowing at least one).
-    [[nodiscard]] bool subframes_shown() const;
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;
@@ -794,6 +534,10 @@ private:
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
+        // Per record, from its drawing state: texgen i's bit when it maps position or normal (its matrices lerp
+        // whole), and the lights its colour channels and emboss texgens evaluate.
+        std::vector<std::uint8_t> spatial_texgens;
+        std::vector<std::uint8_t> light_masks;
         // The palettes (shadows) as rows: per shadow a table of draw_rows::kRows indices into `palette_rows` (4
         // words a row). A shadow appends only the kinds that changed since the one before it; the rest it shares.
         std::vector<std::uint32_t> palette_tables;
@@ -804,13 +548,12 @@ private:
             return {palette_tables.data() + shadow * draw_rows::kRows, palette_rows.data()};
         }
         // Pixel-stage constants per upload in the scene (draws carry the index).
-        std::vector<PixelConstants> ps_constants;
         Affine34 camera{};
         // The game camera (world to eye) of the scene.
         Affine34 view{};
         bool view_known = false;
-        // The projection the ray tracer took the scene's view from (GX A, B, C, D, E, F without the temporal jitter)
-        // and its viewport's size in EFB pixels: sub-frames interpolate it (SubframeTime::projection).
+        // The projection the ray tracer took the scene's view from
+        // and its viewport's size in scene target pixels: sub-frames interpolate it (SubframeTime::projection).
         std::array<float, 6> rt_projection{};
         float rt_viewport[2]{};
         bool rt_projection_known = false;
@@ -836,9 +579,8 @@ private:
         }
         void clear() noexcept {
             constants.clear(); prev_index.clear();
-            palette.clear(); per_vertex.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
+            palette.clear(); per_vertex.clear(); spatial_texgens.clear(); light_masks.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
             valid = false; serial = 0;
-            ps_constants.clear();
             category.clear(); camera_epoch_known = false;
             rt_projection_known = false;
             layers = {};
@@ -894,7 +636,6 @@ private:
         EyeMotion position{};             // inline position matrix
         bool position_moves = false;
         bool tex_moves = false;           // inline texture or post matrices
-        bool colour_moves = false;        // channel ambient or material colours
         bool projection_moves = false;
     };
     std::vector<InterpRecordMotion> interp_moving_;
@@ -905,7 +646,7 @@ private:
         std::int32_t next = -1;           // next entry of the same shadow
         std::uint16_t position_mask = 0;  // PNMTX slots its records read
         std::uint16_t normal_mask = 0;    // normal matrices its records read
-        std::uint8_t light_mask = 0;      // GX lights its records evaluate
+        std::uint8_t light_mask = 0;      // lights its records evaluate
         bool orthographic = false;
         std::uint8_t layer = 0;           // of the records that read it
         PaletteMotion motion{};
@@ -928,11 +669,9 @@ private:
     std::uint64_t interp_sequence_serial_ = 0;
     // GALAXY_INTERP_SNAPSHOT_DIR/_FIRST/_LAST: sequences whose sub-frames and
     // real frame are read back (seq_<n>_sub<i>.ppm, seq_<n>_real.ppm).
-    std::string interp_snapshot_path_;
-    [[nodiscard]] std::string interp_snapshot_path(const char* suffix) const;
     void run_pending_interp_start();
     InterpSequence interp_sequence_{};
-    // A recorded frame whose present arrives as a separate VI present.
+    // A recorded frame whose present arrives as a separate present.
     bool interp_log_waiting_ = false;
     std::uint32_t interp_log_slot_ = 0;
     bool interp_stopping_ = false;        // render thread draining for a stop
@@ -956,7 +695,6 @@ private:
     std::uint64_t interp_slot_to_vblank_samples_ = 0;
     void note_present_vblank(std::int64_t slot);
     // GALAXY_INTERP_TIMELINE=<file>: one line per present while interpolating (pacing checks).
-    void note_interp_timeline(std::int64_t slot, double t, bool real);
     // Smoothed game-frame arrival clock (start_interp_sequence).
     std::int64_t interp_arrival_qpc_ = 0;
     std::int64_t interp_frame_period_qpc_ = 0;
@@ -995,7 +733,7 @@ private:
     std::uint64_t interp_cadence_drops_ = 0;
     double interp_cadence_fps_ = 0.0;
     double interp_cadence_own_misses_ = 0.0;   // the game's own misses per second: their lowest recent rate
-    // The game thread's time blocked on the render thread (queue space, drains, PE completions, EFB peeks), in QPC
+    // The game thread's time blocked on the render thread (queue space, drains, completions, scene target peeks), in QPC
     // ticks: the sub-frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
     std::uint64_t interp_cadence_wait_seen_ = 0;
@@ -1015,15 +753,12 @@ private:
     interp_gpu::Layout interp_layout_{};
     std::vector<std::int32_t> interp_vs_slot_;             // per record
     std::vector<std::int32_t> interp_record_palette_slot_;  // per record
-    std::vector<std::int32_t> interp_ps_slot_;             // per pixel-constant record
     std::vector<std::int32_t> interp_palette_slot_;        // per interp_palette_motions_ entry
     std::vector<std::int32_t> interp_palette_entry_;       // per palette slot: its entry
     std::vector<std::array<std::uint32_t, 5>> interp_palette_source_;  // per palette slot: its draw's blocks
     bool prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene, bool before_valid);
     // Pixel-constant records of the playing scene whose colours change
     // (record, matched record of the scene before), and their sub-frame uploads.
-    std::vector<std::array<std::uint32_t, 2>> interp_ps_moving_;
-    std::uint64_t interp_ps_moving_total_ = 0;   // summed per sub-frame
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
@@ -1040,7 +775,7 @@ private:
     std::uint64_t interp_started_ = 0;
     std::uint64_t interp_last_played_serial_ = 0;
     std::uint64_t interp_logs_skipped_ = 0;     // completed logs replaced before playing
-    std::uint64_t interp_present_skipped_ = 0;  // VI presents while a sequence played
+    std::uint64_t interp_present_skipped_ = 0;  // presents while a sequence played
     // Game frames presented without sub-frames, by reason: overlay, no 3D
     // scene, several scenes, (unused), log already gone, unmatched.
     std::array<std::uint64_t, 6> interp_real_only_{};
@@ -1064,15 +799,14 @@ private:
     MovieReplacements movie_replacements_;
     std::uint64_t movie_mods_generation_ = ~0ull;
     std::uint64_t movie_stats_tick_ = 0;
-    float producer_safety_surround_{},render_safety_surround_{};
     std::array<std::uint64_t,512> pointer_latency_bins_{};
     std::uint64_t pointer_response_count_{}, pointer_latency_total_{}, pointer_latency_max_{}, pointer_report_ns_{};
     std::array<std::uint64_t,512> pointer_acquisition_age_bins_{};
     std::uint64_t pointer_acquisition_age_count_{}, pointer_acquisition_age_total_{}, pointer_acquisition_age_max_{};
-    void record_pointer_response(const XfbTexture& texture) noexcept;
-    void record_presented_xfb_copy(const XfbTexture& texture) noexcept;
-    void record_skipped_duplicate_xfb_present(
-        const XfbTexture& texture) noexcept;
+    void record_pointer_response(const DisplayTexture& texture) noexcept;
+    void record_presented_display_copy(const DisplayTexture& texture) noexcept;
+    void record_skipped_duplicate_display_present(
+        const DisplayTexture& texture) noexcept;
     struct MonotonicCadenceAccumulator {
         static constexpr std::size_t kMaxRetainedIntervals = 20'000u;
 
@@ -1094,28 +828,29 @@ private:
     };
     std::uint64_t frame_tail_report_ns_{};
     void report_frame_tail_window() noexcept;
+    void trace_memory();
     static void record_monotonic_cadence_sample(
         MonotonicCadenceAccumulator& accumulator) noexcept;
     static void reset_monotonic_cadence(
         MonotonicCadenceAccumulator& accumulator) noexcept;
     // The matrices and lights the game loads (E-05 replaces it with a per-frame arena).
     DrawMatrices matrices_;
-    // The drawing state the game's records set, as typed values (draw_state.h).
+    // The drawing state the game's records set, as typed values (drawing_state.h).
     NativeDrawState draw_state_;
     // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
     [[nodiscard]] BlendMode draw_blend() const {
-        return effective_blend(draw_state_.blend, draw_state_.pe.pixel_format == 1u);
+        return effective_blend(draw_state_.blend, draw_state_.frame_alpha);
     }
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
-    EfbCopyManager efb_copies_;
+    DisplayPictures display_pictures_;
     Renderer renderer_;
 
     const RenderServices* frame_services_ = nullptr;
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may
     // run a small bounded number of frames ahead, then blocks on queue_space_cv_. This is the
-    // frame-granular analogue of Dolphin's SyncGPU max-distance throttle. fifo_pool_ recycles chunk
+    // a frame-granular throttle. chunk_pool_ recycles chunk
     // buffers, so the steady state does not allocate.
     std::thread render_thread_;
     std::mutex queue_mutex_;
@@ -1137,21 +872,9 @@ private:
     static_assert(
         kChunkPoolRetainedBuffers >= 2u * kMaxSelectableRenderQueueDepth + 1u,
         "the chunk pool must cover twice the deepest render queue plus the consumer's chunk");
-    // Only the render owner accesses this record outside queue_mutex_. All
-    // mutations hold that mutex for simulation-thread idle predicates.
-    struct PendingPointerDepthCapture {
-        std::shared_ptr<PointerDepthCapture> capture;
-        std::uint64_t fence_value = 0;
-        std::chrono::steady_clock::time_point started{};
-    } pending_pointer_depth_capture_;
-    void take_attached_pointer_depth_capture(FrameChunk& chunk);
-    void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
-    void take_attached_fifo_markers(FrameChunk& chunk) noexcept;
     // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
-    void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
+    void on_scene_marker(SceneMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);
-    // A stage was loaded (another sky and other lights): the tracer's stage state starts over.
-    void begin_rt_stage();
     // Temporal scene: jitter, palette base, transform record and motion
     // fields of a VS constant upload (`upload` is write-combined memory).
     void write_scene_vs_constants(const VertexConstants& cpu, VertexConstants& upload);
@@ -1159,43 +882,23 @@ private:
     // `jitter_ndc` receives the offset (zero for orthographic draws).
     void apply_scene_jitter(const VertexConstants& cpu, VertexConstants& upload,
                             float jitter_ndc[2]);
-    void adopt_pointer_depth_fence_if_needed();
-    // Asynchronous EFB fields for simulation-thread GXPeekZ/GXPeekARGB, one per channel. A channel
-    // answers one peek kind at one draw-sync token (`key`, bound by the simulation thread at the
-    // first such peek; the least recently used channel is rebound). Three slots: the render owner
-    // fills the slot after the published one, then publishes it. Readers only load the published
-    // slot. `published` packs the binding generation (high word) and slot + 1, so a field
-    // captured for an earlier binding never answers the new one.
-    static constexpr std::uint32_t kAsyncPeekUnbound = 0xFFFFFFFFu;
-    struct AsyncPeekFieldState {
-        // Mapped readback bytes of each slot (RGBA8, 640x456), written by the
-        // render thread before the slot is published.
-        std::array<const std::uint8_t*, 3> rgba{};
-        // Slot the in-flight field writes and the binding it was captured for; render thread only.
-        int pending_slot = -1;
-        std::uint32_t pending_generation = 0;
-        std::atomic<std::uint32_t> key{kAsyncPeekUnbound};
-        std::atomic<std::uint32_t> generation{0};
-        std::atomic<std::uint64_t> published{0};
-        std::atomic<bool> requested{false};
-        std::atomic<std::uint64_t> published_answers{0};
-        std::atomic<std::uint32_t> publications{0};  // fields published for the current binding
-        std::uint64_t last_request = 0;  // simulation thread
-        std::uint64_t completed = 0;
+    // Probes in flight, oldest first; the answers of each channel. Only the answers are shared with the simulation thread.
+    struct ScreenProbeFlight {
+        std::uint32_t channel = 0, count = 0;
+        std::size_t slot = 0;
+        ScreenProbeKind kind = ScreenProbeKind::Alpha;
+        std::array<ScreenProbe, kScreenProbesMax> probes{};
     };
-    static constexpr std::uint32_t async_peek_key(EfbPeekKind kind, std::uint16_t token) noexcept {
-        return (kind == EfbPeekKind::Depth ? 0u : 0x10000u) | token;
-    }
-    static constexpr EfbPeekKind async_peek_key_kind(std::uint32_t key) noexcept {
-        return (key & 0x10000u) == 0u ? EfbPeekKind::Depth : EfbPeekKind::Color;
-    }
-    [[nodiscard]] std::size_t async_peek_channel(EfbPeekKind kind, std::uint16_t token);
-    [[nodiscard]] static bool read_async_peek_field(
-        AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value);
-    std::array<AsyncPeekFieldState, Renderer::kAsyncPeekFieldChannels> async_peek_{};
-    std::uint64_t async_peek_requests_ = 0;  // simulation thread
-    // Render owner: records the fields of channels bound to `token` where the stream reaches it.
-    void record_async_peek_fields_at_token(std::uint16_t token);
+    std::array<ScreenProbeFlight, Renderer::kScreenProbeSlots> probe_flights_{};
+    std::size_t probe_flight_first_ = 0, probe_flights_active_ = 0;
+    void record_screen_probes(const shapes::Record& record);
+    static constexpr std::uint32_t kScreenProbeChannels = 8u;
+    struct ScreenProbeAnswers {
+        std::uint32_t count = 0;
+        std::array<ScreenProbe, kScreenProbesMax> probes{};
+    };
+    mutable std::mutex probe_answers_lock_;
+    std::array<ScreenProbeAnswers, kScreenProbeChannels> probe_answers_{};
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
     std::size_t utility_chunks_in_flight_ = 0;
@@ -1208,16 +911,10 @@ private:
             64u * 1024u * 1024u / sizeof(RenderVertex));
     ResidentVertexArena resident_vertices_;
     UploadBuffer resident_vertex_buffer_;
-    std::byte* resident_vertex_mapped_ = nullptr;
     gpu::Address resident_vertex_gpu_ = 0;
     gpu::Device* resident_vertex_device_ = nullptr;
     bool resident_vertex_buffer_failed_ = false;
-    std::uint64_t frame_resident_vertex_hits_ = 0;
     // Curved surface triangles drawn plain (no corner bends) and as patches, and the draws split between them.
-    std::uint64_t frame_curved_flat_triangles_ = 0;
-    std::uint64_t frame_curved_patch_triangles_ = 0;
-    std::uint64_t frame_curved_split_draws_ = 0;
-    std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;
     // `triangles` (indices into `vertices`) with those no corner bends first, into `split`; how many indices those
@@ -1241,40 +938,41 @@ private:
         std::uint8_t position_matrix = 0;
         std::shared_ptr<const curved::Model> curved;
         bool expanded = false;
-        std::vector<RenderVertex> vertices;
-        ImmutableUploadToken index_upload_token;
         std::uint64_t resident_epoch = 0;
         std::uint32_t resident_offset = 0;
-        std::uint32_t resident_units = 0;
+        std::uint32_t resident_units = 0;     // the block: its vertices, then its indices
+        std::uint32_t resident_vertices = 0;  // the vertices alone
         std::vector<std::uint16_t> split_indices;
         std::uint32_t split_flat_indices = 0;
         bool split_built = false;
         ImmutableUploadToken split_upload_token;
     };
     std::unordered_map<std::uint64_t, RecordShape> record_shapes_;
+    std::vector<RenderVertex> expand_scratch_;  // a group's vertices on their way to the resident buffer
     std::vector<shapes::Record> producer_shape_records_;
+    shapes::RecordPool producer_record_pool_;
+    const shapes::RecordPool* current_record_pool_ = nullptr;
     void take_attached_shape_records(FrameChunk& chunk);
     // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
     void on_shape_record(const shapes::Record& record);
     void draw_record_shape(const shapes::Record& record);
     // Vertices the game sent as it drew them, through the frame's rings.
-    void draw_record_immediate(const shapes::Immediate& immediate);
+    void draw_record_immediate(const shapes::Record& record);
     // A material record into the drawing state (native_material.h).
-    void apply_record_material(const material::Program& program, const material::Values& values);
-    // A native material (E-04): its state into the drawing state; its pipeline and constants replace the GX ones for
+    // A native material (E-04): its state into the drawing state; its pipeline and constants for
     // the draws until end_native_material (the next material or drawing-state change).
-    void apply_native_material(std::shared_ptr<const material::Native> native);
+    void apply_native_material(const material::Native* native);
     void end_native_material();
     void begin_target_pass(const shapes::Record& record);
     void end_target_pass(const shapes::Record& record);
     // The open target pass's size (game units), for its closing copy.
-    std::array<std::uint16_t, 2> target_pass_size_{};
+    std::array<std::uint32_t, 2> target_pass_size_{};
     // A draw record's matrices and current matrices, into the matrix state its draw reads.
     void apply_record_matrices(const shapes::Record& record);
     // Gives back a group's resident block.
     void release_record_shape(RecordShape& shape) noexcept;
     // The vertex inputs of the draw being made when a native shape record draws (its corners' matrix slots, its
-    // model's arrays), in place of the GX vertex description the stream's draws carry.
+    // model's arrays), in place of the vertex description the stream's draws carry.
     struct RecordVertexInputs {
         std::uint32_t matrix_bits = 0;  // bit 0 position matrix per corner, bits 1-8 texture matrices 0-7
         std::uint64_t positions = 0;    // the position array's key
@@ -1286,21 +984,18 @@ private:
     };
     const RecordVertexInputs* record_inputs_ = nullptr;
     // draw_record_immediate's vertices and indices before they go to the rings.
-    std::vector<RenderVertex> immediate_vertices_;
     std::vector<std::uint16_t> immediate_indices_;
-    // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
-    std::uint64_t vs_key_vertex_source_ = 0;
-    // Whether the draw being made reads indexed positions (a model's): a record does unless its positions are its own.
-    [[nodiscard]] bool draw_positions_indexed() const noexcept;
+    // The vertex inputs the last keys were built with.
+    std::uint64_t vertex_source_ = 0;
     bool stop_render_thread_ = false;
     std::exception_ptr render_thread_error_;
     std::uint64_t present_epoch_ = 0;
-    XfbSerialAccountingState xfb_serial_accounting_{};
-    MonotonicCadenceAccumulator xfb_copy_production_cadence_{};
-    MonotonicCadenceAccumulator xfb_first_serial_present_cadence_{};
-    std::atomic<std::uint64_t> last_presented_xfb_stamp_{
+    DisplaySerialAccountingState display_serial_accounting_{};
+    MonotonicCadenceAccumulator display_copy_production_cadence_{};
+    MonotonicCadenceAccumulator display_first_serial_present_cadence_{};
+    std::atomic<std::uint64_t> last_presented_display_stamp_{
         ~std::uint64_t{0}};
-    std::atomic<std::uint64_t> last_presented_xfb_serial_{
+    std::atomic<std::uint64_t> last_presented_display_serial_{
         ~std::uint64_t{0}};
     std::atomic<std::uint32_t> last_presented_slot_{0};
     // Present rates below the game's 60 Hz show the newest frame on their own cadence. A 30 Hz present
@@ -1308,44 +1003,20 @@ private:
     [[nodiscard]] bool skip_for_present_rate();
     std::int64_t next_rate_present_qpc_ = 0;
 
-    // GX texture base registers store physical addresses (MEM1 0x00000000 and
-    // MEM2 0x10000000), while the CPU can write through cached/uncached
-    // aliases. Dirty notifications are normalized to this physical window.
-    static constexpr std::uint32_t kMem1PhysicalBase = 0x00000000u;
-    // The native game's memory (docs/NATIVE_PORT.md): MEM1 and MEM2 enlarged for 8-byte pointers; the console's
-    // 24 and 64 MB fit inside.
-    static constexpr std::uint32_t kMem1Size = 0x04000000u;
-    static constexpr std::uint32_t kMem2PhysicalBase = 0x10000000u;
-    static constexpr std::uint32_t kMem2Size = 0x10000000u;
-
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
-    PixelShaderKey ps_key_{};
-    UberPsKeyMemo uber_ps_memo_;
-    VertexShaderKey vs_key_{};
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};
-    // The game's material programs by key (their display lists), as registered.
-    std::unordered_map<std::uint64_t, std::shared_ptr<const material::Program>> material_programs_;
-    // The distinct programs by content hash (material_programs_ points into these).
-    std::unordered_map<std::uint64_t, std::vector<std::shared_ptr<const material::Program>>>
-        material_program_contents_;
-    // The program the drawing state holds whole (set by the last material, nothing set since): a draw with it applies
-    // only its values. Null after any record that sets state outside materials.
-    const material::Program* applied_program_ = nullptr;
-    // The native material the draws use (null: the GX state's), whether its constants are not yet uploaded, and the
+    // The native material the draws use (null: the state's), whether its constants are not yet uploaded, and the
     // texture maps it binds.
-    std::shared_ptr<const material::Native> native_material_;
+    material::Native native_material_storage_{};
+    const material::Native* native_material_ = nullptr;
+    std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a draw's)
     bool native_constants_dirty_ = false;
     std::uint8_t native_texture_mask_ = 0u;
-    // GALAXY_TEST_MATERIAL_CENSUS=1: programs registered (and re-registered with other content), distinct programs,
-    // material applications whole and values only, logged every 65,536 applications.
-    struct MaterialCensus {
-        std::uint64_t registrations = 0, changed = 0, distinct = 0, applications = 0, values_only = 0;
-    } material_census_;
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.
-    bool per_pixel_lighting_ = true;
+    bool per_pixel_lighting_ = false;
     // RenderConfig::curved_surfaces where the renderer tessellates, sampled at each frame start; whether the last
     // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
     bool curved_surfaces_ = false;
@@ -1354,14 +1025,11 @@ private:
     // null where the order of a draw's triangles could show (blending, a logic op, no depth test or write) or while
     // it compiles.
     gpu::Pipeline* current_flat_pipeline_ = nullptr;
-    bool curved_split_ = true;
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;
     bool enhanced_gate_ = false;
     std::uint32_t enhanced_material_ = 0u;
-    // uber_ps_header[3] flags of enhanced pipelines this frame (shader_keys.h kEnhancedRtReflections).
-    std::uint32_t enhanced_ps_flags_ = 0u;
     // The material table bits (enhanced_table_material) the last uploaded PS constants carry.
     std::uint32_t enhanced_material_bits_ = 0u;
     // The material whose glow gain (output_flags bit 5) or falling water (bit 6) the PS constants hold.
@@ -1371,29 +1039,11 @@ private:
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     gpu::Pipeline* current_pipeline_ = nullptr;
-    // Frame-scoped memo of PsoKey -> pipeline resolutions: a frame resolves the same few hundred keys many
-    // times. PipelineCache::published_ changes only on this thread (get(), and drain_completions() in
-    // begin_frame()), so a result holds for the rest of the frame; cleared at begin_frame(). Direct-mapped
-    // on the key hash; a collision falls through to the full resolution.
-    static constexpr std::size_t kPipelineMemoSlots = 512u;
-    static_assert(
-        (kPipelineMemoSlots & (kPipelineMemoSlots - 1u)) == 0u,
-        "the memo index masks the low hash bits, so the slot count is a power of two");
-    static constexpr std::size_t kPipelineMemoMask = kPipelineMemoSlots - 1u;
-    struct PipelineMemoEntry {
-        std::uint64_t hash = 0u;
-        gpu::Pipeline* pipeline = nullptr;
-        PsoKey key{};
-    };
-    std::array<PipelineMemoEntry, kPipelineMemoSlots> pipeline_memo_{};
     // Hash of `current_pso_key_`, kept beside it so the memo probe never
     // re-derives the fold for a key it already hashed once.
     std::uint64_t current_pso_key_hash_ = 0u;
     gpu::Address current_vs_constants_ = 0;
     VsConstantsCpuCache cpu_vs_constants_{};
-    // current_pipeline_ is an uber pipeline standing in for a specialization
-    // that is still compiling: resolve the key again on the next draw.
-    bool current_pipeline_is_uber_ = false;
     gpu::Address current_ps_constants_ = 0;
     gpu::Table current_texture_table_{};
     // The textures current_texture_table_ holds (texture cache handles; empty maps have no resource).
@@ -1421,24 +1071,19 @@ private:
     std::uint64_t matrix_blocks_epoch_ = 0;  // the matrix ring's epoch() the blocks were appended in
     bool matrix_blocks_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
-    // the first draw after begin_frame(), even when GX register state did not
-    // change. EFB copies can also replace a guest-address texture alias
-    // without rewriting its BP texture registers.
+    // the first draw after begin_frame(), even when register state did not
+    // change. scene target copies can also replace a game-address texture alias
+    // without rewriting its texture state.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
-    // Coordinate scales come from the sampled textures (the game changed TEV order or textures since the last
-    // material) rather than from the scale registers (coordinate_scales).
-    bool scales_from_textures_ = false;
     std::uint8_t current_texture_map_mask_ = 0;
-    // sampled_texture_map_mask(draw_state_) reads GenMode, the TEV order, indirect-command and IND_REF registers,
-    // all of which set kDirtyTev; invalidated wherever the BP register file resets.
+    // sampled_texture_map_mask(draw_state_) reads DrawCounts, the material order, indirect-command and IND_REF registers,
+    // all of which set kDirtyTev; invalidated wherever the state resets.
     bool current_texture_map_mask_valid_ = false;
 
     struct TextureBindingKey {
-        // The sampled maps (a palette only for a palette format); kLitTranslucentKey when the lit-translucent path
-        // takes map 7.
+        // The sampled maps; kLitTranslucentKey when the lit-translucent path takes map 7.
         std::array<TextureMap, kMaxTextureMaps> maps{};
-        std::array<std::uint64_t, kMaxTextureMaps> palettes{};  // palette_address of each map
         std::uint32_t lit_translucent = 0;
         std::uint8_t map_mask = 0;
 
@@ -1449,8 +1094,6 @@ private:
         std::uint16_t width = 0;
         std::uint16_t height = 0;
         std::uint8_t format = 0;
-        std::uint8_t tlut_format = 0;
-        std::uint64_t palette_address = 0;
         std::uint8_t levels = 1;
         std::uint8_t generated_mips = 0;
 
@@ -1459,21 +1102,18 @@ private:
     };
     [[nodiscard]] TextureBindingKey capture_texture_binding_key(
         std::uint8_t map_mask) const;
-    [[nodiscard]] TextureHandleKey texture_handle_key(
-        const TexImage& image,
-        const TexMode& mode,
-        std::uint64_t palette_address, TlutFormat palette_format) const;
+    [[nodiscard]] TextureHandleKey texture_handle_key(std::uint64_t texture, const TextureSampler& mode) const;
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
-    void mark_texture_binding_alias_dirty(const EfbCopyParams& params);
+    void mark_texture_binding_alias_dirty(const FramePassRequest& params);
     void prune_dirty_texture_binding_tables();
     void clear_frame_texture_binding_table_cache();
     void clear_texture_binding_table_cache();
     TextureBindingKey current_texture_binding_key_{};
     bool current_texture_binding_key_valid_ = false;
     // Sampled map mask that produced current_texture_binding_key_. A map-mask
-    // change alone must force a new capture even when no texture BP register
+    // change alone must force a new capture even when no texture state
     // moved, so the key stays an exact function of its inputs.
     std::uint8_t current_texture_binding_key_mask_ = 0;
 
@@ -1482,7 +1122,7 @@ private:
         std::uint16_t width = 0;
         std::uint16_t height = 0;
         std::uint8_t format = 0;
-        // Exact decoded mip-chain or strided EFB alias footprint.
+        // Exact decoded mip-chain or strided scene target alias footprint.
         std::uint32_t source_bytes = 0;
 
         [[nodiscard]] bool operator==(
@@ -1490,9 +1130,7 @@ private:
     };
     void invalidate_texture_handle_cache_dependency(
         const TextureBindingDependency& dependency);
-    void invalidate_texture_binding_cache_range(
-        std::uint64_t address,
-        std::uint32_t size);
+    void invalidate_texture_binding_cache_key(std::uint64_t key);
     struct DirtyTextureAlias {
         TextureBindingDependency dependency{};
     };
@@ -1548,8 +1186,6 @@ private:
             mix(key.width);
             mix(key.height);
             mix(key.format);
-            mix(key.tlut_format);
-            mix(key.palette_address);
             mix(key.levels);
             mix(key.generated_mips);
             return static_cast<std::size_t>(hash);
@@ -1560,23 +1196,16 @@ private:
             const TextureBindingKey& key) const noexcept {
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             hash = mix64(hash, key.lit_translucent);
-            for (const std::uint64_t palette : key.palettes) {
-                hash = mix64(hash, palette);
-            }
             for (const TextureMap& t : key.maps) {
-                const TexMode& m = t.mode;
-                hash = mix64(hash, t.image.address);
-                hash = mix64(hash, static_cast<std::uint64_t>(t.image.width) | static_cast<std::uint64_t>(t.image.height) << 16u |
-                                       static_cast<std::uint64_t>(t.image.format) << 32u |
-                                       static_cast<std::uint64_t>(t.tlut.tmem_offset) << 40u |
-                                       static_cast<std::uint64_t>(t.tlut.format) << 56u);
+                const TextureSampler& m = t.mode;
+                hash = mix64(hash, t.texture);
                 hash = mix64(hash, static_cast<std::uint64_t>(m.wrap_s) | static_cast<std::uint64_t>(m.wrap_t) << 4u |
-                                       static_cast<std::uint64_t>(m.mag_filter) << 8u |
-                                       static_cast<std::uint64_t>(m.min_filter) << 12u |
-                                       static_cast<std::uint64_t>(static_cast<std::uint16_t>(m.lod_bias_x32)) << 16u |
-                                       static_cast<std::uint64_t>(m.max_aniso) << 32u |
-                                       static_cast<std::uint64_t>(m.min_lod_x16) << 40u |
-                                       static_cast<std::uint64_t>(m.max_lod_x16) << 48u |
+                                       static_cast<std::uint64_t>(m.mag_linear) << 8u |
+                                       static_cast<std::uint64_t>(min_filter_code(m)) << 12u |
+                                       static_cast<std::uint64_t>(static_cast<std::uint16_t>(lod_bias_x32(m.lod_bias))) << 16u |
+                                       static_cast<std::uint64_t>(m.anisotropy) << 32u |
+                                       static_cast<std::uint64_t>(lod_x16(m.min_lod)) << 40u |
+                                       static_cast<std::uint64_t>(lod_x16(m.max_lod)) << 48u |
                                        static_cast<std::uint64_t>(t.edge_lod) << 56u |
                                        static_cast<std::uint64_t>(t.bias_clamp) << 57u);
             }
@@ -1608,6 +1237,7 @@ private:
     bool texture_pack_settings_applied_ = false;
     std::uint64_t texture_pack_mods_generation_ = ~0ull;
     std::vector<std::filesystem::path> texture_pack_mod_folders_;
+    std::vector<std::uint32_t> texture_pack_mod_categories_off_;
     std::unordered_map<
         TextureHandleKey,
         TextureHandle,
@@ -1622,114 +1252,57 @@ private:
 
     std::uint64_t frame_index_ = 0;
     // frame_index_ published once per frame for the producer's sampling decision; it orders nothing.
-    std::atomic<std::uint64_t> timing_frame_index_{0};
     cadence::Session* cadence_diagnostics_ = nullptr;
     bool initialized_ = false;
     // The per-draw clock reads run this frame: on stall-traced frames and on frames sampled by
-    // GALAXY_GX_FRAME_TIMING_SAMPLE.
-    bool frame_time_detail_ = false;
-    bool frame_time_sample_ = false;
-    // render_start of the last emitted [gx-frame-timing] line, for frame-interval-us.
-    std::chrono::steady_clock::time_point last_frame_timing_emit_{};
-    bool last_frame_timing_emit_valid_ = false;
-    // One-time EFB seed clear; GX clears only through the copy command's clear bit (on_efb_copy).
-    bool efb_seeded_ = false;
+    bool scene_seeded_ = false;
 
-    // The last display copy came from the output EFB and nothing has drawn or cleared since: an EFB-to-texture
-    // copy now takes that picture (RendererD3D12::copy_output_efb_to_texture), not the render EFB's scene.
+    // The last display copy came from the output scene target and nothing has drawn or cleared since: an scene target-to-texture
+    // copy now takes that picture (RendererD3D12::draw_frame_pass_from_output), not the render scene target's scene.
     bool display_copy_on_output_ = false;
 
     // Bring-up stats, reported every 300 frames.
     std::uint64_t stat_draws_issued_ = 0;
     std::uint64_t stat_draws_no_pso_ = 0;
-    std::uint64_t frame_draws_issued_ = 0;
-    std::uint64_t frame_draw_batches_ = 0;
-    std::uint64_t frame_draws_no_pso_ = 0;
-    std::uint64_t frame_xfb_copies_ = 0;
-    std::uint64_t frame_tex_copies_ = 0;
-    std::uint64_t frame_efb_alias_updates_ = 0;
-    std::uint64_t frame_efb_alias_noops_ = 0;
-    std::uint64_t frame_texture_binding_cache_hits_ = 0;
-    std::uint64_t frame_texture_binding_cache_misses_ = 0;
-    std::uint64_t frame_texture_binding_cache_prunes_ = 0;
-    std::uint64_t frame_nontri_skips_ = 0;
-    std::uint64_t frame_scissor_skips_ = 0;
-    std::uint64_t frame_flush_us_ = 0;
-    std::uint64_t frame_flush_pso_us_ = 0;
     // PSO-resolution thread cycles this frame; valid only when every resolution was measured.
-    std::uint64_t frame_flush_pso_cycles_ = 0;
-    bool frame_flush_pso_cycles_valid_ = false;
-    bool pso_cycles_enabled = false;
     // Sampled wall time of whole flush_draw_state calls (ScopedFlushTiming) and the sample count; unlike
     // frame_flush_us_ it needs no per-draw instrumentation.
-    std::uint64_t frame_flush_total_us_ = 0;
-    std::uint64_t frame_flush_timed_samples_ = 0;
-    std::uint64_t frame_flush_timed_calls_ = 0;
     // Sub-slices of frame_flush_pso_us_: memo hits (no PipelineCache call), the PipelineCache::get() call,
     // and the PsoKey hash and compare work.
-    std::uint64_t frame_pso_memo_hits_ = 0;
-    std::uint64_t frame_pso_get_calls_ = 0;
-    std::uint64_t frame_pso_get_us_ = 0;
-    std::uint64_t frame_pso_get_max_us_ = 0;
     // Cached display-list replay path per batch: the parser offers the two batched paths before per-packet
     // replay.
-    std::uint64_t frame_replay_prepared_batches_ = 0;
-    std::uint64_t frame_replay_packet_batches_ = 0;
-    std::uint64_t frame_native_shape_draws_ = 0;
-    std::uint64_t frame_native_shape_misses_ = 0;
-    std::uint64_t frame_replay_simple_batches_ = 0;
-    std::uint64_t frame_replay_generic_draws_ = 0;
-    std::uint64_t frame_flush_matrix_us_ = 0;
     // Bytes written to the matrix upload ring this frame, always counted.
-    std::uint64_t frame_matrix_upload_bytes_ = 0;
     // Per-frame deltas of PipelineCache::CompileStats against frame_compile_stats_baseline_: driver builds
     // (pso-compiles), builds from the D3D12 pipeline library (pso-library-loads), FXC-generated shader pairs
     // and pairs whose DXBC came from disk.
-    std::uint64_t frame_pso_compiles_ = 0;
-    std::uint64_t frame_pso_library_loads_ = 0;
-    std::uint64_t frame_shader_pair_compiles_ = 0;
     // FXC microseconds this frame.
-    std::uint64_t frame_blob_compile_us_ = 0;
-    std::uint64_t frame_blobs_from_cache_ = 0;
-    // Baseline for the deltas above, captured in the per-frame reset block.
-    PipelineCache::CompileStats frame_compile_stats_baseline_{};
-    std::uint64_t frame_flush_constants_us_ = 0;
-    std::uint64_t frame_flush_texture_us_ = 0;
-    std::uint64_t frame_vertex_load_us_ = 0;
-    std::uint64_t frame_cached_vertex_validation_us_ = 0;
     std::uint64_t frame_texture_decode_join_us_ = 0;
-    std::uint64_t frame_cached_vertex_upload_us_ = 0;
-    std::uint64_t frame_draw_record_us_ = 0;
-    std::uint64_t frame_efb_copy_us_ = 0;
     // Always-counted structural counters (the timing fields above need frame_time_detail_). The memo and
     // get() routes are frame_pso_memo_hits_ and frame_pso_get_calls_.
-    std::uint64_t frame_flush_calls_ = 0;
-    std::uint64_t frame_pso_resolutions_ = 0;
-    std::uint64_t frame_pso_route_early_ = 0;
     PendingDrawBatch pending_draw_batch_{};
     bool cached_draw_run_active_ = false;
     bool cached_draw_run_scissor_reject_ = false;
     bool cached_draw_run_primitive_indexed_ = false;
     bool cached_draw_run_no_pso_ = false;
     bool cached_draw_run_batch_compatible_known_ = false;
-    PrimitiveClass cached_draw_run_primitive_ = PrimitiveClass::Points;
+    Primitive cached_draw_run_primitive_ = Primitive::Points;
     std::uint8_t cached_draw_run_vtxfmt_ = 0;
     DrawCall cached_draw_run_state_call_{};
-    std::atomic<std::uint64_t> stat_xfb_copies_{0};
+    std::atomic<std::uint64_t> stat_display_copies_{0};
     std::unique_ptr<galaxy::telemetry::Publisher> frame_telemetry_;
-    std::atomic<std::uint64_t> stat_xfb_present_requests_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_presented_{0};
-    std::atomic<std::uint64_t> stat_xfb_first_serial_presentations_{0};
+    std::atomic<std::uint64_t> stat_display_present_requests_{0};
+    std::atomic<std::uint64_t> stat_display_present_presented_{0};
+    std::atomic<std::uint64_t> stat_display_first_serial_presentations_{0};
     std::atomic<std::uint64_t>
-        stat_xfb_repeated_or_stale_serial_requests_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_skipped_duplicate_presents_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_duplicate_run_max_{0};
-    std::atomic<std::uint64_t> stat_xfb_out_of_order_serial_requests_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_serial_delta_zero_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_serial_delta_one_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_serial_delta_multi_{0};
+        stat_display_repeated_or_stale_serial_requests_{0};
+    std::atomic<std::uint64_t> stat_display_present_skipped_duplicate_presents_{0};
+    std::atomic<std::uint64_t> stat_display_present_duplicate_run_max_{0};
+    std::atomic<std::uint64_t> stat_display_out_of_order_serial_requests_{0};
+    std::atomic<std::uint64_t> stat_display_present_serial_delta_zero_{0};
+    std::atomic<std::uint64_t> stat_display_present_serial_delta_one_{0};
+    std::atomic<std::uint64_t> stat_display_present_serial_delta_multi_{0};
     std::atomic<std::uint64_t>
-        stat_xfb_highest_first_presented_copy_serial_{0};
+        stat_display_highest_first_presented_copy_serial_{0};
 
 };
 

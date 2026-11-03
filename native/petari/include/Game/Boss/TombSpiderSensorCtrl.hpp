@@ -14,5 +14,5 @@ public:
     bool updateAttackSensor(HitSensor*);
     void initSensor();
 
-    /* 0x00 */ TombSpider* mParent;
+    TombSpider* mParent;
 };

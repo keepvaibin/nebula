@@ -1,7 +1,12 @@
+#include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "nw4r/lyt/animation.h"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include <nebula_game_api.h>
+#include <string.h>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include "Game/Util/NativeShader.hpp"
 #include "nw4r/lyt/layout.h"
 #include "nw4r/lyt/material.h"
 #include "nw4r/lyt/resourceAccessor.h"
@@ -12,20 +17,20 @@
 #include "nw4r/ut/inlines.h"
 #include <cstdio>
 
-const GXColorS10 DefaultBlackColor = {0, 0, 0, 0};
+const NebulaColor16 DefaultBlackColor = {0, 0, 0, 0};
 
 namespace nw4r {
     namespace lyt {
         namespace {
-            bool IsWhiteColor(const GXColorS10& color) {
+            bool IsWhiteColor(const NebulaColor16& color) {
                 return color.r == 255 && color.g == 255 && color.b == 255 && color.a == 255;
             }
 
-            bool operator==(const GXColorS10& rLhs, const GXColorS10& rRhs) {
+            bool operator==(const NebulaColor16& rLhs, const NebulaColor16& rRhs) {
                 return rLhs.r == rRhs.r && rLhs.g == rRhs.g && rLhs.b == rRhs.b && rLhs.a == rRhs.a;
             }
 
-            bool operator!=(const GXColorS10& rLhs, const GXColorS10& rRhs) {
+            bool operator!=(const NebulaColor16& rLhs, const NebulaColor16& rRhs) {
                 return !(rLhs == rRhs);
             }
 
@@ -59,74 +64,6 @@ namespace nw4r {
                 pMtx->_23 = 0.0f;
             }
 
-            void SetIndTexMtx(GXIndTexMtxID id, const f32 mtx[2][3]) {
-                f32 m00, m01, m02, m10, m11, m12;
-                f32 a00, a01, a02, a10, a11, a12;
-
-                s8 scaleExp = 0;
-
-                m00 = mtx[0][0];
-                m01 = mtx[0][1];
-                m02 = mtx[0][2];
-                m10 = mtx[1][0];
-                m11 = mtx[1][1];
-                m12 = mtx[1][2];
-
-                a00 = nw4r::math::FAbs(m00);
-                a01 = nw4r::math::FAbs(m01);
-                a02 = nw4r::math::FAbs(m02);
-                a10 = nw4r::math::FAbs(m10);
-                a11 = nw4r::math::FAbs(m11);
-                a12 = nw4r::math::FAbs(m12);
-
-                if (a00 >= 1.0f || a01 >= 1.0f || a02 >= 1.0f || a10 >= 1.0f || a11 >= 1.0f || a12 >= 1.0f) {
-                    do {
-                        if (scaleExp >= 46) {
-                            break;
-                        }
-
-                        scaleExp++;
-
-                        m00 /= 2.0f;
-                        m01 /= 2.0f;
-                        m02 /= 2.0f;
-                        m10 /= 2.0f;
-                        m11 /= 2.0f;
-                        m12 /= 2.0f;
-
-                        a00 /= 2.0f;
-                        a01 /= 2.0f;
-                        a02 /= 2.0f;
-                        a10 /= 2.0f;
-                        a11 /= 2.0f;
-                        a12 /= 2.0f;
-                    } while (a00 >= 1.0f || a01 >= 1.0f || a02 >= 1.0f || a10 >= 1.0f || a11 >= 1.0f || a12 >= 1.0f);
-
-                } else if (a00 < 0.5f && a01 < 0.5f && a02 < 0.5f && a10 < 0.5f && a11 < 0.5f && a12 < 0.5f) {
-                    do {
-                        scaleExp--;
-
-                        m00 *= 2.0f;
-                        m01 *= 2.0f;
-                        m02 *= 2.0f;
-                        m10 *= 2.0f;
-                        m11 *= 2.0f;
-                        m12 *= 2.0f;
-
-                        a00 *= 2.0f;
-                        a01 *= 2.0f;
-                        a02 *= 2.0f;
-                        a10 *= 2.0f;
-                        a11 *= 2.0f;
-                        a12 *= 2.0f;
-
-                    } while (a00 < 0.5f && a01 < 0.5f && a02 < 0.5f && a10 < 0.5f && a11 < 0.5f && a12 < 0.5f && scaleExp > -17);
-                }
-
-                f32 outMtx[2][3] = {m00, m01, m02, m10, m11, m12};
-                J3DNativeState::setIndTexMtx(id, outMtx, scaleExp);
-            }
-
             void CalcIndTexMtx(f32 mtx[2][3], const nw4r::lyt::TexSRT& rSrt) {
                 f32 cr = nw4r::math::CosDeg(rSrt.rotate);
                 f32 sr = nw4r::math::SinDeg(rSrt.rotate);
@@ -141,11 +78,11 @@ namespace nw4r {
             }
 
             inline u32 GetTexMtxIdx(u32 mtx) {
-                return (mtx - GX_TEXMTX0) / 3;
+                return (mtx - J3D_TEXMTX0) / 3;
             }
 
             inline u32 GetTexMtx(u32 idx) {
-                return GX_TEXMTX0 + idx * 3;
+                return J3D_TEXMTX0 + idx * 3;
             }
 
             void SetColorComponentValue(nw4r::ut::Color* pColor, u32 idx, s16 value) {
@@ -178,44 +115,32 @@ namespace nw4r {
                 }
             }
 
-            u32 CalcOffsetTexSRTAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetTexSRTAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.texMap * ROUND_UP(sizeof(nw4r::lyt::TexMap), 4);
             }
 
-            u32 CalcOffsetTexCoordGenAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetTexCoordGenAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.texSRT * ROUND_UP(sizeof(nw4r::lyt::TexSRT), 4) + CalcOffsetTexSRTAry(rNums);
             }
 
-            u32 CalcOffsetChanCtrlAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetChanCtrlAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.texCoordGen * ROUND_UP(sizeof(nw4r::lyt::TexCoordGen), 4) + CalcOffsetTexCoordGenAry(rNums);
             }
 
-            u32 CalcOffsetMatColAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetMatColAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.chanCtrl * ROUND_UP(sizeof(nw4r::lyt::ChanCtrl), 4) + CalcOffsetChanCtrlAry(rNums);
             }
 
-            u32 CalcOffsetTevSwapAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetGetAlphaCompare(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.matCol * ROUND_UP(sizeof(nw4r::ut::Color), 4) + CalcOffsetMatColAry(rNums);
             }
 
-            u32 CalcOffsetGetAlphaCompare(const nw4r::lyt::detail::BitGXNums& rNums) {
-                return rNums.tevSwap * ROUND_UP(sizeof(nw4r::lyt::TevSwapMode), 4) + CalcOffsetTevSwapAry(rNums);
-            }
-
-            u32 CalcOffsetBlendMode(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetBlendMode(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.alpComp * ROUND_UP(sizeof(nw4r::lyt::AlphaCompare), 4) + CalcOffsetGetAlphaCompare(rNums);
             }
 
-            u32 CalcOffsetIndirectStageAry(const nw4r::lyt::detail::BitGXNums& rNums) {
+            u32 CalcOffsetIndTexSRTAry(const nw4r::lyt::detail::StorageNums& rNums) {
                 return rNums.blendMode * ROUND_UP(sizeof(nw4r::lyt::BlendMode), 4) + CalcOffsetBlendMode(rNums);
-            }
-
-            u32 CalcOffsetIndTexSRTAry(const nw4r::lyt::detail::BitGXNums& rNums) {
-                return rNums.indStage * ROUND_UP(sizeof(nw4r::lyt::IndirectStage), 4) + CalcOffsetIndirectStageAry(rNums);
-            }
-
-            u32 CalcOffsetTevStageAry(const nw4r::lyt::detail::BitGXNums& rNums) {
-                return rNums.indSRT * ROUND_UP(sizeof(nw4r::lyt::TexSRT), 4) + CalcOffsetIndTexSRTAry(rNums);
             }
 
             void InitTexSRT(nw4r::lyt::TexSRT* texSRTs, u32 num) {
@@ -233,7 +158,6 @@ namespace nw4r {
             memset(mName, 0, sizeof(mName));
         }
 
-#pragma dont_inline on
 
         // inlining is off the charts here. No idea why the compiler will not inline so much of these calls
         Material::Material(const res::Material* pRes, const ResBlockSet& resBlockSet) {
@@ -242,37 +166,34 @@ namespace nw4r {
             SetName(pRes->name);
 
             for (int i = 0; i < 3; ++i) {
-                mTevCols[i] = pRes->tevCols[i];
+                mRegisterColors[i] = pRes->tevCols[i];
             }
 
             for (int i = 0; i < 4; ++i) {
-                mTevKCols[i] = pRes->tevKCols[i];
+                mConstantColors[i] = pRes->tevKCols[i];
             }
 
             u32 resOffs = sizeof(res::Material);
             const res::TexMap* const pResTexMap = detail::ConvertOffsToPtr< res::TexMap >(pRes, resOffs);
             resOffs += sizeof(res::TexMap) * pRes->resNum.GetTexMapNum();
-            const NEBULA_DISC(TexSRT)* const resTexSRTs = detail::ConvertOffsToPtr< NEBULA_DISC(TexSRT) >(pRes, resOffs);
+            const TexSRT* const resTexSRTs = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
             resOffs += sizeof(TexSRT) * pRes->resNum.GetTexSRTNum();
             const TexCoordGen* const resTexCoordGens = detail::ConvertOffsToPtr< TexCoordGen >(pRes, resOffs);
             resOffs += sizeof(TexCoordGen) * pRes->resNum.GetTexCoordGenNum();
 
-            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(GX_MAX_TEXMAP));
+            const u8 texMapNum = ut::Min(pRes->resNum.GetTexMapNum(), u8(8));
             const u8 texSRTNum = ut::Min(pRes->resNum.GetTexSRTNum(), u8(10));
-            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(GX_MAX_TEXCOORD));
+            const u8 texCoordGenNum = ut::Min(pRes->resNum.GetTexCoordGenNum(), u8(8));
             const bool allocChanCtrl = 0 != pRes->resNum.GetChanCtrlNum();
             const bool allocMatCol = 0 != pRes->resNum.GetMatColNum();
-            const bool allocTevSwap = pRes->resNum.HasTevSwapTable();
             const bool allocAlpComp = pRes->resNum.HasAlphaCompare();
             const bool allocBlendMode = pRes->resNum.HasBlendMode();
             u8 indTexSRTNum = ut::Min(pRes->resNum.GetIndTexSRTNum(), u8(3));
-            u8 indStageNum = ut::Min(pRes->resNum.GetIndTexStageNum(), u8(GX_MAX_INDTEXSTAGE));
-            u8 tevStageNum = ut::Min(pRes->resNum.GetTevStageNum(), u8(GX_MAX_TEVSTAGE));
 
-            ReserveGXMem(texMapNum, texSRTNum, texCoordGenNum, tevStageNum, allocTevSwap, indStageNum, indTexSRTNum, allocChanCtrl, allocMatCol,
+            ReserveStorage(texMapNum, texSRTNum, texCoordGenNum, indTexSRTNum, allocChanCtrl, allocMatCol,
                          allocAlpComp, allocBlendMode);
 
-            if (mpGXMem) {
+            if (mpStorage) {
                 SetTextureNum(texMapNum);
                 if (texMapNum > 0) {
                     const res::Texture* const textures =
@@ -301,7 +222,7 @@ namespace nw4r {
 
                 TexCoordGen* texCoordGens = GetTexCoordGenAry();
                 SetTexCoordGenNum(texCoordGenNum);
-                for (int i = 0; i < mGXMemNum.texCoordGen; ++i) {
+                for (int i = 0; i < mNum.texCoordGen; ++i) {
                     texCoordGens[i] = resTexCoordGens[i];
                 }
 
@@ -317,43 +238,14 @@ namespace nw4r {
                     resOffs += sizeof(*pResMatCol);
                 }
 
-                if (allocTevSwap) {
-                    const TevSwapMode* const pResTevSwap = detail::ConvertOffsToPtr< TevSwapMode >(pRes, resOffs);
-                    TevSwapMode* const tevSwaps = GetTevSwapAry();
-                    for (int i = 0; i < GX_MAX_TEVSWAP; ++i) {
-                        tevSwaps[i] = pResTevSwap[i];
-                    }
-                    resOffs += sizeof(*tevSwaps) * GX_MAX_TEVSWAP;
-                }
-
                 if (indTexSRTNum > 0) {
                     TexSRT* const indTexSRTs = GetIndTexSRTAry();
-                    const NEBULA_DISC(TexSRT)* const pResIndMtx = detail::ConvertOffsToPtr< NEBULA_DISC(TexSRT) >(pRes, resOffs);
+                    const TexSRT* const pResIndMtx = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
                     for (int i = 0; i < indTexSRTNum; ++i) {
                         indTexSRTs[i] = pResIndMtx[i];
                     }
                 }
                 resOffs += sizeof(TexSRT) * pRes->resNum.GetIndTexSRTNum();
-
-                if (indStageNum > 0) {
-                    SetIndStageNum(indStageNum);
-                    IndirectStage* indirectStages = GetIndirectStageAry();
-                    const IndirectStage* const pResIndStg = detail::ConvertOffsToPtr< IndirectStage >(pRes, resOffs);
-                    for (int i = 0; i < indStageNum; ++i) {
-                        indirectStages[i] = pResIndStg[i];
-                    }
-                }
-                resOffs += sizeof(IndirectStage) * pRes->resNum.GetIndTexStageNum();
-
-                if (tevStageNum > 0) {
-                    SetTevStageNum(tevStageNum);
-                    TevStage* const tevStages = GetTevStageAry();
-                    const TevStage* const pResTevStg = detail::ConvertOffsToPtr< TevStage >(pRes, resOffs);
-                    for (int i = 0; i < tevStageNum; ++i) {
-                        tevStages[i] = pResTevStg[i];
-                    }
-                }
-                resOffs += sizeof(TevStage) * pRes->resNum.GetTevStageNum();
 
                 if (allocAlpComp) {
                     const AlphaCompare* const pResAlphaCompare = detail::ConvertOffsToPtr< AlphaCompare >(pRes, resOffs);
@@ -367,113 +259,107 @@ namespace nw4r {
                     resOffs += sizeof(*pResBlendMode);
                 }
             }
+            const u8* native = detail::ConvertOffsToPtr<u8>(pRes, resOffs);
+            if (memcmp(native, "NSID", 4) == 0) {
+                memcpy(mNativeShaders, native + 4, sizeof(mNativeShaders));
+                memcpy(mCoordMap, native + 4 + sizeof(mNativeShaders), sizeof(mCoordMap));
+                mHasStages = native[4 + sizeof(mNativeShaders) + sizeof(mCoordMap)] != 0;
+            }
         }
 
-#pragma dont_inline reset
 
         void Material::Init() {
-            mTevCols[0] = DefaultBlackColor;
-            mTevCols[1].a = mTevCols[1].b = mTevCols[1].g = mTevCols[1].r = 255;
-            mTevCols[2].a = mTevCols[2].b = mTevCols[2].g = mTevCols[2].r = 255;
+            mRegisterColors[0] = DefaultBlackColor;
+            mRegisterColors[1].a = mRegisterColors[1].b = mRegisterColors[1].g = mRegisterColors[1].r = 255;
+            mRegisterColors[2].a = mRegisterColors[2].b = mRegisterColors[2].g = mRegisterColors[2].r = 255;
 
-            InitBitGXNums(&mGXMemCap);
-            InitBitGXNums(&mGXMemNum);
+            InitStorageNums(&mCap);
+            InitStorageNums(&mNum);
 
             mbUserAllocated = false;
 
-            mpGXMem = 0;
+            mpStorage = 0;
+            memset(mNativeShaders, 0, sizeof(mNativeShaders));
+            // A material without its own stages: each texture by its own coordinate.
+            for (u32 i = 0; i < 8; i++) {
+                mCoordMap[i] = static_cast< u8 >(i);
+            }
+            mHasStages = false;
         }
 
         Material::~Material() {
             UnbindAllAnimation();
 
-            if (mpGXMem != NULL) {
-                Layout::FreeMemory(mpGXMem);
-                mpGXMem = NULL;
+            if (mpStorage != NULL) {
+                Layout::FreeMemory(mpStorage);
+                mpStorage = NULL;
             }
         }
 
-        void Material::InitBitGXNums(detail::BitGXNums* ptr) {
+        void Material::InitStorageNums(detail::StorageNums* ptr) {
             ptr->texMap = 0;
             ptr->texSRT = 0;
             ptr->texCoordGen = 0;
             ptr->indSRT = 0;
-            ptr->indStage = 0;
-            ptr->tevSwap = 0;
-            ptr->tevStage = 0;
             ptr->chanCtrl = 0;
             ptr->matCol = 0;
             ptr->alpComp = 0;
             ptr->blendMode = 0;
         }
 
-        void Material::ReserveGXMem(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 tevStageNum, bool allocTevSwap, u8 indStageNum, u8 indSRTNum,
+        void Material::ReserveStorage(u8 texMapNum, u8 texSRTNum, u8 texCoordGenNum, u8 indSRTNum,
                                     bool allocChanCtrl, bool allocMatCol, bool allocAlpComp, bool allocBlendMode) {
-            const int tevSwapNum = allocTevSwap ? 1 : 0;
             const int chanCtrlNum = allocChanCtrl ? 1 : 0;
             const int matColNum = allocMatCol ? 1 : 0;
             const int alpCompNum = allocAlpComp ? 1 : 0;
             const int blendModeNum = allocBlendMode ? 1 : 0;
 
-            if (mGXMemCap.texMap < texMapNum || mGXMemCap.texSRT < texSRTNum || mGXMemCap.texCoordGen < texCoordGenNum ||
-                mGXMemCap.tevStage < tevStageNum || mGXMemCap.tevSwap < tevSwapNum || mGXMemCap.indStage < indStageNum ||
-                mGXMemCap.indSRT < indSRTNum || mGXMemCap.chanCtrl < chanCtrlNum || mGXMemCap.matCol < matColNum || mGXMemCap.alpComp < alpCompNum ||
-                mGXMemCap.blendMode < blendModeNum) {
-                if (mpGXMem) {
-                    Layout::FreeMemory(mpGXMem);
-                    mpGXMem = 0;
+            if (mCap.texMap < texMapNum || mCap.texSRT < texSRTNum || mCap.texCoordGen < texCoordGenNum ||
+                mCap.indSRT < indSRTNum || mCap.chanCtrl < chanCtrlNum || mCap.matCol < matColNum || mCap.alpComp < alpCompNum ||
+                mCap.blendMode < blendModeNum) {
+                if (mpStorage) {
+                    Layout::FreeMemory(mpStorage);
+                    mpStorage = 0;
 
-                    InitBitGXNums(&mGXMemCap);
-                    InitBitGXNums(&mGXMemNum);
+                    InitStorageNums(&mCap);
+                    InitStorageNums(&mNum);
                 }
 
-                mpGXMem = Layout::AllocMemory(sizeof(TexMap) * texMapNum + sizeof(TexSRT) * texSRTNum +
-                                              4 * (texCoordGenNum + chanCtrlNum + matColNum + tevSwapNum + alpCompNum + blendModeNum + indStageNum) +
-                                              sizeof(TexSRT) * indSRTNum + sizeof(TevStage) * tevStageNum);
-                if (mpGXMem) {
-                    mGXMemCap.texMap = texMapNum;
-                    mGXMemCap.texSRT = texSRTNum;
-                    mGXMemCap.texCoordGen = texCoordGenNum;
-                    mGXMemCap.indSRT = indSRTNum;
-                    mGXMemCap.indStage = indStageNum;
-                    mGXMemCap.tevSwap = tevSwapNum;
-                    mGXMemCap.tevStage = tevStageNum;
-                    mGXMemCap.chanCtrl = chanCtrlNum;
-                    mGXMemCap.matCol = matColNum;
-                    mGXMemCap.alpComp = alpCompNum;
-                    mGXMemCap.blendMode = blendModeNum;
+                mpStorage = Layout::AllocMemory(sizeof(TexMap) * texMapNum + sizeof(TexSRT) * texSRTNum +
+                                              4 * (texCoordGenNum + chanCtrlNum + matColNum + alpCompNum + blendModeNum) +
+                                              sizeof(TexSRT) * indSRTNum);
+                if (mpStorage) {
+                    mCap.texMap = texMapNum;
+                    mCap.texSRT = texSRTNum;
+                    mCap.texCoordGen = texCoordGenNum;
+                    mCap.indSRT = indSRTNum;
+                    mCap.chanCtrl = chanCtrlNum;
+                    mCap.matCol = matColNum;
+                    mCap.alpComp = alpCompNum;
+                    mCap.blendMode = blendModeNum;
 
-                    mGXMemNum.texSRT = mGXMemCap.texSRT;
-                    InitTexSRT(GetTexSRTAry(), mGXMemNum.texSRT);
-                    mGXMemNum.indSRT = mGXMemCap.indSRT;
-                    InitTexSRT(GetIndTexSRTAry(), mGXMemNum.indSRT);
+                    mNum.texSRT = mCap.texSRT;
+                    InitTexSRT(GetTexSRTAry(), mNum.texSRT);
+                    mNum.indSRT = mCap.indSRT;
+                    InitTexSRT(GetIndTexSRTAry(), mNum.indSRT);
 
-                    mGXMemNum.chanCtrl = mGXMemCap.chanCtrl;
-                    if (mGXMemNum.chanCtrl) {
+                    mNum.chanCtrl = mCap.chanCtrl;
+                    if (mNum.chanCtrl) {
                         GetChanCtrlAry()[0] = ChanCtrl();
                     }
 
-                    mGXMemNum.matCol = mGXMemCap.matCol;
-                    if (mGXMemNum.matCol) {
+                    mNum.matCol = mCap.matCol;
+                    if (mNum.matCol) {
                         GetMatColAry()[0] = ut::Color::WHITE;
                     }
 
-                    mGXMemNum.tevSwap = mGXMemCap.tevSwap;
-                    if (mGXMemNum.tevSwap) {
-                        TevSwapMode* const tevSwaps = GetTevSwapAry();
-                        tevSwaps[0].Set(GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-                        tevSwaps[1].Set(GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
-                        tevSwaps[2].Set(GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
-                        tevSwaps[3].Set(GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
-                    }
-
-                    mGXMemNum.alpComp = mGXMemCap.alpComp;
-                    if (mGXMemNum.alpComp) {
+                    mNum.alpComp = mCap.alpComp;
+                    if (mNum.alpComp) {
                         *GetAlphaComparePtr() = AlphaCompare();
                     }
 
-                    mGXMemNum.blendMode = mGXMemCap.blendMode;
-                    if (mGXMemNum.blendMode) {
+                    mNum.blendMode = mCap.blendMode;
+                    if (mNum.blendMode) {
                         *GetBlendModePtr() = BlendMode();
                     }
                 }
@@ -481,51 +367,39 @@ namespace nw4r {
         }
 
         const TexMap* Material::GetTexMapAry() const {
-            return detail::ConvertOffsToPtr< TexMap >(mpGXMem, 0);
+            return detail::ConvertOffsToPtr< TexMap >(mpStorage, 0);
         }
 
         TexMap* Material::GetTexMapAry() {
-            return detail::ConvertOffsToPtr< TexMap >(mpGXMem, 0);
+            return detail::ConvertOffsToPtr< TexMap >(mpStorage, 0);
         }
 
         TexSRT* Material::GetTexSRTAry() {
-            return detail::ConvertOffsToPtr< TexSRT >(mpGXMem, CalcOffsetTexSRTAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< TexSRT >(mpStorage, CalcOffsetTexSRTAry(mCap));
         }
 
         TexCoordGen* Material::GetTexCoordGenAry() {
-            return detail::ConvertOffsToPtr< TexCoordGen >(mpGXMem, CalcOffsetTexCoordGenAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< TexCoordGen >(mpStorage, CalcOffsetTexCoordGenAry(mCap));
         }
 
         ChanCtrl* Material::GetChanCtrlAry() {
-            return detail::ConvertOffsToPtr< ChanCtrl >(mpGXMem, CalcOffsetChanCtrlAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< ChanCtrl >(mpStorage, CalcOffsetChanCtrlAry(mCap));
         }
 
         ut::Color* Material::GetMatColAry() {
-            return detail::ConvertOffsToPtr< ut::Color >(mpGXMem, CalcOffsetMatColAry(mGXMemCap));
-        }
-
-        TevSwapMode* Material::GetTevSwapAry() {
-            return detail::ConvertOffsToPtr< TevSwapMode >(mpGXMem, CalcOffsetTevSwapAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< ut::Color >(mpStorage, CalcOffsetMatColAry(mCap));
         }
 
         AlphaCompare* Material::GetAlphaComparePtr() {
-            return detail::ConvertOffsToPtr< AlphaCompare >(mpGXMem, CalcOffsetGetAlphaCompare(mGXMemCap));
+            return detail::ConvertOffsToPtr< AlphaCompare >(mpStorage, CalcOffsetGetAlphaCompare(mCap));
         }
 
         BlendMode* Material::GetBlendModePtr() {
-            return detail::ConvertOffsToPtr< BlendMode >(mpGXMem, CalcOffsetBlendMode(mGXMemCap));
-        }
-
-        IndirectStage* Material::GetIndirectStageAry() {
-            return detail::ConvertOffsToPtr< IndirectStage >(mpGXMem, CalcOffsetIndirectStageAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< BlendMode >(mpStorage, CalcOffsetBlendMode(mCap));
         }
 
         TexSRT* Material::GetIndTexSRTAry() {
-            return detail::ConvertOffsToPtr< TexSRT >(mpGXMem, CalcOffsetIndTexSRTAry(mGXMemCap));
-        }
-
-        TevStage* Material::GetTevStageAry() {
-            return detail::ConvertOffsToPtr< TevStage >(mpGXMem, CalcOffsetTevStageAry(mGXMemCap));
+            return detail::ConvertOffsToPtr< TexSRT >(mpStorage, CalcOffsetIndTexSRTAry(mCap));
         }
 
         void Material::SetName(const char* pName) {
@@ -537,48 +411,24 @@ namespace nw4r {
             if (num > 0) {
                 TexMap* const pTexMap = GetTexMapAry();
 
-                for (u32 i = mGXMemNum.texMap; i < num; i++) {
+                for (u32 i = mNum.texMap; i < num; i++) {
                     new (&pTexMap[i]) TexMap();
                 }
             }
 
-            mGXMemNum.texMap = num;
+            mNum.texMap = num;
         }
 
         void Material::SetTexCoordGenNum(u8 num) {
             if (num > 0) {
                 TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
-                for (u32 i = mGXMemNum.texCoordGen; i < num; i++) {
+                for (u32 i = mNum.texCoordGen; i < num; i++) {
                     new (&pTexCoordGen[i]) TexCoordGen();
                 }
             }
 
-            mGXMemNum.texCoordGen = num;
-        }
-
-        void Material::SetTevStageNum(u8 num) {
-            if (num > 0) {
-                TevStage* const pTevStage = GetTevStageAry();
-
-                for (u32 i = mGXMemNum.tevStage; i < num; i++) {
-                    new (&pTevStage[i]) TevStage();
-                }
-            }
-
-            mGXMemNum.tevStage = num;
-        }
-
-        void Material::SetIndStageNum(u8 num) {
-            if (num > 0) {
-                IndirectStage* const pIndStage = GetIndirectStageAry();
-
-                for (u32 i = mGXMemNum.indStage; i < num; i++) {
-                    new (&pIndStage[i]) IndirectStage();
-                }
-            }
-
-            mGXMemNum.indStage = num;
+            mNum.texCoordGen = num;
         }
 
         void Material::SetColorElement(u32 idx, s16 value) {
@@ -587,7 +437,7 @@ namespace nw4r {
             case detail::ANIMTARGET_MATCOLOR_MATCOLOR0_G:
             case detail::ANIMTARGET_MATCOLOR_MATCOLOR0_B:
             case detail::ANIMTARGET_MATCOLOR_MATCOLOR0_A:
-                if (mGXMemNum.matCol >= 1) {
+                if (mNum.matCol >= 1) {
                     ut::Color* matCols = GetMatColAry();
                     SetColorComponentValue(&matCols[0], (idx - detail::ANIMTARGET_MATCOLOR_MATCOLOR0_R) % 4, value);
                 }
@@ -608,16 +458,16 @@ namespace nw4r {
                 const u32 regIdx = (idx - detail::ANIMTARGET_MATCOLOR_TEVCOLOR0_R) / 4;
                 switch ((idx - detail::ANIMTARGET_MATCOLOR_TEVCOLOR0_R) % 4) {
                 case 0:
-                    mTevCols[regIdx].r = value;
+                    mRegisterColors[regIdx].r = value;
                     break;
                 case 1:
-                    mTevCols[regIdx].g = value;
+                    mRegisterColors[regIdx].g = value;
                     break;
                 case 2:
-                    mTevCols[regIdx].b = value;
+                    mRegisterColors[regIdx].b = value;
                     break;
                 case 3:
-                    mTevCols[regIdx].a = value;
+                    mRegisterColors[regIdx].a = value;
                     break;
                 }
             } break;
@@ -639,35 +489,50 @@ namespace nw4r {
             case detail::ANIMTARGET_MATCOLOR_TEVKONST3_B:
             case detail::ANIMTARGET_MATCOLOR_TEVKONST3_A: {
                 const u32 regIdx = (idx - detail::ANIMTARGET_MATCOLOR_TEVKONST0_R) / 4;
-                SetColorComponentValue(&mTevKCols[regIdx], (idx - detail::ANIMTARGET_MATCOLOR_TEVKONST0_R) % 4, value);
+                SetColorComponentValue(&mConstantColors[regIdx], (idx - detail::ANIMTARGET_MATCOLOR_TEVKONST0_R) % 4, value);
             } break;
             }
         }
 
-        bool Material::SetupGX(bool modulate, u8 alpha) {
-            static GXTevKColorSel kColSels[GX_MAX_TEXMAP] = {GX_TEV_KCSEL_K3_A, GX_TEV_KCSEL_K3_B, GX_TEV_KCSEL_K3_G, GX_TEV_KCSEL_K3_R,
-                                                             GX_TEV_KCSEL_K2_A, GX_TEV_KCSEL_K2_B, GX_TEV_KCSEL_K2_G, GX_TEV_KCSEL_K2_R};
+        bool Material::Setup(bool modulate, u8 alpha) {
+            // A picture made in code has no material in a layout file, so no shader from the cook: J2DPicture's own.
+            if (mNativeShaders[0] == 0 && mNum.texMap != 0) {
+                J3DNativeTexObj texObj;
+                GetTexMapAry()[0].Get(&texObj);
+                NebulaNativeMaterial material;
+                NativeShader::init(material, NEBULA_SHADER_J2D_PICTURE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS,
+                                   false, NEBULA_CULL_NONE);
+                NativeShader::setColor(material, 12, 255, 255, 255, 255);
+                material.constants[16] = 1.0f;
+                material.constants[17] = 1.0f;
+                material.textures[0].image = reinterpret_cast< uintptr_t >(texObj.mImage);
+                material.textures[0].repeat_s = texObj.mWrapS;
+                material.textures[0].repeat_t = texObj.mWrapT;
+                material.textures[0].mag_linear = 1;
+                material.textures[0].min_linear = 1;
+                NativeShader::send(material);
+                return true;
+            }
 
-            static GXTevKAlphaSel kAlpSels[GX_MAX_TEXMAP] = {GX_TEV_KASEL_K3_A, GX_TEV_KASEL_K3_B, GX_TEV_KASEL_K3_G, GX_TEV_KASEL_K3_R,
-                                                             GX_TEV_KASEL_K2_A, GX_TEV_KASEL_K2_B, GX_TEV_KASEL_K2_G, GX_TEV_KASEL_K2_R};
-
+            // The material's setup and values, drawn by the shader the cook chose (mNativeShaders). Stored until the next
+            // material.
+            static J3DMaterialSetup sSetup;
+            static J3DMaterialValues sValues;
+            J3DMaterialSetup& rSetup = sSetup;
+            J3DMaterialValues& rValues = sValues;
+            memset(&rSetup, 0, sizeof(rSetup));
+            memset(&rValues, 0, sizeof(rValues));
+            rSetup.loads = J3D_LOADS_REGISTER_COLOR | J3D_LOADS_KONST_COLOR | J3D_LOADS_AMBIENT | J3D_LOADS_CHANNELS | J3D_LOADS_INDIRECT;
+            rSetup.cull = NEBULA_CULL_NONE;
             bool useVtxColor = true;
             bool useMatColor = false;
 
-            J3DNativeState::setNumChans(1);
-
+            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (the channel's material
+            // source; the ambient source the register).
             if (IsChanCtrlCap()) {
                 const ChanCtrl* const pChanCtrl = GetChanCtrlAry();
-
-                J3DNativeState::setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, pChanCtrl->GetColorSrc(), GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-
-                J3DNativeState::setChanCtrl(GX_ALPHA0, GX_FALSE, GX_SRC_REG, pChanCtrl->GetAlphaSrc(), GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-
-                useVtxColor = pChanCtrl->GetColorSrc() == GX_SRC_VTX || pChanCtrl->GetAlphaSrc() == GX_SRC_VTX;
-
-                useMatColor = pChanCtrl->GetColorSrc() == GX_SRC_REG || pChanCtrl->GetAlphaSrc() == GX_SRC_REG;
-            } else {
-                J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
+                useVtxColor = pChanCtrl->GetColorSrc() == J3D_SRC_VTX || pChanCtrl->GetAlphaSrc() == J3D_SRC_VTX;
+                useMatColor = pChanCtrl->GetColorSrc() == J3D_SRC_REG || pChanCtrl->GetAlphaSrc() == J3D_SRC_REG;
             }
 
             bool useRasStage = false;
@@ -684,9 +549,15 @@ namespace nw4r {
                 }
 
                 matColor = detail::MultipleAlpha(matColor, alpha);
-                J3DNativeState::setChanMatColor(GX_COLOR0A0, matColor);
+                rValues.material_color[0][0] = matColor.r;
+                rValues.material_color[0][1] = matColor.g;
+                rValues.material_color[0][2] = matColor.b;
+                rValues.material_color[0][3] = matColor.a;
 
                 useRasStage = useRasStage || matColor != ut::Color::WHITE;
+            } else {
+                rValues.material_color[0][0] = rValues.material_color[0][1] = rValues.material_color[0][2] =
+                    rValues.material_color[0][3] = 255;
             }
 
             bool setTexMtx = false;
@@ -696,256 +567,147 @@ namespace nw4r {
                 useTexMtx[i] = false;
             }
 
-            J3DNativeState::setNumTexGens(mGXMemNum.texCoordGen);
-            if (mGXMemNum.texCoordGen > 0) {
+            u8 places[8] = {J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
+                            J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY};
+            rSetup.tex_gens = mNum.texCoordGen;
+            if (mNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
-                for (int i = 0; i < mGXMemNum.texCoordGen; i++) {
+                for (int i = 0; i < mNum.texCoordGen; i++) {
                     u32 texMtx = pTexCoordGen[i].GetTexMtx();
 
-                    if (pTexCoordGen[i].GetTexGenType() == GX_TG_MTX2x4 && texMtx != GX_IDENTITY) {
+                    if (pTexCoordGen[i].GetTexGenType() == J3D_TG_MTX2x4 && texMtx != J3D_IDENTITY) {
                         useTexMtx[GetTexMtxIdx(texMtx)] = true;
                         setTexMtx = true;
                     }
 
-                    J3DNativeState::setTexCoordGen2(static_cast< GXTexCoordID >(i), pTexCoordGen[i].GetTexGenType(), pTexCoordGen[i].GetTexGenSrc(), texMtx,
-                                      GX_FALSE, 0x7D);
+                    if (i < 8) {
+                        rSetup.tex_gen_post[i] = static_cast< u8 >(J3D_PTIDENTITY);
+                    }
+                    if (i < 8) {
+                        places[i] = static_cast< u8 >(texMtx);
+                    }
                 }
             }
 
             if (setTexMtx) {
                 const TexSRT* const pTexSrt = GetTexSRTAry();
 
-                for (u8 i = 0; i < mGXMemNum.texSRT; i++) {
+                for (u8 i = 0; i < mNum.texSRT; i++) {
                     if (!useTexMtx[i]) {
                         continue;
                     }
 
                     math::MTX34 mtx;
                     CalcTextureMtx(&mtx, pTexSrt[i]);
-                    J3DNativeShape::setTexture((GetTexMtx(i) - GX_TEXMTX0) / 3, mtx, 2);
+                    J3DNativeShape::setTexture((GetTexMtx(i) - J3D_TEXMTX0) / 3, mtx, 2);
                 }
             }
 
-            if (mGXMemNum.texMap > 0) {
+            if (mNum.texMap > 0) {
                 const TexMap* const pTexMap = GetTexMapAry();
 
-                for (int i = 0; i < mGXMemNum.texMap; i++) {
-                    GXTexObj texObj;
+                for (int i = 0; i < mNum.texMap && i < 8; i++) {
+                    J3DNativeTexObj texObj;
                     pTexMap[i].Get(&texObj);
-                    J3DNativeTexture::load(&texObj, static_cast< GXTexMapID >(i));
+                    NebulaMaterialTexture& rTex = rValues.texture[i];
+                    const u8 minFilter = texObj.mMinFilter;
+                    rTex.image = reinterpret_cast< uintptr_t >(texObj.mImage);
+                    rTex.width = texObj.mWidth;
+                    rTex.height = texObj.mHeight;
+                    rTex.wrap_s = texObj.mWrapS;
+                    rTex.wrap_t = texObj.mWrapT;
+                    rTex.min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5;
+                    rTex.mag_linear = texObj.mMagFilter != NEBULA_FILTER_NEAREST;
+                    rTex.mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
+                    rTex.edge_lod = texObj.mEdgeLod;
+                    rTex.anisotropy = texObj.mMaxAniso;
+                    rTex.min_lod = texObj.mMinLod;
+                    rTex.max_lod = texObj.mMaxLod;
+                    rTex.lod_bias = texObj.mLodBias;
                 }
             }
 
-            J3DNativeState::setTevColorS10(GX_TEVREG0, mTevCols[0]);
-            J3DNativeState::setTevColorS10(GX_TEVREG1, mTevCols[1]);
-            J3DNativeState::setTevColorS10(GX_TEVREG2, mTevCols[2]);
-
-            J3DNativeState::setTevKColor(GX_KCOLOR0, mTevKCols[GX_KCOLOR0]);
-            J3DNativeState::setTevKColor(GX_KCOLOR1, mTevKCols[GX_KCOLOR1]);
-            J3DNativeState::setTevKColor(GX_KCOLOR2, mTevKCols[GX_KCOLOR2]);
-            J3DNativeState::setTevKColor(GX_KCOLOR3, mTevKCols[GX_KCOLOR3]);
-
-            if (IsTevSwapCap()) {
-                const TevSwapMode* const pTevSwap = GetTevSwapAry();
-
-                for (int i = 0; i < GX_MAX_TEVSWAP; i++) {
-                    J3DNativeState::setTevSwapModeTable(static_cast< GXTevSwapSel >(i), pTevSwap[i].GetR(), pTevSwap[i].GetG(), pTevSwap[i].GetB(),
-                                          pTevSwap[i].GetA());
-                }
-            } else {
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP1, GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
-
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP2, GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
-
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
+            for (u32 r = 0; r < 3; r++) {
+                rValues.register_color[r][0] = mRegisterColors[r].r;
+                rValues.register_color[r][1] = mRegisterColors[r].g;
+                rValues.register_color[r][2] = mRegisterColors[r].b;
+                rValues.register_color[r][3] = mRegisterColors[r].a;
+            }
+            for (u32 k = 0; k < 4; k++) {
+                rValues.konst_color[k][0] = mConstantColors[k].r;
+                rValues.konst_color[k][1] = mConstantColors[k].g;
+                rValues.konst_color[k][2] = mConstantColors[k].b;
+                rValues.konst_color[k][3] = mConstantColors[k].a;
             }
 
-            bool setIndTexMtx = false;
-            bool useIndTexMtx[3];
-
-            for (int i = 0; i < 3; i++) {
-                useIndTexMtx[i] = false;
-            }
-
-            if (mGXMemNum.tevStage > 0) {
-                J3DNativeState::setNumTevStages(mGXMemNum.tevStage);
-
-                const TevStage* const pTevStage = GetTevStageAry();
-
-                for (int i = 0; i < mGXMemNum.tevStage; i++) {
-                    GXTevStageID tevStage = static_cast< GXTevStageID >(i);
-
-                    J3DNativeState::setTevOrder(tevStage, pTevStage[i].GetTexCoordGen(), pTevStage[i].GetTexMap(), pTevStage[i].GetColorChan());
-
-                    J3DNativeState::setTevSwapMode(tevStage, pTevStage[i].GetRasSwapSel(), pTevStage[i].GetTexSwapSel());
-
-                    J3DNativeState::setTevColorIn(tevStage, pTevStage[i].GetColorInA(), pTevStage[i].GetColorInB(), pTevStage[i].GetColorInC(),
-                                    pTevStage[i].GetColorInD());
-
-                    J3DNativeState::setTevColorOp(tevStage, pTevStage[i].GetColorOp(), pTevStage[i].GetColorBias(), pTevStage[i].GetColorScale(),
-                                    pTevStage[i].IsColorClamp(), pTevStage[i].GetColorOutReg());
-
-                    J3DNativeState::setTevKColorSel(tevStage, pTevStage[i].GetKColorSel());
-
-                    J3DNativeState::setTevAlphaIn(tevStage, pTevStage[i].GetAlphaInA(), pTevStage[i].GetAlphaInB(), pTevStage[i].GetAlphaInC(),
-                                    pTevStage[i].GetAlphaInD());
-
-                    J3DNativeState::setTevAlphaOp(tevStage, pTevStage[i].GetAlphaOp(), pTevStage[i].GetAlphaBias(), pTevStage[i].GetAlphaScale(),
-                                    pTevStage[i].IsAlphaClamp(), pTevStage[i].GetAlphaOutReg());
-
-                    J3DNativeState::setTevKAlphaSel(tevStage, pTevStage[i].GetKAlphaSel());
-                    GXIndTexMtxID indMtx = pTevStage[i].GetIndMtxSel();
-
-                    J3DNativeState::setTevIndirect(tevStage, pTevStage[i].GetIndStage(), pTevStage[i].GetIndFormat(), pTevStage[i].GetIndBiasSel(), indMtx,
-                                     pTevStage[i].GetIndWrapS(), pTevStage[i].GetIndWrapT(), pTevStage[i].IsIndAddPrev(), pTevStage[i].IsIndUtcLod(),
-                                     pTevStage[i].GetIndAlphaSel());
-                    if (GX_ITM_0 <= indMtx && indMtx <= GX_ITM_2) {
-                        useIndTexMtx[indMtx - 1] = true;
-                        setIndTexMtx = true;
-                    }
+            // Each coordinate's scale: the size of the texture the cook found it samples.
+            for (u32 coord = 0; coord < 8; coord++) {
+                const u32 map = mCoordMap[coord];
+                if (map < 8 && rValues.texture[map].image != 0) {
+                    rValues.tex_coord_scale[coord].scale_s = rValues.texture[map].width;
+                    rValues.tex_coord_scale[coord].scale_t = rValues.texture[map].height;
                 }
-
+            }
+            if (mHasStages || mNum.texMap == 0) {
                 useRasStage = true;
-            } else {
-                u8 tevStageID = GX_TEVSTAGE0;
-
-                if (mGXMemNum.texMap == 0) {
-                    GXTevStageID tevStage = GX_TEVSTAGE0;
-
-                    J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-                    J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_C1, GX_CC_RASC, GX_CC_ZERO);
-                    J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_A1, GX_CA_RASA, GX_CA_ZERO);
-
-                    useRasStage = true;
-                    tevStageID = GX_TEVSTAGE1;
-                } else {
-                    if (mGXMemNum.texMap == 1) {
-                        GXTevStageID tevStage = GX_TEVSTAGE0;
-
-                        J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-                        J3DNativeState::setTevColorIn(tevStage, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
-                        J3DNativeState::setTevAlphaIn(tevStage, GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
-
-                        tevStageID = GX_TEVSTAGE1;
-                    } else {
-                        if (mGXMemNum.texMap == 2) {
-                            GXTevStageID tevStage = GX_TEVSTAGE0;
-
-                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-                            J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
-                            J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-
-                            tevStage = GX_TEVSTAGE1;
-
-                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-                            J3DNativeState::setTevColorIn(tevStage, GX_CC_TEXC, GX_CC_CPREV, GX_CC_KONST, GX_CC_ZERO);
-                            J3DNativeState::setTevAlphaIn(tevStage, GX_CA_TEXA, GX_CA_APREV, GX_CA_KONST, GX_CA_ZERO);
-
-                            J3DNativeState::setTevKColorSel(tevStage, kColSels[GX_TEXMAP0]);
-                            J3DNativeState::setTevKAlphaSel(tevStage, kAlpSels[GX_TEXMAP0]);
-
-                            tevStageID = GX_TEVSTAGE2;
-                        } else {
-                            for (int i = 0; i < mGXMemNum.texMap; i++) {
-                                GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
-
-                                J3DNativeState::setTevOrder(tevStage, static_cast< GXTexCoordID >(i), static_cast< GXTexMapID >(i), GX_COLOR_NULL);
-
-                                GXTevColorArg colorD = i == GX_TEXMAP0 ? GX_CC_ZERO : GX_CC_CPREV;
-                                GXTevAlphaArg alphaD = i == GX_TEXMAP0 ? GX_CA_ZERO : GX_CA_APREV;
-
-                                J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_TEXC, GX_CC_KONST, colorD);
-                                J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, alphaD);
-
-                                J3DNativeState::setTevKColorSel(tevStage, kColSels[i]);
-                                J3DNativeState::setTevKAlphaSel(tevStage, kAlpSels[i]);
-
-                                tevStageID++;
-                            }
-                        }
-
-                        if (mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1])) {
-                            GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
-
-                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-                            J3DNativeState::setTevColorIn(tevStage, GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO);
-                            J3DNativeState::setTevAlphaIn(tevStage, GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO);
-
-                            tevStageID++;
-                        }
-                    }
-
-                    if (useRasStage) {
-                        GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
-
-                        J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-                        J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-                        J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
-
-                        tevStageID++;
-                    }
-                }
-
-                const u8 tevStageNum = tevStageID;
-                for (u8 id = 0; id < tevStageNum; id++) {
-                    GXTevStageID tevStage = static_cast< GXTevStageID >(id);
-
-                    J3DNativeState::setTevColorOp(tevStage, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, TRUE, GX_TEVPREV);
-                    J3DNativeState::setTevAlphaOp(tevStage, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, TRUE, GX_TEVPREV);
-
-                    J3DNativeState::setTevDirect(tevStage);
-                    J3DNativeState::setTevSwapMode(tevStage, GX_TEV_SWAP0, GX_TEV_SWAP0);
-                }
-
-                J3DNativeState::setNumTevStages(tevStageNum);
             }
 
-            if (setIndTexMtx) {
+            {
                 const TexSRT* const pIndTexSrt = GetIndTexSRTAry();
 
-                for (int i = 0; i < mGXMemNum.indSRT; i++) {
-                    if (!useIndTexMtx[i]) {
-                        continue;
-                    }
-
+                for (int i = 0; i < mNum.indSRT && i < 3; i++) {
                     f32 mtx[2][3];
                     CalcIndTexMtx(mtx, pIndTexSrt[i]);
-                    SetIndTexMtx(static_cast< GXIndTexMtxID >(GX_ITM_0 + i), mtx);
-                }
-            }
-
-            J3DNativeState::setNumIndStages(mGXMemNum.indStage);
-            if (mGXMemNum.indStage > 0) {
-                const IndirectStage* const pIndStage = GetIndirectStageAry();
-
-                for (int i = 0; i < mGXMemNum.indStage; i++) {
-                    GXIndTexStageID indStage = static_cast< GXIndTexStageID >(i);
-
-                    J3DNativeState::setIndTexOrder(indStage, pIndStage[i].GetTexCoordGen(), pIndStage[i].GetTexMap());
-
-                    J3DNativeState::setIndTexCoordScale(indStage, pIndStage[i].GetScaleS(), pIndStage[i].GetScaleT());
+                    for (u32 row = 0; row < 2; row++) {
+                        for (u32 c = 0; c < 3; c++) {
+                            rValues.ind_matrix[i].m[row][c] = mtx[row][c];
+                        }
+                    }
                 }
             }
 
             if (IsAlphaCompareCap()) {
                 const AlphaCompare* const pAlphaComp = GetAlphaComparePtr();
 
-                J3DNativeState::setAlphaCompare(pAlphaComp->GetComp0(), pAlphaComp->GetRef0(), pAlphaComp->GetOp(), pAlphaComp->GetComp1(), pAlphaComp->GetRef1());
+                rSetup.alpha_compare.comp0 = pAlphaComp->GetComp0();
+                rSetup.alpha_compare.op = pAlphaComp->GetOp();
+                rSetup.alpha_compare.comp1 = pAlphaComp->GetComp1();
+                rValues.alpha_ref[0] = pAlphaComp->GetRef0();
+                rValues.alpha_ref[1] = pAlphaComp->GetRef1();
             } else {
-                J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+                rSetup.alpha_compare.comp0 = NEBULA_COMPARE_ALWAYS;
+                rSetup.alpha_compare.op = J3D_AOP_AND;
+                rSetup.alpha_compare.comp1 = NEBULA_COMPARE_ALWAYS;
             }
 
             if (IsBlendModeCap()) {
                 const BlendMode* const pBlendMode = GetBlendModePtr();
 
-                J3DNativeState::setBlendMode(pBlendMode->GetType(), pBlendMode->GetSrcFactor(), pBlendMode->GetDstFactor(), pBlendMode->GetOp());
-
+                {
+                    const u8 type = pBlendMode->GetType();
+                    rSetup.blend.type = type == J3D_BM_BLEND ? NEBULA_BLEND_ADD : type == J3D_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+                                          : type == J3D_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+                }
+                {
+                    // NEBULA_FACTOR_*: source colour factors 2 and 3 are the destination's colour.
+                    const u8 src = pBlendMode->GetSrcFactor();
+                    rSetup.blend.source = src == J3D_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
+                                            : src == J3D_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
+                }
+                rSetup.blend.destination = pBlendMode->GetDstFactor();
+                rSetup.blend.logic_op = pBlendMode->GetOp();
             } else {
-                J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+                rSetup.blend.type = NEBULA_BLEND_ADD;
+                rSetup.blend.source = NEBULA_FACTOR_SRC_ALPHA;
+                rSetup.blend.destination = NEBULA_FACTOR_INV_SRC_ALPHA;
+                rSetup.blend.logic_op = J3D_LO_SET;
             }
+
+            const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);
+            const u32 shader = mNativeShaders[(useRasStage ? 1 : 0) | (remap ? 2 : 0)];
+            J3DNativeMaterial::sendWhole(shader != 0 ? NEBULA_SHADER_J3D_FIRST + shader - 1 : 0, rSetup, rValues);
+            J3DNativeShape::setCurrentFromFile(0, places);
 
             return useRasStage && useVtxColor;
         }

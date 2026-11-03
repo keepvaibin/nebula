@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include <string>
+
 // Curved surfaces: the game's models are polygons made for a 456-line picture (a warp pipe is a 16-sided cylinder).
 // Drawn at many times that, their outlines show the polygon. Phong tessellation (Boubekeur and Alexa 2008) rounds
 // them on the GPU: each triangle is subdivided and each new point moved towards the tangent planes of its corners.
@@ -91,6 +93,10 @@ struct Surface {
 // first crease neighbour (place | neighbour << 16), the second crease neighbour (kNoPlace where none), the crease
 // normal (packed), and the bends by normal index (packed).
 struct Model {
+    [[nodiscard]] std::size_t bytes() const noexcept {
+        return places.capacity() * 4u + second.capacity() * 2u + crease.capacity() * 4u + first.capacity() * 4u + bend_normal.capacity() * 2u +
+               bend.capacity() * 4u + bend_flat.capacity();
+    }
     std::vector<std::uint32_t> places;         // per position: place | first crease neighbour << 16
     std::vector<std::uint16_t> second;         // per position: the second crease neighbour
     std::vector<std::uint32_t> crease;         // per position: the crease normal, packed
@@ -106,6 +112,9 @@ struct Model {
     [[nodiscard]] bool flat_of(std::uint32_t position, std::uint32_t normal) const noexcept;
 };
 
+// What the models hold, in bytes (GALAXY_TRACE_MEMORY).
+[[nodiscard]] std::uint64_t memory_bytes();
+
 // The models by their position array's identity (the game's key for it: nebula_game_api.h curved_surface;
 // thread-safe: the game registers while the renderer draws). A model in which nothing bends and no corner is flat is
 // not kept: its draws stay plain triangles; the key's earlier model, if any, is forgotten all the same.
@@ -116,5 +125,10 @@ void register_model_later(std::uint64_t key, std::vector<Vec3> positions, std::v
                           std::vector<Corner> corners);
 [[nodiscard]] std::shared_ptr<const Model> find_model(std::uint64_t key);
 void clear_models();
+// Models keyed from `start` up to `end` go.
+void forget_models(std::uint64_t start, std::uint64_t end);
+
+// The HLSL of the curved surfaces' GPU triangle sort (RendererD3D12's curve sort pass).
+[[nodiscard]] std::string curve_sort_source();
 
 }  // namespace galaxy::render::curved

@@ -21,21 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
-void Jellyfish_FORCE_MATCH_SDATA2() {
-    (void)5.0f;
-    (void)30.0f;
-    (void)100.0f;
-    (void)130.0f;
-    (void)1900.0f;
-    (void)500.0f;
-    (void)0.9999f;
-    (void)-45.511112f;
-    (void)45.511112f;
-    (void)0.2f;
-    (void)-0.2f;
-    (void)1500.0f;
-}
-
 namespace NrvJellyfish {
     NEW_NERVE(JellyfishNrvWait, Jellyfish, Wait);
     NEW_NERVE(JellyfishNrvWaitWithRightTurn, Jellyfish, WaitWithRightTurn);
@@ -123,8 +108,6 @@ void Jellyfish::kill() {
     LiveActor::kill();
 }
 
-#pragma push
-#pragma opt_propagation off
 void Jellyfish::control() {
     const TVec3f& rPosition = mPosition;
     MR::requestPointLight(this, TVec3f(rPosition), ::sPointLightColor, 0.9999f, -1);
@@ -150,7 +133,6 @@ void Jellyfish::control() {
     if (tryDPDSwoon()) {
     }
 }
-#pragma pop
 
 void Jellyfish::calcAndSetBaseMtx() {
     TPos3f baseMtx;
@@ -332,8 +314,6 @@ void Jellyfish::threatTurn() {
     }
 }
 
-#pragma push
-#pragma opt_propagation off
 bool Jellyfish::faceToMario() {
     TVec3f v13;
     const TVec3f& rPosition = mPosition;
@@ -372,7 +352,6 @@ bool Jellyfish::faceToMario() {
 
     return true;
 }
-#pragma pop
 
 void Jellyfish::knockOut(HitSensor* pSender, HitSensor* pReceiver) {
     TVec3f toReceiverDir;
@@ -398,7 +377,7 @@ bool Jellyfish::selectNerveAfterWait() {
     if (MR::isStep(this, 280)) {
         s32 randomVal;
         if (isNerve(GET_NERVE(Jellyfish, JellyfishNrvWait))) {
-            randomVal = MR::getRandom(0l, 3l);
+            randomVal = MR::getRandom(0, 3);
         } else {
             randomVal = 0;
         }

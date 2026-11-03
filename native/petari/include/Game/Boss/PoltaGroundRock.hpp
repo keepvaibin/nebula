@@ -20,16 +20,16 @@ public:
     void initBreakModel();
     void start(LiveActor*, const TVec3f&);
     void requestBreak();
-    bool isEnableAttack() const NO_INLINE;
-    bool isEnableBreak() const NO_INLINE;
+    bool isEnableAttack() const;
+    bool isEnableBreak() const;
 
     void exeSign();
     void exeJut();
     void exeWait();
     void exeBreak();
 
-    /* 0x8C */ LiveActor* mOwner;
-    /* 0x90 */ ModelObj* mBreakModel;
-    /* 0x94 */ TQuat4f _94;
-    /* 0xA4 */ TVec3f _A4;
+    LiveActor* mOwner;
+    ModelObj* mBreakModel;
+    TQuat4f _94;
+    TVec3f _A4;
 };

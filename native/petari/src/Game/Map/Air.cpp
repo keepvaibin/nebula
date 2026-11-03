@@ -159,8 +159,8 @@ ProjectionMapAir::ProjectionMapAir(const char* pName) : Air(pName) {
 
 void ProjectionMapAir::initModel(const char* pModelName) {
     initModelManagerWithAnm(pModelName, nullptr, true);
-    ProjmapEffectMtxSetter* mtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-    MR::newDifferedDLBuffer(this);
+    ProjmapEffectMtxSetter* mtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+    MR::newDifferedMaterials(this);
     mtxSetter->updateMtxUseBaseMtx();
 }
 
@@ -186,13 +186,13 @@ PriorDrawAirHolder::PriorDrawAirHolder() : NameObj("\220\346\225\140\211\346\221
 
 void PriorDrawAirHolder::add(PriorDrawAir* pAir) {
     s32 airCnt = mAirCount++;
-    mAirs[airCnt] = pAir;
+    mAirs.at(airCnt) = pAir;
 }
 
 bool PriorDrawAirHolder::isExistValidDrawAir() const {
-    PriorDrawAir** curAir = (PriorDrawAir**)&mAirs;
+    const PriorDrawAir* const* curAir = mAirs.begin();
 
-    for (; curAir != &mAirs[mAirCount]; *curAir++) {
+    for (; curAir != mAirs.begin() + mAirCount; curAir++) {
         if ((*curAir)->isDrawing()) {
             return true;
         }

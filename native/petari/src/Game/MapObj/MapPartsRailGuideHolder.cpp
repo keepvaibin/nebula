@@ -15,7 +15,7 @@ MapPartsRailGuideDrawer* MapPartsRailGuideHolder::createRailGuide(LiveActor* pHo
 
         u32 index = mNumRailGuides;
         mNumRailGuides++;
-        mDrawers[index] = pDrawer;
+        mDrawers.at(index) = pDrawer;
     }
 
     return pDrawer;

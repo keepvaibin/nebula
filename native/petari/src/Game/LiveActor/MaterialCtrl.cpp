@@ -6,17 +6,6 @@
 
 char MirrorReflectionMtxSetter::sMirrorTextureName[] = "MirrorTex";
 
-void MaterialCtrl_FORCE_MATCH_J3D(J3DMaterial* pMaterial, const J3DGXColorS10* pTevColor, const J3DGXColor* pColor, const J3DZMode* pZMode,
-                                  const J3DBlend* pBlend, J3DTexMtx* pTexMtx) {
-    pMaterial->mTevBlock->setTevColor(0, pTevColor);
-    pMaterial->mPEBlock->getFog();
-    pMaterial->mColorBlock->setMatColor(0, pColor);
-    pMaterial->mPEBlock->setZMode(pZMode);
-    pMaterial->mPEBlock->setBlend(pBlend);
-    pMaterial->mTexGenBlock->setTexMtx(0, pTexMtx);
-    pMaterial->mTevBlock->setTevKColor(0, pColor);
-}
-
 MaterialCtrl::MaterialCtrl(J3DModelData* pModelData, const char* pMaterialName) : mModelData(pModelData), mMaterial() {
     if (pMaterialName) {
         mMaterial = MR::getMaterial(pModelData, pMaterialName);
@@ -39,7 +28,7 @@ FogCtrl::FogCtrl(J3DModelData* pModelData, bool useAllMaterials) : MaterialCtrl(
     J3DMaterial* firstMaterial = nullptr;
     for (u16 i = 0; i < pModelData->mMaterialTable.getMaterialNum(); i++) {
         J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(i);
-        if (useAllMaterials || material->mPEBlock->getFog()->mType) {
+        if (useAllMaterials || material->mOutputBlock->getFog()->mType) {
             if (!firstMaterial) {
                 firstMaterial = material;
             }
@@ -52,13 +41,13 @@ FogCtrl::FogCtrl(J3DModelData* pModelData, bool useAllMaterials) : MaterialCtrl(
         firstMaterial = pModelData->mMaterialTable.getMaterialNodePointer(0);
     }
 
-    mFogInfo = *firstMaterial->mPEBlock->getFog()->getFogInfo();
+    mFogInfo = *firstMaterial->mOutputBlock->getFog()->getFogInfo();
     if (mNumMaterials > 0) {
         mMaterials = new J3DMaterial*[mNumMaterials];
         s32 materialCount = 0;
         for (u16 i = 0; i < pModelData->mMaterialTable.getMaterialNum(); i++) {
             J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(i);
-            if (useAllMaterials || material->mPEBlock->getFog()->mType) {
+            if (useAllMaterials || material->mOutputBlock->getFog()->mType) {
                 mMaterials[materialCount++] = material;
             }
         }
@@ -67,11 +56,11 @@ FogCtrl::FogCtrl(J3DModelData* pModelData, bool useAllMaterials) : MaterialCtrl(
 
 void FogCtrl::update() {
     for (s32 i = 0; i < mNumMaterials; i++) {
-        mMaterials[i]->mPEBlock->getFog()->setFogInfo(mFogInfo);
+        mMaterials[i]->mOutputBlock->getFog()->setFogInfo(mFogInfo);
     }
 }
 
-MatColorCtrl::MatColorCtrl(J3DModelData* pModelData, const char* pName, u32 color, const J3DGXColor* pColor) : MaterialCtrl(pModelData, pName) {
+MatColorCtrl::MatColorCtrl(J3DModelData* pModelData, const char* pName, u32 color, const J3DColor* pColor) : MaterialCtrl(pModelData, pName) {
     mColorChoice = color;
     mColor = pColor;
 }
@@ -198,7 +187,7 @@ void MirrorReflectionMtxSetter::addUpdatingTexMtxFromTexCoord(J3DMaterial* pMate
 }
 
 void MirrorReflectionMtxSetter::addUpdatingTexMtx(J3DTexMtx* pTexMtx) {
-    mUpdatingTexMtx[mNumUpdatingTexMtx] = pTexMtx;
+    mUpdatingTexMtx.at(mNumUpdatingTexMtx) = pTexMtx;
     mNumUpdatingTexMtx++;
 }
 

@@ -301,7 +301,7 @@ void AstroDomeBlueStar::exeWait() {
         MR::tryShowTimeoutedStarPointerGuidance();
     }
 
-    if (isValidBindStart() && MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (isValidBindStart() && MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvPointing));
     }
 }
@@ -314,7 +314,7 @@ void AstroDomeBlueStar::exePointing() {
 
         MR::invalidateClipping(this);
 
-        MR::startCSSound("CS_STAR_POWER", nullptr, WPAD_CHAN0);
+        MR::startCSSound("CS_STAR_POWER", nullptr, PLAYER_1);
     }
 
     MR::requestStarPointerModeBlueStarReady(this);
@@ -326,7 +326,7 @@ void AstroDomeBlueStar::exePointing() {
         return;
     }
 
-    if (!isValidBindStart() || !MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (!isValidBindStart() || !MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvWait));
     }
 }
@@ -373,7 +373,7 @@ void AstroDomeBlueStar::exeBindTraction() {
         MR::emitEffect(mCaptureActor, "LightGrow");
         MR::emitEffect(mCaptureActor, "LightSplash");
 
-        MR::startBckPlayer("SpaceStruggle", 20L);
+        MR::startBckPlayer("SpaceStruggle", 20);
 
         mBindStartMtx.set(mHostMtx);
 
@@ -414,7 +414,7 @@ void AstroDomeBlueStar::exeBindHold() {
 
         MR::deleteEffect(mCaptureActor, "LightSplash");
 
-        MR::startBckPlayer("SpaceWait", 20L);
+        MR::startBckPlayer("SpaceWait", 20);
 
         mCaptureActor->setPosAll(mPosition);
 

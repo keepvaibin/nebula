@@ -41,29 +41,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include <cstdio>
 
-void SkeletalFishBoss_FORCE_MATCH_SDATA2() {
-    (void)1000.0f;
-    (void)1.8325958f;
-    (void)2607.5945f;
-    (void)10.0f;
-    (void)40.0f;
-    (void)5000.0f;
-    (void)7000.0f;
-    (void)60.0f;
-    (void)5.0f;
-    (void)80.0f;
-    (void)400.0f;
-    (void)4000.0f;
-    (void)0.001f;
-    (void)4200.0f;
-    (void)1200.0f;
-    (void)1573.0f;
-    (void)-120.0f;
-    (void)320.0f;
-    (void)0.9f;
-    (void)270.0f;
-}
-
 namespace {
     static const SkeletalFishBoss::SensorToCollider sColInfo[0xE] = {
         {"Joint01", "BackBone01"},        {"Joint02", "BackBone02"},         {"Joint03", "BackBone03"}, {"Joint04", "BackBone04"},
@@ -101,10 +78,6 @@ namespace {
     NEW_NERVE(SkeletalFishBossNrvBreakDemo, SkeletalFishBoss, BreakDemo);
     NEW_NERVE(SkeletalFishBossNrvDemoWait, SkeletalFishBoss, DemoWait);
 };  // namespace
-
-void SkeletalFishBoss_FORCE_MATCH(TVec3f& rVec) {
-    rVec.scale(1.0f);
-}
 
 SkeletalFishBoss::SkeletalFishBoss(const char* pName) : LiveActor(pName) {
     mJointIndicies = nullptr;
@@ -580,11 +553,11 @@ void SkeletalFishBoss::exeBreakDemo() {
         MR::startSound(mBossHead, "SE_BM_SKL_BOSS_EXPLODE");
         mGuardHolder->invalidate();
         mBossDirector->appearBirdLouse();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     if (MR::isStep(this, 204)) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
     }
 
     if (MR::isStep(this, 206)) {
@@ -673,7 +646,7 @@ void SkeletalFishBoss::initJoint() {
 
     for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
         char buf[16];
-        snprintf(buf, sizeof(buf), "Joint%02d", i);
+        nebula_snprintf(buf, sizeof(buf), "Joint%02d", i);
         mControllers[i] = MR::createJointDelegatorWithNullChildFunc(this, &SkeletalFishBoss::calcJoint, buf);
         mJointIndicies[MR::getJointIndex(this, buf)] = i;
     }
@@ -901,7 +874,7 @@ void SkeletalFishBoss::resetCamera() {
 
 void SkeletalFishBoss::playDamageBrk() {
     char buf[0x80];
-    snprintf(buf, sizeof(buf), "Damage%dColor", _118);
+    nebula_snprintf(buf, sizeof(buf), "Damage%dColor", _118);
     MR::startBrk(this, buf);
     MR::startBrk(mBossHead, buf);
     _118++;
@@ -1023,17 +996,10 @@ void SkeletalFishBoss::endBreakDemo() {
 }
 
 bool SkeletalFishBoss::isEnableToBeDamaged() const {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     return !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDamage)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDown)) &&
            !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDeadDamage)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDead)) &&
            !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvAppearDemo)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvPowerUpDemo)) &&
            !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDeadDemo));
-#elif (VERSION == RMGK01)
-    return !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDamage)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDown)) &&
-           !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDeadDamage)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDead)) &&
-           !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDemoWait)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvAppearDemo)) &&
-           !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvPowerUpDemo)) && !isNerve(GET_NERVE_ANON(SkeletalFishBossNrvDeadDemo));
-#endif
 }
 
 SkeletalFishBossHead::SkeletalFishBossHead(LiveActor* pActor)

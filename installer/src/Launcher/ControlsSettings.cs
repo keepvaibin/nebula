@@ -53,18 +53,18 @@ namespace Nebula.Launcher
         public const int ModeAuto = 0, ModeKeyboardMouse = 1, ModeController = 2, ModeRealWiimote = 3;
         public const int Keyboard = 0, Xbox = 1, SwitchPro = 2, SwitchPro2 = 3;
         public static readonly string[] SchemeIds = { "keyboard", "xbox", "switch_pro", "switch_pro2" };
-        public static readonly string[] SchemeLabels = { "Keyboard and mouse", "Xbox controller (XInput)", "Switch Pro Controller", "Switch 2 Pro Controller" };
+        public static readonly string[] SchemeLabels = { NebulaText.Of("Keyboard and mouse"), NebulaText.Of("Xbox controller (XInput)"), "Switch Pro Controller", "Switch 2 Pro Controller" };
         public static readonly string[] TargetIds = {
             "a", "b", "one", "two", "plus", "minus", "home", "dpad_up", "dpad_down", "dpad_left", "dpad_right",
             "stick_up", "stick_down", "stick_left", "stick_right", "c", "z", "shake", "nunchuk_shake",
             "pointer_up", "pointer_down", "pointer_left", "pointer_right", "pointer_recenter", "jump_back" };
         public static readonly string[] TargetLabels = {
-            "A", "B", "1", "2", "Plus", "Minus", "Home", "D-pad up", "D-pad down", "D-pad left", "D-pad right",
-            "Nunchuk stick up", "Nunchuk stick down", "Nunchuk stick left", "Nunchuk stick right", "C", "Z",
-            "Shake (Wii Remote)", "Shake (Nunchuk)", "Pointer up", "Pointer down", "Pointer left", "Pointer right",
-            "Pointer recenter", "A in play, B in menus" };
+            "A", "B", "1", "2", NebulaText.Of("Plus"), NebulaText.Of("Minus"), NebulaText.Of("Home"), NebulaText.Of("D-pad up"), NebulaText.Of("D-pad down"), NebulaText.Of("D-pad left"), NebulaText.Of("D-pad right"),
+            NebulaText.Of("Nunchuk stick up"), NebulaText.Of("Nunchuk stick down"), NebulaText.Of("Nunchuk stick left"), NebulaText.Of("Nunchuk stick right"), "C", "Z",
+            NebulaText.Of("Shake (Wii Remote)"), NebulaText.Of("Shake (Nunchuk)"), NebulaText.Of("Pointer up"), NebulaText.Of("Pointer down"), NebulaText.Of("Pointer left"), NebulaText.Of("Pointer right"),
+            NebulaText.Of("Pointer recenter"), NebulaText.Of("A in play, B in menus") };
         public static readonly string[] MotionNames = { "off", "remote", "nunchuk" };
-        public static readonly string[] MotionLabels = { "Off", "Wii Remote shake", "Nunchuk shake" };
+        public static readonly string[] MotionLabels = { NebulaText.Of("Off"), NebulaText.Of("Wii Remote shake"), NebulaText.Of("Nunchuk shake") };
         // tune.<scheme>.rumble steps (rumble.h).
         public static readonly int[] RumbleSteps = { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
         public static readonly string[] RumbleLabels = { "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%" };
@@ -680,7 +680,7 @@ namespace Nebula.Launcher
 
         private void TryOpen(string path)
         {
-            var handle = CreateFileW(path, 0xC0000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
+            var handle = CreateFileW(path, 3u << 30, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
             if (handle.IsInvalid) return;
             var attributes = new HiddAttributes { Size = Marshal.SizeOf(typeof(HiddAttributes)) };
             if (!HidD_GetAttributes(handle, ref attributes) || attributes.Vendor != 0x057e ||

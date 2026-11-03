@@ -14,16 +14,16 @@ public:
 
     void setModeSubColor();
     void setUpFillScreen() const;
-    void sendFillScreen(GXColor) const;
+    void sendFillScreen(NebulaColor8) const;
 
-    /* 0x0C */ GXBlendMode mFillBlendMode;
-    /* 0x10 */ GXBlendFactor mFillSrcFactor;
-    /* 0x14 */ GXBlendFactor mFillDstFactor;
-    /* 0x18 */ GXLogicOp mFillLogicOp;
-    /* 0x1C */ Color8 _1C;
-    /* 0x20 */ Color8 _20;
-    /* 0x24 */ bool _24;
-    /* 0x25 */ bool _25;
+    // The fill's blend (nebula_game_api.h NEBULA_BLEND_* and NEBULA_FACTOR_*).
+    u8 mFillBlendOp;
+    u8 mFillSrcFactor;
+    u8 mFillDstFactor;
+    Color8 _1C;
+    Color8 _20;
+    bool _24;
+    bool _25;
 };
 
 namespace MR {

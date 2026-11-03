@@ -12,13 +12,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-void AreaObjUtil_FORCE_MATCH(TVec3f* pVec, const TVec3f& rOther) {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    *pVec += rOther;
-}
-
 namespace MR {
     inline AreaObj* getAreaIn(const char* pName, const TVec3f& rPos) {
         return getAreaObjContainer()->getAreaObj(pName, rPos);
@@ -59,8 +52,6 @@ namespace MR {
         }
     }
 
-#pragma push
-#pragma opt_propagation off
     bool getWaterAreaInfo(WaterInfo* pInfo, const TVec3f& rPos, const TVec3f& rGravity, bool skipConnectedArea) {
         if (pInfo->mOceanBowl != nullptr) {
             return pInfo->mOceanBowl->calcWaterInfo(rPos, rGravity, pInfo);
@@ -186,7 +177,6 @@ namespace MR {
 
         return pArea->isInVolume(rPos);
     }
-#pragma pop
 
     bool calcWhirlPoolAccelInfo(const TVec3f& rVec, TVec3f* pVec) {
         return WaterAreaFunction::tryInWhirlPoolAccelerator(rVec, pVec);

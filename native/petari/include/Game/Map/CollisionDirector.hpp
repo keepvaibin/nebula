@@ -19,8 +19,8 @@ public:
         return mCategoryKeeper[index];
     }
 
-    /* 0x0C */ CollisionCategorizedKeeper** mCategoryKeeper;
-    /* 0x10 */ CollisionCode* mCode;
+    CollisionCategorizedKeeper** mCategoryKeeper;
+    CollisionCode* mCode;
 };
 
 namespace MR {

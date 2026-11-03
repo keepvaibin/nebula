@@ -18,7 +18,7 @@ public:
 
     bool isEnableSensor(const HitSensor*) const;
     bool isEnableDamage() const;
-    bool isEnableScream() const NO_INLINE;
+    bool isEnableScream() const;
 
     void exeWait();
     void exeBreakBody();
@@ -30,9 +30,9 @@ public:
     void exeDamageBody();
     void endStagger();
 
-    /* 0x14 */ PoltaStateStagger* mStateStagger;
-    /* 0x18 */ PoltaStateGenerateRock* mStateGenerateRock;
-    /* 0x1C */ PoltaStateGroundRockAttack* mStateGroundRockAttack;
-    /* 0x20 */ s32 mPoltaHealth;
+    PoltaStateStagger* mStateStagger;
+    PoltaStateGenerateRock* mStateGenerateRock;
+    PoltaStateGroundRockAttack* mStateGroundRockAttack;
+    s32 mPoltaHealth;
     s32 _24;
 };

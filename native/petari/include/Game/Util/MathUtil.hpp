@@ -5,8 +5,7 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/gx.h>
-#include <revolution/types.h>
+#include <NebulaGpu.h>
 
 namespace MR {
     /// @brief Initializes the precomputed arccosine table.
@@ -32,13 +31,6 @@ namespace MR {
     /// @param max The exclusive maximum integer.
     /// @return The pseudorandom integer.
     s32 getRandom(s32 min, s32 max);
-#ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
-    template < typename A, typename B >
-    inline typename NebulaLongCall< s32, A, B >::Type getRandom(A min, B max) {
-        return getRandom((s32)min, (s32)max);
-    }
-#endif
 
     /// @brief Computes the next pseudorandom floating-point number within the half-open interval `[0.0f, 360.0f)`.
     /// @return The pseudorandom number of degrees.
@@ -52,7 +44,7 @@ namespace MR {
 
     /// @brief Computes the next pseudorandom Boolean.
     /// @return `true` if the pseudorandom number is less than one half, `false` otherwise.
-    bool isHalfProbability() NO_INLINE;
+    bool isHalfProbability();
 
     /// @brief Computes the sign of the next pseudorandom Boolean.
     /// @retval `-1.0f` if the pseudorandom number is less than one half.
@@ -177,7 +169,6 @@ namespace MR {
     bool turnQuatYDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
     void turnQuatYDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate);
     bool turnQuatZDirRad(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 angle);
-    void turnQuatZDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate);
 
     /// @brief Returns a number representing the sign of a number.
     /// @param x The number to evaluate.
@@ -331,7 +322,7 @@ namespace MR {
     /// @param end The ending color.
     /// @param t The linear interpolant.
     /// @return The result of linear interpolation.
-    GXColor lerp(GXColor start, GXColor end, f32 t);
+    NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t);
 
     void sortSmall(s32 length, f32* pSortArray, s32* pIndexArray);
     void sortSmall(s32 length, u32* pSortArray, s32* pIndexArray);
@@ -349,7 +340,7 @@ namespace MR {
     /// @param[in] rStart A reference to the starting color.
     /// @param[in] rEnd A reference to the ending color.
     /// @param t The linear interpolant.
-    void blendColor(GXColor* pDst, const GXColor& rStart, const GXColor& rEnd, f32 t);
+    void blendColor(NebulaColor8* pDst, const NebulaColor8& rStart, const NebulaColor8& rEnd, f32 t);
 
     /// @brief Computes unclamped linear interpolation between two three-dimensional vectors.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.
@@ -414,13 +405,11 @@ namespace MR {
     /// @param[out] pDst A pointer to the three-dimensional fixed-point vector to initialize.
     /// @param[in] rSrc A reference to the three-dimensional floating-point vector to evaluate.
     /// @param q The number of bits to reserve for the decimal portion.
-    void floatToFixed16(TVec3s* pDst, const TVec3f& rSrc, u8 q);
 
     /// @brief Converts a three-dimensional fixed-point vector into a floating-point vector.
     /// @param[out] pDst A pointer to the three-dimensional floating-point vector to initialize.
     /// @param[in] rSrc A reference to the three-dimensional fixed-point vector to evaluate.
     /// @param q The number of bits reserved for the decimal portion.
-    void fixed16ToFloat(TVec3f* pDst, const TVec3s& rSrc, u8 q);
 
     void getRotatedAxisY(TVec3f* pDst, const TVec3f& rSrc);
     void getRotatedAxisZ(TVec3f* pDst, const TVec3f& rSrc);
@@ -451,15 +440,15 @@ namespace MR {
     }
 
     inline f32 fabs(f64 x) {
-        return __fabs(x);
+        return ::fabs(x);
     }
 
     inline f32 abs(f32 x) {
-        return __fabsf(x);
+        return ::fabsf(x);
     }
 
     inline s32 abs(s32 x) {
-        return __abs(x);
+        return ::abs(x);
     }
 
     /// @brief Computes the cosine of a number, in radians.
@@ -583,14 +572,7 @@ namespace MR {
     /// @retval `min` if the integer is less than or equal to `min`.
     /// @retval `max` if the integer is greater than or equal to `max`.
     /// @retval `x` if the integer is greater than `min` and less than `max`.
-#ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     inline s32 clamp(s32 x, s32 min, s32 max);
-    template < typename A, typename B, typename C >
-    inline typename NebulaLongCall< s32, A, B, C >::Type clamp(A x, B min, C max) {
-        return clamp((s32)x, (s32)min, (s32)max);
-    }
-#endif
 
     inline s32 clamp(s32 x, s32 min, s32 max) {
         s32 ret;
@@ -627,7 +609,7 @@ namespace MR {
         *pValue = clamp(*pValue, min, max);
     }
 
-    inline void clampMax(f32* pValue, f32 max) NO_INLINE {
+    inline void clampMax(f32* pValue, f32 max) {
         f32 ret;
         if (*pValue >= max) {
             ret = max;
@@ -638,7 +620,6 @@ namespace MR {
         *pValue = ret;
     }
 
-    // wrapper function needed to match all instances of MR::repeat
     inline f32 MOD(f32 x, f32 y) {
         return fmod(x, y);
     }
@@ -655,37 +636,11 @@ namespace MR {
         return repeat(value, 0.0f, 360.0f);
     }
 
-#ifdef __MWERKS__
-    inline f32 fastSqrtf(register f32 x) {
-        register f32 recip;
-
-        if (x > 0.0f) {
-            __asm { frsqrte recip, x}
-            f32 v = recip * x;
-            recip = -(v * recip - 3.0f);
-            recip = (recip * v);
-            recip *= 0.5f;
-            return recip;
-        }
-
-        return x;
-    }
-
-#elif defined(TARGET_PC)
-    // The console refines frsqrte's estimate once; natively the root.
-    inline f32 fastSqrtf(f32 x) {
-        return x > 0.0f ? __builtin_sqrtf(x) : x;
-    }
-#else
-    f32 fastSqrtf(f32);
-#endif
-
     template < typename T >
     T sqrt(T x) {
-        return fastSqrtf(x);
+        return NebulaSqrt(x);
     }
 
 };  // namespace MR
 
 f32 VecKillElement(const Vec*, const Vec*, const Vec*);
-f32 JMASqrt(f32);

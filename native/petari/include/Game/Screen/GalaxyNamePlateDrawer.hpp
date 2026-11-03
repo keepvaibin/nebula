@@ -6,8 +6,8 @@
 class LayoutActor;
 
 struct GalaxyNamePlatePrioritied {
-    /* 0x0 */ const LayoutActor* mHostActor;
-    /* 0x4 */ u32 mZ;
+    const LayoutActor* mHostActor;
+    u32 mZ;
 
     GalaxyNamePlatePrioritied(const LayoutActor* pActor) : mHostActor(pActor), mZ() {
     }
@@ -24,7 +24,7 @@ public:
     GalaxyNamePlatePrioritied* registerPlate(const LayoutActor*);
 
 private:
-    /* 0xC */ MR::Vector< MR::FixedArray< GalaxyNamePlatePrioritied*, 16 > > mPlateArray;
+    MR::Vector< MR::FixedArray< GalaxyNamePlatePrioritied*, 16 > > mPlateArray;
 };
 
 namespace MR {

@@ -1,10 +1,10 @@
+#include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/Screen/SystemWipeHolder.hpp"
 #include "Game/Screen/WipeFade.hpp"
 #include "Game/Screen/WipeHolderBase.hpp"
 #include "Game/Screen/WipeRing.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/J2DGraph/J2DPicture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 SystemWipeHolder::SystemWipeHolder() : WipeHolderBase(4, "\203\126\203\130\203\145\203\200\203\217\203\103\203\166\225\333\216\235" /* システムワイプ保持 */), _1C(false) {
 }
@@ -61,17 +61,9 @@ void SystemWipeHolder::drawGameScreenCapture() const {
         return;
     }
 
-    J2DOrthoGraphSimple graph;
-    graph.setPort();
-
-    JUTTexture texture(MR::getScreenResTIMG(), 0);
-
-    J2DPicture picture(&texture);
-    f32 width = MR::getScreenWidth();
-    // inlined MR::getscreenHeight
-    f32 height = (s32)JUTVideo::getManager()->getEfbHeight();
-
-    picture.draw(0.0f, 0.0f, width, height, false, false, false);
+    MR::setupScreen2D();
+    JUTTexture texture(MR::getScreenResTIMG());
+    MR::drawScreenPicture(texture);
 }
 
 void SystemWipeHolder::updateWipe(const char* pWipeName) {

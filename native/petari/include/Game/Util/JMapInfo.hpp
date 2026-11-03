@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstring>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
+#include "Game/Util/ByteView.hpp"
 
 #define JMAP_VALUE_TYPE_LONG 0
 #define JMAP_VALUE_TYPE_STRING 1
@@ -17,20 +17,21 @@
 class JMapInfoIter;
 
 struct JMapItem {
-    /* 0x00 */ NEBULA_BE(u32) mHash;
-    /* 0x04 */ NEBULA_BE(u32) mMask;
-    /* 0x08 */ NEBULA_BE(u16) mOffsData;
-    /* 0x0A */ u8 mShift;
-    /* 0x0B */ u8 mType;
+    u32 mHash;
+    u32 mMask;
+    u16 mOffsData;
+    u8 mShift;
+    u8 mType;
 };
 
-// BCSV: the header and field table big-endian, and each entry's values (JMapInfo::getValueFast reads them).
+// BCSV, in host order as the importer cooks it (crates/nebula-import cook/native_data.rs): the header, the field
+// table and each entry's values (JMapInfo::getValueFast reads them).
 struct JMapData {
-    /* 0x00 */ NEBULA_BE(s32) mNumEntries;
-    /* 0x04 */ NEBULA_BE(s32) mNumFields;
-    /* 0x08 */ NEBULA_BE(s32) mDataOffset;
-    /* 0x0C */ NEBULA_BE(u32) mEntrySize;
-    /* 0x10 */ const JMapItem mItems[];
+    s32 mNumEntries;
+    s32 mNumFields;
+    s32 mDataOffset;
+    u32 mEntrySize;
+    const JMapItem mItems[];
 };
 
 template < typename T >
@@ -79,13 +80,13 @@ public:
     bool getValueFast(int entryIndex, int itemIndex, f32* pValueOut) const {
         const JMapItem* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = *reinterpret_cast< const NEBULA_BE(f32)* >(pValue);
+        *pValueOut = readBytes< f32 >(pValue);
         return true;
     }
     bool getValueFast(int entryIndex, int itemIndex, bool* pValueOut) const {
         const JMapItem* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = (*reinterpret_cast< const NEBULA_BE(u32)* >(pValue) & pItem->mMask) != 0;
+        *pValueOut = (readBytes< u32 >(pValue) & pItem->mMask) != 0;
         return true;
     }
 
@@ -100,8 +101,8 @@ public:
     inline JMapInfoIter begin() const;
     inline JMapInfoIter end() const;
 
-    /* 0x00 */ const JMapData* mData;
-    /* 0x04 */ const char* mName;
+    const JMapData* mData;
+    const char* mName;
 };
 
 template < typename T >
@@ -139,8 +140,8 @@ public:
         return mInfo->getValue(mIndex, pKey, pValueOut);
     }
 
-    /* 0x00 */ const JMapInfo* mInfo;
-    /* 0x04 */ s32 mIndex;
+    const JMapInfo* mInfo;
+    s32 mIndex;
 };
 
 template < typename T >

@@ -1,7 +1,6 @@
 #include "JSystem/JAudio2/JAUSeqDataBlockMgr.hpp"
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
 #include "JSystem/JAudio2/JAUSoundInfo.hpp"
-#include <revolution/types.h>
 
 JAUSeqDataBlock::JAUSeqDataBlock() : mLink(this) {
 }
@@ -60,7 +59,7 @@ JAUDynamicSeqDataBlocks::JAUDynamicSeqDataBlocks() {
     mSeqDataArchive = nullptr;
 }
 
-void JAUDynamicSeqDataBlocks::setSeqDataArchive(JKRArchive* param_0) {
+void JAUDynamicSeqDataBlocks::setSeqDataArchive(AssetFolder* param_0) {
     mSeqDataArchive = param_0;
 }
 
@@ -86,11 +85,10 @@ s32 JAUDynamicSeqDataBlocks::getSeqData(JAISoundID param_0, JAISeqDataUser* para
 
 bool JAUDynamicSeqDataBlocks::appendDynamicSeqDataBlock(JAUSeqDataBlock* seqDataBlock) {
     rearrangeLoadingSeqs_();
-    bool result;
     if (seqDataBlock->mSoundID.isAnonymous()) {
-        result = mFreeBlocks.append(&seqDataBlock->mLink);
+        mFreeBlocks.append(&seqDataBlock->mLink);
     } else {
-        result = mLoadedBlocks.append(&seqDataBlock->mLink);
+        mLoadedBlocks.append(&seqDataBlock->mLink);
     }
     return 1;
 }
@@ -135,27 +133,6 @@ bool JAUDynamicSeqDataBlocks::loadDynamicSeq(JAISoundID param_0, bool param_1, J
                                            JAUDynamicSeqDataBlocks_receiveLoaded_, (uintptr_t)link);
     }
     return true;
-}
-
-u32 JAUDynamicSeqDataBlocks::releaseIdleDynamicSeqDataBlock(JAISeqDataUser* param_0) {
-    rearrangeLoadingSeqs_();
-    u32 size = 0;
-    JSULink< JAUSeqDataBlock >* nextLink;
-    for (JSULink< JAUSeqDataBlock >* link = mLoadedBlocks.getFirst(); link != nullptr;) {
-        nextLink = link->getNext();
-        JAUSeqDataBlock* seqDataBlock = link->getObject();
-        if (param_0 == nullptr || !param_0->isUsingSeqData(seqDataBlock->region)) {
-            mLoadedBlocks.remove(link);
-            JAUSeqDataBlock* seqDataBlock = link->getObject();
-            seqDataBlock->mSoundID.setAnonymous();
-            if (size < seqDataBlock->region.size) {
-                size = seqDataBlock->region.size;
-            }
-            mFreeBlocks.append(link);
-        }
-        link = nextLink;
-    }
-    return size;
 }
 
 JAUSeqDataBlock* JAUDynamicSeqDataBlocks::releaseIdleDynamicSeqDataBlock_(JAISeqDataUser* param_0, u32 param_1) {

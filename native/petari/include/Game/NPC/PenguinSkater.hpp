@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/NPC/NPCActor.hpp"
 
 class ActorCameraInfo;
@@ -41,13 +42,13 @@ public:
 
     bool isAttackable() const;
 
-    /* 0x15C */ ActorCameraInfo* mCameraInfo;
-    /* 0x160 */ NPCSupportRail* mCurrentRail;
-    /* 0x164 */ NPCSupportRail* mSwitchRail;
-    /* 0x168 */ NPCSupportRail* mSwitchRails[16];
-    /* 0x1A8 */ NPCSupportRail* mRail;
-    /* 0x1AC */ s32 mNumRails;
-    /* 0x1B0 */ s32 mCrossPoint;
-    /* 0x1B4 */ TQuat4f mMarioQuat;
-    /* 0x1C4 */ TVec3f mMarioPos;
+    ActorCameraInfo* mCameraInfo;
+    NPCSupportRail* mCurrentRail;
+    NPCSupportRail* mSwitchRail;
+    MR::GrowTable< NPCSupportRail*, 16 > mSwitchRails;
+    NPCSupportRail* mRail;
+    s32 mNumRails;
+    s32 mCrossPoint;
+    TQuat4f mMarioQuat;
+    TVec3f mMarioPos;
 };

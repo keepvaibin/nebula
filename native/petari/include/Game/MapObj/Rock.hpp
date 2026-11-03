@@ -25,7 +25,7 @@ public:
 
     static s32 getAppearFrame();
     static Type getType(const JMapInfoIter&);
-    static s32 getAppearStarPieceNum(Type) NO_INLINE;
+    static s32 getAppearStarPieceNum(Type);
     void initMapToolInfo(const JMapInfoIter&);
     void initModel();
     void initSensor();
@@ -40,13 +40,12 @@ public:
     bool tryFreeze(const Nerve*);
     void setBtkForEnvironmentMap(LiveActor*, const char*);
     void rumblePadAndCamera();
-    void setNerveBreak(bool) NO_INLINE;
+    void setNerveBreak(bool);
     void updateRotateX(f32);
     void appearStarPiece();
-    void moveOnRail(f32, f32, bool) NO_INLINE;
+    void moveOnRail(f32, f32, bool);
     bool isForceInvalidBindSection() const;
     bool tryBreakReachedGoal();
-    const char* getTouchEffect() const;  // stripped
     bool isMoveEnabled() const;          // stripped
 
     void exeAppear();
@@ -69,30 +68,30 @@ public:
         return pSensor->isType(ATYPE_ROCK) || pSensor->isType(ATYPE_WANWAN);
     }
 
-    /* 0x8C */ RockCreator* mCreator;
-    /* 0x90 */ Type mRockType;
-    /* 0x94 */ ModelObj* mBreakModel;
-    /* 0x98 */ f32 mMoveSpeed;
-    /* 0x9C */ bool mBreakModelOnRailGoal;
-    /* 0x9D */ bool mSlowDownOnAttack;
-    /* 0xA0 */ TVec3f mAppearPos;
-    /* 0xAC */ f32 mRadius;
-    /* 0xB0 */ f32 mRotateSpeed;
-    /* 0xB4 */ TPos3f mBaseMtx;
-    /* 0xE4 */ TVec3f mFallVelocity;
-    /* 0xF0 */ f32 mGravityRate;
-    /* 0xF4 */ s32 mCurrentRailPoint;
-    /* 0xF8 */ TVec3f mPrevPos;
-    /* 0x104 */ TVec3f mFront;
-    /* 0x110 */ u32 mAirTime;
-    /* 0x114 */ bool mIsNormalGravity;
-    /* 0x118 */ s32 mWanwanVoiceTimer;
-    /* 0x11C */ s32 mFreezeTime;
-    /* 0x120 */ TVec3f mFreezePos;
-    /* 0x12C */ const Nerve* mUnfreezeNerve;
-    /* 0x130 */ s32 mInvalidBindTime;
-    /* 0x134 */ s32 mAppearTime;
-    /* 0x138 */ f32 mAppearAngle;
-    /* 0x13C */ s32 mRollSoundTimer;
-    /* 0x140 */ s32 mSlowDownTimer;
+    RockCreator* mCreator;
+    Type mRockType;
+    ModelObj* mBreakModel;
+    f32 mMoveSpeed;
+    bool mBreakModelOnRailGoal;
+    bool mSlowDownOnAttack;
+    TVec3f mAppearPos;
+    f32 mRadius;
+    f32 mRotateSpeed;
+    TPos3f mBaseMtx;
+    TVec3f mFallVelocity;
+    f32 mGravityRate;
+    s32 mCurrentRailPoint;
+    TVec3f mPrevPos;
+    TVec3f mFront;
+    u32 mAirTime;
+    bool mIsNormalGravity;
+    s32 mWanwanVoiceTimer;
+    s32 mFreezeTime;
+    TVec3f mFreezePos;
+    const Nerve* mUnfreezeNerve;
+    s32 mInvalidBindTime;
+    s32 mAppearTime;
+    f32 mAppearAngle;
+    s32 mRollSoundTimer;
+    s32 mSlowDownTimer;
 };

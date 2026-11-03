@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct JPAKeyBlock {
     JPAKeyBlock(u8 const*);
@@ -11,5 +10,5 @@ struct JPAKeyBlock {
     }
 
     const u8* mDataStart;
-    const NEBULA_BE(f32)* field_0x4;
+    const f32* field_0x4;
 };

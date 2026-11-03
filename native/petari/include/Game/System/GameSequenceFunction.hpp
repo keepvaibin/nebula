@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class GalaxyMoveArgument;
 class UserFile;
@@ -29,8 +28,8 @@ namespace GameSequenceFunction {
     void requestGalaxyMove(const GalaxyMoveArgument&);
     void requestCancelScenarioSelect();
     void sendStageResultSequenceParam(const char*, s32, int, int);
-    bool hasStageResultSequence() NO_INLINE;
-    const char* getClearedStageName() NO_INLINE;
+    bool hasStageResultSequence();
+    const char* getClearedStageName();
     s32 getClearedPowerStarId();
     int getClearedStarPieceNum();
     int getClearedCoinNum();
@@ -56,12 +55,10 @@ namespace GameSequenceFunction {
     bool isSuccessSaveDataHandleSequence();
     void restoreUserFile(UserFile*, int);
     void restoreUserFile(UserFile*, int, bool);
-    void reserveUserName(const wchar_t*);
+    void reserveUserName(const char16_t*);
     void storeSceneStartGameDataHolder();
     void updateGameDataAndSequenceAfterStageResultSequence();
     void startGameDataSaveSequence(bool, bool);
-#ifdef TARGET_PC
     // After startGameDataSaveSequence: the caller opens a system window once the save is done (SaveDataHandleSequence).
     void setGameDataSaveWindowFollows();
-#endif
 };  // namespace GameSequenceFunction

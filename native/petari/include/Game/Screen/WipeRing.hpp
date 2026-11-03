@@ -27,9 +27,9 @@ public:
     void exeWipeOut();
 
 private:
-    /* 0x20 */ TVec2f mCenterPos;
-    /* 0x28 */ s32 mAnimFrame;
-    /* 0x2C */ f32 mWipeOutFrame;
-    /* 0x30 */ f32 mWipeInFrame;
-    /* 0x34 */ bool mIsCenterOnPlayer;
+    TVec2f mCenterPos;
+    s32 mAnimFrame;
+    f32 mWipeOutFrame;
+    f32 mWipeInFrame;
+    bool mIsCenterOnPlayer;
 };

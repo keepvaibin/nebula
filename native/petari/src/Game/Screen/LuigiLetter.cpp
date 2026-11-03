@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -25,8 +25,8 @@ void LuigiLetter::init(const JMapInfoIter& rIter) {
 
     initLayoutManager("LuigiLetter", 1);
     initNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
-    snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s.arc", _28);
-    snprintf(textureName, sizeof(textureName), "LuigiPicture%s.bti", _28);
+    nebula_snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s.arc", _28);
+    nebula_snprintf(textureName, sizeof(textureName), "LuigiPicture%s.bti", _28);
 
     mTexture = MR::createLytTexMap(archiveName, textureName);
 
@@ -75,7 +75,7 @@ void LuigiLetter::exeWait() {
         mAButtonIcon->openWithoutMessage();
     }
 
-    if (mAButtonIcon->isWait() && MR::testCorePadButtonA(WPAD_CHAN0)) {
+    if (mAButtonIcon->isWait() && MR::isHeldJump(PLAYER_1)) {
         MR::startSystemSE("SE_SY_TALK_OK");
         setNerve(GET_NERVE(LuigiLetter, HostTypeNrvEnd));
     }
@@ -106,7 +106,7 @@ void LuigiLetter::makeArchiveListCommon(NameObjArchiveListCollector* pCollector,
     }
 
     char archiveName[256];
-    snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s", pGalaxyName);
+    nebula_snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s", pGalaxyName);
 
     pCollector->addArchive("LuigiLetter");
     pCollector->addArchive(archiveName);

@@ -1,10 +1,9 @@
 #pragma once
 
-// Nebula's services beyond the console's, asked directly by the game (nebula_game_api.h): the host's options and
+// Nebula's services, asked directly by the game (nebula_game_api.h): the host's options and
 // code patches, its settings menu and button icons, achievements and play stats, presence, the galaxy select's
 // names, scene and light signals for the renderer, art export, test requests.
 
-#include <revolution/types.h>
 
 #include <nebula_game_api.h>
 
@@ -13,8 +12,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace NebulaHost {
     // Whether code patch `id` (NEBULA_PATCH_*) is on, and its value: the host's answer is fixed for the session.
     bool codePatch(u32 id, u32* pValue);
-    // Names an object for the renderer's draw identities (its NEBULA_MARKER_OBJECT records).
-    void objectName(const void* pObject, const char* pName);
 
     inline u32 option(u32 what) {
         return nebula_host()->option(nebula_host()->user, what);
@@ -28,9 +25,6 @@ namespace NebulaHost {
         return nebula_host()->test_scene_frame(nebula_host()->user, pAction);
     }
 
-    inline void sceneSurround(f32 intensity) {
-        nebula_host()->scene_surround(nebula_host()->user, intensity);
-    }
 
     // An object as the host names it (markers, lights, names): its address.
     inline u64 objectId(const void* pObject) {
@@ -43,14 +37,6 @@ namespace NebulaHost {
 
     inline void gameStage(const char* pName) {
         nebula_host()->game_stage(nebula_host()->user, pName);
-    }
-
-    inline f32 lightReach(const char* pModel, f32 radius) {
-        return nebula_host()->light_reach(nebula_host()->user, pModel, radius);
-    }
-
-    inline int tracedSun(f32* pDirection) {
-        return nebula_host()->traced_sun(nebula_host()->user, pDirection);
     }
 
     inline void presence(const u16* pGalaxy, const u16* pStar, s32 powerStars) {
@@ -89,12 +75,16 @@ namespace NebulaHost {
         nebula_host()->button_icons(nebula_host()->user, pIcons);
     }
 
+    inline void textureHd(const void* pImage, const void* pHd) {
+        nebula_host()->texture_hd(nebula_host()->user, pImage, pHd);
+    }
+
     inline u32 artExport(const NebulaArtExport* pArt) {
         return nebula_host()->art_export(nebula_host()->user, pArt);
     }
 
-    inline u32 layer2DScale() {
-        return nebula_host()->layer_2d_scale(nebula_host()->user);
+    inline u32 layer2DLines() {
+        return nebula_host()->layer_2d_lines(nebula_host()->user);
     }
 
     inline s32 pointerWheel() {

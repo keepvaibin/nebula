@@ -12,7 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 namespace {
     NEW_NERVE(GameSystemStationedArchiveLoaderLoadAudio1stWaveData, GameSystemStationedArchiveLoader, LoadAudio1stWaveData);
@@ -20,7 +20,6 @@ namespace {
     NEW_NERVE(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers, GameSystemStationedArchiveLoader, LoadStationedArchiveOthers);
     NEW_NERVE(GameSystemStationedArchiveLoaderInitializeGameData, GameSystemStationedArchiveLoader, InitializeGameData);
     NEW_NERVE(GameSystemStationedArchiveLoaderEnd, GameSystemStationedArchiveLoader, End);
-    NEW_NERVE(GameSystemStationedArchiveLoaderSuspended, GameSystemStationedArchiveLoader, Suspended);
     NEW_NERVE(GameSystemStationedArchiveLoaderChangeArchivePlayer, GameSystemStationedArchiveLoader, ChangeArchivePlayer);
 };  // namespace
 
@@ -42,7 +41,7 @@ bool ConditionUsePlayerHeap::isExecute(const MR::StationedFileInfo* pInfo) const
     return pInfo->mLoadType == type;
 }
 
-JKRHeap* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInfo) const {
+NebulaArena* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInfo) const {
     switch (pInfo->mHeapType) {
     case MR::StationedFileInfo::HEAP_TYPE_NAPA:
         return mNapaHeap;
@@ -57,8 +56,9 @@ JKRHeap* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInf
 
 PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
-    mNapaHeap = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeapNapa());
-    JKRExpHeap* gddr = PlayerHeapHolder::createHeap(0x500000, MR::getStationedHeapGDDR3());
+    // Room for either player's archives: a change of player loads the other's in the same heaps at any time. Pages not used cost nothing.
+    mNapaHeap = NebulaArena::create(MR::getStationedHeap());
+    NebulaArena* gddr = NebulaArena::create(MR::getStationedHeap());
     mGDDRHeap = gddr;
     condition->mNapaHeap = mNapaHeap;
     condition->mGDDRHeap = gddr;
@@ -66,48 +66,21 @@ PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), m
     condition->mIsDataMario = mIsDataMario;
 }
 
-void PlayerHeapHolder::adjust() {
-    JKRExpHeap* napa = mNapaHeap;
-    if (!napa->isEmpty()) {
-        napa->alloc(0x10000, nullptr);
-    }
-
-    JKRExpHeap* gddr = mGDDRHeap;
-    if (!gddr->isEmpty()) {
-        gddr->alloc(0x10000, nullptr);
-    }
-
-    MR::adjustHeapSize(mNapaHeap, nullptr);
-    MR::adjustHeapSize(mGDDRHeap, nullptr);
-}
-
 void PlayerHeapHolder::dispose() {
     MR::removeResourceAndFileHolderIfIsEqualHeap(mNapaHeap);
     MR::removeResourceAndFileHolderIfIsEqualHeap(mGDDRHeap);
 
-    if (mNapaHeap->mSize != 0) {
-        mNapaHeap->freeAll();
-    }
-
-    if (mGDDRHeap->mSize != 0) {
-        mGDDRHeap->freeAll();
-    }
+    mNapaHeap->freeAll();
+    mGDDRHeap->freeAll();
 }
 
-void PlayerHeapHolder::setIsDataMario(bool isDataMario) NO_INLINE {
+void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
     mIsDataMario = isDataMario;
     mCondition->mIsDataMario = isDataMario;
 }
 
-JKRExpHeap* PlayerHeapHolder::createHeap(u32 size, JKRHeap* pParent) {
-    if (pParent->getMaxAllocatableSize(0x10) < size) {
-        size = -1;
-    }
-
-    return JKRExpHeap::create(size, pParent, true);
-}
-
-GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("\217\355\222\223\203\146\201\133\203\136\217\211\212\372\211\273" /* 常駐データ初期化 */), mHeapHolder(), _C() {
+GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("\217\355\222\223\203\146\201\133\203\136\217\211\212\372\211\273" /* 常駐データ初期化 */), mHeapHolder() {
+    mDone.init();
     initNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadAudio1stWaveData));
 }
 
@@ -119,22 +92,10 @@ bool GameSystemStationedArchiveLoader::isDone() const {
     return isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));
 }
 
-bool GameSystemStationedArchiveLoader::isPreparedReset() const {
-    return isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd)) || isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended));
-}
-
-void GameSystemStationedArchiveLoader::prepareReset() {
-    if (_C) {
-        return;
+void GameSystemStationedArchiveLoader::waitDone() {
+    while (!isDone()) {
+        mDone.wait();
     }
-
-    if (isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd)) || isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended)) ||
-        isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderChangeArchivePlayer)) ||
-        isNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderInitializeGameData))) {
-        return;
-    }
-
-    _C = true;
 }
 
 void GameSystemStationedArchiveLoader::requestChangeArchivePlayer(bool isDataMario) {
@@ -160,36 +121,22 @@ void GameSystemStationedArchiveLoader::exeLoadAudio1stWaveData() {
     }
 
     if (GameSystemFunction::isLoadedAudioStaticWaveData()) {
-        if (trySuspend()) {
-            setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended));
-        } else {
-            setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers));
-        }
+        setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderLoadStationedArchiveOthers));
     }
 }
 
 void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
     if (MR::isFirstStep(this)) {
-        if (trySuspend()) {
-            setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended));
-            return;
-        }
-
         mHeapHolder = new PlayerHeapHolder();
 
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, true), 14,
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, true),
                                       "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
-    } else if (trySuspend()) {
-        MR::suspendAsyncExecuteThread("\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
-        setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended));
-        return;
     }
 
     if (MR::tryEndFunctionAsyncExecute("\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */)) {
         createAndAddPlayerArchives(mHeapHolder->mIsDataMario);
 
         if (mHeapHolder != nullptr) {
-            mHeapHolder->adjust();
         }
 
         setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderInitializeGameData));
@@ -198,15 +145,8 @@ void GameSystemStationedArchiveLoader::exeLoadStationedArchivePlayer() {
 
 void GameSystemStationedArchiveLoader::exeLoadStationedArchiveOthers() {
     if (MR::isFirstStep(this)) {
-        if (!tryAsyncExecuteIfNotSuspend(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers),
-                                         "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */)) {
-            setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended));
-            return;
-        }
-    } else if (trySuspend()) {
-        MR::suspendAsyncExecuteThread("\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
-        setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderSuspended));
-        return;
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers),
+                                      "\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */);
     }
 
     if (MR::tryEndFunctionAsyncExecute("\217\355\222\223\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* 常駐リソース読み込み */)) {
@@ -222,46 +162,25 @@ void GameSystemStationedArchiveLoader::exeInitializeGameData() {
     GameSystemFunction::setSceneNameObjHolderToNameObjRegister();
     MR::clearFileLoaderRequestFileInfo(false);
     setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));
+    mDone.signal();
 }
 
 void GameSystemStationedArchiveLoader::exeEnd() {
-}
-
-void GameSystemStationedArchiveLoader::exeSuspended() {
 }
 
 void GameSystemStationedArchiveLoader::exeChangeArchivePlayer() {
     if (MR::isFirstStep(this)) {
         mHeapHolder->dispose();
         bool isMario = mHeapHolder->mIsDataMario;
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, isMario), 14,
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer, isMario),
                                       "\203\166\203\214\203\103\203\204\201\133\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* プレイヤーリソース読み込み */);
     }
 
     if (MR::tryEndFunctionAsyncExecute("\203\166\203\214\203\103\203\204\201\133\203\212\203\134\201\133\203\130\223\307\202\335\215\236\202\335" /* プレイヤーリソース読み込み */)) {
         createAndAddPlayerArchives(mHeapHolder->mIsDataMario);
         setNerve(GET_NERVE_ANON(GameSystemStationedArchiveLoaderEnd));
+        mDone.signal();
     }
-}
-
-bool GameSystemStationedArchiveLoader::trySuspend() {
-    if (!_C) {
-        return false;
-    }
-
-    _C = true;
-
-    return true;
-}
-
-bool GameSystemStationedArchiveLoader::tryAsyncExecuteIfNotSuspend(const MR::FunctorBase& rFunctor, const char* pName) {
-    if (trySuspend()) {
-        return false;
-    }
-
-    MR::startFunctionAsyncExecute(rFunctor, 14, pName);
-
-    return true;
 }
 
 void GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer(bool a1) {
@@ -270,7 +189,7 @@ void GameSystemStationedArchiveLoader::startToLoadStationedArchivePlayer(bool a1
 
 void GameSystemStationedArchiveLoader::startToLoadStationedArchiveOthers() {
     StationedArchiveLoader::loadResourcesFromTable(ConditionIfIsNotPlayer());
-    StationedArchiveLoader::loadScenarioData(MR::getStationedHeapGDDR3());
+    StationedArchiveLoader::loadScenarioData(MR::getStationedHeap());
 }
 
 void GameSystemStationedArchiveLoader::createAndAddPlayerArchives(bool isDataMario) {

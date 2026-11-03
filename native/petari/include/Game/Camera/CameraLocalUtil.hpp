@@ -20,12 +20,12 @@ namespace CameraLocalUtil {
     void setPos(CameraMan*, const TVec3f&);
     void setUpVec(CameraMan*, const TVec3f&);
     void setWatchUpVec(CameraMan*, const TVec3f&);
-    void setFovy(CameraMan*, f32) NO_INLINE;
+    void setFovy(CameraMan*, f32);
     void setGlobalOffset(CameraMan*, const TVec3f&);
     void setLocalOffset(CameraMan*, const TVec3f&);
     void setFrontOffset(CameraMan*, f32);
     void setUpperOffset(CameraMan*, f32);
-    void setRoll(CameraMan*, f32) NO_INLINE;
+    void setRoll(CameraMan*, f32);
     CameraTargetObj* getTarget(const CameraMan*);
     const MtxPtr getMtxReg(const char*);
     const TVec3f& getVecReg(const char*);

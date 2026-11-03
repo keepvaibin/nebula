@@ -3,15 +3,6 @@
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 
-void CameraCalc_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-    (void)1023.5f;
-    (void)(MR::pi() / 2.0f);
-}
-
 namespace MR {
     void crossToPolar(const TVec3f& rA, const TVec3f& rB, f32* pLength, f32* pAngleX, f32* pAngleY) {
         f32 dx = rB.x - rA.x;
@@ -71,8 +62,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void CameraCalc_DUMMY() {
-    TVec3f d(JMAAcosRadian(0.0f));
-    TVec3f a, b, c;
-    b *= 2.0f;
-}

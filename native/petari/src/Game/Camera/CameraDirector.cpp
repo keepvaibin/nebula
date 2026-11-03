@@ -1,4 +1,5 @@
 #include "Game/Camera/CameraDirector.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Boss/BossStinkBug.hpp"
 #include "Game/Camera/CameraCover.hpp"
 #include "Game/Camera/CameraHolder.hpp"
@@ -26,7 +27,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -35,14 +36,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstring>
-
-void CameraDirector_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)MR::pi();
-}
+#include <nebula_format.h>
 
 namespace {
     // static const s32 sDefaultBlendFrame =
@@ -145,6 +139,11 @@ void CameraDirector::push(CameraMan* pMan) {
         getCurrentCameraMan()->deactivate(this);
     }
 
+    if (mStack->mCount == mStack->mCapacity) {
+        mStack->mElements = MR::growArray(mStack->mElements, static_cast< s32 >(mStack->mCapacity));
+        mStack->mCapacity *= 2;
+    }
+
     mStack->mElements[mStack->mCount++] = pMan;
 
     pMan->owned(this);
@@ -172,9 +171,6 @@ void CameraDirector::backLastMtx() {
         TVec3f invTrans;
         MR::getCameraInvViewMtx().getTrans(invTrans);
     }
-}
-
-void CameraDirector::updateTarget() {
 }
 
 CameraMan* CameraDirector::getCurrentCameraMan() const {
@@ -360,9 +356,10 @@ void CameraDirector::endEvent(s32 zoneID, const char* pName, bool resetView, s32
 
 void CameraDirector::endEventAtLanding(s32 zoneID, const char* pName, s32 frame) {
     if (getCurrentCameraMan() == mCameraManEvent) {
-        mEvents[mEventNum].mZoneID = zoneID;
-        strcpy(mEvents[mEventNum].mName, pName);
-        mEvents[mEventNum].mFrame = frame;
+        CameraEvent& rEvent = mEvents.at(mEventNum);
+        rEvent.mZoneID = zoneID;
+        nebula_snprintf(rEvent.mName, sizeof(rEvent.mName), "%s", pName);
+        rEvent.mFrame = frame;
         mEventNum++;
     }
 }
@@ -662,7 +659,7 @@ void CameraDirector::controlCameraSE() {
     }
 
     if (mIsSubjectiveCamera) {
-        if (MR::testCorePadTriggerLeft(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testFpViewStartTrigger()) {
+        if (MR::isPressedLeft(PLAYER_1) || MR::isPressedRight(PLAYER_1) || MR::testFpViewStartTrigger()) {
             if (isPlayableCameraSE(false)) {
                 MR::startSystemSE("SE_SY_CAMERA_NG");
                 mIsCameraNG = true;
@@ -723,7 +720,7 @@ void CameraDirector::controlCameraSE() {
         }
     }
 
-    if (MR::testCorePadTriggerDown(WPAD_CHAN0)) {
+    if (MR::isPressedDown(PLAYER_1)) {
         if (isPlayableCameraSE(false)) {
             MR::startSystemSE("SE_SY_CAMERA_NG");
             mIsCameraNG = true;
@@ -744,7 +741,7 @@ void CameraDirector::removeEndEventAtLanding(s32 zoneID, const char* pName) {
             }
 
             mEvents[idx].mZoneID = mEvents[mEventNum - 1].mZoneID;
-            strcpy(mEvents[idx].mName, mEvents[mEventNum - 1].mName);
+            memcpy(mEvents[idx].mName, mEvents[mEventNum - 1].mName, sizeof(mEvents[idx].mName));
             mEvents[idx].mFrame = mEvents[mEventNum - 1].mFrame;
             mEventNum--;
             return;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/Camera/CameraHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
@@ -34,9 +35,9 @@ namespace MR {
 };  // namespace MR
 
 struct CameraEvent {
-    /* 0x00 */ s32 mZoneID;
-    /* 0x04 */ char mName[128];
-    /* 0x84 */ s32 mFrame;
+    s32 mZoneID;
+    char mName[128];
+    s32 mFrame;
 };
 
 #define CAMERA_MAN_CAPACITY 8
@@ -67,12 +68,11 @@ public:
     void push(CameraMan*);
     CameraMan* pop();
     void backLastMtx();
-    void updateTarget();
     CameraMan* getCurrentCameraMan() const;
     void updateCameraMan();
     void calcPose();
     void calcSubjective();
-    bool isInterpolationOff() NO_INLINE;
+    bool isInterpolationOff();
     void switchAntiOscillation();
     void createViewMtx();
     void checkStartCondition();
@@ -139,43 +139,43 @@ public:
         mRequestCameraLocalOffsetReset = true;
     }
 
-    /* 0x00C */ CameraTargetObj* mTargetObj;
-    /* 0x010 */ CameraManStack* mStack;
-    /* 0x014 */ OnlyCamera* mOnlyCamera;
-    /* 0x018 */ CameraPoseParam* mPoseParam1;
-    /* 0x01C */ CameraPoseParam* mPoseParam2;
-    /* 0x020 */ CameraHolder* mHolder;
-    /* 0x024 */ CameraParamChunkHolder* mChunkHolder;
-    /* 0x028 */ GameCameraCreator* mCameraCreator;
-    /* 0x02C */ CameraRailHolder* mRailHolder;
-    /* 0x030 */ CameraRegisterHolder* mRegisterHolder;
-    /* 0x034 */ CameraTargetHolder* mTargetHolder;
-    /* 0x038 */ CameraShaker* mShaker;
-    /* 0x03C */ CameraViewInterpolator* mViewInterpolator;
-    /* 0x040 */ CameraCover* mCover;
-    /* 0x044 */ CameraRotChecker* mRotChecker;
-    /* 0x048 */ CameraManGame* mCameraManGame;
-    /* 0x04C */ CameraManEvent* mCameraManEvent;
-    /* 0x050 */ CameraManPause* mCameraManPause;
-    /* 0x054 */ CameraManSubjective* mCameraManSubjective;
-    /* 0x058 */ bool _58;
-    /* 0x05C */ CameraEvent mEvents[2];
-    /* 0x16C */ u32 mEventNum;
-    /* 0x170 */ bool mIsStartCameraActive;
-    /* 0x174 */ s32 mStartTime;
-    /* 0x178 */ bool mStartCameraCreated;
-    /* 0x17C */ CameraTargetMtx* mCameraTargetMtx;
-    /* 0x180 */ TPos3f mTargetMtx;
-    /* 0x1B0 */ bool mRequestCameraManReset;
-    /* 0x1B1 */ bool mRequestCameraLocalOffsetReset;
-    /* 0x1B2 */ bool mIsSubjectiveCamera;
-    /* 0x1B3 */ bool mIsStartSubjectiveCamera;
-    /* 0x1B4 */ s32 mSubjectiveFrame;
-    /* 0x1B8 */ u32 _1B8;
-    /* 0x1BC */ f32 mNearZ;
-    /* 0x1C0 */ TPos3f mViewMtx;
-    /* 0x1F0 */ bool mIsSubjectiveCalced;
-    /* 0x1F1 */ bool _1F1;
-    /* 0x1F2 */ bool mIsCameraNG;
-    /* 0x1F3 */ u8 _1F3;
+    CameraTargetObj* mTargetObj;
+    CameraManStack* mStack;
+    OnlyCamera* mOnlyCamera;
+    CameraPoseParam* mPoseParam1;
+    CameraPoseParam* mPoseParam2;
+    CameraHolder* mHolder;
+    CameraParamChunkHolder* mChunkHolder;
+    GameCameraCreator* mCameraCreator;
+    CameraRailHolder* mRailHolder;
+    CameraRegisterHolder* mRegisterHolder;
+    CameraTargetHolder* mTargetHolder;
+    CameraShaker* mShaker;
+    CameraViewInterpolator* mViewInterpolator;
+    CameraCover* mCover;
+    CameraRotChecker* mRotChecker;
+    CameraManGame* mCameraManGame;
+    CameraManEvent* mCameraManEvent;
+    CameraManPause* mCameraManPause;
+    CameraManSubjective* mCameraManSubjective;
+    bool _58;
+    MR::GrowTable< CameraEvent, 2 > mEvents;
+    u32 mEventNum;
+    bool mIsStartCameraActive;
+    s32 mStartTime;
+    bool mStartCameraCreated;
+    CameraTargetMtx* mCameraTargetMtx;
+    TPos3f mTargetMtx;
+    bool mRequestCameraManReset;
+    bool mRequestCameraLocalOffsetReset;
+    bool mIsSubjectiveCamera;
+    bool mIsStartSubjectiveCamera;
+    s32 mSubjectiveFrame;
+    u32 _1B8;
+    f32 mNearZ;
+    TPos3f mViewMtx;
+    bool mIsSubjectiveCalced;
+    bool _1F1;
+    bool mIsCameraNG;
+    u8 _1F3;
 };

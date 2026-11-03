@@ -6,13 +6,11 @@ typedef void(MessageChangeFunc)(LayoutActor*, const char*, const char*);
 
 class IconAButton;
 class YesNoController;
-#ifdef TARGET_PC
 namespace nw4r {
     namespace lyt {
         class Pane;
     };  // namespace lyt
 };  // namespace nw4r
-#endif
 
 struct MessageChangeFuncTableEntry {
     MessageChangeFunc* mFuncPtr;
@@ -57,12 +55,10 @@ public:
     virtual void control();
 
     void appear(const char*, SysInfoType, SysInfoTextPos, SysInfoMessageType);
-#ifdef TARGET_PC
-    void appearYesNoWithText(const wchar_t* pText);
+    void appearYesNoWithText(const char16_t* pText);
     void decideNo();
     // B answers No (a question the player opened from a menu, as Back closes Nebula's menus). Off by default.
     void setBackAnswersNo(bool on);
-#endif
     void disappear();
     void forceKill();
     bool isWait() const;
@@ -75,16 +71,14 @@ public:
     void setYesNoSelectorSE(const char*, const char*, const char*);
     void resetYesNoSelectorSE();
     void setTextBoxArgNumber(s32, s32);
-    void setTextBoxArgString(const wchar_t*, s32);
 
-    /* 0x20 */ SysInfoWindowType mWindowType;
-    /* 0x24 */ SysInfoType mType;
-    /* 0x28 */ YesNoController* mYesNoSelector;
-    /* 0x2C */ IconAButton* mIconAButton;
-    /* 0x30 */ const char* mTextParentPaneName;
-    /* 0x34 */ const char* mWindowParentPaneName;
-    /* 0x38 */ bool _38;
-#ifdef TARGET_PC
+    SysInfoWindowType mWindowType;
+    SysInfoType mType;
+    YesNoController* mYesNoSelector;
+    IconAButton* mIconAButton;
+    const char* mTextParentPaneName;
+    const char* mWindowParentPaneName;
+    bool _38;
     bool mIsBackAnswersNo;
 
     // Nebula: the screen dim (the layout's BG pane) is drawn by the window itself. Where the game opens another system
@@ -116,7 +110,6 @@ private:
     nw4r::lyt::Pane* mFadePane;
     nw4r::lyt::Pane* mPanelPane;
     nw4r::lyt::Pane* mShadowPane;
-#endif
 };
 
 namespace MR {

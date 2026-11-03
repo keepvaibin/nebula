@@ -19,13 +19,11 @@ public:
     void exeSelect();
     void exeSelected();
     void exeNotSelected();
-#ifdef TARGET_PC
     ButtonPaneController* getPaneCtrl() const {
         return mPaneCtrl;
     }
-#endif
 
 private:
-    /* 0x20 */ ButtonPaneController* mPaneCtrl;
-    /* 0x24 */ bool mCanCloseWithPad;
+    ButtonPaneController* mPaneCtrl;
+    bool mCanCloseWithPad;
 };

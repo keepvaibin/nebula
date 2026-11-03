@@ -43,10 +43,10 @@ void LightPointCtrl::requestPointLight(const LiveActor* pActor, TVec3f pos, Colo
     if (mStep == -1 && isUpdateCandidateActor(pActor)) {
         mCandidateActor = pActor;
         mTargetInfo->mPos = pos;
-        mTargetInfo->mColor = color.mGXColor;
+        mTargetInfo->mColor = color.mRGBA;
         mTargetInfo->mRefBrightness = MR::clamp(intensity, 0.95f, 0.999999f);
         mTargetInfo->mRefDistance = ::sDefaultDistRef;
-        mTargetInfo->mDistAttnFn = GX_DA_STEEP;
+        mTargetInfo->mDistAttnFn = J3D_FALLOFF_STEEP;
         mBlendTime = duration >= 0 ? duration : ::sDefaultBlendTime;
     }
 }
@@ -83,7 +83,7 @@ void LightPointCtrl::clearPointLight(PointLightInfo* pInfo) {
     pos.z = 0.0f;
     pInfo->mPos = pos;
 
-    GXColor color;
+    NebulaColor8 color;
     color.r = 0;
     color.g = 0;
     color.b = 0;
@@ -92,7 +92,7 @@ void LightPointCtrl::clearPointLight(PointLightInfo* pInfo) {
 
     pInfo->mRefBrightness = 0.001f;
     pInfo->mRefDistance = ::sDefaultDistRef;
-    pInfo->mDistAttnFn = GX_DA_STEEP;
+    pInfo->mDistAttnFn = J3D_FALLOFF_STEEP;
     mBlendTime = ::sDefaultBlendTime;
 }
 

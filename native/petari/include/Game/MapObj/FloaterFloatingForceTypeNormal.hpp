@@ -20,10 +20,10 @@ public:
     void exeMoveFirst();
     void exeMove();
 
-    /* 0x38 */ f32 mRotateAngle;
-    /* 0x3C */ f32 mRotateSpeed;
-    /* 0x40 */ f32 _40;
-    /* 0x44 */ f32 _44;
-    /* 0x48 */ TVec3f mVelocity;
-    /* 0x54 */ f32 _54;
+    f32 mRotateAngle;
+    f32 mRotateSpeed;
+    f32 _40;
+    f32 _44;
+    TVec3f mVelocity;
+    f32 _54;
 };

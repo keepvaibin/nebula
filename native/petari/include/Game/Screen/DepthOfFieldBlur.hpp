@@ -17,13 +17,15 @@ public:
     void createBlurTexture() const;
     void drawFinal() const;
 
-    /* 0x14 */ JUTTexture* _14;
-    /* 0x18 */ JUTTexture* _18;
-    /* 0x1C */ JUTTexture* _1C;
-    /* 0x20 */ JUTTexture* _20;
-    /* 0x24 */ JUTTexture* _24;
-    /* 0x28 */ JUTTexture* _28;
-    /* 0x2C */ f32 mIntensity;
-    /* 0x30 */ s32 mBlurMaxDist;
-    /* 0x34 */ s32 mBlurMinDist;
+    JUTTexture* _14;
+    JUTTexture* mFrameKey;       // the frame, in the blur source's pass
+    JUTTexture* mFrameDepthKey;  // its depth, in the depth pass
+    JUTTexture* _20;
+    JUTTexture* _24;
+    JUTTexture* _28;
+    JUTTexture* mQuarter;  // the blur's source
+    JUTTexture* mBlurScratch;
+    f32 mIntensity;
+    s32 mBlurMaxDist;
+    s32 mBlurMinDist;
 };

@@ -5,13 +5,12 @@
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/MiiSelectIcon.hpp"
 #include "Game/Util/BitArray.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "revolution/types.h"
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 namespace {
     NEW_NERVE(MiiSelectNrvAppear, MiiSelect, Appear);
@@ -27,11 +26,9 @@ namespace {
     static const CallbackFuncPtr func[2] = {&MiiSelect::callbackLeft, &MiiSelect::callbackRight};
 };  // namespace
 
-#ifdef TARGET_PC
-// RFL_Database.c: the database's Miis changed (Mii import while the game runs).
+// MiiDatabase.c: the database's Miis changed (Mii import while the game runs).
 extern "C" u32 __NebulaMiiGeneration;
 static u32 sCollectedMiiGeneration = 0;
-#endif
 
 MiiSelect::MiiSelect(const char* pName)
     : LayoutActor(pName, true), _28(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), _1EC(), _1F0(), _1F4(), _1F8(), _1FC(),
@@ -56,12 +53,10 @@ void MiiSelect::init(const JMapInfoIter& rIter) {
 void MiiSelect::appear() {
     LayoutActor::appear();
     setNerve(GET_NERVE_ANON(MiiSelectNrvAppear));
-#ifdef TARGET_PC
     // Miis imported since the file select collected them (FileSelector::exeTitleEnd): collected again.
     if (sCollectedMiiGeneration != __NebulaMiiGeneration) {
         collectValidMiiIndex();
     }
-#endif
     _1EC = 0;
     refresh();
     setCurrentPageGroupA();
@@ -69,7 +64,7 @@ void MiiSelect::appear() {
     updateButtons();
     _1F8->invalidateAllIcon();
     _1FC->invalidateAllIcon();
-    MR::setTextBoxMessageRecursive(this, "TxtName", L"");
+    MR::setTextBoxMessageRecursive(this, "TxtName", u"");
 }
 
 void MiiSelect::disappear() {
@@ -168,9 +163,9 @@ void MiiSelect::exeWait() {
         }
     }
 
-    if (!_20[0]->isHidden() && (MR::testCorePadTriggerLeft(WPAD_CHAN0) || MR::testSubPadStickTriggerLeft(WPAD_CHAN0))) {
+    if (!_20[0]->isHidden() && (MR::isPressedLeft(PLAYER_1) || MR::isMoveStickPressedLeft(PLAYER_1))) {
         callbackLeft();
-    } else if (!_20[1]->isHidden() && (MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testSubPadStickTriggerRight(WPAD_CHAN0))) {
+    } else if (!_20[1]->isHidden() && (MR::isPressedRight(PLAYER_1) || MR::isMoveStickPressedRight(PLAYER_1))) {
         callbackRight();
     }
 }
@@ -274,10 +269,8 @@ void MiiSelect::createButtons() {
 
         _20[i] = new ButtonPaneController(this, pane[i], bound[i], 0, true);
         _20[i]->_22 = false;
-#ifdef TARGET_PC
         // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
         _20[i]->mIsNebulaFocusable = false;
-#endif
     }
 }
 
@@ -336,29 +329,23 @@ void MiiSelect::updateButtons() {
 }
 
 void MiiSelect::collectValidMiiIndex() {
-#ifdef TARGET_PC
     // From empty each time: the picker collects again when Miis were imported since (appear).
     mFavoriteMiiNum = 0;
     mMiiNum = 0;
     sCollectedMiiGeneration = __NebulaMiiGeneration;
-#endif
-    for (u32 i = 0; i < RFL_DB_CHAR_MAX; i++) {
-        if (!RFLIsAvailableOfficialData(i)) {
+    for (u32 i = 0; i < MII_DB_CHAR_MAX; i++) {
+        if (!MiiIsAvailableOfficialData(i)) {
             continue;
         }
 
-        RFLAdditionalInfo additionalInfo;
+        MiiAdditionalInfo additionalInfo;
 
-        if (RFLGetAdditionalInfo(&additionalInfo, RFLDataSource_Official, nullptr, i) != RFLErrcode_Success) {
+        if (MiiGetAdditionalInfo(&additionalInfo, MiiDataSource_Official, nullptr, i) != MiiErrcode_Success) {
             continue;
         }
 
-#ifdef TARGET_PC
-        // At most the ten favourites the console allows (the array's size): a database made elsewhere can mark more.
+        // At most ten favourites (the array's size): a database made elsewhere can mark more.
         if (additionalInfo.favorite == 1 && mFavoriteMiiNum < ARRAY_SIZE(mFavoriteMiiIndices)) {
-#else
-        if (additionalInfo.favorite == 1) {
-#endif
             mFavoriteMiiIndices[mFavoriteMiiNum] = static_cast< u16 >(i);
             mFavoriteMiiNum++;
         } else {
@@ -394,7 +381,7 @@ void MiiSelect::setCurrentPageNum() {
     s32 v2 = (getIconNum() - 1) / 8;
     s32 v1 = _1EC / 8;
 
-    MR::setTextBoxFormatRecursive(this, "TxtPage", L"%d/%d", v1 + 1, v2 + 1);
+    MR::setTextBoxFormatRecursive(this, "TxtPage", u"%d/%d", v1 + 1, v2 + 1);
 }
 
 void MiiSelect::validateAllIcon() {
@@ -489,7 +476,7 @@ namespace MiiSelectSub {
     }
 
     inline void setPointedMiiName(MiiSelect* pHost, s32 index) {
-        wchar_t name[RFL_NAME_LEN + 1];
+        char16_t name[MII_NAME_LEN + 1];
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), pHost->makeIconID(index));
         MR::setTextBoxMessageRecursive(pHost, "TxtName", name);
     }
@@ -518,7 +505,7 @@ namespace MiiSelectSub {
         }
 
         if (!isPointingAny) {
-            MR::setTextBoxMessageRecursive(mHost, "TxtName", L"");
+            MR::setTextBoxMessageRecursive(mHost, "TxtName", u"");
         }
     }
 
@@ -532,7 +519,7 @@ namespace MiiSelectSub {
         for (s32 i = 0; i < ARRAY_SIZE(mIconArray); i++) {
             char paneName[128];
 
-            snprintf(paneName, sizeof(paneName), "Mii%02d", v + i);
+            nebula_snprintf(paneName, sizeof(paneName), "Mii%02d", v + i);
             MR::setLayoutPosAtPaneTrans(mIconArray[i], mHost, paneName);
             mIconArray[i]->calcAnim();
         }

@@ -17,8 +17,8 @@ public:
     void exeMove();
     void exeTerminate();
 
-    /* 0x8C */ s32 mRailSpeed;
-    /* 0x90 */ s32 mMoveTime;
-    /* 0x94 */ bool mIsConnectedToRail;
-    /* 0x95 */ bool mIsBig;
+    s32 mRailSpeed;
+    s32 mMoveTime;
+    bool mIsConnectedToRail;
+    bool mIsBig;
 };

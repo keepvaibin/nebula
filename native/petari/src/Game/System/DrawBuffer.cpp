@@ -40,7 +40,7 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 }
 
 void DrawBufferShapeDrawer::draw() const {
-    J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture, mMatPacket->mpDisplayListObj);
+    J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture, mMatPacket->mpSnapshot);
 
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
     firstPacket->mpShape->loadPreDrawSetting();
@@ -56,8 +56,8 @@ void DrawBufferShapeDrawer::draw() const {
         }
 
         if ((packet->mpShape->mFlags & 1) == 0) {
-            if (packet->mpDisplayListObj != nullptr) {
-                J3DNativeMaterial::sendDiffered(packet->mpDisplayListObj);
+            if (packet->mpSnapshot != nullptr) {
+                J3DNativeMaterial::sendDiffered(packet->mpSnapshot);
             }
             packet->drawFast();
         }
@@ -178,7 +178,6 @@ void DrawBuffer::remove(const LiveActor* pActor) {
 }
 
 void DrawBuffer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
-    J3DModel* model = MR::getJ3DModel(pLightCtrl->mActor);
 
     for (s32 idx = 0; idx < mNumMaterials; idx++) {
         getShapeDrawerByMatNo(idx)->resetLightSort(pLightCtrl);
@@ -290,7 +289,7 @@ void DrawBuffer::sortShapeDrawer(s32 matNo1, s32 matNo2) {
     const char* nameA = MR::getMaterialName(mModelData, drawerA->mMaterial->mIndex);
     const char* nameB = MR::getMaterialName(mModelData, drawerB->mMaterial->mIndex);
 
-    if (strcasecmp(nameA, nameB) > 0) {
+    if (nebula_stricmp(nameA, nameB) > 0) {
         drawerA->swap(drawerB);
 
         for (s32 idx = 0; idx < mNumMaterials; idx++) {

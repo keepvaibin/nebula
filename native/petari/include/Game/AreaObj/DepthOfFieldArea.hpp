@@ -20,5 +20,5 @@ public:
     s32 getBlurMaxDist() const;
     s32 getBlurMinDist() const;
 
-    /* 0x40 */ bool mIsPlayerSync;
+    bool mIsPlayerSync;
 };

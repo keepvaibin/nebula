@@ -53,7 +53,7 @@ void LavaStrangeRock::init(const JMapInfoIter& rIter) {
     initModelAndClipping(rIter);
 
     if (mRockType == 1) {
-        mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1, -1);
+        mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, -1);
     }
 
     MR::connectToSceneMapObj(this);
@@ -113,7 +113,7 @@ void LavaStrangeRock::exeWait() {
     MR::calcUpVec(&upVec, this);
 
     TVec3f hitOffset = upVec;
-    f32 radius;
+    f32 radius = 0.0f;
 
     switch (mRockType) {
     case Type_0:

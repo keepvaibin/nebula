@@ -16,20 +16,20 @@ namespace Nebula.Launcher
     /// </summary>
     internal sealed class GraphicsSettings
     {
-        public static readonly string[] DisplayModes = { "Windowed", "Borderless fullscreen" };
-        public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9" };
+        public static readonly string[] DisplayModes = { NebulaText.Of("Windowed"), NebulaText.Of("Borderless fullscreen") };
+        public static readonly string[] Aspects = { NebulaText.Of("Auto (match the window)"), "4:3", "3:2", "16:10", "16:9", "21:9", "32:9" };
         // Their names in config.ini (the runtime's kAspectNames). A number there is an index of the list before 3:2.
         public static readonly string[] AspectNames = { "auto", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9" };
         private static readonly int[] AspectsBefore3To2 = { 0, 1, 3, 4, 5, 6 };
-        public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
-        public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
+        public static readonly string[] AntiAliasingModes = { NebulaText.Of("Off"), "SMAA", NebulaText.Of("Auto (SMAA unless supersampled)"), "FXAA" };
+        public static readonly string[] AntiAliasingQualities = { NebulaText.Of("Low"), NebulaText.Of("Medium"), NebulaText.Of("High"), NebulaText.Of("Ultra") };
         // MSAA (config msaa_samples 1, 2, 4, 8); off with DLSS, FSR 3 or ray tracing.
-        public static readonly string[] MsaaModes = { "Off", "2x", "4x", "8x" };
+        public static readonly string[] MsaaModes = { NebulaText.Of("Off"), "2x", "4x", "8x" };
         // Frame rate: the game's own 60 (Off), Nebula's interpolated frames (Native) or NVIDIA's
         // generated ones (DLSS Frame Generation, with DLSS on an RTX GPU).
-        public static readonly string[] InterpolationModes = { "Off", "Native", "DLSS Frame Generation" };
+        public static readonly string[] InterpolationModes = { NebulaText.Of("Off"), NebulaText.Of("Native"), NebulaText.Of("DLSS Frame Generation") };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
-        public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
+        public static readonly string[] Upscalers = { NebulaText.Of("Bilinear"), "AMD FidelityFX FSR 1" };
         // NVIDIA DLSS (upscaler 3) runs from files the player downloads from NVIDIA
         // (DlssPackage); Nebula ships none of them.
         public static string StreamlineDir { get { return DlssPackage.Folder; } }
@@ -115,16 +115,16 @@ namespace Nebula.Launcher
 
         public static string UpscalerName(int value)
         {
-            if (value == 3) return DlssInstalled() ? "NVIDIA DLSS" : "NVIDIA DLSS (download)";
+            if (value == 3) return DlssInstalled() ? "NVIDIA DLSS" : NebulaText.Of("NVIDIA DLSS (download)");
             return Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
         }
-        public static readonly string[] DlssQualities = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
+        public static readonly string[] DlssQualities = { "DLAA", NebulaText.Of("Quality"), NebulaText.Of("Balanced"), NebulaText.Of("Performance"), NebulaText.Of("Ultra Performance") };
         // Every upscaler: the first mode renders at the internal resolution, the others at the
         // internal resolution divided by 1.5, 1.7, 2 or 3.
-        public static readonly string[] SpatialQualities = { "Native", "Quality", "Balanced", "Performance", "Ultra Performance" };
+        public static readonly string[] SpatialQualities = { NebulaText.Of("Native"), NebulaText.Of("Quality"), NebulaText.Of("Balanced"), NebulaText.Of("Performance"), NebulaText.Of("Ultra Performance") };
         private const int TemporalQualityCount = 5;
-        public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
-        public static readonly string[] LightingModes = { "Enhanced", "Per pixel", "Per vertex (original)" };
+        public static readonly string[] TextureFilters = { NebulaText.Of("Trilinear"), NebulaText.Of("2x anisotropic"), NebulaText.Of("4x anisotropic"), NebulaText.Of("8x anisotropic"), NebulaText.Of("16x anisotropic") };
+        public static readonly string[] LightingModes = { NebulaText.Of("Enhanced"), NebulaText.Of("Per pixel"), NebulaText.Of("Per vertex (original)") };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
 
         /// <summary>
@@ -162,8 +162,6 @@ namespace Nebula.Launcher
         public int WindowWidth = 1280, WindowHeight = 720;
         public int FullscreenWidth = 0, FullscreenHeight = 0, FullscreenRefresh = 0;
         public int Aspect = 0;
-        public int EfbScale = 2;
-        public bool MatchOutput = true;
         public bool VSync = false;
         public int FrameRate = 60;
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
@@ -178,7 +176,7 @@ namespace Nebula.Launcher
         // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land), 2 low (one
         // per 3 x 3, single rays: RTX 3050-class cards). Shown Low, Medium, High (RtQualityOrder).
         public int RtQuality = 1;
-        public static readonly string[] RtQualities = { "Low (1/3 res)", "Medium (1/2 res)", "High (full res)" };
+        public static readonly string[] RtQualities = { NebulaText.Of("Low (1/3 res)"), NebulaText.Of("Medium (1/2 res)"), NebulaText.Of("High (full res)") };
         public static readonly int[] RtQualityOrder = { 2, 0, 1 };
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
@@ -226,9 +224,7 @@ namespace Nebula.Launcher
             settings.FullscreenHeight = Choice(values, "fullscreen_height", 16385, 0);
             settings.FullscreenRefresh = Choice(values, "fullscreen_refresh_hz", 1001, 0);
             settings.Aspect = AspectChoice(values, settings.Aspect);
-            settings.EfbScale = Math.Max(1, Choice(values, "efb_scale", 17, settings.EfbScale));
-            string follow, vsync;
-            if (values.TryGetValue("internal_follow_window", out follow)) settings.MatchOutput = follow.Trim() != "0";
+            string vsync;
             if (values.TryGetValue("vsync_interval", out vsync)) settings.VSync = vsync.Trim() != "0";
             string fps;
             double rate;
@@ -286,8 +282,6 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("fullscreen_height", n(FullscreenHeight)),
                 new KeyValuePair<string, string>("fullscreen_refresh_hz", n(FullscreenRefresh)),
                 new KeyValuePair<string, string>("aspect", AspectNames[Math.Max(0, Math.Min(Aspect, AspectNames.Length - 1))]),
-                new KeyValuePair<string, string>("efb_scale", n(EfbScale)),
-                new KeyValuePair<string, string>("internal_follow_window", MatchOutput ? "1" : "0"),
                 new KeyValuePair<string, string>("vsync_interval", VSync ? "1" : "0"),
                 new KeyValuePair<string, string>("max_fps", n(FrameRate)),
                 new KeyValuePair<string, string>("aa", n(AntiAliasing)),

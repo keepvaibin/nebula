@@ -29,15 +29,15 @@ public:
     void arrangeHorizontalPose();
     bool isUpsideDownByRoll() const;
 
-    /* 0x4C */ TVec3f mWPoint;
-    /* 0x58 */ TVec3f mAxis;
-    /* 0x64 */ f32 mAngleX;
-    /* 0x68 */ f32 mAngleYRoundSpeed;
-    /* 0x6C */ f32 mDist;
-    /* 0x70 */ TVec3f mPos;
-    /* 0x7C */ bool mIsRounding;
-    /* 0x80 */ s32 mRoundIntervalNum;
-    /* 0x84 */ f32 mAngleYSpeed;
-    /* 0x88 */ bool mIsRoundLeftValid;
-    /* 0x89 */ bool mIsRoundRightValid;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mAngleX;
+    f32 mAngleYRoundSpeed;
+    f32 mDist;
+    TVec3f mPos;
+    bool mIsRounding;
+    s32 mRoundIntervalNum;
+    f32 mAngleYSpeed;
+    bool mIsRoundLeftValid;
+    bool mIsRoundRightValid;
 };

@@ -4,7 +4,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 void Mario::check2DMode() {
     mMovementStates._37 = false;
@@ -207,7 +207,6 @@ void Mario::stick2Dadjust(f32& rStickX, f32& rStickY) {
     u8 lockY = 0;
 
     if (!((_60E != 0 || _60F != 0) && _610 == 0 && _611 == 0)) {
-        bool doSecondBlock = false;
 
         if ((angleMove < 0.5235988f || angleMove > 2.617994f || _610 != 0) && _611 == 0) {
             if (_620 == 0.0f) {

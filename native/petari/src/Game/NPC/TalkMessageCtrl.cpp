@@ -24,7 +24,7 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 TalkMessageCtrl::TalkMessageCtrl(LiveActor* pHost, const TVec3f& rArg2, MtxPtr pArg3)
     : NameObj("\211\357\230\142\220\247\214\344" /* 会話制御 */), mHostActor(pHost), mNodeCtrl(), mZoneID(-1), _1C(0.0f, 0.0f, 0.0f), mMsgBalloonFollowOffs(rArg2), mTalkDistance(240.0f),
@@ -82,7 +82,7 @@ void TalkMessageCtrl::createMessage(const JMapInfoIter& rIter, const char* pName
 }
 
 namespace {
-    bool isNodeEventContinue(const MessageSystem::FlowNodeEvent* pArg) NO_INLINE {
+    bool isNodeEventContinue(const MessageSystem::FlowNodeEvent* pArg) {
         return pArg->mEventType <= 4 && (1 << pArg->mEventType & 0x15);
     }
 };  // namespace
@@ -106,7 +106,7 @@ bool TalkMessageCtrl::rootNodeEve() {
             return true;
         }
 
-        if (mEventFunc->operator()(nodeEvent->mUnknown) == nullptr) {
+        if (mEventFunc->operator()(nodeEvent->mUnknown) == false) {
             return false;
         }
     } else if (groupID == 4) {
@@ -114,7 +114,7 @@ bool TalkMessageCtrl::rootNodeEve() {
             return true;
         }
 
-        if (mAnimeFunc->operator()(nodeEvent->mUnknown) == nullptr) {
+        if (mAnimeFunc->operator()(nodeEvent->mUnknown) == false) {
             return false;
         }
     } else if (groupID == 3) {
@@ -125,7 +125,7 @@ bool TalkMessageCtrl::rootNodeEve() {
     } else if (groupID == 6) {
         MR::onSwitchB(mHostActor);
     } else if (groupID == 7) {
-        if (mKillFunc->operator()(nodeEvent->mUnknown) == nullptr) {
+        if (mKillFunc->operator()(nodeEvent->mUnknown) == false) {
             return false;
         }
     }
@@ -205,11 +205,6 @@ void TalkMessageCtrl::rootNodePre(bool arg) {
         case TalkMessageCtrl_TypeC:
             cond = MR::isOnMessageAlreadyRead(branch->mNextIdx);
             break;
-#if (VERSION == RMGK01)
-        case TalkMessageCtrl_TypeD:
-            cond = MR::isMsgLedPattern();
-            break;
-#endif
         case TalkMessageCtrl_TypeE:
             cond = TalkFunction::getBranchAstroGalaxyResult(branch->mNextIdx);
             break;
@@ -424,11 +419,6 @@ const char* TalkMessageCtrl::getBranchID() const {
     case BranchNode_Type12:
         result = "KnockOnTheDoor";
         break;
-#if (VERSION == RMGK01)
-    case BranchNode_Type13:
-        result = "LedPattern";
-        break;
-#endif
     }
 
     return result;
@@ -474,12 +464,12 @@ TalkMessageInfo* TalkFunction::getMessageInfo(const TalkMessageCtrl* pCtrl) {
     return &pCtrl->mNodeCtrl->mMessageInfo;
 }
 
-const wchar_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
-    return (const wchar_t*)pCtrl->mNodeCtrl->mMessageInfo._0;
+const char16_t* TalkFunction::getMessage(const TalkMessageCtrl* pCtrl) {
+    return (const char16_t*)pCtrl->mNodeCtrl->mMessageInfo._0;
 }
 
-const wchar_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
-    return (const wchar_t*)pCtrl->mNodeCtrl->getSubMessage();
+const char16_t* TalkFunction::getSubMessage(const TalkMessageCtrl* pCtrl) {
+    return (const char16_t*)pCtrl->mNodeCtrl->getSubMessage();
 }
 
 bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
@@ -509,7 +499,6 @@ bool TalkMessageCtrl::isNearPlayer(f32 distance) const {
 
     if (!(MR::abs(f2) > distance) && v3.squared() < distance * distance) {
         TalkMessageInfo* info = &mNodeCtrl->mMessageInfo;
-        bool cond = info->mTalkType;
         if (mIsStartOnlyFront || info->isBalloonSign()) {
             TPos3f pos;
             pos.set(mHostActor->getBaseMtx());

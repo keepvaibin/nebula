@@ -46,7 +46,7 @@ void SnowCapsulePlanet::exeOpen() {
         MR::invalidateCollisionParts(mDoor2);
         MR::validateCollisionParts(mDoor1);
         MR::shakeCameraWeak();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     if (MR::isBckStopped(this)) {

@@ -8,7 +8,7 @@ class RailGraphIter {
 public:
     RailGraphIter(const RailGraph*);
 
-    RailGraphIter(const RailGraphIter& rIter) NO_INLINE {
+    RailGraphIter(const RailGraphIter& rIter) {
         *this = rIter;
     }
 
@@ -27,9 +27,9 @@ public:
     RailGraphEdge* getCurrentEdge() const;
     RailGraphEdge* getWatchEdge() const;
 
-    /* 0x00 */ const RailGraph* mGraph;
-    /* 0x04 */ s32 _4;
-    /* 0x08 */ s32 mSelectedEdge;
-    /* 0x0C */ s32 mNextEdge;
-    /* 0x10 */ s32 _10;
+    const RailGraph* mGraph;
+    s32 _4;
+    s32 mSelectedEdge;
+    s32 mNextEdge;
+    s32 _10;
 };

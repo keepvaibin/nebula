@@ -1,9 +1,9 @@
 #include "Game/AudioLib/AudSoundObjHolder.hpp"
 
 #include "Game/AudioLib/AudSoundObject.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-AudSoundObjHolder::AudSoundObjHolder(JKRHeap* pHeap, s32 capacity) {
+AudSoundObjHolder::AudSoundObjHolder(NebulaArena* pHeap, s32 capacity) {
     mCapacity = capacity;
     mSize = 0;
     mArray = new (pHeap, 0) AudSoundObject*[capacity];

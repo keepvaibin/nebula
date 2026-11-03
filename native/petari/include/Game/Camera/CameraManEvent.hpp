@@ -21,9 +21,9 @@ public:
     public:
         ChunkFIFOItem();
 
-        /* 0x00 */ CameraParamChunkEvent* mChunk;
-        /* 0x04 */ CameraTargetArg mTargetArg;
-        /* 0x14 */ u32 mFrame;
+        CameraParamChunkEvent* mChunk;
+        CameraTargetArg mTargetArg;
+        u32 mFrame;
     };
 
     class ChunkFIFOItemPair {
@@ -31,8 +31,8 @@ public:
         inline ChunkFIFOItemPair() {
         }
 
-        /* 0x00 */ ChunkFIFOItem mFirst;
-        /* 0x18 */ ChunkFIFOItem mSecond;
+        ChunkFIFOItem mFirst;
+        ChunkFIFOItem mSecond;
     };
 
     CameraManEvent(CameraHolder*, CameraParamChunkHolder*, const char*);
@@ -64,7 +64,7 @@ public:
     void setVPanParam();
     void resetCameraIfRequested();
     void setSafePose();
-    CameraParamChunkEvent* findChunk(s32, const char*) const NO_INLINE;
+    CameraParamChunkEvent* findChunk(s32, const char*) const;
     void requestChunk(CameraParamChunkEvent*, EPriority, const CameraTargetArg&, s32);
     bool cleanChunkFIFO(CameraParamChunk*);
     bool isChunkFIFOEmpty() const;
@@ -75,11 +75,11 @@ public:
     bool isInFIFO(CameraParamChunk*) const;
     bool isAnimCameraEnd(s32, const char*) const;
 
-    /* 0x48 */ CameraHolder* mHolder;
-    /* 0x4C */ CameraParamChunkHolder* mChunkHolder;
-    /* 0x50 */ Camera* mCamera;
-    /* 0x54 */ ChunkFIFOItemPair mItems[NR_FIFO_ITEMS];
-    /* 0xB4 */ CameraParamChunkEvent* mChunk;
-    /* 0xB8 */ u32 _B8;
-    /* 0xBC */ bool mRequestReset;
+    CameraHolder* mHolder;
+    CameraParamChunkHolder* mChunkHolder;
+    Camera* mCamera;
+    ChunkFIFOItemPair mItems[NR_FIFO_ITEMS];
+    CameraParamChunkEvent* mChunk;
+    u32 _B8;
+    bool mRequestReset;
 };

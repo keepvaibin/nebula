@@ -4,16 +4,11 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 namespace {
     const f32 sModelScale = 100.0f;
 };  // namespace
-
-void ShadowVolumeOvalPole_FORCE_MATCH_SDATA2() {
-    1.0f;
-    0.0f;
-}
 
 ShadowVolumeOvalPole::~ShadowVolumeOvalPole() {
 }

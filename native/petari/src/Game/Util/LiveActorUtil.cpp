@@ -7,7 +7,7 @@
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/LiveActor/ClippingActorHolder.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
-#include "Game/LiveActor/DisplayListMaker.hpp"
+#include "Game/LiveActor/MaterialUpdater.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -34,21 +34,14 @@
 #include "Game/Util/FurMulti.hpp"
 #include <cstdio>
 
-void LiveActorUtil_FORCE_MATCH_SDATA2() {
-    (void)360.0f;
-    (void)0.001f;
-    (void)5000.0f;
-    (void)10000.0f;
-}
-
 namespace {
     CollisionParts* createCollisionParts(ResourceHolder* pResHolder, const char* pName, HitSensor* pSensor, const TPos3f& rMtx,
                                          MR::CollisionScaleType scaleType, s32 unk) {
         CollisionParts* parts = new CollisionParts();
         char kcl[0x80];
-        snprintf(kcl, sizeof(kcl), "%s.kcl", pName);
+        nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pName);
         char pa[0x80];
-        snprintf(pa, sizeof(pa), "%s.pa", pName);
+        nebula_snprintf(pa, sizeof(pa), "%s.pa", pName);
         void* kclRes;
         void* paRes = nullptr;
         kclRes = pResHolder->mFileInfoTable->getRes(kcl);
@@ -77,19 +70,19 @@ namespace {
         u32 actorLength = strlen(pActor->mName);
         u32 length = actorLength + subLength + strlen("\201\151\201\152" /* （） */) + 1;
         char* pBuffer = new char[length];
-        snprintf(pBuffer, length, "%s\201\151%s\201\152" /* %s（%s） */, pActor->mName, pSubName);
+        nebula_snprintf(pBuffer, length, "%s\201\151%s\201\152" /* %s（%s） */, pActor->mName, pSubName);
         return pBuffer;
     }
 
-    PartsModel* createSubModel(LiveActor* pActor, const char* pSubModelName, MtxPtr pMtx, int drawBufferType) NO_INLINE {
-        const char* modelResName = MR::getModelResourceHolder(pActor)->mModelResTable->getResName(0UL);
+    PartsModel* createSubModel(LiveActor* pActor, const char* pSubModelName, MtxPtr pMtx, int drawBufferType) {
+        const char* modelResName = MR::getModelResourceHolder(pActor)->mModelResTable->getResName(0u);
 
         if (!MR::isExistSubModel(modelResName, pSubModelName)) {
             return nullptr;
         }
 
         char subModelName[0x100];
-        snprintf(subModelName, sizeof(subModelName), "%s%s", modelResName, pSubModelName);
+        nebula_snprintf(subModelName, sizeof(subModelName), "%s%s", modelResName, pSubModelName);
 
         const char* objName = createSubModelObjName(pActor, pSubModelName);
         PartsModel* parts = new PartsModel(pActor, objName, subModelName, pMtx, drawBufferType, false);
@@ -98,7 +91,7 @@ namespace {
         return parts;
     }
 
-    void changeBckForEffectKeeper(const LiveActor* pActor) NO_INLINE {
+    void changeBckForEffectKeeper(const LiveActor* pActor) {
         EffectKeeper* keeper = pActor->mEffectKeeper;
 
         if (keeper != nullptr) {
@@ -106,7 +99,7 @@ namespace {
         }
     }
 
-    void calcCollisionMtx(TPos3f* pMtx, const LiveActor* pActor) NO_INLINE {
+    void calcCollisionMtx(TPos3f* pMtx, const LiveActor* pActor) {
         pMtx->set(pActor->getBaseMtx());
 
         f32 scale = pActor->mScale.x;
@@ -121,11 +114,11 @@ namespace {
         pMtx->mMtx[2][2] *= scale;
     }
 
-    bool isShowModel(LiveActor* pActor) NO_INLINE {
+    bool isShowModel(LiveActor* pActor) {
         return !pActor->mFlag.mIsHiddenModel;
     }
 
-    void callFuncAllGroupMember(const NameObj* pActor, void (*pFunc)(NameObj*)) NO_INLINE {
+    void callFuncAllGroupMember(const NameObj* pActor, void (*pFunc)(NameObj*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(static_cast<const LiveActor*>(pActor));
 
@@ -144,7 +137,7 @@ namespace {
         }
     }
 
-    void callFuncAllGroupMember(const LiveActor* pActor, void (*pFunc)(LiveActor*)) NO_INLINE {
+    void callFuncAllGroupMember(const LiveActor* pActor, void (*pFunc)(LiveActor*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
 
@@ -163,7 +156,7 @@ namespace {
         }
     }
 
-    void callMethodAllGroupMember(const LiveActor* pActor, void (LiveActor::*pMethod)()) NO_INLINE {
+    void callMethodAllGroupMember(const LiveActor* pActor, void (LiveActor::*pMethod)()) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
 
@@ -183,10 +176,10 @@ namespace {
     }
 
     template < typename T >
-    s32 countGroupMember(const LiveActor* pActor, T pPred) NO_INLINE;
+    s32 countGroupMember(const LiveActor* pActor, T pPred);
 
     template <>
-    s32 countGroupMember< bool (*)(LiveActor*) >(const LiveActor* pActor, bool (*pPred)(LiveActor*)) NO_INLINE {
+    s32 countGroupMember< bool (*)(LiveActor*) >(const LiveActor* pActor, bool (*pPred)(LiveActor*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
         s32 count = 0;
@@ -211,7 +204,7 @@ namespace {
     }
 
     template <>
-    s32 countGroupMember< bool (*)(const LiveActor*) >(const LiveActor* pActor, bool (*pPred)(const LiveActor*)) NO_INLINE {
+    s32 countGroupMember< bool (*)(const LiveActor*) >(const LiveActor* pActor, bool (*pPred)(const LiveActor*)) {
         LiveActorGroupArray* pGroupArray = MR::getSceneObj< LiveActorGroupArray >(SceneObj_LiveActorGroupArray);
         LiveActorGroup* pGroup = pGroupArray->getLiveActorGroup(pActor);
         s32 count = 0;
@@ -243,17 +236,17 @@ namespace MR {
     }
 
     void initMirrorReflection(LiveActor* pActor) {
-        initDLMakerChangeTex(pActor, "MirrorTex");
-        pActor->mModelManager->newDifferedDLBuffer();
+        initMaterialChangeTex(pActor, "MirrorTex");
+        pActor->mModelManager->newDifferedMaterials();
         changeModelDataTexAll(pActor, "MirrorTex", *MR::getScreenResTIMG());
-        pActor->mModelManager->mDisplayListMaker->addMirrorReflectionMtxSetter();
+        pActor->mModelManager->mMaterialUpdater->addMirrorReflectionMtxSetter();
     }
 
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor* pActor, HitSensor* pSensor) {
         char kcl[0x80];
         {
             const char* pKclName = "MoveLimit";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -276,7 +269,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "WaterSurface";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -299,7 +292,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "Sunshade";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!MR::getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -316,14 +309,6 @@ namespace MR {
         }
 
         return parts;
-    }
-
-    const char* createLowModelObjName(const LiveActor* pActor) {
-        return ::createSubModelObjName(pActor, "Low");
-    }
-
-    const char* createMiddleModelObjName(const LiveActor* pActor) {
-        return ::createSubModelObjName(pActor, "Middle");
     }
 
     PartsModel* createBloomModel(LiveActor* pActor, MtxPtr pMtx) {
@@ -795,7 +780,7 @@ namespace MR {
     }
 
     const char* getModelResName(const LiveActor* pActor) {
-        return getModelResourceHolder(pActor)->mModelResTable->getResName(0UL);
+        return getModelResourceHolder(pActor)->mModelResTable->getResName(0u);
     }
 
     bool isExistAnim(const LiveActor* pActor, const char* pName) {
@@ -874,21 +859,21 @@ namespace MR {
         return getJ3DModelData(pActor)->mMaterialTable.getTextureName()->getIndex(pName) != -1;
     }
 
-    void newDifferedDLBuffer(LiveActor* pActor) {
-        pActor->mModelManager->newDifferedDLBuffer();
+    void newDifferedMaterials(LiveActor* pActor) {
+        pActor->mModelManager->newDifferedMaterials();
     }
 
-    void initDLMakerFog(LiveActor* pActor, bool enable) {
-        pActor->mModelManager->mDisplayListMaker->addFogCtrl(enable);
+    void initMaterialFog(LiveActor* pActor, bool enable) {
+        pActor->mModelManager->mMaterialUpdater->addFogCtrl(enable);
     }
 
-    void initDLMakerMatColor0(LiveActor* pActor, const char* pMatName, const J3DGXColor* pColor) {
-        pActor->mModelManager->mDisplayListMaker->addMatColorCtrl(pMatName, 0, pColor);
+    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DColor* pColor) {
+        pActor->mModelManager->mMaterialUpdater->addMatColorCtrl(pMatName, 0, pColor);
     }
 
-    void initDLMakerChangeTex(LiveActor* pActor, const char* pTexName) {
+    void initMaterialChangeTex(LiveActor* pActor, const char* pTexName) {
         J3DModelData* pModelData = getJ3DModelData(pActor);
-        DisplayListMaker* pDLMaker = pActor->mModelManager->mDisplayListMaker;
+        MaterialUpdater* pMaterialUpdater = pActor->mModelManager->mMaterialUpdater;
 
         for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
             if (!MR::isEqualString(pModelData->mMaterialTable.getTextureName()->getName(texIndex), pTexName)) {
@@ -897,18 +882,18 @@ namespace MR {
 
             for (u16 matIndex = 0; matIndex < pModelData->mMaterialTable.getMaterialNum(); matIndex++) {
                 if (isUseTex(pModelData->mMaterialTable.getMaterialNodePointer(matIndex), texIndex)) {
-                    pDLMaker->onPrgFlag(matIndex, 0x4020000);
+                    pMaterialUpdater->onPrgFlag(matIndex, 0x4020000);
                 }
             }
         }
     }
 
-    TexMtxCtrl* initDLMakerTexMtx(LiveActor* pActor, const char* pName) {
-        return pActor->mModelManager->mDisplayListMaker->addTexMtxCtrl(pName);
+    TexMtxCtrl* initMaterialTexMtx(LiveActor* pActor, const char* pName) {
+        return pActor->mModelManager->mMaterialUpdater->addTexMtxCtrl(pName);
     }
 
-    ProjmapEffectMtxSetter* initDLMakerProjmapEffectMtxSetter(LiveActor* pActor) {
-        return pActor->mModelManager->mDisplayListMaker->addProjmapEffectMtxSetter();
+    ProjmapEffectMtxSetter* initMaterialProjmapEffectMtxSetter(LiveActor* pActor) {
+        return pActor->mModelManager->mMaterialUpdater->addProjmapEffectMtxSetter();
     }
 
     void startAction(const LiveActor* pActor, const char* pName) {
@@ -1098,7 +1083,7 @@ namespace MR {
             setBrkFrame(pActor, getBrkCtrl(pActor)->getEnd());
         }
 
-        // The visibility animation's own frame (the decompilation set the colour animation's here, which leaves every
+        // The visibility animation's own frame (setting the colour animation's here would leave every
         // shape a BVA shows only at its end hidden).
         if (isExistBva(pActor, pName)) {
             setBvaFrame(pActor, getBvaCtrl(pActor)->getEnd());
@@ -1633,7 +1618,7 @@ namespace MR {
     }
 
     void updateMaterial(LiveActor* pActor) {
-        pActor->mModelManager->updateDL(true);
+        pActor->mModelManager->updateList(true);
     }
 
     void setMirrorReflectionInfoFromMtxYUp(const TPos3f& rMtx) {
@@ -1651,7 +1636,7 @@ namespace MR {
 
     void changeModelDataTexAll(LiveActor* pActor, const char* pTexName, const ResTIMG& rTimg) {
         J3DModelData* pModelData = MR::getJ3DModelData(pActor);
-        DisplayListMaker* pDLMaker = pActor->mModelManager->mDisplayListMaker;
+        MaterialUpdater* pMaterialUpdater = pActor->mModelManager->mMaterialUpdater;
 
         for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
             const char* name = pModelData->mMaterialTable.getTextureName()->getName(texIndex);
@@ -1666,7 +1651,7 @@ namespace MR {
                 J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(matIndex);
 
                 if (MR::isUseTex(material, texIndex)) {
-                    pDLMaker->onCurFlag(matIndex, 0x4020000);
+                    pMaterialUpdater->onCurFlag(matIndex, 0x4020000);
                 }
             }
         }
@@ -1774,7 +1759,7 @@ namespace MR {
         LightFunction::calcLightWorldPos(pPos, pActor->mActorLightCtrl->getActorLight()->mInfo1);
     }
 
-    const GXColor* getLightAmbientColor(const LiveActor* pActor) {
+    const NebulaColor8* getLightAmbientColor(const LiveActor* pActor) {
         return &pActor->mActorLightCtrl->getActorLight()->mColor;
     }
 
@@ -2046,10 +2031,11 @@ namespace MR {
             return;
         }
 
-        if (!isDead(pActor) && !pActor->mFlag.mIsClipped) {
+        if (!isDead(pActor) && (!pActor->mFlag.mIsClipped || pActor->mFlag.mIsDrawnClipped)) {
             disconnectToDrawTemporarily(pActor);
         }
 
+        pActor->mFlag.mIsDrawnClipped = false;
         pActor->mFlag.mIsHiddenModel = true;
     }
 
@@ -2246,7 +2232,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "MoveLimit";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2270,7 +2256,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "WaterSurface";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2294,7 +2280,7 @@ namespace MR {
         char kcl[0x80];
         {
             const char* pKclName = "Sunshade";
-            snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
+            nebula_snprintf(kcl, sizeof(kcl), "%s.kcl", pKclName);
         }
 
         if (!getResourceHolder(pActor)->mFileInfoTable->isExistRes(kcl)) {
@@ -2358,7 +2344,7 @@ namespace MR {
 
     bool isExistKcl(LiveActor* pActor, const char* pName) {
         char kclName[0x80];
-        snprintf(kclName, sizeof(kclName), "%s.kcl", pName);
+        nebula_snprintf(kclName, sizeof(kclName), "%s.kcl", pName);
         return getResourceHolder(pActor)->mFileInfoTable->isExistRes(kclName);
     }
 
@@ -2579,50 +2565,20 @@ namespace MR {
 
     LodCtrl* createLodCtrlNPC(LiveActor* pActor, const JMapInfoIter& rIter) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createLodModel(MR::DrawBufferType_NPC, MR::MovementType_NPC, -1);
-        pLod->syncMaterialAnimation();
-        pLod->syncJointAnimation();
-        pLod->initLightCtrl();
-        pLod->offSyncShadowHost();
-        pLod->_1B = true;
         return pLod;
     }
 
-    LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip, s32 lowModelType) {
+    LodCtrl* createLodCtrlPlanet(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createLodModel(MR::DrawBufferType_PlanetLow, lowModelType, MR::DrawBufferType_Sky);
-        pLod->setDistanceToMiddleAndLow(5000.0f, 10000.0f);
+        pLod->createFarModel(MR::DrawBufferType_PlanetLow, -1, MR::DrawBufferType_Sky);
         pLod->setFarClipping(farClip);
-
-        if (pLod->_10 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_10)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_10, pResName);
-        }
-
-        if (pLod->_14 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_14)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_14, pResName);
-        }
-
         return pLod;
     }
 
     LodCtrl* createLodCtrlMapObj(LiveActor* pActor, const JMapInfoIter& rIter, f32 farClip) {
         LodCtrl* pLod = new LodCtrl(pActor, rIter);
-        pLod->createLodModel(MR::DrawBufferType_MapObj, -1, MR::DrawBufferType_PlanetLow);
-        pLod->setDistanceToMiddleAndLow(5000.0f, 10000.0f);
+        pLod->createFarModel(MR::DrawBufferType_MapObj, -1, MR::DrawBufferType_PlanetLow);
         pLod->setFarClipping(farClip);
-
-        if (pLod->_10 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_10)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_10, pResName);
-        }
-
-        if (pLod->_14 != nullptr) {
-            const char* pResName = getModelResourceHolder(pLod->_14)->mModelResTable->getResName(0UL);
-            tryStartAllAnim(pLod->_14, pResName);
-        }
-
         return pLod;
     }
 
@@ -2643,39 +2599,39 @@ namespace MR {
 
     void tryRumblePadAndCameraDistanceVeryStrong(const LiveActor* pActor, f32 near, f32 middle, f32 far) {
         if (isNearPlayerAnyTime(pActor, near)) {
-            tryRumblePadVeryStrong(pActor, WPAD_CHAN0);
+            tryRumblePadVeryStrong(pActor, PLAYER_1);
             shakeCameraStrong();
         } else if (isNearPlayerAnyTime(pActor, middle)) {
-            tryRumblePadStrong(pActor, WPAD_CHAN0);
+            tryRumblePadStrong(pActor, PLAYER_1);
             shakeCameraNormal();
         } else if (isNearPlayerAnyTime(pActor, far)) {
-            tryRumblePadMiddle(pActor, WPAD_CHAN0);
+            tryRumblePadMiddle(pActor, PLAYER_1);
             shakeCameraNormalWeak();
         }
     }
 
     void tryRumblePadAndCameraDistanceStrong(const LiveActor* pActor, f32 near, f32 middle, f32 far) {
         if (isNearPlayerAnyTime(pActor, near)) {
-            tryRumblePadStrong(pActor, WPAD_CHAN0);
+            tryRumblePadStrong(pActor, PLAYER_1);
             shakeCameraNormal();
         } else if (isNearPlayerAnyTime(pActor, middle)) {
-            tryRumblePadMiddle(pActor, WPAD_CHAN0);
+            tryRumblePadMiddle(pActor, PLAYER_1);
             shakeCameraNormalWeak();
         } else if (isNearPlayerAnyTime(pActor, far)) {
-            tryRumblePadWeak(pActor, WPAD_CHAN0);
+            tryRumblePadWeak(pActor, PLAYER_1);
             shakeCameraWeak();
         }
     }
 
     void tryRumblePadAndCameraDistanceMiddle(const LiveActor* pActor, f32 near, f32 middle, f32 far) {
         if (isNearPlayerAnyTime(pActor, near)) {
-            tryRumblePadMiddle(pActor, WPAD_CHAN0);
+            tryRumblePadMiddle(pActor, PLAYER_1);
             shakeCameraNormalWeak();
         } else if (isNearPlayerAnyTime(pActor, middle)) {
-            tryRumblePadWeak(pActor, WPAD_CHAN0);
+            tryRumblePadWeak(pActor, PLAYER_1);
             shakeCameraWeak();
         } else if (isNearPlayerAnyTime(pActor, far)) {
-            tryRumblePadVeryWeak(pActor, WPAD_CHAN0);
+            tryRumblePadVeryWeak(pActor, PLAYER_1);
             shakeCameraVeryWeak();
         }
     }

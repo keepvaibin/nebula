@@ -556,6 +556,32 @@ namespace Nebula.Launcher
             return bytes;
         }
 
+        // A save as the native game writes it: version 3, little-endian.
+        static byte[] NativeGameData(int seed)
+        {
+            byte[] bytes = Noise(SaveFormat.GameDataSize, seed);
+            PutLe32(bytes, 4, 3);
+            PutLe32(bytes, 8, 19);
+            PutLe32(bytes, 12, SaveFormat.GameDataSize);
+            for (int i = 0; i < SaveFormat.GameDataNames.Length; i++)
+            {
+                int info = 0x10 + i * 0x10;
+                Array.Clear(bytes, info, 12);
+                Encoding.ASCII.GetBytes(SaveFormat.GameDataNames[i]).CopyTo(bytes, info);
+                PutLe32(bytes, info + 12, SaveFormat.GameDataOffsets[i]);
+            }
+            PutLe32(bytes, 0, SaveFormat.GameDataChecksum(bytes, false));
+            return bytes;
+        }
+
+        static void PutLe32(byte[] bytes, int offset, uint value)
+        {
+            bytes[offset] = (byte)value;
+            bytes[offset + 1] = (byte)(value >> 8);
+            bytes[offset + 2] = (byte)(value >> 16);
+            bytes[offset + 3] = (byte)(value >> 24);
+        }
+
         static byte[] Banner(int seed)
         {
             byte[] bytes = Noise(SaveFormat.BannerSize, seed);
@@ -636,38 +662,40 @@ namespace Nebula.Launcher
 
         // A game.pak's start: boot.bin with the game id and where the file table is, then the table with a directory
         // at the root for each name (each empty), as the disc's file table lists them.
+        // A store (crates/nebula-import/src/cook/store.rs) of a root and folders.
         static byte[] TestPak(string gameId, params string[] directories)
         {
-            var names = new List<byte>();
-            var entries = new List<byte>();
-            Action<byte, uint, uint, uint> entry = (kind, name, a, b) =>
+            var names = new List<byte> { 0 };
+            var nodes = new List<byte>();
+            Action<ulong, ulong, uint> node = (position, size, name) =>
             {
-                entries.Add(kind);
-                entries.Add((byte)(name >> 16)); entries.Add((byte)(name >> 8)); entries.Add((byte)name);
-                foreach (uint word in new[] { a, b })
-                {
-                    entries.Add((byte)(word >> 24)); entries.Add((byte)(word >> 16)); entries.Add((byte)(word >> 8)); entries.Add((byte)word);
-                }
+                nodes.AddRange(BitConverter.GetBytes(position));
+                nodes.AddRange(BitConverter.GetBytes(size));
+                nodes.AddRange(BitConverter.GetBytes(name));
+                nodes.AddRange(BitConverter.GetBytes(0u));
+                nodes.AddRange(BitConverter.GetBytes(1u));
+                nodes.AddRange(BitConverter.GetBytes(0u));
             };
-            uint count = (uint)directories.Length + 1;
-            entry(1, 0, 0, count);
-            names.Add(0);
-            for (int i = 0; i < directories.Length; i++)
+            node(1, (ulong)directories.Length, 0);
+            foreach (string directory in directories)
             {
                 uint at = (uint)names.Count;
-                names.AddRange(System.Text.Encoding.ASCII.GetBytes(directories[i]));
+                names.AddRange(System.Text.Encoding.ASCII.GetBytes(directory));
                 names.Add(0);
-                entry(1, at, 0, (uint)i + 2);
+                node(0, 0, at);
             }
-            var fst = new List<byte>(entries);
-            fst.AddRange(names);
-            while (fst.Count % 4 != 0) fst.Add(0);
-            var pak = new byte[0x440 + fst.Count];
-            System.Text.Encoding.ASCII.GetBytes(gameId).CopyTo(pak, 0);
-            uint offset = 0x440 >> 2, size = (uint)fst.Count >> 2;
-            pak[0x424] = (byte)(offset >> 24); pak[0x425] = (byte)(offset >> 16); pak[0x426] = (byte)(offset >> 8); pak[0x427] = (byte)offset;
-            pak[0x428] = (byte)(size >> 24); pak[0x429] = (byte)(size >> 16); pak[0x42a] = (byte)(size >> 8); pak[0x42b] = (byte)size;
-            fst.CopyTo(pak, 0x440);
+            const int HeaderSize = 64;
+            long namesAt = HeaderSize + nodes.Count;
+            var pak = new byte[namesAt + names.Count];
+            System.Text.Encoding.ASCII.GetBytes("NBSTORE").CopyTo(pak, 0);
+            BitConverter.GetBytes(2u).CopyTo(pak, 8);
+            BitConverter.GetBytes((uint)directories.Length + 1).CopyTo(pak, 12);
+            BitConverter.GetBytes((long)HeaderSize).CopyTo(pak, 16);
+            BitConverter.GetBytes(namesAt).CopyTo(pak, 32);
+            BitConverter.GetBytes((long)names.Count).CopyTo(pak, 40);
+            System.Text.Encoding.ASCII.GetBytes(gameId).CopyTo(pak, 48);
+            nodes.CopyTo(pak, HeaderSize);
+            names.CopyTo(pak, (int)namesAt);
             return pak;
         }
 
@@ -879,6 +907,30 @@ namespace Nebula.Launcher
             FileUtil.WriteNamedStream(SaveArchive.HostPath(saves, SaveArchive.GameDataPath), "galaxy.isfs.meta.pending", Noise(18, 5));
             Check(Failure(delegate { SaveArchive.Export(work); }) is InvalidOperationException, "export is refused while a save is unfinished");
 
+            // A native save (version 3) exports and imports; the copy of the old one kept beside it stays behind.
+            byte[] native = NativeGameData(6);
+            Check(SaveFormat.IsGameData(native) && SaveFormat.IsGameData(GameData(6)), "version 3 (little-endian) and version 2 (big-endian) saves are valid");
+            byte[] damagedNative = (byte[])native.Clone();
+            damagedNative[0x200] ^= 1;
+            byte[] wrongOrder = NativeGameData(6);
+            PutBe32(wrongOrder, 4, 3);
+            byte[] littleOld = NativeGameData(6);
+            PutLe32(littleOld, 4, 2);
+            PutLe32(littleOld, 0, SaveFormat.GameDataChecksum(littleOld, false));
+            Check(!SaveFormat.IsGameData(damagedNative) && !SaveFormat.IsGameData(wrongOrder) && !SaveFormat.IsGameData(littleOld),
+                  "a damaged native save, a big-endian version 3 and a little-endian version 2 are not");
+            FileUtil.DeleteTree(saves);
+            string nativeSave = SaveArchive.HostPath(saves, SaveArchive.GameDataPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(nativeSave));
+            File.WriteAllBytes(nativeSave, native);
+            File.WriteAllBytes(nativeSave + ".v2", GameData(6));
+            string nativeZip = SaveArchive.Export(work);
+            using (ZipArchive archive = ZipFile.OpenRead(nativeZip))
+                Check(archive.Entries.All(e => !e.FullName.EndsWith(".v2", StringComparison.Ordinal)), "export leaves out GameData.bin.v2");
+            FileUtil.DeleteTree(saves);
+            SaveArchive.Import(nativeZip, null);
+            Check(File.ReadAllBytes(nativeSave).SequenceEqual(native), "a native save survives export and import");
+
             FileUtil.DeleteTree(saves);
             foreach (string backup in Directory.GetDirectories(parent, "saves-backup-*")) FileUtil.DeleteTree(backup);
         }
@@ -941,7 +993,7 @@ namespace Nebula.Launcher
                 string[] lines = File.ReadAllLines(marker);
                 Check(lines.Length == 4 && lines[0] == "--pak" && lines[1] == Path.Combine(later.Content, "game.pak"),
                       "the game receives game.pak: " + string.Join(" ", lines));
-                Check(lines[2] == "--nand" && lines[3].StartsWith(dataRoot, StringComparison.OrdinalIgnoreCase),
+                Check(lines[2] == "--saves" && lines[3].StartsWith(dataRoot, StringComparison.OrdinalIgnoreCase),
                       "saves live under the data root: " + (lines.Length > 3 ? lines[3] : ""));
                 return 0;
             }

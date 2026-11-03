@@ -8,72 +8,16 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
-#include <revolution/gx/GXEnum.h>
 
 CShader::CShader(const J3DModelData* pModelData, const ResTIMG* pTimg) : mIndexArray(), mLengthMap(pTimg) {
     _1C = 0.0f;
     _8 = 0.0f;
     mIndexArray = new CIndex[pModelData->mVertexData.mVtxNum];
-    _22 = 8;
-    _21 = 8;
-    _20 = 8;
-    _23 = 0;
-    _24 = 0;
-    _25 = 0;
-
-    GXVtxAttrFmtList* list = pModelData->mVertexData.mVtxAttrFmtList;
-
-    while (list->attr != GX_VA_NULL) {
-        if (list->attr == GX_VA_POS) {
-            _21 = list->frac;
-            _24 = list->type;
-        } else if (list->attr == GX_VA_NRM) {
-            _22 = list->frac;
-            _25 = list->type;
-        } else if (list->attr == GX_VA_TEX0) {
-            _20 = list->frac;
-            _23 = list->type;
-        }
-
-        list++;
-    }
 }
 
 CShader::~CShader() {
     delete mIndexArray;
 }
-
-#ifdef TARGET_PC
-namespace {
-    // The model's vertex arrays and the fur positions written for GX are big-endian.
-    inline f32 loadF32(const void* pArray, u32 index) {
-        return static_cast< const BE< f32 >* >(pArray)[index];
-    }
-
-    inline s16 loadS16(const void* pArray, u32 index) {
-        return static_cast< const BE< s16 >* >(pArray)[index];
-    }
-
-    inline void loadVec(TVec3f* pOut, const void* pArray, u32 index, u8 type, u8 frac) {
-        if (type == GX_S16) {
-            TVec3s fixed(loadS16(pArray, index), loadS16(pArray, index + 1), loadS16(pArray, index + 2));
-            MR::fixed16ToFloat(pOut, fixed, frac);
-        } else {
-            pOut->set< f32 >(loadF32(pArray, index), loadF32(pArray, index + 1), loadF32(pArray, index + 2));
-        }
-    }
-
-    inline void loadTexCoord(f32* pU, f32* pV, const void* pArray, u32 index, u8 type, u8 frac) {
-        if (type == GX_S16) {
-            f32 scale = 1 << frac;
-            *pU = f32(loadS16(pArray, index * 2)) / scale;
-            *pV = f32(loadS16(pArray, index * 2 + 1)) / scale;
-        } else {
-            *pU = loadF32(pArray, index * 2);
-            *pV = loadF32(pArray, index * 2 + 1);
-        }
-    }
-}  // namespace
 
 void CShader::calc(J3DModel* pModel) {
     pModel->mVertexBuffer.swapTransformedVtxPos();
@@ -94,9 +38,8 @@ void CShader::calc(J3DModel* pModel) {
         if (index != 0xFFFF) {
             f32 u = 0.0f;
             f32 v = 0.0f;
-            if (_23 == GX_S16 || _23 == GX_F32) {
-                loadTexCoord(&u, &v, pTexCoords, index, _23, _20);
-            }
+            u = static_cast< const f32* >(pTexCoords)[index * 2];
+            v = static_cast< const f32* >(pTexCoords)[index * 2 + 1];
 
             if (u > maxU) {
                 maxU = u;
@@ -128,51 +71,33 @@ void CShader::calc(J3DModel* pModel) {
         if (normalIndex != 0xFFFF && texCoordIndex != 0xFFFF) {
             u32 offset = i * 3;
             s32 normalOffset = normalIndex * 3;
-            f32 length;
+            f32 length = 0.0f;
 
-            switch (_23) {
-            case GX_S16: {
-                f32 u;
-                f32 v;
-                loadTexCoord(&u, &v, pTexCoords, texCoordIndex, _23, _20);
-                u = u / f32(spanU);
-                v = v / f32(spanV);
+            f32 u = static_cast< const f32* >(pTexCoords)[texCoordIndex * 2] / f32(spanU);
+            f32 v = static_cast< const f32* >(pTexCoords)[texCoordIndex * 2 + 1] / f32(spanV);
 
-                if (u < 0.0f) {
-                    u += 1.0f;
-                }
-
-                if (v < 0.0f) {
-                    v += 1.0f;
-                }
-
-                length = mLengthMap.refer(u, v);
-                break;
+            if (u < 0.0f) {
+                u += 1.0f;
             }
 
-            case GX_F32: {
-                f32 u;
-                f32 v;
-                loadTexCoord(&u, &v, pTexCoords, texCoordIndex, _23, _20);
-                length = mLengthMap.refer(u, v);
-                break;
+            if (v < 0.0f) {
+                v += 1.0f;
             }
-            }
+
+            length = mLengthMap.refer(u, v);
 
             TVec3f position;
             TVec3f normal;
             TVec3f result;
 
-            if (_25 == GX_S16 || _25 == GX_F32) {
-                loadVec(&normal, pNormals, normalOffset, _25, _22);
-            }
+            const f32* pNormal = static_cast< const f32* >(pNormals) + normalOffset;
+            normal.set< f32 >(pNormal[0], pNormal[1], pNormal[2]);
 
             MR::normalize(&normal);
             MR::isNan(normal);
 
-            if (_24 == GX_S16 || _24 == GX_F32) {
-                loadVec(&position, pPositions, offset, _24, _21);
-            }
+            const f32* pPosition = static_cast< const f32* >(pPositions) + offset;
+            position.set< f32 >(pPosition[0], pPosition[1], pPosition[2]);
 
             MR::isNan(position);
 
@@ -184,257 +109,34 @@ void CShader::calc(J3DModel* pModel) {
 
             MR::isNan(result);
 
-            switch (_24) {
-            case GX_S16: {
-                TVec3s fixed;
-                MR::floatToFixed16(&fixed, result, _21);
-                BE< s16 >* pFixedOutput = static_cast< BE< s16 >* >(pOutput) + offset;
-                pFixedOutput[0] = fixed.x;
-                pFixedOutput[1] = fixed.y;
-                pFixedOutput[2] = fixed.z;
-                break;
-            }
-            case GX_F32: {
-                BE< f32 >* pFloatOutput = static_cast< BE< f32 >* >(pOutput) + offset;
-                pFloatOutput[0] = result.x;
-                pFloatOutput[1] = result.y;
-                pFloatOutput[2] = result.z;
-                break;
-            }
-            }
+            f32* pFloatOutput = static_cast< f32* >(pOutput) + offset;
+            pFloatOutput[0] = result.x;
+            pFloatOutput[1] = result.y;
+            pFloatOutput[2] = result.z;
         }
     }
 
     // The shell's positions as values, for the draws that read them.
-    J3DNativeShape::sendPositions(pOutput, count, static_cast< GXCompType >(_24), GX_POS_XYZ, _21);
+    J3DNativeShape::sendPositions(pOutput, count);
     pModel->mVertexBuffer.setCurrentVtxPos(pOutput);
 }
-#else
-void CShader::calc(J3DModel* pModel) {
-    pModel->mVertexBuffer.swapTransformedVtxPos();
-    J3DVertexData* pData = pModel->mVertexBuffer.getVertexData();
-    u32 count;
-    void* pPositions = pModel->mVertexBuffer.mCurrentVtxPos;
-    count = pData->mVtxNum;
-    void* pNormals = pModel->mVertexBuffer.mCurrentVtxNrm;
-    void* pTexCoords = pData->mVtxTexCoordArray[0];
-    void* pOutput = pModel->mVertexBuffer.mTransformedVtxPosArray[0];
-    f32 maxV;
-    f32 maxU;
-    f32 minV;
-    f32 minU;
-    minU = 0.0f;
-    minV = 0.0f;
-    maxU = 0.0f;
-    maxV = 0.0f;
-
-    for (u32 i = 0; i < count; i++) {
-        u16 index = mIndexArray[i]._2;
-
-        if (index != 0xFFFF) {
-            TVec2s* pFixed = static_cast< TVec2s* >(pTexCoords) + index;
-            TVec2f* pFloat = static_cast< TVec2f* >(pTexCoords) + index;
-            f32 u;
-            f32 v;
-
-            switch (_23) {
-            case GX_S16: {
-                f32 scale = 1 << _20;
-                u = f32(pFixed->x) / scale;
-                v = f32(pFixed->y) / scale;
-            } break;
-            case GX_F32:
-                u = pFloat->x;
-                v = pFloat->y;
-                break;
-            }
-
-            if (u > maxU) {
-                maxU = u;
-            }
-
-            if (u < minU) {
-                minU = u;
-            }
-
-            if (v > maxV) {
-                maxV = v;
-            }
-
-            if (v < minV) {
-                minV = v;
-            }
-        }
-    }
-
-    f32 rangeU = maxU - minU;
-    f32 rangeV = maxV - minV;
-    s32 spanU = 0.45f + rangeU;
-    s32 spanV = 0.45f + rangeV;
-
-    for (u32 i = 0; i < count; i++) {
-        u16 normalIndex = mIndexArray[i]._0;
-        u16 texCoordIndex = mIndexArray[i]._2;
-
-        if (normalIndex != 0xFFFF && texCoordIndex != 0xFFFF) {
-            u32 offset = i * 3;
-            s32 normalOffset = normalIndex * 3;
-            TVec3s* pFixedOutput = reinterpret_cast< TVec3s* >(static_cast< s16* >(pOutput) + offset);
-            TVec3s* pFixedPosition = reinterpret_cast< TVec3s* >(static_cast< s16* >(pPositions) + offset);
-            TVec3s* pFixedNormal = reinterpret_cast< TVec3s* >(static_cast< s16* >(pNormals) + normalOffset);
-            TVec2s* pFixed = static_cast< TVec2s* >(pTexCoords) + texCoordIndex;
-            TVec3f* pFloatOutput = reinterpret_cast< TVec3f* >(static_cast< f32* >(pOutput) + offset);
-            TVec3f* pFloatPosition = reinterpret_cast< TVec3f* >(static_cast< f32* >(pPositions) + offset);
-            TVec3f* pFloatNormal = reinterpret_cast< TVec3f* >(static_cast< f32* >(pNormals) + normalOffset);
-            TVec2f* pFloat = static_cast< TVec2f* >(pTexCoords) + texCoordIndex;
-            f32 length;
-
-            switch (_23) {
-            case GX_S16: {
-                f32 scale = 1 << _20;
-                f32 u = f32(pFixed->x) / scale;
-                f32 v = f32(pFixed->y) / scale;
-                u = u / f32(spanU);
-                v = v / f32(spanV);
-
-                if (u < 0.0f) {
-                    u += 1.0f;
-                }
-
-                if (v < 0.0f) {
-                    v += 1.0f;
-                }
-
-                length = mLengthMap.refer(u, v);
-                break;
-            }
-
-            case GX_F32:
-                length = mLengthMap.refer(pFloat->x, pFloat->y);
-                break;
-            }
-
-            TVec3f position;
-            TVec3f normal;
-            TVec3f result;
-
-            switch (_25) {
-            case GX_S16:
-                MR::fixed16ToFloat(&normal, *pFixedNormal, _22);
-                break;
-            case GX_F32:
-                normal = *pFloatNormal;
-                break;
-            }
-
-            MR::normalize(&normal);
-            MR::isNan(normal);
-
-            switch (_24) {
-            case GX_S16:
-                MR::fixed16ToFloat(&position, *pFixedPosition, _21);
-                break;
-            case GX_F32:
-                position = *pFloatPosition;
-                break;
-            }
-
-            MR::isNan(position);
-
-            if (length == 0.0f) {
-                result = position + normal * -1.0f;
-            } else {
-                result = position + normal * (_1C * length);
-            }
-
-            MR::isNan(result);
-
-            switch (_24) {
-            case GX_S16:
-                MR::floatToFixed16(pFixedOutput, result, _21);
-                break;
-            case GX_F32:
-                *pFloatOutput = result;
-                break;
-            }
-        }
-    }
-
-    pModel->mVertexBuffer.setCurrentVtxPos(pOutput);
-}
-#endif
 
 void CShader::setup(J3DModelData* pData) {
 }
 
-namespace {
-    // Display lists are big-endian.
-    inline s32 getCount(u8* pRead) {
-        return *reinterpret_cast< NEBULA_BE(u16)* >(pRead + 1);
-    }
-};  // namespace
-
 void CShader::makeIndexData(J3DShape* pShape) const {
-    GXVtxDescList* pDesc = pShape->getVtxDesc();
-    s32 stride = 0;
-    s32 posOffset = -1;
-    s32 nrmOffset = -1;
-    s32 texOffset = -1;
-    s32 sizes[4] = {0, 1, 1, 2};
-
-    while (pDesc->attr != GX_VA_NULL) {
-        switch (pDesc->attr) {
-        case GX_VA_POS:
-            posOffset = stride;
-            break;
-        case GX_VA_NRM:
-            nrmOffset = stride;
-            break;
-        case GX_VA_TEX0:
-            texOffset = stride;
-            break;
+    for (u16 group = 0; group < pShape->getMtxGroupNum(); group++) {
+        J3DShapeMesh* pMesh = pShape->getShapeDraw(group)->getMesh();
+        if ((pMesh->mAttributes & NEBULA_SHAPE_NORMAL) == 0 || (pMesh->mAttributes & NEBULA_SHAPE_TEXCOORD0) == 0) {
+            return;
         }
 
-        stride += sizes[pDesc->type];
-        pDesc++;
-    }
-
-    if (posOffset == -1) {
-        return;
-    }
-
-    if (nrmOffset == -1) {
-        return;
-    }
-
-    if (texOffset == -1) {
-        return;
-    }
-
-    for (u16 group = 0; group < pShape->getMtxGroupNum(); group++) {
-        s32 count;
-        u8* pStart;
-        u8* pRead;
-        pStart = static_cast< u8* >(pShape->getShapeDraw(group)->getDisplayList());
-        pRead = pStart;
-
-        while (u32(pRead - pStart) < pShape->getShapeDraw(group)->getDisplayListSize()) {
-            if (*pRead == 0) {
-                break;
-            }
-
-            count = getCount(pRead);
-
-            for (s32 i = 0; i < count; i++) {
-                u8* pVertex = pRead + 3 + stride * i;
-                u16 pos = *reinterpret_cast< NEBULA_BE(u16)* >(pVertex + posOffset);
-                u16 nrm = *reinterpret_cast< NEBULA_BE(u16)* >(pVertex + nrmOffset);
-                u16 tex = *reinterpret_cast< NEBULA_BE(u16)* >(pVertex + texOffset);
-                mIndexArray[pos]._0 = nrm;
-                mIndexArray[pos]._2 = tex;
-            }
-
-            pRead = pRead + stride * count + 3;
+        const NebulaShapeCorner* pCorners = pMesh->corners();
+        const u16* pIndices = pMesh->indices();
+        for (u32 i = 0; i < pMesh->mIndexCount; i++) {
+            const NebulaShapeCorner& rCorner = pCorners[pIndices[i]];
+            mIndexArray[rCorner.position]._0 = rCorner.normal;
+            mIndexArray[rCorner.position]._2 = rCorner.texcoord[0];
         }
     }
 }
@@ -451,48 +153,12 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
             continue;
         }
 
-        GXVtxDescList* pDesc = pShape->getVtxDesc();
-        s32 stride = 0;
-        s32 posOffset = -1;
-        s32 sizes[4] = {0, 1, 1, 2};
-
-        while (pDesc->attr != GX_VA_NULL) {
-            switch (pDesc->attr) {
-            case GX_VA_POS:
-                posOffset = stride;
-                break;
-            case GX_VA_NRM:
-                break;
-            case GX_VA_TEX0:
-                break;
-            }
-
-            stride += sizes[pDesc->type];
-            pDesc++;
-        }
-
-        if (posOffset == -1) {
-            continue;
-        }
-
         for (u16 group = 0; group < pShape->getMtxGroupNum(); group++) {
-            u8* const pStart = pShape->getShapeDraw(group)->getDisplayList();
-            u8* pRead = pStart;
-
-            while (u32(pRead - pStart) < pShape->getShapeDraw(group)->getDisplayListSize()) {
-                if (*pRead == 0) {
-                    break;
-                }
-
-                s32 count = *reinterpret_cast< NEBULA_BE(u16)* >(pRead + 1);
-
-                for (s32 i = 0; i < count; i++) {
-                    u16 pos = *reinterpret_cast< NEBULA_BE(u16)* >((pRead + stride * i) + (posOffset + 3));
-                    mIndexArray[pos]._0 = 0xFFFF;
-                    mIndexArray[pos]._2 = 0xFFFF;
-                }
-
-                pRead = pRead + stride * count + 3;
+            J3DShapeMesh* pMesh = pShape->getShapeDraw(group)->getMesh();
+            const NebulaShapeCorner* pCorners = pMesh->corners();
+            for (u32 c = 0; c < pMesh->mCornerCount; c++) {
+                mIndexArray[pCorners[c].position]._0 = 0xFFFF;
+                mIndexArray[pCorners[c].position]._2 = 0xFFFF;
             }
         }
     }
@@ -500,7 +166,7 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
 
 CShader::CLengthMap::CLengthMap(const ResTIMG* pTimg) {
     _0 = pTimg;
-    _4 = reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG);
+    _4 = pTimg != nullptr ? reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG) : nullptr;
     setLengthMap(pTimg);
 }
 
@@ -510,13 +176,14 @@ void CShader::CLengthMap::setLengthMap(const ResTIMG* pTimg) {
         return;
     }
 
-    if (pTimg->mFormat != GX_TF_I8) {
+    const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
+    if (pRecord == nullptr || pRecord->layout != NEBULA_TEXTURE_L8) {
         _8 = 1;
         return;
     }
 
     _0 = pTimg;
-    _4 = reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG);
+    _4 = reinterpret_cast< const u8* >(pRecord) + NEBULA_TEXTURE_HEADER;
     _8 = 0;
 }
 
@@ -525,22 +192,20 @@ f32 CShader::CLengthMap::refer(f32 u, f32 v) const {
         return 1.0f;
     }
 
-    if (_0->mFormat != GX_TF_I8) {
-        return 1.0f;
-    }
-
-    u16 x = getTexelOrder(_0->mWidth, u, static_cast< GXTexWrapMode >(_0->mWrapS));
-    u16 y = getTexelOrder(_0->mHeight, v, static_cast< GXTexWrapMode >(_0->mWrapT));
-    return f32(_4[((x % 8) + (y % 4) * 8) + (x / 8 + (_0->mWidth / 8) * (y / 4)) * 32]) / 255.0f;
+    u16 x = getTexelOrder(_0->mWidth, u, static_cast< u8 >(_0->mWrapS));
+    u16 y = getTexelOrder(_0->mHeight, v, static_cast< u8 >(_0->mWrapT));
+    x = x < _0->mWidth ? x : _0->mWidth - 1;
+    y = y < _0->mHeight ? y : _0->mHeight - 1;
+    return f32(_4[y * _0->mWidth + x]) / 255.0f;
 }
 
-u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GXTexWrapMode mode) const {
+u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, u8 mode) const {
     if (a2 > 1.0f) {
         switch (mode) {
-        case GX_CLAMP:
+        case NEBULA_WRAP_CLAMP:
             a2 = 1.0f;
             break;
-        case GX_REPEAT:
+        case NEBULA_WRAP_REPEAT:
             while (a2 > 1.0f) {
                 a2 -= 1.0f;
             }
@@ -550,7 +215,7 @@ u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GXTexWrapMode mode) cons
             }
 
             break;
-        case GX_MIRROR:
+        case NEBULA_WRAP_MIRROR:
             while (a2 > 1.0f) {
                 a2 -= 1.0f;
             }

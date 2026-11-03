@@ -1,30 +1,33 @@
 #pragma once
 
+#include <nebula_cooked_texture.h>
 #include "nw4r/lyt/types.h"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
+#include <NebulaGpu.h>
 
 namespace nw4r {
     namespace lyt {
         class TexMap {
         public:
+            // The picture's format as a layout's file names it.
+            enum TexelFormat { TEXEL_I4 = 0, TEXEL_IA4 = 2, TEXEL_RGBA8 = 6 };
+
             TexMap() {
                 SetImage(NULL);
                 SetSize(0, 0);
-                SetTexelFormat(GX_TF_I4);
-                SetWrapMode(GX_CLAMP, GX_CLAMP);
+                SetTexelFormat(TEXEL_I4);
+                SetWrapMode(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
                 SetMipMap(false);
-                SetFilter(GX_LINEAR, GX_LINEAR);
+                SetFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
                 SetLOD(0.0f, 0.0f);
                 SetLODBias(0.0f);
                 SetBiasClampEnable(false);
                 SetEdgeLODEnable(false);
-                SetAnisotropy(GX_ANISO_1);
+                SetAnisotropy(0);
             }
 
-            TexMap(const GXTexObj& rTexObj) {
+            TexMap(const J3DNativeTexObj& rTexObj) {
                 Set(rTexObj);
             }
 
@@ -32,33 +35,33 @@ namespace nw4r {
                 mImage = pImage;
             }
 
-            void SetAnisotropy(GXAnisotropy aniso) {
+            void SetAnisotropy(u8 aniso) {
                 mBits.anisotropy = aniso;
             }
 
-            void Get(_GXTexObj*) const;
-            void Set(const _GXTexObj&);
+            void Get(J3DNativeTexObj*) const;
+            void Set(const J3DNativeTexObj&);
             // Image `id` of a cooked TPL file (its image a texture record).
             void ReplaceImage(const void* pTplFile, u32 id = 0);
 
-            inline GXTexFmt GetTexelFormat() const {
-                return GXTexFmt(mBits.textureFormat);
+            inline u8 GetTexelFormat() const {
+                return u8(mBits.textureFormat);
             }
 
-            inline GXTexWrapMode GetWrapModeS() const {
-                return GXTexWrapMode(mBits.wrapS);
+            inline u8 GetWrapModeS() const {
+                return u8(mBits.wrapS);
             }
 
-            inline GXTexWrapMode GetWrapModeT() const {
-                return GXTexWrapMode(mBits.wrapT);
+            inline u8 GetWrapModeT() const {
+                return u8(mBits.wrapT);
             }
 
-            inline GXTexFilter GetMinFilter() const {
-                return GXTexFilter(mBits.minFilter);
+            inline u8 GetMinFilter() const {
+                return u8(mBits.minFilter);
             }
 
-            inline GXTexFilter GetMagFilter() const {
-                return GXTexFilter(mBits.magFilter);
+            inline u8 GetMagFilter() const {
+                return u8(mBits.magFilter);
             }
 
             inline bool IsBiasClampEnable() const {
@@ -69,8 +72,8 @@ namespace nw4r {
                 return 0 != mBits.edgeLODEnable;
             }
 
-            inline GXAnisotropy GetAnisotropy() const {
-                return GXAnisotropy(mBits.anisotropy);
+            inline u8 GetAnisotropy() const {
+                return u8(mBits.anisotropy);
             }
 
             inline f32 GetLODBias() const {
@@ -97,12 +100,12 @@ namespace nw4r {
                 mLODBias = u16((s32)(bias * 256));
             }
 
-            void SetWrapMode(GXTexWrapMode wrapS, GXTexWrapMode wrapT) {
+            void SetWrapMode(u8 wrapS, u8 wrapT) {
                 mBits.wrapS = wrapS;
                 mBits.wrapT = wrapT;
             }
 
-            void SetFilter(GXTexFilter minFlt, GXTexFilter magFlt) {
+            void SetFilter(u8 minFlt, u8 magFlt) {
                 mBits.minFilter = minFlt;
                 mBits.magFilter = magFlt;
             }
@@ -125,7 +128,7 @@ namespace nw4r {
                 mHeight = height;
             }
 
-            void SetTexelFormat(GXTexFmt value) {
+            void SetTexelFormat(u8 value) {
                 mBits.textureFormat = value;
             }
 
@@ -144,16 +147,16 @@ namespace nw4r {
             f32 mMaxLOD;
             u16 mLODBias;
 
-            /* 0x18 */ struct {
-                /* 0x18 */ u32 textureFormat : 4;
-                /* 0x1C */ u32 mipmap : 1;
-                /* 0x20 */ u32 wrapS : 2;
-                /* 0x24 */ u32 wrapT : 2;
-                /* 0x28 */ u32 minFilter : 3;
-                /* 0x2C */ u32 magFilter : 1;
-                /* 0x30 */ u32 biasClampEnable : 1;
-                /* 0x34 */ u32 edgeLODEnable : 1;
-                /* 0x38 */ u32 anisotropy : 2;
+            struct {
+                u32 textureFormat : 4;
+                u32 mipmap : 1;
+                u32 wrapS : 2;
+                u32 wrapT : 2;
+                u32 minFilter : 3;
+                u32 magFilter : 1;
+                u32 biasClampEnable : 1;
+                u32 edgeLODEnable : 1;
+                u32 anisotropy : 2;
             } mBits;
         };
     };  // namespace lyt

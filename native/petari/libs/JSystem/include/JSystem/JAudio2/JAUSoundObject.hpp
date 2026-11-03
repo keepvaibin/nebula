@@ -5,13 +5,13 @@
 
 class JAISoundHandle;
 class JAISoundID;
-class JKRHeap;
+class NebulaArena;
 
 class JAUSoundObject : public JAISoundHandles {
 public:
     JAUSoundObject();
 
-    JAUSoundObject(TVec3f*, u8, JKRHeap*);
+    JAUSoundObject(TVec3f*, u8, NebulaArena*);
     ~JAUSoundObject();
 
     virtual void process();
@@ -30,7 +30,7 @@ public:
         return mPos;
     }
 
-    /* 0x0C */ bool mIsAllocated;
-    /* 0x10 */ u32 _10;
-    /* 0x14 */ TVec3f* mPos;
+    bool mIsAllocated;
+    u32 _10;
+    TVec3f* mPos;
 };

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include <revolution/types.h>
 
 struct JAUAudibleParam {
     JAUAudibleParam() {
@@ -53,12 +52,8 @@ struct JAUAudibleParam {
     }
 
     u32 getDoppler() const {
-#ifdef TARGET_PC
-        // The top nibble of mAudibleSw (the console read the word's first halfword).
+        // The top nibble of mAudibleSw.
         return (u32)((mAudibleSw >> 12) & 0xf);
-#else
-        return (u32)((*(u16*)&raw >> 12) & 0xf);
-#endif
         // return raw >> 28 & 0xF;
     }
 
@@ -73,45 +68,16 @@ struct JAUAudibleParam {
     }
 
     u32 getVolDistBit() const {
-#ifdef TARGET_PC
         return 1 << ((mAudibleSw >> 4) & 3);
-#else
-        return 1 << ((*(u16*)&raw >> 4) & 3);
-#endif
     }
 
-    // raw is the console's word: mAudibleSw in the high half. Natively the halves are declared low first so the union
-    // keeps that; the byte/bit view below is the console's only.
+    // raw holds mAudibleSw in its high half.
     union {
-#ifdef TARGET_PC
         struct {
             u16 _f1;
             u16 mAudibleSw;
         };
-#else
-        /* 0x0 */ struct {
-            /* 0x0 */ u16 mAudibleSw;
-            /* 0x2 */ u16 _f1;
-        };
-#endif
-        /* 0x0 */ struct {
-            /* 0x0 */ u8 b0_0 : 4;
-            /* 0x0 */ u8 b0_4 : 1;
-            /* 0x0 */ u8 b0_5 : 1;
-            /* 0x0 */ u8 b0_6 : 1;
-            /* 0x0 */ u8 b0_7 : 1;
-            /* 0x1 */ u8 b1_0 : 1;
-            /* 0x1 */ u8 b1_1 : 1;
-            /* 0x1 */ u8 mVolDistSetting : 2;
-            /* 0x1 */ u8 b1_4_7 : 4;
-            /* 0x2 */ u8 b2;
-            /* 0x3 */ u8 b3;
-        }
-#ifdef TARGET_PC
-        consoleBits
-#endif
-        ;
-        /* 0x0 */ u32 raw;
+        u32 raw;
     };
 };
 

@@ -54,13 +54,6 @@ namespace MR {
     void startBckPlayer(const char*, const char* pBrkName = nullptr);
     void startBckPlayer(const char*, const BckCtrlData&);
     void startBckPlayer(const char*, s32);
-#ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
-    template < typename L >
-    inline typename NebulaLongCall< void, L >::Type startBckPlayer(const char* pName, L frame) {
-        startBckPlayer(pName, (s32)frame);
-    }
-#endif
     bool isBckStoppedPlayer();
     bool isBckOneTimeAndStoppedPlayer();
     f32 getBckFrameMaxPlayer();
@@ -84,7 +77,7 @@ namespace MR {
     bool isActorOnPlayer(const LiveActor*);
     bool isOnPlayerShadow(const LiveActor*);
     f32 getPlayerShadowHeight();
-    void setPlayerPos(const char*) NO_INLINE;
+    void setPlayerPos(const char*);
     void setPlayerPosAndWait(const TVec3f&);
     void setPlayerPosAndWait(const char*);
     void setPlayerLinkPosAndWait(const NameObj*, const char*);

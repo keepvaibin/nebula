@@ -29,7 +29,7 @@ public:
     }
 
 private:
-    /* 0x20 */ TVec2f mPosition;
+    TVec2f mPosition;
 };
 
 class StaffRollPicture : public LayoutActor {
@@ -49,7 +49,7 @@ public:
     void exeWork();
 
 private:
-    /* 0x20 */ nw4r::lyt::TexMap** mReplaceTexture;
+    nw4r::lyt::TexMap** mReplaceTexture;
 };
 
 class StaffRoll : public LayoutActor {
@@ -92,16 +92,16 @@ public:
     void exeEnd();
 
 private:
-    /* 0x20 */ InformationMessage* mInfo;
-    /* 0x24 */ StaffRollLine** mLine;
-    /* 0x28 */ StaffRollPicture* mPicture;
-    /* 0x2C */ const wchar_t* mMsg;
-    /* 0x30 */ u32 mMsgLineNum;
-    /* 0x34 */ u32 mMsgLine;
-    /* 0x38 */ TVec2f mTitleLogoPos;
-    /* 0x40 */ TVec2f mEndLogoPos;
-    /* 0x48 */ s32 _48;
-    /* 0x4C */ s32 _4C;
+    InformationMessage* mInfo;
+    StaffRollLine** mLine;
+    StaffRollPicture* mPicture;
+    const char16_t* mMsg;
+    u32 mMsgLineNum;
+    u32 mMsgLine;
+    TVec2f mTitleLogoPos;
+    TVec2f mEndLogoPos;
+    s32 _48;
+    s32 _4C;
 };
 
 namespace MR {

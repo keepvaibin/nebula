@@ -40,16 +40,16 @@ public:
     void calcRotatedAngle(f32*, const TPos3f&) const;
     bool tryHipDrop();
 
-    /* 0x18 */ f32 mAngularSpeedMax;
-    /* 0x1C */ f32 mInertiaConst;
-    /* 0x20 */ f32 mRotateAngle;
-    /* 0x24 */ f32 mRestoreForce;
-    /* 0x28 */ TPos3f mRotateMtx;
-    /* 0x58 */ bool mHipDrop;
-    /* 0x5C */ TVec3f mRotateAxis;
-    /* 0x68 */ f32 mAngularVelocity;
-    /* 0x6C */ f32 mAngularAccel;
-    /* 0x70 */ TVec3f mInitialUp;
-    /* 0x7C */ const char* mMoveSound;
-    /* 0x80 */ f32 mMoveSoundSpeed;
+    f32 mAngularSpeedMax;
+    f32 mInertiaConst;
+    f32 mRotateAngle;
+    f32 mRestoreForce;
+    TPos3f mRotateMtx;
+    bool mHipDrop;
+    TVec3f mRotateAxis;
+    f32 mAngularVelocity;
+    f32 mAngularAccel;
+    TVec3f mInitialUp;
+    const char* mMoveSound;
+    f32 mMoveSoundSpeed;
 };

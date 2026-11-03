@@ -9,10 +9,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 
-void StarPointerCommandStream_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-}
-
 namespace {
     // static const _32 hFlashShiftNum =
     // static const _32 hTexSpeed =
@@ -33,7 +29,7 @@ namespace NrvStarPointerCommandStream {
 };  // namespace NrvStarPointerCommandStream
 
 namespace {
-    static Color8 hOutColor = Color8((GXColor){0xFF, 0x00, 0x00, 0xFF});
+    static Color8 hOutColor = Color8((NebulaColor8){0xFF, 0x00, 0x00, 0xFF});
 };  // namespace
 
 StarPointerCommandStream::StarPointerCommandStream(const TVec2f* pScreenPos)

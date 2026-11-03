@@ -75,7 +75,7 @@ void SeesawMoveNut::exeHalfway() {
     if (isAtEdge()) {
         MapObjActorUtil::endRotator(this);
         MR::reverseRailDirection(this);
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
         MR::startSound(this, "SE_OJ_SEESAW_NUT_STOP");
         setNerve(GET_NERVE(SeesawMoveNut, SeesawMoveNutNrvEdge));

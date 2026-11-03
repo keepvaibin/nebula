@@ -1,7 +1,6 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutManager.hpp"
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutAspect.hpp"
-#endif
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/LayoutGroupCtrl.hpp"
 #include "Game/Screen/LayoutPaneCtrl.hpp"
@@ -28,8 +27,8 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/Rect.h>
 #include <nw4r/ut/RuntimeTypeInfo.h>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
+#include <nebula_format.h>
 
 namespace {
     namespace Local {
@@ -46,7 +45,7 @@ namespace {
         template < int N >
         class BitFlag : public BitFlagBase {
         public:
-            BitFlag() NO_INLINE {
+            BitFlag() {
                 MR::zeroMemory(mBits, sizeof(mBits));
             }
 
@@ -55,7 +54,7 @@ namespace {
             virtual void offBit(int);
             virtual bool isTrue(int) const;
 
-            /* 0x04 */ u32 mBits[N / 32];
+            u32 mBits[N / 32];
         };
     };  // namespace Local
 
@@ -107,8 +106,7 @@ namespace {
                         pName = (*child).mName;
                         length = strlen(pName) - 4;
                         char name[17];
-                        strncpy(name, pName, length);
-                        name[length] = '\0';
+                        nebula_snprintf(name, sizeof(name), "%.*s", static_cast< int >(length), pName);
                         (*child).SetName(name);
                     } else {
                         pPane->RemoveChild(&*child);
@@ -134,10 +132,8 @@ namespace {
 LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
     : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), _61(true), mIndDummyTexMap(), mPaneCount(), mPaneInfoList(),
       mGroupCtrlCount(), mGroupCtrlList(), mLayoutName() {
-#ifdef TARGET_PC
     mFitRules = nullptr;
     mFitRuleCount = -1;
-#endif
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
     // it in the if block: a dangling pointer once the block ends).
     char fileNameWithoutExtension[0x60];
@@ -149,7 +145,7 @@ LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix,
     }
 
     char archiveName[0x40];
-    snprintf(archiveName, sizeof(archiveName), "%s.arc", pLayoutName);
+    nebula_snprintf(archiveName, sizeof(archiveName), "%s.arc", pLayoutName);
 
     char fileName[0x40];
     MR::copyString(fileName, pLayoutName, sizeof(fileName));
@@ -405,7 +401,7 @@ bool LayoutManager::isPointing(const char* pName, const TVec2f& rPos) const {
 
 nw4r::lyt::AnimTransform* LayoutManager::getAnimTransform(const char* pName) const {
     char fileName[0x80];
-    snprintf(fileName, sizeof(fileName), "%s.brlan", pName);
+    nebula_snprintf(fileName, sizeof(fileName), "%s.brlan", pName);
     u32 hash = MR::getHashCodeLower(fileName);
     for (u32 i = 0; i < mLayoutHolder->mAnimRes.mCount; i++) {
         if (mLayoutHolder->isAnimationHashEqual(hash, i)) {
@@ -475,9 +471,7 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
         return;
     }
 
-#ifdef TARGET_PC
     LayoutAspect::extendBackings(this);
-#endif
     mLayout->CalculateMtx(rDrawInfo);
     for (u32 i = 0; i < mPaneCount; i++) {
         if (mPaneInfoList[i].mPaneCtrl != nullptr) {
@@ -489,13 +483,11 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
                 mPaneInfoList[i].mPaneCtrl != nullptr ? mPaneInfoList[i].mPaneCtrl->mPane : findPaneByName(mPaneInfoList[i].mName);
             NebulaMtxCopy(pPane->mGlbMtx, mPaneInfoList[i].mMtxRef);
             if (MR::isScreen16Per9()) {
-                mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / 608.0f;
+                mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
             }
         }
     }
-#ifdef TARGET_PC
     LayoutAspect::fit(this);
-#endif
 }
 
 nw4r::lyt::Group* LayoutManager::getGroup(const char* pName) const {
@@ -515,7 +507,7 @@ void LayoutManager::initArc(const char* pArchiveName, const char* pLayoutName) {
     mLayoutHolder = MR::createAndAddLayoutHolder(pArchiveName);
 
     char layoutResName[0x80];
-    snprintf(layoutResName, sizeof(layoutResName), "%s.brlyt", pLayoutName);
+    nebula_snprintf(layoutResName, sizeof(layoutResName), "%s.brlyt", pLayoutName);
     void* pLayoutRes = mLayoutHolder->GetResource('blyt', layoutResName, nullptr);
 
     mLayout = new nw4r::lyt::Layout();
@@ -551,12 +543,10 @@ void LayoutManager::initPaneInfo() {
     initPaneInfoRecursive(rIndex, mLayout->mpRootPane);
 }
 
-#ifdef TARGET_PC
 void LayoutManager::rebuildPaneInfo() {
     delete[] mPaneInfoList;
     initPaneInfo();
 }
-#endif
 
 void LayoutManager::initPaneInfoRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
     nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
@@ -631,7 +621,6 @@ void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane
 }
 
 void LayoutManager::animateRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
-#ifdef TARGET_PC
     // Panes added after the layout was read (Nebula's screens: NebulaPaneKit) come after its own, outside the pane
     // list, and have no controllers.
     if (rIndex >= mPaneCount) {
@@ -642,7 +631,6 @@ void LayoutManager::animateRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
         }
         return;
     }
-#endif
     if (mPaneInfoList[rIndex].mPaneCtrl != nullptr) {
         mPaneInfoList[rIndex].mPaneCtrl->calcAnim();
     }
@@ -675,7 +663,7 @@ void LayoutManager::replaceIndDummyTexture() {
         return;
     }
 
-    JUTTexture screenTex(MR::getScreenResTIMG(), static_cast< u8 >(0));
+    JUTTexture screenTex(MR::getScreenResTIMG());
 
     mIndDummyTexMap = new nw4r::lyt::TexMap(screenTex.getTexObj());
 

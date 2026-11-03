@@ -1,7 +1,5 @@
 #include "Game/Ride/Tamakoro.hpp"
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#endif
 #include "Game/GameAudio/AudTamakoroBgmCtrl.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -21,7 +19,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
 
@@ -236,7 +234,7 @@ void Tamakoro::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             if (downVel < ::sStampReactionInvalidSpeed) {
                 downVel = -::sStampReactionV - downVel;
                 mVelocity.add(mGravity * downVel);
-                MR::tryRumblePadWeak(this, WPAD_CHAN0);
+                MR::tryRumblePadWeak(this, PLAYER_1);
                 MR::shakeCameraNormalWeak();
             }
             return;
@@ -270,7 +268,7 @@ bool Tamakoro::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pR
 
 bool Tamakoro::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgExplosionAttack(msg) && isEnableEnemyAttack()) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::setVelocitySeparateHV(this, pSender, pReceiver, ::sExplosionReactionH, ::sExplosionReactionV);
         MR::startSoundPlayer("SE_PV_UPSET");
         return true;
@@ -280,9 +278,7 @@ bool Tamakoro::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
 bool Tamakoro::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgAutoRushBegin(msg) && requestBind(pSender)) {
-#ifdef TARGET_PC
         NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 1);
-#endif
         return true;
     }
 
@@ -372,7 +368,6 @@ bool Tamakoro::requestBind(HitSensor* pSensor) {
     } else {
         setNerve(GET_NERVE(Tamakoro, TamakoroNrvBindStart));
 
-        TVec3f v3;  // vec order shenanigans... not used
         TVec3f vPlayerToThis;
         vPlayerToThis = mPosition - mMarioPos;
         vPlayerToThis.orthogonalize(mGravity);
@@ -514,13 +509,13 @@ void Tamakoro::reactionCollision() {
     }
 
     if (hitPower > ::sCollisionStrongPower) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
     } else if (hitPower > ::sCollisionMiddlePower) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
     } else if (hitPower > ::sCollisionWeakPower) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::shakeCameraWeak();
     }
 }
@@ -536,7 +531,7 @@ void Tamakoro::exeStandByBind() {
 void Tamakoro::exeBindStart() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("SlideStomachRecover");
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         mDirectionToMario.set(-mGravity);
         if (MR::normalizeOrZero(&mMarioFront)) {
             MR::makeAxisVerticalZX(&mMarioFront, mGravity);
@@ -576,7 +571,7 @@ void Tamakoro::exeBindStartLand() {
             mBgmCtrl->init();
         }
         MR::startBckPlayer("Land", "BallLand");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
 
         mDirectionToMario.set(mMarioPos - mPosition);
         if (MR::normalizeOrZero(&mDirectionToMario)) {
@@ -693,7 +688,7 @@ void Tamakoro::exeJump() {
 void Tamakoro::exeBumpWall() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("BallHit");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
     }
 
@@ -712,7 +707,7 @@ void Tamakoro::exeBumpWall() {
 void Tamakoro::exeLand() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("Land");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
         MR::startSound(this, "SE_SM_IRONSPH_LAND");
     }
@@ -731,7 +726,7 @@ void Tamakoro::exeLand() {
 
 void Tamakoro::exeJumpHole() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::offBind(this);
         MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\202\265\202\341\202\252\202\335" /* タマコロしゃがみ */);
         mAccelDir.zero();
@@ -745,7 +740,7 @@ void Tamakoro::exeJumpHole() {
 
 void Tamakoro::exeJumpHoleSetUp() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
     updateSquatBckBlend(0.0f);
     updateMarioPose(3.0f);
@@ -755,7 +750,7 @@ void Tamakoro::exeJumpHoleSetUp() {
 void Tamakoro::exeJumpHoleLaunch() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayer("BallJump");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         MR::emitEffect(this, "BigJumpBlur");
     }
@@ -778,7 +773,7 @@ void Tamakoro::exeDashRail() {
         MR::startBckPlayer("BallRoll");
         MR::startSoundPlayer("SE_PV_JUMP_JOY");
         MR::startSound(this, "SE_SM_IRONSPH_RAILDASH");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         mAccelDir.zero();
         mAccelRate = 0.0f;
     }
@@ -815,7 +810,7 @@ void Tamakoro::exeDashRailEnd() {
 void Tamakoro::exeRideRail() {
     if (MR::isFirstStep(this)) {
         MR::startBckPlayerJ("\203\136\203\175\203\122\203\215\210\332\223\256" /* タマコロ移動 */);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     f32 speed = updateRideRail();
@@ -865,7 +860,7 @@ void Tamakoro::exeRideRailFastEnd() {
 
 void Tamakoro::exeBindEnd() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         mAccelDir.zero();
         mAccelRate = 0.0f;
@@ -888,7 +883,7 @@ void Tamakoro::exeBindEnd() {
 void Tamakoro::addVelocityOperate() {
     mAccelRate = mAccelSensorCtrl->calcMoveVector(&mAccelDir, mGravity);
 
-    TVec3f* vel = &mVelocity;  // this needs to be like this to match...
+    TVec3f* vel = &mVelocity;
     mVelocity.scaleAdd(mAccelRate * (MR::isBindedGround(this) ? 0.4f : 0.2f), mAccelDir, *vel);
 }
 
@@ -921,18 +916,12 @@ void Tamakoro::updateMoment() {
         TVec3f moment;
         const TVec3f* up;
         // TVec3f tmpVec;
-#ifdef TARGET_PC
         // Read through up past the else block, so it lives for the whole branch.
         TVec3f tmpVec;
-#endif
         if (MR::isBindedGround(this)) {
             up = MR::getGroundNormal(this);
         } else {
-#ifdef TARGET_PC
             tmpVec = -mGravity;
-#else
-            TVec3f tmpVec(-mGravity);
-#endif
             up = &tmpVec;
         }
 

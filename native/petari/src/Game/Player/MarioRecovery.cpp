@@ -3,7 +3,7 @@
 #include "Game/Player/MarioActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 bool Mario::doRecovery() {
     if (isStatusActive(MarioStatus_Foo)) {

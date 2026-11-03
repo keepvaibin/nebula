@@ -22,9 +22,9 @@ public:
     void initLightCylinderByOwner(const JMapInfoIter&);
     void initLightVolume(const char*);
 
-    /* 0xC4 */ MtxPtr mHostMtx;
-    /* 0xC8 */ VolumeModelDrawer* mLightVolume;
-    /* 0xCC */ Color8 mColor;
+    MtxPtr mHostMtx;
+    VolumeModelDrawer* mLightVolume;
+    Color8 mColor;
 };
 
 class SwingLight : public MapObjActor {
@@ -38,5 +38,5 @@ public:
 
     void appearLight();
 
-    /* 0xC4 */ LightCylinder* mLightCylinder;
+    LightCylinder* mLightCylinder;
 };

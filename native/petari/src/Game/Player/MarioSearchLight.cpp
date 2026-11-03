@@ -1,4 +1,6 @@
 #include "Game/Player/MarioSearchLight.hpp"
+#include "Game/Util/NativeShader.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Player/DrawAdaptor.hpp"
@@ -20,9 +22,8 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/mtx.h>
+#include "Game/System/NebulaArena.hpp"
+#include <nebula_math.h>
 
 MarioSearchLight::MarioSearchLight(LiveActor* pActor) : PartsModel(pActor, "\203\124\201\133\203\140\203\211\203\103\203\147" /* サーチライト */, "SearchLightCone", nullptr, -1, 0), _9C(), _A0(), _A4() {
 }
@@ -50,7 +51,7 @@ void MarioSearchLight::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (pReceiver != _A4) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
     _A4 = pReceiver;
@@ -249,24 +250,27 @@ void MarioActor::drawSearchLight() const {
     screenPos1 = minimum + TVec2f(-10.0f, -10.0f);
     screenPos2 = maximum + TVec2f(10.0f, 10.0f);
 
-    TDDraw::setup(0, 0, 2);
-
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ONE, GX_LO_NOOP);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    // The light's screen box cleared in the alpha buffer (vertex_color, alpha only, a constant destination alpha of 0).
+    NebulaNativeMaterial box;
+    TDDraw::setupNative(&box, 0, 0, 2);
+    box.color_write = 0;
+    box.alpha_write = 1;
+    NativeShader::setBlend(box, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
+    J3DPass::constantAlpha(true, 0);
+    NativeShader::send(box);
 
     TDDraw::drawFillBox(screenPos1, screenPos2, 0);
-    TDDraw::setup(0, 1, 1);
+    // The light model with its own material and the passes over it (J3DNativeMaterial::override); setup's view only.
+    NebulaNativeMaterial view;
+    TDDraw::setupNative(&view, 0, 1, 1);
 
     J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(mSearchLight));
     J3DMaterial* const material = model->getModelData()->getMaterialNodePointer(0);
     if (model->simpleDrawSetup(material)) {
-        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
-        J3DNativeState::setColorUpdate(GX_FALSE);
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, false);
+        J3DPass::writeAlpha(true);
+        J3DPass::writeColor(false);
+        J3DPass::constantAlpha(false, 0);
 
         // Gradually fade in the search light.
         f32 lightBrightness = 1.0f;
@@ -276,52 +280,45 @@ void MarioActor::drawSearchLight() const {
             lightBrightness = (mSearchLightTimer - 30) / 150.0f;
         }
 
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-        J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
-        GXColorS10 color = {255, 255, 255, (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]))};
-
-        J3DNativeState::setTevColorS10(GX_TEVREG0, color);
+        // The channel colour at alpha A0.
+        const u8 volumeAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]));
+        // (The light's model is a native J3D material: J3DNativeMaterial::override draws the pass over it.)
+        J3DNativeMaterial::override(2, volumeAlpha / 255.0f, 0.0f, -1.0f);
 
         // Render intersection of light cone with the scene by subtracting
         // visible back faces from front faces.
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
-        J3DNativeState::setCullMode(GX_CULL_BACK);
+        J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
+        J3DPass::cull(NEBULA_CULL_BACK);
         model->setDrawView(0);
         model->simpleDrawShape(material);
 
-        J3DNativeState::setCullMode(GX_CULL_FRONT);
-        J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
+        J3DPass::cull(NEBULA_CULL_FRONT);
+        J3DPass::subtractBlend();
         model->simpleDrawShape(material);
 
-        TDDraw::setup(0, 1, 2);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ONE, GX_LO_NOOP);
-        J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        // The light's colour added over the box by the destination alpha the volume left (vertex_color).
+        NebulaNativeMaterial fill;
+        TDDraw::setupNative(&fill, 0, 1, 2);
+        fill.alpha_write = 1;
+        NativeShader::setBlend(fill, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
+        J3DPass::constantAlpha(true, 0);
+        NativeShader::send(fill);
 
         u8* col = mConst->getTable()->mSearchLightColor;
         TDDraw::drawFillBox(screenPos1, screenPos2, col[0] << 24 | col[1] << 16 | col[2] << 8);
 
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
+        J3DPass::constantAlpha(false, 0);
+        J3DPass::writeAlpha(false);
 
-        TDDraw::setup(0, 1, 1);
-        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-        J3DNativeState::setAlphaCompare(GX_GREATER, 4, GX_AOP_AND, GX_ALWAYS, 0);
+        TDDraw::setupNative(&view, 0, 1, 1);
+        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, false);
         bool res = model->simpleDrawSetup(material);
 
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-        J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+        J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
 
-        // Colour of the light cone.
-        GXColorS10 searchLightCol = {255, 255, 255, (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel))};
-        J3DNativeState::setTevColorS10(GX_TEVREG0, searchLightCol);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_A0, GX_CA_RASA);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_SUB, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+        // Colour of the light cone: the channel colour at alpha RASA - K(1 - A0), drawn above 4.
+        const u8 coneAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel));
+        J3DNativeMaterial::override(3, coneAlpha / 255.0f, 0.0f, 4.0f);
 
         if (res) {
             // Draw central light cone.
@@ -330,20 +327,13 @@ void MarioActor::drawSearchLight() const {
             return;
         }
 
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A1, GX_CA_A0, GX_CA_RASA, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
-
         // Draw soft falloff outside light cone.
         for (u32 i = 0; i < ARRAY_SIZE(mConst->getTable()->mSearchLightBlurAlpha); i++) {
             model->setDrawView(i + 1);
 
-            // Cone falloff colour.
-            GXColorS10 color3 = {255, 255, 255, (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i]))};
-            J3DNativeState::setTevColorS10(GX_TEVREG0, color3);
-
-            // End cap falloff colour.
-            GXColorS10 endCapCol = {255, 255, 255, 4};
-            J3DNativeState::setTevColorS10(GX_TEVREG1, endCapCol);
+            // Cone falloff colour (A0) and end cap falloff colour (A1): the channel colour at (A1 + (A0 - A1) RASA) / 2.
+            const u8 blurAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i]));
+            J3DNativeMaterial::override(4, blurAlpha / 255.0f, 4.0f / 255.0f, 4.0f);
 
             model->simpleDrawShape(material);
         }

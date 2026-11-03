@@ -10,7 +10,7 @@ JASSimpleWaveBank::~JASSimpleWaveBank() {
     delete[] mWaveTable;
 }
 
-void JASSimpleWaveBank::setWaveTableSize(u32 size, JKRHeap* heap) {
+void JASSimpleWaveBank::setWaveTableSize(u32 size, NebulaArena* heap) {
     delete[] mWaveTable;
     mWaveTable = new (heap, 0) TWaveHandle[size];
     mWaveTableSize = size;
@@ -26,7 +26,7 @@ JASWaveHandle* JASSimpleWaveBank::getWaveHandle(u32 no) const {
 void JASSimpleWaveBank::setWaveInfo(u32 no, JASWaveInfo const& waveInfo) {
     mWaveTable[no].mWaveInfo = waveInfo;
     mWaveTable[no].mWaveInfo._24 = &_48;
-    mWaveTable[no].mHeap = &mHeap;
+    mWaveTable[no].mArc = this;
 }
 
 JASWaveArc* JASSimpleWaveBank::getWaveArc(u32 no) {
@@ -36,8 +36,12 @@ JASWaveArc* JASSimpleWaveBank::getWaveArc(u32 no) {
     return this;
 }
 
+const u8* JASSimpleWaveBank::TWaveHandle::getWaveLimit() const {
+    return mArc->getData() + mArc->getFileSize();
+}
+
 const u8* JASSimpleWaveBank::TWaveHandle::getWavePtr() const {
-    const u8* base = static_cast< const u8* >(mHeap->getBase());
+    const u8* base = mArc->getData();
     if (base == nullptr) {
         return nullptr;
     }

@@ -3,16 +3,11 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
-
-void CameraAnim_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::pi();
-}
+#include "Game/Util/ByteView.hpp"
 
 void CamAnmDataAccessor::set(void* pInfo, void* pValues) {
     mInfo = reinterpret_cast< CanmFrameInfo* >(pInfo);
-    mValues = reinterpret_cast< NEBULA_BE(f32)* >(pValues);
+    mValues = reinterpret_cast< f32* >(pValues);
 }
 
 void CamAnmDataAccessor::getPos(TVec3f* pPos, f32 key) const {
@@ -55,7 +50,7 @@ f32 CamAnmDataAccessor::get(f32 key, u32 offset, u32 count) const {
 
 void KeyCamAnmDataAccessor::set(void* pInfo, void* pValues) {
     mInfo = reinterpret_cast< CanmKeyFrameInfo* >(pInfo);
-    mValues = reinterpret_cast< NEBULA_BE(f32)* >(pValues);
+    mValues = reinterpret_cast< f32* >(pValues);
 }
 
 void KeyCamAnmDataAccessor::getPos(TVec3f* pPos, f32 key) const {
@@ -113,14 +108,14 @@ u32 KeyCamAnmDataAccessor::searchKeyFrameIndex(f32 key, u32 offset, u32 count, u
 
 f32 KeyCamAnmDataAccessor::get3f(f32 key, u32 offset, u32 count) const {
     u32 index = searchKeyFrameIndex(key, offset, count, 3);
-    NEBULA_BE(f32)* values = mValues + offset + index * 3;
+    f32* values = mValues + offset + index * 3;
 
     return calcHermite(key, values[0], values[1], values[2], values[3], values[4], values[5]);
 }
 
 f32 KeyCamAnmDataAccessor::get4f(f32 key, u32 offset, u32 count) const {
     u32 index = searchKeyFrameIndex(key, offset, count, 4);
-    NEBULA_BE(f32)* values = mValues + offset + index * 4;
+    f32* values = mValues + offset + index * 4;
 
     return calcHermite(key, values[0], values[1], values[3], values[4], values[5], values[6]);
 }
@@ -226,10 +221,13 @@ bool CameraAnim::loadBin(u8* pFile) {
         return false;
     }
 
-    if (pHeader->mType[0] == 'C' && pHeader->mType[1] == 'A' && pHeader->mType[2] == 'N' && pHeader->mType[3] == 'M') {
+    if (pHeader->mType[3] == 'M' || pHeader->mType[3] == 'N') {
+        NEBULA_PANIC("CameraAnim: a camera animation not in host order (the importer cooks it)");
+    }
+    if (pHeader->mType[0] == 'C' && pHeader->mType[1] == 'A' && pHeader->mType[2] == 'N' && pHeader->mType[3] == 'm') {
         mIsKey = false;
         mFileDataAccessor = mDataAccessor;
-    } else if (pHeader->mType[0] == 'C' && pHeader->mType[1] == 'K' && pHeader->mType[2] == 'A' && pHeader->mType[3] == 'N') {
+    } else if (pHeader->mType[0] == 'C' && pHeader->mType[1] == 'K' && pHeader->mType[2] == 'A' && pHeader->mType[3] == 'n') {
         mIsKey = true;
         mFileDataAccessor = mKeyDataAccessor;
     } else {
@@ -247,7 +245,7 @@ bool CameraAnim::loadBin(u8* pFile) {
 
     u32 valueOffset = pHeader->mValueOffset;
 
-    mNrValues = *(reinterpret_cast< NEBULA_BE(u32)* >(&pEntry[valueOffset])) / sizeof(f32);
+    mNrValues = readBytes< u32 >(&pEntry[valueOffset]) / sizeof(f32);
 
     mFileDataAccessor->set(pEntry, pEntry + valueOffset + 4);
 

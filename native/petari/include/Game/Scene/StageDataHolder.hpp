@@ -4,7 +4,7 @@
 #include "Game/Util/Array.hpp"
 #include <JSystem/JGeometry.hpp>
 
-class JKRArchive;
+class AssetFolder;
 class JMapIdInfo;
 class PlacementInfoOrdered;
 
@@ -67,32 +67,32 @@ public:
 
     JMapInfo* attachJmpInfoToArray(JMapInfo* pInfo, const char* pDirectory);
 
-    /* 0x0C */ MR::AssignableArray< JMapInfo > mPlacementObjs;
-    /* 0x14 */ MR::AssignableArray< JMapInfo > mStartObjs;
-    /* 0x1C */ MR::AssignableArray< JMapInfo > mGeneralPosObjs;
-    /* 0x24 */ MR::AssignableArray< JMapInfo > mChildObjs;
-    /* 0x2C */ MR::AssignableArray< JMapInfo > mListObjs;
-    /* 0x34 */ MR::AssignableArray< JMapInfo > mPathObjs;
-    /* 0x3C */ JMapInfo* mObjNameTbl;
-    /* 0x40 */ s32 mStageDataHolderCount;
-    /* 0x44 */ StageDataHolder* mStageDataArray[0x18];
-    /* 0xA4 */ JKRArchive* mArchive;
-    /* 0xA8 */ const char* _A8;
-    /* 0xAC */ TPos3f mPlacementMtx;
-    /* 0xDC */ s32 mZoneID;
-    /* 0xE0 */ u8 _E0;
-    /* 0xE1 */ u8 _E1;
-    /* 0xE2 */ u8 _E2;
-    /* 0xE3 */ u8 _E3;
-    /* 0xE4 */ uintptr_t _E4;
-    /* 0xE8 */ uintptr_t _E8;
-    /* 0xEC */ MR::AssignableArray< JMapInfo > _EC;
-    /* 0xF4 */ MR::AssignableArray< JMapInfo > _F4;
-    /* 0xFC */ PlacementInfoOrdered* _FC;
-    /* 0x100 */ PlacementInfoOrdered* _100;
-    /* 0x104 */ PlacementInfoOrdered* _104;
-    /* 0x108 */ PlacementInfoOrdered* _108;
-    /* 0x10C */ PlacementInfoOrdered* _10C;
+    MR::AssignableArray< JMapInfo > mPlacementObjs;
+    MR::AssignableArray< JMapInfo > mStartObjs;
+    MR::AssignableArray< JMapInfo > mGeneralPosObjs;
+    MR::AssignableArray< JMapInfo > mChildObjs;
+    MR::AssignableArray< JMapInfo > mListObjs;
+    MR::AssignableArray< JMapInfo > mPathObjs;
+    JMapInfo* mObjNameTbl;
+    s32 mStageDataHolderCount;
+    MR::GrowTable< StageDataHolder*, 0x18 > mStageDataArray;
+    AssetFolder* mArchive;
+    const char* _A8;
+    TPos3f mPlacementMtx;
+    s32 mZoneID;
+    u8 _E0;
+    u8 _E1;
+    u8 _E2;
+    u8 _E3;
+    uintptr_t _E4;
+    uintptr_t _E8;
+    MR::AssignableArray< JMapInfo > _EC;
+    MR::AssignableArray< JMapInfo > _F4;
+    PlacementInfoOrdered* _FC;
+    PlacementInfoOrdered* _100;
+    PlacementInfoOrdered* _104;
+    PlacementInfoOrdered* _108;
+    PlacementInfoOrdered* _10C;
 };
 
 namespace MR {

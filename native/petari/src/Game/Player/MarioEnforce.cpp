@@ -31,7 +31,6 @@ void Mario::checkEnforceMoveInner() {
     bool same = relativeMove | moveRelativePositionWall();
     if (same) {
         if (MR::isSameMtx(*_45C->getBaseMtx(), *_45C->getPrevBaseMtx())) {
-            f32 verticalLimit = getMovementStates()._1 ? 0.0f : mVerticalSpeed;
 
             if (mVelocity.dot(_368) < 0.0f) {
                 f32 element = MR::vecKillElement(mVelocity, _368, &mVelocity);

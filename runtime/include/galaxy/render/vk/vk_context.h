@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan device every Vulkan GX object shares (docs/VULKAN.md): instance and device through volk, one graphics
+// The Vulkan device every Vulkan object shares (docs/VULKAN.md): instance and device through volk, one graphics
 // queue, VMA for memory. Every submission gets the next fence value (as D3D12's fence), kept with a VkFence of its
 // own, which works on any Vulkan 1.0 device (timeline semaphores need 1.2 or an extension many Android drivers lack).
 // Objects released while the GPU may still use them are destroyed once it passes the last submitted value.
@@ -35,6 +35,10 @@ struct Texture : std::enable_shared_from_this<Texture> {
     VkImageView view = VK_NULL_HANDLE;         // every level, sampled
     VkImageView target_view = VK_NULL_HANDLE;  // level 0, render target (render textures only)
     VkFramebuffer framebuffer = VK_NULL_HANDLE;  // made by the renderer for its render pass, on first use
+    // The scene target pass's framebuffer with this image as the scene target's colour (a display copy's hand-over, E-10) and the scene target
+    // depth target whose serial is scene_depth_serial.
+    VkFramebuffer scene_framebuffer = VK_NULL_HANDLE;
+    std::uint64_t scene_depth_serial = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
@@ -48,7 +52,7 @@ struct Texture : std::enable_shared_from_this<Texture> {
     ~Texture();
 };
 
-// An owned host-visible, persistently mapped buffer with a GX address (gpu::Address, Context::resolve); the last
+// An owned host-visible, persistently mapped buffer with a GPU address (gpu::Address, Context::resolve); the last
 // reference defers its destruction as Texture's.
 struct Buffer {
     VkBuffer buffer = VK_NULL_HANDLE;
@@ -68,7 +72,7 @@ struct Buffer {
 // BAR), else host memory, for data the GPU reads every frame. Device: device memory only, for what the GPU writes.
 enum class BufferPlace : std::uint8_t { Host, DeviceMapped, Device };
 
-// A persistently mapped buffer (unmapped in BufferPlace::Device) without a GX address (create_buffer wraps one in a
+// A persistently mapped buffer (unmapped in BufferPlace::Device) without a GPU address (create_buffer wraps one in a
 // Buffer).
 struct MappedBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
@@ -88,6 +92,7 @@ public:
                     const std::function<VkSurfaceKHR(VkInstance)>& create_surface = {},
                     VkSurfaceKHR* surface = nullptr);
     void shutdown() noexcept;
+    [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
     // Why the last initialize failed (for the player's error message).
     [[nodiscard]] const std::string& failure() const noexcept { return failure_; }
@@ -105,6 +110,7 @@ public:
     [[nodiscard]] bool dual_source_blend() const noexcept { return dual_source_blend_; }
     [[nodiscard]] bool logic_op() const noexcept { return logic_op_; }
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
+    [[nodiscard]] bool sample_rate_shading() const noexcept { return sample_rate_shading_; }
     [[nodiscard]] bool tessellation_shader() const noexcept { return tessellation_shader_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
@@ -132,7 +138,7 @@ public:
     // Waits until the GPU has passed `value`; false on a timeout or a lost device.
     bool wait(std::uint64_t value, std::uint64_t timeout_ns = UINT64_MAX);
     // Runs `destroy` once the GPU has passed the next frame submission (submit_frame), which carries any commands
-    // being recorded now; peeks and other submissions in between carry none of them (one submitting thread: the
+    // being recorded now; other submissions in between carry none of them (one submitting thread: the
     // render thread).
     void defer(std::function<void()> destroy);
     // Runs the deferred destructions the GPU has passed.
@@ -140,7 +146,7 @@ public:
 
     // RGBA8 (or `format`) image with a sampled view of `levels` levels; `render_target` adds a level-0 target view.
     // `samples` per pixel above one: a multisampled target (one level).
-    // Replaces an R8 texture's sampled view with one reading R in every channel (GX's I8). False if it fails.
+    // Replaces an R8 texture's sampled view with one reading R in every channel. False if it fails.
     bool grey_view(Texture& texture) const;
     [[nodiscard]] std::shared_ptr<Texture> create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                           VkFormat format, VkImageUsageFlags usage,
@@ -152,17 +158,17 @@ public:
                                                                VkFormat format, const char* name);
     [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
                                                     BufferPlace place = BufferPlace::Host);
-    // A buffer with a GX address.
+    // A buffer with a GPU address.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
                                                         BufferPlace place = BufferPlace::Host);
     // A mapped transfer-destination buffer the CPU reads (readbacks), in cached host memory (coherent where the driver
-    // reads that back faster: DeviceQuirks::coherent_readback); no GX address.
+    // reads that back faster: DeviceQuirks::coherent_readback); no GPU address.
     [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name);
     // Makes the GPU's writes to a readback buffer visible to the CPU (after its fence).
     void invalidate(const Buffer& buffer) const noexcept;
     void set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept;
 
-    // The GX address space (gpu::Address): an address's top bits name a buffer and its low kAddressShift bits a byte
+    // The GPU address space (gpu::Address): an address's top bits name a buffer and its low kAddressShift bits a byte
     // in it, so the shared code's address arithmetic works; draws turn addresses back into (buffer, offset).
     static constexpr unsigned kAddressShift = 40;
     struct BufferOffset {
@@ -203,6 +209,7 @@ private:
     bool logic_op_ = false;
     bool geometry_shader_ = false;
     bool tessellation_shader_ = false;
+    bool sample_rate_shading_ = false;
     bool sampler_anisotropy_ = false;
     bool gather_extended_ = false;
     bool pipeline_statistics_ = false;

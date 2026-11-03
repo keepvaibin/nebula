@@ -1,4 +1,6 @@
 #include "Game/Map/OceanRingPipeOutside.hpp"
+#include "Game/Util/NativeShader.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Map/OceanRingPipe.hpp"
@@ -8,8 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 namespace {
@@ -19,7 +20,7 @@ namespace {
     const f32 sIndirectScale = 0.15f;
     const f32 sEnvMapScale = 0.6f;
 
-    static GXColor sTevReg0 = {0x14, 0x65, 0xFF, 0xB9};
+    static NebulaColor8 sTevReg0 = {0x14, 0x65, 0xFF, 0xB9};
 };  // namespace
 
 OceanRingPipeOutside::OceanRingPipeOutside(const OceanRingPipe* pPipe)
@@ -28,10 +29,10 @@ OceanRingPipeOutside::OceanRingPipeOutside(const OceanRingPipe* pPipe)
 
 void OceanRingPipeOutside::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_OceanRingPipeOutside);
-    initDisplayList();
+    initMesh();
     MR::invalidateClipping(this);
-    mWaterPipeIndirectTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeIndirect.bti"), 0);
-    mWaterPipeHighLightTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeHighLight.bti"), 0);
+    mWaterPipeIndirectTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeIndirect.bti"));
+    mWaterPipeHighLightTex = new JUTTexture(MR::loadTexFromArc("OceanRing.arc", "WaterPipeHighLight.bti"));
     makeActorAppeared();
 }
 
@@ -39,7 +40,7 @@ void OceanRingPipeOutside::movement() {
     mTexU = MR::repeat(mTexU + ::sTexSpeedU, 0.0f, 1.0f);
 }
 
-void OceanRingPipeOutside::initDisplayList() {
+void OceanRingPipeOutside::initMesh() {
     mMesh.init(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0, 2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
     mMesh.useArray(NativeMesh::SLOT_POSITION, mRingPipe->_A0);
     mMesh.useArray(NativeMesh::SLOT_NORMAL, mRingPipe->_A4);
@@ -53,22 +54,12 @@ void OceanRingPipeOutside::draw() const {
 
     loadMaterial();
     mMesh.draw();
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
 }
 
-const GXColor sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 
 void OceanRingPipeOutside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, 4, GX_DF_CLAMP, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_NRM, 0x21, 0, 0x7D);
-
     TPos3f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = mTexU;
@@ -84,57 +75,35 @@ void OceanRingPipeOutside::loadMaterial() const {
     scaleMtx.identity();
     scaleMtx.scale(::sEnvMapScale);
 
-    static Mtx qMtx2 = {0.5f, 0.0f, 0.0f, 0.5f, 0.0f, -0.5f, 0.0f, 0.5f, 0.0f, 0.0f, 1.0f, 0.0f};
+    static Mtx qMtx2 = {{0.5f, 0.0f, 0.0f, 0.5f}, {0.0f, -0.5f, 0.0f, 0.5f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 
     MR::multMtx(mtx2, scaleMtx, mtx2);
     MR::multMtx(mtx2, qMtx2, mtx2);
     J3DNativeShape::setTexture(1, mtx2, 2);
 
-    mWaterPipeIndirectTex->load(GX_TEXMAP0);
-    mWaterPipeHighLightTex->load(GX_TEXMAP1);
-    J3DNativeState::setNumIndStages(1);
-    J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD0, GX_TEXMAP0);
-    J3DNativeState::setTevIndWarp(GX_TEVSTAGE0, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
-    Mtx23 new_mtx;
-    new_mtx[0][0] = ::sIndirectScale;
-    new_mtx[0][1] = 0.0f;
-    new_mtx[0][2] = 0.0f;
-    new_mtx[1][0] = 0.0f;
-    new_mtx[1][1] = ::sIndirectScale;
-    new_mtx[1][2] = 0.0f;
-    J3DNativeState::setIndTexMtx(GX_ITM_0, new_mtx, 0);
-
-    J3DNativeState::setTevColor(GX_TEVREG0, ::sTevReg0);
-
-    J3DNativeState::setNumTevStages(2);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_RASA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_SUBHALF, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_CPREV, GX_CC_ZERO, GX_CC_ZERO, GX_CC_APREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_KONST, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZMode(1, GX_LEQUAL, 1);
-    J3DNativeState::setZCompLoc(1);
-    if (mRingPipe->_90) {
-        J3DNativeState::setCullMode(GX_CULL_BACK);
-    } else {
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-    }
-
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, MR::getNearZ(), MR::getFarZ(), sFogCol);
+    // runtime/src/render/materials/ocean_ring_pipe_outside.hlsl: the highlight texture (1) by the normal, warped by
+    // the indirect texture (0) at sIndirectScale texels a step, over sTevReg0 with light 2's rim; opaque, depth tested
+    // and written, back faces culled (or none). The alpha channel's material and ambient alphas are the drawing
+    // state's (the site never sets them).
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_OUTSIDE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL,
+                       true, mRingPipe->_90 ? NEBULA_CULL_BACK : NEBULA_CULL_NONE);
+    NativeShader::setColor(material, 0, ::sTevReg0.r, ::sTevReg0.g, ::sTevReg0.b, ::sTevReg0.a);
+    material.constants[4] = ::sIndirectScale;
+    material.constants[6] = static_cast< f32 >(mWaterPipeHighLightTex->getWidth());
+    material.constants[7] = static_cast< f32 >(mWaterPipeHighLightTex->getHeight());
+    const f32* pRegisters = J3DNativeMaterial::registers();
+    material.constants[8] = pRegisters[35];
+    material.constants[9] = pRegisters[43];
+    NativeShader::setTexture(material, 0, mWaterPipeIndirectTex);
+    NativeShader::setTexture(material, 1, mWaterPipeHighLightTex);
+    NativeShader::send(material);
+    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
 }
 
 void OceanRingPipeOutside::sendGD() {
-    u8 something = 0x98;
     s32 vv;
     s32 v;
     f32 f29;
@@ -145,7 +114,7 @@ void OceanRingPipeOutside::sendGD() {
     for (s32 i = 0; i < mRingPipe->_9C - 1; i++) {
         f32 f27 = 0.0f;
         vv = mRingPipe->_98;
-        mMesh.begin(static_cast< GXPrimitive >(something), (u16)(vv << 1));
+        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (u16)(vv << 1));
         for (s32 j = 0; j < mRingPipe->_98; j++) {
             v = j * mRingPipe->_9C;
             u16 cl2 = i + v + 1;

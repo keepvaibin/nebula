@@ -16,51 +16,11 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaAchievements.hpp"
-#endif
 
 namespace {
     f32 cDropFrontSpeed = 2.0f;
 };  // namespace
-
-void MarioJump_FORCE_MATCH_SDATA2() {
-    (void)0.00100000005f;
-    (void)15.0f;
-    (void)0.300000012f;
-    (void)4.0f;
-    (void)10.0f;
-    (void)0.899999976f;
-    (void)500.0f;
-    (void)0.100000001f;
-    (void)5.0f;
-    (void)100.0f;
-    (void)50.0f;
-    (void)150.0f;
-    (void)0.600000024f;
-    (void)80.0f;
-    (void)20.0f;
-    (void)8.0f;
-    (void)0.200000003f;
-    (void)0.800000012f;
-    (void)0.00390625f;
-    (void)45.0f;
-    (void)160.0f;
-    (void)1.79999995f;
-    (void)0.25f;
-    (void)300.0f;
-    (void)200.0f;
-    (void)-0.100000001f;
-    (void)-0.800000012f;
-    (void)30.0f;
-    (void)-0.200000003f;
-    (void)0.785398185f;
-    (void)0.998000026f;
-    (void)0.00999999978f;
-    (void)6.0f;
-    (void)7.0f;
-    (void)90.0f;
-}
 
 bool Mario::isRising() const {
     if (getPlayerMode() == 4 || getPlayerMode() == 6) {
@@ -331,10 +291,8 @@ void Mario::tryJump() {
 
     procJump(true);
     mMovementStates.jumping = true;
-#ifdef TARGET_PC
     // Nebula's all-time jump count: the ground jumps (one, two, three), the somersaults, the long jump, the wall kick.
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
 
     if (_42A == 1 && _430 == 1) {
         _430 = 2;
@@ -476,9 +434,7 @@ void Mario::tryTurnJump() {
     mMovementStates._5 = false;
     mWalkSpeed = 0.0f;
     _10._A = false;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     return;
 }
 
@@ -547,9 +503,7 @@ void Mario::trySquatJump() {
     _3D0 = 0;
     mMovementStates._5 = false;
     mMovementStates._4 = false;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     return;
 }
 
@@ -586,9 +540,7 @@ void Mario::tryBackJump() {
 
     mWalkSpeed = 0.0f;
     mMovementStates.jumping = true;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     _3D0 = 0;
     mMovementStates._1 = false;
     mMovementStates._4 = false;
@@ -857,9 +809,7 @@ void Mario::tryWallJump(const TVec3f& rVec, bool a2) {
     _430 = 0x7;
 
     mMovementStates.jumping = true;
-#ifdef TARGET_PC
     NebulaAchievements::countStat(NebulaStat_Jumps, 1);
-#endif
     mMovementStates._5 = false;
     mMovementStates._E = true;
     mMovementStates._B = false;
@@ -1112,7 +1062,7 @@ void Mario::tryDrop() {
     return;
 }
 
-bool Mario::isDigitalJump() const NO_INLINE {
+bool Mario::isDigitalJump() const {
     return mMovementStates._E;
 }
 
@@ -1126,7 +1076,6 @@ void Mario::initActiveJumpVec() {
 }
 
 void Mario::initJumpParam() {
-    const u32 flags1 = _1C_WORD;
     mMovementStates._13 = true;
 
     if ((_1C._A) || (_1C._B)) {
@@ -1263,10 +1212,6 @@ void Mario::procJump(bool a1) {
     if (useConnectGravity) {
         MarioConstTable* pTable = mActor->getConst().getTable();
         gravityScale = pTable->mGravityRatioA;
-        f32 connectRatio = _3BC <= 45 ? 0.0f : 1.0f;
-        if (_3BC <= 45) {
-            connectRatio = static_cast< f32 >(_3BC) / 45.0f;
-        }
     }
 
     if (a1) {
@@ -2708,23 +2653,6 @@ bool Mario::taskOnSlide(u32 a1) {
     addVelocity(_A40);
     _A3C--;
     return _A3C != 0;
-}
-
-void MarioJump_FORCE_MATCH_DATA() {
-    Mario::Task task = &Mario::taskOnWallRising;
-    (void)task;
-}
-
-bool Mario::taskOnWallRising(u32 a1) {
-    (void)a1;
-
-    if ((mMovementStates._17) == 0) {
-        stopEffect("\213\244\222\312\225\307\217\343\217\270" /* 共通壁上昇 */);
-        return false;
-    }
-
-    playSound("\203\130\203\212\203\142\203\166" /* スリップ */);
-    return true;
 }
 
 void Mario::incAirWalkTimer() {

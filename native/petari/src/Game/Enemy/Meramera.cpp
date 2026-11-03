@@ -21,61 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
-void Meramera_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)2.0f;
-    (void)900.0f;
-    (void)55.0f;
-    (void)10.0f;
-    (void)70.0f;
-    (void)45.0f;
-    (void)50.0f;
-    (void)150.0f;
-    (void)300.0f;
-    (void)5.0f;
-    (void)35.0f;
-    (void)0.001f;
-    (void)200.0f;
-    (void)100.0f;
-    (void)3000.0f;
-    (void)1500.0f;
-    (void)130.0f;
-    (void)0.1f;
-    (void)15.0f;
-    (void)0.98f;
-    (void)0.05f;
-    (void)0.995f;
-    (void)0.2f;
-    (void)0.99f;
-    (void)0.97f;
-    (void)190.0f;
-    (void)20.0f;
-    (void)0.175f;
-    (void)0.3f;
-    (void)140.0f;
-    (void)1.2f;
-    (void)0.9f;
-    (void)12.0f;
-    (void)80.0f;
-    (void)250.0f;
-    (void)0.8f;
-    (void)(1 / 0.35f);
-    (void)1.4f;
-    (void)40.0f;
-    (void)180.0f;
-    (void)0.94f;
-    (void)25.0f;
-    (void)0.02f;
-    (void)500.0f;
-    (void)1000.0f;
-    (void)0.25f;
-    (void)600.0f;
-}
-
 enum { ElementType_Fire, ElementType_Ice };
 enum { EffectType_Null, EffectType_Wait, EffectType_Chase, EffectType_Escape };
 enum { BodyEffectType_Heat = 0x1, BodyEffectType_CoolDown = 0x2, BodyEffectType_Cold = 0x3 };
@@ -92,105 +37,26 @@ namespace {
     static const f32 sBindRadius = 45.0f;
     static const f32 sShadowRadius = 50.0f;
     static const f32 sBaseScale = 150.0f;
-    static f32 sUpVecBlendRate;
-    static f32 sFrontVecBlendRate;
-    static f32 sPushAccel;
     static const f32 sRecoveryDistance = 1500.0f;
     static const f32 sOverWallAccel = 0.9f;
     static const f32 sMaxOverWallHeight = 250.0f;
     static const s32 sWaitTime = 300;
-    static f32 sNormalAccel;
-    static f32 sGravityAccel;
-    static f32 sFloatAccel;
-    static f32 sAirFreq;
-    static f32 sTurnLimit;
-    static f32 sNormalHeight;
     static const s32 sWalkTime = 120;
-    static f32 sTerritoryWalkRange;
     static const s32 sAttackSuccessTime = 180;
     static const s32 sShrinkTime = 20;
     static const f32 sTerritoryChaseRange = 3000.0f;
     static const s32 sChaseEndTime = 240;
-    static f32 sChaseStartTime;
-    static f32 sChaseStartFloatAccel;
-    static f32 sChaseStartHeight;
-    static f32 sChaseDashTime;
-    static f32 sChaseDashFloatStartTime;
     static const f32 sChaseDashAccel = 0.98f;
-    static f32 sChaseDashFreq;
-    static f32 sChaseDashTurnLimit;
-    static f32 sChaseDashFloatAccel;
-    static f32 sChaseDashHeight;
-    static f32 sChaseDashSecondFloatAccel;
-    static f32 sChaseDashSecondHeight;
-    static f32 sChaseTurnTime;
     static const f32 sChaseTurnAccel = 0.97f;
-    static f32 sChaseTurnFreq;
-    static f32 sChaseTurnTurnLimit;
     static const f32 sChaseTurnGravityAccel = 0.99f;
     static const f32 sChaseTurnFloatAccel = 0.05f;
-    static f32 sChaseTurnHeight;
-    static f32 sSinkTime;
     static const s32 sFloatTime = 30;
-    static f32 sFloatUpPower;
-    static f32 sFloatGravityAccel;
-    static f32 sFloatFloatAccel;
-    static f32 sFloatHeight;
-    static f32 sFloatFloatRange;
-    static f32 sFloatFreq;
     static const s32 sIgnitionTime = 20;
-    static f32 sIgnitionUpDelayTime;
-    static f32 sIgnitionUpPower;
-    static f32 sIgnitionGravityAccel;
-    static f32 sIgnitionFloatAccel;
-    static f32 sIgnitionHeight;
-    static f32 sIgnitionFloatRange;
-    static f32 sIgnitionFreq;
     static const s32 sRunawayTime = 30;
-    static f32 sRunawayStartJumpTime;
-    static f32 sRunawayAnimFrameRate;
-    static f32 sRunawayJumpStartVelocity;
-    static f32 sRunawayJumpStartTime;
-    static f32 sRunawayJumpStartTimeRange;
-    static f32 sRunawayDirectionRandomRate;
-    static f32 sRunawayAccel;
-    static f32 sRunawayMinJumpPower;
-    static f32 sRunawayMaxJumpPower;
-    static f32 sRunawayGravityAccel;
-    static f32 sRunawayGroundFreq;
-    static f32 sRunawayAirFreq;
-    static f32 sRunawayEmitLandEffectSpeed;
-    static f32 sRunawayGroundReboundRate;
-    static f32 sRunawayWallReboundRate;
-    static f32 sRunawayGroundReboundStop;
-    static f32 sRunawayFromPlayerDistance;
-    static f32 sCheckDegree;
-    static f32 sDivingMinPowerDis;
-    static f32 sDivingMaxPowerDis;
-    static f32 sCheckDivingFrontLength;
-    static f32 sCheckDivingMoreFrontLength;
-    static f32 sCheckDivingSideLength;
-    static f32 sCheckDivingUpLength;
-    static f32 sCheckDivingLength;
-    static f32 sDivingHeight;
     static const s32 sDivingDelayTime = 35;
     static const s32 sDivingTime = 40;
-    static f32 sDamageTime;
-    static f32 sDelayExtinguishTime;
-    static f32 sDamageRange;
-    static f32 sDamageBlowPower;
-    static f32 sDamageFloatAccel;
-    static f32 sDamageHeight;
-    static f32 sDamageAirFreq;
     static const s32 sDownStopFrame = 2;
-    static f32 sDownScale;
-    static f32 sDownUpPower;
     static const f32 sDownGravityAccel = 0.5f;
-    static f32 sDownFreq;
-    static f32 sDownReboundRate;
-    static f32 sMinExtinguishDistance;
-    static f32 sExtinguishSpeedRate;
-    static f32 sTurnSmokeToGravityDegree;
 };  // namespace
 
 namespace {
@@ -727,7 +593,7 @@ bool Meramera::tryEndChase() {
 }
 
 bool Meramera::tryRunaway() {
-    if (MR::isGreaterStep(this, MR::getRandom(0L, 0L) + ::sRunawayTime)) {
+    if (MR::isGreaterStep(this, MR::getRandom(0, 0) + ::sRunawayTime)) {
         setNerve(GET_NERVE(Meramera, MerameraNrvRunaway));
         return true;
     }
@@ -1094,7 +960,7 @@ void Meramera::exeRunaway() {
 
                 MR::startSound(this, "SE_EM_MERAMERA_JUMP");
 
-                mRunawayTimer = MR::getRandom(0L, 10L) + 30;
+                mRunawayTimer = MR::getRandom(0, 10) + 30;
             }
         }
 
@@ -1544,8 +1410,6 @@ bool Meramera::isHitRecover() const {
 }
 
 bool Meramera::findDivingPoint(TVec3f vec, const TVec3f& rVec) {
-    // FIXME: there is some inline here
-    // https://decomp.me/scratch/uajQ5
     Triangle triangle = Triangle();
     TVec3f vec84;
 

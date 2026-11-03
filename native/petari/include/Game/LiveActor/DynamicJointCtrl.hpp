@@ -1,9 +1,8 @@
 #pragma once
 
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class LiveActor;
 class JointController;
@@ -17,18 +16,18 @@ public:
     void startCtrl(s32);
     void endCtrl(s32);
 
-    /* 0x00 */ f32 _0;
-    /* 0x04 */ s32 _4;
-    /* 0x08 */ s32 _8;
-    /* 0x0C */ s32 _C;
+    f32 _0;
+    s32 _4;
+    s32 _8;
+    s32 _C;
 };
 
 struct DynamicJointCtrlParam {
-    /* 0x00 */ f32 mGravity;
-    /* 0x04 */ f32 mFriction;
-    /* 0x08 */ f32 mAccelRatetoBckPos;
-    /* 0x0C */ f32 mBendMaxDegree;
-    /* 0x10 */ s32 mCtrlJointNumMax;
+    f32 mGravity;
+    f32 mFriction;
+    f32 mAccelRatetoBckPos;
+    f32 mBendMaxDegree;
+    s32 mCtrlJointNumMax;
 };
 
 class DynamicJointCtrlNode;
@@ -42,12 +41,12 @@ public:
     void reset();
     void setCallBackFunction();
 
-    /* 0x00 */ LiveActor* mActor;
-    /* 0x04 */ const char* mName;
-    /* 0x08 */ s32 _8;
-    /* 0x0C */ DynamicJointCtrlNode** mCtrlNodes;
-    /* 0x10 */ const DynamicJointCtrlParam* mParams;
-    /* 0x14 */ JointCtrlRate* mControlRate;
+    LiveActor* mActor;
+    const char* mName;
+    s32 _8;
+    DynamicJointCtrlNode** mCtrlNodes;
+    const DynamicJointCtrlParam* mParams;
+    JointCtrlRate* mControlRate;
 };
 
 class DynamicJointCtrlNode {
@@ -58,14 +57,14 @@ public:
     void reset();
     bool updateJointMtxCallBack(TPos3f*, const JointControllerInfo&);
 
-    /* 0x00 */ f32 _0;
-    /* 0x04 */ TVec3f _4;
-    /* 0x10 */ TVec3f _10;
-    /* 0x1C */ TVec3f _1C;
-    /* 0x28 */ MtxPtr _28;
-    /* 0x2C */ JointController* mJointController;
-    /* 0x30 */ DynamicJointCtrlNode* mChild;
-    /* 0x34 */ const DynamicJointCtrl* mParentControl;
+    f32 _0;
+    TVec3f _4;
+    TVec3f _10;
+    TVec3f _1C;
+    MtxPtr _28;
+    JointController* mJointController;
+    DynamicJointCtrlNode* mChild;
+    const DynamicJointCtrl* mParentControl;
 };
 
 class DynamicJointCtrlKeeper {
@@ -79,7 +78,7 @@ public:
     void reset();
     DynamicJointCtrl* findJointCtrl(const char*);
 
-    /* 0x00 */ LiveActor* mActor;
-    /* 0x04 */ s32 _4;
-    /* 0x08 */ DynamicJointCtrl** mControls;
+    LiveActor* mActor;
+    s32 _4;
+    DynamicJointCtrl** mControls;
 };

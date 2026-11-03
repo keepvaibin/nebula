@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 
@@ -11,8 +12,8 @@ public:
     ChipGroup(const char*, s32);
 
     struct ChipEntry {
-        /* 0x0 */ ChipBase* mChip;
-        /* 0x4 */ bool mIsGotten;
+        ChipBase* mChip;
+        bool mIsGotten;
     };
 
     virtual ~ChipGroup();
@@ -27,21 +28,21 @@ public:
     void noticeGet(ChipBase*);
     void receiveAppearRequest();
 
-    /* 0x0C */ ChipEntry mChips[5];
-    /* 0x34 */ StageSwitchCtrl* mSwitchCtrl;
-    /* 0x38 */ TVec3f mUIPos;
-    /* 0x44 */ s32 mGotCount;
-    /* 0x48 */ s32 mTotalCount;
-    /* 0x4C */ s32 mStageSwitchArg;
-    /* 0x50 */ s32 mChipType;
-    /* 0x54 */ s32 mFlashFrame;
-    /* 0x58 */ s32 mCounterTimer;
-    /* 0x5C */ f32 mUIRange;
-    /* 0x60 */ f32 mUIRangeFixed;
-    /* 0x64 */ u32 mIsDeactivated;
-    /* 0x68 */ s32 mAlreadyDoneFlag;
-    /* 0x6C */ u8 mIsListeningAppear;
-    /* 0x6D */ u8 mIsCounterVisible;
+    MR::GrowTable< ChipEntry, 5 > mChips;
+    StageSwitchCtrl* mSwitchCtrl;
+    TVec3f mUIPos;
+    s32 mGotCount;
+    s32 mTotalCount;
+    s32 mStageSwitchArg;
+    s32 mChipType;
+    s32 mFlashFrame;
+    s32 mCounterTimer;
+    f32 mUIRange;
+    f32 mUIRangeFixed;
+    u32 mIsDeactivated;
+    s32 mAlreadyDoneFlag;
+    u8 mIsListeningAppear;
+    u8 mIsCounterVisible;
 };
 
 class BlueChipGroup : public ChipGroup {

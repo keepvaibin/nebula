@@ -2,11 +2,11 @@
 
 #include "Game/Speaker/SpkTable.hpp"
 #include "Game/Speaker/SpkWave.hpp"
-#include <JSystem/JKernel/JKRArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 
 class SpkData {
 public:
-    SpkData(JKRArchive*);
+    SpkData(AssetFolder*);
 
     void loadTable(u16);
     void loadWave(u16);
@@ -20,7 +20,7 @@ public:
         return &mWave;
     }
 
-    /* 0x00 */ SpkTable mTable;
-    /* 0x10 */ SpkWave mWave;
-    /* 0x20 */ JKRArchive* mArchive;
+    SpkTable mTable;
+    SpkWave mWave;
+    AssetFolder* mArchive;
 };

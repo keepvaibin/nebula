@@ -3,7 +3,6 @@
 #include "Game/Screen/SimpleLayout.hpp"
 #include "Game/System/NerveExecutor.hpp"
 
-class EncouragePal60Window;
 class TriggerChecker;
 
 namespace TitleSequenceProductSub {
@@ -20,7 +19,6 @@ public:
     bool isActive() const;
     void updateButtonReaction(TriggerChecker* pButtonChecker, const char* pAnimName);
     void updatePressStartReaction();
-    void exeDisplayEncouragePal60Window();
     void exeBgmPrepare();
     void exeLogoFadein();
     void exeLogoWait();
@@ -29,12 +27,10 @@ public:
     void exeDead();
 
 private:
-    /* 0x08 */ TitleSequenceProductSub::LogoLayout* mLogoLayout;
-    /* 0x0C */ SimpleLayout* mPressStartLayout;
-    /* 0x10 */ EncouragePal60Window* mEncouragePal60Window;
-    /* 0x14 */ TriggerChecker* mAButtonChecker;
-    /* 0x18 */ TriggerChecker* mBButtonChecker;
-    /* 0x1C */ bool mIsDisplayEncouragePal60Window;
+    TitleSequenceProductSub::LogoLayout* mLogoLayout;
+    SimpleLayout* mPressStartLayout;
+    TriggerChecker* mAButtonChecker;
+    TriggerChecker* mBButtonChecker;
 };
 
 namespace TitleSequenceProductSub {

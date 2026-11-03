@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 
 class NameObj;
 
@@ -151,7 +150,7 @@ public:
     /// @brief Determines if the requested object has been created.
     /// @param id The index of the object.
     /// @return `true` if the object has been created, `false` otherwise.
-    bool isExist(int id) const NO_INLINE;
+    bool isExist(int id) const;
 
     /// @brief Creates the requested object.
     /// @param id The index of the object.
@@ -160,7 +159,7 @@ public:
 
 private:
     /// @brief The array of objects.
-    /* 0x00 */ NameObj* mObj[SceneObj_NumMax];
+    NameObj* mObj[SceneObj_NumMax];
 };
 
 namespace MR {
@@ -171,7 +170,7 @@ namespace MR {
 
     /// @brief Returns the container for global scene objects.
     /// @return A pointer to the container for global scene objects.
-    SceneObjHolder* getSceneObjHolder() NO_INLINE;
+    SceneObjHolder* getSceneObjHolder();
 
     /// @brief Determines if the requested global scene object has been created.
     /// @param id The index of the object.

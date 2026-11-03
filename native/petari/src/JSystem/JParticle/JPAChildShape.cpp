@@ -1,13 +1,13 @@
 #include "JSystem/JParticle/JPAChildShape.hpp"
+#include "JSystem/JParticle/JPANativeColor.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
-#include <revolution/os.h>
 
 void JPARegistChildPrmEnv(JPAEmitterWorkData* work) {
     JPAChildShape* csp = work->mpRes->getCsp();
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm, env;
+    NebulaColor8 prm, env;
     csp->getPrmClr(&prm);
     csp->getEnvClr(&env);
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
@@ -17,13 +17,12 @@ void JPARegistChildPrmEnv(JPAEmitterWorkData* work) {
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
-    J3DNativeState::setTevColor(GX_TEVREG1, env);
+    JPANativeColor::prmEnv(prm, env);
 }
 
 void JPACalcChildAlphaOut(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     f32 anm = (1.0f - ptcl->mTime) * 255.0f;
-    OSf32tou8(&anm, &ptcl->mPrmColorAlphaAnm);
+    ptcl->mPrmColorAlphaAnm = nebula_f32_to_u8(anm);
 }
 
 void JPACalcChildScaleOut(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {

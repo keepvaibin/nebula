@@ -10,9 +10,9 @@ BgmProhibitArea::~BgmProhibitArea() {
 
 namespace {
     struct BgmMuteSet {
-        /* 0x00 */ const char* mGalaxyName;
-        /* 0x04 */ u32 _4;
-        /* 0x08 */ u32 _8;
+        const char* mGalaxyName;
+        u32 _4;
+        u32 _8;
     };
 
     static BgmMuteSet sBgmMuteSet[] = {{"OceanPhantomCaveGalaxy", 7, 1}, {"SoundMapCodeTest", 7, 1}};

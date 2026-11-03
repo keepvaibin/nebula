@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
@@ -8,11 +9,11 @@ class PlayerRacer;
 class RaceManager;
 
 enum RaceID {
-    /* 0x00 */ RaceID_Penguin,
-    /* 0x01 */ RaceID_TeresaPhantom,
-    /* 0x02 */ RaceID_TeresaDeathPromenade,
-    /* 0x03 */ RaceID_SurfingTrial,
-    /* 0x04 */ RaceID_SurfingChallenge,
+    RaceID_Penguin,
+    RaceID_TeresaPhantom,
+    RaceID_TeresaDeathPromenade,
+    RaceID_SurfingTrial,
+    RaceID_SurfingChallenge,
 };
 
 class RaceManagerLayout : public LayoutActor {
@@ -27,7 +28,6 @@ public:
 
     void playCountAndGo();
     void playGo();
-    void playRecord();  // Note: this is very likely stripped
     void playGoal();
     void playLose();
     void playTimeUp();
@@ -67,10 +67,10 @@ public:
         return pRacerA->mRailCoord > pRacerB->mRailCoord;
     }
 
-    /* 0x04 */ f32 mRailCoord;
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ TVec3f mCurrPosition;
-    /* 0x18 */ TVec3f mPrevPosition;
+    f32 mRailCoord;
+    f32 _8;
+    TVec3f mCurrPosition;
+    TVec3f mPrevPosition;
 };
 
 class AbstractAudience {
@@ -119,17 +119,17 @@ public:
     u32 getRank(const AbstractRacer*) const;
     void renewTime();
 
-    /* 0x8C */ s32 mCurrentRace;
-    /* 0x90 */ RaceManagerLayout* mLayout;
-    /* 0x94 */ AbstractRacer* mRacer[10];
-    /* 0xBC */ AbstractAudience* mAudience[10];
-    /* 0xE4 */ u32 mRacerNum;
-    /* 0xE8 */ u32 mAudienceNum;
-    /* 0xEC */ u32 mRank;
-    /* 0xF0 */ u32 mBestTime;
-    /* 0xF4 */ u32 mTime;
-    /* 0xF8 */ PlayerRacer* mPlayerRacer;
-    /* 0xFC */ TPos3f _FC;
+    s32 mCurrentRace;
+    RaceManagerLayout* mLayout;
+    MR::FixedArray< AbstractRacer*, 10 > mRacer;
+    MR::FixedArray< AbstractAudience*, 10 > mAudience;
+    u32 mRacerNum;
+    u32 mAudienceNum;
+    u32 mRank;
+    u32 mBestTime;
+    u32 mTime;
+    PlayerRacer* mPlayerRacer;
+    TPos3f _FC;
 };
 
 namespace RaceManagerFunction {

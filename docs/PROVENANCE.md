@@ -29,8 +29,8 @@ upstream projects; CMake downloads both at configure time from pinned archives c
 
 | Project | License | Adapted for | Nebula files |
 |---|---|---|---|
-| [Aurora](https://github.com/encounter/aurora) | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/native_thp_video.cpp`, `runtime/include/galaxy/native_thp_video.h` |
-| Aurora | MIT | GX blend and pipeline state canonicalization | `runtime/src/render/shader_keys.cpp` |
+| [Aurora](https://github.com/encounter/aurora) | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/movie_video.cpp`, `runtime/include/galaxy/movie_video.h` |
+| Aurora | MIT | Blend and pipeline state canonicalization | `runtime/src/render/shader_keys.cpp` |
 | Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/render/texture_sampling.h`, `runtime/src/render/render_core.cpp` |
 | Aurora | MIT | Content-keyed texture cache (optional) | `runtime/src/render/texture_cache.cpp` |
 | Aurora | MIT | Presentation viewport, logical-to-physical viewport and scissor mapping | `runtime/include/galaxy/content_viewport.h`, `runtime/src/render/render_config.cpp`, `runtime/src/render/renderer_d3d12.cpp` |
@@ -49,10 +49,8 @@ Mario Galaxy (low-resolution bloom copies) and Dolphin's scaled EFB copy filteri
 - Petari and Dusklight are decompilations of Nintendo games, dedicated to the public domain (CC0) by their
   contributors for their own work. Nebula's game module is compiled from Petari's source in `native/petari`;
   Dusklight is used for interface layouts, behaviour and design.
-- The `nod` disc library contains the Wii common keys needed to read a Wii disc. They are compiled into
-  `nebula-import`, which reads the user's own disc.
-- Hardware register layouts and SDK structure layouts (GX, AX and DSP mailboxes, KPAD) are
-  interface facts used for interoperability, written from public documentation.
+- The importer uses the `nod` disc library, which contains the Wii common keys needed to read a Wii disc partition.
+  An extracted game folder needs none, and a build with the importer's `folders-only` feature reads folders only.
 
 ## Not distributed
 

@@ -52,11 +52,11 @@ public:
     inline bool isNrvDown() const;
     inline bool isNrvSwoon() const;
 
-    /* 0x8C */ SpinHitController* mSpinHitController;
-    /* 0x90 */ AnimScaleController* mAnimScaleController;
-    /* 0x94 */ WalkerStateBindStarPointer* mStarPointerBind;
-    /* 0x98 */ TVec3f _98;
-    /* 0xA4 */ TVec3f _A4;
-    /* 0xB0 */ TVec3f _B0;
-    /* 0xBC */ bool mIsClipped;
+    SpinHitController* mSpinHitController;
+    AnimScaleController* mAnimScaleController;
+    WalkerStateBindStarPointer* mStarPointerBind;
+    TVec3f _98;
+    TVec3f _A4;
+    TVec3f _B0;
+    bool mIsClipped;
 };

@@ -31,7 +31,7 @@ public:
     bool receiveMsgBlowDamage(HitSensor* pSender, HitSensor* pReceiver);
     bool requestCaught();
     bool isEnableCaught() const;
-    bool isEnableBlowDamage() const NO_INLINE;
+    bool isEnableBlowDamage() const;
     void startJumpSound();
 
     void exeWaitStart();
@@ -43,13 +43,13 @@ public:
     void exePowerStarDemo();
     void exeGiveUp();
 
-    /* 0x8C */ TQuat4f mRotateQuat;
-    /* 0x9C */ TVec3f mFrontVec;
-    /* 0xA8 */ RabbitStateWaitStart* mStateWaitStart;
-    /* 0xAC */ WalkerStateRunaway* mStateRunaway;
-    /* 0xB0 */ WalkerStateBlowDamage* mStateBlowDamage;
-    /* 0xB4 */ RabbitStateCaught* mStateCaught;
-    /* 0xB8 */ TalkMessageCtrl* mMsgCtrl;
-    /* 0xBC */ FootPrint* mFootPrint;
-    /* 0xC0 */ SpotMarkLight* mSpotMarkLight;
+    TQuat4f mRotateQuat;
+    TVec3f mFrontVec;
+    RabbitStateWaitStart* mStateWaitStart;
+    WalkerStateRunaway* mStateRunaway;
+    WalkerStateBlowDamage* mStateBlowDamage;
+    RabbitStateCaught* mStateCaught;
+    TalkMessageCtrl* mMsgCtrl;
+    FootPrint* mFootPrint;
+    SpotMarkLight* mSpotMarkLight;
 };

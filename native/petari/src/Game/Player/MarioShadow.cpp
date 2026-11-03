@@ -1,4 +1,6 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Player/MarioShadow.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -12,21 +14,11 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include <cstring>
-
-void MarioShadow_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)-1.0f;
-    (void)2.0f;
-}
 
 namespace {
     f32 cCheckOffset0 = 5.0f;
@@ -117,7 +109,7 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211
         _F0[i] = 0;
     }
 
-    createDL();
+    createMesh();
 }
 
 void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, const TVec3f& rUp) {
@@ -277,20 +269,31 @@ void CollisionShadow::create(const TVec3f& rPosition, const TVec3f& rDirection, 
     MR::clampBoth(&_10, 1.0f, _14);
 }
 
+namespace {
+    // runtime/src/render/materials/color_tex_alpha.hlsl: black at the shadow texture's alpha where it passes `test`
+    // (0 above, 1 equal to, 2 not equal to `ref`), blended by alpha unless the site changes it; no culling.
+    void initShadowMaterial(NebulaNativeMaterial* pMaterial, const JUTTexture* pTexture, u32 test, u8 ref) {
+        TDDraw::setupNative(pMaterial, 1, 1, 0);
+        pMaterial->shader = NEBULA_SHADER_COLOR_TEX_ALPHA;
+        pMaterial->constants[4] = ref;
+        pMaterial->constants[5] = static_cast< f32 >(test);
+        NativeShader::setTexture(*pMaterial, 0, pTexture);
+    }
+}  // namespace
+
 void CollisionShadow::draw1() const {
     if (_308 & 8) {
         return;
     }
 
-    TDDraw::setup(1, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    _300->load(GX_TEXMAP0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 1, GX_AOP_AND, GX_ALWAYS, 0);
-    J3DNativeState::setDstAlpha(GX_TRUE, 64);
+    NebulaNativeMaterial material;
+    initShadowMaterial(&material, _300, 0, 1);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_GEQUAL, false);
+    material.alpha_write = 1;
+    J3DPass::constantAlpha(true, 64);
+    NativeShader::send(material);
     sendVtx();
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DPass::constantAlpha(false, 0);
 }
 
 void CollisionShadow::sendVtx() const {
@@ -300,9 +303,9 @@ void CollisionShadow::sendVtx() const {
 
     u16 vertexCount = _54 * _5A;
     if (_5A == 4) {
-        J3DNativeDraw::begin(GX_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     } else {
-        J3DNativeDraw::begin(GX_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
     const TVec2f* pTex;
@@ -321,9 +324,9 @@ void CollisionShadow::sendVtx() const {
 void CollisionShadow::sendZsortedVtx(bool offset) const {
     u16 vertexCount = _54 * _5A;
     if (_5A == 4) {
-        J3DNativeDraw::begin(GX_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     } else {
-        J3DNativeDraw::begin(GX_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
     TVec3f shift(-_24 * 5.0f);
@@ -346,16 +349,16 @@ void CollisionShadow::initCaptureTex() {
     _2FC = 160;
     _2FE = 160;
     {
-        MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
-        _300 = new JUTTexture(_2FC, _2FE, GX_TF_I8);
+        MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
+        _300 = new JUTTexture(_2FC, _2FE);
         MR::zeroMemory(_300->mImage, _2FC * _2FE);
         MR::setMarioShadowTex(_300);
     }
 
-    _300->mWrapS = GX_CLAMP;
-    _300->mWrapT = GX_CLAMP;
-    _300->mMinType = GX_LINEAR;
-    _300->mMagType = GX_LINEAR;
+    _300->mWrapS = NEBULA_WRAP_CLAMP;
+    _300->mWrapT = NEBULA_WRAP_CLAMP;
+    _300->mMinType = NEBULA_FILTER_LINEAR;
+    _300->mMagType = NEBULA_FILTER_LINEAR;
     _300->init();
 }
 
@@ -416,16 +419,22 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         return;
     }
 
+    // Mario's silhouette, a pass into the shadow texture.
+    const ResTIMG* image = _300->getTexInfo();
+    const void* destination = image->image();
+    J3DNativeTarget::begin(destination, _2FC, _2FE, 0);
+
     if (!(_308 & 2)) {
         setViewMtx(_24);
-        TDDraw::setup(0, 0, 1);
+        // The model draws with its own materials (the flat alpha pass, list 1 with 14); setup's view only.
+        NebulaNativeMaterial view;
+        TDDraw::setupNative(&view, 0, 0, 1);
         Mtx44 projection;
         NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
-        J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projection);
         if (_307) {
-            J3DNativeView::setViewport(608 - (_2FC + 32), -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);
-            s32 left = 608 - _2FC;
-            J3DNativeView::setScissor(left + 1, 1, _2FC - 2, _2FE - 2);
+            J3DNativeView::setViewport(-32.0f, -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);
+            J3DNativeView::setScissor(1, 1, _2FC - 2, _2FE - 2);
             pModel->setDrawView(2);
             pModel->mFlags.clear();
             pModel->mFlags._11 = true;
@@ -433,9 +442,8 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
             pModel->directDraw(nullptr);
         }
 
-        J3DNativeView::setViewport(608 - _2FC, 0.0f, _2FC, _2FE, 0.0f, 1.0f);
-        s32 left = 608 - _2FC;
-        J3DNativeView::setScissor(left + 1, 1, _2FC - 2, _2FE - 2);
+        J3DNativeView::setViewport(0.0f, 0.0f, _2FC, _2FE, 0.0f, 1.0f);
+        J3DNativeView::setScissor(1, 1, _2FC - 2, _2FE - 2);
         pModel->setDrawView(2);
         pModel->mFlags.clear();
         pModel->mFlags._1E = true;
@@ -444,47 +452,33 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     }
 
     if (!(_308 & 4)) {
-#ifdef TARGET_PC
-        MR::beginWiiScreenWidth();
-#endif
-        TDDraw::setup(0, 1, 2);
-#ifdef TARGET_PC
-        MR::endWiiScreenWidth();
-#endif
-        J3DNativeState::setColorUpdate(GX_FALSE);
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ZERO, GX_LO_NOOP);
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        MR::beginDesignScreenWidth();
+        // runtime/src/render/materials/vertex_color.hlsl into the alpha: the shadow faded to the edge of a circle (the
+        // alpha times the circle's).
+        NebulaNativeMaterial circle;
+        TDDraw::setupNative(&circle, 0, 1, 2);
+        MR::endDesignScreenWidth();
+        circle.color_write = 0;
+        circle.alpha_write = 1;
+        NativeShader::setBlend(circle, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ZERO);
+        J3DPass::constantAlpha(false, 0);
+        NativeShader::send(circle);
         f32 y = _2FE / 2;
-        f32 x = 608 - _2FC / 2;
+        f32 x = _2FC / 2;
         TVec3f center(x, y, 0.0f);
-#ifdef TARGET_PC
-        MR::beginWiiScreenWidth();
-#endif
+        MR::beginDesignScreenWidth();
         TDDraw::fix2Dpos(&center);
-#ifdef TARGET_PC
-        MR::endWiiScreenWidth();
-#endif
+        MR::endDesignScreenWidth();
         TDDraw::drawFillCircle(center, _2FC / 2, 0xFFFFFFC0, 0, 16);
-        const ResTIMG* image = _300->getTexInfo();
-        void* destination = const_cast< u8* >(reinterpret_cast< const u8* >(image) + image->mImageDataOffset);
-        JUTTexture::captureDolTexture(destination, _2FC, _2FE, 608 - _2FC, 0, false, GX_CTF_A8);
-        J3DNativeState::invalidateTexAll();
     }
 
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeTarget::end(destination, NEBULA_TARGET_ALPHA);
+
+    J3DPass::writeAlpha(false);
+    J3DPass::writeColor(true);
     MR::setDefaultViewportAndScissor();
     TDDraw::cameraInit3D();
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
-}
-
-void CollisionShadow::clearAlphaBuffer() {
-    TVec2f position;
-    TVec2f size(static_cast< f32 >(_2FC), static_cast< f32 >(_2FE));
-    position.x = 608.0f - _2FC;
-    position.y = 0.0f;
-    MR::clearAlphaBuffer(0, position, size);
+    J3DPass::constantAlpha(false, 0);
 }
 
 void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDepth) const {
@@ -492,22 +486,23 @@ void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDept
     TVec3f side;
     side.cross(_24, up);
     MR::normalizeOrZero(&side);
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXColorS10 color = {255, 255, 255, 255};
-    J3DNativeState::setTevColorS10(GX_TEVREG0, color);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
+    // runtime/src/render/materials/flat_color.hlsl into the alpha buffer: the box's front faces added, its back faces
+    // subtracted (a full alpha each), depth tested.
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    material.shader = NEBULA_SHADER_FLAT_COLOR;
+    NativeShader::setColor(material, 0, 255, 255, 255, 255);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    material.color_write = 0;
+    material.alpha_write = 1;
+    J3DPass::constantAlpha(false, 0);
+    NativeShader::setBlend(material, NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
+    material.cull = NEBULA_CULL_BACK;
+    NativeShader::send(material);
     TDDraw::drawFillBox3D(rPosition, rDepth * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
-    J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
+    material.blend_op = NEBULA_BLEND_SUBTRACT;
+    material.cull = NEBULA_CULL_FRONT;
+    NativeShader::send(material);
     TDDraw::drawFillBox3D(rPosition, rDepth * 2.0f, side * _1C, up * _18, 0xFFFFFF01);
 }
 
@@ -529,8 +524,8 @@ void CollisionShadow::draw() const {
         break;
     }
 
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
 }
 
 void CollisionShadow::draw2() const {
@@ -540,17 +535,14 @@ void CollisionShadow::draw2() const {
 
     TVec3f position(_2F0 - _24 * _30C);
     drawVolumeBox(position, _24 * _20);
-    TDDraw::setup(1, 1, 0);
-    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_INVDSTALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 1, GX_AOP_AND, GX_ALWAYS, 0);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
-    _300->load(GX_TEXMAP0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
+    NebulaNativeMaterial material;
+    initShadowMaterial(&material, _300, 0, 1);
+    material.alpha_write = 1;
+    NativeShader::setBlend(material, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
+    J3DPass::constantAlpha(true, 0);
+    NativeShader::send(material);
     sendVtx();
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DPass::constantAlpha(false, 0);
 }
 
 void CollisionShadow::draw3() const {
@@ -560,19 +552,25 @@ void CollisionShadow::draw3() const {
 
     TVec3f position(_2F0 - _24 * _30C);
     drawVolumeBox(position, _24 * _20);
-    TDDraw::setup(1, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_EQUAL, 0, GX_AOP_AND, GX_EQUAL, 0);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
-    _300->load(GX_TEXMAP0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
+    // Where the shadow texture is clear, the alpha buffer cleared (depth tested, alpha only, unblended); the faces in
+    // front of the volume too (alpha 0); then the shadow over the screen by the destination alpha where it is set.
+    NebulaNativeMaterial material;
+    initShadowMaterial(&material, _300, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    material.color_write = 0;
+    material.alpha_write = 1;
+    material.blend_op = NEBULA_BLEND_REPLACE;
+    material.blend_src = NEBULA_FACTOR_ONE;
+    material.blend_dst = NEBULA_FACTOR_ZERO;
+    J3DPass::constantAlpha(true, 0);
+    NativeShader::send(material);
     sendZsortedVtx(true);
     if (_6E) {
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-        J3DNativeDraw::begin(GX_TRIANGLES, _6E * 3, NEBULA_SHAPE_TEXCOORD0);
+        NebulaNativeMaterial clear = material;
+        clear.shader = NEBULA_SHADER_FLAT_COLOR;
+        NativeShader::setColor(clear, 0, 0, 0, 0, 0);
+        NativeShader::send(clear);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, _6E * 3, NEBULA_SHAPE_TEXCOORD0);
         for (u32 i = 0; i < _6E; i++) {
             for (u32 j = 0; j < 3; j++) {
                 const TVec3f& point = *_32C[_70[i]].getPos(j);
@@ -582,19 +580,17 @@ void CollisionShadow::draw3() const {
         }
     }
 
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_INVDSTALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_NEQUAL, 0, GX_AOP_AND, GX_NEQUAL, 0);
+    material.constants[5] = 2.0f;
+    NativeShader::setDepth(material, false, NEBULA_COMPARE_ALWAYS, false);
+    NativeShader::setBlend(material, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
     for (u32 i = 0; i < _54; i++) {
-        J3DNativeState::setColorUpdate(GX_FALSE);
-        J3DNativeState::setDstAlpha(GX_FALSE, 0);
+        material.color_write = 0;
+        J3DPass::constantAlpha(false, 0);
+        NativeShader::send(material);
         if (_5A == 4) {
-            J3DNativeDraw::begin(GX_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
         } else {
-            J3DNativeDraw::begin(GX_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
         }
 
         for (u32 j = 0; j < _5A; j++) {
@@ -604,12 +600,13 @@ void CollisionShadow::draw3() const {
             J3DNativeDraw::texCoord(tex.x, tex.y);
         }
 
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        material.color_write = 1;
+        J3DPass::constantAlpha(true, 0);
+        NativeShader::send(material);
         if (_5A == 4) {
-            J3DNativeDraw::begin(GX_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
         } else {
-            J3DNativeDraw::begin(GX_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
         }
 
         for (u32 j = 0; j < _5A; j++) {
@@ -620,20 +617,10 @@ void CollisionShadow::draw3() const {
         }
     }
 
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DPass::constantAlpha(false, 0);
 }
 
-void CollisionShadow::createDL() {
-    _344.reserve(7);
-    _344.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    _344.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    _344.setTevDirect(GX_TEVSTAGE0);
-    _344.setGenMode(0, 1, 1);
-    _344.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    _344.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
-                                GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    GXColor color = {0, 0, 0, 4};
-    _344.setTevColor(GX_TEVREG0, color);
+void CollisionShadow::createMesh() {
 }
 
 void CollisionShadow::drawVolume() const {
@@ -647,7 +634,7 @@ void CollisionShadow::drawVolume() const {
     _340->mFlags.clear();
     _340->mFlags._15 = true;
     _340->directDraw(nullptr);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DPass::constantAlpha(false, 0);
 }
 
 void CollisionShadow::doSortPolygons() {

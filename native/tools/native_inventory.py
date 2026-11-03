@@ -54,6 +54,10 @@ SIGNALS = [
     ("system", r"\b(?:SC|NWC24|HBM|RSO|ES|IPC)[A-Z][A-Za-z0-9_]*\s*\(", "SYSCONF/NWC24/HOME/RSO"),
     ("rfl", r"\bRFL[A-Za-z0-9_]*\s*\(", "Mii library"),
     ("thp_tpl", r"\b(?:THP|TPL)[A-Z][A-Za-z0-9_]*\s*\(", "THP/TPL"),
+    ("kernel_api", r"\b(?:NebulaKernel::|NebulaThread\b|NebulaThreadQueue\b|NebulaMutex\b|NebulaMessageQueue\b|NebulaAlarm\b|"
+                   r"nebula_raise_event\b|nebula_note_event\b|nebula_switch_stack\b)", "the console scheduler under its new name"),
+    ("audio_shape", r"\b(?:NebulaAudioVoice\b|audio_mix\b|JASDsp\b|JASDSPChannel\b|JASAudioThread\b|JASCriticalSection\b|"
+                    r"sDacRate\b|nebula_game_audio_tick\b)", "DSP-shaped audio interface"),
     ("byte_order", r"\bNEBULA_BE\b|\bNEBULA_OFFSET\b|\bBE\s*<|\bBEOffset\s*<|\bSelfRel\s*<|\bbswap\w*|"
                    r"\b__builtin_bswap\w*|\bbyteswap\w*|\bRFLI_(?:LD|ST)\w*", "big-endian access"),
     ("hw_register", r"\b__(?:GXData|cpReg|peReg|piReg|memReg|VIRegs|DSPRegs|AIRegs|EXIRegs|SIRegs|PIRegs|MEMRegs)\b|"
@@ -64,6 +68,10 @@ SIGNALS = [
     ("fifo", r"\bfifo\b|\bFIFO\b|\bFifo[A-Z]\w*|\bon_fifo\w*|\bgx_submit\b|\bcommand ring\b|\bBP register\b|"
              r"\bCP register\b|\bXF register\b|\bkBp[A-Z]\w*|\bkCp[A-Z]\w*|\bkXf[A-Z]\w*|\bGxState\b",
      "command stream/register state"),
+    ("frame_capture", r"\bImageEffectLocalUtil::capture\(|\bJ3DNativeTarget::capture\(|->capture\(0|\bbloomMarker\(NebulaRender::kBloom(?:Keep|Restore)\b",
+     "the game reads the frame through a copy (E-07)"),
+    ("frame_grid", r"\bscene_target_scale\w*|\bkFrameWidth\b|\bkFrameHeight\b|\bcompute_scaled_\w+|\bkMaxSceneScale\b",
+     "the fixed 640x456 grid at an integer scale in the renderer (E-08)"),
     ("efb_xfb", r"\bEFB\b|\befb_\w+|\bXFB\b|\bxfb_\w+|\bkEfb\w+|\bcopy_efb\w*|\bpeek_efb\w*|\bgx_peek_efb\b",
      "EFB/XFB emulation"),
     ("tev", r"\bTEV\b|\btev_\w+|\bTev[A-Z]\w*|\bkTev\w*|\bswap table\b|\bkonst\b|\bindirect stage\b",
@@ -73,17 +81,19 @@ SIGNALS = [
     ("gx_texture", r"\bCMPR\b|\bRGB5A3\b|\bC14X2\b|\bIA4\b|\bIA8\b|\bTLUT\b|\btlut\w*|\bdecode_(?:i4|i8|ia4|ia8|"
                    r"rgb565|rgb5a3|cmpr|c4|c8|c14)\w*", "GX texture format"),
     ("guest", r"\b[Gg]uest\w*", "recompiler-era guest model"),
-    ("wii_report", r"\breport_\w+|\bwpad_report\b|\bWpadReport\w*|\bIR dot\w*|\bir_dot\w*|\bEEPROM\b|\beeprom\w*",
+    ("wii_report", r"\bwpad_report\b|\bWpadReport\w*|\bIR dot\w*|\bir_dot\w*",
      "Wii Remote report model"),
     ("dsp_program", r"\bDSP data memory\b|\bIRAM\b|\bDRAM\b|\bucode\b|\bCH_BUF\b|\bFX_BUF\b|\bDSPRES_FILTER\b|"
                     r"\baudio_dsp\b|\bai_dma\b", "DSP program model"),
+    ("test_seam", r"\bnebula_switch::|tools/test_driver/", "call into the test driver, compiled out of a release"),
+    ("env_read", r"L?\"(?:GALAXY|NEBULA)_[A-Z0-9_]+\"", "an environment name a release can still read"),
     ("test_hook", r"\bGALAXY_(?:TEST|TRACE|EXPORT|DEBUG|DUMP)_[A-Z0-9_]+|\bNEBULA_TEST_[A-Z0-9_]+",
      "test/trace hook (release hygiene)"),
     ("decomp_residue", r"\bTARGET_PC\b|\b__MWERKS__\b|\basm\s*\{|\b__asm\b|\bnofralloc\b|\bfralloc\b",
      "decompilation residue: console/native dual paths, CodeWarrior assembly"),
 ]
 COMPILED = [(k, re.compile(p), d) for k, p, d in SIGNALS]
-HYGIENE = {"test_hook", "os_report"}
+HYGIENE = {"test_hook", "test_seam", "env_read", "os_report"}
 SOURCE_EXT = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inc", ".hlsl", ".hlsli", ".glsl", ".metal",
               ".rs", ".cs", ".kt", ".java", ".py", ".ps1", ".sh", ".cmake", ".txt", ".kts", ".gradle"}
 
@@ -91,6 +101,7 @@ SOURCE_EXT = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inc", 
 # machinery to be removed in favour of a native design), CONVERT (native code with console signals to rewrite),
 # KEEP (native; rework only where it holds signals), THIRD (vendored), DOC, DATA.
 AREAS = [
+    (r"^native/tools/|^tools/", "tools", "TOOL", "Audits and verifiers: they name what they look for."),
     (r"^third_party/", "third-party", "THIRD", "Vendored; keep license notices; update only for new native features."),
     (r"^native/petari/src/RVL_SDK/gx/|^native/petari/src/RVL_SDK/gd/", "sdk-gx", "REPLACE",
      "Decompiled GX/GD: writes the hardware command stream. Delete once nothing calls GX/GD (native records)."),
@@ -193,7 +204,7 @@ AREAS = [
      r"streamline_bridge)", "feature-temporal", "CONVERT",
      "Interpolation, upscalers, frame generation: exact per-object motion from native data (phase 2)."),
     (r"^runtime/(?:src|include/galaxy)/render/(?:post_process|game_bloom|ambient_occlusion|enhanced_lighting|"
-     r"curved_surfaces|game_lights|game_objects|galaxy_select)", "feature-graphics", "CONVERT",
+     r"curved_surfaces|game_lights|galaxy_select)", "feature-graphics", "CONVERT",
      "Graphics features: on native targets and native data (phase 2)."),
     (r"^runtime/(?:src|include/galaxy)/render/(?:texture_pack|movie_replacement|game_asset_extract)", "feature-packs", "CONVERT",
      "Texture packs and HD movies: names from the cooker (Dolphin hashes of original data), native textures/video."),
@@ -202,10 +213,9 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/", "renderer-other", "CONVERT", "Renderer: native records."),
     (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
      "Host copy of the JAudio DSP program: replace with a native float mixer."),
-    (r"^runtime/(?:src|include/galaxy)/(?:native_host|virtual_disc|native_thp_video)",
+    (r"^runtime/(?:src|include/galaxy)/(?:virtual_disc|native_thp_video)",
      "host-console-model", "REPLACE",
-     "Input as Wii Remote reports, virtual device data, disc image, software THP: replace with native input, "
-     "cooked assets and native video."),
+     "Disc image, software THP: replace with cooked assets and native video."),
     (r"^runtime/(?:src|include/galaxy)/(?:input/|wiimote_|controller_|generic_hid|switch_controller|playstation_|"
      r"steam_controller|native_input|input_bindings|pointer_control|host_pointer|rumble|tilt)", "host-input-devices",
      "KEEP", "Device drivers: feed the native input API directly (no reports)."),
@@ -261,7 +271,7 @@ for rel in files:
     ext = os.path.splitext(rel)[1].lower()
     counts = collections.Counter()
     lines = 0
-    if ext in SOURCE_EXT and disp != "THIRD":
+    if ext in SOURCE_EXT and disp not in ("THIRD", "TOOL"):
         try:
             raw = open(os.path.join(root, rel), encoding="utf-8", errors="replace").read()
         except OSError:
@@ -269,6 +279,12 @@ for rel in files:
         lines = raw.count("\n")
         body = strip_comments(raw, ext)
         for key, rx, _ in COMPILED:
+            # The importer is where the console's formats and main.dol are read: that is its work.
+            if area == "importer" and key in ("dol", "disc"):
+                continue
+            # A test file is not in a release.
+            if key == "env_read" and re.search(r"(_tests?\.|/tests/)", rel):
+                continue
             n = len(rx.findall(body))
             if n:
                 counts[key] = n

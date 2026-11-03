@@ -50,11 +50,21 @@
 
 namespace galaxy::render {
 
+// A texture-pack material's surface class.
+enum class RtSurfaceClass : std::uint8_t {
+    Diffuse = 0,    // lit by the game's lights
+    Glossy = 1,     // a lit channel with the specular function
+    Metal = 2,      // an environment map
+    Unlit = 3,      // baked or self-lit colour
+    Water = 4,      // opaque surface with indirect texturing
+    Crystal = 7,    // clear dielectric (crystals, ice, gems, glass)
+};
+
 enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 
 // The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (the owner, 27 October
 // 2026: ice 20 to 25 % of its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
-// multiply and add (TEV and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
+// multiply and add (material and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
 // it by (0, 40, 65), its sheen by (55, 77, 92)); their textures are grey and what shows through them (the screen
 // capture the ice refracts, its reflection) keeps its own colours. Those colours keep that share of their chroma, their
 // luminance kept: RenderCore clears the registers in a draw's constants, the pixel shaders its rasterized colours
@@ -63,7 +73,7 @@ inline constexpr float kRtIceTintKept = 0.225f;
 inline constexpr float kRtCrystalTintKept = 0.075f;
 
 struct RtMaterial {
-    std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the GX state shows it
+    std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the state shows it
     RtEmission emission = RtEmission::None;
     bool no_light = false;                // skip: never a light, whatever the picture shows
     bool helper = false;                  // a lookup texture: skipped when a draw's material is chosen
@@ -138,10 +148,6 @@ public:
     // elsewhere stays water). Per material index, its stage material.
     [[nodiscard]] std::vector<std::pair<std::uint16_t, const RtMaterial*>> stage_materials(
         std::string_view stage) const;
-    // The radiance (relative to a white surface under the stage's full light) of the brightest light source among
-    // the textures whose rows name `model` in their object column ("Model/texture", or models apart by spaces),
-    // case-insensitive; 0: the model has none.
-    [[nodiscard]] float model_light(std::string_view model) const;
     // A row with a `material` ("Model/material": the model's resource name and J3D's material name, models apart by
     // spaces) names those models' material alone (MotionSignal::drawMaterial's identity): its texture's material with
     // that row on top (the Observatory's white star lamps, not every white plastic its texture is on). 0: none.

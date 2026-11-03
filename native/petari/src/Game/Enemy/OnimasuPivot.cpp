@@ -1,13 +1,6 @@
 #include "Game/Enemy/OnimasuPivot.hpp"
 #include "Game/Util.hpp"
 
-void OnimasuPivot_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)2.0f;
-}
-
 OnimasuPivot::OnimasuPivot(const char* pName) : Onimasu(pName), mCurNormal(), mNormals() {
     _110.set(0.0f, 0.0f, 0.0f, 1.0f);
     _120.set(0.0f, 0.0f, 0.0f, 1.0f);

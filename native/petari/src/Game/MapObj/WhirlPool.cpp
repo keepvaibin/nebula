@@ -8,8 +8,8 @@
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-GXColor sWhirlPoolTevReg1 = {0x28, 0x28, 0x28, 0x14};
-GXColor sWhirlPoolTevReg2 = {0x55, 0x96, 0xBE, 0xFF};
+NebulaColor8 sWhirlPoolTevReg1 = {0x28, 0x28, 0x28, 0x14};
+NebulaColor8 sWhirlPoolTevReg2 = {0x55, 0x96, 0xBE, 0xFF};
 
 WhirlPool::WhirlPool(const char* pName)
     : LiveActor(pName), mRadius(100.0f), mHeight(100.0f), mAxis(0.0f, 1.0f, 0.0f), mPointCount(), mPoints(), mRotation(), mTexOffsetU0(),
@@ -26,8 +26,8 @@ void WhirlPool::init(const JMapInfoIter& rIter) {
     mHeight = 100.0f * mScale.y;
     MR::calcActorAxisY(&mAxis, this);
     initPoints();
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
     initSound(4, false);
     mClippingCenter.set(mPosition);
     mClippingCenter.y -= mRadius / 2.0f;
@@ -123,7 +123,7 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
     MR::makeMtxRotate(rotation, 0.0f, 25.0f, 0.0f);
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
     const WhirlPoolPoint* pPoint;
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -157,12 +157,11 @@ void WhirlPool::loadMaterial() const {
     // runtime/src/render/materials/whirlpool.hlsl: the swirl (texture 0) over the screen behind (texture 1) warped by
     // the indirect texture (texture 2); blended by its alpha where above zero, depth tested and written.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
-    JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
+    J3DNativeShape::setCurrentIdentity();
+    JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NEBULA_BLEND_ALPHA, NEBULA_DEPTH_LEQUAL, true, NEBULA_CULL_NONE);
+    NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
     NativeShader::setColor(material, 0, sWhirlPoolTevReg1.r, sWhirlPoolTevReg1.g, sWhirlPoolTevReg1.b,
                            sWhirlPoolTevReg1.a);
     NativeShader::setColor(material, 4, sWhirlPoolTevReg2.r, sWhirlPoolTevReg2.g, sWhirlPoolTevReg2.b,

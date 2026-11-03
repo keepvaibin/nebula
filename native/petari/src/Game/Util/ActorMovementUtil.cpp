@@ -1,7 +1,5 @@
 #include "Game/Util/ActorMovementUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -21,29 +19,7 @@
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
 #include <cmath>
-#include <revolution/mtx.h>
-
-void ActorMovementUtil_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)-MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)HALF_PI;
-    (void)2.0f;
-    (void)-HALF_PI;
-    (void)FLOAT_MAX;
-    (void)0.001f;
-    (void)0.95f;
-    (void)PI_180;
-    (void)2607.5945f;
-    (void)_180_PI;
-    (void)-0.999f;
-    (void)1000.0f;
-    (void)0.1f;
-}
+#include <nebula_math.h>
 
 namespace {
 
@@ -185,7 +161,7 @@ namespace MR {
         }
 
         TVec3f stack_8 = pActor->mPosition - *MR::getPlayerPos();
-        f32 f1 = vecKillElement(stack_8, pActor->mGravity, &stack_14);
+        vecKillElement(stack_8, pActor->mGravity, &stack_14);
         return (stack_14.squared() < distance * distance);
     }
 
@@ -536,9 +512,7 @@ namespace MR {
     }
 
     void resetPosition(LiveActor* pActor) {
-#ifdef TARGET_PC
         MotionSignal::newLife(pActor);
-#endif
         MR::clearHitSensors(pActor);
 
         if (pActor->mBinder != nullptr) {

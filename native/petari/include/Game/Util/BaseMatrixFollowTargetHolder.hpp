@@ -24,8 +24,8 @@ public:
         return (mHost->*mFunc)(id);
     }
 
-    /* 0x4 */ T* mHost;
-    /* 0x8 */ Func mFunc;
+    T* mHost;
+    Func mFunc;
 };
 
 class BaseMatrixFollowTarget {
@@ -36,11 +36,11 @@ public:
     const MtxPtr getHostBaseMtx() const;
     bool isValid(s32) const;
 
-    /* 0x00 */ TMtx34f _0;
-    /* 0x30 */ const TPos3f* _30;
-    /* 0x34 */ LiveActor* mActor;
-    /* 0x38 */ const JMapLinkInfo* mLinkInfo;
-    /* 0x3C */ BaseMatrixFollowValidater* mValidater;
+    TMtx34f _0;
+    const TPos3f* _30;
+    LiveActor* mActor;
+    const JMapLinkInfo* mLinkInfo;
+    BaseMatrixFollowValidater* mValidater;
 };
 
 class BaseMatrixFollower;
@@ -55,12 +55,12 @@ public:
     virtual void movement();
 
     void addFollower(BaseMatrixFollower* pFollower);
-    void setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const TPos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater) NO_INLINE;
+    void setFollowTargetInfo(LiveActor* pActor, const JMapInfoIter& rIter, const TPos3f* pBaseMtx, BaseMatrixFollowValidater* pValidater);
     BaseMatrixFollowTarget* findFollowTarget(const JMapLinkInfo* pLinkInfo);
     BaseMatrixFollowTarget* findFollowTarget(const BaseMatrixFollower* pFollower);
 
-    /* 0x0C */ MR::Vector< MR::AssignableArray< BaseMatrixFollowTarget* > > mTargets;
-    /* 0x18 */ MR::Vector< MR::AssignableArray< BaseMatrixFollower* > > mFollowers;
+    MR::Vector< MR::AssignableArray< BaseMatrixFollowTarget* > > mTargets;
+    MR::Vector< MR::AssignableArray< BaseMatrixFollower* > > mFollowers;
 };
 
 class BaseMatrixFollower {
@@ -77,10 +77,10 @@ public:
     bool isEnableFollow() const;
     bool isValid() const;
 
-    /* 0x04 */ JMapLinkInfo* mLinkInfo;
-    /* 0x08 */ NameObj* mFollowerObj;
-    /* 0x0C */ BaseMatrixFollowTarget* mFollowTarget;
-    /* 0x10 */ s32 mFollowID;
+    JMapLinkInfo* mLinkInfo;
+    NameObj* mFollowerObj;
+    BaseMatrixFollowTarget* mFollowTarget;
+    s32 mFollowID;
 };
 
 namespace MR {

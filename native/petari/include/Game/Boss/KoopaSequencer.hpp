@@ -22,14 +22,18 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
+#if !defined(NEBULA_RELEASE)
+    virtual void testHit(HitSensor* pPlayer) {}
+#endif
+
     void startBattleLevel2();
     void startBattleLevel3();
 
-    /* 0x08 */ Koopa* mKoopa;
-    /* 0x0C */ KoopaDemoPowerUp* mPowerUp;
-    /* 0x10 */ KoopaBattleStairsBase* mBattleStairs;
-    /* 0x14 */ KoopaDemoJumpToPlanet* mJumpToPlanet;
-    /* 0x18 */ u32 mLv;
-    /* 0x1C */ u32 mVs;
-    /* 0x20 */ bool mIsAngry;
+    Koopa* mKoopa;
+    KoopaDemoPowerUp* mPowerUp;
+    KoopaBattleStairsBase* mBattleStairs;
+    KoopaDemoJumpToPlanet* mJumpToPlanet;
+    u32 mLv;
+    u32 mVs;
+    bool mIsAngry;
 };

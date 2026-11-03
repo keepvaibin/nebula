@@ -21,8 +21,8 @@ namespace {
     const s32 cRotateAppearBrkFrame = 59;
     const f32 cAppearanceRotateSpeed = 0.1f;
 
-    const GXColor sColor1 = {0x00, 0x00, 0x00, 0xFF};
-    const GXColor sColor2 = {0x00, 0x00, 0x00, 0xFF};
+    const NebulaColor8 sColor1 = {0x00, 0x00, 0x00, 0xFF};
+    const NebulaColor8 sColor2 = {0x00, 0x00, 0x00, 0xFF};
 };  // namespace
 
 namespace NrvAstroDomeSky {
@@ -46,8 +46,8 @@ void AstroDomeSky::init(const JMapInfoIter& rIter) {
     const char* pSkyName = ::cAstroDomeSkyTable[arg0 - 1];
     initModelManagerWithAnm(pSkyName, nullptr, true);
 
-    mProjmap = MR::initDLMakerProjmapEffectMtxSetter(this);
-    MR::newDifferedDLBuffer(this);
+    mProjmap = MR::initMaterialProjmapEffectMtxSetter(this);
+    MR::newDifferedMaterials(this);
 
     MR::startBtk(this, pSkyName);
 
@@ -68,7 +68,7 @@ void AstroDomeSky::init(const JMapInfoIter& rIter) {
 }
 
 void AstroDomeSky::draw() const {
-    MR::fillScreen(mColor.mGXColor);
+    MR::fillScreen(mColor.mRGBA);
 }
 
 void AstroDomeSky::calcAndSetBaseMtx() {

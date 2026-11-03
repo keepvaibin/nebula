@@ -107,6 +107,3 @@ void SphereRailDash::exeRailMove() {
     }
 }
 
-void SphereRailDash_FORCE_MATCH(TVec3f* pVector, f32 scale) {
-    *pVector *= scale;
-}

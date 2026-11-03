@@ -1,4 +1,5 @@
 #include "Game/Player/MarioFoo.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
@@ -16,46 +17,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-
-void MarioFoo_FORCE_MATCH_SDATA2() {
-    (void)0.52359879f;
-    (void)0.100000001f;
-    (void)120.0f;
-    (void)0.125f;
-    (void)10.0f;
-    (void)100.0f;
-    (void)0.0500000007f;
-    (void)5.0f;
-    (void)1.04719758f;
-    (void)1.10000002f;
-    (void)-0.100000001f;
-    (void)0.00999999978f;
-    (void)25.0f;
-    (void)0.980000019f;
-    (void)1.01999998f;
-    (void)0.899999976f;
-    (void)1.20000005f;
-    (void)50.0f;
-    (void)1.5f;
-    (void)12.0f;
-    (void)2.09439516f;
-    (void)0.314159274f;
-    (void)0.785398185f;
-    (void)0.25f;
-    (void)30.0f;
-    (void)0.015625f;
-    (void)70.0f;
-    (void)2000.0f;
-    (void)255.0f;
-    (void)1.00010002f;
-    (void)6.0f;
-}
-
-void MarioFoo_FORCE_MATCH(TVec3f& rVec, f32 a, f32 b, f32 c) {
-    rVec.setLength(a);
-    rVec.setLength(b);
-    rVec.setLength(c);
-}
 
 namespace {
     f32 cTurnMotionSpeed = 5.0f;
@@ -116,7 +77,7 @@ MarioFoo::MarioFoo(MarioActor* pActor) : MarioState(pActor, MarioStatus_Foo) {
 }
 
 void MarioFoo::init() {
-    _6B8 = new JUTTexture(MR::getTexture(MR::getModelResourceHolder(mActor), "FooLine.bti"), 0);
+    _6B8 = new JUTTexture(MR::getTexture(MR::getModelResourceHolder(mActor), "FooLine.bti"));
 }
 
 bool MarioFoo::start() {
@@ -206,16 +167,6 @@ bool MarioFoo::update() {
     }
 
     if (!checkLvlA() && !checkLvlZ() && !_18 && _28 < ::cTurnMotionSpeed) {
-        f32 turnAngle = _2C;
-        if (_2C > 1.5707964f) {
-            turnAngle = 1.5707964f;
-        } else if (getStickY() > 0.0f) {
-            f32 angle = 0.5235988f + getStickY() * (JGeometry::TUtil< f32 >::PI() / 6.0f);
-            if (angle > _2C) {
-                turnAngle = angle;
-            }
-        }
-
         if (!_60) {
             _1C++;
         }
@@ -228,7 +179,7 @@ bool MarioFoo::update() {
     }
 
     f32 blend;
-    f32 targetAngle;
+    f32 targetAngle = 0.0f;
     if (MR::isNearZero(getStickY(), 0.1f)) {
         f32 ratio = _1C / 120.0f;
         if (ratio > 1.0f) {
@@ -581,11 +532,6 @@ f32 MarioFoo::getStickY() const {
     return MarioModule::getStickY();
 }
 
-const char* MarioFoo_FORCE_MATCH_DATA(u32 index) {
-    static const char* const strings[] = {"\220\205\211\152\203\137\203\201\201\133\203\127" /* 水泳ダメージ */, "\220\205\222\206\203\137\203\201\201\133\203\127" /* 水中ダメージ */, "\220\272\217\254\203\137\203\201\201\133\203\127" /* 声小ダメージ */, "\203\137\203\201\201\133\203\127" /* ダメージ */, "\220\205\211\152\203\137\203\201\201\133\203\127\222\206" /* 水泳ダメージ中 */};
-    return strings[index];
-}
-
 void MarioFoo::spin() {
     if (!_60) {
         if (mActor->isRequestSpin() && !_4C) {
@@ -684,19 +630,17 @@ void MarioFoo::draw3D() const {
     TVec3f nextRightEdge[2];
 
     if (getPlayer()->_1C._9) {
-        TDDraw::setup(1, 1, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 2, 0);
         MR::ddSetVtxFormat(2);
-        MR::ddLightingOff();
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXA, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-        _6B8->load(GX_TEXMAP0);
+        material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.constants[9] = 2.0f;
+        NativeShader::setTexture(material, 0, _6B8);
         const Color8 color0(255, 32, 32, 128);
-        J3DNativeState::setTevColor(GX_TEVREG0, color0);
+        NativeShader::setColor(material, 0, color0.r, color0.g, color0.b, color0.a);
         const Color8 color1(255, 64, 64, 255);
-        J3DNativeState::setTevColor(GX_TEVREG1, color1);
+        NativeShader::setColor(material, 4, color1.r, color1.g, color1.b, color1.a);
+        NativeShader::send(material);
 
         TVec3f center = mActor->_2A0 + getPlayer()->getUpVec() * 50.0f;
         TVec3f back = -getPlayer()->getUpVec();
@@ -711,7 +655,7 @@ void MarioFoo::draw3D() const {
         beamVertices[1] = center - side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center - side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center - side * 50.0f;
-        J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
         MR::ddSendVtxData(beamVertices[0], TVec2f(0.0f, 0.0f));
         MR::ddSendVtxData(beamVertices[1], TVec2f(0.5f, 0.0f));
         MR::ddSendVtxData(beamVertices[2], TVec2f(0.5f, 1.0f));
@@ -721,7 +665,7 @@ void MarioFoo::draw3D() const {
         beamVertices[1] = center + side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center + side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center + side * 50.0f;
-        J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
         MR::ddSendVtxData(beamVertices[0], TVec2f(0.0f, 0.0f));
         MR::ddSendVtxData(beamVertices[1], TVec2f(0.5f, 0.0f));
         MR::ddSendVtxData(beamVertices[2], TVec2f(0.5f, 1.0f));
@@ -729,18 +673,13 @@ void MarioFoo::draw3D() const {
     }
 
     const Color8 color2(255, 64, 64, 255);
-
-    J3DNativeState::setTevColor(GX_TEVREG1, color2);
     if (_6B0) {
-        TDDraw::setup(1, 1, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 2, 0);
         MR::ddSetVtxFormat(2);
-        MR::ddLightingOff();
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXA, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-        _6B8->load(GX_TEXMAP0);
+        material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.constants[9] = 2.0f;
+        NativeShader::setTexture(material, 0, _6B8);
 
         u32 midpoint;
         u32 count = _6B0;
@@ -757,7 +696,9 @@ void MarioFoo::draw3D() const {
             }
 
             const Color8 color3(255, 0, 0, alpha);
-            J3DNativeState::setTevColor(GX_TEVREG0, color3);
+            NativeShader::setColor(material, 0, color3.r, color3.g, color3.b, color3.a);
+            NativeShader::setColor(material, 4, color2.r, color2.g, color2.b, color2.a);
+            NativeShader::send(material);
             u32 index = (_6B4 + 127 - i) % 64;
             if (i == 0) {
                 u32 j;
@@ -789,12 +730,11 @@ void MarioFoo::draw3D() const {
                 nextTexCoords[0].set(0.0f, textureY);
                 nextTexCoords[1].set(1.0f, textureY);
                 const TVec3f& rPosition = _B0[index];
-                TVec3f direction = rPosition - previous;
                 TVec3f width(_3B0[index]);
                 width.setLength(10.0f);
                 nextLeftEdge[0] = rPosition + width - _3B0[index] * ::cWidth;
                 nextLeftEdge[1] = rPosition - width - _3B0[index] * ::cWidth;
-                J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
+                J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
                 MR::ddSendVtxData(leftEdge[0], texCoords[0]);
                 MR::ddSendVtxData(nextLeftEdge[0], nextTexCoords[0]);
                 MR::ddSendVtxData(nextLeftEdge[1], nextTexCoords[1]);
@@ -802,7 +742,7 @@ void MarioFoo::draw3D() const {
 
                 nextRightEdge[0] = rPosition + width + _3B0[index] * ::cWidth;
                 nextRightEdge[1] = rPosition - width + _3B0[index] * ::cWidth;
-                J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
+                J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, MR::ddVtxAttributes());
                 MR::ddSendVtxData(rightEdge[0], texCoords[0]);
                 MR::ddSendVtxData(nextRightEdge[0], nextTexCoords[0]);
                 MR::ddSendVtxData(nextRightEdge[1], nextTexCoords[1]);

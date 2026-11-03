@@ -25,12 +25,11 @@
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXStruct.h>
-#include <revolution/mtx.h>
+#include <NebulaGpuTypes.h>
+#include <nebula_math.h>
 
-const GXColor effectColors[] = {{0x00, 0x55, 0xff, 0xFF}, {0xFF, 0xFF, 0x00, 0xFF}, {0x55, 0xFF, 0x00, 0xFF}, {0x7F, 0x7F, 0x00, 0xFF}};
-const GXColor initColors[] = {{0x80, 0x00, 0x99, 0xFF}, {0xE6, 0xA0, 0x00, 0xFF}, {0x46, 0xA1, 0x08, 0xFF},
+const NebulaColor8 effectColors[] = {{0x00, 0x55, 0xff, 0xFF}, {0xFF, 0xFF, 0x00, 0xFF}, {0x55, 0xFF, 0x00, 0xFF}, {0x7F, 0x7F, 0x00, 0xFF}};
+const NebulaColor8 initColors[] = {{0x80, 0x00, 0x99, 0xFF}, {0xE6, 0xA0, 0x00, 0xFF}, {0x46, 0xA1, 0x08, 0xFF},
                               {0x37, 0x5A, 0xA0, 0xFF}, {0xBE, 0x33, 0x0B, 0xFF}, {0x80, 0x80, 0x80, 0xFF}};
 
 namespace NrvStarPiece {
@@ -50,7 +49,7 @@ namespace NrvStarPiece {
 
 StarPiece::StarPiece(const char* pName)
     : LiveActor(pName), _8C(0, 0, 1), _98(0.02f), _9C(), _A0(), _A4(), _A8(0, 0, 0), _B4(0, 0, 0), mDelegator(nullptr), mTargetSensor(), _C8(-1),
-      mGettableDelayCounter(-1), mFallKillTimer(), mColor((GXColor){0, 0, 0, 255}), mGroupType(groupType_noGroup), mHostInfo(nullptr),
+      mGettableDelayCounter(-1), mFallKillTimer(), mColor((NebulaColor8){0, 0, 0, 255}), mGroupType(groupType_noGroup), mHostInfo(nullptr),
       mReceiverInfo(0), mNumGift(1) {
     MR::incNumStarPieceNewed();
 
@@ -102,8 +101,8 @@ void StarPiece::init(const JMapInfoIter& rIter) {
     }
 
     initModelManagerWithAnm("StarPiece", nullptr, true);
-    MR::initDLMakerMatColor0(this, "StarPiece1_v", &mColor);
-    MR::newDifferedDLBuffer(this);
+    MR::initMaterialColor0(this, "StarPiece1_v", &mColor);
+    MR::newDifferedMaterials(this);
     MR::connectToSceneNoSilhouettedMapObj(this);
 
     f32 flt = 30.0f;
@@ -196,6 +195,8 @@ void StarPiece::appearFromGroup() {
         break;
     case groupType_RailMoveGroup:
         setNerve(GET_NERVE(StarPiece, HostTypeNrvRailMove));
+        break;
+    default:
         break;
     }
 }
@@ -1250,7 +1251,7 @@ bool StarPiece::touchPlayer() {
             }
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     MR::stopSound(this, "SE_OJ_STAR_PIECE_FLY_W");

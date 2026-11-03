@@ -65,7 +65,7 @@ Uninstalling asks whether to keep this data (`hasFragileUserData`).
   late callback never delays it; the host's clock takes over when the display gives no vsync or runs at a rate 60
   does not divide. Each frame is presented for the retrace slot after its retrace (`VK_GOOGLE_display_timing`), so
   the compositor shows it for exactly one retrace period.
-- The game and GX render threads are a performance-hint session (ADPF, Android 13+): each frame's work (the busier
+- The game and render threads are a performance-hint session (ADPF, Android 13+): each frame's work (the busier
   thread's CPU time) is reported against 16.7 ms, so the CPU clocks rise before a frame runs late.
 - The log reports every 10 s: `[pacing]` (retraces on the display's vsync, frame work), `[present-timing]` (frames
   the display showed at their slot, and one retrace after the frame before), `[vk-cpu]` (the render thread's CPU and

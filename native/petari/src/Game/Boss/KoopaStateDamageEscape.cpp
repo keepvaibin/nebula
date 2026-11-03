@@ -205,7 +205,7 @@ bool KoopaStateDamageEscape::tryDamage(u32 msg, HitSensor* pSender, HitSensor* p
             (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunEnd)) && MR::isLessStep(this, 60)) ||
             isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunFinal)) ||
             (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunEndFinal)) && MR::isLessStep(this, 60))) {
-            MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadVeryStrong(this, PLAYER_1);
             MR::startSpinHitSound(mHost);
             MR::startBlowHitSound(mHost);
             MR::startSound(mHost, "SE_BM_KOOPA_DAMAGE_L");
@@ -250,8 +250,8 @@ bool KoopaStateDamageEscape::tryDamage(u32 msg, HitSensor* pSender, HitSensor* p
 bool KoopaStateDamageEscape::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver)) {
         if ((isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvEscapeRun)) ||
-             (isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRun))) &&
-                 !(KoopaFunction::isKoopaVs1(mHost) && KoopaFunction::isKoopaLv1(mHost)) ||
+             ((isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRun))) &&
+                 !(KoopaFunction::isKoopaVs1(mHost) && KoopaFunction::isKoopaLv1(mHost))) ||
              isNerve(GET_NERVE(KoopaStateDamageEscape, KoopaStateDamageEscapeNrvDamageTailRunFinal))) &&
             MR::isSensor(pSender, "DamageEscapePush") && MR::isSensorPlayer(pReceiver) && MR::sendMsgEnemyAttackFlipMaximum(pReceiver, pSender)) {
             return true;

@@ -1,12 +1,11 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class CometEventExecutorTimeLimit;
 class GalaxyCometScreenFilter;
-class GalaxyTimeLimitInfo;
+struct GalaxyTimeLimitInfo;
 
 class CometEventKeeper {
 public:
@@ -22,8 +21,8 @@ public:
     void initCometStatus();
 
 private:
-    /* 0x0 */ CometEventExecutorTimeLimit* mExecutorTimeLimit;
-    /* 0x4 */ GalaxyCometScreenFilter* mScreenFilter;
-    /* 0x8 */ const char* mCometName;
-    /* 0xC */ s32 mCometStateIndex;
+    CometEventExecutorTimeLimit* mExecutorTimeLimit;
+    GalaxyCometScreenFilter* mScreenFilter;
+    const char* mCometName;
+    s32 mCometStateIndex;
 };

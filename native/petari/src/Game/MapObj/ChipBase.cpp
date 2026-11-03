@@ -345,7 +345,7 @@ void ChipBase::exeGot() {
 
         MR::emitEffect(this, "Get");
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
 
         if (mChipType == Type_Blue) {
             MR::startSystemSE("SE_SY_BLUECHIP_GET", MR::getGotChipCount(mChipType, mGroupID));

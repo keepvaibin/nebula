@@ -3,16 +3,16 @@
 #include "JSystem/JAudio2/JAISoundChild.hpp"
 #include "JSystem/JAudio2/JAIStreamDataMgr.hpp"
 #include "JSystem/JAudio2/JAIStreamMgr.hpp"
-#include "JSystem/JAudio2/JASAramStream.hpp"
+#include "JSystem/JAudio2/JASStream.hpp"
 
-static void JAIStream_JASAramStreamCallback_(u32 type, JASAramStream* aramStream, void* userData) {
+static void JAIStream_JASStreamCallback_(u32 type, JASStream* mStream, void* userData) {
     JAIStream* stream = (JAIStream*)userData;
 
     switch (type) {
-    case JASAramStream::CB_STOP:
+    case JASStream::CB_STOP:
         stream->mIsStreamStopped = true;
         break;
-    case JASAramStream::CB_START:
+    case JASStream::CB_START:
         stream->mIsStreamStarted = true;
         break;
     }
@@ -23,15 +23,12 @@ JAIStream::JAIStream(JAIStreamMgr* streamMgr_, JAISoundStrategyMgr< JAIStream >*
     mPrepareState = 0;
     soundStrategyMgr = soundStrategyMgr_;
     streamMgr = streamMgr_;
-    streamAramAddr = nullptr;
     mIsStreamStarted = false;
 
     for (int i = 0; i < NUM_CHILDREN; i++) {
         children[i] = nullptr;
     }
-#ifdef TARGET_PC
-    inner_.aramStream.mNebulaOwner = this;
-#endif
+    inner_.mStream.mNebulaOwner = this;
 }
 
 void JAIStream::JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const TVec3f* posPtr, JAIAudience* audience, int category) {
@@ -48,35 +45,25 @@ void JAIStream::JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const 
 }
 
 bool JAIStream::prepare_prepareStream_() {
-    u32 local_28;
-    JAIStreamAramMgr* streamAramMgr;
-
     switch (mPrepareState) {
     case 0:
-        streamAramMgr = streamMgr->getStreamAramMgr();
-
-        streamAramAddr = streamAramMgr->newStreamAram(&local_28);
-        if (streamAramAddr != nullptr) {
-            inner_.aramStream.init(static_cast< u8* >(streamAramAddr), local_28, &JAIStream_JASAramStreamCallback_, this);
-            mPrepareState = 1;
-            mPrepareCount = 0;
-        } else {
-            increasePrepareCount_JAISound_();
-        }
+        inner_.mStream.init(&JAIStream_JASStreamCallback_, this);
+        mPrepareState = 1;
+        mPrepareCount = 0;
         break;
     case 1:
         if (mAudible != nullptr) {
             JASSoundParams* soundParams = mAudible->getOuterParams(0);
-            inner_.aramStream.setPitch(soundParams->mPitch);
-            inner_.aramStream.setVolume(soundParams->mVolume);
-            inner_.aramStream.setPan(soundParams->mPan);
-            inner_.aramStream.setFxmix(soundParams->mFxMix);
-            inner_.aramStream.setDolby(soundParams->mDolby);
+            inner_.mStream.setPitch(soundParams->mPitch);
+            inner_.mStream.setVolume(soundParams->mVolume);
+            inner_.mStream.setPan(soundParams->mPan);
+            inner_.mStream.setFxmix(soundParams->mFxMix);
+            inner_.mStream.setDolby(soundParams->mDolby);
         }
 
         mIsStreamStopped = false;
 
-        if (inner_.aramStream.prepare(mStreamFileEntry, -1)) {
+        if (inner_.mStream.prepare(mStreamFileEntry)) {
             mPrepareState = 2;
         }
         break;
@@ -126,7 +113,7 @@ void JAIStream::prepare_() {
 }
 
 void JAIStream::prepare_startStream_() {
-    if (inner_.aramStream.start()) {
+    if (inner_.mStream.start()) {
         mIsStreamStarted = false;
         mIsPaused = false;
         mPrepareState = 4;
@@ -155,17 +142,17 @@ void JAIStream::JAIStreamMgr_mixOut_(const JASSoundParams& inParams, JAISoundAct
     }
 
     for (int i = 0; i < NUM_CHILDREN; i++) {
-        inner_.aramStream.setPitch(mixParams->mPitch);
+        inner_.mStream.setPitch(mixParams->mPitch);
         if (children[i] != nullptr) {
-            inner_.aramStream.setChannelVolume(i, children[i]->mMove.mParams.mVolume * mixParams->mVolume);
-            inner_.aramStream.setChannelPan(i, (children[i]->mMove.mParams.mPan + mixParams->mPan) - 0.5f);
-            inner_.aramStream.setChannelFxmix(i, children[i]->mMove.mParams.mFxMix + mixParams->mFxMix);
-            inner_.aramStream.setChannelDolby(i, children[i]->mMove.mParams.mDolby + mixParams->mDolby);
+            inner_.mStream.setChannelVolume(i, children[i]->mMove.mParams.mVolume * mixParams->mVolume);
+            inner_.mStream.setChannelPan(i, (children[i]->mMove.mParams.mPan + mixParams->mPan) - 0.5f);
+            inner_.mStream.setChannelFxmix(i, children[i]->mMove.mParams.mFxMix + mixParams->mFxMix);
+            inner_.mStream.setChannelDolby(i, children[i]->mMove.mParams.mDolby + mixParams->mDolby);
         } else {
-            inner_.aramStream.setChannelVolume(i, mixParams->mVolume);
-            inner_.aramStream.setChannelPan(i, mixParams->mPan);
-            inner_.aramStream.setChannelFxmix(i, mixParams->mFxMix);
-            inner_.aramStream.setChannelDolby(i, mixParams->mDolby);
+            inner_.mStream.setChannelVolume(i, mixParams->mVolume);
+            inner_.mStream.setChannelPan(i, mixParams->mPan);
+            inner_.mStream.setChannelFxmix(i, mixParams->mFxMix);
+            inner_.mStream.setChannelDolby(i, mixParams->mDolby);
         }
     }
 
@@ -174,7 +161,7 @@ void JAIStream::JAIStreamMgr_mixOut_(const JASSoundParams& inParams, JAISoundAct
     if (mPrepareState == 4) {
         isPaused = mStatus.isPaused() || activity.isPaused();
         if (isPaused != mIsPaused) {
-            inner_.aramStream.pause(isPaused);
+            inner_.mStream.pause(isPaused);
             mIsPaused = isPaused;
         }
     }
@@ -210,11 +197,11 @@ bool JAIStream::JAISound_tryDie_() {
     case 2:
     case 3:
         mPrepareState = 5;
-        inner_.aramStream.cancel();
+        inner_.mStream.cancel();
         break;
     case 4:
         mPrepareState = 6;
-        inner_.aramStream.stop(10);
+        inner_.mStream.stop(10);
         break;
     }
 

@@ -1,6 +1,5 @@
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
 
-#ifdef TARGET_PC
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -43,7 +42,7 @@ void NebulaPauseSettingsButton::init(const JMapInfoIter& rIter) {
         pGroup->mScale = nw4r::math::VEC2(cScale, cScale);
         pGroup->mTranslate.y = cBandMiddle - pLower->mTranslate.y * cScale;
     }
-    wchar_t label[64];
+    char16_t label[64];
     NebulaText::get(label, 64, "SettingsTitle");
     MR::setTextBoxMessageRecursive(this, "NBackDown", label);
 
@@ -69,4 +68,3 @@ void NebulaPauseSettingsButton::hide() {
         mButton->disappear();
     }
 }
-#endif

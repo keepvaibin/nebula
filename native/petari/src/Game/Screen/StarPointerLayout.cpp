@@ -1,18 +1,16 @@
 #include "Game/Screen/StarPointerLayout.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerBlur.hpp"
 #include "Game/Screen/StarPointerCommandStream.hpp"
 #include "Game/Screen/StarPointerController.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
-#include "Game/System/WPadHolder.hpp"
-#include "Game/System/WPadPointer.hpp"
+#include "Game/System/PlayerInputs.hpp"
+#include "Game/System/InputPointer.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -26,14 +24,14 @@
 
 namespace {
     // TODO: names
-    static GXColor sColorA[] = {
+    static NebulaColor8 sColorA[] = {
         {0x00, 0x32, 0xFF, 0xFF},
         {0xFF, 0xFF, 0x00, 0xFF},
         {0x55, 0xFF, 0x00, 0xFF},
         {0x7F, 0x7F, 0x00, 0xFF},
     };
 
-    static GXColor sColorB[] = {
+    static NebulaColor8 sColorB[] = {
         {0x00, 0x0A, 0x32, 0xFF},
         {0x32, 0x32, 0x00, 0xFF},
         {0x00, 0xFF, 0x00, 0xFF},
@@ -79,16 +77,13 @@ namespace NrvStarPointerLayout {
 StarPointerLayout::StarPointerLayout(const char* pName)
     : LayoutActor(pName, true), mPosition(0.0f, 0.0f), mPointerKind(StarPointerKind_NULL), mAnimType(AnimType_HandPaa), mTouchTimer(),
       mPadChannel(-1), mRadius(::sNormalRadius), _3C(),
-#if (VERSION == RMGK01)
-      mRotateAngle(),
-#endif
       mDirector(), mBlur(), mCommandStream(), mNumber(), mActor(), mNewTouchedID(), mTouchedID(), mStartTouch(), mStartDisableShoot(), mSingleTouch(),
       mShootDisabled(), mIsPointerValid(true), mIsAppear(true), mAppearTime() {
 }
 
 void StarPointerLayout::initWithPort(s32 channel) {
     mPadChannel = channel;
-    if (mPadChannel == WPAD_CHAN1) {
+    if (mPadChannel == PLAYER_2) {
         initLayoutManager("DPDPointerSub", 2);
     } else {
         initLayoutManager("DPDPointer", 1);
@@ -98,14 +93,14 @@ void StarPointerLayout::initWithPort(s32 channel) {
     MR::createAndAddPaneCtrl(this, "HandPointer", 1);
     MR::createAndAddPaneCtrl(this, "StarFrame", 1);
     MR::createAndAddPaneCtrl(this, "Star", 1);
-    if (mPadChannel == WPAD_CHAN0) {
+    if (mPadChannel == PLAYER_1) {
         MR::createAndAddPaneCtrl(this, "PicNozzle", 1);
     }
     MR::createAndAddGroupCtrl(this, "GroupRing", 1);
 
     initNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHideImmediately));
 
-    mBlur = new StarPointerBlur(new JUTTexture(MR::loadTexFromArc("StarPointerBlur.arc", "Blur.bti"), 0));
+    mBlur = new StarPointerBlur(new JUTTexture(MR::loadTexFromArc("StarPointerBlur.arc", "Blur.bti")));
 
     mCommandStream = new StarPointerCommandStream(&mPosition);
 
@@ -178,7 +173,7 @@ void StarPointerLayout::exeWait() {
             MR::stopPaneAnim(this, "PicNozzle", 0);
             startAnimStarPointer("Wait");
 
-        } else if (mPadChannel == WPAD_CHAN0) {
+        } else if (mPadChannel == PLAYER_1) {
             MR::hidePane(this, "PicNozzle");
         }
     }
@@ -186,7 +181,7 @@ void StarPointerLayout::exeWait() {
     if (isTouch()) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOnReaction));
     } else {
-        if (MR::testCorePadButtonA(mPadChannel)) {
+        if (MR::isHeldJump(mPadChannel)) {
             setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip));
         }
     }
@@ -194,12 +189,12 @@ void StarPointerLayout::exeWait() {
 
 void StarPointerLayout::exeGrip() {
     if (MR::isFirstStep(this)) {
-        if (mPadChannel == WPAD_CHAN1 && isAppear()) {
+        if (mPadChannel == PLAYER_2 && isAppear()) {
             MR::startSystemSE("SE_SY_DPD_B_TRIG");
         }
 
         if (mPointerKind == StarPointerKind_StarPointer) {
-            if (mPadChannel == WPAD_CHAN1) {
+            if (mPadChannel == PLAYER_2) {
                 startAnimStarPointer("Grip");
             } else {
                 if (mCommandStream->mWorldPos != nullptr) {
@@ -226,7 +221,7 @@ void StarPointerLayout::exeGrip() {
             MR::startPaneAnim(this, "PicNozzle", "Touch", 0);
             startAnimStarPointer("Touch");
         } else {
-            if (mPadChannel == WPAD_CHAN0) {
+            if (mPadChannel == PLAYER_1) {
                 MR::hidePane(this, "PicNozzle");
             }
         }
@@ -236,7 +231,7 @@ void StarPointerLayout::exeGrip() {
         startAnimHandGuu();
     }
 
-    if (!MR::testCorePadButtonA(mPadChannel)) {
+    if (!MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvRelease));
         return;
     }
@@ -249,7 +244,7 @@ void StarPointerLayout::exeGrip() {
 void StarPointerLayout::exeHold() {
     if (MR::isFirstStep(this)) {
         if (mPointerKind == StarPointerKind_StarPointer) {
-            if (mPadChannel == WPAD_CHAN1) {
+            if (mPadChannel == PLAYER_2) {
                 startAnimStarPointer("Hold");
                 mRadius = ::sHoldRadius;
             } else {
@@ -281,7 +276,7 @@ void StarPointerLayout::exeHold() {
             }
             startAnimStarPointer("Touch");
         } else {
-            if (mPadChannel == WPAD_CHAN0) {
+            if (mPadChannel == PLAYER_1) {
                 MR::hidePane(this, "PicNozzle");
             }
         }
@@ -304,7 +299,7 @@ void StarPointerLayout::exeHold() {
         }
     }
 
-    if (!MR::testCorePadButtonA(mPadChannel)) {
+    if (!MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvRelease));
     }
 }
@@ -314,7 +309,7 @@ void StarPointerLayout::endHold() {
 }
 
 void StarPointerLayout::tearDownHold() {
-    if (mPointerKind == StarPointerKind_StarPointer && mPadChannel == WPAD_CHAN1) {
+    if (mPointerKind == StarPointerKind_StarPointer && mPadChannel == PLAYER_2) {
         if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHold)) || isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHoldTouch))) {
             mRadius = ::sHoldRadius;
         } else {
@@ -332,12 +327,12 @@ void StarPointerLayout::exeRelease() {
     }
 
     if (MR::isFirstStep(this)) {
-        if (mPadChannel == WPAD_CHAN1 && isAppear()) {
+        if (mPadChannel == PLAYER_2 && isAppear()) {
             MR::startSystemSE("SE_SY_DPD_B_RELEASE");
         }
 
         if (mPointerKind == StarPointerKind_StarPointer) {
-            if (mPadChannel == WPAD_CHAN1) {
+            if (mPadChannel == PLAYER_2) {
                 startAnimStarPointer("Release");
             } else {
                 changeToStarPointer();
@@ -355,12 +350,12 @@ void StarPointerLayout::exeRelease() {
             MR::showPane(this, "PicNozzle");
             MR::stopPaneAnim(this, "PicNozzle", 0);
             startAnimStarPointer("Wait");
-        } else if (mPadChannel == WPAD_CHAN0) {
+        } else if (mPadChannel == PLAYER_1) {
             MR::hidePane(this, "PicNozzle");
         }
     }
 
-    if (MR::testCorePadButtonA(mPadChannel)) {
+    if (MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip));
         return;
     }
@@ -372,7 +367,7 @@ void StarPointerLayout::exeRelease() {
 
 void StarPointerLayout::exeOnReaction() {
     if (MR::isFirstStep(this)) {
-        if (mPadChannel == WPAD_CHAN0 && mPointerKind == StarPointerKind_StarPointer) {
+        if (mPadChannel == PLAYER_1 && mPointerKind == StarPointerKind_StarPointer) {
             startAnimHandPaa();
         } else {
             if (mPointerKind == StarPointerKind_StarPointer) {
@@ -392,12 +387,12 @@ void StarPointerLayout::exeOnReaction() {
             MR::showPane(this, "PicNozzle");
             MR::stopPaneAnim(this, "PicNozzle", 0);
             startAnimStarPointer("Wait");
-        } else if (mPadChannel == WPAD_CHAN0) {
+        } else if (mPadChannel == PLAYER_1) {
             MR::hidePane(this, "PicNozzle");
         }
     }
 
-    if (MR::testCorePadButtonA(mPadChannel)) {
+    if (MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip));
         return;
     }
@@ -438,13 +433,13 @@ bool StarPointerLayout::isTouch() {
 void StarPointerLayout::exeOutScreen() {
     if (MR::isFirstStep(this)) {
         hideBlur();
-        if (mPadChannel == WPAD_CHAN0) {
+        if (mPadChannel == PLAYER_1) {
             MR::hidePane(this, "PicNozzle");
         }
     }
 
     if (MR::isStarPointerInScreen(mPadChannel)) {
-        if (MR::testCorePadButtonA(mPadChannel)) {
+        if (MR::isHeldJump(mPadChannel)) {
             setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvGrip));
         } else {
             setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvWait));
@@ -452,7 +447,7 @@ void StarPointerLayout::exeOutScreen() {
         return;
     }
 
-    if (mCommandStream->mWorldPos != nullptr && MR::testCorePadButtonA(mPadChannel)) {
+    if (mCommandStream->mWorldPos != nullptr && MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOutScreen));
         return;
     }
@@ -465,7 +460,7 @@ void StarPointerLayout::exeOutScreen() {
 void StarPointerLayout::hideAll() {
     hideBlur();
     mCommandStream->hide();
-    if (mPadChannel == WPAD_CHAN0) {
+    if (mPadChannel == PLAYER_1) {
         MR::hidePane(this, "PicNozzle");
         MR::hidePane(this, "HandArrow");
     }
@@ -475,7 +470,7 @@ void StarPointerLayout::hideAll() {
 
 void StarPointerLayout::exeHide() {
     if (MR::isFirstStep(this)) {
-        if (mPadChannel == WPAD_CHAN0) {
+        if (mPadChannel == PLAYER_1) {
             MR::hidePane(this, "PicNozzle");
         }
 
@@ -537,14 +532,12 @@ void StarPointerLayout::draw() const {
         return;
     }
 
-    if (mPadChannel == WPAD_CHAN0 && MR::isStarPointer1PInvalid2PValidMode()) {
+    if (mPadChannel == PLAYER_1 && MR::isStarPointer1PInvalid2PValidMode()) {
         mBlur->hideAll();
         return;
     }
 
-#ifdef TARGET_PC
     MotionSignal::starPointerLayout(this);
-#endif
     drawDecoration();
     LayoutActor::draw();
     mNumber->draw();
@@ -552,7 +545,7 @@ void StarPointerLayout::draw() const {
 
 void StarPointerLayout::drawDecoration() const {
     if (mPointerKind == StarPointerKind_HandPointer || mPointerKind == StarPointerKind_2 || mPointerKind == StarPointerKind_FingerPointer ||
-        (mPointerKind == StarPointerKind_5 && MR::testCorePadButtonA(mPadChannel))) {
+        (mPointerKind == StarPointerKind_5 && MR::isHeldJump(mPadChannel))) {
         mBlur->hideAll();
         return;
     }
@@ -568,19 +561,19 @@ void StarPointerLayout::control() {
     MR::convertPaneLocalPosToScreenPos(&mPosition, MR::getRootPane(this), TVec2f(0.0f, 0.0f));
 
     if (isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvNotConnected))) {
-        if (MR::isConnectedWPad(mPadChannel)) {
+        if (MR::isConnectedInput(mPadChannel)) {
             hideAll();
             setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHideImmediately));
         }
         return;
     }
 
-    if (!MR::isConnectedWPad(mPadChannel)) {
+    if (!MR::isConnectedInput(mPadChannel)) {
         setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvNotConnected));
         return;
     }
 
-    if (mPadChannel == WPAD_CHAN0) {
+    if (mPadChannel == PLAYER_1) {
         if (mPointerKind == StarPointerKind_HandPointerReactionWithCrossCursor &&
             (getAnimType() == AnimType_HandGuu || getAnimType() == AnimType_HandPaa) && !isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHide)) &&
             !isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHideImmediately)) && !isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOutScreen))) {
@@ -591,9 +584,7 @@ void StarPointerLayout::control() {
     }
 
     updateDecoration();
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     rotateTest();
-#endif
     updateTouch();
 
     mShootDisabled = mStartDisableShoot;
@@ -634,30 +625,17 @@ void StarPointerLayout::control() {
                 }
                 setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOutScreen));
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
                 MR::tryRumblePadWeak(this, mPadChannel);
-#else
-                rotateTest();
-                return;
-#endif
             }
             
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
             return;
-#endif
         } else {
-#if (VERSION == RMGK01)
-            rotateTest();
-#endif
             return;
         }
     }
 
-#if (VERSION == RMGK01)
-    rotateTest();
-#endif
 
-    if (mPadChannel == WPAD_CHAN1) {
+    if (mPadChannel == PLAYER_2) {
         MR::startAnim(this, "Transparency", 1);
 
         if (MR::isStarPointer2PTransparencyMode() && !isNerve(GET_NERVE(StarPointerLayout, HostTypeNrvHide))) {
@@ -674,40 +652,23 @@ void StarPointerLayout::control() {
 
 void StarPointerLayout::setPosition() {
     StarPointerController* controller = StarPointerFunction::getStarPointerDirector()->getStarPointerController(mPadChannel);
-#ifdef TARGET_PC
-    // This frame's position (StarPointerController::updateDpdInfo has run): the console drew the previous frame's,
-    // a frame behind the remote. The 3D targeting keeps the previous frame's, which its depth peek belongs to.
+    // This frame's position (StarPointerController::updateDpdInfo has run). The 3D targeting keeps the previous frame's, which its depth peek belongs to.
     TVec2f pos = controller->mInfo.mPos;
-#else
-    TVec2f pos = controller->mPastInfo.mPos;
-#endif
     setTrans(pos);
     mNumber->setTrans(pos);
 }
 
 void StarPointerLayout::rotateTest() {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     TVec2f horiz;
-    MR::getWPad(mPadChannel)->mPointer->getHorizonVec(&horiz);
+    MR::getPlayerInput(mPadChannel)->mPointer->getHorizonVec(&horiz);
     f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
-#else
-    f32 angle = mRotateAngle;
-    if (MR::isStarPointerInScreen(mPadChannel)) {
-        TVec2f horiz;
-        MR::getWPad(mPadChannel)->mPointer->getHorizonVec(&horiz);
-        angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
-        if (angle != 0.0f) {
-            mRotateAngle = angle;
-        }
-    }
-#endif
 
     if (mPointerKind == StarPointerKind_StarPointer) {
         angle *= ::sRotateMult;
         TVec3f rotate;
         MR::copyPaneRotate(&rotate, this, "StarPointer");
         MR::setPaneRotate(this, rotate.x, rotate.y, -angle, "StarPointer");
-    } else if (mPointerKind == StarPointerKind_StarPointerNozzle && mPadChannel == WPAD_CHAN0) {
+    } else if (mPointerKind == StarPointerKind_StarPointerNozzle && mPadChannel == PLAYER_1) {
         TVec2f targetScreenPos;
         MR::calcScreenPosition(&targetScreenPos, StarPointerFunction::getStarPointerDirector()->mNozzleAimPos);
         TVec2f pointerPos = MR::getStarPointerScreenPositionOrEdge(mPadChannel);
@@ -771,6 +732,8 @@ void StarPointerLayout::changeLayout(StarPointerKind pointerKind) {
     case StarPointerKind_StarPointerNozzle:
         mCommandStream->hide();
         mRadius = ::sNormalRadius;
+        break;
+    default:
         break;
     }
 
@@ -869,7 +832,7 @@ void StarPointerLayout::changeToHandPointer() {
     MR::hidePaneRecursive(this, "StarPointer");
     MR::showPaneRecursive(this, "HandPointer");
 
-    if (mPadChannel == WPAD_CHAN0) {
+    if (mPadChannel == PLAYER_1) {
         MR::showPaneRecursive(this, "PicPlayer1");
         MR::hidePaneRecursive(this, "PicPlayer2");
     } else {
@@ -924,7 +887,7 @@ StarPointerNumber::StarPointerNumber(StarPointerLayout* pParent, s32 padChannel,
 }
 
 void StarPointerNumber::control() {
-    if (MR::isConnectedWPad(WPAD_CHAN0) && MR::isConnectedWPad(WPAD_CHAN1)) {
+    if (MR::isConnectedInput(PLAYER_1) && MR::isConnectedInput(PLAYER_2)) {
         mIsAppear = true;
         mAppearTime++;
     } else {
@@ -959,6 +922,8 @@ void StarPointerNumber::control() {
     case AnimType_StarPointer:
         startAnimPosition(1);
         break;
+    default:
+        break;
     }
 
     mAnimType = mParent->mAnimType;
@@ -974,5 +939,5 @@ bool StarPointerNumber::isOffState() const {
 }
 
 void StarPointerNumber::startAnimPosition(u32 animType) {
-    MR::startAnimAndSetFrameAndStop(this, "Position", animType + (mPadChannel == WPAD_CHAN0 ? 0 : 10), 0);
+    MR::startAnimAndSetFrameAndStop(this, "Position", animType + (mPadChannel == PLAYER_1 ? 0 : 10), 0);
 }

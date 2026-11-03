@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASInstEffect.hpp"
 
-class JASInstParam;
+struct JASInstParam;
 
 class JASInstRand : public JASInstEffect {
 public:
@@ -18,7 +18,7 @@ public:
         mRange = range;
     }
 
-    /* 0x04 */ u32 mType;
-    /* 0x08 */ f32 mBaseValue;
-    /* 0x0C */ f32 mRange;
+    u32 mType;
+    f32 mBaseValue;
+    f32 mRange;
 };

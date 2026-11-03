@@ -225,7 +225,7 @@ namespace Nebula
                 {
                     string name = data.cStreamName;
                     if (name == "::$DATA") continue;
-                    using (var input = NativeMethods.CreateFileW(NativePath(source) + name, 0x80000000, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
+                    using (var input = NativeMethods.CreateFileW(NativePath(source) + name, 1u << 31, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
                     using (var output = NativeMethods.CreateFileW(NativePath(target) + name, 0x40000000, 0, IntPtr.Zero, 1, 0, IntPtr.Zero))
                     {
                         if (input.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), source + name);
@@ -258,7 +258,7 @@ namespace Nebula
                     string name = data.cStreamName;
                     // FileStream rejects "file:stream" paths; open streams natively.
                     using (var handle = NativeMethods.CreateFileW(name == "::$DATA" ? NativePath(path) : NativePath(path) + name,
-                        0x80000000, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
+                        1u << 31, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
                     {
                         if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), path + name);
                         using (var stream = new FileStream(handle, FileAccess.Read))
@@ -296,7 +296,7 @@ namespace Nebula
                     if (!name.StartsWith(":", StringComparison.Ordinal) || !name.EndsWith(":$DATA", StringComparison.Ordinal))
                         throw new IOException("Unexpected stream " + name + " on " + path + ".");
                     if (data.StreamSize > maximumBytes) throw new IOException("The stream " + name + " of " + path + " is too large.");
-                    using (var handle = NativeMethods.CreateFileW(NativePath(path) + name, 0x80000000, 1, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero))
+                    using (var handle = NativeMethods.CreateFileW(NativePath(path) + name, 1u << 31, 1, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero))
                     {
                         if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), path + name);
                         using (var stream = new FileStream(handle, FileAccess.Read))

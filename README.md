@@ -1,7 +1,6 @@
 # Nebula
 
-Nebula runs **Super Mario Galaxy** natively on Windows. Nebula contains no Nintendo code or assets; you need your
-own copy of the game.
+Nebula runs **Super Mario Galaxy** natively on Windows. You need your own copy of the game.
 
 > **The released version is 1.0.2.** This branch (`main`) is **Nebula 2, in development and not released**: much
 > of this page describes it. [What 1.0.2 has](#in-the-released-version-102) and
@@ -33,10 +32,10 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
 Nebula 2 (this branch; 1.0.2 works differently, see [Project status](#project-status)):
 
 1. **Game module** (`native/`). Petari's game code, JSystem, NW4R and RVLFaceLib, compiled with clang into
-   `smg_game.dll`, with a native replacement for the Wii SDK underneath (`native/sdk`).
-2. **Host** (`runtime/`, `native/host`). `NebulaNative.exe` loads the module and gives it the console's services:
-   the GX command stream drawn with Direct3D 12 or Vulkan, the JAudio DSP program and audio output, the Wii Remote
-   and Nunchuk, the disc image, the Wii's internal storage for saves, and the video clock.
+   `smg_game.dll`.
+2. **Host** (`runtime/`, `native/host`). `NebulaNative.exe` loads the module and gives it its services:
+   typed records drawn with Direct3D 12 or Vulkan, voices mixed and played, controllers and a real Wii Remote, the
+   game's files from the store, saves, and the frame clock.
 3. **Setup and launcher** (`installer/`, C#; `crates/nebula-import`, Rust). `Nebula-Setup.exe` reads your disc
    image, checks that it is the supported release and packs its files for Nebula; `Nebula.exe` starts the game.
 

@@ -2,11 +2,7 @@
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JAIAudience.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
-#include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
-#ifdef TARGET_PC
-#include <revolution/os.h>
-#endif
 
 void JAISoundHandle::releaseSound() {
     if (mSound != nullptr) {
@@ -83,18 +79,6 @@ void JAISound::start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience*
     mPriority = 0;
 }
 
-bool JAISound::acceptsNewAudible() const {
-    return mAudible == nullptr && !isCalcedOnce();
-}
-
-void JAISound::newAudible(const TVec3f& pos, const TVec3f* param_1, u32 param_2, JAIAudience* audience) {
-    if (audience != nullptr) {
-        mAudience = audience;
-    }
-
-    mAudible = mAudience->newAudible(pos, mSoundID, param_1, param_2);
-}
-
 void JAISound::stop(u32 fadeTime) {
     if (fadeTime == 0) {
         stop();
@@ -143,7 +127,6 @@ bool JAISound::calc_JAISound_() {
     bool playing = isPlaying();
     if (playing) {
         mCount++;
-#ifdef TARGET_PC
         // An effect nothing can stop any more (no handle holds it, it has no lifetime) and that has played 30 s is an
         // orphaned loop: its owner went without stopping it, and it would play on through everything until the game
         // stopped every sound. It fades out as a stopped sound does, and names itself.
@@ -156,7 +139,6 @@ bool JAISound::calc_JAISound_() {
                          hasLifeTime() ? "on" : "off", isHandleAttached() ? "held" : "none");
             }
         }
-#endif
     }
 
     bool paused = mStatus.isPaused();
@@ -211,7 +193,5 @@ void JAISound::initTrack_JAISound_(JASTrack* track) {
 }
 
 void JAISound::increasePrepareCount_JAISound_() {
-    if ((++mPrepareCount & 0xFF) == 0) {
-        JASReport("It cost %d steps to prepare Sound(ID:%08x, Address%08x).\n", mPrepareCount, *(u32*)&mSoundID, this);
-    }
+    ++mPrepareCount;
 }

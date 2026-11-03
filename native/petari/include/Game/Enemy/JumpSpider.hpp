@@ -38,8 +38,8 @@ public:
     void exeNoPowerWait();
     void exeNoPowerEnd();
 
-    /* 0x8C */ SpinHitController* mSpinHitController;
-    /* 0x90 */ AnimScaleController* mScaleController;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ TVec3f _A0;
+    SpinHitController* mSpinHitController;
+    AnimScaleController* mScaleController;
+    TVec3f _94;
+    TVec3f _A0;
 };

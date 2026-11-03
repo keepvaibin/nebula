@@ -81,13 +81,11 @@ void KoopaShockWave::makeActorDead() {
 }
 
 namespace {
-    void makeShockWaveMtx(TPos3f* pDest, const TVec3f& rUp, const TVec3f& rFront, const TVec3f& r6, f32 f1, f32 f2) NO_INLINE {
+    void makeShockWaveMtx(TPos3f* pDest, const TVec3f& rUp, const TVec3f& rFront, const TVec3f& r6, f32 f1, f32 f2) {
         MR::makeMtxUpFrontPos(pDest, rUp, rFront, rUp * f1 * f2 + r6);
     }
 };  // namespace
 
-#pragma push
-#pragma opt_propagation off
 void KoopaShockWave::exeWaveAttack() {
     if (MR::isFirstStep(this)) {
         mPartsModel->makeActorAppeared();
@@ -151,7 +149,6 @@ void KoopaShockWave::exeWaveAttack() {
         kill();
     }
 }
-#pragma pop
 
 void KoopaShockWave::updateHitSensor(HitSensor* pSensor) {
     TVec3f playerPos = *MR::getPlayerPos();

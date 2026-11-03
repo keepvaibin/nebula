@@ -3,11 +3,10 @@
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
 #include "JSystem/JGeometry.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
-class JASSoundParams;
+struct JASSoundParams;
 class JAISoundHandles;
 
 class JAUSoundAnimationSound {
@@ -95,38 +94,22 @@ public:
         return mSoundID;
     }
 
-    // A BAS entry, read in place (big-endian).
-    /* 0x00 */ NEBULA_DISC(JAISoundID) mSoundID;
-    /* 0x04 */ NEBULA_BE(f32) mNoteOnTime;
-    /* 0x08 */ NEBULA_BE(f32) mNoteOffTime;
-    /* 0x0C */ NEBULA_BE(f32) mBasePitch;
-    /* 0x10 */  // u32 mFlags;
-#ifdef TARGET_PC
-    // The flags are bits of the big-endian word (the accessors above test mFlags).
-    /* 0x10 */ BE< u32 > mFlags;
-#else
-    union {
-        /* 0x10 */ struct {
-            bool mPlaysAtIntervals : 1;
-            bool mSetsLifeTime : 1;
-            bool mStopsWhenSpeedIsZero : 1;
-            bool mStopsWhenNoteOff : 1;
-            bool mPlaysOnlyOnce : 1;
-            bool mStopsWhenAnimationChanges : 1;
-            bool mPlaysOnlyReverse : 1;
-            bool mPlaysOnlyForward : 1;
-        };
-        /* 0x10 */ u32 mFlags;
-    };
-#endif
-    /* 0x14 */ u8 mBaseVolume;
-    /* 0x15 */ s8 mPitchDelta;
-    /* 0x16 */ u8 mPlayTime;
-    /* 0x17 */ u8 mBasePan;
-    /* 0x18 */ s8 mVolumeDelta;
-    /* 0x19 */ u8 mRepeatInterval;
-    /* 0x1A */ s8 _1A;
-    /* 0x1C */ NEBULA_BE(u32) _1C;
+    // A BAS entry, read in place (host order, as the importer cooks it: native_data.rs bas).
+    JAISoundID mSoundID;
+    f32 mNoteOnTime;
+    f32 mNoteOffTime;
+    f32 mBasePitch;
+     // u32 mFlags;
+    // The flags are bits of the word (the accessors above test mFlags).
+    u32 mFlags;
+    u8 mBaseVolume;
+    s8 mPitchDelta;
+    u8 mPlayTime;
+    u8 mBasePan;
+    s8 mVolumeDelta;
+    u8 mRepeatInterval;
+    s8 _1A;
+    u32 _1C;
 };
 
 class JAUSoundAnimation;
@@ -158,15 +141,11 @@ public:
         }
     }
 
-    /* 0x0 */ NEBULA_BE(u16) mNumSounds;
-#ifdef TARGET_PC
-    // A runtime pointer in the console's 4-byte slot of the file header; BAS files hold 0 there.
-    /* 0x4 */ u32 mControlSlot;
+    u16 mNumSounds;
+    // BAS files hold 0 here.
+    u32 mControlSlot;
     static constexpr JAUSoundAnimationControl* mControl = nullptr;
-#else
-    /* 0x4 */ JAUSoundAnimationControl* mControl;
-#endif
-    /* 0x8 */ JAUSoundAnimationSound mSounds;
+    JAUSoundAnimationSound mSounds;
 };
 
 class JAUSoundAnimator {
@@ -198,14 +177,14 @@ public:
         return mHandles->mNumHandles;
     }
 
-    /* 0x04 */ JAISoundHandles* mHandles;
-    /* 0x08 */ const JAUSoundAnimation* mSoundAnimation;
-    /* 0x0C */ bool mIsReversed;
-    /* 0x10 */ s32 mLoopSoundIndex;
-    /* 0x14 */ f32 mLifeTime;
-    /* 0x18 */ s32 mLoopStartSoundIndex;
-    /* 0x1C */ s32 mLoopEndSoundIndex;
-    /* 0x20 */ f32 mLoopStartFrame;
-    /* 0x24 */ f32 mLoopEndFrame;
-    /* 0x28 */ s32 mTime;
+    JAISoundHandles* mHandles;
+    const JAUSoundAnimation* mSoundAnimation;
+    bool mIsReversed;
+    s32 mLoopSoundIndex;
+    f32 mLifeTime;
+    s32 mLoopStartSoundIndex;
+    s32 mLoopEndSoundIndex;
+    f32 mLoopStartFrame;
+    f32 mLoopEndFrame;
+    s32 mTime;
 };

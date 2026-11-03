@@ -7,7 +7,6 @@
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/SpringValue.hpp"
-#include <revolution/types.h>
 
 class DesertLandMoveSwitch : public LiveActor {
 public:
@@ -30,12 +29,12 @@ public:
     void exeOn();
     void exeReturn();
 
-    /* 0x8C */ CollisionParts* mCollisionParts;
-    /* 0x90 */ SpringValue* mSpringValue;
-    /* 0x94 */ MapObjConnector* mMapObjConnector;
-    /* 0x98 */ bool _98;
-    /* 0x99 */ bool _99;
-    /* 0x9A */ bool _9A;
-    /* 0x9C */ s32 _9C;
-    /* 0xA0 */ const char* _A0;
+    CollisionParts* mCollisionParts;
+    SpringValue* mSpringValue;
+    MapObjConnector* mMapObjConnector;
+    bool _98;
+    bool _99;
+    bool _9A;
+    s32 _9C;
+    const char* _A0;
 };

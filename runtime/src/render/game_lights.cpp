@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's lights as its hooks report them (renderer_api.h): the sun, the Comet Observatory's star core, point and
+// The game's lights as its hooks report them (render_api.h): the sun, the Comet Observatory's star core, point and
 // world lights. Simulation thread writes, render thread reads.
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 
 #include <algorithm>
 #include <array>
@@ -24,9 +24,6 @@ float g_game_sun_distance = 0.0f;
 std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
 std::uint64_t g_game_sun_updates = 0u;
-std::array<float, 3> g_traced_sun{};
-std::chrono::steady_clock::time_point g_traced_sun_time{};
-bool g_traced_sun_present = false;
 
 // The game's lights by position (a light that moves takes a new entry; old ones age out).
 struct NotedLight {
@@ -54,7 +51,7 @@ std::array<GameAreaLight, 2> g_area_lights{};
 std::array<std::chrono::steady_clock::time_point, 2> g_area_time{};
 std::array<bool, 2> g_area_known{};
 
-// A light is matched by its guest info (id) when it has one, else by position.
+// A light is matched by its game info (id) when it has one, else by position.
 template <std::size_t N>
 void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
                 const std::array<float, 3>& color, float half_distance = 0.0f, std::uint64_t id = 0u) {
@@ -139,23 +136,6 @@ void set_game_sun(const std::array<float, 3>& direction, float distance) noexcep
     g_game_sun_time = std::chrono::steady_clock::now();
     g_game_sun_known = true;
     ++g_game_sun_updates;
-}
-
-void set_traced_sun(const std::array<float, 3>& direction, bool present) noexcept {
-    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
-    g_traced_sun = direction;
-    g_traced_sun_present = present;
-    g_traced_sun_time = std::chrono::steady_clock::now();
-}
-
-bool traced_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept {
-    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
-    if (!g_traced_sun_present ||
-        std::chrono::steady_clock::now() - g_traced_sun_time > std::chrono::milliseconds(max_age_ms)) {
-        return false;
-    }
-    direction = g_traced_sun;
-    return true;
 }
 
 std::uint64_t game_sun_updates() noexcept {

@@ -2,11 +2,12 @@
 
 #include "JSystem/JSupport/JSupport.hpp"
 
-class JKRHeap;
+class NebulaArena;
 class JASWaveBank;
 struct JASBasicWaveBank;
 struct JASSimpleWaveBank;
 
+// Wave systems (WSYS) in host order, as the importer cooks the audio archive (native_data.rs wave_system).
 class JASWSParser {
 public:
     template < class T >
@@ -17,79 +18,78 @@ public:
         }
 
     private:
-        /* 0x0 */ NEBULA_BE(u32) mOffset;
+        u32 mOffset;
     };
 
     struct TCtrlWave {
         union {
             struct {
-                /* 0x0 */ NEBULA_BE(u16) mWaveGroupId;
-                /* 0x2 */ NEBULA_BE(u16) mWaveId;
+                u16 mWaveGroupId;
+                u16 mWaveId;
             };
-            /* 0x0 */ NEBULA_BE(u32) mData;
+            u32 mData;
         };
     };
 
     struct TWave {
-        /* 0x00 */ u8 _00;
-        /* 0x01 */ u8 mFormat;
-        /* 0x02 */ u8 mBaseKey;
-        /* 0x04 */ NEBULA_BE(f32) mSampleRate;
-        /* 0x08 */ NEBULA_BE(u32) mAWStartOffs;
-        /* 0x0C */ NEBULA_BE(u32) mAWLength;
-        /* 0x10 */ NEBULA_BE(u32) mLoopFlags;
-        /* 0x14 */ NEBULA_BE(u32) mSampleLoopStart;
-        /* 0x18 */ NEBULA_BE(u32) mSampleLoopEnd;
-        /* 0x1C */ NEBULA_BE(u32) mSampleCount;
-        /* 0x20 */ NEBULA_BE(s16) mpLastSample;
-        /* 0x22 */ NEBULA_BE(s16) mpPenultSample;
+        u8 _00;
+        u8 mFormat;
+        u8 mBaseKey;
+        f32 mSampleRate;
+        u32 mAWStartOffs;
+        u32 mAWLength;
+        u32 mLoopFlags;
+        u32 mSampleLoopStart;
+        u32 mSampleLoopEnd;
+        u32 mSampleCount;
+        s16 mpLastSample;
+        s16 mpPenultSample;
     };
 
     struct TWaveArchive {
-        /* 0x00 */ char mFileName[0x70];
-        /* 0x70 */ NEBULA_BE(s32) mWaveCount;
-        /* 0x74 */ TOffset< TWave > mWaveOffsets[0];
+        char mFileName[0x70];
+        s32 mWaveCount;
+        TOffset< TWave > mWaveOffsets[0];
     };
 
     struct TWaveArchiveBank {
-        /* 0x0 */ char mMagic[4];
-        /* 0x4 */ NEBULA_BE(s32) mWaveGroupCount;
-        /* 0x8 */ TOffset< TWaveArchive > mArchiveOffsets[0];
+        char mMagic[4];
+        s32 mWaveGroupCount;
+        TOffset< TWaveArchive > mArchiveOffsets[0];
     };
 
     struct TCtrl {
-        /* 0x0 */ char mMagic[4];
-        /* 0x4 */ NEBULA_BE(u32) mWaveCount;
-        /* 0x8 */ TOffset< TCtrlWave > mCtrlWaveOffsets[0];
+        char mMagic[4];
+        u32 mWaveCount;
+        TOffset< TCtrlWave > mCtrlWaveOffsets[0];
     };
 
     struct TCtrlScene {
-        /* 0x0 */ char mMagic[4];
-        /* 0x4 */ u8 _04[8];
-        /* 0xC */ TOffset< TCtrl > mCtrlOffset;
+        char mMagic[4];
+        u8 _04[8];
+        TOffset< TCtrl > mCtrlOffset;
     };
 
     struct TCtrlGroup {
-        /* 0x0 */ char mMagic[4];
-        /* 0x4 */ u8 _04[4];
-        /* 0x8 */ NEBULA_BE(u32) mGroupCount;
-        /* 0xC */ TOffset< TCtrlScene > mCtrlSceneOffsets[0];
+        char mMagic[4];
+        u8 _04[4];
+        u32 mGroupCount;
+        TOffset< TCtrlScene > mCtrlSceneOffsets[0];
     };
 
     /** @fabricated */
     struct THeader {
-        /* 0x00 */ char mMagic[4];
-        /* 0x04 */ NEBULA_BE(s32) mSize;
-        /* 0x08 */ NEBULA_BE(s32) mId;
-        /* 0x0C */ NEBULA_BE(u32) mWaveTableSize;
-        /* 0x10 */ TOffset< TWaveArchiveBank > mArchiveBankOffset;
-        /* 0x14 */ TOffset< TCtrlGroup > mCtrlGroupOffset;
+        char mMagic[4];
+        s32 mSize;
+        s32 mId;
+        u32 mWaveTableSize;
+        TOffset< TWaveArchiveBank > mArchiveBankOffset;
+        TOffset< TCtrlGroup > mCtrlGroupOffset;
     };
 
     static u32 getGroupCount(void const*);
-    static JASWaveBank* createWaveBank(void const*, JKRHeap*);
-    static JASBasicWaveBank* createBasicWaveBank(void const*, JKRHeap*);
-    static JASSimpleWaveBank* createSimpleWaveBank(void const*, JKRHeap*);
+    static JASWaveBank* createWaveBank(void const*, NebulaArena*);
+    static JASBasicWaveBank* createBasicWaveBank(void const*, NebulaArena*);
+    static JASSimpleWaveBank* createSimpleWaveBank(void const*, NebulaArena*);
 
-    static u32 sUsedHeapSize;
 };

@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class TalkMessageCtrl;
 class TalkBalloon;
@@ -50,8 +49,8 @@ public:
     bool isSelfInterrupt(const TalkMessageCtrl*) const;
 
     TalkMessageCtrl* _04;
-    /* 0x08 */ TalkBalloon* mBalloon;
-    /* 0x0C */ u32 mMessageID;
+    TalkBalloon* mBalloon;
+    u32 mMessageID;
 };
 
 class TalkStateShort : public TalkState {
@@ -69,7 +68,7 @@ public:
     TalkStateEvent();
 
     virtual bool prep(const TalkMessageCtrl*);
-    virtual bool test() NO_INLINE;
+    virtual bool test();
     virtual void open();
     virtual bool talk(const TalkMessageCtrl*);
     virtual void clos();
@@ -81,7 +80,7 @@ public:
     TalkSupportPlayerWatcher* _18;
     u8 _1C;
     bool _1D;
-    /* 0x20 */ u32 mPageCount;
+    u32 mPageCount;
 };
 
 class TalkStateNormal : public TalkStateEvent {
@@ -94,7 +93,7 @@ public:
     virtual bool term(const TalkMessageCtrl*);
     void updateButton();
 
-    /* 0x24 */ IconAButton* mAButton;
+    IconAButton* mAButton;
 };
 
 class TalkStateCompose : public TalkStateNormal {
@@ -106,7 +105,7 @@ public:
     virtual bool test();
     virtual void open();
 
-    /* 0x28 */ TalkBalloon* mSecondBalloon;
+    TalkBalloon* mSecondBalloon;
 };
 
 class TalkStateHolder {
@@ -118,13 +117,13 @@ public:
     TalkState* getState(const TalkMessageCtrl*);
 
     TalkSupportPlayerWatcher* _00;
-    /* 0x04 */ IconAButton* mAButton;
-    /* 0x08 */ TalkStateShort* mTalkShort;
-    /* 0x0C */ TalkStateNormal* mTalkNormal;
-    /* 0x10 */ TalkStateEvent* mTalkEvent;
-    /* 0x14 */ TalkStateCompose* mTalkCompose;
-    /* 0x18 */ TalkState* mTalk;
-    /* 0x1C */ TalkBalloonShort* mBalloonShort;
+    IconAButton* mAButton;
+    TalkStateShort* mTalkShort;
+    TalkStateNormal* mTalkNormal;
+    TalkStateEvent* mTalkEvent;
+    TalkStateCompose* mTalkCompose;
+    TalkState* mTalk;
+    TalkBalloonShort* mBalloonShort;
 };
 
 namespace MR {

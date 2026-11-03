@@ -13,30 +13,6 @@
 
 #include "Game/Util/StringUtil.hpp"
 
-void DummyDisplayModel_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("Coin", "Coin");
-    MR::isEqualString("Kinopio", "Kinopio");
-    MR::isEqualString("Freeze", "Freeze");
-    MR::isEqualString("SpinDriver", "SpinDriver");
-    MR::isEqualString("SuperSpinDriver", "SuperSpinDriver");
-    MR::isEqualString("StarPieceDummy", "StarPieceDummy");
-    MR::isEqualString("Tico", "Tico");
-    MR::isEqualString("KeySwitch", "KeySwitch");
-    MR::isEqualString("InRotation", "InRotation");
-    MR::isEqualString("PowerStar", "PowerStar");
-    MR::isEqualString("KinokoOneUp", "KinokoOneUp");
-    MR::isEqualString("Kuribo", "Kuribo");
-    MR::isEqualString("BlueChip", "BlueChip");
-    MR::isEqualString("YellowChip", "YellowChip");
-    MR::isEqualString("StrayTico", "StrayTico");
-    MR::isEqualString("GrandStar", "GrandStar");
-    MR::isEqualString("KinokoLifeUp", "KinokoLifeUp");
-    MR::isEqualString("ColorChange", "ColorChange");
-    MR::isEqualString("Shadow", "Shadow");
-    MR::isEqualString("Light", "Light");
-    MR::isEqualString("body", "body");
-}
-
 namespace {
     const DummyDisplayModelInfo cDummyDisplayModelInfoTable[15] = {
         {"Coin", {0.0f, 70.0f, 0.0f}, 15, nullptr, false},
@@ -66,15 +42,7 @@ namespace {
         return type;
     }
 
-    const DummyDisplayModelInfo* getInfo(int idx) {
-        if (idx < 0) {
-            idx = 0;
-        }
-
-        return &cDummyDisplayModelInfoTable[idx];
-    }
-
-    DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, int itemIdx) NO_INLINE {
+    DummyDisplayModel* tryCreateDummyModel(LiveActor* pHost, const JMapInfoIter& rIter, s32 a3, int itemIdx) {
         const DummyDisplayModelInfo* pInfo;
         s32 modelId = MR::getDummyDisplayModelId(rIter, a3);
 
@@ -151,11 +119,6 @@ void DummyDisplayModel::init(const JMapInfoIter& rIter) {
 
     case ITEM_TYPE_KINOPIO:
         _A8 = new LodCtrl(this, rIter);
-        _A8->createLodModel(33, -1, -1);
-        _A8->syncMaterialAnimation();
-        _A8->syncJointAnimation();
-        _A8->initLightCtrl();
-        _A8->setDistanceToMiddleAndLow(800.0f, 1500.0f);
         break;
     }
 

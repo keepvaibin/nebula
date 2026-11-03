@@ -14,8 +14,8 @@ public:
     void appearWithButtonLayout();
     void disappear();
     void setMessage(const char* pMessageId);
-    void setMessage(const wchar_t* pMessage);
-    void setReplaceString(const wchar_t* pString, s32 param2);
+    void setMessage(const char16_t* pMessage);
+    void setReplaceString(const char16_t* pString, s32 param2);
     void exeAppear();
     void exeWait();
     void exeDisappear();
@@ -25,6 +25,6 @@ public:
     }
 
 private:
-    /* 0x20 */ IconAButton* mAButtonIcon;
-    /* 0x24 */ bool mIsCenter;
+    IconAButton* mAButtonIcon;
+    bool mIsCenter;
 };

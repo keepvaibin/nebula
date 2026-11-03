@@ -1,6 +1,5 @@
 #pragma once
 
-#include "nw4r/db/assert.h"
 #include "nw4r/misc.h"
 #include "nw4r/ut/inlines.h"
 
@@ -130,7 +129,6 @@ namespace nw4r {
                     }
 
                     reference operator*() const {
-                        NW4R_NULL_ASSERT_AT(230, mPointer);
                         return *mPointer;
                     }
                     pointer operator->() const {
@@ -244,7 +242,6 @@ namespace nw4r {
 
                 reference operator*() const {
                     pointer p = operator->();
-                    NW4R_NULL_ASSERT_AT(403, p);
                     return *p;
                 }
                 pointer operator->() const {
@@ -298,7 +295,6 @@ namespace nw4r {
 
                 reference operator*() const {
                     pointer p = operator->();
-                    NW4R_NULL_ASSERT_AT(447, p);
                     return *p;
                 }
                 pointer operator->() const {
@@ -337,11 +333,7 @@ namespace nw4r {
 
                 TItC_base_ it_;
 
-#ifdef TARGET_PC
                 friend Self;
-#else
-                friend class Self;
-#endif
             };
             explicit LinkList() {
             }
@@ -387,12 +379,10 @@ namespace nw4r {
             }
 
             static const_pointer GetPointerFromNode(const Node* p) {
-                NW4R_NULL_ASSERT_AT(578, p);
                 return reinterpret_cast< const_pointer >(reinterpret_cast< IntPtr >(p) - TNOffset);
             }
 
             static pointer GetPointerFromNode(Node* p) {
-                NW4R_NULL_ASSERT_AT(573, p);
                 return reinterpret_cast< pointer >(reinterpret_cast< IntPtr >(p) - TNOffset);
             }
 

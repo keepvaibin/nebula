@@ -2,9 +2,8 @@
 
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace MR {
     bool isValidInfo(const JMapInfoIter& rIter);
@@ -72,7 +71,7 @@ namespace MR {
     bool getJMapInfoArg7WithInit(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoFollowID(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoGroupID(const JMapInfoIter& rIter, s32*);
-    bool getJMapInfoClippingGroupID(const JMapInfoIter& rIter, s32*) NO_INLINE;
+    bool getJMapInfoClippingGroupID(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoDemoGroupID(const JMapInfoIter& rIter, s32*);
     bool getJMapInfoLinkID(const JMapInfoIter& rIter, s32*);
     bool isConnectedWithRail(const JMapInfoIter& rIter);

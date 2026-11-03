@@ -259,7 +259,7 @@ void StarReturnDemoStarter::exeFlyWaitGrandStar() {
         MR::startBckPlayer("ResultFlyGrandStarFlyAway");
         MR::startBck(mPowerStar, "ResultFlyGrandStarFlyAway");
         MR::shakeCameraWeak();
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
     if (MR::isStep(this, ::cFallStartFrameGrandStar)) {

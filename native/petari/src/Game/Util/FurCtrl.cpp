@@ -15,7 +15,7 @@
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -46,7 +46,6 @@ void FurDrawManager::draw() const {
         }
     }
 
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
 }
 
 FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 drawOrder) : mParam(pParam), mVisible(), mFurUVScale(1.0f) {
@@ -135,8 +134,8 @@ void FurCtrl::drawFur() {
     }
 
     J3DShape* pShape = pModelData->getShapeNodePointer(mShapeIndex);
-    pShape->mCurrentMtx.setCurrentTexMtx(GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                         GX_IDENTITY, GX_IDENTITY);
+    pShape->mCurrentMtx.setCurrentTexMtx(J3D_TEXMTX0, J3D_TEXMTX1, J3D_TEXMTX2, J3D_IDENTITY, J3D_IDENTITY, J3D_IDENTITY,
+                                         J3D_IDENTITY, J3D_IDENTITY);
     J3DShapePacket* pPacket;
 
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {
@@ -148,9 +147,7 @@ void FurCtrl::drawFur() {
     }
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
-    GXColor fogColor = {0, 0, 0, 0};
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DPass::noFog();
 }
 
 void FurCtrl::createFurMap() {
@@ -194,23 +191,14 @@ void FurCtrl::setupFur(J3DModel* pModel, ResTIMG* pLength, ResTIMG* pIndirect, R
     mShader->makeIndexData(pData->getShapeNodePointer(shape));
     mShader->checkBorderVtx(pData, shape);
     mDrawer = new FurDrawer(numLayers, pBody, pIndirect);
-    s32 componentSize;
-
-    switch (mShader->_24) {
-    case GX_S16:
-        componentSize = sizeof(s16);
-        break;
-    case GX_F32:
-        componentSize = sizeof(f32);
-        break;
-    }
+    const s32 componentSize = sizeof(f32);
 
     mNumLayers = numLayers;
     mLayerModels = new J3DModel*[numLayers];
 
     for (s32 i = 0; i < mNumLayers; i++) {
         char name[16];
-        sprintf(name, "\203\214\203\103\203\204 %d" /* レイヤ %d */, i);
+        nebula_sprintf(name, "\203\214\203\103\203\204 %d" /* レイヤ %d */, i);
         J3DModel2* pLayer = new J3DModel2(mModel);
         pLayer->setVtxShader(mShader, componentSize);
         mLayerModels[i] = pLayer;
@@ -233,7 +221,7 @@ void FurCtrl::setupFurClone(J3DModel* pModel, FurCtrl* pOther) {
 
     for (u32 i = 0; i < mNumLayers; i++) {
         char name[32];
-        sprintf(name, "\203\214\203\103\203\204(\203\122\203\163\201\133) %d" /* レイヤ(コピー) %d */, i);
+        nebula_sprintf(name, "\203\214\203\103\203\204(\203\122\203\163\201\133) %d" /* レイヤ(コピー) %d */, i);
         J3DModel2* pLayer = new J3DModel2(mModel);
         *pLayer->getVertexBuffer() = *pOther->mLayerModels[i]->getVertexBuffer();
         mLayerModels[i] = pLayer;
@@ -243,7 +231,7 @@ void FurCtrl::setupFurClone(J3DModel* pModel, FurCtrl* pOther) {
 }
 
 namespace MR {
-    void initFurParamFromDvd(FurParam* pParam, DynamicFurParam* pDynamic, char* pText, u32 size) {
+    void initFurParamFromFile(FurParam* pParam, DynamicFurParam* pDynamic, char* pText, u32 size) {
         char line[256];
         FurLightParam* pLight = pDynamic->mLightParam;
         s32 lightMask = 0;

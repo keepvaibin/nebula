@@ -7,7 +7,7 @@
 
 class AudTamakoroBgmCtrl;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class SphereAccelSensorController;
 class TamakoroTutorial;
 
@@ -69,14 +69,14 @@ public:
     void updateMarioOffset();
     void updateMoveBckBlend(f32);
     void updateSquatBckBlend(f32);
-    bool isEnablePushPlayer() const NO_INLINE;
-    bool isEnableEnemyAttack() const NO_INLINE;
-    bool isEnableBallBind() const NO_INLINE;
-    bool isEnebleHitCollisionMessage() const NO_INLINE;
-    bool isUseMarioOffset() const NO_INLINE;
-    bool isGroundMomentBall() const NO_INLINE;
-    bool isRideRail() const NO_INLINE;
-    bool isNeedTutorial() const NO_INLINE;
+    bool isEnablePushPlayer() const;
+    bool isEnableEnemyAttack() const;
+    bool isEnableBallBind() const;
+    bool isEnebleHitCollisionMessage() const;
+    bool isUseMarioOffset() const;
+    bool isGroundMomentBall() const;
+    bool isRideRail() const;
+    bool isNeedTutorial() const;
     void startRotateLevelSound();
 
     inline void setTutorial() {
@@ -105,29 +105,29 @@ public:
     }
 
 private:
-    /* 0x08C */ SphereAccelSensorController* mAccelSensorCtrl;
-    /* 0x090 */ TamakoroTutorial* mTutorial;
-    /* 0x094 */ JointController* mJointCtrl;
-    /* 0x098 */ TQuat4f mBallRotateQuat;
-    /* 0x0A8 */ TQuat4f mMarioRotateQuat;
-    /* 0x0B8 */ TVec3f mRingUp;
-    /* 0x0C4 */ TVec3f _C4;  // unused
-    /* 0x0D0 */ TVec3f mKickVel;
-    /* 0x0DC */ TVec3f mMarioBindRequestPos;
-    /* 0x0E8 */ TVec3f mMarioUp;
-    /* 0x0F4 */ TVec3f mMarioPos;
-    /* 0x100 */ TVec3f mMoment;
-    /* 0x10C */ TVec3f mMarioFront;
-    /* 0x118 */ TVec3f mDirectionToMario;
-    /* 0x124 */ TVec3f mAccelDir;
-    /* 0x130 */ f32 mAccelRate;
-    /* 0x134 */ f32 mMarioRotateYAngle;
-    /* 0x138 */ f32 mMarioOffset;
-    /* 0x13C */ f32 mMarioOffsetVelocity;
-    /* 0x140 */ s32 mAirTime;
-    /* 0x144 */ AudTamakoroBgmCtrl* mBgmCtrl;
-    /* 0x148 */ bool mControlDisabled;
-    /* 0x149 */ bool mHasTutorial;
+    SphereAccelSensorController* mAccelSensorCtrl;
+    TamakoroTutorial* mTutorial;
+    JointController* mJointCtrl;
+    TQuat4f mBallRotateQuat;
+    TQuat4f mMarioRotateQuat;
+    TVec3f mRingUp;
+    TVec3f _C4;  // unused
+    TVec3f mKickVel;
+    TVec3f mMarioBindRequestPos;
+    TVec3f mMarioUp;
+    TVec3f mMarioPos;
+    TVec3f mMoment;
+    TVec3f mMarioFront;
+    TVec3f mDirectionToMario;
+    TVec3f mAccelDir;
+    f32 mAccelRate;
+    f32 mMarioRotateYAngle;
+    f32 mMarioOffset;
+    f32 mMarioOffsetVelocity;
+    s32 mAirTime;
+    AudTamakoroBgmCtrl* mBgmCtrl;
+    bool mControlDisabled;
+    bool mHasTutorial;
 };
 
 namespace MR {

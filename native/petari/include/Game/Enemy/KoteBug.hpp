@@ -47,11 +47,11 @@ public:
     void setOverturnFall(HitSensor* pSender, HitSensor* pReceiver);
     bool calcJoint(TPos3f* pMtx, const JointControllerInfo& rInfo);
 
-    /* 0x8C */ AnimScaleController* mScaleController;
-    /* 0x90 */ AnimStampController* mStampController;
-    /* 0x94 */ SpinHitController* mSpinHitController;
-    /* 0x98 */ WalkerStateBindStarPointer* mStarPointer;
-    /* 0x9C */ TVec3f mFront;
-    /* 0xA8 */ TQuat4f mPosture;
-    /* 0xB8 */ JointController* mJointController;
+    AnimScaleController* mScaleController;
+    AnimStampController* mStampController;
+    SpinHitController* mSpinHitController;
+    WalkerStateBindStarPointer* mStarPointer;
+    TVec3f mFront;
+    TQuat4f mPosture;
+    JointController* mJointController;
 };

@@ -1,7 +1,6 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/ScenarioSelectLayout.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaRegion.hpp"
-#endif
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/MultiEmitter.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -12,7 +11,7 @@
 #include "Game/System/GameDataConst.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -128,13 +127,9 @@ void ScenarioSelectLayout::init(const JMapInfoIter& rIter) {
     mBackButton = new BackButton("\226\337\202\351\203\173\203\136\203\223" /* 戻るボタン */, false);
     mBackButton->initWithoutIter();
 
-    #ifdef TARGET_PC
     if (!NebulaRegion::isPal()) {
         MR::hidePaneRecursive(this, "CometAppear");
     }
-    #elif (VERSION == RMGJ01 || VERSION == RMGE01)
-    MR::hidePaneRecursive(this, "CometAppear");
-    #endif
 
     initNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvAppearStar));
 }
@@ -218,13 +213,9 @@ void ScenarioSelectLayout::appear() {
     mScenarioSky->appear();
     MultiScene::startBtk(mScenarioSky, "ScenarioSelectSky");
 
-#ifdef TARGET_PC
     if (NebulaRegion::isPal()) {
         MR::hidePaneRecursive(this, "CometAppear");
     }
-#elif (VERSION == RMGP01 || VERSION == RMGK01)
-    MR::hidePaneRecursive(this, "CometAppear");
-#endif
 
     mSelectedScenarioNo = -1;
     _24 = 0;
@@ -381,7 +372,7 @@ void ScenarioSelectLayout::fadeInText() {
 
     if (isPlacedCoin) {
         const s32 bestScore = MR::getCoinBestScore(stageName, mSelectedScenarioNo);
-        MR::setTextBoxFormatRecursive(this, "ShaCoinNum", L"%03d", bestScore);
+        MR::setTextBoxFormatRecursive(this, "ShaCoinNum", u"%03d", bestScore);
     } else {
         MR::setPaneAnimFrameAndStop(this, "BestScore", 0.0f, 0);
     }
@@ -389,7 +380,7 @@ void ScenarioSelectLayout::fadeInText() {
     MR::startPaneAnim(this, "BestTime", "SelectIn", 0);
 
     if (::isCurrentStageRaceComplete(mSelectedScenarioNo)) {
-        wchar_t bestTime[16];
+        char16_t bestTime[16];
         MR::makeRaceBestTimeString(bestTime, RaceManagerFunction::getRaceId(stageName, mSelectedScenarioNo));
         MR::setTextBoxMessageRecursive(this, "ShaTime", bestTime);
     } else {
@@ -399,7 +390,6 @@ void ScenarioSelectLayout::fadeInText() {
 }
 
 void ScenarioSelectLayout::fadeOutText() {
-    const char* stageName = MR::getCurrentStageName();
 
     _A4 = 1;
 
@@ -420,7 +410,7 @@ bool ScenarioSelectLayout::trySelect() {
             return true;
         }
 
-        if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+        if (!MR::isStarPointerInScreen(PLAYER_1)) {
             for (s32 i = 0; i < 7; i++) {
                 if (mStar[i]->_30) {
                     continue;
@@ -458,7 +448,7 @@ ScenarioSelectStar* ScenarioSelectLayout::getSelectedStar() const {
 
 void ScenarioSelectLayout::calcWorldPositionFromScreenPos(TVec3f* pWorldPos, const TVec2f& rScreenPos, f32 depth) const {
     f32 fovy = mCameraContext->getFovy() * (PI / 180.0f);
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+    f32 height = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
     f32 focalLength = (height * 0.5f) / MR::tan(fovy * 0.5f);
     f32 distance;
 
@@ -580,7 +570,7 @@ bool ScenarioSelectLayout::tryCancel() {
         return true;
     }
 
-    if (MR::testCorePadTriggerB(WPAD_CHAN0)) {
+    if (MR::isPressedFire(PLAYER_1)) {
         MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         mBackButton->disappear();
         setNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvCancel));

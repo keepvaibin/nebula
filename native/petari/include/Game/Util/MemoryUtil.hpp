@@ -1,33 +1,27 @@
 #pragma once
 
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-class JKRExpHeap;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
 
 namespace MR {
     class CurrentHeapRestorer {
     public:
-        CurrentHeapRestorer(JKRHeap* pHeap);
+        CurrentHeapRestorer(NebulaArena* pHeap);
 
         ~CurrentHeapRestorer();
 
     private:
-        /* 0x00 */ JKRHeap* _0;
+        NebulaArena* _0;
     };
 
-    JKRHeap* getCurrentHeap();
-    f32 getHeapFreeRatio(JKRHeap* pHeap);
-    JKRHeap* getAproposHeapForSceneArchive(f32 maxFreeSizeRate);
-    JKRExpHeap* getStationedHeapNapa();
-    JKRExpHeap* getStationedHeapGDDR3();
-    JKRSolidHeap* getSceneHeapNapa();
-    JKRSolidHeap* getSceneHeapGDDR3();
-    JKRHeap* getHeapNapa(const JKRHeap* pHeap);
-    JKRHeap* getHeapGDDR3(const JKRHeap* pHeap);
-    void becomeCurrentHeap(JKRHeap* pHeap) NO_INLINE;
-    bool isEqualCurrentHeap(JKRHeap* pHeap);
-    void adjustHeapSize(JKRExpHeap* pHeap, const char* pParam2);
+    NebulaArena* getCurrentHeap();
+    NebulaArena* getAproposHeapForSceneArchive(f32 maxFreeSizeRate);
+    NebulaArena* getStationedHeap();
+    NebulaArena* getSceneHeap();
+    void becomeCurrentHeap(NebulaArena* pHeap);
+    bool isEqualCurrentHeap(NebulaArena* pHeap);
 
     /// @brief Copies `size` bytes from `pSrc` to `pDst`.
     /// @param pDst The pointer to the memory to copy to.
@@ -52,7 +46,5 @@ namespace MR {
     /// @return The computed checksum.
     u32 calcCheckSum(const void* pPtr, u32 size);
 
-    void* allocFromWPadHeap(u32 size);
-    u8 freeFromWPadHeap(void* pPtr);
 
 };  // namespace MR

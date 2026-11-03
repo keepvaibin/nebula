@@ -8,9 +8,9 @@
 
 namespace {
     struct StageBgm {
-        /* 0x00 */ const char* mStageName;
-        /* 0x04 */ u32 mBgmIDs[6];
-        /* 0x1C */ u32 mBgmStates[8];
+        const char* mStageName;
+        u32 mBgmIDs[6];
+        u32 mBgmStates[8];
     };
 
     StageBgm sStageBgmSet[] = {

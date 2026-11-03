@@ -18,23 +18,15 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     const f32 sPointIntervalLine = 200.0f;
     const f32 sDefaultWidth = 1200.0f;
-    const f32 sWingPointNum = 0.0f;  // couldn't figure out what value this became
     const f32 sEdgePointNum = 2.0f;
-    const f32 sTotalDistMin = 0.0f;                    // couldn't figure out what value this became
-    const f32 sCalcNrmDiff = 0.0f;                     // couldn't figure out what value this became
-    const f32 sDefaultUpdateLinePointNumFront = 0.0f;  // couldn't figure out what value this became
-    const f32 sUpdateLinePointNumBack = 0.0f;          // couldn't figure out what value this became
     const f32 sUpdateDistanceMax = 5000.0f;
-    const f32 sUpdateWeakPointNum = 0.0f;  // couldn't figure out what value this became
-    const f32 sPlayerMoveSpeed = 0.0f;     // couldn't figure out what value this became
     const f32 sWaveSpeed0 = -0.04f;
     const f32 sWaveSpeed1 = -0.06f;
-    const f32 sClippingRadiusOffset = 200.0f;
 };  // namespace
 
 OceanRing::OceanRing(const char* pName) : LiveActor(pName) {
@@ -213,7 +205,6 @@ f32 OceanRing::calcNearestPos(const TVec3f& a1, TVec3f* a2, TVec3f* a3, TVec3f* 
         }
     } else {
         a2->set(point->mOrigPos);
-        static_cast< f32 >(index);
     }
 
     if (a4) {
@@ -513,12 +504,8 @@ void OceanRing::calcClippingBox() {
         f32 v4 = (100.0f * v6);
 
         if (v4 >= v1) {
-            v4 = v4;
-        } else {
-            v4 = v1;
+            v1 = v4;
         }
-
-        v1 = v4;
     }
 
     MR::calcBoundingBox(this, &mClippingBox, 200.0f);

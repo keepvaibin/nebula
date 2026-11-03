@@ -5,6 +5,7 @@
 #include "Game/Screen/ScreenPreserver.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/System/AudSystemWrapper.hpp"
+#include "Game/System/AssetFolder.hpp"
 #include "Game/System/ErrorMessageArchive.hpp"
 #include "Game/System/FileLoader.hpp"
 #include "Game/System/FunctionAsyncExecutor.hpp"
@@ -14,22 +15,22 @@
 #include "Game/System/MessageHolder.hpp"
 #include "Game/System/RenderMode.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaArena.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mViWidth(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mWPadHolder(),
+    : mObjHolder(), mParticleResHolder(), mPictureSpan(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mPlayerInputs(),
       mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
-    initDvd();
+    initStore();
     initNAND();
     initNameObj();
-    MR::createAndAddArchive(NebulaDiscTables::loadErrorMessageArchive(MR::getStationedHeapNapa()), MR::getStationedHeapNapa(),
+    MR::createAndAddArchive(AssetFolder::mount("/NebulaData/ErrorMessageArchive.arc", MR::getStationedHeap()), MR::getStationedHeap(),
                             "ErrorMessageArchive.arc");
 }
 
@@ -41,19 +42,16 @@ void GameSystemObjHolder::initAfterStationedResourceLoaded() {
 }
 
 void GameSystemObjHolder::initMessageResource() {
-    JKRArchive* pArchive = nullptr;
-    JKRHeap* pHeap = nullptr;
+    AssetFolder* pArchive = nullptr;
+    NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 
     char systemMessagePath[128];
     const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
+    nebula_snprintf(systemMessagePath, sizeof(systemMessagePath), "/%s/MessageData/System.arc", languagePrefix);
 
-    void* pSystemMessageArchive = MR::decompressFileFromArchive(pArchive, systemMessagePath, nullptr, 0);
-    MR::createAndAddArchive(pSystemMessageArchive, pHeap, "/Memory/SystemMessage.arc");
-
-    void* pErrorMessageWindowArchive = MR::decompressFileFromArchive(pArchive, "/LayoutData/ErrorMessageWindow.arc", pHeap, 32);
-    MR::createAndAddArchive(pErrorMessageWindowArchive, pHeap, "/Memory/ErrorMessageWindow.arc");
+    MR::createAndAddArchive(pArchive->getSubFolder(systemMessagePath, pHeap), pHeap, "/Memory/SystemMessage.arc");
+    MR::createAndAddArchive(pArchive->getSubFolder("/LayoutData/ErrorMessageWindow.arc", pHeap), pHeap, "/Memory/ErrorMessageWindow.arc");
 
     MR::createAndAddLayoutHolderRawData("/Memory/ErrorMessageWindow.arc");
 
@@ -63,7 +61,7 @@ void GameSystemObjHolder::initMessageResource() {
 
 void GameSystemObjHolder::init() {
     initAudio();
-    initRenderMode();
+    initPicture();
     initResourceHolderManager();
     initMessageResource();
     initFunctionAsyncExecutor();
@@ -79,7 +77,7 @@ void GameSystemObjHolder::createAudioSystem() {
 
 void GameSystemObjHolder::update() {
     mAudioSystem->updateRhythm();
-    mWPadHolder->update();
+    mPlayerInputs->update();
     mFunctionAsyncExecutor->update();
     mStarPointerDirector->update();
 }
@@ -106,10 +104,7 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
     mScreenPreserver->captureIfAllow();
 }
 
-void GameSystemObjHolder::initDvd() {
-    JKRMemArchive archive;
-
-    JKRFileLoader::initializeVolumeList();
+void GameSystemObjHolder::initStore() {
     SingletonHolder< FileLoader >::init();
 }
 
@@ -117,15 +112,14 @@ void GameSystemObjHolder::initNAND() {
 }
 
 void GameSystemObjHolder::initAudio() {
-    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeapNapa());
+    mAudioSystem = new AudSystemWrapper(SingletonHolder< HeapMemoryWatcher >::get()->getAudSystemHeap(), MR::getStationedHeap());
     mAudioSystem->requestResourceForInitialize();
 }
 
-void GameSystemObjHolder::initRenderMode() {
-    // The game's frame, 640x456 in either aspect; the picture spans 686 of the television line's 720 in 16:9, 670 in
-    // 4:3.
-    mViWidth = MR::isAspectRatioFlag16Per9() ? 686 : 670;
-    JUTVideo::createManager(640, 456);
+void GameSystemObjHolder::initPicture() {
+    // The share of the safe area's reference width the picture spans (getSafetyFrameWidth).
+    mPictureSpan = MR::isAspectRatioFlag16Per9() ? 686 : 670;
+    NebulaFrameClock::startPicture();
 }
 
 void GameSystemObjHolder::initNameObj() {
@@ -144,12 +138,12 @@ void GameSystemObjHolder::initResourceHolderManager() {
 }
 
 void GameSystemObjHolder::initGameController() {
-    initWPad();
+    initPlayerInput();
     initStarPointerDirector();
 }
 
-void GameSystemObjHolder::initWPad() {
-    mWPadHolder = new WPadHolder();
+void GameSystemObjHolder::initPlayerInput() {
+    mPlayerInputs = new PlayerInputs();
 }
 
 void GameSystemObjHolder::initStarPointerDirector() {

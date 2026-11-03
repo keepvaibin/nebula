@@ -13,6 +13,6 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void movement();
 
-    /* 0x0C */ StageSwitchCtrl* mSwitchCtrl;
-    /* 0x10 */ bool mIsCheckSameSwitchState;
+    StageSwitchCtrl* mSwitchCtrl;
+    bool mIsCheckSameSwitchState;
 };

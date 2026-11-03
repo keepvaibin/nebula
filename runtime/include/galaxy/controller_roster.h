@@ -23,6 +23,11 @@ struct ControllerInfo {
     ControllerLink link = ControllerLink::Unknown;
     const char* model = "";  // static storage
     const char* note = nullptr;  // static storage; shown after the name
+    // What this one has of what its family can have: sensors for tilt and shake, a gyro among them, a touch surface.
+    bool sensors = true;
+    bool gyro = true;
+    bool touch = true;
+    ButtonIconModel icons = ButtonIconModel::Standard;
 };
 
 inline constexpr std::uint8_t kKeyboardSlot = 0xff;

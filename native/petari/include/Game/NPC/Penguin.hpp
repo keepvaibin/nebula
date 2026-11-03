@@ -15,8 +15,8 @@ public:
     bool tryRemove();
     bool tryAttach();
 
-    /* 0x00 */ PartsModel* mShellModel;
-    /* 0x04 */ JetTurtle* mJetTurtle;
+    PartsModel* mShellModel;
+    JetTurtle* mJetTurtle;
 };
 
 class Penguin : public NPCActor {
@@ -45,9 +45,9 @@ public:
     void exeFlow();
     bool tryReleaseTurtle();
 
-    /* 0x15C */ s32 mBehavior;
-    /* 0x160 */ s32 mStepToDive;
-    /* 0x164 */ RemovableTurtle* mTurtle;
+    s32 mBehavior;
+    s32 mStepToDive;
+    RemovableTurtle* mTurtle;
 };
 
 class TurtlePartsModel : public PartsModel {

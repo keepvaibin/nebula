@@ -27,7 +27,6 @@ namespace {
     static const s32 sSpinAttackStepMin = 5;
     static const s32 sSpinAttackStepMax = 65;
     static const s32 sEvenStopSceneStep = 15;
-    static const f32 sEvenSpeed = 30.0f;
 };  // namespace
 
 namespace NrvKoopaStateAttackSpin {
@@ -102,7 +101,7 @@ bool KoopaStateAttackSpin::tryDamage(u32 msg, HitSensor* pSender, HitSensor* pRe
 
     MR::sendMsgEnemyAttackFlipJump(pReceiver, pSender);
 
-    MR::tryRumblePadStrong(this, WPAD_CHAN0);
+    MR::tryRumblePadStrong(this, PLAYER_1);
 
     MR::startSound(mHost, "SE_BM_KOOPA_SPIN_EVEN");
     MR::startSound(mHost, "SE_BV_KOOPA_GUARD");

@@ -2,7 +2,7 @@
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
 
 namespace {
@@ -43,17 +43,17 @@ void CameraManPause::calc() {
     f32 length, angleX, angleY;
     MR::crossToPolar(TVec3f(0.0f, 0.0f, 0.0f), pos, &length, &angleX, &angleY);
 
-    if (MR::testSubPadButtonC(WPAD_CHAN0)) {
-        mDistOffset -= MR::getSubPadStickY(WPAD_CHAN0) * 200.0f;
+    if (MR::isHeldCamera(PLAYER_1)) {
+        mDistOffset -= MR::getMoveStickY(PLAYER_1) * 200.0f;
     } else {
-        mAngle.x += MR::getSubPadStickY(WPAD_CHAN0) * 0.1f;
-        mAngle.y += MR::getSubPadStickX(WPAD_CHAN0) * 0.1f;
+        mAngle.x += MR::getMoveStickY(PLAYER_1) * 0.1f;
+        mAngle.y += MR::getMoveStickX(PLAYER_1) * 0.1f;
     }
 
     MR::clampBoth(&mDistOffset, -mDistBase * 0.7f, mDistBase * 4.5f);
     MR::clampBoth(&mAngle.x, -1.4959966f, 1.4959966f);  // TODO: result of a const calculation?
 
-    if (MR::testSubPadButtonC(WPAD_CHAN0) && MR::testSubPadTriggerZ(WPAD_CHAN0)) {
+    if (MR::isHeldCamera(PLAYER_1) && MR::isPressedCrouch(PLAYER_1)) {
         mDistOffset = mDistBase * 4.5f;
         mAngle.zero();
     }

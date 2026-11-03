@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's Vulkan side (texture_backend.h): image views by srv_index, mapped staging buffers, RGBA8 images and
+// TextureCache's Vulkan side (gpu_texture_backend.h): image views by srv_index, mapped staging buffers, RGBA8 images and
 // the recorded upload of their levels.
 #pragma once
+
+#include "galaxy/render/texel_format.h"
 
 #include "galaxy/render/vk/vk_context.h"
 
@@ -40,7 +42,9 @@ public:
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
     [[nodiscard]] gpu::TextureRef create_texture(
-        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey = false);
+        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes,
+        TexelFormat format = TexelFormat::Rgba8);
+    [[nodiscard]] static bool supports_bc1();
     [[nodiscard]] static bool poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
     void record_upload(vk::Texture* texture, bool reused, const UploadChunk& staging, std::uint64_t offset,

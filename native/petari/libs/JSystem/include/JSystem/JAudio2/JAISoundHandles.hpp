@@ -3,7 +3,7 @@
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 
-class JAISeqDataUser;
+struct JAISeqDataUser;
 
 class JAISoundHandles {
 public:
@@ -29,11 +29,10 @@ public:
     }
 
     JAISoundHandle* getHandleSoundID(JAISoundID);
-    JAISoundHandle* getFreeHandle();
     JAISoundHandle* getHandleUserData(uintptr_t);
 
     void setPos(const TVec3f&);
 
-    /* 0x00 */ JAISoundHandle* mHandles;
-    /* 0x04 */ int mNumHandles;
+    JAISoundHandle* mHandles;
+    int mNumHandles;
 };

@@ -23,12 +23,12 @@ public:
         mIsEnableValid = enabled;
     }
 
-    /* 0x4C */ f32 mAngleX;
-    /* 0x50 */ f32 mAngleY;
-    /* 0x54 */ f32 mDist;
-    /* 0x58 */ bool mIsEnableValid;
-    /* 0x59 */ bool mIsRounding;
-    /* 0x5C */ f32 mRoundTarget;
-    /* 0x60 */ f32 mRoundAngle;
-    /* 0x64 */ f32 mRoundAddition;
+    f32 mAngleX;
+    f32 mAngleY;
+    f32 mDist;
+    bool mIsEnableValid;
+    bool mIsRounding;
+    f32 mRoundTarget;
+    f32 mRoundAngle;
+    f32 mRoundAddition;
 };

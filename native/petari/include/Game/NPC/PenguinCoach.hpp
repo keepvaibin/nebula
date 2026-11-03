@@ -38,11 +38,11 @@ public:
     void setFinishPos();
     void setPlayerNoSelectionPos();
 
-    /* 0x160 */ bool mIsRaceComplete;
-    /* 0x164 */ TakeOutStar* mTakeOutStar;
-    /* 0x168 */ s32 mBehavior;
-    /* 0x16C */ SurfRayTutorial* mTutorial;
-    /* 0x170 */ LiveActor* mActor;
-    /* 0x174 */ ActorCameraInfo* mCameraInfo;
-    /* 0x178 */ TurnJointCtrl* mTurnJointCtrl;
+    bool mIsRaceComplete;
+    TakeOutStar* mTakeOutStar;
+    s32 mBehavior;
+    SurfRayTutorial* mTutorial;
+    LiveActor* mActor;
+    ActorCameraInfo* mCameraInfo;
+    TurnJointCtrl* mTurnJointCtrl;
 };

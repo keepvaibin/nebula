@@ -25,18 +25,18 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/VectorUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     class KuriboParam {
     public:
         KuriboParam();
 
-        /* 0x00 */ WalkerStateParam mStateParam;
-        /* 0x18 */ WalkerStateStaggerParam mStaggerParam;
-        /* 0x48 */ WalkerStateFindPlayerParam mFindPlayerParam;
-        /* 0x54 */ WalkerStateChaseParam mChaseParam;
-        /* 0x68 */ WalkerStateWanderParam mWanderParam;
+        WalkerStateParam mStateParam;
+        WalkerStateStaggerParam mStaggerParam;
+        WalkerStateFindPlayerParam mFindPlayerParam;
+        WalkerStateChaseParam mChaseParam;
+        WalkerStateWanderParam mWanderParam;
     };
 
     KuriboParam::KuriboParam() {
@@ -222,7 +222,7 @@ void Kuribo::calcAndSetBaseMtx() {
 }
 
 void Kuribo::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
-    if ((!MR::isSensorType(pSender, ATYPE_KURIBO) || (isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver) ||
+    if ((!MR::isSensorType(pSender, ATYPE_KURIBO) || ((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver)) ||
          !isEnablePushMove() || !MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender)) &&
         isEnableAttack() && MR::isSensorPlayer(pReceiver) && MR::isSensorEnemyAttack(pSender)) {
         if (!MR::isPlayerHipDropFalling() && MR::sendMsgEnemyAttack(pReceiver, pSender)) {

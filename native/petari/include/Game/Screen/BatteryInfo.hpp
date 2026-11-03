@@ -8,7 +8,7 @@ public:
     /// @brief Creates a new `BatteryInfo`.
     /// @param pHost The pointer to the owning actor instance.
     /// @param pPaneName The pointer to the null-terminated name of the pane.
-    /// @param channel The handle to the Wii Remote.
+    /// @param channel The player.
     BatteryInfo(LayoutActor* pHost, const char* pPaneName, int channel);
 
     /// @brief Updates the object when the popup is hidden for a sufficient battery level.
@@ -58,16 +58,16 @@ public:
 
 private:
     /// @brief The pointer to the owning actor instance.
-    /* 0x08 */ LayoutActor* mHost;
+    LayoutActor* mHost;
 
     /// @brief The pointer to the null-terminated name of the pane.
-    /* 0x0C */ const char* mPaneName;
+    const char* mPaneName;
 
-    /// @brief The handle to the Wii Remote.
-    /* 0x10 */ int mChannel;
+    /// @brief The player.
+    int mChannel;
 };
 
-/// @brief The actor for the popup warning the player about their Wii Remote's battery level.
+/// @brief The actor for the popup warning the player about their controller's battery level.
 class BatteryLayout : public LayoutActor {
 public:
     /// @brief Creates a new `BatteryLayout`.
@@ -78,6 +78,6 @@ public:
     virtual void control();
 
 private:
-    /* 0x20 */ BatteryInfo* mInfo1P;
-    /* 0x24 */ BatteryInfo* mInfo2P;
+    BatteryInfo* mInfo1P;
+    BatteryInfo* mInfo2P;
 };

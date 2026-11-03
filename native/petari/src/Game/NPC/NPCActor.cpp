@@ -26,10 +26,6 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
-void NPCActor_DUMMY() {
-    (void)JGeometry::TUtil< f32 >::acos(1.0f);
-}
-
 namespace NrvNPCActor {
     NEW_NERVE(NPCActorNrvReaction, NPCActor, Reaction);
     NEW_NERVE(NPCActorNrvWait, NPCActor, Wait);
@@ -853,6 +849,3 @@ void NPCActor::exeTalk() {
 void NPCActor::exeNull() {
 }
 
-void NPCActor_FORCE_MATCH(TQuat4f* pDest, const TQuat4f& rSrc) {
-    *pDest = rSrc;
-}

@@ -81,21 +81,6 @@ int main() {
     bool passed = true;
 
     {
-        // The 2D layer's scale for the Wii's own layout density: 16:9 and 4:3 as the Wii, two at 21:9 and 32:9,
-        // three at 9:16, four at 9:21 and narrower; no shape (the game's 16:9) one.
-        const auto at = [](double aspect) {
-            return galaxy::layout_density_scale(galaxy::make_experimental_ultrawide_aspect(aspect));
-        };
-        passed = expect(at(16.0 / 9.0) == 1u && at(4.0 / 3.0) == 1u && at(16.0 / 10.0) == 1u, "Wii shapes at 1x") &&
-                 passed;
-        passed = expect(at(21.0 / 9.0) == 2u && at(32.0 / 9.0) == 2u && at(5.0) == 2u, "wide shapes at 2x") && passed;
-        passed = expect(at(1.0) == 2u && at(9.0 / 16.0) == 3u && at(9.0 / 21.0) == 4u && at(0.2) == 4u,
-                        "narrow shapes by their height") &&
-                 passed;
-        passed = expect(galaxy::layout_density_scale(std::nullopt) == 1u, "no shape at 1x") && passed;
-    }
-
-    {
         const auto same = [](const std::vector<unsigned>& got, std::initializer_list<unsigned> want) {
             return std::equal(got.begin(), got.end(), want.begin(), want.end());
         };
@@ -256,9 +241,8 @@ int main() {
                 "frame-rate caps survive exact float round trips");
         }
         {
-            // The bloom's mode and strength and the ray-traced effects, each away from its default.
+            // The bloom's strength and the ray-traced effects, each away from its default.
             galaxy::render::RenderConfig original{};
-            original.bloom_mode = galaxy::render::kBloomNative;
             original.bloom = 140u;
             original.rt_reflections = false;
             original.rt_lens_bloom = false;
@@ -269,15 +253,15 @@ int main() {
             galaxy::render::set_render_config(galaxy::render::RenderConfig{});
             galaxy::render::load_render_config_from_file();
             const auto loaded = galaxy::render::get_render_config();
-            passed &= expect(loaded.bloom_mode == galaxy::render::kBloomNative && loaded.bloom == 140u &&
+            passed &= expect(loaded.bloom == 140u &&
                                  !loaded.rt_reflections && !loaded.rt_lens_bloom && !loaded.rt_sun_rays &&
                                  !loaded.rt_water,
-                             "the bloom's mode and strength and the ray-traced effects survive a save");
+                             "the bloom's strength and the ray-traced effects survive a save");
             const galaxy::render::RenderConfig defaults{};
-            passed &= expect(defaults.bloom_mode == galaxy::render::kBloomEnhanced && defaults.rt_reflections &&
+            passed &= expect(defaults.rt_reflections &&
                                  defaults.rt_lens_bloom &&
                                  defaults.rt_sun_rays && defaults.rt_water,
-                             "enhanced bloom and every ray-traced effect by default");
+                             "every ray-traced effect by default");
         }
         {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);
@@ -351,17 +335,14 @@ int main() {
     const galaxy::render::RenderConfig defaults{};
     passed &= expect(
         defaults.vsync_interval == 0 &&
-            !defaults.wait_for_frame_latency &&
-            defaults.swap_chain_frame_latency == 2 &&
-            defaults.flip_discard &&
             defaults.max_fps == 60.0f,
         "default Release config keeps a 60 Hz cap for non-realtime-VI launches "
         "and the flip-discard swap chain");
 
-    const galaxy::render::RenderTimingConfig& timing = galaxy::render::get_gx_timing_config();
+    const galaxy::render::RenderTimingConfig& timing = galaxy::render::get_frame_timing_config();
     passed &= expect(
         timing.render_queue_depth == 2,
-        "GX timing is the shipped profile: queue depth 2");
+        "the timing is the shipped profile: queue depth 2");
 
     galaxy::render::RenderConfig config{};
     config.msaa_samples = 8;
@@ -370,8 +351,6 @@ int main() {
     config.rt_shadow_quality = 3;
     config.rt_ao_enabled = true;
     config.rt_reflections = false;
-    config.swap_chain_frame_latency = 99;
-    config.efb_scale = 99;
     galaxy::render::set_render_config(config);
 
     const galaxy::render::RenderConfig sanitized =
@@ -388,17 +367,6 @@ int main() {
             !sanitized.rt_ao_enabled &&
             !sanitized.rt_reflections,
         "set_render_config keeps ray tracing and its reflections choice, and clamps the reserved DXR keys off");
-    passed &= expect(
-        sanitized.swap_chain_frame_latency == 2,
-        "set_render_config clamps swap-chain latency to the frame ring");
-    passed &= expect(
-        sanitized.efb_scale == galaxy::render::kMaxEfbScale,
-        "set_render_config clamps EFB scale to the implemented maximum");
-
-    galaxy::render::stage_next_start_efb_scale(0u);
-    passed &= expect(
-        galaxy::render::get_render_config().efb_scale == galaxy::render::kMaxEfbScale,
-        "staging the next-start EFB scale leaves the live scale");
 
     {
         const std::filesystem::path root =
@@ -410,21 +378,22 @@ int main() {
         const ScopedEnv config_path(
             "GALAXY_RENDER_CONFIG_PATH",
             path.string().c_str());
-        const ScopedEnv efb_scale("GALAXY_EFB_SCALE", "");
+        const auto stage_bloom = [](unsigned bloom) {
+            galaxy::render::RenderConfig staged = galaxy::render::get_render_config();
+            staged.bloom = bloom;
+            galaxy::render::set_render_config(staged);
+        };
 
-        galaxy::render::stage_next_start_efb_scale(2u);
+        stage_bloom(20u);
         passed &= expect(
             galaxy::render::save_render_config_to_file(),
-            "staged next-start EFB scale saves to an isolated config file");
+            "a setting saves to an isolated config file");
         std::ifstream file(path, std::ios::binary);
         const std::string contents{
             std::istreambuf_iterator<char>(file),
             std::istreambuf_iterator<char>()};
         file.close();
-        passed &= expect(
-            contents.find("efb_scale=2") != std::string::npos &&
-                galaxy::render::get_render_config().efb_scale == galaxy::render::kMaxEfbScale,
-            "saved config contains the staged scale while the live scale remains unchanged");
+        passed &= expect(contents.find("bloom=20") != std::string::npos, "the saved config holds the setting");
 
         HANDLE locked = CreateFileW(
             path.c_str(),
@@ -437,7 +406,7 @@ int main() {
         passed &= expect(
             locked != INVALID_HANDLE_VALUE,
             "render settings destination can be locked for failure injection");
-        galaxy::render::stage_next_start_efb_scale(3u);
+        stage_bloom(30u);
         const bool locked_save = galaxy::render::save_render_config_to_file();
         std::ifstream unchanged_file(path, std::ios::binary);
         const std::string unchanged{
@@ -446,21 +415,21 @@ int main() {
         unchanged_file.close();
         passed &= expect(
             !locked_save &&
-                unchanged.find("efb_scale=2") != std::string::npos &&
-                unchanged.find("efb_scale=3") == std::string::npos,
+                unchanged.find("bloom=20") != std::string::npos &&
+                unchanged.find("bloom=30") == std::string::npos,
             "render settings replace failure preserves the complete old file");
         if (locked != INVALID_HANDLE_VALUE) {
             (void)CloseHandle(locked);
         }
-        galaxy::render::stage_next_start_efb_scale(2u);
+        stage_bloom(20u);
         passed &= expect(
             galaxy::render::save_render_config_to_file(),
             "render settings atomically recover after the destination unlocks");
 
         galaxy::render::load_render_config_from_file();
         passed &= expect(
-            galaxy::render::get_render_config().efb_scale == 2u,
-            "a new startup promotes the persisted staged scale to the active scale");
+            galaxy::render::get_render_config().bloom == 20u,
+            "a new startup reads the persisted setting");
         std::filesystem::remove_all(root);
     }
 
@@ -601,50 +570,6 @@ int main() {
     passed &= expect(
         !quality.enhanced_mipmaps,
         "enhanced mipmaps env override is applied");
-
-    {
-        ScopedEnv efb_scale("GALAXY_EFB_SCALE", "4");
-        galaxy::render::load_render_config_from_file();
-        passed &= expect(
-            galaxy::render::get_render_config().efb_scale == 4u,
-            "EFB scale 4x is accepted from the release environment");
-    }
-    {
-        ScopedEnv efb_scale("GALAXY_EFB_SCALE", "6");
-        galaxy::render::load_render_config_from_file();
-        passed &= expect(
-            galaxy::render::get_render_config().efb_scale == 6u,
-            "opt-in EFB scale 6x is accepted from the release environment");
-    }
-    {
-        ScopedEnv efb_scale("GALAXY_EFB_SCALE", "0");
-        galaxy::render::load_render_config_from_file();
-        passed &= expect(
-            galaxy::render::get_render_config().efb_scale == 1u,
-            "unsupported low EFB scale clamps to native 1x");
-    }
-
-    {
-        ScopedEnv wait("GALAXY_WAIT_FOR_FRAME_LATENCY", "0");
-        ScopedEnv latency("GALAXY_SWAP_CHAIN_FRAME_LATENCY", "99");
-        ScopedEnv tearing("GALAXY_ALLOW_TEARING", "1");
-        ScopedEnv discard("GALAXY_FLIP_DISCARD", "0");
-        galaxy::render::load_render_config_from_file();
-    }
-    const galaxy::render::RenderConfig pacing =
-        galaxy::render::get_render_config();
-    passed &= expect(
-        !pacing.wait_for_frame_latency,
-        "frame latency wait env override is applied");
-    passed &= expect(
-        pacing.swap_chain_frame_latency == 2,
-        "swap-chain latency env override is clamped to the supported range");
-    passed &= expect(
-        pacing.allow_tearing,
-        "allow tearing env override is applied");
-    passed &= expect(
-        !pacing.flip_discard,
-        "flip discard env override is applied");
 
     {
         ScopedEnv decouple("GALAXY_FRAME_RATE_DECOUPLE", "1");

@@ -79,7 +79,9 @@ void GeneralMapParts::appear() {
 }
 
 void GeneralMapParts::kill() {
-    std::for_each(mFunctionArray.begin(), mFunctionArray.end(), std::mem_fun(&MapPartsFunction::end));
+    for (auto& item : mFunctionArray) {
+        item->end();
+    }
     LiveActor::kill();
 }
 
@@ -316,8 +318,9 @@ void GeneralMapParts::receiveMsgSwitchBOff() {
 }
 
 void GeneralMapParts::broadcastMsgToAllFunctions(u32 msg) {
-    std::for_each(mFunctionArray.begin(), mFunctionArray.end(),
-                  std::binder2nd< std::mem_fun1_t< bool, MapPartsFunction, u32 >, u32 >(std::mem_func(&MapPartsFunction::receiveMsg), msg));
+    for (auto& item : mFunctionArray) {
+        item->receiveMsg(msg);
+    }
 }
 
 bool GeneralMapParts::isFixed() const {
@@ -404,6 +407,3 @@ void GeneralMapParts::exeMoveStart() {
     }
 }
 
-bool GeneralMapParts_FORCE_MATCH(MapPartsFunction* pFunction, u32 msg) {
-    return pFunction->MapPartsFunction::receiveMsg(msg);
-}

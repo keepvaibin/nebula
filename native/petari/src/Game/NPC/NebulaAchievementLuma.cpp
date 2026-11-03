@@ -1,7 +1,6 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -12,7 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include <math.h>
-#include <revolution/os.h>
 
 namespace NrvNebulaAchievementLuma {
     NEW_NERVE(NebulaAchievementLumaNrvWait, NebulaAchievementLuma, NebulaWait);
@@ -91,4 +89,3 @@ void NebulaAchievementLuma::exeNebulaOpen() {
         setNerve(&NrvNebulaAchievementLuma::NebulaAchievementLumaNrvWait::sInstance);
     }
 }
-#endif

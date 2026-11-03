@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class CameraParamChunkID {
 public:
@@ -19,8 +18,8 @@ public:
     void createEventID(s32, const char*);
     void createStartID(s32, u16);
 
-    /* 0x04 */ s8 mZoneID;
-    /* 0x08 */ char* mName;
+    s8 mZoneID;
+    char* mName;
 };
 
 class CameraParamChunkID_Tmp : public CameraParamChunkID {
@@ -32,5 +31,5 @@ public:
         return &mBuffer[0];
     }
 
-    /* 0x0C */ char mBuffer[0x100];
+    char mBuffer[0x100];
 };

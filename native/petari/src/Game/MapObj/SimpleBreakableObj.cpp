@@ -64,8 +64,6 @@ void SimpleBreakableObj::init(const JMapInfoIter& rIter) {
         MR::declareCoin(this, mItemNum);
         break;
     case 1:
-        // Likely FAKEMATCH, however including the BenefitItemOneUp header (and by proxy BenefitItemObj)
-        // will emit the nerve instances in sinit.
         mKinokoOneUp = reinterpret_cast< BenefitItemObj* >(MR::createKinokoOneUp());
         break;
     case 2:
@@ -275,10 +273,6 @@ void SimpleBreakableObj::exeDemo() {
     if (MR::isStep(this, mBreakOffsetFrame)) {
         startBreak();
     }
-}
-
-void SimpleBreakableIndirectObj::connectToScene(const MapObjActorInitInfo&) {
-    MR::connectToSceneIndirectMapObj(this);
 }
 
 SimpleBreakableObj::~SimpleBreakableObj() {

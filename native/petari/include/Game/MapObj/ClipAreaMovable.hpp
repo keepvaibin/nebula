@@ -22,8 +22,8 @@ public:
     void movementMoveFunction();
     void updateMatrix();
 
-    /* 0xC0 */ MapPartsRailMover* mMapPartsRailMover;
-    /* 0xC0 */ MapPartsRotator* mMapPartsRotator;
+    MapPartsRailMover* mMapPartsRailMover;
+    MapPartsRotator* mMapPartsRotator;
 };
 
 namespace MR {

@@ -9,26 +9,26 @@ JPAEmitterCallBack::~JPAEmitterCallBack() {
 }
 
 JPABaseParticle* JPABaseEmitter::createParticle() {
-    if (mpPtclPool->getNum() != 0) {
-        JPANode< JPABaseParticle >* node = mpPtclPool->pop_front();
-        mAlivePtclBase.push_front(node);
-        mpRes->getDyn()->calc(mpEmtrMgr->pWd);
-        node->mData.init_p(mpEmtrMgr->pWd);
-        return &node->mData;
+    if (mpPtclPool->getNum() == 0) {
+        mpEmtrMgr->growParticles();
     }
 
-    return NULL;
+    JPANode< JPABaseParticle >* node = mpPtclPool->pop_front();
+    mAlivePtclBase.push_front(node);
+    mpRes->getDyn()->calc(mpEmtrMgr->pWd);
+    node->mData.init_p(mpEmtrMgr->pWd);
+    return &node->mData;
 }
 
 JPABaseParticle* JPABaseEmitter::createChild(JPABaseParticle* parent) {
-    if (mpPtclPool->getNum() != 0) {
-        JPANode< JPABaseParticle >* node = mpPtclPool->pop_front();
-        mAlivePtclChld.push_front(node);
-        node->mData.init_c(mpEmtrMgr->pWd, parent);
-        return &node->mData;
+    if (mpPtclPool->getNum() == 0) {
+        mpEmtrMgr->growParticles();
     }
 
-    return NULL;
+    JPANode< JPABaseParticle >* node = mpPtclPool->pop_front();
+    mAlivePtclChld.push_front(node);
+    node->mData.init_c(mpEmtrMgr->pWd, parent);
+    return &node->mData;
 }
 
 void JPABaseEmitter::deleteAllParticle() {

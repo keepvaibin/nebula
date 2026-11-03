@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include "Game/System/SaveBinary.hpp"
 
 class BinaryDataChunkBase {
@@ -30,11 +29,11 @@ public:
     bool loadFromFileBinary(const u8* pData, u32 dataSize);
     static u32 makeChunkData(u8* pData, u32 dataSize, const BinaryDataChunkBase*);
     BinaryDataChunkBase* findFromSignature(u32 signature) const;
-    static u32 calcBinarySize(const u8* pData);
+    static u32 calcBinarySize(const u8* pData, u32 dataSize);
 
-    /* 0x00 */ BinaryDataChunkBase** mChunks;
-    /* 0x04 */ s32 mMaxChunks;
-    /* 0x08 */ s32 mNumChunks;
-    /* 0x0C */ void* mData;
-    /* 0x10 */ u32 mBufferSize;
+    BinaryDataChunkBase** mChunks;
+    s32 mMaxChunks;
+    s32 mNumChunks;
+    void* mData;
+    u32 mBufferSize;
 };

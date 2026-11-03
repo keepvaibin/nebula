@@ -1,7 +1,6 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Demo/DemoDirector.hpp"
@@ -16,7 +15,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -24,7 +23,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstring>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 
 namespace {
@@ -192,8 +190,8 @@ namespace {
 
     // The question in the played language (NebulaText; the game's own Yes and No answer it), its lines broken as
     // the game's messages are (its text boxes do not wrap).
-    const wchar_t* promptText() {
-        static wchar_t question[128];
+    const char16_t* promptText() {
+        static char16_t question[128];
         NebulaText::get(question, 128, "SkipCutsceneQuestion");
         return question;
     }
@@ -239,10 +237,10 @@ namespace NebulaCutsceneSkip {
 
         switch (sState) {
         case State_Idle: {
-            if (!MR::testCorePadButtonPlus(WPAD_CHAN0)) {
+            if (!MR::isHeldPause(PLAYER_1)) {
                 sNeedRelease = false;
             }
-            if (sNeedRelease || !MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+            if (sNeedRelease || !MR::isPressedPause(PLAYER_1)) {
                 break;
             }
             sNeedRelease = true;
@@ -262,9 +260,9 @@ namespace NebulaCutsceneSkip {
         }
         case State_Prompt:
             // + again answers No.
-            if (!MR::testCorePadButtonPlus(WPAD_CHAN0)) {
+            if (!MR::isHeldPause(PLAYER_1)) {
                 sNeedRelease = false;
-            } else if (!sNeedRelease && MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+            } else if (!sNeedRelease && MR::isPressedPause(PLAYER_1)) {
                 sNeedRelease = true;
                 sWindow->decideNo();
             }
@@ -382,4 +380,3 @@ namespace NebulaCutsceneSkip {
         }
     }
 };  // namespace NebulaCutsceneSkip
-#endif

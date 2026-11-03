@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GameBloom: the game's bloom at the internal resolution (game_bloom.h).
 #include "galaxy/render/game_bloom.h"
+#include "galaxy/run_options.h"
 
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -127,8 +128,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
     D3D12_RENDER_TARGET_BLEND_DESC& blend = pd.BlendState.RenderTarget[0];
     blend.BlendEnable = FALSE;
     blend.LogicOp = D3D12_LOGIC_OP_NOOP;
-    blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
-                                  D3D12_COLOR_WRITE_ENABLE_BLUE;
+    blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     pd.SampleMask = UINT_MAX;
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -136,7 +136,7 @@ ID3D12PipelineState* GameBloom::composite_pipeline(unsigned samples, bool hdr) {
     pd.DepthStencilState.DepthEnable = FALSE;
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
-    pd.RTVFormats[0] = hdr ? kEfbHdrColorFormat : kEfbColorFormat;
+    pd.RTVFormats[0] = hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     pd.SampleDesc.Count = 1u << (index & 3u);
     if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&composite_[index])))) {
         std::cerr << "[bloom] composite pipeline failed for " << (1u << (index & 3u)) << " samples\n";
@@ -192,17 +192,17 @@ void GameBloom::transition(ID3D12GraphicsCommandList* list, Target& target, D3D1
     target.state = state;
 }
 
-// The frame's pixels of the EFB, in its own format, into `target` (the normal bloom's kept scene, the simple bloom's
+// The frame's pixels of the scene target, in its own format, into `target` (the normal bloom's kept scene, the simple bloom's
 // source).
 bool GameBloom::copy_frame(ID3D12GraphicsCommandList* list, const Inputs& in, Target& target, const wchar_t* name,
                            std::uint64_t frame_index, unsigned frames_in_flight) {
-    const DXGI_FORMAT format = in.hdr ? kEfbHdrColorFormat : kEfbColorFormat;
+    const DXGI_FORMAT format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     if (!ensure_target(target, format, in.frame_width, in.frame_height, false, frame_index, frames_in_flight, name)) {
         return false;
     }
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource = in.efb;
+    barrier.Transition.pResource = in.scene_target;
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
@@ -212,7 +212,7 @@ bool GameBloom::copy_frame(ID3D12GraphicsCommandList* list, const Inputs& in, Ta
     to.pResource = target.resource.Get();
     to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     D3D12_TEXTURE_COPY_LOCATION from = to;
-    from.pResource = in.efb;
+    from.pResource = in.scene_target;
     const D3D12_BOX frame{0u, 0u, 0u, in.frame_width, in.frame_height, 1u};
     list->CopyTextureRegion(&to, 0u, 0u, 0u, &from, &frame);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
@@ -227,10 +227,38 @@ void GameBloom::retire(std::uint64_t frame_index) {
                    retired_.end());
 }
 
+Microsoft::WRL::ComPtr<ID3D12Resource> GameBloom::take_kept_image(ID3D12GraphicsCommandList* list, const Inputs& in,
+                                                                   std::uint64_t frame_index,
+                                                                   unsigned frames_in_flight) {
+    retire(frame_index);
+    Microsoft::WRL::ComPtr<ID3D12Resource> image;
+    if (keep_.resource) {
+        const D3D12_RESOURCE_DESC desc = keep_.resource->GetDesc();
+        if (keep_.width == in.frame_width && keep_.height == in.frame_height &&
+            (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0) {
+            transition(list, keep_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            image = std::move(keep_.resource);
+        } else {
+            retired_.push_back({std::move(keep_.resource), frame_index + frames_in_flight});
+        }
+    }
+    keep_ = {};
+    return image;
+}
+
+void GameBloom::keep_picture(Microsoft::WRL::ComPtr<ID3D12Resource> picture, const Inputs& in) {
+    keep_.resource = std::move(picture);
+    keep_.width = in.frame_width;
+    keep_.height = in.frame_height;
+    keep_.format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
+    keep_.state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    kept_ = true;
+}
+
 bool GameBloom::keep(ID3D12GraphicsCommandList* list, const Inputs& in, std::uint64_t frame_index,
                      unsigned frames_in_flight) {
     retire(frame_index);
-    kept_ = ready_ && in.efb != nullptr && in.frame_width != 0u && in.frame_height != 0u &&
+    kept_ = ready_ && in.scene_target != nullptr && in.frame_width != 0u && in.frame_height != 0u &&
             copy_frame(list, in, keep_, L"bloom kept scene", frame_index, frames_in_flight);
     return kept_;
 }
@@ -240,11 +268,11 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     retire(frame_index);
     const bool normal = p.kind == Kind::Normal;
     const bool kept = std::exchange(kept_, false);
-    if (!ready_ || in.efb == nullptr || in.frame_width == 0u || in.frame_height == 0u || (normal && !kept)) {
+    if (!ready_ || in.scene_target == nullptr || in.frame_width == 0u || in.frame_height == 0u || (normal && !kept)) {
         return false;
     }
     ID3D12PipelineState* const composite = composite_pipeline(in.samples, in.hdr);
-    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.logical_height, in.scale);
+    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = composite != nullptr &&
                 ensure_target(work_, kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight, L"bloom work") &&
@@ -272,36 +300,16 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     }
 
     // The Gaussians standing for the rings (game_bloom_shape.h).
-    const bloom::Widths widths = bloom::widths_of(normal, s, in.frame_width, in.frame_height, in.logical_width,
-                                                  in.logical_height, p.ring_x, p.ring_y);
+    const bloom::Widths widths = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);
     const float* const sigma1x = widths.x1;
     const float* const sigma1y = widths.y1;
     const float* const sigma2x = widths.x2;
     const float* const sigma2y = widths.y2;
-    // GALAXY_BLOOM_LOG=1: each kind's shape and widths once; 2: every 600th pass of each kind (which stages bloom).
-    static const unsigned log = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_BLOOM_LOG") == 0 && length > 1
-                   ? static_cast<unsigned>(value[0] - '0')
-                   : 0u;
-    }();
-    static std::uint64_t passes[3]{};
-    if (log != 0u && (log == 1u ? passes[static_cast<unsigned>(p.kind)]++ == 0u
-                                : passes[static_cast<unsigned>(p.kind)]++ % 600u == 0u)) {
-        std::cerr << "[bloom] " << (normal ? "normal" : "simple") << " level 1 " << s.w1 << 'x' << s.h1 << " ("
-                  << s.f << " px a texel, footprint " << s.box << "), level 2 " << s.w2 << 'x' << s.h2
-                  << "; sigma 1 " << sigma1x[0] << '/' << sigma1y[0] << ' ' << sigma1x[1] << '/' << sigma1y[1]
-                  << "; sigma 2 " << sigma2x[0] << '/' << sigma2y[0] << ' ' << sigma2x[1] << '/' << sigma2y[1] << ' '
-                  << sigma2x[2] << '/' << sigma2y[2] << "; threshold " << p.threshold << " taps " << p.tap1 << '/'
-                  << p.tap2 << " intensity " << p.intensity << " ring " << p.ring_x << '/' << p.ring_y << " frame "
-                  << frame_index << '\n';
-    }
 
     const UINT increment = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const auto table = [&](const std::array<ID3D12Resource*, 3>& srvs, const std::array<DXGI_FORMAT, 3>& formats,
                            const std::array<ID3D12Resource*, 3>& uavs) { return this->table(ring, srvs, formats, uavs); };
-    const DXGI_FORMAT efb_format = in.hdr ? kEfbHdrColorFormat : kEfbColorFormat;
+    const DXGI_FORMAT scene_format = in.hdr ? kSceneHdrColorFormat : kSceneColorFormat;
     const auto dispatch = [&](ID3D12PipelineState* pipeline, const Constants& c, D3D12_GPU_DESCRIPTOR_HANDLE gpu,
                               unsigned width, unsigned height) {
         D3D12_GPU_DESCRIPTOR_HANDLE uavs = gpu;
@@ -315,14 +323,14 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     list->SetComputeRootSignature(root_signature_.Get());
 
     // The selection's source: the glowing models drawn over black (normal), the scene (simple).
-    D3D12_RESOURCE_BARRIER efb_barrier{};
-    efb_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    efb_barrier.Transition.pResource = in.efb;
-    efb_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    efb_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    efb_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    D3D12_RESOURCE_BARRIER scene_barrier{};
+    scene_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    scene_barrier.Transition.pResource = in.scene_target;
+    scene_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    scene_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    scene_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     if (normal) {
-        list->ResourceBarrier(1, &efb_barrier);
+        list->ResourceBarrier(1, &scene_barrier);
     }
     {
         Constants c{};
@@ -333,14 +341,14 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         c.uv[1] = static_cast<float>(in.frame_height);
         transition(list, work_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         dispatch(down_.Get(), c,
-                 table({normal ? in.efb : source_.resource.Get(), nullptr, nullptr}, {efb_format, {}, {}},
+                 table({normal ? in.scene_target : source_.resource.Get(), nullptr, nullptr}, {scene_format, {}, {}},
                        {work_.resource.Get(), nullptr, nullptr}),
                  s.w1, s.h1);
         transition(list, work_, kRead);
     }
     if (normal) {
-        std::swap(efb_barrier.Transition.StateBefore, efb_barrier.Transition.StateAfter);
-        list->ResourceBarrier(1, &efb_barrier);
+        std::swap(scene_barrier.Transition.StateBefore, scene_barrier.Transition.StateAfter);
+        list->ResourceBarrier(1, &scene_barrier);
     }
     // The game's 4 x 4 pixel footprint (across, then down with the selection).
     const bool across = s.box > 1.0f;
@@ -373,7 +381,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
                  s.w1, s.h1);
         transition(list, mask_, kRead);
     }
-    // Level 1: the rings' Gaussians across, then down, summed at the taps' weight (normal: clamped, as the EFB holds
+    // Level 1: the rings' Gaussians across, then down, summed at the taps' weight (normal: clamped, as the scene target holds
     // it).
     {
         Constants c{};
@@ -492,11 +500,10 @@ D3D12_GPU_DESCRIPTOR_HANDLE GameBloom::table(DescriptorRing& ring, const std::ar
     return t.gpu;
 }
 
-// The scene (t0) plus the bloom from the levels (t1, t2) over the frame, into the EFB's render target.
+// The scene (t0) plus the bloom from the levels (t1, t2) over the frame, into the scene target's render target.
 void GameBloom::draw_composite(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in,
                                ID3D12PipelineState* pipeline, const Target& scene, const Target& first,
                                const Target& second, Constants c) {
-    c.params[3] = in.hdr ? 0.0f : 1.0f;  // 8 bits: the bloom rounded stochastically
     const D3D12_GPU_DESCRIPTOR_HANDLE gpu =
         table(ring, {scene.resource.Get(), first.resource.Get(), second.resource.Get()},
               {scene.format, first.format, second.format}, {nullptr, nullptr, nullptr});

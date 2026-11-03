@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class ImageEffectBase;
 class ImageEffectDirector;
@@ -25,7 +24,7 @@ public:
     void forceOff();
 
 private:
-    /* 0x04 */ ImageEffectDirector* mHost;
+    ImageEffectDirector* mHost;
 };
 
 namespace ImageEffectStateImpl {
@@ -64,16 +63,16 @@ namespace ImageEffectStateImpl {
         void setIntensity2Default();
 
     private:
-        /* 0x08 */ bool _8;
-        /* 0x0C */ u32 _C;
-        /* 0x10 */ f32 _10;
-        /* 0x14 */ u8 mBloomIntensity;
-        /* 0x18 */ f32 _18;
-        /* 0x1C */ u8 mThreshold;
-        /* 0x20 */ f32 _20;
-        /* 0x24 */ s32 mIntensity1;
-        /* 0x28 */ f32 _28;
-        /* 0x2C */ s32 mIntensity2;
+        bool _8;
+        u32 _C;
+        f32 _10;
+        u8 mBloomIntensity;
+        f32 _18;
+        u8 mThreshold;
+        f32 _20;
+        s32 mIntensity1;
+        f32 _28;
+        s32 mIntensity2;
     };
 
     class StateBloomSimple : public ImageEffectState {

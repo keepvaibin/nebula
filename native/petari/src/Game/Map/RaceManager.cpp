@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include "Game/Map/RaceManager.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/RaceRail.hpp"
@@ -17,7 +18,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include <algorithm>
 
-// FIXME: String "Record" is out of order in .data, yet function order matches in retail and debug
 
 namespace {
     // static const _ sTimeOutSecond = _;
@@ -30,13 +30,13 @@ namespace {
             return mMaxTime;
         }
 
-        /* 0x00 */ const char* mName;
-        /* 0x04 */ s32 mEventBgmId;
-        /* 0x08 */ s32 mMaxTime;
-        /* 0x0C */ const char* mMessageId;
-        /* 0x10 */ const char* mGalaxyName;
-        /* 0x14 */ s32 mScenarioNo;
-        /* 0x18 */ bool mIsDemoWithStarPointer;
+        const char* mName;
+        s32 mEventBgmId;
+        s32 mMaxTime;
+        const char* mMessageId;
+        const char* mGalaxyName;
+        s32 mScenarioNo;
+        bool mIsDemoWithStarPointer;
     };
 
     static const RaceStructData sRaceStruct[] = {
@@ -82,15 +82,6 @@ void RaceManagerLayout::playGo() {
     MR::startPaneAnim(this, "Go", "Count", 0);
     MR::setPaneAnimFrame(this, "Go", 180.0f, 0);
     MR::emitEffect(this, "RaceStart");
-}
-
-// NOTE: This function is an approximation of behavior based on
-// string placement in .data section. Function does not exist in build.
-void RaceManagerLayout::playRecord() {
-    MR::showPane(this, "Record");
-    MR::startPaneAnim(this, "Record", "Record", 0);
-    MR::startPaneAnim(this, "ScoreTime", "Record", 0);
-    MR::emitEffect(this, "RaceGoal");
 }
 
 void RaceManagerLayout::playGoal() {
@@ -199,7 +190,9 @@ void RaceManager::exeWait() {
 }
 
 void RaceManager::exePrep() {
-    std::for_each(&mRacer[0], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::initRacer));
+    for (auto it = &mRacer[0], end = &mRacer[mRacerNum]; it != end; ++it) {
+        (*it)->initRacer();
+    }
 
     if (isNerve(GET_NERVE(RaceManager, RaceManagerNrvPrepWipe))) {
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvPreWipeOut));
@@ -263,7 +256,9 @@ void RaceManager::exeWipeIn() {
     } else {
         MR::onPlayerControl(true);
         MR::endDemo(this, "\203\214\201\133\203\130" /* レース */);
-        std::for_each(&mRacer[0], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::exitRacer));
+        for (auto it = &mRacer[0], end = &mRacer[mRacerNum]; it != end; ++it) {
+            (*it)->exitRacer();
+        }
         setNerve(GET_NERVE(RaceManager, RaceManagerNrvWait));
     }
 }
@@ -340,7 +335,7 @@ void RaceManager::exeRace() {
         }
     }
 
-    std::sort(&mRacer[mRank], &mRacer[mRacerNum], AbstractRacer::compRacer);
+    MR::sort(&mRacer[mRank], &mRacer[mRacerNum], AbstractRacer::compRacer);
 }
 
 void RaceManager::exeDemo() {
@@ -419,7 +414,9 @@ void RaceManager::prepRace() {
         }
     }
 
-    std::for_each(&mAudience[0], &mAudience[mAudienceNum], std::mem_func(&AbstractAudience::prepAudience));
+    for (auto it = &mAudience[0], end = &mAudience[mAudienceNum]; it != end; ++it) {
+        (*it)->prepAudience();
+    }
 }
 
 void RaceManager::startRace() {
@@ -427,7 +424,9 @@ void RaceManager::startRace() {
         MR::sendSimpleMsgToActor(ACTMES_RACE_START, MR::getCurrentRushActor());
     }
 
-    std::for_each(&mRacer[0], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::startRacer));
+    for (auto it = &mRacer[0], end = &mRacer[mRacerNum]; it != end; ++it) {
+        (*it)->startRacer();
+    }
     MR::endStarPointerMode(this);
     MR::endDemo(this, "\203\214\201\133\203\130" /* レース */);
     MR::onPlayerControl(true);
@@ -438,7 +437,9 @@ void RaceManager::goalRace() {
         MR::sendSimpleMsgToActor(ACTMES_RACE_GOAL, MR::getCurrentRushActor());
     }
 
-    std::for_each(&mRacer[mRank], &mRacer[mRacerNum], std::mem_func(&AbstractRacer::loseRacer));
+    for (auto it = &mRacer[mRank], end = &mRacer[mRacerNum]; it != end; ++it) {
+        (*it)->loseRacer();
+    }
 }
 
 void RaceManager::resetRace() {
@@ -456,7 +457,9 @@ void RaceManager::resetRace() {
         }
     }
 
-    std::for_each(&mAudience[0], &mAudience[mAudienceNum], std::mem_func(&AbstractAudience::resetAudience));
+    for (auto it = &mAudience[0], end = &mAudience[mAudienceNum]; it != end; ++it) {
+        (*it)->resetAudience();
+    }
     mLayout->kill();
 }
 
@@ -470,6 +473,10 @@ void RaceManager::prepBind() {
 }
 
 void RaceManager::entry(AbstractRacer* pRacer) {
+    if (mRacerNum == static_cast< u32 >(mRacer.size())) {
+        mRacer.grow();
+    }
+
     mRacer[mRacerNum++] = pRacer;
 }
 
@@ -486,6 +493,10 @@ void RaceManager::entry(PlayerRacer* pRacer) {
 }
 
 void RaceManager::entry(AbstractAudience* pAudience) {
+    if (mAudienceNum == static_cast< u32 >(mAudience.size())) {
+        mAudience.grow();
+    }
+
     mAudience[mAudienceNum++] = pAudience;
 }
 
@@ -573,7 +584,3 @@ namespace RaceManagerFunction {
     }
 };  // namespace RaceManagerFunction
 
-void RaceManager_FORCE_MATCH(AbstractRacer* pRacer) {
-    pRacer->AbstractRacer::initRacer();
-    pRacer->AbstractRacer::initRacer();
-}

@@ -2,7 +2,7 @@
 
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include <cmath>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace JGeometry {
     template < typename T >
@@ -24,25 +24,15 @@ namespace JGeometry {
             return ret;
         }
 
-        static T sqrt(T val) NO_INLINE {
-            if (val <= 0.0f) {
-                return val;
-            }
-
-            float outVal = __frsqrte(val);
-            return (val * (0.5f * outVal * (3.0f - (val * (outVal * outVal)))));
+        static T sqrt(T val) {
+            return NebulaSqrt(val);
         }
 
         static f32 sqrtInline(f32 val) {
-            if (val <= 0.0f) {
-                return val;
-            }
-
-            float outVal = __frsqrte(val);
-            return (val * (0.5f * outVal * (3.0f - (val * (outVal * outVal)))));
+            return NebulaSqrt(val);
         }
 
-        static f32 asin(f32 val) NO_INLINE {
+        static f32 asin(f32 val) {
             if (val >= 1.0f) {
                 return 1.5707964f;
             }
@@ -58,7 +48,7 @@ namespace JGeometry {
             return JMath::sAsinAcosTable.mTable[(u32)(1023.5f * val)];
         }
 
-        static f32 acos(f32 val) NO_INLINE {
+        static f32 acos(f32 val) {
             return JMath::sAsinAcosTable.acos_(val);
         }
 
@@ -66,7 +56,7 @@ namespace JGeometry {
             return 3.1415927f;
         }
 
-        static T clamp(T val, T min, T max) NO_INLINE {
+        static T clamp(T val, T min, T max) {
             if (val < min) {
                 return min;
             }
@@ -78,12 +68,11 @@ namespace JGeometry {
             return val;
         }
 
-        static f32 inv_sqrt(f32 val) NO_INLINE {
+        static f32 inv_sqrt(f32 val) {
             if (val <= 0.0f) {
                 return val;
             }
-            f32 outVal = (f32)__frsqrte(val);
-            return outVal * 0.5f * (3.0f - outVal * outVal * val);
+            return 1.0f / sqrtf(val);
         }
 
         static inline f32 epsilon() {

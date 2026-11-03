@@ -1,9 +1,9 @@
 #include "Game/Speaker/SpkSystem.hpp"
 #include "Game/Speaker/SpkSpeakerCtrl.hpp"
 
-SpkSystem::SpkSystem(JKRHeap* pHeap) : JASGlobalInstance(true), mData() {
+SpkSystem::SpkSystem(NebulaArena* pHeap) : JASGlobalInstance(true), mData() {
     if (pHeap == nullptr) {
-        pHeap = JKRGetCurrentHeap();
+        pHeap = NebulaArena::getCurrentHeap();
     }
 
     mHeap = pHeap;
@@ -13,12 +13,7 @@ SpkSystem::SpkSystem(JKRHeap* pHeap) : JASGlobalInstance(true), mData() {
     SpkSpeakerCtrl::setMixingBuffer(mMixBuffer);
 }
 
-void SpkSystem_DUMMY() {
-    // NOTE: JSUList<SpkSound> dtor is being emitted here, as well as JASGlobalInstance<SpkSystem>. Unsure as to exactly why
-    SpkSoundHolder dummy;
-}
-
-void SpkSystem::setResource(JKRArchive* pArchive, u16 tableOffset, u16 waveOffset) {
+void SpkSystem::setResource(AssetFolder* pArchive, u16 tableOffset, u16 waveOffset) {
     mData = new (mHeap, 0) SpkData(pArchive);
     mData->loadTable(tableOffset);
     mData->loadWave(waveOffset);

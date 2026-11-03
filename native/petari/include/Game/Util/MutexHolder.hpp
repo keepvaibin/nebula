@@ -1,19 +1,18 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
-#include "Game/System/NebulaKernel.hpp"
+#include <NebulaGpu.h>
+#include <nebula_math.h>
+#include "Game/System/GameThreads.hpp"
 
-class JKRHeap;
+class NebulaArena;
 
 namespace MR {
     template < int T >
     class MutexHolder {
     public:
-        static NebulaMutex sMutex;
+        static GameMutex sMutex;
     };
 
     template < int T >
-    NebulaMutex MutexHolder< T >::sMutex;
+    GameMutex MutexHolder< T >::sMutex;
 };  // namespace MR

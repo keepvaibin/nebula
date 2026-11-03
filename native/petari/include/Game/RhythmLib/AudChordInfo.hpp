@@ -1,40 +1,44 @@
 #pragma once
 
 #include <JSystem/JAudio2/JASGlobal.hpp>
-#include "nebula_disc.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
-class JKRArchive;
+class AssetFolder;
 
 struct AudChordData {
-    /* 0x00 */ u8 mBass;
-    /* 0x01 */ u8 mChordTone[4];
-    /* 0x05 */ u8 mAddNote[3];
+    u8 mBass;
+    u8 mChordTone[4];
+    u8 mAddNote[3];
 };
 
-// In the chord table file; its offsets are relocated in place (AudChordTable::setChordTableResource).
+// In the chord table file (host order, as the importer cooks it): its note lists' offsets from the file's start.
 struct AudScaleData {
-    void initScaleData(uintptr_t base) NO_INLINE;
-
-    /* 0x00 */ NEBULA_SELFREL(u8) up;
-    /* 0x04 */ NEBULA_SELFREL(u8) down;
+    u32 mUpOffset;
+    u32 mDownOffset;
 };
 
 class AudChordTable {
 public:
     AudChordTable();
 
-    bool setChordTable(s32 id, JKRArchive* pArchive);
+    bool setChordTable(s32 id, AssetFolder* pArchive);
     bool setChordTableResource(void* pRes);
 
-    /* 0x00 */ bool mLoaded;
-    /* 0x04 */ int mChordCount;
-    /* 0x08 */ int mScaleCount;
-    // The file's relocated offset tables.
-    /* 0x0C */ NEBULA_SELFREL(AudChordData)* mChordPtr;
-    /* 0x10 */ NEBULA_SELFREL(AudScaleData)* mScalePtr;
+    bool mLoaded;
+    int mChordCount;
+    int mScaleCount;
+    // The file and its offset tables (from the file's start); the file is not written.
+    const u8* mBase;
+    const u32* mChordOffsets;
+    const u32* mScaleOffsets;
+
+    const AudChordData* getChord(s32 index) const {
+        return reinterpret_cast< const AudChordData* >(mBase + mChordOffsets[index]);
+    }
+    const AudScaleData* getScale(s32 index) const {
+        return reinterpret_cast< const AudScaleData* >(mBase + mScaleOffsets[index]);
+    }
 };
 
 class AudChordInfo : public JASGlobalInstance< AudChordInfo > {
@@ -52,27 +56,27 @@ public:
 
     AudChordInfo();
 
-    void init(JKRArchive* pArchive);
+    void init(AssetFolder* pArchive);
     bool loadChordInfo(s16 id, bool keepCurrent);
     void invalidiate();
     bool setCurChord(s32 index);
     bool setCurScale(s32 index);
 
     u8 getBassNote() const;
-    u8 getRoot() const NO_INLINE {
+    u8 getRoot() const {
         return mCurChord->mChordTone[0];
     }
-    u8 getChordTone(int idx) const NO_INLINE {
+    u8 getChordTone(int idx) const {
         return mCurChord->mChordTone[idx];
     }
-    u8 getAddNote(int idx) const NO_INLINE {
+    u8 getAddNote(int idx) const {
         return mCurChord->mAddNote[idx];
     }
-    s32 getScaleNoteUp(s32 idx) NO_INLINE {
-        return mCurScale->up[idx];
+    s32 getScaleNoteUp(s32 idx) {
+        return mCurScaleUp[idx];
     }
-    s32 getScaleNoteDown(s32 idx) NO_INLINE {
-        return mCurScale->down[idx];
+    s32 getScaleNoteDown(s32 idx) {
+        return mCurScaleDown[idx];
     }
 
     u8 getFirst() {
@@ -136,14 +140,16 @@ public:
         return mTable.mLoaded && mCurChord != nullptr && mCurScale != nullptr;
     }
 
-    /* 0x00 */ JKRArchive* mArchive;
-    /* 0x04 */ AudChordTable mTable;
-    /* 0x18 */ AudChordData* mCurChord;
-    /* 0x1C */ AudScaleData* mCurScale;
-    /* 0x20 */ u8 mChordNoteList[NUM_CHORD_NOTES];
-    /* 0x28 */ u8 mFlags;
-    /* 0x2C */ u32 _2C;
-    /* 0x30 */ s32 mCurChordIndex;
-    /* 0x34 */ s32 mCurScaleIndex;
-    /* 0x38 */ s16 mTableId;
+    AssetFolder* mArchive;
+    AudChordTable mTable;
+    const AudChordData* mCurChord;
+    const AudScaleData* mCurScale;
+    const u8* mCurScaleUp;  // the current scale's note lists in the chord table file
+    const u8* mCurScaleDown;
+    u8 mChordNoteList[NUM_CHORD_NOTES];
+    u8 mFlags;
+    u32 _2C;
+    s32 mCurChordIndex;
+    s32 mCurScaleIndex;
+    s16 mTableId;
 };

@@ -17,19 +17,12 @@ namespace AudParams {
     const int numFreeSeq = 3;
     const int numFreeStream = 3;
     const int numFreeSoundChild = 160;
-    const int aramAddr = nullptr;
-    const int aramSize = 0xE00000;
     const int workAreaSize = 0x1000;
-    const int audioThreadPriority = 2;
-    const int dvdThreadPriority = 5;
-    const int dvdThreadSwitchID = -1;
-    const int audioThreadSwitchID = -1;
     const int numFreeTracks = 200;
     const int numFreeTrackChannels = 1;
     const int streamBlockSize = 0x2760;
     const int numStreamChannels = 4;
     const f32 outputGain = 0.9f;
-    const int maxSeqDataSize = 0xDAC0;
     const s32 numInspectableSoundObj = 8;
     const f32 masterVolBgm = 1.2f;
     const f32 masterVolSe = 1.2f;
@@ -48,7 +41,6 @@ namespace AudParams {
     const JAISeCategoryArrangementItem arrangeSE_DM = {8, 12};
     const JAISeCategoryArrangementItem arrangeSE_RS = {16, 20};
     const JAISeCategoryArrangementItem arrangeHOMESE = {8, 16};
-    const s32 streamAramBlocks_perChunk = 36;
     const f32 streamSampleRate = 32000.0f;
     const f32 faderVolZeroVolume = 0.0f;
     const f32 faderVolDownVolume = 0.3333f;

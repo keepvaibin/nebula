@@ -8,25 +8,19 @@ class RushEndInfo {
 public:
     RushEndInfo(LiveActor*, u32, const TVec3f&, bool, u32);
 
-    /* 0x00 */ u32 _0;
-    /* 0x04 */ u32 _4;
-    /* 0x08 */ TVec3f _8;
-    /* 0x14 */ bool _14;
-    /* 0x18 */ u32 _18;
-    /* 0x1C */ LiveActor* _1C;
-    /* 0x20 */ union {
+    u32 _0;
+    u32 _4;
+    TVec3f _8;
+    bool _14;
+    u32 _18;
+    LiveActor* _1C;
+    union {
         u32 _20;
         struct {
-#ifdef TARGET_PC
-            // _20 is read by shifts: fields from the least significant bit up, so each has the console's bits.
+            // _20 is read by shifts: fields from the least significant bit up,.
             u32 _8 : 24;
             u32 mDamageType : 4;
             u32 _0 : 4;
-#else
-            u32 _0 : 4;
-            u32 mDamageType : 4;
-            u32 _8 : 24;
-#endif
         } mFlags;
     };
 };

@@ -3,14 +3,14 @@
 #include <JSystem/JAudio2/JASCalc.hpp>
 #include <JSystem/JAudio2/JASGlobal.hpp>
 
-SpkMixingBuffer::SpkMixingBuffer(JKRHeap* pHeap) {
+SpkMixingBuffer::SpkMixingBuffer(NebulaArena* pHeap) {
     for (int i = 0; i < 4; i++) {
         mSamples[i] = new (pHeap, 0) s16[40];
         JASCalc::bzero((void*)mSamples[i], sizeof(s16) * 40);
     }
 }
 
-void SpkMixingBuffer::mix(s32 padChannel, NEBULA_BE(s16)* pWaveData, s32 readSize, f32 volume, s32 offset) {
+void SpkMixingBuffer::mix(s32 padChannel, s16* pWaveData, s32 readSize, f32 volume, s32 offset) {
     for (s32 i = 0; i < readSize; i++) {
         s32 sample = mSamples[padChannel][i + offset];
         s16 wav = pWaveData[i];

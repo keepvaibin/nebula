@@ -5,7 +5,7 @@
 
 class AnimScaleController;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class WalkerStateBindStarPointer;
 
 class CollapsePlane : public MapObjActor {
@@ -25,9 +25,9 @@ public:
     bool calcJointPlane(TPos3f*, const JointControllerInfo&);
     bool tryDPDStop();
 
-    /* 0xC4 */ AnimScaleController* mScaleController;
-    /* 0xC8 */ WalkerStateBindStarPointer* mStateBindStartPointer;
-    /* 0xCC */ JointController* mJointController;
-    /* 0xD0 */ s32 mCollapseStep;
-    /* 0xD4 */ s32 mCollapseTime;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mStateBindStartPointer;
+    JointController* mJointController;
+    s32 mCollapseStep;
+    s32 mCollapseTime;
 };

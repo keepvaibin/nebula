@@ -11,7 +11,11 @@ JAUAudioArcInterpreter::~JAUAudioArcInterpreter() {
 bool JAUAudioArcInterpreter::parse(void const* mData) {
     mBase = (const u8*)mData;
     mReadPtr = mBase;
-    if (readU32_() != 'AA_<') {
+    const u32 magic = readU32_();
+    if (magic == '<_AA') {  // "AA_<" as the disc has it
+        NEBULA_PANIC("JAUAudioArcInterpreter: an audio archive not in host order (the importer cooks it)");
+    }
+    if (magic != 'AA_<') {
         return false;
     }
     while (readCommand_()) {
@@ -97,7 +101,7 @@ bool JAUAudioArcInterpreter::readCommand_() {
         break;
     }
     case 'sect': {
-        u8 var1 = readU8_();
+        readU8_();
         u8 var2 = readU8_();
         u8 var3 = readU8_();
         u8 var4 = readU8_();

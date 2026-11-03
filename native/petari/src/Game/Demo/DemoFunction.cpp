@@ -116,15 +116,15 @@ namespace DemoFunction {
 };  // namespace DemoFunction
 
 namespace {
-    DemoTimeKeeper* getCurrentTimeKeeper() NO_INLINE {
+    DemoTimeKeeper* getCurrentTimeKeeper() {
         return DemoFunction::getDemoDirector()->mExecutor->mTimeKeeper;
     }
 
-    DemoSubPartKeeper* getCurrentSubPartKeeper() NO_INLINE {
+    DemoSubPartKeeper* getCurrentSubPartKeeper() {
         return DemoFunction::getDemoDirector()->mExecutor->mSubPartKeeper;
     }
 
-    bool isCurrentMainPart(const char* pPartName) NO_INLINE {
+    bool isCurrentMainPart(const char* pPartName) {
         DemoTimeKeeper* timeKeeper = getCurrentTimeKeeper();
         return MR::isEqualString(pPartName, timeKeeper->mSubPartInfos[0].mPartName);
     }
@@ -304,7 +304,7 @@ namespace DemoFunction {
 
     ResourceHolder* loadDemoArchive() {
         char buf[0x100];
-        snprintf(buf, sizeof(buf), "DemoSheet.arc");
+        nebula_snprintf(buf, sizeof(buf), "DemoSheet.arc");
         return MR::createAndAddResourceHolder(buf);
     }
 

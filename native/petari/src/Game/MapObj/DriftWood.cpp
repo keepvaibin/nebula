@@ -12,8 +12,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 struct SinCosPair {
     f32 sin;
@@ -48,7 +47,7 @@ void DriftWood::init(const JMapInfoIter& rIter) {
     MR::moveCoordAndTransToNearestRailPos(this);
     mRailDirection.set(MR::getRailDirection(this));
     getSensor(nullptr)->setType(ATYPE_EYE);
-    mWaveSoundTimer = MR::getRandom(30l, 90l);
+    mWaveSoundTimer = MR::getRandom(30, 90);
     f32 radius = 0.0f;
     MR::calcModelBoundingRadius(&radius, this);
     MR::initAndSetRailClipping(&mRailClipping, this, 100.0f, radius);
@@ -67,16 +66,12 @@ void DriftWood::exeWait() {
 
     if (mWaveSoundTimer <= 0) {
         MR::startSound(this, "SE_OJ_DRIFT_WOOD_WAVE");
-        mWaveSoundTimer = MR::getRandom(30l, 90l);
+        mWaveSoundTimer = MR::getRandom(30, 90);
     } else {
         mWaveSoundTimer--;
     }
 }
 
-// required to match
-// TODO remove
-#pragma push
-#pragma opt_propagation off
 void DriftWood::exeVibrate() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_DRIFT_WOOD_PLAYER_ON");
@@ -103,7 +98,6 @@ void DriftWood::exeVibrate() {
         }
     }
 }
-#pragma pop
 
 void DriftWood::connectToScene(const MapObjActorInitInfo&) {
     MR::connectToSceneCollisionMapObj(this);
@@ -139,7 +133,7 @@ void DriftWood::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         }
     } else if (MR::isSensorMapObj(pReceiver) && MR::sendMsgEnemyAttack(pReceiver, pSender) && MR::isOnPlayer(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 }
 

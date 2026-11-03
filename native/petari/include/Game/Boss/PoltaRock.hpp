@@ -26,16 +26,16 @@ public:
     void exeSign();
     void exeMove();
     void generateKill();
-    bool isEnableAttack() const NO_INLINE;
+    bool isEnableAttack() const;
     bool isEnableExplosion() const;
 
     inline Polta* getOwner() {
         return mOwner;
-    }  // required to match instruction order in generateKill
+    }
 
-    /* 0x8C */ Polta* mOwner;
+    Polta* mOwner;
     TQuat4f _90;
     TVec3f _A0;
     TVec3f _AC;
-    /* 0xB8 */ s32 mType;
+    s32 mType;
 };

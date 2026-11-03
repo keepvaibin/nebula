@@ -23,6 +23,6 @@ public:
     void exeTalk();
     void exeTakeOutStar();
 
-    /* 0x190 */ TakeOutStar* mTakeOutStar;
-    /* 0x194 */ ActorCameraInfo* mCameraInfo;
+    TakeOutStar* mTakeOutStar;
+    ActorCameraInfo* mCameraInfo;
 };

@@ -115,13 +115,13 @@ bool KoopaJrShipCannonShell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender,
         if (isNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeDown)))
             return false;
 
-        MR::tryRumblePad(this, "\222\206" /* 中 */, WPAD_CHAN0);
+        MR::tryRumblePad(this, "\222\206" /* 中 */, PLAYER_1);
         setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeDown));
         return true;
     }
 
     if (MR::isMsgPlayerHipDrop(msg)) {
-        MR::tryRumblePad(this, "\222\206" /* 中 */, WPAD_CHAN0);
+        MR::tryRumblePad(this, "\222\206" /* 中 */, PLAYER_1);
         setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeHipDropDown));
         return true;
     }
@@ -213,7 +213,7 @@ void KoopaJrShipCannonShell::explosion() {
 
 void KoopaJrShipCannonShell::misfire() {
     MR::shakeCameraWeak();
-    MR::tryRumblePad(this, "\216\343" /* 弱 */, WPAD_CHAN0);
+    MR::tryRumblePad(this, "\216\343" /* 弱 */, PLAYER_1);
     MR::emitEffect(this, "MisFire");
     MR::startSound(this, "SE_EM_KILLER_MISS_FIRE");
     kill();
@@ -258,8 +258,6 @@ void KoopaJrShipCannonShell::exeDown() {
         misfire();
 }
 
-#pragma push
-#pragma global_optimizer off
 void KoopaJrShipCannonShell::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
@@ -289,7 +287,6 @@ void KoopaJrShipCannonShell::exeFreeze() {
         setNerve(GET_NERVE(KoopaJrShipCannonShell, HostTypeFly));
     }
 }
-#pragma pop
 
 namespace CannonShellUtil {
     void registerKoopaJrShipCannonShell(CannonShellHolder* pHolder, int shellNum) {

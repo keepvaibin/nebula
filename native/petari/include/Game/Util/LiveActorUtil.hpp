@@ -5,10 +5,9 @@
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
-#include <revolution/mtx.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
+#include <nebula_math.h>
 
 class ActorLightCtrl;
 class BckCtrlData;
@@ -47,8 +46,6 @@ namespace MR {
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor*, HitSensor*);
     CollisionParts* tryCreateCollisionWaterSurface(LiveActor*, HitSensor*);
     CollisionParts* tryCreateCollisionSunshade(LiveActor*, HitSensor*);
-    const char* createLowModelObjName(const LiveActor*);
-    const char* createMiddleModelObjName(const LiveActor*);
     PartsModel* createBloomModel(LiveActor*, MtxPtr);
     PartsModel* createWaterModel(LiveActor*, MtxPtr);
     PartsModel* createIndirectPlanetModel(LiveActor*, MtxPtr);
@@ -122,11 +119,11 @@ namespace MR {
     bool isExistBva(const LiveActor*, const char*);
     bool isExistTexture(const LiveActor*, const char*);
 
-    void newDifferedDLBuffer(LiveActor*);
-    void initDLMakerFog(LiveActor*, bool);
-    void initDLMakerMatColor0(LiveActor*, const char*, const J3DGXColor*);
-    void initDLMakerChangeTex(LiveActor*, const char*);
-    TexMtxCtrl* initDLMakerTexMtx(LiveActor*, const char*);
+    void newDifferedMaterials(LiveActor*);
+    void initMaterialFog(LiveActor*, bool);
+    void initMaterialColor0(LiveActor*, const char*, const J3DColor*);
+    void initMaterialChangeTex(LiveActor*, const char*);
+    TexMtxCtrl* initMaterialTexMtx(LiveActor*, const char*);
 
     void startAction(const LiveActor*, const char*);
     bool isActionEnd(const LiveActor*);
@@ -136,7 +133,7 @@ namespace MR {
     void startAllAnim(const LiveActor*, const char*);
     bool tryStartAllAnim(const LiveActor*, const char*);
 
-    ProjmapEffectMtxSetter* initDLMakerProjmapEffectMtxSetter(LiveActor*);
+    ProjmapEffectMtxSetter* initMaterialProjmapEffectMtxSetter(LiveActor*);
 
     void startBck(const LiveActor*, const char*, const char* pBrkName = nullptr);
     void startBckWithInterpole(const LiveActor*, const char*, s32);
@@ -210,7 +207,7 @@ namespace MR {
     void setBrkRate(const LiveActor*, f32);
     void setBvaRate(const LiveActor*, f32);
 
-    void setBckFrame(const LiveActor*, f32) NO_INLINE;
+    void setBckFrame(const LiveActor*, f32);
     void setBtkFrame(const LiveActor*, f32);
     void setBrkFrame(const LiveActor*, f32);
     void setBtpFrame(const LiveActor*, f32);
@@ -257,10 +254,10 @@ namespace MR {
     void loadActorLight(const LiveActor*);
     void calcLightPos0(TVec3f*, const LiveActor*);
     void calcLightPos1(TVec3f*, const LiveActor*);
-    const GXColor* getLightAmbientColor(const LiveActor*);
+    const NebulaColor8* getLightAmbientColor(const LiveActor*);
     ActorLightCtrl* getLightCtrl(const LiveActor*);
 
-    bool isStep(const LiveActor*, s32) NO_INLINE;
+    bool isStep(const LiveActor*, s32);
     bool isFirstStep(const LiveActor*);
     bool isLessStep(const LiveActor*, s32);
     bool isLessEqualStep(const LiveActor*, s32);
@@ -325,7 +322,7 @@ namespace MR {
     void showModel(LiveActor*);
     void hideModel(LiveActor*);
     void hideModelAndOnCalcAnim(LiveActor*);
-    void showModelIfHidden(LiveActor*) NO_INLINE;
+    void showModelIfHidden(LiveActor*);
     void hideModelIfShown(LiveActor*);
     void hideModelAndOnCalcAnimIfShown(LiveActor*);
 
@@ -428,7 +425,7 @@ namespace MR {
     PartsModel* createPartsModelNpcAndFix(LiveActor*, const char*, const char*, const char*);
 
     LodCtrl* createLodCtrlNPC(LiveActor*, const JMapInfoIter&);
-    LodCtrl* createLodCtrlPlanet(LiveActor*, const JMapInfoIter&, f32, s32);
+    LodCtrl* createLodCtrlPlanet(LiveActor*, const JMapInfoIter&, f32);
     LodCtrl* createLodCtrlMapObj(LiveActor*, const JMapInfoIter&, f32);
 
     Flag* createMapFlag(const char*, const char*, const TVec3f*, const TVec3f&, f32, f32, f32, s32, s32, f32);

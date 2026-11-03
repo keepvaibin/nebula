@@ -1,14 +1,14 @@
 #include "JSystem/JAudio2/JASChannel.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
-#include "JSystem/JAudio2/JASDSPChannel.hpp"
+#include "JSystem/JAudio2/JASVoiceSlot.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JGeometry.hpp"
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 
-NebulaMessageQueue JASChannel::sBankDisposeMsgQ;
+GameMessageQueue JASChannel::sBankDisposeMsgQ;
 
 void* JASChannel::sBankDisposeMsg[16];
 
@@ -17,10 +17,11 @@ void* JASChannel::sBankDisposeList[16];
 int JASChannel::sBankDisposeListSize;
 
 JASChannel::JASChannel(Callback i_callback, void* i_callbackData)
-    : mStatus(STATUS_STOP), mDspCh(nullptr), mCallback(i_callback), mCallbackData(i_callbackData), mUpdateTimer(0), mBankDisposeID(nullptr), mKey(0),
+    : mStatus(STATUS_STOP), mSlot(nullptr), mCallback(i_callback), mCallbackData(i_callbackData), mUpdateTimer(0), mBankDisposeID(nullptr), mKey(0),
       mVelocity(0x7f), mKeySweep(0.0f), mKeySweepTarget(0.0f), mKeySweepCount(0), mSkipSamples(0) {
     mChannelType = JASChannel::CH_WAVE;
     mWavePtr = nullptr;
+    mWaveLimit = nullptr;
     mMixConfig[0].whole = 0x150;
     mMixConfig[1].whole = 0x210;
     mMixConfig[2].whole = 0x352;
@@ -32,8 +33,8 @@ JASChannel::JASChannel(Callback i_callback, void* i_callbackData)
 }
 
 JASChannel::~JASChannel() {
-    if (mDspCh != nullptr) {
-        mDspCh->drop();
+    if (mSlot != nullptr) {
+        mSlot->drop();
     }
     if (mCallback != nullptr) {
         mCallback(CB_STOP, this, nullptr, mCallbackData);
@@ -41,24 +42,24 @@ JASChannel::~JASChannel() {
 }
 
 int JASChannel::play() {
-    JASDSPChannel* channel = JASDSPChannel::alloc(JSULoByte(mPriority), dspUpdateCallback, this);
+    JASVoiceSlot* channel = JASVoiceSlot::alloc(JSULoByte(mPriority), voiceUpdateCallback, this);
     if (channel == nullptr) {
         delete this;
         return 0;
     }
-    mDspCh = channel;
+    mSlot = channel;
     channel->start();
     mStatus = STATUS_PLAY;
     return 1;
 }
 
 int JASChannel::playForce() {
-    JASDSPChannel* channel = JASDSPChannel::allocForce(JSULoByte(mPriority), dspUpdateCallback, this);
+    JASVoiceSlot* channel = JASVoiceSlot::allocForce(JSULoByte(mPriority), voiceUpdateCallback, this);
     if (channel == nullptr) {
         delete this;
         return 0;
     }
-    mDspCh = channel;
+    mSlot = channel;
     channel->start();
     mStatus = STATUS_PLAY;
     return 1;
@@ -74,7 +75,7 @@ void JASChannel::release(u16 i_directRelease) {
                 mOscillators[i].release();
             }
         }
-        mDspCh->setPriority(JSUHiByte(mPriority));
+        mSlot->setPriority(JSUHiByte(mPriority));
         mStatus = STATUS_RELEASE;
     }
 }
@@ -135,7 +136,7 @@ void JASChannel::setKeySweepTarget(s32 i_target, u32 i_count) {
     mKeySweepCount = i_count;
 }
 
-void JASChannel::updateEffectorParam(JASDsp::TChannel* i_channel, u16* i_mixerVolume, JASOscillator::EffectParams const& i_params) {
+void JASChannel::updateEffectorParam(JASVoice* i_channel, f32* i_mixerVolume, JASOscillator::EffectParams const& i_params) {
     PanVector pan_vector, fxmix_vector, dolby_vector;
     pan_vector.mSound = mSoundParams.mPan;
     pan_vector.mChannel = mParams.mPan;
@@ -179,17 +180,17 @@ void JASChannel::updateEffectorParam(JASDsp::TChannel* i_channel, u16* i_mixerVo
     }
 }
 
-s32 JASChannel::dspUpdateCallback(u32 i_type, JASDsp::TChannel* i_channel, void* i_this) {
+s32 JASChannel::voiceUpdateCallback(u32 i_type, JASVoice* i_channel, void* i_this) {
     JASChannel* _this = static_cast< JASChannel* >(i_this);
     switch (i_type) {
-    case JASDSPChannel::CB_PLAY:
-        return _this->updateDSPChannel(i_channel);
-    case JASDSPChannel::CB_START:
-        return _this->initialUpdateDSPChannel(i_channel);
-    case JASDSPChannel::CB_STOP:
-    case JASDSPChannel::CB_DROP:
-        _this->mDspCh->free();
-        _this->mDspCh = nullptr;
+    case JASVoiceSlot::CB_PLAY:
+        return _this->updateVoice(i_channel);
+    case JASVoiceSlot::CB_START:
+        return _this->initialUpdateVoice(i_channel);
+    case JASVoiceSlot::CB_STOP:
+    case JASVoiceSlot::CB_DROP:
+        _this->mSlot->free();
+        _this->mSlot = nullptr;
         delete _this;
         return -1;
     default:
@@ -198,7 +199,7 @@ s32 JASChannel::dspUpdateCallback(u32 i_type, JASDsp::TChannel* i_channel, void*
     return 0;
 }
 
-s32 JASChannel::initialUpdateDSPChannel(JASDsp::TChannel* i_channel) {
+s32 JASChannel::initialUpdateVoice(JASVoice* i_channel) {
     if (isDolbyMode()) {
         i_channel->initAutoMixer();
     }
@@ -208,15 +209,15 @@ s32 JASChannel::initialUpdateDSPChannel(JASDsp::TChannel* i_channel) {
     }
 
     if (*mWaveInfo._24 == 0) {
-        mDspCh->free();
-        mDspCh = nullptr;
+        mSlot->free();
+        mSlot = nullptr;
         delete this;
         return -1;
     }
 
     if (checkBankDispose()) {
-        mDspCh->free();
-        mDspCh = nullptr;
+        mSlot->free();
+        mSlot = nullptr;
         delete this;
         return -1;
     }
@@ -224,6 +225,7 @@ s32 JASChannel::initialUpdateDSPChannel(JASDsp::TChannel* i_channel) {
     switch (mChannelType) {
     case 0:
         i_channel->setWaveInfo(mWaveInfo, mWavePtr, mSkipSamples);
+        i_channel->wave_end = mWaveLimit;
         break;
     case 2:
         i_channel->setOscInfo(mProgNo);
@@ -257,38 +259,38 @@ s32 JASChannel::initialUpdateDSPChannel(JASDsp::TChannel* i_channel) {
     }
     mVibrate.resetCounter();
     mTremolo.resetCounter();
-    u16 mixer_volume[6];
+    f32 mixer_volume[6];
     updateEffectorParam(i_channel, mixer_volume, effect_params);
     for (u8 i = 0; i < 6; i++) {
         i_channel->setMixerInitVolume(i, mixer_volume[i]);
     }
 
     f32 pitch = JASCalc::pow2(mParams._8 + (mKey + mKeySweep) / 12.0f + effect_params._14 * mVibrate.getValue());
-    pitch = mSoundParams.mPitch * effect_params.mPitch * pitch * mParams.mPitch * 4096.0f;
+    pitch = mSoundParams.mPitch * effect_params.mPitch * pitch * mParams.mPitch;
     if (pitch < 0.0f) {
         pitch = 0.0f;
     }
-    i_channel->setPitch((s32)(pitch));
+    i_channel->setPitch(pitch);
 
     i_channel->setPauseFlag(mPauseFlag);
     return 0;
 }
 
-s32 JASChannel::updateDSPChannel(JASDsp::TChannel* i_channel) {
+s32 JASChannel::updateVoice(JASVoice* i_channel) {
     if (mCallback != nullptr) {
         mCallback(CB_PLAY, this, i_channel, mCallbackData);
     }
 
     if (*mWaveInfo._24 == 0) {
-        mDspCh->free();
-        mDspCh = nullptr;
+        mSlot->free();
+        mSlot = nullptr;
         delete this;
         return -1;
     }
 
     if (checkBankDispose()) {
-        mDspCh->free();
-        mDspCh = nullptr;
+        mSlot->free();
+        mSlot = nullptr;
         delete this;
         return -1;
     }
@@ -297,13 +299,13 @@ s32 JASChannel::updateDSPChannel(JASDsp::TChannel* i_channel) {
     JASOscillator::EffectParams effect_params;
     if (mPauseFlag) {
         if (mOscillators[0].isRelease()) {
-            mDspCh->free();
-            mDspCh = nullptr;
+            mSlot->free();
+            mSlot = nullptr;
             delete this;
             return -1;
         }
     } else {
-        f32 inc = 32028.5f / JASDriver::getDacRate();
+        f32 inc = 32028.5f / JASDriver::getSoundRate();
         mVibrate.incCounter(inc);
         mTremolo.incCounter(inc);
         if (mUpdateTimer != 0) {
@@ -312,14 +314,14 @@ s32 JASChannel::updateDSPChannel(JASDsp::TChannel* i_channel) {
                 mCallback(CB_TIMER, this, i_channel, mCallbackData);
             }
         }
-        inc = 48000.0f / JASDriver::getDacRate();
+        inc = 48000.0f / JASDriver::getSoundRate();
         for (u32 i = 0; i < 2; i++) {
             if (mOscillators[i].isValid()) {
                 mOscillators[i].incCounter(inc);
                 effectOsc(i, &effect_params);
                 if (i == 0 && mOscillators[i].isStop()) {
-                    mDspCh->free();
-                    mDspCh = nullptr;
+                    mSlot->free();
+                    mSlot = nullptr;
                     delete this;
                     return -1;
                 }
@@ -327,18 +329,18 @@ s32 JASChannel::updateDSPChannel(JASDsp::TChannel* i_channel) {
         }
     }
 
-    u16 mixer_volume[6];
+    f32 mixer_volume[6];
     updateEffectorParam(i_channel, mixer_volume, effect_params);
     for (u8 i = 0; i < 6; i++) {
         i_channel->setMixerVolume(i, mixer_volume[i]);
     }
 
     f32 pitch = JASCalc::pow2(mParams._8 + (mKey + mKeySweep) / 12.0f + effect_params._14 * mVibrate.getValue());
-    pitch = mSoundParams.mPitch * effect_params.mPitch * pitch * mParams.mPitch * 4096.0f;
+    pitch = mSoundParams.mPitch * effect_params.mPitch * pitch * mParams.mPitch;
     if (pitch < 0.0f) {
         pitch = 0.0f;
     }
-    i_channel->setPitch((s32)(pitch));
+    i_channel->setPitch(pitch);
 
     if (!mPauseFlag && mKeySweepCount != 0) {
         mKeySweep += (mKeySweepTarget - mKeySweep) / mKeySweepCount;
@@ -347,27 +349,23 @@ s32 JASChannel::updateDSPChannel(JASDsp::TChannel* i_channel) {
     return 0;
 }
 
-void JASChannel::updateAutoMixer(JASDsp::TChannel* i_channel, f32 param_1, f32 param_2, f32 param_3, f32 param_4) {
+void JASChannel::updateAutoMixer(JASVoice* i_channel, f32 param_1, f32 param_2, f32 param_3, f32 param_4) {
     if (JASDriver::getOutputMode() == 0) {
         param_1 *= 0.707f;
     }
     param_1 = JASCalc::clamp01(param_1);
 
-    u16 r31 = (s32)(param_1 * JASDriver::getChannelLevel_dsp());
-    u8 r30 = (s32)(param_2 * 127.5f);
-    u8 r29 = (s32)(param_4 * 127.5f);
-    u8 r28 = (s32)(param_3 * 127.5f);
-    i_channel->setAutoMixer(r31, r30, r29, r28, 0);
+    i_channel->setAutoMixer(param_1 * JASDriver::getChannelGain(), param_2, param_4, param_3);
 }
 
-void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, u16* i_volumeOut) {
+void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, f32* i_volumeOut) {
     for (u32 i = 0; i < 6; i++) {
         f32 volume = i_volume;
         MixConfig config = mMixConfig[i];
         if (config.upper == 0) {
-            i_volumeOut[i] = 0;
+            i_volumeOut[i] = 0.0f;
         } else {
-            f32 scale;
+            f32 scale = 0.0f;
 
             if (config.lower0 != 0) {
                 switch (config.lower0) {
@@ -448,7 +446,7 @@ void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, 
             }
 
             volume = JASCalc::clamp01(volume);
-            i_volumeOut[i] = (s32)(volume * JASDriver::getChannelLevel_dsp());
+            i_volumeOut[i] = volume * JASDriver::getChannelGain();
         }
     }
 }

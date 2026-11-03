@@ -1,10 +1,9 @@
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <locale.h>
 
 // needed here for inlining reasons
-inline int tolower(int c) {
-    return ((c < 0) || (c >= 0x100)) ? c : (int)(_current_locale.ctype_cmpt_ptr->lower_map_ptr[c]);
+static inline int lowerCase(int c) {
+    return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
 }
 
 HashSortTable::HashSortTable(u32 cnt) {
@@ -54,9 +53,9 @@ void HashSortTable::sort() {
         return;
     }
 
-    s32 originalIndices[0x400];
+    s32* const originalIndices = new s32[mCurrentLength];
     MR::sortSmall(mCurrentLength, mHashCodes, originalIndices);
-    HashSortValue swapArray[0x400];
+    HashSortValue* const swapArray = new HashSortValue[mCurrentLength];
 
     for (int i = 0; i < mCurrentLength; i++) {
         swapArray[i] = _8[originalIndices[i]];
@@ -65,6 +64,9 @@ void HashSortTable::sort() {
     for (int i = 0; i < mCurrentLength; i++) {
         _8[i] = swapArray[i];
     }
+
+    delete[] swapArray;
+    delete[] originalIndices;
 
     u32 counter2 = 0;
     u32 counter;
@@ -172,7 +174,7 @@ namespace MR {
         u32 hash;
 
         for (hash = 0; *pStr != '\0'; pStr++) {
-            hash = *pStr + hash * 31;
+            hash = static_cast< s8 >(*pStr) + hash * 31;  // cooked tables hold these: a byte above 127 counts negative
         }
 
         return hash;
@@ -182,7 +184,7 @@ namespace MR {
         u32 hash;
 
         for (hash = 0; *pStr != '\0'; pStr++) {
-            hash = tolower(*pStr) + hash * 31;
+            hash = lowerCase(static_cast< s8 >(*pStr)) + hash * 31;
         }
 
         return hash;

@@ -16,6 +16,11 @@ public:
     ParticleEmitter* findAvailableParticleEmitter();
     void requestMovementOffAllLoopEmitters();
 
-    /* 0x0 */ const EffectSystem* mEffectSystem;
-    /* 0x4 */ MR::AssignableArray< ParticleEmitter > mEmitters;
+    const EffectSystem* mEffectSystem;
+    struct Chunk {
+        MR::AssignableArray< ParticleEmitter > mEmitters;
+        Chunk* mNext;
+    };
+
+    Chunk mFirst;
 };

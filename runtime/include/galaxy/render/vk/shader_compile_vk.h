@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// HLSL to SPIR-V through glslang's HLSL front end (docs/VULKAN.md). The generated GX shaders and the renderer's own
+// HLSL to SPIR-V through glslang's HLSL front end (docs/VULKAN.md). The generated shaders and the renderer's own
 // shaders keep their D3D12 register declarations; annotate() adds the Vulkan binding each register maps to, so the
 // D3D12 sources (and the hashes their caches use) stay as they are.
 #pragma once
@@ -24,15 +24,15 @@ struct RegisterBinding {
     bool push_constant = false;
 };
 
-// The GX draw layout (RendererVk): set 0 = b0 and b1 (dynamic uniform buffers), t0 space1 (the matrix palette, a
+// The draw layout (RendererVk): set 0 = b0 and b1 (dynamic uniform buffers), t0 space1 (the matrix palette, a
 // dynamic storage buffer), t1 and t2 space1 (vertex blending's earlier vertices and verdicts, storage buffers); set
 // 1 = t0-t7 (textures); set 2 = s0-s7 (samplers); b2 (vertex blending's per-draw values) = vertex push constants.
-[[nodiscard]] std::span<const RegisterBinding> gx_draw_bindings() noexcept;
+[[nodiscard]] std::span<const RegisterBinding> draw_bindings() noexcept;
 
 // Inserts the Vulkan attribute before every resource declared with a mapped register.
 [[nodiscard]] std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bindings);
 
-// A GX vertex shader (VSOut, `VSOut o = (VSOut)0;`) that also writes a one-pixel point size: Vulkan points drawn
+// A vertex shader (VSOut, `VSOut o = (VSOut)0;`) that also writes a one-pixel point size: Vulkan points drawn
 // without the expanding geometry shader need the vertex stage to write PointSize.
 [[nodiscard]] std::string with_point_size(std::string_view vertex_hlsl);
 

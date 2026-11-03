@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 namespace galaxy::crash {
@@ -68,10 +69,18 @@ struct Report {
 
 // The code, title, detail and advice for these facts.
 Report classify(const Facts& facts) noexcept;
+// A failure's text says the graphics card was reset or lost (NEB-G01).
+bool is_gpu_lost(const char* text) noexcept;
 
 // The report as the text file and dialog show it: "NEB-xxx: title", the detail, the advice, then `technical`
 // (the exception line, the dump's path) and the session's mods. Returns the length written (without the terminator).
 std::size_t format_report(const Report& report, std::string_view technical, char* out, std::size_t size) noexcept;
+
+// English words in a language folder's spelling (UsFrench, EuGerman, ...) for the dialog, in a healthy process: the
+// file keeps English for the team. No row, or no such folder: the words given.
+[[nodiscard]] std::string_view translated(std::string_view english, std::string_view language) noexcept;
+// A report (format_report, without its technical details) line by line; "CODE: title" keeps its code.
+[[nodiscard]] std::string translated_report(std::string_view report, std::string_view language);
 
 // A mod read within this many seconds before the game failed is named as the likely cause.
 inline constexpr double kRecentModRead = 15.0;

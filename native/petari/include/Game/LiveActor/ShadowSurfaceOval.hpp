@@ -18,7 +18,7 @@ public:
     void setColor(Color8);
     void setAlpha(u8);
 
-    /* 0x10 */ J3DModelData* mModelData;
-    /* 0x14 */ TVec3f mSize;
-    /* 0x20 */ Color8 mColor;
+    J3DModelData* mModelData;
+    TVec3f mSize;
+    Color8 mColor;
 };

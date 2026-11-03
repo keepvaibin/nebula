@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class J3DModel;
 class J3DModelData;
@@ -17,5 +16,5 @@ public:
     virtual ~J3DVtxShader() {
     }
 
-    /* 0x04 */ u32 _4;
+    u32 _4;
 };

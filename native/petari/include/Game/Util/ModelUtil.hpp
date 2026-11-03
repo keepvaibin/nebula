@@ -3,9 +3,8 @@
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <JSystem/JGeometry/TBox.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DModel;
 class J3DMaterial;
@@ -43,7 +42,7 @@ namespace MR {
     J3DMaterial* getMaterial(const LiveActor*, int);
     s32 getMaterialNum(J3DModel*);
     const char* getMaterialName(const J3DModelData*, int);
-    void updateModelDiffDL(LiveActor*);
+    void updateModelDiffMaterials(LiveActor*);
     bool isEnvelope(J3DMaterial*);
     void hideMaterial(J3DModel*, const char*);
     void hideMaterial(const LiveActor*, const char*);
@@ -67,14 +66,12 @@ namespace MR {
     int findPosNrmMtxIndexFromShape(J3DShape*, u16);
     void copyJointAnimation(J3DModel*, J3DModel*);
     void copyJointAnimation(LiveActor*, const LiveActor*);
-    void syncJointAnimation(LiveActor*, const LiveActor*);
     void syncMaterialAnimation(J3DModel*, J3DModel*);
     void syncMaterialAnimation(LiveActor*, const LiveActor*);
     void getLightNum(J3DMaterial*, s32*, s32*, s32*, s32*);
     s32 getLightNum(J3DMaterial*);
     s32 getLightNumMax(const LiveActor*);
     s32 getLightNumMax(J3DModelData*);
-    void downFracVtx(J3DModelData*);
     void calcModelBoundingBox(TBox3f*, const LiveActor*);
     void calcModelBoundingRadius(f32*, const LiveActor*);
     bool isExistCollisionResource(const LiveActor*, const char*);
@@ -82,5 +79,4 @@ namespace MR {
     bool isExistSubModel(const char*, const char*);
     J3DModel* newJ3DModel(const ResourceHolder*, const char*, J3DMdlFlag);
     J3DModelData* getJ3DModelData(const char*);
-    bool isUseFur(const J3DModelData*);
 };  // namespace MR

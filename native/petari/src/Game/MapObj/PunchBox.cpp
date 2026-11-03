@@ -18,16 +18,6 @@ namespace NrvPunchBox {
     NEW_NERVE(PunchBoxNrvHit, PunchBox, Hit);
 };  // namespace NrvPunchBox
 
-void PunchBox_FORCE_MATCH_SDATA2() {
-    (void)90.0f;
-    (void)150.0f;
-    (void)77.0f;
-    (void)410.0f;
-    (void)110.0f;
-    (void)10.0f;
-    (void)40.0f;
-}
-
 PunchBox::PunchBox(const char* pName) : LiveActor(pName) {
 }
 
@@ -59,7 +49,7 @@ void PunchBox::init(const JMapInfoIter& rIter) {
     mCoinCount = arg0;
     _94 = 1;
     _90 = 0;
-    _92 = MR::getRandom(0l, 31l);
+    _92 = MR::getRandom(0, 31);
     _8C = 0;
 
     setNerve(GET_NERVE(PunchBox, PunchBoxNrvWait));

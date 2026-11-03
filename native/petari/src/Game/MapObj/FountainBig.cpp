@@ -137,7 +137,7 @@ void FountainBig::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
                 MR::invalidateHitSensors(this);
             }
         } else {
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, PLAYER_1);
             MR::sendArbitraryMsg(ACTMES_FOUNTAINJUMP, pReceiver, pSender);
         }
     }

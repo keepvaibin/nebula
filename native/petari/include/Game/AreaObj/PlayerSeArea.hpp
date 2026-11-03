@@ -14,5 +14,5 @@ public:
         return "PlayerSeArea";
     }
 
-    /* 0x3C */ s32 _3C;
+    s32 _3C;
 };

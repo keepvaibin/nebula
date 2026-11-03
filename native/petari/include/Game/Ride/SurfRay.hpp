@@ -10,7 +10,7 @@ class SurfRay : public LiveActor {
 public:
     /// @brief Creates a new `SurfRay`.
     /// @param pName A pointer to the null-terminated name of the object.
-    /// @param padChannel The handle to the Wii Remote.
+    /// @param padChannel The player.
     SurfRay(const char* pName, s32 padChannel = 0);
 
     virtual void init(const JMapInfoIter&);
@@ -53,40 +53,40 @@ public:
     bool isTwistStart() const;
     bool isRotateStart() const;
 
-    /* 0x8C */ f32 mSurfSpeed;
-    /* 0x90 */ f32 mOrthoSpeed;
-    /* 0x94 */ TVec3f mOrthoVelocity;
+    f32 mSurfSpeed;
+    f32 mOrthoSpeed;
+    TVec3f mOrthoVelocity;
 
-    /* 0xA0 */ f32 mSteerRate;
-    /* 0xA4 */ f32 mSteerAccel;
+    f32 mSteerRate;
+    f32 mSteerAccel;
 
-    /* 0xA8 */ TVec3f mFront;
-    /* 0xB4 */ TVec3f mUp;
-    /* 0xC0 */ TVec3f mSide;
-    /* 0xCC */ TVec3f mBaseUp;    // base up vector for modification
-    /* 0xD8 */ TVec3f mBaseSide;  // base side vector for modification
-    /* 0xE4 */ TVec3f mGroundNormal;
-    /* 0xF0 */ TVec3f mWarpPos;
+    TVec3f mFront;
+    TVec3f mUp;
+    TVec3f mSide;
+    TVec3f mBaseUp;    // base up vector for modification
+    TVec3f mBaseSide;  // base side vector for modification
+    TVec3f mGroundNormal;
+    TVec3f mWarpPos;
 
-    /* 0xFC */ LiveActor* mRider;
+    LiveActor* mRider;
 
-    /* 0x100 */ s32 mPadChannel;
-    /* 0x104 */ f32 mRayTilt;
-    /* 0x108 */ bool mInWater;
-    /* 0x10C */ s32 mAirTime;
-    /* 0x110 */ TVec3f mWaterNormal;
-    /* 0x11C */ WaterInfo mWaterInfo;
-    /* 0x16C */ TVec3f mWaterShadowPos;
-    /* 0x178 */ f32 mShadowAlpha;
+    s32 mPadChannel;
+    f32 mRayTilt;
+    bool mInWater;
+    s32 mAirTime;
+    TVec3f mWaterNormal;
+    WaterInfo mWaterInfo;
+    TVec3f mWaterShadowPos;
+    f32 mShadowAlpha;
 
-    /* 0x17C */ s32 mTwistBufferSize;
-    /* 0x180 */ f32* mTwistBuffer;
+    s32 mTwistBufferSize;
+    f32* mTwistBuffer;
 
-    /* 0x184 */ bool mInTutorialArea;
-    /* 0x185 */ bool mInTutorial;
-    /* 0x188 */ s32 mLectureIdx;
+    bool mInTutorialArea;
+    bool mInTutorial;
+    s32 mLectureIdx;
 
-    /* 0x18C */ TPos3f mEffectHostMtx;
-    /* 0x1BC */ ActorJointCtrl* mActorJointCtrl;
-    /* 0x1C0 */ ProjmapEffectMtxSetter* mProjmapFxMtxSetter;
+    TPos3f mEffectHostMtx;
+    ActorJointCtrl* mActorJointCtrl;
+    ProjmapEffectMtxSetter* mProjmapFxMtxSetter;
 };

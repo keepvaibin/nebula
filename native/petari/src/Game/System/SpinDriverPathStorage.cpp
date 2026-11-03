@@ -20,11 +20,6 @@ enum SpinDriverScenarioDataFlag {
     SpinDriverScenarioDataFlag_EndOfData = 0b11111111,
 };
 
-void SpinDriverPathStorage_FORCE_MATCHSDATA2() {
-    f32 v1 = 1.0f;
-    f32 v2 = 0.0f;
-}
-
 SpinDriverPathStorageOne::SpinDriverPathStorageOne() : mZoneId(-1), mSpinDriverId(-1), mDrawRange(-1.0f) {
     reset();
 }
@@ -51,7 +46,7 @@ s32 SpinDriverPathStorageOne::serialize(u8* pData) const {
         return 0;
     }
 
-    pData[0] = mSpinDriverId & SpinDriverDataId_Mask | SpinDriverDataFlag_Interrupted;
+    pData[0] = (mSpinDriverId & SpinDriverDataId_Mask) | SpinDriverDataFlag_Interrupted;
 
     s32 writeSize;
     s32 drawRange = 256.0f * getDrawRange();
@@ -136,7 +131,7 @@ s32 SpinDriverPathStorageScenario::serialize(u8* pData, u32 dataSize) const {
         for (s32 idx = 0; idx < mOneStorage.size(); idx++) {
             if (zone == mOneStorage[idx].mZoneId) {
                 if (newZone) {
-                    *(u8*)(pData + 2 + size) = zone & ~(SpinDriverScenarioDataFlag_ZoneDataStart) | SpinDriverScenarioDataFlag_ZoneDataStart;
+                    *(u8*)(pData + 2 + size) = (zone & ~(SpinDriverScenarioDataFlag_ZoneDataStart)) | SpinDriverScenarioDataFlag_ZoneDataStart;
                     size += 1;
                     newZone = false;
                 }
@@ -163,6 +158,11 @@ s32 SpinDriverPathStorageScenario::deserialize(const u8* pData, u32 dataSize) {
             return 0;
         }
 
+        // The size, what is read so far and the next byte lie in the block.
+        if (static_cast< u32 >(readOffset) + 3 > dataSize) {
+            return 0;
+        }
+
         u8 val = *(pData + readOffset + 2);
         if (val != SpinDriverScenarioDataFlag_EndOfData) {
             if ((val & SpinDriverScenarioDataFlag_ZoneDataStart) == SpinDriverScenarioDataFlag_ZoneDataStart) {
@@ -172,6 +172,10 @@ s32 SpinDriverPathStorageScenario::deserialize(const u8* pData, u32 dataSize) {
             }
 
             if (zoneId < 0) {
+                return 0;
+            }
+
+            if ((val & SpinDriverDataFlag_Interrupted) != 0 && static_cast< u32 >(readOffset) + 4 > dataSize) {
                 return 0;
             }
 
@@ -209,10 +213,6 @@ void SpinDriverPathStorageGalaxy::resetAllData() {
     for (s32 idx = 0; idx < mNumScenarios; idx++) {
         mScenarioStorage[idx].resetAllData();
     }
-}
-
-s32 SpinDriverPathStorageGalaxy::setup(int scenarioNo, int zoneId, int spinDriverId, f32* pDrawRange) {
-    return getScenarioStorage(scenarioNo).setup(zoneId, spinDriverId, pDrawRange);
 }
 
 void SpinDriverPathStorageGalaxy::updateValue(int scenarioNo, int spinDriverIndex, f32 drawRange) {
@@ -296,18 +296,33 @@ s32 SpinDriverPathStorage::serialize(u8* pData, u32 maxBufferSize) const {
 s32 SpinDriverPathStorage::deserialize(const u8* pData, u32 maxBufferSize) {
     s32 readError = 0;
 
+    if (maxBufferSize == 0) {
+        return -1;
+    }
+
     JSUMemoryInputStream stream(pData, maxBufferSize);
     u8 numEntries = stream.readU8();
 
     for (s32 idx = 0; idx < numEntries; idx++) {
+        // A block's header and its whole size in what is left of the chunk.
+        const u32 remaining = maxBufferSize - stream.mPosition;
+        if (remaining < 6) {
+            return -1;
+        }
+
         u8* readPtr = (u8*)stream.mBuffer + stream.mPosition;
+        const u32 blockSize = MR::loadSaveU16(readPtr + 2);
+        if (blockSize < 6 || blockSize > remaining) {
+            return -1;
+        }
+
         SpinDriverPathStorageGalaxy* storage = findFromHashCode(MR::loadSaveU16(readPtr));
         if (storage != nullptr) {
-            storage->deserialize((u8*)stream.mBuffer + stream.mPosition, maxBufferSize - stream.mPosition);
+            storage->deserialize(readPtr, blockSize);
         } else {
             readError = 1;
         }
-        stream.seek(MR::loadSaveU16(readPtr + 2), SEEK_FROM_POSITION);
+        stream.seek(blockSize, SEEK_FROM_POSITION);
     }
 
     return readError ? 1 : 0;

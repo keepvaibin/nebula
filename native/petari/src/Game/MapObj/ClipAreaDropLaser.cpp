@@ -1,4 +1,5 @@
 #include "Game/MapObj/ClipAreaDropLaser.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/ClipAreaDropHolder.hpp"
@@ -12,7 +13,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/gx/GXEnum.h>
 
 namespace NrvClipAreaDropLaser {
     NEW_NERVE(ClipAreaDropLaserNrvWait, ClipAreaDropLaser, Wait);
@@ -48,9 +48,11 @@ void ClipAreaDropLaser::control() {
 
 void ClipAreaDropLaser::draw() const {
     TDDraw::cameraInit3D();
-    TDDraw::setup(0, 2, 0);
-    J3DNativeState::setLineWidth(0x14, GX_TO_ZERO);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 2, 0);
+    J3DPass::lineWidth(20.0f / 6.0f);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     for (int r29 = 1; r29 < mNumPointsToDraw; r29++) {
         int u1 = mDrawCount - (r29 - 1);

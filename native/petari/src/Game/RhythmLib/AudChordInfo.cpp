@@ -1,21 +1,12 @@
 #include "Game/RhythmLib/AudChordInfo.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
-#include <JSystem/JKernel/JKRArchive.hpp>
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/AssetFolder.hpp"
+#include "Game/Util/ByteView.hpp"
 
-void AudScaleData::initScaleData(uintptr_t base) {
-#ifdef TARGET_PC
-    up.relocateFrom(reinterpret_cast< const void* >(base));
-    down.relocateFrom(reinterpret_cast< const void* >(base));
-#else
-    up += base;
-    down += base;
-#endif
+AudChordTable::AudChordTable() : mLoaded(false), mChordCount(0), mScaleCount(0), mBase(nullptr), mChordOffsets(nullptr), mScaleOffsets(nullptr) {
 }
 
-AudChordTable::AudChordTable() : mLoaded(false), mChordCount(0), mScaleCount(0), mChordPtr(nullptr), mScalePtr(nullptr) {
-}
-
-bool AudChordTable::setChordTable(s32 id, JKRArchive* pArchive) {
+bool AudChordTable::setChordTable(s32 id, AssetFolder* pArchive) {
     mLoaded = false;
 
     if (id < 0) {
@@ -28,75 +19,38 @@ bool AudChordTable::setChordTable(s32 id, JKRArchive* pArchive) {
 }
 
 bool AudChordTable::setChordTableResource(void* pRes) {
-    s32* cursor = (s32*)pRes;
-
-    bool alreadyRelocated = false;
-    s32* initialized = cursor;
-    if (*cursor++) {
-        alreadyRelocated = true;
-    }
-
-    char* sig = (char*)cursor;
-    // Check for 'CITS' signature
-    if (sig[0] != 'C' || sig[1] != 'I' || sig[2] != 'T' || sig[3] != 'S') {
+    // The chord table as the importer cooks it (host order, offsets from the file's start): a word (0), "CITS", the
+    // size, the chord and scale counts, then their offset tables. Nothing is written to it.
+    const u8* file = static_cast< const u8* >(pRes);
+    if (file == nullptr || file[4] != 'C' || file[5] != 'I' || file[6] != 'T' || file[7] != 'S') {
         return false;
     }
-
-    cursor++;
-    cursor++;
-
-    u8* base = (u8*)cursor;
-    mChordCount = *(NEBULA_BE(u16)*)(base + 0);
-    mScaleCount = *(NEBULA_BE(u16)*)(base + 2);
-    mChordPtr = (NEBULA_SELFREL(AudChordData)*)(base + 4);
-    mScalePtr = (NEBULA_SELFREL(AudScaleData)*)(base + 4 + mChordCount * 4);
-
-    // Word 0 is 0 in the file and set once the tables are relocated (true in host order natively, nonzero either way).
-    if (!alreadyRelocated) {
-#ifdef TARGET_PC
-        for (s32 i = 0; i < mChordCount; i++) {
-            mChordPtr[i].relocateFrom(pRes);
-        }
-
-        for (s32 i = 0; i < mScaleCount; i++) {
-            mScalePtr[i].relocateFrom(pRes);
-            mScalePtr[i]->initScaleData((uintptr_t)pRes);
-        }
-#else
-        // Relocate chord pointers
-        for (s32 i = 0; i < mChordCount; i++) {
-            mChordPtr[i] = (AudChordData*)((u32)pRes + (u32)mChordPtr[i]);
-        }
-
-        // Relocate scale pointers and init scale data
-        for (s32 i = 0; i < mScaleCount; i++) {
-            mScalePtr[i] = (AudScaleData*)((u32)pRes + (u32)mScalePtr[i]);
-            mScalePtr[i]->initScaleData((u32)pRes);
-        }
-#endif
-
-        *initialized = true;
-    }
+    const u8* base = file + 12;
+    mBase = file;
+    mChordCount = readBytes< u16 >(base + 0);
+    mScaleCount = readBytes< u16 >(base + 2);
+    mChordOffsets = reinterpret_cast< const u32* >(base + 4);
+    mScaleOffsets = mChordOffsets + mChordCount;
 
     return true;
 }
 
 AudChordInfo::AudChordInfo()
-    : JASGlobalInstance< AudChordInfo >(true), mArchive(nullptr), mCurChord(nullptr), mCurScale(nullptr), mFlags(0), _2C(0), mCurChordIndex(0),
+    : JASGlobalInstance< AudChordInfo >(true), mArchive(nullptr), mCurChord(nullptr), mCurScale(nullptr), mCurScaleUp(nullptr), mCurScaleDown(nullptr), mFlags(0), _2C(0), mCurChordIndex(0),
       mCurScaleIndex(0), mTableId(-1) {
     for (s32 i = 0; i < NUM_CHORD_NOTES; i++) {
         mChordNoteList[i] = NULL_NOTE;
     }
 }
 
-void AudChordInfo::init(JKRArchive* pArchive) {
+void AudChordInfo::init(AssetFolder* pArchive) {
     mArchive = pArchive;
 }
 
 bool AudChordInfo::loadChordInfo(s16 id, bool keepCurrent) {
     initParams();
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     bool success = mTable.setChordTable(id, mArchive);
 
     if (success) {
@@ -126,7 +80,7 @@ bool AudChordInfo::setCurChord(s32 index) {
         return false;
     }
 
-    mCurChord = mTable.mChordPtr[index];
+    mCurChord = mTable.getChord(index);
     expandChordNote();
     mCurChordIndex = index;
     return true;
@@ -141,7 +95,9 @@ bool AudChordInfo::setCurScale(s32 index) {
         return false;
     }
 
-    mCurScale = mTable.mScalePtr[index];
+    mCurScale = mTable.getScale(index);
+    mCurScaleUp = mTable.mBase + mCurScale->mUpOffset;
+    mCurScaleDown = mTable.mBase + mCurScale->mDownOffset;
     mCurScaleIndex = index;
     return true;
 }
@@ -704,7 +660,6 @@ s32 AudChordInfo::getChordNoteIndex(u8 pitchClass) {
 }
 
 s32 AudChordInfo::addIndexInChordNoteList(s32 idx, s32 count, s32& wrapCount) {
-    // FIXME: regswaps
     wrapCount = 0;
 
     for (s32 c = 0; c < count; c++) {
@@ -736,7 +691,6 @@ s32 AudChordInfo::addIndexInChordNoteList(s32 idx, s32 count, s32& wrapCount) {
 }
 
 s32 AudChordInfo::subIndexInChordNoteList(s32 idx, s32 count, s32& wrapCount) {
-    // FIXME: regswaps
     wrapCount = 0;
 
     for (s32 c = 0; c < count; c++) {
@@ -851,11 +805,13 @@ s32 AudChordInfo::subIndexInScaleNoteList(s32 idx, s32 count, s32& wrapCount) {
 }
 
 void AudChordInfo::initParams() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
 
     mFlags = 0;
     mCurChord = nullptr;
     mCurScale = nullptr;
+    mCurScaleUp = nullptr;
+    mCurScaleDown = nullptr;
     mTableId = -1;
     _2C = 0;
 

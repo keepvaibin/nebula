@@ -7,7 +7,7 @@
 class AnimScaleController;
 template < typename T >
 class JointControlDelegator;
-class JointControllerInfo;
+struct JointControllerInfo;
 class WalkerStateBindStarPointer;
 
 class BombTeresa : public LiveActor {
@@ -62,36 +62,36 @@ public:
     bool endTongueMtxCallBack(TPos3f*, const JointControllerInfo&);
     void updateNormalVelocity();
     void updateDriftReleaseVelocity();
-    bool isTouchTongue() const NO_INLINE;
-    bool isEnableDrift() const NO_INLINE;
-    bool isEnablePointBind() const NO_INLINE;
-    bool isEnableDisperse() const NO_INLINE;
-    bool isEnableHitExplosionToPlayer() const NO_INLINE;
-    bool isEnableHitExplosionToEnemy() const NO_INLINE;
-    bool isEnableHitExplosion() const NO_INLINE;
-    bool isEnableStarPieceAttack() const NO_INLINE;
-    bool isEnableShockWave() const NO_INLINE;
+    bool isTouchTongue() const;
+    bool isEnableDrift() const;
+    bool isEnablePointBind() const;
+    bool isEnableDisperse() const;
+    bool isEnableHitExplosionToPlayer() const;
+    bool isEnableHitExplosionToEnemy() const;
+    bool isEnableHitExplosion() const;
+    bool isEnableStarPieceAttack() const;
+    bool isEnableShockWave() const;
     void addTeresaSpinPullVelocity(f32);
 
     inline bool isOutOfRange(f32 dist) {
         return !MR::isNearPlayer(this, dist);
     }
 
-    /* 0x8C */ JointControlDelegator< BombTeresa >* mJointDelegator;
-    /* 0x90 */ JointControlDelegator< BombTeresa >* mJointDelegator2;
-    /* 0x94 */ AnimScaleController* mScaleController;
-    /* 0x98 */ WalkerStateBindStarPointer* mBindStarPointer;
-    /* 0x9C */ TQuat4f _9C;
-    /* 0xAC */ TVec3f _AC;
-    /* 0xB8 */ TVec3f _B8;
-    /* 0xC4 */ TVec3f _C4;
-    /* 0xD0 */ TVec3f _D0;
-    /* 0xDC */ f32 _DC;
-    /* 0xE0 */ f32 _E0;
-    /* 0xE4 */ f32 _E4;
-    /* 0xE8 */ s32 _E8;
-    /* 0xEC */ bool _EC;
-    /* 0xED */ bool mDisableRespawning;
-    /* 0xEE */ bool _EE;
-    /* 0xEF */ bool _EF;
+    JointControlDelegator< BombTeresa >* mJointDelegator;
+    JointControlDelegator< BombTeresa >* mJointDelegator2;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mBindStarPointer;
+    TQuat4f _9C;
+    TVec3f _AC;
+    TVec3f _B8;
+    TVec3f _C4;
+    TVec3f _D0;
+    f32 _DC;
+    f32 _E0;
+    f32 _E4;
+    s32 _E8;
+    bool _EC;
+    bool mDisableRespawning;
+    bool _EE;
+    bool _EF;
 };

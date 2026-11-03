@@ -1,7 +1,7 @@
 #include "Game/Screen/PictureBookCloseButton.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
@@ -45,7 +45,7 @@ bool PictureBookCloseButton::trySelect() {
         return true;
     }
 
-    if (!mPaneCtrl->isAppearing() && MR::testCorePadTriggerB(WPAD_CHAN0) && mCanCloseWithPad) {
+    if (!mPaneCtrl->isAppearing() && MR::isPressedFire(PLAYER_1) && mCanCloseWithPad) {
         mPaneCtrl->disappear();
         MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);

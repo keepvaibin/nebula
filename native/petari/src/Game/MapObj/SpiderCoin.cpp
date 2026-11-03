@@ -12,8 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 namespace {
     static const f32 sCoinSpeed = 20.0f;
@@ -62,11 +61,9 @@ void SpiderCoin::init(const JMapInfoIter& rIter) {
     makeActorAppeared();
 }
 
-#ifdef TARGET_PC
 // The coin hangs on the spider web its boss sets up (TombSpiderEnvironment). In a scenario without the boss there is
-// no web: the console never ran or showed these coins (their draw distance clipped them, far out of reach), and drawn
-// to the far plane for ray-traced light they hung in empty space and bound to the missing web (a crash in Space Junk's
-// first star). With no web after placement, the coin and its cocoon leave the scene, as unseen as on the console.
+// no web: they would hang in empty space and bind to the missing web (a crash in Space Junk's first star). With no web
+// after placement, the coin and its cocoon leave the scene, as unseen.
 void SpiderCoin::initAfterPlacement() {
     if (MR::isExistSceneObj(SceneObj_SpiderThread)) {
         return;
@@ -76,7 +73,6 @@ void SpiderCoin::initAfterPlacement() {
         mCocoonModel->makeActorDead();
     }
 }
-#endif
 
 void SpiderCoin::kill() {
     LiveActor::kill();
@@ -114,13 +110,13 @@ void SpiderCoin::exeTouch() {
     mPosition.set(*mPointPos);
     mRotation.y += ::sRotateSpeedY;
     mRotation.y = MR::repeatDegree(mRotation.y);
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testCorePadTriggerA(WPAD_CHAN1)) {
+    if (MR::isPressedJump(PLAYER_1) || MR::isPressedJump(PLAYER_2)) {
         kill();
         return;
     }
 
-    if (!tryRub(WPAD_CHAN0, &mPad0Velocity) && !tryRub(WPAD_CHAN1, &mPad1Velocity) && !MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */) &&
-        !MR::isStarPointerPointing(this, WPAD_CHAN1, true, "\216\343" /* 弱 */)) {
+    if (!tryRub(PLAYER_1, &mPad0Velocity) && !tryRub(PLAYER_2, &mPad1Velocity) && !MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */) &&
+        !MR::isStarPointerPointing(this, PLAYER_2, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(SpiderCoin, SpiderCoinNrvTouchAndApart));
     }
 }
@@ -132,7 +128,7 @@ void SpiderCoin::exeTouchAndApart() {
         MR::getEaseOutValue((::sStepToucnAndApart - getNerveStep()) / static_cast< f32 >(::sStepToucnAndApart), 0.0f, 1.0f, 1.0f) * ::sRotateSpeedY;
     MR::repeatDegree(&mRotation.y);
 
-    if (MR::isGreaterStep(this, ::sStepToTouch2nd) && MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (MR::isGreaterStep(this, ::sStepToTouch2nd) && MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         kill();
         return;
     }

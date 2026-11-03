@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// OceanRingDrawer (Game/Map/OceanRingDrawer.cpp loadMaterial): the water texture (0) at two scrolls multiplied and
+// halved; where its red equals the highlight level, the highlight added (unclamped); then the screen behind (texture
+// 1, by the draw's projection: texture matrix 3) tinted and added, its lookup moved by the indirect texture (2, the
+// third scroll; its alpha and blue signed about 128) unless warp.y is 0; alpha the vertex alpha, drawn where above zero.
+struct MaterialConstants {
+    float4 highlight;  // rgb added where the red equals a (the level)
+    float4 tint;       // the screen's tint (rgb)
+    float4 warp;       // x: screen texels per indirect step; y: 1 warped, 0 not; zw: the screen texture's size
+};
+
+#include "native_material.hlsli"
+
+void material_vertex(NativeVertex v, inout NativeVaryings o) {
+    o.color = v.color0;
+    const float4 c0 = float4(v.uv[0], 1.0, 1.0);
+    const float4 c1 = float4(v.uv[1], 1.0, 1.0);
+    const float4 c2 = float4(v.uv[2], 1.0, 1.0);
+    const float4 p = float4(v.pos, 1.0);
+    o.uv[0] = float4(dot(c0, inline_tex_matrices[0]), dot(c0, inline_tex_matrices[1]),
+                     dot(c1, inline_tex_matrices[3]), dot(c1, inline_tex_matrices[4]));
+    o.uv[1] = float4(dot(c2, inline_tex_matrices[6]), dot(c2, inline_tex_matrices[7]), 0.0, 0.0);
+    o.uv[2] = float4(dot(p, inline_tex_matrices[9]), dot(p, inline_tex_matrices[10]), dot(p, inline_tex_matrices[11]), 1.0);
+}
+
+float4 material_color(NativeVaryings i) {
+    if (round(i.color.a * 255.0) <= 0.0) {
+        discard;
+    }
+    float3 c8 = tex[0].Sample(samp[0], i.uv[0].xy).rgb * tex[0].Sample(samp[0], i.uv[0].zw).rgb * 127.5;
+    c8 += material.highlight.rgb * 255.0 * level_line(c8.r, material.highlight.a * 255.0);
+    float2 screen = i.uv[2].z != 0.0 ? i.uv[2].xy / i.uv[2].z : i.uv[2].xy;
+    if (material.warp.y != 0.0) {
+        const float2 step = round(tex[2].Sample(samp[2], i.uv[1].xy).ab * 255.0) - 128.0;
+        screen += step * material.warp.x / material.warp.zw;
+    }
+    const float3 behind = tex[1].Sample(samp[1], screen).rgb * material.tint.rgb;
+    return float4(saturate(c8 / 255.0 + behind), i.color.a);
+}

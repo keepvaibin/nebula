@@ -45,29 +45,28 @@ public:
         return 0.0f <= _1E8;
     }
 
-    /* 0x000 */ TriangleFilterBase* mTriangleFilter;
-    /* 0x004 */ CollisionPartsFilterBase* mCollisionPartsFilter;
-    /* 0x008 */ CollisionParts* mExCollisionParts;
-    /* 0x00C */ MtxPtr _C;
-    /* 0x010 */ const TVec3f* _10;
-    /* 0x014 */ const TVec3f* _14;
-    /* 0x018 */ f32 mRadius;
-    /* 0x01C */ f32 mOffsetY;
-    /* 0x020 */ const TVec3f* mOffsetVec;
-    /* 0x024 */ u32 _24;
-    /* 0x028 */ u32 mPlaneNum;
-    /* 0x02C */ HitInfo* mPlane;
-    /* 0x030 */ TVec3f mFixReactionVector;
-    /* 0x03C */ HitInfo mGroundInfo;
-    /* 0x0C8 */ f32 _C8;
-    /* 0x0CC */ HitInfo mWallInfo;
-    /* 0x158 */ f32 _158;
-    /* 0x15C */ HitInfo mRoofInfo;
-    /* 0x1E8 */ f32 _1E8;
-    /* 0x1EC */ struct {
-#ifdef TARGET_PC
+    TriangleFilterBase* mTriangleFilter;
+    CollisionPartsFilterBase* mCollisionPartsFilter;
+    CollisionParts* mExCollisionParts;
+    MtxPtr _C;
+    const TVec3f* _10;
+    const TVec3f* _14;
+    f32 mRadius;
+    f32 mOffsetY;
+    const TVec3f* mOffsetVec;
+    u32 _24;
+    u32 mPlaneNum;
+    HitInfo* mPlane;
+    TVec3f mFixReactionVector;
+    HitInfo mGroundInfo;
+    f32 _C8;
+    HitInfo mWallInfo;
+    f32 _158;
+    HitInfo mRoofInfo;
+    f32 _1E8;
+    struct {
         // MR:: utilities mask this as a byte (0x80 is _0): fields from the least significant bit up, so each has the
-        // console's bit.
+        // bit those masks name.
         u8 : 2;
         u8 _5 : 1;
         u8 _4 : 1;
@@ -75,13 +74,5 @@ public:
         u8 _2 : 1;
         u8 _1 : 1;
         u8 _0 : 1;
-#else
-        u8 _0 : 1;
-        u8 _1 : 1;
-        u8 _2 : 1;
-        u8 _3 : 1;
-        u8 _4 : 1;
-        u8 _5 : 1;
-#endif
     } _1EC;
 };

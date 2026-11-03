@@ -5,7 +5,7 @@
 
 class AnimScaleController;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class SkeletalFishRailControl;
 
 class SkeletalFishBaby : public LiveActor {
@@ -39,13 +39,13 @@ public:
     bool isAttackable() const;
     bool isStarPointerPointing() const;
 
-    /* 0x8C */ JointController* mControllers[4];
-    /* 0x9C */ s32* mJointIndicies;
-    /* 0xA0 */ f32 mSpeedMax;
-    /* 0xA4 */ f32 mSpeed;
-    /* 0xA8 */ SkeletalFishRailControl* mRailControl;
-    /* 0xAC */ TPos3f _AC;
-    /* 0xDC */ f32 mObjArg1;
-    /* 0xE0 */ AnimScaleController* mScaleController;
-    /* 0xE4 */ LiveActor* mStarPieceTargets[4];
+    JointController* mControllers[4];
+    s32* mJointIndicies;
+    f32 mSpeedMax;
+    f32 mSpeed;
+    SkeletalFishRailControl* mRailControl;
+    TPos3f _AC;
+    f32 mObjArg1;
+    AnimScaleController* mScaleController;
+    LiveActor* mStarPieceTargets[4];
 };

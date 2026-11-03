@@ -1,10 +1,8 @@
 #include "Game/Screen/ProloguePictureBook.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaFrameGen.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/IconAButton.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -47,7 +45,6 @@ void ProloguePictureBook::kill() {
 }
 
 void ProloguePictureBook::exeActive() {
-    J3DFrameCtrl* animCtrl = MR::getAnimCtrl(this, 0);
 
     if (MR::isAnimStopped(this, 0)) {
         setNerve(GET_NERVE(ProloguePictureBook, ProloguePictureBookEnd));
@@ -86,7 +83,7 @@ void ProloguePictureBook::exeKeyWait() {
         animCtrl->setRate(0.0f);
     }
 
-    if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::isPressedJump(PLAYER_1)) {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
         mIconAButton->term();
 
@@ -105,8 +102,6 @@ bool ProloguePictureBook::isEnd() const {
 }
 
 void ProloguePictureBook::control() {
-#ifdef TARGET_PC
     NebulaFrameGen::noteFullscreenUi();
-#endif
     MR::setLayoutScalePosAtPaneScaleTrans(mIconAButton, this, "AButtonPosition");
 }

@@ -18,6 +18,6 @@ public:
 
     virtual void control();
 
-    /* 0x8C */ s32 mID;
-    /* 0x90 */ TPos3f mMtx;
+    s32 mID;
+    TPos3f mMtx;
 };

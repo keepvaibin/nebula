@@ -114,8 +114,6 @@ void KoopaFireStairs::setInfo(const KoopaBattleMapStair* pStair, const TVec3f* p
 
 // this is the only way I could match this
 // TODO fix
-#pragma push
-#pragma opt_propagation off
 void KoopaFireStairs::exeFly() {
     if (mStair->isBreak()) {
         TVec3f v15(mVelocity);
@@ -127,7 +125,7 @@ void KoopaFireStairs::exeFly() {
         MR::emitEffect(this, "MeteorStrikeBreak");
         mVelocity.zero();
         MR::startSound(this, "SE_OJ_KOOPA_FIRE_EXPLODE");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraWeak();
         MR::hideModel(this);
         setNerve(GET_NERVE(KoopaFireStairs, KoopaFireStairsNrvBreak));
@@ -157,7 +155,6 @@ void KoopaFireStairs::exeFly() {
         mRotation.x = MR::repeatDegree(mRotation.x);
     }
 }
-#pragma pop
 
 void KoopaFireStairs::exeBreak() {
     if (MR::isFirstStep(this)) {

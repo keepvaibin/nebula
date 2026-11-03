@@ -10,16 +10,7 @@
 #include "Game/Util.hpp"
 #include "Game/Util/OctahedronBezierSurface.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
-
-void BigBubble_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)3.0f;
-}
+#include <nebula_math.h>
 
 namespace {
     // static const s32 sBrakeInPointerTime
@@ -233,7 +224,7 @@ void BigBubble::calcAnim() {
 
 void BigBubble::draw() const {
     if (isDraw()) {
-        J3DNativeState::setTevColor(GX_TEVREG1, mWarningColor);
+        J3DPass::registerColor(J3D_REGISTER_1, mWarningColor);
         mSurface->draw();
     }
 }
@@ -570,7 +561,7 @@ bool BigBubble::tryBreak() {
 }
 
 bool BigBubble::tryAutoBreak() {
-    if (!mIsObstruct && MR::isGreaterStep(this, ::sAutoBreakTime) || mIsExitLimitter) {
+    if ((!mIsObstruct && MR::isGreaterStep(this, ::sAutoBreakTime)) || mIsExitLimitter) {
         if (mRider != nullptr) {
             MR::endBindAndPlayerWeakGravityLimitJump(this, mVelocity);
             mRider = nullptr;
@@ -593,7 +584,7 @@ bool BigBubble::tryBreakEnd() {
 }
 
 bool BigBubble::tryEscape() {
-    if (MR::testSubPadTriggerZ(WPAD_CHAN0)) {
+    if (MR::isPressedCrouch(PLAYER_1)) {
         setNerve(GET_NERVE(BigBubble, BigBubbleNrvEscape));
         return true;
     }
@@ -701,14 +692,14 @@ void BigBubble::exeCapture() {
     }
 
     if (mIsAttached) {
-        if (addAccelPointing(WPAD_CHAN0)) {
+        if (addAccelPointing(PLAYER_1)) {
             MR::makeMtxUpNoSupportPos(&mEffectMtx, mPosition - mPointerPos, mPointerPos);
             MR::emitEffect(this, "PushWind");
         } else {
             MR::deleteEffect(this, "PushWind");
         }
 
-        addAccelMoment(WPAD_CHAN0);
+        addAccelMoment(PLAYER_1);
     } else {
         addCoriolisAccel();
     }
@@ -937,7 +928,7 @@ void BigBubble::addAccelMoment(s32 padChannel) {
 
 bool BigBubble::addAccelPointing(s32 padChannel) {
     mPointAccel = 0.0f;
-    if (!MR::testCorePadButtonA(padChannel)) {
+    if (!MR::isHeldJump(padChannel)) {
         return false;
     }
 

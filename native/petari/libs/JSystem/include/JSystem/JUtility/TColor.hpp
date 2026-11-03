@@ -1,10 +1,9 @@
 #pragma once
 
-#include "Inline.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 namespace JUtility {
-    struct TColor : public GXColor {
+    struct TColor : public NebulaColor8 {
     public:
         TColor(u8 r, u8 g, u8 b, u8 a);
         TColor() {
@@ -15,11 +14,14 @@ namespace JUtility {
             set(u32Color);
         }
 
-        TColor(GXColor color) {
+        TColor(NebulaColor8 color) {
             set(color);
         }
 
-        TColor& operator=(const TColor& rColor);
+        TColor& operator=(const TColor& rColor) {
+            static_cast< NebulaColor8& >(*this) = rColor;
+            return *this;
+        }
 
         void set(u8 cR, u8 cG, u8 cB, u8 cA) {
             r = cR;
@@ -28,37 +30,25 @@ namespace JUtility {
             a = cA;
         }
 
-#ifdef TARGET_PC
-        // The u32 form is the console's: 0xRRGGBBAA.
+        // The u32 form is 0xRRGGBBAA.
         void set(u32 u32Color) {
             r = u8(u32Color >> 24);
             g = u8(u32Color >> 16);
             b = u8(u32Color >> 8);
             a = u8(u32Color);
         }
-#else
-        void set(u32 u32Color) {
-            *reinterpret_cast< u32* >(&r) = u32Color;
-        }
-#endif
 
         operator u32() const {
             return toUInt32();
         }
 
-#ifdef TARGET_PC
         u32 toUInt32() const {
             return (u32)r << 24 | (u32)g << 16 | (u32)b << 8 | a;
         }
-#else
-        u32 toUInt32() const {
-            return *reinterpret_cast< const u32* >(&r);
-        }
-#endif
 
-        void set(GXColor gxColor) {
-            GXColor* temp = this;
-            *temp = gxColor;
+        void set(NebulaColor8 color) {
+            NebulaColor8* temp = this;
+            *temp = color;
         }
     } ATTRIBUTE_ALIGN(4);
 };  // namespace JUtility

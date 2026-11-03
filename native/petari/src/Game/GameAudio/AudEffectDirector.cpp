@@ -7,10 +7,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 struct AudEffectData {
-    /* 0x00 */ f32 mFxSend;
-    /* 0x04 */ s32 mCutoff;
-    /* 0x08 */ f32 mVolume;
-    /* 0x0C */ u32 _C;
+    f32 mFxSend;
+    s32 mCutoff;
+    f32 mVolume;
+    u32 _C;
 };
 
 namespace {

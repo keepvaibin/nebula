@@ -24,13 +24,6 @@ namespace NrvGravityLightRoad {
     NEW_NERVE(GravityLightRoadNrvDisappear, GravityLightRoad, Disappear);
 };  // namespace NrvGravityLightRoad
 
-void GravityLightRoad_FORCE_MATCH_SDATA2() {
-    (void)2500.0f;
-    (void)250.0f;
-    (void)20.0f;
-    (void)0.2f;
-}
-
 GravityLightRoad::GravityLightRoad(const char* pName) : LiveActor(pName), mHost(), mSpeed(), mRadius(2500.0f), mEndPos(0.0f, 0.0f, 0.0f) {
 }
 

@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Effect/MultiEmitter.hpp"
@@ -16,7 +17,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J2DGraph/J2DPicture.hpp>
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nw4r/lyt/layout.h>
@@ -26,23 +26,10 @@
 
 template nw4r::lyt::TextBox* nw4r::ut::DynamicCast< nw4r::lyt::TextBox*, nw4r::lyt::Pane >(nw4r::lyt::Pane*);
 
-#ifndef TARGET_PC
-template const nw4r::lyt::Pane* nw4r::ut::LinkList< nw4r::lyt::Pane, 4 >::ConstIterator::operator->() const;
-#endif
 template void JGeometry::TVec2< f32 >::set< f32 >(f32, f32);
 template void JGeometry::TBox2< f32 >::set(const TVec2f&, const TVec2f&);
 
-#ifndef TARGET_PC
-template nw4r::lyt::PaneList::Iterator nw4r::ut::LinkList< nw4r::lyt::Pane, 4 >::Iterator::operator++(int);
-#endif
 
-extern "C" int vswprintf(wchar_t*, size_t, const wchar_t*, va_list);
-
-void LayoutUtil_FORCE_MATCH_SDATA2() {
-    (void)255.0f;
-    (void)0.75f;
-    (void)4.0f;
-}
 
 namespace {
     void setInfluencedAlphaToChild(nw4r::lyt::Pane* pPane) {
@@ -214,16 +201,16 @@ void MR::setTextBoxSystemMessageRecursive(LayoutActor* pActor, const char* pPane
     setTextBoxMessageRecursive(pActor, pPaneName, getSystemMessageDirect(pMessageId));
 }
 
-void MR::setTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName, const wchar_t* pMessage) {
+void MR::setTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pMessage) {
     executeTextBoxRecursive(pActor, pPaneName, TextBoxRecursiveSetMessage(pMessage));
 }
 
-void MR::setTextBoxFormatRecursive(LayoutActor* pActor, const char* pPaneName, const wchar_t* pFormat, ...) {
-    wchar_t message[256];
+void MR::setTextBoxFormatRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pFormat, ...) {
+    char16_t message[256];
     va_list list;
 
     va_start(list, pFormat);
-    vswprintf(message, ARRAY_SIZE(message), pFormat, list);
+    MR::formatTextV(message, ARRAY_SIZE(message), pFormat, list);
     va_end(list);
 
     setTextBoxMessageRecursive(pActor, pPaneName, message);
@@ -233,7 +220,7 @@ void MR::setTextBoxArgNumberRecursive(LayoutActor* pActor, const char* pPaneName
     executeTextBoxRecursive(pActor, pPaneName, TextBoxRecursiveSetArgNumber(number, argIndex));
 }
 
-void MR::setTextBoxArgStringRecursive(LayoutActor* pActor, const char* pPaneName, const wchar_t* pMessage, s32 argIndex) {
+void MR::setTextBoxArgStringRecursive(LayoutActor* pActor, const char* pPaneName, const char16_t* pMessage, s32 argIndex) {
     executeTextBoxRecursive(pActor, pPaneName, TextBoxRecursiveSetArgString(pMessage, argIndex));
 }
 
@@ -270,14 +257,14 @@ void MR::setTextBoxHorizontalPositionCenterRecursive(LayoutActor* pActor, const 
 }
 
 void MR::updateClearTimeTextBox(LayoutActor* pActor, const char* pPaneName, u32 step) {
-    wchar_t clearTimeText[16];
+    char16_t clearTimeText[16];
 
     makeClearTimeString(clearTimeText, step);
     setTextBoxMessageRecursive(pActor, pPaneName, clearTimeText);
 }
 
 void MR::updateMinuteAndSecondTextBox(LayoutActor* pActor, const char* pPaneName, u32 step) {
-    wchar_t minuteAndSecondText[16];
+    char16_t minuteAndSecondText[16];
 
     makeMinuteAndSecondString(minuteAndSecondText, step);
     setTextBoxMessageRecursive(pActor, pPaneName, minuteAndSecondText);
@@ -401,13 +388,13 @@ void MR::setLayoutScalePosAtPaneScaleTransIfExecCalcAnim(LayoutActor* pActor, co
 }
 
 nw4r::lyt::TexMap* MR::createLytTexMap(const char* pArcName, const char* pTextureName) {
-    JUTTexture texture(loadTexFromArc(pArcName, pTextureName), 0);
+    JUTTexture texture(loadTexFromArc(pArcName, pTextureName));
 
     return new nw4r::lyt::TexMap(texture.getTexObj());
 }
 
 nw4r::lyt::TexMap* MR::createLytTexMap(ResTIMG* pImage) {
-    JUTTexture texture(pImage, 0);
+    JUTTexture texture(pImage);
 
     return new nw4r::lyt::TexMap(texture.getTexObj());
 }
@@ -641,8 +628,8 @@ void MR::calcAnimLayoutWithDrawInfo(const LayoutActor* pActor, const nw4r::lyt::
 
 void MR::drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor* pActor, const nw4r::lyt::DrawInfo& rDrawInfo) {
     if (isExecuteDrawLayout(pActor)) {
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setZMode(GX_FALSE, GX_NEVER, GX_FALSE);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         pActor->getLayoutManager()->mLayout->Draw(rDrawInfo);
     }
 }
@@ -872,11 +859,11 @@ void MR::setCometPaneAnimFromId(LayoutActor* pActor, const char* pPaneName, int 
 }
 
 void MR::setTextBoxNumberRecursive(LayoutActor* pActor, const char* pPaneName, s32 number) {
-    setTextBoxFormatRecursive(pActor, pPaneName, L"%d", number);
+    setTextBoxFormatRecursive(pActor, pPaneName, u"%d", number);
 }
 
 void MR::clearTextBoxMessageRecursive(LayoutActor* pActor, const char* pPaneName) {
-    setTextBoxMessageRecursive(pActor, pPaneName, L"");
+    setTextBoxMessageRecursive(pActor, pPaneName, u"");
 }
 
 IconAButton* MR::createAndSetupIconAButton(LayoutActor* pActor, bool connectToScene, bool connectToPause) {
@@ -894,8 +881,3 @@ void MR::setCometAnimFromId(LayoutActor* pActor, int cometId, u32 animLayer) {
     setAnimFrameAndStop(pActor, ::getCometColorAnimFrameFromId(cometId), animLayer);
 }
 
-void LayoutUtil_FORCE_MATCH(nw4r::lyt::Pane* pPane, J2DPicture* pPicture) {
-    pPane->SetInfluencedAlpha(true);
-    pPicture->J2DPicture::draw(0.0f, 0.0f, static_cast< u8 >(0), false, false, false);
-    pPicture->J2DPicture::draw(0.0f, 0.0f, static_cast< u8 >(1), false, false, false);
-}

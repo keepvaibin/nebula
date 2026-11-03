@@ -228,11 +228,7 @@ void Sandstorm::exeStormEnd() {
         }
 
         // BUG: Invokes `__ptmf_test` instead of calling the function.
-#ifdef TARGET_PC
         if (&Sandstorm::isSunakazeKun != nullptr) {
-#else
-        if (isSunakazeKun) {
-#endif
             MR::startSound(this, "SE_OJ_SANDSTORM_S_BIND_END");
         } else {
             MR::startSound(this, "SE_OJ_SANDSTORM_BIND_END");
@@ -412,8 +408,6 @@ void Sandstorm::initTrapModel() {
     }
 }
 
-#pragma push
-#pragma optimization_level 3
 void Sandstorm::updateBindActorMtx() {
     f32 dVar9;
     TVec3f* pPosition;
@@ -454,7 +448,6 @@ void Sandstorm::updateBindActorMtx() {
     mtx.setTrans(mBindActor->mPosition);
     MR::setBaseTRMtx(mBindActor, mtx);
 }
-#pragma pop
 
 void Sandstorm::endBind() {
     MR::tryRumblePadStrong(this, 0);
@@ -538,7 +531,7 @@ bool Sandstorm::tryStartBind(HitSensor* pSensor) {
 }
 
 bool Sandstorm::tryTornadoJumpPlayer() {
-    if (!MR::isPadSwing(WPAD_CHAN0)) {
+    if (!MR::isSpin(PLAYER_1)) {
         return false;
     }
 
@@ -562,10 +555,3 @@ bool Sandstorm::isSunakazeKun() const {
     return mType == Type_SunakazeKun;
 }
 
-TVec3f Sandstorm_FORCE_MATCH(f32 v) {
-    return TVec3f(v);
-}
-
-void Sandstorm_FORCE_MATCH_SUB(TVec3f* pDest, const TVec3f& rA, const TVec3f& rB) {
-    pDest->sub(rA, rB);
-}

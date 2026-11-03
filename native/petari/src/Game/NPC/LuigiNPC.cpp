@@ -19,7 +19,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
-#include "revolution/types.h"
 
 namespace {
     static const s32 sLiftUpSeTiming = 87;
@@ -255,7 +254,7 @@ bool LuigiNPC::trySetNerveArrested() {
 }
 
 bool LuigiNPC::isDeclarePowerStarType() {
-    return mType == Type_Afraid || mType >= Type_Event && mType < Type_Count;
+    return mType == Type_Afraid || (mType >= Type_Event && mType < Type_Count);
 }
 
 void LuigiNPC::exeWait() {

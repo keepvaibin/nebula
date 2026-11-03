@@ -19,13 +19,13 @@ public:
     void start(const char*);
     void stop();
     bool isPlaying(const char*) const;
-    bool isStop() const NO_INLINE {
+    bool isStop() const {
         return mAnmRes == nullptr || static_cast< s32 >(mFrameCtrl.checkState(1)) == 1 || mFrameCtrl.getRate() == 0.0f;
     }
 
-    /* 0x4 */ J3DAnmBase* mAnmRes;
-    /* 0x8 */ const ResTable* mResTable;
-    /* 0xC */ J3DFrameCtrl mFrameCtrl;
+    J3DAnmBase* mAnmRes;
+    const ResTable* mResTable;
+    J3DFrameCtrl mFrameCtrl;
 };
 
 class MaterialAnmPlayerBase : public AnmPlayerBase {
@@ -38,5 +38,5 @@ public:
     void beginDiff();
     void endDiff();
 
-    /* 0x20 */ J3DModelData* mModelData;
+    J3DModelData* mModelData;
 };

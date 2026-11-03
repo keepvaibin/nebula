@@ -10,11 +10,9 @@
 #include "galaxy/render/vk/vk_context.h"
 
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <thread>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -31,9 +29,9 @@ public:
     PostProcessorVk& operator=(const PostProcessorVk&) = delete;
     ~PostProcessorVk() { shutdown(); }
 
-    // Starts compiling every pass, for the renderer's EFB pass (RGBA8 and depth) and its RGBA8 colour pass (one
+    // Starts compiling every pass, for the renderer's scene target pass (RGBA8 and depth) and its RGBA8 colour pass (one
     // attachment, ending shader-readable). The present pass comes with set_present_pass.
-    void initialize(const PostProcessSettings& settings, VkRenderPass efb_pass, VkRenderPass color_pass);
+    void initialize(const PostProcessSettings& settings, VkRenderPass scene_pass, VkRenderPass color_pass);
     // The swap chain's render pass (made again when its format changes): the chain's last pass draws in it.
     void set_present_pass(VkRenderPass pass);
     void shutdown() noexcept;
@@ -46,15 +44,15 @@ public:
     // New settings between frames; an SMAA quality change rebuilds its two pipelines.
     void apply_settings(const PostProcessSettings& settings);
 
-    // Scene AA of the EFB colour `color` (RGBA8, COLOR_ATTACHMENT_OPTIMAL, no render pass open), in two parts
-    // around the renderer beginning its EFB pass again: prepare_scene_aa records the passes before (a copy of the
+    // Scene AA of the scene target colour `color` (RGBA8, COLOR_ATTACHMENT_OPTIMAL, no render pass open), in two parts
+    // around the renderer beginning its scene target pass again: prepare_scene_aa records the passes before (a copy of the
     // scene, SMAA's edges and weights) and returns the pass to finish with; finish_scene_aa draws the result into the
-    // open EFB pass, RGB only (the alpha the game left there stays).
+    // open scene target pass, RGB only (the alpha the game left there stays).
     AaRun prepare_scene_aa(VkCommandBuffer commands, const Texture& color, unsigned width, unsigned height,
                            unsigned picture_width, unsigned picture_height, unsigned display_width,
                            unsigned display_height, const SetAllocator& allocate);
     void finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
-                         const SetAllocator& allocate);
+                         const SetAllocator& allocate, VkRenderPass scene_pass, unsigned samples_log2);
     // The targets recorded scene AA reads, for a command buffer submitted again later (the interpolation replay):
     // it keeps them alive.
     void hold_scene_targets(std::vector<std::shared_ptr<Texture>>& held) const;
@@ -77,11 +75,12 @@ public:
                         const SetAllocator& allocate);
 
 private:
-    // The pipelines' SPIR-V, compiled by the worker: vertex and pixel shader per pass.
+    // The passes' vertex and pixel shaders, compiled at build.
     enum Program : unsigned {
-        kFullscreenVs, kResamplePs, kFxaaPs, kEasuPs, kRcasPs, kRcasScaledPs, kSmaaEdgesVs, kSmaaEdgesPs,
-        kSmaaWeightsVs, kSmaaWeightsPs, kSmaaBlendVs, kSmaaBlendPs, kSmaaBlendKeepPs, kDebandPs, kDebandReducePs, kDebandSmoothPs,
-        kDebandApplyPs, kProgramCount
+#define POST(name, pass, library, quality, stage) name,
+#include "galaxy/render/vk/post_programs_vk.inc"
+#undef POST
+        kProgramCount
     };
     struct Target {
         std::shared_ptr<Texture> texture;  // its framebuffer is the pass's (with the stencil for edges and weights)
@@ -98,11 +97,11 @@ private:
         VkPipeline deband_apply = VK_NULL_HANDLE;
     };
 
-    // Every program, or only the three that depend on the SMAA quality.
-    void compile_programs(unsigned smaa_quality, bool quality_only);
     VkShaderModule module(Program program) const;
     VkPipeline create_pipeline(Program vs, Program ps, VkRenderPass pass, VkColorComponentFlags write_mask,
-                               int stencil) const;
+                               int stencil,
+                               VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT) const;
+    [[nodiscard]] VkPipeline scene_pass_pipeline(bool smaa, VkRenderPass pass, unsigned samples_log2);
     bool build_pipelines();
     void destroy_pipelines() noexcept;
     bool create_lookup_textures(VkCommandBuffer commands, std::vector<std::shared_ptr<Buffer>>& staging);
@@ -126,17 +125,14 @@ private:
     PostProcessStatus status_{};
     bool ready_ = false;
     bool built_ = false;
+    bool to_build_ = false;  // initialized: poll_ready makes the pipelines
+    unsigned spirv_quality_ = 0;  // the SMAA quality module() takes the quality-dependent programs at
     bool easu_ = false;  // the device has EASU's single-channel gathers
-    VkRenderPass efb_pass_ = VK_NULL_HANDLE;
+    VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
     VkRenderPass present_pass_ = VK_NULL_HANDLE;
     VkFormat stencil_format_ = VK_FORMAT_UNDEFINED;
 
-    // The worker: SPIR-V for every program, done when `compiled_`.
-    std::thread worker_;
-    std::atomic<bool> compiled_{false};
-    std::array<std::vector<std::uint32_t>, kProgramCount> spirv_{};
-    std::array<char, 160> compile_error_{};
 
     VkDescriptorSetLayout image_layout_ = VK_NULL_HANDLE;    // set 0: t0-t2
     VkDescriptorSetLayout sampler_layout_ = VK_NULL_HANDLE;  // set 1: s0 linear, s1 point (immutable)
@@ -150,9 +146,11 @@ private:
     VkPipeline smaa_edges_ = VK_NULL_HANDLE;
     VkPipeline smaa_weights_ = VK_NULL_HANDLE;
     VkPipeline smaa_blend_ = VK_NULL_HANDLE;      // colour pass (self-test)
-    VkPipeline smaa_blend_rgb_ = VK_NULL_HANDLE;  // EFB pass, RGB only
+    VkPipeline smaa_blend_rgb_ = VK_NULL_HANDLE;  // scene target pass, RGB only
     VkPipeline fxaa_ = VK_NULL_HANDLE;
     VkPipeline fxaa_rgb_ = VK_NULL_HANDLE;
+    // FXAA's, SMAA's last pass over MSAA: per sample count (log2).
+    VkPipeline scene_pass_ms_[2][4]{};
     PassPipelines to_color_{};
     PassPipelines to_present_{};
 

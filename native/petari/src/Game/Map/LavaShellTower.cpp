@@ -47,7 +47,7 @@ void LavaShellTower::exeDemo() {
     }
 
     MR::startSystemLevelSE("SE_DM_LV_SHELL_TOWER");
-    MR::tryRumblePadStrong(this, WPAD_CHAN0);
+    MR::tryRumblePadStrong(this, PLAYER_1);
 
     if (MR::isGreaterStep(this, 1) && MR::isDemoLastStep()) {
         MR::stopShakingCamera(this);

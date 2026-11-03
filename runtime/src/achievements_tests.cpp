@@ -31,7 +31,7 @@ int main() {
     std::filesystem::remove(path);
     ach::set_path_for_tests(path);
 
-    expect(ach::list().size() == 34u, "thirty-four achievements");
+    expect(ach::list().size() == 35u, "thirty-five achievements");
     for (const ach::Info& info : ach::list()) {
         expect(!ach::unlocked(info.id), "every achievement starts locked");
         expect(ach::find(info.id) == &info, "each id is found, once");

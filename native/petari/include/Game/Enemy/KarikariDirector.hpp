@@ -25,21 +25,21 @@ public:
         return (MtxPtr)&mClingJointMtxs[idx];
     }
 
-    /* 0x18 */ s32 mClingNum;
-    /* 0x1C */ TPos3f* mClingJointMtxs;  // array
-    /* 0x20 */ FixedPosition** mClingPositions;
-    /* 0x24 */ Karikari** mClingingKarikari;
-    /* 0x28 */ Karikari* mReleaseKarikari;
-    /* 0x2C */ TVec2f mReleaseVel;
-    /* 0x34 */ f32 mLowestReleaseDist;
-    /* 0x38 */ s32 mNoReleaseTime;
-    /* 0x3C */ s32 mRumbleTime;
+    s32 mClingNum;
+    TPos3f* mClingJointMtxs;  // array
+    FixedPosition** mClingPositions;
+    Karikari** mClingingKarikari;
+    Karikari* mReleaseKarikari;
+    TVec2f mReleaseVel;
+    f32 mLowestReleaseDist;
+    s32 mNoReleaseTime;
+    s32 mRumbleTime;
 };
 
 struct ClingData {
-    /* 0x00 */ const char* mJointName;
-    /* 0x04 */ Vec mPos;
-    /* 0x10 */ Vec mRotDegree;
+    const char* mJointName;
+    Vec mPos;
+    Vec mRotDegree;
 };
 
 namespace MR {

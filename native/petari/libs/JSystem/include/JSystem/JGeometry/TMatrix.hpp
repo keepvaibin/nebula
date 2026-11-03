@@ -6,7 +6,7 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JMath/JMath.hpp"
 #include <cmath>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 inline f32 SIN(f32 angle) {
     return sin(angle);
@@ -18,27 +18,6 @@ inline f32 COS(f32 angle) {
 
 namespace JGeometry {
     template < typename T >
-    struct SMatrix33R {
-        T get(int row, int column) const {
-            return mMtx[column][row];
-        }
-
-        void set(T xx, T xy, T xz, T yx, T yy, T yz, T zx, T zy, T zz) {
-            mMtx[0][0] = xx;
-            mMtx[1][0] = xy;
-            mMtx[2][0] = xz;
-            mMtx[0][1] = yx;
-            mMtx[1][1] = yy;
-            mMtx[2][1] = yz;
-            mMtx[0][2] = zx;
-            mMtx[1][2] = zy;
-            mMtx[2][2] = zz;
-        }
-
-        T mMtx[3][3];
-    };
-
-    template < typename T >
     inline T max(T a, T b) {
         return a >= b ? a : b;
     }
@@ -48,14 +27,14 @@ namespace JGeometry {
     public:
         typedef f32 ArrType[4];
         void set(const ArrType* pSrc) {
-            JMath::gekko_ps_copy12(this, pSrc);
+            __builtin_memcpy(this, pSrc, sizeof(Mtx));
         }
 
         void set(const SMatrix34C< T >& rSrc) {
-            JMath::gekko_ps_copy12(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx));
         }
 
-        void set(T xx, T xy, T xz, T tx, T yx, T yy, T yz, T ty, T zx, T zy, T zz, T tz) NO_INLINE {
+        void set(T xx, T xy, T xz, T tx, T yx, T yy, T yz, T ty, T zx, T zy, T zz, T tz) {
             mMtx[0][0] = xx;
             mMtx[0][1] = xy;
             mMtx[0][2] = xz;
@@ -83,15 +62,15 @@ namespace JGeometry {
         }
 
         inline void setInline(const SMatrix34C< T >& rSrc) {
-            JMath::gekko_ps_copy12(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx));
         }
 
         inline void setInline(const SMatrix34C< T >* rSrc) {
-            JMath::gekko_ps_copy12(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx));
         }
 
         inline void setInline(const MtxPtr rSrc) {
-            JMath::gekko_ps_copy12(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx));
         }
 
         inline void scaleInline(T scalar) {
@@ -134,7 +113,7 @@ namespace JGeometry {
             return get(x, y);
         }
 
-        ALWAYS_INLINE inline f32 dot() const {
+        inline f32 dot() const {
             return ((this->mMtx[1][0] * this->mMtx[1][0]) + (this->mMtx[0][0] * this->mMtx[0][0]) + (this->mMtx[2][0] * this->mMtx[2][0]) +
                     (this->mMtx[0][1] * this->mMtx[0][1]) + (this->mMtx[1][1] * this->mMtx[1][1]) + (this->mMtx[2][1] * this->mMtx[2][1]) +
                     (this->mMtx[0][2] * this->mMtx[0][2]) + (this->mMtx[1][2] * this->mMtx[1][2]) + (this->mMtx[2][2] * this->mMtx[2][2]));
@@ -178,40 +157,18 @@ namespace JGeometry {
     template < typename T >
     struct TMatrix34 : public T {
     public:
-        void identity() NO_INLINE {
+        void identity() {
             this->mMtx[1][0] = this->mMtx[2][0] = this->mMtx[0][1] = this->mMtx[2][1] = this->mMtx[0][2] = this->mMtx[1][2] = this->mMtx[0][3] =
                 this->mMtx[1][3] = this->mMtx[2][3] = 0.0f;
             this->mMtx[0][0] = this->mMtx[1][1] = this->mMtx[2][2] = 1.0f;
         }
 
-        void concat(const T& rSrcA, const T& rSrcB) NO_INLINE {
-            this->set(rSrcA(0, 2) * rSrcB(2, 0) + (rSrcA(0, 0) * rSrcB(0, 0) + rSrcA(0, 1) * rSrcB(1, 0)),
-                      rSrcA(0, 2) * rSrcB(2, 1) + (rSrcA(0, 0) * rSrcB(0, 1) + rSrcA(0, 1) * rSrcB(1, 1)),
-                      rSrcA(0, 2) * rSrcB(2, 2) + (rSrcA(0, 0) * rSrcB(0, 2) + rSrcA(0, 1) * rSrcB(1, 2)),
-                      rSrcA(0, 3) + (rSrcA(0, 2) * rSrcB(2, 3) + (rSrcA(0, 0) * rSrcB(0, 3) + rSrcA(0, 1) * rSrcB(1, 3))),
-                      rSrcA(1, 2) * rSrcB(2, 0) + (rSrcA(1, 0) * rSrcB(0, 0) + rSrcA(1, 1) * rSrcB(1, 0)),
-                      rSrcA(1, 2) * rSrcB(2, 1) + (rSrcA(1, 0) * rSrcB(0, 1) + rSrcA(1, 1) * rSrcB(1, 1)),
-                      rSrcA(1, 2) * rSrcB(2, 2) + (rSrcA(1, 0) * rSrcB(0, 2) + rSrcA(1, 1) * rSrcB(1, 2)),
-                      rSrcA(1, 3) + (rSrcA(1, 2) * rSrcB(2, 3) + (rSrcA(1, 0) * rSrcB(0, 3) + rSrcA(1, 1) * rSrcB(1, 3))),
-                      rSrcA(2, 2) * rSrcB(2, 0) + (rSrcA(2, 0) * rSrcB(0, 0) + rSrcA(2, 1) * rSrcB(1, 0)),
-                      rSrcA(2, 2) * rSrcB(2, 1) + (rSrcA(2, 0) * rSrcB(0, 1) + rSrcA(2, 1) * rSrcB(1, 1)),
-                      rSrcA(2, 2) * rSrcB(2, 2) + (rSrcA(2, 0) * rSrcB(0, 2) + rSrcA(2, 1) * rSrcB(1, 2)),
-                      rSrcA(2, 3) + (rSrcA(2, 2) * rSrcB(2, 3) + (rSrcA(2, 0) * rSrcB(0, 3) + rSrcA(2, 1) * rSrcB(1, 3))));
+        void concat(const T& rSrcA, const T& rSrcB) {
+            NebulaMtxConcat(rSrcA, rSrcB, this->mMtx);
         }
 
-        void concat(const T& rSrc) NO_INLINE {
-            this->set((*this)(0, 2) * rSrc(2, 0) + ((*this)(0, 0) * rSrc(0, 0) + (*this)(0, 1) * rSrc(1, 0)),
-                      (*this)(0, 2) * rSrc(2, 1) + ((*this)(0, 0) * rSrc(0, 1) + (*this)(0, 1) * rSrc(1, 1)),
-                      (*this)(0, 2) * rSrc(2, 2) + ((*this)(0, 0) * rSrc(0, 2) + (*this)(0, 1) * rSrc(1, 2)),
-                      (*this)(0, 3) + ((*this)(0, 2) * rSrc(2, 3) + ((*this)(0, 0) * rSrc(0, 3) + (*this)(0, 1) * rSrc(1, 3))),
-                      (*this)(1, 2) * rSrc(2, 0) + ((*this)(1, 0) * rSrc(0, 0) + (*this)(1, 1) * rSrc(1, 0)),
-                      (*this)(1, 2) * rSrc(2, 1) + ((*this)(1, 0) * rSrc(0, 1) + (*this)(1, 1) * rSrc(1, 1)),
-                      (*this)(1, 2) * rSrc(2, 2) + ((*this)(1, 0) * rSrc(0, 2) + (*this)(1, 1) * rSrc(1, 2)),
-                      (*this)(1, 3) + ((*this)(1, 2) * rSrc(2, 3) + ((*this)(1, 0) * rSrc(0, 3) + (*this)(1, 1) * rSrc(1, 3))),
-                      (*this)(2, 2) * rSrc(2, 0) + ((*this)(2, 0) * rSrc(0, 0) + (*this)(2, 1) * rSrc(1, 0)),
-                      (*this)(2, 2) * rSrc(2, 1) + ((*this)(2, 0) * rSrc(0, 1) + (*this)(2, 1) * rSrc(1, 1)),
-                      (*this)(2, 2) * rSrc(2, 2) + ((*this)(2, 0) * rSrc(0, 2) + (*this)(2, 1) * rSrc(1, 2)),
-                      (*this)(2, 3) + ((*this)(2, 2) * rSrc(2, 3) + ((*this)(2, 0) * rSrc(0, 3) + (*this)(2, 1) * rSrc(1, 3))));
+        void concat(const T& rSrc) {
+            NebulaMtxConcat(this->mMtx, rSrc, this->mMtx);
         }
 
         f32 determinant33() const {
@@ -220,56 +177,24 @@ namespace JGeometry {
                    (*this)(0, 2) * ((*this)(1, 0) * (*this)(2, 1) - (*this)(1, 1) * (*this)(2, 0));
         }
 
-        bool invert(const TMatrix34< T >& rSrc) NO_INLINE {
+        bool invert(const TMatrix34< T >& rSrc) {
             f32 determinant = rSrc.determinant33();
 
             if (determinant <= TUtil< f32 >::epsilon() && determinant >= -TUtil< f32 >::epsilon()) {
                 return false;
             }
 
-            SMatrix33R< f32 > inverse;
-            f32 scale = TUtil< f32 >::invert(determinant);
-
-            TVec3f translation;
-            translation.x = rSrc(0, 3);
-            translation.x = -translation.x;
-
-            inverse.set(scale * (rSrc(1, 1) * rSrc(2, 2) - rSrc(1, 2) * rSrc(2, 1)), scale * -(rSrc(0, 1) * rSrc(2, 2) - rSrc(0, 2) * rSrc(2, 1)),
-                        scale * (rSrc(0, 1) * rSrc(1, 2) - rSrc(0, 2) * rSrc(1, 1)), scale * -(rSrc(1, 0) * rSrc(2, 2) - rSrc(1, 2) * rSrc(2, 0)),
-                        scale * (rSrc(0, 0) * rSrc(2, 2) - rSrc(0, 2) * rSrc(2, 0)), scale * -(rSrc(0, 0) * rSrc(1, 2) - rSrc(0, 2) * rSrc(1, 0)),
-                        scale * (rSrc(1, 0) * rSrc(2, 1) - rSrc(1, 1) * rSrc(2, 0)), scale * -(rSrc(0, 0) * rSrc(2, 1) - rSrc(0, 1) * rSrc(2, 0)),
-                        scale * (rSrc(0, 0) * rSrc(1, 1) - rSrc(0, 1) * rSrc(1, 0)));
-
-            translation.y = rSrc(1, 3);
-            translation.y = -translation.y;
-            translation.z = rSrc(2, 3);
-            translation.z = -translation.z;
-
-            translation.set< f32 >(translation.x * inverse.mMtx[0][0] + translation.y * inverse.mMtx[1][0] + translation.z * inverse.mMtx[2][0],
-                                   translation.x * inverse.mMtx[0][1] + translation.y * inverse.mMtx[1][1] + translation.z * inverse.mMtx[2][1],
-                                   translation.x * inverse.mMtx[0][2] + translation.y * inverse.mMtx[1][2] + translation.z * inverse.mMtx[2][2]);
-            this->mMtx[0][0] = inverse.get(0, 0);
-            this->mMtx[1][0] = inverse.get(1, 0);
-            this->mMtx[2][0] = inverse.get(2, 0);
-            this->mMtx[0][1] = inverse.get(0, 1);
-            this->mMtx[1][1] = inverse.get(1, 1);
-            this->mMtx[2][1] = inverse.get(2, 1);
-            this->mMtx[0][2] = inverse.get(0, 2);
-            this->mMtx[1][2] = inverse.get(1, 2);
-            this->mMtx[2][2] = inverse.get(2, 2);
-            this->mMtx[0][3] = translation.x;
-            this->mMtx[1][3] = translation.y;
-            this->mMtx[2][3] = translation.z;
+            NebulaMtxInverse(rSrc, this->mMtx);
             return true;
         }
 
-        void mult(const TVec3f& rSrc, TVec3f& rDest) const NO_INLINE {
+        void mult(const TVec3f& rSrc, TVec3f& rDest) const {
             rDest.set< f32 >((*this)(0, 3) + (rSrc.z * (*this)(0, 2) + (rSrc.x * (*this)(0, 0) + rSrc.y * (*this)(0, 1))),
                              (*this)(1, 3) + (rSrc.z * (*this)(1, 2) + (rSrc.x * (*this)(1, 0) + rSrc.y * (*this)(1, 1))),
                              (*this)(2, 3) + (rSrc.z * (*this)(2, 2) + (rSrc.x * (*this)(2, 0) + rSrc.y * (*this)(2, 1))));
         }
 
-        void multTranspose(const TVec3f& rSrc, TVec3f& rDest) const NO_INLINE {
+        void multTranspose(const TVec3f& rSrc, TVec3f& rDest) const {
             TVec3f translated;
             translated.x = rSrc.x - (*this)(0, 3);
             translated.y = rSrc.y - (*this)(1, 3);
@@ -356,7 +281,7 @@ namespace JGeometry {
             this->mMtx[2][0] = rSrc.z;
         }
 
-        void setXDir(f32 x, f32 y, f32 z) NO_INLINE {
+        void setXDir(f32 x, f32 y, f32 z) {
             this->mMtx[0][0] = x;
             this->mMtx[1][0] = y;
             this->mMtx[2][0] = z;
@@ -368,7 +293,7 @@ namespace JGeometry {
             this->mMtx[2][1] = rSrc.z;
         }
 
-        void setYDir(f32 x, f32 y, f32 z) NO_INLINE {
+        void setYDir(f32 x, f32 y, f32 z) {
             this->mMtx[0][1] = x;
             this->mMtx[1][1] = y;
             this->mMtx[2][1] = z;
@@ -380,7 +305,7 @@ namespace JGeometry {
             this->mMtx[2][2] = rSrc.z;
         }
 
-        void setZDir(f32 x, f32 y, f32 z) NO_INLINE {
+        void setZDir(f32 x, f32 y, f32 z) {
             this->mMtx[0][2] = x;
             this->mMtx[1][2] = y;
             this->mMtx[2][2] = z;
@@ -438,7 +363,7 @@ namespace JGeometry {
                 return;
             }
 
-            f32 f1 = 1.0f;  // TODO: this is a hack to fix the float regswap
+            f32 f1 = 1.0f;
             if (zx + f1 <= (f32)JGeometry::TUtil< f32 >::epsilon()) {
                 rDest.set(JMAATan2(this->mMtx[0][1], this->mMtx[1][1]), HALF_PI, 0.0f);
                 return;
@@ -494,7 +419,7 @@ namespace JGeometry {
             this->mMtx[0][2] = 0.0f;
         }
 
-        void getQuat(TQuat4f& rDest) const NO_INLINE {
+        void getQuat(TQuat4f& rDest) const {
             if ((*this)(0, 0) + (*this)(1, 1) + (*this)(2, 2) >= 0.0f) {
                 f32 root = (*this)(0, 0) + (*this)(1, 1) + (*this)(2, 2);
                 root += 1.0f;
@@ -588,7 +513,7 @@ namespace JGeometry {
         }
 
         void setScale(const TVec3f& rSrc);
-        void setScale(f32 x, f32 y, f32 z) NO_INLINE {
+        void setScale(f32 x, f32 y, f32 z) {
             this->mMtx[0][0] = x;
             this->mMtx[0][1] = 0.0f;
             this->mMtx[0][2] = 0.0f;
@@ -731,11 +656,11 @@ namespace JGeometry {
         TPosition3() {};
 
         TPosition3(MtxPtr rSrc) {
-            JMath::gekko_ps_copy12(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx));
         }
 
         TPosition3(const TPosition3< T >* rSrc) {
-            JMath::gekko_ps_copy12(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx));
         }
 
         void getTrans(TVec3f& rDest) const {
@@ -958,10 +883,6 @@ namespace JGeometry {
         }
 
         inline void normalizeBasis() {
-            f32 scale = JGeometry::TUtil< f32 >::sqrt(
-                (this->get(0, 0) * this->get(0, 0)) + (this->get(1, 0) * this->get(1, 0)) + (this->get(2, 0) * this->get(2, 0)) +
-                (this->get(0, 1) * this->get(0, 1)) + (this->get(1, 1) * this->get(1, 1)) + (this->get(2, 1) * this->get(2, 1)) +
-                (this->get(0, 2) * this->get(0, 2)) + (this->get(1, 2) * this->get(1, 2)) + (this->get(2, 2) * this->get(2, 2)));
 
             f32 invLenX = JGeometry::TUtil< f32 >::inv_sqrt((this->get(0, 0) * this->get(0, 0)) + (this->get(1, 0) * this->get(1, 0)) +
                                                             (this->get(2, 0) * this->get(2, 0)));
@@ -993,7 +914,7 @@ namespace JGeometry {
         void set(const ArrType*);
 
         void set(const SMatrix44C< T >& rSrc) {
-            JMath::gekko_ps_copy16(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx44));
         }
 
         void set(T rxx, T ryx, T rzx, T tx, T rxy, T ryy, T rzy, T ty, T rxz, T ryz, T rzz, T tz, T wx, T wy, T wz, T ww) {
@@ -1047,15 +968,15 @@ namespace JGeometry {
         }
 
         inline void setInline(const Mtx44Ptr rSrc) {
-            JMath::gekko_ps_copy16(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx44));
         }
 
         inline void setInline(const SMatrix44C< T >& rSrc) {
-            JMath::gekko_ps_copy16(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx44));
         }
 
         inline void setInline(const SMatrix44C< T >* rSrc) {
-            JMath::gekko_ps_copy16(this, rSrc);
+            __builtin_memcpy(this, rSrc, sizeof(Mtx44));
         }
 
         T mMtx[4][4];
@@ -1128,11 +1049,11 @@ namespace JGeometry {
         TProjection3() {};
 
         TProjection3(const Mtx44Ptr rSrc) {
-            JMath::gekko_ps_copy16(this, rSrc);
+            __builtin_memcpy((void*)this, rSrc, sizeof(Mtx44));
         }
 
         TProjection3(const TProjection3& rSrc) {
-            JMath::gekko_ps_copy16(this, rSrc);
+            __builtin_memcpy((void*)this, rSrc, sizeof(Mtx44));
         }
 
         f32 getFocalLength(f32 fov) {

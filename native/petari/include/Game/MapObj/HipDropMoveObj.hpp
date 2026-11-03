@@ -21,7 +21,7 @@ public:
     void exeMove();
     void exeDone();
 
-    /* 0x8C */ const char* mModelName;
+    const char* mModelName;
 };
 
 class HipDropDemoMoveObj : public HipDropMoveObj {
@@ -34,5 +34,5 @@ public:
     virtual void moveStart();
     virtual void moving();
 
-    /* 0x90 */ TMtx34f mMtx;
+    TMtx34f mMtx;
 };

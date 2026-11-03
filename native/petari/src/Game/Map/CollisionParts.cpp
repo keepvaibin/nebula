@@ -11,21 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
-void CollisionParts_FORCE_MATCH_SDATA2() {
-    1.0f;
-    0.0f;
-    3.0f;
-    -1.0f;
-    2.0f;
-    0.001f;
-    20.0f;
-    1.0f / 35.0f;
-}
-
-void CollisionParts_FORCE_MATCH_GET_SCALE(const TPos3f& rMatrix, TVec3f& rScale) {
-    rMatrix.getScale(rScale);
-}
-
 CollisionParts::CollisionParts()
     : _0(), mHitSensor(), _CC(), _CD(true), _CE(), _CF(), _D0(), _D4(), _D8(-1.0f), _DC(1.0f), mKeeperIndex(-1), mZone() {
     mServer = new KCollisionServer();
@@ -39,6 +24,26 @@ CollisionParts::CollisionParts()
 void CollisionParts::init(const TPos3f& rMatrix, HitSensor* pHitSensor, const void* pKclData, const void* pMapInfo, s32 keeperIndex,
                           bool useAutoScale) {
     mServer->init(const_cast< void* >(pKclData), pMapInfo);
+    mHitSensor = pHitSensor;
+
+    resetAllMtx(rMatrix);
+
+    TVec3f scale;
+    mBaseMatrix.getScale(scale);
+
+    mZone = MR::getCollisionDirector()->getCategoryKeeper(keeperIndex)->getZone(MR::getCurrentPlacementZoneId());
+
+    MR::initCameraCodeCollection(pHitSensor->mHost->mName, mZone->mZoneID);
+    mServer->calcFarthestVertexDistance();
+    MR::termCameraCodeCollection();
+
+    updateBoundingSphereRange(scale);
+    mKeeperIndex = keeperIndex;
+}
+
+void CollisionParts::init(const TPos3f& rMatrix, HitSensor* pHitSensor, KCLFile* pModel, const void* pMapInfo, s32 keeperIndex,
+                          bool useAutoScale) {
+    mServer->initModel(pModel, pMapInfo);
     mHitSensor = pHitSensor;
 
     resetAllMtx(rMatrix);
@@ -507,8 +512,13 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const TVec3f
     return hitCount;
 }
 
+namespace {
+    // Area lists are asked for on the game's main thread.
+    KC_PrismData* sAreaPrisms[512];
+}  // namespace
+
 u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const TVec3f& rMin, const TVec3f& rMax) {
-    KC_PrismData* prisms[512];
+    KC_PrismData** const prisms = sAreaPrisms;
     TPos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();
@@ -529,7 +539,7 @@ u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles
 }
 
 u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, TVec3f* pPoints, u32 numPoints) {
-    KC_PrismData* prisms[512];
+    KC_PrismData** const prisms = sAreaPrisms;
     TVec3f localPoints[32];
     TPos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());

@@ -14,5 +14,5 @@ public:
     void exeWait();
     void tryAttack();
 
-    /* 0x10 */ TVec3f mNamePos;
+    TVec3f mNamePos;
 };

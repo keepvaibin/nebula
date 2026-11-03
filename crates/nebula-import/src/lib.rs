@@ -285,7 +285,16 @@ impl Seek for DiscFile {
     }
 }
 
+/// A build for extracted folders only reads no disc image.
+fn refuse_images() -> Result<()> {
+    if cfg!(feature = "folders-only") {
+        bail!("this build of Nebula reads extracted game folders only");
+    }
+    Ok(())
+}
+
 fn open_disc(disc: DiscFile) -> Result<Disc> {
+    refuse_images()?;
     Disc::new_stream_with_options(Box::new(disc), &OpenOptions { rebuild_encryption: false, validate_hashes: true })
         .map_err(|error| anyhow!("this is not a readable GameCube or Wii disc image: {error}"))
 }
@@ -321,6 +330,7 @@ pub fn identify_input(input: &Path) -> Result<InputIdentity> {
     if !input.is_file() {
         bail!("{} does not exist", input.display());
     }
+    refuse_images()?;
     let file = File::open(input).with_context(|| format!("{} cannot be opened", input.display()))?;
     let disc = Disc::new_stream(Box::new(DiscFile::new(file)))
         .map_err(|error| anyhow!("{} is not a readable GameCube/Wii disc image: {error}", input.display()))?;
@@ -369,7 +379,7 @@ fn identify_folder(data: &Path) -> Result<InputIdentity> {
     ))
 }
 
-/// The partition folder of an extracted game (Dolphin's "Extract Entire Disc" layout): `input/DATA` or `input`.
+/// The partition folder of an extracted game (an emulator's whole-disc extraction layout): `input/DATA` or `input`.
 fn data_root(input: &Path) -> Result<PathBuf> {
     let nested = input.join("DATA");
     if nested.join("sys").join("main.dol").is_file() {
@@ -589,7 +599,7 @@ pub struct Partition {
 }
 
 impl Partition {
-    /// The game partition of a disc image, or of an extracted folder (Dolphin's "Extract Entire Disc" layout).
+    /// The game partition of a disc image, or of an extracted folder (an emulator's whole-disc extraction layout).
     pub fn open(input: &Path) -> Result<Partition> {
         if input.is_dir() {
             return Partition::from_folder(&data_root(input)?);
@@ -772,7 +782,7 @@ impl Partition {
         Ok(())
     }
 
-    /// Writes the content folder the native game runs from: game.pak and files/LayoutData/FileSelect.arc. `output`
+    /// Writes the content folder the native game runs from: game.pak. `output`
     /// must not exist; it is removed again when the import fails.
     pub fn write_content(&mut self, output: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> Result<u64> {
         if output.exists() {
@@ -789,7 +799,6 @@ impl Partition {
     fn write_content_to(&mut self, output: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> Result<u64> {
         let pak = output.join("game.pak");
         let (size, _) = self.write_cooked_pak(&pak, progress)?;
-        cook::write_beside_files(&pak, output)?;
         Ok(size)
     }
 
@@ -1113,6 +1122,11 @@ mod tests {
         dol[0x48 + 0x1C..0x48 + 0x20].copy_from_slice(&0x8053_A000u32.to_be_bytes());
         dol[0x90 + 0x1C..0x90 + 0x20].copy_from_slice(&0xE000u32.to_be_bytes());
         dol.resize(0x100 + 0xE000, 0);
+        // The two tables as empty tables (16-byte header: no entries, no fields, data at 16), as the cook reads them.
+        for address in [0x8053_C620u32, 0x8053_C800] {
+            let at = 0x100 + (address - 0x8053_A000) as usize;
+            dol[at + 8..at + 12].copy_from_slice(&16u32.to_be_bytes());
+        }
         let system = vec![
             ("boot.bin", 0, boot.into_boxed_slice()),
             ("main.dol", 0x2480, dol.into_boxed_slice()),
@@ -1122,7 +1136,7 @@ mod tests {
     }
 
     #[test]
-    fn content_folder_holds_the_cooked_game_pak_and_file_select_archive() {
+    fn content_folder_holds_the_cooked_game_pak() {
         let directory = tempfile::tempdir().unwrap();
         // A Yaz0 file of four literal bytes (a code byte, then them): stored expanded.
         let mut compressed = b"Yaz0".to_vec();
@@ -1135,29 +1149,35 @@ mod tests {
         );
         let output = directory.path().join("content");
         partition.write_content(&output, &mut |_, _| true).unwrap();
-        assert_eq!(fs::read(output.join("files").join("LayoutData").join("FileSelect.arc")).unwrap(), b"archive");
-        let mut pak = File::open(output.join("game.pak")).unwrap();
-        let system = cook::pak_system_area(&mut pak).unwrap();
-        let files = cook::pak_files(system.fst()).unwrap();
-        let read = |path: &str| {
-            let file = files.iter().find(|f| f.path == path).unwrap();
-            let mut bytes = vec![0u8; file.length as usize];
-            let mut pak = File::open(output.join("game.pak")).unwrap();
-            pak.seek(SeekFrom::Start(file.offset)).unwrap();
-            pak.read_exact(&mut bytes).unwrap();
-            bytes
-        };
+        let read = |path: &str| cook::store::read_file(&output.join("game.pak"), path).unwrap();
         assert_eq!(read("small.szs"), b"abcd");
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
         // main.dol's tables as files of their own folder (cook/dol.rs).
         assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
-        assert_eq!(read("NebulaData/GameEventFlags.bin").len(), 4 + 188 * 20);
         assert!(partition.write_content(&output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
+    }
 
-        let mut without_archive = table_partition(&directory.path().join("other"), &[("a.bin", 0x21000, b"x")]);
-        let failed = directory.path().join("failed");
-        assert!(without_archive.write_content(&failed, &mut |_, _| true).is_err());
-        assert!(!failed.exists());
+    #[test]
+    fn a_format_1_content_folder_cooks_without_the_disc() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut compressed = b"Yaz0".to_vec();
+        compressed.extend_from_slice(&4u32.to_be_bytes());
+        compressed.extend_from_slice(&[0; 8]);
+        compressed.extend_from_slice(&[0xF0, b'a', b'b', b'c', b'd']);
+        let mut partition = table_partition(
+            &directory.path().join("data"),
+            &[("LayoutData/FileSelect.arc", 0x21000, b"archive"), ("small.szs", 0x21020, &compressed)],
+        );
+        let old = directory.path().join("content-format1");
+        partition.write_pak(&old.join("game.pak"), &mut |_, _| true).unwrap();
+        let output = directory.path().join("content");
+        let stats = cook::cook_content(&old, &output, &mut |_, _| true).unwrap();
+        assert_eq!(stats.expanded_files, 1);
+        let read = |path: &str| cook::store::read_file(&output.join("game.pak"), path).unwrap();
+        assert_eq!(read("small.szs"), b"abcd");
+        assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
+        assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
+        assert!(cook::cook_content(&old, &output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
     }
 
     #[test]

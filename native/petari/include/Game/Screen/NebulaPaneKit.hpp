@@ -1,8 +1,6 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include <nw4r/lyt/common.h>
-#include <revolution/types.h>
 
 class LayoutHolder;
 
@@ -35,4 +33,3 @@ private:
     const void* mLayout;
     nw4r::lyt::ResBlockSet mBlocks;
 };
-#endif

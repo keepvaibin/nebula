@@ -1,11 +1,10 @@
 #pragma once
 
-#include <revolution/types.h>
 
 #include "JSystem/JAudio2/JASSeqParser.hpp"
 #include "JSystem/JAudio2/JASSeqReader.hpp"
 
-class JASTrack;
+struct JASTrack;
 class JASSeqParser;
 
 class JASSeqCtrl {
@@ -107,17 +106,17 @@ public:
         _51 = 1;
     }
 
-    /* 0x00 */ JASSeqReader mReader;
-    /* 0x3C */ JASSeqParser* mParser;
-    /* 0x40 */ s32 mTimer;
-    /* 0x44 */ void* mCursorSwap;
-    /* 0x48 */ u32 _48;
-    /* 0x4C */ u16 _4C;
-    /* 0x4E */ u16 _4E;
-    /* 0x50 */ u8 mIntTimer;
-    /* 0x51 */ u8 _51;
-    /* 0x52 */ u16 _52;
-    /* 0x54 */ u32 _54;
-    /* 0x58 */ u32 _58;
+    JASSeqReader mReader;
+    JASSeqParser* mParser;
+    s32 mTimer;
+    void* mCursorSwap;
+    u32 _48;
+    u16 _4C;
+    u16 _4E;
+    u8 mIntTimer;
+    u8 _51;
+    u16 _52;
+    u32 _54;
+    u32 _58;
     static JASSeqParser sDefaultParser;
 };

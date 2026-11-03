@@ -48,7 +48,7 @@ public:
     bool tryAppearGalaxyMap();
     bool tryDisplayAndKeyWait();
     void setNerveAccordingToNextModeFromMap();
-    void setFaderParam(GXColor, int);
+    void setFaderParam(NebulaColor8, int);
     void capture();
 
     void exeReadyModeMap();
@@ -73,15 +73,15 @@ public:
     void exeFadeout();
     void exeReadyGame();
 
-    /* 0x20 */ GalaxyMap* mMap;
-    /* 0x24 */ GalaxyMapSelectButton* mMapSelectButton;
-    /* 0x28 */ GalaxyMapBackground* mMapBackground;
-    /* 0x2C */ PowerStarList* mPowerStarList;
-    /* 0x30 */ BackButton* mBackButton;
-    /* 0x34 */ WipeFade* mWipe;
-    /* 0x38 */ JUTTexture* _38;
-    /* 0x3C */ s32 mMode;
-    /* 0x40 */ s32 mWipeFrame;
+    GalaxyMap* mMap;
+    GalaxyMapSelectButton* mMapSelectButton;
+    GalaxyMapBackground* mMapBackground;
+    PowerStarList* mPowerStarList;
+    BackButton* mBackButton;
+    WipeFade* mWipe;
+    JUTTexture* _38;
+    s32 mMode;
+    s32 mWipeFrame;
 };
 
 namespace MR {

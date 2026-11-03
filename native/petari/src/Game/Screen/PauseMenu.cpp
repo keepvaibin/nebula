@@ -6,7 +6,7 @@
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -14,10 +14,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaPauseSettingsButton.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
-#endif
 
 namespace {
     const s32 cBackSequenceFadeFrame = 90;
@@ -43,9 +41,7 @@ namespace NrvPauseMenu {
 PauseMenu::PauseMenu()
     : LayoutActor("\203\174\201\133\203\131\203\201\203\152\203\205\201\133" /* ポーズメニュー */, true), _20(), _24(), _28(0.0f, 50.0f), _30(), mLuigiLetter(), _38(), mStageTitleOffset(0.0f, 39.0f),
       mCoinNumPos(0.0f, 0.0f), mStarPieceNumPos(0.0f, 0.0f), _54(true) {
-#ifdef TARGET_PC
     mSettingsButton = nullptr;
-#endif
 }
 
 void PauseMenu::init(const JMapInfoIter& rIter) {
@@ -108,10 +104,8 @@ void PauseMenu::init(const JMapInfoIter& rIter) {
         MR::hidePaneRecursive(this, "LetterButton");
     }
 
-#ifdef TARGET_PC
     mSettingsButton = new NebulaPauseSettingsButton();
     mSettingsButton->initWithoutIter();
-#endif
 
     initNerve(GET_NERVE(PauseMenu, PauseMenuNrvSelecting));
 }
@@ -132,7 +126,7 @@ void PauseMenu::appear() {
     MR::setTextBoxNumberRecursive(this, "ShaPieceNum", starPieceNum);
     MR::setTextBoxGameMessageRecursive(this, "ShaMario", "PlayerLeft");
 
-    wchar_t starPieceMessage[3];
+    char16_t starPieceMessage[3];
 
     starPieceMessage[0] = MR::isStageAstroLocation() ? 0x57 : 0x3B;
     starPieceMessage[1] = 0x40;
@@ -150,9 +144,7 @@ void PauseMenu::appear() {
         _38->appear();
     }
 
-#ifdef TARGET_PC
     mSettingsButton->show();
-#endif
 
     setNerve(GET_NERVE(PauseMenu, PauseMenuNrvSelecting));
     LayoutActor::appear();
@@ -180,9 +172,7 @@ void PauseMenu::appear() {
 
 void PauseMenu::draw() const {
     LayoutActor::draw();
-#ifdef TARGET_PC
     mSettingsButton->draw();
-#endif
 
     if (mLuigiLetter != nullptr) {
         mLuigiLetter->draw();
@@ -191,9 +181,7 @@ void PauseMenu::draw() const {
 
 void PauseMenu::kill() {
     LayoutActor::kill();
-#ifdef TARGET_PC
     mSettingsButton->kill();
-#endif
 
     if (_54) {
         MR::activateDefaultGameLayout();
@@ -285,17 +273,13 @@ void PauseMenu::forceToWaitAllButton() {
         _38->forceToWait();
     }
 
-#ifdef TARGET_PC
     mSettingsButton->getButton()->forceToWait();
-#endif
 }
 
 void PauseMenu::exeSelecting() {
     bool isPointingTrigger = _20->isPointingTrigger() || (_24 != nullptr && _24->isPointingTrigger()) ||
                              (!(_38 == nullptr || _38->isHidden()) && _38->isPointingTrigger());
-#ifdef TARGET_PC
     isPointingTrigger = isPointingTrigger || mSettingsButton->getButton()->isPointingTrigger();
-#endif
 
     if (isPointingTrigger) {
         MR::startSystemSE("SE_SY_SELECT_PAUSE_ITEM");
@@ -308,17 +292,15 @@ void PauseMenu::exeSelecting() {
         return;
     }
 
-#ifdef TARGET_PC
     if (mSettingsButton->getButton()->trySelect()) {
         setNerve(GET_NERVE(PauseMenu, PauseMenuNrvDecided));
         return;
     }
-#endif
 
     bool isAnimStopped = isPaneAnimStoppedWithoutButton() && !_20->isAppearing() && (_24 == nullptr || !_24->isAppearing()) &&
                          ((_38 == nullptr || _38->isHidden()) || !_38->isAppearing());
 
-    if (isAnimStopped && (MR::testCorePadTriggerPlus(0) || MR::testCorePadTriggerMinus(0))) {
+    if (isAnimStopped && (MR::isPressedPause(0) || MR::isPressedMap(0))) {
         MR::startSystemSE("SE_SY_PAUSE_OFF");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
         setNerve(GET_NERVE(PauseMenu, PauseMenuNrvDisappear));
@@ -349,7 +331,6 @@ void PauseMenu::exeDecided() {
             }
         }
     }
-#ifdef TARGET_PC
     // Settings: the menu drops in over the pause menu, which waits under it with its buttons ready.
     else if (mSettingsButton->getButton()->mIsSelected) {
         if (mSettingsButton->getButton()->isDecidedWait()) {
@@ -358,7 +339,6 @@ void PauseMenu::exeDecided() {
             setNerve(GET_NERVE(PauseMenu, PauseMenuNrvSelecting));
         }
     }
-#endif
     else {
         bool isLetterHidden = _38 == nullptr || _38->isHidden();
 
@@ -390,9 +370,7 @@ void PauseMenu::exeDisappear() {
             _38->disappear();
         }
 
-#ifdef TARGET_PC
         mSettingsButton->hide();
-#endif
     }
 
     if (isPaneAnimStoppedWithoutButton() && _20->isHidden() && (_24 == nullptr || _24->isHidden())) {
@@ -409,10 +387,8 @@ void PauseMenu::exeConfirm() {
         const char* pMessageId = ::isInvalidBackAstroDome() ? "PauseMenu_ConfirmEndGame" : "PauseMenu_ConfirmBackAstroDome";
 
         _30->appear(pMessageId, SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
-#ifdef TARGET_PC
         // Yes fades the screen out from a capture of it: the dim stays in that capture instead of lifting first.
         _30->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (MR::isDead(_30)) {
@@ -434,10 +410,8 @@ void PauseMenu::exeConfirm() {
 void PauseMenu::exeGameDataSave() {
     if (MR::isFirstStep(this)) {
         GameSequenceFunction::startGameDataSaveSequence(false, true);
-#ifdef TARGET_PC
         // Its question follows the save (exeConfirm).
         GameSequenceFunction::setGameDataSaveWindowFollows();
-#endif
     }
 
     if (GameSequenceFunction::isActiveSaveDataHandleSequence()) {

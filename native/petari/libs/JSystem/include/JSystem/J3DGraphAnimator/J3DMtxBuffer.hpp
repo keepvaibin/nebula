@@ -3,9 +3,8 @@
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DJointTree;
 
@@ -87,32 +86,12 @@ public:
     }
 
     void setNrmMtx(int idx, Mtx mtx) {
-#ifdef TARGET_PC
         f32(*dst)[3] = mpNrmMtxArr[1][mCurrentViewNo][idx];
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 dst[i][j] = mtx[i][j];
             }
         }
-#elif defined(__MWERKS__)
-        __REGISTER const void* source = mtx;
-        __REGISTER void* destination = mpNrmMtxArr[1][mCurrentViewNo][idx];
-        __REGISTER f32 v, u, w, z, y, x;
-        asm {
-            psq_l x, 0(source), 0, 0
-            lfs y, 8(source)
-            psq_l z, 16(source), 0, 0
-            lfs w, 24(source)
-            psq_l u, 32(source), 0, 0
-            lfs v, 40(source)
-            psq_st x, 0(destination), 0, 0
-            stfs y, 8(destination)
-            psq_st z, 12(destination), 0, 0
-            stfs w, 20(destination)
-            psq_st u, 24(destination), 0, 0
-            stfs v, 32(destination)
-        }
-#endif
     }
 
     void swapDrawMtx() {
@@ -132,17 +111,17 @@ public:
     static Mtx* sNoUseDrawMtxPtr;
     static Mtx33* sNoUseNrmMtxPtr;
 
-    /* 0x00 */ J3DJointTree* mJointTree;
-    /* 0x04 */ u8* mpScaleFlagArr;
-    /* 0x08 */ u8* mpEvlpScaleFlagArr;
-    /* 0x0C */ Mtx* mpAnmMtx;
-    /* 0x10 */ Mtx* mpWeightEvlpMtx;
-    /* 0x14 */ Mtx** mpDrawMtxArr[2];
-    /* 0x1C */ Mtx33** mpNrmMtxArr[2];
-    /* 0x24 */ Mtx33*** mpBumpMtxArr[2];
-    /* 0x2C */ u32 mMtxNum;
-    /* 0x30 */ u32 mCurrentViewNo;
-    /* 0x34 */ Mtx* mpUserAnmMtx;
+    J3DJointTree* mJointTree;
+    u8* mpScaleFlagArr;
+    u8* mpEvlpScaleFlagArr;
+    Mtx* mpAnmMtx;
+    Mtx* mpWeightEvlpMtx;
+    Mtx** mpDrawMtxArr[2];
+    Mtx33** mpNrmMtxArr[2];
+    Mtx33*** mpBumpMtxArr[2];
+    u32 mMtxNum;
+    u32 mCurrentViewNo;
+    Mtx* mpUserAnmMtx;
 
     virtual ~J3DMtxBuffer() {
     }

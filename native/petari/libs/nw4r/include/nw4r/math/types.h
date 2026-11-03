@@ -1,9 +1,8 @@
 #pragma once
 
 #include <cstring>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace nw4r {
     namespace math {
@@ -99,9 +98,10 @@ namespace nw4r {
             return pOut;
         }
 
-        MTX34* MTX34Mult(MTX34* pOut, const MTX34* p, f32 f);
-
-        VEC3* VEC3TransformNormal(VEC3* pOut, const MTX34* pM, const VEC3* pV);
+        inline VEC3* VEC3TransformNormal(VEC3* pOut, const MTX34* pM, const VEC3* pV) {
+            NebulaMtxMultVecSR(pM->mtx, reinterpret_cast< const Vec* >(pV), reinterpret_cast< Vec* >(pOut));
+            return pOut;
+        }
 
     };  // namespace math
 };  // namespace nw4r

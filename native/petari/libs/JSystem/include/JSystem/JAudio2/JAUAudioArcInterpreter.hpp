@@ -1,6 +1,7 @@
 #pragma once
 
-#include <revolution/types.h>
+#include <cstring>
+
 
 class JAUAudioArcInterpreter {
 public:
@@ -28,8 +29,9 @@ public:
     }
 
     u32 readU32_() {
-        // BAA commands are big-endian.
-        u32 temp = *(NEBULA_BE(u32)*)mReadPtr;
+        // The commands and arguments in host order, as the importer cooks the audio archive.
+        u32 temp;
+        memcpy(&temp, mReadPtr, sizeof(temp));
         mReadPtr += 4;
         return temp;
     }
@@ -37,6 +39,6 @@ public:
         return mBase + offset;
     }
 
-    /* 0x04 */ const u8* mReadPtr;
-    /* 0x08 */ const u8* mBase;
+    const u8* mReadPtr;
+    const u8* mBase;
 };

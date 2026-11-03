@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 
 class Air : public LiveActor {
@@ -18,9 +20,9 @@ public:
     void exeIn();
     void exeOut();
 
-    /* 0x8C */ u8 _8C;
-    /* 0x8D */ bool _8D;
-    /* 0x90 */ f32 mDistance;
+    u8 _8C;
+    bool _8D;
+    f32 mDistance;
 };
 
 class AirFar100m : public Air {
@@ -49,8 +51,8 @@ public:
     void add(PriorDrawAir*);
     bool isExistValidDrawAir() const;
 
-    /* 0x0C */ PriorDrawAir* mAirs[8];
-    /* 0x2C */ s32 mAirCount;
+    MR::GrowTable< PriorDrawAir*, 8 > mAirs;
+    s32 mAirCount;
 };
 
 namespace MR {

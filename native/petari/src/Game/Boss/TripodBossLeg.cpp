@@ -300,7 +300,7 @@ bool TripodBossLeg::canCancelStep() const {
 
 bool TripodBossLeg::canWeighting() const {
     return isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvHold)) || isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvLanding)) ||
-           isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvLeaveOut)) && MR::isLessStep(this, 60);
+           (isNerve(GET_NERVE(TripodBossLeg, TripodBossLegNrvLeaveOut)) && MR::isLessStep(this, 60));
 }
 
 void TripodBossLeg::exeDemo() {
@@ -395,7 +395,6 @@ void TripodBossLeg::exeMoveToLandingPos() {
     }
 }
 
-// float regswap
 void TripodBossLeg::exeStampSign() {
     if (MR::isFirstStep(this)) {
         _240 = _98->mStepPosition + _98->mStepNormal * 1000.0f;

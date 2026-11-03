@@ -360,8 +360,8 @@ void MiniatureGalaxy::initPartsModel() {
     ::initGalaxyPart(mUnknownModel);
 
     mShadowModel = ::createGalaxyPart("\211\145\203\202\203\146\203\213" /* 影モデル */, "MiniatureGalaxyShadow", mShadowBaseMtx, true);
-    mProjmapEffectMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(mShadowModel);
-    MR::newDifferedDLBuffer(mShadowModel);
+    mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(mShadowModel);
+    MR::newDifferedMaterials(mShadowModel);
     ::initGalaxyPart(mShadowModel);
 
     mSelectModel = ::createGalaxyPart("\221\111\221\360\216\236\203\202\203\146\203\213" /* 選択時モデル */, "MiniatureGalaxySelect", mPosMtx, false);
@@ -376,13 +376,13 @@ void MiniatureGalaxy::initPartsModel() {
     s32 powerStarNum = MR::getPowerStarNumToOpenGalaxy(mGalaxyName);
 
     if (powerStarNum < 10) {
-        MR::initDLMakerTexMtx(mStarPlateModel, "StarNumber1")->setTexMtx(0, &mOnesTexMtx);
+        MR::initMaterialTexMtx(mStarPlateModel, "StarNumber1")->setTexMtx(0, &mOnesTexMtx);
 
         MR::hideMaterial(mStarPlateModel, "StarNumber01");
         MR::hideMaterial(mStarPlateModel, "StarNumber10");
     } else {
-        MR::initDLMakerTexMtx(mStarPlateModel, "StarNumber01")->setTexMtx(0, &mOnesTexMtx);
-        MR::initDLMakerTexMtx(mStarPlateModel, "StarNumber10")->setTexMtx(0, &mTensTexMtx);
+        MR::initMaterialTexMtx(mStarPlateModel, "StarNumber01")->setTexMtx(0, &mOnesTexMtx);
+        MR::initMaterialTexMtx(mStarPlateModel, "StarNumber10")->setTexMtx(0, &mTensTexMtx);
 
         MR::hideMaterial(mStarPlateModel, "StarNumber1");
     }
@@ -390,7 +390,7 @@ void MiniatureGalaxy::initPartsModel() {
     mOnesTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum % 10 * 0.1f;
     mTensTexMtx.mTexMtxInfo.mSRT.mTranslationY = powerStarNum / 10 * 0.1f;
 
-    MR::newDifferedDLBuffer(mStarPlateModel);
+    MR::newDifferedMaterials(mStarPlateModel);
     ::initGalaxyPart(mStarPlateModel);
 }
 
@@ -574,7 +574,7 @@ bool MiniatureGalaxy::isUseKoopaFaceModel() const {
 }
 
 void MiniatureGalaxy::playPointedME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY1");
 
@@ -599,7 +599,7 @@ void MiniatureGalaxy::playPointedME() {
 }
 
 void MiniatureGalaxy::playNeedStarME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY_N1");
 
@@ -712,7 +712,7 @@ void MiniatureGalaxy::exeOpen() {
     if (MR::isStep(this, ::cOpenMiniatureAppearStep)) {
         MR::startSystemSE("SE_SY_NEW_GALAXY_OPEN");
         MR::emitEffect(mUnknownModel, "MiniatureGalaxyNewOpen");
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -741,7 +741,7 @@ void MiniatureGalaxy::exeOpen() {
     }
 
     if (MR::isLessStep(this, ::cOpenDisappearStep)) {
-        MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 
     if (MR::isStep(this, ::cOpenTotalFrame)) {

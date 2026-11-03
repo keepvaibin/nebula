@@ -7,10 +7,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include <algorithm>
 
-void MapPartsRailGuideDrawer_FORCE_MATCH_SDATA2() {
-    (void)200.0f;
-}
-
 namespace NrvMapPartsRailGuideDrawer {
     NEW_NERVE(HostTypeHideAll, MapPartsRailGuideDrawer, HideAll);
     NEW_NERVE(HostTypeDrawAll, MapPartsRailGuideDrawer, DrawAll);
@@ -59,11 +55,15 @@ bool MapPartsRailGuideDrawer::isWorking() const {
 }
 
 void MapPartsRailGuideDrawer::show() {
-    std::for_each(mGuidePoints.begin(), mGuidePoints.end(), std::mem_fun(&LiveActor::appear));
+    for (auto& item : mGuidePoints) {
+        item->appear();
+    }
 }
 
 void MapPartsRailGuideDrawer::hide() {
-    std::for_each(mGuidePoints.begin(), mGuidePoints.end(), std::mem_fun(&LiveActor::kill));
+    for (auto& item : mGuidePoints) {
+        item->kill();
+    }
 }
 
 void MapPartsRailGuideDrawer::initGuidePoints(const JMapInfoIter& rIter) {

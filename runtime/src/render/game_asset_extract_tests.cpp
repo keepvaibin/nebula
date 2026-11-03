@@ -1,4 +1,4 @@
-// Game asset extraction: cooked TPL texture records, malformed containers, RARC lookup and the disk loader.
+// Game asset extraction: cooked TPL texture records, malformed containers; the loader without a store. And the disk loader.
 
 #include "galaxy/render/game_asset_extract.h"
 #include "nebula_cooked_texture.h"
@@ -23,13 +23,14 @@ void require(bool condition, const char* message) {
 }
 
 void put16(Bytes& bytes, std::size_t offset, unsigned value) {
-    bytes.at(offset) = static_cast<std::byte>((value >> 8) & 255u);
-    bytes.at(offset + 1) = static_cast<std::byte>(value & 255u);
+    bytes[offset] = static_cast<std::byte>(value & 0xFFu);
+    bytes[offset + 1] = static_cast<std::byte>(value >> 8);
 }
 
 void put32(Bytes& bytes, std::size_t offset, std::uint32_t value) {
-    put16(bytes, offset, value >> 16);
-    put16(bytes, offset + 2, value & 65535u);
+    for (int i = 0; i < 4; ++i) {
+        bytes[offset + i] = static_cast<std::byte>((value >> (8 * i)) & 0xFFu);
+    }
 }
 
 // A cooked TPL: one image whose data is a texture record of `layout` holding `texels` (the level's bytes).
@@ -91,37 +92,7 @@ void test_malformed_tpl() {
     require(!galaxy::render::tpl_texture(uncooked), "a TPL packed before cooking accepted");
 }
 
-Bytes archive(const Bytes& texture) {
-    Bytes bytes(0x80 + texture.size());
-    bytes[0] = std::byte{'R'}; bytes[1] = std::byte{'A'};
-    bytes[2] = std::byte{'R'}; bytes[3] = std::byte{'C'};
-    put32(bytes, 0x0C, 0x60); // File data at 0x80, relative to 0x20.
-    put32(bytes, 0x20, 1);
-    put32(bytes, 0x24, 0x20); // Node at 0x40.
-    put32(bytes, 0x2C, 0x30); // Entry at 0x50.
-    put32(bytes, 0x34, 0x44); // String at 0x64.
-    put16(bytes, 0x4A, 1);
-    put32(bytes, 0x54, 0x00010000);
-    put32(bytes, 0x5C, static_cast<std::uint32_t>(texture.size()));
-    constexpr char name[] = "image.tpl";
-    for (std::size_t i = 0; i < sizeof(name); ++i) {
-        bytes[0x64 + i] = static_cast<std::byte>(name[i]);
-    }
-    std::copy(texture.begin(), texture.end(), bytes.begin() + 0x80);
-    return bytes;
-}
-
-void test_archive_and_loader() {
-    const auto texture = tpl(1, 1, NEBULA_TEXTURE_LA8, {1, 2});
-    const auto bytes = archive(texture);
-    require(galaxy::render::rarc_find_file(bytes, "image.tpl").has_value(), "valid archive lookup failed");
-    require(!galaxy::render::rarc_find_file(bytes, "IMAGE.TPL"), "archive lookup lost case sensitivity");
-    for (const std::size_t offset : {0x0Cu, 0x24u, 0x2Cu, 0x34u}) {
-        auto corrupt = bytes;
-        put32(corrupt, offset, 0xFFFFFFE0u);
-        require(!galaxy::render::rarc_find_file(corrupt, "image.tpl"), "wrapped archive offset accepted");
-    }
-
+void test_loader() {
     const auto root = std::filesystem::temp_directory_path() /
         ("galaxy-asset-test-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     require(std::filesystem::create_directory(root), "fresh loader fixture directory unavailable");
@@ -129,22 +100,8 @@ void test_archive_and_loader() {
         std::filesystem::path path;
         ~Cleanup() { std::error_code ignored; std::filesystem::remove_all(path, ignored); }
     } cleanup{root};
-    const auto write = [&](const Bytes& contents) {
-        std::ofstream output(root / "asset.arc", std::ios::binary | std::ios::trunc);
-        output.write(reinterpret_cast<const char*>(contents.data()), static_cast<std::streamsize>(contents.size()));
-        require(static_cast<bool>(output), "archive fixture write failed");
-    };
-    const auto root_string = root.string() + "/";
-    require(!galaxy::render::load_game_texture(root_string, "missing.arc", "image.tpl"), "missing file accepted");
-    write(bytes);
-    require(galaxy::render::load_game_texture(root_string, "asset.arc", "image.tpl").has_value(), "valid disk archive failed");
-    auto broken = texture;
-    broken.resize(broken.size() - 1u);
-    auto corrupt = archive(broken);
-    write(corrupt);
-    require(!galaxy::render::load_game_texture(root_string, "asset.arc", "image.tpl"), "bad file reused successful texture");
-    std::filesystem::resize_file(root / "asset.arc", 64u * 1024u * 1024u + 1u);
-    require(!galaxy::render::load_game_texture(root_string, "asset.arc", "image.tpl"), "oversized cosmetic archive accepted");
+    const auto root_string = root.string();
+    require(!galaxy::render::load_game_texture(root_string, "asset.arc", "image.tpl"), "no store accepted");
 }
 } // namespace
 
@@ -152,7 +109,7 @@ int main() {
     try {
         test_pixels();
         test_malformed_tpl();
-        test_archive_and_loader();
+        test_loader();
         return 0;
     } catch (const std::exception& error) {
         std::cerr << "FAILED: " << error.what() << '\n';

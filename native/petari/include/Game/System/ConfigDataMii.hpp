@@ -17,7 +17,7 @@ public:
     bool getMiiId(void*) const;
 
 private:
-    /* 0x04 */ u8 mFlag;
-    /* 0x05 */ u8 mIconId;
-    /* 0x08 */ void* mMiiId;
+    u8 mFlag;
+    u8 mIconId;
+    void* mMiiId;
 };

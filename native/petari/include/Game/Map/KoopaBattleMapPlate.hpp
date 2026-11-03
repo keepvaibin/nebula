@@ -13,5 +13,5 @@ public:
     bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
 private:
-    /* 0x8C */ TPos3f _8C;
+    TPos3f _8C;
 };

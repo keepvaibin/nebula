@@ -10,10 +10,11 @@
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
+#include <nebula_format.h>
 
 namespace {
     FurParam sFurParam = {6,
@@ -72,27 +73,23 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
     mFurCtrls[layer]->calcLayerForm();
 
     if (pDensity) {
-        pDensity->mFormat = GX_TF_IA8;
         pDensity->mWidth = 32;
         pDensity->mHeight = 32;
-        pDensity->mWrapS = GX_REPEAT;
-        pDensity->mWrapT = GX_REPEAT;
-        pDensity->mPaletteName = GX_TLUT0;
-        pDensity->mPaletteFormat = GX_TL_IA8;
-        pDensity->mPaletteNum = 0;
-        pDensity->mPaletteDataOffset = 0;
+        pDensity->mWrapS = NEBULA_WRAP_REPEAT;
+        pDensity->mWrapT = NEBULA_WRAP_REPEAT;
+        pDensity->mImage = nullptr;
         pDensity->mMipmap = false;
         pDensity->mDoEdgeLod = false;
         pDensity->mBiasClamp = false;
-        pDensity->mMaxAnisotropy = GX_ANISO_1;
-        pDensity->mMinType = GX_LINEAR;
-        pDensity->mMagType = GX_LINEAR;
+        pDensity->mMaxAnisotropy = 0;
+        pDensity->mMinType = NEBULA_FILTER_LINEAR;
+        pDensity->mMagType = NEBULA_FILTER_LINEAR;
         pDensity->mMinLod = 0;
         pDensity->mMaxLod = 0;
         pDensity->mImageNum = 1;
         pDensity->mLodBias = 0;
         pDensity->mImageDataOffset = sizeof(ResTIMG);
-        JUTTexture* pTexture = new JUTTexture(pDensity, 0);
+        JUTTexture* pTexture = new JUTTexture(pDensity);
         FurDrawer* pDrawer = mFurCtrls[layer]->mDrawer;
         pDrawer->mFurTexture = pTexture;
         pDrawer->mUseDensityMap = 1;
@@ -131,7 +128,7 @@ namespace {
     void loadFurText(LiveActor* pActor, FurParam* pParam, DynamicFurParam* pDynamic, const char* pName) {
         char* pText = static_cast< char* >(MR::getResourceHolder(pActor)->mFileInfoTable->getRes(pName));
         ResFileInfo* pInfo = MR::getResourceHolder(pActor)->mFileInfoTable->findFileInfo(pName);
-        MR::initFurParamFromDvd(pParam, pDynamic, pText, pInfo->_4);
+        MR::initFurParamFromFile(pParam, pDynamic, pText, pInfo->_4);
     }
 };  // namespace
 
@@ -141,7 +138,7 @@ namespace MR {
         u16 i;
         u16 shape;
         FurMulti* pMulti;
-        CurrentHeapRestorer heapRestorer(getSceneHeapGDDR3());
+        CurrentHeapRestorer heapRestorer(getSceneHeap());
         J3DModelData* pModelData = getJ3DModelData(pActor);
         count = 0;
 
@@ -166,8 +163,7 @@ namespace MR {
             if (strstr(pModelData->getMaterialName()->getName(i), "Fur")) {
                 shape = pModelData->getMaterialNodePointer(i)->getShape()->getIndex();
                 char name[256];
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Body");
+                nebula_snprintf(name, sizeof(name), "%sBody", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pBody;
 
                 if (isExistTexture(pActor, name)) {
@@ -176,24 +172,21 @@ namespace MR {
                     pBody = getResTIMG(pActor, 0);
                 }
 
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Length.bti");
+                nebula_snprintf(name, sizeof(name), "%sLength.bti", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pLength = nullptr;
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
                     pLength = static_cast< ResTIMG* >(getResourceHolder(pActor)->mFileInfoTable->getRes(name));
                 }
 
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Indirect.bti");
+                nebula_snprintf(name, sizeof(name), "%sIndirect.bti", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pIndirect = nullptr;
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
                     pIndirect = static_cast< ResTIMG* >(getResourceHolder(pActor)->mFileInfoTable->getRes(name));
                 }
 
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, "Density.bti");
+                nebula_snprintf(name, sizeof(name), "%sDensity.bti", pModelData->getMaterialName()->getName(i));
                 ResTIMG* pDensity = nullptr;
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
@@ -202,8 +195,7 @@ namespace MR {
 
                 FurParam* pParam = new FurParam;
                 *pParam = ::sFurParam;
-                strcpy(name, pModelData->getMaterialName()->getName(i));
-                strcat(name, ".fur.txt");
+                nebula_snprintf(name, sizeof(name), "%s.fur.txt", pModelData->getMaterialName()->getName(i));
 
                 if (getResourceHolder(pActor)->mFileInfoTable->isExistRes(name)) {
                     loadFurText(pActor, pParam, &dynamicParam, name);
@@ -222,7 +214,7 @@ namespace MR {
 };  // namespace MR
 
 void FurBank::regist(FurMulti* pMulti, u32 layer) {
-    mEntries[mCount] = pMulti;
-    mLayerMasks[mCount] |= 1 << layer;
+    mEntries.at(mCount) = pMulti;
+    mLayerMasks.at(mCount) |= 1 << layer;
     mCount++;
 }

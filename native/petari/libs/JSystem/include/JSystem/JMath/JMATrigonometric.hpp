@@ -1,21 +1,18 @@
 #pragma once
 
 #include <math_types.hpp>
-#include <revolution/types.h>
 
-namespace std {
+namespace JMath {
+
     template < typename A1, typename B1 >
-    struct pair {
+    struct Pair {
         A1 a1;
         B1 b1;
-        pair() {
+        Pair() {
             a1 = A1();
             b1 = B1();
         }
     };
-}  // namespace std
-
-namespace JMath {
 
     template < typename T >
     struct TAngleConstant_;
@@ -45,7 +42,7 @@ namespace JMath {
         TSinCosTable();
 
         static const u32 LEN = 1 << Bits;
-        std::pair< T, T > table[LEN];
+        Pair< T, T > table[LEN];
 
         T sinShort(s16 v) const {
             return table[static_cast< u16 >(v) >> (16U - Bits)].a1;
@@ -120,8 +117,7 @@ namespace JMath {
         T atan2_(T, T) const;
         T get_(T, T) const;
 
-        T mTable[Len];
-        T _1000;
+        T mTable[Len + 1];
     };
 
     template < s32 Len, typename T >
@@ -164,11 +160,9 @@ namespace JMath {
     };
 
     extern TSinCosTable< 14, f32 > sSinCosTable;
-#ifdef TARGET_PC
     // Defined in JMATrigonometric.cpp; declared before the inline users below instantiate it.
     template <>
     f32 TAtanTable< 1024, f32 >::atan2_(f32, f32) const;
-#endif
     extern TAtanTable< 1024, f32 > sAtanTable;
     extern TAsinAcosTable< 1024, f32 > sAsinAcosTable;
 
@@ -193,11 +187,11 @@ inline f32 JMASSin(s16 v) {
     return JMASinShort(v);
 }
 
-inline f32 JMAAcosRadian(f32 v) NO_INLINE {
+inline f32 JMAAcosRadian(f32 v) {
     return JMath::sAsinAcosTable.acos_(v);
 }
 
-inline f32 JMAAsinRadian(f32 v) NO_INLINE {
+inline f32 JMAAsinRadian(f32 v) {
     return JMath::sAsinAcosTable.asin_(v);
 }
 

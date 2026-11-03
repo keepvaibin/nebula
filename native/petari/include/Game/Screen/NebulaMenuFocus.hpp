@@ -1,11 +1,10 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class ButtonPaneController;
 
-// Nebula's menu focus: the D-pad and the Nunchuk stick move the pointer's highlight between the buttons a menu takes
+// Nebula's menu focus: the D-pad and the move stick move the pointer's highlight between the buttons a menu takes
 // input on (ButtonPaneController::trySelect) and the other things it offers (the file select's 3D files), to the
 // nearest one in the pressed direction by where they are on screen; A decides as it does for a pointed one. Moving the
 // pointer gives the menu back to it. The highlight is the button's own (its SelectIn and SelectOut animations, cursor

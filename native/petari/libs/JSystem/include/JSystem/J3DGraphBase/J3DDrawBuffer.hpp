@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DDrawBuffer;
 class J3DPacket;
@@ -10,31 +9,8 @@ class J3DDrawPacket;
 class J3DMatPacket;
 class J3DShapePacket;
 
-inline f32 J3DCalcZValue(__REGISTER MtxPtr m, __REGISTER Vec v) {
-#ifdef TARGET_PC
+inline f32 J3DCalcZValue(MtxPtr m, Vec v) {
     return (v.z * m[2][2] + v.x * m[2][0]) + (m[2][3] + v.y * m[2][1]);
-#elif defined(__MWERKS__)
-    __REGISTER f32 temp_f4;
-    __REGISTER f32 out;
-    __REGISTER f32 temp_f0;
-    __REGISTER f32 temp_f2;
-    __REGISTER f32 temp_f1 = 1.0f;
-
-    // clang-format off
-    asm {
-        psq_l temp_f0, 0(v), 0, 0 /* qr0 */
-        lfs temp_f2, 8(v)
-        psq_l temp_f4, 32(m), 0, 0 /* qr0 */
-        psq_l out, 40(m), 0, 0 /* qr0 */
-        ps_merge00 temp_f2, temp_f2, temp_f1
-        ps_mul temp_f4, temp_f0, temp_f4
-        ps_madd out, temp_f2, out, temp_f4
-        ps_sum0 out, out, out, out
-    }
-    // clang-format on
-
-    return out;
-#endif
 }
 
 enum J3DDrawBufDrawMode {
@@ -100,15 +76,15 @@ public:
         mpZMtx = mtx;
     }
 
-    /* 0x00 */ J3DPacket** mpBuffer;
-    /* 0x04 */ u32 mEntryTableSize;
-    /* 0x08 */ u32 mDrawMode;
-    /* 0x0C */ u32 mSortMode;
-    /* 0x10 */ f32 mZNear;
-    /* 0x14 */ f32 mZFar;
-    /* 0x18 */ f32 mZRatio;
-    /* 0x1C */ MtxPtr mpZMtx;
-    /* 0x20 */ J3DPacket* mpCallBackPacket;
+    J3DPacket** mpBuffer;
+    u32 mEntryTableSize;
+    u32 mDrawMode;
+    u32 mSortMode;
+    f32 mZNear;
+    f32 mZFar;
+    f32 mZRatio;
+    MtxPtr mpZMtx;
+    J3DPacket* mpCallBackPacket;
 
     static sortFunc sortFuncTable[6];
     static drawFunc drawFuncTable[2];

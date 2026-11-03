@@ -162,7 +162,7 @@ bool BossKameckStateBattle::tryAttackWait() {
 }
 
 bool BossKameckStateBattle::trySummonKameck() {
-    if (mBattlePattarn->_10 == nullptr) {
+    if (mBattlePattarn->_10 == false) {
         return false;
     }
 

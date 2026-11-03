@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class BinaryDataChunkHolder;
 class GameDataAllGalaxyStorage;
@@ -65,15 +64,15 @@ public:
     u32 makeFileBinary(u8*, u32);
     bool loadFromFileBinary(const char*, const u8*, u32);
 
-    /* 0x00 */ GameEventFlagChecker* mEventFlagChecker;
-    /* 0x04 */ GameEventValueChecker* mEventValueChecker;
-    /* 0x08 */ GameDataPlayerStatus* mPlayerStatus;
-    /* 0x0C */ GameDataAllGalaxyStorage* mAllGalaxyStorage;
-    /* 0x10 */ SpinDriverPathStorage* mSpinDriverPathStorage;
-    /* 0x14 */ StarPieceAlmsStorage* mStarPieceAlmsStorage;
-    /* 0x18 */ JMapInfo* mMapInfo;
-    /* 0x1C */ ScenarioProgressTestRun* mScenarioProgressTestRun;
-    /* 0x20 */ BinaryDataChunkHolder* mChunkHolder;
-    /* 0x24 */ char mName[16];
-    /* 0x34 */ const UserFile* mUserFile;
+    GameEventFlagChecker* mEventFlagChecker;
+    GameEventValueChecker* mEventValueChecker;
+    GameDataPlayerStatus* mPlayerStatus;
+    GameDataAllGalaxyStorage* mAllGalaxyStorage;
+    SpinDriverPathStorage* mSpinDriverPathStorage;
+    StarPieceAlmsStorage* mStarPieceAlmsStorage;
+    JMapInfo* mMapInfo;
+    ScenarioProgressTestRun* mScenarioProgressTestRun;
+    BinaryDataChunkHolder* mChunkHolder;
+    char mName[16];
+    const UserFile* mUserFile;
 };

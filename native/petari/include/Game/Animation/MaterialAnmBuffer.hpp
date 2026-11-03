@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class J3DAnmColorKey;
 class J3DAnmTexPattern;
@@ -21,8 +20,8 @@ public:
     u16 getDifferedMaterialNum(const J3DModelData*) const;
     void attachMaterialAnmBuffer(J3DModelData*, bool);
 
-    /* 0x00 */ J3DMaterialAnm* _0;
-    /* 0x04 */ u32* _4;
+    J3DMaterialAnm* _0;
+    u32* _4;
 };
 
 namespace MR {

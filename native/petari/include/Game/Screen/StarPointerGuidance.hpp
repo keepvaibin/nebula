@@ -30,28 +30,28 @@ public:
     void tryResetTimeout();
     bool isExistGuidanceOrFrame();
     bool isExistGuidance();
-    bool isExistFrame1P() NO_INLINE;
-    bool isExistFrame2P() NO_INLINE;
+    bool isExistFrame1P();
+    bool isExistFrame2P();
     void deactive();
 
     void active() {
         mIsActive = true;
     }
 
-    /* 0x20 */ Spine* mSpineFrame1P;
-    /* 0x24 */ Spine* mSpineGuidance;
-    /* 0x28 */ Spine* mSpineFrame2P;
-    /* 0x2C */ s32 mOutScreenTime;
-    /* 0x30 */ s32 mRequestTime1P;
-    /* 0x34 */ s32 mRequestTime2P;
-    /* 0x38 */ const wchar_t* mGuidanceMessage;
-    /* 0x3C */ const wchar_t* mPrevGuidanceMessage;
-    /* 0x40 */ bool mIsActiveRequest1P;
-    /* 0x41 */ bool mIsActiveRequest2P;
-    /* 0x42 */ bool mIsActive;
-    /* 0x43 */ bool mIsGuidanceDisabled;
-    /* 0x44 */ u32 mTextLineNumGuidance;
-    /* 0x48 */ u32 mTextLineNum1P;
-    /* 0x4C */ u32 mTextLineNum2P;
-    /* 0x50 */ bool mIsTimeOutEnabled;
+    Spine* mSpineFrame1P;
+    Spine* mSpineGuidance;
+    Spine* mSpineFrame2P;
+    s32 mOutScreenTime;
+    s32 mRequestTime1P;
+    s32 mRequestTime2P;
+    const char16_t* mGuidanceMessage;
+    const char16_t* mPrevGuidanceMessage;
+    bool mIsActiveRequest1P;
+    bool mIsActiveRequest2P;
+    bool mIsActive;
+    bool mIsGuidanceDisabled;
+    u32 mTextLineNumGuidance;
+    u32 mTextLineNum1P;
+    u32 mTextLineNum2P;
+    bool mIsTimeOutEnabled;
 };

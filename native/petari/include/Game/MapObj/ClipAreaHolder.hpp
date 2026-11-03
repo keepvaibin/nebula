@@ -3,9 +3,8 @@
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class ClipArea;
 
@@ -17,7 +16,7 @@ public:
 
     bool isInArea(const TVec3f&, f32) const;
 
-    /* 0x18 */ bool mIsActive;
+    bool mIsActive;
 };
 
 class ClipAreaCollisionFilter : public CollisionPartsFilterBase {
@@ -26,15 +25,15 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts*) const;
 
-    /* 0x04 */ const TVec3f* _04;
-    /* 0x08 */ f32 _08;
+    const TVec3f* _04;
+    f32 _08;
 };
 
 namespace MR {
     void createClipAreaHolder();
     bool isExistClipAreaHolder();
     void addClipArea(ClipArea*);
-    bool isInClipArea(const TVec3f&, f32) NO_INLINE;
+    bool isInClipArea(const TVec3f&, f32);
     bool isActiveClipArea();
     void activateClipArea();
     void deactivateClipArea();

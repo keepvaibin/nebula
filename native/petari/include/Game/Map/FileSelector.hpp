@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/FileSelectIconID.hpp"
 
-struct RFLCreateID;
+struct MiiCreateID;
 
 namespace nw4r {
     namespace ut {
@@ -23,9 +23,7 @@ class InformationMessage;
 class Manual2P;
 class MiiConfirmIcon;
 class MiiSelect;
-#ifdef TARGET_PC
 class NebulaQuitButton;
-#endif
 class TitleSequenceProduct;
 class UserFile;
 class SysInfoWindow;
@@ -63,9 +61,6 @@ public:
     void createTitle();
     void createMiiSelect();
     void createMiiConfirmIcon();
-#if (VERSION == RMGK01)
-    void createMiiFont();
-#endif
     void createManual();
     void createSelectEffect();
     void appearAllItems();
@@ -94,9 +89,9 @@ public:
     bool isUserFileCorrupted(s32 id) const;
     bool isUserFileAppearLuigi(s32 id) const;
     bool isUserFileLuigi(s32 id) const;
-    void setUserFileMario(s32 id, bool isMario) NO_INLINE;
+    void setUserFileMario(s32 id, bool isMario);
     void storeSetMiiIdUserFile(s32 id, const FileSelectIconID& rIconId);
-    void getMiiId(RFLCreateID* pCreateId, const FileSelectIconID& rIconId) const;
+    void getMiiId(MiiCreateID* pCreateId, const FileSelectIconID& rIconId) const;
     void getIconId(FileSelectIconID* pIconId, s32 id) const;
     s32 getMissCount(s32 id) const;
     void playSelectedME();
@@ -104,9 +99,9 @@ public:
     void exeWaitBind();
     void exeTitle();
     void exeTitleEnd();
-    void exeRFLError();
-    void exeRFLWait();
-    void exeRFLWaitEnd();
+    void exeMiiDataError();
+    void exeMiiDataWait();
+    void exeMiiDataWaitEnd();
     void exeFileSelectStart();
     void exeFileSelect();
     void exeFileConfirmStart();
@@ -147,46 +142,39 @@ public:
     void exeFileBroken();
     void exeManualStart();
     void exeManual();
-#ifdef TARGET_PC
     void createQuitButton();
     void updateQuitButton();
     bool updateQuitQuestion();
     void offerFilesToMenuFocus();
-#endif
 
-    /* 0x8C */ FileSelectCameraController* mCameraController;
-    /* 0x90 */ FileSelectSky* mSky;
-    /* 0x94 */ DeriveActorGroup< FileSelectItem >* mItems;
-    /* 0x98 */ TVec3f* _98;
-    /* 0x9C */ FileSelectButton* mOperationButton;
-    /* 0xA0 */ BackButton* mBackButton;
-    /* 0xA4 */ BrosButton* mBrosButton;
-    /* 0xA8 */ InformationMessage* mInfoMessage;
-    /* 0xAC */ SysInfoWindow* mSysInfoWindow;
-    /* 0xB0 */ SysInfoWindow* mSysInfoWindowMini;
-    /* 0xB4 */ FileSelectItem* _B4;
-    /* 0xB8 */ FileSelectItem* _B8;
-    /* 0xBC */ FileSelectItem* _BC;
-    /* 0xC0 */ FileSelectItem* _C0;
-    /* 0xC4 */ FileSelectInfo* mFileInfo;
-    /* 0xC8 */ UserFile* mUserFile;
-    /* 0xCC */ bool* _CC;
-    /* 0xD0 */ TitleSequenceProduct* mTitle;
-    /* 0xD4 */ MiiSelect* mMiiSelect;
-    /* 0xD8 */ MiiConfirmIcon* mMiiConfirmIcon;
-    /* 0xDC */ RFLCreateID* mMiiId;
-    /* 0xE0 */ Manual2P* mManual;
-    /* 0xE4 */ bool mIsMiiSelectStartFirst;
-    /* 0xE8 */ s32 mBgmState;
-    /* 0xEC */ FileSelectEffect* mSelectEffect;
-#if (VERSION == RMGK01)
-    /* 0xF0 */ nw4r::ut::ResFont* mFont;
-#endif
-#ifdef TARGET_PC
+    FileSelectCameraController* mCameraController;
+    FileSelectSky* mSky;
+    DeriveActorGroup< FileSelectItem >* mItems;
+    TVec3f* _98;
+    FileSelectButton* mOperationButton;
+    BackButton* mBackButton;
+    BrosButton* mBrosButton;
+    InformationMessage* mInfoMessage;
+    SysInfoWindow* mSysInfoWindow;
+    SysInfoWindow* mSysInfoWindowMini;
+    FileSelectItem* _B4;
+    FileSelectItem* _B8;
+    FileSelectItem* _BC;
+    FileSelectItem* _C0;
+    FileSelectInfo* mFileInfo;
+    UserFile* mUserFile;
+    bool* _CC;
+    TitleSequenceProduct* mTitle;
+    MiiSelect* mMiiSelect;
+    MiiConfirmIcon* mMiiConfirmIcon;
+    MiiCreateID* mMiiId;
+    Manual2P* mManual;
+    bool mIsMiiSelectStartFirst;
+    s32 mBgmState;
+    FileSelectEffect* mSelectEffect;
     NebulaQuitButton* mQuitButton;
     SysInfoWindow* mQuitWindow;  // its own: the file select's window keeps its messages' text positions
     bool mIsAskingQuit;
     s32 mQuitFrames;  // from Yes: the fade to black, then the game's own way out
     bool mIsQuitFocusWanted;  // Up from the top files: the highlight goes to Quit to desktop once it shows
-#endif
 };

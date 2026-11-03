@@ -37,11 +37,6 @@ PlanetMap::PlanetMap(const char* pName, const char* pModelName)
 void PlanetMap::init(const JMapInfoIter& rIter) {
     MR::getObjectName(&mModelName, rIter);
     if (MR::isValidInfo(rIter)) {
-        f32 v11 = -1.0f;
-        MR::getJMapInfoArg0NoInit(rIter, &v11);
-        f32 v12 = -1.0f;
-        MR::getJMapInfoArg2NoInit(rIter, &v12);
-        f32 unknownUse = 0.0f > v11 ? 1.0f : -1.0f;
     }
 
     MR::initDefaultPos(this, rIter);
@@ -124,15 +119,10 @@ void PlanetMap::initClipping(const JMapInfoIter& rIter) {
     }
 }
 
-s32 PlanetMap::getLowMovementType() const {
-    return -1;
-}
-
 void PlanetMap::initModel(const char* pModelName, const JMapInfoIter& rIter) {
     initModelManagerWithAnm(pModelName, nullptr, false);
-    s32 lowMovementType = getLowMovementType();
     f32 farClippingDistance = getFarClipDistance();
-    mLODCtrl = MR::createLodCtrlPlanet(this, rIter, farClippingDistance, lowMovementType);
+    mLODCtrl = MR::createLodCtrlPlanet(this, rIter, farClippingDistance);
     initBloomModel(pModelName);
     mWaterModel = MR::createWaterModel(this, nullptr);
     mIndirectModel = MR::createIndirectPlanetModel(this, nullptr);
@@ -145,7 +135,7 @@ void PlanetMap::initBloomModel(const char* pModelName) {
     }
 
     char str[256];
-    snprintf(str, 256, "%sBloom", mModelName);
+    nebula_snprintf(str, 256, "%sBloom", mModelName);
     const char* name = mName;
     mBloomModel = MR::createModelObjBloomModel(name, str, getBaseMtx());
     mBloomModel->mScale.set(mScale);
@@ -207,15 +197,9 @@ void RailPlanetMap::init(const JMapInfoIter& rIter) {
     initRailRider(rIter);
 }
 
-s32 PlanetMapAnimLow::getLowMovementType() const {
-    return 29;
-}
-
 FurPlanetMap::~FurPlanetMap() {
 }
 RailPlanetMap::~RailPlanetMap() {
-}
-PlanetMapAnimLow::~PlanetMapAnimLow() {
 }
 
 f32 PlanetMap::getFarClipDistance() const {

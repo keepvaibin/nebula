@@ -1,9 +1,7 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include <JSystem/JGeometry/TVec.hpp>
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/types.h>
 
 class J3DMatPacket;
 class J3DModel;
@@ -27,7 +25,7 @@ namespace nw4r {
 
 // What the renderer needs to draw between two game frames (frame interpolation, motion vectors, temporal upscaling)
 // and to know the scene (ray tracing): the object each draw belongs to, the draw phase it is in, when an object starts
-// a new life or jumps, and when the camera cuts. The game writes them as host markers into the GX stream
+// a new life or jumps, and when the camera cuts. The game writes them as host markers into the record stream
 // (galaxy/motion_signals.h), only while the renderer asks for them (NebulaRender::sDrawIdentities).
 namespace MotionSignal {
     // SceneFunction's draw phases in GameScene::draw3D (galaxy::motion::ScenePhase).
@@ -86,14 +84,14 @@ namespace MotionSignal {
         }
     }
 
-    // One particle draws next (its own GXBegin).
+    // One particle draws next (its own u8).
     inline void drawParticle(const JPABaseParticle* pParticle, bool child) {
         if (NebulaRender::sDrawIdentities != 0) {
             drawParticleImpl(pParticle, child);
         }
     }
 
-    // A particle of a stripe: its two vertices are written next, inside the stripe's one GXBegin (strip 0 JPADrawStripe,
+    // A particle of a stripe: its two vertices are written next, inside the stripe's one u8 (strip 0 JPADrawStripe,
     // 1 and 2 the passes of JPADrawStripeX).
     void stripeParticle(const JPABaseParticle* pParticle, u8 strip);
 
@@ -125,13 +123,8 @@ namespace MotionSignal {
     // GameScene::drawMirror: the mirror's draws begin (after isDrawMirror) and end (before its clearZBuffer).
     void mirror(bool begin);
 
-    // Draws only the ray tracer's rays meet, never drawn to the picture (the player's body in the first-person view):
-    // whether the renderer takes them now (it traces the scene and reads the markers that keep them out of the
-    // picture; without both they would be drawn), and their bounds.
-    bool traceOnlyWanted();
-    void traceOnly(bool begin);
 
-    // GX light loads (LightFunction, MR::loadLightPlayer).
+    // light loads (LightFunction, MR::loadLightPlayer).
     void actorLight(const ActorLightInfo* pInfo);
     void coinLight(const LightInfoCoin* pInfo);
     void pointLight(const PointLightInfo* pInfo);
@@ -163,4 +156,3 @@ namespace MotionSignal {
     // CameraViewInterpolator::reduceOscillation took its target without blending: a camera cut.
     void cameraCut();
 };  // namespace MotionSignal
-#endif

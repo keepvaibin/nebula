@@ -15,6 +15,8 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include "galaxy/run_options.h"
+#include <cwchar>
 #include <Windows.h>
 #endif
 
@@ -27,33 +29,21 @@
 namespace galaxy::timeline {
 
 enum class Event : std::uint16_t {
-    SubmitBegin = 1,       // sim: render_frame with a FIFO. a=fifo bytes
-    SubmitEnd = 2,         // sim: render_frame returned. a=token value, b=token kind
-    SubmitSource = 3,      // sim: caller of the next render_frame. a=1 VI, 2 draw-done, 3 GX sync, 4 other
-    RenderBegin = 4,       // render: chunk dequeued. a=token value, b=fifo bytes
-    RenderReadsDone = 5,   // render: every guest-memory read of the chunk done. a=token value
-    RenderSubmitted = 6,   // render: command list executed and fence signaled. a=token value, b=fence | pe<<63
+    SubmitBegin = 1,       // game: a frame's records handed to the renderer. a=bytes
+    SubmitEnd = 2,         // game: handed over. a=token value, b=token kind
+    RenderBegin = 4,       // render: chunk dequeued. a=token value, b=bytes
+    RenderSubmitted = 6,   // render: command list executed and fence signaled. a=token value, b=fence
     GpuBegin = 7,          // GPU timestamp at command-list start (QPC domain). a=fence
     GpuEnd = 8,            // GPU timestamp at command-list end (QPC domain). a=fence
-    FenceObserved = 9,     // render: fence of a PE-bearing frame seen complete. a=fence, b=token value
-    PeDelivered = 10,      // a=1 finish, 2 token. b=PE token value
-    TokenConsumed = 11,    // sim: frame PE token observed complete by its consumer. a=token value
-    ViEdge = 12,           // sim: VI deadline consumed. a=deadline sequence, b=deadline ticks
-    ViLatched = 13,        // sim: VI interrupt level raised for the guest. a=boundary serial
     PresentBegin = 14,     // render: IDXGISwapChain::Present call. a=present ordinal, b=sync interval
     PresentEnd = 15,       // render: Present returned. a=present ordinal
-    DisplayStats = 16,     // render: DXGI frame statistics. qpc=SyncQPCTime, a=PresentCount<<32|PresentRefreshCount, b=SyncRefreshCount
-    IdleWaitBegin = 17,    // sim: idle-loop wait
-    IdleWaitEnd = 18,      // a=1 woken by a publication, 0 timer or timeout
-    PeWaitBegin = 19,      // sim: blocked on a frame PE token
-    PeWaitEnd = 20,
-    XfbCopy = 21,          // render: XFB copy executed. a=guest destination
+    DisplayStats = 16,     // render: DXGI frame statistics. qpc=SyncQPCTime, a=PresentCount<<32|PresentRefreshCount
+    DisplayCopy = 21,      // render: display picture copy executed. a=destination key
     SlotWaitBegin = 22,    // render: waiting for a frame slot's fence. a=fence
     SlotWaitEnd = 23,
     VBlank = 24,           // render: DWM composition timing. qpc=last vblank, a=refresh period (QPC ticks)
-    XfbPresented = 25,     // render: XFB chosen for a present. a=guest address, b=copy serial
-    GuestFrame = 26,       // sim: game frame boundary marker. a=VI retrace count
-    IdleWake = 27,         // any thread: woke the waiting simulation thread. a=EventKind, 100=host (PE, IOS)
+    DisplayPresented = 25, // render: display picture chosen for a present. a=key
+    GameFrame = 26,        // game: frame boundary marker. a=frame count
 };
 
 struct Record {
@@ -115,13 +105,14 @@ inline void record(Event event, std::uint64_t a = 0u, std::uint64_t b = 0u) noex
 inline void initialize_from_environment() noexcept {
     char flag[8]{};
     std::size_t length = 0;
-    if (getenv_s(&length, flag, sizeof(flag), "GALAXY_FRAME_TIMELINE") != 0 || length < 2 ||
-        flag[0] == '0') {
+    if (!::galaxy::diagnostics_recording() &&
+        (::galaxy::run_option_read(&length, flag, sizeof(flag), ::galaxy::run_options().frame_timeline) != 0 || length < 2 ||
+         flag[0] == '0')) {
         return;
     }
     std::uint64_t capacity = 2'000'000u;  // 64 MB, about 25 minutes at 60 frames/s
     char count[32]{};
-    if (getenv_s(&length, count, sizeof(count), "GALAXY_FRAME_TIMELINE_EVENTS") == 0 && length > 1) {
+    if (::galaxy::run_option_read(&length, count, sizeof(count), ::galaxy::run_options().frame_timeline_events) == 0 && length > 1) {
         const unsigned long long parsed = std::strtoull(count, nullptr, 10);
         if (parsed >= 1000u && parsed <= 50'000'000u) capacity = parsed;
     }
@@ -140,7 +131,11 @@ inline void dump() noexcept {
     if (!g_state.enabled) return;
     g_state.enabled = false;
     wchar_t path[MAX_PATH]{};
-    DWORD length = GetEnvironmentVariableW(L"GALAXY_FRAME_TIMELINE_PATH", path, MAX_PATH);
+    const wchar_t* const named = ::galaxy::run_options().frame_timeline_path_w;
+    DWORD length = named != nullptr ? static_cast<DWORD>(std::wcslen(named)) : 0u;
+    if (length != 0u && length < MAX_PATH) {
+        std::wmemcpy(path, named, length + 1u);
+    }
     if (length == 0u || length >= MAX_PATH) {
         wchar_t base[MAX_PATH]{};
         const DWORD base_length = GetEnvironmentVariableW(L"LOCALAPPDATA", base, MAX_PATH);

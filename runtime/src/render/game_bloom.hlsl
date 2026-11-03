@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's bloom at the internal resolution (game_bloom.h): BloomEffect's and BloomEffectSimple's chains as one
-// operator on the EFB, with the game's own thresholds, blur radii and intensities.
+// operator on the scene target, with the game's own thresholds, blur radii and intensities.
 //
-// DownCS: the source's region in boxes of c_size.z x c_size.z texels (each texel clamped to 1, as the 8-bit EFB keeps
+// DownCS: the source's region in boxes of c_size.z x c_size.z texels (each texel clamped to 1, as the 8-bit scene target keeps
 // it) into u0.
 // BoxCS: a box of c_params.x texels along axis c_size.w (the game's 4 x 4 pixel workspace texel at the internal
-// resolution); with c_params.y >= 0 the selection after it: the colour where its intensity (GX_TF_I8) or channel
-// c_params.z (GX_CTF_R8/G8/B8) exceeds the threshold, else black.
+// resolution); with c_params.y >= 0 the selection after it: the colour where its intensity or channel
+// c_params.z (red, green or blue) exceeds the threshold, else black.
 // BlurCS: axis 0, up to three Gaussians (widths c_sigma.xyz in texels) of t0 into u0..u2; axis 1, the Gaussians of
 // t0..t2 summed, times c_params.x, clamped to 1 when c_params.y is 1, into u0.
 // CompositeVS/CompositePS: the kept scene plus the bloom (bilinear from its levels) over the game's frame.
@@ -14,7 +14,7 @@
 cbuffer BloomConstants : register(b0) {
     uint4 c_size;     // the output's texels (x, y); Down: the box (z); Box, Blur: the Gaussians (z), the axis (w)
     float4 c_sigma;   // Blur: the Gaussians' widths along the axis (texels)
-    float4 c_params;  // per pass (above); Composite: intensity, strength, kind (0 scene, 1 normal, 2 simple), 1: 8 bits
+    float4 c_params;  // per pass (above); Composite: intensity, strength, kind (0 scene, 1 normal, 2 simple)
     float4 c_uv;      // Down: the source region (texels: x, y); Composite: frame pixel to level-1 UV (x, y), level-2 (z, w)
 };
 
@@ -23,7 +23,7 @@ Texture2D<float4> t_second : register(t1);
 Texture2D<float4> t_third : register(t2);
 // Vulkan (game_bloom_vk.cpp) writes the work images as storage images of a known format: no device feature needed.
 #ifdef BLOOM_STORAGE_FORMAT
-#define WORK_FORMAT [[vk::image_format("rgba16f")]]
+#define WORK_FORMAT [[spv::format_rgba16f]]
 #else
 #define WORK_FORMAT
 #endif
@@ -77,7 +77,7 @@ void BoxCS(uint3 id : SV_DispatchThreadID) {
     }
     float3 c = sum / c_params.x;
     if (c_params.y >= 0.0f) {
-        // The 8-bit value the copy would hold: intensity as the EFB copy converts it (BT.601, 16-235), or a channel.
+        // The 8-bit value the copy would hold: intensity as the scene target copy converts it (BT.601, 16-235), or a channel.
         const uint channel = uint(c_params.z);
         const float value = channel == 0u ? dot(c, float3(66.0f, 129.0f, 25.0f)) * (255.0f / 256.0f) + 16.0f
                                           : c[min(channel, 3u) - 1u] * 255.0f;
@@ -143,7 +143,8 @@ float4 CompositeVS(uint id : SV_VertexID) : SV_Position {
 // t_source the kept scene, t_second level 1 (normal: the first blur's sum; simple: its one blur), t_third level 2.
 // Kind 0 (the game's own chain restoring its kept scene): the scene alone.
 float4 CompositePS(float4 position : SV_Position) : SV_Target0 {
-    const float3 scene = t_source.Load(int3(int2(position.xy), 0)).rgb;
+    const float4 kept = t_source.Load(int3(int2(position.xy), 0));
+    const float3 scene = kept.rgb;
     float3 bloom = 0.0f;
     if (c_params.z == 1.0f) {
         const float3 first = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb;
@@ -152,11 +153,5 @@ float4 CompositePS(float4 position : SV_Position) : SV_Target0 {
     } else if (c_params.z == 2.0f) {
         bloom = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb * (c_params.x * c_params.y);
     }
-    if (c_params.w == 0.0f) {
-        return float4(scene + bloom, 1.0f);
-    }
-    // Into 8 bits: the scene as it was, the bloom stochastically rounded (interleaved gradient noise, Jimenez 2014), so
-    // its gradients come out smooth instead of in bands.
-    const float u = frac(52.9829189f * frac(dot(floor(position.xy), float2(0.06711056f, 0.00583715f))));
-    return float4(saturate((round(saturate(scene) * 255.0f) + floor(bloom * 255.0f + u)) / 255.0f), 1.0f);
+    return float4(scene + bloom, kept.a);
 }

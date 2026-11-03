@@ -36,7 +36,6 @@ public:
     void restrictPointToHead(s32, const TVec3f&, f32 length = 0.0f);
 
     bool isAllPointsStop() const;
-    bool isAllPointsSlow() const;
     bool isStretched() const;
     bool tryJump();
     void updateHangPoint();
@@ -58,27 +57,27 @@ public:
         return mBasePos;
     }
 
-    /* 0x8C */ TVec3f mBasePos;
-    /* 0x98 */ f32 mRopeLength;
-    /* 0x9C */ bool mIsStretched;
-    /* 0xA0 */ s32 mStretchTime;  // Time since start of stretch condition
-    /* 0xA4 */ s32 mAccelTime;    // Time since start of accel
-    /* 0xA8 */ s32 mNumPoints;
-    /* 0xAC */ SwingRopePoint** mPoints;
-    /* 0xB0 */ LiveActor* mRider;
-    /* 0xB4 */ TPos3f mRideMtx;
-    /* 0xE4 */ f32 mGrabCoord;
-    /* 0xE8 */ f32 mGrabPointNum;
-    /* 0xEC */ f32 mSlideSpeed;
-    /* 0xF0 */ SledRopePoint* mSledPoint;
-    /* 0xF4 */ ActorCameraInfo* mCameraInfo;
-    /* 0xF8 */ f32 mFootCoord;
-    /* 0xFC */ f32 mFootPointNum;
-    /* 0x100 */ f32 mGrabToFootDist;
-    /* 0x104 */ TVec3f mFootPos;
-    /* 0x110 */ TVec3f mShadowDropPos;
-    /* 0x11C */ f32 mShadowDropOffset;
-    /* 0x120 */ s32 mPrevSoundLvl;
+    TVec3f mBasePos;
+    f32 mRopeLength;
+    bool mIsStretched;
+    s32 mStretchTime;  // Time since start of stretch condition
+    s32 mAccelTime;    // Time since start of accel
+    s32 mNumPoints;
+    SwingRopePoint** mPoints;
+    LiveActor* mRider;
+    TPos3f mRideMtx;
+    f32 mGrabCoord;
+    f32 mGrabPointNum;
+    f32 mSlideSpeed;
+    SledRopePoint* mSledPoint;
+    ActorCameraInfo* mCameraInfo;
+    f32 mFootCoord;
+    f32 mFootPointNum;
+    f32 mGrabToFootDist;
+    TVec3f mFootPos;
+    TVec3f mShadowDropPos;
+    f32 mShadowDropOffset;
+    s32 mPrevSoundLvl;
 };
 
 class SwingRopeGroup : public NameObj {
@@ -87,5 +86,5 @@ public:
 
     virtual void initDraw() const;
 
-    /* 0x0C */ JUTTexture* mTexture;
+    JUTTexture* mTexture;
 };

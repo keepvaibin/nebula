@@ -17,37 +17,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void MarioTeresa_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)10.0f;
-    (void)0.00100000005f;
-    (void)0.00999999978f;
-    (void)120.0f;
-    (void)110.0f;
-    (void)-0.100000001f;
-    (void)0.100000001f;
-    (void)50.0f;
-    (void)0.939999998f;
-    (void)1.5f;
-    (void)0.200000003f;
-    (void)200.0f;
-    (void)0.99000001f;
-    (void)60.0f;
-    (void)-2.0f;
-    (void)-0.400000006f;
-    (void)-0.25f;
-    (void)0.25f;
-    (void)0.75f;
-    (void)-0.5f;
-    (void)0.0399999991f;
-    (void)0.300000012f;
-    (void)20.0f;
-    (void)-2607.59448f;
-    (void)2607.59448f;
-    (void)0.707000017f;
-    (void)-10.0f;
-}
-
 void Mario::startTeresaMode() {
     _418 = 0;
     _428 = 0;
@@ -563,7 +532,7 @@ void MarioTeresa::procControl() {
 void MarioActor::runTeresaBaseAnimation() {
     if (!mMario->isStatusActive(MarioStatus_Wait) && !_9B8->isRun("\212\356\226\173" /* 基本 */)) {
         _9B8->changeAnimation("\212\356\226\173" /* 基本 */);
-        _9B4 = MR::getRandom(60L, 180L);
+        _9B4 = MR::getRandom(60, 180);
         MR::startBtp(_9A4, "blink");
     }
 }
@@ -580,7 +549,7 @@ void MarioActor::changeTeresaAnimation(const char* pAnimation, s32 interpolation
     }
 
     if (MR::isEqualString(pAnimation, "wait") || MR::isEqualString(pAnimation, "run")) {
-        _9B4 = MR::getRandom(60L, 180L);
+        _9B4 = MR::getRandom(60, 180);
         MR::stopBtp(_9A4);
         return;
     }
@@ -684,7 +653,7 @@ void MarioActor::updateTeresaAnimation() {
     if (_9B4) {
         _9B4--;
         if (!_9B4) {
-            _9B4 = MR::getRandom(90L, 240L);
+            _9B4 = MR::getRandom(90, 240);
             MR::startBtp(_9A4, "blink");
         }
     }

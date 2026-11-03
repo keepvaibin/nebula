@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class HitSensor;
 class Koopa;
@@ -19,15 +18,11 @@ class ModelObjNpc;
 class NameObj;
 class PartsModel;
 
-namespace {
-    bool tryStartCameraDemo(Koopa*, const char*, const char* pName, const char* pDemoName, bool isMario);
-};  // namespace
-
 namespace MR {
     struct ActorSightParam {
-        /* 0x0 */ f32 _0;
-        /* 0x4 */ f32 _4;
-        /* 0x8 */ f32 _8;
+        f32 _0;
+        f32 _4;
+        f32 _8;
     };
 
     struct ActorMoveParam;
@@ -52,7 +47,7 @@ namespace KoopaFunction {
     bool escapeKoopaFromPlayer(Koopa* pKoopa, const MR::ActorMoveParam& rMoveParam);
     bool isKoopaVs1(const Koopa* pKoopa);
     bool isKoopaVs2(const Koopa* pKoopa);
-    bool isKoopaVs3(const Koopa* pKoopa) NO_INLINE;  // otherwise inlines in startKoopaPlateDamageAnimPowerStarAppear
+    bool isKoopaVs3(const Koopa* pKoopa);  // otherwise inlines in startKoopaPlateDamageAnimPowerStarAppear
     bool isKoopaLv1(const Koopa* pKoopa);
     bool isKoopaLv2(const Koopa* pKoopa);
     bool isKoopaLv3(const Koopa* pKoopa);

@@ -82,19 +82,19 @@ bool ShadowVolumeDrawer::isDraw() const {
 void ShadowVolumeDrawer::draw() const {
     if (isDraw()) {
         loadModelDrawMtx();
-        GXColor shapeColor = reinterpret_cast< GXColor& >(::sShapeColor);
-        J3DNativeState::setTevColor(GX_TEVREG0, shapeColor);
-        J3DNativeState::setColorUpdate(0);
-        J3DNativeState::setDstAlpha(0, 0);
-        J3DNativeState::setCullMode(GX_CULL_FRONT);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_COPY);
+        NebulaColor8 shapeColor = reinterpret_cast< NebulaColor8& >(::sShapeColor);
+        MR::setShadowVolumeColor(shapeColor);
+        J3DPass::writeColor(false);
+        J3DPass::constantAlpha(false, 0);
+        J3DPass::cull(NEBULA_CULL_FRONT);
+        J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
         drawShape();
-        J3DNativeState::setCullMode(GX_CULL_BACK);
-        J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
+        J3DPass::cull(NEBULA_CULL_BACK);
+        J3DPass::subtractBlend();
         drawShape();
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setColorUpdate(1);
-        J3DNativeState::setDstAlpha(1, 0);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::writeColor(true);
+        J3DPass::constantAlpha(true, 0);
     }
 }
 

@@ -1,9 +1,8 @@
 #pragma once
 
 #include "Game/Gravity/PlanetGravity.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class GravityInfo {
 public:
@@ -11,7 +10,7 @@ public:
 
     void init();
 
-    /* 0x00 */ TVec3f mGravityVector;
-    /* 0x0C */ s32 mLargestPriority;
-    /* 0x10 */ PlanetGravity* mGravityInstance;
+    TVec3f mGravityVector;
+    s32 mLargestPriority;
+    PlanetGravity* mGravityInstance;
 };

@@ -26,7 +26,7 @@ public:
     void exeDPDOpen();
     void endDPDOpen();
     void initItem(const JMapInfoIter&);
-    void initCoin(const JMapInfoIter&) NO_INLINE;
+    void initCoin(const JMapInfoIter&);
     void initYellowChip(const JMapInfoIter&);
     void initBlueChip(const JMapInfoIter&);
     void initKinokoOneUp(const JMapInfoIter&);
@@ -34,11 +34,11 @@ public:
     void endBindItem();
     void putItem();
 
-    /* 0x8C */ AnimScaleController* mScaleController;
-    /* 0x90 */ WalkerStateBindStarPointer* mStarPointerState;
-    /* 0x94 */ LiveActor* mItem;
-    /* 0x98 */ s32 mItemType;
-    /* 0x9C */ bool mIsItemBound;
-    /* 0xA0 */ CollisionParts* mLowCollision;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mStarPointerState;
+    LiveActor* mItem;
+    s32 mItemType;
+    bool mIsItemBound;
+    CollisionParts* mLowCollision;
     bool _A4;
 };

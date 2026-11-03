@@ -34,12 +34,12 @@ public:
         mPartialRate = partialRate;
     }
 
-    /* 0x4C */ const char* mString;
-    /* 0x50 */ f32 mDistMin;
-    /* 0x54 */ f32 mDistMax;
-    /* 0x58 */ f32 mAngleMin;
-    /* 0x5C */ f32 mPeepAngle;
-    /* 0x60 */ f32 mDist;
-    /* 0x64 */ f32 mAngleConstrainRate;
-    /* 0x68 */ f32 mPartialRate;
+    const char* mString;
+    f32 mDistMin;
+    f32 mDistMax;
+    f32 mAngleMin;
+    f32 mPeepAngle;
+    f32 mDist;
+    f32 mAngleConstrainRate;
+    f32 mPartialRate;
 };

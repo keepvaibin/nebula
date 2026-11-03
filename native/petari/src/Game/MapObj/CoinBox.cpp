@@ -35,7 +35,6 @@ void CoinBox::init(const JMapInfoIter& rIter) {
 void CoinBox::exeWait() {
 }
 
-// https://decomp.me/scratch/2bcHZ
 void CoinBox::exeHit() {
     if (!getNerveStep()) {
         getSensor("body")->invalidate();

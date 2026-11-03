@@ -2,7 +2,6 @@
 
 #include "Game/Map/RailPart.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class JMapInfo;
 class JMapInfoIter;
@@ -28,11 +27,11 @@ public:
     }
 
     // 0th to 3rd degree control vectors for bezier control
-    /* 0x00 */ TVec3f mStart;
-    /* 0x0C */ TVec3f mCtrlDegree1;  // "velocity"
-    /* 0x18 */ TVec3f mCtrlDegree2;  // "acceleration"
-    /* 0x24 */ TVec3f mCtrlDegree3;  // "jerk"
-    /* 0x30 */ f32 mLength;
+    TVec3f mStart;
+    TVec3f mCtrlDegree1;  // "velocity"
+    TVec3f mCtrlDegree2;  // "acceleration"
+    TVec3f mCtrlDegree3;  // "jerk"
+    f32 mLength;
 };
 
 class BezierRail {
@@ -47,7 +46,7 @@ public:
     f32 getNearestRailPosCoord(const TVec3f&) const;
     f32 getRailPosCoord(int) const;
     void calcCurrentRailCtrlPointIter(JMapInfoIter*, f32, bool) const;
-    void calcRailCtrlPointIter(JMapInfoIter*, int) const NO_INLINE;
+    void calcRailCtrlPointIter(JMapInfoIter*, int) const;
     void getIncludedSection(const RailPart**, f32*, f32, int) const;
     int getCurrentCtrlPointIndex(f32, bool) const;
 
@@ -57,11 +56,11 @@ public:
         return &mRailParts[idx];
     }
 
-    /* 0x00 */ bool mIsClosed;
-    /* 0x04 */ s32 mPointNum;
-    /* 0x08 */ s32 mNumRailParts;
-    /* 0x0C */ RailPart* mRailParts;  // this is a direct array of RailParts, not a single RailPart
-    /* 0x10 */ f32* mPointCoords;
-    /* 0x14 */ JMapInfoIter* mIter;
-    /* 0x18 */ const JMapInfo* mInfo;
+    bool mIsClosed;
+    s32 mPointNum;
+    s32 mNumRailParts;
+    RailPart* mRailParts;  // this is a direct array of RailParts, not a single RailPart
+    f32* mPointCoords;
+    JMapInfoIter* mIter;
+    const JMapInfo* mInfo;
 };

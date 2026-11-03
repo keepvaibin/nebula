@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class CodeTable;
 class JMapInfoIter;
@@ -109,10 +108,10 @@ public:
     u32 getCameraCode(const JMapInfoIter& rIter);
     u32 getCameraID(const JMapInfoIter& rIter);
 
-    /* 0x00 */ CodeTable* mFloorTable;
-    /* 0x04 */ CodeTable* mWallTable;
-    /* 0x08 */ CodeTable* mSoundTable;
-    /* 0x0C */ CodeTable* mCameraTable;
+    CodeTable* mFloorTable;
+    CodeTable* mWallTable;
+    CodeTable* mSoundTable;
+    CodeTable* mCameraTable;
 };
 
 class CodeTable {
@@ -122,9 +121,9 @@ public:
     void add(const char* pName, u32 code);
     const char* getString(u32 code);
 
-    /* 0x00 */ u32 mCodeNum;
-    /* 0x04 */ u32 mCodeNumMax;
-    /* 0x08 */ u32* mHashTable;
-    /* 0x0C */ u32* mCodeTable;
-    /* 0x10 */ const char** mNameTable;
+    u32 mCodeNum;
+    u32 mCodeNumMax;
+    u32* mHashTable;
+    u32* mCodeTable;
+    const char** mNameTable;
 };

@@ -50,16 +50,16 @@ public:
     void exeBlowDown();
     void calcPassiveMovement();
     bool isEnableAttack() const;
-    bool isEnableKick() const NO_INLINE;
+    bool isEnableKick() const;
     bool isDown() const;
 
-    /* 0x8C */ AnimScaleController* mScaleController;
-    /* 0x90 */ ItemGenerator* mItemGenerator;
-    /* 0x94 */ WalkerStateWander* mStateWander;
-    /* 0x98 */ WalkerStateFindPlayer* mStateFindPlayer;
-    /* 0x9C */ WalkerStateChase* mStateChase;
-    /* 0xA0 */ WalkerStateStagger* mStateStagger;
-    /* 0xA4 */ WalkerStateBindStarPointer* mStateBindStarPointer;
-    /* 0xA8 */ TQuat4f _A8;
-    /* 0xB8 */ TVec3f _B8;
+    AnimScaleController* mScaleController;
+    ItemGenerator* mItemGenerator;
+    WalkerStateWander* mStateWander;
+    WalkerStateFindPlayer* mStateFindPlayer;
+    WalkerStateChase* mStateChase;
+    WalkerStateStagger* mStateStagger;
+    WalkerStateBindStarPointer* mStateBindStarPointer;
+    TQuat4f _A8;
+    TVec3f _B8;
 };

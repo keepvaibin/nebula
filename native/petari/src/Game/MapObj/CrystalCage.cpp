@@ -8,13 +8,6 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JMath.hpp>
 
-void CrystalCage_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)HALF_PI;
-    (void)2.0f;
-}
-
 namespace NrvCrystalCage {
     NEW_NERVE(CrystalCageNrvWait, CrystalCage, Wait);
     NEW_NERVE(CrystalCageNrvBreak, CrystalCage, Break);
@@ -45,7 +38,7 @@ void CrystalCage::init(const JMapInfoIter& rIter) {
 
     if (mHasBinding) {
         initBinder(50.0f, 0.0f, 0);
-        MR::setBinderOffsetVec(this, &_110, nullptr);
+        MR::setBinderOffsetVec(this, &_110, false);
         MR::setBinderExceptActor(this, this);
     }
 
@@ -161,7 +154,7 @@ void CrystalCage::kill() {
 void CrystalCage::forceBreak() {
     if (isNerve(GET_NERVE(CrystalCage, CrystalCageNrvWait))) {
         if (!_104 || !MR::isClipped(this)) {
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             MR::invalidateClipping(this);
             MR::invalidateCollisionParts(this);
             MR::invalidateHitSensors(this);

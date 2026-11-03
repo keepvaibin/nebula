@@ -3,7 +3,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/MapObjActor.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class DriftWood : public MapObjActor {
 public:
@@ -18,8 +17,8 @@ public:
     void exeWait();
     void exeVibrate();
 
-    /* 0xC4 */ TVec3f mRailDirection;
-    /* 0xD0 */ TVec3f mRailClipping;
-    /* 0xDC */ TVec3f mVibrateOffset;
-    /* 0xE8 */ s32 mWaveSoundTimer;
+    TVec3f mRailDirection;
+    TVec3f mRailClipping;
+    TVec3f mVibrateOffset;
+    s32 mWaveSoundTimer;
 };

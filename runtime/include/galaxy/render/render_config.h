@@ -2,7 +2,7 @@
 
 // The rendering settings (config.ini), set before galaxy::render::initialize() and changed at run time through
 // set_render_config(); the render thread takes a snapshot at each frame boundary and applies changes there
-// (efb_scale re-creates the EFB targets). Window dimensions change through the window itself. Settings the renderer
+// Window dimensions change through the window itself. Settings the renderer
 // does not implement are clamped off.
 
 #include <algorithm>
@@ -16,33 +16,20 @@
 
 namespace galaxy::render {
 
-// The largest EFB/XFB backing scale; the game's logical EFB/VI sizes and addresses are unchanged. 12x covers 32:9 at
-// 2160 lines; 16x (10240x8448) stays inside D3D12's 16384-texel limit.
-inline constexpr unsigned kMaxEfbScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
 inline constexpr float kMaxFrameRate = 1000.0f;
 // The bloom settings' top (percent of the game's and the camera's own strength).
 inline constexpr unsigned kMaxBloom = 200;
-// RenderConfig::bloom_mode.
-inline constexpr unsigned kBloomNative = 0;
-inline constexpr unsigned kBloomEnhanced = 1;
 
 struct RenderConfig {
-    // EFB resolution multiplier, 1..kMaxEfbScale (2: 1280x912, supersampling the game's 640x456 frame). 1 is the Wii's
-    // own resolution.
-    unsigned efb_scale           = 1;
 
     // DXGI Present sync interval: 0 off, 1 every vblank, 2 every other vblank. 1 can back-pressure the command
     // stream through DWM and lower the frame rate on some systems.
     unsigned vsync_interval      = 0;
 
     // Swap-chain options, read once at start.
-    bool     wait_for_frame_latency = false;
-    unsigned swap_chain_frame_latency = 2;
-    bool     allow_tearing = false;
-    bool     flip_discard = true;
 
-    // EFB multisampling (1, 2, 4 or 8), up to what the adapter supports; single-sampled with temporal upscaling or
+    // scene target multisampling (1, 2, 4 or 8), up to what the adapter supports; single-sampled with temporal upscaling or
     // ray tracing.
     unsigned msaa_samples        = 1;
 
@@ -52,13 +39,13 @@ struct RenderConfig {
     // Frames per second presented (0: the display's rate, at least 60; see present_frame_rate).
     float    max_fps             = 60.0f;
 
-    // Submits the game's GX FIFO at its own 60 Hz cadence instead of one present per game frame.
+    // Submits the game's records at their own 60 Hz cadence instead of one present per game frame.
     bool     frame_rate_decouple = false;
 
     // Mip LOD bias in units of 0.5 LOD levels (0 full detail, 2 quarter), applied to every sampler.
     unsigned texture_lod_bias    = 0;
 
-    // Anisotropic filtering for mipmapped GX samplers: 1 off, 2/4/8/16 D3D12_SAMPLER_DESC::MaxAnisotropy.
+    // Anisotropic filtering for mipmapped samplers: 1 off, 2/4/8/16 D3D12_SAMPLER_DESC::MaxAnisotropy.
     unsigned anisotropic_filtering = 1;
 
     // Generates mip chains for color textures the game samples with linear filtering but without authored mips.
@@ -67,27 +54,20 @@ struct RenderConfig {
     // Curved models rounded on the GPU where the renderer tessellates (curved_surfaces.h).
     bool     curved_surfaces     = true;
 
-    // Lit GX color channels evaluated per pixel instead of per vertex (the XF light formulas on the interpolated
+    // Lit color channels evaluated per pixel instead of per vertex (the light formulas on the interpolated
     // eye-space position and normal), in specialized triangle pipelines.
     bool     per_pixel_lighting  = false;
 
     // Lit and environment-mapped draws shaded per pixel in linear light, with highlights, a sky/ground ambient and
     // Fresnel on environment maps (enhanced_lighting.h). Takes precedence over per_pixel_lighting for those draws.
     bool     enhanced_lighting   = false;
+    // The enhanced lighting's scene in a wide target with its camera (scene_camera.h). No row: its look is not accepted.
+    bool     wide_scene          = false;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
-    // The game's bloom: kBloomNative its own chain at the console's size, kBloomEnhanced the renderer's at the internal
-    // resolution (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
-    unsigned bloom_mode          = kBloomEnhanced;
+    // The game's bloom (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
     unsigned bloom               = 100;
 
-    // Match Output: after a resize settles (not during an edge drag), efb_scale becomes the smallest scale whose game
-    // picture covers the window; the renderer re-creates its targets once, at a frame boundary. Off by default: the
-    // internal resolution is the player's setting.
-    bool     internal_follow_window = false;
-    // Match Output may step its scale down while the GPU stays above 80% busy (RendererD3D12::update_gpu_budget).
-    // Off by default: it would change what the player chose.
-    bool     gpu_budget = false;
     // The 2D layer (HUD, menus, text) renders at the window's resolution over the resampled 3D scene when the
     // internal resolution is lower. Off by default: the scene then takes two resamples (to the integer output
     // scale, then to the window) instead of one.
@@ -145,7 +125,7 @@ struct RenderConfig {
     bool     texture_dump        = false;
     unsigned texture_pack_budget_mb = 2048;
 
-    // Back-buffer size (the present blit scales the EFB to it): in windowed mode the client size, limited to the
+    // Back-buffer size (the present blit scales the scene target to it): in windowed mode the client size, limited to the
     // monitor's work area.
     unsigned window_width        = 854;
     unsigned window_height       = 480;
@@ -159,9 +139,6 @@ struct RenderConfig {
     // GPU that is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Set at start-up from
     // config.ini (GALAXY_GPU overrides) and kept for the session; see next_start_gpu().
     std::array<char, 32> gpu{};
-    unsigned fullscreen_width    = 0;
-    unsigned fullscreen_height   = 0;
-    unsigned fullscreen_refresh_hz = 0;
     // Game picture aspect, an index of kAspectRatios (0 follows the window's shape). Applied at the next video
     // frame.
     unsigned aspect_mode         = 0;
@@ -181,6 +158,11 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
 
 // The most interpolated frames one game frame needs at a present rate: ceil(rate / 60) - 1 (75 Hz shows one between
 // most pairs of game frames, 144 Hz two between some), none at 60 and below, at most 7.
+// The ray tracer is parked (E-02): it shaded hits by evaluating the material from the old path's shader keys, which native
+// draws no longer have. It returns when it is rebuilt on native materials (the additions' F/G phase); until then the
+// RAY TRACING row is not offered and no tracer starts, on any adapter.
+inline constexpr bool kRayTracingParked = true;
+
 inline unsigned interpolated_frames_per_game_frame(double rate) {
     if (!(rate > 61.0)) return 0u;
     const double frames = std::ceil(rate / 60.0 - 1e-3) - 1.0;
@@ -189,7 +171,6 @@ inline unsigned interpolated_frames_per_game_frame(double rate) {
 
 inline constexpr unsigned kDisplayWindowed = 0u;
 inline constexpr unsigned kDisplayBorderless = 1u;
-inline constexpr unsigned kDisplayExclusive = 2u;
 inline constexpr unsigned kAspectModeCount = 7u;
 // Width:height of each aspect_mode (0 = follow the window), narrowest first.
 inline constexpr unsigned kAspectRatios[kAspectModeCount][2] = {
@@ -217,7 +198,7 @@ inline std::vector<std::pair<unsigned, unsigned>> aspect_window_sizes(
     return sizes;
 }
 
-// The GX backend's timing policy (get_gx_timing_config), the same for every subsystem.
+// The backend's timing policy (get_frame_timing_config), the same for every subsystem.
 struct RenderTimingConfig {
     // Non-present render chunks the game thread may have outstanding before render_frame() waits for the render
     // thread.
@@ -294,15 +275,14 @@ void set_curved_surfaces_offered(bool offered) noexcept;
 [[nodiscard]] bool curved_surfaces_offered() noexcept;
 void set_rt_effect_frame(std::uint64_t frame) noexcept;
 
-// The EFB scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
+// The scene target scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.
-void stage_next_start_efb_scale(unsigned efb_scale);
 [[nodiscard]] RenderFeatureCaps get_render_feature_caps();
 void set_render_feature_caps(const RenderFeatureCaps& caps);
 
-// Both return RenderTimingConfig{}; runtime code uses get_gx_timing_config().
-[[nodiscard]] RenderTimingConfig resolve_gx_timing_config_from_environment();
-[[nodiscard]] const RenderTimingConfig& get_gx_timing_config();
+// Both return RenderTimingConfig{}; runtime code uses get_frame_timing_config().
+[[nodiscard]] RenderTimingConfig resolve_frame_timing_config_from_environment();
+[[nodiscard]] const RenderTimingConfig& get_frame_timing_config();
 
 // Reads config.ini (in the data folder, or GALAXY_RENDER_CONFIG_PATH) if present, then the GALAXY_<KEY> overrides;
 // missing keys keep their defaults. Called once by the host before initialize().
@@ -336,12 +316,14 @@ bool reload_render_config_if_changed();
 [[nodiscard]] std::filesystem::path texture_dump_directory();
 // The enabled mods' textures/ folders in load order (the host sets them at start); the generation changes with each
 // set.
-void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders);
+void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders, std::vector<std::uint32_t> categories_off = {});
 // The disc's game id (RMGE01, RMGP01, RMGJ01; the host sets it at start, TexturePacks::kGameId until then): the packs'
 // game folders and the dumps' are named by it.
 void set_texture_pack_game_id(std::string id);
 [[nodiscard]] std::string texture_pack_game_id();
 [[nodiscard]] std::vector<std::filesystem::path> texture_pack_mod_folders();
+// The categories (galaxy::textures::category_bit) off in each of them.
+[[nodiscard]] std::vector<std::uint32_t> texture_pack_mod_categories_off();
 [[nodiscard]] std::uint64_t texture_pack_mod_folders_generation() noexcept;
 // HD movie replacements (movie_replacement.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and
 // the enabled mods' movies/ folders in load order (the host sets them at start).

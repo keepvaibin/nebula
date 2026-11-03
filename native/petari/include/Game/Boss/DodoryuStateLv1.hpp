@@ -43,13 +43,13 @@ public:
     void exeDive();
     void exeSpinOut();
 
-    /* 0x90 */ s32 mHideStep;
-    /* 0x94 */ s32 mAppearStep;
-    /* 0x98 */ TVec3f _98;
-    /* 0xA4 */ bool _A4;
-    /* 0xA5 */ bool mIsValidPop;
-    /* 0xA8 */ f32 mPopAccel;
-    /* 0xAC */ f32 mPopSpeed;
-    /* 0xB0 */ f32 mRailSpeed;
-    /* 0xB4 */ f32 mRailSpeedMax;
+    s32 mHideStep;
+    s32 mAppearStep;
+    TVec3f _98;
+    bool _A4;
+    bool mIsValidPop;
+    f32 mPopAccel;
+    f32 mPopSpeed;
+    f32 mRailSpeed;
+    f32 mRailSpeedMax;
 };

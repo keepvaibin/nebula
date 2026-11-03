@@ -70,7 +70,15 @@ void SimpleEffectObj::init(const JMapInfoIter& rIter) {
     _90.set(mPosition + *getClippingCenterOffset());
     MR::setClippingTypeSphere(this, getClippingRadius(), &_90);
     MR::setGroupClipping(this, rIter, 0x40);
-    MR::setClippingFar(this, getFarClipDistance());
+    // An always-on effect (a torch's flame, a lamp's glow) has no logic to wake: it shows wherever the camera sees it.
+    // The Comet Observatory's torches were dark until the player came within 50 m. Those that shake the screen when
+    // they start keep the level's distance.
+    const s_effectDataTable* pData = ::findDataElement(_8C);
+    if (pData == nullptr || pData->_C == -1) {
+        MR::setClippingFarMax(this);
+    } else {
+        MR::setClippingFar(this, getFarClipDistance());
+    }
     MR::joinToGroupArray(this, rIter, nullptr, 0x20);
     makeActorAppeared();
 }
@@ -175,7 +183,7 @@ void SimpleEffectObj::exeMove() {
         }
 
         if (v15 != nullptr) {
-            MR::tryRumblePad(this, v15, WPAD_CHAN0);
+            MR::tryRumblePad(this, v15, PLAYER_1);
         }
     }
 }

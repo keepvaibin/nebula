@@ -5,12 +5,11 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
-#include <revolution/types.h>
+#include "Game/System/NebulaArena.hpp"
 
 namespace {
     const PoltaSensorListEntry sCoreSensorList[] = {
-        "Core", "Tongue3", 150.0f, 0.0f, 0.0f, 0.0f,
+        {"Core", "Tongue3", 150.0f, 0.0f, 0.0f, 0.0f},
     };
 
     const PoltaSensorListEntry sBodySensorList[] = {{

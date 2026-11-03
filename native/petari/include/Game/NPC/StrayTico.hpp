@@ -21,7 +21,7 @@ public:
 
     void initSensor();
     void setShadowDrop(const char*);
-    void initShadow() NO_INLINE;
+    void initShadow();
     void startGlad();
     bool requestCompleteDemo(const TVec3f&, const TVec3f&, f32);
     void updateWarp();
@@ -37,15 +37,15 @@ public:
     void exeLauncherCamera();
     void exeCompleteDemo();
 
-    /* 0x8C */ CollectTico* mHost;
-    /* 0x90 */ PartsModel* mItemBubbleModel;
-    /* 0x94 */ TQuat4f mRotateQuat;
-    /* 0xA4 */ TVec3f mFrontVec;
-    /* 0xB0 */ TVec3f _B0;
-    /* 0xBC */ TVec3f _BC;
-    /* 0xC8 */ TVec3f _C8;
-    /* 0xD4 */ TVec3f _D4;
-    /* 0xE0 */ TVec3f _E0;
-    /* 0xEC */ f32 _EC;
-    /* 0xF0 */ f32 _F0;
+    CollectTico* mHost;
+    PartsModel* mItemBubbleModel;
+    TQuat4f mRotateQuat;
+    TVec3f mFrontVec;
+    TVec3f _B0;
+    TVec3f _BC;
+    TVec3f _C8;
+    TVec3f _D4;
+    TVec3f _E0;
+    f32 _EC;
+    f32 _F0;
 };

@@ -74,7 +74,7 @@ void GrandStarReturnDemoStarter::init(const JMapInfoIter& rIter) {
 
     for (int i = 0; i < 6; i++) {
         char buffer[32];
-        snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", i + 1);
+        nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", i + 1);
         MR::initAnimCamera(this, mActorCameraInfo, "DemoAstroReturn.arc", buffer);
     }
 
@@ -237,7 +237,7 @@ void GrandStarReturnDemoStarter::exeRushToCore() {
 void GrandStarReturnDemoStarter::exeRevival() {
     char buffer[32];
     int index = AstroDemoFunction::getActiveGrandStarReturnDemoIndex() + 1;
-    snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", index);
+    nebula_snprintf(buffer, sizeof(buffer), "DemoAstroReturn%d", index);
 
     if (MR::isFirstStep(this)) {
         mReturnDemoRailMove->offPathDraw();

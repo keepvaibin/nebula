@@ -11,10 +11,10 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JParticle/JPAEmitterManager.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
-    void connectToSceneDrawAdaptor(NameObjAdaptor* pAdaptor, const MR::FunctorBase& rFunctor, int drawType) NO_INLINE {
+    void connectToSceneDrawAdaptor(NameObjAdaptor* pAdaptor, const MR::FunctorBase& rFunctor, int drawType) {
         pAdaptor->connectToDraw(rFunctor);
         MR::connectToScene(pAdaptor, -1, -1, -1, drawType);
         MR::registerPreDrawFunction(MR::Functor(&ParticleDrawExecutor::initDraw), drawType);
@@ -29,7 +29,7 @@ ParticleDrawExecutor::ParticleDrawExecutor(const EffectSystem* pSystem, bool cre
 }
 
 void ParticleDrawExecutor::initDraw() {
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
+    J3DPass::noFog();
 }
 
 void ParticleDrawExecutor::draw3D() const {
@@ -43,21 +43,19 @@ void ParticleDrawExecutor::draw2D() const {
         JPADrawInfo drawInfo(cameraMtx.toMtxPtr());
 
         f32 width;
-        f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
-        width = MR::isScreen16Per9() ? MR::getScreenWidth() : 608.0f;
+        f32 height = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
+        width = MR::isScreen16Per9() ? MR::getScreenWidth() : NebulaFrameClock::cLayoutWidth;
         width *= 0.5f;
         height *= 0.5f;
 
         Mtx44 projection;
         NebulaMtxOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
-        J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setZMode(GX_FALSE, GX_NEVER, GX_FALSE);
+        J3DNativeView::setOrthographic(projection);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
         NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
         mHost->mEmitterManager->draw(&drawInfo, 6);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
         mHost->mEmitterManager->draw(&drawInfo, 7);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 
@@ -65,7 +63,6 @@ void ParticleDrawExecutor::drawIndirect() const {
     if (_20) {
         JPADrawInfo drawInfo(j3dSys.getViewMtx(), MR::getRenderFovy(), MR::getAspect());
         mHost->mEmitterManager->draw(&drawInfo, 2);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 
@@ -77,7 +74,6 @@ void ParticleDrawExecutor::drawFor2DModel() const {
     if (_20) {
         JPADrawInfo drawInfo(j3dSys.getViewMtx());
         mHost->mEmitterManager->draw(&drawInfo, 8);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 
@@ -93,9 +89,7 @@ void ParticleDrawExecutor::drawWithViewMtx3D(const TPos3f& rViewMtx) const {
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 0);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
         mHost->mEmitterManager->draw(&drawInfo, 1);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 
@@ -103,7 +97,6 @@ void ParticleDrawExecutor::drawWithViewMtxAfterIndirect(const TPos3f& rViewMtx) 
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 3);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 
@@ -111,7 +104,6 @@ void ParticleDrawExecutor::drawWithViewMtxForBloomEffect(const TPos3f& rViewMtx)
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 4);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 
@@ -119,7 +111,6 @@ void ParticleDrawExecutor::drawWithViewMtxAfterImageEffect(const TPos3f& rViewMt
     if (_20) {
         JPADrawInfo drawInfo(rViewMtx);
         mHost->mEmitterManager->draw(&drawInfo, 5);
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 }
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class ActorCameraInfo;
 class DemoExecutor;
@@ -12,16 +11,16 @@ public:
     /// @brief Creates a new `DemoCameraInfo`.
     DemoCameraInfo();
 
-    /* 0x00 */ const char* mPartName;
-    /* 0x04 */ const char* mCameraTargetName;
-    /* 0x08 */ s32 mCameraTargetCastID;
-    /* 0x0C */ const char* mAnimCameraName;
-    /* 0x10 */ s32 mAnimCameraStartFrame;
-    /* 0x14 */ s32 mAnimCameraEndFrame;
-    /* 0x18 */ u8 mIsContinuous;
-    /* 0x1C */ const char* _1C;
-    /* 0x20 */ ActorCameraInfo* _20;
-    /* 0x24 */ LiveActor* _24;
+    const char* mPartName;
+    const char* mCameraTargetName;
+    s32 mCameraTargetCastID;
+    const char* mAnimCameraName;
+    s32 mAnimCameraStartFrame;
+    s32 mAnimCameraEndFrame;
+    u8 mIsContinuous;
+    const char* _1C;
+    ActorCameraInfo* _20;
+    LiveActor* _24;
 };
 
 class DemoCameraKeeper {
@@ -38,9 +37,9 @@ public:
     void executeLast(const DemoCameraInfo*);
     void endCurrentCamera();
 
-    /* 0x00 */ DemoExecutor* mExecutor;
-    /* 0x04 */ s32 _4;
-    /* 0x08 */ DemoCameraInfo* _8;
-    /* 0x0C */ s32 _C;
-    /* 0x10 */ const DemoCameraInfo* _10;
+    DemoExecutor* mExecutor;
+    s32 _4;
+    DemoCameraInfo* _8;
+    s32 _C;
+    const DemoCameraInfo* _10;
 };

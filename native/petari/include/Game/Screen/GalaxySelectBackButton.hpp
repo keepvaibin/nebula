@@ -24,5 +24,5 @@ public:
     void exeDecide();
 
 private:
-    /* 0x20 */ ButtonPaneController* mPaneCtrl;
+    ButtonPaneController* mPaneCtrl;
 };

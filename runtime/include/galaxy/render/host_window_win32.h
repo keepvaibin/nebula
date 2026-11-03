@@ -43,21 +43,16 @@ struct WindowPlacement {
 extern std::atomic<std::uintptr_t> settings_window;
 // The window the pointer belongs to (from WM_CREATE to WM_DESTROY).
 extern std::atomic<std::uintptr_t> pointer_hwnd;
+// The desktop's monitors changed: a borderless window's bounds are out of date.
+extern std::atomic<bool> display_changed;
+// The window is minimised, as the last message said.
+[[nodiscard]] bool is_minimized() noexcept;
 
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);
 
 // The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
 extern std::atomic<bool> temporal_interp_suspended;  // RendererD3D12::suspend_temporal_interpolation
-extern std::atomic<bool> ray_tracing_offered;        // the RAY TRACING row is offered
-// Every ray tracing pipeline loads from the pipeline library (rt_prepare.h): RAY TRACING starts at once. Otherwise it
-// starts at the next start, which prepares the library before the title.
-extern std::atomic<bool> ray_tracing_prepared;
-extern std::atomic<bool> rtx_adapter;                // the session's GPU is an NVIDIA RTX (DLSS)
-[[nodiscard]] unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal);
-void save_native_settings_now();
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-// The refresh rate the settings menu assumes in place of the display's (0: the display's own).
-void native_settings_set_refresh_override_for_tests(unsigned hz) noexcept;
 
 }  // namespace galaxy::render::host_window

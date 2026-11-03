@@ -1,32 +1,31 @@
 #pragma once
 
-#include <revolution/gx/GXStruct.h>
-#include <revolution/types.h>
+#include <NebulaGpuTypes.h>
 
 class FogCtrl;
 
 class FurParam {
 public:
-    /* 0x00 */ s32 mNumLayers;
-    /* 0x04 */ f32 mLength;
-    /* 0x08 */ f32 mLengthCurve;
-    /* 0x0C */ f32 mIndirect;
-    /* 0x10 */ f32 mIndirectCurve;
-    /* 0x14 */ f32 mBrightnessTip;
-    /* 0x18 */ f32 mBrightnessRoot;
-    /* 0x1C */ f32 mBrightnessCurve;
-    /* 0x20 */ f32 mAlphaTip;
-    /* 0x24 */ f32 mAlphaRoot;
-    /* 0x28 */ f32 mAlphaCurve;
-    /* 0x2C */ f32 mSkinAlphaTip;
-    /* 0x30 */ f32 mSkinAlphaRoot;
-    /* 0x34 */ f32 mSkinAlphaCurve;
-    /* 0x38 */ f32 mFurUVScale;
-    /* 0x3C */ f32 mBodyUVScale;
-    /* 0x40 */ GXColor mColor;
-    /* 0x44 */ f32 mDensity[4];
-    /* 0x54 */ f32 mThickness[4];
-    /* 0x64 */ u8 mLengthMap[4];
+    s32 mNumLayers;
+    f32 mLength;
+    f32 mLengthCurve;
+    f32 mIndirect;
+    f32 mIndirectCurve;
+    f32 mBrightnessTip;
+    f32 mBrightnessRoot;
+    f32 mBrightnessCurve;
+    f32 mAlphaTip;
+    f32 mAlphaRoot;
+    f32 mAlphaCurve;
+    f32 mSkinAlphaTip;
+    f32 mSkinAlphaRoot;
+    f32 mSkinAlphaCurve;
+    f32 mFurUVScale;
+    f32 mBodyUVScale;
+    NebulaColor8 mColor;
+    f32 mDensity[4];
+    f32 mThickness[4];
+    u8 mLengthMap[4];
 };
 
 class FurLightParam {
@@ -37,22 +36,22 @@ public:
         mColorSource = 0;
     }
 
-    /* 0x00 */ u16 mLightMask;
-    /* 0x02 */ u16 mSpecularLightMask;
-    /* 0x04 */ u8 mMatIntensity;
-    /* 0x05 */ u8 mAmbIntensity;
-    /* 0x06 */ u8 mSpecularMatIntensity;
-    /* 0x07 */ u8 mSpecularAmbIntensity;
-    /* 0x08 */ u8 mColorSource;
-    /* 0x0C */ s32 mLightType;
+    u16 mLightMask;
+    u16 mSpecularLightMask;
+    u8 mMatIntensity;
+    u8 mAmbIntensity;
+    u8 mSpecularMatIntensity;
+    u8 mSpecularAmbIntensity;
+    u8 mColorSource;
+    s32 mLightType;
 };
 
 class DynamicFurParam {
 public:
-    /* 0x00 */ FogCtrl* mFogCtrl;
-    /* 0x04 */ FurLightParam* mLightParam;
+    FogCtrl* mFogCtrl;
+    FurLightParam* mLightParam;
 };
 
 namespace MR {
-    void initFurParamFromDvd(FurParam*, DynamicFurParam*, char*, u32);
+    void initFurParamFromFile(FurParam*, DynamicFurParam*, char*, u32);
 };  // namespace MR

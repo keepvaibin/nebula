@@ -1,10 +1,8 @@
 #pragma once
 
-#include "nw4r/db/assert.h"
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace nw4r {
     namespace ut {
@@ -34,21 +32,15 @@ namespace nw4r {
                 mCharStrm = stream;
             }
 
-            void Set(const wchar_t* stream) {
-                NW4R_POINTER_ASSERT_AT(60, this);
-                NW4R_ALIGN2_ASSERT_AT(61, stream);
-                NW4R_POINTER_ASSERT_AT(62, stream);
-                NW4R_ASSERT_AT(63, mReadFunc == ReadNextCharUTF16);
+            void Set(const char16_t* stream) {
                 mCharStrm = stream;
             }
 
             u16 Next() {
-                NW4R_POINTER_ASSERT_AT(75, this);
                 return (this->*mReadFunc)();
             }
 
             const void* GetCurrentPos() const {
-                NW4R_POINTER_ASSERT_AT(69, this);
                 return mCharStrm;
             }
 

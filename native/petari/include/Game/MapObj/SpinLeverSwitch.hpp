@@ -18,5 +18,5 @@ public:
     void exeSwitchOn();
     void exeEnd();
 
-    /* 0x8C */ MapObjConnector* mConnector;
+    MapObjConnector* mConnector;
 };

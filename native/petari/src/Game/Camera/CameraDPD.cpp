@@ -2,20 +2,10 @@
 #include "Game/Camera/CamTranslatorDPD.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
-
-void CameraDPD_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    f32 f6 = MR::pi() / 2.0f;
-    (void)2.0f;
-}
 
 namespace {
     static const f32 sMaxDistance = 0.15f;
@@ -23,7 +13,7 @@ namespace {
 };  // namespace
 
 CameraDPD::CameraDPD(const char* pName)
-    : Camera(pName), mCorePadDistToDisplay(), mRealPointPos(0.0f, 0.0f), mBlendPointPos(0.0f, 0.0f), mResetPointingPos(true), mCameraType(), mDist(),
+    : Camera(pName), mPointerDistance(), mRealPointPos(0.0f, 0.0f), mBlendPointPos(0.0f, 0.0f), mResetPointingPos(true), mCameraType(), mDist(),
       mFovy(40.0f), mAngleXRange(PI / 2.0f), mAngleYRange(PI / 2.0f), mAngleX(), mSpeedBlendRate(0.05f), mBlendFriction(0.99f), mIsVertical(),
       mAngleYMin() {
     mMtx.identity();
@@ -45,7 +35,7 @@ void CameraDPD::reset() {
         mMtx.setZDir(front);
     } else if (mCameraType == CameraType_FollowWorldPos) {
         TVec3f worldPos;
-        worldPos.set(*MR::getStarPointerWorldPosUsingDepth(WPAD_CHAN0));
+        worldPos.set(*MR::getStarPointerWorldPosUsingDepth(PLAYER_1));
         TVec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * mDist;
         TVec3f front = worldPos - basePos;
         if (MR::isNearZero(front)) {
@@ -73,7 +63,7 @@ void CameraDPD::reset() {
         mMtx.setZDir(front);
     }
 
-    MR::getCorePadPointingPos(&mRealPointPos, WPAD_CHAN0);
+    MR::getPointerPos(&mRealPointPos, PLAYER_1);
     mResetPointingPos = true;
     mBlendPointPos.set(0.0f, 0.0f);
     mRealPointPos.set(0.0f, 0.0f);
@@ -91,7 +81,7 @@ CameraTargetObj* CameraDPD::calc() {
     }
 
     TVec2f pointPos;
-    MR::getCorePadPointingPos(&pointPos, WPAD_CHAN0);
+    MR::getPointerPos(&pointPos, PLAYER_1);
 
     if (mResetPointingPos) {
         pointPos.set(0.0f, 0.0f);
@@ -100,14 +90,14 @@ CameraTargetObj* CameraDPD::calc() {
         }
     }
 
-    if (MR::isCorePadPointInScreen(WPAD_CHAN0)) {
+    if (MR::isPointerInScreen(PLAYER_1)) {
         mRealPointPos = mRealPointPos * 0.9f + pointPos * 0.1f;
         if (mCameraType != CameraType_FollowWorldPos) {
-            if (MR::testSubPadTriggerZ(WPAD_CHAN0)) {
-                mCorePadDistToDisplay = MR::getCorePadDistanceToDisplay(WPAD_CHAN0);
+            if (MR::isPressedCrouch(PLAYER_1)) {
+                mPointerDistance = MR::getPointerDistance(PLAYER_1);
             }
-            if (MR::testSubPadButtonZ(WPAD_CHAN0)) {
-                f32 updateDist = MR::clamp(mCorePadDistToDisplay - MR::getCorePadDistanceToDisplay(WPAD_CHAN0), -::sMaxDistance, ::sMaxDistance);
+            if (MR::isHeldCrouch(PLAYER_1)) {
+                f32 updateDist = MR::clamp(mPointerDistance - MR::getPointerDistance(PLAYER_1), -::sMaxDistance, ::sMaxDistance);
                 mFovy =
                     (40.0f - ((updateDist * 30.0f) / ::sMaxDistance)) * (1.0f - ::sFovyBlendRate) + CameraLocalUtil::getFovy(this) * ::sFovyBlendRate;
             }
@@ -124,7 +114,7 @@ CameraTargetObj* CameraDPD::calc() {
     mBlendPointPos = mBlendPointPos * t + pointPos * (1.0f - t);
 
     if (mCameraType != CameraType_FollowWorldPos) {
-        if (!MR::testSubPadButtonZ(WPAD_CHAN0)) {
+        if (!MR::isHeldCrouch(PLAYER_1)) {
             mFovy = CameraLocalUtil::getFovy(this) * ::sFovyBlendRate + 38.0f;
         }
         CameraLocalUtil::setFovy(this, mFovy);
@@ -132,15 +122,6 @@ CameraTargetObj* CameraDPD::calc() {
 
     TPos3f panYMtx;
     panYMtx.identity();
-    if (mIsVertical) {
-        f32 f1 = mBlendPointPos.y * MR::max(mAngleYRange, mAngleYMin);
-        f32 f2;
-        if (mAngleYRange < mAngleYMin) {
-            f2 = f1 > mAngleYRange ? mAngleYRange : f1;
-        } else {
-            f2 = f1 < -mAngleYMin ? -mAngleYMin : f1;
-        }
-    }
     panYMtx.makeRotate(TVec3f(1.0f, 0.0f, 0.0f), mBlendPointPos.y * mAngleYRange);
 
     TPos3f panXMtx;

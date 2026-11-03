@@ -16,6 +16,6 @@ public:
     void exeJet();
     void exeEnd();
 
-    /* 0x8C */ const char* mObjName;
-    /* 0x90 */ TVec3f mUp;
+    const char* mObjName;
+    TVec3f mUp;
 };

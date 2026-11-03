@@ -7,7 +7,7 @@ struct JPAResourceLoader {
     JPAResourceLoader(u8 const*, JPAResourceManager*);
 };
 
-JPAResourceManager::JPAResourceManager(void const* pData, JKRHeap* pHeap) {
+JPAResourceManager::JPAResourceManager(void const* pData, NebulaArena* pHeap) {
     mpResArr = NULL;
     mpTexArr = NULL;
     mResMax = 0;
@@ -32,7 +32,7 @@ const ResTIMG* JPAResourceManager::swapTexture(ResTIMG const* img, char const* s
         if (strcmp(swapName, mpTexArr[i]->getName()) == 0) {
             JUTTexture* tex = mpTexArr[i]->getJUTTexture();
             ret = tex->getTexInfo();
-            tex->storeTIMG(img, (u8)0);
+            tex->storeTIMG(img);
             break;
         }
     }

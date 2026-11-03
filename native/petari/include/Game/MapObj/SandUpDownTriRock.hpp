@@ -23,6 +23,6 @@ public:
     void exeUp();
     void exeStop();
 
-    /* 0xC4 */ CollisionParts* mRockCollisionParts[3];
-    /* 0xD0 */ s32 mRestStep;
+    CollisionParts* mRockCollisionParts[3];
+    s32 mRestStep;
 };

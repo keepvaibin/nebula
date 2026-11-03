@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class JASSeqReader {
 public:
@@ -24,9 +23,10 @@ public:
         mSeqCursor = (u8*)param_1;
     }
 
-    // Sequence data (BMS) is big-endian.
+    // A sequence's bytecode holds its operands high byte first: read as bytes, whatever the host's order.
     u32 get24(u32 param_0) const {
-        return (*(NEBULA_BE(u32)*)(mSeqBuff + param_0 - 1)) & 0xffffff;
+        const u8* const p = mSeqBuff + param_0;
+        return (p[0] << 16) | (p[1] << 8) | p[2];
     }
 
     u32* getBase() {
@@ -42,10 +42,12 @@ public:
         return *(mSeqBuff + param_0);
     }
     u16 get16(u32 param_0) const {
-        return *(NEBULA_BE(u16)*)(mSeqBuff + param_0);
+        const u8* const p = mSeqBuff + param_0;
+        return static_cast< u16 >((p[0] << 8) | p[1]);
     }
     u32 get32(u32 param_0) const {
-        return *(NEBULA_BE(u32)*)(mSeqBuff + param_0);
+        const u8* const p = mSeqBuff + param_0;
+        return (static_cast< u32 >(p[0]) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
     }
     u8* getCur() {
         return mSeqCursor;
@@ -54,23 +56,14 @@ public:
         return *mSeqCursor++;
     }
     u32 read16() {
-#ifdef __MWERKS__
-        return *((u16*)mSeqCursor)++;
-#else
-        NEBULA_BE(u16)* value = (NEBULA_BE(u16)*)mSeqCursor;
+        const u32 value = (mSeqCursor[0] << 8) | mSeqCursor[1];
         mSeqCursor += 2;
-        return *value;
-#endif
+        return value;
     }
     u32 read24() {
-        mSeqCursor--;
-#ifdef __MWERKS__
-        return (*((u32*)mSeqCursor)++) & 0x00ffffff;
-#else
-        NEBULA_BE(u32)* value = (NEBULA_BE(u32)*)mSeqCursor;
-        mSeqCursor += 4;
-        return *value & 0x00ffffff;
-#endif
+        const u32 value = (mSeqCursor[0] << 16) | (mSeqCursor[1] << 8) | mSeqCursor[2];
+        mSeqCursor += 3;
+        return value;
     }
     u16 getLoopCount() const {
         if (mNumStacks == 0) {
@@ -79,9 +72,9 @@ public:
         return mLoopCounts[mNumStacks - 1];
     }
 
-    /* 0x00 */ u8* mSeqBuff;
-    /* 0x04 */ u8* mSeqCursor;
-    /* 0x08 */ u32 mNumStacks;
-    /* 0x0C */ u8* mStackPtrs[8];
-    /* 0x2C */ u16 mLoopCounts[8];
+    u8* mSeqBuff;
+    u8* mSeqCursor;
+    u32 mNumStacks;
+    u8* mStackPtrs[8];
+    u16 mLoopCounts[8];
 };

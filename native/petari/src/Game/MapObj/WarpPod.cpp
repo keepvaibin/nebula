@@ -1,4 +1,5 @@
 #include "Game/MapObj/WarpPod.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorCameraInfo.hpp"
@@ -24,20 +25,7 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstdio>
 
-void WarpPod_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)MR::pi();
-    (void)2.0f;
-    (void)200.0f;
-    (void)(MR::pi() / 4.0f);
-    (void)30.0f;
-    (void)100.0f;
-}
-
-GXColor gGlowEffectEnvColor[] = {
+NebulaColor8 gGlowEffectEnvColor[] = {
     {0, 100, 200}, {44, 255, 42}, {255, 60, 60}, {196, 166, 0}, {0, 255, 0}, {255, 0, 255}, {255, 255, 0}, {255, 255, 255},
 };
 
@@ -178,11 +166,12 @@ void WarpPod::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg0WithInit(rIter, &arg0);
 
     char eventCameraName[256];
-    sprintf(eventCameraName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupId, arg0 + 65);
+    nebula_sprintf(eventCameraName, "\203\217\201\133\203\166\203\112\203\201\203\211 %d-%c" /* ワープカメラ %d-%c */, groupId, arg0 + 65);
     MR::declareEventCamera(mCamInfo, eventCameraName);
 
-    mEventCameraName = new char[strlen(eventCameraName) + 1];
-    strcpy(mEventCameraName, eventCameraName);
+    const size_t eventCameraSize = strlen(eventCameraName) + 1;
+    mEventCameraName = new char[eventCameraSize];
+    memcpy(mEventCameraName, eventCameraName, eventCameraSize);
 
     if (mVisibilityState == 0) {
         MR::connectToScene(this, MR::MovementType_MapObj, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
@@ -270,7 +259,7 @@ void WarpPod::glowEffect() {
 void WarpPod::initPair() {
     mPairPod = MR::getWarpPodManager()->getPairPod(this);
 
-    bool someBool;
+    bool someBool = false;
 
     if (mPairPod->mPosition.x > mPosition.x) {
         someBool = true;
@@ -307,10 +296,11 @@ void WarpPod::initPair() {
     }
 
     char buf[256];
-    sprintf(buf, "wPod\217\157\214\273\203\112\203\201\203\211 %d" /* wPod出現カメラ %d */, mGroupId);
+    nebula_sprintf(buf, "wPod\217\157\214\273\203\112\203\201\203\211 %d" /* wPod出現カメラ %d */, mGroupId);
 
-    _9C = new char[strlen(buf) + 1];
-    strcpy(_9C, buf);
+    const size_t size = strlen(buf) + 1;
+    _9C = new char[size];
+    memcpy(_9C, buf, size);
 
     MR::declareEventCamera(mCamInfo, _9C);
 }
@@ -508,8 +498,8 @@ void WarpPod::initDraw() {
         _C4[i] = position + up * 200.0f;
     }
 
-    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"), 0);
-    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"), 0);
+    _D4 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestColor.bti"));
+    _D8 = new JUTTexture(MR::getTexture(MR::getResourceHolder(this), "TestMask.bti"));
 }
 
 void WarpPod::drawCylinder(u32) const {
@@ -531,19 +521,19 @@ void WarpPod::drawCylinder(u32) const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    // runtime/src/render/materials/tex_alpha_lerp.hlsl: the glow colour to white by the texture's alpha, opaque
+    // added; depth tested.
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 2, 0);
     MR::ddSetVtxFormat(2);
-    MR::ddLightingOff();
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ONE, GX_CC_TEXA, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_CC_APREV, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TB_ADDHALF, GX_TEVPREV);
-    J3DNativeState::setTevColor(GX_TEVREG0, ::gGlowEffectEnvColor[mGlowColorIndex]);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-
-    _D4->load(GX_TEXMAP0);
-    _D8->load(GX_TEXMAP1);
+    material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    const NebulaColor8& glow = ::gGlowEffectEnvColor[mGlowColorIndex];
+    NativeShader::setColor(material, 0, glow.r, glow.g, glow.b, glow.a);
+    NativeShader::setColor(material, 4, 255, 255, 255, 255);
+    material.constants[10] = 1.0f;
+    NativeShader::setTexture(material, 0, _D4);
+    NativeShader::send(material);
 
     s32 val1 = _A6;
     u32 val2 = _C8;
@@ -639,7 +629,7 @@ void WarpPod::drawCylinder(u32) const {
         vecC0 = _C4[i] + vec164;
         vecB4 = _C4[i] - vec164;
 
-        J3DNativeDraw::begin(GX_QUADS, 8, MR::ddVtxAttributes());
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 8, MR::ddVtxAttributes());
 
         MR::ddSendVtxData(vecA8, previousTexCoords[0]);
         MR::ddSendVtxData(vecD8, currentTexCoords[0]);
@@ -677,8 +667,10 @@ void WarpPod::draw() const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     for (u32 i = 0; i < _C8; i++) {
         TDDraw::drawCylinder(_C4[i], _C4[i + 1] - _C4[i], 100.0f, 0x40406040, 0x40406040, 8);

@@ -20,13 +20,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include <cstring>
 
-void CameraManGame_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::pi();
-    (void)2.0f;
-}
-
 namespace {
     static const f32 sMinDistance = 300.0f;
     const char* sThruCamName = "\203\146\203\164\203\110\203\213\203\147\203\112\203\201\203\211" /* デフォルトカメラ */;
@@ -493,11 +486,7 @@ void CameraManGame::createStartAnimCamera() {
         CameraDirector* director = CameraLocalUtil::getCameraDirector();
         chunk->setCameraType("CAM_TYPE_ANIM", director->mHolder);
 
-#ifdef TARGET_PC
         chunk->mGeneralParam->mAnimData = reinterpret_cast< u8* >(data);
-#else
-        chunk->mGeneralParam->mNum1 = reinterpret_cast< s32 >(data);
-#endif
         chunk->_64 = true;
     }
 }

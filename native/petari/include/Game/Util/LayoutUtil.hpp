@@ -3,9 +3,8 @@
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include <JSystem/JGeometry/TBox.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class IconAButton;
 class J3DFrameCtrl;
@@ -25,7 +24,7 @@ namespace nw4r {
 
     namespace ut {
         class Font;
-        class Rect;
+        struct Rect;
     };  // namespace ut
 };  // namespace nw4r
 
@@ -41,7 +40,7 @@ public:
 class TextBoxRecursiveSetMessage : public TextBoxRecursiveOperation {
 public:
     /// @brief Creates a new `TextBoxRecursiveSetMessage`.
-    TextBoxRecursiveSetMessage(const wchar_t* pMessage) : mMessage(pMessage) {
+    TextBoxRecursiveSetMessage(const char16_t* pMessage) : mMessage(pMessage) {
     }
 
     virtual void execute(nw4r::lyt::TextBox* pTextBox) const {
@@ -49,7 +48,7 @@ public:
     }
 
 private:
-    /* 0x4 */ const wchar_t* mMessage;
+    const char16_t* mMessage;
 };
 
 class TextBoxRecursiveSetArgNumber : public TextBoxRecursiveOperation {
@@ -63,14 +62,14 @@ public:
     }
 
 private:
-    /* 0x4 */ s32 mArg;
-    /* 0x8 */ s32 mArgIndex;
+    s32 mArg;
+    s32 mArgIndex;
 };
 
 class TextBoxRecursiveSetArgString : public TextBoxRecursiveOperation {
 public:
     /// @brief Creates a new `TextBoxRecursiveSetArgString`.
-    TextBoxRecursiveSetArgString(const wchar_t* pArg, s32 argIndex) : mArg(pArg), mArgIndex(argIndex) {
+    TextBoxRecursiveSetArgString(const char16_t* pArg, s32 argIndex) : mArg(pArg), mArgIndex(argIndex) {
     }
 
     virtual void execute(nw4r::lyt::TextBox* pTextBox) const {
@@ -78,8 +77,8 @@ public:
     }
 
 private:
-    /* 0x4 */ const wchar_t* mArg;
-    /* 0x8 */ s32 mArgIndex;
+    const char16_t* mArg;
+    s32 mArgIndex;
 };
 
 class TextBoxRecursiveSetVerticalPosition : public TextBoxRecursiveOperation {
@@ -93,7 +92,7 @@ public:
     }
 
 private:
-    /* 0x4 */ u8 mPosition;
+    u8 mPosition;
 };
 
 class TextBoxRecursiveSetHorizontalPosition : public TextBoxRecursiveOperation {
@@ -107,7 +106,7 @@ public:
     }
 
 private:
-    /* 0x4 */ u8 mPosition;
+    u8 mPosition;
 };
 
 class TextBoxRecursiveSetFont : public TextBoxRecursiveOperation {
@@ -123,7 +122,7 @@ public:
     }
 
 private:
-    /* 0x4 */ nw4r::ut::Font* mFont;
+    nw4r::ut::Font* mFont;
 };
 
 namespace MR {
@@ -142,10 +141,10 @@ namespace MR {
     void setTextBoxGameMessageRecursive(LayoutActor*, const char*, const char*);
     void setTextBoxLayoutMessageRecursive(LayoutActor*, const char*, const char*);
     void setTextBoxSystemMessageRecursive(LayoutActor*, const char*, const char*);
-    void setTextBoxMessageRecursive(LayoutActor*, const char*, const wchar_t*);
-    void setTextBoxFormatRecursive(LayoutActor*, const char*, const wchar_t*, ...);
+    void setTextBoxMessageRecursive(LayoutActor*, const char*, const char16_t*);
+    void setTextBoxFormatRecursive(LayoutActor*, const char*, const char16_t*, ...);
     void setTextBoxArgNumberRecursive(LayoutActor*, const char*, s32, s32);
-    void setTextBoxArgStringRecursive(LayoutActor*, const char*, const wchar_t*, s32);
+    void setTextBoxArgStringRecursive(LayoutActor*, const char*, const char16_t*, s32);
     void setTextBoxArgGameMessageRecursive(LayoutActor*, const char*, const char*, s32);
     void setTextBoxVerticalPositionTopRecursive(LayoutActor*, const char*);
     void setTextBoxVerticalPositionCenterRecursive(LayoutActor*, const char*);
@@ -222,13 +221,13 @@ namespace MR {
     void copyLayoutDrawInfoWithAspect(nw4r::lyt::DrawInfo*, const LayoutActor*, bool);
     void calcAnimLayoutWithDrawInfo(const LayoutActor*, const nw4r::lyt::DrawInfo&);
     void drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor*, const nw4r::lyt::DrawInfo&);
-    bool isStep(const LayoutActor*, s32) NO_INLINE;
+    bool isStep(const LayoutActor*, s32);
     bool isFirstStep(const LayoutActor*);
     bool isLessStep(const LayoutActor*, s32);
     bool isGreaterStep(const LayoutActor*, s32);
     bool isGreaterEqualStep(const LayoutActor*, s32);
     bool isIntervalStep(const LayoutActor*, s32);
-    bool isNewNerve(const LayoutActor*) NO_INLINE;
+    bool isNewNerve(const LayoutActor*);
     f32 calcNerveRate(const LayoutActor*, s32);
     f32 calcNerveRate(const LayoutActor*, s32, s32);
     f32 calcNerveEaseInRate(const LayoutActor*, s32);

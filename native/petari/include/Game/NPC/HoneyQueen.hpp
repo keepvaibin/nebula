@@ -31,7 +31,7 @@ public:
     void exeEvent();
     void exeAfter();
 
-    /* 0x15C */ ModelObj* mWing;
-    /* 0x160 */ CollisionParts* mCollisionParts[10];
-    /* 0x188 */ s32 _188;
+    ModelObj* mWing;
+    CollisionParts* mCollisionParts[10];
+    s32 _188;
 };

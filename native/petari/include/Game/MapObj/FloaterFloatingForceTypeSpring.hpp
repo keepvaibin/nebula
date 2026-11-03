@@ -11,10 +11,10 @@ public:
     void addSpringVelocity(f32);
     void setSpringBaseValue(f32);
 
-    /* 0x00 */ f32 _0;
-    /* 0x04 */ f32 _4;
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ SpringValue* mSpringValue;
+    f32 _0;
+    f32 _4;
+    f32 _8;
+    SpringValue* mSpringValue;
 };
 
 class FloaterFloatingForceTypeSpring : public FloaterFloatingForce {
@@ -31,7 +31,7 @@ public:
 
     void updateVelocity();
     void soundMoveSE();
-    f32 getCurrentSinkSpeed() const NO_INLINE;
+    f32 getCurrentSinkSpeed() const;
     bool tryOn();
     bool tryReturn();
     ;
@@ -39,7 +39,7 @@ public:
     void exeMove();
     void exeMoveReturn();
 
-    /* 0x38 */ FloaterSpringForce* mSpringForce;
-    /* 0x3C */ TVec3f mVelocity;
-    /* 0x48 */ f32 _48;
+    FloaterSpringForce* mSpringForce;
+    TVec3f mVelocity;
+    f32 _48;
 };

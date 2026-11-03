@@ -13,12 +13,12 @@ public:
 
     void forceToDeactive();
     bool isActive() const;
-    bool tryCorePadTriggerHome();
+    bool tryPressedHome();
 
     void exeDeactive();
     void exeActive();
 
     bool mIsInitialized;
-    /* 0x24 */ bool _24;
-    /* 0x25 */ bool _25;
+    bool _24;
+    bool _25;
 };

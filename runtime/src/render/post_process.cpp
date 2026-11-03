@@ -1,5 +1,6 @@
 // PostProcessor: the D3D12 presentation chain (post_process.h).
 #include "galaxy/render/post_process.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/renderer_d3d12.h"
 
 #include <algorithm>
@@ -76,7 +77,7 @@ D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
 
 bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
                                     DXGI_FORMAT format, int stencil,
-                                    ComPtr<ID3D12PipelineState>& out, UINT8 write_mask) {
+                                    ComPtr<ID3D12PipelineState>& out, UINT8 write_mask, UINT samples) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
     pd.VS = vs;
@@ -89,7 +90,7 @@ bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTEC
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = format;
-    pd.SampleDesc.Count = 1;
+    pd.SampleDesc.Count = samples;
     // stencil: 0 none, 1 write 1 where the pixel shader keeps the pixel,
     // 2 draw only where the stencil is 1 (SMAA's edge mask).
     if (stencil != 0) {
@@ -163,7 +164,7 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 bool test_fault(const char* name) noexcept {
     char value[64]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_POST_FAULT") != 0 || length <= 1u) {
+    if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_post_fault) != 0 || length <= 1u) {
         return false;
     }
     const std::size_t n = std::strlen(name);
@@ -361,6 +362,9 @@ void PostProcessor::shutdown() noexcept {
     fxaa_.Reset();
     smaa_blend_rgb_.Reset();
     fxaa_rgb_.Reset();
+    for (auto& pass : scene_pass_ms_) {
+        for (auto& pipeline : pass) pipeline.Reset();
+    }
     easu_.Reset();
     rcas_.Reset();
     rcas_scaled_.Reset();
@@ -630,7 +634,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
                                      unsigned width, unsigned height, unsigned picture_width,
                                      unsigned picture_height, unsigned display_width,
                                      unsigned display_height, std::uint64_t frame_index,
-                                     unsigned frames_in_flight) {
+                                     unsigned frames_in_flight, unsigned samples) {
     if (!ready_ || color == nullptr || width == 0u || height == 0u) {
         return AaRun::kNone;
     }
@@ -644,7 +648,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
           ensure_target(stencil_, width, height, kStencilFormat, 0u, frame_index, frames_in_flight))) {
         pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
     }
-    // The passes read a copy of the scene and write the EFB.
+    // The passes read a copy of the scene and write the scene target.
     if (pass != AaRun::kNone &&
         ((fault_targets_ && frame_index != 0u) ||
          !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight))) {
@@ -676,7 +680,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
         list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-        draw(list, srv_ring, fxaa_rgb_.Get(), {source}, {kColorFormat}, viewport, c);
+        draw(list, srv_ring, scene_pass_pipeline(false, samples), {source}, {kColorFormat}, viewport, c);
         return pass;
     }
     constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -697,9 +701,30 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
          viewport, c);
     transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-    draw(list, srv_ring, smaa_blend_rgb_.Get(), {source, weights_.resource.Get()},
+    draw(list, srv_ring, scene_pass_pipeline(true, samples), {source, weights_.resource.Get()},
          {kColorFormat, kColorFormat}, viewport, c);
     return pass;
+}
+
+// The last pass of the scene's AA, into the scene target: over MSAA every sample takes the result. Those are made at
+// first use.
+ID3D12PipelineState* PostProcessor::scene_pass_pipeline(bool smaa, unsigned samples) {
+    if (samples <= 1u) {
+        return smaa ? smaa_blend_rgb_.Get() : fxaa_rgb_.Get();
+    }
+    ComPtr<ID3D12PipelineState>& out = scene_pass_ms_[smaa ? 1u : 0u][std::min(std::countr_zero(samples), 3)];
+    if (!out) {
+        constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
+                               D3D12_COLOR_WRITE_ENABLE_BLUE;
+        const bool made = smaa ? create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)),
+                                                 kColorFormat, 0, out, kRgb, samples)
+                               : create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat,
+                                                 0, out, kRgb, samples);
+        if (!made) {
+            return nullptr;
+        }
+    }
+    return out.Get();
 }
 
 void PostProcessor::self_test(ID3D12CommandQueue* queue) {
@@ -945,15 +970,9 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
 
     // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one (a
     // supersampled scene) in the window after the box filter, where it has a third or less of the pixels, its taps
-    // stay in the texture cache and its dither is at the size it is seen.
-    const bool deband = deband_ && deband_wanted();
-    // GALAXY_TEST_DEBAND_AB=1: a reduced picture debanded at its own size in every other frame (same-run pictures).
-    static const bool deband_ab = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_DEBAND_AB") == 0 && length > 1u && value[0] == '1';
-    }();
-    const bool deband_in_window = deband && !(deband_ab && (frame_index & 1u) != 0u) &&
+    // stay in the texture cache and its grain is at the size it is seen.
+    const bool deband = deband_;
+    const bool deband_in_window = deband &&
         target_width < source_width && target_height < source_height &&
         plan.resample && !plan.rcas &&
         ensure_target(scaled_, target_width, target_height, kColorFormat, 3u, frame_index, frames_in_flight);

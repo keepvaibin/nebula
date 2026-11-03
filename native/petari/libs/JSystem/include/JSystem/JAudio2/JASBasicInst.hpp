@@ -5,14 +5,14 @@
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 
-struct JKRHeap;
+class NebulaArena;
 
 struct JASInstEffect;
 
 const int OSC_MAX = 2;
 
 struct JASInstParam : public JASSoundParams {
-    JASInstParam() ATTRIBUTE_WEAK;  // gets overwritten in OverwriteJAudio
+    JASInstParam();  // gets overwritten in OverwriteJAudio
 
     void initChannelType() {
         mChannelType = JASChannel::CH_WAVE;
@@ -43,12 +43,12 @@ struct JASInstParam : public JASSoundParams {
         initRelease();
     }
 
-    /* 0x14 */ u32 mChannelType;
-    /* 0x18 */ u32 _18;
-    /* 0x1C */ JASOscillator::Data** mOscillatorData;
-    /* 0x20 */ u32 mNumOscillators;
-    /* 0x24 */ bool _24;
-    /* 0x26 */ u16 mDirectRelease;
+    u32 mChannelType;
+    u32 _18;
+    JASOscillator::Data** mOscillatorData;
+    u32 mNumOscillators;
+    bool _24;
+    u16 mDirectRelease;
 };
 
 struct JASInst {
@@ -59,10 +59,10 @@ struct JASInst {
 
 struct JASBasicInst : public JASInst {
     struct TVelomap {
-        /* 0x00 */ s32 _0;
-        /* 0x04 */ s32 _4;
-        /* 0x08 */ f32 mVolume;
-        /* 0x0C */ f32 mPitch;
+        s32 _0;
+        s32 _4;
+        f32 mVolume;
+        f32 mPitch;
     };
 
     struct TKeymap {
@@ -79,7 +79,7 @@ struct JASBasicInst : public JASInst {
             mHighKey = key;
         }
 
-        void setVeloRegionCount(u32, JKRHeap*);
+        void setVeloRegionCount(u32, NebulaArena*);
         TVelomap* getVeloRegion(int);
         const TVelomap* getVeloRegion(int) const;
 
@@ -87,13 +87,13 @@ struct JASBasicInst : public JASInst {
             return mVelomapCount;
         }
 
-        /* 0x0 */ s32 mHighKey;
-        /* 0x4 */ u32 mVelomapCount;
-        /* 0x8 */ TVelomap* mVelomap;
+        s32 mHighKey;
+        u32 mVelomapCount;
+        TVelomap* mVelomap;
     };
 
     JASBasicInst();
-    void setKeyRegionCount(u32, JKRHeap*);
+    void setKeyRegionCount(u32, NebulaArena*);
     void appendEffect(JASPtrListAdaptor< JASInstEffect >*);
     void setOsc(int, JASOscillator::Data const*);
     TKeymap* getKeyRegion(int);
@@ -115,10 +115,10 @@ struct JASBasicInst : public JASInst {
         return mKeymapCount;
     }
 
-    /* 0x04 */ f32 mVolume;
-    /* 0x08 */ f32 mPitch;
-    /* 0x0C */ JASOscillator::Data const* mOscillatorData[OSC_MAX];
-    /* 0x14 */ JASPtrList< JASInstEffect > mEffects;
-    /* 0x18 */ u32 mKeymapCount;
-    /* 0x1C */ TKeymap* mKeymap;
+    f32 mVolume;
+    f32 mPitch;
+    JASOscillator::Data const* mOscillatorData[OSC_MAX];
+    JASPtrList< JASInstEffect > mEffects;
+    u32 mKeymapCount;
+    TKeymap* mKeymap;
 };

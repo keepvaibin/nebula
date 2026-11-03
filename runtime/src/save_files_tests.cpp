@@ -51,8 +51,9 @@ int main() {
                      "a shorter save replaces the whole file");
     std::size_t files = 0;
     for (const auto& entry : fs::directory_iterator(folder)) {
-        (void)entry;
-        files++;
+        // The game's own copies of its last saves (GameData.bin.1, .2) are kept on purpose.
+        const std::string name = entry.path().filename().string();
+        files += name == "GameData.bin.1" || name == "GameData.bin.2" ? 0u : 1u;
     }
     passed &= expect(files == 1, "a save leaves no temporary file beside it");
 
@@ -71,6 +72,30 @@ int main() {
     passed &= expect(remove(folder, "GameData.bin") == kNoFile &&
                          read(folder, "GameData.bin", buffer.data(), kBufferSize, &length) == kNoFile,
                      "a deleted save is gone");
+
+    // The first version 3 save over a version 2 one keeps the old file, once.
+    const fs::path upgrade = root / "upgrade";
+    std::array<unsigned char, 64> old_save{}, native_save{}, other_old{};
+    old_save[7] = 2;
+    old_save[63] = 0x11;
+    other_old[7] = 2;
+    other_old[63] = 0x22;
+    native_save[4] = 3;
+    const auto kept_is = [&](const std::array<unsigned char, 64>& expected) {
+        return read(upgrade, "GameData.bin.v2", buffer.data(), kBufferSize, &length) == kDone && length == expected.size() &&
+            std::memcmp(buffer.data(), expected.data(), expected.size()) == 0;
+    };
+    passed &= expect(write(upgrade, "GameData.bin", old_save.data(), 64) == kDone &&
+                         write(upgrade, "GameData.bin", other_old.data(), 64) == kDone && !fs::exists(upgrade / "GameData.bin.v2"),
+                     "a version 2 save keeps no copy");
+    passed &= expect(write(upgrade, "GameData.bin", native_save.data(), 64) == kDone && kept_is(other_old),
+                     "the first version 3 save keeps the version 2 file");
+    passed &= expect(write(upgrade, "GameData.bin", old_save.data(), 64) == kDone &&
+                         write(upgrade, "GameData.bin", native_save.data(), 64) == kDone && kept_is(other_old),
+                     "the copy is made once");
+    passed &= expect(write(upgrade, "Other.bin", old_save.data(), 64) == kDone &&
+                         write(upgrade, "Other.bin", native_save.data(), 64) == kDone && !fs::exists(upgrade / "Other.bin.v2"),
+                     "only GameData.bin keeps a copy");
 
     std::error_code error;
     fs::remove_all(root, error);

@@ -17,7 +17,7 @@ namespace galaxy::render::gpu {
 using Device = VkDevice_T;
 using Pipeline = VkPipeline_T;
 using Resource = VkBuffer_T;
-// A 64-bit address in the renderer's own buffer address space: each buffer the GX path binds owns a range, and the
+// A 64-bit address in the renderer's own buffer address space: each buffer the old path binds owns a range, and the
 // renderer turns an address back into (buffer, offset) when it binds it. Arithmetic on it works as on D3D12's.
 using Address = std::uint64_t;
 struct Table {
@@ -105,10 +105,10 @@ struct DeviceRef {
     bool operator!=(std::nullptr_t) const noexcept { return handle != VK_NULL_HANDLE; }
     bool operator==(std::nullptr_t) const noexcept { return handle == VK_NULL_HANDLE; }
 };
-// GX copies stay below 640x528 at scale 6; every Vulkan device reports at least 4096.
+// copies stay below 640x528 at scale 6; every Vulkan device reports at least 4096.
 inline constexpr unsigned kMaxTexture2DDimension = 4096u;
 
-// An RGBA8 texture that is rendered to and sampled (XFB copies); empty when it cannot be created.
+// An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
 [[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
 
 }  // namespace galaxy::render::gpu
@@ -177,7 +177,7 @@ inline constexpr Topology kTopologyTrianglePatches = D3D_PRIMITIVE_TOPOLOGY_3_CO
     return Rect{static_cast<LONG>(left), static_cast<LONG>(top), static_cast<LONG>(right), static_cast<LONG>(bottom)};
 }
 
-// An RGBA8 texture that is rendered to and sampled (XFB copies); empty when it cannot be created.
+// An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
 [[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
 
 }  // namespace galaxy::render::gpu

@@ -1,13 +1,12 @@
 #pragma once
 
-#include "nebula_disc.hpp"
 
 #include "JSystem/JAudio2/JAIAudible.hpp"
 #include "JSystem/JAudio2/JAISoundParams.hpp"
 #include <stdint.h>
 
 class JAISound;
-class JASTrack;
+struct JASTrack;
 
 class JAISoundID {
 public:
@@ -29,13 +28,7 @@ public:
     }
 
     JAISoundID(u32 sectionID, u32 groupID, u32 waveID) {
-#ifdef TARGET_PC
         mID.mComposite = (u32)(u8)sectionID << 24 | (u32)(u8)groupID << 16 | (u16)waveID;
-#else
-        mID.info.type.parts.sectionID = sectionID;
-        mID.info.type.parts.groupID = groupID;
-        mID.info.waveID = waveID;
-#endif
     }
 
     operator u32() const {
@@ -50,9 +43,7 @@ public:
         mID.mComposite = -1;
     }
 
-#ifdef TARGET_PC
-    // The id is the console's word 0xSSGGWWWW (section, group, wave): natively its parts come from the value, not
-    // from the bytes the union overlays on it.
+    // The id is 0xSSGGWWWW (section, group, wave): its parts come from the value.
     u8 getSectionID() const {
         return (u8)(mID.mComposite >> 24);
     }
@@ -76,31 +67,6 @@ public:
     void setWaveID(u16 id) {
         mID.mComposite = (mID.mComposite & 0xFFFF0000) | id;
     }
-#else
-    u8 getSectionID() const {
-        return mID.info.type.parts.sectionID;
-    }
-
-    void setSectionID(u8 id) {
-        mID.info.type.parts.sectionID = id;
-    }
-
-    u8 getGroupID() const {
-        return mID.info.type.parts.groupID;
-    }
-
-    void setGroupID(u8 id) {
-        mID.info.type.parts.groupID = id;
-    }
-
-    u16 getWaveID() const {
-        return mID.info.waveID;
-    }
-
-    void setWaveID(u16 id) {
-        mID.info.waveID = id;
-    }
-#endif
 
     void set(u8 sectionID, u8 groupID, u16 waveID) {
         setSectionID(sectionID);
@@ -108,7 +74,7 @@ public:
         setWaveID(waveID);
     }
 
-    /* 0x00 */ union {
+    union {
         u32 mComposite;
         struct {
             union {
@@ -122,18 +88,6 @@ public:
         } info;
     } mID;
 };
-
-#ifdef TARGET_PC
-// A sound id in a file (BAS): the big-endian word.
-template <>
-struct BEData< JAISoundID > {
-    BE< u32 > mComposite;
-
-    operator JAISoundID() const {
-        return JAISoundID((u32)mComposite);
-    }
-};
-#endif
 
 class JAISoundHandle {
 public:
@@ -160,7 +114,7 @@ public:
 
     void releaseSound();
 
-    /* 0x00 */ JAISound* mSound;
+    JAISound* mSound;
 };
 
 struct JAISoundStatus_ {
@@ -180,7 +134,7 @@ struct JAISoundStatus_ {
     void init() {
         _0.value = 0;
         _1.value = 0;
-        *((u16*)&mState) = 0;
+        __builtin_memset(&mState, 0, sizeof(mState));
         mUserData = 0;
     }
 
@@ -271,7 +225,7 @@ struct JAISoundStatus_ {
         return mUserData;
     }
 
-    /* 0x0 */ union {  // TODO: is this just JAISoundActivity?
+    union {  // TODO: is this just JAISoundActivity?
         u8 value;
         struct {
             u8 mute : 1;
@@ -284,7 +238,7 @@ struct JAISoundStatus_ {
             u8 flag8 : 1;
         } flags;
     } _0;
-    /* 0x1 */ union {
+    union {
         u8 value;
         struct {
             u8 comesBack : 1;
@@ -297,7 +251,7 @@ struct JAISoundStatus_ {
             u8 flag8 : 1;
         } flags;
     } _1;
-    /* 0x2 */ struct {
+    struct {
         u8 state;
         struct {
             u8 flag1 : 1;
@@ -309,7 +263,7 @@ struct JAISoundStatus_ {
             u8 flag8 : 1;
         } flags;
     } mState;
-    /* 0x4 */ uintptr_t mUserData;
+    uintptr_t mUserData;
 };
 
 struct JAISoundFader {
@@ -355,8 +309,8 @@ struct JAISoundFader {
         return mValue;
     }
 
-    /* 0x00 */ f32 mValue;
-    /* 0x04 */ JAISoundParamsTransition::TTransition mTransition;
+    f32 mValue;
+    JAISoundParamsTransition::TTransition mTransition;
 };
 
 template < typename T >
@@ -395,7 +349,7 @@ public:
         return _0.flags.paused;
     }
 
-    /* 0x0 */ union {
+    union {
         u8 value;
         struct {
             u8 muted : 1;
@@ -434,8 +388,8 @@ public:
         mTempo = mTransition.apply(mTempo);
     }
 
-    /* 0x00 */ f32 mTempo;
-    /* 0x04 */ JAISoundParamsTransition::TTransition mTransition;
+    f32 mTempo;
+    JAISoundParamsTransition::TTransition mTransition;
 };
 
 class JAISoundHandle;
@@ -458,8 +412,6 @@ public:
     void attachHandle(JAISoundHandle* handle);
 
     void start_JAISound_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience);
-    bool acceptsNewAudible() const;
-    void newAudible(const TVec3f&, TVec3f const*, u32, JAIAudience*);
     void stop();
     void stop(u32 fadeTime);
     void die_JAISound_();
@@ -621,15 +573,15 @@ public:
         return mParams.mMove;
     }
 
-    /* 0x04 */ JAISoundHandle* mHandle;
-    /* 0x08 */ JAIAudible* mAudible;
-    /* 0x0C */ JAIAudience* mAudience;
-    /* 0x10 */ u32 mLifeTime;
-    /* 0x14 */ s32 mPrepareCount;
-    /* 0x18 */ JAISoundID mSoundID;
-    /* 0x1C */ JAISoundStatus_ mStatus;
-    /* 0x24 */ JAISoundFader mFader;
-    /* 0x34 */ u32 mPriority;
-    /* 0x38 */ s32 mCount;
-    /* 0x3C */ JAISoundParams mParams;
+    JAISoundHandle* mHandle;
+    JAIAudible* mAudible;
+    JAIAudience* mAudience;
+    u32 mLifeTime;
+    s32 mPrepareCount;
+    JAISoundID mSoundID;
+    JAISoundStatus_ mStatus;
+    JAISoundFader mFader;
+    u32 mPriority;
+    s32 mCount;
+    JAISoundParams mParams;
 };

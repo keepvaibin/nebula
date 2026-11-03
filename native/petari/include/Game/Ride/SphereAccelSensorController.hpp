@@ -19,7 +19,7 @@ public:
     void getPadAcceleration(TVec3f*) const;
     bool testBrake() const;
 
-    bool isCorePad() const {
+    bool isMainHand() const {
         return mPad == Pad_Core;
     }
 
@@ -33,35 +33,35 @@ public:
     u32 _40, _44, _48, _4C;
     u32 _50, _54;
 
-    /* 0x58 */ u32 _58;
-    /* 0x5C */ u32 _5C;
+    u32 _58;
+    u32 _5C;
 
-    /* 0x60 */ u32 _60;
-    /* 0x64 */ u32 _64;
-    /* 0x68 */ u32 _68;
-    /* 0x6C */ u32 _6C;
-    /* 0x70 */ u32 _70;
+    u32 _60;
+    u32 _64;
+    u32 _68;
+    u32 _6C;
+    u32 _70;
 
-    /* 0x74 */ u32 _74;
-    /* 0x78 */ u32 _78;
+    u32 _74;
+    u32 _78;
 
-    /* 0x7C */ f32 _7C;
-    /* 0x80 */ f32 _80;
-    /* 0x84 */ f32 _84;
-    /* 0x88 */ f32 _88;
+    f32 _7C;
+    f32 _80;
+    f32 _84;
+    f32 _88;
 
-    /* 0x8C */ u32 _8C;
-    /* 0x90 */ u32 _90;
+    u32 _8C;
+    u32 _90;
 
-    /* 0x94 */ f32 _94;
-    /* 0x98 */ f32 _98;
-    /* 0x9C */ f32 _9C;
-    /* 0xA0 */ f32 _A0;
-    /* 0xA4 */ f32 _A4;
-    /* 0xA8 */ f32 _A8;
-    /* 0xAC */ f32 _AC;
+    f32 _94;
+    f32 _98;
+    f32 _9C;
+    f32 _A0;
+    f32 _A4;
+    f32 _A8;
+    f32 _AC;
 
-    /* 0xB0 */ u16 _B0;
-    /* 0xB4 */ f32 _B4;
-    /* 0xB8 */ Pad mPad;  // determines whether wiimote or nunchuck is used for control
+    u16 _B0;
+    f32 _B4;
+    Pad mPad;  // determines whether wiimote or nunchuck is used for control
 };

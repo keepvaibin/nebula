@@ -9,7 +9,7 @@ public:
 
     void initDraw() const;
 
-    /* 0x8C */ J3DMaterial* mMaterial;
-    /* 0x90 */ J3DShape* mShape;
-    /* 0x94 */ J3DShapeDraw* mShapeDraw;
+    J3DMaterial* mMaterial;
+    J3DShape* mShape;
+    J3DShapeDraw* mShapeDraw;
 };

@@ -112,94 +112,171 @@ pub fn is_archive(bytes: &[u8]) -> bool {
     bytes.len() >= 0x40 && be32(bytes, 0).ok() == Some(RARC)
 }
 
-const FLAG_FILE: u8 = 0x01;
+const FLAG_FOLDER: u8 = 0x02;
 const FLAG_COMPRESSED: u8 = 0x04;
-const FLAG_MRAM: u8 = 0x10;
-const FLAG_ARAM: u8 = 0x20;
-const FLAG_YAZ0: u8 = 0x80;
 
-fn align32(n: usize) -> usize {
-    (n + 31) & !31
+/// A file of an archive: its path below the archive, where it lay in the archive's data, its bytes expanded.
+pub struct Member {
+    pub path: String,
+    pub offset: usize,
+    pub bytes: Vec<u8>,
 }
 
-/// An archive with each member file replaced by `cook(name, bytes)` (or kept when it returns None). Members keep
-/// their order in the data area; the header's data, memory and auxiliary-memory sizes are summed again.
-pub fn rebuild(bytes: &[u8], cook: &mut dyn FnMut(&str, Vec<u8>) -> Result<Option<Vec<u8>>>) -> Result<Vec<u8>> {
+/// An archive's files, folder by folder as its directory lists them (a sub-folder's files where the folder is listed).
+pub fn members(bytes: &[u8]) -> Result<Vec<Member>> {
     let data_start = be32(bytes, 0x0C)? as usize + 0x20;
-    let entry_count = be32(bytes, 0x28)? as usize;
+    let folders_at = be32(bytes, 0x24)? as usize + 0x20;
+    let folder_count = be32(bytes, 0x20)? as usize;
     let entry_at = be32(bytes, 0x2C)? as usize + 0x20;
+    let entry_count = be32(bytes, 0x28)? as usize;
     let strings_at = be32(bytes, 0x34)? as usize + 0x20;
-    if data_start > bytes.len() || entry_at + entry_count * 0x14 > data_start {
+    if data_start > bytes.len() || entry_at + entry_count * 0x14 > data_start || folders_at + folder_count * 0x10 > data_start {
         bail!("an archive whose tables overlap its data");
     }
-    struct Member {
-        entry: usize,
-        flags: u8,
-        offset: usize,
-        bytes: Vec<u8>,
+    let mut out = Vec::new();
+    if folder_count != 0 {
+        let layout = Layout { data_start, folders_at, folder_count, entry_at, entry_count, strings_at };
+        let mut walked = Walked { folders: vec![false; folder_count], bytes: 0 };
+        walk(bytes, &layout, 0, "", 0, &mut walked, &mut out)?;
     }
-    let mut members = Vec::new();
-    for e in 0..entry_count {
-        let at = entry_at + e * 0x14;
+    Ok(out)
+}
+
+/// Past this an archive's members are refused: entries can share bytes, so the table alone can ask for any amount.
+const MEMBERS_MAX: usize = 4 << 30;
+
+/// What a walk has been through: each folder once, however the entries point at them, and the members' bytes.
+struct Walked {
+    folders: Vec<bool>,
+    bytes: usize,
+}
+
+struct Layout {
+    data_start: usize,
+    folders_at: usize,
+    folder_count: usize,
+    entry_at: usize,
+    entry_count: usize,
+    strings_at: usize,
+}
+
+fn walk(bytes: &[u8], layout: &Layout, folder: usize, prefix: &str, depth: usize, walked: &mut Walked, out: &mut Vec<Member>) -> Result<()> {
+    if folder >= layout.folder_count || depth > 32 || std::mem::replace(&mut walked.folders[folder], true) {
+        bail!("an archive's folders do not form a tree");
+    }
+    let at = layout.folders_at + folder * 0x10;
+    let count = u16::from_be_bytes(bytes[at + 0x0A..at + 0x0C].try_into().unwrap()) as usize;
+    let first = be32(bytes, at + 0x0C)? as usize;
+    if first + count > layout.entry_count {
+        bail!("an archive folder lists past the file table");
+    }
+    for e in first..first + count {
+        let at = layout.entry_at + e * 0x14;
         let flags = bytes[at + 4];
-        if flags & FLAG_FILE == 0 {
+        let name_at = layout.strings_at + (be32(bytes, at + 4)? & 0x00FF_FFFF) as usize;
+        let name_end = bytes.get(name_at..).and_then(|s| s.iter().position(|b| *b == 0)).context("an archive name without its end")?;
+        let name = String::from_utf8_lossy(&bytes[name_at..name_at + name_end]).into_owned();
+        if name == "." || name == ".." {
             continue;
         }
-        let name_at = strings_at + (be32(bytes, at + 4)? & 0x00FF_FFFF) as usize;
-        let name_end = bytes[name_at..].iter().position(|b| *b == 0).context("an archive name without its end")?;
-        let name = String::from_utf8_lossy(&bytes[name_at..name_at + name_end]).into_owned();
+        let path = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
         let offset = be32(bytes, at + 8)? as usize;
+        if flags & FLAG_FOLDER != 0 {
+            walk(bytes, layout, offset, &path, depth + 1, walked, out)?;
+            continue;
+        }
         let size = be32(bytes, at + 12)? as usize;
-        let start = data_start + offset;
+        let start = layout.data_start + offset;
         let mut member = bytes.get(start..start + size).with_context(|| format!("{name} lies past the archive's end"))?.to_vec();
-        let mut flags = flags;
         if flags & FLAG_COMPRESSED != 0 || is_compressed(&member) {
             member = expand(&member).with_context(|| format!("{name} cannot be expanded"))?;
-            flags &= !(FLAG_COMPRESSED | FLAG_YAZ0);
         }
-        let member = match cook(&name, member.clone())? {
-            Some(cooked) => cooked,
-            None => member,
-        };
-        members.push(Member { entry: at, flags, offset, bytes: member });
+        walked.bytes += member.len();
+        if walked.bytes > MEMBERS_MAX {
+            bail!("an archive whose files come to more than {MEMBERS_MAX} bytes");
+        }
+        out.push(Member { path, offset, bytes: member });
     }
-    members.sort_by_key(|m| m.offset);
-    let mut out = bytes[..data_start].to_vec();
-    let (mut mram, mut aram) = (0usize, 0usize);
-    let mut placed: Vec<(usize, usize)> = Vec::new(); // original offset -> new offset (shared data stays shared)
-    for m in &members {
-        let new_offset = match placed.iter().find(|(old, _)| *old == m.offset) {
-            Some((_, new)) => *new,
-            None => {
-                let new = out.len() - data_start;
-                out.extend_from_slice(&m.bytes);
-                out.resize(data_start + align32(out.len() - data_start), 0);
-                let span = align32(m.bytes.len());
-                if m.flags & FLAG_MRAM != 0 {
-                    mram += span;
-                } else if m.flags & FLAG_ARAM != 0 {
-                    aram += span;
-                }
-                placed.push((m.offset, new));
-                new
-            }
-        };
-        out[m.entry + 4] = m.flags;
-        put32(&mut out, m.entry + 8, new_offset as u32);
-        put32(&mut out, m.entry + 12, m.bytes.len() as u32);
-    }
-    let total = out.len() - data_start;
-    let file_size = out.len() as u32;
-    put32(&mut out, 0x04, file_size);
-    put32(&mut out, 0x10, total as u32);
-    put32(&mut out, 0x14, mram as u32);
-    put32(&mut out, 0x18, aram as u32);
-    Ok(out)
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // An archive: a.bin, then the folder sub with b.bin; a.bin's bytes lie after b.bin's.
+    fn small_archive() -> Vec<u8> {
+        let names = b".\0..\0a.bin\0sub\0b.bin\0";
+        let (folders_at, entries_at, strings_at, data_at) = (0x40usize, 0x60usize, 0xECusize, 0x120usize);
+        let mut out = vec![0u8; data_at];
+        out[..4].copy_from_slice(b"RARC");
+        for (at, value) in [(0x0C, data_at - 0x20), (0x20, 2), (0x24, folders_at - 0x20), (0x28, 7), (0x2C, entries_at - 0x20), (0x34, strings_at - 0x20)] {
+            put32(&mut out, at, value as u32);
+        }
+        out[folders_at + 0x0B] = 4;
+        out[folders_at + 0x10 + 0x0B] = 3;
+        put32(&mut out, folders_at + 0x10 + 0x0C, 4);
+        // Name offsets: "." 0, ".." 2, a.bin 5, sub 11, b.bin 15.
+        let entries: [(u32, u32, u32, u32); 7] = [(0x01, 5, 16, 2), (0x02, 11, 1, 0), (0x02, 0, 0, 0), (0x02, 2, 0, 0), (0x01, 15, 0, 3), (0x02, 0, 1, 0), (0x02, 2, 0, 0)];
+        for (i, (flags, name, offset, size)) in entries.into_iter().enumerate() {
+            let at = entries_at + i * 0x14;
+            put32(&mut out, at + 4, flags << 24 | name);
+            put32(&mut out, at + 8, offset);
+            put32(&mut out, at + 12, size);
+        }
+        out[strings_at..strings_at + names.len()].copy_from_slice(names);
+        out.extend_from_slice(b"bbb");
+        out.resize(data_at + 16, 0);
+        out.extend_from_slice(b"aa");
+        out
+    }
+
+    fn put32(out: &mut [u8], at: usize, value: u32) {
+        out[at..at + 4].copy_from_slice(&value.to_be_bytes());
+    }
+
+    #[test]
+    fn members_in_their_folders_order() {
+        let members = members(&small_archive()).unwrap();
+        let listed: Vec<(&str, usize, &[u8])> = members.iter().map(|m| (m.path.as_str(), m.offset, m.bytes.as_slice())).collect();
+        assert_eq!(listed, [("a.bin", 16, &b"aa"[..]), ("sub/b.bin", 0, &b"bbb"[..])]);
+    }
+
+    #[test]
+    fn folders_that_list_each_other_are_refused_at_once() {
+        // Each of 32 folders' two entries points at the next: 2^32 walks if a folder could be walked twice.
+        let folders = 32usize;
+        let (folders_at, entries_at) = (0x40usize, 0x40 + folders * 0x10);
+        let strings_at = entries_at + folders * 2 * 0x14;
+        let data_at = strings_at + 0x10;
+        let mut out = vec![0u8; data_at];
+        out[..4].copy_from_slice(b"RARC");
+        for (at, value) in [(0x0C, data_at - 0x20), (0x20, folders), (0x24, folders_at - 0x20), (0x28, folders * 2), (0x2C, entries_at - 0x20), (0x34, strings_at - 0x20)] {
+            put32(&mut out, at, value as u32);
+        }
+        out[strings_at..strings_at + 2].copy_from_slice(b"d\0");
+        for folder in 0..folders {
+            let at = folders_at + folder * 0x10;
+            out[at + 0x0B] = 2;
+            put32(&mut out, at + 0x0C, (folder * 2) as u32);
+            for entry in 0..2 {
+                let at = entries_at + (folder * 2 + entry) * 0x14;
+                put32(&mut out, at + 4, 0x02 << 24);
+                put32(&mut out, at + 8, ((folder + 1) % folders) as u32);
+            }
+        }
+        assert!(members(&out).err().unwrap().to_string().contains("do not form a tree"));
+    }
+
+    #[test]
+    fn an_archive_is_a_folder_of_the_store_with_its_files_side_by_side() {
+        let mut stats = crate::cook::Stats::default();
+        let items = crate::cook::cook_entry("x.arc", small_archive(), &mut stats).unwrap();
+        let paths: Vec<&str> = items.iter().map(|i| i.path.as_str()).collect();
+        assert_eq!(paths, ["a.bin", "sub/b.bin"]);
+        let orders: Vec<usize> = items.iter().map(|i| i.order).collect();
+        assert_eq!(orders, [16, 0]);
+    }
 
     #[test]
     fn yaz0_literals_and_back_references() {

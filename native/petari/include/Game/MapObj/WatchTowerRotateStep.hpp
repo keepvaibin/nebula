@@ -20,6 +20,6 @@ public:
     void exeMoveStart();
     void exeMove();
 
-    /* 0x8C */ TVec3f mRotateVec;
-    /* 0x98 */ PartsModel** mLift;
+    TVec3f mRotateVec;
+    PartsModel** mLift;
 };

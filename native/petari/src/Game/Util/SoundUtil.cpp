@@ -20,7 +20,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -29,10 +29,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JAudio2/JAISound.hpp>
-
-bool SoundUtil_FORCE_MATCH_DATA(const char* pName) {
-    return MR::isEqualString(pName, "SE_SY_READ_RIDDLE_S");
-}
 
 namespace {
     AudBgmConductor* getAudBgmConductor() {
@@ -265,31 +261,7 @@ namespace MR {
             return -1;
         }
 
-        s32 groundCode = -1;
-        s32 wallCode = -1;
-        s32 roofCode = -1;
-        const Triangle* pGround = &pBinder->mGroundInfo.mParentTriangle;
-        if (pGround != nullptr) {
-            groundCode = getSoundCodeIndex(pGround->getAttributes());
-        } else if (&pBinder->mWallInfo.mParentTriangle != nullptr) {
-            wallCode = getSoundCodeIndex(pBinder->mWallInfo.mParentTriangle.getAttributes());
-        } else if (&pBinder->mRoofInfo.mParentTriangle != nullptr) {
-            roofCode = getSoundCodeIndex(pBinder->mRoofInfo.mParentTriangle.getAttributes());
-        }
-
-        if (groundCode >= 0) {
-            return groundCode;
-        }
-
-        if (roofCode >= 0) {
-            return roofCode;
-        }
-
-        if (wallCode >= 0) {
-            return wallCode;
-        }
-
-        return -1;
+        return getSoundCodeIndex(pBinder->mGroundInfo.mParentTriangle.getAttributes());
     }
 
     void setMapSondCodeGravity(const LiveActor* pActor, s32 code) {
@@ -336,7 +308,7 @@ namespace MR {
         return AudWrap::getRemixMgr()->getRemixNoteGroupDataFromMelodyNo(melodyNo)->mNoteCount;
     }
 
-    void limitedSound(const char* pName, s32 param2) NO_INLINE {
+    void limitedSound(const char* pName, s32 param2) {
         JAISoundID id = AudSingletonHolder< AudSoundNameConverter >::get()->getSoundID(pName);
 
         AudWrap::getSystem()->registerLimitedSound(id, param2);
@@ -628,7 +600,7 @@ namespace MR {
     }
 
     void startCSSound2P(const char* pCSName, const char* pSEName) {
-        if (isConnectedWPad(1)) {
+        if (isConnectedInput(1)) {
             startCSSound(pCSName, pSEName, 1);
         }
     }

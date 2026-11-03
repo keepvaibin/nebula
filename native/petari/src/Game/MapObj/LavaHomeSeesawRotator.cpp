@@ -1,4 +1,3 @@
-#include <revolution/types.h>
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/MapObj/LavaHomeSeesawRotator.hpp"
@@ -10,21 +9,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-
-void LavaHomeSeesawRotator_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)JGeometry::TUtil< f32 >::epsilon();
-    (void)-JGeometry::TUtil< f32 >::epsilon();
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)-HALF_PI;
-    (void)HALF_PI;
-}
-
-f32 JMAAcosRadian_dummy(f32 f) {
-    return JMAAcosRadian(f);
-}
 
 namespace {
     const f32 sAngularVelocityFric = 0.99f;

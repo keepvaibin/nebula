@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class GameSystemObjHolder;
 class JMapIdInfo;
@@ -33,20 +32,19 @@ namespace MR {
     void syncWithFlagsAllSceneNameObj();
     void setRandomSeedFromStageName();
     void clearFileLoaderRequestFileInfo(bool);
-    void startFunctionAsyncExecute(const MR::FunctorBase&, int, const char*);
+    void startFunctionAsyncExecute(const MR::FunctorBase&, const char*);
     bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase&, const char*);
     void waitForEndFunctionAsyncExecute(const char*);
     bool isEndFunctionAsyncExecute(const char*);
     bool tryEndFunctionAsyncExecute(const char*);
-    void suspendAsyncExecuteThread(const char*);
-    void resumeAsyncExecuteThread(const char*);
-    bool isSuspendedAsyncExecuteThread(const char*);
+    // Scene init waits here for the scenario select; false while it has not got here.
+    void waitSceneInitializeResume();
+    bool tryResumeSceneInitialize();
     bool isScreen16Per9();
     void initSceneMessage();
     void destroySceneMessage();
     void resetSystemAndGameStatus();
     void stopAllSound(u32);
-    bool isDisplayEncouragePal60Window();
     JMapIdInfo* getPlayerRestartIdInfo();
     void setPlayerRestartIdInfo(const JMapIdInfo&);
 };  // namespace MR

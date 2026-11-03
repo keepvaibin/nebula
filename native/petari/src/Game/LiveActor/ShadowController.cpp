@@ -17,7 +17,7 @@ namespace {
 };  // namespace
 
 ShadowControllerHolder::ShadowControllerHolder() : NameObj("\211\145\212\307\227\235" /* 影管理 */), _C(), _18(), _24() {
-    mFarClip = 4000.0f;
+    mFarClip = 1000000.0f;  // as far as the camera sees
     _C.init(0x500);
     _18.init(0x400);
     MR::connectToScene(this, MR::MovementType_ShadowControllerHolder, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);

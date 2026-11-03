@@ -1,95 +1,80 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_cooked_texture.h>
+#include <nebula_math.h>
 
-class JUTPalette;
-
+// In host order, as the importer cooks model TEX1 blocks, particle textures and BTI files (native_data.rs host_timg).
 struct ResTIMG {
-    /* 0x00 */ u8 mFormat;
-    /* 0x01 */ u8 mTransparency;
-    /* 0x02 */ NEBULA_BE(u16) mWidth;
-    /* 0x04 */ NEBULA_BE(u16) mHeight;
-    /* 0x06 */ u8 mWrapS;
-    /* 0x07 */ u8 mWrapT;
-    /* 0x08 */ u8 mPaletteName;
-    /* 0x09 */ u8 mPaletteFormat;
-    /* 0x0A */ NEBULA_BE(u16) mPaletteNum;
-#ifdef TARGET_PC
-    // Signed natively, as the console's 32-bit address arithmetic wrapped: J3DTexture::setResTIMG can point a copied
-    // header back at another header's data.
-    /* 0x0C */ BE< s32 > mPaletteDataOffset;
-#else
-    /* 0x0C */ u32 mPaletteDataOffset;
-#endif
-    /* 0x10 */ bool mMipmap;
-    /* 0x11 */ bool mDoEdgeLod;
-    /* 0x12 */ bool mBiasClamp;
-    /* 0x13 */ u8 mMaxAnisotropy;
-    /* 0x14 */ u8 mMinType;
-    /* 0x15 */ u8 mMagType;
-    /* 0x16 */ u8 mMinLod;
-    /* 0x17 */ u8 mMaxLod;
-    /* 0x18 */ u8 mImageNum;
-    /* 0x19 */ u8 _19;
-    /* 0x1A */ NEBULA_BE(s16) mLodBias;
-#ifdef TARGET_PC
-    /* 0x1C */ BE< s32 > mImageDataOffset;
-#else
-    /* 0x1C */ u32 mImageDataOffset;
-#endif
+    u8 mFormat;
+    u8 mTransparency;
+    u16 mWidth;
+    u16 mHeight;
+    u8 mWrapS;
+    u8 mWrapT;
+    const u8* mImage;  // null in a file; J3DTexture::setResTIMG's other image, anywhere in memory
+    bool mMipmap;
+    bool mDoEdgeLod;
+    bool mBiasClamp;
+    u8 mMaxAnisotropy;
+    u8 mMinType;
+    u8 mMagType;
+    u8 mMinLod;
+    u8 mMaxLod;
+    u8 mImageNum;
+    u8 _19;
+    s16 mLodBias;
+    s32 mImageDataOffset;  // from this header; 0 means right after it
+
+    const u8* image() const {
+        if (mImage != nullptr) {
+            return mImage;
+        }
+        return reinterpret_cast< const u8* >(this) + (mImageDataOffset != 0 ? mImageDataOffset : 0x20);
+    }
 };
 
 class JUTTexture {
 public:
     /// @brief Creates a new `JUTTexture`.
     JUTTexture() {
-        setCaptureFlag(false);
-        mEmbPalette = NULL;
+        mFlag = 0;
         mTIMG = NULL;
     }
 
     /// @brief Creates a new `JUTTexture`.
     /// @param width The width of the texture, in pixels.
     /// @param height The height of the texture, in pixels.
-    /// @param format The type of the texture.
-    JUTTexture(int width, int height, GXTexFmt format);
+    /// @param layout How the game writes it (NEBULA_TEXTURE_LINEAR_*); a capture's buffer is only its key.
+    JUTTexture(int width, int height, u8 layout = NEBULA_TEXTURE_LINEAR_L8);
 
     /// @brief Creates a new `JUTTexture`.
-    /// @param pTIMG TODO.
-    /// @param param2 TODO.
-    JUTTexture(const ResTIMG* p_timg, u8 param_1) {
-        mEmbPalette = NULL;
-        storeTIMG(p_timg, param_1);
-        setCaptureFlag(false);
+    /// @param pTIMG The image.
+    explicit JUTTexture(const ResTIMG* pTIMG) {
+        // storeTIMG hands the record to the renderer unless the capture bit says the buffer is its own.
+        mFlag = 0;
+        storeTIMG(pTIMG);
     }
 
     /// @brief Destroys the `JUTTexture`.
     ~JUTTexture();
 
-    void storeTIMG(const ResTIMG*, u8);
-    void storeTIMG(const ResTIMG*, JUTPalette*);
-    void storeTIMG(const ResTIMG*, JUTPalette*, GXTlut);
-    void attachPalette(JUTPalette*);
+    void storeTIMG(const ResTIMG*);
     void init();
-    GXTexObj getTexObj() const {
+    J3DNativeTexObj getTexObj() const {
         return mObj;
+    }
+    const J3DNativeTexObj* texObj() const {
+        return &mObj;
     }
 
     void initTexObj();
-    void initTexObj(_GXTlut);
-    void load(_GXTexMapID);
-    // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
-    // filter: J3DNativeTarget::capture's flags).
-    void capture(int x, int y, GXTexFmt format, bool half, u8 clear, bool filtered = false);
-    static void captureDolTexture(void*, int, int, int, int, bool, GXTexFmt);
+    // The frame as drawn so far as this texture: its colour, alpha or depth; half: each texel averages 2x2.
+    void frameColor();
+    void frameColorAlpha();
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;
-    }
-    s32 getFormat() const {
-        return mTIMG->mFormat;
     }
     s32 getTransparency() const {
         return mTIMG->mTransparency;
@@ -101,34 +86,22 @@ public:
         return mTIMG->mHeight;
     }
     void setCaptureFlag(bool flag) {
-        mFlag = (mFlag & 2) | flag;
+        mFlag = flag;
     }
     bool getCaptureFlag() const {
         return mFlag & 1;
     }
-    bool getEmbPaletteDelFlag() const {
-        return mFlag & 2;
-    }
-    void setEmbPaletteDelFlag(bool flag) {
-        mFlag = (mFlag & 1) | (flag << 1);
-    }
-    int getTlutName() const {
-        return mTlutName;
-    }
 
-    /* 0x00 */ GXTexObj mObj;
-    /* 0x20 */ const ResTIMG* mTIMG;
-    /* 0x24 */ u8* mImage;
-    /* 0x28 */ JUTPalette* mEmbPalette;
-    /* 0x2C */ JUTPalette* mPalette;
-    /* 0x30 */ u8 mWrapS;
-    /* 0x31 */ u8 mWrapT;
-    /* 0x32 */ u8 mMinType;
-    /* 0x33 */ u8 mMagType;
-    /* 0x34 */ u16 mMinLod;
-    /* 0x36 */ u16 mMaxLod;
-    /* 0x38 */ s16 mLodBias;
-    /* 0x3A */ u8 mTlutName;
-    /* 0x3B */ u8 mFlag;
-    /* 0x3C */ ResTIMG* _3C;
+    J3DNativeTexObj mObj;
+    const ResTIMG* mTIMG;
+    u8* mImage;
+    u8 mWrapS;
+    u8 mWrapT;
+    u8 mMinType;
+    u8 mMagType;
+    u16 mMinLod;
+    u16 mMaxLod;
+    s16 mLodBias;
+    u8 mFlag;
+    ResTIMG* _3C;
 };

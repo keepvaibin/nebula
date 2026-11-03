@@ -6,11 +6,11 @@ class DpdInfo {
 public:
     DpdInfo();
 
-    /* 0x00 */ TVec2f mPos;
-    /* 0x08 */ bool mInScreen;
-    /* 0x09 */ bool mDrawReady;
-    /* 0x0C */ u32 mZDepth;
-    /* 0x10 */ f32 mViewDistZ;
+    TVec2f mPos;
+    bool mInScreen;
+    bool mDrawReady;
+    f32 mZDepth;  // 0 near to 1 far
+    f32 mViewDistZ;
 };
 
 class StarPointerController {
@@ -26,23 +26,13 @@ public:
     void updateDpdInfo();
     void updateAdditionalInfo();
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     void forcePointerOut();
-#endif
 
     f32 calcViewDistanceZ(const TVec3f&, MtxPtr);
 
-    void drawDebug3D() const;
-
-    #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     bool isInScreen() const {
         return mPastInfo.mInScreen;
     }
-    #else
-    bool isInScreen() const {
-        return !isOutScreenLong();
-    }
-    #endif
 
     f32 getViewDistZ() const {
         return mPastInfo.mViewDistZ;
@@ -52,19 +42,19 @@ public:
         return mPastInfo.mPos;
     }
 
-    /* 0x00 */ s32 mPadChannel;
-    /* 0x04 */ DpdInfo mPastInfo;
-    /* 0x18 */ DpdInfo mInfo;
-    /* 0x2C */ TVec2f mScreenPos;
-    /* 0x34 */ s32 mOutScreenTime;
-    /* 0x38 */ TVec2f* mPastPosition;
-    /* 0x3C */ s32 mPastPointNum;
-    /* 0x40 */ TVec2f* mNextPastPosition;
-    /* 0x44 */ s32 mNextPastPointNum;
-    /* 0x48 */ f32 mScreenDist;
-    /* 0x4C */ f32 mScreenSpeed;
-    /* 0x50 */ TVec2f mScreenVel;
-    /* 0x58 */ TVec3f mWorldVel;
-    /* 0x64 */ TVec3f mWorldPos;
-    /* 0x70 */ bool mNotInScreen;
+    s32 mPadChannel;
+    DpdInfo mPastInfo;
+    DpdInfo mInfo;
+    TVec2f mScreenPos;
+    s32 mOutScreenTime;
+    TVec2f* mPastPosition;
+    s32 mPastPointNum;
+    TVec2f* mNextPastPosition;
+    s32 mNextPastPointNum;
+    f32 mScreenDist;
+    f32 mScreenSpeed;
+    TVec2f mScreenVel;
+    TVec3f mWorldVel;
+    TVec3f mWorldPos;
+    bool mNotInScreen;
 };

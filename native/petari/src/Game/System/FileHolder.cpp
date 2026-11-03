@@ -1,14 +1,10 @@
 #include "Game/System/FileHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
-#define FILE_HOLDER_STATE_NONE 0
-#define FILE_HOLDER_STATE_READING 1
-#define FILE_HOLDER_STATE_DONE 2
-
-FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, JKRHeap* pHeap, void* pContext)
-    : mEntryNum(NebulaDisc::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
+FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, NebulaArena* pHeap, void* pContext)
+    : mEntryNum(GameAssets::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mDone(false), mContextSet(true) {
     mQueue.init(&mMessage, 1);
 
     if (pContext) {
@@ -24,26 +20,26 @@ FileHolderFileEntry::~FileHolderFileEntry() {
 }
 
 void FileHolderFileEntry::waitReadDone() {
-    if (mState != FILE_HOLDER_STATE_DONE) {
+    if (!mDone) {
         void* msg;
         mQueue.receive(&msg, true);
-        mState = FILE_HOLDER_STATE_DONE;
+        mDone = true;
+        // Another thread may wait for this file too: the message stays for it.
+        mQueue.send(nullptr, false);
     }
 }
 
-void FileHolderFileEntry::setContext(void* pContext, JKRHeap* pHeap) {
+// The file loader's last touch of the entry: the message wakes a waiter on another thread, which owns it from then on.
+void FileHolderFileEntry::setContext(void* pContext) {
     mContext = pContext;
-    mHeap = pHeap;
-
     mQueue.send(nullptr, false);
-    mState = FILE_HOLDER_STATE_READING;
 }
 
 FileHolder::FileHolder() {
     mEntries.init(0x180);
 }
 
-FileHolderFileEntry* FileHolder::add(const char* pFilePath, JKRHeap* pHeap, void* pContext) {
+FileHolderFileEntry* FileHolder::add(const char* pFilePath, NebulaArena* pHeap, void* pContext) {
     FileHolderFileEntry* pEntry = new (pHeap, 0) FileHolderFileEntry(pFilePath, pHeap, pContext);
     mEntries.push_back(pEntry);
     return pEntry;
@@ -57,13 +53,13 @@ void* FileHolder::getContext(const char* pFilePath) const {
     return findEntry(pFilePath)->mContext;
 }
 
-void FileHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
+void FileHolder::removeIfIsEqualHeap(NebulaArena* pHeap) {
     if (pHeap == nullptr) {
         return;
     }
 
     for (FileHolderFileEntry** i = mEntries.begin(); i != mEntries.end();) {
-        if ((*i)->mHeap == pHeap || MR::getHeapNapa((*i)->mHeap) == pHeap || MR::getHeapGDDR3((*i)->mHeap) == pHeap) {
+        if ((*i)->mHeap == pHeap) {
             delete *i;
             mEntries.erase(i);
         } else {
@@ -84,7 +80,7 @@ FileHolderFileEntry** FileHolder::removeFile(const char* pFilePath) {
 }
 
 FileHolderFileEntry* FileHolder::findEntry(const char* pFilePath) const {
-    s32 entryNum = NebulaDisc::find(pFilePath);
+    s32 entryNum = GameAssets::find(pFilePath);
     for (FileHolderFileEntry* const* pEntry = mEntries.begin(); pEntry != mEntries.end(); pEntry++) {
         if (entryNum == (*pEntry)->mEntryNum) {
             return *pEntry;

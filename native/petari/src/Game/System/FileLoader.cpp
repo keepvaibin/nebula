@@ -1,8 +1,8 @@
 #include "Game/System/FileLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 FileLoader::FileLoader() {
     mLoaderThread = nullptr;
@@ -10,8 +10,8 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
     mFileHolder = nullptr;
     mArchiveHolder = nullptr;
-    mLoaderThread = new FileLoaderThread(13, 320, MR::getStationedHeapNapa());
-    NebulaKernel::resume(mLoaderThread->mThread);
+    mLoaderThread = new FileLoaderThread(320, MR::getStationedHeap());
+    GameThreads::resume(mLoaderThread->mThread);
     mMutex.init();
     mRequestFileInfos = new RequestFileInfo[0x140];
     mFileHolder = new FileHolder();
@@ -19,16 +19,13 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
 }
 
-void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection direction, bool jam) {
+void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, NebulaArena* pHeap, GameAssets::AllocDirection direction, bool jam) {
     if (isNeedToLoad(pName)) {
         if (pHeap == nullptr) {
             pHeap = MR::getCurrentHeap();
         }
 
-        RequestFileInfo* info = addRequest(pName);
-        info->_0 = 0;
-        info->mRequestType = direction;
-        info->mFileEntry = mFileHolder->add(pName, pHeap, pData);
+        RequestFileInfo* info = addRequest(pName, 0, direction, mFileHolder->add(pName, pHeap, pData));
 
         if (jam) {
             mLoaderThread->mQueue.jam(info, false);
@@ -38,16 +35,13 @@ void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHe
     }
 }
 
-void FileLoader::requestMountArchive(const char* pName, JKRHeap* pHeap, bool jam) {
+void FileLoader::requestMountArchive(const char* pName, NebulaArena* pHeap, bool jam) {
     if (isNeedToLoad(pName)) {
         if (pHeap == nullptr) {
             pHeap = MR::getCurrentHeap();
         }
 
-        RequestFileInfo* info = addRequest(pName);
-        info->_0 = 1;
-        info->mRequestType = 1;
-        info->mFileEntry = mFileHolder->add(pName, pHeap, nullptr);
+        RequestFileInfo* info = addRequest(pName, 1, 1, mFileHolder->add(pName, pHeap, nullptr));
 
         if (jam) {
             mLoaderThread->mQueue.jam(info, false);
@@ -61,22 +55,18 @@ bool FileLoader::isLoaded(const char* pName) const {
     return mFileHolder->isExist(pName);
 }
 
-bool FileLoader::isMountedArchive(const char* pName) const {
-    return mArchiveHolder->getArchive(pName) != nullptr;
-}
-
 void* FileLoader::receiveFile(const char* pName) {
     const RequestFileInfo* info = getRequestFileInfoConst(pName);
-    if (info != nullptr) {
+    if (info != nullptr && info->mFileEntry != nullptr) {
         info->mFileEntry->waitReadDone();
     }
 
     return mFileHolder->getContext(pName);
 }
 
-JKRMemArchive* FileLoader::receiveArchive(const char* pName) {
+AssetFolder* FileLoader::receiveArchive(const char* pName) {
     const RequestFileInfo* info = getRequestFileInfoConst(pName);
-    if (info != nullptr) {
+    if (info != nullptr && info->mFileEntry != nullptr) {
         info->mFileEntry->waitReadDone();
     }
 
@@ -85,28 +75,46 @@ JKRMemArchive* FileLoader::receiveArchive(const char* pName) {
 
 void FileLoader::receiveAllRequestedFile() {
     for (u32 i = 0; i < mRequestedFileCount; i++) {
-        mRequestFileInfos[i].mFileEntry->waitReadDone();
+        if (mRequestFileInfos[i].mFileEntry != nullptr) {
+            mRequestFileInfos[i].mFileEntry->waitReadDone();
+        }
     }
 }
 
-JKRMemArchive* FileLoader::createAndAddArchive(void* pData, JKRHeap* pHeap, const char* pName) {
-    return mArchiveHolder->createAndAdd(pData, pHeap, pName)->mArchive;
+AssetFolder* FileLoader::createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pName) {
+    return mArchiveHolder->createAndAdd(pFolder, pHeap, pName)->mArchive;
 }
 
-void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchive, JKRHeap** pHeap) const {
+void FileLoader::getMountedArchiveAndHeap(const char* pName, AssetFolder** pArchive, NebulaArena** pHeap) const {
     mArchiveHolder->getArchiveAndHeap(pName, pArchive, pHeap);
 }
 
+// The loader reads a request's slot when it comes to it: a slot is free for the next request only once its load is over.
 void FileLoader::clearRequestFileInfo(bool) {
-    mRequestedFileCount = nullptr;
+    receiveAllRequestedFile();
+    mRequestedFileCount = 0;
 }
 
-void FileLoader::removeHolderIfIsEqualHeap(JKRHeap* pHeap) {
+void FileLoader::removeHolderIfIsEqualHeap(NebulaArena* pHeap) {
+    for (u32 i = 0; i < mRequestedFileCount; i++) {
+        RequestFileInfo* info = &mRequestFileInfos[i];
+        if (info->mFileEntry != nullptr && info->mFileEntry->mHeap == pHeap) {
+            info->mFileEntry->waitReadDone();
+            info->mFileEntry = nullptr;
+        }
+    }
+
     mFileHolder->removeIfIsEqualHeap(pHeap);
     mArchiveHolder->removeIfIsEqualHeap(pHeap);
 }
 
 void FileLoader::removeFile(const char* pName) {
+    RequestFileInfo* info = const_cast< RequestFileInfo* >(getRequestFileInfoConst(pName));
+    if (info != nullptr && info->mFileEntry != nullptr) {
+        info->mFileEntry->waitReadDone();
+        info->mFileEntry = nullptr;
+    }
+
     mFileHolder->removeFile(pName);
 }
 
@@ -131,15 +139,17 @@ const RequestFileInfo* FileLoader::getRequestFileInfoConst(const char* pName) co
 }
 
 // string load is in the wrong spot for some reason
-RequestFileInfo* FileLoader::addRequest(const char* pName) {
-    NebulaMutex* mutex = &mMutex;
+RequestFileInfo* FileLoader::addRequest(const char* pName, u32 kind, u32 requestType, FileHolderFileEntry* pEntry) {
+    GameMutex* mutex = &mMutex;
     mutex->lock();
 
+    // Counted once whole: another thread may wait for every request while this one is added.
     RequestFileInfo* info = &mRequestFileInfos[mRequestedFileCount];
+    info->_0 = kind;
+    info->mRequestType = requestType;
+    info->mFileEntry = pEntry;
+    nebula_snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
     mRequestedFileCount++;
-    info->mFileEntry = nullptr;
-    info->_88 = 0;
-    snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
 
     mutex->unlock();
 

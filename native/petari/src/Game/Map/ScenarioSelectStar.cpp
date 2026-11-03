@@ -160,7 +160,7 @@ void ScenarioSelectStar::exeNotPointing() {
 void ScenarioSelectStar::exePointing() {
     if (MultiScene::isFirstStep(this)) {
         MR::startSystemSE("SE_SY_CURSOR_1");
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         mRotateSpeed = ::cPointingRotateSpeedZ;
     }
 
@@ -192,7 +192,7 @@ void ScenarioSelectStar::exeEndPointing() {
 void ScenarioSelectStar::exeSelected() {
     if (MultiScene::isFirstStep(this)) {
         MultiScene::emitEffect(this, "Select");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         mTranslationOnSelect.set(mTranslation);
         mRotateSpeed = ::cPointingRotateSpeedZ;
         mScaleOnSelect = mScale.x;

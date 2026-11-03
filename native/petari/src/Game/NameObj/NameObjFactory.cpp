@@ -6477,12 +6477,6 @@ namespace {
             "FileSelector",
             "SysPALInfo",
         },
-#if (VERSION == RMGK01)
-        {
-            "FileSelector",
-            "MiiFont",
-        },
-#endif
         {
             "FireBallBeamKameck",
             "BossKameckFireBall",
@@ -8125,7 +8119,7 @@ namespace NameObjFactory {
         }
     }
 
-    bool isReadResourceFromDVD(const char* pName, const JMapInfoIter& rIter) {
+    bool isReadResourceFromStore(const char* pName, const JMapInfoIter& rIter) {
         NameObjArchiveListCollector collector;
         getMountObjectArchiveList(&collector, pName, rIter);
 

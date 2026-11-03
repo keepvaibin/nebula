@@ -1,11 +1,9 @@
 #pragma once
 
-#include "Inline.hpp"
 
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 #include <stdint.h>
 
 class J3DMatPacket;
@@ -31,62 +29,20 @@ enum J3DDiffFlag {
     J3DDiffFlag_Fog = 0x10000000,
     J3DDiffFlag_Blend = 0x20000000,
     J3DDiffFlag_Unk40000000 = 0x40000000,
-    J3DDiffFlag_Changed = 0x80000000,
+    J3DDiffFlag_Changed = 1u << 31,
 };
 
-inline u32 getDiffFlag_TexNoNum(u32 diffFlags) {
-    return (diffFlags & 0xf0000) >> 0x10;
-}
-
-inline u32 getDiffFlag_LightObjNum(u32 diffFlags) {
-    return (diffFlags & 0xf0) >> 4;
-}
-
-inline u32 getDiffFlag_TexGenNum(u32 diffFlags) {
-    return (diffFlags & 0xf00) >> 8;
-}
-
-inline int calcDifferedBufferSize_TexMtxSize(u32 param_1) {
-    return param_1 * 0x35;
-}
-
-inline int calcDifferedBufferSize_TexGenSize(u32 param_1) {
-    return param_1 * 0x3d + 10;
-}
-
-inline int calcDifferedBufferSize_TexNoSize(u32 param_1) {
-    return param_1 * 0x37;
-}
-
-inline u32 calcDifferedBufferSize_TexNoAndTexCoordScaleSize(u32 param_1) {
-    u32 res = param_1 * 0x37;
-    res += ((param_1 + 1) >> 1) * 0x37;
-    return res;
-}
-
-inline u32 getDiffFlag_TevStageNum(u32 diffFlags) {
-    return (diffFlags & 0xf00000) >> 0x14;
-}
-
-inline int calcDifferedBufferSize_TevStageSize(u32 param_1) {
-    return param_1 * 10;
-}
-
-inline int calcDifferedBufferSize_TevStageDirectSize(u32 param_1) {
-    return param_1 * 5;
-}
-
-// A material's typed snapshot (J3DNativeMaterial), where J3D kept the material's display list: made with its owner
+// A material's typed snapshot (J3DNativeMaterial): made with its owner
 // (a material, a material packet, an instance's shape packet), refreshed where J3D built or patched the list.
-class J3DDisplayListObj {
+class J3DMaterialSnapshot {
 public:
-    J3DDisplayListObj() {
+    J3DMaterialSnapshot() {
         mpNebulaMaterial = nullptr;
         mNebulaCaptured = false;
         mNebulaDiffFlags = 0;
     }
 
-    J3DError newDisplayList();
+    J3DError newSnapshot();
 
     struct NebulaMaterialParts* mpNebulaMaterial;
     bool mNebulaCaptured;
@@ -102,12 +58,8 @@ public:
     }
 
     virtual int entry(J3DDrawBuffer*);
-#ifdef TARGET_PC
-    // Pure, as on the console (the DOL has no vtable of this base; every packet defines it).
+    // Pure (the DOL has no vtable of this base; every packet defines it).
     virtual void draw() = 0;
-#else
-    virtual void draw();
-#endif
     virtual ~J3DPacket() {
     }
 
@@ -133,28 +85,28 @@ public:
     }
 
 public:
-    /* 0x04 */ J3DPacket* mpNextPacket;
-    /* 0x08 */ J3DPacket* mpFirstChild;
-    /* 0x0C */ void* mpUserArea;
-};  // Size: 0x10
+    J3DPacket* mpNextPacket;
+    J3DPacket* mpFirstChild;
+    void* mpUserArea;
+};
 
 class J3DDrawPacket : public J3DPacket {
 public:
     J3DDrawPacket();
     ~J3DDrawPacket();
-    J3DError newDisplayList();
+    J3DError newSnapshot();
     virtual void draw();
 
-    J3DDisplayListObj* getDisplayListObj() {
-        return mpDisplayListObj;
+    J3DMaterialSnapshot* getSnapshot() {
+        return mpSnapshot;
     }
 
-    void setDisplayListObj(J3DDisplayListObj* pObj) {
-        mpDisplayListObj = pObj;
+    void setSnapshot(J3DMaterialSnapshot* pObj) {
+        mpSnapshot = pObj;
     }
 
-    bool isValidDisplayListObj() const {
-        return mpDisplayListObj;
+    bool isValidSnapshot() const {
+        return mpSnapshot;
     }
 
     enum {
@@ -184,17 +136,16 @@ public:
     }
 
 public:
-    /* 0x10 */ u32 mFlags;
-    /* 0x14 */ char unk_0x14[0x20 - 0x14];
-    /* 0x20 */ J3DDisplayListObj* mpDisplayListObj;
-    /* 0x24 */ J3DTexMtxObj* mpTexMtxObj;
-};  // Size: 0x28
+    u32 mFlags;
+    char unk_0x14[0x20 - 0x14];
+    J3DMaterialSnapshot* mpSnapshot;
+    J3DTexMtxObj* mpTexMtxObj;
+};
 
 class J3DShapePacket : public J3DDrawPacket {
 public:
     J3DShapePacket();
-    u32 calcDifferedBufferSize(u32);
-    J3DError newDifferedDisplayList(u32);
+    J3DError newDifferedSnapshot(u32);
     void prepareDraw() const;
     void drawFast();
 
@@ -227,12 +178,12 @@ public:
     }
 
 public:
-    /* 0x28 */ J3DShape* mpShape;
-    /* 0x2C */ J3DMtxBuffer* mpMtxBuffer;
-    /* 0x30 */ Mtx* mpBaseMtxPtr;
-    /* 0x34 */ u32 mDiffFlag;
-    /* 0x38 */ J3DModel* mpModel;
-};  // Size: 0x3C
+    J3DShape* mpShape;
+    J3DMtxBuffer* mpMtxBuffer;
+    Mtx* mpBaseMtxPtr;
+    u32 mDiffFlag;
+    J3DModel* mpModel;
+};
 
 class J3DMatPacket : public J3DDrawPacket {
 public:
@@ -271,7 +222,7 @@ public:
         return mDiffFlag & J3DDiffFlag_Changed;
     }
     bool isEnabled_Diff() {
-        return mpInitShapePacket->getDisplayListObj() != NULL;
+        return mpInitShapePacket->getSnapshot() != NULL;
     }
 
     virtual ~J3DMatPacket();
@@ -279,10 +230,10 @@ public:
     virtual void draw();
 
 public:
-    /* 0x28 */ J3DShapePacket* mpInitShapePacket;
-    /* 0x2C */ J3DShapePacket* mpShapePacket;
-    /* 0x30 */ J3DMaterial* mpMaterial;
-    /* 0x34 */ u32 mDiffFlag;
-    /* 0x38 */ J3DTexture* mpTexture;
-    /* 0x3C */ J3DMaterialAnm* mpMaterialAnm;
-};  // Size: 0x40
+    J3DShapePacket* mpInitShapePacket;
+    J3DShapePacket* mpShapePacket;
+    J3DMaterial* mpMaterial;
+    u32 mDiffFlag;
+    J3DTexture* mpTexture;
+    J3DMaterialAnm* mpMaterialAnm;
+};

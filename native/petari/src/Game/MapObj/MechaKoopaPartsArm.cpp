@@ -62,7 +62,7 @@ void MechaKoopaPartsArm::exeMoveStart() {
 
         if (MR::isOnPlayer(this)) {
             MR::shakeCameraNormal();
-            MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+            MR::tryRumblePadMiddle(this, PLAYER_1);
         }
     }
 

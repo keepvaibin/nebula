@@ -58,10 +58,13 @@ file(COPY ${nebula_glslang_spirv_headers} DESTINATION "${CMAKE_BINARY_DIR}/glsla
 
 add_library(nebula_vulkan_deps INTERFACE)
 target_include_directories(nebula_vulkan_deps SYSTEM INTERFACE
-    "${vulkan_headers_SOURCE_DIR}/include" "${volk_SOURCE_DIR}" "${vma_SOURCE_DIR}/include"
-    "${CMAKE_BINARY_DIR}/glslang-include" "${glslang_SOURCE_DIR}" "${glslang_SOURCE_DIR}/External/spirv-tools/include")
+    "${vulkan_headers_SOURCE_DIR}/include" "${volk_SOURCE_DIR}" "${vma_SOURCE_DIR}/include")
 target_compile_definitions(nebula_vulkan_deps INTERFACE NEBULA_GPU_VULKAN VK_NO_PROTOTYPES
     $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR NOMINMAX>
     $<$<PLATFORM_ID:Android>:VK_USE_PLATFORM_ANDROID_KHR>)
-target_link_libraries(nebula_vulkan_deps INTERFACE glslang SPIRV glslang-default-resource-limits SPIRV-Tools-opt
+# The shader compiler: the build tools' only (tools/dev/native_spirv.cpp, utility_spirv.cpp).
+add_library(nebula_shader_compiler INTERFACE)
+target_include_directories(nebula_shader_compiler SYSTEM INTERFACE
+    "${CMAKE_BINARY_DIR}/glslang-include" "${glslang_SOURCE_DIR}" "${glslang_SOURCE_DIR}/External/spirv-tools/include")
+target_link_libraries(nebula_shader_compiler INTERFACE glslang SPIRV glslang-default-resource-limits SPIRV-Tools-opt
     SPIRV-Tools-static)

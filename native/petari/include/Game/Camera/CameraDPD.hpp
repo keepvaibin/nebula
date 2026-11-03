@@ -29,19 +29,19 @@ public:
         mAngleYMin = angleYMin;
     }
 
-    /* 0x4C */ f32 mCorePadDistToDisplay;
-    /* 0x50 */ TVec2f mRealPointPos;
-    /* 0x58 */ TVec2f mBlendPointPos;
-    /* 0x60 */ TPos3f mMtx;
-    /* 0x90 */ bool mResetPointingPos;
-    /* 0x94 */ s32 mCameraType;
-    /* 0x98 */ f32 mDist;
-    /* 0x9C */ f32 mFovy;
-    /* 0xA0 */ f32 mAngleXRange;
-    /* 0xA4 */ f32 mAngleYRange;
-    /* 0xA8 */ f32 mAngleX;
-    /* 0xAC */ f32 mSpeedBlendRate;
-    /* 0xB0 */ f32 mBlendFriction;
-    /* 0xB4 */ bool mIsVertical;
-    /* 0xB8 */ f32 mAngleYMin;
+    f32 mPointerDistance;
+    TVec2f mRealPointPos;
+    TVec2f mBlendPointPos;
+    TPos3f mMtx;
+    bool mResetPointingPos;
+    s32 mCameraType;
+    f32 mDist;
+    f32 mFovy;
+    f32 mAngleXRange;
+    f32 mAngleYRange;
+    f32 mAngleX;
+    f32 mSpeedBlendRate;
+    f32 mBlendFriction;
+    bool mIsVertical;
+    f32 mAngleYMin;
 };

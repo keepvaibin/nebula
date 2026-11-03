@@ -1,6 +1,5 @@
-#include <revolution/types.h>
 
-f32 JMAAcosRadian(f32) NO_INLINE;
+f32 JMAAcosRadian(f32);
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/MapObj/MapPartsSeesaw1AxisRotator.hpp"

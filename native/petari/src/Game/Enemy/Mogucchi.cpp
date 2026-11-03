@@ -76,7 +76,7 @@ void Mogucchi::init(const JMapInfoIter& rIter) {
 
 void Mogucchi::initAfterPlacement() {
     MR::moveCoordToNearestPos(this, mPosition);
-    MR::calcGravityVector(this, MR::getRailPos(this), &mRailGravity, nullptr, nullptr);
+    MR::calcGravityVector(this, MR::getRailPos(this), &mRailGravity, nullptr, 0);
     updatePosition();
     updateReferenceMtx();
 }
@@ -388,7 +388,7 @@ bool Mogucchi::receiveAttackBySpinSensor(u32 msg, HitSensor* pSender, HitSensor*
     }
 
     MR::stopScene(8);
-    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     calcScatterVec(pSender->mPosition, pReceiver->mPosition);
     setNerve(GET_NERVE_ANON(MogucchiNrvScatter));
 
@@ -429,7 +429,7 @@ bool Mogucchi::receiveAttackByBodySensor(u32 msg, HitSensor* pSender, HitSensor*
 
     if (MR::isMsgPlayerHitAll(msg)) {
         MR::stopScene(8);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         calcScatterVec(pSender->mPosition, pReceiver->mPosition);
         setNerve(GET_NERVE_ANON(MogucchiNrvScatter));
         return true;

@@ -22,7 +22,7 @@ GreenCaterpillarBigBody::GreenCaterpillarBigBody(LiveActor* pCaterpillar, MtxPtr
 
 void GreenCaterpillarBigBody::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
-    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLOD->validate();
     MR::calcFrontVec(&mFrontVec, mCaterpillar);
     MR::startBck(this, "Wait");
@@ -93,7 +93,7 @@ void GreenCaterpillarBig::init(const JMapInfoIter& rIter) {
     initBodyParts(rIter);
     MR::hideModel(this);
     MR::invalidateClipping(this);
-    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mPlanetLOD = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     mPlanetLOD->validate();
     initNerve(GET_NERVE(GreenCaterpillarBig, GreenCaterpillarBigNrvHide));
     makeActorAppeared();
@@ -134,7 +134,7 @@ void GreenCaterpillarBig::exeWriggle() {
 
             if (point_arg == 0.0f) {
                 _9C = 1;
-                MR::tryRumblePadStrong(this, WPAD_CHAN0);
+                MR::tryRumblePadStrong(this, PLAYER_1);
                 MR::shakeCameraNormal();
                 MR::startSound(this, "SE_OJ_GRN_CATERP_IN");
             } else if (point_arg == 1.0f) {
@@ -233,7 +233,7 @@ void GreenCaterpillarBig::fixBodyPartsOnRail() {
 
 void GreenCaterpillarBig::leaveApple() {
     _9D = 1;
-    MR::tryRumblePadStrong(this, WPAD_CHAN0);
+    MR::tryRumblePadStrong(this, PLAYER_1);
     MR::shakeCameraNormal();
     MR::startSound(this, "SE_OJ_GRN_CATERP_DAMAGE");
     MR::startSound(this, "SE_OJ_GRN_CATERP_OUT");

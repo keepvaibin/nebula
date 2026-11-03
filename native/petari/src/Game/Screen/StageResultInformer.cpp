@@ -8,7 +8,7 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/StageResultSequenceChecker.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -16,18 +16,14 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 
 namespace {
     // A skipped star return (NebulaCutsceneSkip) closes each panel as soon as it is up.
     bool isTriggerDecide() {
-#ifdef TARGET_PC
         if (NebulaCutsceneSkip::isSkipping()) {
             return true;
         }
-#endif
         return MR::testSystemPadTriggerDecide();
     }
 };  // namespace

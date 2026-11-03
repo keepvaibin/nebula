@@ -4,7 +4,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class MsgSharedGroup;
 
 class FirePressureRadiate : public LiveActor {
@@ -31,14 +31,14 @@ public:
     void calcRadiateEffectMtx();
     bool calcJointCannon(TPos3f*, const JointControllerInfo&);
 
-    /* 0x8C */ JointController* mJointController;
-    /* 0x90 */ TPos3f mRadiateMtx;
-    /* 0xC0 */ f32 mCannonRotation;
-    /* 0xC4 */ s32 mWaitTime;
-    /* 0xC8 */ s32 mShootTime;
-    /* 0xCC */ s32 _CC;
-    /* 0xD0 */ f32 _D0;
-    /* 0xD4 */ f32 _D4;
-    /* 0xD8 */ MsgSharedGroup* mGroup;
-    /* 0xDC */ bool _DC;
+    JointController* mJointController;
+    TPos3f mRadiateMtx;
+    f32 mCannonRotation;
+    s32 mWaitTime;
+    s32 mShootTime;
+    s32 _CC;
+    f32 _D0;
+    f32 _D4;
+    MsgSharedGroup* mGroup;
+    bool _DC;
 };

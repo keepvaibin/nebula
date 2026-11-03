@@ -1,22 +1,26 @@
 #include "nw4r/ut/CharWriter.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include "Game/Screen/NebulaIcons.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/ut/Font.h"
 
 namespace {
-    void SetupGXCommon() {
-        static const nw4r::ut::Color fog = 0;
-        J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fog);
-        J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-        J3DNativeState::setZTexture(GX_ZT_DISABLE, GX_TF_Z8, 0);
-        J3DNativeState::setNumChans(1);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setNumTexGens(1);
-        J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, 0x7D);
-        J3DNativeState::setNumIndStages(0);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+    // The writer's native material (runtime/src/render/materials/font_text.hlsl) as Setup set it; each glyph sheet
+    // LoadTexture binds sends it. Blended by alpha; depth, culling and writes as the drawing state has them.
+    NebulaNativeMaterial sMaterial;
+
+    void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
+        const nw4r::ut::Color fog = 0;
+        J3DPass::noFog();
+        NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        sMaterial.depth_test = NEBULA_NATIVE_KEPT;
+        sMaterial.cull = NEBULA_NATIVE_KEPT;
+        NativeShader::setColor(sMaterial, 0, min.r, min.g, min.b, min.a);
+        NativeShader::setColor(sMaterial, 4, max.r, max.g, max.b, max.a);
+        sMaterial.constants[8] = intensity ? 1.0f : 0.0f;
     }
 };  // namespace
 
@@ -34,7 +38,7 @@ namespace nw4r {
             EnableLinearFilter(true, true);
         }
 
-        void CharWriter::LoadTexture(const Glyph& glyph, GXTexMapID slot) {
+        void CharWriter::LoadTexture(const Glyph& glyph, u8 slot) {
             LoadingTexture loadInfo;
 
             loadInfo.slot = slot;
@@ -42,12 +46,13 @@ namespace nw4r {
             loadInfo.filter = mFilter;
 
             if (loadInfo != mLoadingTexture) {
-                GXTexObj tobj;
+                J3DNativeTexObj tobj;
 
-                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GX_CLAMP, GX_CLAMP,
-                             GX_FALSE);
-                J3DNativeTexture::initLOD(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GX_DISABLE, GX_DISABLE, GX_ANISO_1);
-                J3DNativeTexture::load(&tobj, slot);
+                NebulaIcons::noteDrawn(glyph.pTexture);
+                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+                J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
+                NativeShader::setTexObj(sMaterial, slot - 0, &tobj);
+                NativeShader::send(sMaterial);
 
                 mLoadingTexture = loadInfo;
             }
@@ -59,67 +64,54 @@ namespace nw4r {
         void CharWriter::SetupVertexFormat() {
         }
 
-        void CharWriter::SetupGX() {
+        void CharWriter::Setup() {
             ResetTextureCache();
 
-            if ((mColorMapping.min != 0x00000000UL) || (mColorMapping.max != 0xFFFFFFFFUL)) {
-                SetupGXWithColorMapping(mColorMapping.min, mColorMapping.max);
+            if ((mColorMapping.min != 0x00000000u) || (mColorMapping.max != 0xFFFFFFFFu)) {
+                SetupWithColorMapping(mColorMapping.min, mColorMapping.max);
             } else {
                 if (mFont) {
-                    GXTexFmt format = mFont->GetTextureFormat();
+                    u8 format = mFont->GetTextureFormat();
 
                     switch (format) {
-                    case GX_TF_I4:
-                    case GX_TF_I8:
-                        SetupGXForI();
+                    case SHEET_I4:
+                    case SHEET_I8:
+                        SetupForIntensity();
                         break;
 
-                    case GX_TF_IA4:
-                    case GX_TF_IA8:
-                        SetupGXDefault();
+                    case SHEET_IA4:
+                    case SHEET_IA8:
+                        SetupDefault();
                         break;
 
-                    case GX_TF_RGB565:
-                    case GX_TF_RGB5A3:
-                    case GX_TF_RGBA8:
-                        SetupGXForRGBA();
+                    case SHEET_RGB565:
+                    case SHEET_RGB5A3:
+                    case SHEET_RGBA8:
+                        SetupForColor();
                         break;
 
                     default:
-                        SetupGXDefault();
+                        SetupDefault();
                         break;
                     }
                 } else {
-                    SetupGXDefault();
+                    SetupDefault();
                 }
             }
         }
 
-        void CharWriter::SetupGXDefault() {
-            SetupGXCommon();
-            J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
+        void CharWriter::SetupDefault() {
+            SetupMaterial(0x00000000u, 0xFFFFFFFFu, false);
             SetupVertexFormat();
         }
 
-        void CharWriter::SetupGXForI() {
-            SetupGXCommon();
-            J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_RASC);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+        void CharWriter::SetupForIntensity() {
+            SetupMaterial(0x00000000u, 0xFFFFFFFFu, true);
             SetupVertexFormat();
         }
 
-        void CharWriter::SetupGXForRGBA() {
-            SetupGXDefault();
+        void CharWriter::SetupForColor() {
+            SetupDefault();
         }
 
         void CharWriter::SetFontSize(f32 width, f32 height) {
@@ -139,8 +131,8 @@ namespace nw4r {
         }
 
         void CharWriter::EnableLinearFilter(bool atSmall, bool atLarge) {
-            mFilter.atSmall = atSmall ? GX_LINEAR : GX_NEAR;
-            mFilter.atLarge = atLarge ? GX_LINEAR : GX_NEAR;
+            mFilter.atSmall = atSmall ? NEBULA_FILTER_LINEAR : NEBULA_FILTER_NEAREST;
+            mFilter.atLarge = atLarge ? NEBULA_FILTER_LINEAR : NEBULA_FILTER_NEAREST;
         }
 
         f32 CharWriter::Print(CharCode code) {
@@ -180,9 +172,9 @@ namespace nw4r {
             const u16 texRight = static_cast< u16 >((glyph.cellX + glyph.widths.glyphWidth) * TEXTURE_COODINATE_ONE / glyph.texWidth);
             const u16 texBottom = static_cast< u16 >((glyph.cellY + glyph.height) * TEXTURE_COODINATE_ONE / glyph.texHeight);
 
-            LoadTexture(glyph, GX_TEXMAP0);
+            LoadTexture(glyph, 0);
 
-            J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {
                 J3DNativeDraw::position(posLeft, posTop, posZ);
                 J3DNativeDraw::color(mVertexColor.lu);
@@ -214,26 +206,8 @@ namespace nw4r {
             mVertexColor.rd.a = static_cast< u8 >(mVertexColor.rd.a * mAlpha / Color::ALPHA_MAX);
         }
 
-        void CharWriter::SetupGXWithColorMapping(Color min, Color max) {
-            SetupGXCommon();
-            J3DNativeState::setNumTevStages(2);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-            J3DNativeState::setTevColor(GX_TEVREG0, min);
-            J3DNativeState::setTevColor(GX_TEVREG1, max);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
+        void CharWriter::SetupWithColorMapping(Color min, Color max) {
+            SetupMaterial(min, max, false);
             SetupVertexFormat();
         }
     };  // namespace ut

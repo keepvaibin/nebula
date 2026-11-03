@@ -3,7 +3,7 @@
 #include "galaxy/render/streamline_bridge.h"
 
 #include "galaxy/render/temporal_upscaler.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
@@ -603,7 +603,7 @@ public:
             options_.mode = mode_;
             options_.outputWidth = in.output_width;
             options_.outputHeight = in.output_height;
-            // The EFB is gamma-encoded RGBA8 without an exposure value.
+            // The scene target is gamma-encoded RGBA8 without an exposure value.
             options_.colorBuffersHDR = sl::Boolean::eFalse;
             options_.useAutoExposure = sl::Boolean::eTrue;
             if (g_api.dlss_set_options(viewport_, options_) != sl::Result::eOk) {
@@ -676,7 +676,7 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
         return nullptr;
     }
     // A mode evaluates only render widths inside its range (ultra performance accepts one size), and
-    // the render scales are whole EFB scales: the requested mode, else the next higher-quality one
+    // the render scales are whole scene target scales: the requested mode, else the next higher-quality one
     // whose range holds the render width (NGX fails every evaluate outside it).
     unsigned mode = std::min(quality, 4u);
     if (g_api.dlss_get_optimal_settings != nullptr) {

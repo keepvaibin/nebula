@@ -1,18 +1,16 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaRegion.hpp"
-#endif
+#include "Game/System/NebulaText.hpp"
+#include <nw4r/lyt/textBox.h>
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/Screen/EncouragePal60Window.hpp"
 #include "Game/System/GameDataFunction.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include "Game/System/NebulaCalendar.hpp"
 
 namespace {
     static const s32 sPressABAppearFrame = 25;
@@ -26,7 +24,6 @@ namespace TitleSequenceProductSub {
 };  // namespace TitleSequenceProductSub
 
 namespace {
-    NEW_NERVE(TitleSequenceProductDisplayEncouragePal60Window, TitleSequenceProduct, DisplayEncouragePal60Window);
     NEW_NERVE(TitleSequenceProductBgmPrepare, TitleSequenceProduct, BgmPrepare);
     NEW_NERVE(TitleSequenceProductLogoFadein, TitleSequenceProduct, LogoFadein);
     NEW_NERVE(TitleSequenceProductLogoWait, TitleSequenceProduct, LogoWait);
@@ -36,60 +33,41 @@ namespace {
 };  // namespace
 
 TitleSequenceProduct::TitleSequenceProduct()
-    : NerveExecutor(""), mLogoLayout(nullptr), mPressStartLayout(nullptr), mEncouragePal60Window(nullptr), mAButtonChecker(nullptr),
+    : NerveExecutor(""), mLogoLayout(nullptr), mPressStartLayout(nullptr), mAButtonChecker(nullptr),
       mBButtonChecker(nullptr) {
-    if (MR::isDisplayEncouragePal60Window()) {
-        initNerve(GET_NERVE_ANON(TitleSequenceProductDisplayEncouragePal60Window));
-    } else {
-        initNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
-    }
+    initNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
 
     mLogoLayout = new TitleSequenceProductSub::LogoLayout();
     mPressStartLayout = new SimpleLayout("Press[A][B]", "PressStart", 1, -1);
     mPressStartLayout->initWithoutIter();
+#if defined(__ANDROID__)
+    // "Press A or tap the screen": one thumb starts the game. The game's own tag for A, whichever device shows it.
+    static char16_t sPrompt[96];
+    NebulaText::get(sPrompt, 96 - 3, "PressATap");
+    s32 at = 0;
+    while (sPrompt[at] != 0 && sPrompt[at] != u'\u25A0') {
+        at++;
+    }
+    if (sPrompt[at] != 0) {
+        s32 end = at + 1;
+        while (sPrompt[end] != 0) {
+            end++;
+        }
+        for (s32 i = end; i > at; i--) {
+            sPrompt[i + 2] = sPrompt[i];
+        }
+        sPrompt[at] = 0x1A;
+        sPrompt[at + 1] = static_cast< char16_t >(6 | (3 << 8));
+        sPrompt[at + 2] = 0x0000;
+    }
+    // The layout's boxes hold the prompt they ship with.
+    static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(96);
+    static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(96);
+    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
+#endif
     mAButtonChecker = new TriggerChecker();
     mBButtonChecker = new TriggerChecker();
-    mIsDisplayEncouragePal60Window = MR::isDisplayEncouragePal60Window();
-    mEncouragePal60Window = new EncouragePal60Window();
-    mEncouragePal60Window->initWithoutIter();
-    mEncouragePal60Window->kill();
 }
-
-// FIXME: GPR4 and GPR5 are swapped and missing addi instruction.
-#pragma push
-#pragma opt_propagation off
-void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
-    if (MR::isFirstStep(this)) {
-        OSTime timeAnnounced = GameDataFunction::getSysConfigFileTimeAnnounced();
-        OSTime ticks = NebulaCalendar::now();
-        s32 day = NebulaCalendar::toSeconds(ticks) / (60 * 60 * 24);
-        s32 dayAnnounced = NebulaCalendar::toSeconds(timeAnnounced) / (60 * 60 * 24);
-        dayAnnounced += 100;
-
-        if (timeAnnounced == 0 || ticks < timeAnnounced || dayAnnounced < day) {
-            mEncouragePal60Window->appear();
-#ifdef TARGET_PC
-            if (NebulaRegion::isPal()) {
-                GameDataFunction::updateSysConfigFileTimeAnnounced();
-            }
-#elif (VERSION == RMGP01 || VERSION == RMGK01)
-            GameDataFunction::updateSysConfigFileTimeAnnounced();
-#endif
-        }
-    }
-
-    if (MR::isDead(mEncouragePal60Window)) {
-#ifdef TARGET_PC
-        if (!NebulaRegion::isPal()) {
-            GameDataFunction::updateSysConfigFileTimeAnnounced();
-        }
-#elif (VERSION == RMGJ01 || VERSION == RMGE01)
-        GameDataFunction::updateSysConfigFileTimeAnnounced();
-#endif
-        setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
-    }
-}
-#pragma pop
 
 void TitleSequenceProduct::exeBgmPrepare() {
     if (MR::isFirstStep(this)) {
@@ -140,14 +118,18 @@ void TitleSequenceProduct::exeLogoDisplay() {
         MR::startAnim(mPressStartLayout, "Wait", 0);
     }
 
-    mAButtonChecker->update(MR::testCorePadButtonA(WPAD_CHAN0));
-    mBButtonChecker->update(MR::testCorePadButtonB(WPAD_CHAN0));
+    mAButtonChecker->update(MR::isHeldJump(PLAYER_1));
+    mBButtonChecker->update(MR::isHeldFire(PLAYER_1));
 
+#if defined(__ANDROID__)
+    if (mAButtonChecker->getLevel() || mBButtonChecker->getLevel()) {
+#else
     if (mAButtonChecker->getLevel() && mBButtonChecker->getLevel()) {
+#endif
         MR::stopStageBGM(75);
         MR::startSystemSE("SE_SY_GAME_START");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         setNerve(GET_NERVE_ANON(TitleSequenceProductDecide));
     } else {
         updateButtonReaction(mAButtonChecker, "ReactionA");
@@ -173,18 +155,11 @@ void TitleSequenceProduct::exeDead() {
         mLogoLayout->kill();
         mPressStartLayout->kill();
 
-        if (mIsDisplayEncouragePal60Window) {
-            mEncouragePal60Window->kill();
-        }
     }
 }
 
 void TitleSequenceProduct::appear() {
-    if (mIsDisplayEncouragePal60Window) {
-        setNerve(GET_NERVE_ANON(TitleSequenceProductDisplayEncouragePal60Window));
-    } else {
-        setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
-    }
+    setNerve(GET_NERVE_ANON(TitleSequenceProductBgmPrepare));
 }
 
 void TitleSequenceProduct::kill() {

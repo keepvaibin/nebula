@@ -5,23 +5,23 @@
 
 class JAISeMgr;
 
-class JAISe : public JSULink< JAISe >, public JAISound, public JASPoolAllocObject< JAISe > {
+class JAISe final : public JSULink< JAISe >, public JAISound, public JASPoolAllocObject< JAISe > {
 public:
     class TInner {
     public:
         TInner() : mSeqData(nullptr, 0) {
         }
 
-        /* 0x000 */ u32 mProperPriority;
-        /* 0x004 */ u32 mPriority;
-        /* 0x008 */ JASSoundParams mSoundParams;
-        /* 0x01c */ JASTrack track;
-        /* 0x264 */ JAISeqData mSeqData;
-        /* 0x26c */ bool _26C;
-        /* 0x270 */ JAISeMgr* seMgr;
-        /* 0x274 */ JAISoundStrategyMgr< JAISe >* mSoundStrategyMgr;
-        /* 0x278 */ JAISoundStrategy< JAISe >* mSoundStrategy;
-        /* 0x27c */ JAITempoMgr mTempoMgr;
+        u32 mProperPriority;
+        u32 mPriority;
+        JASSoundParams mSoundParams;
+        JASTrack track;
+        JAISeqData mSeqData;
+        bool _26C;
+        JAISeMgr* seMgr;
+        JAISoundStrategyMgr< JAISe >* mSoundStrategyMgr;
+        JAISoundStrategy< JAISe >* mSoundStrategy;
+        JAITempoMgr mTempoMgr;
     };
 
     virtual s32 getNumChild() const;
@@ -56,5 +56,5 @@ public:
         return inner_.mPriority == -1;
     }
 
-    /* 0x0ac */ TInner inner_;
+    TInner inner_;
 };

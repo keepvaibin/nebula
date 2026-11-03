@@ -25,14 +25,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/types.h>
-
-void Metbo_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 a = MR::epsilon();
-    (void)-1.0f;
-}
 
 namespace {
     // sSpeedMax
@@ -190,7 +182,7 @@ void Metbo::exeWalkAround() {
         TVec3f upVec;
         f32 angle;
         MR::calcUpVec(&upVec, this);
-        if (MR::getRandom(0l, 2l)) {
+        if (MR::getRandom(0, 2)) {
             angle = -1.0f;
         } else {
             angle = 1.0f;
@@ -202,7 +194,7 @@ void Metbo::exeWalkAround() {
     v.add(_B0, mPosition);
     moveOrFall(::sWalkAroundParam, &v);
     if (!trySearch() && MR::isStep(this, ::sStepForWalkAround)) {
-        if (MR::getRandom(0l, 2l)) {
+        if (MR::getRandom(0, 2)) {
             setNerve(GET_NERVE(Metbo, MetboNrvWait));
         } else {
             setNerve(GET_NERVE(Metbo, MetboNrvWalkAround));
@@ -257,7 +249,7 @@ void Metbo::exeChase() {
     }
 
     bool isNear = MR::isNearPlayer(this, 1200.0f) == false;
-    if (isNear || MR::isBindedWallOfMoveLimit(this) || MR::isStep(this, ::sStepForChaseMax) || !MR::getRandom(0l, 50l)) {
+    if (isNear || MR::isBindedWallOfMoveLimit(this) || MR::isStep(this, ::sStepForChaseMax) || !MR::getRandom(0, 50)) {
         setNerve(GET_NERVE(Metbo, MetboNrvRest));
     }
 }

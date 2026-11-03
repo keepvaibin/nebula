@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
         "myfileselwinframe.tpl", "mybuttonatypeside.tpl", "my2picon.tpl"};
     for (const char* name : names) {
         const auto tex = galaxy::render::load_game_texture(
-            root, "files\\LayoutData\\FileSelect.arc", name);
+            root, "LayoutData/FileSelect.arc", name);
         if (!tex.has_value()) {
             std::cout << name << ": FAILED to load\n";
             continue;

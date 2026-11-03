@@ -30,11 +30,11 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
-#include "Game/System/WPadRumble.hpp"
+#include "Game/System/InputRumble.hpp"
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
@@ -45,14 +45,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <cstdio>
-#include <va_list.h>
-
-void ObjUtil_FORCE_MATCH_SDATA2() {
-    (void)57.2957802f;
-    (void)15.0f;
-    (void)100.0f;
-    (void)1000.0f;
-}
+#include <cstdarg>
 
 namespace {
     static const TVec3f sDefaultPlayerPos = TVec3f(0, 0, 0);
@@ -528,18 +521,18 @@ const ResTIMG* MR::loadTexFromArc(const char* pArchive, const char* pFile) {
 
 const ResTIMG* MR::loadTexFromArc(const char* pArchive) {
     char arcName[256];
-    snprintf(arcName, sizeof(arcName), "%s.arc", pArchive);
+    nebula_snprintf(arcName, sizeof(arcName), "%s.arc", pArchive);
 
     char texName[256];
-    snprintf(texName, sizeof(texName), "%s.bti", pArchive);
+    nebula_snprintf(texName, sizeof(texName), "%s.bti", pArchive);
 
     return loadTexFromArc(arcName, texName);
 }
 
 namespace {
-    bool isExistFileInArcLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) NO_INLINE {
+    bool isExistFileInArcLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
         char buf[0x100];
-        vsnprintf(buf, sizeof(buf), pArchive, pFormat);
+        nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
         return pHolder->mFileInfoTable->isExistRes(buf) != false;
     }
@@ -553,9 +546,9 @@ bool MR::isExistFileInArc(const ResourceHolder* pHolder, const char* pFormat, ..
 }
 
 namespace {
-    JMapInfo* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) NO_INLINE {
+    JMapInfo* tryCreateCsvParserLocal(const ResourceHolder* pHolder, const char* pArchive, va_list pFormat) {
         char buf[0x100];
-        vsnprintf(buf, sizeof(buf), pArchive, pFormat);
+        nebula_vsnprintf(buf, sizeof(buf), pArchive, pFormat);
 
         if (!pHolder->mFileInfoTable->isExistRes(buf)) {
             return nullptr;
@@ -578,7 +571,7 @@ JMapInfo* MR::createCsvParser(const ResourceHolder* pHolder, const char* pFormat
 JMapInfo* MR::createCsvParser(const char* pArchive, const char* pFormat, ...) {
     ResourceHolder* pResourceHolder = SingletonHolder< ResourceHolderManager >::get()->createAndAdd(pArchive, nullptr);
 
-    return MR::createCsvParser(pResourceHolder, pFormat);
+    return MR::createCsvParser(pResourceHolder, "%s", pFormat);
 }
 
 JMapInfo* MR::tryCreateCsvParser(const LiveActor* pActor, const char* pFormat, ...) {
@@ -619,7 +612,7 @@ void MR::getCsvDataS32(s32* pOut, const JMapInfo* pMapInfo, const char* pKey, s3
     pMapInfo->getValue< s32 >(idx, pKey, pOut);
 }
 
-void MR::getCsvDataU8(u8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) NO_INLINE {
+void MR::getCsvDataU8(u8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     s32 val = 0;
     pMapInfo->getValue< s32 >(idx, pKey, &val);
     *pOut = val;
@@ -635,23 +628,23 @@ void MR::getCsvDataBool(bool* pOut, const JMapInfo* pMapInfo, const char* pKey, 
 
 void MR::getCsvDataVec(Vec* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
-    snprintf(key, sizeof(key), "%sX", pKey);
+    nebula_snprintf(key, sizeof(key), "%sX", pKey);
     getCsvDataF32(&pOut->x, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sY", pKey);
+    nebula_snprintf(key, sizeof(key), "%sY", pKey);
     getCsvDataF32(&pOut->y, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sZ", pKey);
+    nebula_snprintf(key, sizeof(key), "%sZ", pKey);
     getCsvDataF32(&pOut->z, pMapInfo, key, idx);
 }
 
-void MR::getCsvDataColor(GXColor* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataColor(NebulaColor8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
-    snprintf(key, sizeof(key), "%sR", pKey);
+    nebula_snprintf(key, sizeof(key), "%sR", pKey);
     getCsvDataU8(&pOut->r, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sG", pKey);
+    nebula_snprintf(key, sizeof(key), "%sG", pKey);
     getCsvDataU8(&pOut->g, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sB", pKey);
+    nebula_snprintf(key, sizeof(key), "%sB", pKey);
     getCsvDataU8(&pOut->b, pMapInfo, key, idx);
-    snprintf(key, sizeof(key), "%sA", pKey);
+    nebula_snprintf(key, sizeof(key), "%sA", pKey);
     getCsvDataU8(&pOut->a, pMapInfo, key, idx);
 }
 
@@ -849,35 +842,35 @@ void MR::stopSceneForDefaultHit(s32 frame) {
 }
 
 bool MR::tryRumblePad(const void* pParam1, const char* pPatternName, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, pPatternName);
 }
 
 bool MR::tryRumblePadVeryStrongLong(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */);
 }
 
 bool MR::tryRumblePadVeryStrong(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\215\305\213\255" /* 最強 */);
 }
 
 bool MR::tryRumblePadStrong(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
 }
 
 bool MR::tryRumblePadMiddle(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
+    return PlayerInputFunction::getInputRumble(channel)->getRumbleInstance()->vibratePatternIfNotExist(pParam1, "\222\206" /* 中 */);
 }
 
 bool MR::tryRumblePadWeak(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\216\343" /* 弱 */);
 }
 
 bool MR::tryRumblePadVeryWeak(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\224\367\216\343" /* 微弱 */);
 }
 
 bool MR::tryRumbleDefaultHit(const void* pParam1, s32 channel) {
-    return WPadFunction::getWPadRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
+    return PlayerInputFunction::getInputRumble(channel)->vibratePatternIfNotExist(pParam1, "\213\255" /* 強 */);
 }
 
 void MR::shakeCameraVeryStrong() {
@@ -983,6 +976,3 @@ bool MR::tryFindLinkNamePos(const NameObj* pObj, const char* pName, TVec3f* pPar
     return getNamePosHolder()->find(pObj, pName, pParam3, pParam4);
 }
 
-void ObjUtil_FORCE_MATCH(TVec3f* pOut, const TVec3f& rVec) {
-    pOut->add(rVec);
-}

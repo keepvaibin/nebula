@@ -1,11 +1,10 @@
 #include "Game/Screen/NebulaMenuFocus.hpp"
 
-#ifdef TARGET_PC
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/LayoutManager.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nw4r/lyt/pane.h>
 #include "Game/System/NebulaInput.hpp"
@@ -172,20 +171,20 @@ namespace {
 
 namespace NebulaMenuFocus {
     Direction readDirection() {
-        if (MR::testCorePadButtonUp(WPAD_CHAN0)) {
+        if (MR::isHeldUp(PLAYER_1)) {
             return Direction_Up;
         }
-        if (MR::testCorePadButtonDown(WPAD_CHAN0)) {
+        if (MR::isHeldDown(PLAYER_1)) {
             return Direction_Down;
         }
-        if (MR::testCorePadButtonLeft(WPAD_CHAN0)) {
+        if (MR::isHeldLeft(PLAYER_1)) {
             return Direction_Left;
         }
-        if (MR::testCorePadButtonRight(WPAD_CHAN0)) {
+        if (MR::isHeldRight(PLAYER_1)) {
             return Direction_Right;
         }
-        const f32 x = MR::getSubPadStickX(WPAD_CHAN0);
-        const f32 y = MR::getSubPadStickY(WPAD_CHAN0);
+        const f32 x = MR::getMoveStickX(PLAYER_1);
+        const f32 y = MR::getMoveStickY(PLAYER_1);
         if (absolute(x) < cStickHold && absolute(y) < cStickHold) {
             return Direction_None;
         }
@@ -238,8 +237,8 @@ namespace NebulaMenuFocus {
             sFocus = nullptr;
         }
 
-        const TVec2f* pPointer = MR::getStarPointerScreenPosition(WPAD_CHAN0);
-        if (sActive && MR::isStarPointerInScreen(WPAD_CHAN0) &&
+        const TVec2f* pPointer = MR::getStarPointerScreenPosition(PLAYER_1);
+        if (sActive && MR::isStarPointerInScreen(PLAYER_1) &&
             (absolute(pPointer->x - sPointerAnchor.x) > cPointerHandBack ||
              absolute(pPointer->y - sPointerAnchor.y) > cPointerHandBack)) {
             sActive = false;
@@ -313,7 +312,6 @@ namespace NebulaMenuFocus {
     void setFocus(const ButtonPaneController* pButton) {
         sFocus = pButton;
         sActive = true;
-        sPointerAnchor = *MR::getStarPointerScreenPosition(WPAD_CHAN0);
+        sPointerAnchor = *MR::getStarPointerScreenPosition(PLAYER_1);
     }
 };  // namespace NebulaMenuFocus
-#endif

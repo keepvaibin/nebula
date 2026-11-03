@@ -33,9 +33,9 @@ struct RuntimeAudioSettings {
 
 // The style of the game's button icons: the controller in use (a Wii Remote's for the keyboard and controllers it does
 // not know), or one style always.
-enum class ButtonIcons : std::uint8_t { Auto, Wii, Xbox, Nintendo, PlayStation, Keyboard };
+enum class ButtonIcons : std::uint8_t { Auto, Game, Xbox, Nintendo, PlayStation, Keyboard };
 
-// The game's languages, as the Wii's SC language codes SCGetLanguage returns; the disc's release picks each one's
+// The game's languages, by the game's language codes; the disc's release picks each one's
 // folder (UsEnglish on North America's disc, EuEnglish on Europe's, JpJapanese on Japan's). Auto: the system's language
 // where the disc has it, else English, else the disc's first (game_language_resolved).
 enum class GameLanguage : std::uint8_t {
@@ -54,7 +54,11 @@ inline constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLan
                                                   GameLanguage::Japanese};
 
 struct RuntimeSettings {
-    RuntimeInputMode input_mode = RuntimeInputMode::Auto;
+#if defined(__ANDROID__)
+    RuntimeInputMode input_mode = RuntimeInputMode::Auto;  // the touch controls, and a pad when one is in hand
+#else
+    RuntimeInputMode input_mode = RuntimeInputMode::KeyboardMouse;
+#endif
     RuntimeAudioSettings audio{};
     // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3; 4 each page at once (instant).
     unsigned text_speed = 1u;
@@ -63,6 +67,8 @@ struct RuntimeSettings {
     // Discord shows what the player is doing (galaxy, star, Power Stars) while Discord runs.
     bool discord_status = true;
     ButtonIcons button_icons = ButtonIcons::Auto;
+    // Co-star mode: with two controllers attached, the second plays player 2.
+    bool co_star = false;
 
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
@@ -85,12 +91,25 @@ void set_disc_languages(std::span<const std::string> folders) noexcept;
 // "auto", "wii", "xbox", "nintendo" or "playstation" (runtime_settings.ini).
 [[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
 
-// The generation changes only when the input mode changes, so device FIFOs can reject reports acquired
+// The generation changes only when the input mode changes, so device queues can reject reports acquired
 // under an older source.
 struct RuntimeInputModeState {
-    RuntimeInputMode mode = RuntimeInputMode::Auto;
+    RuntimeInputMode mode = RuntimeInputMode::KeyboardMouse;
     std::uint64_t generation = 1u;
 };
+
+// The chosen input mode has nothing to play with: Controller with no controller, Wii Remote with no remote, Auto with
+// nothing at all. Keyboard and mouse never reports it.
+[[nodiscard]] constexpr bool input_missing(RuntimeInputMode mode, bool controller, bool wii_remote,
+                                           bool keyboard_or_mouse) noexcept {
+    switch (mode) {
+    case RuntimeInputMode::Controller: return !controller;
+    case RuntimeInputMode::RealWiimote: return !wii_remote;
+    case RuntimeInputMode::Auto: return !controller && !wii_remote && !keyboard_or_mouse;
+    case RuntimeInputMode::KeyboardMouse: break;
+    }
+    return false;
+}
 
 [[nodiscard]] RuntimeSettings get_runtime_settings();
 [[nodiscard]] RuntimeInputModeState get_runtime_input_mode_state();

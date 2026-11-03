@@ -4,7 +4,7 @@
 
 #include "galaxy/render/texture_pack.h"
 
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 
 #include <algorithm>
 #include <bit>
@@ -52,7 +52,7 @@ bool read_file(const std::filesystem::path& path, std::vector<std::uint8_t>& byt
     return static_cast<bool>(in.read(reinterpret_cast<char*>(bytes.data()), size));
 }
 
-// Levels below the given ones, each a 2x2 box of the one above (texture_cache.h's generator).
+// Levels below the given ones, each a 2x2 box of the one above (texture_store.h's generator).
 void generate_levels(TexturePackPixels& image) {
     const auto count = static_cast<std::uint32_t>(std::bit_width(std::max(image.width, image.height)));
     std::vector<RGBA8> above;

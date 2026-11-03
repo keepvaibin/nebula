@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class GhostPacket {
 public:
@@ -15,8 +14,8 @@ public:
     void read(TVec3Sc*);
     void read(TVec3s*);
 
-    /* 0x0 */ u32 _0;
-    /* 0x4 */ u8* mDataPtr;
-    /* 0x8 */ u32 mCurOffs;
-    /* 0xC */ u32 _C;
+    u32 _0;
+    u8* mDataPtr;
+    u32 mCurOffs;
+    u32 _C;
 };

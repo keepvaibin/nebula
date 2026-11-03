@@ -1,14 +1,13 @@
 #pragma once
 
-#include <revolution/types.h>
 
-class JKRHeap;
-class JPAEmitterWorkData;
+class NebulaArena;
+struct JPAEmitterWorkData;
 class JPABaseEmitter;
 class JPABaseParticle;
 
-class JPAKeyBlock;
-class JPABaseShape;
+struct JPAKeyBlock;
+struct JPABaseShape;
 class JPAExtraShape;
 class JPAChildShape;
 class JPAExTexShape;
@@ -18,7 +17,7 @@ class JPAFieldBlock;
 class JPAResource {
 public:
     JPAResource();
-    void init(JKRHeap*);
+    void init(NebulaArena*);
     bool calc(JPAEmitterWorkData*, JPABaseEmitter*);
     void draw(JPAEmitterWorkData*, JPABaseEmitter*);
     void drawP(JPAEmitterWorkData*);
@@ -58,32 +57,32 @@ public:
 public:
     typedef void (*EmitterFunc)(JPAEmitterWorkData*);
     typedef void (*ParticleFunc)(JPAEmitterWorkData*, JPABaseParticle*);
-    /* 0x00 */ EmitterFunc* mpCalcEmitterFuncList;
-    /* 0x04 */ EmitterFunc* mpDrawEmitterFuncList;
-    /* 0x08 */ EmitterFunc* mpDrawEmitterChildFuncList;
-    /* 0x0C */ ParticleFunc* mpCalcParticleFuncList;
-    /* 0x10 */ ParticleFunc* mpDrawParticleFuncList;
-    /* 0x14 */ ParticleFunc* mpCalcParticleChildFuncList;
-    /* 0x18 */ ParticleFunc* mpDrawParticleChildFuncList;
+    EmitterFunc* mpCalcEmitterFuncList;
+    EmitterFunc* mpDrawEmitterFuncList;
+    EmitterFunc* mpDrawEmitterChildFuncList;
+    ParticleFunc* mpCalcParticleFuncList;
+    ParticleFunc* mpDrawParticleFuncList;
+    ParticleFunc* mpCalcParticleChildFuncList;
+    ParticleFunc* mpDrawParticleChildFuncList;
 
-    /* 0x1C */ JPABaseShape* mpBaseShape;
-    /* 0x20 */ JPAExtraShape* mpExtraShape;
-    /* 0x24 */ JPAChildShape* mpChildShape;
-    /* 0x28 */ JPAExTexShape* mpExTexShape;
-    /* 0x2C */ JPADynamicsBlock* mpDynamicsBlock;
-    /* 0x30 */ JPAFieldBlock** mpFieldBlocks;
-    /* 0x34 */ JPAKeyBlock** mpKeyBlocks;
-    // The resource's texture index table (big-endian).
-    /* 0x38 */ NEBULA_BE(u16) const* mpTDB1;
-    /* 0x3C */ u16 mUsrIdx;
-    /* 0x3E */ u8 mFieldBlockNum;
-    /* 0x3F */ u8 mKeyBlockNum;
-    /* 0x40 */ u8 mTDB1Num;
-    /* 0x41 */ u8 mpCalcEmitterFuncListNum;
-    /* 0x42 */ u8 mpDrawEmitterFuncListNum;
-    /* 0x43 */ u8 mpDrawEmitterChildFuncListNum;
-    /* 0x44 */ u8 mpCalcParticleFuncListNum;
-    /* 0x45 */ u8 mpDrawParticleFuncListNum;
-    /* 0x46 */ u8 mpCalcParticleChildFuncListNum;
-    /* 0x47 */ u8 mpDrawParticleChildFuncListNum;
+    JPABaseShape* mpBaseShape;
+    JPAExtraShape* mpExtraShape;
+    JPAChildShape* mpChildShape;
+    JPAExTexShape* mpExTexShape;
+    JPADynamicsBlock* mpDynamicsBlock;
+    JPAFieldBlock** mpFieldBlocks;
+    JPAKeyBlock** mpKeyBlocks;
+    // The resource's texture index table.
+    u16 const* mpTDB1;
+    u16 mUsrIdx;
+    u8 mFieldBlockNum;
+    u8 mKeyBlockNum;
+    u8 mTDB1Num;
+    u8 mpCalcEmitterFuncListNum;
+    u8 mpDrawEmitterFuncListNum;
+    u8 mpDrawEmitterChildFuncListNum;
+    u8 mpCalcParticleFuncListNum;
+    u8 mpDrawParticleFuncListNum;
+    u8 mpCalcParticleChildFuncListNum;
+    u8 mpDrawParticleChildFuncListNum;
 };

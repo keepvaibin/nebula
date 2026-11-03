@@ -10,9 +10,21 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 
 void TalkMessageHistory::entry(u16 msgID) {
+    if (mCount == mMax) {
+        const s32 max = mMax != 0 ? mMax * 2 : 16;
+        u16* const pHistory = new (NebulaArena::findFromRoot(this), 0) u16[max];
+        for (s32 i = 0; i < mCount; i++) {
+            pHistory[i] = mHistory[i];
+        }
+        delete[] mHistory;
+        mHistory = pHistory;
+        mMax = max;
+    }
+
     mHistory[mCount++] = msgID;
 }
 
@@ -27,7 +39,9 @@ bool TalkMessageHistory::search(u16 msgID) const {
 }
 
 TalkNodeCtrl::TalkNodeCtrl() : _0(), mCurrentNodeIdx(-1), mMessageInfo() {
+    mHistory.mHistory = nullptr;
     mHistory.mCount = 0;
+    mHistory.mMax = 0;
     _38 = nullptr;
     mCurrentNode = nullptr;
     mNodeData = -1;
@@ -251,14 +265,14 @@ void TalkNodeCtrl::readMessage() {
     }
 }
 
-const wchar_t* TalkNodeCtrl::getSubMessage() const {
+const char16_t* TalkNodeCtrl::getSubMessage() const {
     const TalkMessageInfo info = mMessageInfo;
 
-    if (*((wchar_t*)info._0) != 0x1A) {
+    if (*((char16_t*)info._0) != 0x1A) {
         return nullptr;
     }
 
-    MessageEditorMessageTag messageTag = MessageEditorMessageTag((const wchar_t*)&info._0[2]);
+    MessageEditorMessageTag messageTag = MessageEditorMessageTag((const char16_t*)&info._0[2]);
 
     if (((char*)messageTag.mMessage)[1] != 8 || messageTag.mMessage[1] != 0) {
         return nullptr;
@@ -268,7 +282,7 @@ const wchar_t* TalkNodeCtrl::getSubMessage() const {
     u16 param = messageTag.getParam32(0);
 
     if (MessageSystem::getSceneMessageData()->getMessage(&info2, 0, param)) {
-        return (const wchar_t*)info2._0;
+        return (const char16_t*)info2._0;
     }
 
     return nullptr;
@@ -294,7 +308,7 @@ void TalkNodeCtrl::createFlowNode(TalkMessageCtrl* pMsgCtrl, const JMapInfoIter&
     char buf[0x100];
     s32 msgID = MR::getMessageID(rIter);
     const char* zoneName = MR::getCurrentPlacementZoneName();
-    snprintf(buf, sizeof(buf), "%s_%s%03d", zoneName, pName, msgID);
+    nebula_snprintf(buf, sizeof(buf), "%s_%s%03d", zoneName, pName, msgID);
     createFlowNodeDirect(pMsgCtrl, rIter, buf, pCameraInf);
 }
 
@@ -313,6 +327,10 @@ void TalkNodeCtrl::initNodeRecursive(TalkMessageCtrl* pMsgCtrl, const JMapInfoIt
 
     if (pHelper->hasNode(currentNode)) {
         return;
+    }
+
+    if (pHelper->mIndex == pHelper->mStack.size()) {
+        pHelper->mStack.grow();
     }
 
     pHelper->mStack[pHelper->mIndex++] = currentNode;

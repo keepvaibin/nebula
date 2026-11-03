@@ -24,14 +24,14 @@ public:
 
     void exeWait();
 
-    /* 0x8C */ TVec3f _8C;
-    /* 0x98 */ TVec3f _98;
-    /* 0xA4 */ TVec3f _A4;
-    /* 0xB0 */ TVec3f mAccelerate;
-    /* 0xBC */ TVec3f mDirection;
-    /* 0xC8 */ TVec3f _C8;
-    /* 0xD4 */ f32 mRadiusRate;
-    /* 0xD8 */ f32 _D8;
-    /* 0xDC */ f32 _DC;
-    /* 0xE0 */ s32 _E0;
+    TVec3f _8C;
+    TVec3f _98;
+    TVec3f _A4;
+    TVec3f mAccelerate;
+    TVec3f mDirection;
+    TVec3f _C8;
+    f32 mRadiusRate;
+    f32 _D8;
+    f32 _DC;
+    s32 _E0;
 };

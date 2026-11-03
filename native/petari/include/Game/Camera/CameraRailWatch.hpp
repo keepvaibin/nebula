@@ -14,10 +14,10 @@ public:
 
     void setParam(s32, s32, s32, f32, f32, f32);
 
-    /* 0x4C */ RailRider* mRailRider;
-    /* 0x50 */ s32 mDirection;
-    /* 0x54 */ s32 mSetDirection;
-    /* 0x58 */ f32 mRailCoordOffset;
-    /* 0x5C */ f32 mDist;
-    /* 0x60 */ f32 mAngleX;
+    RailRider* mRailRider;
+    s32 mDirection;
+    s32 mSetDirection;
+    f32 mRailCoordOffset;
+    f32 mDist;
+    f32 mAngleX;
 };

@@ -37,7 +37,7 @@ bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcep
 [[nodiscard]] bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept;
 // The display's refresh rate: the vsync period the system states, else as its vsyncs measure it (0: not known).
 [[nodiscard]] double display_refresh_hz() noexcept;
-// Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the GX, host-main and
+// Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the render, host-main and
 // game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).
 void start_thread_sampler() noexcept;
 
@@ -62,6 +62,19 @@ enum TouchButton : std::uint32_t {
 inline constexpr std::size_t kMaxPads = 4;
 
 // One coherent copy of everything the input poll reads.
+// A pad's sensors and touch surface.
+struct PadMotion {
+    bool imu_live = false;
+    bool touch_live = false;
+    bool gravity_valid = false;
+    float gyro_x = 0.0f;
+    float gyro_y = 0.0f;  // up positive; picture widths turned
+    float touch_dx = 0.0f;
+    float touch_dy = 0.0f;  // the surface's width and height 1 each
+    std::array<float, 3> gravity{0.0f, 1.0f, 0.0f};
+    std::uint64_t shake_until_us = 0u;
+};
+
 struct InputState {
     // On-screen controls.
     std::uint32_t touch_buttons = 0;
@@ -76,7 +89,6 @@ struct InputState {
     std::uint64_t taps = 0;
     float tap_x = 0.0f;
     float tap_y = 0.0f;
-    std::uint64_t tap_down_ms = 0;
     // When the finger last touched or moved (steady milliseconds; 0: never).
     std::uint64_t finger_ms = 0;
     int window_width = 0;
@@ -87,18 +99,21 @@ struct InputState {
     // Gamepads, in the unified layout (input_bindings.h).
     std::array<galaxy::input::PadSample, kMaxPads> pads{};
     std::array<std::uint32_t, kMaxPads> pad_ids{};
+    // Each pad's motion and touch surface since the game last took them (take_pad_motion).
+    std::array<PadMotion, kMaxPads> motion{};
+    // The device's own sensors (a phone), when it has them.
+    PadMotion device_motion{};
 };
 
 [[nodiscard]] InputState input_state() noexcept;
+// input_state with each pad's turn and touch travel, which then start again from nothing: the game's thread, once a frame.
+[[nodiscard]] InputState take_input_state() noexcept;
 // The game is on a pointer screen (menus, the file select): the on-screen controls leave the picture to the pointer.
 void set_menu_context(bool menu) noexcept;
+// The game shows its title: a tap anywhere starts it.
+void set_title_screen(bool title) noexcept;
 // Rumble on the gamepad with this SDL id (0: none) at `strength` (0..1). Any thread: SDL's thread applies it.
 void rumble(std::uint32_t pad_id, float strength) noexcept;
 
-// The HOME Menu (Android: the activity's dialog): -1 until the player chooses (0 return, 1 quit, 2 reset). Any
-// thread: SDL's thread shows and hides it.
-void home_menu_show() noexcept;
-void home_menu_hide() noexcept;
-[[nodiscard]] int home_menu_choice() noexcept;
 
 }  // namespace galaxy::sdl

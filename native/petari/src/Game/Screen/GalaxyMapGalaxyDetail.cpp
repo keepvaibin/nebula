@@ -4,7 +4,7 @@
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Screen/IconComet.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstddef>
@@ -86,7 +86,7 @@ void GalaxyMapGalaxyDetail::exeDisplay() {
         mAButtonIcon->openWithoutMessage();
     }
 
-    if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::isPressedJump(PLAYER_1)) {
         setNerve(GET_NERVE_ANON(GalaxyMapGalaxyDetailDisappear));
     }
 }

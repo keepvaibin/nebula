@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -91,7 +91,7 @@ void RosettaPictureBook::exeWait() {
         return;
     }
 
-    if (!MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (!MR::isPressedJump(PLAYER_1)) {
         return;
     }
 

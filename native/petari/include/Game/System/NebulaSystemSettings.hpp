@@ -1,8 +1,7 @@
 #pragma once
 
-// The system settings the game reads (I-09: the host's settings, not the console's SYSCONF).
+// The system settings the game reads (the host's settings).
 
-#include <revolution/types.h>
 
 namespace NebulaSystemSettings {
     enum SoundMode {
@@ -16,5 +15,4 @@ namespace NebulaSystemSettings {
     SoundMode soundMode();
     bool isWidescreen();
     // Whether the screen saver may dim the screen after the controllers go idle.
-    bool screenSaver();
 }  // namespace NebulaSystemSettings

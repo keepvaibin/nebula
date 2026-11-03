@@ -6,7 +6,7 @@
 #include "Game/RhythmLib/AudMeHandles.hpp"
 #include "Game/RhythmLib/AudMePlayer.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 void AudMeHandle::releaseMe() {
     if (isMeAttached()) {
@@ -35,7 +35,7 @@ bool AudMe::start(void* pData, u32 a1) {
         return false;
     }
 
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mTrack->setSeqData(pData, a1);
     updateTimedParams(true);
     mTrack->startSeq();
@@ -122,7 +122,7 @@ void AudMe::update() {
     if (mTrack != nullptr) {
         updateTimedParams(false);
         {
-            JASCriticalSection crit;
+            GameAudioExclusion crit;
             mTrack->gframeProc();
         }
 
@@ -191,7 +191,7 @@ void AudMe::updateTimedParams(bool immediate) {
     f32 dolby = mDolbyParam.mValue + _8C;
 
     for (u32 i = 0; i < numChannelMgrs; i++) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         AudMeChannelMgr* pChannelMgr = mTrack->mChannelMgrs[i];
         if (pChannelMgr == nullptr) {
             continue;
@@ -225,7 +225,7 @@ void AudMe::doneStop() {
 
 void AudMe::setPauseFlag(bool pause) {
     if (mTrack != nullptr) {
-        JASCriticalSection crit;
+        GameAudioExclusion crit;
         mTrack->setPauseFlag(pause);
     }
 }
@@ -341,7 +341,7 @@ s32 AudMeMgr::getSeqStartPos(u32 meId) {
         return -1;
     }
 
-    NEBULA_BE(s32)* pStartPos = mMeSeq->mSeqStartPos;
+    s32* pStartPos = mMeSeq->mSeqStartPos;
     if (meId >= mMeSeq->mNumEntries) {
         return -1;
     }
@@ -354,7 +354,7 @@ bool AudMeMgr::isRequestedMe(u32 meId) {
     for (JSULink< AudMe >* it = mMeList.getFirst(); it != mMeList.getEnd(); it = it->getNext()) {
         track = it->getObject()->mTrack;
         if (track != nullptr) {
-            JASCriticalSection crit;
+            GameAudioExclusion crit;
             if (meId == track->mMeId) {
                 bool requested = track->mStatus == AudMeTrack::STATUS_RUN || track->mStatus == AudMeTrack::STATUS_READY;
                 if (requested) {
@@ -377,32 +377,14 @@ void AudMeMgr::setOuterPlayingParam(s32 meId, AudMe* pMe) {
 }
 
 void AudMePlayingParamsHolder::setResource(void* pRes) {
-    NEBULA_BE(s32)* cursor = (NEBULA_BE(s32)*)pRes;
-
-    s32 numEntries = *cursor++;
-    s32 entryOff = *cursor++;
-    s32 namesOff = *cursor++;
+    // The ME table as the importer cooks it (host order): entry count, entry and name table offsets; nothing written.
+    const s32* cursor = static_cast< const s32* >(pRes);
+    const s32 numEntries = cursor[0];
+    const s32 entryOff = cursor[1];
+    const s32 namesOff = cursor[2];
 
     mNumEntries = numEntries;
-
-#ifdef TARGET_PC
-    // The name offsets are relocated in place, as on the console (which keeps no relocated state either).
-    NEBULA_SELFREL(const char)* offsets = (NEBULA_SELFREL(const char)*)((u8*)pRes + namesOff);
-    mParams = (AudMePlayingParams*)((u8*)pRes + entryOff);
-
-    for (u32 i = 0; i < numEntries; i++) {
-        offsets[i].relocateFrom(pRes);
-    }
-
-    mNames = offsets;
-#else
-    const char** offsets = (const char**)((s32)pRes + namesOff);
-    mParams = (AudMePlayingParams*)((s32)pRes + entryOff);
-
-    for (u32 i = 0; i < numEntries; i++) {
-        offsets[i] += (s32)pRes;
-    }
-
-    mNames = (const char**)offsets;
-#endif
+    mBase = static_cast< const u8* >(pRes);
+    mParams = reinterpret_cast< AudMePlayingParams* >(static_cast< u8* >(pRes) + entryOff);
+    mNameOffsets = reinterpret_cast< const u32* >(mBase + namesOff);
 }

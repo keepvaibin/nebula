@@ -10,5 +10,5 @@ public:
 
 private:
     /// @brief The pointer to the owning container for persistent gameplay data.
-    /* 0x00 */ GameDataHolder* mHost;
+    GameDataHolder* mHost;
 };

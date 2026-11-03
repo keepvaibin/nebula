@@ -13,7 +13,7 @@ namespace MR {
 };  // namespace MR
 
 namespace MR {
-    void moveAndTurnToPlayer(LiveActor* pActor, TVec3f* pVec, const MR::ActorMoveParam& rMoveParam) NO_INLINE;
+    void moveAndTurnToPlayer(LiveActor* pActor, TVec3f* pVec, const MR::ActorMoveParam& rMoveParam);
 };  // namespace MR
 
 class KoopaBattleBase : public ActorStateBase< Koopa > {
@@ -30,7 +30,7 @@ public:
     bool updateFind();
     bool updateRecover(const Nerve* pNerve);
 
-    /* 0x10 */ KoopaStateDamageEscape* mStateDamageEscape;
-    /* 0x14 */ KoopaStateGuard* mStateGuard;
-    /* 0x18 */ s32 mWanderTime;
+    KoopaStateDamageEscape* mStateDamageEscape;
+    KoopaStateGuard* mStateGuard;
+    s32 mWanderTime;
 };

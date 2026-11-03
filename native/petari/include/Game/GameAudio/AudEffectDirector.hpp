@@ -11,7 +11,7 @@ public:
 
     void setEffectType(s32, s32);
     void setAudioEffectParam(s32);
-    void playEffectSound(s32) NO_INLINE;
+    void playEffectSound(s32);
 
     s32 _C;
     s32 _10;

@@ -1,17 +1,11 @@
 #include "Game/Ride/SpherePadController.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TQuat.hpp>
 #include <JSystem/JGeometry/TUtil.hpp>
 #include "Game/System/NebulaInput.hpp"
-
-void SpherePadController_DUMMY() {
-    TPos3f m;
-    TVec3f a, b;
-    m.setRotate(a, b);
-}
 
 SpherePadController::SpherePadController() : SphereController() {
 }
@@ -31,9 +25,9 @@ f32 SpherePadController::calcJumpPower() const {
 void SpherePadController::update(const TVec3f&) {
 }
 
-void SpherePadController::clacXY(f32* pX, f32* pY) NO_INLINE {
-    *pX = MR::getSubPadStickX(WPAD_CHAN0);
-    *pY = MR::getSubPadStickY(WPAD_CHAN0);
+void SpherePadController::clacXY(f32* pX, f32* pY) {
+    *pX = MR::getMoveStickX(PLAYER_1);
+    *pY = MR::getMoveStickY(PLAYER_1);
 }
 
 f32 SpherePadController::calcDirSphereMove(TVec3f* pMoveDir, const TVec3f& rBaseVec, u32 isFrontVec) {

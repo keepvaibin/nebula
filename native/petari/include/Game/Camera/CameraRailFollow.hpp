@@ -18,11 +18,11 @@ public:
         return mRailSpeed * mRailSpeed / (mRailAccel * 2.0f);
     }
 
-    /* 0x4C */ RailRider* mRailRider;
-    /* 0x50 */ f32 mRailCoord;
-    /* 0x54 */ f32 mRailSpeed;
-    /* 0x58 */ f32 mTargetMargin;
-    /* 0x5C */ f32 mRailSpeedMax;
-    /* 0x60 */ f32 mRailAccel;
-    /* 0x64 */ s32 mMarginScale;
+    RailRider* mRailRider;
+    f32 mRailCoord;
+    f32 mRailSpeed;
+    f32 mTargetMargin;
+    f32 mRailSpeedMax;
+    f32 mRailAccel;
+    s32 mMarginScale;
 };

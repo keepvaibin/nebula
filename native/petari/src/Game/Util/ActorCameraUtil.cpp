@@ -13,17 +13,17 @@
 namespace {
     void createActorCameraName(char* pName, u32 nameSize, const LiveActor* pActor, const ActorCameraInfo* pInfo) {
         if (pInfo->mCameraSetID & 0x8000) {
-            snprintf(pName, nameSize, "%s\213\244\222\312%03d" /* %s共通%03d */, pActor->getName(), pInfo->mCameraSetID - 0x8000);
+            nebula_snprintf(pName, nameSize, "%s\213\244\222\312%03d" /* %s共通%03d */, pActor->getName(), pInfo->mCameraSetID - 0x8000);
         } else {
-            snprintf(pName, nameSize, "%s\214\305\227\114%03d" /* %s固有%03d */, pActor->getName(), pInfo->mCameraSetID);
+            nebula_snprintf(pName, nameSize, "%s\214\305\227\114%03d" /* %s固有%03d */, pActor->getName(), pInfo->mCameraSetID);
         }
     }
 
     void createMultiActorCameraName(char* pName, u32 nameSize, const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         if (pInfo->mCameraSetID & 0x8000) {
-            snprintf(pName, nameSize, "%s\213\244\222\312%s%03d" /* %s共通%s%03d */, pActor->getName(), pEventName, pInfo->mCameraSetID - 0x8000);
+            nebula_snprintf(pName, nameSize, "%s\213\244\222\312%s%03d" /* %s共通%s%03d */, pActor->getName(), pEventName, pInfo->mCameraSetID - 0x8000);
         } else {
-            snprintf(pName, nameSize, "%s\214\305\227\114%s%03d" /* %s固有%s%03d */, pActor->getName(), pEventName, pInfo->mCameraSetID);
+            nebula_snprintf(pName, nameSize, "%s\214\305\227\114%s%03d" /* %s固有%s%03d */, pActor->getName(), pEventName, pInfo->mCameraSetID);
         }
     }
 };  // namespace
@@ -31,10 +31,10 @@ namespace {
 namespace MR {
     void initAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         char actorEventName[128];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         char animName[64];
-        snprintf(animName, sizeof(animName), "%s.canm", pEventName);
+        nebula_snprintf(animName, sizeof(animName), "%s.canm", pEventName);
 
         declareEventCameraAnim(pInfo, actorEventName, getResourceHolder(pActor)->mFileInfoTable->getRes(animName));
     }
@@ -155,7 +155,7 @@ namespace MR {
         setCameraTargetToPlayer(&targetArg);
 
         char actorEventName[128];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         startEventCameraAnim(pInfo, actorEventName, targetArg, frame, speed);
     }
@@ -164,7 +164,7 @@ namespace MR {
         CameraTargetArg targetArg(pActor);
 
         char actorEventName[128];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         startEventCameraAnim(pInfo, actorEventName, targetArg, frame, speed);
     }
@@ -172,7 +172,7 @@ namespace MR {
     void startAnimCameraTargetOther(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, const CameraTargetArg& rTargetArg,
                                     s32 frame, f32 speed) {
         char actorEventName[128];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         startEventCameraAnim(pInfo, actorEventName, rTargetArg, frame, speed);
     }
@@ -259,31 +259,31 @@ namespace MR {
 
     void initAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pArcName, const char* pEventName) {
         char actorEventName[128];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         char animName[64];
-        snprintf(animName, sizeof(animName), "%s.canm", pEventName);
+        nebula_snprintf(animName, sizeof(animName), "%s.canm", pEventName);
 
         declareEventCameraAnim(pInfo, actorEventName, loadResourceFromArc(pArcName, animName));
     }
 
     void endAnimCamera(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName, s32 frame, bool resetView) {
         char actorEventName[128];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         endEventCamera(pInfo, actorEventName, resetView, frame);
     }
 
     s32 getAnimCameraFrame(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         char actorEventName[256];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         return getAnimCameraFrame(pInfo, actorEventName);
     }
 
     bool isAnimCameraEnd(const LiveActor* pActor, const ActorCameraInfo* pInfo, const char* pEventName) {
         char actorEventName[256];
-        snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
+        nebula_snprintf(actorEventName, sizeof(actorEventName), "%s%s", pActor->getName(), pEventName);
 
         return isAnimCameraEnd(pInfo, actorEventName);
     }
@@ -321,10 +321,10 @@ namespace MR {
         f32 dist = calcDistanceToPlayer(pActor);
 
         if (dist <= strongDistMax) {
-            tryRumblePad(pActor, pStrongPatternName, WPAD_CHAN0);
+            tryRumblePad(pActor, pStrongPatternName, PLAYER_1);
             shakeCameraNormal();
         } else if (dist <= weakDistMax) {
-            tryRumblePad(pActor, pWeakPatternName, WPAD_CHAN0);
+            tryRumblePad(pActor, pWeakPatternName, PLAYER_1);
             shakeCameraWeak();
         }
     }
@@ -334,10 +334,10 @@ namespace MR {
         f32 dist = calcDistanceToPlayer(pActor);
 
         if (dist <= strongDistMax) {
-            tryRumblePad(pActor, pStrongPatternName, WPAD_CHAN0);
+            tryRumblePad(pActor, pStrongPatternName, PLAYER_1);
             shakeCameraNormalWeak();
         } else if (dist <= weakDistMax) {
-            tryRumblePad(pActor, pWeakPatternName, WPAD_CHAN0);
+            tryRumblePad(pActor, pWeakPatternName, PLAYER_1);
             shakeCameraWeak();
         }
     }
@@ -347,10 +347,10 @@ namespace MR {
         f32 dist = calcDistanceToPlayer(pActor);
 
         if (dist <= strongDistMax) {
-            tryRumblePad(pActor, pStrongPatternName, WPAD_CHAN0);
+            tryRumblePad(pActor, pStrongPatternName, PLAYER_1);
             shakeCameraStrong();
         } else if (dist <= weakDistMax) {
-            tryRumblePad(pActor, pWeakPatternName, WPAD_CHAN0);
+            tryRumblePad(pActor, pWeakPatternName, PLAYER_1);
             shakeCameraNormal();
         }
     }

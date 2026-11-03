@@ -9,7 +9,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/types.h>
 
 namespace NrvPalmIsland {
     NEW_NERVE(PalmIslandNrvWait, PalmIsland, Wait);
@@ -39,7 +38,7 @@ void PalmIsland::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, nullptr, false);
     initSound(2, false);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
-    _8C = MR::getRandom(0l, 60);
+    _8C = MR::getRandom(0, 60);
     initNerve(GET_NERVE(PalmIsland, PalmIslandNrvWait));
     makeActorAppeared();
 }
@@ -50,10 +49,6 @@ inline void PalmIsland::exeWait() {
     }
 }
 
-// required to match
-// TODO remove
-#pragma push
-#pragma opt_propagation off
 void PalmIsland::exeFloat() {
     if (MR::isFirstStep(this)) {
         _90 = mPosition;
@@ -75,4 +70,3 @@ void PalmIsland::exeFloat() {
     _9C = temp;
     mVelocity.scale(value, *getGravity());
 }
-#pragma pop

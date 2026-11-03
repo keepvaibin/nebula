@@ -46,6 +46,8 @@ struct Corner {
 };
 
 // Geometry::attributes (as nebula_game_api.h's NEBULA_SHAPE_*).
+// Corner::texture_matrix: the coordinate starts from the corner's own position matrix (as NEBULA_CORNER_POSITION_MATRIX).
+inline constexpr std::uint8_t kCornerPositionMatrix = 0xFFu;
 inline constexpr std::uint32_t kNormal = 1u << 0;
 inline constexpr std::uint32_t kColor0 = 1u << 1;
 inline constexpr std::uint32_t kColor1 = 1u << 2;
@@ -87,58 +89,98 @@ struct Matrix {
     std::array<float, 12> values{};
 };
 
-// Vertices the game sent as it drew them (nebula_game_api.h NebulaImmediate): `geometry` has one corner per vertex,
-// in order, reading `arrays` (its values) entry by entry; `primitive` is GX's opcode (its top five bits).
-struct Immediate {
-    std::uint8_t primitive = 0;
-    Geometry geometry;
-    std::array<Array, 12> arrays;
-};
+// How immediate vertices group: nebula_game_api.h NebulaPrimitive's values.
+enum PrimitiveKind : std::uint8_t { kQuads = 0, kTriangles, kTriangleStrip, kTriangleFan, kLines, kLineStrip, kPoints, kWideQuads };
 
-// The indices a primitive of `count` vertices draws with, as the renderer has always split GX's primitives (`primitive`
-// is GX's opcode, its top five bits): quads as (0 1 2)(0 2 3), strips with their odd triangles turned, fans around
-// vertex 0, line strips as line lists, triangles, lines and points as they are.
+// The indices a primitive (NebulaPrimitive) of `count` vertices draws with: quads as (0 1 2)(0 2 3), strips with their
+// odd triangles turned, fans around vertex 0, line strips as line lists, triangles, lines and points as they are.
+// Lines and points as triangles (kWideQuads, four corners each); the vertex stage moves the corners out by the draw's line
+// width and point size. widened_count: how many corners `count` vertices make; 0 when the primitive is not a line or point.
+[[nodiscard]] std::uint32_t widened_count(std::uint8_t primitive, std::uint32_t count) noexcept;
+void widen_lines_points(std::uint8_t primitive, std::uint32_t count, const RenderVertex* in, RenderVertex* out) noexcept;
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
 
+inline constexpr std::uint32_t kNoNative = 0xFFFFFFFFu;
+
+// A scene boundary's camera, the player's up and the stage (the game's values at that boundary).
+struct SceneInfo {
+    std::array<float, 12> view{};
+    std::uint32_t sky_up = 0;
+    bool view_valid = false, sky_up_valid = false;
+    std::array<char, 48> stage{};
+};
+
+// What a chunk's records point into: one allocation a frame, not one a record.
+struct RecordPool {
+    std::vector<SceneInfo> scenes;
+    std::vector<Matrix> matrices;
+    std::vector<state::Op> ops;
+    std::vector<material::Native> natives;
+    std::vector<RenderVertex> vertices;
+    std::vector<ScreenProbe> probes;
+};
+
 // The game's records, in the order it made them (render_core.h attach_shape_record).
+// What a draw does to the target (nebula_game_api.h NebulaPassState).
+struct PassState {
+    std::uint8_t blend_op = 0, blend_src = 0, blend_dst = 0, logic_op = 0;
+    std::uint8_t depth_test = 0, depth_func = 0, depth_write = 0;
+    std::uint8_t cull = 0;
+    std::uint8_t color_write = 0, alpha_write = 0;
+    std::uint8_t constant_alpha = 0, constant_alpha_value = 0;
+    std::uint8_t position_matrix = 0;
+    std::uint8_t line_divisor = 0, point_divisor = 0;
+    std::uint8_t line_offsets = 0, point_offsets = 0;
+    std::uint8_t reserved[3] = {};
+    float line_width = 0.0f, point_size = 0.0f;
+};
+
 struct Record {
     enum class Kind : std::uint8_t {
-        Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow, FrameClear
+        Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
+        TargetBegin, TargetEnd, TargetClear, FramePass, FrameTake, NativeMaterial, FrameShow, FrameClear, Forget, Scene, TextureHd
     };
-    std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
     std::uint64_t key = 0;   // the array's or the group's
-    std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays
+    std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays (Forget: keys from `key` up to `position` go)
     std::shared_ptr<const Array> array;
     std::shared_ptr<const Geometry> geometry;
     // A material program (MaterialProgram) and a material's values (Material), both under `key`: the program's.
-    std::shared_ptr<const material::Program> program;
-    std::shared_ptr<const material::Values> material;
     // A native material (NativeMaterial): a shader compiled at build with its constants, textures and state.
-    std::shared_ptr<const material::Native> native;
-    std::vector<state::Op> state;  // drawing-state changes outside materials, in order
-    std::shared_ptr<const Immediate> immediate;
-    // An image's bytes (TextureImage), at `key`: its physical address.
+    std::uint32_t native_index = kNoNative;
+    // Drawing-state changes outside materials, in order: their place in the frame's pool (RecordPool::ops).
+    std::uint32_t op_first = 0, op_count = 0;
+    // Immediate: its vertices in the frame's pool; their position matrix slot is the current one unless the attributes
+    // (Geometry::attributes' bits) say each has its own. `primitive` a NebulaPrimitive.
+    // Readback: its probes in the frame's pool, the same way.
+    std::uint32_t vertex_first = 0, vertex_count = 0, attributes = 0;
+    PassState pass;  // Draw, Immediate
+    std::uint8_t primitive = 0;
+    // An image's bytes (TextureImage), at `key`: its physical address. TextureHd: the record the game painted larger of
+    // the image at `key`; none: it goes.
     std::shared_ptr<const std::vector<std::byte>> image;
     // A draw's (or an immediate's) matrices, and the places its corners take when they carry none (position, texture
     // coordinates 0-7) when the game set them since its last draw.
-    std::vector<Matrix> matrices;
+    std::uint32_t matrix_first = 0, matrix_count = 0;  // their place in the frame's pool (RecordPool::matrices)
     bool has_current = false;
     std::array<std::uint8_t, 9> current{};
     // Texture coordinates generated differently from the material: coord, type, source, normalize, post matrix id.
-    std::vector<std::array<std::uint8_t, 5>> texgens;
+    std::array<std::array<std::uint8_t, 5>, 8> texgens{};
+    std::uint8_t texgen_count = 0;
     // A host marker (Marker, its kind at `key`): aux, then a and b (a draw identity's objects by address).
     std::uint32_t marker_aux = 0;
     std::array<std::uint64_t, 2> marker{};
     // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth.
-    std::uint16_t target_width = 0, target_height = 0;
-    std::uint32_t target_clear_rgba = 0, target_clear_z = 0;
-    // TargetClear, FrameClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd, TargetCapture:
+    std::uint32_t target_width = 0, target_height = 0;
+    std::uint32_t target_clear_rgba = 0;
+    // TargetBegin: the textures that are the frame and its depth during the pass (0: not sampled), the frame carrying
+    // target_channels.
+    std::uint64_t target_frame_key = 0, target_depth_key = 0;
+    // TargetClear, FrameClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd, FramePass:
     // NebulaTargetChannels. FrameClear: its rectangle (target_x, target_y, target_width x target_height).
     std::uint8_t target_channels = 0;
-    // TargetCapture: the frame's rectangle (target_x, target_y, target_width x target_height), NebulaCaptureFlags;
-    // FrameShow: the picture shown (target_width x target_height) and its NebulaCaptureFlags.
+    // FramePass: the frame's rectangle (target_x, target_y, target_width x target_height), NebulaFramePassFlags;
+    // FrameShow: the picture shown (target_width x target_height) and its NebulaFramePassFlags.
     std::uint16_t target_x = 0, target_y = 0;
     std::uint8_t target_flags = 0;
 };

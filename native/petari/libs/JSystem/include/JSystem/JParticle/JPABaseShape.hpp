@@ -1,100 +1,99 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 class JPABaseParticle;
-class JKRHeap;
+class NebulaArena;
 
 struct JPABaseShapeData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ NEBULA_BE(u32) mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ NEBULA_BE(u32) mFlags;
-    /* 0x0C */ NEBULA_BE(s16) mClrPrmAnmOffset;
-    /* 0x0E */ NEBULA_BE(s16) mClrEnvAnmOffset;
-    /* 0x10 */ NEBULA_BE(f32) mBaseSizeX;
-    /* 0x14 */ NEBULA_BE(f32) mBaseSizeY;
-    /* 0x18 */ NEBULA_BE(u16) mBlendModeCfg;
-    /* 0x1A */ u8 mAlphaCompareCfg;
-    /* 0x1B */ u8 mAlphaRef0;
-    /* 0x1C */ u8 mAlphaRef1;
-    /* 0x1D */ u8 mZModeCfg;
-    /* 0x1E */ u8 mTexFlg;
-    /* 0x1F */ u8 mTexAnmNum;
-    /* 0x20 */ u8 mTexIdx;
-    /* 0x21 */ u8 mClrFlg;
-    /* 0x22 */ u8 mClrPrmKeyNum;
-    /* 0x23 */ u8 mClrEnvKeyNum;
-    /* 0x24 */ NEBULA_BE(s16) mClrAnmFrmMax;
-    /* 0x26 */ GXColor mClrPrm;
-    /* 0x2A */ GXColor mClrEnv;
-    /* 0x2E */ u8 mAnmRndm;
-    /* 0x2F */ u8 mClrAnmRndmMask;
-    /* 0x30 */ u8 mTexAnmRndmMask;
-};  // Size: 0x34
+    u32 mFlags;
+    s16 mClrPrmAnmOffset;
+    s16 mClrEnvAnmOffset;
+    f32 mBaseSizeX;
+    f32 mBaseSizeY;
+    u16 mBlendModeCfg;
+    u8 mAlphaCompareCfg;
+    u8 mAlphaRef0;
+    u8 mAlphaRef1;
+    u8 mZModeCfg;
+    u8 mTexFlg;
+    u8 mTexAnmNum;
+    u8 mTexIdx;
+    u8 mClrFlg;
+    u8 mClrPrmKeyNum;
+    u8 mClrEnvKeyNum;
+    s16 mClrAnmFrmMax;
+    NebulaColor8 mClrPrm;
+    NebulaColor8 mClrEnv;
+    u8 mAnmRndm;
+    u8 mClrAnmRndmMask;
+    u8 mTexAnmRndmMask;
+};
 
 struct JPABaseShape {
 public:
-    JPABaseShape(u8 const*, JKRHeap*);
-    void setGX(JPAEmitterWorkData*) const;
+    JPABaseShape(u8 const*, NebulaArena*);
+    void setPass(JPAEmitterWorkData*) const;
 
-    static GXBlendMode st_bm[3];
-    static GXBlendFactor st_bf[10];
-    static GXLogicOp st_lo[16];
-    static GXCompare st_c[8];
-    static GXAlphaOp st_ao[4];
-    static GXTevColorArg st_ca[6][4];
-    static GXTevAlphaArg st_aa[2][4];
+    static const u8 st_bm[4];
+    static const u8 st_lo[16];
+    static const u8 st_c[8];
+    static u8 blendFactor(u32 code, bool source);
 
-    GXBlendMode getBlendMode() const {
+    u8 getBlendMode() const {
         return st_bm[mpData->mBlendModeCfg & 0x03];
     }
-    GXBlendFactor getBlendSrc() const {
-        return st_bf[(mpData->mBlendModeCfg >> 2) & 0x0F];
+    u8 getBlendSrc() const {
+        return blendFactor((mpData->mBlendModeCfg >> 2) & 0x0F, true);
     }
-    GXBlendFactor getBlendDst() const {
-        return st_bf[(mpData->mBlendModeCfg >> 6) & 0x0F];
+    u8 getBlendDst() const {
+        return blendFactor((mpData->mBlendModeCfg >> 6) & 0x0F, false);
     }
-    GXLogicOp getLogicOp() const {
+    u8 getLogicOp() const {
         return st_lo[(mpData->mBlendModeCfg >> 10) & 0x0F];
     }
-    GXBool getZCompLoc() const {
-        return (GXBool)((mpData->mZModeCfg >> 5) & 0x01);
+    bool getZCompLoc() const {
+        return ((mpData->mZModeCfg >> 5) & 0x01) != 0;
     }
 
-    GXBool getZEnable() const {
-        return (GXBool)(mpData->mZModeCfg & 0x01);
+    bool getZEnable() const {
+        return (mpData->mZModeCfg & 0x01) != 0;
     }
-    GXCompare getZCmp() const {
+    u8 getZCmp() const {
         return st_c[(mpData->mZModeCfg >> 1) & 0x07];
     }
-    GXBool getZUpd() const {
-        return (GXBool)((mpData->mZModeCfg >> 4) & 0x01);
+    bool getZUpd() const {
+        return ((mpData->mZModeCfg >> 4) & 0x01) != 0;
     }
 
-    GXCompare getAlphaCmp0() const {
+    u8 getAlphaCmp0() const {
         return st_c[mpData->mAlphaCompareCfg & 0x07];
     }
     u8 getAlphaRef0() const {
         return mpData->mAlphaRef0;
     }
-    GXAlphaOp getAlphaOp() const {
-        return st_ao[(mpData->mAlphaCompareCfg >> 3) & 0x03];
+    // 0 and, 1 or, 2 exclusive or, 3 equal.
+    u8 getAlphaOp() const {
+        return (mpData->mAlphaCompareCfg >> 3) & 0x03;
     }
-    GXCompare getAlphaCmp1() const {
+    u8 getAlphaCmp1() const {
         return st_c[(mpData->mAlphaCompareCfg >> 5) & 0x07];
     }
     u8 getAlphaRef1() const {
         return mpData->mAlphaRef1;
     }
 
-    const GXTevColorArg* getTevColorArg() const {
-        return st_ca[(mpData->mFlags >> 0x0F) & 0x07];
+    // The colour and alpha modes (runtime/src/render/materials/particle.hlsl).
+    u32 getTevColorMode() const {
+        return (mpData->mFlags >> 0x0F) & 0x07;
     }
-    const GXTevAlphaArg* getTevAlphaArg() const {
-        return st_aa[(mpData->mFlags >> 0x12) & 0x01];
+    u32 getTevAlphaMode() const {
+        return (mpData->mFlags >> 0x12) & 0x01;
     }
 
     u32 getType() const {
@@ -155,16 +154,16 @@ public:
     s16 getClrAnmMaxFrm() const {
         return mpData->mClrAnmFrmMax;
     }
-    void getPrmClr(GXColor* dst) {
+    void getPrmClr(NebulaColor8* dst) {
         *dst = mpData->mClrPrm;
     }
-    void getPrmClr(s16 idx, GXColor* dst) {
+    void getPrmClr(s16 idx, NebulaColor8* dst) {
         *dst = mpPrmClrAnmTbl[idx];
     }
-    void getEnvClr(GXColor* dst) {
+    void getEnvClr(NebulaColor8* dst) {
         *dst = mpData->mClrEnv;
     }
-    void getEnvClr(s16 idx, GXColor* dst) {
+    void getEnvClr(s16 idx, NebulaColor8* dst) {
         *dst = mpEnvClrAnmTbl[idx];
     }
 
@@ -204,50 +203,50 @@ public:
     }
 
     f32 getIncTransX() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[5];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[5];
     }
     f32 getInitTransX() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[0];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[0];
     }
     f32 getIncTransY() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[6];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[6];
     }
     f32 getInitTransY() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[1];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[1];
     }
     f32 getIncScaleX() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[7];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[7];
     }
     f32 getInitScaleX() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[2];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[2];
     }
     f32 getIncScaleY() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[8];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[8];
     }
     f32 getInitScaleY() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[3];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[3];
     }
     f32 getIncRot() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[9];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[9];
     }
     f32 getInitRot() const {
-        return ((const NEBULA_BE(f32)*)mpTexCrdMtxAnmTbl)[4];
+        return ((const f32*)mpTexCrdMtxAnmTbl)[4];
     }
     u8 getTexAnmKeyNum() const {
         return mpData->mTexAnmNum;
     }
 
 public:
-    /* 0x00 */ const JPABaseShapeData* mpData;
-    /* 0x04 */ const void* mpTexCrdMtxAnmTbl;
-    /* 0x08 */ const u8* mpTexIdxAnimTbl;
-    /* 0x0C */ GXColor* mpPrmClrAnmTbl;
-    /* 0x10 */ GXColor* mpEnvClrAnmTbl;
+    const JPABaseShapeData* mpData;
+    const void* mpTexCrdMtxAnmTbl;
+    const u8* mpTexIdxAnimTbl;
+    NebulaColor8* mpPrmClrAnmTbl;
+    NebulaColor8* mpEnvClrAnmTbl;
 };
 
 struct JPAClrAnmKeyData {
-    /* 0x0 */ NEBULA_BE(s16) index;
-    /* 0x2 */ GXColor color;
+    s16 index;
+    NebulaColor8 color;
 };
 
 // The quad arrays the particles drawn next read (JPAResource's), and a particle's quad from them (type 1: crossed).
@@ -280,8 +279,8 @@ void JPACalcClrIdxMerge(JPAEmitterWorkData*, JPABaseParticle*);
 void JPACalcClrIdxRandom(JPAEmitterWorkData*, JPABaseParticle*);
 void JPACalcColorCopy(JPAEmitterWorkData*, JPABaseParticle*);
 
-void JPADrawStripe(JPAEmitterWorkData*) ATTRIBUTE_WEAK;
-void JPADrawStripeX(JPAEmitterWorkData*) ATTRIBUTE_WEAK;
+void JPADrawStripe(JPAEmitterWorkData*);
+void JPADrawStripeX(JPAEmitterWorkData*);
 void JPADrawEmitterCallBackB(JPAEmitterWorkData*);
 void JPALoadTex(JPAEmitterWorkData*);
 void JPALoadTexAnm(JPAEmitterWorkData*);
@@ -297,7 +296,7 @@ void JPARegistEnv(JPAEmitterWorkData*);
 void JPARegistPrmEnv(JPAEmitterWorkData*);
 
 void JPADrawPoint(JPAEmitterWorkData*, JPABaseParticle*);
-void JPADrawLine(JPAEmitterWorkData*, JPABaseParticle*) ATTRIBUTE_WEAK;
+void JPADrawLine(JPAEmitterWorkData*, JPABaseParticle*);
 void JPADrawRotBillboard(JPAEmitterWorkData*, JPABaseParticle*);
 void JPADrawBillboard(JPAEmitterWorkData*, JPABaseParticle*);
 void JPADrawRotDirection(JPAEmitterWorkData*, JPABaseParticle*);

@@ -1,7 +1,5 @@
 #include "Game/Camera/CameraViewInterpolator.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/AreaObj/AreaObj.hpp"
 #include "Game/AreaObj/CameraRepulsiveArea.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
@@ -12,16 +10,6 @@
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
-
-void CameraViewInterpolator_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)2.0f;
-    (void)MR::epsilon();
-    (void)-1.0f;
-    (void)0.5f;
-    (void)3.0f;
-}
 
 namespace {
     static const f32 sCollisionBallRadius = 10000.0f;
@@ -215,11 +203,9 @@ bool CameraViewInterpolator::calcBinder(TVec3f* pBindDir, const TVec3f& rTargetP
 }
 
 void CameraViewInterpolator::reduceOscillation() {
-#ifdef TARGET_PC
     if (mIsForceCameraChange) {
         MotionSignal::cameraCut();
     }
-#endif
     if (!mIsAntiOscillation || mIsForceCameraChange) {
         mIsForceCameraChange = false;
         mMtx.set(mTargetMtx);

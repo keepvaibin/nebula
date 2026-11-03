@@ -3,18 +3,14 @@
 #include "galaxy/render/vk/game_bloom_vk.h"
 
 #include "galaxy/render/game_bloom_shape.h"
-#include "galaxy/render/vk/shader_compile_vk.h"
+#include "galaxy/render/vk/utility_spirv.h"
 
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <span>
 #include <string>
 #include <utility>
-
-namespace galaxy::render {
-// The shader source cmake/post_shader_sources.cmake embeds.
-extern const unsigned char galaxy_post_game_bloom_hlsl[];
-}  // namespace galaxy::render
 
 namespace galaxy::render::vk {
 namespace {
@@ -22,10 +18,6 @@ namespace {
 constexpr VkFormat kWorkFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 constexpr VkShaderStageFlags kStages =
     VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-// game_bloom.hlsl's registers: t0-t2 sampled and u0-u2 storage images in set 0, s0 in set 1, the constants pushed.
-constexpr RegisterBinding kBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
-                                         {"u0", 0, 3},       {"u1", 0, 4}, {"u2", 0, 5}, {"s0", 1, 0}};
 
 void image_barrier(VkCommandBuffer commands, VkImage image, VkImageLayout from, VkImageLayout to,
                    VkPipelineStageFlags src_stage, VkAccessFlags src_access, VkPipelineStageFlags dst_stage,
@@ -55,35 +47,11 @@ void written(VkCommandBuffer commands) {
 
 void GameBloomVk::initialize() {
     shutdown();
-    compiled_.store(false, std::memory_order_relaxed);
-    worker_ = std::thread([this] {
-        struct Source {
-            Program program;
-            ShaderStage stage;
-            const char* entry;
-        };
-        static constexpr Source kSources[] = {{kDown, ShaderStage::Compute, "DownCS"},
-                                              {kBox, ShaderStage::Compute, "BoxCS"},
-                                              {kBlur, ShaderStage::Compute, "BlurCS"},
-                                              {kCompositeVs, ShaderStage::Vertex, "CompositeVS"},
-                                              {kCompositePs, ShaderStage::Fragment, "CompositePS"}};
-        const std::string source =
-            annotate(reinterpret_cast<const char*>(galaxy_post_game_bloom_hlsl), kBindings);
-        for (const Source& s : kSources) {
-            std::string error;
-            spirv_[s.program] = compile_hlsl(source, s.stage, s.entry, {"BLOOM_STORAGE_FORMAT=1"}, error);
-            if (spirv_[s.program].empty()) {
-                std::cerr << "[bloom] " << s.entry << ": " << error << '\n';
-            }
-        }
-        compiled_.store(true, std::memory_order_release);
-    });
+    to_build_ = true;
 }
 
 void GameBloomVk::shutdown() noexcept {
-    if (worker_.joinable()) {
-        worker_.join();
-    }
+    to_build_ = false;
     destroy();
     ready_ = false;
     kept_ = false;
@@ -100,10 +68,10 @@ bool GameBloomVk::poll_ready() {
     if (ready_) {
         return true;
     }
-    if (!worker_.joinable() || !compiled_.load(std::memory_order_acquire)) {
+    if (!to_build_) {
         return false;
     }
-    worker_.join();
+    to_build_ = false;
     ready_ = build();
     if (!ready_) {
         destroy();
@@ -113,12 +81,12 @@ bool GameBloomVk::poll_ready() {
 }
 
 VkShaderModule GameBloomVk::module(Program program) const {
-    const std::vector<std::uint32_t>& code = spirv_[program];
-    if (code.empty()) {
-        return VK_NULL_HANDLE;
-    }
+    static constexpr UtilitySpirv kShaders[kProgramCount] = {UtilitySpirv::BloomDownCs, UtilitySpirv::BloomBoxCs,
+                                                             UtilitySpirv::BloomBlurCs, UtilitySpirv::BloomCompositeVs,
+                                                             UtilitySpirv::BloomCompositePs};
+    const std::span<const std::uint32_t> code = utility_spirv(kShaders[program]);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * sizeof(std::uint32_t);
+    info.codeSize = code.size_bytes();
     info.pCode = code.data();
     VkShaderModule shader = VK_NULL_HANDLE;
     return vkCreateShaderModule(Context::get().device(), &info, nullptr, &shader) == VK_SUCCESS ? shader
@@ -198,8 +166,8 @@ bool GameBloomVk::build() {
             return false;
         }
     }
-    // The composite's pipelines are made per EFB pass at first use; its programs must have compiled.
-    return !spirv_[kCompositeVs].empty() && !spirv_[kCompositePs].empty();
+    // The composite's pipelines are made per scene target pass at first use.
+    return true;
 }
 
 void GameBloomVk::destroy() noexcept {
@@ -230,7 +198,7 @@ void GameBloomVk::destroy() noexcept {
     sampler_ = VK_NULL_HANDLE;
 }
 
-// The kept scene plus the bloom over the frame, RGB only, in an EFB pass of 2^samples_log2 samples.
+// The kept scene plus the bloom over the frame, RGB only, in an scene target pass of 2^samples_log2 samples.
 VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_log2) {
     samples_log2 = std::min(samples_log2, 3u);
     if (composite_[samples_log2] != VK_NULL_HANDLE && composite_pass_[samples_log2] == pass) {
@@ -266,7 +234,8 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
         multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
         VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
         VkPipelineColorBlendAttachmentState target{};
-        target.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+        target.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+                                VK_COLOR_COMPONENT_A_BIT;
         VkPipelineColorBlendStateCreateInfo blend{VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO};
         blend.attachmentCount = 1;
         blend.pAttachments = &target;
@@ -299,7 +268,7 @@ VkPipeline GameBloomVk::composite_pipeline(VkRenderPass pass, unsigned samples_l
     return pipeline;
 }
 
-// A work image (storage and sampled, kept in GENERAL) or a copy target (the EFB's format, transfer destination and
+// A work image (storage and sampled, kept in GENERAL) or a copy target (the scene target's format, transfer destination and
 // sampled), made again when its size or format changes; the old one lives while submissions name it.
 bool GameBloomVk::ensure(std::shared_ptr<Texture>& target, unsigned width, unsigned height, VkFormat format, bool work,
                          const char* name) {
@@ -343,6 +312,15 @@ bool GameBloomVk::copy_frame(VkCommandBuffer commands, const Inputs& in, std::sh
     return true;
 }
 
+std::shared_ptr<Texture> GameBloomVk::take_kept_image() {
+    return std::move(keep_);
+}
+
+void GameBloomVk::keep_picture(std::shared_ptr<Texture> picture) {
+    keep_ = std::move(picture);
+    kept_ = true;
+}
+
 bool GameBloomVk::keep(VkCommandBuffer commands, const Inputs& in) {
     kept_ = ready_ && in.color != nullptr && in.frame_width != 0u && in.frame_height != 0u &&
             copy_frame(commands, in, keep_, "bloom kept scene");
@@ -357,7 +335,7 @@ VkDescriptorSet GameBloomVk::set_of(const SetAllocator& allocate, std::array<con
     for (unsigned i = 0; i < 6u; ++i) {
         const Texture* const t = i < 3u ? sampled[i] : storage[i - 3u];
         const Texture* const used = t != nullptr ? t : dummy_.get();
-        // Copies are read shader-read-only, work images in GENERAL; the first slot's layout may be given (the EFB).
+        // Copies are read shader-read-only, work images in GENERAL; the first slot's layout may be given (the scene target).
         const VkImageLayout layout = i == 0u && first_layout != VK_IMAGE_LAYOUT_UNDEFINED ? first_layout
                                      : used->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
                                          ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
@@ -398,11 +376,10 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     if (restore) {
         // Kind 0: the scene alone, the levels unread.
         composite_inputs_[0] = composite_inputs_[1] = composite_inputs_[2] = keep_.get();
-        composite_constants_.params[3] = 1.0f;  // the RGBA8 EFB
         pending_ = true;
         return true;
     }
-    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.logical_height, in.scale);
+    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot") &&
                 ensure(work_, s.w1, s.h1, kWorkFormat, true, "bloom work") &&
@@ -436,9 +413,8 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-    const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, in.logical_width,
-                                             in.logical_height, p.ring_x, p.ring_y);
-    // The selection's source: the glowing models drawn over black (normal: the EFB itself), the scene (simple).
+    const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);
+    // The selection's source: the glowing models drawn over black (normal: the scene target itself), the scene (simple).
     if (normal) {
         image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -486,7 +462,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
                  set_of(allocate, {(across ? box_tmp_ : work_).get(), nullptr, nullptr}, {mask_.get(), nullptr, nullptr}),
                  s.w1, s.h1);
     }
-    // Level 1: the rings' Gaussians across, then down, summed at the taps' weight (normal: clamped, as the EFB holds
+    // Level 1: the rings' Gaussians across, then down, summed at the taps' weight (normal: clamped, as the scene target holds
     // it).
     {
         Constants c{};
@@ -540,7 +516,6 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     c.params[0] = static_cast<float>(std::min(p.intensity, 255u)) / 255.0f;
     c.params[1] = std::max(p.strength, 0.0f);
     c.params[2] = normal ? 1.0f : 2.0f;
-    c.params[3] = 1.0f;  // the RGBA8 EFB: the bloom rounded stochastically
     c.uv[0] = 1.0f / static_cast<float>(s.f * s.w1);
     c.uv[1] = 1.0f / static_cast<float>(s.f * s.h1);
     c.uv[2] = 1.0f / static_cast<float>(s.f * s.n * std::max(s.w2, 1u));

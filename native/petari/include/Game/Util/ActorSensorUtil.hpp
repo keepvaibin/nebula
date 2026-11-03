@@ -1,9 +1,8 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class HitSensor;
 class LiveActor;
@@ -544,9 +543,9 @@ namespace MR {
     bool isInSpinStormRange(u32 msg, HitSensor* pSender, HitSensor* pReceiver, f32 range);
     bool receiveItemShowMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     bool receiveItemHideMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
-    HitSensor* getGroundSensor(const LiveActor* pActor) NO_INLINE;
-    HitSensor* getRoofSensor(const LiveActor* pActor) NO_INLINE;
-    HitSensor* getWallSensor(const LiveActor* pActor) NO_INLINE;
+    HitSensor* getGroundSensor(const LiveActor* pActor);
+    HitSensor* getRoofSensor(const LiveActor* pActor);
+    HitSensor* getWallSensor(const LiveActor* pActor);
     bool isMsgPlayerHitAll(u32 msg);
     bool isMsgPlayerSpinAttack(u32 msg);
     bool isMsgPlayerTrample(u32 msg);

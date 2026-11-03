@@ -1,9 +1,8 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 typedef void (*PreRenderCallback)();
 
@@ -28,28 +27,24 @@ public:
     void prepareCopyDisp();
     void preGX();
     void endGX();
-    void waitForRetrace();
     void beginRender();
     void endRender();
     void endFrame();
-    void waitBlanking(int);
-    void clearEfb(GXColor);
-    static void setForOSResetSystem();
+    void clearFrame(NebulaColor8);
+    static void prepareForExit();
 
-    /* 0x00 */ Color8 mClearColor;
-    /* 0x10 */ u16 mRetraceCount;
-    /* 0x18 */ bool mUseAlpha;
-    /* 0x19 */ bool mUseVFilter;
+    Color8 mClearColor;
+    bool mUseAlpha;
     u8 _1A;
     u8 _1B;
-    /* 0x1C */ f32 mCombinationRatio;
-    /* 0x2C */ s32 mRenderInterval;
-    /* 0x30 */ s32 mRenderCounter;
-    /* 0x34 */ u8 mDoRenderFrame;
+    f32 mCombinationRatio;
+    s32 mRenderInterval;
+    s32 mRenderCounter;
+    u8 mDoRenderFrame;
     u8 _35;
     u8 _36;
     u8 _37;
-    /* 0x38 */ PreRenderCallback mPreRenderCallback;
+    PreRenderCallback mPreRenderCallback;
 
     u32 _pad1;
     u32 _pad2;

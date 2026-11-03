@@ -4,9 +4,18 @@
 //! files' new places and sizes, the files after it.
 
 pub mod archive;
+pub mod audio_data;
 pub mod dol;
+pub mod ghost;
 pub mod formats;
+pub mod material;
+pub mod mesh;
+pub mod native_data;
+pub mod overlay;
+pub mod shader_source;
+pub mod store;
 pub mod texture;
+pub mod thp;
 
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -46,12 +55,104 @@ fn extension(name: &str) -> String {
     name.rsplit_once('.').map_or(String::new(), |(_, e)| e.to_ascii_lowercase())
 }
 
-/// Whether the cooker reads a file of this name (the others are copied as they are).
-pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "tpl" | "brfnt" | "jpc")
+/// A name the stages' placement tables take: no extension, or a numeric one (commonpathpointinfo.2).
+fn placement_table_name(name: &str) -> bool {
+    let file = name.rsplit('/').next().unwrap_or(name);
+    match file.rsplit_once('.') {
+        None => true,
+        Some((_, ext)) => !ext.is_empty() && ext.bytes().all(|b| b.is_ascii_digit()),
+    }
 }
 
-/// One file cooked: Some(new bytes), or None when it stays as it is.
+/// Whether the cooker reads a file of this name (the others are copied as they are).
+pub fn cooks(name: &str) -> bool {
+    matches!(extension(name).as_str(), "arc" | "szs" | "gst" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
+}
+
+/// A disc file only a console reads: the channel banner, the HOME menu's loadable module and the module list.
+fn console_only(path: &str) -> bool {
+    path == "opening.bnr" || path.starts_with("ModuleData/")
+}
+
+/// An archive member left behind by the tools that made the game; no code opens one.
+fn tool_leftover(file: &str) -> bool {
+    matches!(extension(file).as_str(), "ini" | "prj" | "xnim" | "dvw" | "dvmat" | "dck" | "dtp" | "backup" | "csv#")
+}
+
+/// What a source file (or a part of one) becomes in the store: bytes at a path below it, or a folder with no files.
+pub struct StoreItem {
+    pub path: String,
+    /// Where it comes in the store's bytes against the others of its source file.
+    pub order: usize,
+    pub bytes: Option<Vec<u8>>,
+}
+
+/// Archives inside archives past this are refused (the game's own go one level down): each level can expand again.
+const ARCHIVE_DEPTH_MAX: usize = 8;
+
+/// One source file as the store holds it: itself cooked, or, an archive, a folder of its members cooked, side by side.
+pub fn cook_entry(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
+    cook_entry_at(name, bytes, 0, stats)
+}
+
+fn cook_entry_at(name: &str, bytes: Vec<u8>, depth: usize, stats: &mut Stats) -> Result<Vec<StoreItem>> {
+    let mut bytes = bytes;
+    if archive::is_compressed(&bytes) {
+        bytes = archive::expand(&bytes).with_context(|| format!("{name} cannot be expanded"))?;
+        stats.expanded_files += 1;
+    }
+    if !archive::is_archive(&bytes) {
+        let cooked = cook_file(name, bytes.clone(), stats)?.unwrap_or(bytes);
+        return Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]);
+    }
+    if depth >= ARCHIVE_DEPTH_MAX {
+        bail!("{name}: archives inside archives more than {ARCHIVE_DEPTH_MAX} deep");
+    }
+    let mut items = Vec::new();
+    for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
+        let file = member.path.rsplit('/').next().unwrap_or(&member.path);
+        if tool_leftover(file) {
+            continue;
+        }
+        for item in cook_entry_at(&format!("{name}/{file}"), member.bytes, depth + 1, stats)? {
+            let path = if item.path.is_empty() { member.path.clone() } else { format!("{}/{}", member.path, item.path) };
+            items.push(StoreItem { path, order: member.offset, bytes: item.bytes });
+        }
+    }
+    if items.is_empty() {
+        items.push(StoreItem { path: String::new(), order: 0, bytes: None });
+    }
+    stats.cooked_files += 1;
+    Ok(items)
+}
+
+/// Writes a source file's items at `at` in their order, each on a boundary; their places, in the items' own order.
+fn place(pak: &mut File, at: &mut u64, path: &str, items: Vec<StoreItem>, stats: &mut Stats) -> Result<Vec<store::Placed>> {
+    let mut by_order: Vec<usize> = (0..items.len()).collect();
+    by_order.sort_by_key(|i| items[*i].order);
+    let mut places = vec![(0u64, 0u64); items.len()];
+    for i in by_order {
+        if let Some(bytes) = &items[i].bytes {
+            pak.seek(SeekFrom::Start(*at))?;
+            pak.write_all(bytes).with_context(|| format!("{path}/{} cannot be written", items[i].path))?;
+            places[i] = (*at, bytes.len() as u64);
+            stats.bytes_out += bytes.len() as u64;
+            *at = (*at + bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+        }
+    }
+    Ok(items
+        .iter()
+        .zip(places)
+        .map(|(item, (position, size))| store::Placed {
+            path: if item.path.is_empty() { path.to_string() } else { format!("{path}/{}", item.path) },
+            position,
+            size,
+            folder: item.bytes.is_none(),
+        })
+        .collect())
+}
+
+/// One file cooked: Some(new bytes), or None when it stays as it is. An archive is not one file (cook_entry).
 pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option<Vec<u8>>> {
     let mut changed = false;
     let mut bytes = bytes;
@@ -60,22 +161,65 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         stats.expanded_files += 1;
         changed = true;
     }
-    let cooked = if archive::is_archive(&bytes) {
-        Some(archive::rebuild(&bytes, &mut |member, data| {
-            cook_file(&format!("{name}/{member}"), data, stats)
-        })?)
-    } else if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
-        Some(formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?)
+    if archive::is_archive(&bytes) {
+        bail!("{name} is an archive");
+    }
+    let cooked = if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
+        let textured = formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?;
+        Some(material::cook_model(&textured).with_context(|| format!("{name}: native model materials"))?)
+    } else if native_data::is_j3d_model(&bytes) {
+        Some(material::cook_model(&bytes).with_context(|| format!("{name}: native material table"))?)
+    } else if native_data::is_j3d_animation(&bytes) {
+        Some(native_data::j3d_animation(&bytes).with_context(|| format!("{name}: animation"))?)
     } else if bytes.starts_with(b"JPAC2-10") {
-        Some(formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?)
+        let textured = formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
+        Some(native_data::jpc_host(&textured).with_context(|| format!("{name}: particles (host order)"))?)
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
-        Some(formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?)
+        let textured = formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?;
+        Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
+    } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
+        Some(material::layout::cook(&bytes).with_context(|| format!("{name}: native layout materials"))?)
+    } else if bytes.starts_with(b"STRM") && extension(name) == "ast" {
+        Some(audio_data::ast(&bytes).with_context(|| format!("{name}: stream"))?)
+    } else if bytes.starts_with(b"THP\0") {
+        Some(thp::movie(&bytes).with_context(|| format!("{name}: movie"))?)
+    } else if bytes.starts_with(b"AA_<") {
+        Some(native_data::baa(&bytes).with_context(|| format!("{name}: audio archive"))?)
+    } else if bytes.starts_with(b"MESGbmg1") {
+        Some(native_data::bmg(&bytes).with_context(|| format!("{name}: messages"))?)
+    } else if matches!(extension(name).as_str(), "bcsv" | "tbl" | "pa" | "bcam" | "banmt") {
+        native_data::bcsv(&bytes, true).with_context(|| format!("{name}: table"))?
+    } else if placement_table_name(name) && native_data::bcsv(&bytes, false).ok().flatten().is_some()
+    {
+        native_data::bcsv(&bytes, false)?
+    } else if extension(name) == "gst" {
+        Some(ghost::host_order(&bytes).with_context(|| format!("{name}: ghost"))?)
+    } else if extension(name) == "canm" {
+        Some(native_data::canm(&bytes).with_context(|| format!("{name}: camera animation"))?)
+    } else if extension(name) == "bas" {
+        Some(native_data::bas(&bytes).with_context(|| format!("{name}: sound animation"))?)
+    } else if extension(name) == "cit" {
+        Some(native_data::cit(&bytes).with_context(|| format!("{name}: chord table"))?)
+    } else if matches!(extension(name).as_str(), "brs" | "bme") || (extension(name) == "bmt" && !bytes.starts_with(b"J3D")) {
+        Some(native_data::rhythm(&bytes, &extension(name)).with_context(|| format!("{name}: rhythm library file"))?)
+    } else if matches!(extension(name).as_str(), "bct" | "csw") {
+        Some(native_data::speaker(&bytes, &extension(name)).with_context(|| format!("{name}: speaker file"))?)
+    } else if extension(name) == "kcl" {
+        Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {
-        Some(formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?)
+        let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
+        Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)
     } else if name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("RFL_Res.dat")) {
-        Some(formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?)
-    } else if extension(name) == "bti" && !texture::is_record(bytes.get(0x20..).unwrap_or(&[])) {
-        Some(formats::bti(&bytes, stats).with_context(|| format!("{name}: texture"))?)
+        let textured = formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?;
+        Some(native_data::rfl_res_host(&textured).with_context(|| format!("{name}: Mii parts (host order)"))?)
+    } else if extension(name) == "bti" {
+        // A texture file whose image is a record already keeps it; every one's header turns host order.
+        let textured = if texture::is_record(bytes.get(0x20..).unwrap_or(&[])) {
+            bytes.clone()
+        } else {
+            formats::bti(&bytes, stats).with_context(|| format!("{name}: texture"))?
+        };
+        Some(native_data::bti_host(&textured).with_context(|| format!("{name}: texture (host order)"))?)
     } else {
         None
     };
@@ -159,64 +303,63 @@ pub fn write_cooked_pak(
 ) -> Result<u64> {
     let files = pak_files(system.fst())?;
     let total: u64 = files.iter().map(|f| f.length).sum();
-    let mut fst = system.fst().to_vec();
     let mut pak = File::create(output).with_context(|| format!("{} cannot be created", output.display()))?;
-    pak.write_all(&system.bytes)?;
-    let mut at = (system.bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+    pak.write_all(&[0u8; store::HEADER as usize])?;
+    let mut at = store::HEADER.div_ceil(ALIGN) * ALIGN;
+    let mut placed = Vec::with_capacity(files.len());
     let mut done = 0u64;
     if !progress(0, total) {
         bail!("the import was cancelled");
+    }
+    // AW files have no header: the audio archive's wave systems say where their waves lie.
+    let mut waves = std::collections::BTreeMap::new();
+    for file in files.iter().filter(|f| f.path.ends_with("AudioRes/SMR.szs")) {
+        waves = audio_data::wave_layout(&read(file)?).context("the audio archive's wave systems")?;
     }
     // In disc order, so a reader of the source reads forwards.
     let mut order: Vec<&PakFile> = files.iter().collect();
     order.sort_by_key(|f| f.offset);
     for file in order {
+        if console_only(&file.path) {
+            done += file.length;
+            continue;
+        }
         let bytes = read(file)?;
         if bytes.len() as u64 != file.length {
             bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
         }
         stats.bytes_in += file.length;
-        let out = if cooks(&file.path) {
-            cook_file(&file.path, bytes.clone(), stats)?.unwrap_or(bytes)
+        // Whatever its name, a compressed file is expanded here: the game has no decompressor.
+        let items = if cooks(&file.path) || archive::is_compressed(&bytes) {
+            cook_entry(&file.path, bytes, stats)?
+        } else if let Some(places) = waves.get(&audio_data::wave_archive_key(&file.path)) {
+            stats.cooked_files += 1;
+            let cooked = audio_data::wave_archive(&bytes, places).with_context(|| format!("{}: wave archive", file.path))?;
+            vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]
         } else {
-            bytes
+            vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }]
         };
-        if at >> 2 > u32::MAX as u64 || out.len() > u32::MAX as usize {
-            bail!("the cooked game is larger than a file table can address");
-        }
-        pak.seek(SeekFrom::Start(at))?;
-        pak.write_all(&out).with_context(|| format!("{} cannot be written", file.path))?;
-        fst[file.node * 12 + 4..file.node * 12 + 8].copy_from_slice(&((at >> 2) as u32).to_be_bytes());
-        fst[file.node * 12 + 8..file.node * 12 + 12].copy_from_slice(&(out.len() as u32).to_be_bytes());
-        stats.bytes_out += out.len() as u64;
-        at = (at + out.len() as u64).div_ceil(ALIGN) * ALIGN;
+        placed.extend(place(&mut pak, &mut at, &file.path, items, stats)?.into_iter().map(|p| (file.node, p)));
         done += file.length;
         if !progress(done, total) {
             bail!("the import was cancelled");
         }
     }
-    // The tables main.dol holds, as files of their own folder after the disc's (B-05): the file table grows, so it
-    // moves after the files and boot.bin names its new place.
+    // A folder lists its files in the file table's order, whatever order their bytes are in.
+    placed.sort_by_key(|(node, _)| *node);
+    let mut placed: Vec<store::Placed> = placed.into_iter().map(|(_, file)| file).collect();
+    // The tables main.dol holds, as files of their own folder (B-05).
     let dol = system_dol(system)?;
     let game_id = String::from_utf8_lossy(&system.bytes[..6]).into_owned();
     let extra = dol::tables(dol, &game_id, stats)?;
-    let mut placed = Vec::with_capacity(extra.len());
-    for (_, bytes) in &extra {
-        pak.seek(SeekFrom::Start(at))?;
-        pak.write_all(bytes)?;
-        placed.push(at);
-        at = (at + bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+    for (name, items) in extra {
+        placed.extend(place(&mut pak, &mut at, &format!("{}/{name}", dol::FOLDER), items, stats)?);
     }
-    let fst = append_folder(&fst, dol::FOLDER, &extra, &placed)?;
-    let fst_at = at;
-    pak.seek(SeekFrom::Start(fst_at))?;
-    pak.write_all(&fst)?;
-    at = (at + fst.len() as u64).div_ceil(ALIGN) * ALIGN;
-    let words = |n: u64| ((n >> 2) as u32).to_be_bytes();
-    pak.seek(SeekFrom::Start(0x424))?;
-    pak.write_all(&words(fst_at))?;
-    pak.write_all(&words(fst.len() as u64))?;
-    pak.write_all(&words(fst.len() as u64))?;
+    // Where the disc's waves lie: a cooked archive no longer says, and mods' wave archives need it (overlay.rs).
+    let layout = audio_data::layout_text(&waves).into_bytes();
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(layout) };
+    placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
+    let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
     Ok(at)
@@ -234,43 +377,6 @@ fn system_dol(system: &SystemArea) -> Result<&[u8]> {
         }
     }
     system.bytes.get(start..start + end).context("main.dol runs past the system area")
-}
-
-/// A file table with a folder of `files` added at the root, after every other node: their places `placed`.
-fn append_folder(fst: &[u8], folder: &str, files: &[(String, Vec<u8>)], placed: &[u64]) -> Result<Vec<u8>> {
-    let count = be32(fst, 8) as usize;
-    let names_at = count * 12;
-    let new_count = count + 1 + files.len();
-    let mut out = Vec::with_capacity(fst.len() + (1 + files.len()) * 12 + 64);
-    out.extend_from_slice(&fst[..names_at]);
-    out[8..12].copy_from_slice(&(new_count as u32).to_be_bytes());
-    // Names: the table's own, then the folder's and its files'.
-    let mut names = fst[names_at..].to_vec();
-    while names.last() == Some(&0) && names.len() > 1 && names[names.len() - 2] == 0 {
-        names.pop();
-    }
-    let mut add_name = |names: &mut Vec<u8>, name: &str| -> u32 {
-        let at = names.len() as u32;
-        names.extend_from_slice(name.as_bytes());
-        names.push(0);
-        at
-    };
-    let folder_name = add_name(&mut names, folder);
-    out.extend_from_slice(&(0x0100_0000 | folder_name).to_be_bytes());
-    out.extend_from_slice(&0u32.to_be_bytes());
-    out.extend_from_slice(&(new_count as u32).to_be_bytes());
-    for ((name, bytes), at) in files.iter().zip(placed) {
-        let name = add_name(&mut names, name);
-        out.extend_from_slice(&name.to_be_bytes());
-        out.extend_from_slice(&((at >> 2) as u32).to_be_bytes());
-        out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
-    }
-    if names.len() > 0x00FF_FFFF {
-        bail!("the file table's names outgrow it");
-    }
-    out.extend_from_slice(&names);
-    out.resize((out.len() + 3) & !3, 0);
-    Ok(out)
 }
 
 /// The system area of an existing game.pak (the content format before cooking).
@@ -295,7 +401,11 @@ pub fn pak_system_area(pak: &mut File) -> Result<SystemArea> {
             dol_end = dol_end.max(dol + offset + size);
         }
     }
-    let end = (fst_offset + fst_max).max(dol_end);
+    // The boot header's words stay readable in the area; its numbers are compared to the file before any is allocated.
+    let end = (fst_offset + fst_max).max(dol_end).max(boot.len());
+    if end as u64 > pak.metadata()?.len() {
+        bail!("game.pak ends inside its system files");
+    }
     let mut bytes = vec![0u8; end];
     pak.seek(SeekFrom::Start(0))?;
     pak.read_exact(&mut bytes).context("game.pak ends inside its system files")?;
@@ -312,116 +422,23 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
     let system = pak_system_area(&mut pak)?;
     fs::create_dir_all(output).with_context(|| format!("{} cannot be created", output.display()))?;
     let mut stats = Stats::default();
+    let source_len = pak.metadata()?.len();
     let result = (|| {
         let target = output.join("game.pak");
         let mut read = |file: &PakFile| -> Result<Vec<u8>> {
+            if file.offset + file.length > source_len {
+                bail!("{} lies past game.pak's end", file.path);
+            }
             let mut bytes = vec![0u8; file.length as usize];
             pak.seek(SeekFrom::Start(file.offset))?;
             pak.read_exact(&mut bytes).with_context(|| format!("{} cannot be read from game.pak", file.path))?;
             Ok(bytes)
         };
-        write_cooked_pak(&system, &mut read, &target, progress, &mut stats)?;
-        write_beside_files(&target, output)
+        write_cooked_pak(&system, &mut read, &target, progress, &mut stats).map(|_| ())
     })();
     if let Err(error) = result {
         let _ = fs::remove_dir_all(output);
         return Err(error);
     }
     Ok(stats)
-}
-
-/// The content folder's one file besides game.pak: the settings overlay draws its window frame from this archive.
-pub const FILE_SELECT_ARCHIVE: &str = "LayoutData/FileSelect.arc";
-
-/// files/LayoutData/FileSelect.arc beside a cooked game.pak, copied out of it.
-pub fn write_beside_files(pak_path: &Path, output: &Path) -> Result<()> {
-    let mut pak = File::open(pak_path)?;
-    let system = pak_system_area(&mut pak)?;
-    let files = pak_files(system.fst())?;
-    let file = files
-        .iter()
-        .find(|f| f.path.eq_ignore_ascii_case(FILE_SELECT_ARCHIVE))
-        .with_context(|| format!("the file table has no {FILE_SELECT_ARCHIVE}"))?;
-    let mut bytes = vec![0u8; file.length as usize];
-    pak.seek(SeekFrom::Start(file.offset))?;
-    pak.read_exact(&mut bytes)?;
-    let target = FILE_SELECT_ARCHIVE.split('/').fold(output.join("files"), |p, c| p.join(c));
-    fs::create_dir_all(target.parent().unwrap())?;
-    fs::write(&target, bytes).with_context(|| format!("{} cannot be written", target.display()))?;
-    Ok(())
-}
-
-/// The runtime's call into the cooker for a mod's files (runtime/src/cooker_bridge.cpp): `name` (UTF-8, its disc
-/// path) and `size` bytes at `data`. Returns 1 with the cooked bytes in `*out` (`*out_size` of them, freed with
-/// nebula_cook_free), 0 when the file stays as it is, -1 when it cannot be cooked.
-///
-/// # Safety
-/// `name` is a NUL-terminated string, `data` holds `size` bytes, `out` and `out_size` are writable.
-#[no_mangle]
-pub unsafe extern "C" fn nebula_cook_file(
-    name: *const std::ffi::c_char,
-    data: *const u8,
-    size: usize,
-    out: *mut *mut u8,
-    out_size: *mut usize,
-) -> i32 {
-    let result = std::panic::catch_unwind(|| {
-        let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
-        let bytes = std::slice::from_raw_parts(data, size).to_vec();
-        cook_file(&name, bytes, &mut Stats::default())
-    });
-    match result {
-        Ok(Ok(Some(cooked))) => {
-            let boxed = cooked.into_boxed_slice();
-            *out_size = boxed.len();
-            *out = Box::into_raw(boxed) as *mut u8;
-            1
-        }
-        Ok(Ok(None)) => 0,
-        _ => -1,
-    }
-}
-
-/// One of the NebulaData files (cook/dol.rs) of a main.dol (`size` bytes at `dol`) for release `game_id`: the runtime
-/// cooks a mod's patched main.dol with it. Returns 1 with the bytes in `*out` (`*out_size` of them, freed with
-/// nebula_cook_free), 0 when that release has no such file, -1 when main.dol cannot be read.
-///
-/// # Safety
-/// `game_id` and `name` are NUL-terminated strings, `dol` holds `size` bytes, `out` and `out_size` are writable.
-#[no_mangle]
-pub unsafe extern "C" fn nebula_cook_dol_table(
-    dol: *const u8,
-    size: usize,
-    game_id: *const std::ffi::c_char,
-    name: *const std::ffi::c_char,
-    out: *mut *mut u8,
-    out_size: *mut usize,
-) -> i32 {
-    let result = std::panic::catch_unwind(|| {
-        let game_id = std::ffi::CStr::from_ptr(game_id).to_string_lossy().into_owned();
-        let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
-        let dol = std::slice::from_raw_parts(dol, size);
-        dol::tables(dol, &game_id, &mut Stats::default()).map(|files| files.into_iter().find(|(n, _)| *n == name))
-    });
-    match result {
-        Ok(Ok(Some((_, bytes)))) => {
-            let boxed = bytes.into_boxed_slice();
-            *out_size = boxed.len();
-            *out = Box::into_raw(boxed) as *mut u8;
-            1
-        }
-        Ok(Ok(None)) => 0,
-        _ => -1,
-    }
-}
-
-/// Frees what nebula_cook_file returned.
-///
-/// # Safety
-/// `data` and `size` are a pair nebula_cook_file returned, freed once.
-#[no_mangle]
-pub unsafe extern "C" fn nebula_cook_free(data: *mut u8, size: usize) {
-    if !data.is_null() {
-        drop(Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, size)));
-    }
 }

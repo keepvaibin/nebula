@@ -6,7 +6,7 @@ void JASSeqReader::init() {
     mNumStacks = 0;
     for (u32 i = 0; i < 8; i++) {
         mStackPtrs[i] = nullptr;
-        mLoopCounts[i] = nullptr;
+        mLoopCounts[i] = 0;
     }
 }
 

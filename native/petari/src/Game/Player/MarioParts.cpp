@@ -5,13 +5,12 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, bool a4, MtxPtr mtx1, MtxPtr mtx2)
     : PartsModel(pActor, pName, pModelName, mtx2, a4 ? MR::DrawBufferType_CrystalBox : MR::DrawBufferType_PlayerDecoration, true), _9C() {
-    MR::initDLMakerFog(this, true);
-    MR::newDifferedDLBuffer(this);
+    MR::initMaterialFog(this, true);
+    MR::newDifferedMaterials(this);
     if (MR::getLightNumMax(this) > 0) {
         MR::initLightCtrl(this);
     }
@@ -24,8 +23,8 @@ MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelN
 
 MarioParts::MarioParts(LiveActor* pActor, const char* pName, const char* pModelName, MtxPtr mtx)
     : PartsModel(pActor, pName, pModelName, nullptr, MR::DrawBufferType_UNK_0x17, true), _9C() {
-    MR::initDLMakerFog(this, true);
-    MR::newDifferedDLBuffer(this);
+    MR::initMaterialFog(this, true);
+    MR::newDifferedMaterials(this);
     if (MR::getLightNumMax(this) > 0) {
         MR::initLightCtrl(this);
     }

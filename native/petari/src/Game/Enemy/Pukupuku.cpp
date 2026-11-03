@@ -22,27 +22,6 @@
 #include "Game/Util/ValueControl.hpp"
 #include <JSystem/JMath/JMath.hpp>
 
-void Pukupuku_FORCE_MATCH_SDATA2() {
-    (void)300.0f;
-    (void)15.0f;
-    (void)500.0f;
-    (void)0.15f;
-    (void)0.01f;
-    (void)1.5f;
-    (void)100.0f;
-    (void)60.0f;
-    (void)70.0f;
-    (void)50.0f;
-    (void)10.0f;
-    (void)40.0f;
-    (void)0.08f;
-    (void)0.89f;
-    (void)35.0f;
-    (void)20.0f;
-    (void)5.0f;
-    (void)0.6f;
-}
-
 namespace {
     NEW_NERVE(PukupukuStateLandingLandingMoveLand, PukupukuStateLanding, LandingMoveLand);
     NEW_NERVE(PukupukuStateLandingLandingJumpFromWater, PukupukuStateLanding, LandingJumpFromWater);
@@ -90,7 +69,7 @@ void PukupukuStateLanding::exeLandingMoveLand() {
 
     bool move = false;
 
-    if (mValueCtrl->isFrameMaxFrame() || MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue()) {
+    if (mValueCtrl->isFrameMaxFrame() || (MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue())) {
         move = true;
     }
 
@@ -122,7 +101,7 @@ void PukupukuStateLanding::exeLandingJumpFromWater() {
 
     bool move = false;
 
-    if (mValueCtrl->isFrameMaxFrame() || MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue()) {
+    if (mValueCtrl->isFrameMaxFrame() || (MR::isBinded(mHost) && 0.5f < mValueCtrl->getValue())) {
         move = true;
     }
 
@@ -332,7 +311,7 @@ void Pukupuku::calcGroundHitMtx(TPos3f* pMtx) const {
     MR::calcMtxFromGravityAndZAxis(pMtx, this, mGravity, zDir);
 }
 
-bool Pukupuku::isReadyToJumpFromLand() const NO_INLINE {
+bool Pukupuku::isReadyToJumpFromLand() const {
     s32 arg0 = -1;
     MR::getRailPointArg0NoInit(this, MR::getCurrentRailPointNo(this), &arg0);
     return arg0 == 1;

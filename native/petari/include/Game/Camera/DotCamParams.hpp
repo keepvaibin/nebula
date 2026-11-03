@@ -2,9 +2,8 @@
 
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class DotCamReader {
 public:
@@ -37,9 +36,9 @@ public:
 
     void init(const void*);
 
-    /* 0x04 */ u32 mVersion;
-    /* 0x08 */ u8* _8;
-    /* 0x0C */ JMapInfo mMapInfo;
-    /* 0x14 */ JMapInfoIter mMapIter;
-    /* 0x1C */ u8 _1C[0x10];
+    u32 mVersion;
+    u8* _8;
+    JMapInfo mMapInfo;
+    JMapInfoIter mMapIter;
+    u8 _1C[0x10];
 };

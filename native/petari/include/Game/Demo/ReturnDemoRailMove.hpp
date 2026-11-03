@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/types.h>
 
 class LiveActor;
 class JMapInfoIter;
@@ -25,11 +24,11 @@ public:
         return mTransform;
     }
 
-    /* 0x00 */ LiveActor* mDemoStarter;  // Can be either StarReturnDemoStarter or GrandStarReturnDemoStarter
-    /* 0x04 */ LiveActor* mPowerStar;
-    /* 0x08 */ bool mIsGrandStar;
-    /* 0x0C */ TPos3f* mTransform;
-    /* 0x10 */ SpinDriverShootPath* mShootPath;
-    /* 0x14 */ SpinDriverPathDrawer* mPathDrawer;
-    /* 0x18 */ TVec3f mForward;
+    LiveActor* mDemoStarter;  // Can be either StarReturnDemoStarter or GrandStarReturnDemoStarter
+    LiveActor* mPowerStar;
+    bool mIsGrandStar;
+    TPos3f* mTransform;
+    SpinDriverShootPath* mShootPath;
+    SpinDriverPathDrawer* mPathDrawer;
+    TVec3f mForward;
 };

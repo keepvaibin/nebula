@@ -20,13 +20,13 @@ namespace NrvCandlestand {
 
 namespace {
     struct Param {
-        /* 0x00 */ const char* mObjName;
-        /* 0x04 */ f32 mClippingRadius;
-        /* 0x08 */ f32 mSensorRange;
-        /* 0x0C */ f32 mSensorHeight;
-        /* 0x10 */ f32 mItemHeight;
-        /* 0x14 */ f32 mCoinAngle;
-        /* 0x18 */ bool mCanUseSwitch;
+        const char* mObjName;
+        f32 mClippingRadius;
+        f32 mSensorRange;
+        f32 mSensorHeight;
+        f32 mItemHeight;
+        f32 mCoinAngle;
+        bool mCanUseSwitch;
     };
 
     static const Param sParams[] = {
@@ -35,7 +35,7 @@ namespace {
         {"CandlestandIceVolcano", 500.0f, 150.0f, 220.0f, 0.0f, 0.0f, true},
     };
 
-    const Param* getParam(const char* pObjName) NO_INLINE {
+    const Param* getParam(const char* pObjName) {
         for (u32 i = 0; i < ARRAY_SIZE(::sParams); i++) {
             if (MR::isEqualString(pObjName, ::sParams[i].mObjName)) {
                 return &::sParams[i];

@@ -1,10 +1,9 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <revolution/types.h>
 
 class CreateResourceHolderArgs;
-class JKRHeap;
+class NebulaArena;
 class LayoutHolder;
 class ResourceHolder;
 class ResourceHolderManager;
@@ -18,9 +17,9 @@ public:
     /// @brief Creates a new `CreateResourceHolderArgs`.
     CreateResourceHolderArgs();
 
-    /* 0x0 */ ResourceHolder* mResourceHolder;
-    /* 0x4 */ LayoutHolder* mLayoutHolder;
-    /* 0x8 */ JKRHeap* mHeap;
+    ResourceHolder* mResourceHolder;
+    LayoutHolder* mLayoutHolder;
+    NebulaArena* mHeap;
 };
 
 class ResourceHolderManagerName2Resource {
@@ -33,10 +32,10 @@ public:
     /// @return A reference to `this`.
     ResourceHolderManagerName2Resource& operator=(const ResourceHolderManagerName2Resource& other);
 
-    /* 0x0 */ ResourceHolder* mResourceHolder;
-    /* 0x4 */ LayoutHolder* mLayoutHolder;
-    /* 0x8 */ u32 mHash;
-    /* 0xC */ JKRHeap* mHeap;
+    ResourceHolder* mResourceHolder;
+    LayoutHolder* mLayoutHolder;
+    u32 mHash;
+    NebulaArena* mHeap;
 };
 
 class ResourceHolderManager {
@@ -44,23 +43,23 @@ public:
     /// @brief Creates a new `ResourceHolderManager`.
     ResourceHolderManager();
 
-    ResourceHolder* createAndAdd(const char*, JKRHeap*);
+    ResourceHolder* createAndAdd(const char*, NebulaArena*);
     ResourceHolder* createAndAddStationed(const char*);
-    LayoutHolder* createAndAddLayoutHolder(const char*, JKRHeap*);
+    LayoutHolder* createAndAddLayoutHolder(const char*, NebulaArena*);
     LayoutHolder* createAndAddLayoutHolderStationed(const char*);
     LayoutHolder* createAndAddLayoutHolderRawData(const char*);
-    void removeIfIsEqualHeap(JKRHeap*);
-    static void startCreateResourceHolderOnMainThread(const char*, CreateResourceHolderArgs*);
-    static void startCreateLayoutHolderOnMainThread(const char*, CreateResourceHolderArgs*);
+    void removeIfIsEqualHeap(NebulaArena*);
+    static void startCreateResourceHolder(const char*, CreateResourceHolderArgs*);
+    static void startCreateLayoutHolder(const char*, CreateResourceHolderArgs*);
 
 private:
     ResourceHolderManagerName2Resource* createAndAddInner(const char*, MakeArchiveFileNameFuncPtr, FuncPtrB);
-    ResourceHolderManagerName2Resource* createAndAddInnerStationed(const char*, FuncPtrC) NO_INLINE;
+    ResourceHolderManagerName2Resource* createAndAddInnerStationed(const char*, FuncPtrC);
     void createResourceHolder(const char*, CreateResourceHolderArgs*);
     void createLayoutHolder(const char*, CreateResourceHolderArgs*);
     ResourceHolderManagerName2Resource* add(const char*, const CreateResourceHolderArgs&);
     ResourceHolderManagerName2Resource* find(const char*);
 
 private:
-    /* 0x0 */ MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
+    MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
 };

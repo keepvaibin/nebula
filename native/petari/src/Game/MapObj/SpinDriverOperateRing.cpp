@@ -1,6 +1,6 @@
 #include "Game/MapObj/SpinDriverOperateRing.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -86,10 +86,10 @@ void SpinDriverOperateRing::updatePosition() {
 }
 
 void SpinDriverOperateRing::updateControlPoint(const TVec3f& rVec) {
-    if (MR::isStarPointerInScreen(WPAD_CHAN0) && MR::calcStarPointerPosOnPlane(&_C8, _8C, rVec, WPAD_CHAN0, false)) {
+    if (MR::isStarPointerInScreen(PLAYER_1) && MR::calcStarPointerPosOnPlane(&_C8, _8C, rVec, PLAYER_1, false)) {
         _E0 = 1;
 
-        if (MR::testCorePadButtonB(WPAD_CHAN0)) {
+        if (MR::isHeldFire(PLAYER_1)) {
             _E0 = 2;
         }
     } else {
@@ -153,7 +153,6 @@ void SpinDriverOperateRing::calcOperatePowerByDPD(TVec3f* pVec) const {
         pVec->set(_C8 - _8C - _A4);
 
         TVec3f vec(_C8 - _8C - _A4);
-        TVec3f dir;
         f32 scalar;
         MR::separateScalarAndDirection(&scalar, &vec, vec);
 

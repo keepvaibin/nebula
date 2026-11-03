@@ -28,8 +28,8 @@ public:
     void exeStopped();
 
 private:
-    /* 0x08 */ MR::MovementControlType _8;
-    /* 0x0C */ const NameObj* _C;
+    MR::MovementControlType _8;
+    const NameObj* _C;
 };
 
 class SceneNameObjMovementController : public NameObj {
@@ -45,11 +45,11 @@ public:
     void notifyRequestNameObjMovementOnOff(bool);
 
 private:
-    /* 0x0C */ bool _C;
-    /* 0x10 */ StopSceneStateControl* mStopSceneStateControl;
+    bool _C;
+    StopSceneStateControl* mStopSceneStateControl;
 };
 
 namespace MR {
     SceneNameObjMovementController* getSceneNameObjMovementController();
-    void notifyRequestNameObjMovementOnOff() NO_INLINE;
+    void notifyRequestNameObjMovementOnOff();
 };  // namespace MR

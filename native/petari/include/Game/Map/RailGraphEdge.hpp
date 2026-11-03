@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class JMapInfo;
 
@@ -32,17 +31,17 @@ public:
         mPointArg7 = rEdge.mPointArg7;
     }
 
-    /* 0x00 */ f32 mDistance;
-    /* 0x04 */ s32 _4;
-    /* 0x08 */ s32 _8;
-    /* 0x0C */ s32 _C;
-    /* 0x10 */ s32 _10;
-    /* 0x14 */ s32 mPointArg0;
-    /* 0x18 */ s32 mPointArg1;
-    /* 0x1C */ s32 mPointArg2;
-    /* 0x20 */ s32 mPointArg3;
-    /* 0x24 */ s32 mPointArg4;
-    /* 0x28 */ s32 mPointArg5;
-    /* 0x2C */ s32 mPointArg6;
-    /* 0x30 */ s32 mPointArg7;
+    f32 mDistance;
+    s32 _4;
+    s32 _8;
+    s32 _C;
+    s32 _10;
+    s32 mPointArg0;
+    s32 mPointArg1;
+    s32 mPointArg2;
+    s32 mPointArg3;
+    s32 mPointArg4;
+    s32 mPointArg5;
+    s32 mPointArg6;
+    s32 mPointArg7;
 };

@@ -1,5 +1,4 @@
 #include "Game/LiveActor/ShadowSurfaceOval.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
@@ -10,7 +9,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx/GXEnum.h>
 
 ShadowSurfaceOval::~ShadowSurfaceOval() {
 }
@@ -48,7 +46,7 @@ void ShadowSurfaceOval::draw() const {
     TVec3f pos, normal;
     controller->getProjectionPos(&pos);
     controller->getProjectionNormal(&normal);
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, mColor);
+    ShadowSurfaceDrawInit::sendColor(mColor);
     TPos3f mtx;
     mtx.setInline(baseMtx);
     MR::preScaleMtx(mtx, size);
@@ -62,5 +60,5 @@ void ShadowSurfaceOval::draw() const {
     MR::preScaleMtx(mtx.toMtxPtr(), 0.9f);
     TDDraw::setModelMtx(mtx.toMtxPtr());
     MR::drawSimpleModel(mModelData);
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(128));
+    ShadowSurfaceDrawInit::sendColor(Color8(128));
 }

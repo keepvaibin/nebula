@@ -12,11 +12,6 @@ namespace NrvIceStep {
     NEW_NERVE(IceStepNrvHit, IceStep, Hit);
 };  // namespace NrvIceStep
 
-void IceStep_FORCE_MATCH_SDATA2() {
-    (void)90.0f;
-    (void)0.2f;
-}
-
 IceStep::IceStep(const char* pName) : LiveActor(pName) {
 }
 

@@ -1,20 +1,19 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <revolution/gx/GXEnum.h>
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class LiveActor;
 
 struct PointLightInfo {
-    /* 0x00 */ Vec mPos;
-    /* 0x0C */ GXColor mColor;
-    /* 0x10 */ f32 mRefDistance;
-    /* 0x14 */ f32 mRefBrightness;
-    /* 0x18 */ GXDistAttnFn mDistAttnFn;
+    Vec mPos;
+    NebulaColor8 mColor;
+    f32 mRefDistance;
+    f32 mRefBrightness;
+    J3DLightFalloff mDistAttnFn;
 };
 
 class LightPointCtrl {
@@ -36,12 +35,12 @@ public:
         return mStep;
     }
 
-    /* 0x00 */ s32 mStep;
-    /* 0x04 */ s32 mBlendTime;
-    /* 0x08 */ const LiveActor* mCurrentActor;
-    /* 0x0C */ const LiveActor* mPreviousActor;
-    /* 0x10 */ const LiveActor* mCandidateActor;
-    /* 0x14 */ PointLightInfo* mCurrentInfo;
-    /* 0x18 */ PointLightInfo* mTargetInfo;
-    /* 0x1C */ PointLightInfo* mPreviousInfo;
+    s32 mStep;
+    s32 mBlendTime;
+    const LiveActor* mCurrentActor;
+    const LiveActor* mPreviousActor;
+    const LiveActor* mCandidateActor;
+    PointLightInfo* mCurrentInfo;
+    PointLightInfo* mTargetInfo;
+    PointLightInfo* mPreviousInfo;
 };

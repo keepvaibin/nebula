@@ -19,38 +19,38 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
     MR::createSceneObj(SceneObj_VolumeModelDrawInit);
     mMtx = mtx;
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "%s.arc", pFileName);
+    nebula_snprintf(buf, sizeof(buf), "%s.arc", pFileName);
     mModelData = (J3DModelData*)MR::createAndAddResourceHolder(buf)->mModelResTable->getRes(pFileName);
 }
 
 void VolumeModelDrawer::draw() const {
     MR::loadProjectionMtx();
     loadModelDrawMtx();
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setColorUpdate(0);
-    J3DNativeState::setAlphaUpdate(1);
-    J3DNativeState::setDstAlpha(1, 0);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    GXColor color_1 = mColor;
-    J3DNativeState::setTevColor(GX_TEVREG0, color_1);
-    J3DNativeState::setZMode(0, GX_ALWAYS, 0);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    J3DPass::positionMatrix(0);
+    J3DPass::writeColor(false);
+    J3DPass::writeAlpha(true);
+    J3DPass::constantAlpha(true, 0);
+    J3DPass::cull(NEBULA_CULL_NONE);
+    NebulaColor8 color_1 = mColor;
+    MR::setShadowVolumeColor(color_1);
+    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
+    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ZERO);
     MR::drawSimpleModel(mModelData);
-    J3DNativeState::setDstAlpha(0, 0);
-    J3DNativeState::setZMode(1, GX_GEQUAL, 0);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ZERO, GX_LO_COPY);
+    J3DPass::constantAlpha(false, 0);
+    J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
+    J3DPass::cull(NEBULA_CULL_FRONT);
+    J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ZERO);
     MR::drawSimpleModel(mModelData);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
+    J3DPass::cull(NEBULA_CULL_BACK);
+    J3DPass::subtractBlend();
     MR::drawSimpleModel(mModelData);
-    GXColor color_2 = mColor;
-    J3DNativeState::setTevColor(GX_TEVREG0, color_2);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ONE, GX_LO_COPY);
-    J3DNativeState::setColorUpdate(1);
-    J3DNativeState::setDstAlpha(1, 0);
-    J3DNativeState::setZMode(0, GX_ALWAYS, 0);
+    NebulaColor8 color_2 = mColor;
+    MR::setShadowVolumeColor(color_2);
+    J3DPass::cull(NEBULA_CULL_NONE);
+    J3DPass::blend(NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_ONE);
+    J3DPass::writeColor(true);
+    J3DPass::constantAlpha(true, 0);
+    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
     MR::drawSimpleModel(mModelData);
 }
 

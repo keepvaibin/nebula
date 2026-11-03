@@ -1,5 +1,5 @@
 #include "Game/System/GalaxyCometScheduler.hpp"
-#include "Game/System/NebulaDiscTables.hpp"
+#include "Game/System/NebulaDataTables.hpp"
 #include "Game/System/GalaxyCometState.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -288,7 +288,7 @@ void GalaxyCometTimeTable::advance() {
 GalaxyCometScheduler::GalaxyCometScheduler() : mTimeTables(), mEnabled(true) {
     mTimeTables.init(6);
     for (s32 i = 0; i < mTimeTables.size(); i++) {
-        mTimeTables[i] = new GalaxyCometTimeTable(NebulaDiscTables::getCometTimePaper(i, sGalaxyCometTimerPaper[i]));
+        mTimeTables[i] = new GalaxyCometTimeTable(sGalaxyCometTimerPaper[i]);
     }
 }
 

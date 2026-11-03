@@ -26,7 +26,7 @@ struct StarPieceHostInfo {
 public:
     inline StarPieceHostInfo(NameObj* pNameObj, s32 a2, s32 a3, s32 a4) : mObj(pNameObj), _4(a2), _8(a3), _C(a4) {
     }
-    bool isAppearable() NO_INLINE {
+    bool isAppearable() {
         return _C < _4 && _8 < _4 - _C;
     }
 
@@ -87,7 +87,7 @@ public:
     void launch(const TVec3f&, const TVec3f&, bool, bool);
     f32 calcEffectScale(f32, f32, bool);
     f32 calcNearCameraScale();
-    f32 calcDistToCamera() NO_INLINE;
+    f32 calcDistToCamera();
     void emitTouchEffect(s32, f32);
     void emitGettableEffect(f32);
     void tryGotJudge();
@@ -109,17 +109,17 @@ public:
     TVec3f _A8;
     TVec3f _B4;
 
-    /* 0xC0 */ TriangleFilterDelegator< StarPiece >* mDelegator;
-    /* 0xC4 */ HitSensor* mTargetSensor;
+    TriangleFilterDelegator< StarPiece >* mDelegator;
+    HitSensor* mTargetSensor;
     s32 _C8;
-    /* 0xCC */ s32 mGettableDelayCounter;
-    /* 0xD0 */ s32 mFallKillTimer;
+    s32 mGettableDelayCounter;
+    s32 mFallKillTimer;
 
-    /* 0xD4 */ J3DGXColor mColor;
+    J3DColor mColor;
 
-    /* 0xD8 */ groupType mGroupType;
-    /* 0xDC */ StarPieceHostInfo* mHostInfo;
-    /* 0xE0 */ StarPieceReceiverInfo* mReceiverInfo;
+    groupType mGroupType;
+    StarPieceHostInfo* mHostInfo;
+    StarPieceReceiverInfo* mReceiverInfo;
     /* 0XE4 */ s32 mNumGift;
 
     struct {

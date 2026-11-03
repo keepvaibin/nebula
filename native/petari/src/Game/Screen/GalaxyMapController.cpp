@@ -1,3 +1,5 @@
+#include "Game/System/NebulaFrameClock.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Screen/GalaxyMapController.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/Nerve.hpp"
@@ -10,7 +12,7 @@
 #include "Game/Screen/PowerStarList.hpp"
 #include "Game/Screen/WipeFade.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -18,9 +20,8 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include <nw4r/lyt/drawInfo.h>
 
 namespace {
@@ -49,7 +50,6 @@ namespace {
     NEW_NERVE(GalaxyMapControllerNewGalaxyDiscoverPhaseDisplayGalaxyMap, GalaxyMapController, NewGalaxyDiscoverPhaseDisplayGalaxyMap);
     NEW_NERVE(GalaxyMapControllerNewTicoGalaxyDiscoverPhaseAstroMap, GalaxyMapController, NewTicoGalaxyDiscoverPhaseAstroMap);
     NEW_NERVE(GalaxyMapControllerNewDomeDiscoverPhaseAstroMap, GalaxyMapController, NewDomeDiscoverPhaseAstroMap);
-    NEW_NERVE(GalaxyMapControllerTicoCometFadeoutWhite, GalaxyMapController, TicoCometFadeoutWhite);
     NEW_NERVE(GalaxyMapControllerTicoCometWaitWhite, GalaxyMapController, TicoCometWaitWhite);
     NEW_NERVE(GalaxyMapControllerTicoCometPray, GalaxyMapController, TicoCometPray);
     NEW_NERVE(GalaxyMapControllerChallengeGalaxyDiscoverPhaseAstroMap, GalaxyMapController, ChallengeGalaxyDiscoverPhaseAstroMap);
@@ -70,7 +70,7 @@ GalaxyMapController::GalaxyMapController()
 
 namespace {
     u16 getFbWidth() {
-        const u16& rWidth = JUTGetVideoManager()->getFbWidth();
+        const u16& rWidth = NebulaFrameClock::cScreenUnitsAcross;
         return rWidth;
     }
 };  // namespace
@@ -100,9 +100,9 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
     mWipe->initWithoutIter();
 
     {
-        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
+        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2, GX_TF_RGB565);
+        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2);
     }
 
     if (MR::startFunctionAsyncExecuteOnMainThread(MR::Functor(this, &GalaxyMapController::capture), "GalaxyMapController::capture")) {
@@ -189,7 +189,7 @@ void GalaxyMapController::drawForCapture() {
     mMap->drawForCapture(drawInfo);
 }
 
-static const GXColor sWipeColor = {0, 0, 0, 255};
+static const NebulaColor8 sWipeColor = {0, 0, 0, 255};
 
 void GalaxyMapController::startGalaxyMap() {
     appear();
@@ -245,7 +245,7 @@ void GalaxyMapController::startNewDomeDiscover() {
     setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeinModeMap));
 }
 
-static const GXColor sTicoCometPrayWipeColor = {255, 255, 255, 255};
+static const NebulaColor8 sTicoCometPrayWipeColor = {255, 255, 255, 255};
 
 void GalaxyMapController::startTicoCometPray() {
     appear();
@@ -552,7 +552,7 @@ bool GalaxyMapController::tryChangeMode() {
         return true;
     }
 
-    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::isPressedJump(PLAYER_1)) {
         switch (mMode) {
         case Mode_AstroMap:
             MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
@@ -596,13 +596,8 @@ bool GalaxyMapController::tryDisplayAndKeyWait() {
         mMap->_71 = false;
     }
 
-#if (VERSION == RMGK01)
-    if (MR::isStep(this, ::sDisplayKeepFrame)) {
-        mMap->dispIconAButton();
-    }
-#endif
 
-    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::isPressedJump(PLAYER_1)) {
         setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeout));
 
         return true;
@@ -625,7 +620,7 @@ void GalaxyMapController::setNerveAccordingToNextModeFromMap() {
     }
 }
 
-void GalaxyMapController::setFaderParam(GXColor color, int frame) {
+void GalaxyMapController::setFaderParam(NebulaColor8 color, int frame) {
     mWipe->setColor(color);
     mWipeFrame = frame;
 }
@@ -634,10 +629,12 @@ void GalaxyMapController::capture() {
     Mtx44 projectionMtx;
     f32 halfHeight = MR::getScreenHeight() * 0.5f;
     f32 halfWidth = 304.0f;
-    NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    // A pass keeps the screen's scale and its target is half the screen: this projection puts the whole map in that half.
+    NebulaMtxOrtho(projectionMtx, halfHeight, -3.0f * halfHeight, -halfWidth, 3.0f * halfWidth, -1000.0f, 1000.0f);
+    J3DNativeTarget::begin(_38->mImage, _38->getWidth(), _38->getHeight(), 0);
+    J3DNativeView::setOrthographic(projectionMtx);
     drawForCapture();
-    _38->capture(0, 0, GX_TF_RGB565, true, 0, true);
+    J3DNativeTarget::end(_38->mImage, NEBULA_TARGET_RGB);
 }
 
 namespace MR {

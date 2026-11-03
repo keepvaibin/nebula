@@ -5,7 +5,7 @@
 
 class CameraTargetMtx;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class ModelObj;
 class SkeletalFishGuard;
 class SkeletalFishGuardHolder;
@@ -108,32 +108,32 @@ public:
         return mBossInfo->getLevelStatus(_110);
     }
 
-    /* 0x8C */ JointController* mControllers[0xD];
-    /* 0xC0 */ s32* mJointIndicies;
-    /* 0xC4 */ CollisionParts** mPartsArray;
-    /* 0xC8 */ SkeletalFishBossHead* mBossHead;
-    /* 0xCC */ SkeletalFishBossScarFlash* mScarFlash;
-    /* 0xD0 */ ModelObj* mBreakModel;
-    /* 0xD4 */ const HitSensor* _D4;
-    /* 0xD8 */ TPos3f _D8;
-    /* 0x108 */ SkeletalFishRailControl* mRailControl;
-    /* 0x10C */ SkeletalFishBossBattleDirector* mBossDirector;
-    /* 0x110 */ s32 _110;
-    /* 0x114 */ s32 _114;
-    /* 0x118 */ u32 _118;
-    /* 0x11C */ CameraTargetMtx* mCameraTargetMtx;
-    /* 0x120 */ TPos3f _120;
-    /* 0x150 */ TPos3f _150;
-    /* 0x180 */ TVec3f _180;
-    /* 0x18C */ SceneFunc mSceneFunc;
-    /* 0x198 */ const char* mCurScene;
-    /* 0x19C */ const Nerve* mSceneNerve;
-    /* 0x1A0 */ s32 _1A0;
-    /* 0x1A4 */ s32 _1A4;
-    /* 0x1A8 */ SkeletalFishBossInfo* mBossInfo;
-    /* 0x1AC */ SkeletalFishGuardHolder* mGuardHolder;
-    /* 0x1B0 */ s32 _1B0;
-    /* 0x1B4 */ s32 _1B4;
+    JointController* mControllers[0xD];
+    s32* mJointIndicies;
+    CollisionParts** mPartsArray;
+    SkeletalFishBossHead* mBossHead;
+    SkeletalFishBossScarFlash* mScarFlash;
+    ModelObj* mBreakModel;
+    const HitSensor* _D4;
+    TPos3f _D8;
+    SkeletalFishRailControl* mRailControl;
+    SkeletalFishBossBattleDirector* mBossDirector;
+    s32 _110;
+    s32 _114;
+    u32 _118;
+    CameraTargetMtx* mCameraTargetMtx;
+    TPos3f _120;
+    TPos3f _150;
+    TVec3f _180;
+    SceneFunc mSceneFunc;
+    const char* mCurScene;
+    const Nerve* mSceneNerve;
+    s32 _1A0;
+    s32 _1A4;
+    SkeletalFishBossInfo* mBossInfo;
+    SkeletalFishGuardHolder* mGuardHolder;
+    s32 _1B0;
+    s32 _1B4;
 };
 
 class SkeletalFishBossScarFlash : public PartsModel {
@@ -163,11 +163,11 @@ public:
     void updateCollisionMtx();
     void createSubModel();
 
-    /* 0x9C */ TMtx34f _9C;
-    /* 0xCC */ CollisionParts* _CC;
-    /* 0xD0 */ TMtx34f _D0;
-    /* 0x100 */ CollisionParts* _100;
-    /* 0x104 */ ModelObj* mLightModels[2];
-    /* 0x10C */ ModelObj* mBloomModels[2];
-    /* 0x114 */ u8 _114;
+    TMtx34f _9C;
+    CollisionParts* _CC;
+    TMtx34f _D0;
+    CollisionParts* _100;
+    ModelObj* mLightModels[2];
+    ModelObj* mBloomModels[2];
+    u8 _114;
 };

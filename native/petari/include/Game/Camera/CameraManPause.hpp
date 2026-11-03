@@ -19,8 +19,8 @@ public:
         return true;
     }
 
-    /* 0x48 */ f32 mDistBase;
-    /* 0x4C */ f32 mDistOffset;
-    /* 0x50 */ TVec2f mAngle;
-    /* 0x58 */ TVec3f mBasePos;
+    f32 mDistBase;
+    f32 mDistOffset;
+    TVec2f mAngle;
+    TVec3f mBasePos;
 };

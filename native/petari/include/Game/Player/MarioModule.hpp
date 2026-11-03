@@ -53,13 +53,6 @@ public:
     void stopAnimationUpperForce();
     f32 getAnimationFrame() const;
     void changeAnimation(const char*, u32);
-#ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< void, L >::Type changeAnimation(const char* pName, L n) {
-        changeAnimation(pName, (u32)n);
-    }
-#endif
     bool isAnimationRun(const char*, u32);
     void stopAnimation(const char*, u32);
     void setJointGlobalMtx(u16, MtxPtr);
@@ -92,13 +85,6 @@ public:
     TVec3f& getCamDirY() const;
     TVec3f& getCamDirZ() const;
     void startPadVib(u32);
-#ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
-    template < typename L >
-    typename NebulaLongCall< void, L >::Type startPadVib(L n) {
-        startPadVib((u32)n);
-    }
-#endif
     void startPadVib(const char*);
     f32 getStickX() const;
     f32 getStickP() const;
@@ -122,7 +108,7 @@ public:
     f32 marioAcos(f32) const;
     bool isInputDisable() const;
 
-    /* 0x4 */ MarioActor* mActor;
+    MarioActor* mActor;
 };
 
 class MarioModuleTask {
@@ -135,6 +121,6 @@ public:
     virtual bool exec() = 0;
     virtual void draw() const = 0;
 
-    /* 0x4 */ void* _4;
-    /* 0x8 */ MarioModuleTask* mNext;
+    void* _4;
+    MarioModuleTask* mNext;
 };

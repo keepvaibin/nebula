@@ -1,4 +1,7 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Screen/DepthOfFieldBlur.hpp"
+#include "Game/Util/NativeShader.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -10,7 +13,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <nebula_game_api.h>
 #include <cstring>
 
@@ -23,159 +26,66 @@ namespace {
     static const f32 sViewDistance = 10000.0f;
     static const s8 sScaleExp = 1;
 
-    // The depth-to-alpha pass's material (nebula_game_api.h NebulaMaterialProgram): the vertex colour passed
-    // through, no fog, no alpha test, depth neither tested nor written, no dither, no blending, no culling.
-    NebulaMaterialProgram sZAlphaProgram;
-    bool sZAlphaRegistered = false;
-
-    void sendZAlphaProgram() {
-        const NebulaHostServices* pHost = nebula_host();
-        if (!sZAlphaRegistered) {
-            NebulaMaterialProgram& rProgram = sZAlphaProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD_NULL;
-            rStage.tex_map = GX_TEXMAP_NULL;
-            rStage.channel = GX_COLOR0A0;
-            rStage.color_in[0] = rStage.color_in[1] = rStage.color_in[2] = GX_CC_ZERO;
-            rStage.color_in[3] = GX_CC_RASC;
-            rStage.alpha_in[0] = rStage.alpha_in[1] = rStage.alpha_in[2] = GX_CA_ZERO;
-            rStage.alpha_in[3] = GX_CA_RASA;
-            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            rProgram.tev_stages = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.dither = GX_FALSE;
-            rProgram.z_compare_location = 1;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_FOG | NEBULA_MATERIAL_LOADS_DITHER;
-            rProgram.fog.type = GX_FOG_NONE;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            rProgram.blend.type = GX_BM_NONE;
-            rProgram.blend.source = rProgram.blend.destination = GX_BL_ZERO;
-            rProgram.blend.logic_op = GX_LO_CLEAR;
-            rProgram.z_mode.enable = GX_FALSE;
-            rProgram.z_mode.func = GX_ALWAYS;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sZAlphaProgram), &rProgram);
-            sZAlphaRegistered = true;
-        }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sZAlphaProgram), &values);
+    // The depth-to-alpha pass (runtime/src/render/materials/vertex_color.hlsl): the ramp's vertex colours, no blending,
+    // depth or culling.
+    void sendZAlphaMaterial() {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_VERTEX_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.constants[4] = -1.0f;
+        NativeShader::send(material);
     }
 
-    // The final blend's material: the sharp picture's colour (texture 0) taken where the depth texture (2, as an
-    // indirect offset into texture 1) leaves it, its alpha from texture 1 times the material alpha, blended over the
-    // frame by source alpha; setupDrawTexture's other state.
-    NebulaMaterialProgram sFinalProgram;
-    bool sFinalRegistered = false;
-
-    void sendFinalProgram(JUTTexture* pTexture0, JUTTexture* pTexture1, JUTTexture* pTexture2, u8 alpha) {
-        const NebulaHostServices* pHost = nebula_host();
-        if (!sFinalRegistered) {
-            NebulaMaterialProgram& rProgram = sFinalProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            for (u32 i = 0; i < 2; i++) {
-                NebulaMaterialTevStage& rStage = rProgram.tev[i];
-                rStage.tex_coord = static_cast< u8 >(GX_TEXCOORD0 + i);
-                rStage.tex_map = static_cast< u8 >(GX_TEXMAP0 + i);
-                rStage.channel = GX_COLOR0A0;
-                rStage.color_in[0] = rStage.color_in[1] = rStage.color_in[2] = GX_CC_ZERO;
-                rStage.color_in[3] = i == 0 ? GX_CC_TEXC : GX_CC_CPREV;
-                rStage.alpha_in[0] = GX_CA_ZERO;
-                rStage.alpha_in[1] = i == 0 ? GX_CA_ZERO : GX_CA_TEXA;
-                rStage.alpha_in[2] = i == 0 ? GX_CA_ZERO : GX_CA_RASA;
-                rStage.alpha_in[3] = i == 0 ? GX_CA_KONST : GX_CA_ZERO;
-                rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-                rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-                rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-                rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            }
-            NebulaMaterialTevStage& rOffset = rProgram.tev[1];
-            rOffset.ind_stage = GX_INDTEXSTAGE0;
-            rOffset.ind_format = GX_ITF_8;
-            rOffset.ind_bias = GX_ITB_ST;
-            rOffset.ind_matrix = GX_ITM_0;
-            rOffset.ind_wrap_s = rOffset.ind_wrap_t = GX_ITW_0;
-            rOffset.ind_alpha = GX_ITBA_OFF;
-            rProgram.ind_order[0].coord = GX_TEXCOORD2;
-            rProgram.ind_order[0].map = GX_TEXMAP2;
-            rProgram.ind_order[0].scale_s = rProgram.ind_order[0].scale_t = GX_ITS_1;
-            for (u32 t = 0; t < 3; t++) {
-                rProgram.tex_gen[t].type = GX_TG_MTX2x4;
-                rProgram.tex_gen[t].source = GX_TG_TEX0;
-                rProgram.tex_gen[t].matrix = GX_IDENTITY;
-                rProgram.tex_gen[t].post_matrix = GX_PTIDENTITY;
-            }
-            for (u32 c = 0; c < 2; c++) {
-                rProgram.channel[c].material_source = GX_SRC_REG;
-                rProgram.channel[c].ambient_source = GX_SRC_REG;
-                rProgram.channel[c].diffuse = GX_DF_NONE;
-                rProgram.channel[c].attenuation = GX_AF_NONE;
-            }
-            rProgram.tev_stages = 2;
-            rProgram.tex_gens = 3;
-            rProgram.ind_stages = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.dither = GX_FALSE;
-            rProgram.z_compare_location = 1;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_INDIRECT | NEBULA_MATERIAL_LOADS_CHANNELS |
-                             NEBULA_MATERIAL_LOADS_AMBIENT | NEBULA_MATERIAL_LOADS_FOG | NEBULA_MATERIAL_LOADS_DITHER;
-            rProgram.fog.type = GX_FOG_NONE;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            rProgram.blend.type = GX_BM_BLEND;
-            rProgram.blend.source = GX_BL_SRCALPHA;
-            rProgram.blend.destination = GX_BL_INVSRCALPHA;
-            rProgram.blend.logic_op = GX_LO_CLEAR;
-            rProgram.z_mode.enable = GX_FALSE;
-            rProgram.z_mode.func = GX_ALWAYS;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sFinalProgram), &rProgram);
-            sFinalRegistered = true;
+    // The final pass (runtime/src/render/materials/dof_final.hlsl): the blurred picture (texture 0) over the frame at the
+    // alpha the focus ramp (texture 1) gives at the depth (texture 2) times `alpha`; blended by that alpha, no depth or
+    // culling.
+    void sendFinalMaterial(JUTTexture* pTexture0, JUTTexture* pTexture1, JUTTexture* pTexture2, u8 alpha) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_DOF_FINAL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        f32 scale = 0.5f;
+        for (s32 e = ::sScaleExp; e > 0; e--) {
+            scale *= 2.0f;
         }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        values.material_color[0][0] = values.material_color[0][1] = values.material_color[0][2] = 255;
-        values.material_color[0][3] = alpha;
-        values.ambient_color[0][3] = 255;
-        values.ind_matrix[0].m[0][0] = 0.5f;
-        values.ind_matrix[0].m[1][1] = 0.5f;
-        values.ind_matrix[0].scale = ::sScaleExp;
-        JUTTexture* textures[3] = {pTexture0, pTexture1, pTexture2};
-        for (u32 t = 0; t < 3; t++) {
-            values.tex_coord_scale[t].scale_s = textures[t]->getWidth();
-            values.tex_coord_scale[t].scale_t = textures[t]->getHeight();
+        for (s32 e = ::sScaleExp; e < 0; e++) {
+            scale *= 0.5f;
         }
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sFinalProgram), &values);
-        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        material.constants[0] = alpha / 255.0f;
+        material.constants[1] = scale;
+        material.constants[2] = pTexture1->getWidth();
+        material.constants[3] = pTexture1->getHeight();
+        NativeShader::setTexture(material, 0, pTexture0);
+        NativeShader::setTexture(material, 1, pTexture1);
+        NativeShader::setTexture(material, 2, pTexture2);
+        NativeShader::send(material);
     }
 };  // namespace
 
 DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
-    : ImageEffectBase(pName), _14(), _18(), _1C(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
+    : ImageEffectBase(pName), _14(), mFrameKey(), mFrameDepthKey(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createDOFTexture();
     _14 = MR::getImageEffectResource()->_0;
-    _18 = MR::getImageEffectResource()->_10;
-    _1C = MR::getImageEffectResource()->_4;
+    mFrameKey = ImageEffectLocalUtil::createFrameKey();
+    mFrameDepthKey = ImageEffectLocalUtil::createFrameKey();
     _20 = MR::getImageEffectResource()->_8;
     _24 = MR::getImageEffectResource()->_C;
-    _28 = new JUTTexture(128, 2, GX_TF_I8);
-    _28->mWrapS = GX_CLAMP;
-    _28->mWrapT = GX_CLAMP;
-    _28->mMinType = GX_LINEAR;
-    _28->mMagType = GX_LINEAR;
+    _28 = new JUTTexture(128, 2);
+    _28->mWrapS = NEBULA_WRAP_CLAMP;
+    _28->mWrapT = NEBULA_WRAP_CLAMP;
+    _28->mMinType = NEBULA_FILTER_LINEAR;
+    _28->mMagType = NEBULA_FILTER_LINEAR;
+    mQuarter = new JUTTexture(_24->getWidth(), _24->getHeight());
+    mQuarter->mWrapS = NEBULA_WRAP_CLAMP;
+    mQuarter->mWrapT = NEBULA_WRAP_CLAMP;
+    mQuarter->mMinType = NEBULA_FILTER_LINEAR;
+    mQuarter->mMagType = NEBULA_FILTER_LINEAR;
+    mBlurScratch = new JUTTexture(_24->getWidth(), _24->getHeight());
+    mBlurScratch->mWrapS = NEBULA_WRAP_CLAMP;
+    mBlurScratch->mWrapT = NEBULA_WRAP_CLAMP;
+    mBlurScratch->mMinType = NEBULA_FILTER_LINEAR;
+    mBlurScratch->mMagType = NEBULA_FILTER_LINEAR;
 }
 
 void DepthOfFieldBlur::draw() const {
@@ -183,13 +93,12 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    ImageEffectLocalUtil::capture(_18, 4, 0, GX_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::capture(_1C, 1, 0, GX_TF_RGB565, true, 0);
+    J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0);
     drawZAlphaTex();
-    ImageEffectLocalUtil::capture(_28, 1, 0, GX_CTF_R8, false, 0);
+    J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
-    ImageEffectLocalUtil::capture(_20, 1, 0, GX_TF_Z8, true, 0);
+    ImageEffectLocalUtil::drawFrameDepth(_20, mFrameDepthKey);
     drawFinal();
     MR::loadProjectionMtx();
     MR::loadViewMtx();
@@ -197,24 +106,21 @@ void DepthOfFieldBlur::draw() const {
 
 void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()), 0.0f,
-               static_cast< s32 >(JUTVideo::getManager()->getFbWidth()), -::sViewDistance, ::sViewDistance);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown), 0.0f,
+               static_cast< s32 >(NebulaFrameClock::cScreenUnitsAcross), -::sViewDistance, ::sViewDistance);
+    J3DNativeView::setOrthographic(projectionMtx);
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeShape::setTexture(0, posMtx.toMtxPtr(), 2);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setLineWidth(12, GX_TO_ZERO);
-    sendZAlphaProgram();
+    J3DPass::positionMatrix(0);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
+    J3DPass::lineWidth(2.0f);
+    sendZAlphaMaterial();
 
-    J3DNativeDraw::begin(GX_LINESTRIP, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINE_STRIP, 4, NEBULA_SHAPE_COLOR0);
     {
         u8 blurMinDist;
         u8 blurMaxDist = 248;
@@ -252,25 +158,18 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 }
 
 void DepthOfFieldBlur::createBlurTexture() const {
-    ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GX_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::blurTexture(_24, 4, 0, 4, mIntensity * get_10() * 0.005f, 1.0f);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GX_TF_RGB565, false, 0);
+    J3DNativeTarget::beginOverFrame(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, mFrameKey->mImage, NEBULA_TARGET_RGB,
+                                    nullptr);
+    const NebulaColor8 none = {0, 0, 0, 0};
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_QuarterBox, none, none);
+    ImageEffectLocalUtil::drawTexture(mFrameKey, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    ImageEffectLocalUtil::setupDrawTexture();
+    J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);
+    ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, _24, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
 }
 
 void DepthOfFieldBlur::drawFinal() const {
-    ImageEffectLocalUtil::drawTexture(_18, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    _24->load(GX_TEXMAP0);
-    _28->load(GX_TEXMAP1);
-    _20->load(GX_TEXMAP2);
-    sendFinalProgram(_24, _28, _20, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f)));
+    sendFinalMaterial(_24, _28, _20, static_cast< u8 >((s32)(mIntensity * get_10() * 255.0f)));
     ImageEffectLocalUtil::sendTextureVertex(1, 0);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE3);
     ImageEffectLocalUtil::setupDrawTexture();
 }

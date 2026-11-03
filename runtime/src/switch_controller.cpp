@@ -192,7 +192,7 @@ bool decode_pro_report(std::span<const std::uint8_t> r, const ImuCal& cal, Decod
         for (std::size_t i = 0; i < 3; ++i) {
             const std::uint8_t* s = &r[13 + i * 12];
             const int ax = s16(s), ay = s16(s + 2), az = s16(s + 4);
-            const int gx = s16(s + 6) - cal.gyro_offset[0];
+            const int gyro_x = s16(s + 6) - cal.gyro_offset[0];
             const int gy = s16(s + 8) - cal.gyro_offset[1];
             const int gz = s16(s + 10) - cal.gyro_offset[2];
             if (ax == 0 && ay == 0 && az == 0) continue;  // IMU not enabled yet
@@ -202,7 +202,7 @@ bool decode_pro_report(std::span<const std::uint8_t> r, const ImuCal& cal, Decod
                             -cal.accel_scale[0] * static_cast<float>(ax)};
             sample.gyro = {-cal.gyro_scale[1] * static_cast<float>(gy),
                            cal.gyro_scale[2] * static_cast<float>(gz),
-                           -cal.gyro_scale[0] * static_cast<float>(gx)};
+                           -cal.gyro_scale[0] * static_cast<float>(gyro_x)};
         }
     }
     return true;
@@ -275,9 +275,16 @@ JoyConSide joycon_side_of_type(std::uint8_t type) noexcept {
 }
 
 JoyConSide joycon_side_of_product(std::uint16_t product) noexcept {
-    return product == kJoyConLeftProductId    ? JoyConSide::Left
-           : product == kJoyConRightProductId ? JoyConSide::Right
-                                              : JoyConSide::None;
+    return product == kJoyConLeftProductId || product == kJoyCon2LeftProductId     ? JoyConSide::Left
+           : product == kJoyConRightProductId || product == kJoyCon2RightProductId ? JoyConSide::Right
+                                                                                   : JoyConSide::None;
+}
+
+void silence_neutral_rumble(std::span<std::uint8_t> report) noexcept {
+    if (report.size() < 10u) return;
+    static constexpr std::array<std::uint8_t, 4> kSilent{0x00, 0x00, 0x01, 0x40};
+    std::copy(kSilent.begin(), kSilent.end(), report.begin() + 2);
+    std::copy(kSilent.begin(), kSilent.end(), report.begin() + 6);
 }
 
 void turn_right_joycon_imu(DecodedState& state) noexcept {
@@ -297,7 +304,7 @@ DecodedState combine_joycons(const DecodedState& left, const DecodedState& right
                                            bit(kLeftStickBit) | bit(kCaptureBit);
     constexpr std::uint32_t kRightButtons = bit(kSouthBit) | bit(kEastBit) | bit(kWestBit) | bit(kNorthBit) |
                                             bit(kRightShoulderBit) | bit(kStartBit) | bit(kRightStickBit) |
-                                            bit(kHomeBit);
+                                            bit(kHomeBit) | bit(kChatBit);
     DecodedState out = right;
     out.buttons = (left.buttons & kLeftButtons) | (right.buttons & kRightButtons);
     out.left_trigger = left.left_trigger;
@@ -436,6 +443,18 @@ Switch2Command switch2_player_led(std::uint8_t pattern) noexcept {
     return cmd;
 }
 
+void apply_gamecube_triggers(std::span<const std::uint8_t> r, std::array<std::uint8_t, 2> zero,
+                             DecodedState& state) noexcept {
+    if (r.size() <= 62u) return;
+    constexpr int kFullPull = 232;
+    const auto pulled = [](std::uint8_t value, std::uint8_t rest) {
+        const int z = std::min<int>(rest, kFullPull - 1);
+        return (static_cast<int>(value) - z) * 2 >= kFullPull - z;
+    };
+    state.left_trigger = state.left_trigger || pulled(r[61], zero[0]);
+    state.right_trigger = state.right_trigger || pulled(r[62], zero[1]);
+}
+
 bool decode_switch2_report(std::span<const std::uint8_t> r, Switch2ImuState& imu, DecodedState& out) noexcept {
     if (r.size() < kSwitch2ReportBytes || r[0] != kSwitch2InputReport) return false;
     out = DecodedState{};
@@ -523,6 +542,23 @@ bool finite(const Vec3& a) noexcept {
 }
 
 }  // namespace
+
+bool ReportModeWatch::update(std::uint8_t report_id, std::size_t imu_count, bool wants_motion,
+                             std::uint64_t now_us) noexcept {
+    if (report_id != kReportFullState && report_id != kReportSimpleState) return false;
+    if (report_id == kReportFullState && (imu_count != 0u || !wants_motion)) {
+        answered = true;
+        unanswered = 0u;
+        lost_since_us = 0u;
+        return false;
+    }
+    if (lost_since_us == 0u) lost_since_us = now_us;
+    if (now_us - lost_since_us < kLostUs || (asked_us != 0u && now_us - asked_us < kAskUs)) return false;
+    if (!answered && unanswered >= kMostUnanswered) return false;
+    asked_us = now_us;
+    if (!answered) ++unanswered;
+    return true;
+}
 
 float SwitchMotion::shake_accel_threshold_g(std::uint8_t sensitivity) noexcept {
     static constexpr float kThresholds[kShakeSensitivitySteps] = {1.50f, 1.20f, 0.95f, 0.75f, 0.60f};

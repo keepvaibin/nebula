@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The Vulkan GX renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The EFB, draws,
-// copies and peeks are renderer_vk_efb.cpp.
+// The Vulkan renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
+// copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/vk/renderer_vk.h"
 #include "galaxy/platform_time.h"
 
@@ -10,8 +11,8 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/game_asset_extract.h"
 #include "galaxy/render/host_window.h"
-#include "galaxy/render/texture_cache.h"
-#include "galaxy/native_host.h"
+#include "galaxy/render/texture_store.h"
+#include "galaxy/game_paths.h"
 
 #include <vk_mem_alloc.h>
 
@@ -29,6 +30,10 @@
 
 namespace galaxy::render {
 
+void RendererVk::test_lose_device() {
+    throw std::runtime_error("[RendererVk] VK_ERROR_DEVICE_LOST (test)");
+}
+
 namespace {
 
 bool env_flag(const char* name, bool fallback) {
@@ -40,34 +45,12 @@ bool env_flag(const char* name, bool fallback) {
 }
 
 bool trace_present_stats_enabled() {
-    static const bool enabled = env_flag("GALAXY_TRACE_PRESENT_STATS", false);
+    static const bool enabled = ::galaxy::run_option_flag(::galaxy::run_options().trace_present_stats, false);
     return enabled;
 }
 
-// The binding layouts of the renderer's own shaders (annotate()).
-constexpr vk::RegisterBinding kUtilityBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}};
-constexpr vk::RegisterBinding kConversionBindings[] = {
-    {"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}, {"s1", 0, 2}};
 constexpr std::uint32_t kPushConstantBytes = 64u;
 constexpr VkShaderStageFlags kPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-// The XFB into the swap chain image (the present pass's blit), turned for a pre-rotated image: `transform` is the
-// image's VkSurfaceTransformFlagBitsKHR (identity, 90, 180 or 270 degrees clockwise). t is the position in the
-// viewport, which already covers the picture's turned rectangle; uv is the picture's point shown there.
-constexpr char kPresentVs[] = R"HLSL(
-cbuffer C : register(b0) { uint transform; };
-struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };
-V main(uint id : SV_VertexID) {
-    V o;
-    float2 t = float2(id == 1 ? 2 : 0, id == 2 ? 2 : 0);
-    o.pos = float4(t.x * 2 - 1, 1 - t.y * 2, 0.5, 1);
-    o.uv = transform == 2u ? float2(t.y, 1 - t.x)
-         : transform == 4u ? float2(1 - t.x, 1 - t.y)
-         : transform == 8u ? float2(1 - t.y, t.x)
-         : t;
-    return o;
-}
-)HLSL";
 
 // The picture's rectangle (in the window as displayed, `width` x `height`) in an image turned by `transform`.
 VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int height, int left, int top, int w, int h) {
@@ -136,8 +119,8 @@ std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& k
     return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.palette)));
 }
 
-bool RendererVk::initialize(int window_width, int window_height, unsigned efb_scale) {
-    efb_scale_ = std::clamp(efb_scale, 1u, kMaxEfbScale);
+bool RendererVk::initialize(int window_width, int window_height, const FrameMap& frame) {
+    scene_map_ = frame;
     frame_slot_ = 0;
     frame_index_ = 0;
     const host_window::OpenedWindow opened = host_window::open_game_window(window_owner_, window_width, window_height);
@@ -151,20 +134,14 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             shutdown();
             return false;
         }
-        efb_scale_ = std::min(efb_scale_, host_window::display_efb_scale_cap());
         const VkDevice device = vk::Context::get().device();
         {
             VkCommandPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
             pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
             pool_info.queueFamilyIndex = vk::Context::get().queue_family();
             vk::check(vkCreateCommandPool(device, &pool_info, nullptr, &utility_pool_), "vkCreateCommandPool");
-            VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-            alloc.commandPool = utility_pool_;
-            alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            alloc.commandBufferCount = 1;
-            vk::check(vkAllocateCommandBuffers(device, &alloc, &utility_commands_), "vkAllocateCommandBuffers");
         }
-        if (!create_efb_targets(efb_scale_, wanted_msaa_samples()) || !create_utility_pipelines()) {
+        if (!create_scene_targets(scene_map_, wanted_msaa_samples()) || !create_utility_pipelines()) {
             shutdown();
             return false;
         }
@@ -193,11 +170,11 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             query_info.queryCount = kFramesInFlight * 2u;
             vk::check(vkCreateQueryPool(device, &query_info, nullptr, &timestamps_), "vkCreateQueryPool");
             timestamp_period_ns_ = vk::Context::get().properties().limits.timestampPeriod;
-            if (env_flag("GALAXY_GPU_DRAWS", false)) {
+            if (::galaxy::run_option_flag(::galaxy::run_options().gpu_draws, false)) {
                 query_info.queryCount = kFramesInFlight * kGpuDrawSlots;
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &draw_queries_), "vkCreateQueryPool");
             }
-            if (env_flag("GALAXY_GPU_PASSES", false)) {
+            if (::galaxy::run_option_flag(::galaxy::run_options().gpu_passes, false)) {
                 query_info.queryCount = kFramesInFlight * (kGpuPassSlots + 2u);
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &pass_queries_), "vkCreateQueryPool");
                 if (vk::Context::get().pipeline_statistics()) {
@@ -215,14 +192,14 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
                 }
             }
         }
-        // The rings are Vulkan buffers with GX addresses; their sizes follow the D3D12 renderer's. Every segmentation
+        // The rings are Vulkan buffers with GPU addresses; their sizes follow the D3D12 renderer's. Every segmentation
         // shares one buffer per ring.
         const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes) {
             return target.initialize(device, name, UploadRing::budget(bytes, kFramesInFlight), kFramesInFlight,
                                      bytes);
         };
-        if (!ring(vertex_ring_, "vertex", 192u << 20u) || !ring(index_ring_, "index", 48u << 20u) ||
-            !ring(constant_ring_, "constant", 96u << 20u) || !ring(matrix_ring_, "matrix", 128u << 20u)) {
+        if (!ring(vertex_ring_, "vertex", 32u << 20u) || !ring(index_ring_, "index", 12u << 20u) ||
+            !ring(constant_ring_, "constant", 12u << 20u) || !ring(matrix_ring_, "matrix", 8u << 20u)) {
             std::cerr << "[Renderer] upload rings unavailable\n";
             shutdown();
             return false;
@@ -241,7 +218,13 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
-            post_.initialize(post_process_settings_from(cfg), gx_layout_.efb_pass, color_pass_);
+            post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_);
+            if (!ao_.initialize()) {
+                std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+            }
+            if (!scene_camera_.initialize()) {
+                std::cerr << "[scene-camera] off on this device" << std::endl;
+            }
             post_.set_present_pass(present_pass_);
         } else {
             PostProcessStatus off{};
@@ -251,20 +234,21 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
         }
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Vulkan initialize failed: " << error.what() << '\n';
+        init_error_ = error.what();
         shutdown();
         return false;
     }
-    std::cout << "[Renderer] Vulkan EFB=" << kFrameWidth * efb_scale_ << 'x' << kFrameHeight * efb_scale_
+    std::cout << "[Renderer] Vulkan scene target=" << scene_map_.width << 'x' << scene_map_.height
               << " depth=" << (depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? "D24S8" : "D32F") << '\n';
     return true;
 }
 
 bool RendererVk::create_surface_and_device() {
     const bool prefer_integrated = [] {
-        const char* value = std::getenv("GALAXY_GPU_PREFERENCE");
+        const char* value = ::galaxy::run_options().gpu_preference;
         return value != nullptr && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M');
     }();
-    const bool validation = env_flag("GALAXY_VULKAN_VALIDATION", false);
+    const bool validation = ::galaxy::run_option_flag(::galaxy::run_options().vulkan_validation, false);
     const host_window::NativeWindow window = window_;
     const auto make_surface = [window](VkInstance instance) {
         return host_window::create_vulkan_surface(instance, window);
@@ -282,7 +266,7 @@ bool RendererVk::create_surface_and_device() {
 bool RendererVk::create_layouts() {
     const vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    // EFB depth: 24-bit integer as the console's (and D3D12's D24) where the device has it.
+    // scene target depth: 24-bit integer.
     VkFormatProperties format{};
     vkGetPhysicalDeviceFormatProperties(context.physical_device(), VK_FORMAT_D24_UNORM_S8_UINT, &format);
     depth_format_ = (format.optimalTilingFeatures & (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT |
@@ -296,23 +280,25 @@ bool RendererVk::create_layouts() {
         depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
     }
 
-    const VkShaderStageFlags gx_stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
-        (context.geometry_shader() ? VK_SHADER_STAGE_GEOMETRY_BIT : 0u);
+    // Curved surfaces' patch stages read the draw constants too.
+    const VkShaderStageFlags stage_passes =
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+        (context.tessellation_shader() ? VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT : 0u);
     {
         // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
         const VkDescriptorSetLayoutBinding bindings[] = {
-            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
+            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             // b1: the pixel constants, or a native material's constants (both stages read those).
             {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
+            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
             {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, gx_stages, nullptr},  // the rows the row table names
+            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},  // the rows the row table names
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 6;
         info.pBindings = bindings;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[0]), "set 0 layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[0]), "set 0 layout");
     }
     {
         const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8,
@@ -320,7 +306,7 @@ bool RendererVk::create_layouts() {
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 1;
         info.pBindings = &binding;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[1]), "set 1 layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[1]), "set 1 layout");
     }
     {
         const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLER, 8, VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -328,17 +314,17 @@ bool RendererVk::create_layouts() {
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 1;
         info.pBindings = &binding;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[2]), "set 2 layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[2]), "set 2 layout");
     }
     {
         // Vertex blending's per-draw values (b2): mode, frame element, verdict slot, last vertex, first vertex's byte.
         const VkPushConstantRange blend{VK_SHADER_STAGE_VERTEX_BIT, 0, 5u * sizeof(std::uint32_t)};
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         info.setLayoutCount = 3;
-        info.pSetLayouts = gx_layout_.sets.data();
+        info.pSetLayouts = draw_layout_.sets.data();
         info.pushConstantRangeCount = 1;
         info.pPushConstantRanges = &blend;
-        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &gx_layout_.layout), "GX pipeline layout");
+        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "draw pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);
     point_clamp_ = create_sampler(device, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
@@ -404,11 +390,12 @@ bool RendererVk::create_layouts() {
             msaa_max_samples_ = samples;
         }
     }
-    // The EFB pass keeps both targets in their attachment layouts; whoever samples them transitions and returns them.
+    // The scene target pass keeps both targets in their attachment layouts; whoever samples them transitions and returns them.
     // With MSAA its targets are multisampled and a third attachment, the single-sample colour, takes their resolve.
+    for (const bool wide : {false, true})
     for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
         VkAttachmentDescription attachments[3]{};
-        attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
+        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
         attachments[0].samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -432,8 +419,8 @@ bool RendererVk::create_layouts() {
         subpass.pColorAttachments = &color;
         subpass.pResolveAttachments = samples_log2 != 0u ? &resolve : nullptr;
         subpass.pDepthStencilAttachment = &depth;
-        // Work before the pass (copies out of the EFB, uploads) completes before its draws; draws complete before
-        // anything after it reads the EFB.
+        // Work before the pass (copies out of the scene target, uploads) completes before its draws; draws complete before
+        // anything after it reads the scene target.
         VkSubpassDependency dependencies[2]{};
         dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
         dependencies[0].dstSubpass = 0;
@@ -465,17 +452,20 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
-                                     samples_log2 != 0u ? &gx_layout_.ms_passes[samples_log2] : &gx_layout_.efb_pass),
-                  "EFB render pass");
+                                     wide                ? &draw_layout_.wide_passes[samples_log2]
+                                     : samples_log2 != 0u ? &draw_layout_.ms_passes[samples_log2]
+                                                         : &draw_layout_.scene_pass),
+                  "scene target render pass");
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
-                                     samples_log2 != 0u ? &gx_layout_.ms_passes_clear[samples_log2]
-                                                        : &gx_layout_.efb_pass_clear),
-                  "EFB clearing render pass");
+                                     wide                ? &draw_layout_.wide_passes_clear[samples_log2]
+                                     : samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
+                                                         : &draw_layout_.scene_pass_clear),
+                  "scene target clearing render pass");
     }
-    // One RGBA8 target written whole (copies, peeks): its old contents are dropped; it ends shader-readable.
+    // One RGBA8 target written whole (copies, screen probes): its old contents are dropped; it ends shader-readable.
     {
         VkAttachmentDescription attachment{};
         attachment.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -513,16 +503,15 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_), "copy render pass");
-        attachment.format = VK_FORMAT_R8_UNORM;
-        vk::check(vkCreateRenderPass(device, &info, nullptr, &grey_pass_), "one-channel copy render pass");
     }
-    gx_layout_.depth_format = depth_format_;
-    gx_layout_.geometry_shaders = context.geometry_shader();
-    gx_layout_.tessellation = context.tessellation_shader();
-    gx_layout_.dual_source_blend = context.dual_source_blend();
-    gx_layout_.logic_op = context.logic_op();
-    gx_layout_.depth_clamp = context.depth_clamp();
-    gx_layout_.depth_clip_enable = context.depth_clip_enable();
+    draw_layout_.depth_format = depth_format_;
+    draw_layout_.tessellation = context.tessellation_shader();
+    set_curved_surfaces_offered(context.tessellation_shader());
+    draw_layout_.dual_source_blend = context.dual_source_blend();
+    set_dual_source_blending(context.dual_source_blend());
+    draw_layout_.logic_op = context.logic_op();
+    draw_layout_.depth_clamp = context.depth_clamp();
+    draw_layout_.depth_clip_enable = context.depth_clip_enable();
     persistent_pool_ = create_pool(device, kPersistentSets, kPersistentPool);
     return true;
 }
@@ -540,6 +529,9 @@ bool RendererVk::create_swapchain() {
     VkExtent2D extent = caps.currentExtent;
     if (extent.width == UINT32_MAX) {
         extent = {host_window::backbuffer_width, host_window::backbuffer_height};
+    }
+    if (caps.maxImageExtent.width == 0u || caps.maxImageExtent.height == 0u) {
+        return false;  // minimised: try again later
     }
     extent.width = std::clamp(extent.width, std::max(1u, caps.minImageExtent.width), caps.maxImageExtent.width);
     extent.height = std::clamp(extent.height, std::max(1u, caps.minImageExtent.height), caps.maxImageExtent.height);
@@ -653,7 +645,7 @@ bool RendererVk::create_swapchain() {
         VkAttachmentDescription attachment{};
         attachment.format = format.format;
         attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        // PowerVR clears by command instead (DeviceQuirks::clear_by_command, present_xfb).
+        // PowerVR clears by command instead (DeviceQuirks::clear_by_command, present_display).
         attachment.loadOp = vk::Context::get().quirks().clear_by_command ? VK_ATTACHMENT_LOAD_OP_DONT_CARE
                                                                          : VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -774,31 +766,23 @@ bool RendererVk::restore_surface() {
     return true;
 }
 
-VkShaderModule RendererVk::utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion) {
-    std::string error;
-    const std::vector<std::uint32_t> spirv = vk::compile_hlsl(
-        vk::annotate(hlsl, conversion ? std::span<const vk::RegisterBinding>(kConversionBindings)
-                                      : std::span<const vk::RegisterBinding>(kUtilityBindings)),
-        stage, "main", {}, error);
-    if (spirv.empty()) {
-        throw std::runtime_error("utility shader: " + error);
-    }
+VkShaderModule RendererVk::utility_module(vk::UtilitySpirv shader) {
+    const std::span<const std::uint32_t> spirv = vk::utility_spirv(shader);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = spirv.size() * sizeof(std::uint32_t);
+    info.codeSize = spirv.size_bytes();
     info.pCode = spirv.data();
     VkShaderModule module = VK_NULL_HANDLE;
     vk::check(vkCreateShaderModule(vk::Context::get().device(), &info, nullptr, &module), "vkCreateShaderModule");
     return module;
 }
 
-VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, std::string_view vs_source,
-                                               std::string_view ps_source, VkColorComponentFlags write_mask,
+VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, vk::UtilitySpirv vs_shader,
+                                               vk::UtilitySpirv ps_shader, VkColorComponentFlags write_mask,
                                                bool blend, bool strip, bool depth_write,
                                                VkSampleCountFlagBits samples) {
     const VkDevice device = vk::Context::get().device();
-    const bool conversion = layout == conversion_layout_;
-    const VkShaderModule vs = utility_module(vs_source, vk::ShaderStage::Vertex, conversion);
-    const VkShaderModule ps = utility_module(ps_source, vk::ShaderStage::Fragment, conversion);
+    const VkShaderModule vs = utility_module(vs_shader);
+    const VkShaderModule ps = utility_module(ps_shader);
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs,
                  "main", nullptr};
@@ -866,72 +850,63 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
 bool RendererVk::create_utility_pipelines() {
     constexpr VkColorComponentFlags kAll = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
-                                                   efb_conversion_shader_source(), kAll, false, false, false);
-    grey_conversion_pipeline_ = create_utility_pipeline(grey_pass_, conversion_layout_, blit_vertex_shader_source(),
-                                                        efb_conversion_shader_source(), kAll, false, false, false);
-    display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
-                                                       display_filter_shader_source(), kAll, false, false, false);
-    for (unsigned kind = 0u; kind < static_cast<unsigned>(EfbUtility::Count); ++kind) {
-        (void)efb_utility_pipeline(static_cast<EfbUtility>(kind));
+    conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+                                                   vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
+    display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+                                                       vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
+    for (unsigned kind = 0u; kind < static_cast<unsigned>(SceneUtility::Count); ++kind) {
+        (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
     if (msaa_max_samples_ > 1u) {
-        // The depth resolve: each pixel's sample 0 (the console's single sample sits at the pixel centre).
-        static constexpr char kDepthResolvePs[] = R"HLSL(
-Texture2DMS<float> t0 : register(t0);
-float main(float4 pos : SV_Position) : SV_Depth {
-    return t0.Load(int2(pos.xy), 0);
-}
-)HLSL";
-        depth_resolve_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_,
-                                                          blit_vertex_shader_source(), kDepthResolvePs, 0u, false,
+        depth_resolve_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_,
+                                                          vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::DepthResolvePs, 0u, false,
                                                           false, true);
     }
-    blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, kPresentVs, blit_pixel_shader_source(),
+    blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::PresentVs, vk::UtilitySpirv::BlitPs,
                                              kAll, false, false, false);
-    ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, ui_solid_quad_vertex_shader_source(),
-                                                 ui_solid_quad_pixel_shader_source(), kAll, true, true, false);
+    ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::UiSolidVs,
+                                                 vk::UtilitySpirv::UiSolidPs, kAll, true, true, false);
     ui_textured_pipeline_ = create_utility_pipeline(
-        present_pass_, utility_layout_, ui_textured_quad_vertex_shader_source(),
-        ui_textured_quad_pixel_shader_source(), kAll, true, true, false);
+        present_pass_, utility_layout_, vk::UtilitySpirv::UiTexturedVs,
+        vk::UtilitySpirv::UiTexturedPs, kAll, true, true, false);
     depth_carry_pipeline_ = create_utility_pipeline(
-        gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
-        depth_linear_ ? depth_carry_pixel_shader_source() : depth_carry_load_pixel_shader_source(), 0u, false, false,
+        draw_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+        depth_linear_ ? vk::UtilitySpirv::DepthCarryPs : vk::UtilitySpirv::DepthCarryLoadPs, 0u, false, false,
         true);
-    color_carry_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
-                                                    blit_pixel_shader_source(), kAll, false, false, false);
+    color_carry_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                                    vk::UtilitySpirv::BlitPs, kAll, false, false, false);
     return true;
 }
 
-VkPipeline RendererVk::efb_utility_pipeline(EfbUtility kind) {
-    const unsigned samples_log2 = efb_samples_log2();
-    VkPipeline& pipeline = efb_utility_pipelines_[static_cast<unsigned>(kind)][samples_log2];
+VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
+    const unsigned samples_log2 = scene_samples_log2();
+    VkPipeline& pipeline = scene_utility_pipelines_[static_cast<unsigned>(kind)][scene_variant()];
     if (pipeline != VK_NULL_HANDLE) {
         return pipeline;
     }
-    if ((kind == EfbUtility::ClearRgba || kind == EfbUtility::ClearDepth) &&
+    if ((kind == SceneUtility::ClearRgba || kind == SceneUtility::ClearDepth) &&
         !vk::Context::get().quirks().clear_with_draw) {
         return VK_NULL_HANDLE;
     }
-    const VkRenderPass pass = gx_layout_.pass_for(samples_log2, false);
+    const VkRenderPass pass = draw_layout_.pass_for(scene_variant(), false);
     const auto samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
     constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT;
     switch (kind) {
-    case EfbUtility::ClearRgb:
-    case EfbUtility::ClearAlpha:
-    case EfbUtility::ClearRgba:
+    case SceneUtility::ClearRgb:
+    case SceneUtility::ClearAlpha:
+    case SceneUtility::ClearRgba:
         pipeline = create_utility_pipeline(
-            pass, utility_layout_, blit_vertex_shader_source(), clear_pixel_shader_source(),
-            kind == EfbUtility::ClearRgb ? kRgb
-                : kind == EfbUtility::ClearAlpha ? VK_COLOR_COMPONENT_A_BIT : kRgb | VK_COLOR_COMPONENT_A_BIT,
+            pass, utility_layout_, vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::ClearPs,
+            kind == SceneUtility::ClearRgb ? kRgb
+                : kind == SceneUtility::ClearAlpha ? VK_COLOR_COMPONENT_A_BIT : kRgb | VK_COLOR_COMPONENT_A_BIT,
             false, false, false, samples);
         break;
-    case EfbUtility::ClearDepth:
-        pipeline = create_utility_pipeline(pass, utility_layout_, blit_vertex_shader_source(),
-                                           clear_depth_pixel_shader_source(), 0u, false, false, true, samples);
+    case SceneUtility::ClearDepth:
+        pipeline = create_utility_pipeline(pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                           vk::UtilitySpirv::ClearDepthPs, 0u, false, false, true, samples);
         break;
-    case EfbUtility::Count:
+    case SceneUtility::Count:
         break;
     }
     return pipeline;
@@ -945,9 +920,12 @@ void RendererVk::shutdown() {
         post_.shutdown();
         bloom_.shutdown();
         oriented_.reset();
+        scene_owed_.reset();
+        scene_submitted_color_.reset();
+        scene_shown_image_ = VK_NULL_HANDLE;
+        turn_source_ = VK_NULL_HANDLE;
         release_replay_resources();
-        efb_copy_dests_.clear();
-        efb_copy_dests_bytes_ = 0u;
+        frame_pass_targets_.clear();
         for (Frame& frame : frames_) {
             frame.retired.clear();
             if (frame.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, frame.pool, nullptr);
@@ -956,52 +934,16 @@ void RendererVk::shutdown() {
             if (frame.acquired != VK_NULL_HANDLE) vkDestroySemaphore(device, frame.acquired, nullptr);
             frame = Frame{};
         }
-        for (AsyncField& field : async_fields_) {
-            if (field.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, field.pool, nullptr);
-            field = AsyncField{};
-        }
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
-        utility_commands_ = VK_NULL_HANDLE;
-        for (VkPipeline pipeline : {conversion_pipeline_, grey_conversion_pipeline_, display_filter_pipeline_,
-                                    blit_pipeline_, ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
-                                    color_carry_pipeline_, depth_resolve_pipeline_}) {
-            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-        }
-        for (auto& by_samples : efb_utility_pipelines_) {
-            for (VkPipeline& pipeline : by_samples) {
-                if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-                pipeline = VK_NULL_HANDLE;
-            }
-        }
-        conversion_pipeline_ = grey_conversion_pipeline_ = display_filter_pipeline_ = blit_pipeline_ =
-            depth_resolve_pipeline_ = VK_NULL_HANDLE;
-        ui_solid_pipeline_ = ui_textured_pipeline_ = depth_carry_pipeline_ = color_carry_pipeline_ = VK_NULL_HANDLE;
-        for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
-        samplers_.clear();
-        sampler_tables_.clear();
-        constants_sets_.clear();
-        for (EfbSet* set : {&efb_, &alt_efb_}) {
-            for (VkFramebuffer framebuffer : {set->framebuffer, set->resolve_framebuffer}) {
-                if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, framebuffer, nullptr);
-            }
-            set->framebuffer = set->resolve_framebuffer = VK_NULL_HANDLE;
-            set->color.reset();
-            set->depth.reset();
-            set->ms_color.reset();
-            set->ms_depth.reset();
-            set->samples = 1u;
-        }
-        alt_efb_scale_ = 0u;
-        output_efb_active_ = false;
-        efb_carry_color_.reset();
-        efb_carry_depth_.reset();
+        output_scene_active_ = false;
+        scene_carry_color_.reset();
+        scene_carry_depth_.reset();
         corner_texture_.reset();
-        peek_target_.reset();
-        field_target_.reset();
-        peek_readback_ = Readback{};
-        for (Readback& readback : pointer_depth_ring_) readback = Readback{};
-        efb_capture_ = Readback{};
+        probe_target_.reset();
+        probe_target_linear_.reset();
+        for (Readback& readback : probe_slots_) readback = Readback{};
+        scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
         vertex_ring_.reset();
         index_ring_.reset();
@@ -1021,25 +963,25 @@ void RendererVk::shutdown() {
         draw_queries_ = VK_NULL_HANDLE;
         destroy_swapchain();
         for (VkRenderPass pass :
-             {present_pass_, color_pass_, grey_pass_, gx_layout_.efb_pass, gx_layout_.efb_pass_clear}) {
+             {present_pass_, color_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
-        for (auto* passes : {&gx_layout_.ms_passes, &gx_layout_.ms_passes_clear}) {
+        for (auto* passes : {&draw_layout_.ms_passes, &draw_layout_.ms_passes_clear}) {
             for (VkRenderPass& pass : *passes) {
                 if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = grey_pass_ = gx_layout_.efb_pass = gx_layout_.efb_pass_clear = VK_NULL_HANDLE;
-        for (VkPipelineLayout layout : {gx_layout_.layout, utility_layout_, conversion_layout_}) {
+        present_pass_ = color_pass_ = draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
+        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, conversion_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
-        gx_layout_.layout = utility_layout_ = conversion_layout_ = VK_NULL_HANDLE;
-        for (VkDescriptorSetLayout layout : {gx_layout_.sets[0], gx_layout_.sets[1], gx_layout_.sets[2],
+        draw_layout_.layout = utility_layout_ = conversion_layout_ = VK_NULL_HANDLE;
+        for (VkDescriptorSetLayout layout : {draw_layout_.sets[0], draw_layout_.sets[1], draw_layout_.sets[2],
                                              utility_set_layout_, conversion_set_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, layout, nullptr);
         }
-        gx_layout_.sets.fill(VK_NULL_HANDLE);
+        draw_layout_.sets.fill(VK_NULL_HANDLE);
         utility_set_layout_ = conversion_set_layout_ = VK_NULL_HANDLE;
         for (VkSampler sampler : {linear_clamp_, point_clamp_}) {
             if (sampler != VK_NULL_HANDLE) vkDestroySampler(device, sampler, nullptr);
@@ -1085,6 +1027,7 @@ UploadBuffer RendererVk::create_resident_vertices(std::size_t bytes, const char*
     }
     UploadBuffer out;
     out.cpu = buffer->mapped;
+    resident_mapped_ = out.cpu;
     out.gpu = buffer->address;
     out.buffer = std::move(buffer);
     return out;
@@ -1106,7 +1049,7 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
 void RendererVk::begin_frame(bool) {
     host_window::poll_render_config_file();
     follow_window_and_resize();
-    apply_pending_efb_scale();
+    apply_window_size();
     update_ring_mode();
     sync_post_process();
     bloom_.poll_ready();
@@ -1136,7 +1079,6 @@ void RendererVk::begin_frame(bool) {
             const double gpu_ms = static_cast<double>(ticks[1] - ticks[0]) * timestamp_period_ns_ / 1'000'000.0;
             stats_.gpu_ms += gpu_ms;
             ++stats_.gpu_samples;
-            gpu_budget_ms_ += gpu_ms;
             gpu_window_.ms += gpu_ms;
             gpu_window_.max_ms = std::max(gpu_window_.max_ms, gpu_ms);
             ++gpu_window_.frames;
@@ -1193,11 +1135,11 @@ void RendererVk::begin_frame(bool) {
         constant_ring_.begin_frame(frame_slot_);
         matrix_ring_.begin_frame(frame_slot_);
     }
-    reset_gx_bindings();
-    efb_pass_open_ = false;
+    reset_draw_bindings();
+    scene_pass_open_ = false;
     swap_image_ = UINT32_MAX;
-    if (efb_carry_color_ || efb_carry_depth_) {
-        carry_over_efb_contents();
+    if (scene_carry_color_ || scene_carry_depth_) {
+        carry_over_scene_contents();
     }
     if (collect_timing) {
         last_begin_reset_us_ = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
@@ -1208,7 +1150,12 @@ void RendererVk::begin_frame(bool) {
 std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback on_submitted,
                                     void* submission_context) {
     Frame& frame = frames_[frame_slot_];
-    end_efb_pass();
+    end_scene_pass();
+    // A picture still owed stays owed across the submission: the next frame's clear normally covers it. Until then
+    // separate submissions read it as it is (shader-readable), where presentation reads it too.
+    scene_submitted_color_ = scene_owed_;
+    scene_turned_in_frame_ = scene_owed_ != nullptr;
+    scene_shown_image_ = scene_owed_ ? scene_owed_->image : VK_NULL_HANDLE;
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestamps_,
                             frame_slot_ * 2u + 1u);
@@ -1247,17 +1194,13 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         segments_[ring_segment_].fence = std::max(segments_[ring_segment_].fence, fence);
     }
     timestamp_pending_[frame_slot_] = timestamps_ != VK_NULL_HANDLE;
-    if (pointer_depth_in_frame_) {
-        pointer_depth_fence_ = fence;
-        pointer_depth_in_frame_ = false;
-    }
-    for (AsyncField& field : async_fields_) {
-        if (field.fence == kAsyncPeekInFrame) {
-            field.fence = fence;
+    for (Readback& readback : probe_slots_) {
+        if (readback.fence == kProbesInFrame) {
+            readback.fence = fence;
         }
     }
-    if (efb_capture_.buffer && efb_capture_.fence == 0u && !efb_capture_pending_path_.empty()) {
-        efb_capture_.fence = fence;
+    if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {
+        scene_capture_.fence = fence;
     }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u &&
         !backbuffer_capture_pending_path_.empty()) {
@@ -1291,11 +1234,16 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         last_time = now;
         if (gpu_window_.frames != 0u) {
             const double frames = static_cast<double>(gpu_window_.frames);
-            std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f EFB passes and %.1f EFB copies a "
-                         "frame; EFB %ux%u, swap chain %ux%u\n", gpu_window_.ms / frames, gpu_window_.max_ms,
+            std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f scene target passes and %.1f scene target copies a "
+                         "frame; scene target %ux%u, swap chain %ux%u; %llu display copies handed over, owed pictures %llu "
+                         "cleared, %llu banded, %llu copied back\n", gpu_window_.ms / frames, gpu_window_.max_ms,
                          static_cast<double>(gpu_window_.passes) / 600.0,
-                         static_cast<double>(gpu_window_.copies) / 600.0, kFrameWidth * efb_scale_,
-                         kFrameHeight * efb_scale_, swapchain_.image.width, swapchain_.image.height);
+                         static_cast<double>(gpu_window_.copies) / 600.0, scene_map_.width,
+                         scene_map_.height, swapchain_.image.width, swapchain_.image.height,
+                         static_cast<unsigned long long>(gpu_window_.handovers),
+                         static_cast<unsigned long long>(gpu_window_.owed_free),
+                         static_cast<unsigned long long>(gpu_window_.owed_banded),
+                         static_cast<unsigned long long>(gpu_window_.owed_restored));
         }
         gpu_window_ = GpuWindow{};
     }
@@ -1464,13 +1412,13 @@ void RendererVk::report_present_stats() {
     }
     static std::uint64_t first_serial_start = 0;
     static std::uint64_t copies_start = 0;
-    const XfbPresentStats progress = xfb_present_stats();
-    const std::uint64_t copies = xfb_copy_count();
+    const DisplayPresentStats progress = display_present_stats();
+    const std::uint64_t copies = display_copy_count();
     const double presents = static_cast<double>(stats_.presents);
     std::ostringstream message;
     message << "[present-stats] fps=" << presents / seconds << " new-serial-hz="
             << static_cast<double>(progress.first_serial_presentations - first_serial_start) / seconds
-            << " xfb-production-hz=" << static_cast<double>(copies - copies_start) / seconds
+            << " display-production-hz=" << static_cast<double>(copies - copies_start) / seconds
             << " frame-ms(avg/max)=" << (stats_.intervals != 0u ? stats_.interval_ms / stats_.intervals : 0.0)
             << '/' << stats_.interval_max_ms << " pace-wait-ms(avg/max)=" << stats_.pace_wait_ms / presents << '/'
             << stats_.pace_wait_max_ms << " present-ms(avg/max)=" << stats_.present_ms / presents << '/'
@@ -1483,8 +1431,8 @@ void RendererVk::report_present_stats() {
     }
     message << " gpu-samples=" << stats_.gpu_samples << " gpu-total-ms=" << stats_.gpu_ms;
     if (pass_queries_ != VK_NULL_HANDLE) {
-        static constexpr const char* kPassNames[] = {"scene", "resolve", "efb-copy", "xfb-copy", "bloom", "scene-aa",
-                                                     "scene-ao", "upscale", "rt", "present", "curve-sort"};
+        static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
+                                                     "scene-ao", "upscale", "rt", "present", "curve-sort", "camera"};
         static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
         message << " gpu-pass-ms=";
         for (std::size_t pass = 0; pass < std::size(kPassNames); ++pass) {
@@ -1596,36 +1544,6 @@ void RendererVk::read_gpu_passes() {
 // The share of wall time the GPU may spend on the frame before Match Output steps down (RendererD3D12's rule).
 constexpr double kGpuBudgetBusy = 0.80;
 
-void RendererVk::update_gpu_budget() {
-    const std::int64_t now = galaxy::qpc_now();
-    if (gpu_budget_window_qpc_ == 0) {
-        gpu_budget_window_qpc_ = now;
-        gpu_budget_ms_ = 0.0;
-        return;
-    }
-    const double window_ms = static_cast<double>(now - gpu_budget_window_qpc_) * 1000.0 /
-        static_cast<double>(galaxy::qpc_frequency());
-    if (window_ms < 2000.0) {
-        return;
-    }
-    const double busy = gpu_budget_ms_ / window_ms;
-    gpu_budget_window_qpc_ = now;
-    gpu_budget_ms_ = 0.0;
-    const RenderConfig cfg = get_render_config();
-    if (!cfg.gpu_budget || !cfg.internal_follow_window || efb_scale_ <= 1u || busy <= kGpuBudgetBusy) {
-        gpu_budget_over_windows_ = 0u;
-        return;
-    }
-    if (++gpu_budget_over_windows_ < 2u) {
-        return;
-    }
-    gpu_budget_over_windows_ = 0u;
-    gpu_budget_cap_ = efb_scale_ - 1u;
-    follow_window_width_ = 0u;  // re-derive the scale under the cap at this frame boundary
-    std::cerr << "[Renderer] GPU busy " << static_cast<int>(busy * 100.0 + 0.5) << "% at internal resolution "
-              << efb_scale_ << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
-}
-
 void RendererVk::sync_post_process() {
     const bool was_ready = post_.ready();
     if (!post_.poll_ready()) {
@@ -1688,59 +1606,16 @@ void RendererVk::follow_window_and_resize() {
     if (display_refresh_checks_++ % 120u == 0u) {
         refresh_display_rate();
     }
-
-    update_gpu_budget();
-    // Match Output: the smallest scale covering the picture on both axes (the launcher's rule, as RendererD3D12).
-    const auto aspect = galaxy::experimental_effective_host_aspect();
-    const double content_aspect = aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
-    if (host_window::follow_window_rearm.load(std::memory_order_relaxed) &&
-        host_window::follow_window_rearm.exchange(false, std::memory_order_acq_rel)) {
-        follow_window_width_ = 0u;
-    }
-    if (follow_window_retry_ms_ != 0u && galaxy::steady_ms() >= follow_window_retry_ms_) {
-        follow_window_retry_ms_ = 0u;
-        follow_window_width_ = 0u;
-    }
-    if (host_window::backbuffer_width == follow_window_width_ &&
-        host_window::backbuffer_height == follow_window_height_ && content_aspect == follow_window_aspect_) {
-        return;
-    }
-    if (host_window::move_size_active.load(std::memory_order_acquire)) {
-        return;  // an edge drag resizes every frame: settle first
-    }
-    follow_window_width_ = host_window::backbuffer_width;
-    follow_window_height_ = host_window::backbuffer_height;
-    follow_window_aspect_ = content_aspect;
-    RenderConfig render = get_render_config();
-    if (!render.internal_follow_window) {
-        return;
-    }
-    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
-        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        content_aspect);
-    if (content.width <= 0 || content.height <= 0) {
-        return;
-    }
-    const double needed = std::max(content.width / static_cast<double>(kFrameWidth), content.height / 456.0);
-    unsigned scale = std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
-    if (gpu_budget_cap_ != 0u) {
-        scale = std::min(scale, gpu_budget_cap_);
-    }
-    if (scale != render.efb_scale) {
-        render.efb_scale = scale;
-        set_render_config(render);
-        stage_next_start_efb_scale(scale);
-    }
 }
 
-bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool black) {
+bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, bool black) {
     const GpuPassScope pass{*this, GpuPass::Present};
     present_black_ = black;
     if (source == nullptr || !source->texture) {
-        throw std::runtime_error("present requested without a valid XFB blit source");
+        throw std::runtime_error("present requested without a valid display picture blit source");
     }
     debug_log_backbuffer_readback();
-    end_efb_pass();
+    end_scene_pass();
     vk::Context& context = vk::Context::get();
     Frame& frame = *frame_;
     surface_lock_ = std::unique_lock<std::timed_mutex>(host_window::surface_use);
@@ -1770,32 +1645,33 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
     }
     swap_image_ = image;
     const VkCommandBuffer commands = commands_;
-    vk::Texture& xfb = *source->texture;
-    if (xfb.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+    vk::Texture& display_picture = *source->texture;
+    if (display_picture.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
         VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.image = xfb.image;
+        barrier.image = display_picture.image;
         barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
                              nullptr, 0, nullptr, 1, &barrier);
         const VkClearColorValue black{};
         const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-        vkCmdClearColorImage(commands, xfb.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
+        vkCmdClearColorImage(commands, display_picture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &range);
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
                              nullptr, 0, nullptr, 1, &barrier);
-        xfb.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        display_picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     }
+    vk::Texture* shown = &display_picture;
 
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const auto content_aspect = galaxy::presentation_content_aspect(
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect, source->prerecorded_movie);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect, source->prerecorded_movie);
     const int bb_w = static_cast<int>(swapchain_.extent.width);
     const int bb_h = static_cast<int>(swapchain_.extent.height);
     galaxy::ContentViewport content = galaxy::fit_content_viewport(bb_w, bb_h, content_aspect);
@@ -1808,12 +1684,13 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
     // turned swap chain takes it through `oriented_` and the blit, which turns it.
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     vk::PostProcessorVk::PresentStep step{};
-    const vk::Texture* picture = &xfb;
+    const vk::Texture* picture = shown;
     if (post_.ready() && !present_black_) {
         const bool turned = swapchain_.transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         const auto width = static_cast<std::uint32_t>(content.width);
         const auto height = static_cast<std::uint32_t>(content.height);
-        step = post_.prepare_present(commands, xfb, xfb.width, xfb.height, width, height, !turned, allocate);
+        step = post_.prepare_present(commands, *shown, shown->width, shown->height, width, height, !turned,
+                                     allocate);
         if (turned && step.pipeline != VK_NULL_HANDLE) {
             if (!oriented_ || oriented_->width != width || oriented_->height != height) {
                 oriented_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
@@ -1847,9 +1724,8 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
         }
     }
 
-    const float surround = source->safety_surround;
     VkClearValue clear{};
-    clear.color = {{surround, surround, surround, 1.0f}};
+    clear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = present_pass_;
     begin.framebuffer = swapchain_.framebuffers[image];
@@ -1864,7 +1740,7 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
     }
 
     // The picture, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image:
-    // the post chain's last pass, or the blit of the XFB (or of the chain's turned picture).
+    // the post chain's last pass, or the blit of the display picture (or of the chain's turned picture).
     const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
     const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, picture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -1906,7 +1782,7 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
         host_window::draw_home_menu(*this);
     }
     vkCmdEndRenderPass(commands);
-    reset_gx_bindings();
+    reset_draw_bindings();
 
     if (capture_backbuffer && swapchain_.copyable && !backbuffer_capture_path_.empty() &&
         backbuffer_capture_pending_path_.empty()) {
@@ -1957,7 +1833,7 @@ void RendererVk::ensure_native_settings_corner_texture_loaded() {
         return;
     }
     const auto texture = load_game_texture(host_window::native_settings_content_root,
-                                           "files\\LayoutData\\FileSelect.arc", "myfileselwinframe.tpl");
+                                           "LayoutData/FileSelect.arc", "myfileselwinframe.tpl");
     if (!texture.has_value() || texture->width == 0u || texture->height == 0u) {
         return;
     }

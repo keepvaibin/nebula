@@ -1,7 +1,8 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/MoviePlayerSimple.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/MovieDraw.hpp"
-#include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/Screen/MovieStream.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/HomeButtonStateNotifier.hpp"
@@ -16,27 +17,24 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaClock.hpp"
-#include "JSystem/JUtility/JUTException.hpp"
 
 namespace {
     static const s16 sCinemaFrameHeightTop = 44;
     static const s16 sCinemaFrameHeightBottom = 412;
-    static const GXColor sCinemaFrameColor = {0, 0, 0, 255};
+    static const NebulaColor8 sCinemaFrameColor = {0, 0, 0, 255};
 };  // namespace
 
 namespace {
     NEW_NERVE(MoviePlayerSimpleOff, MoviePlayerSimple, SimpleOff);
     NEW_NERVE(MoviePlayerSimpleOpen, MoviePlayerSimple, Open);
-    NEW_NERVE(MoviePlayerSimplePreload, MoviePlayerSimple, Preload);
     NEW_NERVE(MoviePlayerSimplePlaying, MoviePlayerSimple, Playing);
     NEW_NERVE(MoviePlayerSimpleSuspend, MoviePlayerSimple, SimpleSuspend);
 };  // namespace
 
 MoviePlayerSimple::MoviePlayerSimple()
-    : LayoutActor("\203\200\201\133\203\162\201\133\203\166\203\214\203\103\203\204\201\133" /* ムービープレイヤー */, true), JKRDisposer(), mMovie(nullptr), mPlayerWrapper(nullptr), _44(false), _45(false) {
+    : LayoutActor("\203\200\201\133\203\162\201\133\203\166\203\214\203\103\203\204\201\133" /* ムービープレイヤー */, true), JKRDisposer(), mMovie(nullptr), mStream(nullptr), _44(false), _45(false) {
     mMovie = new Movie();
     mMovie->mMovieName = "";
     mMovie->mBuffer = nullptr;
@@ -50,18 +48,17 @@ MoviePlayerSimple::MoviePlayerSimple()
 
 MoviePlayerSimple::~MoviePlayerSimple() {
     SingletonHolder< GameSystem >::get()->mHomeButtonStateNotifier->unregisterMoviePlayerSimple(this);
-    mPlayerWrapper->quit();
-    delete mPlayerWrapper;
-    JKRHeap::destroy(mHeap);
+    mStream->quit();
+    delete mStream;
+    NebulaArena::destroy(mHeap);
 }
 
 void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMovie(this);
 
-    mPlayerWrapper = new THPSimplePlayerWrapper("THP\203\126\203\223\203\166\203\213\203\166\203\214\203\103\203\204\201\133\202\314\203\211\203\142\203\160" /* THPシンプルプレイヤーのラッパ */);
-    mPlayerWrapper->init(0);
+    mStream = new MovieStream();
 
-    mHeap = JKRExpHeap::create(calcNeedMemoryForMovieWorks(), MR::getCurrentHeap(), true);
+    mHeap = NebulaArena::create(MR::getCurrentHeap());
 
     initNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
     kill();
@@ -69,7 +66,7 @@ void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
 
 void MoviePlayerSimple::draw() const {
     if (!isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying)) && !isNerve(GET_NERVE_ANON(MoviePlayerSimpleSuspend))) {
-        GXColor fillColor;
+        NebulaColor8 fillColor;
         fillColor.r = 0;
         fillColor.g = 0;
         fillColor.b = 0;
@@ -82,22 +79,25 @@ void MoviePlayerSimple::draw() const {
         u32 frameBufferWidth;
 
         if (MR::isScreen16Per9()) {
-            frameBufferWidth = MR::getFrameBufferWidth();
+            frameBufferWidth = MR::getScreenUnitsAcross();
         } else {
-            frameBufferWidth = 832;
+            frameBufferWidth = NebulaFrameClock::cWideScreenWidth;
         }
 
-        u32 ySize = mMovie->mVideoInfo.ySize;
-        u32 v4 = (MR::getFrameBufferWidth() - frameBufferWidth) / 2;
-        u32 v5 = (MR::getFrameBufferHeight() - ySize) / 2;
+        u32 ySize = mMovie->mVideoInfo.mHeight;
+        u32 v4 = (MR::getScreenUnitsAcross() - frameBufferWidth) / 2;
+        u32 v5 = (MR::getScreenUnitsDown() - ySize) / 2;
         MovieDraw::setLinearFilter(true);
-        mMovie->mCurrentFrame = mPlayerWrapper->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
+        if (mStream->hasSound() && isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying))) {
+            mStream->decodeHeardFrame();
+        }
+        mMovie->mCurrentFrame = mStream->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
     }
 }
 
 void MoviePlayerSimple::startMovie(const char* pMovieName, bool a2) {
     if (!MR::isFileExist(pMovieName, false)) {
-        JUTException::panic_f(__FILE__, 0xDB, "Moive File NOT found.");
+        NEBULA_PANIC("Moive File NOT found.");
     }
 
     mMovie->mMovieName = pMovieName;
@@ -121,7 +121,7 @@ bool MoviePlayerSimple::isMovieActive() const {
         return false;
     }
 
-    return isNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen)) || isNerve(GET_NERVE_ANON(MoviePlayerSimplePreload)) ||
+    return isNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen)) ||
            isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying)) || isNerve(GET_NERVE_ANON(MoviePlayerSimpleSuspend));
 }
 
@@ -142,11 +142,11 @@ s32 MoviePlayerSimple::getCurrentFrame() const {
 }
 
 s32 MoviePlayerSimple::getTotalFrame() const {
-    return mPlayerWrapper->getTotalFrame();
+    return mStream->getTotalFrame();
 }
 
 void MoviePlayerSimple::setFrameRateDefault() {
-    f32 frameRate = mPlayerWrapper->getFrameRate();
+    f32 frameRate = mStream->getFrameRate();
 
     if (MR::isNearZero(frameRate - 59.94f)) {
         mMovie->mFrameRateDefault = 1;
@@ -156,44 +156,43 @@ void MoviePlayerSimple::setFrameRateDefault() {
 }
 
 void MoviePlayerSimple::setVolume(f32 volume, s32 time) {
-    mPlayerWrapper->setVolume(volume * 127.0f, time);
+    mStream->setVolume(volume * 127.0f, time);
 }
 
 void MoviePlayerSimple::setUnpauseHomeButtonFlag() {
-    mPlayerWrapper->setUnpauseFrameFlag();
+    mStream->setUnpauseFrameFlag();
 }
 
 void MoviePlayerSimple::exeSimpleOff() {
 }
 
 void MoviePlayerSimple::exeOpen() {
-    if (MR::isFirstStep(this)) {
-        mPlayerWrapper->open(mMovie->mMovieName);
-    }
-
-    if (mPlayerWrapper->_9) {
-        mPlayerWrapper->getVideoInfo(&mMovie->mVideoInfo);
-        mMovie->_20 = 0;
-        mMovie->_19 = false;
-        setFrameRateDefault();
-        mMovie->mBuffer = new (mHeap, 32) u8[mPlayerWrapper->calcNeedMemory()];
-        mPlayerWrapper->setBuffer(mMovie->mBuffer);
-        mPlayerWrapper->preLoad(_44 != false);
-        setNerve(GET_NERVE_ANON(MoviePlayerSimplePreload));
-    }
-}
-
-void MoviePlayerSimple::exePreload() {
-    if (mPlayerWrapper->isPreLoading()) {
-        return;
-    }
-
+    mStream->open(mMovie->mMovieName);
+    mMovie->mVideoInfo = mStream->getVideoInfo();
+    mMovie->_20 = 0;
+    mMovie->_19 = false;
+    setFrameRateDefault();
+    mMovie->mBuffer = new (mHeap, 32) u8[mStream->calcNeedMemory()];
+    mStream->setBuffer(mMovie->mBuffer);
+    mStream->start(_44);
     setNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying));
     appear();
 }
 
 void MoviePlayerSimple::exePlaying() {
-    if (mMovie->mCurrentFrame + 1 == mPlayerWrapper->getTotalFrame()) {
+    // The sound keeps the time, whatever the game's frame rate or the screen's: draw shows the frame being heard.
+    if (mStream->hasSound()) {
+        mStream->feedSound(0);
+
+        if (!mMovie->_18 && mStream->getSoundPosition() >= mStream->getTotalFrame()) {
+            mMovie->_24 = 0;
+            stop();
+            setNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
+        }
+        return;
+    }
+
+    if (mMovie->mCurrentFrame + 1 == mStream->getTotalFrame()) {
         mMovie->_24 = 0;
 
         if (!mMovie->_18) {
@@ -204,7 +203,7 @@ void MoviePlayerSimple::exePlaying() {
     }
 
     if (!mMovie->_19) {
-        s32 result = mPlayerWrapper->decode(0);
+        s32 result = mStream->decode();
 
         switch (result) {
         case 0:
@@ -213,8 +212,6 @@ void MoviePlayerSimple::exePlaying() {
         case 2:
             mMovie->_24++;
             break;
-        case 3:
-            return;
         }
     }
 
@@ -231,53 +228,30 @@ void MoviePlayerSimple::exePlaying() {
 void MoviePlayerSimple::exeSimpleSuspend() {
 }
 
-void MoviePlayerSimple::control() {
-    mPlayerWrapper->updateNerve();
-}
-
 void MoviePlayerSimple::play(bool a1) {
     _44 = a1;
     setNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen));
     MR::startStarPointerModeDemo(this);
-    _45 = GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
+    _45 = GameSystemFunction::setPermissionToCheckInput(false);
 }
 
 void MoviePlayerSimple::stop() {
-    mPlayerWrapper->loadStop();
-    mPlayerWrapper->close();
+    mStream->stop();
+    mStream->close();
     delete[] mMovie->mBuffer;
     mMovie->mBuffer = nullptr;
     MR::endStarPointerMode(this);
-    GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(_45);
-}
-
-u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
-    u32 needMemory = 0;
-    needMemory += 0x140000;
-
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-    needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight());
-    needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4);
-    needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4);
-#else
-    s32 texCount = mPlayerWrapper->getUseTextureCount();
-
-    needMemory += NebulaAlignUp32(texCount * (MR::getFrameBufferWidth() * MR::getFrameBufferHeight()));
-    needMemory += NebulaAlignUp32(texCount * (MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4));
-    needMemory += NebulaAlignUp32(texCount * (MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4));
-#endif
-
-    return needMemory + 0x1188;
+    GameSystemFunction::setPermissionToCheckInput(_45);
 }
 
 void MoviePlayerSimple::drawCinemaFrame() const {
     MR::fillScreenSetup(::sCinemaFrameColor);
 
-    s16 width = MR::getFrameBufferWidth();
+    s16 width = MR::getScreenUnitsAcross();
     TBox2s top(0, 0, width, ::sCinemaFrameHeightTop);
     MR::fillScreenArea(top.i, top.f);
 
-    s16 height = MR::getFrameBufferHeight();
+    s16 height = MR::getScreenUnitsDown();
     TBox2s bottom(0, ::sCinemaFrameHeightBottom, width, height);
     MR::fillScreenArea(bottom.i, bottom.f);
 }

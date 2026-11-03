@@ -19,10 +19,10 @@ public:
     void exeFlyAway();
     void initAnimID(const JMapInfoIter& rIter);
     void createKoopaJrObj(const JMapInfoIter& rIter);
-    bool tryDemoEnd() NO_INLINE;
+    bool tryDemoEnd();
     void startEntryAnim();
     void startLeaveAnim();
 
-    /* 0x8C */ KoopaJr* mKoopaJrObj;
-    /* 0x90 */ s32 mAnimCameraIndex;
+    KoopaJr* mKoopaJrObj;
+    s32 mAnimCameraIndex;
 };

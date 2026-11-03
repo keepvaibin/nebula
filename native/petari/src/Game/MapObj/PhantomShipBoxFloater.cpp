@@ -30,7 +30,7 @@ void PhantomShipBoxFloater::init(const JMapInfoIter& rIter) {
     initEffectKeeper(0, nullptr, false);
     MR::setEffectHostSRT(this, ::cEffectName, &mFloaterOffset, nullptr, nullptr);
     initSound(4, false);
-    mRippleSeCounter = MR::getRandom(20l, 90l);
+    mRippleSeCounter = MR::getRandom(20, 90);
     initHitSensor(1);
     MR::initCollisionParts(this, mObjectName, MR::addBodyMessageSensorMapObj(this), nullptr);
     MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
@@ -121,7 +121,7 @@ void PhantomShipBoxFloater::exeMoveUnderWater() {
 void PhantomShipBoxFloater::playRippleSe() {
     if (--mRippleSeCounter <= 0) {
         MR::startSound(this, "SE_OJ_BOX_FLOATER_RIPPLE");
-        mRippleSeCounter = MR::getRandom(20l, 90l);
+        mRippleSeCounter = MR::getRandom(20, 90);
     }
 }
 

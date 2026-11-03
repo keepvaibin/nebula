@@ -4,7 +4,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -12,10 +12,10 @@
 #include "Game/Util/SoundUtil.hpp"
 
 struct InformationObserverAttribute {
-    /* 0x00 */ const char* mMessageId;
-    /* 0x04 */ bool _4;
-    /* 0x08 */ const char* mFirstMorphBgmName;
-    /* 0x0C */ const char* mBgmName;
+    const char* mMessageId;
+    bool _4;
+    const char* mFirstMorphBgmName;
+    const char* mBgmName;
 };
 
 static InformationObserverAttribute sAttr[] = {
@@ -96,7 +96,7 @@ void InformationObserver::exeDisp() {
         mDisplayFrame--;
     }
 
-    if (!MR::testCorePadTriggerA(WPAD_CHAN0) || mDisplayFrame >= 0) {
+    if (!MR::isPressedJump(PLAYER_1) || mDisplayFrame >= 0) {
         return;
     }
 

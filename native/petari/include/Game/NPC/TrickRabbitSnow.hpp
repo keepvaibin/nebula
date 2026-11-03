@@ -41,7 +41,7 @@ public:
     bool isGiveUp() const;
     bool isHideSnow() const;
     bool isEnableCaught() const;
-    bool isEnableBlowDamage() const NO_INLINE;
+    bool isEnableBlowDamage() const;
     void startJumpSound();
 
     void exeWaitSnow();
@@ -55,20 +55,20 @@ public:
     void exeGiveUp();
 
 private:
-    /* 0x8C */ TQuat4f mFinishQuat;
-    /* 0x9C */ TVec3f mFinishPos;
-    /* 0xA8 */ TQuat4f mRotateQuat;
-    /* 0xB8 */ TVec3f mFrontVec;
-    /* 0xC4 */ RabbitStateWaitStart* mStateWaitStart;
-    /* 0xC8 */ WalkerStateRunaway* mStateRunaway;
-    /* 0xCC */ WalkerStateBlowDamage* mStateBlowDamage;
-    /* 0xD0 */ RabbitStateCaught* mStateCaught;
-    /* 0xD4 */ TalkMessageCtrl* mMsgCtrl;
-    /* 0xD8 */ FootPrint* mFootPrint;
-    /* 0xDC */ SpotMarkLight* mSpotMarkLight;
-    /* 0xE0 */ TrickRabbitSnowListener* mListener;
-    /* 0xE4 */ s32 mNotCaughtableTimer;
-    /* 0xE8 */ bool mIsValidAppearStarPiece;
+    TQuat4f mFinishQuat;
+    TVec3f mFinishPos;
+    TQuat4f mRotateQuat;
+    TVec3f mFrontVec;
+    RabbitStateWaitStart* mStateWaitStart;
+    WalkerStateRunaway* mStateRunaway;
+    WalkerStateBlowDamage* mStateBlowDamage;
+    RabbitStateCaught* mStateCaught;
+    TalkMessageCtrl* mMsgCtrl;
+    FootPrint* mFootPrint;
+    SpotMarkLight* mSpotMarkLight;
+    TrickRabbitSnowListener* mListener;
+    s32 mNotCaughtableTimer;
+    bool mIsValidAppearStarPiece;
 };
 
 class TrickRabbitSnowListener {

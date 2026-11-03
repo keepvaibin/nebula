@@ -1,6 +1,8 @@
 #include "JSystem/J3DGraphAnimator/J3DMaterialAnm.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 
+u32 J3DMaterialAnm::sNextDrawSlot;
+
 void J3DMaterialAnm::initialize() {
     for (int i = 0; i < ARRAY_SIZE(mMatColorAnm); i++) {
         mMatColorAnm[i].setAnmFlag(false);
@@ -26,7 +28,7 @@ void J3DMaterialAnm::initialize() {
 void J3DMaterialAnm::calc(J3DMaterial* pMaterial) const {
     for (u32 i = 0; i < ARRAY_SIZE(mMatColorAnm); i++) {
         if (mMatColorAnm[i].getAnmFlag()) {
-            GXColor* color = pMaterial->mColorBlock->getMatColor(i);
+            NebulaColor8* color = pMaterial->mColorBlock->getMatColor(i);
             mMatColorAnm[i].calc(color);
         }
     }
@@ -35,20 +37,20 @@ void J3DMaterialAnm::calc(J3DMaterial* pMaterial) const {
     for (u32 i = 0; i < ARRAY_SIZE(mTexNoAnm); i++) {
         if (mTexNoAnm[i].getAnmFlag()) {
             mTexNoAnm[i].calc(&tmp);
-            pMaterial->mTevBlock->setTexNo(i, tmp);
+            pMaterial->mRegisterBlock->setTexNo(i, tmp);
         }
     }
 
     for (u32 i = 0; i < 3; i++) {
         if (mTevColorAnm[i].getAnmFlag()) {
-            GXColorS10* color = pMaterial->mTevBlock->getTevColor(i);
+            NebulaColor16* color = pMaterial->mRegisterBlock->getRegisterColor(i);
             mTevColorAnm[i].calc(color);
         }
     }
 
     for (u32 i = 0; i < ARRAY_SIZE(mTevKColorAnm); i++) {
         if (mTevKColorAnm[i].getAnmFlag()) {
-            GXColor* color = pMaterial->mTevBlock->getTevKColor(i);
+            NebulaColor8* color = pMaterial->mRegisterBlock->getConstantColor(i);
             mTevKColorAnm[i].calc(color);
         }
     }

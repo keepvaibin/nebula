@@ -5,7 +5,7 @@
 
 template < typename T >
 class JointControlDelegator;
-class JointControllerInfo;
+struct JointControllerInfo;
 
 class BossBegomanHead : public PartsModel {
 public:
@@ -32,6 +32,6 @@ public:
     bool calcJointEdge(TPos3f*, const JointControllerInfo&);
 
 private:
-    /* 0x9C */ f32 mAngle;
-    /* 0xA0 */ JointControlDelegator< BossBegomanHead >* mJointDelegator;
+    f32 mAngle;
+    JointControlDelegator< BossBegomanHead >* mJointDelegator;
 };

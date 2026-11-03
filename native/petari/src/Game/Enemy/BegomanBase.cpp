@@ -27,15 +27,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
- void BegomanBase_FORCE_MATCH_SDATA2() {
-    (void) 1.0f;
-    (void) 0.0f;
-    (void) 0.5f;
-    (void) 3.0f;
-    (void) -1.0f;
-    (void) 2.0f;
- }
-
 namespace {
     const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
     const MR::ActorMoveParam hReturnMoveParam = {0.2f, 1.0f, 0.95f, 3.0f};
@@ -82,7 +73,6 @@ namespace {
     // static const _32 hLaunchDampVelGround = _;
     static const s32 hReceiveLimitTime = 2;
     static const s32 hPermitLimitTime = 30;
-    static const BegomanSound sound_baby = {"SE_EM_LV_BABYBEGO_DASH"};
     static const BegomanSound sound_normal = {"SE_EM_LV_BEGOMAN_DASH"};
     static const BegomanSound sound_boss = {"SE_BM_LV_BBEGO_DASH"};
 };  // namespace
@@ -97,11 +87,8 @@ BegomanBase::BegomanBase(const char* pName)
     : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), _A8(0.0f, 0.0f, -1.0f), _B4(1.0f, 1.0f, 1.0f),
       _C0(0, 0, 0, 1), _D0(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
       mCanTrySetReturn() {
-}
-
-// needed to get a string to show up in .data, should be deadstripped.
-const BegomanSound* BegomanBase::getSoundBaby() {
-    return &::sound_baby;
+    mIsTouchElectricRail = false;
+    mInvertSideVec = false;
 }
 
 const BegomanSound* BegomanBase::getSoundNormal() {
@@ -262,9 +249,6 @@ void BegomanBase::exeNoCalcWaitCore(f32 tolerance, const Nerve* pNerve) {
     // has to be zero because it sets z first.
     mVelocity.zero();
     // incorrectly inlined
-    TVec3f playerPos(*MR::getPlayerPos());
-    playerPos.sub(mPosition);
-    f32 f2 = playerPos.squared();
 
     if (pNerve != nullptr) {
         if (MR::calcDistanceToPlayer(mPosition) < 1000.0f) {
@@ -659,8 +643,6 @@ bool BegomanBase::incAndCheckTiredCounter() {
     return mTiredCounter == 180;
 }
 
-#pragma push
-#pragma opt_propagation off
 void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
                                     const TVec3f* pVec) {
     TVec3f vec2;
@@ -695,7 +677,6 @@ void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArr
         angle += TWO_PI / (numBegoman);
     }
 }
-#pragma pop
 
 void BegomanBase::launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const TVec3f* pVec) {
     launchBegomanCore(pActor, pBegomanArray, numBegoman, radius, velH, velV, pVec);
@@ -948,7 +929,7 @@ void BegomanBase::dampingVerticalAndParallelVelocity(f32 f1, f32 f2) {
 
 bool BegomanBase::isInWaterAndSetWaterNerve(const Nerve* pWaterNerve, TPos3f* pPos) {
     WaterInfo info;
-    if (MR::getWaterAreaObj(&info, mPosition) != nullptr) {
+    if (MR::getWaterAreaObj(&info, mPosition) != false) {
         MR::getWaterAreaInfo(&info, mPosition, mGravity, false);
         setNerve(pWaterNerve);
         MR::makeMtxUpNoSupportPos(pPos, info.mSurfaceNormal, info.mSurfacePos);

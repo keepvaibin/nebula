@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 #define REGION_EU 0
 #define REGION_JP 1
@@ -50,17 +49,16 @@ struct Language {
 };
 
 namespace MR {
-    /// @brief Returns the region-language identifier based on the console's language setting.
+    /// @brief Returns the region-language identifier based on the language setting.
     /// @return The region-language identifier.
     u32 getDecidedLanguageFromIPL();
 
     /// @brief Returns the working region-language identifier.
     /// @return The region-language identifier.
-    u32 getLanguage() NO_INLINE;
+    u32 getLanguage();
 
-    /// @brief Extracts the console's language setting from the working region-language identifier.
-    /// @return The console's language setting.
-    u32 getLanguageFromIPL();
+    /// @brief Extracts the language setting from the working region-language identifier.
+    /// @return The language setting.
 
     /// @brief Returns the region-language label.
     /// @return The pointer to the null-terminated label.

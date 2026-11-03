@@ -130,8 +130,6 @@ void MarioActor::updateTornado() {
     mTornadoMario->setTrHeight(mPosition, mMario->mFrontVec, mMario->_54C, _240);
 }
 
-#pragma push
-#pragma global_optimizer off
 void MarioActor::updateTakingPosition() {
     if (_480) {
         const HitSensor* sensor = _424;
@@ -173,7 +171,7 @@ void MarioActor::updateTakingPosition() {
             landing |= terminated;
             updateAnimation = landing;
         } else {
-            f32 frame;
+            f32 frame = 0.0f;
             if (_B92 == -1)
                 frame = mMarioAnim->getUpperFrame();
             if (_B92 == -2)
@@ -235,10 +233,9 @@ void MarioActor::updateTakingPosition() {
         carryRotation = _438[0] + rotation;
     }
 }
-#pragma pop
 
 const HitSensor* MarioActor::getCarrySensor() const {
-    if (_468 == nullptr) {
+    if (_468 == 0) {
         return nullptr;
     }
 

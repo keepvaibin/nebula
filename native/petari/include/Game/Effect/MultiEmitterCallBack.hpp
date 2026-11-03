@@ -45,7 +45,7 @@ public:
     void setSRTFromHostMtx(JPABaseEmitter*, MtxPtr, const FlagSRT&, bool);
     void setSRTFromHostSRT(JPABaseEmitter*, const FlagSRT&, bool);
     void setScaleFromHostScale(JPABaseEmitter*, const TVec3f&, bool, bool);
-    void effectLight(JPABaseEmitter*) NO_INLINE;
+    void effectLight(JPABaseEmitter*);
     void followSRT(JPABaseEmitter*, bool);
     void setColor(JPABaseEmitter*);
     void isFollowSRT(FlagSRT*, bool) const;
@@ -68,14 +68,14 @@ public:
         mFlags &= ~flag;
     }
 
-    /* 0x04 */ const MultiEmitter* mEmitter;
-    /* 0x08 */ const TVec3f* mScale;
-    /* 0x0C */ const TVec3f* mRotation;
-    /* 0x10 */ const TVec3f* mTranslation;
-    /* 0x14 */ MtxPtr mMtx;
-    /* 0x18 */ TVec3f _18;
-    /* 0x24 */ f32 mBaseScale;
-    /* 0x28 */ Color8 mPrmColor;
-    /* 0x2C */ Color8 mEnvColor;
-    /* 0x30 */ u16 mFlags;
+    const MultiEmitter* mEmitter;
+    const TVec3f* mScale;
+    const TVec3f* mRotation;
+    const TVec3f* mTranslation;
+    MtxPtr mMtx;
+    TVec3f _18;
+    f32 mBaseScale;
+    Color8 mPrmColor;
+    Color8 mEnvColor;
+    u16 mFlags;
 };

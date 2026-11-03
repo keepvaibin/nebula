@@ -196,74 +196,14 @@ void test_texture_matrices() {
     }
 }
 
-void test_colours() {
-    PixelConstants a{}, b{};
-    for (unsigned r = 0; r < 4u; ++r) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            a.tev_regs[r][c] = uniform(-1.0f, 1.0f);
-            b.tev_regs[r][c] = uniform(-1.0f, 1.0f);
-            a.konst[r][c] = uniform(0.0f, 1.0f);
-            b.konst[r][c] = r == 2u ? a.konst[r][c] : uniform(0.0f, 1.0f);
-        }
-    }
-    a.alpha_refs[0] = 0.2f; b.alpha_refs[0] = 0.6f; a.alpha_refs[3] = 1.0f; b.alpha_refs[3] = 0.5f;
-    a.fog_params[2] = b.fog_params[2] = 3.0f; a.fog_params[0] = 1.0f; b.fog_params[0] = 2.0f;
-    a.fog_params[4] = 0.1f; b.fog_params[4] = 0.9f;
-    a.ind_mtx[1][0] = 100; b.ind_mtx[1][0] = 300; a.ind_mtx[1][3] = b.ind_mtx[1][3] = 5;
-    a.ind_mtx[2][0] = 7; b.ind_mtx[2][0] = 9; a.ind_mtx[2][3] = 4; b.ind_mtx[2][3] = 6;
-    b.tev_regs[1][2] = std::numeric_limits<float>::infinity();
-    Program program;
-    program.ps_colours(0u, a, b);
-    for (float t : {0.25f, 0.5f, 0.8f}) {
-        PixelConstants got = b;
-        evaluate(program, affine_identity(), t, reinterpret_cast<std::uint32_t*>(&got));
-        PixelConstants want{};
-        ps_colours_at(a, b, t, want);
-        check(std::memcmp(&got.ind_mtx, &want.ind_mtx, sizeof(want.ind_mtx)) == 0, "indirect matrices match");
-        const auto* g = reinterpret_cast<const std::uint32_t*>(&got);
-        const auto* w = reinterpret_cast<const std::uint32_t*>(&want);
-        bool same = true;
-        for (unsigned i = 0; i < sizeof(PixelConstants) / 4u; ++i) same = same && near_word(g[i], w[i]);
-        check(same, "pixel colour ops match ps_colours_at");
-    }
-    VertexConstants va{}, vb{};
-    for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            va.chan_ambient[ch][c] = uniform(0.0f, 1.0f);
-            vb.chan_ambient[ch][c] = uniform(0.0f, 1.0f);
-            va.chan_material[ch][c] = uniform(0.0f, 1.0f);
-            vb.chan_material[ch][c] = va.chan_material[ch][c];
-        }
-        for (unsigned c = 0; c < 4u; ++c) {
-            va.projection[ch][c] = uniform(-2.0f, 2.0f);
-            vb.projection[ch][c] = uniform(-2.0f, 2.0f);
-        }
-    }
-    Program vs;
-    vs.channel_colours(0u, va, vb);
-    vs.projection(0u, va, vb);
-    VertexConstants got = vb;
-    evaluate(vs, affine_identity(), 0.4f, reinterpret_cast<std::uint32_t*>(&got));
-    VertexConstants want = vb;
-    channel_colours_at(va, vb, 0.4f, want);
-    for (unsigned i = 0; i < 16u; ++i) {
-        (&want.projection[0][0])[i] = (&va.projection[0][0])[i] + ((&vb.projection[0][0])[i] - (&va.projection[0][0])[i]) * 0.4f;
-    }
-    const auto* g = reinterpret_cast<const std::uint32_t*>(&got);
-    const auto* w = reinterpret_cast<const std::uint32_t*>(&want);
-    bool same = true;
-    for (unsigned i = 0; i < sizeof(VertexConstants) / 4u; ++i) same = same && near_word(g[i], w[i]);
-    check(same, "channel colour and projection ops match");
-}
-
 void test_layout() {
-    Layout layout{3u, 2u, 4u};
+    Layout layout{3u, 2u};
     check(layout.palette_base() == 3u * sizeof(VertexConstants), "palettes follow the VS blocks");
-    check(layout.ps_base() % 256u == 0u && layout.palette_offset(1u) % 256u == 0u, "blocks stay 256-byte aligned");
-    check(layout.bytes() == layout.ps_base() + 4u * sizeof(PixelConstants), "layout size");
-    Layout motion{3u, 2u, 4u, 2u};
+    check(layout.palette_offset(1u) % 256u == 0u, "blocks stay 256-byte aligned");
+    check(layout.bytes() == layout.palette_base() + 2u * kPaletteBytes, "layout size");
+    Layout motion{3u, 2u, 2u};
     check(motion.prev_palette_offset(0u) == motion.palette_offset(2u) &&
-              motion.ps_base() == motion.prev_palette_offset(1u) + kPrevPaletteBytes &&
+              motion.bytes() == motion.prev_palette_offset(1u) + kPrevPaletteBytes &&
               motion.prev_palette_offset(1u) % 256u == 0u,
           "previous-frame palette rows follow the palettes");
 }
@@ -513,7 +453,6 @@ int main() {
     test_endpoints();
     test_palettes();
     test_texture_matrices();
-    test_colours();
     test_layout();
     test_previous_frame();
     test_previous_frame_across_pairs();

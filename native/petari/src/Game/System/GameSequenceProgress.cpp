@@ -101,8 +101,8 @@ void GameSequenceProgress::startScene() {
         MR::startStarPointerModeGame(this);
     }
 
-    GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(isScenePermittedIsUpdateWiiRemoteStatus());
-    GameSystemFunction::setAutoSleepTimeWiiRemote(isSceneLongAutoSleepWiiRemote());
+    GameSystemFunction::setPermissionToCheckInput(isScenePermittedUpdateInputStatus());
+    GameSystemFunction::setInputSleepTime(isSceneLongInputSleep());
 
     if (MR::isEqualSceneName("Game")) {
         mStorySequenceExecutor->setNerveSceneStart();
@@ -296,11 +296,11 @@ void GameSequenceProgress::exeResetProcessing() {
     }
 }
 
-bool GameSequenceProgress::isScenePermittedIsUpdateWiiRemoteStatus() {
+bool GameSequenceProgress::isScenePermittedUpdateInputStatus() {
     return !MR::isEqualSceneName("Logo");
 }
 
-bool GameSequenceProgress::isSceneLongAutoSleepWiiRemote() {
+bool GameSequenceProgress::isSceneLongInputSleep() {
     if (MR::isEqualSceneName("Game") && MR::isEqualStageName("EpilogueDemoStage")) {
         return true;
     }

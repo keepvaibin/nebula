@@ -17,7 +17,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "revolution/types.h"
 
 namespace {
     // static const f32 sDriftSpeedMax = 2.4f;
@@ -312,8 +311,6 @@ void Kiraira::closeEyes() {
     mEyesOpen = false;
 }
 
-#pragma push
-#pragma opt_propagation off
 void Kiraira::drift() {
     if (mIsRail) {
         bool dead, alive;
@@ -340,7 +337,6 @@ void Kiraira::drift() {
 
     _A8++;
 }
-#pragma pop
 
 void Kiraira::driftOnRail() {
     MR::moveCoordAndFollowTrans(this, mRailCoordSpeed);

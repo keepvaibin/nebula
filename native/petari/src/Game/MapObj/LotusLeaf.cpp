@@ -80,8 +80,6 @@ void LotusLeaf::exeWaitPlayerOn() {
     setNerve(GET_NERVE(LotusLeaf, HostTypeWait));
 }
 
-#pragma push
-#pragma global_optimizer off
 void LotusLeaf::exeShake() {
     if (MR::isFirstStep(this)) {
         mShakeSpeed = ::sShakeInitSpeed;
@@ -127,7 +125,6 @@ void LotusLeaf::exeShake() {
         }
     }
 }
-#pragma pop
 
 void LotusLeaf::convergeToInitPos() {
     if (mPosition.y < mInitPos.y) {

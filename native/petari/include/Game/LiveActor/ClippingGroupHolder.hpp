@@ -17,11 +17,11 @@ public:
     void startClippedAll();
     void endClippedAll();
 
-    /* 0x0C */ int _C;
-    /* 0x10 */ s32 _10;
-    /* 0x14 */ ClippingActorInfo** _14;
-    /* 0x18 */ JMapIdInfo* _18;
-    /* 0x1C */ u8 _1C;
+    int _C;
+    s32 _10;
+    ClippingActorInfo** _14;
+    JMapIdInfo* _18;
+    u8 _1C;
 };
 
 class ClippingGroupHolder : public NameObj {
@@ -39,6 +39,7 @@ public:
         return mInfoGroups[index];
     }
 
-    /* 0x0C */ s32 mNumGroups;
-    /* 0x10 */ ClippingInfoGroup** mInfoGroups;
+    s32 mNumGroups;
+    ClippingInfoGroup** mInfoGroups;
+    s32 mMaxGroups = 0x40;
 };

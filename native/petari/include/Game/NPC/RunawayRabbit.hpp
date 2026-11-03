@@ -13,8 +13,8 @@ class RunawayRabbit : public LiveActor {
 public:
     enum HideLocation {
         /* -0x1 */ HideLocation_None = -1,
-        /* 0x0 */ HideLocation_Hole,
-        /* 0x1 */ HideLocation_Leaves
+        HideLocation_Hole,
+        HideLocation_Leaves
     };
 
     RunawayRabbit(const char* pName, RunawayRabbitCollect* pCollect);
@@ -43,11 +43,11 @@ public:
     void setNotCaughtable();
     void startJumpSound();
     void setMsgCtrl(TalkMessageCtrl* pMsgCtrl);
-    bool isCaught() const NO_INLINE;
+    bool isCaught() const;
     bool isCaughtable() const;
     bool isRunnaway() const;
     bool isChasing() const;
-    bool isEnableBlow() const NO_INLINE;
+    bool isEnableBlow() const;
     bool isValidFollow(s32 id) const;
     s32 getGroupId() const {
         return mGroupId;
@@ -64,23 +64,23 @@ public:
     void exeStop();
     void exeBlowDamage();
 
-    /* 0x8C */ WalkerStateRunaway* mStateRunaway;
-    /* 0x90 */ WalkerStateBlowDamage* mStateBlowDamage;
-    /* 0x94 */ RunawayRabbitCollect* mCollect;
-    /* 0x98 */ FootPrint* mFootPrint;
-    /* 0x9C */ SpotMarkLight* mSpotMarkLight;
-    /* 0xA0 */ TalkMessageCtrl* mMsgCtrl;
-    /* 0xA4 */ TQuat4f mPoseQuat;
-    /* 0xB4 */ TVec3f mFrontVec;
-    /* 0xC0 */ TQuat4f mPlayerPoseQuat;
-    /* 0xD0 */ TVec3f mPlayerBindPos;
-    /* 0xDC */ u8 _DC[4];
-    /* 0xE0 */ s32 mGroupId;
-    /* 0xE4 */ s32 mRunawayLevel;
-    /* 0xE8 */ s32 mHideLocation;
-    /* 0xEC */ s32 mPressureTimer;
-    /* 0xF0 */ s32 mNotCaughtableTimer;
-    /* 0xF4 */ bool mIsActive;
-    /* 0xF5 */ bool mIsLinked;
-    /* 0xF8 */ f32 mNearSoundRadius;
+    WalkerStateRunaway* mStateRunaway;
+    WalkerStateBlowDamage* mStateBlowDamage;
+    RunawayRabbitCollect* mCollect;
+    FootPrint* mFootPrint;
+    SpotMarkLight* mSpotMarkLight;
+    TalkMessageCtrl* mMsgCtrl;
+    TQuat4f mPoseQuat;
+    TVec3f mFrontVec;
+    TQuat4f mPlayerPoseQuat;
+    TVec3f mPlayerBindPos;
+    u8 _DC[4];
+    s32 mGroupId;
+    s32 mRunawayLevel;
+    s32 mHideLocation;
+    s32 mPressureTimer;
+    s32 mNotCaughtableTimer;
+    bool mIsActive;
+    bool mIsLinked;
+    f32 mNearSoundRadius;
 };

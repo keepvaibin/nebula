@@ -5,7 +5,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -60,13 +60,6 @@ namespace {
 
     static const Vec sMarioCapPosOffset = {0.0f, 50.2f, 24.9f};
 
-    f32 getScreenDistanceToStarPointer(const LiveActor* pActor, s32 port) {
-        TVec2f screenPos;
-        MR::calcScreenPosition(&screenPos, pActor->mPosition);
-        TVec2f pointerScreenPos;
-        pointerScreenPos.set(*MR::getStarPointerScreenPosition(port));
-        return screenPos.distance(pointerScreenPos);
-    }
 };  // namespace
 
 Butterfly::Butterfly(const char* pName) : LiveActor(pName), mHomePos(gZeroVec), mColorIndex(), mPerchTarget(), mStarPieceAppeared() {
@@ -232,7 +225,7 @@ bool Butterfly::tryRunAway() {
         return false;
     }
 
-    if (MR::testCorePadButtonB(port)) {
+    if (MR::isHeldFire(port)) {
         return false;
     }
 
@@ -274,7 +267,7 @@ bool Butterfly::tryHive() {
         return false;
     }
 
-    if (!MR::testCorePadButtonB(port)) {
+    if (!MR::isHeldFire(port)) {
         return false;
     }
 

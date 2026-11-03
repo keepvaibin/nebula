@@ -2,13 +2,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
-void IronCannonShell_FORCE_MATCH_SDATA2() {
-    (void)30.0f;
-    (void)75.0f;
-    (void)100.0f;
-    (void)1.2999999523162842f;
-}
-
 namespace {
     static const s32 sDefaultShotInterval = 300;
     static const f32 sDefaultBulletSpeed = 30.0f;

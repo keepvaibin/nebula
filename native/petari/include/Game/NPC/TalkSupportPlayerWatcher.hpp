@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class TalkSupportPlayerWatcher {
 public:
@@ -10,8 +9,8 @@ public:
     void update();
     bool isEnableTalkPlayerStateNormal() const;
     bool isEnableTalkPlayerStateEvent() const;
-    bool isEnableTalkPlayerSpeed() const NO_INLINE;
+    bool isEnableTalkPlayerSpeed() const;
 
-    /* 0x00 */ u32 mEnableTalkCounter;
-    /* 0x04 */ u32 mDisableTalkCounter;
+    u32 mEnableTalkCounter;
+    u32 mDisableTalkCounter;
 };

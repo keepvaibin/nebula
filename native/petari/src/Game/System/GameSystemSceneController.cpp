@@ -13,7 +13,7 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
-#include "Game/System/WPadHolder.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
@@ -23,15 +23,13 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include "Game/System/NebulaHost.hpp"
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-#endif
 
 namespace {
-    AudSystemWrapper* getAudioSystemWrapper() NO_INLINE {
+    AudSystemWrapper* getAudioSystemWrapper() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mAudioSystem;
     }
 };  // namespace
@@ -59,11 +57,11 @@ SceneControlInfo::SceneControlInfo() : mStartIdInfo() {
 }
 
 void SceneControlInfo::setScene(const char* pSceneName) {
-    snprintf(mScene, sizeof(mScene), "%s", pSceneName);
+    nebula_snprintf(mScene, sizeof(mScene), "%s", pSceneName);
 }
 
 void SceneControlInfo::setStage(const char* pStageName) {
-    snprintf(mStage, sizeof(mStage), "%s", pStageName);
+    nebula_snprintf(mStage, sizeof(mStage), "%s", pStageName);
 }
 
 void SceneControlInfo::setStartIdInfo(const JMapIdInfo& rInfo) {
@@ -109,13 +107,22 @@ void GameSystemSceneController::checkRequestAndChangeScene() {
     }
 
     mSpine->update();
+    // A load's steps follow each other within the frame: the screen is black and nothing waits for them.
+    while (mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerChangeWaveBank) ||
+           mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInitializeScene) ||
+           mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInvalidateSystemWipe) ||
+           mNextNerve == GET_NERVE(GameSystemSceneController, GameSystemSceneControllerReadyToStartScene)) {
+        mSpine->setNerve(mNextNerve);
+        mNextNerve = nullptr;
+        mSpine->update();
+    }
 }
 
 void GameSystemSceneController::initializeScene() {
     mSceneInitializeState = SceneInitializeState_Init;
 
     if (SingletonHolder< HeapMemoryWatcher >::get()->mFileCacheHeap == nullptr || !isSameAtNextSceneAndStage()) {
-        SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap(0x1040400);
+        SingletonHolder< HeapMemoryWatcher >::get()->createFileCacheHeapOnGameHeap();
     }
 
     SingletonHolder< HeapMemoryWatcher >::get()->createSceneHeapOnGameHeap();
@@ -127,7 +134,7 @@ void GameSystemSceneController::initializeScene() {
         mScenarioSelectScene->validateScenarioSelect();
     }
 
-    MR::resetWPad();
+    MR::resetPlayerInput();
 
     mScene = MR::createScene(mCurrSceneControlInfo.mScene);
     mScene->initNameObjListExecutor();
@@ -142,14 +149,8 @@ void GameSystemSceneController::initializeScene() {
 void GameSystemSceneController::destroyScene() {
     bool stopSound = isStopSound();
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     delete mScene;
     mScene = nullptr;
-#else
-    Scene* pScene = mScene;
-    mScene = nullptr;
-    delete pScene;
-#endif
 
     mObjHolder->clearArray();
 
@@ -158,7 +159,7 @@ void GameSystemSceneController::destroyScene() {
     }
 
     GameSystemFunction::resetAllControllerRumble();
-    MR::removeResourceAndFileHolderIfIsEqualHeap(MR::getSceneHeapNapa());
+    MR::removeResourceAndFileHolderIfIsEqualHeap(MR::getSceneHeap());
 
     if (tryDestroyFileCacheHeap(false)) {
         SingletonHolder< HeapMemoryWatcher >::get()->destroyGameHeap();
@@ -213,7 +214,6 @@ bool GameSystemSceneController::isFirstUpdateSceneNerveNormal() const {
 
 void GameSystemSceneController::startScene() {
     mScene->start();
-    GameSystemFunction::restartControllerLeaveWatcher();
     requestChangeNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerNormal));
 }
 
@@ -251,24 +251,18 @@ void GameSystemSceneController::drawScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
-#ifdef TARGET_PC
-        // Black borders around a fitted picture unless the scene says otherwise (LogoScene's strap screen).
-        NebulaHost::sceneSurround(0.0f);
-#endif
         pScene->draw();
         mPlayTimerScene->draw();
         mScenarioSelectScene->draw();
     }
 }
 
-#ifdef TARGET_PC
 void GameSystemSceneController::drawSceneOverlay() {
     Scene* pScene = getCurrentSceneForExecute();
     if (pScene != nullptr && MR::isEqualSceneName("Game")) {
         static_cast< GameScene* >(pScene)->drawOverlay();
     }
 }
-#endif
 
 NameObjListExecutor* GameSystemSceneController::getNameObjListExecutor() const {
     return mScene->mListExecutor;
@@ -357,7 +351,7 @@ void GameSystemSceneController::exeWaitDrawDoneScene() {
 void GameSystemSceneController::exeDestroyScene() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[destroy Scene: %s]", mCurrSceneControlInfo.mScene);
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::destroyScene), 17, "\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */);
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::destroyScene), "\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */);
     }
 
     if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\224\152\212\374" /* シーン破棄 */)) {
@@ -388,11 +382,12 @@ void GameSystemSceneController::exeChangeWaveBank() {
 void GameSystemSceneController::exeInitializeScene() {
     if (mSpine->mStep == 0) {
         mIntermissionScene->setCurrentSceneControllerState("[initialize Scene: %s]", mNextSceneControlInfo.mScene);
-        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::initializeScene), 17, "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */);
+        MR::startFunctionAsyncExecute(MR::Functor(this, &GameSystemSceneController::initializeScene), "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */);
     }
 
     if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */)) {
         mSceneInitializeState = SceneInitializeState_End;
+        mIntermissionScene->setCurrentSceneControllerState("[scene ready]");
 
         requestChangeNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInvalidateSystemWipe));
     }

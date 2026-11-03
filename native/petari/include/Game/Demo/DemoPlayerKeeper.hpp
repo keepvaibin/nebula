@@ -6,9 +6,9 @@ class DemoPlayerInfo {
 public:
     DemoPlayerInfo();
 
-    /* 0x0 */ const char* mPartName;
-    /* 0x4 */ const char* mPosName;
-    /* 0x8 */ const char* mBckName;
+    const char* mPartName;
+    const char* mPosName;
+    const char* mBckName;
 };
 
 class DemoPlayerKeeper {
@@ -18,7 +18,7 @@ public:
     bool isExistPosName() const;
     void executePlayer(const DemoPlayerInfo*) const;
 
-    /* 0x0 */ const DemoExecutor* mExecutor;
-    /* 0x4 */ s32 mNumPlayerInfos;
-    /* 0x8 */ DemoPlayerInfo* mPlayerInfos;
+    const DemoExecutor* mExecutor;
+    s32 mNumPlayerInfos;
+    DemoPlayerInfo* mPlayerInfos;
 };

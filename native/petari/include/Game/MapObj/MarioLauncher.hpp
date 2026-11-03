@@ -42,23 +42,23 @@ public:
     bool doFlight();
     bool doLanding(s32);
 
-    bool testHitCollision() NO_INLINE;
+    bool testHitCollision();
     bool isBreak(const Triangle*);
 
     void onSwitchA();
     void offSwitchA();
 
-    /* 0x08C */ MarioLauncherLayout* mLayout;
-    /* 0x090 */ MarioLauncherShell* mShell;
-    /* 0x094 */ LiveActor* mHost;
-    /* 0x098 */ bool mIsInAttractor;
-    /* 0x09C */ s32 mLauncherType;  // arg0
-    /* 0x0A0 */ TPos3f mEffectMtxSmoke;
-    /* 0x0D0 */ TPos3f mEffectMtxGravity;
-    /* 0x100 */ CameraTargetMtx mCameraTargetMtx;
-    /* 0x190 */ TPos3f mPlayerMtx;
-    /* 0x1C0 */ TPos3f mPlayerBaseMtx;
-    /* 0x1F0 */ TPos3f mLauncherBaseMtx;
+    MarioLauncherLayout* mLayout;
+    MarioLauncherShell* mShell;
+    LiveActor* mHost;
+    bool mIsInAttractor;
+    s32 mLauncherType;  // arg0
+    TPos3f mEffectMtxSmoke;
+    TPos3f mEffectMtxGravity;
+    CameraTargetMtx mCameraTargetMtx;
+    TPos3f mPlayerMtx;
+    TPos3f mPlayerBaseMtx;
+    TPos3f mLauncherBaseMtx;
 };
 
 class MarioLauncherLayout : public LayoutActor {
@@ -80,7 +80,7 @@ public:
         mLayout->kill();
     }
 
-    /* 0x20 */ SimpleLayout* mLayout;
+    SimpleLayout* mLayout;
 };
 
 class MarioLauncherShell : public LiveActor {
@@ -99,8 +99,8 @@ public:
         return mPosition;
     }
 
-    /* 0x8C */ TPos3f mBaseMtx;
-    /* 0xBC */ TQuat4f mRotQuat;
-    /* 0xCC */ TVec3f _CC;
-    /* 0xD8 */ TVec3f mReboundDir;
+    TPos3f mBaseMtx;
+    TQuat4f mRotQuat;
+    TVec3f _CC;
+    TVec3f mReboundDir;
 };

@@ -28,7 +28,7 @@ public:
     void initElementType(const JMapInfoIter&);
     void initEffect();
     void initSensor();
-    void initBind() NO_INLINE;
+    void initBind();
     void initShadow();
     void initAppearState(const JMapInfoIter&);
     bool requestDamage(HitSensor*, HitSensor*);
@@ -90,7 +90,7 @@ public:
     bool isPushMoved() const;
     bool isEnableFireball() const;
     bool isEnableChase() const;
-    void addToTargetMovingAccel(const TVec3f&, f32, f32) NO_INLINE;
+    void addToTargetMovingAccel(const TVec3f&, f32, f32);
     void addMovingAccel(const TVec3f&, f32, f32);
     void addRunawayJumpPower();
     void addOverWallAccel(const TVec3f&);
@@ -115,30 +115,30 @@ public:
     inline bool isActionDisabled() const;
     inline TVec3f getDistanceToPlayer() const;
 
-    /* 0x08C */ AnimScaleController* mAnimScaleController;
-    /* 0x090 */ WalkerStateBindStarPointer* mWalkerStateBindStarPointer;
-    /* 0x094 */ ParabolicPath* mParabolicPath;
-    /* 0x098 */ TPos3f _98;
-    /* 0x0C8 */ TPos3f mExtinguishMtx;
-    /* 0x0F8 */ TPos3f _F8;
-    /* 0x128 */ TQuat4f _128;
-    /* 0x138 */ TVec3f _138;
-    /* 0x144 */ TVec3f _144;
-    /* 0x150 */ TVec3f mHomePosition;
-    /* 0x15C */ TVec3f _15C;
-    /* 0x168 */ TVec3f mPlayerPosition;
-    /* 0x174 */ TVec3f _174;
-    /* 0x180 */ TVec3f _180;
-    /* 0x18C */ TVec3f _18C;
-    /* 0x198 */ TVec3f _198;
-    /* 0x1A4 */ f32 _1A4;
-    /* 0x1A8 */ f32 mChaseDistance;
-    /* 0x1AC */ s32 mAppearStatus;  // Obj_arg0
-    /* 0x1B0 */ s32 mElementType;
-    /* 0x1B4 */ s32 mEffectType;
-    /* 0x1B8 */ s32 mBodyEffectType;
-    /* 0x1BC */ s32 mRunawayTimer;
-    /* 0x1C0 */ bool mCanDive;
-    /* 0x1C1 */ bool _1C1;
-    /* 0x1C2 */ bool mIsValidRestart;  // Obj_arg2
+    AnimScaleController* mAnimScaleController;
+    WalkerStateBindStarPointer* mWalkerStateBindStarPointer;
+    ParabolicPath* mParabolicPath;
+    TPos3f _98;
+    TPos3f mExtinguishMtx;
+    TPos3f _F8;
+    TQuat4f _128;
+    TVec3f _138;
+    TVec3f _144;
+    TVec3f mHomePosition;
+    TVec3f _15C;
+    TVec3f mPlayerPosition;
+    TVec3f _174;
+    TVec3f _180;
+    TVec3f _18C;
+    TVec3f _198;
+    f32 _1A4;
+    f32 mChaseDistance;
+    s32 mAppearStatus;  // Obj_arg0
+    s32 mElementType;
+    s32 mEffectType;
+    s32 mBodyEffectType;
+    s32 mRunawayTimer;
+    bool mCanDive;
+    bool _1C1;
+    bool mIsValidRestart;  // Obj_arg2
 };

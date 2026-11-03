@@ -2,6 +2,7 @@
 CMakeFiles/smg_game.dir). Every symbol some object references and no object defines, demangled, grouped by owner
 (RVL SDK area by prefix, MSL/C library, compiler runtime, C++ runtime), with how many objects reference it. Writes
 boundary.tsv and prints a summary."""
+import shutil
 import collections
 import os
 import re
@@ -9,8 +10,24 @@ import subprocess
 import sys
 
 objdir, out = sys.argv[1], sys.argv[2]
-bin_ = r"C:\Program Files\LLVM\bin"
+bin_ = os.path.dirname(shutil.which("llvm-nm") or r"C:\Program Files\LLVM\bin\llvm-nm")
+# Only what the module links: a build folder keeps objects of deleted sources until it is cleaned.
+root = os.path.dirname(os.path.dirname(os.path.abspath(objdir)))
+linked = None
+ninja = os.path.join(root, "build.ninja")
+if os.path.exists(ninja):
+    with open(ninja, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if line.startswith("build smg_game.dll"):
+                linked = {os.path.normcase(os.path.join(root, w.replace("/", os.sep))) for w in line.split() if w.endswith((".o", ".obj"))}
+                break
 objs = sorted(os.path.join(b, f) for b, _, fs in os.walk(objdir) for f in fs if f.endswith((".o", ".obj")))
+stale = 0
+if linked is not None:
+    kept = [o for o in objs if os.path.normcase(os.path.abspath(o)) in linked]
+    stale = len(objs) - len(kept)
+    objs = kept
+print(f"{stale} stale objects left out" if linked is not None else "no build.ninja: every object in the folder counted")
 defined, refs = set(), collections.defaultdict(set)
 for i in range(0, len(objs), 200):
     chunk = objs[i:i + 200]

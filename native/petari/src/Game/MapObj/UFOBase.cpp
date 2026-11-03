@@ -34,7 +34,6 @@ UFOBase::UFOBase(const char* pName) : LiveActor(pName) {
     mLODCtrl = nullptr;
     mModel = nullptr;
     mRailMover = nullptr;
-    f32 v1 = 1.0f;  // ???
     _9C.x = 0.0f;
     _9C.y = 0.0f;
     _9C.z = 1.0f;
@@ -159,7 +158,7 @@ void UFOBase::control() {
             }
         }
         if (mRailMover->isDone() && !_B0) {
-            MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+            MR::tryRumblePadMiddle(this, PLAYER_1);
             MR::shakeCameraNormal();
             if (MR::isEqualString("UFOBattleStageC", _B4)) {
                 MR::startSound(this, "SE_OJ_UFO_BTL_C_STOP");
@@ -184,7 +183,7 @@ void UFOBase::initSubModel(const JMapInfoIter& rIter, const char* name) {
     mLODCtrl = MR::createLodCtrlMapObj(this, rIter, 100.0f);
     if (MR::isExistSubModel(name, "Bloom")) {
         char buf[0x100];
-        snprintf(buf, sizeof(buf), "%sBloom", name);
+        nebula_snprintf(buf, sizeof(buf), "%sBloom", name);
         const char* name2 = mName;
         mModel = MR::createModelObjBloomModel(name2, buf, getBaseMtx());
         f32 num = 500.0f;

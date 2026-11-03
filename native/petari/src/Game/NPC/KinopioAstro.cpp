@@ -1,7 +1,4 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#endif
 #include "Game/NPC/KinopioAstro.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/DemoFunction.hpp"
@@ -32,23 +29,13 @@ namespace {
 
     // The larger supply's 1-ups (a mod may change them: NEBULA_PATCH_MESSENGER_EX_ONE_UPS).
     s32 messengerOneUpExNum() {
-#ifdef TARGET_PC
         u32 count = ::sMessangerOneUpExNum;
         NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
         return static_cast< s32 >(count);
-#else
-        return ::sMessangerOneUpExNum;
-#endif
     }
     const f32 sMessangerTalkDistance = 3000.0f;
     const f32 sGotMailSePlayAreaRadius = 1500.0f;
-    const char* sStaffLetterID = "StaffFinalLetter_000";
-    const char* sSenderID = "WiiMessageTitle";
 };  // namespace
-
-u32 JKRArchive::getExpandedResSize(const void* pResource) const {
-    return getResSize(pResource);
-}
 
 void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
     NPCActorItem item("Kinopio");
@@ -149,15 +136,6 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
     } else if (letterEvent == LetterEvent_3) {
         return true;
     }
-#if (VERSION == RMGK01)
-    else if (letterEvent == LetterEvent_OnMsgLedPattern) {
-        MR::onMsgLedPattern();
-        return true;
-    } else if (letterEvent == LetterEvent_OffMsgLedPattern) {
-        MR::offMsgLedPattern();
-        return true;
-    }
-#endif
 
     return true;
 }
@@ -180,7 +158,7 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::isEqualStageName("PeachCastleFinalGalaxy")) {
-        // The staff's letter went to the Wii Message Board: no message board (B-31, Q5), no letter.
+        // No message board (B-31, Q5), no letter from the staff.
         return;
     }
 
@@ -205,11 +183,9 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
             if (MR::isLuigiLeftSupply()) {
                 mIsPlayerLuigi = true;
             }
-#ifdef TARGET_PC
             if (NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_ALWAYS_EX, nullptr)) {
                 mIsPlayerLuigi = true;
             }
-#endif
 
             if (mIsPlayerLuigi) {
                 MR::setMessageArg(mMsgCtrl, messengerOneUpExNum());

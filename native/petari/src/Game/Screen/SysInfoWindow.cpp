@@ -2,26 +2,22 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Screen/YesNoController.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaFrameGen.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
-#endif
 
 namespace {
     const MessageChangeFuncTableEntry cMessageChangeFuncTable[] = {
         {MR::setTextBoxSystemMessageRecursive},
         {MR::setTextBoxGameMessageRecursive},
     };
-#ifdef TARGET_PC
     // The dim a closing or closed system window still shows, and when it last did (NebulaClock); the hand-overs so far.
     f32 sDimLeft = 0.0f;
     s64 sDimLeftTime = 0;
@@ -32,7 +28,6 @@ namespace {
     const f32 cDimStep = 0.1f;
     // A dim left longer ago than this belongs to an earlier screen.
     const s32 cDimHandOverMs = 100;
-#endif
 };  // namespace
 
 namespace NrvSysInfoWindow {
@@ -44,11 +39,9 @@ namespace NrvSysInfoWindow {
 SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType executeType)
     : LayoutActor("\203\126\203\130\203\145\203\200\227\160\203\103\203\223\203\164\203\110\203\201\201\133\203\126\203\207\203\223\203\105\203\102\203\223\203\150\203\105" /* システム用インフォメーションウィンドウ */, true), mWindowType(windowType), mType(Type_Key), mYesNoSelector(nullptr),
       mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), _38(executeType == ExecuteType_Children)
-#ifdef TARGET_PC
       ,
       mIsBackAnswersNo(false), mDimPane(nullptr), mDim(0.0f), mDimFloor(0.0f), mDimLinger(0), mDimEpoch(0),
       mDimHandOver(DimHandOver_None), mDimHanding(false), mFadePane(nullptr), mPanelPane(nullptr), mShadowPane(nullptr)
-#endif
 {
     switch (windowType) {
     case WindowType_Normal:
@@ -76,14 +69,12 @@ void SysInfoWindow::init(const JMapInfoIter& rIter) {
     }
 
     mIconAButton = MR::createAndSetupIconAButton(this, !_38, false);
-#ifdef TARGET_PC
     mDimPane = MR::getPane(this, "BG");
     if (mWindowType == WindowType_Normal) {
         mFadePane = MR::getPane(this, mWindowParentPaneName);
         mPanelPane = MR::getPane(this, "WinInfo");
         mShadowPane = MR::getPane(this, "ShaInfo");
     }
-#endif
 
     initNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvAppear));
 }
@@ -98,13 +89,11 @@ void SysInfoWindow::movement() {
 
 void SysInfoWindow::calcAnim() {
     LayoutActor::calcAnim();
-#ifdef TARGET_PC
     if (!MR::isDead(this)) {
         shapeFade();
         NebulaFrameGen::noteFullscreenUi();
     }
     updateDim();
-#endif
 
     if (_38) {
         mIconAButton->calcAnim();
@@ -112,7 +101,6 @@ void SysInfoWindow::calcAnim() {
 }
 
 void SysInfoWindow::draw() const {
-#ifdef TARGET_PC
     if (mDimPane != nullptr) {
         // A dim handed over goes the frame the next window opens (this window's update may have run first).
         if (mDim > 0.0f && !mFlag.mIsHidden && (!mDimHanding || mDimEpoch == sDimEpoch)) {
@@ -127,9 +115,6 @@ void SysInfoWindow::draw() const {
     } else {
         LayoutActor::draw();
     }
-#else
-    LayoutActor::draw();
-#endif
 
     if (_38) {
         mIconAButton->draw();
@@ -137,7 +122,6 @@ void SysInfoWindow::draw() const {
 }
 
 void SysInfoWindow::appear() {
-#ifdef TARGET_PC
     // The dim a window closing or just closed left takes this one's place until its own is as deep.
     mDimFloor = 0.0f;
     if (sDimLeft > 0.0f && (NebulaClock::nowNs() - sDimLeftTime) / 1000000 < cDimHandOverMs) {
@@ -147,7 +131,6 @@ void SysInfoWindow::appear() {
     sDimLeft = 0.0f;
     mDimHandOver = DimHandOver_None;
     mDimHanding = false;
-#endif
     const char* pAnimName = "ButtonAppear";
 
     MR::startPaneAnim(this, mTextParentPaneName, pAnimName, 0);
@@ -189,8 +172,8 @@ void SysInfoWindow::appear(const char* pMessageId, SysInfoType type, SysInfoText
     if (type == Type_YesNo) {
         char yesMessageId[48];
         char noMessageId[48];
-        snprintf(yesMessageId, sizeof(yesMessageId), "%s_Yes", pMessageId);
-        snprintf(noMessageId, sizeof(noMessageId), "%s_No", pMessageId);
+        nebula_snprintf(yesMessageId, sizeof(yesMessageId), "%s_Yes", pMessageId);
+        nebula_snprintf(noMessageId, sizeof(noMessageId), "%s_No", pMessageId);
         pMessageChangeFunc(this, "Right", yesMessageId);
         pMessageChangeFunc(this, "Left", noMessageId);
     }
@@ -220,11 +203,9 @@ void SysInfoWindow::kill() {
 
 void SysInfoWindow::forceKill() {
     kill();
-#ifdef TARGET_PC
     // Taken away at once: its dim goes with it.
     mDim = 0.0f;
     mDimHanding = false;
-#endif
 
     if (mYesNoSelector != nullptr) {
         mYesNoSelector->kill();
@@ -249,7 +230,6 @@ void SysInfoWindow::control() {
     }
 }
 
-#ifdef TARGET_PC
 namespace {
     // Lines centred in a box centred in its pane, as the game's own questions are.
     class TextBoxRecursiveCenter : public TextBoxRecursiveOperation {
@@ -264,7 +244,7 @@ namespace {
 
 // A Yes/No question of Nebula's own (the cutscene skip): its text as given, centred; the answers as init set them (the
 // save prompt's Yes and No, in the played language).
-void SysInfoWindow::appearYesNoWithText(const wchar_t* pText) {
+void SysInfoWindow::appearYesNoWithText(const char16_t* pText) {
     mType = Type_YesNo;
     MR::showPaneRecursive(this, "Left");
     MR::showPaneRecursive(this, "Right");
@@ -362,7 +342,6 @@ void SysInfoWindow::drawDim() const {
     mDimPane->Draw(pManager->mDrawInfo);
     mDimPane->mGlbAlpha = alpha;
 }
-#endif
 
 const char* SysInfoWindow::getLayoutName() const {
     switch (mWindowType) {
@@ -396,11 +375,9 @@ void SysInfoWindow::exeWait() {
             setNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvDisappear));
         }
     } else if (mYesNoSelector != nullptr) {
-#ifdef TARGET_PC
         if (mIsBackAnswersNo && MR::testSystemTriggerB()) {
             mYesNoSelector->decideNo();
         }
-#endif
         if (mYesNoSelector->isDisappearStart()) {
             setNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvDisappear));
         }
@@ -417,7 +394,6 @@ void SysInfoWindow::exeDisappear() {
         if (mType == Type_Key) {
             mIconAButton->term();
         }
-#ifdef TARGET_PC
         // A window the caller opens next (even this frame) takes over the dim this one shows now.
         const u8 answer = mType == Type_YesNo && mYesNoSelector != nullptr
                               ? (mYesNoSelector->isSelectedYes() ? DimHandOver_Yes : DimHandOver_No)
@@ -427,11 +403,10 @@ void SysInfoWindow::exeDisappear() {
             sDimLeft = mDim;
             sDimLeftTime = NebulaClock::nowNs();
         }
-#endif
     }
 
     if (MR::isPaneAnimStopped(this, mTextParentPaneName, 0)) {
-        if (mType == Type_Key || mType == Type_Blocking || mYesNoSelector != nullptr && !mYesNoSelector->_C) {
+        if (mType == Type_Key || mType == Type_Blocking || (mYesNoSelector != nullptr && !mYesNoSelector->_C)) {
             kill();
         }
     }
@@ -451,10 +426,6 @@ void SysInfoWindow::resetYesNoSelectorSE() {
 
 void SysInfoWindow::setTextBoxArgNumber(s32 arg, s32 param2) {
     MR::setTextBoxArgNumberRecursive(this, mTextParentPaneName, arg, param2);
-}
-
-void SysInfoWindow::setTextBoxArgString(const wchar_t* pArg, s32 param2) {
-    MR::setTextBoxArgStringRecursive(this, mTextParentPaneName, pArg, param2);
 }
 
 namespace MR {

@@ -8,7 +8,7 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -105,7 +105,7 @@ void TamakoroTutorial::requestEnd() {
 }
 
 void TamakoroTutorial::control() {
-    MR::getCorePadAcceleration(&mPadAccel, WPAD_CHAN0);
+    MR::getMainTilt(&mPadAccel, PLAYER_1);
     MR::normalizeOrZero(&mPadAccel);
 }
 

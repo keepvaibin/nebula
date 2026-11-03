@@ -21,7 +21,7 @@ public:
 
     void updateDropFlag();
     void resetTeresaMode();
-    bool isTeresaAccel() const NO_INLINE;
+    bool isTeresaAccel() const;
     f32 checkHeight();
     void checkAccel();
     void checkWind();
@@ -36,19 +36,19 @@ public:
     void addTeresaHorizontalVelocity(const TVec3f&);
     void doTeresaReflection(const TVec3f&, bool);
 
-    /* 0x14 */ TVec3f _14;
-    /* 0x20 */ f32 _20;
-    /* 0x24 */ f32 _24;
-    /* 0x28 */ TVec3f _28;
-    /* 0x34 */ TVec3f _34;
-    /* 0x40 */ u16 _40;
-    /* 0x42 */ u16 _42;
-    /* 0x44 */ u16 _44;
-    /* 0x46 */ u16 _46;
-    /* 0x48 */ u16 _48;
-    /* 0x4C */ f32 _4C;
-    /* 0x50 */ f32 _50;
-    /* 0x54 */ f32 _54;
-    /* 0x58 */ u8 _58;
-    /* 0x59 */ u8 _59;
+    TVec3f _14;
+    f32 _20;
+    f32 _24;
+    TVec3f _28;
+    TVec3f _34;
+    u16 _40;
+    u16 _42;
+    u16 _44;
+    u16 _46;
+    u16 _48;
+    f32 _4C;
+    f32 _50;
+    f32 _54;
+    u8 _58;
+    u8 _59;
 };

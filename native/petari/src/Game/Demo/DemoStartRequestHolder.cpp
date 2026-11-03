@@ -2,15 +2,12 @@
 #include "Game/Demo/DemoStartRequestUtil.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <revolution/types.h>
 
-#ifdef TARGET_PC
 // Defined below; declared before this file's first use instantiates them.
 template <>
 void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::push_back(const DemoStartInfo* const& rValue);
 template <>
 void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::operator++();
-#endif
 
 DemoStartInfo::DemoStartInfo() {
     _0 = nullptr;

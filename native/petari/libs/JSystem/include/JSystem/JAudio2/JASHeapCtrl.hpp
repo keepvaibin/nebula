@@ -1,60 +1,14 @@
 #pragma once
 
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution/types.h>
-#include <revolution/os.h>
-#include <revolution/types.h>
 
-struct JASDisposer;
-class JKRHeap;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
 
-extern JKRSolidHeap* JASDram;
-
-class JASHeap {
-public:
-    JASHeap(JASDisposer* disposer = nullptr);
-
-    void initRootHeap(void*, u32);
-    bool alloc(JASHeap*, u32);
-    bool allocTail(JASHeap*, u32);
-    bool free();
-    void insertChild(JASHeap*, JASHeap*, void*, u32, bool);
-    JASHeap* getTailHeap();
-    u32 getTailOffset();
-    u32 getCurOffset();
-
-    void* getBase() {
-        return mBase;
-    }
-    bool isAllocated() const {
-        return mBase != nullptr;
-    }
-    u32 getSize() const {
-        return mSize;
-    }
-
-    JSUTree< JASHeap >* getFirstChild() {
-        return mTree.getFirstChild();
-    }
-    JSUTree< JASHeap >* getEndChild() {
-        return mTree.getEndChild();
-    }
-
-    NebulaMutex& getMutex() {
-        return mMutex;
-    }
-
-    /* 0x00 */ JSUTree< JASHeap > mTree;
-    /* 0x1C */ NebulaMutex mMutex;
-    /* 0x34 */ JASDisposer* mDisposer;
-    /* 0x38 */ u8* mBase;
-    /* 0x3C */ u32 mSize;
-    /* 0x40 */ JASHeap* mHeap;
-};
+extern NebulaArena* JASDram;
 
 class JASGenericMemPool {
 public:
@@ -78,30 +32,30 @@ public:
         return mUsedMemCount;
     }
 
-    /* 0x0 */ void* _0;
-    /* 0x4 */ u32 mFreeMemCount;
-    /* 0x8 */ u32 mTotalMemCount;
-    /* 0xC */ u32 mUsedMemCount;
+    void* _0;
+    u32 mFreeMemCount;
+    u32 mTotalMemCount;
+    u32 mUsedMemCount;
 };
 
 namespace JASThreadingModel {
     template < typename T >
-    class InterruptsDisable {
+    class AudioExcluded {
     public:
         struct Lock {
             Lock(const T&) {
-                mInterruptState = NebulaKernel::disableInterrupts();
+                mEnabled = GameThreads::excludeAudio();
             }
             ~Lock() {
-                NebulaKernel::restoreInterrupts(mInterruptState);
+                GameThreads::restoreAudio(mEnabled);
             }
 
-            /* 0x00 */ u32 mInterruptState;
+            u32 mEnabled;
         };
     };
 
     template < typename T >
-    struct ObjectLevelLockable : public NebulaMutex {
+    struct ObjectLevelLockable : public GameMutex {
         ObjectLevelLockable() {
             this->init();
         }
@@ -116,7 +70,7 @@ namespace JASThreadingModel {
                 mMutex->unlock();
             }
 
-            /* 0x00 */ T* mMutex;
+            T* mMutex;
         };
     };
 
@@ -159,7 +113,7 @@ public:
 };
 
 namespace JASKernel {
-    JKRHeap* getSystemHeap();
+    NebulaArena* getSystemHeap();
 };  // namespace JASKernel
 
 template < u32 ChunkSize, template < typename > class T >
@@ -173,12 +127,7 @@ public:
         }
 
         bool checkArea(const void* ptr) const {
-#ifdef TARGET_PC
-            // The buffer follows the header: 0xC on the console, larger natively (a pointer member).
             return mBuffer <= (const u8*)ptr && (const u8*)ptr < mBuffer + ChunkSize;
-#else
-            return (u8*)this + 0xc <= (u8*)ptr && (u8*)ptr < (u8*)this + (0xc + ChunkSize);
-#endif
         }
 
         MemoryChunk* getNextChunk() {
@@ -212,10 +161,10 @@ public:
             mUsedSize = 0;
         }
 
-        /* 0x0 */ MemoryChunk* mNextChunk;
-        /* 0x4 */ u32 mUsedSize;
-        /* 0x8 */ u32 mChunks;
-        /* 0xC */ u8 mBuffer[ChunkSize];
+        MemoryChunk* mNextChunk;
+        u32 mUsedSize;
+        u32 mChunks;
+        u8 mBuffer[ChunkSize];
     };
 
     JASMemChunkPool() {
@@ -234,7 +183,7 @@ public:
             return true;
         }
 
-        mChunk = new (JKRHeap::getSystemHeap(), 0) MemoryChunk(pMVar4);
+        mChunk = new (NebulaArena::getSystemHeap(), 0) MemoryChunk(pMVar4);
         if (mChunk != nullptr) {
             return true;
         }
@@ -264,7 +213,6 @@ public:
         while (chunk != nullptr) {
             if (chunk->checkArea(ptr)) {
                 chunk->free(ptr);
-                bool r26 = false;
                 if (chunk != mChunk && chunk->isEmpty()) {
                     MemoryChunk* nextChunk = chunk->getNextChunk();
                     delete chunk;
@@ -277,31 +225,25 @@ public:
         }
     }
 
-    /* 0x18 */ MemoryChunk* mChunk;
+    MemoryChunk* mChunk;
 };
 
 namespace JASKernel {
-    void setupRootHeap(JKRSolidHeap*, u32);
-    JKRHeap* getSystemHeap();
+    void setupRootHeap(NebulaArena*, u32);
+    NebulaArena* getSystemHeap();
     JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* getCommandHeap();
-    void setupAramHeap(u32, u32);
-    JASHeap* getAramHeap();
-    u32 getAramFreeSize();
-    u32 getAramSize();
-
-    extern JASHeap audioAramHeap;
-    extern JKRHeap* sSystemHeap;
+    extern NebulaArena* sSystemHeap;
     extern JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* sCommandHeap;
 };  // namespace JASKernel
 
 template < typename T >
 class JASPoolAllocObject {
 public:
-    static void* operator new(JKRNewSize size) {
+    static void* operator new(size_t size) {
         return memPool_.alloc(size);
     }
 
-    static void operator delete(void* addr, JKRNewSize size) {
+    static void operator delete(void* addr, size_t size) {
         memPool_.free(addr, size);
     }
 
@@ -319,16 +261,16 @@ template < typename T >
 class JASMemPool_MultiThreaded : public JASGenericMemPool {
 public:
     void newMemPool(int n) {
-        typename JASThreadingModel::InterruptsDisable< JASMemPool_MultiThreaded< T > >::Lock lock(*this);
+        typename JASThreadingModel::AudioExcluded< JASMemPool_MultiThreaded< T > >::Lock lock(*this);
         JASGenericMemPool::newMemPool(sizeof(T), n);
     }
 
     void* alloc(u32 size) {
-        typename JASThreadingModel::InterruptsDisable< JASMemPool_MultiThreaded >::Lock lock(*this);
+        typename JASThreadingModel::AudioExcluded< JASMemPool_MultiThreaded >::Lock lock(*this);
         return JASGenericMemPool::alloc(size);
     }
     void free(void* addr, u32 size) {
-        typename JASThreadingModel::InterruptsDisable< JASMemPool_MultiThreaded >::Lock lock(*this);
+        typename JASThreadingModel::AudioExcluded< JASMemPool_MultiThreaded >::Lock lock(*this);
         JASGenericMemPool::free(addr, size);
     }
 };
@@ -336,11 +278,11 @@ public:
 template < typename T >
 class JASPoolAllocObject_MultiThreaded {
 public:
-    static void* operator new(JKRNewSize size) {
+    static void* operator new(size_t size) {
         return memPool_.alloc(size);
     }
 
-    static void operator delete(void* addr, JKRNewSize size) {
+    static void operator delete(void* addr, size_t size) {
         memPool_.free(addr, size);
     }
 

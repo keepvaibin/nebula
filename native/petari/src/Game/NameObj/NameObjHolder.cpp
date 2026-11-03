@@ -14,8 +14,8 @@ namespace {
             return strcmp(pObj->getName(), mName) == 0;
         }
 
-        /* 0x00 */ u32 mHash;
-        /* 0x04 */ const char* mName;
+        u32 mHash;
+        const char* mName;
     };
 };  // namespace
 
@@ -44,7 +44,9 @@ void NameObjHolder::syncWithFlags() {
 }
 
 void NameObjHolder::callMethodAllObj(NameObjMethod pMethod) {
-    std::for_each(mObjArray1.begin(), mObjArray1.end(), std::mem_fun(pMethod));
+    for (auto& item : mObjArray1) {
+        (item->*pMethod)();
+    }
 }
 
 void NameObjHolder::clearArray() {

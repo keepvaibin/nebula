@@ -1,25 +1,24 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace nw4r {
     namespace ut {
         typedef u32 SigWord;
 
         struct BinaryFileHeader {
-            NEBULA_BE(SigWord) signature;
-            NEBULA_BE(u16) byteOrder;
-            NEBULA_BE(u16) version;
-            NEBULA_BE(u32) fileSize;
-            NEBULA_BE(u16) headerSize;
-            NEBULA_BE(u16) dataBlocks;
+            SigWord signature;
+            u16 byteOrder;
+            u16 version;
+            u32 fileSize;
+            u16 headerSize;
+            u16 dataBlocks;
         };
 
         struct BinaryBlockHeader {
-            NEBULA_BE(SigWord) kind;
-            NEBULA_BE(u32) size;
+            SigWord kind;
+            u32 size;
         };
 
         bool IsValidBinaryFile(const BinaryFileHeader *, u32, u16, u16);

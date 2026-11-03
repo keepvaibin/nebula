@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/NPC/NPCActor.hpp"
-#include <revolution/types.h>
 
 class ButlerStateStarPieceReaction;
 class JMapInfoIter;
@@ -45,11 +44,11 @@ public:
         return mTalkMessage[index];
     }
 
-    /* 0x15C */ TalkMessageCtrl** mTalkMessage;
-    /* 0x160 */ bool _160;
-    /* 0x164 */ s32 _164;
-    /* 0x168 */ s32 _168;
-    /* 0x16C */ ButlerStateStarPieceReaction* mButlerState;
-    /* 0x170 */ bool _170;
-    /* 0x171 */ bool _171;
+    TalkMessageCtrl** mTalkMessage;
+    bool _160;
+    s32 _164;
+    s32 _168;
+    ButlerStateStarPieceReaction* mButlerState;
+    bool _170;
+    bool _171;
 };

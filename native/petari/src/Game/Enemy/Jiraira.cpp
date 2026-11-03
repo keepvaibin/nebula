@@ -12,7 +12,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/types.h>
 
 namespace {
     static const s32 hPreRecoverTime = 188;
@@ -98,7 +97,7 @@ void Jiraira::exeStepped() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Stepped");
         MR::startBrk(this, "Stepped");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(this, "SE_OJ_JIRAIRA_STEPPED");
     }
 

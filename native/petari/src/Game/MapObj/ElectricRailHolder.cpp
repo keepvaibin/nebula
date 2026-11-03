@@ -15,10 +15,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 
-void ElectricRailHolder_FORCE_MATCH_SDATA2() {
-    (void)30.0f;
-}
-
 namespace {
     const f32 cHitSensorRadius = 30.0f;
 
@@ -26,7 +22,7 @@ namespace {
         return MR::getSceneObj< ElectricRailHolder >(SceneObj_ElectricRailHolder);
     }
 
-    bool isNearRail(const LiveActor* pActor, const HitSensor* pSensor, TVec3f* pRailPos, TVec3f* pRailDir) NO_INLINE {
+    bool isNearRail(const LiveActor* pActor, const HitSensor* pSensor, TVec3f* pRailPos, TVec3f* pRailDir) {
         TVec3f railPos;
         f32 coord = MR::calcNearestRailPos(&railPos, pActor, pSensor->mPosition);
 
@@ -81,10 +77,10 @@ void ElectricRailHolder::draw() const {
         }
 
         J3DMatPacket* pPacket = pItem->mMatPacket;
-        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture, pItem->mMatPacket->getDisplayListObj());
+        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture, pItem->mMatPacket->getSnapshot());
 
-        if (pPacket->mpShapePacket->mpDisplayListObj != nullptr) {
-            J3DNativeMaterial::sendDiffered(pPacket->mpShapePacket->mpDisplayListObj);
+        if (pPacket->mpShapePacket->mpSnapshot != nullptr) {
+            J3DNativeMaterial::sendDiffered(pPacket->mpShapePacket->mpSnapshot);
         }
 
         pItem->mHost->draw();
@@ -140,8 +136,8 @@ void ElectricRailHolder::control() {
 
 void ElectricRailHolder::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
+    J3DPass::positionMatrix(0);
+    J3DPass::textureMatrix(0, 0);
 }
 
 void ElectricRailFunction::registerRail(const LiveActor* pActor, ElectricRailType railType) {
@@ -159,10 +155,6 @@ bool ElectricRailFunction::isTouchRail(const HitSensor* pSensor, TVec3f* pVec1, 
 
 f32 ElectricRailFunction::getHitSensorRadius() {
     return ::cHitSensorRadius;
-}
-
-u32 ElectricRailFunction::calcDisplayListSize(u32 size, s32 count) {
-    return (((size * count + 3) / 32) + 2) * 32;
 }
 
 void ElectricRailHolder::init(const JMapInfoIter& rIter) {

@@ -30,20 +30,6 @@
 // TODO: the symbol order for header funcs is out of order between JointControlDelegator funcs
 //       and Array funcs. This needs to be fixed in order to link.
 
-void IceMerameraKing_DUMMY() {
-    TVec3f a, b;
-    a.sub(b);
-}
-
-void IceMerameraKing_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)2.0f;
-}
-
 namespace NrvIceMerameraKing {
     NEW_NERVE(HostTypeNrvSearch, IceMerameraKing, Search);
     NEW_NERVE_ONEND(HostTypeNrvBeginDemo, IceMerameraKing, Throw, Throw);
@@ -324,7 +310,6 @@ void IceMerameraKing::tearDownThrow() {
 }
 
 void IceMerameraKing::exeExtinguish() {
-    f32 temp = ::hOnAirParam._4;  // it just exists
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "GoOut");
         MR::startSound(this, "SE_BM_ICEMERAKING_BLOW");

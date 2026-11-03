@@ -99,7 +99,7 @@ void FindingLuigiEventScheduler::getHidingGalaxyNameAndStarId(const char** pStag
     char eventName[] = "SpecialStarFindingLuigi1";
 
     for (s32 idx = 1; idx <= 3; idx++) {
-        snprintf(eventName, sizeof(eventName), "SpecialStarFindingLuigi%1d", idx);
+        nebula_snprintf(eventName, sizeof(eventName), "SpecialStarFindingLuigi%1d", idx);
         if (!GameDataFunction::isOnGameEventFlag(eventName)) {
             // found event flag that is not completed
             GameEventFlagAccessor accessor = GameEventFlagTable::makeAccessor(eventName);
@@ -152,7 +152,7 @@ s32 FindingLuigiEventScheduler::calcPowerStarIndexLuigiHas() const {
 
     char printBuffer[] = "SpecialStarFindingLuigi1";
     for (s32 idx = 1; idx <= 3; idx++) {
-        snprintf(printBuffer, sizeof(printBuffer), "SpecialStarFindingLuigi%1d", idx);
+        nebula_snprintf(printBuffer, sizeof(printBuffer), "SpecialStarFindingLuigi%1d", idx);
         if (!GameDataFunction::isOnGameEventFlag(printBuffer)) {
             return idx;
         }

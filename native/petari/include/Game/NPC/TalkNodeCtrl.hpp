@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/NPC/TalkMessageCtrl.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
 
 class TalkMessageHistory {
@@ -8,21 +9,22 @@ public:
     void entry(u16);
     bool search(u16) const;
 
-    /* 0x00 */ u16 mHistory[0x10];
-    /* 0x20 */ s32 mCount;
+    u16* mHistory;
+    s32 mCount;
+    s32 mMax;
 };
 
 class TalkNode {
 public:
-    // A BMG FLW1 node, read in place (big-endian).
-    /* 0x0 */ u8 mNodeType;
-    /* 0x1 */ u8 mGroupID;
-    /* 0x2 */ NEBULA_BE(u16) mIndex;
+    // A BMG FLW1 node, read in place (host order, as the importer cooks it).
+    u8 mNodeType;
+    u8 mGroupID;
+    u16 mIndex;
     union {
-        /* 0x4 */ NEBULA_BE(u32) mUnknown;
+        u32 mUnknown;
         struct {
-            /* 0x4 */ NEBULA_BE(u16) mNextIdx;
-            /* 0x6 */ NEBULA_BE(u16) mNextGroup;
+            u16 mNextIdx;
+            u16 mNextGroup;
         };
     };
 };
@@ -30,13 +32,13 @@ public:
 class RecursiveHelper {
 public:
     inline bool hasNode(const TalkNode*) const;
-    TalkNode* mStack[64];
+    MR::FixedArray< TalkNode*, 64 > mStack;
     s32 mIndex;
 };
 
 class MessageNode {
 public:
-    /* 0x0 */ const char* mMessage;
+    const char* mMessage;
 };
 
 class TalkNodeCtrl {
@@ -59,17 +61,17 @@ public:
     TalkNode* getNextNodeEvent() const;
     void updateMessage();
     void readMessage();
-    const wchar_t* getSubMessage() const;
+    const char16_t* getSubMessage() const;
     void forwardCurrentBranchNode(bool);
     void createFlowNode(TalkMessageCtrl*, const JMapInfoIter&, const char*, ActorCameraInfo**);
     void initNodeRecursive(TalkMessageCtrl*, const JMapInfoIter&, ActorCameraInfo*, RecursiveHelper*);
 
-    /* 0x00 */ char* _0;
-    /* 0x04 */ s32 mCurrentNodeIdx;
-    /* 0x08 */ TalkMessageInfo mMessageInfo;
-    /* 0x14 */ TalkMessageHistory mHistory;
-    /* 0x38 */ TalkNode* _38;
-    /* 0x3C */ TalkNode* mCurrentNode;
-    /* 0x40 */ TalkNode* mFlowNode;
-    /* 0x44 */ s16 mNodeData;
+    char* _0;
+    s32 mCurrentNodeIdx;
+    TalkMessageInfo mMessageInfo;
+    TalkMessageHistory mHistory;
+    TalkNode* _38;
+    TalkNode* mCurrentNode;
+    TalkNode* mFlowNode;
+    s16 mNodeData;
 };

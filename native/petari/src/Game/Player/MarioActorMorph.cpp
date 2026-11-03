@@ -13,7 +13,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/types.h>
 
 void MarioActor::setPlayerMode(u16 playerMode, bool myBool) {
     if (mPlayerMode == playerMode) {
@@ -341,7 +340,7 @@ struct myStruct {
     u32 _24;
 };
 
-static myStruct cMorphStringTable[] = {{"DieBlackHole", 0, 0, 0, "DieBlackHoleBee", 0, 0, 0, "DieBlackHoleLuigi", 0}, {}};
+static myStruct cMorphStringTable[] = {{{"DieBlackHole", 0, 0, 0, "DieBlackHoleBee", 0, 0, 0, "DieBlackHoleLuigi"}, 0}, {}};
 
 void MarioActor::touchSensor(HitSensor* pSensor) {
     switch (pSensor->mType) {

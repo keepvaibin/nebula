@@ -1,37 +1,36 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class JMapInfo;
 class TalkMessageInfo;
 class TalkNode;
 
-// BMG. The block headers, INF1 items and FLW1 nodes are read big-endian; natively the DAT1 text is converted to
-// host order once at load (MessageData::MessageData), see MessageEditorMessageTag for the tags.
+// BMG, in host order as the importer cooks it (crates/nebula-import cook/native_data.rs); see
+// MessageEditorMessageTag for the tags.
 struct MessageInfoBlock {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
-    /* 0x8 */ NEBULA_BE(u16) mItemCount;
-    /* 0xA */ NEBULA_BE(u16) mItemSize;
-    /* 0xC */ NEBULA_BE(u32) _C;
+    u32 mMagic;
+    u32 mBlockSize;
+    u16 mItemCount;
+    u16 mItemSize;
+    u32 _C;
 };
 
 struct MessageDataBlock {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
+    u32 mMagic;
+    u32 mBlockSize;
 };
 
 struct MessageFlowBlock {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
-    /* 0x8 */ NEBULA_BE(u16) mNodeCount;
-    /* 0xA */ NEBULA_BE(u16) _A;
-    /* 0xC */ NEBULA_BE(u32) _C;
+    u32 mMagic;
+    u32 mBlockSize;
+    u16 mNodeCount;
+    u16 _A;
+    u32 _C;
 };
 
 struct MessageFLI1Block {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
+    u32 mMagic;
+    u32 mBlockSize;
 };
 
 class MessageData {
@@ -47,14 +46,14 @@ public:
     u8* getMessageInfoTool(int) const;
     s32 findMessageIndex(const char*) const;
 
-    /* 0x00 */ JMapInfo* mIDTable;
-    /* 0x04 */ MessageInfoBlock* mInfoBlock;
-    /* 0x08 */ MessageDataBlock* mDataBlock;
-    /* 0x0C */ u32 _C;
-    /* 0x10 */ MessageFlowBlock* mFlowBlock;
-    /* 0x14 */ NEBULA_BE(u16)* _14;
-    /* 0x18 */ u8* _18;
-    /* 0x1C */ MessageFLI1Block* mFLI1Block;
+    JMapInfo* mIDTable;
+    MessageInfoBlock* mInfoBlock;
+    MessageDataBlock* mDataBlock;
+    u32 _C;
+    MessageFlowBlock* mFlowBlock;
+    u16* _14;
+    u8* _18;
+    MessageFLI1Block* mFLI1Block;
 };
 
 class MessageHolder {
@@ -66,9 +65,9 @@ public:
     void initSystemData();
     void initGameData();
 
-    /* 0x00 */ MessageData* mSystemMessageData;
-    /* 0x04 */ MessageData* mGameMessageData;
-    /* 0x08 */ MessageData* mSceneMessageData;
+    MessageData* mSystemMessageData;
+    MessageData* mGameMessageData;
+    MessageData* mSceneMessageData;
 };
 
 class MessageSystem {
@@ -78,10 +77,10 @@ public:
     struct FlowNodeBranch {};
 
     struct FlowNodeEvent {
-        /* 0x00 */ u8 mFlowType;
-        /* 0x01 */ u8 mEventType;
-        /* 0x02 */ NEBULA_BE(u16) mBranchID;
-        /* 0x04 */ NEBULA_BE(u32) mArg;
+        u8 mFlowType;
+        u8 mEventType;
+        u16 mBranchID;
+        u32 mArg;
     };
 
     static bool getSystemMessageDirect(TalkMessageInfo*, const char*);

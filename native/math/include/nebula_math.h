@@ -1,19 +1,47 @@
 /* The native math library: 3x4 and 4x4 matrices, vectors and quaternions (requirement C-08). The small functions are
    inline here, so the game's ~1,000 call sites pay no call; the rest are in nebula_math.c. Each keeps the console's
    results: the same operations grouped as the console grouped them, every input read before any output is written
-   (an output may be an input). Square roots are exact; reciprocal square roots are the host estimate refined once,
-   as the console refined frsqrte. Uses the Mtx, Mtx44, Vec, Point3d and Quaternion layouts. */
+   (an output may be an input). Square roots and their reciprocals are exact: the same bits on every CPU. */
 #ifndef NEBULA_MATH_H
 #define NEBULA_MATH_H
 
 #include <math.h>
 #if defined(__SSE2__)
 #include <emmintrin.h>
+#elif defined(__ARM_NEON) || defined(_M_ARM64)
+#define NEBULA_MATH_NEON 1
+#include <arm_neon.h>
 #endif
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct {
+    f32 x, y, z;
+} Vec, *VecPtr, Point3d;
+
+typedef struct {
+    s16 x;
+    s16 y;
+    s16 z;
+} S16Vec, *S16VecPtr;
+
+typedef struct {
+    f32 x, y, z, w;
+} Quaternion, *QuaternionPtr;
+
+typedef f32 Mtx23[2][3];
+
+typedef f32 Mtx[3][4];
+typedef f32 (*MtxPtr)[4];
+
+typedef f32 Mtx44[4][4];
+typedef f32 (*Mtx44Ptr)[4];
+
+typedef f32 Mtx33[3][3];
+typedef f32 (*Mtx3P)[3];
 
 /* The larger ones (nebula_math.c). */
 u32 NebulaMtxInverse(const Mtx src, Mtx inv);
@@ -31,11 +59,6 @@ void NebulaQuatFromMtx(Quaternion* r, const Mtx m);
 void NebulaQuatSlerp(const Quaternion* p, const Quaternion* q, Quaternion* r, f32 t);
 /* A rotation about the x, y or z axis by the game's own sine and cosine tables (JMath; defined with the game). */
 void NebulaMtxRotRad(Mtx m, char axis, f32 rad);
-
-static inline f32 __NebulaRsqrtRefined(f32 x) {
-    const f32 e = __frsqrte(x);
-    return (3.0f - (e * e) * x) * (e * 0.5f);
-}
 
 static inline void NebulaMtxIdentity(Mtx m) {
     m[0][0] = 1.0f; m[0][1] = 0.0f; m[0][2] = 0.0f; m[0][3] = 0.0f;
@@ -63,6 +86,20 @@ static inline void NebulaMtxConcat(const Mtx a, const Mtx b, Mtx ab) {
     _mm_storeu_ps(ab[0], r[0]);
     _mm_storeu_ps(ab[1], r[1]);
     _mm_storeu_ps(ab[2], r[2]);
+#elif defined(NEBULA_MATH_NEON)
+    const float32x4_t b0 = vld1q_f32(b[0]), b1 = vld1q_f32(b[1]), b2 = vld1q_f32(b[2]);
+    const uint32x4_t lane3 = vsetq_lane_u32(0xFFFFFFFFu, vdupq_n_u32(0u), 3);
+    float32x4_t r[3];
+    for (int i = 0; i < 3; ++i) {
+        const float32x4_t ai = vld1q_f32(a[i]);
+        float32x4_t t = vmulq_laneq_f32(b0, ai, 0);
+        t = vaddq_f32(t, vmulq_laneq_f32(b1, ai, 1));
+        t = vaddq_f32(t, vmulq_laneq_f32(b2, ai, 2));
+        r[i] = vaddq_f32(t, vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(ai), lane3))); /* + a[i][3] in the translation column only */
+    }
+    vst1q_f32(ab[0], r[0]);
+    vst1q_f32(ab[1], r[1]);
+    vst1q_f32(ab[2], r[2]);
 #else
     f32 r[3][4];
     for (int i = 0; i < 3; i++) {
@@ -72,6 +109,32 @@ static inline void NebulaMtxConcat(const Mtx a, const Mtx b, Mtx ab) {
         r[i][3] += a[i][3];
     }
     __builtin_memcpy(ab, r, sizeof(r));
+#endif
+}
+
+/* dst = src * a scale about the origin: the columns scaled, translation kept. */
+static inline void NebulaMtxApplyScale(const Mtx src, Mtx dst, f32 x, f32 y, f32 z) {
+#if defined(__SSE2__)
+    const __m128 s = _mm_set_ps(1.0f, z, y, x);
+    const __m128 r0 = _mm_mul_ps(_mm_loadu_ps(src[0]), s), r1 = _mm_mul_ps(_mm_loadu_ps(src[1]), s), r2 = _mm_mul_ps(_mm_loadu_ps(src[2]), s);
+    _mm_storeu_ps(dst[0], r0);
+    _mm_storeu_ps(dst[1], r1);
+    _mm_storeu_ps(dst[2], r2);
+#elif defined(NEBULA_MATH_NEON)
+    const float scale[4] = {x, y, z, 1.0f};
+    const float32x4_t v = vld1q_f32(scale);
+    const float32x4_t r0 = vmulq_f32(vld1q_f32(src[0]), v), r1 = vmulq_f32(vld1q_f32(src[1]), v), r2 = vmulq_f32(vld1q_f32(src[2]), v);
+    vst1q_f32(dst[0], r0);
+    vst1q_f32(dst[1], r1);
+    vst1q_f32(dst[2], r2);
+#else
+    for (int i = 0; i < 3; i++) {
+        const f32 r0 = src[i][0] * x, r1 = src[i][1] * y, r2 = src[i][2] * z, r3 = src[i][3];
+        dst[i][0] = r0;
+        dst[i][1] = r1;
+        dst[i][2] = r2;
+        dst[i][3] = r3;
+    }
 #endif
 }
 
@@ -198,7 +261,7 @@ static inline f32 NebulaVecSquareDistance(const Vec* a, const Vec* b) {
 /* No zero test, as on the console: a zero vector normalises to NaN. */
 static inline void NebulaVecNormalize(const Vec* src, Vec* dst) {
     const f32 x = src->x, y = src->y, z = src->z;
-    const f32 r = __NebulaRsqrtRefined((x * x + z * z) + y * y);
+    const f32 r = 1.0f / sqrtf((x * x + z * z) + y * y);
     dst->x = x * r;
     dst->y = y * r;
     dst->z = z * r;
@@ -231,6 +294,45 @@ static inline f32 NebulaVecDistance(const Vec* a, const Vec* b) {
 }
 
 /* pq = p * q (Hamilton product). */
+/* dst = a + (b - a) * t. */
+static inline void NebulaVecLerp(const Vec* a, const Vec* b, Vec* dst, f32 t) {
+    const f32 x = (b->x - a->x) * t + a->x;
+    const f32 y = (b->y - a->y) * t + a->y;
+    const f32 z = (b->z - a->z) * t + a->z;
+    dst->x = x;
+    dst->y = y;
+    dst->z = z;
+}
+
+/* dst = a * scale + b. */
+static inline void NebulaVecScaleAdd(const Vec* a, const Vec* b, Vec* dst, f32 scale) {
+    const f32 x = a->x * scale + b->x;
+    const f32 y = a->y * scale + b->y;
+    const f32 z = a->z * scale + b->z;
+    dst->x = x;
+    dst->y = y;
+    dst->z = z;
+}
+
+/* The root of a positive value; zero, negatives and NaN come back as they are. */
+static inline f32 NebulaSqrt(f32 value) {
+    return value > 0.0f ? __builtin_sqrtf(value) : value;
+}
+
+/* Along the shorter way round: q is flipped when the two lie on opposite sides. */
+static inline void NebulaQuatLerp(const Quaternion* p, const Quaternion* q, f32 t, Quaternion* dst) {
+    const f32 dot = (p->z * q->z + p->x * q->x) + (p->w * q->w + p->y * q->y);
+    const f32 sign = dot < 0.0f ? -1.0f : 1.0f;
+    const f32 x = -t * (p->x - sign * q->x) + p->x;
+    const f32 y = -t * (p->y - sign * q->y) + p->y;
+    const f32 z = -t * (p->z - sign * q->z) + p->z;
+    const f32 w = -t * (p->w - sign * q->w) + p->w;
+    dst->x = x;
+    dst->y = y;
+    dst->z = z;
+    dst->w = w;
+}
+
 static inline void NebulaQuatMultiply(const Quaternion* p, const Quaternion* q, Quaternion* pq) {
     const f32 px = p->x, py = p->y, pz = p->z, pw = p->w;
     const f32 qx = q->x, qy = q->y, qz = q->z, qw = q->w;

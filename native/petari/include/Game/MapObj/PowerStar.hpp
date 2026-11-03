@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/LiveActor/LiveActor.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
@@ -61,32 +63,32 @@ public:
         return mIsGrandStar;
     }
 
-    /* 0x08C */ s32 mPowerStarId;
-    /* 0x090 */ bool mIsInDemo;
-    /* 0x094 */ TVec3f mAppearPosition;
-    /* 0x0A0 */ TVec3f mInitRotation;
-    /* 0x0AC */ TVec3f mInitPosition;
-    /* 0x0B8 */ TPos3f _B8;
-    /* 0x0E8 */ TPos3f mBaseMtx;
-    /* 0x118 */ ModelObj* mPowerStarModelObj;
-    /* 0x11C */ u8 _11C;
-    /* 0x11D */ u8 _11D;
-    /* 0x11E */ u8 _11E;
-    /* 0x11F */ u8 _11F;
+    s32 mPowerStarId;
+    bool mIsInDemo;
+    TVec3f mAppearPosition;
+    TVec3f mInitRotation;
+    TVec3f mInitPosition;
+    TPos3f _B8;
+    TPos3f mBaseMtx;
+    ModelObj* mPowerStarModelObj;
+    u8 _11C;
+    u8 _11D;
+    u8 _11E;
+    u8 _11F;
 
     // this isn't what they wrote but oh well
     union {
-        /* 0x120 */ vs32 mColorFrame_v;
-        /* 0x120 */ s32 mColorFrame;
+        vs32 mColorFrame_v;
+        s32 mColorFrame;
     };
 
-    /* 0x124 */ volatile bool mIsGrandStar;
-    /* 0x125 */ bool _125;
-    /* 0x126 */ bool _126;
-    /* 0x127 */ bool _127;
-    /* 0x128 */ ActorCameraInfo* mCameraInfo;
-    /* 0x12C */ PowerStarAppearPoint* mCameraActor;
-    /* 0x130 */ ModelObj* mLuigiNPC;
-    /* 0x134 */ TMtx34f _134;
-    /* 0x164 */ bool _164;
+    NebulaAtomic< bool > mIsGrandStar;
+    bool _125;
+    bool _126;
+    bool _127;
+    ActorCameraInfo* mCameraInfo;
+    PowerStarAppearPoint* mCameraActor;
+    ModelObj* mLuigiNPC;
+    TMtx34f _134;
+    bool _164;
 };

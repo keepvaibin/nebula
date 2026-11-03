@@ -1,21 +1,20 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
-#include <revolution/types.h>
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/AssetFolder.hpp"
 
 class ArchiveHolderArchiveEntry {
 public:
     /// @brief Creates a new `ArchiveHolderArchiveEntry`.
-    ArchiveHolderArchiveEntry(void*, JKRHeap*, const char*);
+    ArchiveHolderArchiveEntry(AssetFolder*, NebulaArena*, const char*);
 
     /// @brief Destroys the `ArchiveHolderArchiveEntry`.
     ~ArchiveHolderArchiveEntry();
 
-    /* 0x0 */ JKRMemArchive* mArchive;
-    /* 0x4 */ JKRHeap* mHeap;
-    /* 0x8 */ char* mArchiveName;
+    AssetFolder* mArchive;
+    NebulaArena* mHeap;
+    char* mArchiveName;
 };
 
 class ArchiveHolder {
@@ -24,32 +23,32 @@ public:
     ArchiveHolder();
 
     /// @brief Creates and adds a new archive entry.
-    /// @param pData The data for the archive.
+    /// @param pFolder The archive.
     /// @param pHeap The heap to allocate the archive in.
     /// @param pArchiveName The name of the archive.
     /// @return The pointer to the created entry.
-    ArchiveHolderArchiveEntry* createAndAdd(void*, JKRHeap*, const char*);
+    ArchiveHolderArchiveEntry* createAndAdd(AssetFolder*, NebulaArena*, const char*);
 
     /// @brief Gets the archive for the given archive name.
     /// @param pArchiveName The name of the archive.
     /// @return The pointer to the found archive, or `nullptr` if not found.
-    JKRMemArchive* getArchive(const char*) const;
+    AssetFolder* getArchive(const char*) const;
 
     /// @brief Gets the archive and heap for the given archive name.
     /// @param pArchiveName The name of the archive.
     /// @param pArchive The output pointer for the archive.
     /// @param pHeap The output pointer for the heap.
-    void getArchiveAndHeap(const char*, JKRArchive**, JKRHeap**) const;
+    void getArchiveAndHeap(const char*, AssetFolder**, NebulaArena**) const;
 
     /// @brief Removes entries that match the given heap.
     /// @param pHeap The heap to compare.
-    void removeIfIsEqualHeap(JKRHeap*);
+    void removeIfIsEqualHeap(NebulaArena*);
 
     /// @brief Finds the entry with the given archive name.
     /// @param pArchiveName The name of the archive.
     /// @return The pointer to the found entry, or `nullptr` if not found.
     ArchiveHolderArchiveEntry* findEntry(const char*) const;
 
-    /* 0x0 */ MR::Vector< MR::AssignableArray< ArchiveHolderArchiveEntry* > > mEntries;
-    /* 0xC */ NebulaMutex mMutex;
+    MR::Vector< MR::AssignableArray< ArchiveHolderArchiveEntry* > > mEntries;
+    mutable GameMutex mMutex;
 };

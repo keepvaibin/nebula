@@ -2,7 +2,6 @@
 
 #include "Game/LiveActor/ActorStateBase.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
-#include <revolution/types.h>
 
 class TalkMessageCtrl;
 
@@ -15,6 +14,6 @@ public:
 
     void exeWait();
 
-    /* 0x10 */ TalkMessageCtrl* mTalkMessage;
-    /* 0x14 */ bool _14;
+    TalkMessageCtrl* mTalkMessage;
+    bool _14;
 };

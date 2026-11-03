@@ -9,7 +9,7 @@ namespace {
                                                 11, 7, 8, 12, 13, 9, -1, -1, -1, 17, 18, 14, 15, 19, 20, 16, -1, -1, -1, 21};
     static s32 cJMapBoneIDToBoneIndexTableSize = ARRAY_SIZE(cJMapBoneIDToBoneIndexTable);
 
-    s32 convertBoneIDToIndex(s32 id) NO_INLINE {
+    s32 convertBoneIDToIndex(s32 id) {
         if (id < 0 || cJMapBoneIDToBoneIndexTableSize <= id) {
             return -1;
         }
@@ -30,7 +30,7 @@ void TripodBossAccesser::setTriPodBoss(TripodBoss* pBoss) {
 }
 
 void TripodBossAccesser::addTripodBossParts(LiveActor* pActor) {
-    mParts[mPartsNum] = pActor;
+    mParts.at(mPartsNum) = pActor;
     mPartsNum++;
 }
 

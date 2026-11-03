@@ -1,5 +1,5 @@
 #include "Game/Player/MarioActor.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
 void MarioActor::resetPadSwing() {
@@ -88,7 +88,7 @@ bool MarioActor::isRequestSpin() const {
         return false;
     }
 
-    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::testCorePadTriggerA(1)) {
+    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -124,7 +124,7 @@ bool MarioActor::isRequestJump2P() const {
         return false;
     }
 
-    if (MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::testCorePadTriggerA(1)) {
+    if (MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::isPressedJump(1)) {
         return true;
     }
 
@@ -144,7 +144,7 @@ bool MarioActor::isKeepJump2P() const {
         return false;
     }
 
-    return MR::testCorePadButtonA(1);
+    return MR::isHeldJump(1);
 }
 
 bool MarioActor::checkButtonType(u16 type, bool isObeyDisable) const {
@@ -179,56 +179,56 @@ bool MarioActor::checkButtonType(u16 type, bool isObeyDisable) const {
         break;
 
     case 3:
-        if (MR::getPlayerTriggerA()) {
+        if (MR::getPlayerPressedJump()) {
             return true;
         }
 
         break;
 
     case 4:
-        if (MR::getPlayerTriggerB()) {
+        if (MR::getPlayerPressedFire()) {
             return true;
         }
 
         break;
 
     case 7:
-        if (MR::getPlayerTriggerZ()) {
+        if (MR::getPlayerPressedCrouch()) {
             return true;
         }
 
         break;
 
     case 8:
-        if (MR::getPlayerTriggerC()) {
+        if (MR::getPlayerPressedCamera()) {
             return true;
         }
 
         break;
 
     case 5:
-        if (MR::getPlayerLevelA()) {
+        if (MR::getPlayerHeldJump()) {
             return true;
         }
 
         break;
 
     case 6:
-        if (MR::getPlayerLevelB()) {
+        if (MR::getPlayerHeldFire()) {
             return true;
         }
 
         break;
 
     case 9:
-        if (MR::getPlayerLevelZ()) {
+        if (MR::getPlayerHeldCrouch()) {
             return true;
         }
 
         break;
 
     case 10:
-        if (MR::getPlayerLevelC()) {
+        if (MR::getPlayerHeldCamera()) {
             return true;
         }
 
@@ -288,16 +288,16 @@ void MarioActor::updateControllerSwing() {
     bool F20 = _F20;
     _F00 = false;
 
-    bool isCorePadSwing = !mMario->isSwimming() ? MR::isCorePadSwing(0) : MR::isCorePadSwingTrigger(0);
-    _F20 = isCorePadSwing;
+    bool isMainSpin = !mMario->isSwimming() ? MR::isMainSpin(0) : MR::isMainSpinPressed(0);
+    _F20 = isMainSpin;
 
     if (_F1C != 0) {
         _F1C--;
-    } else if (isCorePadSwing && F20 == 0) {
+    } else if (isMainSpin && F20 == 0) {
         _F00 = true;
     }
 
-    if (isCorePadSwing && _946 > 10 && _F1C < 8) {
+    if (isMainSpin && _946 > 10 && _F1C < 8) {
         _F1C = 8;
     }
 }
@@ -311,16 +311,16 @@ void MarioActor::updateControllerSwingLeft() {
     bool F21 = _F21;
     _F0C = false;
 
-    bool isSubPadSwing = MR::isSubPadSwing(0);
-    _F21 = isSubPadSwing;
+    bool isSubSpin = MR::isSubSpin(0);
+    _F21 = isSubSpin;
 
     if (_F1E != 0) {
         _F1E--;
-    } else if (isSubPadSwing && !F21) {
+    } else if (isSubSpin && !F21) {
         _F0C = true;
     }
 
-    if (isSubPadSwing && _946 > 10 && _F1E < 8) {
+    if (isSubSpin && _946 > 10 && _F1E < 8) {
         _F1E = 8;
     }
 }
@@ -365,7 +365,7 @@ bool MarioActor::isRequestSpinJump2P() const {
         return false;
     }
 
-    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::testCorePadTriggerA(1)) {
+    if (isJumping() && mMario->_3BC > 6 && MR::isStarPointerPointing2P(this, "\216\343" /* 弱 */, true, false) && MR::isPressedJump(1)) {
         return true;
     }
 

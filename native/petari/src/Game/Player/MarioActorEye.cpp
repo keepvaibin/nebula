@@ -84,14 +84,14 @@ void MarioActor::updateBlink() {
     if (_B68) {
         _B68 = 0;
         _B72 = 0;
-        _B74 = MR::getRandom(60L, 360L);
+        _B74 = MR::getRandom(60, 360);
         _B6A = 0;
     }
 
     if (_B72) {
         _B72--;
         _B6A = ::sBlinkStates[9 - _B72];
-        _B74 = MR::getRandom(60L, 360L);
+        _B74 = MR::getRandom(60, 360);
         return;
     }
 

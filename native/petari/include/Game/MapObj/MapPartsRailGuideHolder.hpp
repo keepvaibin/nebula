@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/Util/Array.hpp"
+
 #include "Game/NameObj/NameObj.hpp"
 
 class LiveActor;
@@ -15,6 +17,6 @@ public:
     MapPartsRailGuideDrawer* createRailGuide(LiveActor* pHost, const char* pModelName, const JMapInfoIter& rIter);
     MapPartsRailGuideDrawer* find(s32 railId);
 
-    /* 0x00C */ MapPartsRailGuideDrawer* mDrawers[64];
-    /* 0x10C */ s32 mNumRailGuides;
+    MR::GrowTable< MapPartsRailGuideDrawer*, 64 > mDrawers;
+    s32 mNumRailGuides;
 };

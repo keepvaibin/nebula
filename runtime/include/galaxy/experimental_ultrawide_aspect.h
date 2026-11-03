@@ -18,12 +18,12 @@
 
 namespace galaxy {
 
-// The game's widescreen mode spans 832 logical units over its 640-unit EFB; another shape keeps that anamorphic
+// The game's widescreen mode spans 832 logical units over its 640-unit scene target; another shape keeps that anamorphic
 // relation and changes the logical width. Camera and HUD follow one logical aspect, the policy of Dusklight's (CC0)
 // m_Do_graphic.cpp::updateRenderSize/setTvSize.
 struct ExperimentalUltrawideAspect {
-    double content_aspect = kWiiContentAspect;
-    unsigned guest_screen_width = 832;
+    double content_aspect = kDesignContentAspect;
+    unsigned game_screen_width = 832;
 };
 
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
@@ -82,23 +82,11 @@ make_experimental_ultrawide_aspect(double content_aspect) noexcept {
     // An even number of units, as the game's own 608 and 832 (624 at 4:3 and narrower).
     const unsigned width = static_cast<unsigned>(
         std::lround(kWideLogicalWidth *
-                    (std::max(aspect, 4.0 / 3.0) / kWiiContentAspect) * 0.5)) * 2u;
+                    (std::max(aspect, 4.0 / 3.0) / kDesignContentAspect) * 0.5)) * 2u;
     if (width <= 608u || width > 1664u) {
         return std::nullopt;
     }
     return ExperimentalUltrawideAspect{aspect, width};
-}
-
-// The smallest integer EFB scale at which the 2D layouts keep the Wii's own density: past 16:9 their logical width
-// spreads over the same 640 columns (half of them at 32:9), narrower than 4:3 their logical height over the same rows.
-[[nodiscard]] inline unsigned layout_density_scale(
-    const std::optional<ExperimentalUltrawideAspect>& shape) noexcept {
-    if (!shape) {
-        return 1u;
-    }
-    const double wide = shape->guest_screen_width / 832.0;
-    const double tall = (4.0 / 3.0) / std::min(shape->content_aspect, 4.0 / 3.0);
-    return static_cast<unsigned>(std::ceil(std::max({1.0, wide, tall}) - 1e-6));
 }
 
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>

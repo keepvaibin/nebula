@@ -1,14 +1,13 @@
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASBankTable.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 
 #include <cstring>
-#include <revolution/os.h>
 
 JASTrack::JASTrack() : mSeqCtrl(), mRegisterParam(), mDefaultChannelMgr(this), mChannelMgrCount(1), mStatus(STATUS_FREE), mNode() {
     mChannelMgrs[0] = &mDefaultChannelMgr;
@@ -192,13 +191,13 @@ void JASTrack::setSeqData(void* data, u32 offset) {
 }
 
 void JASTrack::startSeq() {
-    JASCriticalSection lock;
+    GameAudioExclusion lock;
     sTrackList.append(this);
     mStatus = STATUS_RUN;
 }
 
 void JASTrack::stopSeq() {
-    JASCriticalSection lock;
+    GameAudioExclusion lock;
     mIsStopped = true;
 }
 
@@ -457,7 +456,7 @@ void JASTrack::updateTrack(f32 num) {
 
 void JASTrack::updateTempo() {
     if (!mParent) {
-        f32 rate = JASDriver::getDacRate();
+        f32 rate = JASDriver::getSoundRate();
         mSampleInterval = mTempoRate * (1.33333337307f * (mTimebase * mTempo) / rate);
     } else {
         mTempo = mParent->mTempo;
@@ -532,8 +531,26 @@ void JASTrack::setOscScale(u32 a, f32 scale) {
     mOscParam[a].mScale = scale;
 }
 
-void JASTrack::setOscTable(u32 a, const JASOscillator::Point* point) {
-    mOscParam[a].mTable = point;
+void JASTrack::setOscTable(u32 a, const u8* data) {
+    const auto read = [&data]() {
+        const s16 value = static_cast< s16 >((data[0] << 8) | data[1]);
+        data += 2;
+        return value;
+    };
+    JASOscillator::Point* const table = mOscTable[a];
+    for (u32 i = 0;; i++) {
+        if (i == cOscTablePoints) {
+            NEBULA_PANIC("a sequence's envelope longer than %u points", cOscTablePoints);
+        }
+        table[i]._0 = read();
+        table[i]._2 = read();
+        table[i]._4 = read();
+        // Its modes 0xD, 0xE and 0xF end it (JASOscillator::update).
+        if (table[i]._0 >= 0xD) {
+            break;
+        }
+    }
+    mOscParam[a].mTable = table;
     if (a == 0) {
         return;
     }
@@ -551,9 +568,9 @@ void JASTrack::setOscAdsr(s16 attack, s16 delay, s16 sustain, s16 release, u16 e
     mDirectRelease = e;
 }
 
-void JASTrack::setFIR(const NEBULA_BE(s16)* FIRFilter) {
+void JASTrack::setFIR(const u8* filter) {
     for (u32 i = 0; i < 8; i++) {
-        mFIR[i] = FIRFilter[i];
+        mFIR[i] = static_cast< s16 >((filter[i * 2] << 8) | filter[i * 2 + 1]);
     }
 
     mFilterMode &= 0x20;
@@ -651,7 +668,7 @@ void JASTrack::setTimebase(u16 timebase) {
     updateTempo();
 }
 
-void JASTrack::updateChannel(JASChannel* channel, JASDsp::TChannel* dspChannel) {
+void JASTrack::updateChannel(JASChannel* channel, JASVoice* dspChannel) {
     channel->setVibrate(mVibDepth, mVibPitch);
     channel->setTremolo(mTremDepth, mTremPitch);
     if (mFilterMode & 0x20) {
@@ -665,7 +682,7 @@ void JASTrack::updateChannel(JASChannel* channel, JASDsp::TChannel* dspChannel) 
     dspChannel->setFilterMode(mFilterMode);
 }
 
-void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASDsp::TChannel* dspChannel, void* data) {
+void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASVoice* dspChannel, void* data) {
     TChannelMgr* mgr = (TChannelMgr*)data;
     JASTrack* track = mgr->mTrack;
     switch (a) {
@@ -691,26 +708,11 @@ void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASDsp::TChanne
     }
 }
 
-s32 JASTrack::getChannelCount() const {
-    JASCriticalSection lock;
-    s32 count = 0;
-    for (s32 i = 0; i < mChannelMgrCount; i++) {
-        if (mChannelMgrs[i]) {
-            for (s32 j = 0; j < 8; j++) {
-                if (mChannelMgrs[i]->mChannels[j]) {
-                    count++;
-                }
-            }
-        }
-    }
-
-    return count;
-}
-
 JASTrack* JASTrack::getRootTrack() {
-    JASTrack *next, *parent = this;
-    for (; next = parent->mParent; parent = next)
-        ;
+    JASTrack* parent = this;
+    while (parent->mParent != nullptr) {
+        parent = parent->mParent;
+    }
     return parent;
 }
 

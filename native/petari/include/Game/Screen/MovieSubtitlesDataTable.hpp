@@ -1,26 +1,25 @@
 #pragma once
 
-#include <revolution/types.h>
 
 /// @brief The general parameters for a subtitle.
 struct SubtitlesMessageInfo {
     /// @brief A pointer to the null-terminated name of the subtitle message.
-    /* 0x00 */ const char* mMessageID;
+    const char* mMessageID;
 
     /// @brief The number of frames to wait before displaying the subtitle.
-    /* 0x04 */ s32 mStartStep;
+    s32 mStartStep;
 
     /// @brief The number of frames to display the subtitle for.
-    /* 0x08 */ s32 mAppearTime;
+    s32 mAppearTime;
 };
 
 /// @brief The general parameters for a movie's subtitles.
 struct SubtitlesInfo {
     /// @brief A pointer to the null-terminated absolute path of the associated movie file.
-    /* 0x00 */ const char* mMovieName;
+    const char* mMovieName;
 
     /// @brief An array of general parameters for each subtitle.
-    /* 0x04 */ SubtitlesMessageInfo mMessageInfo[5];
+    SubtitlesMessageInfo mMessageInfo[5];
 };
 
 namespace MovieSubtitlesUtil {

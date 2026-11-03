@@ -4,14 +4,14 @@
 #include "Game/Ride/SwingRopePoint.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorShadowUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -224,7 +224,7 @@ bool JumpBranch::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 }
 
 bool JumpBranch::updateBind() {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA() || MR::isCorePadSwing(WPAD_CHAN0)) {
+    if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA() || MR::isMainSpin(PLAYER_1)) {
         TVec3f front = mFront;
         if (mSwingReverse) {
             front.scale(-1.0f);
@@ -233,10 +233,10 @@ bool JumpBranch::updateBind() {
 
         TVec3f stickXZ(0.0f, 0.0f, 0.0f);
         bool fall = false;
-        if (MR::isCorePadSwing(WPAD_CHAN0)) {
+        if (MR::isMainSpin(PLAYER_1)) {
             fall = true;
         } else {
-            MR::calcWorldStickDirectionXZ(&stickXZ, WPAD_CHAN0);
+            MR::calcWorldStickDirectionXZ(&stickXZ, PLAYER_1);
         }
 
         TVec3f jumpDir(0.0f, 0.0f, 0.0f);

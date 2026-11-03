@@ -2,7 +2,7 @@
 
 #include "Game/System/BinaryDataChunkHolder.hpp"
 
-class GameEventFlag;
+struct GameEventFlag;
 
 namespace MR {
     class BitArray;
@@ -21,5 +21,5 @@ public:
     void set(const GameEventFlag*, bool);
     bool isOn(const GameEventFlag*) const;
 
-    /* 0x04 */ MR::BitArray* mFlagBitArray;
+    MR::BitArray* mFlagBitArray;
 };

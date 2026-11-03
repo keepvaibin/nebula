@@ -3,9 +3,8 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Color.hpp"
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class VolumeModelDrawer : public NameObj {
 public:
@@ -13,11 +12,11 @@ public:
 
     virtual void draw() const;
 
-    void loadModelDrawMtx() const NO_INLINE;
+    void loadModelDrawMtx() const;
 
-    /* 0x0C */ MtxPtr mMtx;
-    /* 0x10 */ J3DModelData* mModelData;
-    /* 0x14 */ Color8 mColor;
+    MtxPtr mMtx;
+    J3DModelData* mModelData;
+    Color8 mColor;
 };
 
 class VolumeModelDrawInit : public NameObj {

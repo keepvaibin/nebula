@@ -1,6 +1,5 @@
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -19,17 +18,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <cstdio>
-
-void MapPartsUtil_FORCE_MATCH_SDATA2() {
-    0.0f;
-    0.5f;
-}
-
-void MapPartsUtil_DUMMY() {
-    TVec3f a(0.0f, 0.0f, 0.0f);
-    TVec3f b;
-    a.sub(b);
-}
 
 namespace {
     const char* cFollowJointName = "Move";
@@ -161,12 +149,12 @@ namespace MR {
         if (shapeId >= 0) {
             getMapPartsObjectName(pBuffer, size, pName, shapeId);
         } else {
-            snprintf(pBuffer, size, "%s", pName);
+            nebula_snprintf(pBuffer, size, "%s", pName);
         }
     }
 
     void getMapPartsObjectName(char* pBuffer, u32 size, const char* pName, s32 shapeId) {
-        snprintf(pBuffer, size, "%s%02d", pName, shapeId);
+        nebula_snprintf(pBuffer, size, "%s%02d", pName, shapeId);
     }
 
     void initMapPartsClipping(LiveActor* pActor, const JMapInfoIter& rIter, TVec3f* pCenter, bool ignoreRail) {

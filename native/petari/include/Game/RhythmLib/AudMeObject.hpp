@@ -6,7 +6,7 @@
 
 class AudMeObject : public AudMeHandles, public JKRDisposer {
 public:
-    AudMeObject(TVec3f*, u8, JKRHeap*);
+    AudMeObject(TVec3f*, u8, NebulaArena*);
 
     virtual ~AudMeObject();
     virtual void dispose();
@@ -14,6 +14,6 @@ public:
     AudMeHandle* startMe(u32);
     AudMeHandle* getLowestPrioHandle(u32);
 
-    /* 0x24 */ TVec3f* mPos;
-    /* 0x28 */ bool mIsAllocated;
+    TVec3f* mPos;
+    bool mIsAllocated;
 };

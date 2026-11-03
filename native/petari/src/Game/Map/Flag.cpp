@@ -1,4 +1,5 @@
 #include "Game/Map/Flag.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -16,79 +17,10 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXEnum.h>
 #include <nebula_game_api.h>
 #include <cstring>
 
 extern "C" const NebulaHostServices* nebula_host(void);
-
-namespace {
-    // The flags' materials (nebula_game_api.h NebulaMaterialProgram), opaque (depth written) or not: the texture times
-    // the vertex colour, its alpha times register 0's; blended by alpha where above zero, depth tested, no culling, fog
-    // off.
-    NebulaMaterialProgram sFlagPrograms[2];
-    bool sFlagRegistered[2] = {false, false};
-
-    void sendFlagProgram(JUTTexture* pTexture, bool opaque) {
-        NebulaMaterialProgram& rProgram = sFlagPrograms[opaque ? 1 : 0];
-        const NebulaHostServices* pHost = nebula_host();
-        if (!sFlagRegistered[opaque ? 1 : 0]) {
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD0;
-            rStage.tex_map = GX_TEXMAP0;
-            rStage.channel = GX_COLOR0A0;
-            rStage.color_in[0] = GX_CC_ZERO;
-            rStage.color_in[1] = GX_CC_TEXC;
-            rStage.color_in[2] = GX_CC_RASC;
-            rStage.color_in[3] = GX_CC_ZERO;
-            rStage.alpha_in[0] = GX_CA_ZERO;
-            rStage.alpha_in[1] = GX_CA_TEXA;
-            rStage.alpha_in[2] = GX_CA_A0;
-            rStage.alpha_in[3] = GX_CA_ZERO;
-            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-            rStage.color_clamp = rStage.alpha_clamp = GX_FALSE;
-            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            rProgram.tex_gen[0].type = GX_TG_MTX2x4;
-            rProgram.tex_gen[0].source = GX_TG_TEX0;
-            rProgram.tex_gen[0].matrix = GX_IDENTITY;
-            rProgram.tex_gen[0].post_matrix = GX_PTIDENTITY;
-            rProgram.tev_stages = 1;
-            rProgram.tex_gens = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.z_compare_location = 0;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_FOG;
-            rProgram.fog.type = GX_FOG_NONE;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            rProgram.blend.type = GX_BM_BLEND;
-            rProgram.blend.source = GX_BL_SRCALPHA;
-            rProgram.blend.destination = GX_BL_INVSRCALPHA;
-            rProgram.blend.logic_op = GX_LO_NOOP;
-            rProgram.z_mode.enable = GX_TRUE;
-            rProgram.z_mode.func = GX_LEQUAL;
-            rProgram.z_mode.update = opaque ? GX_TRUE : GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&rProgram), &rProgram);
-            sFlagRegistered[opaque ? 1 : 0] = true;
-        }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        values.fog.start = 0.0f;
-        values.fog.end = 1.0f;
-        values.fog.near_z = MR::getNearZ();
-        values.fog.far_z = MR::getFarZ();
-        memset(values.fog.color, 0xFF, sizeof(values.fog.color));
-        values.tex_coord_scale[0].scale_s = pTexture->getWidth();
-        values.tex_coord_scale[0].scale_t = pTexture->getHeight();
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rProgram), &values);
-        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
-    }
-}  // namespace
 
 namespace {
     static const f32 sDefaultPointIntervalU = 40.0f;
@@ -120,7 +52,7 @@ namespace {
 };  // namespace
 
 namespace {
-    GXColor sStickColors[] = {{0x00, 0xC8, 0x00, 0x00}, {0x00, 0xDC, 0x00, 0x00}, {0x00, 0xB4, 0x00, 0x00}, {0x00, 0xC8, 0x00, 0x00}};
+    NebulaColor8 sStickColors[] = {{0x00, 0xC8, 0x00, 0x00}, {0x00, 0xDC, 0x00, 0x00}, {0x00, 0xB4, 0x00, 0x00}, {0x00, 0xC8, 0x00, 0x00}};
 };  // namespace
 
 Flag::~Flag() {
@@ -214,7 +146,7 @@ void Flag::init(const JMapInfoIter& rIter) {
         mColors[idx].set(0xFF, 0xFF, 0xFF, 0xFF);
     }
 
-    mTexST = new NEBULA_BE(f32)[mNumPointsV * (mNumPointsU + 1) * 2];
+    mTexST = new f32[mNumPointsV * (mNumPointsU + 1) * 2];
     s32 idx = 0;
     for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
         f32 texV = static_cast< f32 >(idxV) / static_cast< f32 >(mNumPointsV - 1);
@@ -230,9 +162,9 @@ void Flag::init(const JMapInfoIter& rIter) {
     }
 
     if (mObjName != nullptr) {
-        mTexture = new JUTTexture(MR::loadTexFromArc(mObjName), 0);
+        mTexture = new JUTTexture(MR::loadTexFromArc(mObjName));
     } else {
-        mTexture = new JUTTexture(MR::loadTexFromArc("Flag.arc", "Flag.bti"), 0);
+        mTexture = new JUTTexture(MR::loadTexFromArc("Flag.arc", "Flag.bti"));
     }
 
     initSound(4, false);
@@ -309,9 +241,6 @@ void Flag::movement() {
     updateFlag();
 }
 
-#pragma push
-#pragma opt_propagation off
-#pragma opt_loop_invariants off
 void Flag::updateFlag() {
     NebulaVecCrossProduct(&mSide, &mUp, &mFront);
     if (MR::isNearZero(mFront)) {
@@ -444,7 +373,6 @@ void Flag::updateFlag() {
         }
     }
 }
-#pragma pop
 
 void Flag::draw() const {
     if (!MR::isValidDraw(this)) {
@@ -453,31 +381,31 @@ void Flag::draw() const {
 
     loadMaterial();
 
-    u8 gxPosA = 0;
-    u8 gxPosB = mNumPointsU + 1;
+    u8 indexA = 0;
+    u8 indexB = mNumPointsU + 1;
     for (s32 idxV = 0; idxV < mNumPointsV - 1; idxV++) {
         const TVec3f& posA = mFixPoints[idxV + 0].mPos;
         const TVec3f& posB = mFixPoints[idxV + 1].mPos;
         // Each vertex's colour and texture coordinate are its entries of mColors and mTexST.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             J3DNativeDraw::position(posB.x, posB.y, posB.z);
-            sendEntry(gxPosB);
+            sendEntry(indexB);
             J3DNativeDraw::position(posA.x, posA.y, posA.z);
-            sendEntry(gxPosA);
-            gxPosB++;
-            gxPosA++;
+            sendEntry(indexA);
+            indexB++;
+            indexA++;
 
             for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
                 const TVec3f& posA = mFixPoints[idxV].mPoints[idxU]->mPosition;
                 const TVec3f& posB = mFixPoints[idxV + 1].mPoints[idxU]->mPosition;
                 J3DNativeDraw::position(posB.x, posB.y, posB.z);
-                sendEntry(gxPosB);
+                sendEntry(indexB);
                 J3DNativeDraw::position(posA.x, posA.y, posA.z);
-                sendEntry(gxPosA);
+                sendEntry(indexA);
 
-                gxPosB++;
-                gxPosA++;
+                indexB++;
+                indexA++;
             }
         }
     }
@@ -488,7 +416,7 @@ void Flag::draw() const {
         const TVec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
 
         // The stick's colours are ::sStickColors' entries, its texture coordinate mTexST's first.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
 
         f32 length = mStickLength + mPointIntervalV * (mNumPointsV - 1);
         for (s32 idx = 0; idx < 4; idx++) {
@@ -522,11 +450,15 @@ void Flag::sendEntry(u8 index) const {
 
 void Flag::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
 
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    mTexture->load(GX_TEXMAP0);
-    sendFlagProgram(mTexture, mAlpha == 0xFF);
-    J3DNativeState::setTevColor(GX_TEVREG0, Color8(0xFF, 0xFF, 0xFF, mAlpha));
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha times mAlpha;
+    // blended by alpha where above zero, depth tested (written when opaque), no culling, no fog.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+                       mAlpha == 0xFF, NEBULA_CULL_NONE);
+    material.constants[0] = mAlpha / 255.0f;
+    NativeShader::setTexture(material, 0, mTexture);
+    NativeShader::send(material);
+    J3DNativeShape::setCurrentIdentity();
 }

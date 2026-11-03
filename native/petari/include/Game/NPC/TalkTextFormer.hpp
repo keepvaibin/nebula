@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class CustomTagArg;
 class LayoutActor;
@@ -9,20 +8,18 @@ class TalkTextFormer {
 public:
     TalkTextFormer(LayoutActor*, const char*);
 
-    void formMessage(const wchar_t*, s32);
+    void formMessage(const char16_t*, s32);
     void setArg(const CustomTagArg&, s32);
     bool nextPage();
     bool hasNextPage() const;
     void updateTalking();
-#ifdef TARGET_PC
     void updateTalkingAtTextSpeed();
-#endif
     bool isTextAppearedAll() const;
 
-    /* 0x0 */ LayoutActor* mHostActor;
-    /* 0x4 */ const wchar_t* mMsg;
-    /* 0x8 */ s32 _8;
-    /* 0xC */ const char* mPaneName;
+    LayoutActor* mHostActor;
+    const char16_t* mMsg;
+    s32 _8;
+    const char* mPaneName;
 };
 
 namespace MR {

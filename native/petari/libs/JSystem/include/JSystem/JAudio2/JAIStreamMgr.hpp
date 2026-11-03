@@ -4,7 +4,6 @@
 #include "JSystem/JAudio2/JAIStream.hpp"
 #include "JSystem/JAudio2/JASGlobal.hpp"
 
-class JAIStreamAramMgr;
 struct JAIStreamDataMgr;
 
 class JAIStreamMgr : public JASGlobalInstance< JAIStreamMgr > {
@@ -32,9 +31,6 @@ public:
     JAISoundParamsMove* getParams() {
         return &mParams;
     }
-    JAIStreamAramMgr* getStreamAramMgr() {
-        return mStreamAramMgr;
-    }
     JSUList< JAIStream >* getStreamList() {
         return &mStreamList;
     }
@@ -43,9 +39,6 @@ public:
         streamDataMgr_ = streamDataMgr;
     }
 
-    void setStreamAramMgr(JAIStreamAramMgr* streamDataMgr) {
-        mStreamAramMgr = streamDataMgr;
-    }
 
     void pause(bool paused) {
         mActivity.pause(paused);
@@ -60,11 +53,10 @@ public:
     }
 
 private:
-    /* 0x00 */ JAISoundActivity mActivity;
-    /* 0x04 */ JAISoundParamsMove mParams;
-    /* 0x54 */ JAIAudience* mAudience;
-    /* 0x58 */ JSUList< JAIStream > mStreamList;
-    /* 0x64 */ JAIStreamDataMgr* streamDataMgr_;
-    /* 0x68 */ JAIStreamAramMgr* mStreamAramMgr;
-    /* 0x6C */ JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
+    JAISoundActivity mActivity;
+    JAISoundParamsMove mParams;
+    JAIAudience* mAudience;
+    JSUList< JAIStream > mStreamList;
+    JAIStreamDataMgr* streamDataMgr_;
+    JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
 };

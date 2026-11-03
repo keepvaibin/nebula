@@ -7,7 +7,6 @@
 #include "Game/Util/MathUtil.hpp"
 
 bool Mario::doFlipJump(const TVec3f& rVec) {
-    // FIXME: regswap
     if (isAnimationRun("\225\307\202\315\202\266\202\253" /* 壁はじき */)) {
         return false;
     }
@@ -40,7 +39,7 @@ bool Mario::doFlipBackRoll(const TVec3f& rVec) {
 
         TVec3f vec28;
         MR::vecKillElement(rVec, getAirGravityVec(), &vec28);
-        setFrontVecKeepUp(-vec28, static_cast< u32 >(12l));
+        setFrontVecKeepUp(-vec28, static_cast< u32 >(12));
 
         return true;
     }

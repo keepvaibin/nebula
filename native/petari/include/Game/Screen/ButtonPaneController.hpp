@@ -27,9 +27,7 @@ public:
     bool isFirstStepWait() const;
     bool isWait() const;
     bool isDecidedWait() const;
-#ifdef TARGET_PC
     bool isNotPointing() const;
-#endif
     bool onPointing();
     void decide();
     bool isPointingPaneDirect() const;
@@ -50,24 +48,22 @@ public:
     void exeDecidedToDisappear();
     void exeDisappear();
 
-    /* 0x08 */ LayoutActor* mHost;
-    /* 0x0C */ const char* mPaneName;
-    /* 0x10 */ const char* mBoundingPaneName;
-    /* 0x14 */ u32 mAnimIndex;
-    /* 0x18 */ bool _18;
-    /* 0x1C */ f32 mPointingAnimStartFrame;
-    /* 0x20 */ bool mIsSelected;
-    /* 0x21 */ bool mIsPointing;
-    /* 0x22 */ bool _22;
-    /* 0x23 */ bool _23;
-    /* 0x24 */ bool _24;
-    /* 0x28 */ const char* mAppearAnimName;
-    /* 0x2C */ const char* mWaitAnimName;
-    /* 0x30 */ const char* mDecideAnimName;
-    /* 0x34 */ const char* mPointingAnimName;
-    /* 0x38 */ const char* mNotPointingAnimName;
-    /* 0x3C */ const char* mDisappearAnimName;
-#ifdef TARGET_PC
+    LayoutActor* mHost;
+    const char* mPaneName;
+    const char* mBoundingPaneName;
+    u32 mAnimIndex;
+    bool _18;
+    f32 mPointingAnimStartFrame;
+    bool mIsSelected;
+    bool mIsPointing;
+    bool _22;
+    bool _23;
+    bool _24;
+    const char* mAppearAnimName;
+    const char* mWaitAnimName;
+    const char* mDecideAnimName;
+    const char* mPointingAnimName;
+    const char* mNotPointingAnimName;
+    const char* mDisappearAnimName;
     bool mIsNebulaFocusable;  // the D-pad and stick may highlight it (NebulaMenuFocus); off where they page the menu
-#endif
 };

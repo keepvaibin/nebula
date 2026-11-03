@@ -36,14 +36,14 @@ public:
     bool isEnableSensor(const HitSensor*) const;
     bool isEnableAttack(const HitSensor*) const;
     bool isEnableDamage() const;
-    bool isEnableScream() const NO_INLINE;
+    bool isEnableScream() const;
     void addDamageBody();
 
-    /* 0x14 */ PoltaStateAttackGround* mStateAttackGround;
-    /* 0x18 */ PoltaStatePunch* mStatePunch;
-    /* 0x1C */ PoltaStateStagger* mStateStagger;
-    /* 0x20 */ PoltaStateGenerateRock* mStateGenerateRock;
-    /* 0x24 */ PoltaStateGroundRockAttack* mStateGroundRockAttack;
-    /* 0x28 */ s32 mPoltaHealth;
+    PoltaStateAttackGround* mStateAttackGround;
+    PoltaStatePunch* mStatePunch;
+    PoltaStateStagger* mStateStagger;
+    PoltaStateGenerateRock* mStateGenerateRock;
+    PoltaStateGroundRockAttack* mStateGroundRockAttack;
+    s32 mPoltaHealth;
     s32 _2C;
 };

@@ -12,9 +12,9 @@ public:
 
     void setParam(const TVec3f&, const TVec3f&, f32, f32);
 
-    /* 0x4C */ TVec3f mPos;
-    /* 0x58 */ TVec3f mUp;
-    /* 0x64 */ f32 mHeight;
-    /* 0x68 */ f32 mDist;
-    /* 0x6C */ bool mAxisReversed;
+    TVec3f mPos;
+    TVec3f mUp;
+    f32 mHeight;
+    f32 mDist;
+    bool mAxisReversed;
 };

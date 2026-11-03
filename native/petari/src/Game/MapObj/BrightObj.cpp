@@ -1,9 +1,9 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/MapObj/BrightObj.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
-#endif
 #include "Game/MapObj/Sun.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/LensFlare.hpp"
@@ -17,27 +17,8 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
-
-void BrightObj_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)0.25f;
-    (void)0.4f;
-    (void)0.7f;
-    (void)1.1f;
-    (void)100.0f;
-    (void)100000.0f;
-    (void)3000.0f;
-    (void)-0.999f;
-    (void)180.0f;
-    (void)57.295776f;
-}
 
 namespace {
-    inline const TPos3f& getBrightView(const BrightCamInfo& rInfo, u16 index) {
-        return rInfo.mViewMtx[index];
-    }
-
     const static f32 sSunRadius = 3000.0f;
     const static f32 sSunModelScale = 100.0f;
 
@@ -68,7 +49,7 @@ namespace {
         }
 
         f32 width = MR::getScreenWidth();
-        f32 height = static_cast< s32 >(JUTGetVideoManager()->getEfbHeight());
+        f32 height = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
         screenPos.set< f32 >(0.5f * width + 0.5f * (newPos.x * width), 0.5f * height + 0.5f * (-newPos.y * height), newPos.z);
 
         pDst->x = screenPos.x;
@@ -123,65 +104,26 @@ void BrightInfo::reset() {
     }
 }
 
-BrightDrawInfo::BrightDrawInfo() {
-    for (u32 idx = 0; idx < 2; idx++) {
-        mPosition[idx].zero();
-        mRadius[idx] = 0.0f;
-    }
-}
-
-void BrightDrawInfo::write(u16 index, const TVec3f& rPosition, f32 radius) {
-    mPosition[index].set(rPosition);
-    mRadius[index] = radius;
-}
-
-BrightCamInfo::BrightCamInfo() {
-    for (u32 idx = 0; idx < ARRAY_SIZE(mViewMtx); idx++) {
-        mViewMtx[idx].identity();
-
-        /* set mtx to identity mtx */
-        mProjectionMtx[idx][2][3] = 0.0f;
-        mProjectionMtx[idx][1][3] = 0.0f;
-        mProjectionMtx[idx][0][3] = 0.0f;
-        mProjectionMtx[idx][3][2] = 0.0f;
-        mProjectionMtx[idx][1][2] = 0.0f;
-        mProjectionMtx[idx][0][2] = 0.0f;
-        mProjectionMtx[idx][3][1] = 0.0f;
-        mProjectionMtx[idx][2][1] = 0.0f;
-        mProjectionMtx[idx][0][1] = 0.0f;
-        mProjectionMtx[idx][3][0] = 0.0f;
-        mProjectionMtx[idx][2][0] = 0.0f;
-        mProjectionMtx[idx][1][0] = 0.0f;
-        mProjectionMtx[idx][3][3] = 1.0f;
-        mProjectionMtx[idx][2][2] = 1.0f;
-        mProjectionMtx[idx][1][1] = 1.0f;
-        mProjectionMtx[idx][0][0] = 1.0f;
-
-        mCameraDir[idx].set< f32 >(0.0f, 1.0f, 0.0f);
-        mCameraPos[idx].zero();
-    }
-}
-
-void BrightCamInfo::write(u16 index, const TPos3f& rViewMtx, const TProj3f& rProjMtx, const TVec3f& rCamDir, const TVec3f& rCamPos) {
-    mViewMtx[index].set(rViewMtx);
-    mProjectionMtx[index].set(rProjMtx);
-    mCameraDir[index].set(rCamDir);
-    mCameraPos[index].set(rCamPos);
-}
-
-BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f), mBrightness(), mIsNotVisible(true), mDrawInfo() {
+BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(0.0f, 0.0f), mBrightness(), mIsNotVisible(true), mDrawPos(0.0f, 0.0f, 0.0f), mDrawRadius(0.0f) {
     MR::addBrightObj(this);
 }
 
-void BrightObjBase::checkVisibilityOfSphere(u16 index, const BrightCamInfo& rCamInfo) {
-    TVec3f drawPos(mDrawInfo.mPosition[index]);
-    TVec3f camDir(rCamInfo.mCameraDir[index]);
-    TVec3f drawDir(rCamInfo.mCameraPos[index] - drawPos);
+// The picture has been drawn with this frame's camera: the points of the sphere it shows are asked about with that camera.
+void BrightObjBase::checkVisibilityOfSphere(NebulaScreenProbe* pProbes) {
+    const TPos3f& rView = MR::getCameraViewMtx();
+    const TProj3f& rProj = MR::getCameraProjectionMtx();
+    TVec3f drawPos(mDrawPos);
+    TVec3f camDir(MR::getCamYdir());
+    TVec3f drawDir(MR::getCamPos() - drawPos);
+
+    for (u32 idx = 0; idx < cProbeCount; idx++) {
+        pProbes[idx].x = -1.0f;
+        pProbes[idx].y = -1.0f;
+        pProbes[idx].user_x = 0.0f;
+        pProbes[idx].user_y = 0.0f;
+    }
 
     if (MR::isNearZero(drawDir)) {
-        mIsNotVisible = true;
-        mBrightness = 0.0f;
-
         return;
     }
 
@@ -194,69 +136,73 @@ void BrightObjBase::checkVisibilityOfSphere(u16 index, const BrightCamInfo& rCam
     TPos3f mtx;
     mtx.setTR(vec110, camDir, drawDir, drawPos);
 
-    const TPos3f& rView = ::getBrightView(rCamInfo, index);
-    CheckArg args = CheckArg();
-    args.mReadback = cReadbackChannel + index;
-    const TProj3f& rProj = rCamInfo.mProjectionMtx[index];
-
-    ::calcScreenPosition(&args.mCenter, drawPos, rView, rProj);
-    checkVisible(&args, drawPos, rView, rProj);
+    // The first point is the centre: its screen position comes back as the flare's centre whether or not it shows.
+    TVec2f center;
+    ::calcScreenPosition(&center, drawPos, rView, rProj);
+    checkVisible(&pProbes[0], drawPos, rView, rProj);
+    pProbes[0].user_x = center.x;
+    pProbes[0].user_y = center.y;
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = idx * MR::pi() / 4.0f;
         TVec3f vec11C(MR::cos(angle), MR::sin(angle), 0.0f);
-        vec11C.scale(mDrawInfo.mRadius[index] * 0.4f);
+        vec11C.scale(mDrawRadius * 0.4f);
 
         mtx.mult(vec11C, vec11C);
 
-        checkVisible(&args, vec11C, rView, rProj);
+        checkVisible(&pProbes[1 + idx], vec11C, rView, rProj);
     }
 
     for (u32 idx = 0; idx < 8; idx++) {
         f32 angle = (idx + 0.5f) * MR::pi() / 4.0f;
         TVec3f vec128(MR::cos(angle), MR::sin(angle), 0.0f);
-        vec128.scale(mDrawInfo.mRadius[index] * 0.7f);
+        vec128.scale(mDrawRadius * 0.7f);
 
         mtx.mult(vec128, vec128);
 
-        checkVisible(&args, vec128, rView, rProj);
+        checkVisible(&pProbes[9 + idx], vec128, rView, rProj);
     }
-
-    setResult(args);
 }
 
-void BrightObjBase::checkVisible(BrightObjBase::CheckArg* pArg, const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
+void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const TVec3f& rTrans, const TPos3f& rViewMtx, const TProj3f& rProjMtx) {
     TVec2f screenPos;
 
     if (::calcScreenPosition(&screenPos, rTrans, rViewMtx, rProjMtx)) {
         TVec2f frameBufferPos;
-        MR::convertScreenPosToFrameBufferPos(&frameBufferPos, screenPos);
+        MR::convertScreenPosToCanvasPos(&frameBufferPos, screenPos);
+        pProbe->x = frameBufferPos.x;
+        pProbe->y = frameBufferPos.y;
+        pProbe->user_x = screenPos.x;
+        pProbe->user_y = screenPos.y;
+    }
+}
 
-        const u32 color = J3DNativeView::readbackColor(pArg->mReadback, (s32)(frameBufferPos.x), (s32)(frameBufferPos.y));
+// The points' answers: how much of the sphere passed its depth test (its alpha is set where it did).
+void BrightObjBase::setResult(const NebulaScreenProbe* pProbes) {
+    u32 bright = 0;
+    TVec2f objCenter(0.0f, 0.0f);
 
-        if ((color & 0xFF000000) >= 0xF0000000) {
-            pArg->mCurrBrightness++;
-            pArg->mObjCenter += screenPos;
+    for (u32 idx = 0; idx < cProbeCount; idx++) {
+        if (pProbes[idx].x >= 0.0f && pProbes[idx].value >= (0xF0 / 255.0f)) {
+            bright++;
+            objCenter += TVec2f(pProbes[idx].user_x, pProbes[idx].user_y);
         }
     }
 
-    pArg->mMaxBrightness++;
-}
+    const TVec2f center(pProbes[0].user_x, pProbes[0].user_y);
+    f32 ratio = static_cast< f32 >(bright) / cProbeCount;
 
-void BrightObjBase::setResult(const BrightObjBase::CheckArg& rArg) {
-    f32 ratio = static_cast< f32 >(rArg.mCurrBrightness) / rArg.mMaxBrightness;
-
-    if (rArg.mCurrBrightness != 0) {
-        mBrightCenter.set(TVec2f(rArg.mObjCenter * (1.0f / rArg.mCurrBrightness)));
+    if (bright != 0) {
+        mBrightCenter.set(TVec2f(objCenter * (1.0f / bright)));
         mBrightness = ratio;
-        mNowCenter.set(rArg.mCenter);
+        mNowCenter.set(center);
         mIsNotVisible = false;
     } else {
         mBrightness = ratio;
         mIsNotVisible = true;
     }
 
-    mInfo.write(mBrightCenter, rArg.mCenter, mBrightness);
+    mInfo.write(mBrightCenter, center, mBrightness);
 }
 
 void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
@@ -267,22 +213,27 @@ void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
     mtx.setTrans(rPos);
     mtx.concat(viewMtx, mtx);
 
-    TDDraw::setup(0, 0, 1);
+    // The sun's visibility in the alpha buffer: cleared by a larger sphere over everything, then set where the sun
+    // itself passes the depth test (alpha only).
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 0, 1);
     TDDraw::loadViewMtx(mtx);
 
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_FALSE);
+    J3DPass::constantAlpha(false, 0);
+    material.color_write = 0;
+    material.alpha_write = 1;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, false);
+    NativeShader::send(material);
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius * 1.1f, 0xFF000000, 0x10);
 
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius, 0x00FF00FF, 0x10);
 
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
 }
 
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {
@@ -301,8 +252,8 @@ void BrightObj::init(const JMapInfoIter& rIter) {
 }
 
 void BrightObj::control() {
-    f32 radius = mRadius;
-    mDrawInfo.write(MR::getLensFlareDrawSyncTokenIndex(), mPosition, radius);
+    mDrawPos.set(mPosition);
+    mDrawRadius = mRadius;
 }
 
 void BrightObj::draw() const {
@@ -313,8 +264,8 @@ void BrightObj::draw() const {
     drawSphere(mPosition, mRadius);
 }
 
-void BrightObj::calcBrightInfo(u16 index, const BrightCamInfo& rCamInfo) {
-    BrightObjBase::checkVisibilityOfSphere(index, rCamInfo);
+void BrightObj::calcBrightInfo(NebulaScreenProbe* pProbes) {
+    BrightObjBase::checkVisibilityOfSphere(pProbes);
 }
 
 void BrightObj::getNowCenter(TVec2f* pDst) const {
@@ -336,13 +287,12 @@ void BrightSun::control() {
 
     mtxTR.concat(mtx);
     mtxTR.getTrans(mPosition);
-#ifdef TARGET_PC
     GameLightSignal::sun(mPosition);
-#endif
 
     controlSunModel();
 
-    mDrawInfo.write(MR::getLensFlareDrawSyncTokenIndex(), mPosition, ::sSunRadius);
+    mDrawPos.set(mPosition);
+    mDrawRadius = ::sSunRadius;
 }
 
 void BrightSun::draw() const {
@@ -353,12 +303,13 @@ void BrightSun::draw() const {
     drawSphere(mPosition, ::sSunRadius);
 }
 
-void BrightSun::calcBrightInfo(u16 index, const BrightCamInfo& rCamInfo) {
+void BrightSun::calcBrightInfo(NebulaScreenProbe* pProbes) {
     if (MR::isDead(this)) {
+        pProbes[0].x = cNoProbes;
         return;
     }
 
-    checkVisibilityOfSphere(index, rCamInfo);
+    checkVisibilityOfSphere(pProbes);
 }
 
 void BrightSun::getNowCenter(TVec2f* pDst) const {

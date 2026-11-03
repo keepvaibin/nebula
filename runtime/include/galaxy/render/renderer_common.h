@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// What both GX renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the EFB's logical
-// size, one resolved draw, clear values, the EFB conversion shader and its constants, and the sampler-table cache.
+// What both renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the scene target's logical
+// size, one resolved draw, clear values, the scene target conversion shader and its constants, and the sampler-table cache.
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/renderer_api.h"  // EfbPeekKind
+#include "galaxy/render_api.h"
 
 #include <array>
 #include <cstddef>
@@ -37,10 +37,6 @@ inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
 // is reused only after its fence (the oldest log is then invalidated).
 inline constexpr unsigned kInterpSegments = 3u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
-
-// The game's frame in its units (640x456): the scene targets are this size times the render scale.
-inline constexpr unsigned kFrameWidth = 640;
-inline constexpr unsigned kFrameHeight = 456;
 
 struct SamplerTableKey {
     std::array<std::uint32_t, 8> samplers{};
@@ -105,29 +101,29 @@ struct StripeVertex {
     std::uint8_t side = 0;           // the particle's first or second vertex
 };
 
-struct EfbClearValues {
+struct SceneClearValues {
     std::array<float, 4> color{};
     float reversed_depth = 0.0f;
 };
-[[nodiscard]] EfbClearValues make_efb_clear_values(
-    std::uint32_t rgba, std::uint32_t z24,
-    std::uint8_t pixel_format) noexcept;
-// With an EFB pixel format (0-2), clear values as given, not quantized to the format: the 8-bit values a draw stores
-// (alpha 255 on a format without alpha).
-inline constexpr std::uint8_t kEfbClearExact = 0x80u;
+// A clear's values as given; on a frame without alpha (frame_format 0, 1 with alpha) alpha 255.
+[[nodiscard]] SceneClearValues make_scene_clear_values(
+    std::uint32_t rgba,
+    std::uint8_t frame_format) noexcept;
 
-// The EFB conversion shader's root constants (16 dwords).
-struct EfbConversionShaderConstants {
+// The scene target conversion shader's root constants (16 dwords).
+struct SceneConversionShaderConstants {
     std::array<float, 16> values{};
 };
 
-[[nodiscard]] std::string_view efb_conversion_shader_source() noexcept;
-// A display copy one EFB pixel to one XFB pixel without gamma (efb_conversion_shader_source's arithmetic for it).
+[[nodiscard]] std::string_view scene_conversion_shader_source() noexcept;
+// The frame shown, one frame pixel to one picture pixel (scene_conversion_shader_source's arithmetic for it).
 [[nodiscard]] std::string_view display_filter_shader_source() noexcept;
 
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
-// fullscreen-triangle blit, the EFB colour-channel clear, the depth carry after a resolution change, and the
+// fullscreen-triangle blit, the scene target colour-channel clear, the depth carry after a resolution change, and the
 // overlay's textured and solid quads (root constants / push constants b0).
+[[nodiscard]] std::string_view depth_resolve_pixel_shader_source() noexcept;
+[[nodiscard]] std::string_view motion_debug_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
@@ -149,41 +145,28 @@ struct UiSolidQuadConstants {
     std::uint32_t glyph_mode;
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
-[[nodiscard]] EfbConversionShaderConstants make_efb_conversion_constants(
-    const EfbCopyParams& params,
-    bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
-    std::uint8_t copy_format,
+[[nodiscard]] SceneConversionShaderConstants make_scene_conversion_constants(
+    bool from_depth,
+    std::uint8_t channels,
     float src_x,
     float src_y,
     float step_x,
-    float step_y,
-    float filter_row_offset,
-    unsigned efb_scale,
-    unsigned logical_efb_height,
-    unsigned reduction_width = 0u) noexcept;
+    float step_y) noexcept;
 
-// The 1x1 GXPeek conversion constants. Color peeks box-reduce the complete
-// scaled logical-pixel block; depth peeks address the exact point-selected
-// physical texel recorded in EfbPeekSamplingGeometry.
-[[nodiscard]] EfbConversionShaderConstants make_efb_peek_conversion_constants(
-    const EfbPeekSamplingGeometry& sampling,
-    EfbPeekKind kind) noexcept;
+// A screen probe's constants: the capture shader reads the one pixel of the frame the point names (`depth`: as the
+// 24-bit value in three bytes, otherwise as it is).
+[[nodiscard]] SceneConversionShaderConstants make_screen_probe_constants(float x, float y, const FrameMap& map, bool depth) noexcept;
 
-// The EFB-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
+// The scene target-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
 // the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in
 // a recording.
-[[nodiscard]] std::uint64_t efb_copy_dest_budget_bytes();
 
 // Effect copies (destinations up to 320x228: the bloom pyramid, simple bloom, depth of field, Mario's 160x160
-// shadow capture) are built at the game's own resolution, box-filtered over the scaled EFB. Their low resolution is
+// shadow capture) are built at the game's own resolution, box-filtered over the scaled scene target. Their low resolution is
 // part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
-// copies turn the taps into separate offset images. Full-size captures stay scaled. After Dolphin's Super Mario
-// Galaxy Native Bloom mod (iwubcode, GPL-2.0-or-later).
-[[nodiscard]] bool is_effect_copy(unsigned width, unsigned height) noexcept;
+// copies turn the taps into separate offset images. Full-size captures stay scaled. After Super Mario
 
-// Present pacing with vsync off and a frame-rate cap. The VI paces presents; the pacer smooths one that arrives
+// Present pacing with vsync off and a frame-rate cap. The game's frame clock paces presents; the pacer smooths one that arrives
 // early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,
 // then yields.
 class PresentPacer {
@@ -222,11 +205,9 @@ struct DrawCall {
     std::uint32_t index_count = 0;
     gpu::Topology topology = gpu::kTopologyTriangleList;
     gpu::Rect scissor{};
-    // Raw XF viewport registers 0x101A-0x101F in hardware order:
-    // [0]=wd (w/2), [1]=ht (-h/2), [2]=zRange ((f-n)*(2^24-1)),
-    // [3]=xOrig (cx+342), [4]=yOrig (cy+342), [5]=farZ (f*(2^24-1)).
-    // has_viewport=false (XF regs not yet written) falls back to full EFB.
-    float xf_viewport[6]{};
+    // The game's viewport (drawing_state.h: left, top, width, height, near and far depth); has_viewport=false (not set
+    // yet, or empty) falls back to the full frame.
+    float viewport[6]{};
     bool  has_viewport = false;
     // Render target 1 in temporal scenes: 1 the motion target (opaque
     // motion writers), 2 the reactive mask (blended draws), 0 none.

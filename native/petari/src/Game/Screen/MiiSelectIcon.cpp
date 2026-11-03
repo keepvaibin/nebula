@@ -10,10 +10,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <nw4r/lyt/texMap.h>
 
-void MiiSelectIcon_FORCE_MATCH_SDATA2() {
-    (void)5.0f;
-}
-
 namespace {
     static const f32 sCharacterTexFrame[] = {
         0.0f, 4.0f, 3.0f, 2.0f, 1.0f,
@@ -22,7 +18,6 @@ namespace {
     NEW_NERVE(MiiSelectIconNrvCreate, MiiSelectIcon, Create);
     NEW_NERVE(MiiSelectIconNrvWait, MiiSelectIcon, Wait);
     NEW_NERVE(MiiSelectIconNrvSelected, MiiSelectIcon, Selected);
-    NEW_NERVE(MiiSelectIconNrvDisappear, MiiSelectIcon, Disappear);
     NEW_NERVE(MiiSelectIconNrvInvalid, MiiSelectIcon, Invalid);
 };  // namespace
 
@@ -157,7 +152,7 @@ void MiiSelectIcon::copyIconID(FileSelectIconID* pIconID) {
 
 nw4r::lyt::TexMap* MiiSelectIcon::getTexMap() {
     if (mIconID->isFellow()) {
-        GXTexObj texObj;
+        J3DNativeTexObj texObj;
 
         MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
         mFellowTexMap->Set(texObj);
@@ -234,21 +229,19 @@ void MiiSelectIcon::createButton() {
 
     _28 = new ButtonPaneController(this, "MiiIcon", "PicMii", 0, true);
     _28->_22 = false;
-#ifdef TARGET_PC
     // MiiSelect turns its pages with the D-pad and stick (NebulaMenuFocus leaves its icons to the pointer).
     _24->mIsNebulaFocusable = false;
     _28->mIsNebulaFocusable = false;
-#endif
 }
 
 void MiiSelectIcon::createFaceImageObj() {
     nw4r::lyt::TexMap* pTexMap;
 
     mIcon =
-        new MiiFaceIcon(128, 128, MiiFaceRecipe(RFLDataSource_Official, 0, RFLResolution_256, RFLExpFlag_Normal | RFLExpFlag_Blink), "Mii\203\101\203\103\203\122\203\223" /* Miiアイコン */);
+        new MiiFaceIcon(128, 128, MiiFaceRecipe(MiiDataSource_Official, 0, MiiResolution_256, MiiExpFlag_Normal | MiiExpFlag_Blink), "Mii\203\101\203\103\203\122\203\223" /* Miiアイコン */);
     mIcon->initWithoutIter();
 
-    GXTexObj texObj;
+    J3DNativeTexObj texObj;
     MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
 
     mFellowTexMap = new nw4r::lyt::TexMap(texObj);

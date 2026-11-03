@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
+#include "galaxy/run_options.h"
 #include "galaxy/render/vk/vk_context.h"
 
 #include "galaxy/render/gpu_types.h"
@@ -101,10 +102,12 @@ Texture::~Texture() {
     const VkImage image_handle = image;
     VmaAllocation_T* const allocation_handle = allocation;
     const VkImageView views[2] = {view, target_view};
-    const VkFramebuffer framebuffer_handle = framebuffer;
+    const VkFramebuffer framebuffers[2] = {framebuffer, scene_framebuffer};
     context.defer([=] {
-        if (framebuffer_handle != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(device, framebuffer_handle, nullptr);
+        for (const VkFramebuffer f : framebuffers) {
+            if (f != VK_NULL_HANDLE) {
+                vkDestroyFramebuffer(device, f, nullptr);
+            }
         }
         for (const VkImageView v : views) {
             if (v != VK_NULL_HANDLE) {
@@ -267,13 +270,27 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     quirks_ = quirks_for(identity_);
     VkPhysicalDeviceFeatures available{};
     vkGetPhysicalDeviceFeatures(physical_, &available);
+    // GALAXY_VK_TEST_NO_FEATURE=<names, comma-separated>: this GPU acts without those features, as a phone's may, so
+    // the paths for it run on any GPU.
+    if (const char* const names = ::galaxy::run_options().vk_test_no_feature) {
+        const std::string list = std::string(",") + names + ",";
+        const auto off = [&list](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
+        if (off("dual-source")) available.dualSrcBlend = VK_FALSE;
+        if (off("logic-op")) available.logicOp = VK_FALSE;
+        if (off("bc")) available.textureCompressionBC = VK_FALSE;
+        if (off("geometry")) available.geometryShader = VK_FALSE;
+        if (off("anisotropy")) available.samplerAnisotropy = VK_FALSE;
+        if (off("tessellation")) available.tessellationShader = VK_FALSE;
+        if (off("gather")) available.shaderImageGatherExtended = VK_FALSE;
+    }
     VkPhysicalDeviceFeatures enabled{};
     enabled.dualSrcBlend = available.dualSrcBlend;
     enabled.logicOp = available.logicOp;
-    enabled.geometryShader = available.geometryShader;
+    enabled.sampleRateShading = available.sampleRateShading;
+    sample_rate_shading_ = available.sampleRateShading == VK_TRUE;
     // Curved surfaces: the vertex stage's 19 interpolant locations into the hull stage, 16 segments an edge.
     const VkPhysicalDeviceLimits& limits = properties_.limits;
-    tessellation_shader_ = !quirks_.no_tessellation && available.tessellationShader == VK_TRUE &&
+    tessellation_shader_ = available.tessellationShader == VK_TRUE &&
                            limits.maxTessellationGenerationLevel >= 16u &&
                            limits.maxVertexOutputComponents >= 76u &&
                            limits.maxTessellationControlPerVertexInputComponents >= 76u &&
@@ -772,7 +789,7 @@ std::uint64_t Context::register_address(VkBuffer buffer) {
     } else if (next_address_id_ < kAddressSlots) {
         id = next_address_id_++;
     } else {
-        std::fprintf(stderr, "[vulkan] GX address space exhausted (%zu buffers)\n", kAddressSlots - 1u);
+        std::fprintf(stderr, "[vulkan] buffer address space exhausted (%zu buffers)\n", kAddressSlots - 1u);
         return 0u;
     }
     address_slots_[id].store(buffer, std::memory_order_release);
@@ -838,7 +855,7 @@ TextureRef create_render_texture(Device*, std::uint32_t width, std::uint32_t hei
         width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        true, "XFB copy");
+        true, "display picture copy");
 }
 
 }  // namespace galaxy::render::gpu

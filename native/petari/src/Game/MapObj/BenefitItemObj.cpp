@@ -22,25 +22,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void BenefitItemObj_FORCE_MATCH_SDATA2() {
-    (void)50.0f;
-    (void)5.0f;
-    (void)10.0f;
-    (void)100.0f;
-    (void)2000.0f;
-    (void)0.0010000000474974513f;
-    (void)6.2831854820251465f;
-    (void)7.0f;
-    (void)0.019999999552965164f;
-    (void)1.100000023841858f;
-    (void)0.009999999776482582f;
-    (void)0.949999988079071f;
-    (void)20.0f;
-    (void)0.10000000149011612f;
-    (void)0.20000000298023224f;
-    (void)60.0f;
-}
-
 namespace {
     f32 cAppearThrowUpSpd = 10.0f;
     f32 cAppearThrowUpSpd2 = 15.0f;
@@ -50,20 +31,10 @@ namespace {
     static u16 sVal = 0x0258;
 };  // namespace
 
-const char* BenefitItemObj_FORCE_MATCH() {
-    return "\211\145\203\116\203\212\203\142\203\166\224\273\222\350" /* 影クリップ判定 */;
-}
-
 void ShadowClipActor::endClipped() {
     LiveActor::endClipped();
 
     if (MR::isClipped(_8C)) {
-        _8C->endClipped();
-    }
-}
-
-void ShadowClipActor::control() {
-    if (!MR::isClipped(this)) {
         _8C->endClipped();
     }
 }
@@ -609,7 +580,7 @@ bool BenefitItemObj::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRe
 
             setNerve(GET_NERVE(BenefitItemObj, HostTypeNrvCatch));
 
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, PLAYER_1);
 
             return true;
         }

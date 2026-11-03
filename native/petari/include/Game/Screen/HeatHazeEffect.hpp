@@ -15,7 +15,7 @@ public:
     virtual void control();
 
 private:
-    /* 0x8C */ f32 _8C;
+    f32 _8C;
 };
 
 class HeatHazeDirector : public NameObj {
@@ -28,5 +28,5 @@ public:
     virtual void movement();
 
 private:
-    /* 0x0C */ HeatHazeEffect* mEffect;
+    HeatHazeEffect* mEffect;
 };

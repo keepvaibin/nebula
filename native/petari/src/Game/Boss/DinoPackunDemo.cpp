@@ -37,10 +37,7 @@ namespace {
     static const s32 sAngryLv1BlurFadeOut = 30;
     static const s32 sAngryLv2BlurStart = 220;
     static const s32 sAngryLv2BlurTime = 80;
-    static const f32 sAngryLv2BlurOffset = 18.0f;
     static const u8 sAngryLv2BlurAlpha = 80;
-    static const s32 sAngryLv2BlurFadeIn = 5;
-    static const s32 sAngryLv2BlurFadeOut = 30;
     static const s32 sDeathBlurStart = 20;
     static const s32 sDeathBlurTime = 130;
     static const f32 sDeathBlurOffset = 18.0f;
@@ -236,7 +233,7 @@ void DinoPackunDemo::exeDownDemo() {
 
     if (MR::isBckStopped(getHost())) {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_EXPLODE");
-        MR::tryRumblePadVeryStrong(getHost(), WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(getHost(), PLAYER_1);
         MR::hideModel(getHost());
         setNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoNrvAppearPowerStar));
     }

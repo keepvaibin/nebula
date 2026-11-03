@@ -36,14 +36,14 @@ public:
 
     void init();
 
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ u32 mHash;
-    /* 0x08 */ JAISoundID mID;
+    const char* mName;
+    u32 mHash;
+    JAISoundID mID;
 };
 
 class AudSoundObject : public JAUSoundObject, JKRDisposer {
 public:
-    AudSoundObject(TVec3f*, u8, JKRHeap*);
+    AudSoundObject(TVec3f*, u8, NebulaArena*);
 
     virtual JAISoundHandle* startSound(JAISoundID);
     virtual JAISoundHandle* startLevelSound(JAISoundID);
@@ -58,7 +58,7 @@ public:
     JAISoundHandle* startLevelSoundParam(JAISoundID, s32, s32);
     JAISoundHandle* startLevelSoundParam(const char*, s32, s32);
     bool modifyLimitedSound(JAISoundID);
-    bool isPlayingID(JAISoundID) NO_INLINE;
+    bool isPlayingID(JAISoundID);
     void releaseHandle(JAISoundID);
     void setMapCode(s32);
     void setMapCodeExtra(s32);
@@ -80,10 +80,10 @@ public:
         return AudWrap::getSystem()->isEnableStartSound(soundID);
     }
 
-    /* 0x30 */ u32 mSeVersion;  // TODO: Kuribo and Metbo "_DARK"?
-    /* 0x34 */ s32 mMapCode;
-    /* 0x38 */ s32 mMapCodeExtra;
-    /* 0x3C */ AudSoundObjHashData* mHashDatas;
-    /* 0x40 */ s32 mNumHandles;
-    /* 0x44 */ s32 mNumSounds;
+    u32 mSeVersion;  // TODO: Kuribo and Metbo "_DARK"?
+    s32 mMapCode;
+    s32 mMapCodeExtra;
+    AudSoundObjHashData* mHashDatas;
+    s32 mNumHandles;
+    s32 mNumSounds;
 };

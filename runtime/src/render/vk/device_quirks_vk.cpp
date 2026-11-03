@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan driver identification and known-bug table (device_quirks_vk.h).
 #include "galaxy/render/vk/device_quirks_vk.h"
+#include "galaxy/run_options.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -74,7 +75,7 @@ DriverVersion decode(DriverKind kind, std::uint32_t raw) {
 // GALAXY_VK_SIMULATE_DRIVER=<kind>:<major>.<minor>.<patch> (kind: qualcomm, arm, imagination, samsung) presents this
 // device as that driver to the table, so a desktop run exercises a mobile driver's workarounds.
 void apply_simulation(DeviceIdentity& identity) {
-    const char* value = std::getenv("GALAXY_VK_SIMULATE_DRIVER");
+    const char* value = ::galaxy::run_options().vk_simulate_driver;
     if (value == nullptr || value[0] == '\0') {
         return;
     }
@@ -134,29 +135,23 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     DeviceQuirks quirks;
     const bool qualcomm = id.driver == DriverKind::QualcommProprietary;
     const bool arm = id.driver == DriverKind::ArmProprietary;
-    // Dolphin DriverDetails BUG_BROKEN_TEV_COLOR_ZERO: Qualcomm's Android drivers from 512.700 (0x802bc000)
-    // miscompile specialised TEV shaders whose colour input A or B is the constant zero.
-    quirks.tev_zero_from_constant = qualcomm && id.driver_version.at_least(512, 700, 0);
     // ANGLE preferDrawClearOverVkCmdClearAttachments: vkCmdClearAttachments races with draws on Qualcomm drivers
     // before 512.762.12 (issuetracker.google.com/166809097).
     quirks.clear_with_draw = qualcomm && !id.driver_version.at_least(512, 762, 12);
-    // Dolphin DriverDetails BUG_SLOW_CACHED_READBACK_MEMORY: Mali and Adreno read cached memory back slower than
+    // BUG_SLOW_CACHED_READBACK_MEMORY: Mali and Adreno read cached memory back slower than
     // coherent memory.
     quirks.coherent_readback = qualcomm || arm;
-    // Dolphin DriverDetails BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY (VKStagingTexture): Qualcomm's driver allocates a
+    // BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY (VKStagingTexture): Qualcomm's driver allocates a
     // temporary image for each copy from an optimal-tiled image to a buffer; a reused linear image avoids it.
     quirks.linear_readback = qualcomm;
-    // Dolphin DriverDetails BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
+    // BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
     quirks.clear_by_command = id.driver == DriverKind::ImaginationProprietary;
-    // NVIDIA's Vulkan shader compiler (nvgpucomp64.dll, RTX 5090, Windows driver 610) crashes inside
-    // vkCreateGraphicsPipelines building the curved surfaces' pipelines, whose SPIR-V validates.
-    quirks.no_tessellation = id.driver == DriverKind::NvidiaProprietary;
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
     // 512.829 crashes on SPIR-V 1.4's OpCopyLogical, Adreno 7xx too, ARM before r47 mishandles its OpSelect); no
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
-    // compiler crashes); TEV byte masks one component at a time (Dolphin BUG_BROKEN_VECTOR_BITWISE_AND: Mali returns
-    // the constant vector of a vector AND); D24S8 depth where the device has it (Dolphin BUG_BROKEN_D32F_CLEAR: D32F
-    // clears do nothing on Adreno); viewport depth ranges never reversed (Dolphin BUG_BROKEN_REVERSED_DEPTH_RANGE).
+    // compiler crashes); material byte masks one component at a time (BUG_BROKEN_VECTOR_BITWISE_AND: Mali returns
+    // the constant vector of a vector AND); D24S8 depth where the device has it (BUG_BROKEN_D32F_CLEAR: D32F
+    // clears do nothing on Adreno); viewport depth ranges never reversed.
     return quirks;
 }
 
@@ -199,12 +194,10 @@ std::string describe(const DeviceQuirks& quirks) {
             text += name;
         }
     };
-    add(quirks.tev_zero_from_constant, "tev-zero-from-constant");
     add(quirks.clear_with_draw, "clear-with-draw");
     add(quirks.coherent_readback, "coherent-readback");
     add(quirks.linear_readback, "linear-readback");
     add(quirks.clear_by_command, "clear-by-command");
-    add(quirks.no_tessellation, "no-tessellation");
     return text.empty() ? "none" : text;
 }
 

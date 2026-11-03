@@ -48,10 +48,10 @@
 #include <cstring>
 
 struct CameraTableEntry {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ const char* mExplain;
-    /* 0x08 */ Camera* (*mCreateFunc)(void);
-    /* 0x0C */ bool mIsPublic;
+    const char* mName;
+    const char* mExplain;
+    Camera* (*mCreateFunc)(void);
+    bool mIsPublic;
 };
 
 namespace {

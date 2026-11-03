@@ -16,20 +16,12 @@ void GhostPacket::read(u8* pOut, u32 len) {
     }
 }
 
-// Ghost data is big-endian: the byte copies below are the console's in-place reads; natively the copied value is then
-// put in host order.
 void GhostPacket::read(u32* pOut) {
     read((u8*)pOut, 4);
-#ifdef TARGET_PC
-    *pOut = __builtin_bswap32(*pOut);
-#endif
 }
 
 void GhostPacket::read(s16* pOut) {
     read((u8*)pOut, 2);
-#ifdef TARGET_PC
-    *pOut = (s16)__builtin_bswap16((u16)*pOut);
-#endif
 }
 
 void GhostPacket::read(char** pOut) {
@@ -50,13 +42,7 @@ void GhostPacket::read(TVec3Sc* pOut) {
 }
 
 void GhostPacket::read(TVec3s* pOut) {
-#ifdef TARGET_PC
     read(&pOut->x);
     read(&pOut->y);
     read(&pOut->z);
-#else
-    read((u8*)&pOut->x, 2);
-    read((u8*)&pOut->y, 2);
-    read((u8*)&pOut->z, 2);
-#endif
 }

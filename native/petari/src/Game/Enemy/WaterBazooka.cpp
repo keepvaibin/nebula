@@ -1,7 +1,4 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#endif
 #include "Game/Enemy/WaterBazooka.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Enemy/ElectricPressureBullet.hpp"
@@ -36,7 +33,7 @@
 #include "math_types.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace NrvWaterBazooka {
@@ -493,7 +490,7 @@ void WaterBazooka::exeDemoBreakSign() {
         }
     }
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, PLAYER_1);
     MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_PRE_EXPLODE");
     if (MR::isGreaterEqualStep(this, 120)) {
         MR::startLevelSound(this, "SE_EM_LV_WATERBAZ_BREAK_FLASH");
@@ -521,7 +518,7 @@ void WaterBazooka::exeDemoBreakExplosion() {
         MR::invalidateClipping(mBreakModel);
         MR::startBck(mBreakModel, "Break");
         MR::startBrk(mBreakModel, "Break");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
         MR::startSound(this, "SE_EM_WATERBAZ_EXPLODE");
         MR::startSound(this, "SE_EV_MOGUBAZ_DEAD");
@@ -698,8 +695,6 @@ void WaterBazooka::startDemoBreakCapsule() {
     setNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakWait));
 }
 
-#pragma push
-#pragma opt_propagation off
 bool WaterBazooka::aimAtMario() {
     if (MR::isStageStateScenarioOpeningCamera()) {
         return true;
@@ -734,7 +729,6 @@ bool WaterBazooka::aimAtMario() {
     mBaseMtx.getXDir(side2);
     return side2.angle(aim) * _180_PI <= 2.0f;
 }
-#pragma pop
 
 void WaterBazooka::switchShowOrHide() {
     if (isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakExplosion)) || isNerve(GET_NERVE(WaterBazooka, WaterBazookaNrvDemoBreakEnd))) {
@@ -943,13 +937,9 @@ bool WaterBazooka::tryShotBullet() {
     if (mIsElectric) {
         static_cast< ElectricPressureBullet* >(bullet)->shotElectricBullet(this, posMtx, ::sElectricBulletSpeed);
     } else {
-#ifdef TARGET_PC
         static_cast< WaterPressureBullet* >(bullet)->shotWaterBullet(
             this, posMtx, 40.0f, true, true, NebulaHost::codePatch(NEBULA_PATCH_WATER_BAZOOKA_SHOT_FLAG, nullptr) != 0,
             &mCameraInfo);
-#else
-        static_cast< WaterPressureBullet* >(bullet)->shotWaterBullet(this, posMtx, 40.0f, true, true, false, &mCameraInfo);
-#endif
     }
 
     return true;

@@ -1,18 +1,20 @@
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <nebula_cooked_material.h>
 #include "Game/Player/J3DModelX.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp>
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DShapeMtx.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaArena.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 
 class J3DMtxBuffer2 : public J3DMtxBuffer {
 public:
@@ -139,16 +141,6 @@ void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3
 
 void J3DModelX::directDraw(J3DModel* model) {
     j3dSys.setModel(this);
-    if (J3DModel::checkFlag(4)) {
-        j3dSys.onFlag(4);
-    } else {
-        j3dSys.offFlag(4);
-    }
-    if (J3DModel::checkFlag(8)) {
-        j3dSys.onFlag(8);
-    } else {
-        j3dSys.offFlag(8);
-    }
     mModelData->syncJ3DSysFlags();
     j3dSys.setTexture(mModelData->getTexture());
 
@@ -168,6 +160,21 @@ void J3DModelX::directDraw(J3DModel* model) {
     }
 }
 
+namespace {
+    // The flat passes' colours by list: `a` marks a flat pass (2: register 0's
+    // colour as the draw's lists left it), `alpha` its
+    // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
+    struct OverrideColor {
+        u8 r, g, b, alpha, a;
+    };
+    const OverrideColor kOverrideColors[16] = {
+        {0, 0, 0, 0, 0},     {0, 0, 0, 64, 1},   {0, 0, 0, 0, 0},  {0, 0, 0, 64, 1},
+        {255, 255, 0, 255, 1}, {0, 0, 0, 0, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+        {0, 0, 0, 252, 1},   {0, 0, 0, 4, 1},    {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 2},     {35, 25, 25, 5, 1}, {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+    };
+}  // namespace
+
 void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* model) {
     if (!material) {
         return;
@@ -181,7 +188,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = model ? model->getShapePacket(material->getShape()->getIndex()) : getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
-    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getDisplayListObj());
+    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getSnapshot());
 
     if (fog) {
         TVec3f pos;
@@ -190,16 +197,31 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     }
 
     packet->getShape()->loadPreDrawSetting();
-    if (packet->getDisplayListObj()) {
-        J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
+    if (packet->getSnapshot()) {
+        J3DNativeMaterial::sendDiffered(packet->getSnapshot());
     }
     if (MR::getJ3DShapePacketUserData(packet)) {
         MR::getJ3DShapePacketUserData(packet)->load();
     }
 
+    s32 override = -1;
     for (u32 i = 0; i <= 15; i++) {
-        if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
-            mStateLists[i].send();
+        if (mFlags.word() & (1 << i)) {
+            if (i == 6) {
+                J3DNativeMaterial::overrideCoordinate(MR::getScreenResTIMG()->image(), MR::getScreenWidth(),
+                                                      NebulaFrameClock::cScreenUnitsDown);
+                continue;
+            }
+            sendFlagState(i);
+            if (i == 2) {
+                J3DNativeMaterial::override(1, 0.0f, 0.0f, -1.0f);
+            }
+            if (i == 11) {
+                J3DNativeMaterial::override(5, 0.0f, 0.0f, 32.0f);
+            }
+            if (kOverrideColors[i].a != 0) {
+                override = static_cast< s32 >(i);
+            }
         }
     }
 
@@ -217,13 +239,35 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         _1C8[index] = nullptr;
     }
     if (_1C4[index]) {
-        _1C4[index]->send();
+        J3DNativeMaterial::swapImage(0, _1C4[index]);
+    }
+    if (override >= 0) {
+        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (no textures), with the blending, depth and culling the lists set.
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
+                           false, NEBULA_CULL_NONE);
+        material.blend_op = NEBULA_NATIVE_KEPT;
+        material.depth_test = NEBULA_NATIVE_KEPT;
+        material.cull = NEBULA_NATIVE_KEPT;
+        const OverrideColor& rColor = kOverrideColors[override];
+        if (rColor.a == 2) {
+            const f32* pRegisters = J3DNativeMaterial::registers();
+            for (u32 c = 0; c < 4; c++) {
+                material.constants[c] = pRegisters[4 + c];
+            }
+        } else {
+            material.constants[0] = rColor.r / 255.0f;
+            material.constants[1] = rColor.g / 255.0f;
+            material.constants[2] = rColor.b / 255.0f;
+            material.constants[3] = rColor.alpha / 255.0f;
+        }
+        NativeShader::send(material);
     }
     if (_120) {
         _120(_128, _1C0);
     }
 
-    J3DShape* original;
+    J3DShape* original = nullptr;
     if (_12C) {
         J3DShapePacket* replacement = _12C->getShapePacket(material->getShape()->getIndex());
         original = packet->getShape();
@@ -253,10 +297,10 @@ bool J3DModelX::simpleDrawSetup(J3DMaterial* material) {
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
-    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getDisplayListObj());
+    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture, matPacket->getSnapshot());
     packet->getShape()->loadPreDrawSetting();
-    if (packet->getDisplayListObj()) {
-        J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
+    if (packet->getSnapshot()) {
+        J3DNativeMaterial::sendDiffered(packet->getSnapshot());
     }
     return true;
 }
@@ -265,9 +309,157 @@ void J3DModelX::simpleDrawShape(J3DMaterial* material) {
     getShapePacket(material->getShape()->getIndex())->drawFast();
 }
 
-void J3DModelX::storeStateList(J3DStateList& rBuilder, u32 index) {
-    mStateLists[index].copy(rBuilder);
-    rBuilder.clear();
+void J3DModelX::sendFlagState(u32 flag) {
+    using namespace J3DPass;
+    switch (flag) {
+    case 0:
+        cull(NEBULA_CULL_FRONT);
+        break;
+    // Flags 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by drawIn
+    // as a native material): their fixed state here.
+    case 1:
+        depth(false, NEBULA_COMPARE_ALWAYS, false);
+        cull(NEBULA_CULL_BACK);
+        noBlend();
+        writeColor(false);
+        writeAlpha(true);
+        constantAlpha(true, 0xFF);
+        break;
+    // Texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
+    case 2:
+        cull(NEBULA_CULL_FRONT);
+        depth(true, NEBULA_COMPARE_LEQUAL, true);
+        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 3:
+        depth(true, NEBULA_COMPARE_GEQUAL, false);
+        cull(NEBULA_CULL_BACK);
+        noBlend();
+        writeColor(false);
+        writeAlpha(true);
+        constantAlpha(true, 0x90);
+        break;
+    case 4:
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        cull(NEBULA_CULL_FRONT);
+        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 5:
+        depth(true, NEBULA_COMPARE_ALWAYS, true);
+        cull(NEBULA_CULL_FRONT);
+        noBlend();
+        writeColor(false);
+        writeAlpha(false);
+        break;
+    case 7: {
+        const NebulaColor8 ambient = {0, 0, 0, 0};
+        const NebulaColor8 material = {0, 0, 0, 255};
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setLightAmbient(0, ambient);
+        J3DNativeMaterial::setLightMaterial(0, material);
+        J3DNativeMaterial::sendRegisters();
+        noBlend();
+        writeColor(false);
+        writeAlpha(true);
+        J3DNativeMaterial::applyPass(NEBULA_PASS_LIGHT_MASK);
+        break;
+    }
+    case 8:
+        cull(NEBULA_CULL_FRONT);
+        blend(NEBULA_FACTOR_ZERO, NEBULA_FACTOR_ZERO);
+        writeColor(false);
+        writeAlpha(true);
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        break;
+    case 9:
+        cull(NEBULA_CULL_BACK);
+        blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
+        writeColor(false);
+        writeAlpha(true);
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        break;
+    case 10:
+        blend(NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA);
+        writeColor(true);
+        writeAlpha(true);
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        constantAlpha(true, 0);
+        break;
+    // The reflection model: its program (one stage: texture 0 halved, stage 0's alpha above 0x20, no channels) is
+    // J3DNativeMaterial::override mode 5.
+    case 11:
+        depth(true, NEBULA_COMPARE_LEQUAL, true);
+        cull(NEBULA_CULL_FRONT);
+        noBlend();
+        writeColor(true);
+        writeAlpha(true);
+        break;
+    // The blur ghosts in colour 0 (the ghost's tint sets it).
+    case 12:
+        depth(true, NEBULA_COMPARE_LEQUAL, false);
+        cull(NEBULA_CULL_BACK);
+        blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_ONE);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 13:
+        depth(true, NEBULA_COMPARE_GEQUAL, false);
+        cull(NEBULA_CULL_BACK);
+        blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_ALPHA);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    case 14:
+        constantAlpha(true, 0x40);
+        break;
+    case 15:
+        blend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
+        writeColor(true);
+        writeAlpha(false);
+        break;
+    default:
+        break;
+    }
+}
+
+void MarioModelTint::send() const {
+    J3DNativeShape::flushState();
+    switch (kind) {
+    case Kind_Alpha:
+        J3DNativeMaterial::setColorRegister(3, color0);
+        J3DNativeMaterial::sendRegisters();
+        J3DPass::blend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+        J3DPass::cull(NEBULA_CULL_BACK);
+        J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_OPACITY);
+        break;
+    case Kind_ConstantAlpha:
+        J3DPass::constantAlpha(true, alpha);
+        break;
+    case Kind_ReflectAlpha:
+        J3DNativeMaterial::setColorRegister(3, color0);
+        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::applyPass(NEBULA_PASS_REFLECTION_ALPHA);
+        break;
+    case Kind_Light:
+        J3DNativeMaterial::setLightAmbient(0, color0);
+        J3DNativeMaterial::setLightMaterial(0, color1);
+        if (hasFog) {
+            J3DNativeMaterial::setFog(2, fogStart, fogEnd, fogNear, fogFar, fogColor);
+        }
+        J3DNativeMaterial::sendRegisters();
+        J3DNativeMaterial::applyPass(NEBULA_PASS_PLAYER_LIGHT);
+        break;
+    case Kind_Ghost:
+        J3DNativeMaterial::setColorRegister(1, color0);
+        J3DNativeMaterial::sendRegisters();
+        break;
+    default:
+        break;
+    }
 }
 
 J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(data, flags, bufferFlags) {
@@ -280,154 +472,6 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     _1E4 = 0;
     _1E5 = 0;
 
-    NebulaStateOp storage[16];
-    J3DStateList list(storage, 16);
-
-    list.setCullMode(GX_CULL_FRONT);
-    storeStateList(list, 0);
-
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    list.setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setDstAlpha(GX_TRUE, 0xFF);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 1);
-
-    list.setCullMode(GX_CULL_FRONT);
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 2);
-
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setDstAlpha(GX_TRUE, 0x90);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 3);
-
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    static GXColor highlightColor = {255, 255, 0, 255};
-    list.setTevColor(GX_TEVREG0, highlightColor);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 4);
-
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    list.setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
-    list.setBlendModeEtc(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_FALSE, GX_FALSE, GX_FALSE);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    storeStateList(list, 5);
-
-    list.setTexLookupMode(GX_TEXMAP0, GX_REPEAT, GX_REPEAT, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
-    list.setTexImgAttr(GX_TEXMAP0, MR::getScreenWidth(), JUTVideo::getManager()->getEfbHeight(), GX_TF_RGB565);
-    list.setTexImgPtr(GX_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
-    list.setTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_NRM, GX_TRUE, GX_IDENTITY);
-    storeStateList(list, 6);
-
-    GXColor ambientColor = {0, 0, 0, 0};
-    GXColor materialColor = {0, 0, 0, 255};
-    list.setChanAmbColor(GX_ALPHA0, ambientColor);
-    list.setChanMatColor(GX_ALPHA0, materialColor);
-    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    list.setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_RASA, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 7);
-
-    list.setCullMode(GX_CULL_FRONT);
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GXColor subtractColor = {0, 0, 0, 252};
-    list.setTevColor(GX_TEVREG0, subtractColor);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 8);
-
-    list.setCullMode(GX_CULL_BACK);
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GXColor addColor = {0, 0, 0, 4};
-    list.setTevColor(GX_TEVREG0, addColor);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 9);
-
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_INVDSTALPHA, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    list.setDstAlpha(GX_TRUE, 0);
-    storeStateList(list, 10);
-
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
-    list.setAlphaCompare(GX_GREATER, 0x20, GX_AOP_AND, GX_ALWAYS, 0);
-    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    storeStateList(list, 11);
-
-    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_BACK);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP, GX_TRUE, GX_FALSE, GX_FALSE);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ONE, GX_CC_C0, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    storeStateList(list, 12);
-
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_SRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    static GXColor tintColor = {35, 25, 25, 5};
-    list.setTevColor(GX_TEVREG0, tintColor);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeStateList(list, 13);
-
-    list.setDstAlpha(GX_TRUE, 0x40);
-    storeStateList(list, 14);
-
-    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    storeStateList(list, 15);
-
     _1E0 = -1;
     _1DC = 0x32323232;
     _1D8 = 0xFF0000FF;
@@ -438,8 +482,8 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     _1B8 = nullptr;
 
     u32 count = mModelData->getMaterialNum();
-    _1C4 = new const J3DStateList*[count];
-    _1C8 = new const J3DStateList*[count];
+    _1C4 = new const void*[count];
+    _1C8 = new const void*[count];
     for (u32 i = 0; i < count; i++) {
         _1C4[i] = nullptr;
         _1C8[i] = nullptr;
@@ -469,9 +513,6 @@ void J3DModelX::shapeDrawFast(J3DShapeX* shape) const {
     shape->setArrayAndBindPipeline();
 
     if (!(shape->mFlags & 0x200)) {
-        if (J3DShapeMtx::sLODFlag) {
-            J3DShapeMtx::resetMtxLoadCache();
-        }
         u16 count = shape->mMtxGroupNum;
         for (u16 i = 0; i < count; i++) {
             if (shape->mShapeMtx[i]) {

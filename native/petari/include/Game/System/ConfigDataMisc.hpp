@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/BinaryDataChunkHolder.hpp"
-#include <revolution/os.h>
 
 class ConfigDataMisc : public BinaryDataChunkBase {
 public:
@@ -19,10 +19,10 @@ public:
     void onCompleteEndingLuigi();
     bool isOnCompleteEndingMario();
     bool isOnCompleteEndingLuigi();
-    OSTime getLastModified() const;
+    NebulaCalendar::SaveTime getLastModified() const;
     void updateLastModified();
 
 private:
-    /* 0x04 */ u8 mFlag;
-    /* 0x08 */ OSTime mLastModified;
+    u8 mFlag;
+    NebulaCalendar::SaveTime mLastModified;
 };

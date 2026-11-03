@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
 
 struct JASBasicWaveBank : public JASWaveBank {
@@ -10,7 +10,7 @@ struct JASBasicWaveBank : public JASWaveBank {
     struct TWaveGroup : JASWaveArc {
         TWaveGroup(JASBasicWaveBank*);
         virtual ~TWaveGroup();
-        void setWaveCount(u32, JKRHeap*);
+        void setWaveCount(u32, NebulaArena*);
         virtual void onLoadDone();
         virtual void onEraseDone();
         u32 getWaveID(int index) const {
@@ -18,9 +18,9 @@ struct JASBasicWaveBank : public JASWaveBank {
         }
         void setWaveInfo(int param_0, u32 param_1, const JASWaveInfo& waveInfo);
 
-        /* 0x74 */ JASBasicWaveBank* mBank;
-        /* 0x78 */ TWaveInfo* mCtrlWaveArray;
-        /* 0x7C */ u32 mWaveCount;
+        JASBasicWaveBank* mBank;
+        TWaveInfo* mCtrlWaveArray;
+        u32 mWaveCount;
 
         u32 getWaveCount() const {
             return mWaveCount;
@@ -29,20 +29,17 @@ struct JASBasicWaveBank : public JASWaveBank {
 
     struct TWaveHandle : public JASWaveHandle {
         TWaveHandle() {
-            mHeap = nullptr;
+            mArc = nullptr;
         }
 
         virtual const JASWaveInfo* getWaveInfo() const {
             return &mWaveInfo;
         }
         virtual const u8* getWavePtr() const;
+        virtual const u8* getWaveLimit() const;
 
-        bool compareHeap(JASHeap* heap) const {
-            return mHeap == heap;
-        }
-
-        /* 0x04 */ JASWaveInfo mWaveInfo;
-        /* 0x28 */ JASHeap* mHeap;
+        JASWaveInfo mWaveInfo;
+        JASWaveArc* mArc;
     };
 
     struct TWaveInfo {
@@ -56,17 +53,17 @@ struct JASBasicWaveBank : public JASWaveBank {
             return mWaveId;
         }
 
-        /* 0x00 */ TWaveHandle mWaveHandle;
-        /* 0x30 */ u32 mWaveId;
-        /* 0x34 */ TWaveInfo* mNext;
-        /* 0x38 */ TWaveInfo* mPrev;
+        TWaveHandle mWaveHandle;
+        u32 mWaveId;
+        TWaveInfo* mNext;
+        TWaveInfo* mPrev;
     };
 
     JASBasicWaveBank();
     ~JASBasicWaveBank();
     TWaveGroup* getWaveGroup(u32);
-    void setGroupCount(u32, JKRHeap*);
-    void setWaveTableSize(u32, JKRHeap*);
+    void setGroupCount(u32, NebulaArena*);
+    void setWaveTableSize(u32, NebulaArena*);
     void incWaveTable(JASBasicWaveBank::TWaveGroup const*);
     void decWaveTable(JASBasicWaveBank::TWaveGroup const*);
     JASWaveHandle* getWaveHandle(u32) const;
@@ -81,11 +78,11 @@ struct JASBasicWaveBank : public JASWaveBank {
         return mGroupCount;
     }
 
-    /* 0x04 */ NebulaMutex mMutex;
-    /* 0x1C */ TWaveInfo** mWaveTable;
-    /* 0x20 */ u32 mHandleCount;
-    /* 0x24 */ TWaveGroup** mWaveGroupArray;
-    /* 0x28 */ u32 mGroupCount;
+    GameMutex mMutex;
+    TWaveInfo** mWaveTable;
+    u32 mHandleCount;
+    TWaveGroup** mWaveGroupArray;
+    u32 mGroupCount;
 
     static u32 mNoLoad;
 };

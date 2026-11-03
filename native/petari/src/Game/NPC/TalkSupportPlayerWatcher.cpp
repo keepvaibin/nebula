@@ -1,6 +1,6 @@
 #include "Game/NPC/TalkSupportPlayerWatcher.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
@@ -33,7 +33,7 @@ bool TalkSupportPlayerWatcher::isEnableTalkPlayerStateNormal() const {
         return false;
     }
 
-    if (!MR::isNearZero(MR::getSubPadStickX(WPAD_CHAN0)) || !MR::isNearZero(MR::getSubPadStickY(WPAD_CHAN0))) {
+    if (!MR::isNearZero(MR::getMoveStickX(PLAYER_1)) || !MR::isNearZero(MR::getMoveStickY(PLAYER_1))) {
         return false;
     }
 

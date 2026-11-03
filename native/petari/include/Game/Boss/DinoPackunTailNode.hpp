@@ -7,7 +7,7 @@ class DinoPackun;
 template < typename T >
 class JointControlDelegator;
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 
 class DinoPackunTailNode : public LiveActor {
 public:
@@ -32,16 +32,16 @@ public:
     void unLockPosition();
     void addNodeVelocityHost(const TVec3f&);
 
-    /* 0x8C */ DinoPackun* mParent;
-    /* 0x90 */ TVec3f mNodeDirection;
-    /* 0x9C */ TVec3f _9C;
-    /* 0xA8 */ TVec3f _A8;
-    /* 0xB4 */ LiveActor* _B4;
-    /* 0xB8 */ LiveActor* _B8;
-    /* 0xBC */ MtxPtr _BC;
-    /* 0xC0 */ JointControlDelegator< DinoPackunTailNode >* _C0;
-    /* 0xC4 */ JointControlDelegator< DinoPackunTailNode >* _C4;
-    /* 0xC8 */ f32 mLinkLength;
-    /* 0xCC */ f32 mKeepBendPower;
-    /* 0xD0 */ u8 _D0;
+    DinoPackun* mParent;
+    TVec3f mNodeDirection;
+    TVec3f _9C;
+    TVec3f _A8;
+    LiveActor* _B4;
+    LiveActor* _B8;
+    MtxPtr _BC;
+    JointControlDelegator< DinoPackunTailNode >* _C0;
+    JointControlDelegator< DinoPackunTailNode >* _C4;
+    f32 mLinkLength;
+    f32 mKeepBendPower;
+    u8 _D0;
 };

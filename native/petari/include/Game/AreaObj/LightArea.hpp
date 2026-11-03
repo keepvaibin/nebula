@@ -12,5 +12,5 @@ public:
         return "LightArea";
     }
 
-    /* 0x3C */ s32 mPlacedZoneID;
+    s32 mPlacedZoneID;
 };

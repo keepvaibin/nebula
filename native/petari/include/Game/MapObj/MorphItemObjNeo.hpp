@@ -37,27 +37,27 @@ public:
     void exeFly();
     void exeDemo();
 
-    /* 0x8c */ u16 mAppearMode;
-    /* 0x8E */ u16 mAppearFrames;
-    /* 0x90 */ bool mIsUseSwitch;
-    /* 0x91 */ bool mIsFloating;  // Obj_arg2
-    /* 0x92 */ bool _92;
-    /* 0x93 */ u8 mCameraMode;     // Obj_arg5
-    /* 0x94 */ s8 mRotateMode;     // Obj_arg6
-    /* 0x95 */ bool _95;           // Obj_arg0
-    /* 0x96 */ u8 mContainerType;  // Obj_arg3
-    /* 0x97 */ u8 _97;
-    /* 0x98 */ s8 mIsBind;      // Obj_arg1
-    /* 0x99 */ u8 mShadowType;  // Obj_arg4
-    /* 0x9C */ TVec3f mZRotation;
-    /* 0xA8 */ s32 mMorphType;
-    /* 0xAC */ f32 mAngle;
-    /* 0xB0 */ TVec3f mSpawnPosition;
-    /* 0xBC */ ActorCameraInfo* mActorCameraInfo;
-    /* 0xC0 */ ModelObj* mContainerModel;
-    /* 0xC4 */ ModelObj* mContainerBreakModel;
-    /* 0xC8 */ TPos3f mBaseMtx;
-    /* 0xF8 */ CameraTargetMtx* mCameraTargetMtx;
+    u16 mAppearMode;
+    u16 mAppearFrames;
+    bool mIsUseSwitch;
+    bool mIsFloating;  // Obj_arg2
+    bool _92;
+    u8 mCameraMode;     // Obj_arg5
+    s8 mRotateMode;     // Obj_arg6
+    bool _95;           // Obj_arg0
+    u8 mContainerType;  // Obj_arg3
+    u8 _97;
+    s8 mIsBind;      // Obj_arg1
+    u8 mShadowType;  // Obj_arg4
+    TVec3f mZRotation;
+    s32 mMorphType;
+    f32 mAngle;
+    TVec3f mSpawnPosition;
+    ActorCameraInfo* mActorCameraInfo;
+    ModelObj* mContainerModel;
+    ModelObj* mContainerBreakModel;
+    TPos3f mBaseMtx;
+    CameraTargetMtx* mCameraTargetMtx;
 };
 
 class MorphItemNeoHopper : public MorphItemObjNeo {
@@ -158,13 +158,9 @@ public:
     }
 
     virtual TVec3f* getClippingCenterOffset() const {
-#ifdef TARGET_PC
         static TVec3f sOffset;
         sOffset.set(0.0f, 200.0f, 0.0f);
         return &sOffset;
-#else
-        return &(TVec3f(0.0f, 200.0f, 0.0f));
-#endif
     }
 
     virtual bool isSyncClipping() const {
@@ -184,13 +180,9 @@ public:
         return 50.0f;
     };
     virtual TVec3f* getClippingCenterOffset() const {
-#ifdef TARGET_PC
         static TVec3f sOffset;
         sOffset.set(0.0f, 200.0f, 0.0f);
         return &sOffset;
-#else
-        return &(TVec3f(0.0f, 200.0f, 0.0f));
-#endif
     };
     virtual bool isSyncClipping() const {
         return true;
@@ -211,13 +203,9 @@ public:
     }
 
     virtual TVec3f* getClippingCenterOffset() const {
-#ifdef TARGET_PC
         static TVec3f sOffset;
         sOffset.set(0.0f, 580.0f, 0.0f);
         return &sOffset;
-#else
-        return &TVec3f(0.0f, 580.0f, 0.0f);
-#endif
     }
 
     virtual bool isSyncClipping() const {

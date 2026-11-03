@@ -1,4 +1,5 @@
 #include "Game/Player/MarineSnow.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -7,7 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new (32) TVec3f[mParticleCount]), mCellSize(1000.0f) {
@@ -19,7 +20,7 @@ MarineSnow::MarineSnow() : mParticleCount(16), mParticlePositions(new (32) TVec3
 
     mFadeStep = 0;
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("MarineSnow"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("MarineSnow"));
 }
 
 void MarineSnow::view() {
@@ -48,9 +49,11 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     s32 cellZ = static_cast< s32 >((rPosition.z + mCellSize / 2.0f) / mCellSize);
     s32 originZ = cellZ * mCellSize;
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setPointSize(27, GX_TO_ZERO);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
+    J3DPass::pointSize(4.5f);
 
     static u8 phase = 0;
     phase = (phase + 1) & 3;
@@ -73,16 +76,15 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     TVec3f diagonalUp = (billboardRight + billboardUp) * 10.0f;
     TVec3f diagonalDown = (billboardRight - billboardUp) * 10.0f;
 
-    TDDraw::setup(1, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-
-    mTexture->load(GX_TEXMAP0);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ONE, GX_CC_TEXC, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_A0, GX_CA_TEXA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    // runtime/src/render/materials/tex_vertex_alpha.hlsl: the flake texture, its alpha times the cell's opacity (the
+    // vertices' alpha); blended by alpha, depth tested.
+    NebulaNativeMaterial flakes;
+    TDDraw::setupNative(&flakes, 1, 1, 0);
+    flakes.shader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
+    flakes.constants[0] = 1.0f;
+    NativeShader::setDepth(flakes, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::setTexture(flakes, 0, mTexture);
+    NativeShader::send(flakes);
 
     for (s32 i = -4; i < 4; i++) {
         for (s32 j = -4; j < 4; j++) {
@@ -124,8 +126,6 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                     continue;
                 }
 
-                GXColor color = {0, 0, 0, alpha};
-                J3DNativeState::setTevColor(GX_TEVREG0, color);
 
                 TMtx34f mtx;
                 MtxPtr pTranslationMtx = MR::tmpMtxTrans(cellOrigin);
@@ -144,18 +144,18 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                 }
 
                 for (u16 point = firstParticle; point < lastParticle; point += particleStride) {
-                    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+                    J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
                     {
-                        TDDraw::sendPoint(mParticlePositions[point] - diagonalDown);
+                        TDDraw::sendPoint(mParticlePositions[point] - diagonalDown, alpha);
                         J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-                        TDDraw::sendPoint(mParticlePositions[point] + diagonalUp);
+                        TDDraw::sendPoint(mParticlePositions[point] + diagonalUp, alpha);
                         J3DNativeDraw::texCoord(1.0f, 0.0f);
 
-                        TDDraw::sendPoint(mParticlePositions[point] + diagonalDown);
+                        TDDraw::sendPoint(mParticlePositions[point] + diagonalDown, alpha);
                         J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-                        TDDraw::sendPoint(mParticlePositions[point] - diagonalUp);
+                        TDDraw::sendPoint(mParticlePositions[point] - diagonalUp, alpha);
                         J3DNativeDraw::texCoord(0.0f, 1.0f);
                     }
                 }
@@ -164,6 +164,3 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     }
 }
 
-MarineSnow* MarineSnow_FORCE_MATCH() {
-    return new MarineSnow();
-}

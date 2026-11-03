@@ -116,7 +116,7 @@ void TripodBoss::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm(objName, nullptr, false);
 
     char lowName[32];
-    sprintf(lowName, "%sLow", objName);
+    nebula_sprintf(lowName, "%sLow", objName);
 
     mLowModel = new ModelObj("\216\117\213\162\203\173\203\130LOD\203\202\203\146\203\213" /* 三脚ボスLODモデル */, lowName, getBaseMtx(), MR::DrawBufferType_TripodBoss, -2, -2, false);
     mLowModel->initWithoutIter();
@@ -170,7 +170,7 @@ void TripodBoss::initLeg(const JMapInfoIter& rIter) {
     MR::getObjectName(&objName, rIter);
 
     char legShadowName[32];
-    sprintf(legShadowName, "%sLegShadow", objName);
+    nebula_sprintf(legShadowName, "%sLegShadow", objName);
 
     for (u32 i = 0; i < ARRAY_SIZE(mLegs); i++) {
         mLegs[i] = new TripodBossLeg("\216\117\213\162\203\173\203\130\221\253" /* 三脚ボス足 */);
@@ -190,10 +190,6 @@ void TripodBoss::initLeg(const JMapInfoIter& rIter) {
 }
 
 // TODO
-#pragma push
-#pragma opt_propagation off
-#pragma opt_loop_invariants off
-#pragma opt_common_subs off
 void TripodBoss::initLegIKPlacement() {
     f32 heightRate = _618;
     f32 widthRate = MR::sqrt(1.0f - heightRate * heightRate);
@@ -237,7 +233,6 @@ void TripodBoss::initLegIKPlacement() {
         getLeg(i)->setWait();
     }
 }
-#pragma pop
 
 void TripodBoss::initMovableArea(const TPos3f& rPos) {
     TVec3f trans;
@@ -744,7 +739,7 @@ void TripodBoss::exePainDemo() {
 
 void TripodBoss::exeBreakDownDemo() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         MR::startSound(this, "SE_BM_TRIPOD_ALL_BREAK");
     }
@@ -756,7 +751,7 @@ void TripodBoss::exeBreakDownDemo() {
 
 void TripodBoss::exeExplosionDemo() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadVeryStrongLong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrongLong(this, PLAYER_1);
     }
 
     if (MR::isStep(this, ::sHeadExplodeSeTiming)) {
@@ -1169,9 +1164,6 @@ s32 TripodBoss::getPartIDFromBoneID(s32 boneID) {
 void TripodBossBone::setAttachBaseMatrix(const TPos3f& rPos) {
     _0.invert(rPos);
 
-    f32 scale = JGeometry::TUtil< f32 >::sqrt((_0.get(0, 0) * _0.get(0, 0)) + (_0.get(1, 0) * _0.get(1, 0)) + (_0.get(2, 0) * _0.get(2, 0)) +
-                                              (_0.get(0, 1) * _0.get(0, 1)) + (_0.get(1, 1) * _0.get(1, 1)) + (_0.get(2, 1) * _0.get(2, 1)) +
-                                              (_0.get(0, 2) * _0.get(0, 2)) + (_0.get(1, 2) * _0.get(1, 2)) + (_0.get(2, 2) * _0.get(2, 2)));
 
     if (_0.toMtxPtr() != nullptr) {
         f32 invLenX =

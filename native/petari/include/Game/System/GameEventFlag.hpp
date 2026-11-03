@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct GameEventFlag {
     enum Type {
@@ -18,37 +17,37 @@ struct GameEventFlag {
         Type_StoryEventSync = 0x0B,
     };
 
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ u8 mType;
-    /* 0x05 */ u8 mSaveFlag;
+    const char* mName;
+    u8 mType;
+    u8 mSaveFlag;
 
     union {
-        /* 0x06 */ u8 mCondition1;
-        /* 0x06 */ u8 mStarID;
-        /* 0x06 */ u8 mStarNum;
-        /* 0x06 */ u8 mStarPieceIndex;
+        u8 mCondition1;
+        u8 mStarID;
+        u8 mStarNum;
+        u8 mStarPieceIndex;
     };
 
     union {
-        /* 0x07 */ u8 mCondition2;
-        /* 0x07 */ u8 mNeedStarPieceNum;
+        u8 mCondition2;
+        u8 mNeedStarPieceNum;
     };
 
-    /* 0x08 */ u32 _8; // Unused
+    u32 _8; // Unused
 
     union {
-        /* 0x0C */ const char* mCondition3;
-        /* 0x0C */ const char* mGalaxyName;
-        /* 0x0C */ const char* mEventFlagName;
-        /* 0x0C */ const char* mEventValueName;
-        /* 0x0C */ const char* mStoryEventName;
-        /* 0x0C */ const char* mRequirement1;
+        const char* mCondition3;
+        const char* mGalaxyName;
+        const char* mEventFlagName;
+        const char* mEventValueName;
+        const char* mStoryEventName;
+        const char* mRequirement1;
     };
 
     union {
-        /* 0x10 */ const char* mCondition4;
-        /* 0x10 */ const char* mRequirement;
-        /* 0x10 */ const char* mRequirement2;
+        const char* mCondition4;
+        const char* mRequirement;
+        const char* mRequirement2;
     };
 };
 
@@ -69,5 +68,5 @@ public:
     const char* getEventValueName() const;
     const char* getRequirement() const;
 
-    /* 0x00 */ const GameEventFlag* mFlag;
+    const GameEventFlag* mFlag;
 };

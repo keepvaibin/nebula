@@ -37,8 +37,6 @@ RainCloud::RainCloud(const char* pName)
     mSplashMtx.identity();
 }
 
-#pragma push
-#pragma global_optimizer off
 void RainCloud::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     initModelManagerWithAnm("RainCloud", nullptr, false);
@@ -78,7 +76,7 @@ void RainCloud::init(const JMapInfoIter& rIter) {
         mRailMover->start();
     }
 
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     MR::initShadowVolumeFlatModel(this, "RainCloudVolume", MR::getJointMtx(this, "Shadow"));
     MR::getJMapInfoArg0NoInit(rIter, &mShadowDropLength);
 
@@ -115,16 +113,13 @@ void RainCloud::init(const JMapInfoIter& rIter) {
 
     if (!mNoRain) {
         MR::startBpk(this, "Rain");
-        MR::startBpk(mLodCtrl->_14, "Rain");
     } else {
         MR::startBpk(this, "Fine");
-        MR::startBpk(mLodCtrl->_14, "Fine");
     }
 
     initNerve(GET_NERVE(RainCloud, RainCloudNrvWait));
     makeActorAppeared();
 }
-#pragma pop
 
 void RainCloud::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
     bool arg3 = false;
@@ -211,7 +206,7 @@ void RainCloud::exeSoftTouch() {
 void RainCloud::exeHardTouch() {
     if (MR::isFirstStep(this)) {
         MR::invalidateCollisionParts(this);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -249,7 +244,7 @@ void RainCloud::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver)) {
         if (MR::isPlayerElementModeBee()) {
             MR::curePlayerElementMode();
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
         }
 
         MR::sendArbitraryMsg(ACTMES_PUDDLE_TOUCH_GROUND, pReceiver, pSender);

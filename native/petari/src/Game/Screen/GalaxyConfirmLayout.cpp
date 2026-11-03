@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BackButton.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
@@ -63,7 +63,7 @@ void GalaxyConfirmLayout::exeSelecting() {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_OK");
             mBackButton->disappear();
             setNerve(GET_NERVE(GalaxyConfirmLayout, GalaxyConfirmLayoutNrvSelected));
-        } else if (!mBackButton->isAppearing() && !mPaneCtrl->isAppearing() && MR::testCorePadTriggerB(WPAD_CHAN0)) {
+        } else if (!mBackButton->isAppearing() && !mPaneCtrl->isAppearing() && MR::isPressedFire(PLAYER_1)) {
             MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
             mPaneCtrl->disappear();
             mBackButton->disappear();

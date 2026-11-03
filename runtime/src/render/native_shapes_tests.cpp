@@ -6,6 +6,7 @@
 
 #include "galaxy/render/curved_surfaces.h"
 
+#include <cstring>
 #include <cstdio>
 #include <memory>
 #include <vector>
@@ -71,10 +72,20 @@ int main() {
                          "matrix slots as the shaders read them");
     }
 
+    // A coordinate that starts from the corner's own position matrix reads its rows, not a texture place's.
+    {
+        Geometry from_position = g;
+        from_position.corners[0].texture_matrix[1] = kCornerPositionMatrix;
+        std::vector<RenderVertex> own;
+        passed &= expect(expand(from_position, arrays, 0u, nullptr, own) && own.size() == 1u &&
+                             own[0].mtx_indices[0] == (3u | 3u << 16u),
+                         "a coordinate from the position matrix takes the corner's rows");
+    }
+
     // Without per-corner position matrices, the draw's.
     Geometry plain = g;
     plain.attributes &= ~kPositionMatrix;
-    passed &= expect(expand(plain, arrays, 9u, nullptr, out) && (out[0].mtx_indices[0] & 0xFFu) == 9u,
+    passed &= expect(expand(plain, arrays, 3u, nullptr, out) && (out[0].mtx_indices[0] & 0xFFu) == 9u,
                      "corners without a position matrix take the draw's");
 
     // NBT: normal, tangent and binormal from three entries.

@@ -25,5 +25,5 @@ public:
     void exeGuard();
     void exeRecover();
 
-    /* 0x1C */ KoopaStateAttackRoll* mStateAttackRoll;
+    KoopaStateAttackRoll* mStateAttackRoll;
 };

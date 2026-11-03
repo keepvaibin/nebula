@@ -12,7 +12,7 @@ namespace {
 
         virtual void setPosition(s32, const TVec3f&);
 
-        /* 0x04 */ CoinGroup* mGroup;
+        CoinGroup* mGroup;
     };
 };  // namespace
 

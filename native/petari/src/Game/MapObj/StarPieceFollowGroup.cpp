@@ -14,12 +14,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "math_types.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/mtx.h>
-
-void StarPieceFollowGroup_DUMMY() {
-    TVec3f a;
-    a *= 1.0f;
-}
+#include <nebula_math.h>
 
 namespace NrvStarPieceFollowGroup {
     NEW_NERVE(HostTypeNrvFollowToPlayer, StarPieceFollowGroup, FollowToPlayer);

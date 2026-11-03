@@ -4,7 +4,7 @@
 #include "Game/RhythmLib/AudMeSeqCtrl.hpp"
 #include "Game/RhythmLib/AudMeTrackCallback.hpp"
 #include <JSystem/JAudio2/JASBankTable.hpp>
-#include <JSystem/JAudio2/JASDspInterface.hpp>
+#include <JSystem/JAudio2/JASVoice.hpp>
 #include <JSystem/JGadget/linklist.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JAudio2/JASOscillator.hpp>
@@ -52,24 +52,20 @@ public:
             return mBendSense;
         }
 
-        /* 0x00 */ u8 mVelocity;
-        /* 0x02 */ u16 mBankNumber;
-        /* 0x04 */ u16 mProgNumber;
-        /* 0x06 */ u8 mBendSense;
-        /* 0x08 */ u16 mRelease;
-        /* 0x0A */ u8 mPlayPriority;
-        /* 0x0B */ u8 mReleasePriority;
-        /* 0x0C */ u32 mNoteReg;
-        /* 0x10 */ u8 mNoteRangeLower;
-        /* 0x11 */ u8 mNoteRangeUpper;
-        /* 0x12 */ u8 mNoteRangeStart;
+        u8 mVelocity;
+        u16 mBankNumber;
+        u16 mProgNumber;
+        u8 mBendSense;
+        u16 mRelease;
+        u8 mPlayPriority;
+        u8 mReleasePriority;
+        u32 mNoteReg;
+        u8 mNoteRangeLower;
+        u8 mNoteRangeUpper;
+        u8 mNoteRangeStart;
     };
 
-#ifdef TARGET_PC
     struct TList : JGadget::TLinkList< AudMeTrack, JGadget::NEBULA_NODE_OFFSET_OF_T > {
-#else
-    struct TList : JGadget::TLinkList< AudMeTrack, -384 > {
-#endif
         TList() : mCallbackRegistered(false) {
         }
 
@@ -82,7 +78,7 @@ public:
         void seqMain(s32, s32);
         AudMeTrack* getSameME(AudMeTrack*, u32);
 
-        /* 0xC */ bool mCallbackRegistered;
+        bool mCallbackRegistered;
     };
 
     operator JGadget::TLinkListNode() {
@@ -110,7 +106,7 @@ public:
     bool noteOff(u32, u16);
     void noteOffAll(u16);
     void startNote();
-    static void channelUpdateCallback(u32, JASChannel*, JASDsp::TChannel*, void*);
+    static void channelUpdateCallback(u32, JASChannel*, JASVoice*, void*);
     static void initRegister();
     void overwriteOsc(JASChannel*);
     void setOscAdsr(s16, s16, s16, s16, u16);
@@ -273,40 +269,38 @@ public:
     static JASOscillator::Data const sEnvOsc;
     static JASOscillator::Data const sPitchEnvOsc;
 
-    /* 0x000 */ AudMeSeqCtrl mSeqCtrl;
-    /* 0x050 */ AudMeTrack* mParent;
-    /* 0x054 */ AudMeTrack* mChildren[MAX_CHILDREN];
-    /* 0x074 */ s32 mBrotherNo;
-    /* 0x078 */ AudMeChannelMgr* mChannelMgrs[CHANNEL_MGR_MAX];
-    /* 0x088 */ AudMeChannelMgr mDefaultChannelMgr;
-    /* 0x0E8 */ u32 mNumChannelMgrs;
-    /* 0x0EC */ bool mIsPaused;
-    /* 0x0ED */ bool mIsProcStopped;
-    /* 0x0F0 */ s32 mStatus;
-    /* 0x0F4 */ const JASDefaultBankTable* mBankTable;
-    /* 0x0F8 */ JASOscillator::Data mOscParam[OSC_NUM];
-    /* 0x128 */ JASOscillator::Point mOscPoint[4];
-    /* 0x140 */ f32 mVolume;
-    /* 0x144 */ f32 mPitchBend;
-    /* 0x148 */ f32 mFxMix;
-    /* 0x14C */ f32 mPan;
-    /* 0x150 */ f32 mDolby;
-    /* 0x154 */ u8 mBaseNote;
-    /* 0x155 */ u8 mBaseNotePrev;
-    /* 0x156 */ bool mIsInStart;
-    /* 0x157 */ bool mStopAfterNote;
-    /* 0x158 */ bool mNoStartRange;
-    /* 0x15C */ u32 mMeId;
-    /* 0x160 */ s16 mChordTableId;
-    /* 0x162 */ bool mJumpFlag;
-    /* 0x163 */ u8 _163[MAX_CHILDREN];  // AudMeSeqParser::cmdCmpCI
-    /* 0x16C */ TTrackInfo mTrackInfo;
-    /* 0x180 */ JGadget::TLinkListNode mNode;
+    AudMeSeqCtrl mSeqCtrl;
+    AudMeTrack* mParent;
+    AudMeTrack* mChildren[MAX_CHILDREN];
+    s32 mBrotherNo;
+    AudMeChannelMgr* mChannelMgrs[CHANNEL_MGR_MAX];
+    AudMeChannelMgr mDefaultChannelMgr;
+    u32 mNumChannelMgrs;
+    bool mIsPaused;
+    bool mIsProcStopped;
+    s32 mStatus;
+    const JASDefaultBankTable* mBankTable;
+    JASOscillator::Data mOscParam[OSC_NUM];
+    JASOscillator::Point mOscPoint[4];
+    f32 mVolume;
+    f32 mPitchBend;
+    f32 mFxMix;
+    f32 mPan;
+    f32 mDolby;
+    u8 mBaseNote;
+    u8 mBaseNotePrev;
+    bool mIsInStart;
+    bool mStopAfterNote;
+    bool mNoStartRange;
+    u32 mMeId;
+    s16 mChordTableId;
+    bool mJumpFlag;
+    u8 _163[MAX_CHILDREN];  // AudMeSeqParser::cmdCmpCI
+    TTrackInfo mTrackInfo;
+    JGadget::TLinkListNode mNode;
 
-#ifdef TARGET_PC
-    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's code uses the literal -384.
+    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T).
     static int nebulaListNodeOffset() {
         return -(int)offsetof(AudMeTrack, mNode);
     }
-#endif
 };

@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SurfingGuidance.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -46,7 +46,7 @@ SurfRayTutorial::SurfRayTutorial(LiveActor* pHost, TalkMessageCtrl* pTalkCtrl, c
 }
 
 bool SurfRayTutorial::update() {
-    MR::getCorePadAcceleration(&mPadAccel, WPAD_CHAN0);
+    MR::getMainTilt(&mPadAccel, PLAYER_1);
     updateNerve();
 
     return mIsTutorialPass;
@@ -54,7 +54,7 @@ bool SurfRayTutorial::update() {
 
 void SurfRayTutorial::exeTutorialAllStart() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::sendMsgToGroupMember(ACTMES_TUTORIAL_START, mHost, MR::getSensor(mHost, 0), "body");
         MR::resetAndForwardNode(mTalkCtrl, 0);
     }
@@ -67,7 +67,7 @@ void SurfRayTutorial::exeTutorialAllStart() {
 
 void SurfRayTutorial::exeTutorialStraightStart() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 1);
         mSurfingGuidance->levelOffReady();
     }
@@ -99,7 +99,7 @@ void SurfRayTutorial::exeTutorialStraightUpkeep() {
     if (MR::isFirstStep(this)) {
         mChangeStep = 0;
 
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::startSystemSE("SE_SY_SURF_TUTORIAL_OK");
         mSurfingGuidance->levelOffHold();
     }
@@ -129,7 +129,7 @@ void SurfRayTutorial::exeTutorialStraightUpkeep() {
 void SurfRayTutorial::exeTutorialStraightSuccess() {
     if (MR::isFirstStep(this)) {
         mSurfingGuidance->levelOffSuccess();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 2);
     }
 
@@ -140,7 +140,7 @@ void SurfRayTutorial::exeTutorialStraightSuccess() {
 
 void SurfRayTutorial::exeTutorialTurnLeftStart() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 3);
         mSurfingGuidance->turnLeftReady();
     }
@@ -172,7 +172,7 @@ void SurfRayTutorial::exeTutorialTurnLeftUpkeep() {
     if (MR::isFirstStep(this)) {
         mChangeStep = 0;
 
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::startSystemSE("SE_SY_SURF_TUTORIAL_OK");
         mSurfingGuidance->turnLeftHold();
     }
@@ -201,7 +201,7 @@ void SurfRayTutorial::exeTutorialTurnLeftUpkeep() {
 
 void SurfRayTutorial::exeTutorialTurnLeftSuccess() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 4);
         mSurfingGuidance->turnLeftSuccess();
     }
@@ -213,7 +213,7 @@ void SurfRayTutorial::exeTutorialTurnLeftSuccess() {
 
 void SurfRayTutorial::exeTutorialTurnRightStart() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 5);
         mSurfingGuidance->turnRightReady();
     }
@@ -245,7 +245,7 @@ void SurfRayTutorial::exeTutorialTurnRightUpkeep() {
     if (MR::isFirstStep(this)) {
         mChangeStep = 0;
 
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::startSystemSE("SE_SY_SURF_TUTORIAL_OK");
         mSurfingGuidance->turnRightHold();
     }
@@ -274,7 +274,7 @@ void SurfRayTutorial::exeTutorialTurnRightUpkeep() {
 
 void SurfRayTutorial::exeTutorialTurnRightSuccess() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 6);
         mSurfingGuidance->turnRightSuccess();
     }
@@ -286,7 +286,7 @@ void SurfRayTutorial::exeTutorialTurnRightSuccess() {
 
 void SurfRayTutorial::exeTutorialAllEnd() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::resetAndForwardNode(mTalkCtrl, 7);
         mSurfingGuidance->deactivate();
     }

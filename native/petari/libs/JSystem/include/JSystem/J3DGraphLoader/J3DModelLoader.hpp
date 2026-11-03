@@ -1,13 +1,11 @@
 #pragma once
 
-#include "nebula_disc.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DModelData;
 class J3DMaterialTable;
-class J3DModelHierarchy;
+struct J3DModelHierarchy;
 
 enum J3DModelLoaderFlagTypes {
     J3DMLF_None = 0x00000000,
@@ -31,9 +29,9 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_DoBdlMaterialCalc = 0x00002000,
     J3DMLF_15 = 0x00004000,
     J3DMLF_16 = 0x00008000,
-    J3DMLF_TevNumShift = 0x00010000,
+    J3DMLF_StageCountShift = 0x00010000,
     J3DMLF_18 = 0x00020000,
-    J3DMLF_UseSingleSharedDL = 0x00040000,
+    J3DMLF_UseSingleSharedSnapshot = 0x00040000,
     J3DMLF_20 = 0x00080000,
     J3DMLF_21 = 0x00100000,
     J3DMLF_UseUniqueMaterials = 0x00200000,
@@ -46,151 +44,115 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_Material_PE_Full = 0x10000000,
     J3DMLF_Material_PE_FogOff = 0x20000000,
     J3DMLF_Material_Color_LightOn = 0x40000000,
-    J3DMLF_Material_Color_AmbientOn = 0x80000000
+    J3DMLF_Material_Color_AmbientOn = 1u << 31
 };
 
+// The file header, every block's header (kind, size, count, offsets) and the INF1/JNT1/EVP1/DRW1 contents are in
+// host order as the importer cooks them (crates/nebula-import cook/native_data.rs j3d_model); the magic, type and
+// block kinds read as their character constants.
 struct J3DModelBlock {
-    /* 0x0 */ NEBULA_BE(u32) mBlockType;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
+    u32 mBlockType;
+    u32 mBlockSize;
 };
 
 struct J3DModelFileData {
-    /* 0x00 */ NEBULA_BE(u32) mMagic1;
-    /* 0x04 */ NEBULA_BE(u32) mMagic2;
-    /* 0x08 */ u8 _8[4];
-    /* 0x0C */ NEBULA_BE(u32) mBlockNum;
-    /* 0x10 */ u8 _10[0x10];
-    /* 0x20 */ J3DModelBlock mBlocks[1];
+    u32 mMagic1;
+    u32 mMagic2;
+    u8 _8[4];
+    u32 mBlockNum;
+    u8 _10[0x10];
+    J3DModelBlock mBlocks[1];
 };
 
 struct J3DModelInfoBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mFlags;
-    /* 0x0C */ NEBULA_BE(u32) mPacketNum;
-    /* 0x10 */ NEBULA_BE(u32) mVtxNum;
-    /* 0x14 */ NEBULA_OFFSET(void) mpHierarchy;
+    u16 mFlags;
+    u32 mPacketNum;
+    u32 mVtxNum;
+    u32 mpHierarchy;
 };
 
 struct J3DVertexBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_OFFSET(void) mpVtxAttrFmtList;
-    /* 0x0C */ NEBULA_OFFSET(void) mpVtxPosArray;
-    /* 0x10 */ NEBULA_OFFSET(void) mpVtxNrmArray;
-    /* 0x14 */ NEBULA_OFFSET(void) mpVtxNBTArray;
-    /* 0x18 */ NEBULA_OFFSET(void) mpVtxColorArray[2];
-    /* 0x20 */ NEBULA_OFFSET(void) mpVtxTexCoordArray[8];
+    u32 mpVtxAttrFmtList;
+    u32 mpVtxPosArray;
+    u32 mpVtxNrmArray;
+    u32 mpVtxNBTArray;
+    u32 mpVtxColorArray[2];
+    u32 mpVtxTexCoordArray[8];
+    u32 mCounts[13];   // entries of each array above, position first
+    u32 mNormalFloats;  // 3, or 9 where the model's normals are NBT normals
 };
 
 struct J3DEnvelopeBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mWEvlpMtxNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpWEvlpMixMtxNum;
-    /* 0x10 */ NEBULA_OFFSET(void) mpWEvlpMixIndex;
-    /* 0x14 */ NEBULA_OFFSET(void) mpWEvlpMixWeight;
-    /* 0x18 */ NEBULA_OFFSET(void) mpInvJointMtx;
+    u16 mWEvlpMtxNum;
+    u32 mpWEvlpMixMtxNum;
+    u32 mpWEvlpMixIndex;
+    u32 mpWEvlpMixWeight;
+    u32 mpInvJointMtx;
 };
 
 struct J3DDrawBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mMtxNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpDrawMtxFlag;
-    /* 0x10 */ NEBULA_OFFSET(void) mpDrawMtxIndex;
+    u16 mMtxNum;
+    u32 mpDrawMtxFlag;
+    u32 mpDrawMtxIndex;
 };
 
 struct J3DJointBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mJointNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpJointInitData;
-    /* 0x10 */ NEBULA_OFFSET(void) mpIndexTable;
-    /* 0x14 */ NEBULA_OFFSET(void) mpNameTable;
-};  // size 0x18
+    u16 mJointNum;
+    u32 mpJointInitData;
+    u32 mpIndexTable;
+    u32 mpNameTable;
+};
 
 struct J3DMaterialBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mMaterialNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpMaterialInitData;
-    /* 0x10 */ NEBULA_OFFSET(void) mpMaterialID;
-    /* 0x14 */ NEBULA_OFFSET(void) mpNameTable;
-    /* 0x18 */ NEBULA_OFFSET(void) mpIndInitData;
-    /* 0x1C */ NEBULA_OFFSET(void) mpCullMode;
-    /* 0x20 */ NEBULA_OFFSET(void) mpMatColor;
-    /* 0x24 */ NEBULA_OFFSET(void) mpColorChanNum;
-    /* 0x28 */ NEBULA_OFFSET(void) mpColorChanInfo;
-    /* 0x2C */ NEBULA_OFFSET(void) mpAmbColor;
-    /* 0x30 */ NEBULA_OFFSET(void) mpLightInfo;
-    /* 0x34 */ NEBULA_OFFSET(void) mpTexGenNum;
-    /* 0x38 */ NEBULA_OFFSET(void) mpTexCoordInfo;
-    /* 0x3C */ NEBULA_OFFSET(void) mpTexCoord2Info;
-    /* 0x40 */ NEBULA_OFFSET(void) mpTexMtxInfo;
-    /* 0x44 */ NEBULA_OFFSET(void) field_0x44;
-    /* 0x48 */ NEBULA_OFFSET(void) mpTexNo;
-    /* 0x4C */ NEBULA_OFFSET(void) mpTevOrderInfo;
-    /* 0x50 */ NEBULA_OFFSET(void) mpTevColor;
-    /* 0x54 */ NEBULA_OFFSET(void) mpTevKColor;
-    /* 0x58 */ NEBULA_OFFSET(void) mpTevStageNum;
-    /* 0x5C */ NEBULA_OFFSET(void) mpTevStageInfo;
-    /* 0x60 */ NEBULA_OFFSET(void) mpTevSwapModeInfo;
-    /* 0x64 */ NEBULA_OFFSET(void) mpTevSwapModeTableInfo;
-    /* 0x68 */ NEBULA_OFFSET(void) mpFogInfo;
-    /* 0x6C */ NEBULA_OFFSET(void) mpAlphaCompInfo;
-    /* 0x70 */ NEBULA_OFFSET(void) mpBlendInfo;
-    /* 0x74 */ NEBULA_OFFSET(void) mpZModeInfo;
-    /* 0x78 */ NEBULA_OFFSET(void) mpZCompLoc;
-    /* 0x7C */ NEBULA_OFFSET(void) mpDither;
-    /* 0x80 */ NEBULA_OFFSET(void) mpNBTScaleInfo;
-};
-
-struct J3DMaterialBlock_v21 : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mMaterialNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpMaterialInitData;
-    /* 0x10 */ NEBULA_OFFSET(void) mpMaterialID;
-    /* 0x14 */ NEBULA_OFFSET(void) mpNameTable;
-    /* 0x18 */ NEBULA_OFFSET(void) mpCullMode;
-    /* 0x1C */ NEBULA_OFFSET(void) mpMatColor;
-    /* 0x20 */ NEBULA_OFFSET(void) mpColorChanNum;
-    /* 0x24 */ NEBULA_OFFSET(void) mpColorChanInfo;
-    /* 0x28 */ NEBULA_OFFSET(void) mpTexGenNum;
-    /* 0x2C */ NEBULA_OFFSET(void) mpTexCoordInfo;
-    /* 0x30 */ NEBULA_OFFSET(void) mpTexCoord2Info;
-    /* 0x34 */ NEBULA_OFFSET(void) mpTexMtxInfo;
-    /* 0x38 */ NEBULA_OFFSET(void) field_0x38;
-    /* 0x3C */ NEBULA_OFFSET(void) mpTexNo;
-    /* 0x40 */ NEBULA_OFFSET(void) mpTevOrderInfo;
-    /* 0x44 */ NEBULA_OFFSET(void) mpTevColor;
-    /* 0x48 */ NEBULA_OFFSET(void) mpTevKColor;
-    /* 0x4C */ NEBULA_OFFSET(void) mpTevStageNum;
-    /* 0x50 */ NEBULA_OFFSET(void) mpTevStageInfo;
-    /* 0x54 */ NEBULA_OFFSET(void) mpTevSwapModeInfo;
-    /* 0x58 */ NEBULA_OFFSET(void) mpTevSwapModeTableInfo;
-    /* 0x5C */ NEBULA_OFFSET(void) mpFogInfo;
-    /* 0x60 */ NEBULA_OFFSET(void) mpAlphaCompInfo;
-    /* 0x64 */ NEBULA_OFFSET(void) mpBlendInfo;
-    /* 0x68 */ NEBULA_OFFSET(void) mpZModeInfo;
-    /* 0x6C */ NEBULA_OFFSET(void) mpZCompLoc;
-    /* 0x70 */ NEBULA_OFFSET(void) mpDither;
-    /* 0x74 */ NEBULA_OFFSET(void) mpNBTScaleInfo;
-};
-
-struct J3DMaterialDLBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mMaterialNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpDisplayListInit;
-    /* 0x10 */ NEBULA_OFFSET(void) mpPatchingInfo;
-    /* 0x14 */ NEBULA_OFFSET(void) mpCurrentMtxInfo;
-    /* 0x18 */ NEBULA_OFFSET(void) mpMaterialMode;
-    /* 0x1C */ NEBULA_OFFSET(void) _1C;
-    /* 0x20 */ NEBULA_OFFSET(void) mpNameTable;
+    u16 mMaterialNum;
+    u32 mpMaterialInitData;
+    u32 mpMaterialID;
+    u32 mpNameTable;
+    u32 mpIndInitData;
+    u32 mpCullMode;
+    u32 mpMatColor;
+    u32 mpColorChanNum;
+    u32 mpColorChanInfo;
+    u32 mpAmbColor;
+    u32 mpLightInfo;
+    u32 mpTexGenNum;
+    u32 mpTexCoordInfo;
+    u32 mpTexCoord2Info;
+    u32 mpTexMtxInfo;
+    u32 field_0x44;
+    u32 mpTexNo;
+    u32 mpTevOrderInfo;
+    u32 mpRegisterColor;
+    u32 mpConstantColor;
+    u32 mpStageCount;
+    u32 mpTevStageInfo;
+    u32 mpTevSwapModeInfo;
+    u32 mpTevSwapModeTableInfo;
+    u32 mpFogInfo;
+    u32 mpAlphaCompInfo;
+    u32 mpBlendInfo;
+    u32 mpZModeInfo;
+    u32 mpZCompLoc;
+    u32 mpDither;
+    u32 mpNBTScaleInfo;
 };
 
 struct J3DShapeBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mShapeNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpShapeInitData;
-    /* 0x10 */ NEBULA_OFFSET(void) mpIndexTable;
-    /* 0x14 */ NEBULA_OFFSET(void) mpNameTable;
-    /* 0x18 */ NEBULA_OFFSET(void) mpVtxDescList;
-    /* 0x1C */ NEBULA_OFFSET(void) mpMtxTable;
-    /* 0x20 */ NEBULA_OFFSET(void) mpDisplayListData;
-    /* 0x24 */ NEBULA_OFFSET(void) mpMtxInitData;
-    /* 0x28 */ NEBULA_OFFSET(void) mpDrawInitData;
+    u16 mShapeNum;
+    u32 mpShapeInitData;
+    u32 mpIndexTable;
+    u32 mpNameTable;
+    u32 mpVtxDescList;
+    u32 mpMtxTable;
+    u32 mpShapeDrawData;
+    u32 mpMtxInitData;
+    u32 mpDrawInitData;
 };
 
 struct J3DTextureBlock : public J3DModelBlock {
-    /* 0x08 */ NEBULA_BE(u16) mTextureNum;
-    /* 0x0C */ NEBULA_OFFSET(void) mpTextureRes;
-    /* 0x10 */ NEBULA_OFFSET(void) mpNameTable;
+    u16 mTextureNum;
+    u32 mpTextureRes;
+    u32 mpNameTable;
 };
 
 class J3DModelLoader {
@@ -199,11 +161,7 @@ public:
 
     virtual J3DModelData* load(const void*, u32);
     virtual J3DMaterialTable* loadMaterialTable(const void*);
-    virtual J3DModelData* loadBinaryDisplayList(const void*, u32);
-    virtual u32 calcLoadSize(const void*, u32);
-    virtual u32 calcLoadMaterialTableSize(const void*);
-    virtual u32 calcLoadBinaryDisplayListSize(void const*, u32);
-    virtual u16 countMaterialNum(void const*);
+    virtual J3DModelData* loadBinaryMaterials(const void*, u32);
     virtual void setupBBoardInfo();
     virtual ~J3DModelLoader() {
     }
@@ -211,21 +169,7 @@ public:
     virtual void readMaterial(J3DMaterialBlock const*, u32) {
     }
 
-    virtual void readMaterial_v21(J3DMaterialBlock_v21 const*, u32) {
-    }
-
     virtual void readMaterialTable(J3DMaterialBlock const*, u32) {
-    }
-
-    virtual void readMaterialTable_v21(J3DMaterialBlock_v21 const*, u32) {
-    }
-
-    virtual u32 calcSizeMaterial(J3DMaterialBlock const*, u32) {
-        return false;
-    }
-
-    virtual u32 calcSizeMaterialTable(J3DMaterialBlock const*, u32) {
-        return false;
     }
 
     void readInformation(J3DModelInfoBlock const*, u32);
@@ -236,28 +180,16 @@ public:
     void readShape(J3DShapeBlock const*, u32);
     void readTexture(J3DTextureBlock const*);
     void readTextureTable(J3DTextureBlock const*);
-    void readPatchedMaterial(J3DMaterialBlock const*, u32);
-    void readMaterialDL(J3DMaterialDLBlock const*, u32);
-    void modifyMaterial(u32);
 
-    u32 calcSizeInformation(J3DModelInfoBlock const*, u32);
-    u32 calcSizeJoint(J3DJointBlock const*);
-    u32 calcSizeEnvelope(J3DEnvelopeBlock const*);
-    u32 calcSizeDraw(J3DDrawBlock const*) NO_INLINE;
-    u32 calcSizeShape(J3DShapeBlock const*, u32);
-    u32 calcSizeTexture(J3DTextureBlock const*);
-    u32 calcSizeTextureTable(J3DTextureBlock const*);
-    u32 calcSizePatchedMaterial(J3DMaterialBlock const*, u32);
-    u32 calcSizeMaterialDL(J3DMaterialDLBlock const*, u32);
 
-    /* 0x04 */ J3DModelData* mpModelData;
-    /* 0x08 */ J3DMaterialTable* mpMaterialTable;
-    /* 0x0C */ const J3DShapeBlock* mpShapeBlock;
-    /* 0x10 */ const J3DMaterialBlock* mpMaterialBlock;
-    /* 0x14 */ J3DModelHierarchy* mpModelHierarchy;
-    /* 0x18 */ u8 field_0x18;  // CLEANME: Change unknown JSystem members to the _XX format?
-    /* 0x1C */ u8 field_0x19;
-    /* 0x1A */ u16 mEnvelopeSize;
+    J3DModelData* mpModelData;
+    J3DMaterialTable* mpMaterialTable;
+    const J3DShapeBlock* mpShapeBlock;
+    const J3DMaterialBlock* mpMaterialBlock;
+    J3DModelHierarchy* mpModelHierarchy;
+    u8 field_0x18;  // CLEANME: Change unknown JSystem members to the _XX format?
+    u8 field_0x19;
+    u16 mEnvelopeSize;
 };
 
 class J3DModelLoader_v26 : public J3DModelLoader {
@@ -270,30 +202,16 @@ public:
 
     void readMaterial(J3DMaterialBlock const*, u32);
     void readMaterialTable(J3DMaterialBlock const*, u32);
-    u32 calcSizeMaterial(J3DMaterialBlock const*, u32);
-    u32 calcSizeMaterialTable(J3DMaterialBlock const*, u32);
-};
-
-class J3DModelLoader_v21 : public J3DModelLoader {
-public:
-    inline J3DModelLoader_v21() {
-    }
-
-    ~J3DModelLoader_v21() {
-    }
-
-    void readMaterial_v21(J3DMaterialBlock_v21 const*, u32);
-    void readMaterialTable_v21(J3DMaterialBlock_v21 const*, u32);
 };
 
 class J3DModelLoaderDataBase {
 public:
     static J3DModelData* load(void const*, u32);
     static J3DMaterialTable* loadMaterialTable(const void*);
-    static J3DModelData* loadBinaryDisplayList(const void*, u32);
+    static J3DModelData* loadBinaryMaterials(const void*, u32);
 };
 
-static inline u32 getMdlDataFlag_TevStageNum(u32 flags) {
+static inline u32 getMdlDataFlag_StageCount(u32 flags) {
     return (flags & 0x001f0000) >> 0x10;
 }
 
@@ -302,10 +220,10 @@ static inline u32 getMdlDataFlag_TexGenFlag(u32 flags) {
 }
 
 static inline u32 getMdlDataFlag_ColorFlag(u32 flags) {
-    return flags & 0xc0000000;
+    return flags & (3u << 30);
 }
 
-static inline u32 getMdlDataFlag_PEFlag(u32 flags) {
+static inline u32 getMdlDataFlag_OutputFlag(u32 flags) {
     return flags & 0x30000000;
 }
 

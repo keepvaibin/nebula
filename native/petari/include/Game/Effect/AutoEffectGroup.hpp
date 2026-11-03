@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class AutoEffectInfo;
 class EffectKeeper;
@@ -20,10 +19,10 @@ public:
         return mName;
     }
 
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ AutoEffectInfo** mEffects;
-    /* 0x08 */ s32 mCapacity;
-    /* 0x0C */ s32 mCount;
+    const char* mName;
+    AutoEffectInfo** mEffects;
+    s32 mCapacity;
+    s32 mCount;
 };
 
 namespace MR {

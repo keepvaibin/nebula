@@ -15,8 +15,8 @@ class TriggerChecker;
 class GameSystemErrorWatcher : public NerveExecutor {
 public:
     struct Message {
-        /* 0x00 */ const char* mId;
-        /* 0x04 */ ErrorMessageWindow::MessageType mType;
+        const char* mId;
+        ErrorMessageWindow::MessageType mType;
     };
 
     /// @brief Creates a new `GameSystemErrorWatcher`.
@@ -26,24 +26,24 @@ public:
     void movement();
     void draw() const;
     bool isWarning() const;
-    bool setPermissionUpdateWiiRemoteStatus(bool);
+    bool setPermissionUpdateInputStatus(bool);
     void exeNoError();
     void exeErrorWindowIn();
     void exeErrorWindowDisplay();
     void exeErrorWindowOut();
-    void updateWiiRemoteStatus();
+    void updateInputStatus();
     const Message* getProperMessageId() const;
     const nw4r::lyt::TexMap* getProperErrorTexMap() const;
 
 private:
-    /* 0x08 */ ErrorMessageWindow* mWindow;
-    /* 0x0C */ const Message* mMessage;
-    /* 0x10 */ const nw4r::lyt::TexMap* mUnplaggedTexMap;
-    /* 0x14 */ BatteryLayout* mBatteryLayout;
-    /* 0x1C */ TriggerChecker* _1C;
-    /* 0x20 */ s32 mWiiRemoteStatus;
-    /* 0x24 */ s32 mCounterIgnoreCheckFreeStyle;
-    /* 0x28 */ s32 mCounterDecideDisconnect;
-    /* 0x2C */ s32 mWiiRemoteBattery;
-    /* 0x30 */ bool mPermissionUpdateWiiRemoteStatus;
+    ErrorMessageWindow* mWindow;
+    const Message* mMessage;
+    const nw4r::lyt::TexMap* mUnplaggedTexMap;
+    BatteryLayout* mBatteryLayout;
+    TriggerChecker* _1C;
+    s32 mInputStatus;
+    s32 mCounterIgnoreCheckMoveStick;
+    s32 mCounterDecideDisconnect;
+    s32 mInputBattery;
+    bool mPermissionUpdateInputStatus;
 };

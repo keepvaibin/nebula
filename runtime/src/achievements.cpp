@@ -40,6 +40,7 @@ constexpr Info kCatalogue[] = {
     {"speedy", Group::Challenge, "Beat the Clock"},
     {"purplecoins", Group::Challenge, "Purple Reign"},
     {"hidden", Group::Challenge, "Hidden Treasures"},
+    {"wayfarer", Group::Challenge, "Galactic Wayfarer"},
     {"greenstars", Group::Challenge, "Going Green"},
     {"trials", Group::Challenge, "Trial Run"},
     {"lumas", Group::Challenge, "All You Can Eat"},
@@ -108,7 +109,7 @@ void write_waiting() {
         contents = out.str();
         path = file_path_locked(s);
     }
-    if (!path.empty()) (void)io::write_text_file_atomically(path, contents);
+    if (!path.empty()) (void)io::write_file_atomically(path, contents);
 }
 
 void writer_main() {

@@ -1,16 +1,8 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
-
-inline J3DShapeMtx::~J3DShapeMtx() {
-}
-
-inline u32 J3DShapeMtx::getType() const {
-    return 'SMTX';
-}
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DTexMtx;
 class J3DTexGenBlock;
@@ -33,9 +25,9 @@ public:
         return mTexMtxNum;
     }
 
-    /* 0x00 */ Mtx* mpTexMtx;
-    /* 0x04 */ Mtx44* mpEffectMtx;
-    /* 0x08 */ u16 mTexMtxNum;
+    Mtx* mpTexMtx;
+    Mtx44* mpEffectMtx;
+    u16 mTexMtxNum;
 };
 
 class J3DDifferedTexMtx {
@@ -56,7 +48,7 @@ typedef void (J3DShapeMtxConcatView::*J3DShapeMtxConcatView_LoadFunc)(int, u16) 
 
 class J3DShapeMtxMulti : public J3DShapeMtx {
 public:
-    J3DShapeMtxMulti(u16 useMtxIndex, u16 useMtxNum, NEBULA_BE(u16)* useMtxIndexTable)
+    J3DShapeMtxMulti(u16 useMtxIndex, u16 useMtxNum, u16* useMtxIndexTable)
         : J3DShapeMtx(useMtxIndex), mUseMtxNum(useMtxNum), mUseMtxIndexTable(useMtxIndexTable) {
     }
 
@@ -75,9 +67,9 @@ public:
     virtual void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
 
 private:
-    /* 0x8 */ u16 mUseMtxNum;
+    u16 mUseMtxNum;
     // In the file.
-    /* 0xC */ NEBULA_BE(u16)* mUseMtxIndexTable;
+    u16* mUseMtxIndexTable;
 };
 
 class J3DShapeMtxConcatView : public J3DShapeMtx {
@@ -96,19 +88,13 @@ public:
     virtual void loadNrmMtx(int, u16, f32 (*)[4]) const;
 
     void loadMtxConcatView_PNGP(int, u16) const;
-    void loadMtxConcatView_PCPU(int, u16) const;
-    void loadMtxConcatView_NCPU(int, u16) const;
-    void loadMtxConcatView_PNCPU(int, u16) const;
-    void loadMtxConcatView_PNGP_LOD(int, u16) const;
 
-    static J3DShapeMtxConcatView_LoadFunc sMtxLoadPipeline[4];
-    static J3DShapeMtxConcatView_LoadFunc sMtxLoadLODPipeline[4];
     static MtxPtr sMtxPtrTbl[2];
 };
 
 class J3DShapeMtxMultiConcatView : public J3DShapeMtxConcatView {
 public:
-    J3DShapeMtxMultiConcatView(u16 useMtxIndex, u16 useMtxNum, NEBULA_BE(u16)* useMtxIndexTable)
+    J3DShapeMtxMultiConcatView(u16 useMtxIndex, u16 useMtxNum, u16* useMtxIndexTable)
         : J3DShapeMtxConcatView(useMtxIndex), mUseMtxNum(useMtxNum), mUseMtxIndexTable(useMtxIndexTable) {
     }
 
@@ -129,9 +115,9 @@ public:
     virtual void loadNrmMtx(int, u16, f32 (*)[4]) const;
 
 private:
-    /* 0x8 */ u16 mUseMtxNum;
+    u16 mUseMtxNum;
     // In the file.
-    /* 0xC */ NEBULA_BE(u16)* mUseMtxIndexTable;
+    u16* mUseMtxIndexTable;
 };
 
 class J3DShapeMtxBBoardConcatView : public J3DShapeMtxConcatView {

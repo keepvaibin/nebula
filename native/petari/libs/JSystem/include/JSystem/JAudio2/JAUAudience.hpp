@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class JAUAudience3DSetting {
 public:
@@ -11,18 +10,18 @@ public:
 
     void init();
 
-    /* 0x00 */ f32 mFarDistance;
-    /* 0x04 */ f32 mNearDistance;
-    /* 0x08 */ f32 mMinVolume;
-    /* 0x0C */ f32 mFrontDolbyZ;
-    /* 0x10 */ f32 mBehindDolbyZ;
-    /* 0x14 */ f32 mMaxDolby;
-    /* 0x18 */ f32 mCenterDolby;
-    /* 0x1C */ f32 mMinDolby;
-    /* 0x20 */ f32 mMinFxMix;
-    /* 0x24 */ f32 mMaxFxMix;
-    /* 0x28 */ f32 mPanAmplitude;
-    /* 0x2C */ f32 mSonicSpeed;
-    /* 0x30 */ f32 mPitchDeltaRatioRange;
-    /* 0x34 */ u32 mPriorityDownRange;
+    f32 mFarDistance;
+    f32 mNearDistance;
+    f32 mMinVolume;
+    f32 mFrontDolbyZ;
+    f32 mBehindDolbyZ;
+    f32 mMaxDolby;
+    f32 mCenterDolby;
+    f32 mMinDolby;
+    f32 mMinFxMix;
+    f32 mMaxFxMix;
+    f32 mPanAmplitude;
+    f32 mSonicSpeed;
+    f32 mPitchDeltaRatioRange;
+    u32 mPriorityDownRange;
 };

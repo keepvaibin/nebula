@@ -1,16 +1,15 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DMtxBuffer;
 class JUTNameTab;
 
 struct J3DModelHierarchy {
-    /* 0x0 */ NEBULA_BE(u16) mType;
-    /* 0x2 */ NEBULA_BE(u16) mValue;
+    u16 mType;
+    u16 mValue;
 };
 
 class J3DJoint;
@@ -61,10 +60,10 @@ public:
     u16* getWEvlpImportantMtxIndex() const {
         return mWEvlpImportantMtxIdx;
     }
-    NEBULA_BE(u16)* getWEvlpMixMtxIndex() const {
+    u16* getWEvlpMixMtxIndex() const {
         return mWEvlpMixMtxIndex;
     }
-    NEBULA_BE(f32)* getWEvlpMixWeight() const {
+    f32* getWEvlpMixWeight() const {
         return mWEvlpMixWeight;
     }
     u16 getDrawFullWgtMtxNum() const {
@@ -101,21 +100,21 @@ public:
         mFlags = flag;
     }
 
-    /* 0x04 */ J3DModelHierarchy* mHierarchy;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u32 mModelDataType;
-    /* 0x10 */ J3DJoint* mRootNode;
-    /* 0x14 */ J3DMtxCalc* mBasicMtxCalc;
-    /* 0x18 */ J3DJoint** mJointNodePointer;
-    /* 0x1C */ u16 mJointNum;
-    /* 0x1E */ u16 mWEvlpMtxNum;
-    /* 0x20 */ u8* mWEvlpMixMtxNum;
-    // In the file, except mInvJointMtx: a native copy on native builds (J3DModelLoader::readEnvelop).
-    /* 0x24 */ NEBULA_BE(u16)* mWEvlpMixMtxIndex;
-    /* 0x28 */ NEBULA_BE(f32)* mWEvlpMixWeight;
-    /* 0x2C */ Mtx* mInvJointMtx;
-    /* 0x30 */ u16* mWEvlpImportantMtxIdx;
-    /* 0x34 */ J3DDrawMtxData mDrawMtxData;
-    /* 0x40 */ u32 field_0x40;
-    /* 0x44 */ JUTNameTab* mJointName;
+    J3DModelHierarchy* mHierarchy;
+    u32 mFlags;
+    u32 mModelDataType;
+    J3DJoint* mRootNode;
+    J3DMtxCalc* mBasicMtxCalc;
+    J3DJoint** mJointNodePointer;
+    u16 mJointNum;
+    u16 mWEvlpMtxNum;
+    u8* mWEvlpMixMtxNum;
+    // In the file (host order, as the importer cooks EVP1).
+    u16* mWEvlpMixMtxIndex;
+    f32* mWEvlpMixWeight;
+    Mtx* mInvJointMtx;
+    u16* mWEvlpImportantMtxIdx;
+    J3DDrawMtxData mDrawMtxData;
+    u32 field_0x40;
+    JUTNameTab* mJointName;
 };

@@ -65,20 +65,17 @@ public:
     void exeFadeinAstroMap();
     void exeShowDetail();
 
-    /* 0x20 */ MR::Vector< MR::AssignableArray< GalaxyMapIcon* > > mIcon;
-    /* 0x2C */ MR::Vector< MR::AssignableArray< GalaxyMapCometIcon* > > mCometIcon;
-    /* 0x38 */ MR::Vector< MR::AssignableArray< GalaxyMapDomeIcon* > > mDomeIcon;
-    /* 0x44 */ MR::Vector< MR::AssignableArray< GalaxyMapTicoIcon* > > mTicoIcon;
-    /* 0x50 */ GalaxyMapMarioIcon* mMarioIcon1;
-    /* 0x54 */ GalaxyMapMarioIcon* mMarioIcon2;
-    /* 0x58 */ GalaxyMapGalaxyPlain* mGalaxyPlain;
-    /* 0x5C */ GalaxyMapGalaxyDetail* mGalaxyDetail;
-    /* 0x60 */ GalaxyMapIcon* mPointingIcon;
-    /* 0x64 */ GalaxyMapTitle* mTitle;
-#if (VERSION == RMGK01)
-    /* 0x68 */ IconAButton* mIconAButton;
-#endif
-    /* 0x6C */ const char* mGalaxyName;
-    /* 0x70 */ bool _70;
-    /* 0x71 */ bool _71;
+    MR::Vector< MR::AssignableArray< GalaxyMapIcon* > > mIcon;
+    MR::Vector< MR::AssignableArray< GalaxyMapCometIcon* > > mCometIcon;
+    MR::Vector< MR::AssignableArray< GalaxyMapDomeIcon* > > mDomeIcon;
+    MR::Vector< MR::AssignableArray< GalaxyMapTicoIcon* > > mTicoIcon;
+    GalaxyMapMarioIcon* mMarioIcon1;
+    GalaxyMapMarioIcon* mMarioIcon2;
+    GalaxyMapGalaxyPlain* mGalaxyPlain;
+    GalaxyMapGalaxyDetail* mGalaxyDetail;
+    GalaxyMapIcon* mPointingIcon;
+    GalaxyMapTitle* mTitle;
+    const char* mGalaxyName;
+    bool _70;
+    bool _71;
 };

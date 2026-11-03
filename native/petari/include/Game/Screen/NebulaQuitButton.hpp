@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 
 class ButtonPaneController;
@@ -24,13 +23,12 @@ public:
     // Nebula's menu focus: the D-pad or stick's highlight to it, once it waits to be chosen. True when it took it.
     bool takeMenuFocus();
 
-    static const wchar_t* getQuestion();
+    static const char16_t* getQuestion();
 
 private:
     void layOut();
 
-    /* 0x20 */ ButtonPaneController* mButton;
-    /* 0x24 */ s32 mShownFrames;
-    /* 0x28 */ bool mIsDecided;
+    ButtonPaneController* mButton;
+    s32 mShownFrames;
+    bool mIsDecided;
 };
-#endif

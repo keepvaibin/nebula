@@ -25,7 +25,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 namespace {
     class KuriboMiniParam {
@@ -170,7 +169,7 @@ void KuriboMini::calcAndSetBaseMtx() {
 
 void KuriboMini::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (!isDown() &&
-        (MR::isSensorEnemyAttack(pSender) || (isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver) ||
+        (MR::isSensorEnemyAttack(pSender) || ((isEnableAttack() || !MR::isSensorPlayer(pReceiver)) && !MR::isSensorEnemy(pReceiver)) ||
          !MR::sendMsgPushAndKillVelocityToTarget(this, pReceiver, pSender)) &&
         isEnableAttack() && MR::isSensorPlayer(pReceiver) && MR::isSensorEnemyAttack(pSender)) {
         if (!MR::isPlayerHipDropFalling() && MR::sendMsgEnemyAttack(pReceiver, pSender)) {
@@ -248,7 +247,7 @@ bool KuriboMini::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    if ((MR::isSensorEnemy(pSender) || MR::isSensorRide(pSender) || !isEnableAttack() && MR::isSensorPlayer(pSender))) {
+    if ((MR::isSensorEnemy(pSender) || MR::isSensorRide(pSender) || (!isEnableAttack() && MR::isSensorPlayer(pSender)))) {
         bool isDwn = isDown() == false;
         if (isDwn) {
             MR::addVelocityFromPush(this, 1.5f, pSender, pReceiver);

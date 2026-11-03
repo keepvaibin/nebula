@@ -9,7 +9,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -25,25 +25,22 @@
 
 namespace {
     struct StaffRollParam {
-        /* 0x00 */ f32 mPaneScale;
-        /* 0x04 */ f32 mScrollSpeed;
-        /* 0x08 */ f32 mLineLeading;
-        /* 0x0C */ f32 mEmptyLineLeading;
+        f32 mPaneScale;
+        f32 mScrollSpeed;
+        f32 mLineLeading;
+        f32 mEmptyLineLeading;
     };
 
     struct PictureTiming {
-        /* 0x00 */ s32 mAppearStep;
-        /* 0x04 */ s32 mReplaceTextureId;
-        /* 0x08 */ s32 mPaneId;
-        /* 0x0C */ s32 mAnimId;
+        s32 mAppearStep;
+        s32 mReplaceTextureId;
+        s32 mPaneId;
+        s32 mAnimId;
     };
 
     static const StaffRollParam sStaffRollParamTable[] = {
         // Jp, Us, Eu
         {0.8f, 0.5f, 27.5f, 36.0f},  {0.8f, 0.5f, 24.5f, 29.5f}, {0.8f, 0.5f, 23.5f, 30.5f},
-#if (VERSION == RMGK01)  // Cn, Kr
-        {0.85f, 0.5f, 27.5f, 32.5f}, {0.8f, 0.5f, 24.0f, 30.5f},
-#endif
     };
     static const PictureTiming sPictureTimingTable[] = {
         {1100, 0, 2, 0},   {1900, 0, 2, 1},   {2000, 1, 1, 0},   {2800, 1, 1, 1},   {2900, 2, 0, 0},   {3700, 2, 0, 1},   {3800, 3, 3, 0},
@@ -101,15 +98,6 @@ namespace {
             return &::sStaffRollParamTable[2];
         }
 
-#if (VERSION == RMGK01)
-        if (MR::isEqualString(pRegionPrefix, "Cn")) {
-            return &::sStaffRollParamTable[3];
-        }
-
-        if (MR::isEqualString(pRegionPrefix, "Kr")) {
-            return &::sStaffRollParamTable[4];
-        }
-#endif
 
         return nullptr;
     }
@@ -191,14 +179,14 @@ void StaffRollPicture::initReplaceTexture() {
     }
 
     for (s32 i = 0; i < PICTURE_TEXTURE_NUM; i++) {
-        snprintf(replaceTextureName, sizeof(replaceTextureName), "%s%03d.bti", pReplaceTexturePrefix, i);
+        nebula_snprintf(replaceTextureName, sizeof(replaceTextureName), "%s%03d.bti", pReplaceTexturePrefix, i);
         mReplaceTexture[i] = MR::createLytTexMap(::cReplaceTextureArcName, replaceTextureName);
     }
 }
 
 void StaffRollPicture::startPictureAction(s32 replaceTextureId, const char* pPaneName, const char* pAnimName) {
     if (replaceTextureId >= 0) {
-        const char* pChildPaneName;
+        const char* pChildPaneName = nullptr;
 
         if (MR::isEqualString(pPaneName, "PictureLU")) {
             pChildPaneName = "PicLU";
@@ -289,7 +277,7 @@ void StaffRoll::init(const JMapInfoIter& rIter) {
 }
 
 void StaffRoll::appear() {
-    GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
+    GameSystemFunction::setPermissionToCheckInput(false);
     MR::deactivateGameSceneDraw3D();
     LayoutActor::appear();
     setNerve(GET_NERVE(StaffRoll, StaffRollNrvPrepareDemo));
@@ -322,7 +310,7 @@ bool StaffRoll::isNextLineEmpty() const {
         return false;
     }
 
-    wchar_t message[256];
+    char16_t message[256];
     MR::getMessageLine(message, ARRAY_SIZE(message), mMsg, mMsgLine);
 
     return message[0] == '\0';
@@ -418,9 +406,6 @@ void StaffRoll::exeAllRights() {
     }
 
     if (MR::isPaneAnimStopped(this, ::cPaneNameTheEnd, 0)) {
-#if (VERSION == RMGK01)
-        MR::stopStageBGM(0);
-#endif
 
         mPicture->kill();
         MR::hidePane(this, ::cPaneNameTheEnd);
@@ -435,7 +420,7 @@ void StaffRoll::exePrepareInfo() {
 }
 
 void StaffRoll::exeInfoAppear() {
-    const char* pMessageId;
+    const char* pMessageId = nullptr;
 
     if (MR::isFirstStep(this)) {
         if (isNerve(GET_NERVE(StaffRoll, StaffRollNrvInfoPictureBookAppear))) {
@@ -544,19 +529,9 @@ void StaffRoll::movement() {
     LayoutActor::movement();
     tryGenerateLine();
 
-    #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     if (MR::isPlayingStageBgm()) {
         _4C++;
     }
-    #else
-    if (_4C == 0) {
-        if (MR::isPlayingStageBgm()) {
-            _4C++;
-        }
-    } else {
-        _4C++;
-    }
-    #endif
 }
 
 void StaffRoll::calcAnim() {
@@ -575,7 +550,7 @@ void StaffRoll::draw() const {
         return;
     }
 
-    GXColor fillColor = {0, 0, 0, 0};
+    NebulaColor8 fillColor = {0, 0, 0, 0};
 
     MR::fillScreen(fillColor);
     mInfo->draw();
@@ -638,13 +613,12 @@ bool StaffRoll::tryGenerateLine() {
 
 void StaffRoll::makeLine() {
     StaffRollLine* pLine;
-    wchar_t message[256];
+    char16_t message[256];
     MR::getMessageLine(message, ARRAY_SIZE(message), mMsg, mMsgLine);
-    wchar_t buffer[256] = {};
-    const wchar_t* pMessage = message;
+    const char16_t* pMessage = message;
     s32 columnCount = 0;
-    wchar_t columns[3][256] = {};
-    wchar_t* pColumn = columns[0];
+    char16_t columns[3][256] = {};
+    char16_t* pColumn = columns[0];
 
     while (true) {
         if (*pMessage == 0x1A) {
@@ -659,12 +633,12 @@ void StaffRoll::makeLine() {
             continue;
         }
 
-        if (*pMessage != L'|' && *pMessage != L'\0') {
+        if (*pMessage != u'|' && *pMessage != u'\0') {
             *pColumn++ = *pMessage;
         } else {
-            *pColumn = L'\0';
+            *pColumn = u'\0';
             columnCount++;
-            if (*pMessage == L'\0') {
+            if (*pMessage == u'\0') {
                 break;
             }
 
@@ -713,8 +687,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void StaffRoll_FORCE_MATCH(StaffRollLine* pLine, StaffRollPicture* pPicture, StaffRoll* pRoll) {
-    pLine->StaffRollLine::~StaffRollLine();
-    pPicture->StaffRollPicture::~StaffRollPicture();
-    pRoll->StaffRoll::~StaffRoll();
-}

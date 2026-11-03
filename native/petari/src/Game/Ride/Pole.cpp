@@ -6,7 +6,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -310,7 +310,7 @@ void Pole::exeBindTurn() {
     }
 
     if (!mIsSquare) {
-        mRotation.y += ::sRotateSpeedRate * getPoleSubPadStickX();
+        mRotation.y += ::sRotateSpeedRate * getPoleMoveStickX();
         mRotation.y = MR::repeat(mRotation.y, 0.0f, 360.0f);
     }
 
@@ -361,7 +361,7 @@ void Pole::exeBindClimbUp() {
     }
 
     if (!tryJump(false, ::sClimbUpRotateSpeedRate) && !tryTurn() && !tryFallDown()) {
-        if (0.0f == getPoleSubPadStickY()) {
+        if (0.0f == getPoleMoveStickY()) {
             setNerve(GET_NERVE(Pole, PoleNrvBindWait));
             return;
         }
@@ -382,7 +382,7 @@ void Pole::exeBindClimbUp() {
                 }
             }
         } else {
-            MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadVeryWeak(this, PLAYER_1);
         }
         updateBindTrans();
     }
@@ -412,7 +412,7 @@ void Pole::exeBindFallDown() {
     }
 
     updateBindTrans();
-    MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadVeryWeak(this, PLAYER_1);
     MR::startLevelSound(mRider, "SE_PM_LV_POLE_SLIDE");
 
     if ((!mIsSquare && mClimbCoord <= ::sLandingHeightMin) || (mIsSquare && mClimbCoord <= ::sLandingHeightMinSquare)) {
@@ -437,7 +437,7 @@ void Pole::exeBindFallDown() {
     }
 
     if (!tryJump(false, 0.0f) && !tryTurn() && !tryClimbUp()) {
-        if (0.0f == getPoleSubPadStickY()) {
+        if (0.0f == getPoleMoveStickY()) {
             setNerve(GET_NERVE(Pole, PoleNrvBindWait));
         }
     }
@@ -473,7 +473,7 @@ void Pole::exeBindHandstandWait() {
     }
 
     if (!Pole::tryJump(true, 0.0f) && !Pole::tryHandstandTurn()) {
-        if (getPoleSubPadStickY() < ::sEndHandstandStickY) {
+        if (getPoleMoveStickY() < ::sEndHandstandStickY) {
             setNerve(GET_NERVE(Pole, PoleNrvBindHandstandEnd));
         }
     }
@@ -504,7 +504,7 @@ void Pole::exeBindHandstandTurn() {
         MR::startBckPlayer("TreeHandstandTurn");
     }
 
-    mRotation.y += getPoleSubPadStickX() * ::sRotateSpeedRate;
+    mRotation.y += getPoleMoveStickX() * ::sRotateSpeedRate;
     mRotation.y = MR::repeat(mRotation.y, 0.0f, 360.0f);
 
     if (!tryJump(true, 0.0f) && !isEnableTurn()) {
@@ -603,7 +603,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         MR::startSound(mRider, "SE_PM_GRAB_OBJ");
         MR::startSound(mRider, "SE_PV_LIFT_UP");
         MR::startActorCameraNoTarget(this, mCameraInfo);
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
 
         if (speedXZ > ::sPlayerSpeedToCatchMax) {
             setNerve(GET_NERVE(Pole, PoleNrvBindStartFast));
@@ -644,7 +644,7 @@ bool Pole::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
 }
 
 bool Pole::tryJump(bool handstand, f32 rotateSpeed) {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA()) {
         TPos3f pos;
         calcGravityMtx(&pos);
 
@@ -696,7 +696,7 @@ bool Pole::tryJump(bool handstand, f32 rotateSpeed) {
 
 bool Pole::tryTurn() {
     if (isEnableTurn()) {
-        if (getPoleSubPadStickX() > 0.0f) {
+        if (getPoleMoveStickX() > 0.0f) {
             setNerve(GET_NERVE(Pole, PoleNrvBindTurnRight));
         } else {
             setNerve(GET_NERVE(Pole, PoleNrvBindTurnLeft));
@@ -707,7 +707,7 @@ bool Pole::tryTurn() {
 }
 
 bool Pole::tryClimbUp() {
-    if (getPoleSubPadStickY() > 0.0f) {
+    if (getPoleMoveStickY() > 0.0f) {
         setNerve(GET_NERVE(Pole, PoleNrvBindClimbUp));
         return true;
     }
@@ -715,7 +715,7 @@ bool Pole::tryClimbUp() {
 }
 
 bool Pole::tryFallDown() {
-    if (getPoleSubPadStickY() < 0.0f) {
+    if (getPoleMoveStickY() < 0.0f) {
         setNerve(GET_NERVE(Pole, PoleNrvBindFallDown));
         return true;
     }
@@ -731,7 +731,7 @@ bool Pole::tryHandstandTurn() {
 }
 
 bool Pole::isEnableTurn() const {
-    if (MR::abs(getPoleSubPadStickX()) > ::sTurnStickMin) {
+    if (MR::abs(getPoleMoveStickX()) > ::sTurnStickMin) {
         return true;
     }
     return false;
@@ -764,18 +764,18 @@ void Pole::updateTopPos(f32 top) {
     MR::setMtxTrans(mTopMtx, mTopPos);
 }
 
-f32 Pole::getPoleSubPadStickX() const {
+f32 Pole::getPoleMoveStickX() const {
     if (mInvertStick) {
-        return -MR::getSubPadStickX(WPAD_CHAN0);
+        return -MR::getMoveStickX(PLAYER_1);
     } else {
-        return MR::getSubPadStickX(WPAD_CHAN0);
+        return MR::getMoveStickX(PLAYER_1);
     }
 }
 
-f32 Pole::getPoleSubPadStickY() const {
+f32 Pole::getPoleMoveStickY() const {
     if (mInvertStick) {
-        return -MR::getSubPadStickY(WPAD_CHAN0);
+        return -MR::getMoveStickY(PLAYER_1);
     } else {
-        return MR::getSubPadStickY(WPAD_CHAN0);
+        return MR::getMoveStickY(PLAYER_1);
     }
 }

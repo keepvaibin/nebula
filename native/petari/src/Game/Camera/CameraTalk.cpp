@@ -4,16 +4,6 @@
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraTalk_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)(MR::epsilon());
-    (void)0.5f;
-    (void)-1.0f;
-    (void)(MR::pi() / 2.0f);
-    (void)(-MR::pi() / 2.0f);
-}
-
 namespace {
     static const f32 sRate = 0.5f;
     static const f32 sAngleX = 0.12f;

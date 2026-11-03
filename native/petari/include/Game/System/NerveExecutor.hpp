@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class Nerve;
 class Spine;
@@ -17,5 +16,5 @@ public:
     bool isNerve(const Nerve* pNerve) const;
     s32 getNerveStep() const;
 
-    /* 0x4 */ Spine* mSpine;
+    Spine* mSpine;
 };

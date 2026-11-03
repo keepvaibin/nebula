@@ -9,36 +9,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
-void MarioActorGravity_FORCE_MATCH(TVec3f& rVec, f32 a, f32 b, f32 c) {
-    rVec *= a;
-    rVec *= b;
-    rVec *= c;
-}
-
-void MarioActorGravity_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)100.0f;
-    (void)0.001f;
-    (void)0.9f;
-    (void)(MR::pi() / 6.0f);
-    (void)(MR::pi() * 0.4f);
-    (void)(MR::pi() * (2.0f / 3.0f));
-    (void)0.75f;
-    (void)70.0f;
-    (void)50.0f;
-    (void)59.0f;
-    (void)0.1f;
-    (void)15.0f;
-    (void)160.0f;
-    (void)80.0f;
-    (void)200.0f;
-    (void)(MR::pi() / 36.0f);
-    (void)0.3f;
-}
-
 const TVec3f& MarioActor::getGravityVec() const {
     return *mMario->getGravityVec();
 }
@@ -84,7 +54,7 @@ bool MarioActor::checkBeeWallStick(TVec3f& rVec) {
         _240 = rVec;
         mMario->setGravityVec(rVec);
         mMario->setHeadVec(-rVec);
-        mMario->setFrontVecKeepUp(head, 1UL);
+        mMario->setFrontVecKeepUp(head, 1u);
         setBlendMtxTimer(2);
 
         _38C = 5;

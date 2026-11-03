@@ -19,10 +19,10 @@ public:
         mDotMax = dotMax;
     }
 
-    /* 0x4C */ TVec3f mWPoint;
-    /* 0x58 */ TVec3f mAxis;
-    /* 0x64 */ f32 mDist;
-    /* 0x68 */ f32 mAngleX;
-    /* 0x6C */ f32 mAngleY;
-    /* 0x70 */ f32 mDotMax;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mDist;
+    f32 mAngleX;
+    f32 mAngleY;
+    f32 mDotMax;
 };

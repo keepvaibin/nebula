@@ -24,16 +24,16 @@ public:
     virtual const char* getName() const = 0;
     virtual const char* getTypeString() const = 0;
     virtual void initCast(LiveActor*, const JMapInfoIter&) {};
-    virtual void start() NO_INLINE {
+    virtual void start() {
     }
 
-    virtual void end() NO_INLINE {
+    virtual void end() {
     }
 
-    virtual void update() NO_INLINE {
+    virtual void update() {
     }
 
-    /* 0x04 */ DemoExecutor* mExecutor;
+    DemoExecutor* mExecutor;
 };
 
 template < class T >
@@ -47,12 +47,12 @@ public:
         }
     }
 
-    /* 0x04 */ MR::Vector< MR::AssignableArray< T > > mInfo;
+    MR::Vector< MR::AssignableArray< T > > mInfo;
 };
 
 struct DemoTalkMessageCtrl {
-    /* 0x00 */ LiveActor* mActor;
-    /* 0x04 */ TalkMessageCtrl* mTalkMessageCtrl;
+    LiveActor* mActor;
+    TalkMessageCtrl* mTalkMessageCtrl;
 };
 
 class DemoExecutor : public DemoCastGroup {
@@ -80,21 +80,21 @@ public:
     void setTalkMessageCtrl(const LiveActor*, TalkMessageCtrl*);
     void end();
 
-    /* 0x014 */ const char* mSheetName;
-    /* 0x018 */ DemoTimeKeeper* mTimeKeeper;
-    /* 0x01C */ DemoSubPartKeeper* mSubPartKeeper;
-    /* 0x020 */ DemoPlayerKeeper* mPlayerKeeper;
-    /* 0x024 */ DemoCameraKeeper* mCameraKeeper;
-    /* 0x028 */ DemoActionKeeper* mActionKeeper;
-    /* 0x02C */ DemoWipeKeeper* mWipeKeeper;
-    /* 0x030 */ DemoSoundKeeper* mSoundKeeper;
-    /* 0x034 */ MR::Vector< MR::FixedArray< DemoSheetKeeperBase*, 2 > > mSheetKeeper;
-    /* 0x040 */ StageSwitchCtrl* _40;
-    /* 0x044 */ NameObj* _44;
-    /* 0x048 */ const char* _48;
-    /* 0x04C */ s32 _4C;
-    /* 0x050 */ bool _50;
-    /* 0x054 */ MR::Vector< MR::FixedArray< LiveActor*, 192 > > mActor;
-    /* 0x358 */ MR::Vector< MR::FixedArray< DemoTalkAnimCtrl*, 8 > > mTalkAnimCtrl;
-    /* 0x37C */ MR::Vector< MR::FixedArray< DemoTalkMessageCtrl, 8 > > mTalkMessageCtrl;
+    const char* mSheetName;
+    DemoTimeKeeper* mTimeKeeper;
+    DemoSubPartKeeper* mSubPartKeeper;
+    DemoPlayerKeeper* mPlayerKeeper;
+    DemoCameraKeeper* mCameraKeeper;
+    DemoActionKeeper* mActionKeeper;
+    DemoWipeKeeper* mWipeKeeper;
+    DemoSoundKeeper* mSoundKeeper;
+    MR::Vector< MR::FixedArray< DemoSheetKeeperBase*, 2 > > mSheetKeeper;
+    StageSwitchCtrl* _40;
+    NameObj* _44;
+    const char* _48;
+    s32 _4C;
+    bool _50;
+    MR::Vector< MR::FixedArray< LiveActor*, 192 > > mActor;
+    MR::Vector< MR::FixedArray< DemoTalkAnimCtrl*, 8 > > mTalkAnimCtrl;
+    MR::Vector< MR::FixedArray< DemoTalkMessageCtrl, 8 > > mTalkMessageCtrl;
 };

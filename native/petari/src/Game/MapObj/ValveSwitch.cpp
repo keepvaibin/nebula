@@ -4,12 +4,6 @@
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
 
-void ValveSwitch_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)-75.0f;
-    (void)150.0f;
-}
-
 namespace NrvValveSwitch {
     NEW_NERVE(ValveSwitchNrvWait, ValveSwitch, Wait);
     NEW_NERVE(ValveSwitchNrvAdjust, ValveSwitch, Adjust);
@@ -106,7 +100,7 @@ void ValveSwitch::exeValve() {
 
     if (MR::isStep(this, 30)) {
         MR::startSound(this, "SE_OJ_VALVE_SWITCH_ON");
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 

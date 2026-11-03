@@ -1,5 +1,5 @@
 #include "Game/Scene/ScenarioSelectScene.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/EffectSystem.hpp"
@@ -17,7 +17,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <revolution/gx/GXEnum.h>
 #include <JSystem/J3DGraphBase/J3DDrawBuffer.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 
@@ -42,13 +41,7 @@ namespace {
     }
 
     bool tryResumeInitializeThread() {
-        const char* thread = "\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */;
-        if (MR::isSuspendedAsyncExecuteThread(thread)) {
-            MR::resumeAsyncExecuteThread(thread);
-            return true;
-        }
-
-        return false;
+        return MR::tryResumeSceneInitialize();
     }
 };  // namespace
 
@@ -107,10 +100,8 @@ void ScenarioSelectScene::calcAnim() {
     bool res = isExecForeground() && _28 == 0;
 
     if (res) {
-#ifdef TARGET_PC
         // The scene builds its perspective once, at boot: follow the picture's aspect as it changes.
         mCameraContext->updateProjectionMtx();
-#endif
         mScenarioLayout->calcAnim();
         mCinemaFrame->calcAnim();
         MR::Effect::movementEffectNormal(mEffectSystem);
@@ -214,7 +205,7 @@ bool ScenarioSelectScene::isResetEnd() const {
 
 void ScenarioSelectScene::setupCameraMtx() const {
     NebulaMtxCopy(mCameraContext->getViewMtx(), j3dSys.mViewMtx);
-    J3DNativeView::setProjection(mCameraContext->mProjection, GX_PERSPECTIVE);
+    J3DNativeView::setPerspective(mCameraContext->mProjection);
 }
 
 bool ScenarioSelectScene::trySetCurrentScenarioNo() const {

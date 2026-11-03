@@ -1,7 +1,4 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#endif
 #include "Game/MapObj/FlipPanel.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActorGroupArray.hpp"
@@ -11,11 +8,6 @@
 #include "Game/Util.hpp"
 #include <JSystem/JMath/JMath.hpp>
 #include "Game/System/NebulaHost.hpp"
-
-void FlipPanel_FORCE_MATCH_SDATA2() {
-    (void)MR::epsilon();
-    (void)-25.0f;
-}
 
 namespace NrvFlipPanel {
     NEW_NERVE(FlipPanelNrvFrontLand, FlipPanel, FrontLand);
@@ -57,13 +49,9 @@ void FlipPanel::init(const JMapInfoIter& rIter) {
     initialize(rIter, info);
     mIsReverse = isObjectName("FlipPanelReverse");
     mDelegator = MR::createJointDelegatorWithNullChildFunc(this, &FlipPanel::calcJointMove, "Panel");
-#ifdef TARGET_PC
     u32 groupSize = 0x20;
     NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_GROUP, &groupSize);
     mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, groupSize);
-#else
-    mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, 0x20);
-#endif
     MR::invalidateClipping(this);
     MR::startBck(this, "PanelB");
     f32 frameMax = MR::getBckFrameMax(this);
@@ -92,7 +80,7 @@ void FlipPanel::exeFrontLand() {
             MapObjActorUtil::killBloomModel(this);
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(this, "SE_OJ_FLIP_PANEL_CHANGE");
 
         if (_CD) {
@@ -122,7 +110,7 @@ void FlipPanel::exeBackLand() {
             MR::setBrkFrame(bloomModel, frameMax);
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(this, "SE_OJ_FLIP_PANEL_CHANGE");
 
         if (!_CD) {
@@ -289,13 +277,9 @@ void FlipPanelObserver::init(const JMapInfoIter& rIter) {
     initHitSensor(1);
     MR::addBodyMessageSensorMapObj(this);
     MR::invalidateClipping(this);
-#ifdef TARGET_PC
     u32 groupSize = 0x20;
     NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP, &groupSize);
     _8C = MR::joinToGroupArray(this, rIter, 0, groupSize);
-#else
-    _8C = MR::joinToGroupArray(this, rIter, 0, 0x20);
-#endif
     MR::useStageSwitchWriteA(this, rIter);
     initSound(2, false);
     MR::getJMapInfoArg7NoInit(rIter, &mPowerStarId);

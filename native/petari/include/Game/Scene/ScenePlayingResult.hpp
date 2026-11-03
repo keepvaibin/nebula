@@ -30,10 +30,10 @@ public:
     s32 getStarPieceNum() const;
 
     /// @brief The number of coins.
-    /* 0x0C */ s32 mCoinNum;
+    s32 mCoinNum;
 
     /// @brief The number of Purple Coins.
-    /* 0x10 */ s32 mPurpleCoinNum;
+    s32 mPurpleCoinNum;
 
-    /* 0x14 */ u32 _14;
+    u32 _14;
 };

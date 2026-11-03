@@ -1,16 +1,9 @@
 #include "Game/Ride/SphereAccelSensorController.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
 #include "Game/System/NebulaInput.hpp"
-
-void SphereAccelSensorController_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)-1.0f;
-}
 
 namespace {
     // sMinStableValue
@@ -50,22 +43,22 @@ SphereAccelSensorController::SphereAccelSensorController()
 
 void SphereAccelSensorController::getPadAcceleration(TVec3f* pAccel) const {
     if (mPad == Pad_Core) {
-        MR::getCorePadAcceleration(pAccel, WPAD_CHAN0);
+        MR::getMainTilt(pAccel, PLAYER_1);
     } else {
-        MR::getSubPadAcceleration(pAccel, WPAD_CHAN0);
+        MR::getSubTilt(pAccel, PLAYER_1);
     }
 }
 
 bool SphereAccelSensorController::testBrake() const {
     if (mPad == Pad_Core) {
-        return MR::testCorePadButtonA(WPAD_CHAN0);
+        return MR::isHeldJump(PLAYER_1);
     } else {
-        return MR::testSubPadButtonZ(WPAD_CHAN0) || MR::testSubPadButtonC(WPAD_CHAN0);
+        return MR::isHeldCrouch(PLAYER_1) || MR::isHeldCamera(PLAYER_1);
     }
 }
 
 f32 SphereAccelSensorController::calcJumpPower() const {
-    return MR::testCorePadTriggerA(WPAD_CHAN0);
+    return MR::isPressedJump(PLAYER_1);
 }
 
 bool SphereAccelSensorController::doBrake() const {
@@ -76,10 +69,10 @@ void SphereAccelSensorController::update(const TVec3f&) {
 }
 
 void SphereAccelSensorController::clacXY(f32* pX, f32* pY) {
-    f32 accelMargine = isCorePad() ? MR::toRadian(::sCoreAccelDegreMargine) : MR::toRadian(::sSubAccelDegreMargine);
-    f32 accelRange = isCorePad() ? MR::toRadian(::sCoreAccelDegreeRange) : MR::toRadian(::sSubAccelDegreeRange);
-    f32 accelRangeY = isCorePad() ? MR::toRadian(::sCoreAccelDegreeRangeY) : MR::toRadian(::sSubAccelDegreeRangeY);
-    f32 baseAngleYZ = isCorePad() ? MR::toRadian(::sCoreBaseDegreeYZ) : MR::toRadian(::sSubBaseDegreeYZ);
+    f32 accelMargine = isMainHand() ? MR::toRadian(::sCoreAccelDegreMargine) : MR::toRadian(::sSubAccelDegreMargine);
+    f32 accelRange = isMainHand() ? MR::toRadian(::sCoreAccelDegreeRange) : MR::toRadian(::sSubAccelDegreeRange);
+    f32 accelRangeY = isMainHand() ? MR::toRadian(::sCoreAccelDegreeRangeY) : MR::toRadian(::sSubAccelDegreeRangeY);
+    f32 baseAngleYZ = isMainHand() ? MR::toRadian(::sCoreBaseDegreeYZ) : MR::toRadian(::sSubBaseDegreeYZ);
 
     TVec3f padAccel;
     getPadAcceleration(&padAccel);

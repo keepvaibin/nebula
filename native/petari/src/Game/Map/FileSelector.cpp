@@ -1,9 +1,7 @@
 #include "Game/Map/FileSelector.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/FileSelectCameraController.hpp"
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
-#endif
 #include "Game/Map/FileSelectEffect.hpp"
 #include "Game/Map/FileSelectFunc.hpp"
 #include "Game/Map/FIleSelectItem.hpp"
@@ -28,7 +26,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -40,16 +38,14 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <nw4r/ut/ResFont.h>
-#ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Screen/NebulaQuitButton.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/NebulaHost.hpp"
-#endif
 
 #define USER_FILE_NUM 6
 
@@ -91,9 +87,9 @@ namespace NrvFileSelector {
     NEW_NERVE(FileSelectorNrvWaitBind, FileSelector, WaitBind);
     NEW_NERVE(FileSelectorNrvTitle, FileSelector, Title);
     NEW_NERVE(FileSelectorNrvTitleEnd, FileSelector, TitleEnd);
-    NEW_NERVE(FileSelectorNrvRFLError, FileSelector, RFLError);
-    NEW_NERVE(FileSelectorNrvRFLWait, FileSelector, RFLWait);
-    NEW_NERVE(FileSelectorNrvRFLWaitEnd, FileSelector, RFLWaitEnd);
+    NEW_NERVE(FileSelectorNrvMiiDataError, FileSelector, MiiDataError);
+    NEW_NERVE(FileSelectorNrvMiiDataWait, FileSelector, MiiDataWait);
+    NEW_NERVE(FileSelectorNrvMiiDataWaitEnd, FileSelector, MiiDataWaitEnd);
     NEW_NERVE(FileSelectorNrvFileSelectStart, FileSelector, FileSelectStart);
     NEW_NERVE(FileSelectorNrvFileSelect, FileSelector, FileSelect);
     NEW_NERVE(FileSelectorNrvFileConfirmStart, FileSelector, FileConfirmStart);
@@ -137,20 +133,12 @@ namespace NrvFileSelector {
     NEW_NERVE(FileSelectorNrvManual, FileSelector, Manual);
 };  // namespace NrvFileSelector
 
-void FileSelector_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)PI;
-}
-
 FileSelector::FileSelector(const char* pName)
     : LiveActor(pName), mCameraController(), mSky(), mItems(), mOperationButton(), mBackButton(), mBrosButton(), mInfoMessage(), mSysInfoWindow(),
-      _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new RFLCreateID()), mManual(), mIsMiiSelectStartFirst(),
+      _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new MiiCreateID()), mManual(), mIsMiiSelectStartFirst(),
       mBgmState(), mSelectEffect()
-#ifdef TARGET_PC
       ,
       mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mIsQuitFocusWanted(false)
-#endif
 {
 }
 
@@ -168,9 +156,7 @@ void FileSelector::init(const JMapInfoIter& rIter) {
     createBrosButton();
     createInfoMessage();
     createSysInfoWindow();
-#ifdef TARGET_PC
     createQuitButton();
-#endif
     createFileInfo();
     createTitle();
     createMiiSelect();
@@ -179,9 +165,6 @@ void FileSelector::init(const JMapInfoIter& rIter) {
     createSelectEffect();
     initNerve(GET_NERVE(FileSelector, FileSelectorNrvWaitBind));
     MR::tryRegisterDemoCast(this, rIter);
-#if (VERSION == RMGK01)
-    createMiiFont();
-#endif
     appear();
 }
 
@@ -256,9 +239,7 @@ void FileSelector::control() {
     }
 
     updateBgm();
-#ifdef TARGET_PC
     updateQuitButton();
-#endif
 }
 
 bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -354,16 +335,13 @@ void FileSelector::createInfoMessage() {
 void FileSelector::createSysInfoWindow() {
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayout(mSysInfoWindow);
-#ifdef TARGET_PC
     // Its questions (create, copy, delete) come from choosing a file: B goes back, as the Back button does.
     mSysInfoWindow->setBackAnswersNo(true);
-#endif
 
     mSysInfoWindowMini = MR::createSysInfoWindowMiniExecuteWithChildren();
     MR::connectToSceneLayout(mSysInfoWindowMini);
 }
 
-#ifdef TARGET_PC
 void FileSelector::createQuitButton() {
     mQuitButton = new NebulaQuitButton("NebulaQuitButton");
     mQuitButton->initWithoutIter();
@@ -424,10 +402,10 @@ void FileSelector::offerFilesToMenuFocus() {
 // The quit question; true while it holds the file select.
 bool FileSelector::updateQuitQuestion() {
     if (mQuitFrames >= 0) {
-        // The picture and sound fade as the cutscene skip's do; then the game's own way out (the HOME Menu's Wii
-        // Menu), its screen already black.
+        // The picture and sound fade as the cutscene skip's do; then the game's own way out, its screen already
+        // black.
         if (++mQuitFrames >= 2 && !MR::isSystemWipeActive()) {
-            GameSystemFunction::requestGoWiiMenu(true);
+            GameSystemFunction::requestQuitGame(true);
         }
         return true;
     }
@@ -469,10 +447,9 @@ bool FileSelector::updateQuitQuestion() {
     MR::activeStarPointerGuidance();
     return false;
 }
-#endif
 
 void FileSelector::createFileInfo() {
-    mFileInfo = new FileSelectInfo(RFL_NAME_LEN + 1, "\203\164\203\100\203\103\203\213\217\356\225\361" /* ファイル情報 */);
+    mFileInfo = new FileSelectInfo(MII_NAME_LEN + 1, "\203\164\203\100\203\103\203\213\217\356\225\361" /* ファイル情報 */);
     mFileInfo->initWithoutIter();
 }
 
@@ -492,17 +469,6 @@ void FileSelector::createMiiConfirmIcon() {
     MR::connectToScene(mMiiConfirmIcon, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_LayoutDecoration);
 }
 
-#if (VERSION == RMGK01)
-void FileSelector::createMiiFont() {
-    JKRMemArchive* pArchive = MR::receiveArchive("/LayoutData/MiiFont.arc");
-    mFont = new nw4r::ut::ResFont();
-    mFont->SetResource(pArchive->getResource("/MiiFont26.brfnt"));
-    mFont->SetAlternateChar('?');
-    MR::setTextBoxFontRecursive(mFileInfo, "FileName", mFont);
-    MR::setTextBoxFontRecursive(mMiiSelect, "TxtName", mFont);
-    MR::setTextBoxFontRecursive(mMiiConfirmIcon, "MiiName", mFont);
-}
-#endif
 
 void FileSelector::createManual() {
     mManual = new Manual2P("\202\121\202\157\203\175\203\152\203\205\203\101\203\213" /* ２Ｐマニュアル */);
@@ -644,11 +610,9 @@ void FileSelector::onPoint(FileSelectItem* pItem) {
         return;
     }
 
-#ifdef TARGET_PC
     if (mQuitButton->isPointing()) {
         return;
     }
-#endif
 
     if (_C0 != nullptr) {
         if (_C0->_140 > pItem->_140) {
@@ -688,7 +652,7 @@ void FileSelector::clearPointing() {
 }
 
 namespace {
-    inline OSTime getUserFileLastModified(const FileSelector* pSelector, s32 id) {
+    inline NebulaCalendar::SaveTime getUserFileLastModified(const FileSelector* pSelector, s32 id) {
         return pSelector->mUserFile[id - 1].getLastModified();
     }
 
@@ -718,9 +682,9 @@ namespace {
 
 void FileSelector::setFileInfo(s32 id) {
     NebulaCalendar::Date date;
-    u16 nameBuffer[RFL_NAME_LEN + 1];
-    wchar_t dateBuffer[32];
-    wchar_t timeBuffer[32];
+    u16 nameBuffer[MII_NAME_LEN + 1];
+    char16_t dateBuffer[32];
+    char16_t timeBuffer[32];
 
     if (static_cast< FileSelectItem* >(mItems->getActor(::getItemArrayIndex(id)))->_146) {
         FileSelectFunc::copyMiiName(nameBuffer, FileSelectIconID());
@@ -823,8 +787,6 @@ namespace {
     };
 };  // namespace
 
-#pragma push
-#pragma opt_prelinearize off
 void FileSelector::calcBasePos(f32 offset) {
     f32 thetaStep = 2.0f * PI / USER_FILE_NUM;
     TPos3f translationMtx;
@@ -849,7 +811,6 @@ void FileSelector::calcBasePos(f32 offset) {
         transform.mult(_98[i], _98[i]);
     }
 }
-#pragma pop
 
 namespace {
     inline void initFileItem(FileSelector* pSelector, FileSelectItem* pItem) {
@@ -860,7 +821,7 @@ namespace {
         }
 
         u32 tempIconId;
-        RFLCreateID tempMiiId;
+        MiiCreateID tempMiiId;
         FileSelectIconID iconId = FileSelectIconID();
 
         if (pSelector->mUserFile[id - 1].getIconId(&tempIconId)) {
@@ -910,12 +871,12 @@ FileSelectIconID::EFellowID FileSelector::getUserFileFellowID(s32 id) const {
 }
 
 bool FileSelector::isUserFileMiiIdValid(s32 id) const {
-    RFLCreateID createId;
+    MiiCreateID createId;
     u16 index;
 
     if (mUserFile[id - 1].getMiiId(&createId)) {
-        if (RFLSearchOfficialData(&createId, &index) == TRUE) {
-            return RFLIsAvailableOfficialData(index) == TRUE;
+        if (MiiSearchOfficialData(&createId, &index) == TRUE) {
+            return MiiIsAvailableOfficialData(index) == TRUE;
         }
     }
 
@@ -923,11 +884,11 @@ bool FileSelector::isUserFileMiiIdValid(s32 id) const {
 }
 
 u16 FileSelector::getUserFileMiiIndex(s32 id) const {
-    RFLCreateID createId;
+    MiiCreateID createId;
     u16 index;
 
     if (mUserFile[id - 1].getMiiId(&createId)) {
-        if (RFLSearchOfficialData(&createId, &index)) {
+        if (MiiSearchOfficialData(&createId, &index)) {
             return index;
         }
     }
@@ -959,7 +920,7 @@ bool FileSelector::isUserFileLuigi(s32 id) const {
     return !mUserFile[id].mIsPlayerMario;
 }
 
-void FileSelector::setUserFileMario(s32 id, bool isMario) NO_INLINE {
+void FileSelector::setUserFileMario(s32 id, bool isMario) {
     id--;
 
     mUserFile[id].mIsPlayerMario = isMario;
@@ -978,18 +939,18 @@ void FileSelector::storeSetMiiIdUserFile(s32 id, const FileSelectIconID& rIconId
     GameSequenceFunction::startSaveAllUserFileSequence();
 }
 
-void FileSelector::getMiiId(RFLCreateID* pCreateId, const FileSelectIconID& rIconId) const {
-    RFLAdditionalInfo additionalInfo;
+void FileSelector::getMiiId(MiiCreateID* pCreateId, const FileSelectIconID& rIconId) const {
+    MiiAdditionalInfo additionalInfo;
     u16 index = rIconId.getMiiIndex();
 
-    if (RFLGetAdditionalInfo(&additionalInfo, RFLDataSource_Official, nullptr, index) == RFLErrcode_Success) {
+    if (MiiGetAdditionalInfo(&additionalInfo, MiiDataSource_Official, nullptr, index) == MiiErrcode_Success) {
         *pCreateId = additionalInfo.createID;
     }
 }
 
 void FileSelector::getIconId(FileSelectIconID* pIconId, s32 id) const {
     u32 iconId;
-    RFLCreateID miiId;
+    MiiCreateID miiId;
 
     if (mUserFile[id - 1].getIconId(&iconId)) {
         FileSelectIconID::EFellowID fellowId = getUserFileFellowID(id);
@@ -1013,7 +974,7 @@ s32 FileSelector::getMissCount(s32 id) const {
 }
 
 void FileSelector::playSelectedME() {
-    switch (MR::getRandom(0L, 4L)) {
+    switch (MR::getRandom(0, 4)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_SELECT1");
         break;
@@ -1029,14 +990,6 @@ void FileSelector::playSelectedME() {
     default:
         break;
     }
-}
-
-void FileSelector_FORCE_MATCH() {
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL1");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL2");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL3");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL4");
-    MR::startSystemME("ME_ASTRO_DOME_CALCEL5");
 }
 
 void FileSelector::updateBgm() {
@@ -1084,12 +1037,12 @@ void FileSelector::exeTitle() {
 
     if (::getMiiFacePartsHolder()->isInitEnd()) {
         if (::getMiiFacePartsHolder()->isError()) {
-            setNerve(GET_NERVE(FileSelector, FileSelectorNrvRFLError));
+            setNerve(GET_NERVE(FileSelector, FileSelectorNrvMiiDataError));
         } else {
             setNerve(GET_NERVE(FileSelector, FileSelectorNrvTitleEnd));
         }
     } else {
-        setNerve(GET_NERVE(FileSelector, FileSelectorNrvRFLWait));
+        setNerve(GET_NERVE(FileSelector, FileSelectorNrvMiiDataWait));
     }
 }
 
@@ -1111,9 +1064,9 @@ void FileSelector::exeTitleEnd() {
     }
 }
 
-void FileSelector::exeRFLError() {
+void FileSelector::exeMiiDataError() {
     if (MR::isFirstStep(this)) {
-        mSysInfoWindow->appear("RFL_02", SysInfoWindow::Type_Key, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
+        mSysInfoWindow->appear("MII_02", SysInfoWindow::Type_Key, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
     }
 
     if (MR::isDead(mSysInfoWindow)) {
@@ -1121,9 +1074,9 @@ void FileSelector::exeRFLError() {
     }
 }
 
-void FileSelector::exeRFLWait() {
+void FileSelector::exeMiiDataWait() {
     if (MR::isFirstStep(this)) {
-        mSysInfoWindowMini->appear("RFL_01", SysInfoWindow::Type_Blocking, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
+        mSysInfoWindowMini->appear("MII_01", SysInfoWindow::Type_Blocking, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
     }
 
     if (!::getMiiFacePartsHolder()->isInitEnd()) {
@@ -1134,10 +1087,10 @@ void FileSelector::exeRFLWait() {
         return;
     }
 
-    setNerve(GET_NERVE(FileSelector, FileSelectorNrvRFLWaitEnd));
+    setNerve(GET_NERVE(FileSelector, FileSelectorNrvMiiDataWaitEnd));
 }
 
-void FileSelector::exeRFLWaitEnd() {
+void FileSelector::exeMiiDataWaitEnd() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindowMini->disappear();
     }
@@ -1160,19 +1113,15 @@ void FileSelector::exeFileSelectStart() {
 
 void FileSelector::exeFileSelect() {
     if (MR::isFirstStep(this)) {
-#ifdef TARGET_PC
         NebulaHost::presence(nullptr, nullptr, -1);  // Discord: choosing a file
-#endif
         validateSelectAll();
         appearAllIndex();
         MR::activeStarPointerGuidance();
     } else {
-#ifdef TARGET_PC
         if (updateQuitQuestion()) {
             return;
         }
         offerFilesToMenuFocus();
-#endif
         updateFileInfo();
     }
 
@@ -1309,7 +1258,7 @@ void FileSelector::exeDemo() {
         return;
     }
 
-    wchar_t name[RFL_NAME_LEN + 1];
+    char16_t name[MII_NAME_LEN + 1];
     FileSelectIconID iconId = FileSelectIconID();
 
     getIconId(&iconId, _B4->_140);
@@ -1317,11 +1266,11 @@ void FileSelector::exeDemo() {
     if (iconId.isMii()) {
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), iconId);
     } else if (isUserFileLuigi(_B4->_140)) {
-        const wchar_t* pMessage = MR::getGameMessageDirect(::cLuigiNameMessageID);
+        const char16_t* pMessage = MR::getGameMessageDirect(::cLuigiNameMessageID);
 
         MR::copyString(name, pMessage, ARRAY_SIZE(name));
     } else {
-        const wchar_t* pMessage = MR::getGameMessageDirect(::cMarioNameMessageID);
+        const char16_t* pMessage = MR::getGameMessageDirect(::cMarioNameMessageID);
 
         MR::copyString(name, pMessage, ARRAY_SIZE(name));
     }
@@ -1348,10 +1297,8 @@ void FileSelector::exeCreateConfirm() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->appear("System_FileSelect001", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_NEW_FILE", "SE_SY_TALK_SELECT_NO");
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
@@ -1416,9 +1363,7 @@ void FileSelector::exeCopySelect() {
     }
 
     MR::requestFileSelectCopyGuidance();
-#ifdef TARGET_PC
     offerFilesToMenuFocus();
-#endif
     updateFileInfo();
 
     if (mBackButton->isPointing()) {
@@ -1434,11 +1379,6 @@ void FileSelector::exeCopySelect() {
     mSelectEffect[::getItemArrayIndex(_B8->_140)].disappear();
     mInfoMessage->disappear();
     MR::deactiveStarPointerGuidance();
-#if (VERSION == RMGK01)
-    setFileInfo(_B4->_140);
-    mFileInfo->appear();
-    mFileInfo->forceChange();
-#endif
     setNerve(GET_NERVE(FileSelector, FileSelectorNrvFileConfirmStart));
 }
 
@@ -1470,10 +1410,8 @@ void FileSelector::exeCopyConfirm() {
 
         mSysInfoWindow->setTextBoxArgNumber(_B8->_140, 0);
         mSysInfoWindow->setTextBoxArgNumber(_B4->_140, 1);
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
@@ -1515,7 +1453,7 @@ void FileSelector::exeCopySave() {
 
 void FileSelector::exeCopySaveMii() {
     if (MR::isFirstStep(this)) {
-        RFLCreateID createId;
+        MiiCreateID createId;
 
         if (_B4->_146 && mUserFile[_B4->_140 - 1].getMiiId(&createId)) {
             GameSequenceFunction::storeMiiOrIconIdUserFileSequence(_B4->_140, &createId, nullptr);
@@ -1708,17 +1646,15 @@ void FileSelector::exeMiiConfirm() {
                                    SysInfoWindow::MessageType_System);
         }
 
-        u16 name[RFL_NAME_LEN + 1];
+        u16 name[MII_NAME_LEN + 1];
         FileSelectIconID iconId = FileSelectIconID();
 
         mMiiSelect->getSelectedID(&iconId);
         FileSelectFunc::copyMiiName(name, iconId);
-        mMiiConfirmIcon->appear(mMiiSelect->getSelectedMiiTexMap(), reinterpret_cast< wchar_t* >(name));
+        mMiiConfirmIcon->appear(mMiiSelect->getSelectedMiiTexMap(), reinterpret_cast< char16_t* >(name));
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_MII_CHANGE", "SE_SY_TALK_SELECT_NO");
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!mMiiConfirmIcon->isDisappear() && mSysInfoWindow->isDisappear()) {
@@ -1837,10 +1773,8 @@ void FileSelector::exeDeleteConfirm() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_DELETE", "SE_SY_TALK_SELECT_NO");
         mSysInfoWindow->appear("System_FileSelect007", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
-#ifdef TARGET_PC
         // Yes saves, under the game's Saving... window.
         mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {

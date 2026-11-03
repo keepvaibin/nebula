@@ -14,16 +14,14 @@ public:
 
     void createScreenAlpha(s32, f32);
     void captureScreenAlpha(s32);
-    void loadScreenTexture(s32, GXTexMapID);
     JUTTexture* getTexture(s32);
 
 private:
-    /* 0x0C */ JUTTexture* mTexture[5];
+    JUTTexture* mTexture[5];
 };
 
 namespace MR {
     void createScreenAlphaSceneObj(s32, f32);
     void captureScreenAlpha(s32);
-    void loadScreenAlphaTexture(s32, GXTexMapID);
     JUTTexture* getScreenAlphaTexture(s32);
 };  // namespace MR

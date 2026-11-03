@@ -27,10 +27,18 @@ std::string code_of(const Facts& facts) { return classify(facts).code; }
 }  // namespace
 
 int main() {
+    expect(galaxy::crash::translated("The game crashed", "EuGerman") == "Das Spiel ist abgest\xC3\xBCrzt", "a row in a language");
+    expect(galaxy::crash::translated("The game crashed", "UsEnglish") == "The game crashed", "English is the words given");
+    expect(galaxy::crash::translated("no such row", "EuGerman") == "no such row", "no row: the words given");
+    expect(galaxy::crash::translated("The game crashed", "Klingon") == "The game crashed", "no such folder: the words given");
+    expect(galaxy::crash::translated_report("NEB-C01: The game crashed\n\nsome detail\n\nNebula crashed", "EuItalian") ==
+               "NEB-C01: Il gioco si \xC3\xA8 bloccato\n\nsome detail\n\nNebula si \xC3\xA8 bloccato",
+           "a report keeps its code and its details");
+
     Facts fault;
     fault.kind = Facts::Kind::Fault;
     fault.in_game = true;
-    fault.text = "exception 0xC0000005 at smg_game.dll+0x1234";
+    fault.text = "exception 0x40000005 at smg_game.dll+0x1234";
     expect(code_of(fault) == "NEB-C01", "a crash in the game's code");
 
     Facts overflow = fault;
@@ -75,11 +83,11 @@ int main() {
 
     Facts gpu;
     gpu.kind = Facts::Kind::Startup;
-    gpu.text = "renderer: [RendererD3D12] Present HRESULT=0x887A0005";
+    gpu.text = "renderer: [RendererD3D12] Present HRESULT=887A0005";
     expect(code_of(gpu) == "NEB-G01", "the graphics card was lost mid-game");
     Facts renderer;
     renderer.kind = Facts::Kind::Exception;
-    renderer.text = "[RendererD3D12] CreateCommittedResource HRESULT=0x80070057";
+    renderer.text = "[RendererD3D12] CreateCommittedResource HRESULT=0x40070057";
     expect(code_of(renderer) == "NEB-G02", "another renderer error");
     Facts memory;
     memory.kind = Facts::Kind::Exception;
@@ -106,7 +114,7 @@ int main() {
     expect(startup("the renderer did not start: no adapter") == "NEB-S04", "no renderer");
     expect(startup("the settings did not load: bad value") == "NEB-S05", "settings");
     expect(startup("unknown option --x") == "NEB-S06", "options");
-    expect(startup("a GX span does not continue the last") == "NEB-N04", "another startup stop");
+    expect(startup("a span does not continue the last") == "NEB-N04", "another startup stop");
 
     // The disc thread's note and the activity of this thread.
     char line[256];
@@ -120,7 +128,7 @@ int main() {
     expect(current_activity(file, sizeof(file)) == Activity::None && file[0] == '\0', "no activity");
     {
         ScopedActivity activity(Activity::Movie, "C:/m/PrologueA.mp4");
-        expect(current_activity(file, sizeof(file)) == Activity::Movie && std::string(file) == "C:/m/PrologueA.mp4",
+        expect(current_activity(file, sizeof(file)) == Activity::Movie && std::string(file) == "PrologueA.mp4",
                "the thread's activity");
         Activity other = Activity::TexturePack;
         std::thread([&] { other = current_activity(nullptr, 0); }).join();
@@ -130,11 +138,11 @@ int main() {
 
     set_session_mods("  Kaizo (Riivolution, game files)\n", true);
     char text[2048];
-    const std::size_t length = format_report(named, "exception 0xC0000005", text, sizeof(text));
+    const std::size_t length = format_report(named, "exception 0x40000005", text, sizeof(text));
     const std::string report(text, length);
     expect(report.starts_with("NEB-M02: A mod's file crashed the game\n"), "the report's first line");
     expect(report.find("Mods this session:\n  Kaizo (Riivolution, game files)") != std::string::npos, "the mods");
-    expect(report.find("Technical details:\nexception 0xC0000005") != std::string::npos, "the technical line");
+    expect(report.find("Technical details:\nexception 0x40000005") != std::string::npos, "the technical line");
     char tiny[8];
     expect(format_report(named, "", tiny, sizeof(tiny)) == 7u && tiny[7] == '\0', "a short buffer is cut");
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class JPABaseEmitter;
 
@@ -14,7 +13,7 @@ public:
     void pauseOn();
     void pauseOff();
     bool isValid() const;
-    bool isContinuousParticle() const NO_INLINE;
+    bool isContinuousParticle() const;
 
     // In MultiEmitterAccess
     void setGlobalRotation(const TVec3s&);
@@ -23,7 +22,7 @@ public:
     void setGlobalPrmColor(u8, u8, u8);
     void setGlobalEnvColor(u8, u8, u8);
 
-    /* 0x0 */ JPABaseEmitter* mEmitter;
-    /* 0x4 */ bool mPaused;
-    /* 0x5 */ bool mStopped;  // Not sure if it is stopped, but good chance it is.
+    JPABaseEmitter* mEmitter;
+    bool mPaused;
+    bool mStopped;  // Not sure if it is stopped, but good chance it is.
 };

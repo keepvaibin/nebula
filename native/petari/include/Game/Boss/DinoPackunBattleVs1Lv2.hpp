@@ -29,6 +29,6 @@ public:
     void exeAttackHit();
     void exeDamage();
 
-    /* 0x14 */ DinoPackunStateDamage* mStateDamage;
-    /* 0x18 */ bool _18;
+    DinoPackunStateDamage* mStateDamage;
+    bool _18;
 };

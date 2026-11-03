@@ -1,7 +1,6 @@
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/GalaxyMapBackground.hpp"
@@ -12,7 +11,7 @@
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/System/NebulaText.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -29,8 +28,7 @@
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/lyt/window.h>
 #include <nw4r/ut/Font.h>
-#include <revolution/gx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
 
@@ -106,7 +104,7 @@ namespace {
     const u32 cFocus = 0xFFFFFFFF;
     const u32 cWhite = 0xFFFFFFFF;
     const u32 cTextShadow = 0x00000070;
-    const u32 cSubText = 0xD2DCFFFF;
+    const u32 cSubText = NEBULA_RGBA(0xD2, 0xDC, 0xFF, 0xFF);
     const u32 cLockedText = 0xA6AED6FF;
     const u32 cLockedSubText = 0x7E88B8FF;
     const u32 cGold = 0xFFD860FF;
@@ -131,51 +129,51 @@ namespace {
 
 
     // A whole number, at least `digits` long (the game's wide characters are 16-bit everywhere: no swprintf).
-    void formatInt(wchar_t* pDst, s32 capacity, s32 value, s32 digits) {
+    void formatInt(char16_t* pDst, s32 capacity, s32 value, s32 digits) {
         char text[16];
-        snprintf(text, sizeof(text), "%0*d", digits, value);
+        nebula_snprintf(text, sizeof(text), "%0*d", digits, value);
         s32 i = 0;
         for (; text[i] != 0 && i + 1 < capacity; i++) {
-            pDst[i] = static_cast< wchar_t >(text[i]);
+            pDst[i] = static_cast< char16_t >(text[i]);
         }
         pDst[i] = 0;
     }
 
     // A number with its digits grouped by threes, as the language writes them (NebulaText's DigitGroup).
-    void formatNumber(wchar_t* pDst, s32 capacity, u64 value) {
+    void formatNumber(char16_t* pDst, s32 capacity, u64 value) {
         char digits[24];
-        snprintf(digits, sizeof(digits), "%llu", static_cast< unsigned long long >(value));
-        wchar_t group[4];
+        nebula_snprintf(digits, sizeof(digits), "%llu", static_cast< unsigned long long >(value));
+        char16_t group[4];
         NebulaText::get(group, 4, "DigitGroup");
         const s32 count = static_cast< s32 >(strlen(digits));
-        wchar_t* p = pDst;
-        wchar_t* pEnd = pDst + capacity;
+        char16_t* p = pDst;
+        char16_t* pEnd = pDst + capacity;
         for (s32 i = 0; i < count && p + 1 < pEnd; i++) {
             if (i > 0 && (count - i) % 3 == 0) {
                 p = append(p, pEnd, group);
             }
-            *p++ = static_cast< wchar_t >(digits[i]);
+            *p++ = static_cast< char16_t >(digits[i]);
         }
         *p = 0;
     }
 
     // NebulaText's `pId` with its {name} tokens replaced.
-    void fill(wchar_t* pDst, s32 capacity, const char* pId, const char* const* pNames, const wchar_t* const* pValues, s32 count) {
-        wchar_t pattern[128];
+    void fill(char16_t* pDst, s32 capacity, const char* pId, const char* const* pNames, const char16_t* const* pValues, s32 count) {
+        char16_t pattern[128];
         NebulaText::get(pattern, 128, pId);
-        wchar_t* p = pDst;
-        wchar_t* pEnd = pDst + capacity;
+        char16_t* p = pDst;
+        char16_t* pEnd = pDst + capacity;
         *p = 0;
-        for (const wchar_t* s = pattern; *s != 0;) {
+        for (const char16_t* s = pattern; *s != 0;) {
             bool replaced = false;
-            if (*s == L'{') {
+            if (*s == u'{') {
                 for (s32 i = 0; i < count && !replaced; i++) {
                     const char* pName = pNames[i];
                     s32 n = 0;
-                    while (pName[n] != 0 && s[1 + n] == static_cast< wchar_t >(pName[n])) {
+                    while (pName[n] != 0 && s[1 + n] == static_cast< char16_t >(pName[n])) {
                         n++;
                     }
-                    if (pName[n] == 0 && s[1 + n] == L'}') {
+                    if (pName[n] == 0 && s[1 + n] == u'}') {
                         p = append(p, pEnd, pValues[i]);
                         s += n + 2;
                         replaced = true;
@@ -192,22 +190,22 @@ namespace {
         }
     }
 
-    void formatDate(wchar_t* pDst, s32 capacity, s32 date) {
-        wchar_t y[8], m[4], d[4];
+    void formatDate(char16_t* pDst, s32 capacity, s32 date) {
+        char16_t y[8], m[4], d[4];
         formatInt(y, 8, date / 10000, 1);
         formatInt(m, 4, date / 100 % 100, 2);
         formatInt(d, 4, date % 100, 2);
         const char* const names[] = {"y", "m", "d"};
-        const wchar_t* const values[] = {y, m, d};
+        const char16_t* const values[] = {y, m, d};
         fill(pDst, capacity, "DateFormat", names, values, 3);
     }
 
-    void formatCount(wchar_t* pDst, s32 capacity, s32 current, s32 goal) {
-        wchar_t n[16], total[16];
+    void formatCount(char16_t* pDst, s32 capacity, s32 current, s32 goal) {
+        char16_t n[16], total[16];
         formatNumber(n, 16, static_cast< u64 >(current));
         formatNumber(total, 16, static_cast< u64 >(goal));
         const char* const names[] = {"n", "total"};
-        const wchar_t* const values[] = {n, total};
+        const char16_t* const values[] = {n, total};
         fill(pDst, capacity, "BoardCount", names, values, 2);
     }
 
@@ -225,7 +223,7 @@ namespace {
         TextBox* mMeta;
         Window* mTrack;
         Window* mBar;
-        wchar_t mHintText[192];  // what the player did (shown unlocked), or the locked line
+        char16_t mHintText[192];  // what the player did (shown unlocked), or the locked line
         bool mUnlocked;
         s32 mDate;
         s32 mCurrent;
@@ -548,7 +546,7 @@ namespace {
         }
 
         // The empty list's line.
-        wchar_t empty[96] = {0};
+        char16_t empty[96] = {0};
         if (p->mTab != TabStats && p->mShownNum == 0) {
             NebulaText::get(empty, 96, p->mFilterMode == FilterLocked ? "BoardEmptyLocked" : "BoardEmptyUnlocked");
         }
@@ -577,7 +575,7 @@ namespace {
             x += rChip.mWidth + cTabGap;
         }
         // The tab's count at the row's right: how many of its achievements are unlocked (the header has All's).
-        wchar_t count[48] = {0};
+        char16_t count[48] = {0};
         if (p->mTab != TabAll && p->mTab != TabStats) {
             s32 unlocked = 0;
             s32 total = 0;
@@ -857,10 +855,10 @@ namespace {
 
     // The pointer in board units; false when it is off the screen.
     bool readPointer(NebulaBoardParts* p, f32* pX, f32* pY) {
-        if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+        if (!MR::isStarPointerInScreen(PLAYER_1)) {
             return false;
         }
-        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0);
+        TVec2f screen = MR::getStarPointerScreenPositionOrEdge(PLAYER_1);
         TVec2f layout;
         MR::convertScreenPosToLayoutPos(&layout, screen);
         *pX = layout.x / p->mScaleX;
@@ -1037,7 +1035,7 @@ namespace {
             }
         }
 
-        if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
+        if (MR::isPressedJump(PLAYER_1)) {
             if (p->mOverBack) {
                 return true;
             }
@@ -1055,7 +1053,7 @@ namespace {
             }
         }
         if (p->mDragging) {
-            if (!MR::testCorePadButtonA(WPAD_CHAN0)) {
+            if (!MR::isHeldJump(PLAYER_1)) {
                 p->mDragging = false;
             } else {
                 const f32 delta = y - p->mDragStartY;
@@ -1164,7 +1162,7 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     }
     paint(p->mSummaryTrack, cTrack, cTrack);
     paint(p->mSummaryBar, cGold, cGoldTop);
-    wchar_t text[192];
+    char16_t text[192];
     NebulaText::get(text, 64, "BoardTitle");
     setText(p->mTitle, text);
     setText(p->mTitleShadow, text);
@@ -1176,7 +1174,7 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     static const char* const cTabIds[TabNum] = {"TabAll", "TabStory", "TabChallenges", "TabExtras", "TabStats"};
     for (s32 i = 0; i < TabNum; i++) {
         char name[17];
-        snprintf(name, sizeof(name), "NbTab%d", i);
+        nebula_snprintf(name, sizeof(name), "NbTab%d", i);
         if (!makeChip(p, pBoard, &p->mTabs[i], name, false)) {
             p->mBoard = nullptr;
             return;
@@ -1187,7 +1185,7 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     static const char* const cFilterIds[FilterNum] = {"FilterAll", "FilterUnlocked", "FilterLocked"};
     for (s32 i = 0; i < FilterNum; i++) {
         char name[17];
-        snprintf(name, sizeof(name), "NbFlt%d", i);
+        nebula_snprintf(name, sizeof(name), "NbFlt%d", i);
         if (!makeChip(p, pBoard, &p->mFilters[i], name, false)) {
             p->mBoard = nullptr;
             return;
@@ -1215,39 +1213,39 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     for (s32 i = 0; i < p->mCardNum; i++) {
         Card& rCard = p->mCards[i];
         char name[17];
-        snprintf(name, sizeof(name), "NbC%02d", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02d", i);
         rCard.mRoot = makeGroup(p->mList, name);
         if (rCard.mRoot == nullptr) {
             p->mCardNum = i;
             break;
         }
-        snprintf(name, sizeof(name), "NbC%02dF", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dF", i);
         rCard.mFocus = makeWindow(p, rCard.mRoot, name);
-        snprintf(name, sizeof(name), "NbC%02dS", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dS", i);
         rCard.mShadow = makeWindow(p, rCard.mRoot, name);
-        snprintf(name, sizeof(name), "NbC%02dB", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dB", i);
         rCard.mBody = makeWindow(p, rCard.mRoot, name);
-        snprintf(name, sizeof(name), "NbC%02dI", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dI", i);
         rCard.mBadge = makeWindow(p, rCard.mRoot, name);
-        snprintf(name, sizeof(name), "NbC%02dY", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dY", i);
         rCard.mGlyph = makeText(p, rCard.mRoot, name, 8);
         const NebulaAchievementIcon* pIcon = NebulaAchievements::getIcon(i);
         const s32 texture = pIcon != nullptr && pIcon->mGlyph == 0 ? NebulaAchievements::findIconTexture(pIcon) : -1;
         if (texture >= 0) {
-            snprintf(name, sizeof(name), "NbC%02dP", i);
+            nebula_snprintf(name, sizeof(name), "NbC%02dP", i);
             rCard.mPicture = makePicture(rCard.mRoot, name, p->mTextures[texture]);
         }
-        snprintf(name, sizeof(name), "NbC%02dn", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dn", i);
         rCard.mNameShadow = makeText(p, rCard.mRoot, name, 96);
-        snprintf(name, sizeof(name), "NbC%02dN", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dN", i);
         rCard.mName = makeText(p, rCard.mRoot, name, 96);
-        snprintf(name, sizeof(name), "NbC%02dH", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dH", i);
         rCard.mHint = makeText(p, rCard.mRoot, name, 256);
-        snprintf(name, sizeof(name), "NbC%02dM", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dM", i);
         rCard.mMeta = makeText(p, rCard.mRoot, name, 48);
-        snprintf(name, sizeof(name), "NbC%02dT", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dT", i);
         rCard.mTrack = makeWindow(p, rCard.mRoot, name);
-        snprintf(name, sizeof(name), "NbC%02dR", i);
+        nebula_snprintf(name, sizeof(name), "NbC%02dR", i);
         rCard.mBar = makeWindow(p, rCard.mRoot, name);
         if (rCard.mFocus == nullptr || rCard.mShadow == nullptr || rCard.mBody == nullptr || rCard.mBadge == nullptr ||
             rCard.mGlyph == nullptr || rCard.mNameShadow == nullptr || rCard.mName == nullptr || rCard.mHint == nullptr ||
@@ -1272,7 +1270,7 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
 
     for (s32 i = 0; i < 2; i++) {
         char name[17];
-        snprintf(name, sizeof(name), "NbSec%d", i);
+        nebula_snprintf(name, sizeof(name), "NbSec%d", i);
         p->mSections[i] = makeText(p, p->mList, name, 64);
         if (p->mSections[i] == nullptr) {
             p->mBoard = nullptr;
@@ -1285,31 +1283,31 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     for (s32 i = 0; i < StatNum; i++) {
         Tile& rTile = p->mTiles[i];
         char name[17];
-        snprintf(name, sizeof(name), "NbS%02d", i);
+        nebula_snprintf(name, sizeof(name), "NbS%02d", i);
         rTile.mRoot = makeGroup(p->mList, name);
         if (rTile.mRoot == nullptr) {
             p->mBoard = nullptr;
             return;
         }
-        snprintf(name, sizeof(name), "NbS%02dB", i);
+        nebula_snprintf(name, sizeof(name), "NbS%02dB", i);
         rTile.mBody = makeWindow(p, rTile.mRoot, name);
-        snprintf(name, sizeof(name), "NbS%02dY", i);
+        nebula_snprintf(name, sizeof(name), "NbS%02dY", i);
         rTile.mGlyph = makeText(p, rTile.mRoot, name, 8);
         if (i == StatJumps || i == StatLivesLost || i == StatChapters) {
             // A picture: the player's face (Mario's or Luigi's, chosen when the board opens), the storybook's cover.
             const char* pTexture = i == StatChapters ? "PictureBookCoverFront.bti" : "mymiimario.tpl";
             for (s32 t = 0; t < textureNum; t++) {
                 if (strcmp(NebulaAchievements::getIconTexture(t)->mTexture, pTexture) == 0 && p->mTextures[t] != nullptr) {
-                    snprintf(name, sizeof(name), "NbS%02dP", i);
+                    nebula_snprintf(name, sizeof(name), "NbS%02dP", i);
                     rTile.mPicture = makePicture(rTile.mRoot, name, p->mTextures[t]);
                 }
             }
         }
-        snprintf(name, sizeof(name), "NbS%02dv", i);
+        nebula_snprintf(name, sizeof(name), "NbS%02dv", i);
         rTile.mValueShadow = makeText(p, rTile.mRoot, name, 48);
-        snprintf(name, sizeof(name), "NbS%02dV", i);
+        nebula_snprintf(name, sizeof(name), "NbS%02dV", i);
         rTile.mValue = makeText(p, rTile.mRoot, name, 48);
-        snprintf(name, sizeof(name), "NbS%02dL", i);
+        nebula_snprintf(name, sizeof(name), "NbS%02dL", i);
         rTile.mLabel = makeText(p, rTile.mRoot, name, 64);
         if (rTile.mBody == nullptr || rTile.mGlyph == nullptr || rTile.mValueShadow == nullptr || rTile.mValue == nullptr ||
             rTile.mLabel == nullptr) {
@@ -1347,8 +1345,8 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     }
     setGlyph(p->mBack.mGlyph, cGlyphB, cBackGlyph);
     NebulaText::get(text, 48, "BoardBack");
-    const wchar_t* pBack = text;
-    while (*pBack == L' ') {
+    const char16_t* pBack = text;
+    while (*pBack == u' ') {
         pBack++;
     }
     setText(p->mBack.mText, pBack);
@@ -1356,16 +1354,16 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
     static const char* const cHintIds[HintNum] = {"HintTabs", "HintMove"};
     for (s32 i = 0; i < HintNum; i++) {
         char name[17];
-        snprintf(name, sizeof(name), "NbHint%dY", i);
+        nebula_snprintf(name, sizeof(name), "NbHint%dY", i);
         p->mHintGlyphs[i] = makeText(p, pBoard, name, 16);
-        snprintf(name, sizeof(name), "NbHint%dT", i);
+        nebula_snprintf(name, sizeof(name), "NbHint%dT", i);
         p->mHintLabels[i] = makeText(p, pBoard, name, 48);
         if (p->mHintGlyphs[i] == nullptr || p->mHintLabels[i] == nullptr) {
             p->mBoard = nullptr;
             return;
         }
-        wchar_t glyphs[16] = {0};
-        wchar_t* q = glyphs;
+        char16_t glyphs[16] = {0};
+        char16_t* q = glyphs;
         if (i == HintTabs) {
             q = MR::addPictureFontTag(q, cGlyphMinus);
             q = MR::addPictureFontTag(q, cGlyphPlus);
@@ -1442,7 +1440,7 @@ void NebulaAchievementBoard::open() {
         }
         if (rCard.mUnlocked) {
             char id[48];
-            snprintf(id, sizeof(id), "AchievementHint.%s", NebulaAchievements::getId(i));
+            nebula_snprintf(id, sizeof(id), "AchievementHint.%s", NebulaAchievements::getId(i));
             NebulaText::get(rCard.mHintText, 192, id);
         } else if (rCard.mGoal > 0) {
             // Its progress bar says enough.
@@ -1451,7 +1449,7 @@ void NebulaAchievementBoard::open() {
             // What earns it stays a surprise until it is unlocked.
             NebulaText::get(rCard.mHintText, 192, "AchievementLocked");
         }
-        wchar_t meta[48] = {0};
+        char16_t meta[48] = {0};
         if (rCard.mDate > 1) {
             formatDate(meta, 48, rCard.mDate);
         } else if (rCard.mGoal > 0) {
@@ -1470,14 +1468,14 @@ void NebulaAchievementBoard::open() {
     }
 
     // The header: how many are unlocked.
-    wchar_t text[48];
+    char16_t text[48];
     formatCount(text, 48, p->mUnlockedNum, p->mCardNum);
     setText(p->mSummary, text);
     setTextStyle(p->mSummary, cSummarySize, cWhite, cWhite, 5);
-    wchar_t percent[8];
+    char16_t percent[8];
     formatInt(percent, 8, p->mCardNum > 0 ? p->mUnlockedNum * 100 / p->mCardNum : 0, 1);
     const char* const percentNames[] = {"n"};
-    const wchar_t* const percentValues[] = {percent};
+    const char16_t* const percentValues[] = {percent};
     fill(text, 48, "BoardPercent", percentNames, percentValues, 1);
     setText(p->mPercent, text);
     setTextStyle(p->mPercent, cSummarySize, cGoldTop, cGoldBottom, 5);
@@ -1553,13 +1551,13 @@ void NebulaAchievementBoard::open() {
             count = NebulaAchievements::getStat(NebulaStat_PlaySeconds), glyph = 'W';
             break;
         }
-        wchar_t value[48];
+        char16_t value[48];
         if (i == StatPlayTime) {
-            wchar_t hours[16], minutes[8];
+            char16_t hours[16], minutes[8];
             formatNumber(hours, 16, count / 3600);
             formatInt(minutes, 8, static_cast< s32 >(count / 60 % 60), 1);
             const char* const names[] = {"h", "m"};
-            const wchar_t* const values[] = {hours, minutes};
+            const char16_t* const values[] = {hours, minutes};
             fill(value, 48, "PlayTime", names, values, 2);
         } else if (current >= 0 && goal > 0) {
             formatCount(value, 48, current, goal);
@@ -1678,9 +1676,9 @@ void NebulaAchievementBoard::exeWait() {
         setNerve(&NrvNebulaAchievementBoard::NebulaAchievementBoardNrvDisappear::sInstance);
         return;
     }
-    if (MR::testCorePadTriggerMinus(WPAD_CHAN0)) {
+    if (MR::isPressedMap(PLAYER_1)) {
         stepTab(p, -1);
-    } else if (MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+    } else if (MR::isPressedPause(PLAYER_1)) {
         stepTab(p, 1);
     }
     const s32 press = NebulaMenuFocus::readPress(&p->mRepeat);
@@ -1724,4 +1722,3 @@ void NebulaAchievementBoard::exeDisappear() {
     NebulaAchievements::flushStats();
     MR::openSystemWipeFade(cFadeFrames);
 }
-#endif

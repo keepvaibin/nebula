@@ -1,9 +1,8 @@
 #pragma once
 
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class HitResult {
 public:
@@ -29,10 +28,10 @@ public:
     void setFrontVector(const TVec3f&);
     void setRadius(f32);
 
-    /* 0x04 */ TVec3f mCenter;
-    /* 0x10 */ TVec3f mBaseAxis;
-    /* 0x1C */ TVec3f mFront;
-    /* 0x28 */ f32 mRadius;
-    /* 0x2C */ f32 _2C;
-    /* 0x30 */ f32 _30;
+    TVec3f mCenter;
+    TVec3f mBaseAxis;
+    TVec3f mFront;
+    f32 mRadius;
+    f32 _2C;
+    f32 _30;
 };

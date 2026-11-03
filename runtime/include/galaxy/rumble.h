@@ -1,7 +1,7 @@
 #pragma once
 
 // Controller vibration that mirrors the virtual Wii Remote's motor. The game
-// drives the motor itself (WPadRumble::updateRumble -> WPADControlMotor); its
+// drives the motor itself (the rumble pattern it was given); its
 // on/off bit goes through the motor model below to the controller in use,
 // with no patterns of the host's own.
 //
@@ -93,6 +93,12 @@ inline constexpr std::uint16_t kSwitch2MaxAmplitude = 29000;
 // 0x12..0x16, amplitudes as switch_pro_motor_rumble scaled to the limit.
 std::size_t build_switch2_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
                                         std::span<std::uint8_t> out) noexcept;
+// A Joy-Con 2 half: report 0x01, one motor.
+std::size_t build_joycon2_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
+                                        std::span<std::uint8_t> out) noexcept;
+// The GameCube pad: report 0x03, a motor only on or off, pulsed for its strength by `error` (kept between calls).
+std::size_t build_gamecube_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
+                                         std::uint16_t& error, std::span<std::uint8_t> out) noexcept;
 
 struct XInputMotors {
     std::uint16_t left = 0;   // low-frequency (heavy) motor

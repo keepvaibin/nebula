@@ -1,6 +1,9 @@
 // The rendering settings: config.ini loading and saving, the GALAXY_<KEY> overrides, and the data folders beside
 // config.ini.
+#include "galaxy/portable.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/run_options.h"
+#include "../../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/platform_paths.h"
 
@@ -35,7 +38,6 @@ namespace {
 
 // Guarded by s_lock.
 static RenderConfig s_config{};
-static unsigned s_next_start_efb_scale = 1u;
 static RenderFeatureCaps s_feature_caps{};
 static std::shared_mutex s_lock;
 // Last-write time of config.ini when this process last read or wrote it.
@@ -115,7 +117,7 @@ static unsigned parse_choice(const char* v, const char* const (&names)[N], unsig
     const unsigned index = parse_uint(v, N);
     if (index < N) return index;
     for (std::size_t i = 0; i < N; ++i) {
-        if (_stricmp(v, names[i]) == 0) return static_cast<unsigned>(i);
+        if (::galaxy::text_iequal(v, names[i])) return static_cast<unsigned>(i);
     }
     return def;
 }
@@ -127,18 +129,13 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
     const unsigned index = parse_uint(v, kAspectModeCount);
     if (index < std::size(kBefore3To2)) return kBefore3To2[index];
     for (unsigned i = 0; i < kAspectModeCount; ++i) {
-        if (_stricmp(v, kAspectNames[i]) == 0) return i;
+        if (::galaxy::text_iequal(v, kAspectNames[i])) return i;
     }
     return def;
 }
 
 static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
-    if (std::strcmp(key, "efb_scale")           == 0) cfg.efb_scale           = std::clamp(parse_uint(val, 1), 1u, kMaxEfbScale);
-    else if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
-    else if (std::strcmp(key, "wait_for_frame_latency") == 0) cfg.wait_for_frame_latency = parse_bool(val, cfg.wait_for_frame_latency);
-    else if (std::strcmp(key, "swap_chain_frame_latency") == 0) cfg.swap_chain_frame_latency = std::clamp(parse_uint(val, cfg.swap_chain_frame_latency), 1u, 2u);
-    else if (std::strcmp(key, "allow_tearing") == 0) cfg.allow_tearing = parse_bool(val, cfg.allow_tearing);
-    else if (std::strcmp(key, "flip_discard") == 0) cfg.flip_discard = parse_bool(val, cfg.flip_discard);
+    if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
     else if (std::strcmp(key, "msaa_samples")   == 0) cfg.msaa_samples        = std::clamp(parse_uint(val, 1), 1u, 8u);
     else if (std::strcmp(key, "taa_enabled")    == 0) cfg.taa_enabled         = parse_bool(val, false);
     else if (std::strcmp(key, "max_fps")        == 0) cfg.max_fps             = parse_float(val, cfg.max_fps);
@@ -150,11 +147,9 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "curved_surfaces") == 0) cfg.curved_surfaces = parse_bool(val, cfg.curved_surfaces);
     else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "ambient_occlusion") == 0) cfg.ambient_occlusion = parse_bool(val, cfg.ambient_occlusion);
-    else if (std::strcmp(key, "bloom_mode") == 0) cfg.bloom_mode = std::min(parse_uint(val, cfg.bloom_mode), kBloomEnhanced);
+    else if (std::strcmp(key, "wide_scene") == 0) cfg.wide_scene = parse_bool(val, cfg.wide_scene);
     else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
-    else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
-    else if (std::strcmp(key, "gpu_budget") == 0) cfg.gpu_budget = parse_bool(val, cfg.gpu_budget);
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
     else if (std::strcmp(key, "aa") == 0) {
         static constexpr const char* kNames[] = {"off", "smaa", "auto", "fxaa"};
@@ -207,9 +202,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         const std::size_t length = std::min(std::strlen(val), cfg.gpu.size() - 1u);
         std::memcpy(cfg.gpu.data(), val, length);
     }
-    else if (std::strcmp(key, "fullscreen_width") == 0) cfg.fullscreen_width = std::min(parse_uint(val, 0u), 16384u);
-    else if (std::strcmp(key, "fullscreen_height") == 0) cfg.fullscreen_height = std::min(parse_uint(val, 0u), 16384u);
-    else if (std::strcmp(key, "fullscreen_refresh_hz") == 0) cfg.fullscreen_refresh_hz = std::min(parse_uint(val, 0u), 1000u);
     else if (std::strcmp(key, "aspect") == 0) {
         cfg.aspect_mode = parse_aspect_mode(val, cfg.aspect_mode);
     }
@@ -237,73 +229,15 @@ static void parse_ini(FILE* f, RenderConfig& cfg) {
     }
 }
 
-static void apply_env(RenderConfig& cfg, const char* env_name, const char* key) {
-    char value[128]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env_name) == 0 &&
-        length > 1) {
-        apply_kv(cfg, key, value);
-    }
-}
-
-static void apply_env_overrides(RenderConfig& cfg) {
-    apply_env(cfg, "GALAXY_EFB_SCALE", "efb_scale");
-    apply_env(cfg, "GALAXY_VSYNC_INTERVAL", "vsync_interval");
-    apply_env(cfg, "GALAXY_WAIT_FOR_FRAME_LATENCY", "wait_for_frame_latency");
-    apply_env(cfg, "GALAXY_SWAP_CHAIN_FRAME_LATENCY", "swap_chain_frame_latency");
-    apply_env(cfg, "GALAXY_ALLOW_TEARING", "allow_tearing");
-    apply_env(cfg, "GALAXY_FLIP_DISCARD", "flip_discard");
-    apply_env(cfg, "GALAXY_MSAA_SAMPLES", "msaa_samples");
-    apply_env(cfg, "GALAXY_TAA_ENABLED", "taa_enabled");
-    apply_env(cfg, "GALAXY_MAX_FPS", "max_fps");
-    apply_env(cfg, "GALAXY_FRAME_RATE_DECOUPLE", "frame_rate_decouple");
-    apply_env(cfg, "GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias");
-    apply_env(cfg, "GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering");
-    apply_env(cfg, "GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps");
-    apply_env(cfg, "GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting");
-    apply_env(cfg, "GALAXY_CURVED_SURFACES", "curved_surfaces");
-    apply_env(cfg, "GALAXY_ENHANCED_LIGHTING", "enhanced_lighting");
-    apply_env(cfg, "GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion");
-    apply_env(cfg, "GALAXY_BLOOM_MODE", "bloom_mode");
-    apply_env(cfg, "GALAXY_BLOOM", "bloom");
-    apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
-    apply_env(cfg, "GALAXY_INTERNAL_FOLLOW_WINDOW", "internal_follow_window");
-    apply_env(cfg, "GALAXY_GPU_BUDGET", "gpu_budget");
-    apply_env(cfg, "GALAXY_HUD_OUTPUT_RESOLUTION", "hud_output_resolution");
-    apply_env(cfg, "GALAXY_AA", "aa");
-    apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
-    apply_env(cfg, "GALAXY_UPSCALER", "upscaler");
-    apply_env(cfg, "GALAXY_FRAME_GENERATION", "frame_generation");
-    apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
-    apply_env(cfg, "GALAXY_SPATIAL_QUALITY", "spatial_quality");
-    apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
-    apply_env(cfg, "GALAXY_RAY_TRACING", "ray_tracing_enabled");
-    apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
-    apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
-    apply_env(cfg, "GALAXY_RT_QUALITY", "rt_quality");
-    apply_env(cfg, "GALAXY_RT_LENS_BLOOM", "rt_lens_bloom");
-    apply_env(cfg, "GALAXY_RT_SUN_RAYS", "rt_sun_rays");
-    apply_env(cfg, "GALAXY_RT_WATER", "rt_water");
-    apply_env(cfg, "GALAXY_RT_AO_ENABLED", "rt_ao_enabled");
-    apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
-    apply_env(cfg, "GALAXY_TEXTURE_PACKS", "texture_packs");
-    apply_env(cfg, "GALAXY_TEXTURE_PACK_PRELOAD", "texture_pack_preload");
-    apply_env(cfg, "GALAXY_TEXTURE_DUMP", "texture_dump");
-    apply_env(cfg, "GALAXY_TEXTURE_PACK_BUDGET_MB", "texture_pack_budget_mb");
-    apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
-    apply_env(cfg, "GALAXY_WINDOW_HEIGHT", "window_height");
-    apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
-    apply_env(cfg, "GALAXY_MONITOR", "monitor");
-    apply_env(cfg, "GALAXY_GPU", "gpu");
-    apply_env(cfg, "GALAXY_ASPECT", "aspect");
-}
+#if defined(NEBULA_RELEASE)
+static void apply_env_overrides(RenderConfig&) {}
+#else
+#include "../../../tools/test_driver/render_config_env.inc"
+#endif
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
     // Clamps every value into its range; settings the renderer does not implement stay parseable but off.
-    cfg.efb_scale = std::clamp(cfg.efb_scale, 1u, kMaxEfbScale);
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
-    cfg.swap_chain_frame_latency =
-        std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
     if (!std::isfinite(cfg.max_fps) || (cfg.max_fps != 0.0f && cfg.max_fps < kMinFrameRate) || cfg.max_fps > kMaxFrameRate) {
         cfg.max_fps = RenderConfig{}.max_fps;
     }
@@ -330,6 +264,19 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
+#if defined(NEBULA_RELEASE)
+    // What is not built natively yet stays off whatever an older settings file says. Each line goes with its feature.
+    cfg.ray_tracing_enabled = false;
+    cfg.upscaler = 0u;
+    cfg.spatial_quality = 0u;
+    cfg.temporal_quality = 0u;
+    cfg.sharpness = 0u;
+    cfg.frame_generation = 0u;
+    cfg.hud_output_resolution = false;
+    if (cfg.max_fps <= 0.0f || cfg.max_fps > 60.0f) {
+        cfg.max_fps = 60.0f;  // no interpolated frames
+    }
+#endif
 }
 
 static void sanitize_feature_status(RenderFeatureStatus& status) {
@@ -375,23 +322,13 @@ static void clamp_feature_caps(RenderFeatureCaps& caps) {
 }
 
 static std::filesystem::path config_path() {
-#if defined(_WIN32)
-    SetLastError(ERROR_SUCCESS);
-    const DWORD required = GetEnvironmentVariableW(L"GALAXY_RENDER_CONFIG_PATH", nullptr, 0);
-    if (required != 0u) {
-        std::wstring override_path(required, L'\0');
-        const DWORD copied = GetEnvironmentVariableW(L"GALAXY_RENDER_CONFIG_PATH",
-            override_path.data(), required);
-        if (copied == 0u || copied >= required) return {};
-        override_path.resize(copied);
-        return std::filesystem::path(override_path);
-    }
-    // An empty or unreadable override never falls back to the default config.ini.
-    if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
-
-#else
     // An empty override never falls back to the default config.ini.
-    if (const char* override_path = std::getenv("GALAXY_RENDER_CONFIG_PATH"); override_path != nullptr) {
+#if defined(_WIN32)
+    if (const wchar_t* override_path = ::galaxy::run_options().render_config_path_w; override_path != nullptr) {
+        return override_path[0] != L'\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
+    }
+#else
+    if (const char* override_path = ::galaxy::run_options().render_config_path; override_path != nullptr) {
         return override_path[0] != '\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
     }
 #endif
@@ -454,13 +391,13 @@ bool frame_generation_allowed() noexcept {
            steady_ms() - at < kFrameGenerationReportMs;
 }
 
-RenderTimingConfig resolve_gx_timing_config_from_environment() {
+RenderTimingConfig resolve_frame_timing_config_from_environment() {
     return RenderTimingConfig{};
 }
 
-const RenderTimingConfig& get_gx_timing_config() {
+const RenderTimingConfig& get_frame_timing_config() {
     static const RenderTimingConfig config =
-        resolve_gx_timing_config_from_environment();
+        resolve_frame_timing_config_from_environment();
     return config;
 }
 
@@ -489,21 +426,6 @@ namespace {
 
 std::atomic<std::uint64_t> s_rt_effect_frame{0};
 
-// GALAXY_TEST_RT_EFFECT_AB's effect; -1 none.
-int rt_effect_ab() {
-    static const int effect = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RT_EFFECT_AB") != 0 || length <= 1u) return -1;
-        static constexpr const char* kNames[] = {"reflections", "water", "sun_rays", "lens_bloom"};
-        for (int i = 0; i < 4; ++i) {
-            if (std::strcmp(value, kNames[i]) == 0) return i;
-        }
-        return -1;
-    }();
-    return effect;
-}
-
 }  // namespace
 
 bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
@@ -511,8 +433,7 @@ bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
                             : effect == RtEffect::Water     ? cfg.rt_water
                             : effect == RtEffect::SunRays   ? cfg.rt_sun_rays
                                                             : cfg.rt_lens_bloom;
-    return configured && !(rt_effect_ab() == static_cast<int>(effect) &&
-                           (s_rt_effect_frame.load(std::memory_order_relaxed) & 1u) != 0u);
+    return configured;
 }
 
 void set_rt_effect_frame(std::uint64_t frame) noexcept {
@@ -536,13 +457,6 @@ void set_render_config(const RenderConfig& cfg) {
     clamp_unimplemented_features(sanitized);
     s_lock.lock();
     s_config = sanitized;
-    s_lock.unlock();
-}
-
-void stage_next_start_efb_scale(unsigned efb_scale) {
-    const unsigned sanitized = std::clamp(efb_scale, 1u, kMaxEfbScale);
-    s_lock.lock();
-    s_next_start_efb_scale = sanitized;
     s_lock.unlock();
 }
 
@@ -585,7 +499,6 @@ void load_render_config_from_file() {
 
     s_lock.lock();
     s_config = cfg;
-    s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -619,7 +532,6 @@ bool reload_render_config_if_changed() {
 
     s_lock.lock();
     s_config = cfg;
-    s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -629,7 +541,6 @@ bool reload_render_config_if_changed() {
 bool save_render_config_to_file() {
     s_lock.lock_shared();
     RenderConfig cfg = s_config;
-    const unsigned next_start_efb_scale = s_next_start_efb_scale;
     std::array<char, 32> gpu = s_file_gpu;
     s_lock.unlock_shared();
     clamp_unimplemented_features(cfg);
@@ -651,15 +562,7 @@ bool save_render_config_to_file() {
 
     std::ostringstream contents;
     contents.imbue(std::locale::classic());
-    contents << "efb_scale="
-             << std::clamp(next_start_efb_scale, 1u, kMaxEfbScale) << '\n'
-             << "vsync_interval=" << cfg.vsync_interval << '\n'
-             << "wait_for_frame_latency="
-             << (cfg.wait_for_frame_latency ? 1u : 0u) << '\n'
-             << "swap_chain_frame_latency="
-             << std::clamp(cfg.swap_chain_frame_latency, 1u, 2u) << '\n'
-             << "allow_tearing=" << (cfg.allow_tearing ? 1u : 0u) << '\n'
-             << "flip_discard=" << (cfg.flip_discard ? 1u : 0u) << '\n'
+    contents << "vsync_interval=" << cfg.vsync_interval << '\n'
              << std::setprecision(std::numeric_limits<float>::max_digits10)
              << "max_fps=" << cfg.max_fps << '\n'
              << "texture_lod_bias=" << cfg.texture_lod_bias << '\n'
@@ -675,8 +578,8 @@ bool save_render_config_to_file() {
              << (cfg.enhanced_lighting ? 1u : 0u) << '\n'
              << "ambient_occlusion="
              << (cfg.ambient_occlusion ? 1u : 0u) << '\n'
-             << "bloom_mode=" << std::min(cfg.bloom_mode, kBloomEnhanced) << '\n'
              << "bloom=" << std::min(cfg.bloom, kMaxBloom) << '\n'
+             << "wide_scene=" << (cfg.wide_scene ? 1u : 0u) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "msaa_samples=" << cfg.msaa_samples << '\n'
@@ -685,9 +588,6 @@ bool save_render_config_to_file() {
              << "temporal_quality=" << cfg.temporal_quality << '\n'
              << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
-             << "internal_follow_window="
-             << (cfg.internal_follow_window ? 1u : 0u) << '\n'
-             << "gpu_budget=" << (cfg.gpu_budget ? 1u : 0u) << '\n'
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "ray_tracing_enabled="
@@ -706,14 +606,11 @@ bool save_render_config_to_file() {
              << "display_mode=" << cfg.display_mode << '\n'
              << "monitor=" << cfg.monitor.data() << '\n'
              << "gpu=" << gpu.data() << '\n'
-             << "fullscreen_width=" << cfg.fullscreen_width << '\n'
-             << "fullscreen_height=" << cfg.fullscreen_height << '\n'
-             << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
              << "aspect=" << kAspectNames[std::min(cfg.aspect_mode, kAspectModeCount - 1u)] << '\n';
     if (!contents) {
         return false;
     }
-    if (!io::write_text_file_atomically(path, contents.str())) {
+    if (!io::write_file_atomically(path, contents.str())) {
         return false;
     }
     // This process's own write is not a change to take back in.
@@ -759,7 +656,7 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
                  << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
                  << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
                  << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
-        static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
+        static_cast<void>(io::write_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
     }
 }
@@ -767,30 +664,47 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
 namespace {
 
 // A folder beside config.ini, or the environment's override (an empty override: none).
-std::filesystem::path data_folder(const char* override_name, const char* folder) {
 #if defined(_WIN32)
-    const std::wstring name(override_name, override_name + std::strlen(override_name));
-    SetLastError(ERROR_SUCCESS);
-    const DWORD required = GetEnvironmentVariableW(name.c_str(), nullptr, 0);
-    if (required != 0u) {
-        std::wstring value(required, L'\0');
-        const DWORD copied = GetEnvironmentVariableW(name.c_str(), value.data(), required);
-        if (copied == 0u || copied >= required) return {};
-        value.resize(copied);
-        return std::filesystem::path(value);
-    }
-    if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
+using RunFolder = const wchar_t*;
 #else
-    if (const char* value = std::getenv(override_name); value != nullptr) {
-        return value[0] != '\0' ? std::filesystem::path(value) : std::filesystem::path{};
-    }
+using RunFolder = const char*;
 #endif
+
+std::filesystem::path data_folder(RunFolder named, const char* folder) {
+    if (named != nullptr) {
+        return named[0] != 0 ? std::filesystem::path(named) : std::filesystem::path{};
+    }
     const std::filesystem::path config = config_path();
     return config.empty() ? std::filesystem::path{} : config.parent_path() / folder;
 }
 
+RunFolder run_folder_texture_pack_dir() {
+#if defined(_WIN32)
+    return ::galaxy::run_options().texture_pack_dir_w;
+#else
+    return ::galaxy::run_options().texture_pack_dir;
+#endif
+}
+
+RunFolder run_folder_texture_dump_dir() {
+#if defined(_WIN32)
+    return ::galaxy::run_options().texture_dump_dir_w;
+#else
+    return ::galaxy::run_options().texture_dump_dir;
+#endif
+}
+
+RunFolder run_folder_movie_dir() {
+#if defined(_WIN32)
+    return ::galaxy::run_options().movie_dir_w;
+#else
+    return ::galaxy::run_options().movie_dir;
+#endif
+}
+
 std::mutex s_mod_folders_mutex;
 std::vector<std::filesystem::path> s_mod_folders;
+std::vector<std::uint32_t> s_mod_categories_off;
 std::atomic<std::uint64_t> s_mod_folders_generation{0};
 std::vector<std::filesystem::path> s_movie_folders;
 std::atomic<std::uint64_t> s_movie_folders_generation{0};
@@ -799,27 +713,25 @@ std::string s_texture_pack_game_id = "RMGE01";  // TexturePacks::kGameId until t
 }  // namespace
 
 std::filesystem::path texture_pack_directory() {
-    return data_folder("GALAXY_TEXTURE_PACK_DIR", "TexturePacks");
+    return data_folder(run_folder_texture_pack_dir(), "TexturePacks");
 }
 
 std::filesystem::path texture_pack_test_directory() {
     // Only the environment's: texture packs are mods (mods.h); tests name a pack folder directly.
-#if defined(_WIN32)
-    static const bool named = GetEnvironmentVariableW(L"GALAXY_TEXTURE_PACK_DIR", nullptr, 0) != 0u;
-#else
-    static const bool named = std::getenv("GALAXY_TEXTURE_PACK_DIR") != nullptr;
-#endif
+    static const bool named = run_folder_texture_pack_dir() != nullptr;
     static const std::filesystem::path folder = named ? texture_pack_directory() : std::filesystem::path{};
     return folder;
 }
 
 std::filesystem::path texture_dump_directory() {
-    return data_folder("GALAXY_TEXTURE_DUMP_DIR", "TextureDumps");
+    return data_folder(run_folder_texture_dump_dir(), "TextureDumps");
 }
 
-void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders) {
+void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders, std::vector<std::uint32_t> categories_off) {
     const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
     s_mod_folders = std::move(folders);
+    categories_off.resize(s_mod_folders.size(), 0u);
+    s_mod_categories_off = std::move(categories_off);
     s_mod_folders_generation.fetch_add(1u, std::memory_order_release);
 }
 
@@ -838,12 +750,17 @@ std::vector<std::filesystem::path> texture_pack_mod_folders() {
     return s_mod_folders;
 }
 
+std::vector<std::uint32_t> texture_pack_mod_categories_off() {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    return s_mod_categories_off;
+}
+
 std::uint64_t texture_pack_mod_folders_generation() noexcept {
     return s_mod_folders_generation.load(std::memory_order_acquire);
 }
 
 std::filesystem::path movie_directory() {
-    static const std::filesystem::path folder = data_folder("GALAXY_MOVIE_DIR", "Movies");
+    static const std::filesystem::path folder = data_folder(run_folder_movie_dir(), "Movies");
     return folder;
 }
 

@@ -69,6 +69,9 @@ void clear_native_window_key_presses() noexcept;
 // Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
 // the press latch.
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept;
+// One window key event, including its native scan identity. Call before discarding the message payload.
+void publish_native_window_key_event(std::uint32_t key, std::uintptr_t message_bits,
+                                    bool down, bool repeat, bool injected);
 // Whether the window message for `key` / the latest mouse move or button came
 // from SendInput (a controller mapper such as Steam's desktop layout) instead
 // of a device. In auto input mode with a controller attached such input is
@@ -97,10 +100,20 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
 [[nodiscard]] std::optional<input::DeviceKey> last_input_device() noexcept;
 // The game's button icons now (ButtonIcons setting, the controller last used and its bindings); `menu`: a menu shows.
 [[nodiscard]] input::ButtonIconSpec button_icons(bool menu) noexcept;
-// The style the Auto setting shows now (the controller in use; Wii's before the game first asks).
+// The style the Auto setting shows now (the controller in use; the game's before it first asks).
 [[nodiscard]] input::ButtonIconStyle button_icons_auto_style() noexcept;
 // A person typed or clicked (overlay keys included).
 void note_keyboard_input() noexcept;
+#if defined(__ANDROID__)
+// A keyboard or mouse plugged in, not the touch screen that stands in for them.
+[[nodiscard]] bool physical_keyboard_attached() noexcept;
+#endif
+// The system lists a keyboard or a mouse.
+[[nodiscard]] bool keyboard_or_mouse_attached() noexcept;
+// The chosen input mode has nothing to play with (input_missing): the game shows its message, and Enter opens the
+// settings menu as F1 does.
+void set_input_missing_shown(bool shown) noexcept;
+[[nodiscard]] bool input_missing_shown() noexcept;
 // Synchronous check (settings UI only): a controller is attached now.
 [[nodiscard]] bool controller_present_now() noexcept;
 
@@ -111,6 +124,8 @@ void note_keyboard_input() noexcept;
     std::uint64_t current_vi,
     std::int32_t star_pointer_mode,
     std::uint8_t tilt_section);
+// Player 2 (co-star mode), as of the last native_game_input: false while nobody plays it.
+[[nodiscard]] bool native_game_co_star(galaxy::input::PlayerInput* input) noexcept;
 // The game's motor bit to the controller in use, held off in menus (the HOME Menu, pause, error). Renew it with every
 // input sample: a motor whose state goes stale stops.
 void native_game_rumble(bool motor_on, std::int32_t star_pointer_mode) noexcept;

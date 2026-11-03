@@ -88,7 +88,7 @@ void Syati::init(const JMapInfoIter& rIter) {
     MR::calcModelBoundingRadius(&mClippingRange, this);
     MR::setClippingTypeSphere(this, mClippingRange);
     MR::validateClipping(this);
-    initEffectKeeper(1, nullptr, nullptr);
+    initEffectKeeper(1, nullptr, false);
 
     if (mSwimMode) {
         MR::initEffectSyncBck(this, "Ripple", ::cBckForRipple);
@@ -161,13 +161,10 @@ void Syati::exeWaitBlank() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void PlayerPoseSetterInWater::update() {
     _1C++;
     _1C = (_1C + 90) % 90;
 
-    f32 pitching = MR::cos((_1C / 90.0f) * TWO_PI);
 
     TPos3f syatiMtx;
     syatiMtx.setQuat(_C);
@@ -196,7 +193,6 @@ void PlayerPoseSetterInWater::update() {
     MR::makeMtxUpFrontPos(&baseMtx, forward, *MR::getPlayerGravity(), pos);
     MR::setPlayerBaseMtx(baseMtx);
 }
-#pragma pop
 
 void Syati::exeFadeinBeforeTalk() {
     if (MR::isFirstStep(this)) {
@@ -593,7 +589,7 @@ void Syati::updateBlink() {
     if (mBlinkTimer < 0) {
         MR::startBva(this, "Blink");
         s16 frame = MR::getBvaCtrl(this)->mEnd;
-        u32 rand = MR::getRandom(0x78L, 0xF0L);
+        u32 rand = MR::getRandom(0x78, 0xF0);
         mBlinkTimer = frame + rand;
     } else if (MR::isBvaStopped(this)) {
         MR::startBva(this, "Open");

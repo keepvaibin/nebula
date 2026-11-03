@@ -10,11 +10,6 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include "revolution/os.h"
-
-void MarioModule_FORCE_EMIT_STRING() {
-    JUTNativeLog("P_PlanetMap");
-}
 
 bool MarioModule::isInputDisable() const {
     if (mActor->mMario->mMovementStates._22) {
@@ -432,16 +427,16 @@ TVec3f& MarioModule::getCamDirZ() const {
 void MarioModule::startPadVib(u32 strength) {
     switch (strength) {
     case 1:
-        MR::tryRumblePadVeryWeak(mActor, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(mActor, PLAYER_1);
         return;
     case 0:
-        MR::tryRumblePadWeak(mActor, WPAD_CHAN0);
+        MR::tryRumblePadWeak(mActor, PLAYER_1);
         return;
     case 2:
-        MR::tryRumblePadMiddle(mActor, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(mActor, PLAYER_1);
         return;
     case 3:
-        MR::tryRumblePadStrong(mActor, WPAD_CHAN0);
+        MR::tryRumblePadStrong(mActor, PLAYER_1);
         return;
     default:
         return;
@@ -449,7 +444,7 @@ void MarioModule::startPadVib(u32 strength) {
 }
 
 void MarioModule::startPadVib(const char* pStrength) {
-    MR::tryRumblePad(mActor, pStrength, WPAD_CHAN0);
+    MR::tryRumblePad(mActor, pStrength, PLAYER_1);
 }
 
 f32 MarioModule::getStickX() const {

@@ -5,186 +5,186 @@
 XanimeBckTable4 quadAnimeTable[] = {
     {
         {"\212\356\226\173" /* 基本 */},        // mParent
-        "WalkSoft",      // fileName1
-        0.00000000000f,  // 0x8
-        "Walk",          // fileName2
-        0.00000000000f,  // 0x10
-        "Run",           // fileName3
-        0.00000000000f,  // 0x18
-        "Wait",          // fileName4
-        1.00000000000f,  // 0x20
+        {{"WalkSoft",      // fileName1
+        0.00000000000f},  // 0x8
+        {"Walk",          // fileName2
+        0.00000000000f},  // 0x10
+        {"Run",           // fileName3
+        0.00000000000f},  // 0x18
+        {"Wait",          // fileName4
+        1.00000000000f}},  // 0x20
     },
     {
         {"\220\205\211\152\212\356\226\173" /* 水泳基本 */},          // mParent
-        "SwimWait",            // fileName1
-        1.00000000000f,        // 0x8
-        "SwimFlutterSurface",  // fileName2
-        0.00000000000f,        // 0x10
-        "SwimFlutter",         // fileName3
-        0.00000000000f,        // 0x18
-        "SwimDrift",           // fileName4
-        0.00000000000f,        // 0x20
+        {{"SwimWait",            // fileName1
+        1.00000000000f},        // 0x8
+        {"SwimFlutterSurface",  // fileName2
+        0.00000000000f},        // 0x10
+        {"SwimFlutter",         // fileName3
+        0.00000000000f},        // 0x18
+        {"SwimDrift",           // fileName4
+        0.00000000000f}},        // 0x20
     },
     {
         {"\203\145\203\152\203\130\212\356\226\173" /* テニス基本 */},  // mParent
-        "WalkSoft",      // fileName1
-        0.00000000000f,  // 0x8
-        "Walk",          // fileName2
-        0.00000000000f,  // 0x10
-        "TennisRun",     // fileName3
-        0.00000000000f,  // 0x18
-        "TennisWait",    // fileName4
-        1.00000000000f,  // 0x20
+        {{"WalkSoft",      // fileName1
+        0.00000000000f},  // 0x8
+        {"Walk",          // fileName2
+        0.00000000000f},  // 0x10
+        {"TennisRun",     // fileName3
+        0.00000000000f},  // 0x18
+        {"TennisWait",    // fileName4
+        1.00000000000f}},  // 0x20
     },
     {
         {"\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */},    // mParent
-        "SlideHipForWard",   // fileName1
-        0.300000011921f,     // 0x8
-        "SlideHipBackward",  // fileName2
-        0.200000002980f,     // 0x10
-        "SlideHipLeft",      // fileName3
-        0.250000000000f,     // 0x18
-        "SlideHipRight",     // fileName4
-        0.250000000000f,     // 0x20
+        {{"SlideHipForWard",   // fileName1
+        0.300000011921f},     // 0x8
+        {"SlideHipBackward",  // fileName2
+        0.200000002980f},     // 0x10
+        {"SlideHipLeft",      // fileName3
+        0.250000000000f},     // 0x18
+        {"SlideHipRight",     // fileName4
+        0.250000000000f}},     // 0x20
     },
     {
         {"\215\342\202\267\202\327\202\350\211\272\214\374\202\253\202\240\202\250\202\336\202\257" /* 坂すべり下向きあおむけ */},  // mParent
-        "SlideHipForWard",           // fileName1
-        0.300000011921f,             // 0x8
-        "SlideHipBackward",          // fileName2
-        0.200000002980f,             // 0x10
-        "SlideHipLeft",              // fileName3
-        0.250000000000f,             // 0x18
-        "SlideHipRight",             // fileName4
-        0.250000000000f,             // 0x20
+        {{"SlideHipForWard",           // fileName1
+        0.300000011921f},             // 0x8
+        {"SlideHipBackward",          // fileName2
+        0.200000002980f},             // 0x10
+        {"SlideHipLeft",              // fileName3
+        0.250000000000f},             // 0x18
+        {"SlideHipRight",             // fileName4
+        0.250000000000f}},             // 0x20
     },
     {
         {"\203\136\203\175\203\122\203\215\210\332\223\256" /* タマコロ移動 */},  // mParent
-        "BallIdle",        // fileName1
-        1.00000000000f,    // 0x8
-        "BallWalkSoft",    // fileName2
-        0.00000000000f,    // 0x10
-        "BallWalk",        // fileName3
-        0.00000000000f,    // 0x18
-        "BallRun",         // fileName4
-        0.00000000000f,    // 0x20
+        {{"BallIdle",        // fileName1
+        1.00000000000f},    // 0x8
+        {"BallWalkSoft",    // fileName2
+        0.00000000000f},    // 0x10
+        {"BallWalk",        // fileName3
+        0.00000000000f},    // 0x18
+        {"BallRun",         // fileName4
+        0.00000000000f}},    // 0x20
     },
     {
         {""},            // mParent
-        "",              // fileName1
-        0.00000000000f,  // 0x8
-        nullptr,         // fileName2
-        0.00000000000f,  // 0x10
-        nullptr,         // fileName3
-        0.00000000000f,  // 0x18
-        nullptr,         // fileName4
-        0.00000000000f,  // 0x20
+        {{"",              // fileName1
+        0.00000000000f},  // 0x8
+        {nullptr,         // fileName2
+        0.00000000000f},  // 0x10
+        {nullptr,         // fileName3
+        0.00000000000f},  // 0x18
+        {nullptr,         // fileName4
+        0.00000000000f}},  // 0x20
     },
 };
 
 XanimeBckTable3 tripleAnimeTable[] = {
     {
         {"\215\342\215\266\211\105\203\105\203\107\203\103\203\147" /* 坂左右ウエイト */},  // mParent
-        "Wait",              // fileName1
-        1.00000000000f,      // 0x8
-        "WaitSlopeL",        // fileName2
-        0.00000000000f,      // 0x10
-        "WaitSlopeR",        // fileName3
-        0.00000000000f,      // 0x18
+        {{"Wait",              // fileName1
+        1.00000000000f},      // 0x8
+        {"WaitSlopeL",        // fileName2
+        0.00000000000f},      // 0x10
+        {"WaitSlopeR",        // fileName3
+        0.00000000000f}},      // 0x18
     },
     {
         {"\215\342\221\117\214\343\203\105\203\107\203\103\203\147" /* 坂前後ウエイト */},  // mParent
-        "Wait",              // fileName1
-        1.00000000000f,      // 0x8
-        "WaitSlopeD",        // fileName2
-        0.00000000000f,      // 0x10
-        "WaitSlopeU",        // fileName3
-        0.00000000000f,      // 0x18
+        {{"Wait",              // fileName1
+        1.00000000000f},      // 0x8
+        {"WaitSlopeD",        // fileName2
+        0.00000000000f},      // 0x10
+        {"WaitSlopeU",        // fileName3
+        0.00000000000f}},      // 0x18
     },
     {
         {"\203\124\201\133\203\164\203\102\203\223" /* サーフィン */},   // mParent
-        "SurfRideLoop",   // fileName1
-        1.00000000000f,   // 0x8
-        "SurfRideLoopL",  // fileName2
-        0.00000000000f,   // 0x10
-        "SurfRideLoopR",  // fileName3
-        0.00000000000f,   // 0x18
+        {{"SurfRideLoop",   // fileName1
+        1.00000000000f},   // 0x8
+        {"SurfRideLoopL",  // fileName2
+        0.00000000000f},   // 0x10
+        {"SurfRideLoopR",  // fileName3
+        0.00000000000f}},   // 0x18
     },
     {
         {"\203\124\201\133\203\164\203\102\203\223\201\151\211\301\221\254\201\152" /* サーフィン（加速） */},  // mParent
-        "SurfRideDashLoop",      // fileName1
-        1.00000000000f,          // 0x8
-        "SurfRideDashLoopL",     // fileName2
-        0.00000000000f,          // 0x10
-        "SurfRideDashLoopR",     // fileName3
-        0.00000000000f,          // 0x18
+        {{"SurfRideDashLoop",      // fileName1
+        1.00000000000f},          // 0x8
+        {"SurfRideDashLoopL",     // fileName2
+        0.00000000000f},          // 0x10
+        {"SurfRideDashLoopR",     // fileName3
+        0.00000000000f}},          // 0x18
     },
     {
         {"\203\124\201\133\203\164\203\102\203\223\214\130\202\253\212\112\216\156" /* サーフィン傾き開始 */},  // mParent
-        "SurfRide",              // fileName1
-        1.00000000000f,          // 0x8
-        "SurfRideL",             // fileName2
-        0.00000000000f,          // 0x10
-        "SurfRideR",             // fileName3
-        0.00000000000f,          // 0x18
+        {{"SurfRide",              // fileName1
+        1.00000000000f},          // 0x8
+        {"SurfRideL",             // fileName2
+        0.00000000000f},          // 0x10
+        {"SurfRideR",             // fileName3
+        0.00000000000f}},          // 0x18
     },
     {
         {"\203\124\201\133\203\164\203\102\203\223\214\130\202\253\212\112\216\156\201\151\211\301\221\254\201\152" /* サーフィン傾き開始（加速） */},  // mParent
-        "SurfRideDash",                  // fileName1
-        1.00000000000f,                  // 0x8
-        "SurfRideDashL",                 // fileName2
-        0.00000000000f,                  // 0x10
-        "SurfRideDashR",                 // fileName3
-        0.00000000000f,                  // 0x18
+        {{"SurfRideDash",                  // fileName1
+        1.00000000000f},                  // 0x8
+        {"SurfRideDashL",                 // fileName2
+        0.00000000000f},                  // 0x10
+        {"SurfRideDashR",                 // fileName3
+        0.00000000000f}},                  // 0x18
     },
     {
         {"\203\124\201\133\203\164\203\102\203\223\227\216\211\272" /* サーフィン落下 */},  // mParent
-        "SurfFall",          // fileName1
-        1.00000000000f,      // 0x8
-        "SurfFallL",         // fileName2
-        0.00000000000f,      // 0x10
-        "SurfFallR",         // fileName3
-        0.00000000000f,      // 0x18
+        {{"SurfFall",          // fileName1
+        1.00000000000f},      // 0x8
+        {"SurfFallL",         // fileName2
+        0.00000000000f},      // 0x10
+        {"SurfFallR",         // fileName3
+        0.00000000000f}},      // 0x18
     },
     {
         {""},            // mParent
-        "",              // fileName1
-        0.00000000000f,  // 0x8
-        nullptr,         // fileName2
-        0.00000000000f,  // 0x10
-        nullptr,         // fileName3
-        0.00000000000f,  // 0x18
+        {{"",              // fileName1
+        0.00000000000f},  // 0x8
+        {nullptr,         // fileName2
+        0.00000000000f},  // 0x10
+        {nullptr,         // fileName3
+        0.00000000000f}},  // 0x18
     },
 };
 
 XanimeBckTable2 doubleAnimeTable[] = {
     {
         {"\202\265\202\341\202\252\202\335\212\356\226\173" /* しゃがみ基本 */},  // mParent
-        "SquatWait",       // fileName1
-        1.00000000000f,    // 0x8
-        "SquatWalk",       // fileName2
-        0.00000000000f,    // 0x10
+        {{"SquatWait",       // fileName1
+        1.00000000000f},    // 0x8
+        {"SquatWalk",       // fileName2
+        0.00000000000f}},    // 0x10
     },
     {
         {"\202\273\202\314\217\352\221\253\223\245\202\335" /* その場足踏み */},  // mParent
-        "Run",             // fileName1
-        0.750000000000f,   // 0x8
-        "Wait",            // fileName2
-        0.250000000000f,   // 0x10
+        {{"Run",             // fileName1
+        0.750000000000f},   // 0x8
+        {"Wait",            // fileName2
+        0.250000000000f}},   // 0x10
     },
     {
         {"\203\136\203\175\203\122\203\215\202\265\202\341\202\252\202\335" /* タマコロしゃがみ */},  // mParent
-        "BallSquat",           // fileName1
-        1.00000000000f,        // 0x8
-        "BallWalk",            // fileName2
-        0.00000000000f,        // 0x10
+        {{"BallSquat",           // fileName1
+        1.00000000000f},        // 0x8
+        {"BallWalk",            // fileName2
+        0.00000000000f}},        // 0x10
     },
     {
         {""},            // mParent
-        "",              // fileName1
-        0.00000000000f,  // 0x8
-        nullptr,         // fileName2
-        0.00000000000f,  // 0x10
+        {{"",              // fileName1
+        0.00000000000f},  // 0x8
+        {nullptr,         // fileName2
+        0.00000000000f}},  // 0x10
     },
 };
 
@@ -9954,7 +9954,7 @@ XanimeGroupInfo marioAnimeTable[] = {
     },
 };
 
-XanimeAuxInfo marioAnimeAuxTable[] = {{""}};
+XanimeAuxInfo marioAnimeAuxTable[] = {{{""}}};
 
 XanimeOfsInfo marioAnimeOfsTable[] = {
     {

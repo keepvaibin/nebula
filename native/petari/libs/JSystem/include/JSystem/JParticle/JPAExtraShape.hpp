@@ -1,39 +1,38 @@
 #pragma once
 
-#include <revolution/types.h>
 
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 class JPABaseParticle;
 
 struct JPAExtraShapeData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ NEBULA_BE(u32) mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ NEBULA_BE(u32) mFlags;
-    /* 0x0C */ NEBULA_BE(f32) mScaleInTiming;
-    /* 0x10 */ NEBULA_BE(f32) mScaleOutTiming;
-    /* 0x14 */ NEBULA_BE(f32) mScaleInValueX;
-    /* 0x18 */ NEBULA_BE(f32) mScaleOutValueX;
-    /* 0x1C */ NEBULA_BE(f32) mScaleInValueY;
-    /* 0x20 */ NEBULA_BE(f32) mScaleOutValueY;
-    /* 0x24 */ NEBULA_BE(f32) mScaleOutRandom;
-    /* 0x28 */ NEBULA_BE(s16) mScaleAnmCycleX;
-    /* 0x2A */ NEBULA_BE(s16) mScaleAnmCycleY;
-    /* 0x2C */ NEBULA_BE(f32) mAlphaInTiming;
-    /* 0x30 */ NEBULA_BE(f32) mAlphaOutTiming;
-    /* 0x34 */ NEBULA_BE(f32) mAlphaInValue;
-    /* 0x38 */ NEBULA_BE(f32) mAlphaBaseValue;
-    /* 0x3C */ NEBULA_BE(f32) mAlphaOutValue;
-    /* 0x40 */ NEBULA_BE(f32) mAlphaWaveFrequency;
-    /* 0x44 */ NEBULA_BE(f32) mAlphaWaveRandom;
-    /* 0x48 */ NEBULA_BE(f32) mAlphaWaveAmplitude;
-    /* 0x4C */ NEBULA_BE(f32) mRotateAngle;
-    /* 0x50 */ NEBULA_BE(f32) mRotateAngleRandom;
-    /* 0x54 */ NEBULA_BE(f32) mRotateSpeed;
-    /* 0x58 */ NEBULA_BE(f32) mRotateSpeedRandom;
-    /* 0x5C */ NEBULA_BE(f32) mRotateDirection;
-};  // Size: 0x60
+    u32 mFlags;
+    f32 mScaleInTiming;
+    f32 mScaleOutTiming;
+    f32 mScaleInValueX;
+    f32 mScaleOutValueX;
+    f32 mScaleInValueY;
+    f32 mScaleOutValueY;
+    f32 mScaleOutRandom;
+    s16 mScaleAnmCycleX;
+    s16 mScaleAnmCycleY;
+    f32 mAlphaInTiming;
+    f32 mAlphaOutTiming;
+    f32 mAlphaInValue;
+    f32 mAlphaBaseValue;
+    f32 mAlphaOutValue;
+    f32 mAlphaWaveFrequency;
+    f32 mAlphaWaveRandom;
+    f32 mAlphaWaveAmplitude;
+    f32 mRotateAngle;
+    f32 mRotateAngleRandom;
+    f32 mRotateSpeed;
+    f32 mRotateSpeedRandom;
+    f32 mRotateDirection;
+};
 
 class JPAExtraShape {
 public:
@@ -154,13 +153,13 @@ public:
     }
 
 private:
-    /* 0x00 */ const JPAExtraShapeData* mpData;
-    /* 0x04 */ f32 mAlphaIncRate;
-    /* 0x08 */ f32 mAlphaDecRate;
-    /* 0x0C */ f32 mScaleIncRateX;
-    /* 0x10 */ f32 mScaleIncRateY;
-    /* 0x14 */ f32 mScaleDecRateX;
-    /* 0x18 */ f32 mScaleDecRateY;
+    const JPAExtraShapeData* mpData;
+    f32 mAlphaIncRate;
+    f32 mAlphaDecRate;
+    f32 mScaleIncRateX;
+    f32 mScaleIncRateY;
+    f32 mScaleDecRateX;
+    f32 mScaleDecRateY;
 };
 
 void JPACalcAlphaFlickAnm(JPAEmitterWorkData*, JPABaseParticle*);

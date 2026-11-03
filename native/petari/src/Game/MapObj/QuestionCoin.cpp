@@ -6,13 +6,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void NrvQuestionCoin_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)MR::epsilon();
-    (void)0.0f;
-    (void)2.0f;
-}
-
 namespace {
     // cPoseTypeString
     // cShadowDropLengthType
@@ -215,7 +208,7 @@ void QuestionCoin::updateActorMtx() {
 
     TQuat4f startQuat;
     mActorMtx.getQuat(startQuat);
-    TQuat4f quat = static_cast< TVec4f >(startQuat);  // TODO: FAKEMATCH
+    TQuat4f quat = static_cast< TVec4f >(startQuat);
     quat.slerp(mLaunchQuat, rate);
     TVec3f startPos;
     mActorMtx.getTrans(startPos);

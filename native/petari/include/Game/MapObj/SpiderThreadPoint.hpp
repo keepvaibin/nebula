@@ -27,16 +27,16 @@ public:
 
     // TODO: this should be removed when the appropriate inline in JAudio is made/found
     inline s32 systemLevelParam(f32 a, f32 b) {
-        return static_cast< s16 >((s32)(a)) << 16 | static_cast< s16 >((s32)(b)) & 0xFFFF;
+        return static_cast< s16 >((s32)(a)) << 16 | (static_cast< s16 >((s32)(b)) & 0xFFFF);
     }
 
-    /* 0x00 */ TVec3f mBasePos;
-    /* 0x0C */ TVec3f mPosition;
-    /* 0x18 */ TVec3f mVelocity;
-    /* 0x24 */ f32 mFriction;
-    /* 0x28 */ TVec3f mUp;
-    /* 0x34 */ TVec3f mFront;
-    /* 0x40 */ s32 mWindStartTime;
-    /* 0x44 */ s32 mWindTime;
-    /* 0x48 */ f32 mPrevStretchDist;
+    TVec3f mBasePos;
+    TVec3f mPosition;
+    TVec3f mVelocity;
+    f32 mFriction;
+    TVec3f mUp;
+    TVec3f mFront;
+    s32 mWindStartTime;
+    s32 mWindTime;
+    f32 mPrevStretchDist;
 };

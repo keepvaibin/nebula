@@ -133,8 +133,6 @@ void HoneyBee::init(const JMapInfoIter& rIter) {
     MR::getNPCItemData(&item, mArg0);
     NPCActor::equipment(item, false);
     MR::initFur(this);
-    MR::initFur(mLodCtrl->_10);
-    MR::initFur(mLodCtrl->_14);
 }
 
 void HoneyBee::calcAndSetBaseMtx() {

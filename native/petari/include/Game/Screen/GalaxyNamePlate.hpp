@@ -2,7 +2,7 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 
-class GalaxyNamePlatePrioritied;
+struct GalaxyNamePlatePrioritied;
 
 class GalaxyNamePlate : public LayoutActor {
 public:
@@ -15,20 +15,20 @@ public:
     void showUnknown(bool);
     void showNew(bool);
     void showOpen(bool);
-    void show(const wchar_t*, bool);
+    void show(const char16_t*, bool);
     void setPos3D(const TVec3f&);
     void setShowBalloonNozzle(bool);
-    void show(const wchar_t*, s32, bool, bool);
+    void show(const char16_t*, s32, bool, bool);
 
     void exeAppearReady();
     void exeAppear();
     void exeWait();
 
-    /* 0x20 */ const char* mGalaxyName;
-    /* 0x24 */ bool _24;
-    /* 0x25 */ bool _25;
-    /* 0x26 */ bool mShowBalloonNozzle;
-    /* 0x28 */ GalaxyNamePlatePrioritied* mDrawerEntry;
-    /* 0x2C */ s32 _2C;
-    /* 0x30 */ bool _30;
+    const char* mGalaxyName;
+    bool _24;
+    bool _25;
+    bool mShowBalloonNozzle;
+    GalaxyNamePlatePrioritied* mDrawerEntry;
+    s32 _2C;
+    bool _30;
 };

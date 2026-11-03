@@ -219,7 +219,7 @@ void J3DFrameCtrl::update() {
     }
 }
 
-J3DAnmTransform::J3DAnmTransform(s16 frameMax, NEBULA_BE(f32)* pScaleData, NEBULA_BE(s16)* pRotData, NEBULA_BE(f32)* pTransData)
+J3DAnmTransform::J3DAnmTransform(s16 frameMax, f32* pScaleData, s16* pRotData, f32* pTransData)
     : J3DAnmBase(frameMax) {
     mScaleData = pScaleData;
     mRotData = pRotData;
@@ -404,7 +404,6 @@ void J3DAnmTransformFullWithLerp::getTransform(u16 jointNo, J3DTransformInfo* pT
             }
         } else {
             f32 rate = mFrame - frame;
-            f32 var_f30 = 1.0f - rate;
 
             u32 next_frame = frame + 1;
 
@@ -514,7 +513,6 @@ inline f32 J3DHermiteInterpolation(f32 p1, f32 const* p2, f32 const* p3, f32 con
     return JMAHermiteInterpolation(p1, *p2, *p3, *p4, *p5, *p6, *p7);
 }
 
-#ifdef TARGET_PC
 // Keys are s16 (GQR5): time, value, out tangent of the first key, then time, value, in tangent of the second.
 inline f32 J3DHermiteInterpolationS16Keys(f32 pp1, f32 a, f32 b, f32 c, f32 d, f32 e, f32 f) {
     const f32 duration = d - a;
@@ -529,56 +527,9 @@ inline f32 J3DHermiteInterpolationS16Keys(f32 pp1, f32 a, f32 b, f32 c, f32 d, f
     return value - end;
 }
 
-// The animation files' key arrays, big-endian.
-inline f32 J3DHermiteInterpolation(f32 p1, const BE< f32 >* p2, const BE< f32 >* p3, const BE< f32 >* p4, const BE< f32 >* p5,
-                                   const BE< f32 >* p6, const BE< f32 >* p7) {
-    return JMAHermiteInterpolation(p1, *p2, *p3, *p4, *p5, *p6, *p7);
-}
-
-inline f32 J3DHermiteInterpolation(f32 pp1, const BE< s16 >* pp2, const BE< s16 >* pp3, const BE< s16 >* pp4, const BE< s16 >* pp5,
-                                   const BE< s16 >* pp6, const BE< s16 >* pp7) {
-    return J3DHermiteInterpolationS16Keys(pp1, (s16)*pp2, (s16)*pp3, (s16)*pp4, (s16)*pp5, (s16)*pp6, (s16)*pp7);
-}
-#endif
-
-inline f32 J3DHermiteInterpolation(__REGISTER f32 pp1, __REGISTER s16 const* pp2, __REGISTER s16 const* pp3, __REGISTER s16 const* pp4,
-                                   __REGISTER s16 const* pp5, __REGISTER s16 const* pp6, __REGISTER s16 const* pp7) {
-#ifdef TARGET_PC
+inline f32 J3DHermiteInterpolation(f32 pp1, s16 const* pp2, s16 const* pp3, s16 const* pp4,
+                                   s16 const* pp5, s16 const* pp6, s16 const* pp7) {
     return J3DHermiteInterpolationS16Keys(pp1, *pp2, *pp3, *pp4, *pp5, *pp6, *pp7);
-#elif defined(__MWERKS__)
-    register f32 value = pp1;
-    register f32 time;
-    register f32 start;
-    register f32 end;
-    register f32 duration;
-    register f32 delta;
-    register f32 t;
-    register f32 squared;
-    asm {
-        psq_l time, 0(pp2), 1, 5
-        psq_l end, 0(pp5), 1, 5
-        psq_l start, 0(pp3), 1, 5
-        fsubs duration, end, time
-        psq_l end, 0(pp6), 1, 5
-        fsubs t, value, time
-        psq_l value, 0(pp7), 1, 5
-        fsubs delta, end, start
-        fdivs t, t, duration
-        psq_l time, 0(pp4), 1, 5
-        fmadds value, value, duration, start
-        fnmsubs delta, duration, time, delta
-        fmuls squared, t, t
-        fsubs value, value, end
-        fsubs value, value, delta
-        fmuls end, squared, value
-        fmadds value, duration, time, end
-        fmadds value, value, t, start
-        fmadds value, delta, squared, value
-        fsubs value, value, end
-    }
-
-    return value;
-#endif
 }
 
 template < typename T >
@@ -674,11 +625,11 @@ void J3DAnmTransformKey::calcTransform(f32 frame, u16 jointNo, J3DTransformInfo*
         pTransform->mRotation.x = 0;
         break;
     case 1:
-        pTransform->mRotation.x = mRotData[entryX->mRotationInfo.mOffset] << mDecShift;
+        pTransform->mRotation.x = mRotData[entryX->mRotationInfo.mOffset] * (1 << mDecShift);
         break;
     default:
         pTransform->mRotation.x = (int)J3DGetKeyFrameInterpolation(frame, &entryX->mRotationInfo, &mRotData[entryX->mRotationInfo.mOffset])
-                                  << mDecShift;
+                                  * (1 << mDecShift);
     }
 
     switch (entryY->mRotationInfo.mMaxFrame) {
@@ -686,11 +637,11 @@ void J3DAnmTransformKey::calcTransform(f32 frame, u16 jointNo, J3DTransformInfo*
         pTransform->mRotation.y = 0;
         break;
     case 1:
-        pTransform->mRotation.y = mRotData[entryY->mRotationInfo.mOffset] << mDecShift;
+        pTransform->mRotation.y = mRotData[entryY->mRotationInfo.mOffset] * (1 << mDecShift);
         break;
     default:
         pTransform->mRotation.y = (int)J3DGetKeyFrameInterpolation(frame, &entryY->mRotationInfo, &mRotData[entryY->mRotationInfo.mOffset])
-                                  << mDecShift;
+                                  * (1 << mDecShift);
     }
 
     switch (entryZ->mRotationInfo.mMaxFrame) {
@@ -698,11 +649,11 @@ void J3DAnmTransformKey::calcTransform(f32 frame, u16 jointNo, J3DTransformInfo*
         pTransform->mRotation.z = 0;
         break;
     case 1:
-        pTransform->mRotation.z = mRotData[entryZ->mRotationInfo.mOffset] << mDecShift;
+        pTransform->mRotation.z = mRotData[entryZ->mRotationInfo.mOffset] * (1 << mDecShift);
         break;
     default:
         pTransform->mRotation.z = (int)J3DGetKeyFrameInterpolation(frame, &entryZ->mRotationInfo, &mRotData[entryZ->mRotationInfo.mOffset])
-                                  << mDecShift;
+                                  * (1 << mDecShift);
     }
 
     switch (entryX->mTranslateInfo.mMaxFrame) {
@@ -785,11 +736,11 @@ void J3DAnmTextureSRTKey::calcTransform(f32 frame, u16 jointNo, J3DTextureSRTInf
         pTexSRTInfo->mRotation = 0;
         break;
     case 1:
-        pTexSRTInfo->mRotation = mRotData[entryRot->mRotationInfo.mOffset] << mDecShift;
+        pTexSRTInfo->mRotation = mRotData[entryRot->mRotationInfo.mOffset] * (1 << mDecShift);
         break;
     default:
         pTexSRTInfo->mRotation = (int)J3DGetKeyFrameInterpolation(frame, &entryRot->mRotationInfo, &mRotData[entryRot->mRotationInfo.mOffset])
-                                 << mDecShift;
+                                 * (1 << mDecShift);
     }
 
     switch (entryX->mTranslateInfo.mMaxFrame) {
@@ -856,7 +807,7 @@ J3DAnmVtxColorFull::J3DAnmVtxColorFull() {
     }
 }
 
-void J3DAnmVtxColorFull::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
+void J3DAnmVtxColorFull::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) const {
     J3DAnmColorFullTable* entry = &mpTable[tableNo][index];
 
     if (mFrame < 0.0f) {
@@ -904,7 +855,7 @@ J3DAnmVtxColorKey::J3DAnmVtxColorKey() {
     }
 }
 
-void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
+void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) const {
     J3DAnmColorKeyTable* entry = &mpTable[tableNo][index];
 
     f32 col;
@@ -920,7 +871,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
         if (col <= 0.0f) {
             pColor->r = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->r);
+            pColor->r = nebula_f32_to_u8(col);
         } else {
             pColor->r = 255;
         }
@@ -938,7 +889,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
         if (col <= 0.0f) {
             pColor->g = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->g);
+            pColor->g = nebula_f32_to_u8(col);
         } else {
             pColor->g = 255;
         }
@@ -956,7 +907,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
         if (col <= 0.0f) {
             pColor->b = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->b);
+            pColor->b = nebula_f32_to_u8(col);
         } else {
             pColor->b = 255;
         }
@@ -974,7 +925,7 @@ void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
         if (col <= 0.0f) {
             pColor->a = 0;
         } else if (col <= 255.0f) {
-            OSf32tou8(&col, &pColor->a);
+            pColor->a = nebula_f32_to_u8(col);
         } else {
             pColor->a = 255;
         }
@@ -1007,7 +958,7 @@ J3DAnmColorFull::J3DAnmColorFull() {
     mAnmTable = nullptr;
 }
 
-void J3DAnmColorFull::getColor(u16 index, GXColor* pColor) const {
+void J3DAnmColorFull::getColor(u16 index, NebulaColor8* pColor) const {
     J3DAnmColorFullTable* entry = &mAnmTable[index];
 
     if (mFrame < 0.0f) {
@@ -1057,7 +1008,7 @@ J3DAnmColorKey::J3DAnmColorKey() {
     mAnmTable = nullptr;
 }
 
-void J3DAnmColorKey::getColor(u16 index, GXColor* pColor) const {
+void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
     J3DAnmColorKeyTable* entry = &mAnmTable[index];
 
     f32 col;
@@ -1075,7 +1026,7 @@ void J3DAnmColorKey::getColor(u16 index, GXColor* pColor) const {
         } else if (col > 255.0f) {
             pColor->r = 255;
         } else {
-            OSf32tou8(&col, &pColor->r);
+            pColor->r = nebula_f32_to_u8(col);
         }
     }
 
@@ -1093,7 +1044,7 @@ void J3DAnmColorKey::getColor(u16 index, GXColor* pColor) const {
         } else if (col > 255.0f) {
             pColor->g = 255;
         } else {
-            OSf32tou8(&col, &pColor->g);
+            pColor->g = nebula_f32_to_u8(col);
         }
     }
 
@@ -1111,7 +1062,7 @@ void J3DAnmColorKey::getColor(u16 index, GXColor* pColor) const {
         } else if (col > 255.0f) {
             pColor->b = 255;
         } else {
-            OSf32tou8(&col, &pColor->b);
+            pColor->b = nebula_f32_to_u8(col);
         }
     }
 
@@ -1129,7 +1080,7 @@ void J3DAnmColorKey::getColor(u16 index, GXColor* pColor) const {
         } else if (col > 255.0f) {
             pColor->a = 255;
         } else {
-            OSf32tou8(&col, &pColor->a);
+            pColor->a = nebula_f32_to_u8(col);
         }
     }
 }
@@ -1214,7 +1165,7 @@ void J3DAnmTextureSRTKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 
-void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
+void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
     J3DAnmCRegKeyTable* entry = &mAnmCRegKeyTable[index];
 
     f32 col;
@@ -1232,7 +1183,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
         } else if (col > 0x3FF) {
             pColor->r = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->r);
+            pColor->r = nebula_f32_to_s16(col);
         }
     }
 
@@ -1250,7 +1201,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
         } else if (col > 0x3FF) {
             pColor->g = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->g);
+            pColor->g = nebula_f32_to_s16(col);
         }
     }
 
@@ -1268,7 +1219,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
         } else if (col > 0x3FF) {
             pColor->b = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->b);
+            pColor->b = nebula_f32_to_s16(col);
         }
     }
 
@@ -1286,12 +1237,12 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
         } else if (col > 0x3FF) {
             pColor->a = 0x3FF;
         } else {
-            OSf32tos16(&col, &pColor->a);
+            pColor->a = nebula_f32_to_s16(col);
         }
     }
 }
 
-void J3DAnmTevRegKey::getTevKonstReg(u16 index, GXColor* pColor) const {
+void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
     J3DAnmKRegKeyTable* entry = &mAnmKRegKeyTable[index];
 
     f32 col;
@@ -1309,7 +1260,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, GXColor* pColor) const {
         } else if (col > 0xFF) {
             pColor->r = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->r);
+            pColor->r = nebula_f32_to_u8(col);
         }
     }
 
@@ -1327,7 +1278,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, GXColor* pColor) const {
         } else if (col > 0xFF) {
             pColor->g = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->g);
+            pColor->g = nebula_f32_to_u8(col);
         }
     }
 
@@ -1345,7 +1296,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, GXColor* pColor) const {
         } else if (col > 0xFF) {
             pColor->b = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->b);
+            pColor->b = nebula_f32_to_u8(col);
         }
     }
 
@@ -1363,7 +1314,7 @@ void J3DAnmTevRegKey::getTevKonstReg(u16 index, GXColor* pColor) const {
         } else if (col > 0xFF) {
             pColor->a = 0xFF;
         } else {
-            OSf32tou8(&col, &pColor->a);
+            pColor->a = nebula_f32_to_u8(col);
         }
     }
 }
@@ -1392,6 +1343,3 @@ void J3DAnmTevRegKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 
-void J3DAnimation_FORCE_EMIT(s16 frameMax, NEBULA_BE(f32)* pWeight) {
-    J3DAnmCluster cluster(frameMax, pWeight);
-}

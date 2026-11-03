@@ -25,7 +25,7 @@ void FileSelectSky::init(const JMapInfoIter& rIter) {
     mScale.x = 0.8f;
     mScale.y = 0.8f;
     mScale.z = 0.8f;
-    mProjmapEffectMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
+    mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
     MR::connectToSceneSky(this);
     initEffectKeeper(0, nullptr, false);
     MR::invalidateClipping(this);
@@ -46,8 +46,6 @@ bool FileSelectSky::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pRec
     return false;
 }
 
-#pragma push
-#pragma global_optimizer off
 void FileSelectSky::exeWait() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "CometNearOrbitSky");
@@ -69,4 +67,3 @@ void FileSelectSky::exeWait() {
     mAngleX = 0.5f * (1.0f - MR::cos(step)) * MR::pi() * 3.0f / 4.0f;
     mAngleY += ::cAngleIncY;
 }
-#pragma pop

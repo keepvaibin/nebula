@@ -65,7 +65,7 @@ void FireMarioBall::appearAndThrow(const TVec3f& v1, const TVec3f& v2) {
     mPosition.set(v1);
     mVelocity.set(v2 * ::cThrowSpeed);
     mRotation.set< f32 >(0.0f, MR::toDegree(MR::atan2(mVelocity.x, mVelocity.z)), 0.0f);
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, PLAYER_1);
     appear();
 }
 
@@ -77,7 +77,7 @@ void FireMarioBall::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
 bool FireMarioBall::attackFire(HitSensor* pReceiver) {
     if (MR::sendArbitraryMsg(ACTMES_FIREBALL_ATTACK, pReceiver, getSensor("body"))) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         kill();
 
         return true;

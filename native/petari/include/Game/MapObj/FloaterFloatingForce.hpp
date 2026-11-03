@@ -11,20 +11,20 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void start();
 
-    virtual void updateHostTrans(TVec3f*) const NO_INLINE {
+    virtual void updateHostTrans(TVec3f*) const {
     }
 
     virtual void updateHostVelocity(TVec3f*) const {
     }
 
     virtual const TVec3f& getCurrentVelocity() const {
-        // Zero; the console returned a stack temporary its caller read before anything overwrote it.
-        static const TVec3f zero(0.0f, 0.0f, 0.0f);
+        // Zero.
+        static TVec3f zero;
         return zero;
     }
 
-    /* 0x18 */ const char* _18;
-    /* 0x1C */ TVec3f _1C;
-    /* 0x28 */ TVec3f _28;
-    /* 0x34 */ f32 mMoveConditionType;
+    const char* _18;
+    TVec3f _1C;
+    TVec3f _28;
+    f32 mMoveConditionType;
 };

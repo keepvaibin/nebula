@@ -3,20 +3,19 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <JSystem/JParticle/JPAResourceManager.hpp>
 #include <cstring>
 
 ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     : mResourceMgr(), mAutoEffectList(new JMapInfo), mParticleNames(new JMapInfo), mNumEffectNums() {
-    JKRMemArchive* pArchive = MR::mountArchive(pArchiveName, nullptr);
+    AssetFolder* pArchive = MR::mountArchive(pArchiveName, nullptr);
     mResourceMgr = new JPAResourceManager(pArchive->getResource("Particles.jpc"), MR::getCurrentHeap());
     mParticleNames->attach(pArchive->getResource("ParticleNames.bcsv"));
     mAutoEffectList->attach(pArchive->getResource("AutoEffectList.bcsv"));
     countAutoEffectNum();
 }
 
-#ifdef TARGET_PC
 const char* ParticleResourceHolder::getParticleName(u16 index) const {
     const char* pName = nullptr;
     if (mParticleNames == nullptr || index >= mParticleNames->getNumEntries() ||
@@ -25,7 +24,6 @@ const char* ParticleResourceHolder::getParticleName(u16 index) const {
     }
     return pName;
 }
-#endif
 
 u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
     const JMapInfo* pInfo = mParticleNames;
@@ -91,7 +89,7 @@ void ParticleResourceHolder::countAutoEffectNum() {
             if (!found) {
                 EffectNum* pParticle = new EffectNum(pGroupName);
                 const int index = mNumEffectNums++;
-                mEffectNums[index] = pParticle;
+                mEffectNums.at(index) = pParticle;
             }
         }
     }

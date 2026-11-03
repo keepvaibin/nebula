@@ -1,4 +1,5 @@
 #include "Game/MapObj/GCaptureRibbon.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorLightCtrl.hpp"
@@ -9,8 +10,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/types.h>
 
 GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture(), _990(), _994() {
 }
@@ -18,12 +17,14 @@ GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture()
 void GCaptureRibbon::draw() const {
     if (_990 >= 2) {
         TDDraw::cameraInit3D();
-        TDDraw::setup(1, 2, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 2, 0);
         f32 width = calcLineWidth();
-        mTexture->load(GX_TEXMAP0);
-        J3DNativeState::setZMode(true, GX_LEQUAL, false);
+        NativeShader::setTexture(material, 0, mTexture);
+        NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+        NativeShader::send(material);
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
         {
             for (s32 i = 0; i < _990; i++) {
                 f32 v2 = i / (_990 - 1.0f);
@@ -37,7 +38,7 @@ void GCaptureRibbon::draw() const {
             }
         }
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
         {
             for (s32 j = 0; j < _990; j++) {
                 f32 v2 = j / (_990 - 1.0f);
@@ -117,7 +118,7 @@ GCaptureRibbon::~GCaptureRibbon() {
 }
 
 void GCaptureRibbon::init(const JMapInfoIter& rIter) {
-    mTexture = new JUTTexture(MR::loadTexFromArc("GCaptureRibbon.arc", "GCaptureRibbon.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("GCaptureRibbon.arc", "GCaptureRibbon.bti"));
     MR::invalidateClipping(this);
     makeActorAppeared();
 }

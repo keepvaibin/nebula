@@ -1,8 +1,6 @@
 #include "Game/Screen/StarPointerDirector.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerController.hpp"
 #include "Game/Screen/StarPointerGuidance.hpp"
@@ -10,7 +8,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -51,7 +49,7 @@ void StarPointerDirector::update() {
     mTransHolder->movement();
 
     for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
-        if (MR::isConnectedWPad(channel)) {
+        if (MR::isConnectedInput(channel)) {
             getStarPointerController(channel)->movement(mPeekZ->mProjectionParameters, mPeekZ->mViewportParameters);
         }
 
@@ -68,9 +66,7 @@ void StarPointerDirector::update() {
 }
 
 void StarPointerDirector::draw() {
-#ifdef TARGET_PC
     MotionSignal::starPointerDirector(this);
-#endif
     if (mGuidance != nullptr) {
         mGuidance->draw();
     }
@@ -144,19 +140,14 @@ namespace {
     static f32 mtx_identity[3][4] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 };  // namespace
 
-#ifdef TARGET_PC
 namespace {
-    // The projection is a 4x4 copy; the console read the 3x4 identity and the 16 bytes after it (a vtable).
+    // The projection is a 4x4 copy.
     static f32 proj_identity[4][4] = {
         {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
 };  // namespace
 
 StarPointerTransformHolder::StarPointerTransformHolder() : mViewMtx(mtx_identity), mProjMtx(proj_identity) {
 }
-#else
-StarPointerTransformHolder::StarPointerTransformHolder() : mViewMtx(mtx_identity), mProjMtx(mtx_identity) {
-}
-#endif
 
 void StarPointerTransformHolder::movement() {
     f32 fovyRad = PI_180 * getFovy();
@@ -170,21 +161,30 @@ StarPointerPeekZ::StarPointerPeekZ() {
 void StarPointerPeekZ::setDrawSyncToken() {
     J3DNativeView::getProjectionv(mProjectionParameters);
     J3DNativeView::getViewportv(mViewportParameters);
-    J3DNativeView::captureReadback(cReadbackChannel);
-    for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
+    // The depth under each pointer: what was asked last, and the picture drawn so far at where they are now.
+    NebulaScreenProbe probes[2];
+    const u32 count = StarPointerFunction::getNumStarPointer();
+    const u32 done = J3DNativeView::screenProbeResults(cReadbackChannel, probes, count);
+    for (u32 channel = 0; channel < count; channel++) {
         if (MR::isInRange(mInfos[channel]->mPos.x, 0.0f, MR::getScreenWidth() - 1) &&
             MR::isInRange(mInfos[channel]->mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
-            TVec2f pos;
-            MR::convertScreenPosToFrameBufferPos(&pos, mInfos[channel]->mPos);
-            mInfos[channel]->mZDepth = J3DNativeView::readbackDepth(cReadbackChannel, (s32)(pos.x), (s32)(pos.y));
+            mInfos[channel]->mZDepth = channel < done && probes[channel].x >= 0.0f ? probes[channel].value : 0.0f;
             mInfos[channel]->mDrawReady = true;
+
+            TVec2f pos;
+            MR::convertScreenPosToCanvasPos(&pos, mInfos[channel]->mPos);
+            probes[channel].x = pos.x;
+            probes[channel].y = pos.y;
+        } else {
+            probes[channel].x = -1.0f;
+            probes[channel].y = -1.0f;
         }
     }
+    J3DNativeView::probeScreen(cReadbackChannel, NEBULA_SCREEN_PROBE_DEPTH, probes, count);
 }
 
 namespace StarPointerFunction {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-    // No source in the decompilation; written from the RMGE01 assembly (0x80385C1C). Moves rPos along rDir to the
+    // Moves rPos along rDir to the
     // first screen edge (inset by the margins) that stays in the screen.
     bool forceOutsideScreenEdge(TVec2f* pOut, const TVec2f& rPos, const TVec2f& rDir, f32 marginX, f32 marginY) {
         if (!isInScreen(rPos, marginX, marginY)) {
@@ -244,33 +244,6 @@ namespace StarPointerFunction {
 
         return true;
     }
-#endif
-
-    bool isOnScreenEdge(const TVec2f& rPos, f32 marginX, f32 marginY) {
-        if (rPos.x <= marginX) {
-            return true;
-        }
-
-        if (rPos.y <= marginY) {
-            return true;
-        }
-
-        if (MR::getScreenWidth() - marginX <= rPos.x) {
-            return true;
-        }
-
-        if (MR::getScreenHeight() - marginY <= rPos.y) {
-            return true;
-        }
-
-        return false;
-    }
-
-    bool isOnScreenEdge(s32 channel) {
-        TVec2f pos;
-        MR::convertPaneLocalPosToScreenPos(&pos, MR::getRootPane(getStarPointerDirector()->getStarPointerLayout(channel)), TVec2f(0.0f, 0.0f));
-        return isOnScreenEdge(pos, 0.0f, 0.0f);
-    }
 
     bool forceInsideScreenEdge(TVec2f* pPos) {
         bool forced = false;
@@ -312,6 +285,10 @@ namespace StarPointerFunction {
 
     const TVec2f& getPastPosition(s32 channel, s32 index) {
         return getStarPointerDirector()->getStarPointerController(channel)->mPastPosition[index];
+    }
+
+    const TVec2f& getNextPastPosition(s32 channel, s32 index) {
+        return getStarPointerDirector()->getStarPointerController(channel)->mNextPastPosition[index];
     }
 
     s32 getNextPastPointNum(s32 channel) {

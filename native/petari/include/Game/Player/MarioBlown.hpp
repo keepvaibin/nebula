@@ -16,9 +16,9 @@ public:
         return MR::vecKillElement(rVec, mActor->_240, &_18);
     }
 
-    /* 0x12 */ u16 mTimer;
-    /* 0x14 */ u16 _14;
-    /* 0x18 */ TVec3f _18;
-    /* 0x24 */ bool _24;
-    /* 0x25 */ bool _25;
+    u16 mTimer;
+    u16 _14;
+    TVec3f _18;
+    bool _24;
+    bool _25;
 };

@@ -1,9 +1,8 @@
 #pragma once
 
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class LayoutActor;
 class LiveActor;
@@ -40,11 +39,9 @@ namespace MR {
     bool isExistStarPointerGuidanceFrame1P();
     void activeStarPointerGuidance();
     void deactiveStarPointerGuidance();
-#ifdef TARGET_PC
     // Whether the guidance may show. The system draws it over every layout, so Nebula's own windows turn it off while
     // they are up (as the game does before its own) and restore this after.
     bool isActiveStarPointerGuidance();
-#endif
     void tryShowTimeoutedStarPointerGuidance();
     bool isExistStarPointerTarget(const LiveActor*);
     void setStarPointerTargetRadius3d(LiveActor*, f32);
@@ -79,7 +76,6 @@ namespace MR {
     void startStarPointerModeDemoWithHandPointerFinger(void*);
     void startStarPointerModeDemoMarioDeath(void*);
     void startStarPointerModeMarioLauncher(void*);
-    void startStarPointerModeHomeButton(void*);
     void startStarPointerModeChooseYesNo(void*);
     void startStarPointerModePauseMenu(void*);
     void startStarPointerModeScenarioSelectScene(void*);
@@ -94,11 +90,9 @@ namespace MR {
     void endStarPointerMode(void*);
     void requestStarPointerModeErrorWindow(void*);
     void requestStarPointerModeSaveLoad(void*);
-#ifdef TARGET_PC
     // The pointer's mode as requested this frame, while the scene and its sequences hold still (Nebula's cutscene
     // skip question): GameSequenceProgress updates it otherwise.
     void updateStarPointerModeWhileSceneHeld();
-#endif
     void requestStarPointerModePictureBook(void*);
     void requestStarPointerModePauseMenu(void*);
     void requestStarPointerModeBlueStarReady(void*);

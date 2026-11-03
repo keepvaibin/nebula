@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 template < class T >
 struct JPANode {
@@ -16,16 +15,16 @@ struct JPANode {
         return &mData;
     }
 
-    /* 0x00 */ JPANode< T >* mpPrev;
-    /* 0x04 */ JPANode< T >* mpNext;
-    /* 0x08 */ T mData;
+    JPANode< T >* mpPrev;
+    JPANode< T >* mpNext;
+    T mData;
 };
 
 template < class T >
 struct JPAList {
-    /* 0x00 */ JPANode< T >* mpFirst;
-    /* 0x04 */ JPANode< T >* mpLast;
-    /* 0x08 */ u32 mNum;
+    JPANode< T >* mpFirst;
+    JPANode< T >* mpLast;
+    u32 mNum;
 
     JPAList();
     ~JPAList() {

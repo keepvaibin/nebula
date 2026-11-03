@@ -37,8 +37,8 @@ namespace {
     const f32 sClippingDistance = 1000.0f;
     const f32 sPointIntervalHalf = ::sPointInterval / 2.0f;
 
-    static GXColor sOceanBowlTevReg0 = {40, 40, 40, 20};
-    static GXColor sOceanBowlTevReg1 = {200, 230, 210, 255};
+    static NebulaColor8 sOceanBowlTevReg0 = {40, 40, 40, 20};
+    static NebulaColor8 sOceanBowlTevReg1 = {200, 230, 210, 255};
     static u8 sOceanBowlBloomTevReg0V = 95;
     static u8 sOceanBowlBloomTevReg1V = 50;
 };  // namespace
@@ -65,9 +65,9 @@ void OceanBowl::init(const JMapInfoIter& rIter) {
     initPoints();
     WaterAreaFunction::entryOceanBowl(this);
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
-    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Mask.bti"), 0);
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mWaterIndirectTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
+    mMaskTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Mask.bti"));
 
     mBloomDrawer = new OceanBowlBloomDrawer(this);
     mBloomDrawer->initWithoutIter();
@@ -85,10 +85,6 @@ bool OceanBowl::isInWater(const TVec3f& rPos) const {
     return !(mUp.dot(rPos - mPosition) > 0.0f);
 }
 
-// only way I could get it to match.
-// TODO remove me
-#pragma push
-#pragma opt_propagation off
 bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterInfo* pInfo) const {
     const TVec3f* pPosition = &mPosition;
     f32 B0 = mRadius;
@@ -141,7 +137,6 @@ bool OceanBowl::calcWaterInfo(const TVec3f& rPos, const TVec3f& rGravity, WaterI
 
     return true;
 }
-#pragma pop
 
 void OceanBowl::movement() {
     const TVec3f* pPosition = &getPoint(12, 12)->mPosition;
@@ -196,10 +191,10 @@ void OceanBowl::initPoints() {
         }
     }
 
-    mVtxTex0Array = new (0x20) NEBULA_BE(f32)[24 * 25 * 4];
-    mVtxTex1Array = new (0x20) NEBULA_BE(f32)[24 * 25 * 4];
-    mVtxTex2Array = new (0x20) NEBULA_BE(f32)[24 * 25 * 4];
-    mVtxTex3Array = new (0x20) NEBULA_BE(f32)[24 * 25 * 4];
+    mVtxTex0Array = new (0x20) f32[24 * 25 * 4];
+    mVtxTex1Array = new (0x20) f32[24 * 25 * 4];
+    mVtxTex2Array = new (0x20) f32[24 * 25 * 4];
+    mVtxTex3Array = new (0x20) f32[24 * 25 * 4];
 
     s32 index = 0;
 
@@ -370,7 +365,7 @@ void OceanBowl::draw() const {
     u16 odd = 1;
     for (s32 x = 0; x < 24; x++) {
         // Texture coordinates 0-3 are entries of the bowl's arrays (two floats each), the vertex's index in all four.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 50,
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50,
                              NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 |
                                  NEBULA_SHAPE_TEXCOORD0 << 2 | NEBULA_SHAPE_TEXCOORD0 << 3);
 
@@ -403,14 +398,13 @@ void OceanBowl::loadMaterial() const {
     // 1) warped by the indirect texture (texture 2); alpha the vertex alpha times the shore mask (texture 3). Blended by
     // its alpha (added under water), depth tested, not written.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    J3DNativeShape::setCurrentIdentity();
     const bool inWater = MR::isCameraInWater();
-    JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
+    JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL, inWater ? NEBULA_BLEND_ADD : NEBULA_BLEND_ALPHA,
-                       NEBULA_DEPTH_LEQUAL, false, NEBULA_CULL_NONE);
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL,
+                       inWater ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+                       false, NEBULA_CULL_NONE);
     NativeShader::setColor(material, 0, ::sOceanBowlTevReg0.r, ::sOceanBowlTevReg0.g, ::sOceanBowlTevReg0.b,
                            ::sOceanBowlTevReg0.a);
     NativeShader::setColor(material, 4, ::sOceanBowlTevReg1.r, ::sOceanBowlTevReg1.g, ::sOceanBowlTevReg1.b,
@@ -442,46 +436,23 @@ void OceanBowl::loadMaterial() const {
 }
 
 void OceanBowl::loadMaterialBloom() const {
+    // runtime/src/render/materials/ocean_bowl_bloom.hlsl: the water texture at its two scrolls times the grey c0 over
+    // the grey c1, alpha the texture's by the vertex alpha at both; blended by its alpha where above zero, depth
+    // tested and written before texturing, no culling.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX1, GX_TEXMTX1, GX_FALSE, GX_PTIDENTITY);
-
-    TMtx34f mat;
-    mat.identity();
-    mat[0][2] = mTexU0;
-    mat[1][2] = mTexV0;
-    J3DNativeShape::setTexture(0, mat, 2);
-    mat[0][2] = mTexU1;
-    mat[1][2] = mTexV1;
-    J3DNativeShape::setTexture(1, mat, 2);
-    mWaterTex->load(GX_TEXMAP0);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setNumTevStages(2);
-    Color8 c0 = Color8(::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, 255);
-    Color8 c1 = Color8(::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, 255);
-    J3DNativeState::setTevColor(GX_TEVREG0, c0);
-    J3DNativeState::setTevColor(GX_TEVREG1, c1);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_C1);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_APREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeShape::setCurrentIdentity();
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
+    material.early_depth = 1;
+    NativeShader::setColor(material, 0, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V,
+                           255);
+    NativeShader::setColor(material, 4, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V,
+                           255);
+    material.constants[8] = mTexU0;
+    material.constants[9] = mTexV0;
+    material.constants[10] = mTexU1;
+    material.constants[11] = mTexV1;
+    NativeShader::setTexture(material, 0, mWaterTex);
+    NativeShader::send(material);
 }

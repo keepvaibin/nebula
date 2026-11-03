@@ -2,7 +2,6 @@
 
 #include "Game/Util/Array.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class Binder;
 class HashSortTable;
@@ -53,15 +52,15 @@ public:
     void updateFloorCode(const Triangle*);
     bool isTypeAttributeEffect(const char*) const;
 
-    /* 0x00 */ const char* _0;
-    /* 0x04 */ ResourceHolder* _4;  // mResourceHolder
-    /* 0x08 */ const char* _8;      // mResourceName
-    /* 0x0C */ MR::Vector< MR::AssignableArray< MultiEmitter* > > _C;
-    /* 0x18 */ HashSortTable* _18;
-    /* 0x1C */ u32 _1C;
-    /* 0x20 */ SyncBckEffectChecker* _20;
-    /* 0x24 */ const Binder* mBinder;
-    /* 0x28 */ s32 _28;
-    /* 0x2C */ s32 _2C;
-    /* 0x30 */ bool _30;
+    const char* _0;
+    ResourceHolder* _4;  // mResourceHolder
+    const char* _8;      // mResourceName
+    MR::Vector< MR::AssignableArray< MultiEmitter* > > _C;
+    HashSortTable* _18;
+    u32 _1C;
+    SyncBckEffectChecker* _20;
+    const Binder* mBinder;
+    s32 _28;
+    s32 _2C;
+    bool _30;
 };

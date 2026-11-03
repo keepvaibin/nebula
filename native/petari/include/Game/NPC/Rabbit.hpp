@@ -2,7 +2,6 @@
 
 #include "Game/NPC/NPCActor.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class LodCtrl;
 class TalkMessageCtrl;
@@ -50,13 +49,13 @@ public:
     void exeJumpV();
     void exeJumpH();
 
-    /* 0x15C */ s32 mBehavior;
-    /* 0x160 */ bool _160;
-    /* 0x162 */ u16 _162;
-    /* 0x164 */ u16 _164;
-    /* 0x168 */ f32 _168;
-    /* 0x16C */ f32 _16C;
-    /* 0x170 */ f32 _170;
-    /* 0x174 */ TVec3f _174;
-    /* 0x180 */ f32 _180;
+    s32 mBehavior;
+    bool _160;
+    u16 _162;
+    u16 _164;
+    f32 _168;
+    f32 _16C;
+    f32 _170;
+    TVec3f _174;
+    f32 _180;
 };

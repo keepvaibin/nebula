@@ -1,90 +1,47 @@
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 ImageEffectResource::ImageEffectResource()
-    : _0(nullptr), _4(nullptr), _8(nullptr), _C(nullptr), _10(nullptr), _14(nullptr), _18(nullptr), _1C(nullptr), _20(nullptr) {
-}
-
-void ImageEffectResource::createBloomTexture() {
-    if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GX_TF_RGBA8);
-    }
-
-    if (_4 == nullptr) {
-        _4 = createTexture(0.5f, GX_TF_RGB565);
-    }
-
-    if (_C == nullptr) {
-        _C = createTexture(0.25f, GX_TF_RGB565);
-    }
-
-    if (_10 == nullptr) {
-        _10 = createTexture(0.25f, GX_TF_RGB565);
-    }
-
-    if (_14 == nullptr) {
-        _14 = createTexture(0.125f, GX_TF_RGB565);
-    }
-
-    if (_18 == nullptr) {
-        _18 = createTexture(0.125f, GX_TF_RGB565);
-    }
-
-    if (_1C == nullptr) {
-        _1C = createTexture(0.25f, GX_TF_I8);
-    }
-
-    if (_20 == nullptr) {
-        _20 = createTexture(0.25f, GX_TF_RGB565);
-    }
+    : _0(nullptr), _8(nullptr), _C(nullptr) {
 }
 
 void ImageEffectResource::createBlurTexture() {
     if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GX_TF_RGBA8);
+        _0 = createTexture(1.0f);
     }
 
     if (_8 == nullptr) {
-        _8 = createTexture(0.5f, GX_TF_I8);
+        _8 = createTexture(0.5f);
     }
 }
 
 void ImageEffectResource::createDOFTexture() {
     if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GX_TF_RGBA8);
-    }
-
-    if (_4 == nullptr) {
-        _4 = createTexture(0.5f, GX_TF_RGB565);
+        _0 = createTexture(1.0f);
     }
 
     if (_C == nullptr) {
-        _C = createTexture(0.25f, GX_TF_RGB565);
-    }
-
-    if (_10 == nullptr) {
-        _10 = createTexture(0.25f, GX_TF_RGB565);
+        _C = createTexture(0.25f);
     }
 
     if (_8 == nullptr) {
-        _8 = createTexture(0.5f, GX_TF_I8);
+        _8 = createTexture(0.5f);
     }
 }
 
-JUTTexture* ImageEffectResource::createTexture(f32 scale, GXTexFmt format) {
+JUTTexture* ImageEffectResource::createTexture(f32 scale) {
     JUTTexture* pTexture;
 
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-    pTexture = new JUTTexture(scale * (s32)JUTVideo::getManager()->getFbWidth(),
-                              scale * (s32)JUTVideo::getManager()->getEfbHeight(), format);
-    pTexture->mWrapS = GX_CLAMP;
-    pTexture->mWrapT = GX_CLAMP;
-    pTexture->mMinType = GX_LINEAR;
-    pTexture->mMagType = GX_LINEAR;
+    pTexture = new JUTTexture(scale * (s32)NebulaFrameClock::cScreenUnitsAcross, scale * (s32)NebulaFrameClock::cScreenUnitsDown);
+    pTexture->mWrapS = NEBULA_WRAP_CLAMP;
+    pTexture->mWrapT = NEBULA_WRAP_CLAMP;
+    pTexture->mMinType = NEBULA_FILTER_LINEAR;
+    pTexture->mMagType = NEBULA_FILTER_LINEAR;
 
     return pTexture;
 }

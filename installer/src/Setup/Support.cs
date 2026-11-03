@@ -80,7 +80,72 @@ namespace Nebula.Setup
         public static void RequireClosed(string root)
         {
             if (Find(root, Programs) != null)
-                throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
+                throw new InvalidOperationException(NebulaText.Of("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again."));
+        }
+    }
+
+    /// <summary>
+    /// GameData.bin across versions: one of content format 1 reads only the big-endian version 2 save; later ones read
+    /// it and write version 3, keeping the old file once as GameData.bin.v2 (runtime save_files.cpp). Going back, the
+    /// native save waits as GameData.bin.v3; coming forward it returns, unless the older version saved since.
+    /// </summary>
+    internal static class SaveRollback
+    {
+        private const string SaveName = "GameData.bin";
+
+        public static void To(long contentFormat, string saves)
+        {
+            if (!Directory.Exists(saves)) return;
+            var folders = new List<string>(Directory.GetDirectories(saves, "*", SearchOption.AllDirectories));
+            folders.Add(saves);
+            foreach (var folder in folders)
+            {
+                string save = Path.Combine(folder, SaveName);
+                if (contentFormat == InstallEngine.CookableContentFormatVersion) ToOld(save);
+                else ToNew(save);
+            }
+        }
+
+        private static void ToOld(string save)
+        {
+            if (!File.Exists(save) || !IsNative(save)) return;
+            CopyAtomically(save, save + ".v3");
+            if (File.Exists(save + ".v2")) CopyAtomically(save + ".v2", save);
+            else File.Delete(save);
+        }
+
+        private static void ToNew(string save)
+        {
+            string v2 = save + ".v2", v3 = save + ".v3";
+            if (!File.Exists(v3) || (File.Exists(save) && IsNative(save))) return;
+            if (!File.Exists(save) || (File.Exists(v2) && Same(save, v2)))
+            {
+                CopyAtomically(v3, save);
+                File.Delete(v3);
+            }
+            else if (File.Exists(v2)) File.Delete(v2);  // the next native save keeps the newer old one
+        }
+
+        private static bool IsNative(string save)
+        {
+            using (var file = new FileStream(save, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                var header = new byte[8];
+                return file.Read(header, 0, 8) == 8 && header[4] == 3 && header[5] == 0 && header[6] == 0 && header[7] == 0;
+            }
+        }
+
+        private static bool Same(string first, string second)
+        {
+            return FileUtil.Sha256File(first) == FileUtil.Sha256File(second);
+        }
+
+        private static void CopyAtomically(string source, string destination)
+        {
+            string temp = destination + ".tmp-" + Guid.NewGuid().ToString("N");
+            File.Copy(source, temp);
+            if (File.Exists(destination)) File.Replace(temp, destination, null, true);
+            else File.Move(temp, destination);
         }
     }
 
@@ -148,15 +213,61 @@ namespace Nebula.Setup
             linkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null);
         }
 
-        /// <summary>Switch back to the retained previous version.</summary>
+        /// <summary>
+        /// Switch back to the retained previous version, with the game files it reads and, for a format-1 one, its save.
+        /// A recompiled 1.x version is never restored: an update removes it and its compiler, so normally none is retained.
+        /// A refusal changes nothing.
+        /// </summary>
         public static string Rollback(InstallLayout layout)
         {
             Running.RequireClosed(layout.Root);
             var current = InstalledInfo.Read(layout);
-            if (current == null || current.Previous == null) throw new InvalidOperationException("No previous version is available.");
-            Json.Save(layout.Current, new Dictionary<string, object> { { "version", current.Previous }, { "previous", current.Version } });
-            Register(layout, current.Previous, false);
-            return current.Previous;
+            if (current == null || current.Previous == null) throw new InvalidOperationException(NebulaText.Of("No previous version is available."));
+            string previous = current.Previous, versionDir = layout.VersionDir(previous);
+            if (InstallEngine.HoldsRecompiledGame(versionDir))
+                throw new InvalidOperationException(NebulaText.Of("Nebula {0} is the older recompiled game, which cannot be restored. Nebula {1} stays installed.", previous, current.Version));
+            long format = InstallEngine.VersionContentFormat(versionDir), active = InstallEngine.ContentFormatOf(layout.Content);
+            if (format <= 0)
+                throw new InvalidOperationException(NebulaText.Of("Nebula {0} does not say which game files it reads, so it cannot be restored. Nebula {1} stays installed.", previous, current.Version));
+            bool swap = format != active;
+            if (swap && InstallEngine.ContentFormatOf(layout.KeptContent(format)) != format)
+                throw new InvalidOperationException(NebulaText.Of("The game files Nebula {0} reads were not kept, so it cannot be restored. Nebula {1} stays installed.", previous, current.Version));
+            if (swap) SwapContent(layout, format, active);
+            try
+            {
+                if (swap) SaveRollback.To(format, NebulaPaths.Saves);
+                Json.Save(layout.Current, new Dictionary<string, object> { { "version", previous }, { "previous", current.Version } });
+            }
+            catch (Exception)
+            {
+                if (swap)
+                {
+                    try { SaveRollback.To(active, NebulaPaths.Saves); }
+                    catch (Exception) { }  // its copies stay beside the save
+                    SwapContent(layout, active, format);
+                }
+                throw;
+            }
+            Register(layout, previous, false);
+            return previous;
+        }
+
+        /// <summary>The kept content of <paramref name="format"/> in place, the content there kept beside it; if it cannot move in, the content returns.</summary>
+        private static void SwapContent(InstallLayout layout, long format, long active)
+        {
+            string kept = layout.KeptContent(format), aside = layout.KeptContent(active);
+            bool existed = Directory.Exists(layout.Content);
+            if (existed)
+            {
+                FileUtil.DeleteTree(aside);
+                FileUtil.MoveDirectoryInPlace(layout.Content, aside);
+            }
+            try { FileUtil.MoveDirectoryInPlace(kept, layout.Content); }
+            catch (Exception)
+            {
+                if (existed) FileUtil.MoveDirectoryInPlace(aside, layout.Content);
+                throw;
+            }
         }
 
         /// <summary>Remove the program. Saves, settings and caches stay unless asked.</summary>
@@ -177,8 +288,8 @@ namespace Nebula.Setup
                     if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
                     string holders = Directory.Exists(entry) ? FileUtil.Holders(Directory.GetFiles(entry, "*", SearchOption.AllDirectories))
                         : FileUtil.Holders(new[] { entry });
-                    throw new IOException("Could not remove " + entry + ": " + error.Message +
-                        (holders.Length != 0 ? " In use by: " + holders + "." : "") + " Close it and uninstall again.", error);
+                    throw new IOException(NebulaText.Of("Could not remove {0}: {1}", entry, error.Message) +
+                        (holders.Length != 0 ? " " + NebulaText.Of("In use by: {0}.", holders) : "") + " " + NebulaText.Of("Close it and uninstall again."), error);
                 }
             }
             if (Directory.Exists(StartMenuFolder)) FileUtil.DeleteTree(StartMenuFolder);

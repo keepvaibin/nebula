@@ -1,26 +1,18 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include "JSystem/JAudio2/JASDvdThread.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JAudio2/JASLoadThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "JSystem/JKernel/JKRDvdRipper.hpp"
+
 #include <cstring>
 #include <stdint.h>
-#include "Game/System/NebulaDisc.hpp"
-
-JASHeap* JASWaveArcLoader::sAramHeap;
-
-JASHeap* JASWaveArcLoader::getRootHeap() {
-    if (JASWaveArcLoader::sAramHeap) {
-        return JASWaveArcLoader::sAramHeap;
-    }
-    return JASKernel::getAramHeap();
-}
+#include "Game/System/GameAssets.hpp"
+#include <nebula_format.h>
 
 char JASWaveArcLoader::sCurrentDir[DIR_MAX] = "/AudioRes/Waves/";
 
 void JASWaveArcLoader::setCurrentDir(char const* dir) {
-    strcpy(sCurrentDir, dir);
+    nebula_snprintf(sCurrentDir, DIR_MAX - 1, "%s", dir);
     u32 len = strlen(sCurrentDir);
     if (sCurrentDir[len - 1] != '/') {
         sCurrentDir[len] = '/';
@@ -32,13 +24,19 @@ char* JASWaveArcLoader::getCurrentDir() {
     return sCurrentDir;
 }
 
-JASWaveArc::JASWaveArc() : mHeap(this) {
+GameEvent JASWaveArc::sLoadDone;
+
+void JASWaveArc::waitLoadDone() {
+    sLoadDone.wait();
+}
+
+JASWaveArc::JASWaveArc() {
     _48 = 0;
     mStatus = 0;
     _58 = 0;
+    mData = nullptr;
     mEntryNum = -1;
     mFileLength = 0;
-    _5A = 0;
     mMutex.init();
 }
 
@@ -72,16 +70,20 @@ bool JASWaveArc::eraseSetup() {
     return true;
 }
 
-void JASWaveArc::loadToAramCallback(void* this_) {
-    loadToAramCallbackParams* tmp = (loadToAramCallbackParams*)this_;
+void JASWaveArc::loadCallback(void* this_) {
+    loadCallbackParams* tmp = (loadCallbackParams*)this_;
     JASWaveArc* wavArc = tmp->mWavArc;
-    if (JKRDvdRipper::loadToMainRAM(tmp->mEntryNum, tmp->mBase, EXPAND_SWITCH_UNKNOWN0, wavArc->mFileLength, nullptr,
-                                    JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, nullptr, nullptr) == nullptr) {
+    const u8* const pData = static_cast< const u8* >(GameAssets::map(tmp->mEntryNum));
+    if (pData == nullptr) {
         return;
     }
-    wavArc->_5A--;
+    {
+        JASMutexLock mutexLock(&wavArc->mMutex);
+        wavArc->mData = pData;
+    }
     if (wavArc->loadSetup(tmp->_C)) {
         wavArc->onLoadDone();
+        sLoadDone.signal();
     }
 }
 
@@ -89,71 +91,34 @@ bool JASWaveArc::sendLoadCmd() {
     JASMutexLock mutexLock(&mMutex);
     _48 = 0;
     mStatus = 1;
-    loadToAramCallbackParams commandInfo;
+    loadCallbackParams commandInfo;
     commandInfo.mWavArc = this;
     commandInfo.mEntryNum = mEntryNum;
-    commandInfo.mBase = static_cast< u8* >(mHeap.getBase());
     commandInfo._C = ++_58;
 
-    _5A++;
-
-    if (JASDvd::getThreadPointer()->sendCmdMsg(loadToAramCallback, &commandInfo, sizeof(commandInfo)) == 0) {
-        mHeap.free();
+    if (JASLoad::getThreadPointer()->sendCmdMsg(loadCallback, &commandInfo, sizeof(commandInfo)) == 0) {
+        eraseSetup();
         return false;
     }
     return true;
 }
 
-#ifndef TARGET_PC
-// Replaced by Game's Overwrite file; only that copy is in the game.
-bool JASWaveArc::load(JASHeap* heap) {
-    if (mEntryNum < 0) {
-        return false;
-    }
-    JASMutexLock mutexLock(&mMutex);
-    if (mStatus != 0) {
-        return false;
-    }
-    if (heap == nullptr) {
-        heap = JASWaveArcLoader::getRootHeap();
-    }
-    if (mHeap.alloc(heap, mFileLength) == false) {
-        return false;
-    }
-    return sendLoadCmd();
-}
-#endif
-
-bool JASWaveArc::loadTail(JASHeap* heap) {
-    if (mEntryNum < 0) {
-        return false;
-    }
-    JASMutexLock mutexLock(&mMutex);
-    if (mStatus != 0) {
-        return false;
-    }
-    if (heap == nullptr) {
-        heap = JASWaveArcLoader::getRootHeap();
-    }
-    if (mHeap.allocTail(heap, mFileLength) == false) {
-        return false;
-    }
-    return sendLoadCmd();
-}
 
 bool JASWaveArc::erase() {
-    return mHeap.free();
-}
+    JASMutexLock mutexLock(&mMutex);
+    if (mStatus == 0) {
+        return false;
+    }
 
-void JASWaveArc::onDispose() {
     if (eraseSetup()) {
         onEraseDone();
     }
+    return true;
 }
 
 void JASWaveArc::setEntryNum(s32 entryNum) {
-    NebulaDisc::File file;
-    if (entryNum < 0 || !NebulaDisc::open(entryNum, &file)) {
+    GameAssets::File file;
+    if (entryNum < 0 || !GameAssets::open(entryNum, &file)) {
         return;
     }
     mFileLength = file.mLength;

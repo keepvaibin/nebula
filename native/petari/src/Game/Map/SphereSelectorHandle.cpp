@@ -83,7 +83,7 @@ void SphereSelectorHandle::appear() {
 }
 
 bool SphereSelectorHandle::isPointing() const {
-    return MR::isStarPointerInScreen(WPAD_CHAN0);
+    return MR::isStarPointerInScreen(PLAYER_1);
 }
 
 bool SphereSelectorHandle::isHolding() const {
@@ -178,7 +178,7 @@ void SphereSelectorHandle::stackPointerVelocity() {
         _F4[i].set(_F4[i - 1]);
     }
 
-    _F4[0].set(*MR::getStarPointerScreenVelocity(WPAD_CHAN0));
+    _F4[0].set(*MR::getStarPointerScreenVelocity(PLAYER_1));
 }
 
 TVec2f* SphereSelectorHandle::getPointerVelocity() {
@@ -273,7 +273,7 @@ void SphereSelectorHandle::playRotateSE() {
     MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_DOME_WIND_2");
 }
 
-void SphereSelectorHandle::setStateConfirmStartAtFirstStep() NO_INLINE {
+void SphereSelectorHandle::setStateConfirmStartAtFirstStep() {
     if (MR::isFirstStep(this)) {
         resetRotateParam();
         MR::setStageBGMState(::cBgmConfirmState, ::cBgmConfirmFrames);
@@ -325,7 +325,7 @@ void SphereSelectorHandle::exeHold() {
 void SphereSelectorHandle::exeSpin() {
     mRotateSpeed *= ::cSpinReduceRate;
     _D4 *= ::cSpinReduceRate;
-    if (MR::isStarPointerInScreen(WPAD_CHAN0)) {
+    if (MR::isStarPointerInScreen(PLAYER_1)) {
         SphereSelectorFunction::registerPointingTarget(this, HandlePointingPriority(1));
     }
 
@@ -376,7 +376,7 @@ void SphereSelectorHandle::exeGalaxyConfirmCancel() {
     MR::setNerveAtStep(this, GET_NERVE(SphereSelectorHandle, SphereSelectorHandleNrvWait), confirmStartCancelFrame);
 }
 
-void SphereSelectorHandle::exeIdleEndForFileSelect() NO_INLINE {
+void SphereSelectorHandle::exeIdleEndForFileSelect() {
     if (MR::isFirstStep(this)) {
         MR::setStageBGMState(::cBgmNotConfirmState, ::cBgmNotConfirmFrames);
     }

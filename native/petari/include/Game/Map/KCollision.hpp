@@ -2,18 +2,17 @@
 
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class JMapInfo;
 
 struct KC_PrismData {
-    /* 0x00 */ f32 mHeight;
-    /* 0x04 */ u16 mPositionIndex;
-    /* 0x06 */ u16 mNormalIndex;
-    /* 0x08 */ u16 mEdgeIndices[3];
-    /* 0x0E */ u16 mAttribute;
+    f32 mHeight;
+    u16 mPositionIndex;
+    u16 mNormalIndex;
+    u16 mEdgeIndices[3];
+    u16 mAttribute;
 };
 
 class Fxyz {
@@ -26,40 +25,39 @@ public:
     f32 x, y, z;
 };
 
+// A collision model natively: its arrays and octree, and its scalars. KCollisionServer::setData makes one from a
+// cooked .kcl (KCLHeader); DynamicCollisionObj builds its own (KCollisionServer::setModel).
 struct KCLFile {
-#ifdef TARGET_PC
-    // Natively the whole file is converted to host order at load and these slots relocated in place
-    // (KCollisionServer::setData); KCollisionServer::isBinaryInitialized tells the two states apart.
-    /* 0x00 */ SelfRel< TVec3f > mPos;
-    /* 0x04 */ SelfRel< TVec3f > mNorms;
-    /* 0x08 */ SelfRel< KC_PrismData > mPrisms;
-    /* 0x0C */ SelfRel< void > mOctree;
-#else
-    union {
-        /* 0x00 */ TVec3f* mPos;
-        /* 0x00 */ u32 mPosOffset;
-    };
-    union {
-        /* 0x04 */ TVec3f* mNorms;
-        /* 0x04 */ u32 mNormOffset;
-    };
-    union {
-        /* 0x08 */ KC_PrismData* mPrisms;
-        /* 0x08 */ u32 mPrismOffset;
-    };
-    union {
-        /* 0x0C */ void* mOctree;
-        /* 0x0C */ u32 mOctreeOffset;
-    };
-#endif
-    /* 0x10 */ f32 mThickness;
-    /* 0x14 */ TVec3f mMin;
-    /* 0x20 */ s32 mXMask;
-    /* 0x24 */ s32 mYMask;
-    /* 0x28 */ s32 mZMask;
-    /* 0x2C */ s32 mBlockWidthShift;
-    /* 0x30 */ s32 mBlockXShift;
-    /* 0x34 */ s32 mBlockXYShift;
+    TVec3f* mPos;
+    TVec3f* mNorms;
+    KC_PrismData* mPrisms;  // 1-based
+    void* mOctree;
+    f32 mThickness;
+    TVec3f mMin;
+    s32 mXMask;
+    s32 mYMask;
+    s32 mZMask;
+    s32 mBlockWidthShift;
+    s32 mBlockXShift;
+    s32 mBlockXYShift;
+    s32 mTriangleNum;
+};
+
+// A .kcl's header as the importer cooks it (host order, crates/nebula-import cook/native_data.rs): the arrays'
+// offsets from the file's start, then the scalars.
+struct KCLHeader {
+    u32 mPosOffset;
+    u32 mNormOffset;
+    u32 mPrismOffset;
+    u32 mOctreeOffset;
+    f32 mThickness;
+    f32 mMin[3];
+    s32 mXMask;
+    s32 mYMask;
+    s32 mZMask;
+    s32 mBlockWidthShift;
+    s32 mBlockXShift;
+    s32 mBlockXYShift;
 };
 
 class KCollisionServer {
@@ -80,8 +78,10 @@ public:
 
     void init(void*, const void*);
     void setData(void*);
+    // A model the game built (no file): DynamicCollisionObj.
+    void setModel(KCLFile*);
+    void initModel(KCLFile*, const void*);
     bool calcFarthestVertexDistance();
-    static bool isBinaryInitialized(const void*) NO_INLINE;
     KC_PrismData* checkPoint(Fxyz*, f32, f32*);
     u32 checkArea3D(Fxyz*, Fxyz*, KC_PrismData**, u32);
     u32 checkSphere(Fxyz*, f32, f32, u32, KC_PrismData**, f32*, u8*);
@@ -107,7 +107,8 @@ public:
     bool outCheck(const TVec3f*, const TVec3f*, V3u*, V3u*) const;
     void objectSpaceToLocalSpace(V3u*, const TVec3f&) const;
 
-    /* 0x00 */ KCLFile* mFile;
-    /* 0x04 */ JMapInfo* mapInfo;
-    /* 0x08 */ f32 mMaxVertexDistance;
+    KCLFile* mFile;
+    JMapInfo* mapInfo;
+    f32 mMaxVertexDistance;
+    KCLFile mModel;  // the view of a cooked file
 };

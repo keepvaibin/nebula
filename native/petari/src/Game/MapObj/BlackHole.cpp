@@ -4,12 +4,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 
-void BlackHole_FORCE_MATCH_SDATA2() {
-    (void)500.0f;
-    (void)0.009999999776482582f;
-    (void)1000.0f;
-}
-
 namespace NrvBlackHole {
     NEW_NERVE(BlackHoleNrvWait, BlackHole, Wait);
     NEW_NERVE(BlackHoleNrvDemo, BlackHole, Demo);
@@ -32,9 +26,7 @@ void BlackHole::init(const JMapInfoIter& rIter) {
     f32 radius = _A0;
     f32 val = 500.0f * _9C;
 
-    if (radius >= val) {
-        radius = radius;
-    } else {
+    if (radius < val) {
         radius = val;
     }
 

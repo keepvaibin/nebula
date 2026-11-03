@@ -14,7 +14,7 @@ public:
     virtual ~J3DModelData() {
     }
 
-    s32 newSharedDisplayList(u32);
+    s32 newSharedSnapshot(u32);
     void clear();
     void syncJ3DSysFlags() const;
 
@@ -93,10 +93,10 @@ public:
     u16 getWEvlpMtxNum() const {
         return mJointTree.getWEvlpMtxNum();
     }
-    NEBULA_BE(u16)* getWEvlpMixMtxIndex() const {
+    u16* getWEvlpMixMtxIndex() const {
         return mJointTree.getWEvlpMixMtxIndex();
     }
-    NEBULA_BE(f32)* getWEvlpMixWeight() const {
+    f32* getWEvlpMixWeight() const {
         return mJointTree.getWEvlpMixWeight();
     }
     u8 getWEvlpMixMtxNum(u16 idx) const {
@@ -117,7 +117,7 @@ public:
     void* getVtxNrmArray() const {
         return mVertexData.getVtxNrmArray();
     }
-    GXColor* getVtxColorArray(u8 idx) const {
+    NebulaColor8* getVtxColorArray(u8 idx) const {
         return mVertexData.getVtxColorArray(idx);
     }
     bool checkFlag(u32 flag) const {
@@ -177,12 +177,12 @@ public:
         mShapeTable.hide();
     }
 
-    /* 0x04 */ void const* mpRawData;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u16 mbHasBumpArray;
-    /* 0x0E */ u16 mbHasBillboard;
-    /* 0x10 */ J3DJointTree mJointTree;
-    /* 0x58 */ J3DMaterialTable mMaterialTable;
-    /* 0x78 */ J3DShapeTable mShapeTable;
-    /* 0x88 */ J3DVertexData mVertexData;
+    void const* mpRawData;
+    u32 mFlags;
+    u16 mbHasBumpArray;
+    u16 mbHasBillboard;
+    J3DJointTree mJointTree;
+    J3DMaterialTable mMaterialTable;
+    J3DShapeTable mShapeTable;
+    J3DVertexData mVertexData;
 };

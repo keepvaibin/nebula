@@ -105,7 +105,7 @@ Affine34 load_matrix(const std::uint32_t* words) noexcept {
 void store_matrix(const Affine34& m, std::uint32_t* words) noexcept {
     for (unsigned i = 0; i < 12u; ++i) words[i] = float_word(m[i]);
 }
-// XF normal matrices are 3x3 (9 words, row-major) without translation.
+// Normal matrices are 3x3 (9 words, row-major) without translation.
 Affine34 load_normal(const std::uint32_t* words) noexcept {
     Affine34 m{};
     for (unsigned row = 0; row < 3u; ++row) {
@@ -373,70 +373,6 @@ Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affi
     out[3] = out[7] = out[11] = 0.0f;
     return out;
 }
-bool texgen_spatial(std::uint32_t texgen) noexcept {
-    const std::uint32_t type = (texgen >> 4u) & 7u;
-    const std::uint32_t source = (texgen >> 7u) & 0x1Fu;
-    return type == 0u && (source == 0u || source == 1u || source == 3u || source == 4u);
-}
-
-bool ps_colours_move(const PixelConstants& a, const PixelConstants& b) noexcept {
-    if (std::memcmp(a.stage_config, b.stage_config, sizeof(a.stage_config)) != 0 ||
-        std::memcmp(a.uber_ps_header, b.uber_ps_header, sizeof(a.uber_ps_header)) != 0 ||
-        std::memcmp(a.ind_cmd, b.ind_cmd, sizeof(a.ind_cmd)) != 0 ||
-        std::memcmp(a.ind_misc, b.ind_misc, sizeof(a.ind_misc)) != 0 ||
-        std::memcmp(a.tex_dims, b.tex_dims, sizeof(a.tex_dims)) != 0 ||
-        std::memcmp(&a.alpha_refs[2], &b.alpha_refs[2], sizeof(float)) != 0 ||
-        std::memcmp(&a.fog_params[7], &b.fog_params[7], sizeof(float)) != 0) {
-        return false;
-    }
-    return std::memcmp(a.tev_regs, b.tev_regs, sizeof(a.tev_regs)) != 0 ||
-           std::memcmp(a.konst, b.konst, sizeof(a.konst)) != 0 ||
-           std::memcmp(a.alpha_refs, b.alpha_refs, sizeof(a.alpha_refs)) != 0 ||
-           std::memcmp(a.fog_params, b.fog_params, sizeof(a.fog_params)) != 0 ||
-           std::memcmp(a.ind_mtx, b.ind_mtx, sizeof(a.ind_mtx)) != 0;
-}
-
-void ps_colours_at(const PixelConstants& a, const PixelConstants& b, float t, PixelConstants& out) noexcept {
-    out = b;
-    if (t >= 1.0f) {
-        return;
-    }
-    const auto lerp = [t](float x, float y) {
-        return std::isfinite(x) && std::isfinite(y) ? x + (y - x) * t : y;
-    };
-    for (unsigned r = 0; r < 4u; ++r) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            out.tev_regs[r][c] = lerp(a.tev_regs[r][c], b.tev_regs[r][c]);
-            out.konst[r][c] = lerp(a.konst[r][c], b.konst[r][c]);
-        }
-    }
-    // Alpha-test references and the constant destination alpha; [2] packs the
-    // compare modes.
-    out.alpha_refs[0] = lerp(a.alpha_refs[0], b.alpha_refs[0]);
-    out.alpha_refs[1] = lerp(a.alpha_refs[1], b.alpha_refs[1]);
-    out.alpha_refs[3] = lerp(a.alpha_refs[3], b.alpha_refs[3]);
-    // Fog: a, b magnitude, b shift, c, colour, projection.
-    for (unsigned i = 4u; i < 7u; ++i) out.fog_params[i] = lerp(a.fog_params[i], b.fog_params[i]);
-    if (a.fog_params[2] == b.fog_params[2]) {
-        out.fog_params[0] = lerp(a.fog_params[0], b.fog_params[0]);
-        out.fog_params[1] = lerp(a.fog_params[1], b.fog_params[1]);
-        out.fog_params[3] = lerp(a.fog_params[3], b.fog_params[3]);
-    }
-    // Indirect matrices: integer mantissas per row, w = 17 - scale.
-    for (unsigned r = 0; r < 6u; ++r) {
-        if (a.ind_mtx[r][3] != b.ind_mtx[r][3]) continue;
-        for (unsigned c = 0; c < 3u; ++c) {
-            const float x = static_cast<float>(a.ind_mtx[r][c]);
-            const float y = static_cast<float>(b.ind_mtx[r][c]);
-            out.ind_mtx[r][c] = static_cast<std::int32_t>(std::lround(x + (y - x) * t));
-        }
-    }
-}
-bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept {
-    return std::memcmp(a.chan_ambient, b.chan_ambient, sizeof(a.chan_ambient)) != 0 ||
-           std::memcmp(a.chan_material, b.chan_material, sizeof(a.chan_material)) != 0;
-}
-
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
               const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept {
     constexpr unsigned kColor = draw_rows::kLightColorWord, kAngle = draw_rows::kLightAngleWord,
@@ -502,7 +438,7 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
             d[i] = da[i] + (db[i] - da[i]) * t;
         }
     }
-    // Keep the interpolated direction at the interpolated length (GX spot
+    // Keep the interpolated direction at the interpolated length (spot
     // directions are unit vectors; specular half-angle vectors are not).
     const float la = vector_length(da);
     const float lb = vector_length(db);
@@ -516,41 +452,8 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         out[kDirection + i] = float_word(d[i]);
     }
 }
-void channel_colours_at(const VertexConstants& a, const VertexConstants& b, float t, VertexConstants& out) noexcept {
-    if (t >= 1.0f) {
-        return;
-    }
-    for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            const float am = a.chan_ambient[ch][c], bm = b.chan_ambient[ch][c];
-            const float ma = a.chan_material[ch][c], mb = b.chan_material[ch][c];
-            out.chan_ambient[ch][c] = std::isfinite(am) && std::isfinite(bm) ? am + (bm - am) * t : bm;
-            out.chan_material[ch][c] = std::isfinite(ma) && std::isfinite(mb) ? ma + (mb - ma) * t : mb;
-        }
-    }
-}
-std::uint8_t used_lights(const VertexConstants& constants) noexcept {
-    std::uint32_t mask = 0u;
-    const std::uint32_t channels = std::min<std::uint32_t>(constants.uber_vs_header[1], 2u);
-    for (std::uint32_t ch = 0; ch < channels; ++ch) {
-        for (const std::uint32_t control : {constants.uber_channel[ch], constants.uber_channel[2u + ch]}) {
-            if ((control & 2u) != 0u) {
-                mask |= ((control >> 2u) & 0xFu) | (((control >> 11u) & 0xFu) << 4u);
-            }
-        }
-    }
-    const std::uint32_t texgens = std::min<std::uint32_t>(constants.uber_vs_header[0], kMaxTexGens);
-    for (std::uint32_t i = 0; i < texgens; ++i) {
-        const std::uint32_t texgen = constants.uber_texgen[i];
-        if (((texgen >> 4u) & 7u) == 1u) {
-            mask |= 1u << ((texgen >> 15u) & 7u);
-        }
-    }
-    return static_cast<std::uint8_t>(mask);
-}
-
 namespace {
-// Row numbers of the palette's parts (XF words / 4).
+// Row numbers of the palette's parts (words / 4).
 constexpr unsigned kNormalRow = kNormalBase / 4u;
 constexpr unsigned kTexRow = 30u;
 constexpr unsigned kPostRow = kPostBase / 4u;

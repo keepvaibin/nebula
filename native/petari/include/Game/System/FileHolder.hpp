@@ -1,11 +1,10 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include <revolution/types.h>
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/GameThreads.hpp"
 
-class JKRHeap;
+class NebulaArena;
 
 class FileHolderFileEntry {
 public:
@@ -13,7 +12,7 @@ public:
     /// @param pFilePath The path to the file.
     /// @param pHeap The heap used for allocation.
     /// @param pContext The context data for the file.
-    FileHolderFileEntry(const char*, JKRHeap*, void*);
+    FileHolderFileEntry(const char*, NebulaArena*, void*);
 
     /// @brief Destroys the `FileHolderFileEntry`.
     ~FileHolderFileEntry();
@@ -23,16 +22,15 @@ public:
 
     /// @brief Sets the context data for the file.
     /// @param pContext The context data.
-    /// @param pHeap The heap used for allocation.
-    void setContext(void*, JKRHeap*);
+    void setContext(void*);
 
-    /* 0x00 */ s32 mEntryNum;
-    /* 0x04 */ void* mContext;
-    /* 0x08 */ JKRHeap* mHeap;
-    /* 0x0C */ s32 mState;
-    /* 0x10 */ NebulaMessageQueue mQueue;
-    /* 0x30 */ void* mMessage;
-    /* 0x34 */ bool mContextSet;
+    s32 mEntryNum;
+    void* mContext;
+    NebulaArena* mHeap;
+    bool mDone;
+    GameMessageQueue mQueue;
+    void* mMessage;
+    bool mContextSet;
 };
 
 class FileHolder {
@@ -44,7 +42,7 @@ public:
     /// @param pFilePath The path to the file.
     /// @param pHeap The heap used for allocation.
     /// @param pContext The context data for the file.
-    FileHolderFileEntry* add(const char*, JKRHeap*, void*);
+    FileHolderFileEntry* add(const char*, NebulaArena*, void*);
 
     /// @brief Checks if a file entry exists.
     /// @param pFilePath The path to the file.
@@ -57,7 +55,7 @@ public:
 
     /// @brief Removes file entries that match the given heap.
     /// @param pHeap The heap to compare.
-    void removeIfIsEqualHeap(JKRHeap*);
+    void removeIfIsEqualHeap(NebulaArena*);
 
     /// @brief Removes the file entry for the given file.
     /// @param pFilePath The path to the file.
@@ -69,5 +67,5 @@ public:
     /// @return The pointer to the found entry, or `nullptr` if not found.
     FileHolderFileEntry* findEntry(const char*) const;
 
-    /* 0x0 */ MR::Vector< MR::AssignableArray< FileHolderFileEntry* > > mEntries;
+    MR::Vector< MR::AssignableArray< FileHolderFileEntry* > > mEntries;
 };

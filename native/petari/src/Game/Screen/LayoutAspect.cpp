@@ -1,4 +1,4 @@
-#ifdef TARGET_PC
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutAspect.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Screen/LayoutManager.hpp"
@@ -6,7 +6,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
 #include "Game/System/NebulaHost.hpp"
@@ -61,6 +60,10 @@ namespace {
         {"CometScreenFilter", "PicPurpleComet", FitWidth | FitHeight},
         {"CometScreenFilter", "PicWhiteComet", FitWidth | FitHeight},
         {"FileSelect", "StartButton", FitRight | FitBottom},
+        {"FileSelect", "CopyButton", FitTop},
+        {"FileSelect", "MiiButton", FitTop},
+        {"FileSelect", "DeleteButton", FitTop},
+        {"FileInfo", "FileInfo", FitTop},
         {"FileSelect", "P2ManualButton", FitRight},
         {"GalaxyDetail", "BG", FitWidth | FitHeight},
         {"GalaxyInfo", "InfoWindowUp", FitRight | FitTop},
@@ -82,8 +85,8 @@ namespace {
         {"MiiSelect", "Text", FitSlide, 660.0f},
         {"MiiSelect", "MiiPosition", FitSlide, 660.0f},
         {"MiiSelect", "Arrow", FitSlide, 660.0f},
-        {"MiiSelect", "MiiGroupA", FitSlide, 608.0f},
-        {"MiiSelect", "MiiGroupB", FitSlide, 608.0f},
+        {"MiiSelect", "MiiGroupA", FitSlide, NebulaFrameClock::cLayoutWidth},
+        {"MiiSelect", "MiiGroupB", FitSlide, NebulaFrameClock::cLayoutWidth},
         // Nebula's achievement pop-up (NebulaAchievementToast) in the bottom-right corner.
         {"NebulaAchievementToast", "InfoWindowCenter", FitRight | FitBottom},
         // The file select's Quit to desktop (NebulaQuitButton): its Start button in the top-left corner, sliding in
@@ -131,18 +134,18 @@ namespace {
     struct Extent {
         f32 mWidth;
         f32 mHeight;
-        f32 mHorizontalDelta;  // how much further each side edge lies than at 608
+        f32 mHorizontalDelta;  // how much further each side edge lies than at the authored width
         f32 mVerticalDelta;
     };
 
-    // The canvas setupDrawForNW4RLayout projects; the Wii's 608x456 when nothing changes.
+    // The canvas setupDrawForNW4RLayout projects; 608x456 when nothing changes.
     Extent getExtent() {
-        Extent extent = {608.0f, 456.0f, 0.0f, 0.0f};
+        Extent extent = {NebulaFrameClock::cLayoutWidth, NebulaFrameClock::cScreenHeight, 0.0f, 0.0f};
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
-            extent.mWidth = MR::getDisplay().canvas_width;
-            extent.mHeight = 456.0f * MR::getDisplay().vertical_fit;
-            extent.mHorizontalDelta = (extent.mWidth - 608.0f) * 0.5f;
-            extent.mVerticalDelta = (extent.mHeight - 456.0f) * 0.5f;
+            extent.mWidth = MR::getDisplay().layout_width;
+            extent.mHeight = NebulaFrameClock::cScreenHeight * MR::getDisplay().vertical_fit;
+            extent.mHorizontalDelta = (extent.mWidth - NebulaFrameClock::cLayoutWidth) * 0.5f;
+            extent.mVerticalDelta = (extent.mHeight - NebulaFrameClock::cScreenHeight) * 0.5f;
         }
         return extent;
     }
@@ -206,25 +209,10 @@ namespace {
         pPane->mGlbMtx._13 = inner + (m13 - inner) * k;
     }
 
-    // Tests (NEBULA_OPTION_TEST_DUMP_LAYOUTS): the authored tree, one line per pane: depth, name, translation, size,
-    // base position (0-8, row-major), visibility.
-    void dumpPane(const char* pLayout, const nw4r::lyt::Pane* pPane, s32 depth) {
-        if (depth > 16) {
-            return;
-        }
-        JUTNativeLog("layout %s: %*s%s t=(%.1f,%.1f) size=(%.1f,%.1f) base=%u %s\n", pLayout, depth * 2, "", pPane->mName,
-                 pPane->mTranslate.x, pPane->mTranslate.y, pPane->mSize.width, pPane->mSize.height,
-                 (u32)pPane->mBasePosition, pPane->IsVisible() ? "" : "hidden");
-        nw4r::lyt::PaneList& children = const_cast< nw4r::lyt::Pane* >(pPane)->GetChildList();
-        for (nw4r::lyt::PaneList::Iterator it = children.GetBeginIter(); it != children.GetEndIter(); ++it) {
-            dumpPane(pLayout, &*it, depth + 1);
-        }
-    }
-
     // True when the branch moved, so the copied matrices need copying again.
     bool applyFit(nw4r::lyt::Pane* pPane, const FitRule& rRule, const Extent& rExtent) {
-        const f32 wide = rExtent.mWidth / 608.0f;
-        const f32 tall = rExtent.mHeight / 456.0f;
+        const f32 wide = rExtent.mWidth / NebulaFrameClock::cLayoutWidth;
+        const f32 tall = rExtent.mHeight / NebulaFrameClock::cScreenHeight;
         if (rRule.mFit & FitCover) {
             const f32 k = wide > tall ? wide : tall;
             scaleRow(pPane, 0, k);
@@ -307,15 +295,13 @@ namespace LayoutAspect {
         }
         // The owning layout and exact names identify each backing: generic Base and PicBG panes elsewhere stay.
         const Extent extent = getExtent();
-        bool safety = false;
         bool title = false;
         for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-            safety |= isNamed(&*it, "WiiRemoteStrap");
             title |= isNamed(&*it, "SMGTitleLogo");
         }
         for (nw4r::lyt::PaneList::Iterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
             nw4r::lyt::Pane* pPane = &*it;
-            if ((safety && isNamed(pPane, "PicBG")) || (title && isNamed(pPane, "PicFlash"))) {
+            if (title && isNamed(pPane, "PicFlash")) {
                 pPane->mSize.width = extent.mWidth;
                 pPane->mSize.height = extent.mHeight;
             } else if (isNamed(pPane, "CinemaFrame")) {
@@ -347,9 +333,6 @@ namespace LayoutAspect {
 
         // This layout's rules and panes, looked up once.
         if (pManager->mFitRuleCount < 0) {
-            if (NebulaHost::option(NEBULA_OPTION_TEST_DUMP_LAYOUTS) != 0) {
-                dumpPane(pManager->mLayoutName != nullptr ? pManager->mLayoutName : "?", pRoot, 0);
-            }
             pManager->mFitRuleCount = 0;
             for (u32 i = 0; i < sizeof(cFitRules) / sizeof(cFitRules[0]); i++) {
                 if (pManager->mLayoutName == nullptr || strcmp(cFitRules[i].mLayout, pManager->mLayoutName) != 0) {
@@ -387,9 +370,8 @@ namespace LayoutAspect {
                                                                                      : pManager->findPaneByName(pManager->mPaneInfoList[i].mName);
             NebulaMtxCopy(pPane->mGlbMtx, pManager->mPaneInfoList[i].mMtxRef);
             if (MR::isScreen16Per9()) {
-                pManager->mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / 608.0f;
+                pManager->mPaneInfoList[i].mMtxRef[0][3] *= MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth;
             }
         }
     }
 };  // namespace LayoutAspect
-#endif

@@ -2,13 +2,7 @@
 #include "galaxy/rumble.h"
 #include "galaxy/c_locale_number.h"
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#else
-#include "galaxy/virtual_keys.h"
-#endif
+#include "galaxy/input/key_codes.h"
 
 #include <algorithm>
 #include <atomic>
@@ -24,11 +18,15 @@
 #include <cstring>
 #include <limits>
 
+#if defined(_WINDOWS_) || defined(_INC_WINDOWS)
+#error The shared bindings engine must not include Windows.h
+#endif
+
 namespace galaxy::input {
 
 namespace {
 
-constexpr std::array<const char*, kWiiTargetCount> kTargetIds{
+constexpr std::array<const char*, kGameInputCount> kTargetIds{
     "a", "b", "one", "two", "plus", "minus", "home",
     "dpad_up", "dpad_down", "dpad_left", "dpad_right",
     "stick_up", "stick_down", "stick_left", "stick_right",
@@ -37,7 +35,7 @@ constexpr std::array<const char*, kWiiTargetCount> kTargetIds{
     "pointer_recenter", "jump_back",
 };
 
-constexpr std::array<const char*, kWiiTargetCount> kTargetLabels{
+constexpr std::array<const char*, kGameInputCount> kTargetLabels{
     "A", "B", "1", "2", "+", "-", "HOME",
     "D-PAD UP", "D-PAD DOWN", "D-PAD LEFT", "D-PAD RIGHT",
     "STICK UP", "STICK DOWN", "STICK LEFT", "STICK RIGHT",
@@ -58,21 +56,21 @@ struct NamedKey {
 
 // Keys whose name is not a single letter or digit.
 constexpr NamedKey kNamedKeys[] = {
-    {VK_SPACE, "Space"}, {VK_RETURN, "Enter"}, {VK_TAB, "Tab"},
-    {VK_BACK, "Backspace"}, {VK_ESCAPE, "Escape"},
-    {VK_LSHIFT, "LShift"}, {VK_RSHIFT, "RShift"}, {VK_SHIFT, "Shift"},
-    {VK_LCONTROL, "LCtrl"}, {VK_RCONTROL, "RCtrl"}, {VK_CONTROL, "Ctrl"},
-    {VK_LMENU, "LAlt"}, {VK_RMENU, "RAlt"}, {VK_MENU, "Alt"},
-    {VK_UP, "Up"}, {VK_DOWN, "Down"}, {VK_LEFT, "Left"}, {VK_RIGHT, "Right"},
-    {VK_INSERT, "Insert"}, {VK_DELETE, "Delete"}, {VK_HOME, "Home"},
-    {VK_END, "End"}, {VK_PRIOR, "PageUp"}, {VK_NEXT, "PageDown"},
-    {VK_CAPITAL, "CapsLock"},
-    {VK_OEM_MINUS, "Minus"}, {VK_OEM_PLUS, "Equals"},
-    {VK_OEM_4, "LBracket"}, {VK_OEM_6, "RBracket"}, {VK_OEM_5, "Backslash"},
-    {VK_OEM_1, "Semicolon"}, {VK_OEM_7, "Quote"}, {VK_OEM_COMMA, "Comma"},
-    {VK_OEM_PERIOD, "Period"}, {VK_OEM_2, "Slash"}, {VK_OEM_3, "Grave"},
-    {VK_ADD, "NumAdd"}, {VK_SUBTRACT, "NumSub"}, {VK_MULTIPLY, "NumMul"},
-    {VK_DIVIDE, "NumDiv"}, {VK_DECIMAL, "NumDecimal"},
+    {keys::SPACE, "Space"}, {keys::RETURN, "Enter"}, {keys::TAB, "Tab"},
+    {keys::BACK, "Backspace"}, {keys::ESCAPE, "Escape"},
+    {keys::LSHIFT, "LShift"}, {keys::RSHIFT, "RShift"}, {keys::SHIFT, "Shift"},
+    {keys::LCONTROL, "LCtrl"}, {keys::RCONTROL, "RCtrl"}, {keys::CONTROL, "Ctrl"},
+    {keys::LMENU, "LAlt"}, {keys::RMENU, "RAlt"}, {keys::MENU, "Alt"},
+    {keys::UP, "Up"}, {keys::DOWN, "Down"}, {keys::LEFT, "Left"}, {keys::RIGHT, "Right"},
+    {keys::INSERT, "Insert"}, {keys::DELETE, "Delete"}, {keys::HOME, "Home"},
+    {keys::END, "End"}, {keys::PRIOR, "PageUp"}, {keys::NEXT, "PageDown"},
+    {keys::CAPITAL, "CapsLock"},
+    {keys::OEM_MINUS, "Minus"}, {keys::OEM_PLUS, "Equals"},
+    {keys::OEM_4, "LBracket"}, {keys::OEM_6, "RBracket"}, {keys::OEM_5, "Backslash"},
+    {keys::OEM_1, "Semicolon"}, {keys::OEM_7, "Quote"}, {keys::OEM_COMMA, "Comma"},
+    {keys::OEM_PERIOD, "Period"}, {keys::OEM_2, "Slash"}, {keys::OEM_3, "Grave"},
+    {keys::ADD, "NumAdd"}, {keys::SUBTRACT, "NumSub"}, {keys::MULTIPLY, "NumMul"},
+    {keys::DIVIDE, "NumDiv"}, {keys::DECIMAL, "NumDecimal"},
 };
 
 constexpr std::array<const char*, kMouseButtonCount> kMouseNames{
@@ -105,9 +103,9 @@ constexpr std::array<const char*, 4> kStickAxisNames{"LX", "LY", "RX", "RY"};
 
 bool iequals(std::string_view a, std::string_view b) noexcept {
     if (a.size() != b.size()) return false;
+    const auto lower = [](unsigned char c) { return c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c; };
     for (std::size_t i = 0; i < a.size(); ++i) {
-        if (std::tolower(static_cast<unsigned char>(a[i])) !=
-            std::tolower(static_cast<unsigned char>(b[i]))) {
+        if (lower(static_cast<unsigned char>(a[i])) != lower(static_cast<unsigned char>(b[i]))) {
             return false;
         }
     }
@@ -146,11 +144,11 @@ std::string format_key(std::uint8_t vk) {
     if ((vk >= '0' && vk <= '9') || (vk >= 'A' && vk <= 'Z')) {
         return std::string(1, static_cast<char>(vk));
     }
-    if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) {
-        return "Num" + std::to_string(vk - VK_NUMPAD0);
+    if (vk >= keys::NUMPAD0 && vk <= keys::NUMPAD9) {
+        return "Num" + std::to_string(vk - keys::NUMPAD0);
     }
-    if (vk >= VK_F1 && vk <= VK_F24) {
-        return "F" + std::to_string(vk - VK_F1 + 1);
+    if (vk >= keys::F1 && vk <= keys::F24) {
+        return "F" + std::to_string(vk - keys::F1 + 1);
     }
     for (const NamedKey& key : kNamedKeys) {
         if (key.vk == vk) return key.name;
@@ -187,11 +185,11 @@ std::optional<std::uint8_t> parse_key(std::string_view text) noexcept {
     int value = 0;
     if (text.size() == 4u && iequals(text.substr(0, 3), "Num") &&
         parse_number(text.substr(3), 10, value)) {
-        return static_cast<std::uint8_t>(VK_NUMPAD0 + value);
+        return static_cast<std::uint8_t>(keys::NUMPAD0 + value);
     }
     if (text.size() >= 2u && (text[0] == 'F' || text[0] == 'f') &&
         parse_number(text.substr(1), 10, value) && value >= 1 && value <= 24) {
-        return static_cast<std::uint8_t>(VK_F1 + value - 1);
+        return static_cast<std::uint8_t>(keys::F1 + value - 1);
     }
     if (text.size() == 4u && iequals(text.substr(0, 2), "VK") &&
         parse_number(text.substr(2), 16, value) && value > 0) {
@@ -214,7 +212,7 @@ InputSource axis_neg(PadAxis axis) noexcept {
     return {SourceKind::AxisNegative, static_cast<std::uint8_t>(axis)};
 }
 
-void set(BindingTable& table, WiiTarget target, std::initializer_list<InputSource> sources) {
+void set(BindingTable& table, GameInput target, std::initializer_list<InputSource> sources) {
     TargetBindings bindings{};
     std::size_t i = 0;
     for (InputSource source : sources) {
@@ -260,7 +258,7 @@ bool is_gyro_pad_scheme(ControlScheme scheme) noexcept {
 // positions (South confirms and jumps, East backs out of menus).
 BindingTable gyro_pad_binding_table() {
     BindingTable table{};
-    using T = WiiTarget;
+    using T = GameInput;
     set(table, T::A, {button(pad::kSouthBit)});
     set(table, T::JumpBack, {button(pad::kEastBit)});
     set(table, T::B, {button(pad::kLeftShoulderBit)});
@@ -292,7 +290,7 @@ BindingTable gyro_pad_binding_table() {
 // versions share these.
 BindingTable generic_binding_table() {
     BindingTable table{};
-    using T = WiiTarget;
+    using T = GameInput;
     set(table, T::A, {button(pad::kSouthBit)});
     set(table, T::JumpBack, {button(pad::kEastBit)});
     set(table, T::B, {button(pad::kLeftShoulderBit)});
@@ -325,25 +323,25 @@ BindingTable legacy_binding_table(ControlScheme scheme) {
     if (is_gyro_pad_scheme(scheme)) return gyro_pad_binding_table();
     if (scheme == ControlScheme::Generic) return generic_binding_table();
     BindingTable table{};
-    using T = WiiTarget;
+    using T = GameInput;
     if (scheme == ControlScheme::Keyboard) {
-        set(table, T::A, {key(VK_SPACE), key(VK_RETURN), mouse(MouseButton::Left)});
-        set(table, T::B, {key(VK_LSHIFT), key(VK_RSHIFT), mouse(MouseButton::Right)});
-        set(table, T::One, {key('1'), key(VK_NUMPAD1)});
-        set(table, T::Two, {key('2'), key(VK_NUMPAD2)});
-        set(table, T::Plus, {key(VK_OEM_PLUS), key('P')});
-        set(table, T::Minus, {key(VK_OEM_MINUS), key('M')});
+        set(table, T::A, {key(keys::SPACE), key(keys::RETURN), mouse(MouseButton::Left)});
+        set(table, T::B, {key(keys::LSHIFT), key(keys::RSHIFT), mouse(MouseButton::Right)});
+        set(table, T::One, {key('1'), key(keys::NUMPAD1)});
+        set(table, T::Two, {key('2'), key(keys::NUMPAD2)});
+        set(table, T::Plus, {key(keys::OEM_PLUS), key('P')});
+        set(table, T::Minus, {key(keys::OEM_MINUS), key('M')});
         set(table, T::Home, {key('H')});
-        set(table, T::DpadUp, {key(VK_UP)});
-        set(table, T::DpadDown, {key(VK_DOWN)});
-        set(table, T::DpadLeft, {key(VK_LEFT)});
-        set(table, T::DpadRight, {key(VK_RIGHT)});
+        set(table, T::DpadUp, {key(keys::UP)});
+        set(table, T::DpadDown, {key(keys::DOWN)});
+        set(table, T::DpadLeft, {key(keys::LEFT)});
+        set(table, T::DpadRight, {key(keys::RIGHT)});
         set(table, T::StickUp, {key('W')});
         set(table, T::StickDown, {key('S')});
         set(table, T::StickLeft, {key('A')});
         set(table, T::StickRight, {key('D')});
         set(table, T::C, {key('C')});
-        set(table, T::Z, {key('Z'), key(VK_LCONTROL), key(VK_RCONTROL)});
+        set(table, T::Z, {key('Z'), key(keys::LCONTROL), key(keys::RCONTROL)});
         set(table, T::Shake, {key('Q'), key('E')});
         set(table, T::PointerUp, {key('I')});
         set(table, T::PointerDown, {key('K')});
@@ -388,7 +386,7 @@ BindingTable version2_binding_table(ControlScheme scheme) {
     if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
-    using T = WiiTarget;
+    using T = GameInput;
     const bool xbox = scheme == ControlScheme::Xbox;
     set(table, T::A, {button(xbox ? pad::kSouthBit : pad::kEastBit)});
     set(table, T::JumpBack, {button(xbox ? pad::kEastBit : pad::kSouthBit)});
@@ -416,7 +414,7 @@ BindingTable version3_binding_table(ControlScheme scheme) {
     if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
-    using T = WiiTarget;
+    using T = GameInput;
     set(table, T::B, {button(pad::kLeftShoulderBit)});
     set(table, T::Z, {axis_pos(PadAxis::LeftTrigger), axis_pos(PadAxis::RightTrigger)});
     set(table, T::C, {button(pad::kLeftStickBit)});
@@ -431,10 +429,22 @@ BindingTable version3_binding_table(ControlScheme scheme) {
 // Xbox: the pointer).
 BindingTable default_binding_table(ControlScheme scheme) {
     BindingTable table = version3_binding_table(scheme);
+    if (scheme == ControlScheme::Keyboard) {
+        for (const auto target : {GameInput::StickUp, GameInput::StickDown, GameInput::StickLeft, GameInput::StickRight,
+                                 GameInput::C, GameInput::Z, GameInput::Shake, GameInput::PointerUp,
+                                 GameInput::PointerDown, GameInput::PointerLeft, GameInput::PointerRight,
+                                 GameInput::PointerRecenter}) {
+            for (auto& source : table[target]) {
+                if (source.kind == SourceKind::Key && source.code >= 'A' && source.code <= 'Z')
+                    source.kind = SourceKind::KeyPosition;
+            }
+        }
+        return table;
+    }
     if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
-    using T = WiiTarget;
+    using T = GameInput;
     set(table, T::Z, {axis_pos(PadAxis::LeftTrigger)});
     if (scheme == ControlScheme::Xbox) {
         set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit),
@@ -498,6 +508,7 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
 }
 
 unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept {
+    if (version >= kControlsVersion) return 0u;
     unsigned changed = 0u;
     for (std::size_t s = 0; s < kControlSchemeCount; ++s) {
         const auto scheme = static_cast<ControlScheme>(s);
@@ -505,7 +516,7 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
         const BindingTable version2 = version2_binding_table(scheme);
         const BindingTable version3 = version3_binding_table(scheme);
         const BindingTable current = default_binding_table(scheme);
-        for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+        for (std::size_t t = 0; t < kGameInputCount; ++t) {
             TargetBindings& bindings = config.tables[s].targets[t];
             const bool old_default = bindings == legacy.targets[t] || bindings == version2.targets[t] ||
                                      bindings == version3.targets[t];
@@ -522,7 +533,7 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
             tuning.gyro_pointer = current_tuning.gyro_pointer;
             ++changed;
         }
-        if (version < kControlsVersion && scheme_is_gamepad(scheme)) {
+        if (version < 5u && scheme_is_gamepad(scheme)) {
             const bool old_seconds =
                 (version < 4u && tuning.pointer_hide_seconds == kVersion3PointerHideSeconds) ||
                 tuning.pointer_hide_seconds == kVersion4PointerHideSeconds;
@@ -558,11 +569,11 @@ const char* control_scheme_id(ControlScheme scheme) noexcept {
 const char* control_scheme_label(ControlScheme scheme) noexcept {
     return kSchemeLabels[static_cast<std::size_t>(scheme) % kControlSchemeCount];
 }
-const char* wii_target_id(WiiTarget target) noexcept {
-    return kTargetIds[static_cast<std::size_t>(target) % kWiiTargetCount];
+const char* game_input_id(GameInput target) noexcept {
+    return kTargetIds[static_cast<std::size_t>(target) % kGameInputCount];
 }
-const char* wii_target_label(WiiTarget target) noexcept {
-    return kTargetLabels[static_cast<std::size_t>(target) % kWiiTargetCount];
+const char* game_input_label(GameInput target) noexcept {
+    return kTargetLabels[static_cast<std::size_t>(target) % kGameInputCount];
 }
 
 std::optional<ControlScheme> parse_control_scheme(std::string_view id) noexcept {
@@ -572,9 +583,9 @@ std::optional<ControlScheme> parse_control_scheme(std::string_view id) noexcept 
     return std::nullopt;
 }
 
-std::optional<WiiTarget> parse_wii_target(std::string_view id) noexcept {
+std::optional<GameInput> parse_wii_target(std::string_view id) noexcept {
     for (std::size_t i = 0; i < kTargetIds.size(); ++i) {
-        if (iequals(id, kTargetIds[i])) return static_cast<WiiTarget>(i);
+        if (iequals(id, kTargetIds[i])) return static_cast<GameInput>(i);
     }
     return std::nullopt;
 }
@@ -585,6 +596,8 @@ std::string format_input_source(ControlScheme scheme, InputSource source) {
         return "None";
     case SourceKind::Key:
         return format_key(source.code);
+    case SourceKind::KeyPosition:
+        return source.code >= 'A' && source.code <= 'Z' ? "Position." + format_key(source.code) : "None";
     case SourceKind::Mouse:
         return source.code < kMouseNames.size() ? kMouseNames[source.code] : "None";
     case SourceKind::Button:
@@ -607,6 +620,13 @@ std::optional<InputSource> parse_input_source(ControlScheme scheme, std::string_
     text = trim(text);
     if (text.empty()) return std::nullopt;
     if (scheme == ControlScheme::Keyboard) {
+        constexpr std::string_view prefix = "Position.";
+        if (text.size() == prefix.size() + 1u && iequals(text.substr(0, prefix.size()), prefix)) {
+            auto letter = static_cast<std::uint8_t>(text.back());
+            if (letter >= 'a' && letter <= 'z') letter = static_cast<std::uint8_t>(letter - 'a' + 'A');
+            if (letter >= 'A' && letter <= 'Z') return InputSource{SourceKind::KeyPosition, letter};
+            return std::nullopt;
+        }
         for (std::size_t i = 0; i < kMouseNames.size(); ++i) {
             if (iequals(text, kMouseNames[i])) return mouse(static_cast<MouseButton>(i));
         }
@@ -668,15 +688,17 @@ bool parse_target_bindings(ControlScheme scheme, std::string_view text, TargetBi
     return true;
 }
 
-bool binding_source_allowed(ControlScheme scheme, WiiTarget target, InputSource source) noexcept {
+bool binding_source_allowed(ControlScheme scheme, GameInput target, InputSource source) noexcept {
     switch (source.kind) {
     case SourceKind::None:
         return false;
     case SourceKind::Key:
         return scheme == ControlScheme::Keyboard && source.code != 0u;
+    case SourceKind::KeyPosition:
+        return scheme == ControlScheme::Keyboard && source.code >= 'A' && source.code <= 'Z';
     case SourceKind::Mouse:
         return scheme == ControlScheme::Keyboard && source.code < kMouseButtonCount &&
-               !wii_target_is_analog(target);
+               !game_input_is_analog(target);
     case SourceKind::Button:
         return source.code < pad::kButtonBitCount &&
                (scheme_button_mask(scheme) & pad::bit(source.code)) != 0u;
@@ -807,7 +829,7 @@ std::string format_controls_settings(const ControlsConfig& config) {
     for (std::size_t s = 0; s < kControlSchemeCount; ++s) {
         const auto scheme = static_cast<ControlScheme>(s);
         const std::string prefix = std::string(control_scheme_id(scheme)) + ".";
-        for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+        for (std::size_t t = 0; t < kGameInputCount; ++t) {
             text += "bind." + prefix + kTargetIds[t] + "=" +
                     format_target_bindings(scheme, config.tables[s].targets[t]) + "\n";
         }
@@ -844,6 +866,8 @@ float source_value_keyboard(InputSource source, const KeyboardMouseLevels& level
     switch (source.kind) {
     case SourceKind::Key:
         return levels.key(source.code) ? 1.0f : 0.0f;
+    case SourceKind::KeyPosition:
+        return levels.position(source.code) ? 1.0f : 0.0f;
     case SourceKind::Mouse:
         return source.code < kMouseButtonCount &&
                        levels.mouse_button(static_cast<MouseButton>(source.code))
@@ -877,8 +901,8 @@ bool is_stick_source(InputSource source) noexcept {
            source.code <= static_cast<std::uint8_t>(PadAxis::RightY);
 }
 
-bool is_pointer_target(WiiTarget target) noexcept {
-    return target >= WiiTarget::PointerUp && target <= WiiTarget::PointerRight;
+bool is_pointer_target(GameInput target) noexcept {
+    return target >= GameInput::PointerUp && target <= GameInput::PointerRight;
 }
 
 // Bit per stick axis (code) bound to a pointer direction / to anything else.
@@ -889,11 +913,11 @@ struct StickRoles {
 
 StickRoles stick_roles(const BindingTable& table) noexcept {
     StickRoles roles{};
-    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+    for (std::size_t t = 0; t < kGameInputCount; ++t) {
         for (const InputSource& source : table.targets[t]) {
             if (!is_stick_source(source)) continue;
             const auto bit = static_cast<std::uint8_t>(1u << source.code);
-            (is_pointer_target(static_cast<WiiTarget>(t)) ? roles.pointer : roles.other) |= bit;
+            (is_pointer_target(static_cast<GameInput>(t)) ? roles.pointer : roles.other) |= bit;
         }
     }
     return roles;
@@ -903,10 +927,10 @@ template <typename ValueOf, typename PressedOf, typename Usable>
 LogicalInput evaluate(const BindingTable& table, ValueOf&& value_of, PressedOf&& pressed_of,
                       Usable&& usable) noexcept {
     LogicalInput out{};
-    std::array<float, kWiiTargetCount> analog{};
-    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
-        const auto target = static_cast<WiiTarget>(t);
-        const bool is_analog = wii_target_is_analog(target);
+    std::array<float, kGameInputCount> analog{};
+    for (std::size_t t = 0; t < kGameInputCount; ++t) {
+        const auto target = static_cast<GameInput>(t);
+        const bool is_analog = game_input_is_analog(target);
         float magnitude = 0.0f;
         bool pressed = false;
         for (const InputSource& source : table.targets[t]) {
@@ -921,13 +945,13 @@ LogicalInput evaluate(const BindingTable& table, ValueOf&& value_of, PressedOf&&
             analog[t] = magnitude;
             pressed = magnitude >= kStickDirectionPress;
         }
-        if (pressed) out.pressed |= wii_target_bit(target);
+        if (pressed) out.pressed |= game_input_bit(target);
     }
-    const auto at = [&analog](WiiTarget t) { return analog[static_cast<std::size_t>(t)]; };
-    out.stick_x = at(WiiTarget::StickRight) - at(WiiTarget::StickLeft);
-    out.stick_y = at(WiiTarget::StickUp) - at(WiiTarget::StickDown);
-    out.pointer_x = at(WiiTarget::PointerRight) - at(WiiTarget::PointerLeft);
-    out.pointer_y = at(WiiTarget::PointerUp) - at(WiiTarget::PointerDown);
+    const auto at = [&analog](GameInput t) { return analog[static_cast<std::size_t>(t)]; };
+    out.stick_x = at(GameInput::StickRight) - at(GameInput::StickLeft);
+    out.stick_y = at(GameInput::StickUp) - at(GameInput::StickDown);
+    out.pointer_x = at(GameInput::PointerRight) - at(GameInput::PointerLeft);
+    out.pointer_y = at(GameInput::PointerUp) - at(GameInput::PointerDown);
     return out;
 }
 
@@ -937,8 +961,8 @@ LogicalInput evaluate_keyboard_bindings(const BindingTable& table, const Keyboar
     return evaluate(
         table,
         [&levels](InputSource s) { return source_value_keyboard(s, levels); },
-        [&levels](WiiTarget, InputSource s) { return source_value_keyboard(s, levels) >= 0.5f; },
-        [](WiiTarget, InputSource) { return true; });
+        [&levels](GameInput, InputSource s) { return source_value_keyboard(s, levels) >= 0.5f; },
+        [](GameInput, InputSource) { return true; });
 }
 
 LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& sample,
@@ -953,14 +977,14 @@ LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& s
     return evaluate(
         table,
         [&sample](InputSource s) { return source_value_pad(s, sample); },
-        [&sample, trigger_threshold, previous_pressed](WiiTarget target, InputSource s) {
+        [&sample, trigger_threshold, previous_pressed](GameInput target, InputSource s) {
             const float value = source_value_pad(s, sample);
             if (is_trigger_source(s)) return value >= trigger_threshold && value > 0.0f;
-            const bool was_pressed = (previous_pressed & wii_target_bit(target)) != 0u;
+            const bool was_pressed = (previous_pressed & game_input_bit(target)) != 0u;
             return value >= kStickDirectionPress ||
                    (was_pressed && is_stick_source(s) && value >= kStickDirectionRelease);
         },
-        [&roles, sensor_pointing](WiiTarget target, InputSource s) {
+        [&roles, sensor_pointing](GameInput target, InputSource s) {
             if (!is_stick_source(s)) return true;
             const auto bit = static_cast<std::uint8_t>(1u << s.code);
             if ((roles.pointer & roles.other & bit) == 0u) return true;
@@ -970,15 +994,15 @@ LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& s
 
 std::uint32_t shared_binding_targets(const BindingTable& table) noexcept {
     std::uint32_t shared = 0u;
-    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
-        for (std::size_t u = t + 1u; u < kWiiTargetCount; ++u) {
-            const auto first = static_cast<WiiTarget>(t);
-            const auto second = static_cast<WiiTarget>(u);
+    for (std::size_t t = 0; t < kGameInputCount; ++t) {
+        for (std::size_t u = t + 1u; u < kGameInputCount; ++u) {
+            const auto first = static_cast<GameInput>(t);
+            const auto second = static_cast<GameInput>(u);
             for (const InputSource& a : table.targets[t]) {
                 if (a.empty()) continue;
                 const bool together = !is_stick_source(a) || is_pointer_target(first) == is_pointer_target(second);
                 for (const InputSource& b : table.targets[u]) {
-                    if (together && a == b) shared |= wii_target_bit(first) | wii_target_bit(second);
+                    if (together && a == b) shared |= game_input_bit(first) | game_input_bit(second);
                 }
             }
         }
@@ -999,11 +1023,11 @@ LogicalInput merge_logical_input(const LogicalInput& a, const LogicalInput& b) n
 
 std::uint32_t mouse_bound_targets(const BindingTable& table, std::uint8_t mouse_buttons) noexcept {
     std::uint32_t mask = 0u;
-    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+    for (std::size_t t = 0; t < kGameInputCount; ++t) {
         for (const InputSource& source : table.targets[t]) {
             if (source.kind == SourceKind::Mouse && source.code < kMouseButtonCount &&
                 ((mouse_buttons >> source.code) & 1u) != 0u) {
-                mask |= wii_target_bit(static_cast<WiiTarget>(t));
+                mask |= game_input_bit(static_cast<GameInput>(t));
             }
         }
     }
@@ -1020,6 +1044,21 @@ KeyList referenced_keys(const BindingTable& table) noexcept {
     KeyList list{};
     for (std::size_t vk = 1; vk < seen.size() && list.count < list.keys.size(); ++vk) {
         if (seen[vk]) list.keys[list.count++] = static_cast<std::uint8_t>(vk);
+    }
+    return list;
+}
+
+KeyList referenced_key_positions(const BindingTable& table) noexcept {
+    std::array<bool, 26> seen{};
+    for (const auto& bindings : table.targets) {
+        for (const auto& source : bindings) {
+            if (source.kind == SourceKind::KeyPosition && source.code >= 'A' && source.code <= 'Z')
+                seen[source.code - 'A'] = true;
+        }
+    }
+    KeyList list;
+    for (std::size_t i = 0; i < seen.size(); ++i) {
+        if (seen[i]) list.keys[list.count++] = static_cast<std::uint8_t>('A' + i);
     }
     return list;
 }
@@ -1082,9 +1121,16 @@ struct GlyphPlace {
 };
 
 GlyphPlace glyph_of(InputSource source) noexcept {
-    if (source.kind == SourceKind::AxisPositive) {
-        if (source.code == static_cast<std::uint8_t>(PadAxis::LeftTrigger)) return {ButtonGlyph::Trigger, 0u};
-        if (source.code == static_cast<std::uint8_t>(PadAxis::RightTrigger)) return {ButtonGlyph::Trigger, 1u};
+    if (source.kind == SourceKind::AxisPositive || source.kind == SourceKind::AxisNegative) {
+        const bool positive = source.kind == SourceKind::AxisPositive;
+        switch (static_cast<PadAxis>(source.code)) {
+        case PadAxis::LeftTrigger: return positive ? GlyphPlace{ButtonGlyph::Trigger, 0u} : GlyphPlace{};
+        case PadAxis::RightTrigger: return positive ? GlyphPlace{ButtonGlyph::Trigger, 1u} : GlyphPlace{};
+        case PadAxis::LeftY: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{0u} : std::uint8_t{1u}};
+        case PadAxis::LeftX: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{3u} : std::uint8_t{2u}};
+        case PadAxis::RightY: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{4u} : std::uint8_t{5u}};
+        case PadAxis::RightX: return {ButtonGlyph::StickAxis, positive ? std::uint8_t{7u} : std::uint8_t{6u}};
+        }
         return {};
     }
     if (source.kind != SourceKind::Button) return {};
@@ -1104,21 +1150,29 @@ GlyphPlace glyph_of(InputSource source) noexcept {
     case pad::kDpadDownBit:
     case pad::kDpadLeftBit:
     case pad::kDpadRightBit: return {ButtonGlyph::Dpad, 0u};
+    case pad::kCaptureBit: return {ButtonGlyph::Capture, 0u};
+    case pad::kChatBit: return {ButtonGlyph::Chat, 0u};
+    case pad::kGripLeftBit: return {ButtonGlyph::Grip, 0u};
+    case pad::kGripRightBit: return {ButtonGlyph::Grip, 1u};
+    case pad::kGripLeft2Bit: return {ButtonGlyph::Grip, 2u};
+    case pad::kGripRight2Bit: return {ButtonGlyph::Grip, 3u};
+    case pad::kLeftPadBit: return {ButtonGlyph::Trackpad, 0u};
+    case pad::kRightPadBit: return {ButtonGlyph::Trackpad, 1u};
     default: return {};
     }
 }
 
 // The layout keys in key icon order: US ; = , - . / ` [ \ ] ', OEM 8 and the ISO key.
 constexpr std::array<std::uint8_t, kKeyIconLayoutCount> kLayoutKeys{
-    VK_OEM_1, VK_OEM_PLUS, VK_OEM_COMMA, VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_2, VK_OEM_3,
-    VK_OEM_4, VK_OEM_5, VK_OEM_6, VK_OEM_7, VK_OEM_8, VK_OEM_102};
+    keys::OEM_1, keys::OEM_PLUS, keys::OEM_COMMA, keys::OEM_MINUS, keys::OEM_PERIOD, keys::OEM_2, keys::OEM_3,
+    keys::OEM_4, keys::OEM_5, keys::OEM_6, keys::OEM_7, keys::OEM_8, keys::OEM_102};
 
 // Named keys' icons in order from Space (the game API's NEBULA_KEY_SPACE .. NEBULA_KEY_RIGHT_WIN).
 constexpr std::uint8_t kKeyIconSpace = 75;
 constexpr std::array<std::uint8_t, 32> kNamedKeyIcons{
-    VK_SPACE, VK_RETURN, VK_TAB, VK_BACK, VK_ESCAPE, VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL,
-    VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_INSERT, VK_DELETE, VK_HOME,
-    VK_END, VK_PRIOR, VK_NEXT, VK_CAPITAL, VK_NUMLOCK, VK_SCROLL, VK_PAUSE, VK_SNAPSHOT, VK_APPS, VK_LWIN, VK_RWIN};
+    keys::SPACE, keys::RETURN, keys::TAB, keys::BACK, keys::ESCAPE, keys::SHIFT, keys::LSHIFT, keys::RSHIFT, keys::CONTROL, keys::LCONTROL,
+    keys::RCONTROL, keys::MENU, keys::LMENU, keys::RMENU, keys::UP, keys::DOWN, keys::LEFT, keys::RIGHT, keys::INSERT, keys::DELETE, keys::HOME,
+    keys::END, keys::PRIOR, keys::NEXT, keys::CAPITAL, keys::NUMLOCK, keys::SCROLL, keys::PAUSE, keys::SNAPSHOT, keys::APPS, keys::LWIN, keys::RWIN};
 static_assert(kKeyIconSpace + kNamedKeyIcons.size() == kKeyIconLayoutFirst);
 
 }  // namespace
@@ -1129,18 +1183,18 @@ std::optional<std::uint8_t> key_icon(InputSource source) noexcept {
         if (source.code >= kMouseButtonCount) return std::nullopt;
         return static_cast<Icon>(kKeyIconMouseLeft + source.code);
     }
-    if (source.kind != SourceKind::Key) return std::nullopt;
+    if (source.kind != SourceKind::Key && source.kind != SourceKind::KeyPosition) return std::nullopt;
     const std::uint8_t vk = source.code;
     if (vk >= 'A' && vk <= 'Z') return static_cast<Icon>(vk - 'A');
     if (vk >= '0' && vk <= '9') return static_cast<Icon>(26 + vk - '0');
-    if (vk >= VK_F1 && vk <= VK_F24) return static_cast<Icon>(36 + vk - VK_F1);
-    if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) return static_cast<Icon>(60 + vk - VK_NUMPAD0);
+    if (vk >= keys::F1 && vk <= keys::F24) return static_cast<Icon>(36 + vk - keys::F1);
+    if (vk >= keys::NUMPAD0 && vk <= keys::NUMPAD9) return static_cast<Icon>(60 + vk - keys::NUMPAD0);
     switch (vk) {
-    case VK_ADD: return Icon{70};
-    case VK_SUBTRACT: return Icon{71};
-    case VK_MULTIPLY: return Icon{72};
-    case VK_DIVIDE: return Icon{73};
-    case VK_DECIMAL: return Icon{74};
+    case keys::ADD: return Icon{70};
+    case keys::SUBTRACT: return Icon{71};
+    case keys::MULTIPLY: return Icon{72};
+    case keys::DIVIDE: return Icon{73};
+    case keys::DECIMAL: return Icon{74};
     default: break;
     }
     for (std::size_t i = 0; i < kNamedKeyIcons.size(); ++i) {
@@ -1158,17 +1212,17 @@ std::array<char, 8> key_icon_name(std::uint8_t vk) noexcept {
         const char* name;
     };
     static constexpr Name kNames[] = {
-        {VK_VOLUME_MUTE, "MUTE"}, {VK_VOLUME_DOWN, "VOL -"}, {VK_VOLUME_UP, "VOL +"}, {VK_MEDIA_NEXT_TRACK, "NEXT"},
-        {VK_MEDIA_PREV_TRACK, "PREV"}, {VK_MEDIA_STOP, "STOP"}, {VK_MEDIA_PLAY_PAUSE, "PLAY"}, {VK_BROWSER_BACK, "BACK"},
-        {VK_BROWSER_FORWARD, "FWD"}, {VK_BROWSER_REFRESH, "RELOAD"}, {VK_BROWSER_STOP, "STOP"},
-        {VK_BROWSER_SEARCH, "SEARCH"}, {VK_BROWSER_FAVORITES, "FAV"}, {VK_BROWSER_HOME, "WEB"}, {VK_LAUNCH_MAIL, "MAIL"},
-        {VK_LAUNCH_MEDIA_SELECT, "MEDIA"}, {VK_LAUNCH_APP1, "APP 1"}, {VK_LAUNCH_APP2, "APP 2"}, {VK_SLEEP, "SLEEP"},
-        {VK_HELP, "HELP"}, {VK_SELECT, "SELECT"}, {VK_PRINT, "PRINT"}, {VK_EXECUTE, "EXEC"}, {VK_CLEAR, "CLEAR"},
-        {VK_SEPARATOR, "SEP"}, {VK_CANCEL, "BREAK"}, {VK_KANA, "KANA"}, {VK_JUNJA, "JUNJA"}, {VK_FINAL, "FINAL"},
-        {VK_KANJI, "KANJI"}, {VK_CONVERT, "CONV"}, {VK_NONCONVERT, "NCONV"}, {VK_ACCEPT, "ACCEPT"},
-        {VK_MODECHANGE, "MODE"}, {VK_OEM_ATTN, "EISU"}, {VK_OEM_FINISH, "KATA"}, {VK_OEM_COPY, "HIRA"},
-        {VK_OEM_AUTO, "HANKAK"}, {VK_OEM_ENLW, "ZENKAK"}, {VK_OEM_BACKTAB, "ROMAJI"}, {VK_ATTN, "ATTN"},
-        {VK_PLAY, "PLAY"}, {VK_ZOOM, "ZOOM"}, {VK_OEM_CLEAR, "CLEAR"},
+        {keys::VOLUME_MUTE, "MUTE"}, {keys::VOLUME_DOWN, "VOL -"}, {keys::VOLUME_UP, "VOL +"}, {keys::MEDIA_NEXT_TRACK, "NEXT"},
+        {keys::MEDIA_PREV_TRACK, "PREV"}, {keys::MEDIA_STOP, "STOP"}, {keys::MEDIA_PLAY_PAUSE, "PLAY"}, {keys::BROWSER_BACK, "BACK"},
+        {keys::BROWSER_FORWARD, "FWD"}, {keys::BROWSER_REFRESH, "RELOAD"}, {keys::BROWSER_STOP, "STOP"},
+        {keys::BROWSER_SEARCH, "SEARCH"}, {keys::BROWSER_FAVORITES, "FAV"}, {keys::BROWSER_HOME, "WEB"}, {keys::LAUNCH_MAIL, "MAIL"},
+        {keys::LAUNCH_MEDIA_SELECT, "MEDIA"}, {keys::LAUNCH_APP1, "APP 1"}, {keys::LAUNCH_APP2, "APP 2"}, {keys::SLEEP, "SLEEP"},
+        {keys::HELP, "HELP"}, {keys::SELECT, "SELECT"}, {keys::PRINT, "PRINT"}, {keys::EXECUTE, "EXEC"}, {keys::CLEAR, "CLEAR"},
+        {keys::SEPARATOR, "SEP"}, {keys::CANCEL, "BREAK"}, {keys::KANA, "KANA"}, {keys::JUNJA, "JUNJA"}, {keys::FINAL, "FINAL"},
+        {keys::KANJI, "KANJI"}, {keys::CONVERT, "CONV"}, {keys::NONCONVERT, "NCONV"}, {keys::ACCEPT, "ACCEPT"},
+        {keys::MODECHANGE, "MODE"}, {keys::OEM_ATTN, "EISU"}, {keys::OEM_FINISH, "KATA"}, {keys::OEM_COPY, "HIRA"},
+        {keys::OEM_AUTO, "HANKAK"}, {keys::OEM_ENLW, "ZENKAK"}, {keys::OEM_BACKTAB, "ROMAJI"}, {keys::ATTN, "ATTN"},
+        {keys::PLAY, "PLAY"}, {keys::ZOOM, "ZOOM"}, {keys::OEM_CLEAR, "CLEAR"},
     };
     std::array<char, 8> out{};
     for (const Name& name : kNames) {
@@ -1187,37 +1241,38 @@ std::uint8_t key_icon_layout_key(std::size_t index) noexcept {
 
 namespace {
 
-// The keyboard's icons: each Wii button's input as the player reaches for it there (B's in menus JumpBack's first),
+// The keyboard's icons: each game button's input as the player reaches for it there (B's in menus JumpBack's first),
 // HOME's, and the Control Pad's four keys. A in menus and B everywhere show their first mouse button where they have one
 // (the pointer chooses in menus; B shoots Star Bits where the pointer aims: Space and the left click are both A, Shift
 // and the right click both B); every other icon, and A in play, its first key, else its first mouse button.
 ButtonIconSpec keyboard_icon_spec(const BindingTable& table, bool menu) noexcept {
     ButtonIconSpec spec;
     spec.style = ButtonIconStyle::Keyboard;
-    const auto first = [&table](WiiTarget target, bool mouse_first = false) -> std::optional<InputSource> {
+    const auto first = [&table](GameInput target, bool mouse_first = false) -> std::optional<InputSource> {
         for (const SourceKind kind : {mouse_first ? SourceKind::Mouse : SourceKind::Key,
                                       mouse_first ? SourceKind::Key : SourceKind::Mouse}) {
             for (const InputSource source : table[target]) {
-                if (source.kind == kind && key_icon(source).has_value()) return source;
+                const bool matches = source.kind == kind || (kind == SourceKind::Key && source.kind == SourceKind::KeyPosition);
+                if (matches && key_icon(source).has_value()) return source;
             }
         }
         return std::nullopt;
     };
-    static constexpr WiiTarget kTargets[static_cast<std::size_t>(ButtonIcon::Pad)] = {
-        WiiTarget::A, WiiTarget::B, WiiTarget::C, WiiTarget::Z, WiiTarget::One, WiiTarget::Two, WiiTarget::Plus,
-        WiiTarget::Minus, WiiTarget::Home};
+    static constexpr GameInput kTargets[static_cast<std::size_t>(ButtonIcon::Pad)] = {
+        GameInput::A, GameInput::B, GameInput::C, GameInput::Z, GameInput::One, GameInput::Two, GameInput::Plus,
+        GameInput::Minus, GameInput::Home};
     for (std::size_t i = 0; i < std::size(kTargets); ++i) {
         const bool b = i == static_cast<std::size_t>(ButtonIcon::B);
         const bool mouse_first = b || (i == static_cast<std::size_t>(ButtonIcon::A) && menu);
-        std::optional<InputSource> input = b && menu ? first(WiiTarget::JumpBack, mouse_first) : std::nullopt;
+        std::optional<InputSource> input = b && menu ? first(GameInput::JumpBack, mouse_first) : std::nullopt;
         if (!input) input = first(kTargets[i], mouse_first);
         const std::optional<std::uint8_t> icon = input ? key_icon(*input) : std::nullopt;
         spec.glyphs[i] = icon ? ButtonGlyph::Key : ButtonGlyph::Keep;
         spec.places[i] = icon.value_or(0u);
         if (icon == kKeyIconOther) spec.other[i] = key_icon_name(input->code);
     }
-    static constexpr WiiTarget kPad[4] = {WiiTarget::DpadUp, WiiTarget::DpadDown, WiiTarget::DpadLeft,
-                                          WiiTarget::DpadRight};
+    static constexpr GameInput kPad[4] = {GameInput::DpadUp, GameInput::DpadDown, GameInput::DpadLeft,
+                                          GameInput::DpadRight};
     bool any = false;
     for (std::size_t i = 0; i < 4u; ++i) {
         const std::optional<InputSource> input = first(kPad[i]);
@@ -1231,16 +1286,21 @@ ButtonIconSpec keyboard_icon_spec(const BindingTable& table, bool menu) noexcept
 
 }  // namespace
 
-ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept {
+ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu,
+                                ButtonIconModel model) noexcept {
     if (style == ButtonIconStyle::Keyboard) return keyboard_icon_spec(table, menu);
     ButtonIconSpec spec;
     spec.style = style;
-    if (style == ButtonIconStyle::Wii) return spec;
-    // HOME and the Control Pad look alike on every controller: the Wii's own stay (Keep).
-    static constexpr WiiTarget kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
-        WiiTarget::A, WiiTarget::B, WiiTarget::C, WiiTarget::Z, WiiTarget::One, WiiTarget::Two, WiiTarget::Plus,
-        WiiTarget::Minus};
-    const auto first = [&table](WiiTarget target) {
+    if (style == ButtonIconStyle::Game) return spec;
+    if ((model == ButtonIconModel::Sixaxis && style == ButtonIconStyle::PlayStation) ||
+        (model == ButtonIconModel::GameCube && style == ButtonIconStyle::Nintendo)) {
+        spec.model = model;
+    }
+    // HOME and the Control Pad look alike on every controller: the game's own stay (Keep).
+    static constexpr GameInput kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
+        GameInput::A, GameInput::B, GameInput::C, GameInput::Z, GameInput::One, GameInput::Two, GameInput::Plus,
+        GameInput::Minus};
+    const auto first = [&table](GameInput target) {
         for (const InputSource source : table[target]) {
             const GlyphPlace found = glyph_of(source);
             if (found.glyph != ButtonGlyph::Keep) return found;
@@ -1248,7 +1308,7 @@ ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table
         return GlyphPlace{};
     };
     for (std::size_t i = 0; i < std::size(kTargets); ++i) {
-        GlyphPlace found = i == static_cast<std::size_t>(ButtonIcon::B) && menu ? first(WiiTarget::JumpBack) : GlyphPlace{};
+        GlyphPlace found = i == static_cast<std::size_t>(ButtonIcon::B) && menu ? first(GameInput::JumpBack) : GlyphPlace{};
         if (found.glyph == ButtonGlyph::Keep) found = first(kTargets[i]);
         spec.glyphs[i] = found.glyph;
         spec.places[i] = found.place;

@@ -18,7 +18,8 @@ namespace Nebula.Launcher
         public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
             var game = new ProcessStartInfo(Path.Combine(app, "NebulaNative.exe"),
-                "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --nand " + ProcessRunner.Quote(saves));
+                "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --saves " + ProcessRunner.Quote(saves) +
+                (recording != RecordingMode.None ? " --diagnostics 1" : ""));
             game.UseShellExecute = false;
             game.CreateNoWindow = true;
             game.WorkingDirectory = app;
@@ -33,19 +34,12 @@ namespace Nebula.Launcher
 
         internal static void ApplyRecording(ProcessStartInfo start, RecordingMode mode)
         {
-            bool record = mode != RecordingMode.None, detailed = mode == RecordingMode.Detailed;
+            bool record = mode != RecordingMode.None;
             var env = start.EnvironmentVariables;
-            foreach (var flag in new[] { "GALAXY_TRACE_PRESENT_STATS", "GALAXY_MONITOR_POINTER_LATENCY",
-                "GALAXY_MONITOR_FRAME_TAILS", "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_FRAME_TELEMETRY" })
+            foreach (var flag in new[] { "GALAXY_MONITOR_POINTER_LATENCY", "GALAXY_MONITOR_FRAME_TAILS" })
                 env[flag] = record ? "1" : "0";
-            env["GALAXY_TRACE_GX_STALLS"] = detailed ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE"] = record ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE_EVENTS"] = "4000000";
-            env["GALAXY_GPU_TIMESTAMPS"] = detailed ? "1" : "0";
-            env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
-            env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailed ? "32" : "0";
-            env["GALAXY_GX_PSO_CYCLES"] = detailed ? "1" : "0";
-            env["GALAXY_TRACE_GX_STALL_US"] = "20000";
         }
 
         public static void ValidatePair(string app)
@@ -53,14 +47,14 @@ namespace Nebula.Launcher
             string manifest = Path.Combine(app, "validation-pair.json");
             if (!File.Exists(manifest)) return; // Standard setup validates its own payload.
             var files = Json.Obj(Json.Load(manifest), "files");
-            if (files == null) throw new InvalidDataException("The portable build manifest is missing.");
+            if (files == null) throw new InvalidDataException(NebulaText.Of("The portable build manifest is missing."));
             string prefix = Path.GetFullPath(app).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             foreach (var file in files)
             {
                 string path = Path.GetFullPath(Path.Combine(app, file.Key));
                 if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || !File.Exists(path) ||
                     !string.Equals(FileUtil.Sha256File(path), Convert.ToString(file.Value), StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Portable build file mismatch: " + file.Key + ". Extract the complete ZIP again.");
+                    throw new InvalidDataException(NebulaText.Of("Portable build file mismatch: {0}. Extract the complete ZIP again.", file.Key));
             }
         }
 
@@ -68,7 +62,7 @@ namespace Nebula.Launcher
         public static void PreserveUserData(string dataRoot, string backupKey)
         {
             if (backupKey.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || backupKey == "." || backupKey == "..")
-                throw new ArgumentException("Invalid backup identity.");
+                throw new ArgumentException(NebulaText.Of("Invalid backup identity."));
             string backup = Path.Combine(dataRoot, "backups", backupKey);
             string completed = Path.Combine(backup, "backup.json");
             if (File.Exists(completed)) return;
@@ -92,17 +86,17 @@ namespace Nebula.Launcher
                         var a = FileUtil.StreamDigests(entry);
                         var b = FileUtil.StreamDigests(Path.Combine(target, relative));
                         if (a.Count != b.Count || a.Any(p => !b.ContainsKey(p.Key) || b[p.Key] != p.Value))
-                            throw new IOException("Save/cache backup verification failed: " + relative + ". The game was not started.");
+                            throw new IOException(NebulaText.Of("Save/cache backup verification failed: {0}. The game was not started.", relative));
                     }
                 }
                 foreach (string name in new[] { "settings.json", "config.ini" })
                 {
                     string source = Path.Combine(dataRoot, name), target = Path.Combine(snapshot, name);
                     if (!File.Exists(source)) continue;
-                    if (!NativeMethods.CopyFileW(source, target, true)) throw new IOException("Settings backup failed: " + name);
+                    if (!NativeMethods.CopyFileW(source, target, true)) throw new IOException(NebulaText.Of("Settings backup failed: {0}", name));
                     var a = FileUtil.StreamDigests(source); var b = FileUtil.StreamDigests(target);
                     if (a.Count != b.Count || a.Any(p => !b.ContainsKey(p.Key) || b[p.Key] != p.Value))
-                        throw new IOException("Settings backup verification failed: " + name);
+                        throw new IOException(NebulaText.Of("Settings backup verification failed: {0}", name));
                 }
                 Json.Save(completed, new Dictionary<string, object> { { "createdUtc", DateTime.UtcNow.ToString("o") },
                     { "source", dataRoot }, { "version", backupKey }, { "snapshot", snapshot } });

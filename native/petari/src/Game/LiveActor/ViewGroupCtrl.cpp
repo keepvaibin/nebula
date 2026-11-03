@@ -6,13 +6,15 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
+#include "Game/Map/StageSwitch.hpp"
 
 namespace {
     // sLodCtrlNumMax
     const u32 sAllLodCtrlNumMax = 0x100;
 };  // namespace
 
-ViewGroupCtrl::ViewGroupCtrl() : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupData(), mViewCtrlCount(), mLodCtrls() {
+ViewGroupCtrl::ViewGroupCtrl() : mViewCubeMgr(), mMaxViewGroupId(), mViewGroupData(), mViewCtrlCount(), mLodCtrls(), mLodCtrlCapacity(::sAllLodCtrlNumMax), mPlanetsFromStart(false) {
     mLodCtrls = new LodCtrl*[::sAllLodCtrlNumMax];
 
     for (u32 i = 0; i < ::sAllLodCtrlNumMax; i++) {
@@ -47,6 +49,16 @@ void ViewGroupCtrl::entryLodCtrl(LodCtrl* pCtrl, const JMapInfoIter& rIter) {
     s32 groupID = -1;
     if (MR::getJMapInfoViewGroupID(rIter, &groupID)) {
         pCtrl->mViewGroupID = groupID;
+        if (mViewCtrlCount >= mLodCtrlCapacity) {
+            const s32 grown = mLodCtrlCapacity * 2;
+            LodCtrl** pList = new LodCtrl*[grown]();
+            for (s32 i = 0; i < mViewCtrlCount; i++) {
+                pList[i] = mLodCtrls[i];
+            }
+            delete[] mLodCtrls;
+            mLodCtrls = pList;
+            mLodCtrlCapacity = grown;
+        }
         mLodCtrls[mViewCtrlCount] = pCtrl;
         mViewCtrlCount++;
     }
@@ -78,7 +90,7 @@ void ViewGroupCtrl::update() {
                 entry->_2 = true;
             } else if (area->mObjArg1 == 3) {
                 entry->_3 = true;
-            } else if (area->mObjArg1 == 4) {
+            } else if (area->mObjArg1 == 4 && !(mPlanetsFromStart && area->mSwitchCtrl->isValidSwitchAppear())) {
                 entry->_0 = false;
                 entry->_4 = true;
             }
@@ -88,6 +100,9 @@ void ViewGroupCtrl::update() {
 
 void ViewGroupCtrl::startInitViewGroupTable() {
     mViewCubeMgr = MR::getAreaObjManager("ViewGroupCtrlCube");
+    // Gateway's first planet hides the galaxy's other planets until Rosalina has spoken (the cube under a story switch).
+    // The sky holds them from the start here; its cube without a switch still hides them from inside the last planet.
+    mPlanetsFromStart = MR::isEqualStageName("HeavensDoorGalaxy");
     if (mViewCubeMgr) {
         for (s32 i = 0; i < mViewCubeMgr->getNumAreaObj(); i++) {
             s32 groupID = mViewCubeMgr->getAreaObj(i)->mObjArg0;
@@ -115,6 +130,6 @@ void ViewGroupCtrl::startInitViewGroupTable() {
         }
 
         ViewGroupCtrlDataEntry* entry = &mViewGroupData[groupID];
-        ctrl->setViewCtrlPtr(&entry->_1, &entry->_2, &entry->_3, &entry->_4);
+        ctrl->setViewCtrlPtr(&entry->_1, &entry->_3, &entry->_4);
     }
 }

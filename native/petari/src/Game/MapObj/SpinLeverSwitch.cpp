@@ -105,7 +105,7 @@ void SpinLeverSwitch::exeSwitchOn() {
             MR::startSound(this, "SE_OJ_SPIN_LEVER_SW_HIT");
         }
 
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 

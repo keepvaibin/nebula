@@ -1,7 +1,8 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
-#include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <math.h>
@@ -10,331 +11,71 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // GXInit's cull mode and pixel format.
-    GXCullMode sCullMode = GX_CULL_BACK;
-    GXPixelFmt sPixelFormat = GX_PF_RGB8_Z24;
-    GXZFmt16 sZFormat = GX_ZC_LINEAR;
+    NebulaPassState sPass;
 
-    static_assert(sizeof(J3DNativeLight) <= sizeof(GXLightObj), "a GXLightObj holds a J3DNativeLight");
-
-    J3DNativeLight& light(GXLightObj* pObj) {
-        return *reinterpret_cast< J3DNativeLight* >(pObj);
-    }
 }  // namespace
 
 namespace J3DNativeState {
-    void setZMode(GXBool compare, GXCompare func, GXBool update) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setZMode(compare, func, update);
-        list.send();
+    const NebulaPassState* pass() {
+        sPass.position_matrix = J3DNativeShape::currentPosition();
+        return &sPass;
     }
 
-    void setAlphaCompare(GXCompare comp0, u8 ref0, GXAlphaOp alphaOp, GXCompare comp1, u8 ref1) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setAlphaCompare(comp0, ref0, alphaOp, comp1, ref1);
-        list.send();
-    }
-
-    void setDstAlpha(GXBool enable, u8 alpha) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setDstAlpha(enable, alpha);
-        list.send();
-    }
-
-    void setTevColor(GXTevRegID id, GXColor color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevColor(id, color);
-        list.send();
-    }
-
-    void setTevKColor(GXTevKColorID id, GXColor color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevKColor(id, color);
-        list.send();
-    }
-
-    void setTevColorS10(GXTevRegID id, GXColorS10 color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevColorS10(id, color);
-        list.send();
-    }
-
-    void setChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask,
-                     GXDiffuseFn diffFn, GXAttnFn attnFn) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setChanCtrl(chan, enable, ambSrc, matSrc, lightMask, diffFn, attnFn);
-        list.send();
-    }
-
-    void setTevDirect(GXTevStageID stage) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevDirect(stage);
-        list.send();
-    }
-
-    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setFog(type, start, end, nearZ, farZ, color);
-        op.a[5] = 1;
-        list.send();
-    }
-
-    void setClipMode(GXClipMode mode) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setClipMode(mode);
-        list.send();
-    }
-
-    void setIndTexMtx(GXIndTexMtxID id, const f32 offset[2][3], s8 scaleExp) {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_IND_TEX_MATRIX;
-        op.a[0] = static_cast< u8 >(id);
-        op.a[1] = static_cast< u8 >(scaleExp);
-        for (u32 c = 0; c < 3; c++) {
-            op.f[2 * c] = offset[0][c];
-            op.f[2 * c + 1] = offset[1][c];
+    void sendMaterial(const NebulaNativeMaterial* pMaterial) {
+        J3DNativeShape::flushState();
+        // Its state comes with the material except when only its constants change, or where it keeps what was set.
+        if ((pMaterial->constants_only & 1) == 0 && pMaterial->shader != NEBULA_SHADER_NONE) {
+            if (pMaterial->blend_op != NEBULA_NATIVE_KEPT) {
+                sPass.blend_op = pMaterial->blend_op;
+                sPass.blend_src = pMaterial->blend_src <= 9 ? pMaterial->blend_src : 0;
+                sPass.blend_dst = pMaterial->blend_dst <= 9 ? pMaterial->blend_dst : 0;
+                sPass.logic_op = pMaterial->logic_op & 15;
+            }
+            if (pMaterial->color_write != 2) {
+                sPass.color_write = pMaterial->color_write != 0;
+            }
+            if (pMaterial->alpha_write != 2) {
+                sPass.alpha_write = pMaterial->alpha_write != 0;
+            }
+            if (pMaterial->depth_test != NEBULA_NATIVE_KEPT) {
+                sPass.depth_test = pMaterial->depth_test != 0;
+                sPass.depth_func = pMaterial->depth_func & 7;
+                sPass.depth_write = pMaterial->depth_write != 0;
+            }
+            if (pMaterial->cull != NEBULA_NATIVE_KEPT) {
+                sPass.cull = pMaterial->cull <= 2 ? pMaterial->cull : 0;
+            }
         }
-        J3DStateList list(&op, 1);
-        list.adopt(1);
-        list.send();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->native_material(pHost->user, pMaterial);
     }
 
-    void setBlendMode(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setBlendMode(type, src, dst, op);
-        list.send();
+    void initLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
+        J3DNativeLight& rLight = *pObj;
+        rLight.color[0] = color.r;
+        rLight.color[1] = color.g;
+        rLight.color[2] = color.b;
+        rLight.color[3] = color.a;
     }
 
-    void setTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevColorIn(stage, a, b, c, d);
-        list.send();
+    void initLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z) {
+        J3DNativeLight& rLight = *pObj;
+        rLight.position[0] = x;
+        rLight.position[1] = y;
+        rLight.position[2] = z;
     }
 
-    void setTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevAlphaIn(stage, a, b, c, d);
-        list.send();
+    void initLightDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz) {
+        J3DNativeLight& rLight = *pObj;
+        rLight.direction[0] = -nx;
+        rLight.direction[1] = -ny;
+        rLight.direction[2] = -nz;
     }
 
-    void setTevColorOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevColorOp(stage, op, bias, scale, clamp, out);
-        list.send();
-    }
-
-    void setTevAlphaOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevAlphaOp(stage, op, bias, scale, clamp, out);
-        list.send();
-    }
-
-    void setTevKColorSel(GXTevStageID stage, GXTevKColorSel sel) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevKColorSel(stage, sel);
-        list.send();
-    }
-
-    void setTevKAlphaSel(GXTevStageID stage, GXTevKAlphaSel sel) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevKAlphaSel(stage, sel);
-        list.send();
-    }
-
-    void setTevSwapMode(GXTevStageID stage, GXTevSwapSel rasSwap, GXTevSwapSel texSwap) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevSwapMode(stage, rasSwap, texSwap);
-        list.send();
-    }
-
-    void setTevSwapModeTable(GXTevSwapSel table, GXTevColorChan red, GXTevColorChan green, GXTevColorChan blue, GXTevColorChan alpha) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setTevSwapModeTable(table, red, green, blue, alpha);
-        list.send();
-    }
-
-    void setColorUpdate(GXBool enable) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setColorUpdate(enable);
-        list.send();
-    }
-
-    void setAlphaUpdate(GXBool enable) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setAlphaUpdate(enable);
-        list.send();
-    }
-
-    void setDither(GXBool enable) {
-        NebulaStateOp ops[1];
-        J3DStateList list(ops, 1);
-        list.setDither(enable);
-        list.send();
-    }
-
-    void setTevOp(GXTevStageID stage, GXTevMode mode) {
-        NebulaStateOp ops[4];
-        J3DStateList list(ops, 4);
-        list.setTevOp(stage, mode);
-        list.send();
-    }
-
-    void setChanMatColor(GXChannelID chan, GXColor color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setChanMatColor(chan, color);
-        op.a[5] = 1;
-        list.send();
-    }
-
-    void setChanAmbColor(GXChannelID chan, GXColor color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setChanAmbColor(chan, color);
-        op.a[5] = 1;
-        list.send();
-    }
-
-    void setTexCoordGen2(GXTexCoordID coord, GXTexGenType type, GXTexGenSrc src, u32 mtx, GXBool normalize, u32 postMtx) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTexCoordGen2(coord, type, src, mtx, normalize, postMtx);
-        list.send();
-    }
-
-    void setNumTexGens(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumTexGens(count);
-        list.send();
-    }
-
-    void setNumChans(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumChans(count);
-        list.send();
-    }
-
-    void setNumTevStages(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumTevStages(count);
-        list.send();
-    }
-
-    void setNumIndStages(u8 count) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setNumIndStages(count);
-        list.send();
-    }
-
-    void setCoPlanar(GXBool enable) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCoPlanar(enable);
-        list.send();
-    }
-
-    void setZCompLoc(GXBool beforeTex) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setZCompLoc(beforeTex);
-        list.send();
-    }
-
-    void setCurrentMtx(u32 id) {
-        J3DNativeShape::setCurrentPosition(id / 3);
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCurrentMtx(id);
-        list.send();
-    }
-
-    void setTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format, GXIndTexBiasSel bias, GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT, GXBool addPrev, GXBool utcLod, GXIndTexAlphaSel alpha) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevIndirect(stage, indStage, format, bias, matrix, wrapS, wrapT, addPrev, utcLod, alpha);
-        list.send();
-    }
-
-    void setTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, GXBool signedOffset, GXBool replaceMode, GXIndTexMtxID matrix) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevIndWarp(stage, indStage, signedOffset, replaceMode, matrix);
-        list.send();
-    }
-
-    void setIndTexCoordScale(GXIndTexStageID indStage, GXIndTexScale scaleS, GXIndTexScale scaleT) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setIndTexCoordScale(indStage, scaleS, scaleT);
-        list.send();
-    }
-
-    void setLineWidth(u8 width, GXTexOffset texOffsets) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setLineWidth(width, texOffsets);
-        list.send();
-    }
-
-    void setPointSize(u8 size, GXTexOffset texOffsets) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setPointSize(size, texOffsets);
-        list.send();
-    }
-
-    void initLightColor(GXLightObj* pObj, GXColor color) {
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mColor[0] = color.r;
-        rLight.mColor[1] = color.g;
-        rLight.mColor[2] = color.b;
-        rLight.mColor[3] = color.a;
-    }
-
-    void initLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z) {
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mPosition[0] = x;
-        rLight.mPosition[1] = y;
-        rLight.mPosition[2] = z;
-    }
-
-    void initLightDir(GXLightObj* pObj, f32 nx, f32 ny, f32 nz) {
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mDirection[0] = -nx;
-        rLight.mDirection[1] = -ny;
-        rLight.mDirection[2] = -nz;
-    }
-
-    // GX's distance for a light at infinity.
+    // The distance of a light at infinity.
     const f32 cInfiniteLightDistance = 1.0e18f;
 
-    void initSpecularDir(GXLightObj* pObj, f32 nx, f32 ny, f32 nz) {
+    void initSpecularDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz) {
         const f32 hx = -nx;
         const f32 hy = -ny;
         const f32 hz = 1.0f - nz;
@@ -345,127 +86,67 @@ namespace J3DNativeState {
         initSpecularDirHA(pObj, nx, ny, nz, hx * mag, hy * mag, hz * mag);
     }
 
-    void initSpecularDirHA(GXLightObj* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mDirection[0] = hx;
-        rLight.mDirection[1] = hy;
-        rLight.mDirection[2] = hz;
-        rLight.mPosition[0] = nx * -cInfiniteLightDistance;
-        rLight.mPosition[1] = ny * -cInfiniteLightDistance;
-        rLight.mPosition[2] = nz * -cInfiniteLightDistance;
+    void initSpecularDirHA(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
+        J3DNativeLight& rLight = *pObj;
+        rLight.direction[0] = hx;
+        rLight.direction[1] = hy;
+        rLight.direction[2] = hz;
+        rLight.position[0] = nx * -cInfiniteLightDistance;
+        rLight.position[1] = ny * -cInfiniteLightDistance;
+        rLight.position[2] = nz * -cInfiniteLightDistance;
     }
 
-    void initLightAttn(GXLightObj* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2) {
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mAngle[0] = a0;
-        rLight.mAngle[1] = a1;
-        rLight.mAngle[2] = a2;
-        rLight.mDistance[0] = k0;
-        rLight.mDistance[1] = k1;
-        rLight.mDistance[2] = k2;
+    void initLightAttn(J3DNativeLight* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2) {
+        J3DNativeLight& rLight = *pObj;
+        rLight.angle[0] = a0;
+        rLight.angle[1] = a1;
+        rLight.angle[2] = a2;
+        rLight.distance[0] = k0;
+        rLight.distance[1] = k1;
+        rLight.distance[2] = k2;
     }
 
-    void initLightSpot(GXLightObj* pObj, f32 cutoff, GXSpotFn spotFn) {
-        if (cutoff <= 0.0f || cutoff > 90.0f) {
-            spotFn = GX_SP_OFF;
-        }
-        const f32 cr = cos(cutoff * 3.14159265358979323846f / 180.0f);
-        f32 a0, a1, a2, d;
-        switch (spotFn) {
-        case GX_SP_FLAT:
-            a0 = -1000.0f * cr;
-            a1 = 1000.0f;
-            a2 = 0.0f;
-            break;
-        case GX_SP_COS:
-            a1 = 1.0f / (1.0f - cr);
-            a0 = -cr * a1;
-            a2 = 0.0f;
-            break;
-        case GX_SP_COS2:
-            a2 = 1.0f / (1.0f - cr);
-            a0 = 0.0f;
-            a1 = -cr * a2;
-            break;
-        case GX_SP_SHARP:
-            d = 1.0f / ((1.0f - cr) * (1.0f - cr));
-            a0 = cr * (cr - 2.0f) * d;
-            a1 = 2.0f * d;
-            a2 = -d;
-            break;
-        case GX_SP_RING1:
-            d = 1.0f / ((1.0f - cr) * (1.0f - cr));
-            a2 = -4.0f * d;
-            a0 = a2 * cr;
-            a1 = 4.0f * (1.0f + cr) * d;
-            break;
-        case GX_SP_RING2:
-            d = 1.0f / ((1.0f - cr) * (1.0f - cr));
-            a0 = 1.0f - 2.0f * cr * cr * d;
-            a1 = 4.0f * cr * d;
-            a2 = -2.0f * d;
-            break;
-        default:
-            a0 = 1.0f;
-            a1 = 0.0f;
-            a2 = 0.0f;
-            break;
-        }
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mAngle[0] = a0;
-        rLight.mAngle[1] = a1;
-        rLight.mAngle[2] = a2;
+    void initLightNoSpot(J3DNativeLight* pObj) {
+        pObj->angle[0] = 1.0f;
+        pObj->angle[1] = 0.0f;
+        pObj->angle[2] = 0.0f;
     }
 
-    void initLightDistAttn(GXLightObj* pObj, f32 refDistance, f32 refBrightness, GXDistAttnFn distFn) {
+    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, J3DLightFalloff falloff) {
         if (refDistance < 0.0f || refBrightness <= 0.0f || refBrightness >= 1.0f) {
-            distFn = GX_DA_OFF;
+            falloff = J3D_FALLOFF_NONE;
         }
         f32 k0 = 1.0f, k1 = 0.0f, k2 = 0.0f;
-        switch (distFn) {
-        case GX_DA_GENTLE:
+        switch (falloff) {
+        case J3D_FALLOFF_GENTLE:
             k1 = (1.0f - refBrightness) / (refBrightness * refDistance);
             break;
-        case GX_DA_MEDIUM:
+        case J3D_FALLOFF_MEDIUM:
             k1 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance);
             k2 = 0.5f * (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
             break;
-        case GX_DA_STEEP:
+        case J3D_FALLOFF_STEEP:
             k2 = (1.0f - refBrightness) / (refBrightness * refDistance * refDistance);
             break;
         default:
             break;
         }
-        J3DNativeLight& rLight = light(pObj);
-        rLight.mDistance[0] = k0;
-        rLight.mDistance[1] = k1;
-        rLight.mDistance[2] = k2;
+        J3DNativeLight& rLight = *pObj;
+        rLight.distance[0] = k0;
+        rLight.distance[1] = k1;
+        rLight.distance[2] = k2;
     }
 
-    void loadLightObjImm(const GXLightObj* pObj, GXLightID id) {
-        NebulaStateOp ops[2];
-        J3DStateList list(ops, 2);
-        list.setLight(id, *reinterpret_cast< const J3DNativeLight* >(pObj));
-        list.send();
+    void sendLight(const J3DNativeLight* pLight, u8 index) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->light(pHost->user, index, pLight);
     }
 
-    void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat) {
-        // GXSetPixelFmt compares the hardware's type, which three YUV formats share.
-        static const u8 sHardwareType[8] = {0, 1, 2, 3, 4, 4, 4, 5};
-        const bool changed = sHardwareType[format & 7] != sHardwareType[sPixelFormat & 7] || zFormat != sZFormat;
-        sPixelFormat = format;
-        sZFormat = zFormat;
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setPixelFmt(format, zFormat, changed);
-        list.send();
-    }
-
-    void invalidateTexAll() {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.invalidateTexAll();
-        list.send();
+    void setFrameAlpha(bool keepAlpha) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->frame_alpha(pHost->user, keepAlpha);
     }
 
     // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
@@ -479,325 +160,253 @@ namespace J3DNativeState {
                                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};
     // The projection before the game sets its own (orthographic, -1..1 depth).
     static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
-    // The frame GXInit assumed (its NTSC 480-line mode): 640x480.
+    // Until the game sets its own view.
     const u16 cDefaultWidth = 640;
     const u16 cDefaultHeight = 480;
 
     void initDefaults() {
-        const GXColor black = {0, 0, 0, 0};
-        const GXColor white = {255, 255, 255, 255};
+        const NebulaColor8 black = {0, 0, 0, 0};
+        const NebulaColor8 white = {255, 255, 255, 255};
 
-        for (u32 i = 0; i < 8; i++) {
-            setTexCoordGen2(static_cast< GXTexCoordID >(i), GX_TG_MTX2x4, static_cast< GXTexGenSrc >(GX_TG_TEX0 + i),
-                            GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+        for (u8 i = 0; i < 8; i++) {
+            J3DPass::textureIdentity(i);
         }
-        setNumTexGens(1);
-        setLineWidth(6, GX_TO_ZERO);
-        setPointSize(6, GX_TO_ZERO);
-        for (u32 i = 0; i < 8; i++) {
-            enableTexOffsets(static_cast< GXTexCoordID >(i), GX_FALSE, GX_FALSE);
-        }
+        J3DPass::lineWidth(1.0f);
+        J3DPass::pointSize(1.0f);
 
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
         J3DNativeShape::setNormal(0, identity);
-        setCurrentMtx(GX_PNMTX0);
+        J3DPass::positionMatrix(0);
         J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, identity, 3);
         J3DNativeShape::setPostTexture(J3DNativeShape::kIdentityPost, identity);
         J3DNativeView::setViewport(0.0f, 0.0f, cDefaultWidth, cDefaultHeight, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
-        setCoPlanar(GX_FALSE);
-        setCullMode(GX_CULL_BACK);
-        setClipMode(GX_CLIP_ENABLE);
+        J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeView::setScissor(0, 0, cDefaultWidth, cDefaultHeight);
-        setNumChans(0);
-        setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        setChanAmbColor(GX_COLOR0A0, black);
-        setChanMatColor(GX_COLOR0A0, white);
-        setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        setChanAmbColor(GX_COLOR1A1, black);
-        setChanMatColor(GX_COLOR1A1, white);
-        invalidateTexAll();
-
-        static GXTexObj sDefaultTexture;
-        J3DNativeTexture::registerImage(&sDefaultTexData, GX_TF_IA8, 4, 4, 1);
-        J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
-        for (u32 i = 0; i < 8; i++) {
-            J3DNativeTexture::load(&sDefaultTexture, static_cast< GXTexMapID >(i));
+        for (u8 channel = 0; channel < 2; channel++) {
+            J3DPass::lightAmbient(channel, black);
+            J3DPass::lightMaterial(channel, white);
         }
 
-        for (u32 i = 0; i < 8; i++) {
-            setTevOrder(static_cast< GXTevStageID >(i), static_cast< GXTexCoordID >(i), static_cast< GXTexMapID >(i),
-                        GX_COLOR0A0);
-        }
-        for (u32 i = 8; i < 16; i++) {
-            setTevOrder(static_cast< GXTevStageID >(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-        }
-        setNumTevStages(1);
-        setTevOp(GX_TEVSTAGE0, GX_REPLACE);
-        setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-        setZTexture(GX_ZT_DISABLE, GX_TF_Z8, 0);
-        for (u32 i = 0; i < 16; i++) {
-            setTevKColorSel(static_cast< GXTevStageID >(i), GX_TEV_KCSEL_1_4);
-            setTevKAlphaSel(static_cast< GXTevStageID >(i), GX_TEV_KASEL_1);
-            setTevSwapMode(static_cast< GXTevStageID >(i), GX_TEV_SWAP0, GX_TEV_SWAP0);
-        }
-        setTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-        setTevSwapModeTable(GX_TEV_SWAP1, GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
-        setTevSwapModeTable(GX_TEV_SWAP2, GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
-        setTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
-        for (u32 i = 0; i < 16; i++) {
-            setTevDirect(static_cast< GXTevStageID >(i));
-        }
-        setNumIndStages(0);
-        for (u32 i = 0; i < 4; i++) {
-            setIndTexCoordScale(static_cast< GXIndTexStageID >(i), GX_ITS_1, GX_ITS_1);
-        }
+        J3DNativeTexture::registerRecord(&sDefaultTexData);
 
-        setFog(GX_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, black);
-        setFogRangeAdj(GX_FALSE, 0, nullptr);
-        setBlendMode(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
-        setColorUpdate(GX_TRUE);
-        setAlphaUpdate(GX_TRUE);
-        setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-        setZCompLoc(GX_TRUE);
-        setDither(GX_TRUE);
-        setDstAlpha(GX_FALSE, 0);
-        setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
+        J3DPass::noAlphaTest();
+        J3DPass::noFog();
+        J3DPass::noBlend();
+        J3DPass::writeColor(true);
+        J3DPass::writeAlpha(true);
+        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
+        J3DPass::constantAlpha(false, 0);
+        setFrameAlpha(false);
     }
 
-    void showFrame(u16 width, u16 height, bool filtered) {
+    void showFrame() {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_show(pHost->user, width, height, filtered ? NEBULA_CAPTURE_FILTERED : 0u);
+        pHost->frame_show(pHost->user);
     }
 
     void endFrame() {
+        J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
         pHost->frame_end(pHost->user);
     }
-
-    void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias) {
-        NebulaStateOp storage;
-        J3DStateList list(&storage, 1);
-        list.setZTexture(op, format, bias);
-        list.send();
-    }
-
-    void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable) {
-        NebulaStateOp ops[6];
-        J3DStateList list(ops, 6);
-        list.setFogRangeAdj(enable, center, pTable);
-        list.send();
-    }
-
-    void setTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setTevStageOrder(stage, coord, map, color);
-        list.send();
-    }
-
-    void setIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setIndTexOrder(stage, coord, map);
-        list.send();
-    }
-
-    void enableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.enableTexOffsets(coord, lines, points);
-        list.send();
-    }
-
-    void setCullMode(GXCullMode mode) {
-        sCullMode = mode;
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCullMode(mode);
-        list.send();
-    }
-
-    void getCullMode(GXCullMode* pMode) {
-        *pMode = sCullMode;
-    }
 };  // namespace J3DNativeState
-void J3DNativeStateSetTexCoordGen2(GXTexCoordID coord, GXTexGenType type, GXTexGenSrc src, u32 mtx, GXBool normalize, u32 postMtx) {
-    J3DNativeState::setTexCoordGen2(coord, type, src, mtx, normalize, postMtx);
-}
-
-void J3DNativeStateSetNumTexGens(u8 count) {
-    J3DNativeState::setNumTexGens(count);
-}
-
-void J3DNativeStateSetNumChans(u8 count) {
-    J3DNativeState::setNumChans(count);
-}
-
-void J3DNativeStateSetNumTevStages(u8 count) {
-    J3DNativeState::setNumTevStages(count);
-}
-
-void J3DNativeStateSetNumIndStages(u8 count) {
-    J3DNativeState::setNumIndStages(count);
-}
-
-void J3DNativeStateSetCoPlanar(GXBool enable) {
-    J3DNativeState::setCoPlanar(enable);
-}
-
-void J3DNativeStateSetZCompLoc(GXBool beforeTex) {
-    J3DNativeState::setZCompLoc(beforeTex);
-}
-
-void J3DNativeStateSetCurrentMtx(u32 id) {
-    J3DNativeState::setCurrentMtx(id);
-}
-
-void J3DNativeStateSetTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format, GXIndTexBiasSel bias, GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT, GXBool addPrev, GXBool utcLod, GXIndTexAlphaSel alpha) {
-    J3DNativeState::setTevIndirect(stage, indStage, format, bias, matrix, wrapS, wrapT, addPrev, utcLod, alpha);
-}
-
-void J3DNativeStateSetTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, GXBool signedOffset, GXBool replaceMode, GXIndTexMtxID matrix) {
-    J3DNativeState::setTevIndWarp(stage, indStage, signedOffset, replaceMode, matrix);
-}
-
-void J3DNativeStateSetIndTexCoordScale(GXIndTexStageID indStage, GXIndTexScale scaleS, GXIndTexScale scaleT) {
-    J3DNativeState::setIndTexCoordScale(indStage, scaleS, scaleT);
-}
-
-void J3DNativeStateSetLineWidth(u8 width, GXTexOffset texOffsets) {
-    J3DNativeState::setLineWidth(width, texOffsets);
-}
-
-void J3DNativeStateSetPointSize(u8 size, GXTexOffset texOffsets) {
-    J3DNativeState::setPointSize(size, texOffsets);
-}
-
-void J3DNativeStateInitLightColor(GXLightObj* pObj, GXColor color) {
+void J3DNativeStateInitLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
     J3DNativeState::initLightColor(pObj, color);
 }
 
-void J3DNativeStateInitLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z) {
+void J3DNativeStateInitLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z) {
     J3DNativeState::initLightPos(pObj, x, y, z);
 }
 
-void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id) {
-    J3DNativeState::loadLightObjImm(pObj, id);
+void J3DNativeStateSendLight(const J3DNativeLight* pLight, u8 index) {
+    J3DNativeState::sendLight(pLight, index);
 }
 
-void J3DNativeStateInvalidateTexAll(void) {
-    J3DNativeState::invalidateTexAll();
-}
+namespace J3DPass {
+    namespace {
+        // The numbers of j3d_material.hlsli j3d_fog.
+        const u32 cFogNone = 0;
+        const u32 cFogLinear = 2;
+        const u8 cFirstTextureSlot = 10;
+        const u8 cIdentitySlot = 20;
 
-void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {
-    J3DNativeState::setTevOrder(stage, coord, map, color);
-}
+        void sendCoordinate(u8 coord, u8 fromCoordinate, u8 matrixSlot) {
+            J3DNativeShape::flushState();
+            const NebulaHostServices* pHost = nebula_host();
+            pHost->texture_coordinate(pHost->user, coord, fromCoordinate, matrixSlot);
+        }
+    }  // namespace
 
-void J3DNativeStateSetIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map) {
-    J3DNativeState::setIndTexOrder(stage, coord, map);
-}
+    void depth(bool test, u8 compare, bool write) {
+        J3DNativeShape::flushState();
+        sPass.depth_test = test;
+        sPass.depth_func = compare & 7;
+        sPass.depth_write = write;
+    }
 
-void J3DNativeStateEnableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points) {
-    J3DNativeState::enableTexOffsets(coord, lines, points);
-}
+    void blendState(u8 op, u8 source, u8 destination, u8 logicOp) {
+        J3DNativeShape::flushState();
+        sPass.blend_op = op;
+        sPass.blend_src = source <= 9 ? source : 0;
+        sPass.blend_dst = destination <= 9 ? destination : 0;
+        sPass.logic_op = logicOp & 15;
+    }
 
-void J3DNativeStateSetCullMode(GXCullMode mode) {
-    J3DNativeState::setCullMode(mode);
-}
+    void blend(u8 source, u8 destination) {
+        blendState(NEBULA_BLEND_ADD, source, destination, 0);
+    }
 
-void J3DNativeStateGetCullMode(GXCullMode* pMode) {
-    J3DNativeState::getCullMode(pMode);
-}
+    void noBlend() {
+        blendState(NEBULA_BLEND_REPLACE, 0, 0, 0);
+    }
 
-void J3DNativeStateSetChanMatColor(GXChannelID chan, GXColor color) {
-    J3DNativeState::setChanMatColor(chan, color);
-}
+    void subtractBlend() {
+        blendState(NEBULA_BLEND_SUBTRACT, 0, 0, 0);
+    }
 
-void J3DNativeStateSetChanAmbColor(GXChannelID chan, GXColor color) {
-    J3DNativeState::setChanAmbColor(chan, color);
-}
+    void cull(u8 faces) {
+        J3DNativeShape::flushState();
+        sPass.cull = faces & 3;
+    }
 
-void J3DNativeStateSetZMode(GXBool compare, GXCompare func, GXBool update) {
-    J3DNativeState::setZMode(compare, func, update);
-}
+    void writeColor(bool write) {
+        J3DNativeShape::flushState();
+        sPass.color_write = write;
+    }
 
-void J3DNativeStateSetAlphaCompare(GXCompare comp0, u8 ref0, GXAlphaOp op, GXCompare comp1, u8 ref1) {
-    J3DNativeState::setAlphaCompare(comp0, ref0, op, comp1, ref1);
-}
+    void writeAlpha(bool write) {
+        J3DNativeShape::flushState();
+        sPass.alpha_write = write;
+    }
 
-void J3DNativeStateSetDstAlpha(GXBool enable, u8 alpha) {
-    J3DNativeState::setDstAlpha(enable, alpha);
-}
+    void constantAlpha(bool on, u8 alpha) {
+        J3DNativeShape::flushState();
+        sPass.constant_alpha = on;
+        sPass.constant_alpha_value = alpha;
+    }
 
-void J3DNativeStateSetTevColor(GXTevRegID id, GXColor color) {
-    J3DNativeState::setTevColor(id, color);
-}
+    void positionMatrix(u8 index) {
+        J3DNativeShape::flushState();
+        J3DNativeShape::setCurrentPosition(index % 10);
+    }
 
-void J3DNativeStateSetTevKColor(GXTevKColorID id, GXColor color) {
-    J3DNativeState::setTevKColor(id, color);
-}
+    void alphaCompare(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setAlphaTest(compare0, reference0, op, compare1, reference1);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask, GXDiffuseFn diffFn, GXAttnFn attnFn) {
-    J3DNativeState::setChanCtrl(chan, enable, ambSrc, matSrc, lightMask, diffFn, attnFn);
-}
+    void noAlphaTest() {
+        alphaCompare(NEBULA_COMPARE_ALWAYS, 0, cAlphaOr, NEBULA_COMPARE_ALWAYS, 0);
+    }
 
-void J3DNativeStateSetTevDirect(GXTevStageID stage) {
-    J3DNativeState::setTevDirect(stage);
-}
+    void alphaTest(u8 compare, u8 reference) {
+        alphaCompare(compare, reference, cAlphaOr, NEBULA_COMPARE_NEVER, 0);
+    }
 
-void J3DNativeStateSetFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
-    J3DNativeState::setFog(type, start, end, nearZ, farZ, color);
-}
+    void noFog() {
+        const NebulaColor8 none = {0, 0, 0, 0};
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setFog(cFogNone, 0.0f, 0.0f, 0.0f, 0.0f, none);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetBlendMode(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op) {
-    J3DNativeState::setBlendMode(type, src, dst, op);
-}
+    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setFog(cFogLinear, start, end, nearZ, farZ, color);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d) {
-    J3DNativeState::setTevColorIn(stage, a, b, c, d);
-}
+    void lineWidth(f32 pixels, bool spreadTexture) {
+        J3DNativeShape::flushState();
+        sPass.line_width = pixels * J3DNativeView::cUnitsDown;
+        sPass.line_divisor = spreadTexture ? 1 : 0;
+        sPass.line_offsets = spreadTexture ? 7 : 0;
+    }
 
-void J3DNativeStateSetTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d) {
-    J3DNativeState::setTevAlphaIn(stage, a, b, c, d);
-}
+    void pointSize(f32 pixels, bool spreadTexture) {
+        J3DNativeShape::flushState();
+        sPass.point_size = pixels * J3DNativeView::cUnitsDown;
+        sPass.point_divisor = spreadTexture ? 1 : 0;
+        sPass.point_offsets = spreadTexture ? 7 : 0;
+    }
 
-void J3DNativeStateSetTevColorOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out) {
-    J3DNativeState::setTevColorOp(stage, op, bias, scale, clamp, out);
-}
+    void registerColor(J3DRegister reg, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setColorRegister(reg, color);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetTevAlphaOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out) {
-    J3DNativeState::setTevAlphaOp(stage, op, bias, scale, clamp, out);
-}
+    void registerColorWide(J3DRegister reg, const NebulaColor16& rColor) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setColorRegisterWide(reg, rColor);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetTevKColorSel(GXTevStageID stage, GXTevKColorSel sel) {
-    J3DNativeState::setTevKColorSel(stage, sel);
-}
+    void constantColor(u8 index, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setConstantColor(index, color);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetTevKAlphaSel(GXTevStageID stage, GXTevKAlphaSel sel) {
-    J3DNativeState::setTevKAlphaSel(stage, sel);
-}
+    void lightMaterial(u8 channel, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setLightMaterial(channel, color);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetTevSwapMode(GXTevStageID stage, GXTevSwapSel rasSwap, GXTevSwapSel texSwap) {
-    J3DNativeState::setTevSwapMode(stage, rasSwap, texSwap);
-}
+    void lightAmbient(u8 channel, NebulaColor8 color) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setLightAmbient(channel, color);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetTevSwapModeTable(GXTevSwapSel table, GXTevColorChan red, GXTevColorChan green, GXTevColorChan blue, GXTevColorChan alpha) {
-    J3DNativeState::setTevSwapModeTable(table, red, green, blue, alpha);
-}
+    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp) {
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::setIndirectMatrix(index, offset, scaleExp);
+        J3DNativeMaterial::sendRegisters();
+    }
 
-void J3DNativeStateSetColorUpdate(GXBool enable) {
-    J3DNativeState::setColorUpdate(enable);
-}
+    void textureMatrix(u8 coord, u8 matrix) {
+        sendCoordinate(coord, 0, static_cast< u8 >(cFirstTextureSlot + matrix));
+    }
 
-void J3DNativeStateSetAlphaUpdate(GXBool enable) {
-    J3DNativeState::setAlphaUpdate(enable);
-}
+    void textureIdentity(u8 coord) {
+        sendCoordinate(coord, coord, cIdentitySlot);
+    }
+};  // namespace J3DPass
 
-void J3DNativeStateSetDither(GXBool enable) {
-    J3DNativeState::setDither(enable);
+extern "C" {
+void J3DPassDepth(int test, u8 compare, int write) {
+    J3DPass::depth(test != 0, compare, write != 0);
+}
+void J3DPassBlend(u8 source, u8 destination) {
+    J3DPass::blend(source, destination);
+}
+void J3DPassCull(u8 faces) {
+    J3DPass::cull(faces);
+}
+void J3DPassWriteColor(int write) {
+    J3DPass::writeColor(write != 0);
+}
+void J3DPassWriteAlpha(int write) {
+    J3DPass::writeAlpha(write != 0);
+}
+void J3DPassConstantAlpha(int on, u8 alpha) {
+    J3DPass::constantAlpha(on != 0, alpha);
+}
+void J3DPassPositionMatrix(u8 index) {
+    J3DPass::positionMatrix(index);
+}
+void J3DPassAlphaTest(u8 compare, u8 reference) {
+    J3DPass::alphaTest(compare, reference);
+}
+void J3DPassNoFog(void) {
+    J3DPass::noFog();
+}
 }

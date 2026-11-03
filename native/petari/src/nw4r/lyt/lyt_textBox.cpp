@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "nw4r/lyt/drawInfo.h"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "nw4r/lyt/layout.h"
@@ -8,7 +9,6 @@
 #include "nw4r/ut/WideTextWriter.h"
 #include <cstdio>
 extern "C" {
-#include <wstring.h>
 }
 
 namespace {
@@ -18,8 +18,8 @@ namespace {
         return u8(colVal < 0 ? 0 : (colVal > 255 ? 255 : colVal));
     }
 
-    ut::Color GetColor(const GXColorS10& src) {
-        GXColor dst;
+    ut::Color GetColor(const NebulaColor16& src) {
+        NebulaColor8 dst;
         dst.r = ClampColor(src.r);
         dst.g = ClampColor(src.g);
         dst.b = ClampColor(src.b);
@@ -32,32 +32,17 @@ namespace nw4r {
         NW4R_UT_RUNTIME_TYPEINFO_DEFINITION(TextBox, Pane);
 
         TextBox::TextBox(const res::TextBox* pBlock, const ResBlockSet& resBlockSet) : Pane(pBlock) {
-            u16 allocStrBufLen = static_cast< u16 >(pBlock->textBufBytes / sizeof(wchar_t));
+            u16 allocStrBufLen = static_cast< u16 >(pBlock->textBufBytes / sizeof(char16_t));
             if (allocStrBufLen > 0) {
                 allocStrBufLen -= 1;
             }
 
             Init(allocStrBufLen);
 
-            if (pBlock->textStrBytes >= sizeof(wchar_t) && mTextBuf) {
-                const wchar_t* const pBlockText = detail::ConvertOffsToPtr< wchar_t >(pBlock, pBlock->textStrOffset);
-                const u16 resStrLen = static_cast< u16 >(pBlock->textStrBytes / sizeof(wchar_t) - 1);
+            if (pBlock->textStrBytes >= sizeof(char16_t) && mTextBuf) {
+                const char16_t* const pBlockText = detail::ConvertOffsToPtr< char16_t >(pBlock, pBlock->textStrOffset);
+                const u16 resStrLen = static_cast< u16 >(pBlock->textStrBytes / sizeof(char16_t) - 1);
                 SetString(pBlockText, 0, resStrLen);
-#ifdef TARGET_PC
-                // The resource's UTF-16 is big-endian: swap the copy, keeping the length/group bytes after each 0x1A
-                // escape as bytes (the form MessageData gives BMG text).
-                for (u16 i = 0; i < mTextLen; i++) {
-                    const u16 unit = __builtin_bswap16(mTextBuf[i]);
-                    mTextBuf[i] = unit;
-                    if (unit == 0x1A && i + 1 < mTextLen) {
-                        const u16 tagUnits = (u16)((reinterpret_cast< const u8* >(&mTextBuf[i + 1])[0] - 2) / 2);
-                        for (u16 j = i + 2; j < i + 1 + tagUnits && j < mTextLen; j++) {
-                            mTextBuf[j] = __builtin_bswap16(mTextBuf[j]);
-                        }
-                        i = (u16)(i + tagUnits);
-                    }
-                }
-#endif
             }
 
             for (int i = 0; i < 2; ++i) {
@@ -67,9 +52,7 @@ namespace nw4r {
             mFontSize = pBlock->fontSize;
             mTextPosition = pBlock->textPosition;
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
             mBits.textAlignment = pBlock->textAlignment;
-#endif
 
             mCharSpace = pBlock->charSpace;
             mLineSpace = pBlock->lineSpace;
@@ -91,7 +74,7 @@ namespace nw4r {
 
             void* pMem = Layout::AllocMemory(sizeof(Material));
             if (pMem != nullptr) {
-                const NEBULA_BE(u32)* const matOffsTbl = detail::ConvertOffsToPtr< NEBULA_BE(u32) >(resBlockSet.pMaterialList, sizeof(*resBlockSet.pMaterialList));
+                const u32* const matOffsTbl = detail::ConvertOffsToPtr< u32 >(resBlockSet.pMaterialList, sizeof(*resBlockSet.pMaterialList));
                 const res::Material* const pResMaterial =
                     detail::ConvertOffsToPtr< res::Material >(resBlockSet.pMaterialList, matOffsTbl[pBlock->materialIdx]);
                 mpMaterial = new (pMem) Material(pResMaterial, resBlockSet);
@@ -182,9 +165,9 @@ namespace nw4r {
             ut::Color minCol = GetColor(mpMaterial->GetTevColor(0));
             ut::Color maxCol = GetColor(mpMaterial->GetTevColor(1));
             writer.SetColorMapping(minCol, maxCol);
-            writer.SetupGX();
+            writer.Setup();
 
-            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DPass::noAlphaTest();
             writer.SetCursor(textRect.left, textRect.top);
             writer.Print(mTextBuf, mTextLen);
         }
@@ -194,7 +177,7 @@ namespace nw4r {
                 return 0;
             }
 
-            return mTextBufBytes / sizeof(wchar_t) - 1;
+            return mTextBufBytes / sizeof(char16_t) - 1;
         }
 
         void TextBox::AllocStringBuffer(u16 len) {
@@ -203,11 +186,11 @@ namespace nw4r {
             }
 
             u16 chars = len + 1;
-            u16 bytes = chars * sizeof(wchar_t);
+            u16 bytes = chars * sizeof(char16_t);
 
             if (bytes > mTextBufBytes) {
                 FreeStringBuffer();
-                mTextBuf = static_cast< wchar_t* >(Layout::AllocMemory(bytes));
+                mTextBuf = static_cast< char16_t* >(Layout::AllocMemory(bytes));
 
                 if (mTextBuf != NULL) {
                     mTextBufBytes = bytes;
@@ -225,11 +208,11 @@ namespace nw4r {
             mTextBufBytes = 0;
         }
 
-        u16 TextBox::SetString(const wchar_t* pStr, u16 pos) {
-            return SetString(pStr, pos, wcslen(pStr));
+        u16 TextBox::SetString(const char16_t* pStr, u16 pos) {
+            return SetString(pStr, pos, MR::textLength(pStr));
         }
 
-        u16 TextBox::SetString(const wchar_t* pStr, u16 pos, u16 len) {
+        u16 TextBox::SetString(const char16_t* pStr, u16 pos, u16 len) {
             if (mTextBuf == NULL) {
                 return 0;
             }
@@ -240,10 +223,10 @@ namespace nw4r {
             }
 
             const u16 chars = ut::Min< u16 >(len, maxlen - pos);
-            memcpy(&mTextBuf[pos], pStr, chars * sizeof(wchar_t));
+            memcpy(&mTextBuf[pos], pStr, chars * sizeof(char16_t));
 
             mTextLen = pos + chars;
-            mTextBuf[mTextLen] = L'\0';
+            mTextBuf[mTextLen] = u'\0';
 
             return chars;
         }
@@ -338,16 +321,10 @@ namespace nw4r {
             return mag;
         }
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
         u32 TextBox::MakeDrawFlag() const {
             u32 flag = 0;
-#ifdef TARGET_PC
-            // textAlignment: the console's compiler packed the bit-field from the high bit (bits 5-6, read as
-            // mBitsu8 >> 5); this compiler packs it from the low bit, where those bits are always 0.
+            // textAlignment is bits 5-6 of the byte: mBitsu8 >> 5.
             switch (GetTextAlignment()) {
-#else
-            switch (mBitsu8 >> 5 & 0x3) {
-#endif
             case 0:
             default:
                 switch (GetTextPositionH()) {
@@ -378,29 +355,6 @@ namespace nw4r {
 
             return flag;
         }
-#else
-        u32 TextBox::MakeDrawFlag() const {
-            u32 flag = 0;
-
-            switch (GetTextPositionH()) {
-            case 1: {
-                flag |= 1;
-                break;
-            }
-
-            case 2: {
-                flag |= 2;
-                break;
-            }
-
-            default: {
-                break;
-            }
-            }
-
-            return flag;
-        }
-#endif
 
         f32 TextBox::GetTextAlignMag() const {
             switch (GetTextAlignment()) {

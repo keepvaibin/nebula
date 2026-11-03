@@ -17,85 +17,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void MarioSwim_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)50.0f;
-    (void)0.52359879f;
-    (void)-200.0f;
-    (void)0.100000001f;
-    (void)0.200000003f;
-    (void)10.0f;
-    (void)1.74532938f;
-    (void)-10.0f;
-    (void)1.49599659f;
-    (void)200.0f;
-    (void)8.0f;
-    (void)2.09439516f;
-    (void)40.0f;
-    (void)0.00999999978f;
-    (void)0.0299999993f;
-    (void)6.28318548f;
-    (void)-50.0f;
-    (void)0.196349546f;
-    (void)30.0f;
-    (void)-30.0f;
-    (void)-0.100000001f;
-    (void)60.0f;
-    (void)1000.0f;
-    (void)0.899999976f;
-    (void)400.0f;
-    (void)0.707000017f;
-    (void)2.5f;
-    (void)-400.0f;
-    (void)120.0f;
-    (void)0.125f;
-    (void)300.0f;
-    (void)0.0500000007f;
-    (void)5.0f;
-    (void)0.150000006f;
-    (void)0.87266469f;
-    (void)2.26892805f;
-    (void)12.0f;
-    (void)25.0f;
-    (void)0.25f;
-    (void)0.980000019f;
-    (void)0.00100000005f;
-    (void)1.04719758f;
-    (void)2000.0f;
-    (void)-25.0f;
-    (void)0.949999988f;
-    (void)0.75f;
-    (void)0.300000012f;
-    (void)2.61799383f;
-    (void)0.99000001f;
-    (void)0.995000005f;
-    (void)0.959999979f;
-    (void)1.65346992f;
-    (void)15.0f;
-    (void)110.0f;
-    (void)80.0f;
-    (void)-500.0f;
-    (void)210.0f;
-    (void)170.0f;
-    (void)10000.0f;
-    (void)0.970000029f;
-    (void)0.800000012f;
-    (void)500.0f;
-    (void)1.01999998f;
-    (void)1.5f;
-    (void)6.0f;
-    (void)0.699999988f;
-    (void)0.314159274f;
-    (void)0.785398185f;
-    (void)2.61799407f;
-    (void)16.0f;
-    (void)-0.5f;
-    (void)18.0f;
-    (void)1.25f;
-    (void)1.00010002f;
-}
-
-static const f32 cAnimSpeeds[] = {1.0f, 1.0f, 1.0f, 1.0f};
 namespace {
     static f32 cFrontAcc[] = {-0.2f, -0.2f, -0.2f, -0.1f, -0.1f, -0.1f, -0.1f, -0.1f, -0.0f, -0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
                               0.0f,  0.0f,  0.0f,  0.2f,  0.2f,  0.2f,  0.3f,  0.3f,  0.4f,  0.5f,  0.5f, 0.5f, 0.5f, 0.5f,
@@ -110,7 +31,6 @@ namespace {
         1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
     };
 
-    static f32 cSwimWeightTable[] = {0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f};
     static f32 cWeightTableSP[] = {0.0f, 0.0f, 0.75f, 0.25f};
     static f32 cLimitAngleSink = JGeometry::TUtil< f32 >::PI() / 1.0001f;
     static f32 cNeutralAngleWait = (JGeometry::TUtil< f32 >::PI() / 2.0f) - (JGeometry::TUtil< f32 >::PI() / 6.0f);
@@ -119,18 +39,6 @@ namespace {
     static f32 cWaterSurfaceRange = 160.0f;
     static f32 cTurnMotionSpeed = 5.0f;
 };  // namespace
-
-f32 getSwimValue(f32 stick, u32 index, const MarioConstTable* pTable) {
-    if (index == 2) {
-        return pTable->mSwimRotXIne;
-    }
-
-    if (index == 3) {
-        return pTable->mSwimRotZIne;
-    }
-
-    return 0.0f;
-}
 
 bool Mario::isSwimming() const {
     if (isStatusActive(MarioStatus_Swim)) {
@@ -465,7 +373,7 @@ bool MarioSwim::start() {
         mActor->emitEffectWaterColumn(mSurfacePos, mSurfaceNorm);
     }
 
-    if (getPlayer()->getMovementStates().jumping && getPlayer()->mVerticalSpeed > 100.0f || r1e) {
+    if ((getPlayer()->getMovementStates().jumping && getPlayer()->mVerticalSpeed > 100.0f) || r1e) {
         TVec3f stack_44;
         mStateTimer = 0;
         Mario* mario = getPlayer();
@@ -954,7 +862,7 @@ bool MarioSwim::update() {
             mIdleWaitTimer = 0;
         }
 
-        f32 fr1d;
+        f32 fr1d = 0.0f;
         if (MR::isNearZero(getStickY(), 0.1f)) {
             f32 num = mIdleWaitTimer / 120.0f;
             if (num > 1.0f) {
@@ -1651,7 +1559,6 @@ void MarioSwim::decideEffect(bool isReset) {
         mEffectState = 0xFF;
     }
 
-    u8 newState = mEffectState;
     if (oldState != mEffectState) {
         switch (oldState) {
         case 0:
@@ -1680,7 +1587,6 @@ void MarioSwim::decideEffect(bool isReset) {
 
         switch (mEffectState) {
         case 0: {
-            TVec3f copyPos((getTrans() - mSurfacePos * mWaterDepth) + mSurfacePos * 30.0f);
 
             break;
         }
@@ -1804,7 +1710,6 @@ bool MarioSwim::close() {
     }
 
     if (mNextAction == EXIT_ACTION_POWER_JUMP) {
-        TVec3f spawnPos = getTrans() - mUpVec * mWaterDepth + mUpVec * 10.0f;
 
         playEffectRT("\220\205\226\312\203\127\203\203\203\223\203\166\220\205\222\214" /* 水面ジャンプ水柱 */, mSurfacePos, mSurfaceNorm);
         playSound("\220\205\203\127\203\203\203\223\203\166\222\105\217\157" /* 水ジャンプ脱出 */);
@@ -2807,7 +2712,6 @@ void MarioSwim::hitWall(const TVec3f& rNormal, HitSensor* pSensor) {
 
                 tangent += rNormal * speedIntoWall * 1.5f;
                 MR::vecKillElement(tangent, getGravityVec(), &velocityAfterHit);
-                f32 velocityAfterHitLength = velocityAfterHit.length();
 
                 bool isReflect = true;
                 f32 speedReduction = mActor->getConst().getTable()->mTurboReductionHitWall;
@@ -2851,7 +2755,6 @@ void MarioSwim::hitWall(const TVec3f& rNormal, HitSensor* pSensor) {
                             TVec3f glanceDir;
                             MR::vecKillElement(mFrontVec, rNormal, &glanceDir);
                             if (!MR::normalizeOrZero(&glanceDir)) {
-                                bool isTurn = false;
                                 mFrontVec = glanceDir;
                                 speedReduction = 0.8f;
                                 isReflect = false;
@@ -3213,7 +3116,6 @@ void MarioSwim::ringDash() {
     f32 accFactor = calcRingAcc();
 
     if (mRingDashTimer != 0) {
-        const MarioConstTable* table = mActor->getConst().getTable();
         f32 targetSpeed = accFactor * mActor->getConst().getTable()->mSwimFrontMaxSpeed;
 
         if (mForwardSpeed < targetSpeed) {

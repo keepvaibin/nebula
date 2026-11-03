@@ -127,7 +127,7 @@ void StrayTico::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (isNerve(GET_NERVE(StrayTico, StrayTicoNrvWait)) && MR::isSensorPlayer(pReceiver)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::emitEffect(this, "Break");
         MR::startSound(this, "SE_OJ_ITEM_BUBBLE_BREAK");
         startGlad();

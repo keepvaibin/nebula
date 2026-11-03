@@ -20,7 +20,7 @@ class SimpleBreakableObj : public SimpleBreakableObjBase {
 public:
     SimpleBreakableObj(const char*);
 
-    virtual ~SimpleBreakableObj() NO_INLINE;
+    virtual ~SimpleBreakableObj();
     virtual void init(const JMapInfoIter&) override;
     virtual void control() override;
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*) override;
@@ -45,16 +45,16 @@ public:
     void exeTryStartDemo();
     void exeDemo();
 
-    /* 0xC4 */ ActorCameraInfo* mCameraInfo;
-    /* 0xC8 */ s32 mBreakOffsetFrame;
+    ActorCameraInfo* mCameraInfo;
+    s32 mBreakOffsetFrame;
     s32 _CC;
-    /* 0xD0 */ s32 mSwitchDeadDelay;
-    /* 0xD4 */ u16 mBreakFlags;
-    /* 0xD8 */ s32 mItemType;
-    /* 0xDC */ s32 mItemNum;
-    /* 0xE0 */ BenefitItemObj* mKinokoOneUp;
-    /* 0xE4 */ bool mPlayRiddleSound;
-    /* 0xE5 */ bool mBreakEnded;
+    s32 mSwitchDeadDelay;
+    u16 mBreakFlags;
+    s32 mItemType;
+    s32 mItemNum;
+    BenefitItemObj* mKinokoOneUp;
+    bool mPlayRiddleSound;
+    bool mBreakEnded;
     bool _E6;
 };
 
@@ -65,6 +65,4 @@ public:
 
     virtual ~SimpleBreakableIndirectObj() {
     }
-
-    virtual void connectToScene(const MapObjActorInitInfo&) override;
 };

@@ -27,7 +27,7 @@ public:
     bool isCurrentAlive() const;
 
 private:
-    /* 0x1C */ bool _1C;
+    bool _1C;
 };
 
 namespace MR {

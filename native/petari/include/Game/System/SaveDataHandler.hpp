@@ -3,22 +3,20 @@
 #include "Game/System/NerveExecutor.hpp"
 #include "Game/System/SaveRequest.hpp"
 
-class SysConfigFile;
 class UserFile;
 
 class SaveDataHandler : public NerveExecutor {
 public:
-    SaveDataHandler(const SysConfigFile*, const UserFile*);
+    SaveDataHandler(const UserFile*);
 
     void update();
     void requestCheckEnableToCreate();
-    void requestLoadSaveData();
+    void requestLoadSaveData(int copy = 0);
     bool requestVerifyAfterLoadGameDataFile();
     void initializeUserFileMemory(int, const UserFile*);
     void copyUserFileMemory(int, int);
     void restoreGameDataFile(const char*, void*, u32);
     void storeUserFile(const UserFile*);
-    void storeSysConfigFile(const SysConfigFile*);
     void requestSaveSaveData();
     void requestRemoveSaveData();
     static u32 getEnoughtTempBufferSize();
@@ -29,15 +27,18 @@ public:
     void exeSaveProcessingGameData();
     void exeRemoveProcessingGameData();
     static void resetSaveData(u8*);
-    static void initializeAllFileInSaveData(u8*, const SysConfigFile*, const UserFile*);
+    static void initializeAllFileInSaveData(u8*, const UserFile*);
     static bool isCorrectFileHeader(const u8*);
     static void copySaveDataEachFile(u8*, const u8*);
+    void convertFileHeader(u8*);
+    void convertUserFiles(u8*);
+    static const u32 cSaveFileVersion = 3;
     void createCommunicationBuffer();
     bool tryRemoveFile(const char*, bool*);
     bool trySave(bool*, bool);
 
-    /* 0x08 */ SaveRequest* mSaveRequest;
-    /* 0x0C */ u32 _C;
-    /* 0x14 */ u8* _14;
-    /* 0x18 */ u8* _18;
+    SaveRequest* mSaveRequest;
+    u32 _C;
+    u8* _14;
+    u8* _18;
 };

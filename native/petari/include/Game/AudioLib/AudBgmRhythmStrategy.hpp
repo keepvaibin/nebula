@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class AudBgm;
 class JAISoundHandle;
@@ -16,6 +15,6 @@ public:
     bool setDominant();
     bool isDominant() const;
 
-    /* 0x04 */ s32 mBgmIdx;
-    /* 0x08 */ AudBgm* mBgm;
+    s32 mBgmIdx;
+    AudBgm* mBgm;
 };

@@ -11,23 +11,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <cstring>
 
-void MarioActorTakeMsg_FORCE_MATCH_SDATA2() {
-    (void)1.04719758f;
-    (void)500.0f;
-    (void)57.2957802f;
-    (void)600.0f;
-    (void)200.0f;
-    (void)-0.100000001f;
-    (void)120.0f;
-    (void)400000.0f;
-    (void)10000.0f;
-    (void)0.400000006f;
-    (void)0.00999999978f;
-    (void)0.0399999991f;
-    (void)25.0f;
-    (void)50.0f;
-}
-
 void MarioActor::memorizeSensorThrow(HitSensor* pSensor) {
     _428[_468] = pSensor;
     _438[_468] = pSensor->mHost->mRotation - mRotation;
@@ -232,7 +215,7 @@ void MarioActor::flushCoinPull() {
     }
 }
 
-bool MarioActor::tryCoinPullOne(HitSensor* pSensor) NO_INLINE {
+bool MarioActor::tryCoinPullOne(HitSensor* pSensor) {
     tryPullTrans(&pSensor->mHost->mVelocity, pSensor->mPosition);
 
     return pSensor->receiveMessage(ACTMES_ITEM_PULL, getSensor("body"));

@@ -1,35 +1,35 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 class JPABaseParticle;
 
 struct JPAChildShapeData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ NEBULA_BE(u32) mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ NEBULA_BE(u32) mFlags;
-    /* 0x0C */ NEBULA_BE(f32) mPosRndm;
-    /* 0x10 */ NEBULA_BE(f32) mBaseVel;
-    /* 0x14 */ NEBULA_BE(f32) mBaseVelRndm;
-    /* 0x18 */ NEBULA_BE(f32) mVelInfRate;
-    /* 0x1C */ NEBULA_BE(f32) mGravity;
-    /* 0x20 */ NEBULA_BE(f32) mScaleX;
-    /* 0x24 */ NEBULA_BE(f32) mScaleY;
-    /* 0x28 */ NEBULA_BE(f32) mInheritScale;
-    /* 0x2C */ NEBULA_BE(f32) mInheritAlpha;
-    /* 0x30 */ NEBULA_BE(f32) mInheritRGB;
-    /* 0x34 */ GXColor mPrmClr;
-    /* 0x38 */ GXColor mEnvClr;
-    /* 0x3C */ NEBULA_BE(f32) mTiming;
-    /* 0x40 */ NEBULA_BE(s16) mLife;
-    /* 0x42 */ NEBULA_BE(s16) mRate;
-    /* 0x44 */ u8 mStep;
-    /* 0x45 */ u8 mTexIdx;
-    /* 0x46 */ NEBULA_BE(s16) mRotSpeed;
-};  // Size: 0x48
+    u32 mFlags;
+    f32 mPosRndm;
+    f32 mBaseVel;
+    f32 mBaseVelRndm;
+    f32 mVelInfRate;
+    f32 mGravity;
+    f32 mScaleX;
+    f32 mScaleY;
+    f32 mInheritScale;
+    f32 mInheritAlpha;
+    f32 mInheritRGB;
+    NebulaColor8 mPrmClr;
+    NebulaColor8 mEnvClr;
+    f32 mTiming;
+    s16 mLife;
+    s16 mRate;
+    u8 mStep;
+    u8 mTexIdx;
+    s16 mRotSpeed;
+};
 
 class JPAChildShape {
 public:
@@ -65,13 +65,13 @@ public:
     f32 getColorInhRate() const {
         return mpData->mInheritRGB;
     }
-    void getPrmClr(GXColor* dst) const {
+    void getPrmClr(NebulaColor8* dst) const {
         *dst = mpData->mPrmClr;
     }
     u8 getPrmAlpha() const {
         return mpData->mPrmClr.a;
     }
-    void getEnvClr(GXColor* dst) const {
+    void getEnvClr(NebulaColor8* dst) const {
         *dst = mpData->mEnvClr;
     }
     f32 getTiming() const {
@@ -131,7 +131,7 @@ public:
     }
 
 public:
-    /* 0x00 */ const JPAChildShapeData* mpData;
+    const JPAChildShapeData* mpData;
 };
 
 void JPARegistChildPrmEnv(JPAEmitterWorkData*);

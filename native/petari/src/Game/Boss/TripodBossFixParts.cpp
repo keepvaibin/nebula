@@ -21,8 +21,8 @@ namespace NrvTripodBossFixParts {
 };  // namespace NrvTripodBossFixParts
 
 struct TripodBossSetting {
-    /* 0x0 */ const char* mPartName;
-    /* 0x4 */ s32 mType;
+    const char* mPartName;
+    s32 mType;
 };
 
 namespace {
@@ -48,7 +48,6 @@ TripodBossFixParts::TripodBossFixParts(const char* pName)
     : TripodBossFixPartsBase(pName), _E4(-1), _E8(180), mHasCollision(), _ED(true), _EE(), mIsPlayingWarning() {
 }
 
-// https://decomp.me/scratch/UtuYP
 void TripodBossFixParts::init(const JMapInfoIter& rIter) {
     const char* objName;
     MR::getObjectName(&objName, rIter);
@@ -124,19 +123,19 @@ void TripodBossFixParts::kill() {
     case 1:
         MR::emitEffect(this, "ExplosionM");
         MR::startSound(this, "SE_BM_TRIPOD_KILL_M");
-        MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, PLAYER_1);
         break;
     case 2:
         MR::emitEffect(this, "ExplosionM");
         MR::startSound(this, "SE_BM_TRIPOD_KILL_M");
         MR::shakeCameraVeryWeak();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         break;
     case 3:
         MR::emitEffect(this, "ExplosionL");
         MR::startSound(this, "SE_BM_TRIPOD_KILL_L");
         MR::shakeCameraStrong();
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
         break;
     }
 

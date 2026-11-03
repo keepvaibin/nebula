@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/Scene/PlayTimerScene.hpp"
@@ -42,11 +43,11 @@ namespace {
     char sWipeKoopa[] = "\203\116\203\142\203\160" /* クッパ */;
     char sSoundOneUp[] = "SE_SY_1UP";
 
-    CaptureScreenDirector* getCaptureScreenDirector() NO_INLINE {
+    CaptureScreenDirector* getCaptureScreenDirector() {
         return SingletonHolder< GameSystem >::get()->mObjHolder->mCaptureScreenDirector;
     }
 
-    PlayTimerScene* getPlayTimerScene() NO_INLINE {
+    PlayTimerScene* getPlayTimerScene() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mPlayTimerScene;
     }
 
@@ -64,11 +65,11 @@ namespace {
         }
     }
 
-    StarCounter* getStarCounter() NO_INLINE {
+    StarCounter* getStarCounter() {
         return MR::getGameSceneLayoutHolder()->mCounterLayoutCtrl->mStarCounter;
     }
 
-    StarPieceCounter* getStarPieceCounter() NO_INLINE {
+    StarPieceCounter* getStarPieceCounter() {
         return MR::getGameSceneLayoutHolder()->mCounterLayoutCtrl->mStarPieceCounter;
     }
 
@@ -89,13 +90,9 @@ namespace {
     }
 };  // namespace
 
-void ScreenUtil_FORCE_MATCH_SDATA2() {
-    (void)0.87f;
-    (void)0.844f;
-}
 namespace MR {
-    u32 getViWidth() {
-        return SingletonHolder< GameSystem >::get()->mObjHolder->getViWidth();
+    u32 getPictureSpan() {
+        return SingletonHolder< GameSystem >::get()->mObjHolder->getPictureSpan();
     }
 
     f32 getSafetyVIScreenWidthRatio() {
@@ -106,34 +103,30 @@ namespace MR {
         }
     }
 
-#ifdef TARGET_PC
-    static bool sWiiScreenWidth;
+    static bool sDesignScreenWidth;
 
-    void beginWiiScreenWidth() {
-        sWiiScreenWidth = true;
+    void beginDesignScreenWidth() {
+        sDesignScreenWidth = true;
     }
 
-    void endWiiScreenWidth() {
-        sWiiScreenWidth = false;
+    void endDesignScreenWidth() {
+        sDesignScreenWidth = false;
     }
-#endif
 
     s32 getScreenWidth() {
-#ifdef TARGET_PC
-        if (isScreen16Per9() && getDisplay().wide && !sWiiScreenWidth) {
+        if (isScreen16Per9() && getDisplay().wide && !sDesignScreenWidth) {
             return getDisplay().screen_width;
         }
-#endif
-        return isScreen16Per9() ? 832 : 608;
+        return isScreen16Per9() ? NebulaFrameClock::cWideScreenWidth : static_cast< s32 >(NebulaFrameClock::cLayoutWidth);
     }
 
     s32 getSafetyFrameWidth() {
         const s32 viWidthMax = 720;  // a television line
         f32 safetyFrameWidthRatio = viWidthMax * getSafetyVIScreenWidthRatio();
         s32 screenWidth = getScreenWidth();
-        f32 viWidthRatio = static_cast< f32 >(screenWidth) / static_cast< s32 >(getViWidth());
+        f32 spanRatio = static_cast< f32 >(screenWidth) / static_cast< s32 >(getPictureSpan());
 
-        return safetyFrameWidthRatio * viWidthRatio + 0.5f;
+        return safetyFrameWidthRatio * spanRatio + 0.5f;
     }
 
     s32 getSafetyFrameLeft() {
@@ -144,16 +137,16 @@ namespace MR {
         return (getScreenWidth() + getSafetyFrameWidth()) / 2;
     }
 
-    void convertFrameBufferPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rFrameBufferPos) {
-        f32 posRatio = rFrameBufferPos.x / getFrameBufferWidth();
+    void convertCanvasPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rCanvasPos) {
+        f32 posRatio = rCanvasPos.x / getScreenUnitsAcross();
 
-        pScreenPos->set(posRatio * getScreenWidth(), rFrameBufferPos.y);
+        pScreenPos->set(posRatio * getScreenWidth(), rCanvasPos.y);
     }
 
-    void convertScreenPosToFrameBufferPos(TVec2f* pFrameBufferPos, const TVec2f& rScreenPos) {
+    void convertScreenPosToCanvasPos(TVec2f* pCanvasPos, const TVec2f& rScreenPos) {
         f32 posRatio = rScreenPos.x / getScreenWidth();
 
-        pFrameBufferPos->set(posRatio * getFrameBufferWidth(), rScreenPos.y);
+        pCanvasPos->set(posRatio * getScreenUnitsAcross(), rScreenPos.y);
     }
 
     void startToCaptureScreen(const char* pParam1) {
@@ -170,10 +163,6 @@ namespace MR {
 
     const ResTIMG* getScreenResTIMG() {
         return ::getCaptureScreenDirector()->getResTIMG();
-    }
-
-    u8* getScreenTexImage() {
-        return ::getCaptureScreenDirector()->getTexImage();
     }
 
     void closeWipeCircle(s32 frame) {
@@ -479,12 +468,12 @@ namespace MR {
         ::appearInformationMessage(hasButtonLayout, true);
     }
 
-    void appearInformationMessage(const wchar_t* pMessage, bool hasButtonLayout) {
+    void appearInformationMessage(const char16_t* pMessage, bool hasButtonLayout) {
         getGameSceneLayoutHolder()->mInformationMessage->setMessage(pMessage);
         ::appearInformationMessage(hasButtonLayout, false);
     }
 
-    void setInformationMessageReplaceString(const wchar_t* pMessage, s32 param2) {
+    void setInformationMessageReplaceString(const char16_t* pMessage, s32 param2) {
         getGameSceneLayoutHolder()->mInformationMessage->setReplaceString(pMessage, param2);
     }
 

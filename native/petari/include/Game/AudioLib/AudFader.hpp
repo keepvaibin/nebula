@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class AudFader {
 public:
@@ -22,7 +21,7 @@ public:
         return mCurrentVolume;
     }
 
-    /* 0x00 */ f32 mCurrentVolume;
-    /* 0x04 */ f32 mFinalVolume;
-    /* 0x08 */ f32 mStepVolume;  ///< Volume intensity increase/decrease per AudFader::update() call until mCurrentVolume reaches mFinalVolume value
+    f32 mCurrentVolume;
+    f32 mFinalVolume;
+    f32 mStepVolume;  ///< Volume intensity increase/decrease per AudFader::update() call until mCurrentVolume reaches mFinalVolume value
 };

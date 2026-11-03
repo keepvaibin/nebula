@@ -1,22 +1,16 @@
+#include "JSystem/JParticle/JPANativeColor.hpp"
 #include "Game/System/ShapePacketUserData.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/System/WPad.hpp"
+#include "Game/System/PlayerInput.hpp"
 #include "Game/Util/MathUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 
-#include <JSystem/JKernel/JKRAram.hpp>
-#include <JSystem/JKernel/JKRAramPiece.hpp>
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
-#include <JSystem/JKernel/JKRThread.hpp>
-#include <JSystem/JKernel/JKRUnitHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-#include <JSystem/JUtility/JUTConsole.hpp>
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 #include <JSystem/JSupport/JSUInputStream.hpp>
@@ -32,168 +26,21 @@
 #include <JSystem/JParticle/JPAFieldBlock.hpp>
 #include <JSystem/JParticle/JPAParticle.hpp>
 
-#include <JSystem/JAudio2/JASAramStream.hpp>
-#include <JSystem/JAudio2/JASAudioThread.hpp>
+#include <JSystem/JAudio2/JASStream.hpp>
+#include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JAudio2/JASDriverIF.hpp>
-#include <JSystem/JAudio2/JASDvdThread.hpp>
+#include <JSystem/JAudio2/JASLoadThread.hpp>
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JAudio2/JASTrack.hpp>
 #include <JSystem/JAudio2/JASWaveArcLoader.hpp>
 #include <JSystem/JAudio2/JAUInitializer.hpp>
 
 #include <cstdarg>
-#include "Game/System/NebulaAuxMemory.hpp"
+#include "Game/AudioLib/AudParams.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 
-void Overwrite_FORCE_MATCH_SDATA2() {
-    (void)-2607.5945f;
-    (void)2607.5945f;
-    (void)0.333333f;
-    (void)0.57735f;
-    (void)0.001f;
-    (void)25.0f;
-    (void)0.01f;
-}
-
 namespace {
-    const u8 sUnitMask[] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 };  // namespace
-
-#ifdef TARGET_PC
-NEBULA_NO_ASAN
-#endif
-void* JKRUnitHeap::do_alloc(u32 size, int alignment) {
-    u32 bit;
-    u8* pBat;
-    s32 index;
-    lock();
-    void* pResult = nullptr;
-
-    if (size <= mUnitSize) {
-        index = find1FreeBlock(alignment);
-        if (index >= 0) {
-            setUnitUsed(index);
-            mTotalFreeSize -= mUnitSize;
-            pResult = indexToAddress(index);
-        }
-    } else {
-        u32 count = (size + mUnitSize - 1) / mUnitSize;
-        index = findFreeBlock(alignment, count);
-        if (index >= 0) {
-            pBat = mBat + index / 8;
-            for (s32 i = index; i < index + count; i++) {
-                bit = i & 7;
-                if (bit == 0) {
-                    pBat = mBat + i / 8;
-                }
-
-                *pBat |= ::sUnitMask[bit];
-            }
-
-            mTotalFreeSize -= mUnitSize * count;
-            pResult = indexToAddress(index);
-        }
-    }
-
-    unlock();
-    return pResult;
-}
-
-#ifdef TARGET_PC
-NEBULA_NO_ASAN
-#endif
-void JKRUnitHeap::do_free(void* pMemory) {
-    lock();
-    s32 index = addressToIndex(pMemory);
-    if (index >= 0) {
-        u32 value = mBat[index / 8];
-        u32 cleared = value & (::sUnitMask[index & 7] ^ 0xFF);
-        mBat[index / 8] = cleared;
-        if (value != cleared) {
-            mTotalFreeSize += mUnitSize;
-        }
-    }
-
-    unlock();
-}
-
-void JKRSolidHeap::do_free(void* pMemory) {
-}
-
-#ifdef TARGET_PC
-NEBULA_NO_ASAN
-#endif
-s32 JKRExpHeap::adjustSize() {
-    CMemBlock* pNext;
-    JKRHeap* pParent = mChildTree.getParent()->getObject();
-    if (pParent == nullptr) {
-        return -1;
-    }
-
-    lock();
-    u8* pEnd = mStart;
-    for (CMemBlock* pBlock = mHeadUsedList; pBlock != nullptr; pBlock = pBlock->mNext) {
-        u8* pBlockEnd = reinterpret_cast< u8* >(pBlock + 1) + pBlock->mSize;
-        if (pBlockEnd > pEnd) {
-            pEnd = pBlockEnd;
-        }
-    }
-
-    if (pEnd == mEnd) {
-        unlock();
-        return -1;
-    }
-
-    if (pParent->getHeapType() != 'EXPH') {
-        unlock();
-        return -1;
-    }
-
-    for (CMemBlock* pBlock = mHeadFreeList; pBlock != nullptr; pBlock = pNext) {
-        pNext = pBlock->mNext;
-        if (reinterpret_cast< u8* >(pBlock) >= pEnd) {
-            if (pNext != nullptr) {
-                pNext = pNext->mNext;
-            }
-
-            removeFreeBlock(pBlock);
-        }
-    }
-
-    if (mHeadFreeList == nullptr) {
-        CMemBlock* pBlock = reinterpret_cast< CMemBlock* >(pEnd);
-        pBlock->initiate(nullptr, nullptr, 0, 0, 0);
-        mHeadFreeList = pBlock;
-        mTailFreeList = pBlock;
-        pEnd += sizeof(CMemBlock);
-    }
-
-    u32 size = pEnd - reinterpret_cast< u8* >(this);
-    pParent->resize(this, size);
-    mEnd = pEnd;
-    mSize = pEnd - mStart;
-    unlock();
-    return size;
-}
-
-#ifdef TARGET_PC
-NEBULA_NO_ASAN
-#endif
-u32 JKRHeap::getMaxAllocatableSize(int alignment) {
-    u32 address = (u32)reinterpret_cast< uintptr_t >(getMaxFreeBlock());
-    return ~(alignment - 1) & (getFreeSize() - ((alignment - 1) & (alignment - (address & 0xF))));
-}
-
-extern "C" void JUTWarningConsole_f(const char* pFormat, ...) {
-    va_list args;
-    va_start(args, pFormat);
-    JUTWarningConsole_f_va(pFormat, args);
-    va_end(args);
-}
-
-extern "C" void JUTWarningConsole(const char* pMessage) {
-    JUTWarningConsole_f("%s", pMessage);
-}
 
 JSUOutputStream::~JSUOutputStream() {
 }
@@ -223,13 +70,9 @@ namespace {
     void loadPrj(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
         Mtx mtx;
         NebulaMtxConcat(pWork->mPrjMtx, pSrt, mtx);
-        J3DNativeShape::setTexture(0, mtx, 3);
+        JPAParticleBatch::setProjection(mtx);
     }
 
-// only way I can get these to match
-// TODO find better way
-#pragma push
-#pragma opt_common_subs off
     static void loadPrjAnm(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
         f32 frame = pWork->mpEmtr->getAge();
         const JPABaseShape* pShape = pWork->mpRes->getBsp();
@@ -257,9 +100,8 @@ namespace {
         matrix[2][3] = 0.0f;
         NebulaMtxConcat(matrix, pWork->mPrjMtx, matrix);
         NebulaMtxConcat(matrix, pSrt, matrix);
-        J3DNativeShape::setTexture(0, matrix, 3);
+        JPAParticleBatch::setProjection(matrix);
     }
-#pragma pop
 
 
     typedef void (*projectionFunc)(JPAEmitterWorkData const*, const Mtx);
@@ -423,9 +265,7 @@ namespace {
 };  // namespace
 
 void JPABaseEmitter::init(JPAEmitterManager* pManager, JPAResource* pResource) {
-#ifdef TARGET_PC
     MotionSignal::emitterInit(this);
-#endif
     mpEmtrMgr = pManager;
     mpRes = pResource;
     const JPADynamicsBlockData* pData = mpRes->getDyn()->mpData;
@@ -514,9 +354,9 @@ void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][3] = pParticle->mPosition.z;
     p_plane[pWork->mPlaneType](matrix, scaleX, scaleY);
     NebulaMtxConcat(pWork->mPosCamMtx, matrix, matrix);
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
-    JPADrawQuad(pWork->mDLType);
+    JPADrawQuad(pWork->mListType);
 }
 
 void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
@@ -562,9 +402,9 @@ void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) 
     matrix[2][3] = pParticle->mPosition.z;
     NebulaMtxConcat(matrix, rotation, rotation);
     NebulaMtxConcat(pWork->mPosCamMtx, rotation, matrix);
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
-    JPADrawQuad(pWork->mDLType);
+    JPADrawQuad(pWork->mListType);
 }
 
 void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
@@ -596,7 +436,7 @@ void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = 1.0f;
     matrix[2][3] = position.z;
     matrix[0][2] = matrix[1][2] = matrix[2][0] = matrix[2][1] = 0.0f;
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -615,20 +455,11 @@ void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
 
     end.setLength(pWork->mGlobalPtclScl.y * (25.0f * pParticle->mParticleScaleY));
     end.sub(position, end);
-    J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
-    J3DNativeDraw::position(position.x, position.y, position.z);
-    J3DNativeDraw::texCoord(0.0f, 0.0f);
-    J3DNativeDraw::position(end.x, end.y, end.z);
-    J3DNativeDraw::texCoord(0.0f, 1.0f);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_LINES);
+    JPAParticleBatch::vertex(position.x, position.y, position.z, 0.0f, 0.0f);
+    JPAParticleBatch::vertex(end.x, end.y, end.z, 0.0f, 1.0f);
 }
 
-// only way I can get these to match
-// TODO find better way
-#pragma push
-#pragma opt_propagation off
-#pragma opt_common_subs off
-#pragma opt_lifetimes off
-#pragma opt_loop_invariants off
 void JPADrawStripe(JPAEmitterWorkData* pWork) {
     const u32 count = pWork->mpAlivePtcl->getNum();
     JPABaseShape* pShape = pWork->mpRes->getBsp();
@@ -652,20 +483,18 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    J3DNativeShape::setPosition(0, pWork->mPosCamMtx);
+    JPAParticleBatch::setMatrix(pWork->mPosCamMtx);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
     TVec3f side;
     TVec3f vertices[2];
     Mtx matrix;
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
-#ifdef TARGET_PC
         MotionSignal::stripeParticle(pParticle, 0);
-#endif
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -702,22 +531,14 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        J3DNativeDraw::position(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z);
-        J3DNativeDraw::texCoord(0.0f, texCoord);
-        J3DNativeDraw::position(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z);
-        J3DNativeDraw::texCoord(1.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
 
 }
-#pragma pop
 
-#pragma push
-#pragma opt_propagation off
-#pragma opt_common_subs off
-#pragma opt_lifetimes off
-#pragma opt_loop_invariants off
 void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     const u32 count = pWork->mpAlivePtcl->getNum();
     JPABaseShape* pShape = pWork->mpRes->getBsp();
@@ -745,20 +566,18 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    J3DNativeShape::setPosition(0, pWork->mPosCamMtx);
+    JPAParticleBatch::setMatrix(pWork->mPosCamMtx);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
     TVec3f side;
     TVec3f vertices[2];
     Mtx matrix;
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
-#ifdef TARGET_PC
         MotionSignal::stripeParticle(pParticle, 1);
-#endif
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -799,22 +618,18 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        J3DNativeDraw::position(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z);
-        J3DNativeDraw::texCoord(0.0f, texCoord);
-        J3DNativeDraw::position(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z);
-        J3DNativeDraw::texCoord(1.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
 
     texCoord = startTexCoord;
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    JPAParticleBatch::primitive(NEBULA_PRIMITIVE_TRIANGLE_STRIP);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
-#ifdef TARGET_PC
         MotionSignal::stripeParticle(pParticle, 2);
-#endif
         position.set(pParticle->mPosition);
         f32 sin = -JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -855,16 +670,13 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         matrix[2][2] = pParticle->mBaseAxis.z;
         matrix[2][3] = 0.0f;
         NebulaMtxMultVecArraySR(matrix, vertices, vertices, 2);
-        J3DNativeDraw::position(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z);
-        J3DNativeDraw::texCoord(0.0f, texCoord);
-        J3DNativeDraw::position(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z);
-        J3DNativeDraw::texCoord(1.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[0].x + position.x, vertices[0].y + position.y, vertices[0].z + position.z, 0.0f, texCoord);
+        JPAParticleBatch::vertex(vertices[1].x + position.x, vertices[1].y + position.y, vertices[1].z + position.z, 1.0f, texCoord);
         pNode = pNext(pNode);
         texCoord += texStep;
     }
 
 }
-#pragma pop
 
 void JPAFieldAir::prepare(JPAEmitterWorkData* pWork, JPAFieldBlock* pBlock) {
     TVec3f direction(pBlock->getDir());
@@ -970,7 +782,7 @@ void JPADrawYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = pWork->mYBBCamMtx[2][2];
     matrix[2][3] = position.z;
     matrix[0][1] = matrix[0][2] = matrix[1][0] = matrix[2][0] = 0.0f;
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -1008,69 +820,22 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     matrix[2][1] = cosY * z;
     matrix[2][2] = y;
     matrix[2][3] = position.z;
-    J3DNativeShape::setPosition(0, matrix);
+    JPAParticleBatch::setMatrix(matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
 
-void JKRAramPiece::startDMA(JKRAMCommand* pCommand) {
-#ifdef TARGET_PC
-    // The console required a cached main-memory source (0x80000000 and up): natively, a main-to-ARAM transfer
-    // from a non-null pointer.
-    if (pCommand->mTransferDirection != 0 || pCommand->mSrc == 0) {
-#else
-    if (pCommand->mSrc < 0x80000000) {
-#endif
-        doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-        return;
-    }
-
-    if (pCommand->mDst >= 0x04000000) {
-        doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-        return;
-    }
-
-    if (pCommand->mDataLength > 0x00E00000) {
-        doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-        return;
-    }
-
-    NebulaAuxMemory::write(pCommand->mDst, reinterpret_cast< const void* >(pCommand->mSrc), pCommand->mDataLength);
-    doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-}
-
-void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
-    if (JASAudioThread::getThreadPointer() == nullptr && JASDvd::getThreadPointer() == nullptr) {
+void JAU_JASInitializer::initJASystem(NebulaArena* pHeap) {
+    if (JASLoad::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
-        if (audioMemory_ == 0) {
-            audioMemory_ = JKRAram::getManager()->getAudioMemory();
-        }
-
-        if (audioMemSize_ == 0) {
-            audioMemSize_ = JKRAram::getManager()->getAudioMemSize();
-        }
-
-        JASKernel::setupAramHeap(audioMemory_, audioMemSize_);
         JASTrack::newMemPool(field_0x1c);
         if (field_0x20 > 0) {
             JASTrack::TChannelMgr::newMemPool(field_0x20);
         }
 
-        JASDvd::createThread(dvdThreadPriority_, 0x100, 0x8000);
-        JASAudioThread::create(audioThreadPriority_);
-        JKRThreadSwitch* pThreadSwitch = JKRThreadSwitch::getManager();
-        if (pThreadSwitch != nullptr) {
-            if (dvdThreadId_ >= 0) {
-                pThreadSwitch->enter(JASDvd::getThreadPointer(), dvdThreadId_);
-            }
-
-            if (audioThreadId_ >= 0) {
-                pThreadSwitch->enter(JASAudioThread::getThreadPointer(), audioThreadId_);
-            }
-        }
-
-        JASDriver::setDSPLevel(dspLevel_);
-        JASAramStream::initSystem(aramBlockSize_, aramChannelNum_);
+        JASLoad::createThread(0x100, 0x8000);
+        JASDriver::startAudio();
+        JASDriver::setOutputLevel(outputLevel_);
     }
 
     if (waveArcDir_ != nullptr) {
@@ -1090,37 +855,3 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
     }
 }
 
-namespace {
-    s32 sAudioThreadMsgSize = 0x20;
-    u32 sAudioThreadStackSize = 0x8000;
-    u32 sAramThreadStackSize = 0xC000;
-    s32 sAramThreadMsgSize = 0x20;
-};  // namespace
-
-JASAudioThread::JASAudioThread(int priority, int, u32)
-    : JKRThread(JASDram, ::sAudioThreadStackSize, ::sAudioThreadMsgSize, priority), JASGlobalInstance< JASAudioThread >(true), sbPauseFlag() {
-    sThreadQueue.init();
-}
-
-JKRAram::JKRAram(u32 audioSize, u32 graphSize, s32 priority) : JKRThread(::sAramThreadStackSize, ::sAramThreadMsgSize, priority) {
-    const u32 reserved = NebulaAuxMemory::cReserved;
-    const u32 total = NebulaAuxMemory::size();
-    mAudioMemorySize = audioSize;
-    if (graphSize == 0xFFFFFFFF) {
-        mGraphMemorySize = total - audioSize - reserved;
-        mAramMemorySize = 0;
-    } else {
-        mGraphMemorySize = graphSize;
-        mAramMemorySize = total - (audioSize + graphSize) - reserved;
-    }
-
-    mAudioMemoryPtr = NebulaAuxMemory::alloc(mAudioMemorySize);
-    mGraphMemoryPtr = NebulaAuxMemory::alloc(mGraphMemorySize);
-    if (mAramMemorySize != 0) {
-        mAramMemoryPtr = NebulaAuxMemory::alloc(mAramMemorySize);
-    } else {
-        mAramMemoryPtr = 0;
-    }
-
-    mAramHeap = new (JKRGetSystemHeap(), 0) JKRAramHeap(mGraphMemoryPtr, mGraphMemorySize);
-}

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class GameDataHolder;
 
@@ -11,12 +10,12 @@ public:
     void init();
 
 private:
-    /* 0x00 */ s32 mTicoGalaxyNum;
-    /* 0x04 */ s32 mPictureBookChapterCanRead;
-    /* 0x08 */ s32 mGalaxyNumCanOpen;
-    /* 0x0C */ s32 mPowerStarNum;
-    /* 0x10 */ s32 mGreenStarNum;
-    /* 0x14 */ bool mIsCompleteGalaxy;
+    s32 mTicoGalaxyNum;
+    s32 mPictureBookChapterCanRead;
+    s32 mGalaxyNumCanOpen;
+    s32 mPowerStarNum;
+    s32 mGreenStarNum;
+    bool mIsCompleteGalaxy;
 };
 
 class StageResultSequenceChecker {
@@ -38,6 +37,6 @@ public:
     bool isJustOpenGalaxyWithoutChallengeGalaxy() const;
 
 private:
-    /* 0x00 */ StageResultSequenceCheckList mCheckListPrev;
-    /* 0x18 */ StageResultSequenceCheckList mCheckListAfter;
+    StageResultSequenceCheckList mCheckListPrev;
+    StageResultSequenceCheckList mCheckListAfter;
 };

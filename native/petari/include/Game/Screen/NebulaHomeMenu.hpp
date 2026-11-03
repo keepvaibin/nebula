@@ -1,10 +1,9 @@
 #pragma once
 
 // The HOME Menu: the host keeps it (its rows close, reset and leave the game, the last two after "are you sure?"; its
-// keys and controller buttons) and the game drives and draws it (HomeButtonLayout, NebulaSettingsMenu). On the console
+// keys and controller buttons) and the game drives and draws it (HomeButtonLayout, NebulaSettingsMenu). Originally
 // it was Nintendo's HOME button library, a module on the disc the game linked at run time.
 
-#include <revolution/types.h>
 
 namespace NebulaHomeMenu {
     enum Choice {

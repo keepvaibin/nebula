@@ -7,7 +7,6 @@ namespace {
     // static const char* sDrawTypeCameraName = ;
     // static const char* sPermitMultiCategoryArciveName = ;
 
-    bool isExcludedCheckMultiRegistCategory(s32);
 };  // namespace
 
 DrawBufferHolder::DrawBufferHolder() : mTableInitialized() {
@@ -17,8 +16,6 @@ bool DrawBufferHolder::isBufferGroupEmpty(s32 drawBufferType) const {
     return mBufferGroups[drawBufferType].mActiveExecutors.size() == 0;
 }
 
-#pragma push
-#pragma opt_loop_invariants off
 void DrawBufferHolder::initTable(const DrawBufferInitialTable* pInitialTable, s32 numGroups) {
     mBufferGroups.init(numGroups);
 
@@ -45,13 +42,14 @@ void DrawBufferHolder::initTable(const DrawBufferInitialTable* pInitialTable, s3
 
     mTableInitialized = true;
 }
-#pragma pop
 
 void DrawBufferHolder::allocateActorListBuffer() {
     mTableInitialized = false;
     // NOTE: this symbol does not appear in the debug map, instead it likely uses std::for_each. However the current std::for_each does not support
     // flat array iteration
-    std::for_each_array(mBufferGroups.begin(), mBufferGroups.end(), std::mem_func(&DrawBufferGroup::allocateActorListBuffer));
+    for (auto& item : mBufferGroups) {
+        item.allocateActorListBuffer();
+    }
 }
 
 s32 DrawBufferHolder::registerDrawBuffer(LiveActor* pActor, s32 drawBufferType) {
@@ -84,7 +82,9 @@ void DrawBufferHolder::findLightInfo(LiveActor* pActor, s32 drawBufferType, s32 
 }
 
 void DrawBufferHolder::entry(s32 drawBufferType) {
-    std::for_each(mExecuteLists[drawBufferType].begin(), mExecuteLists[drawBufferType].end(), std::mem_func(&DrawBufferGroup::entry));
+    for (auto& item : mExecuteLists[drawBufferType]) {
+        item->entry();
+    }
 }
 
 void DrawBufferHolder::drawOpa(s32 drawBufferType) const {
@@ -103,17 +103,8 @@ void DrawBufferHolder::drawXlu(s32 drawBufferType) const {
     mBufferGroups[drawBufferType].drawXlu();
 }
 
-void DrawBufferHolder::dummy(s32 drawBufferType) {
-    // TODO: This SHOULD NOT be here, this is only here because for_each and Vector<>.end are emitted in this file for DrawBufferGroups,
-    // indicating some stripped function uses them. (Check Debug symbols for candidates)
-    std::for_each(mExecuteLists[drawBufferType].begin(), mExecuteLists[drawBufferType].end(), std::mem_func(&DrawBufferGroup::entry));
-}
-
 ExecutorList& DrawBufferHolder::getExecuteList(s32 drawBufferType) {
     s32 listId = mBufferGroups[drawBufferType].mDrawCameraType;
     return mExecuteLists[listId];
 }
 
-DrawBufferGroup* DrawBufferHolder::getDrawBufferGroup(s32 drawBufferType) {
-    return &mBufferGroups[drawBufferType];
-}

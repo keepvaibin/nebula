@@ -2,14 +2,12 @@
 #include "Game/AreaObj/AreaObj.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include <revolution/types.h>
 
 #include <cstring>
 
 CubeCameraArea::CubeCameraArea(int formType, const char* pName) : AreaObj(formType, pName), _3C(), mZoneID() {
 }
 
-// needed to get sCubeCategory emitted in sbss;
 s32 CubeCameraArea::sCubeCategory = 0;
 
 void CubeCameraArea::init(const JMapInfoIter& rIter) {

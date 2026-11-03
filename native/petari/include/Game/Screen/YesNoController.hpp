@@ -19,9 +19,7 @@ public:
     bool isDisappearStart() const;
     void setSE(const char*, const char*, const char*);
     bool trySelect();
-#ifdef TARGET_PC
     void decideNo();
-#endif
     void emitEffectIfExist(const char*);
     void deleteEffectIfExist(const char*);
     void forceDeleteEffectAllIfExist();
@@ -31,11 +29,11 @@ public:
     void exeSelected();
     void exeNotSelected();
 
-    /* 0x08 */ LayoutActor* mHost;
-    /* 0x0C */ bool _C;
-    /* 0x10 */ ButtonPaneController* mButtonYesPaneCtrl;
-    /* 0x14 */ ButtonPaneController* mButtonNoPaneCtrl;
-    /* 0x18 */ const char* mCursorSE;
-    /* 0x1C */ const char* mYesSE;
-    /* 0x20 */ const char* mNoSE;
+    LayoutActor* mHost;
+    bool _C;
+    ButtonPaneController* mButtonYesPaneCtrl;
+    ButtonPaneController* mButtonNoPaneCtrl;
+    const char* mCursorSE;
+    const char* mYesSE;
+    const char* mNoSE;
 };

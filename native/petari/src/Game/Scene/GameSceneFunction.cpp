@@ -5,7 +5,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 
 namespace {
-    GameScene* getGameScene() NO_INLINE {
+    GameScene* getGameScene() {
         return static_cast< GameScene* >(SingletonHolder< GameSystem >::get()->mSceneController->mScene);
     }
 };  // namespace
@@ -43,11 +43,9 @@ namespace GameSceneFunction {
         ::getGameScene()->requestShowGalaxyMap();
     }
 
-#ifdef TARGET_PC
     void requestShowNebulaBoard() {
         ::getGameScene()->requestShowNebulaBoard();
     }
-#endif
 
     void requestStaffRoll() {
         ::getGameScene()->requestStaffRoll();

@@ -1,18 +1,16 @@
 #pragma once
 
-#include "Inline.hpp"
 #include "JSystem/JParticle/JPATexture.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
-class JKRHeap;
+class NebulaArena;
 class JPAResource;
 struct ResTIMG;
 
 class JPAResourceManager {
 public:
-    JPAResourceManager(void const*, JKRHeap*);
+    JPAResourceManager(void const*, NebulaArena*);
     JPAResource* getResource(u16) const;
     bool checkUserIndexDuplication(u16) const;
     const ResTIMG* swapTexture(ResTIMG const*, char const*);
@@ -20,20 +18,16 @@ public:
     void registTex(JPATexture*);
     u32 getResUserWork(u16) const;
 
-    void load(u16 idx, GXTexMapID texMapID) NO_INLINE {
-        CALL_INLINE_FUNC(load, idx, texMapID);
-    }
-
-    inline void INLINE_FUNC_DECL(load, u16 idx, GXTexMapID texMapID) {
-        mpTexArr[idx]->load(texMapID);
+    void use(u16 idx, u32 slot) {
+        mpTexArr[idx]->use(slot);
     }
 
 public:
-    /* 0x00 */ JKRHeap* mpHeap;
-    /* 0x04 */ JPAResource** mpResArr;
-    /* 0x08 */ JPATexture** mpTexArr;
-    /* 0x0C */ u16 mResMax;
-    /* 0x0E */ u16 mResNum;
-    /* 0x10 */ u16 mTexMax;
-    /* 0x12 */ u16 mTexNum;
+    NebulaArena* mpHeap;
+    JPAResource** mpResArr;
+    JPATexture** mpTexArr;
+    u16 mResMax;
+    u16 mResNum;
+    u16 mTexMax;
+    u16 mTexNum;
 };

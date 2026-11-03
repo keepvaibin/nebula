@@ -52,7 +52,7 @@ void WormEatenPlanet::init(const JMapInfoIter& rIter) {
 
     initWormEatenHill();
 
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoCast(mCaterpillar, rIter);
@@ -131,7 +131,7 @@ void WormEatenPlanet::initWormEatenHill() {
 
     for (s32 i = 0; i < ::sNumWormEatenHill; i++) {
         char jointName[256];
-        snprintf(jointName, sizeof(jointName), "ConnectParts%c", i + 'A');
+        nebula_snprintf(jointName, sizeof(jointName), "ConnectParts%c", i + 'A');
         MtxPtr jointMtx = MR::getJointMtx(this, jointName);
 
         mWormEatenHill[i] = new PartsModel(this, "\220\110\202\242\224\152\202\350\222\313" /* 食い破り塚 */, "WormEatenHill", jointMtx, -1, false);

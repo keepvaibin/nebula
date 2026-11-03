@@ -1,7 +1,5 @@
 #include "Game/Screen/PictureBookLayout.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaFrameGen.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
@@ -10,12 +8,10 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -46,11 +42,11 @@ namespace {
         s32 textureNo = 0;
 
         char chapterArcName[64];
-        snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", chapterNo);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", chapterNo);
 
         for (;;) {
             char pageTexName[64];
-            snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", chapterNo, textureNo + 1);
+            nebula_snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", chapterNo, textureNo + 1);
 
             if (!MR::isExistResourceInArc(chapterArcName, pageTexName)) {
                 break;
@@ -65,7 +61,7 @@ namespace {
     s32 getPageNum(s32 chapterNo) {
         for (s32 pageNo = 0; pageNo < 100; pageNo++) {
             char messageId[64];
-            snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo + 1, 0);
+            nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo + 1, 0);
 
             if (MR::isExistGameMessage(messageId)) {
                 continue;
@@ -115,10 +111,8 @@ void PictureBookLayout::init(const JMapInfoIter& rIter) {
 
         mCloseButton = new PictureBookCloseButton(true);
         mCloseButton->initWithoutIter();
-#ifdef TARGET_PC
         // While a page shows, A and the D-pad turn the pages: NebulaMenuFocus leaves the close button to the pointer.
         mCloseButton->getPaneCtrl()->mIsNebulaFocusable = false;
-#endif
     }
 
     initNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeIn));
@@ -174,7 +168,7 @@ void PictureBookLayout::makeArchiveList(NameObjArchiveListCollector* pCollector,
     for (s32 c = chapterMin; c <= chapterMax; c++) {
         char chapterArcName[64];
 
-        snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", c);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d", c);
         pCollector->addArchive(chapterArcName);
     }
 
@@ -190,9 +184,7 @@ s32 PictureBookLayout::getChapterMax() {
 }
 
 void PictureBookLayout::control() {
-#ifdef TARGET_PC
     NebulaFrameGen::noteFullscreenUi();
-#endif
     if (mContentsButtonPaneController == nullptr) {
         return;
     }
@@ -215,11 +207,11 @@ void PictureBookLayout::initTexture() {
 
     for (s32 c = mChapterMin; c <= mChapterMax; c++) {
         char chapterArcName[64];
-        snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", c);
+        nebula_snprintf(chapterArcName, sizeof(chapterArcName), "PictureBookChapter%d.arc", c);
 
         for (s32 p = 0; p < ::getTextureNum(c); p++) {
             char pageTexName[64];
-            snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", c, p + 1);
+            nebula_snprintf(pageTexName, sizeof(pageTexName), "Chapter%dPage%d.bti", c, p + 1);
 
             _44[textureIndex] = MR::createLytTexMap(chapterArcName, pageTexName);
             textureIndex++;
@@ -238,7 +230,7 @@ void PictureBookLayout::initContentsButton() {
         mContentsButtonPaneController[i] = new ButtonPaneController(this, ::cContentsPaneName[i], ::cContentsPointingPaneName[i], 0, false);
         mContentsButtonPaneController[i]->invalidateAppearance();
 
-        snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", i + 1);
+        nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", i + 1);
 
         MR::setTextBoxGameMessageRecursive(this, ::cContentsPaneName[i], messageId);
     }
@@ -247,13 +239,13 @@ void PictureBookLayout::initContentsButton() {
 namespace {
     inline void setChapterTitle(LayoutActor* pActor, const char* pPaneName, s32 chapter) {
         char messageId[64];
-        snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", chapter);
+        nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Title", chapter);
         MR::setTextBoxGameMessageRecursive(pActor, pPaneName, messageId);
     }
 };  // namespace
 namespace {
     inline bool setPageText(LayoutActor* pActor, char (&rMessageId)[64], const s32& rChapter, const s32& rPage, const s32& rTextIndex) {
-        snprintf(rMessageId, sizeof(rMessageId), "PictureBookChapter%d_Page%d_%03d", rChapter, rPage, rTextIndex);
+        nebula_snprintf(rMessageId, sizeof(rMessageId), "PictureBookChapter%d_Page%d_%03d", rChapter, rPage, rTextIndex);
 
         if (MR::isExistGameMessage(rMessageId)) {
             MR::setTextBoxGameMessageRecursive(pActor, "Text", rMessageId);
@@ -457,7 +449,7 @@ s32 PictureBookLayout::getCurrentMaxTextIndex() const {
 
     for (s32 i = 0; i < 100; i++) {
         char messageId[64];
-        snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo, i);
+        nebula_snprintf(messageId, sizeof(messageId), "PictureBookChapter%d_Page%d_%03d", chapterNo, pageNo, i);
 
         if (MR::isExistGameMessage(messageId)) {
             continue;
@@ -710,11 +702,9 @@ void PictureBookLayout::exeWaitWithText() {
         setNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeOutText));
     } else {
         bool isTriggerNextPage =
-            MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testSubPadStickTriggerRight(WPAD_CHAN0);
-#ifdef TARGET_PC
+            MR::isPressedJump(PLAYER_1) || MR::isPressedRight(PLAYER_1) || MR::isMoveStickPressedRight(PLAYER_1);
         // A skipped reading (Rosalina's, a cutscene) turns each page as soon as it is up.
         isTriggerNextPage = isTriggerNextPage || NebulaCutsceneSkip::isSkipping();
-#endif
 
         if (isTriggerNextPage) {
             MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
@@ -733,7 +723,7 @@ void PictureBookLayout::exeWaitWithText() {
 
             setNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeOutText));
         } else {
-            bool isTriggerPrevPage = MR::testCorePadTriggerLeft(WPAD_CHAN0) || MR::testSubPadStickTriggerLeft(WPAD_CHAN0);
+            bool isTriggerPrevPage = MR::isPressedLeft(PLAYER_1) || MR::isMoveStickPressedLeft(PLAYER_1);
 
             if (isTriggerPrevPage) {
                 if (mChapterMin < mChapterNo || mPageNo > 0 || mTextIndex > 0) {

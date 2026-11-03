@@ -4,9 +4,13 @@
 // defaults and patch order are Riivolution's as Dolphin reproduces them.
 
 #include "galaxy/mods.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+#include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
-#include "galaxy/cooker_bridge.h"
+#include "galaxy/disc_files.h"
 #include "galaxy/mod_xml.h"
 
 #include <algorithm>
@@ -42,9 +46,18 @@ fs::path from_utf8(std::string_view s) {
     return fs::path(std::u8string(reinterpret_cast<const char8_t*>(s.data()), s.size()));
 }
 
+// A patch or settings file past this is not read: real ones are kilobytes.
+constexpr std::uintmax_t kTextFileLimit = 64u << 20u;
+
 std::string read_text(const fs::path& path) {
+    std::error_code error;
+    const std::uintmax_t size = fs::file_size(path, error);
+    if (error || size > kTextFileLimit) return {};
     std::ifstream in(path, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string text(static_cast<std::size_t>(size), '\0');
+    in.read(text.data(), static_cast<std::streamsize>(size));
+    text.resize(static_cast<std::size_t>(in.gcount()));
+    return text;
 }
 
 // A child of `dir` named `name` whatever its case (Riivolution assumes an SD card's case-insensitive names).
@@ -74,17 +87,15 @@ struct SavePatch {
 };
 struct MemoryPatch {
     std::uint32_t offset = 0;
-    std::vector<std::uint8_t> value, original;
-    std::string valuefile;
+    std::vector<std::uint8_t> value;
     bool ocarina = false, search = false;
-    std::uint32_t align = 1;
 };
 struct Patch {
     std::string id, root;
     std::vector<FilePatch> files;
     std::vector<FolderPatch> folders;
     std::vector<SavePatch> saves;
-    std::vector<MemoryPatch> memory;
+    std::vector<MemoryPatch> memory;  // patches written for the console's code
 };
 struct PatchRef {
     std::string id;
@@ -234,11 +245,8 @@ std::optional<RiivDisc> parse_riivolution(const fs::path& xml, std::string* erro
                 MemoryPatch& m = patch.memory.emplace_back();
                 m.offset = static_cast<std::uint32_t>(n.attribute_uint("offset", 0));
                 m.value = hex_bytes(n.attribute("value"));
-                m.valuefile = n.attribute("valuefile");
-                m.original = hex_bytes(n.attribute("original"));
                 m.ocarina = n.attribute_bool("ocarina", false);
                 m.search = n.attribute_bool("search", false);
-                m.align = static_cast<std::uint32_t>(n.attribute_uint("align", 1));
             }
         }
     }
@@ -279,7 +287,7 @@ void apply_config(RiivDisc& d, const fs::path& riivolution_dir, const std::strin
     }
 }
 
-// The SD card's and the patch's roots of a Riivolution mod, and its external paths (Dolphin FileDataLoaderHostFS).
+// The SD card's and the patch's roots of a Riivolution mod, and its external paths.
 struct Loader {
     fs::path sd_root;
     fs::path patch_root;
@@ -301,7 +309,7 @@ struct Loader {
                 result = result.parent_path();
                 continue;
             }
-            if (std::all_of(element.begin(), element.end(), [](char c) { return c == '.'; })) return std::nullopt;
+            if (!safe_path_part(element)) return std::nullopt;
             ++depth;
             std::error_code error;
             const fs::path exact = result / from_utf8(element);
@@ -375,7 +383,6 @@ std::vector<Patch> generate_patches(const RiivDisc& d, const std::string& game_i
                     f.external = replace_variables(f.external, with);
                 }
                 for (SavePatch& sp : p.saves) sp.external = replace_variables(sp.external, with);
-                for (MemoryPatch& m : p.memory) m.valuefile = replace_variables(m.valuefile, with);
                 active.push_back(std::move(p));
             }
         }
@@ -389,7 +396,11 @@ constexpr const char* kDiscFolders[] = {"AudioRes", "LayoutData", "MapPartsData"
                                          "UsSpanish", "EuEnglish", "EuFrench", "EuGerman", "EuItalian", "EuSpanish",
                                          "JpJapanese", "KrKorean", "CnSimpChinese", "TwTradChinese", "HomeButton2"};
 
+// The package format this build reads (LumaLink's PACKAGE_FORMAT); old ones keep working.
+constexpr long long kPackageFormat = 1;
+
 struct ModLayout {
+    fs::path package;  // luma.json of a converted mod
     fs::path sd_root;           // Riivolution: where riivolution/ is
     fs::path riivolution_dir;
     std::vector<fs::path> xmls;
@@ -415,10 +426,22 @@ std::string language_of(std::string_view disc_path) {
 
 // Notes beside a mod's files: never placed on the disc.
 bool mod_note(const fs::path& file) {
-    const std::string extension = lower(file.extension().string());
+    const std::string extension = lower(galaxy::path_text(file.extension()));
     for (const char* known : {".txt", ".md", ".pdf", ".url", ".htm", ".html", ".rtf", ".png", ".jpg", ".jpeg",
                               ".webp", ".gif", ".nfo", ".xml", ".ini", ".db", ".zip", ".7z", ".rar"}) {
         if (extension == known) return true;
+    }
+    return false;
+}
+
+// A folder the game has at its root, or one language's.
+bool is_disc_folder(std::string_view name) {
+    const std::string wanted = lower(name);
+    for (const char* folder : kDiscFolders) {
+        if (lower(folder) == wanted) return true;
+    }
+    for (const char* folder : kLanguageFolders) {
+        if (lower(folder) == wanted) return true;
     }
     return false;
 }
@@ -471,9 +494,121 @@ bool has_pack_textures(const fs::path& dir) {
     return false;
 }
 
+// A string field of a resource pack's manifest.json ("name": "..."); a small reading, enough for its flat fields.
+std::string json_string(const std::string& text, std::string_view field) {
+    const std::string key = "\"" + std::string(field) + "\"";
+    std::size_t at = text.find(key);
+    if (at == std::string::npos) return {};
+    at = text.find(':', at + key.size());
+    if (at == std::string::npos) return {};
+    at = text.find_first_not_of(" \t\r\n[", at + 1u);
+    if (at == std::string::npos || text[at] != '"') return {};
+    std::string value;
+    for (++at; at < text.size() && text[at] != '"'; ++at) {
+        if (text[at] == '\\' && at + 1u < text.size()) ++at;
+        value.push_back(text[at]);
+    }
+    return value;
+}
+
+void read_pack(ModInfo& mod, const fs::path& textures) {
+    auto list = std::make_shared<std::vector<PackTexture>>();
+    std::error_code error;
+    for (auto it = fs::recursive_directory_iterator(textures, fs::directory_options::skip_permission_denied, error);
+         !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
+        if (!it->is_regular_file(error)) continue;
+        const std::string stem = lower(utf8_name(it->path().stem()));
+        if (stem.find("_mip") != std::string::npos) continue;
+        const std::optional<std::uint64_t> hash = galaxy::textures::hash_of_pack_name(stem);
+        if (!hash) continue;
+        PackTexture texture;
+        texture.hash = *hash;
+        const std::string folder = utf8_name(it->path().parent_path().lexically_relative(textures));
+        if (const auto named = galaxy::textures::category_of_pack_folder(galaxy::path_text(
+                it->path().parent_path().lexically_relative(textures)))) {
+            texture.folder_category = static_cast<std::uint8_t>(*named);
+        }
+        (void)folder;
+        list->push_back(texture);
+    }
+    mod.pack_textures = std::move(list);
+    // A resource pack's manifest, in the mod or one folder down.
+    std::vector<fs::path> places{mod.path, textures};
+    for (const auto& entry : fs::directory_iterator(mod.path, error)) {
+        if (entry.is_directory(error)) places.push_back(entry.path());
+    }
+    for (const fs::path& place : places) {
+        const std::optional<fs::path> manifest = child_any_case(place, "manifest.json", false);
+        if (!manifest) continue;
+        const std::string text = read_text(*manifest);
+        mod.pack_title = json_string(text, "name");
+        mod.pack_author = json_string(text, "authors");
+        mod.pack_description = json_string(text, "description");
+        break;
+    }
+}
+
+// A whole number field of a package's manifest, at the top of the file; `fallback` when it has none.
+long long json_number(const std::string& text, std::string_view field, long long fallback) {
+    const std::string key = '"' + std::string(field) + '"';
+    std::size_t at = text.find(key);
+    if (at == std::string::npos) return fallback;
+    at = text.find(':', at + key.size());
+    if (at == std::string::npos) return fallback;
+    ++at;
+    while (at < text.size() && (text[at] == ' ' || text[at] == '\t' || text[at] == '\r' || text[at] == '\n')) ++at;
+    long long value = 0;
+    bool any = false;
+    for (; at < text.size() && text[at] >= '0' && text[at] <= '9'; ++at) {
+        value = value * 10 + (text[at] - '0');
+        any = true;
+    }
+    return any ? value : fallback;
+}
+
+bool json_true(const std::string& text, std::string_view field) {
+    const std::string key = '"' + std::string(field) + '"';
+    std::size_t at = text.find(key);
+    if (at == std::string::npos) return false;
+    at = text.find(':', at + key.size());
+    return at != std::string::npos && text.find("true", at) == text.find_first_not_of(" \t\r\n", at + 1u);
+}
+
+// A package's native switches: "native_patches": { "5": 1, ... }.
+std::map<std::uint32_t, std::uint32_t> package_patches(const std::string& text) {
+    std::map<std::uint32_t, std::uint32_t> out;
+    std::size_t at = text.find("\"native_patches\"");
+    if (at == std::string::npos) return out;
+    at = text.find('{', at);
+    const std::size_t end = at == std::string::npos ? at : text.find('}', at);
+    if (end == std::string::npos) return out;
+    while (true) {
+        const std::size_t open = text.find('"', at);
+        if (open == std::string::npos || open > end) break;
+        const std::size_t close = text.find('"', open + 1u);
+        const std::size_t colon = close == std::string::npos ? close : text.find(':', close);
+        if (colon == std::string::npos || colon > end) break;
+        std::uint64_t id = 0;
+        for (std::size_t i = open + 1u; i < close && text[i] >= '0' && text[i] <= '9'; ++i) id = id * 10u + static_cast<unsigned>(text[i] - '0');
+        std::size_t v = colon + 1u;
+        while (v < end && (text[v] == ' ' || text[v] == '\r' || text[v] == '\n')) ++v;
+        std::uint64_t value = 0;
+        for (; v < end && text[v] >= '0' && text[v] <= '9'; ++v) value = value * 10u + static_cast<unsigned>(text[v] - '0');
+        out[static_cast<std::uint32_t>(id)] = static_cast<std::uint32_t>(value);
+        at = v;
+    }
+    return out;
+}
+
 ModLayout layout_of(const fs::path& mod) {
     ModLayout layout;
     std::error_code error;
+    if (std::optional<fs::path> manifest = child_any_case(mod, "luma.json", false)) {
+        // A converted mod: everything is where the package put it.
+        layout.package = *manifest;
+        if (std::optional<fs::path> textures = child_any_case(mod, "textures", true)) layout.textures = *textures;
+        return layout;
+    }
     // riivolution/ in the mod, or one folder down (an archive's own top folder).
     std::vector<fs::path> roots{mod};
     for (const auto& entry : fs::directory_iterator(mod, error)) {
@@ -484,7 +619,7 @@ ModLayout layout_of(const fs::path& mod) {
             layout.sd_root = root;
             layout.riivolution_dir = *riiv;
             for (const auto& entry : fs::directory_iterator(*riiv, error)) {
-                if (entry.is_regular_file(error) && lower(entry.path().extension().string()) == ".xml") {
+                if (entry.is_regular_file(error) && lower(galaxy::path_text(entry.path().extension())) == ".xml") {
                     layout.xmls.push_back(entry.path());
                 }
             }
@@ -522,6 +657,7 @@ ModLayout layout_of(const fs::path& mod) {
 }
 
 struct SavedMod {
+    std::uint32_t categories_off = 0;
     bool enabled = true;
     unsigned order = 0;
     bool has_order = false;
@@ -561,11 +697,14 @@ std::string unescape_key(std::string_view s) {
 }
 
 struct Settings {
+    fs::path store;
     std::mutex mutex;
     fs::path folder;
     fs::path file;
     std::string game_id;
 };
+
+void start_texture_sorting();
 
 Settings& settings() {
     static Settings s;
@@ -576,6 +715,14 @@ struct Session {
     std::mutex mutex;
     SessionMods mods;
 };
+
+void start_texture_sorting() {
+    Settings& s = settings();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    if (!s.store.empty() && !s.file.empty()) {
+        galaxy::textures::start_index(s.store, s.file.parent_path() / "texture_index.bin");
+    }
+}
 
 Session& session() {
     static Session s;
@@ -619,6 +766,8 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             current->has_order = true;
         } else if (key == "text") {
             current->own_text = value != "game";
+        } else if (key == "textures_off") {
+            current->categories_off = static_cast<std::uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
         } else if (key.starts_with("option.")) {
             current->options[unescape_key(std::string_view(key).substr(7))] =
                 static_cast<unsigned>(std::strtoul(value.c_str(), nullptr, 10));
@@ -626,15 +775,6 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
     }
     return saved;
 }
-
-bool dol_used(std::uint32_t address, std::size_t size, const std::string& game_id);
-std::optional<std::size_t> dol_offset_of(std::span<const std::uint8_t> dol, std::uint32_t address, std::size_t size);
-struct NativeCodePatch;
-const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32_t address,
-                                         std::span<const std::uint8_t> value);
-// main.dol as this session's game has it (the scan checks a patch's `original` against it).
-std::mutex s_dol_mutex;
-std::vector<std::uint8_t> s_dol;
 
 // The region a choice's name stands for ('E', 'P', 'J', 'K'), else 0: NTSC/USA, PAL/EUR, JP/NTSC-J, KOR.
 char choice_region(std::string_view name) {
@@ -681,6 +821,7 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
                                 std::string* problem) {
     std::vector<RiivDisc> discs;
     unsigned other_game = 0;
+    std::string other_game_id;
     for (const fs::path& xml : layout.xmls) {
         std::string error;
         std::optional<RiivDisc> d = parse_riivolution(xml, &error);
@@ -690,6 +831,7 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
         }
         if (!game_id.empty() && !valid_for_game(*d, game_id, -1, -1)) {
             ++other_game;
+            if (d->game) other_game_id = *d->game;
             continue;
         }
         apply_config(*d, layout.riivolution_dir, game_id.empty() ? std::string("RMGE01") : game_id);
@@ -714,11 +856,30 @@ std::vector<RiivDisc> mod_discs(const ModLayout& layout, const SavedMod* saved, 
         }
         discs.push_back(std::move(*d));
     }
-    if (discs.empty() && other_game != 0u && problem != nullptr && problem->empty()) *problem = "FOR ANOTHER GAME";
+    if (discs.empty() && other_game != 0u && problem != nullptr && problem->empty()) {
+        *problem = other_game_id.starts_with("SB4")   ? "THIS MOD IS FOR SUPER MARIO GALAXY 2"
+                   : other_game_id.starts_with("RMG") ? "THIS MOD IS FOR ANOTHER VERSION OF THE GAME"
+                                                      : "THIS MOD IS FOR ANOTHER GAME";
+    }
     return discs;
 }
 
 }  // namespace
+
+bool safe_path_part(std::string_view part) {
+    if (part.empty() || part.find_first_of(":/\\") != std::string_view::npos ||
+        part.find_first_not_of(". ") == std::string_view::npos) {
+        return false;
+    }
+    // A device whatever follows its name's first dot, on every platform: a mod is the same mod on all of them.
+    std::string stem = lower(part.substr(0, part.find('.')));
+    while (!stem.empty() && stem.back() == ' ') stem.pop_back();
+    if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul" || stem == "conin$" || stem == "conout$") return false;
+    if (!stem.starts_with("com") && !stem.starts_with("lpt")) return true;
+    const std::string_view number = std::string_view(stem).substr(3);
+    const bool digit = number.size() == 1u && number[0] >= '1' && number[0] <= '9';
+    return !digit && number != "\xC2\xB9" && number != "\xC2\xB2" && number != "\xC2\xB3";
+}
 
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id) {
@@ -727,11 +888,6 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
     s.folder = folder;
     s.file = settings_file;
     s.game_id = game_id;
-}
-
-void set_game_dol(std::span<const std::uint8_t> dol) {
-    const std::lock_guard<std::mutex> lock(s_dol_mutex);
-    s_dol.assign(dol.begin(), dol.end());
 }
 
 std::string mods_game_id() {
@@ -747,6 +903,7 @@ std::filesystem::path mods_folder() {
 }
 
 std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
+    // (The packs' categories wait for start_texture_sorting's index and are counted again when it is ready.)
     fs::path folder;
     fs::path file;
     std::string game_id = requested_game_id;
@@ -781,10 +938,17 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.textures = !layout.textures.empty();
         mod.movies = !layout.movies.empty();
         mod.loose = !layout.loose.empty();
+        mod.package = !layout.package.empty();
         const auto it = saved.find(mod.id);
         const SavedMod* s = it != saved.end() ? &it->second : nullptr;
         mod.enabled = s == nullptr || s->enabled;
         mod.own_text = s == nullptr || s->own_text;
+        mod.categories_off = s != nullptr ? s->categories_off : 0u;
+        if (mod.textures) {
+            read_pack(mod, layout.textures);
+            start_texture_sorting();
+            update_pack_categories(mod);
+        }
         std::set<std::string> languages;
         if (!layout.files_root.empty()) {
             for (const char* language : kLanguageFolders) {
@@ -845,36 +1009,41 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                             }
                         }
                     }
-                    for (const MemoryPatch& m : p.memory) {
-                        const std::uint32_t address = m.offset | 0x80000000u;
-                        {
-                            // For another release (its original bytes differ from this disc's): skipped, as
-                            // Riivolution does.
-                            const std::lock_guard<std::mutex> lock(s_dol_mutex);
-                            if (!m.original.empty() && !s_dol.empty()) {
-                                const std::optional<std::size_t> at = dol_offset_of(s_dol, address, m.original.size());
-                                if (!at || !std::equal(m.original.begin(), m.original.end(), s_dol.begin() + *at)) continue;
-                            }
-                        }
-                        if (!m.ocarina && !m.search && !m.value.empty() && native_code_patch(region_id, address, m.value)) {
-                            ++mod.native_patches;
-                        } else if (m.ocarina || m.search ||
-                                   !dol_used(address, std::max<std::size_t>(m.value.size(), 1u), region_id)) {
-                            ++mod.code_patches;
-                        }
-                    }
+                    mod.code_patches += static_cast<unsigned>(p.memory.size());
                 }
+            }
+        }
+        if (mod.package) {
+            const std::string manifest = read_text(layout.package);
+            const std::string title = json_string(manifest, "name");
+            if (!title.empty()) mod.pack_title = title;
+            mod.native_patches = static_cast<unsigned>(package_patches(manifest).size());
+            mod.changed_files = static_cast<unsigned>(json_number(manifest, "files", 0));
+            const std::string for_game = json_string(manifest, "game_id");
+            if (json_number(manifest, "format", 1) > kPackageFormat) {
+                mod.problem = "UPDATE NEBULA TO USE THIS MOD";
+            } else if (!game_id.empty() && !for_game.empty() && for_game != game_id) {
+                mod.problem = for_game.starts_with("RMG") ? "THIS MOD IS FOR ANOTHER VERSION OF THE GAME" : "THIS MOD IS FOR ANOTHER GAME";
             }
         }
         mod.languages.assign(languages.begin(), languages.end());
         if (!layout.files_root.empty()) list_files(layout.files_root, std::string(), changed_paths[mod.id]);
         for (const fs::path& loose_file : layout.loose) changed_paths[mod.id].insert("name:" + lower(utf8_name(loose_file)));
         if (!layout.textures.empty()) list_textures(layout.textures, changed_textures[mod.id]);
-        mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
+        if (!mod.package) mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
-        if (!mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
-            mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";
+        if (mod.code_patches != 0u) {
+            // Its files apply. LumaLink finds the native versions of known patches when it converts a mod.
+            mod.problem = "MOST OF THIS MOD WORKS. " + std::to_string(mod.code_patches) + " CODE CHANGES NEED A NEBULA UPDATE OR A PLUGIN";
         }
+        if (!mod.package && !mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
+            mod.problem = "THIS DOESN'T LOOK LIKE A MOD";
+        }
+#if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
+        if (!mod.package && (mod.riivolution || mod.files || mod.loose)) {
+            mod.problem = "CONVERT THIS MOD WITH LUMALINK ON A COMPUTER, THEN OPEN THE FILE HERE";
+        }
+#endif
         mods.push_back(std::move(mod));
     }
     // Disabled mods have no place: they follow the enabled ones by name.
@@ -951,119 +1120,10 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         out << "enabled=" << (mod.enabled ? 1 : 0) << '\n';
         out << "order=" << mod.order << '\n';
         if (!mod.own_text) out << "text=game\n";
+        if (mod.categories_off != 0u) out << "textures_off=" << mod.categories_off << '\n';
         for (const ModOption& o : mod.options) out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
     }
-    return io::write_text_file_atomically(file, out.str());
-}
-
-namespace {
-
-struct DolTable {
-    std::uint32_t address;
-    std::uint32_t size;
-};
-
-// Native equivalents of known patches to the console's code, matched by their exact bytes for a release (the disc's
-// region): each sets the game's NEBULA_PATCH_* switch (nebula_game_api.h); id 0 has no native counterpart because
-// Nebula does the job itself. Covers Kaizo Mario Galaxy Rebalanced 2.1 (NTSC and the shared UEJ patches) and Super
-// Lillie Galaxy's crash debugger.
-struct NativeCodePatch {
-    char region;
-    std::uint32_t address;
-    const char* value;
-    std::uint32_t id;
-    std::uint32_t parameter;
-    const char* what;
-};
-
-constexpr NativeCodePatch kNativeCodePatches[] = {
-    {'E', 0x801DD690, "38C00080", kPatchFlipPanelObserverGroup, 0x80, "flip panel observer groups of 128"},
-    {'E', 0x801DCE48, "38C00080", kPatchFlipPanelGroup, 0x80, "flip panel groups of 128"},
-    {'E', 0x80153D84, "39000001", kPatchWaterBazookaShotFlag, 1, "water bazooka shots' flag"},
-    {'E', 0x80001800, "C4BB8000C03E00103C608000C0031800EC00082AD01E0010809E008C4E800020", kPatchKameckBarrierOffsetY,
-     0xC4BB8000u, "Kamek's barrier 1500 lower"},
-    {'E', 0x800382B8, "4BFC954D", kPatchKameckBarrierOffsetY, 0xC4BB8000u, "Kamek's barrier 1500 lower"},
-    {'E', 0x8007679C, "60000000", kPatchSkeletalFishBabyNoBubble, 1, "no air bubble from hit skeletal fish"},
-    {'E', 0x80054490, "4836F0A9", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
-    {'E', 0x800564C4, "4836D075", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
-    {'E', 0x803F82D8, "4BC0A058", kPatchMissStarPieces, 0xFFFFFC19u, "every star bit lost after a miss"},
-    {'E', 0x80002330, "3860FC19483ADFB980010034483F5FA0", kPatchMissStarPieces, 0xFFFFFC19u,
-     "every star bit lost after a miss"},
-    {'E', 0x803F6298, "38600000", kPatchNoHiddenStarTable, 1, "hidden stars without their table"},
-    {'E', 0x803F5D40, "386000004E800020", kPatchNoSuddenDeathDodoryu, 1, "no sudden-death Dodoryu"},
-    {'E', 0x800D02C0, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x800D5DD8, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x800D7D50, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x80275440, "60000000", kPatchMessengerAlwaysEx, 1, "the 1-up messenger's larger supply"},
-    {'E', 0x80275458, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x802750F0, "2C1F0063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x802750FC, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x8039AA2C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-    {'E', 0x8039AAF0, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-    {'E', 0x804A432C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-};
-
-const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32_t address,
-                                         std::span<const std::uint8_t> value) {
-    if (game_id.size() < 4u) return nullptr;
-    for (const NativeCodePatch& patch : kNativeCodePatches) {
-        if (patch.region != game_id[3] || patch.address != (address | 0x80000000u)) continue;
-        const std::vector<std::uint8_t> bytes = hex_bytes(patch.value);
-        if (bytes.size() == value.size() && std::equal(bytes.begin(), bytes.end(), value.begin())) return &patch;
-    }
-    return nullptr;
-}
-
-// The tables the game reads from main.dol's data (the cooker's NebulaData files, crates/nebula-import/src/cook/dol.rs),
-// by release (the USA release's comet schedules and event flags too).
-std::span<const DolTable> dol_tables(const std::string& game_id) {
-    static constexpr DolTable kKorea[] = {{0x8053DC20, 0x1E0}, {0x8053DE00, 0xD20}, {0x8053F5E0, 0x1CAC0}};
-    static constexpr DolTable kOthers[] = {{0x8053C620, 0x1E0}, {0x8053C800, 0xD20}, {0x8053DFE0, 0x9AC0}};
-    static constexpr DolTable kUsa[] = {{0x8053C620, 0x1E0}, {0x8053C800, 0xD20}, {0x8053DFE0, 0x9AC0},
-                                        {0x8053AEF0, 0x3F0}, {0x8053B320, 0xEB0}};
-    if (game_id.size() >= 4u && game_id[3] == 'K') return kKorea;
-    if (game_id.size() >= 4u && game_id[3] == 'E') return kUsa;
-    return kOthers;
-}
-
-bool dol_used(std::uint32_t address, std::size_t size, const std::string& game_id) {
-    for (const DolTable& t : dol_tables(game_id)) {
-        if (address >= t.address && address - t.address < t.size && size <= t.size - (address - t.address)) return true;
-    }
-    return false;
-}
-
-// A console address's offset in main.dol's image.
-std::optional<std::size_t> dol_offset_of(std::span<const std::uint8_t> dol, std::uint32_t address, std::size_t size) {
-    if (dol.size() < 0x100u) return std::nullopt;
-    const auto be = [&](std::size_t at) {
-        return static_cast<std::uint32_t>(dol[at]) << 24u | static_cast<std::uint32_t>(dol[at + 1]) << 16u |
-               static_cast<std::uint32_t>(dol[at + 2]) << 8u | static_cast<std::uint32_t>(dol[at + 3]);
-    };
-    for (unsigned s = 0; s < 18u; ++s) {
-        const std::uint32_t offset = be(s * 4u);
-        const std::uint32_t start = be(0x48 + s * 4u);
-        const std::uint32_t length = be(0x90 + s * 4u);
-        if (length == 0u || address < start || address - start >= length || size > length - (address - start)) continue;
-        const std::size_t at = offset + (address - start);
-        if (at + size > dol.size()) return std::nullopt;
-        return at;
-    }
-    return std::nullopt;
-}
-
-}  // namespace
-
-bool patch_dol(std::vector<std::uint8_t>& dol, std::uint32_t address, std::span<const std::uint8_t> value,
-               std::span<const std::uint8_t> original) {
-    const std::optional<std::size_t> at = dol_offset_of(dol, address, value.size());
-    if (!at) return false;
-    if (!original.empty()) {
-        if (original.size() > value.size() && !dol_offset_of(dol, address, original.size())) return false;
-        if (!std::equal(original.begin(), original.end(), dol.begin() + static_cast<std::ptrdiff_t>(*at))) return false;
-    }
-    std::copy(value.begin(), value.end(), dol.begin() + static_cast<std::ptrdiff_t>(*at));
-    return true;
+    return io::write_file_atomically(file, out.str());
 }
 
 bool changes_disc(const ModInfo& mod) noexcept {
@@ -1078,6 +1138,46 @@ std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods
         if (!layout.textures.empty()) out.push_back(layout.textures);
     }
     return out;
+}
+
+std::vector<std::uint32_t> texture_folder_categories_off(std::span<const ModInfo> mods) {
+    std::vector<std::uint32_t> out;
+    for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
+        if (!it->enabled || !it->textures) continue;
+        if (!layout_of(it->path).textures.empty()) out.push_back(it->categories_off);
+    }
+    return out;
+}
+
+bool update_pack_categories(ModInfo& mod) {
+    if (mod.pack_textures == nullptr || mod.categories_final) return false;
+    const bool sorted = galaxy::textures::index_ready();
+    galaxy::textures::CategoryCounts counts{};
+    unsigned game_textures = 0;
+    for (const PackTexture& texture : *mod.pack_textures) {
+        std::optional<galaxy::textures::Category> category = galaxy::textures::category_of_hash(texture.hash);
+        if (category) {
+            ++game_textures;
+        } else if (texture.folder_category < galaxy::textures::kCategoryCount) {
+            category = static_cast<galaxy::textures::Category>(texture.folder_category);
+        }
+        ++counts[static_cast<std::size_t>(category.value_or(galaxy::textures::Category::Other))];
+    }
+    const bool changed = counts != mod.category_textures || game_textures != mod.game_textures;
+    mod.category_textures = counts;
+    mod.game_textures = game_textures;
+    mod.categories_final = sorted;
+    // A pack with none of this game's textures is for another game (or another release's other art).
+    if (sorted && game_textures == 0u && !mod.pack_textures->empty() && mod.problem.empty()) {
+        mod.problem = "THESE TEXTURES ARE FOR ANOTHER GAME";
+    }
+    return changed || sorted;
+}
+
+void set_mods_store_file(const std::filesystem::path& store) {
+    Settings& s = settings();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    s.store = store;
 }
 
 std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods) {
@@ -1110,39 +1210,242 @@ std::string language_folder(const std::string& game_id, unsigned language) {
     }
 }
 
-std::vector<std::string> language_folders(std::span<const std::uint8_t> fst) {
-    std::vector<std::string> folders;
-    const auto u32 = [&fst](std::size_t at) {
-        return static_cast<std::uint32_t>(fst[at]) << 24u | static_cast<std::uint32_t>(fst[at + 1u]) << 16u |
-               static_cast<std::uint32_t>(fst[at + 2u]) << 8u | static_cast<std::uint32_t>(fst[at + 3u]);
+namespace {
+
+// A store's files of a name, archives as files, by path from the root.
+void find_names(const galaxy::disc::AssetStore& store, std::int32_t folder, const std::string& path,
+                const std::string& name, std::vector<std::string>& out) {
+    const std::optional<galaxy::disc::Entry> self = store.entry(folder);
+    if (!self) return;
+    for (std::uint32_t c = 0; c < self->children; ++c) {
+        const std::optional<galaxy::disc::Entry> child = store.child(folder, c);
+        if (!child || child->name == nullptr) continue;
+        const std::string child_name(child->name);
+        const std::string child_path = path + "/" + child_name;
+        if (lower(child_name) == name) out.push_back(child_path);
+        if (child->folder && child_name.find('.') == std::string::npos) {
+            find_names(store, child->index, child_path, name, out);
+        }
+    }
+}
+
+}  // namespace
+
+DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::string& game_id,
+                           const std::string& language) {
+    std::vector<ModInfo> mods = scan_mods(game_id);
+    DiscPlan plan;
+    std::vector<std::string> active;
+    std::map<std::string, DiscPlan::File> chosen;  // by the lower-case path, the last set winning
+    struct Placed {
+        std::string disc;
+        fs::path host;
     };
-    if (fst.size() < 12u) return folders;
-    const std::uint32_t count = u32(8u);
-    if (count == 0u || static_cast<std::uint64_t>(count) * 12u > fst.size()) return folders;
-    const std::size_t strings = static_cast<std::size_t>(count) * 12u;
-    // A directory at the root is followed by its nodes, up to the index it gives.
-    for (std::uint32_t index = 1u; index < count;) {
-        const std::size_t entry = static_cast<std::size_t>(index) * 12u;
-        if (fst[entry] == 0u) {
-            ++index;
+    // From the bottom of the list up: the mod on top sets a file last and wins it.
+    for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
+        const ModInfo& mod = *it;
+        if (!mod.enabled) continue;
+        active.push_back(mod.id);
+        plan.code_patches += mod.code_patches;
+        if (mod.package) {
+            if (!mod.problem.empty()) {
+                plan.notes.push_back(mod.id + ": " + mod.problem);
+                continue;
+            }
+            const std::string manifest = read_text(mod.path / "luma.json");
+            std::error_code ec;
+            if (fs::is_regular_file(mod.path / "files.pak", ec)) plan.stores.push_back(mod.path / "files.pak");
+            for (const auto& [id, value] : package_patches(manifest)) plan.native_patches[id] = value;
+            if (json_true(manifest, "has_save")) {
+                plan.save_folder = mod.path / "save";
+                plan.save_clone = json_true(manifest, "save_clone");
+            }
             continue;
         }
-        const std::size_t name_at = strings + (u32(entry) & 0xFFFFFFu);
-        std::string name;
-        for (std::size_t at = name_at; at < fst.size() && fst[at] != 0u; ++at) name.push_back(static_cast<char>(fst[at]));
-        static constexpr std::string_view kRegions[] = {"Us", "Eu", "Jp", "Kr", "Cn", "Tw"};
-        for (const std::string_view region : kRegions) {
-            const std::string_view rest = std::string_view(name).substr(std::min(name.size(), region.size()));
-            if (name.starts_with(region) && !rest.empty() && std::isupper(static_cast<unsigned char>(rest[0])) &&
-                std::all_of(rest.begin(), rest.end(), [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; })) {
-                folders.push_back(name);
-                break;
+        if (!changes_disc(mod)) continue;
+#if defined(__ANDROID__) || defined(__APPLE__) && TARGET_OS_IPHONE
+        // The converter runs on computers: the page has told the player.
+        continue;
+#endif
+        const ModLayout layout = layout_of(mod.path);
+        std::vector<Placed> placed;
+        const auto note = [&plan, &mod](const std::string& text) { plan.notes.push_back(mod.id + ": " + text); };
+        const auto set_file = [&placed](std::string disc, const fs::path& host) {
+            if (!disc.starts_with('/')) disc.insert(disc.begin(), '/');
+            placed.push_back({std::move(disc), host});
+        };
+        const auto patch_file = [&](const Loader& loader, const FilePatch& f) {
+            const std::optional<fs::path> host = loader.resolve(f.external);
+            std::error_code ec;
+            if (!host || !fs::is_regular_file(*host, ec)) {
+                note(f.external + ": not in the mod");
+                return;
+            }
+            if ((f.offset & ~std::uint64_t{3}) != 0u || f.file_offset != 0u || f.length != 0u || !f.resize) {
+                // The game's files are cooked: the disc file's offsets are not theirs.
+                note(f.disc + ": patched in part by the disc file's offsets, which the game's files do not have");
+                return;
+            }
+            if (lower(f.disc).ends_with(".dol")) {
+                note(f.disc + ": the native game has no such file");
+                return;
+            }
+            if (!f.disc.empty() && f.disc[0] == '/') {
+                if (!f.create && !store.find(f.disc)) {
+                    note(f.disc + ": the game has no such file and the patch does not create it");
+                    return;
+                }
+                set_file(f.disc, *host);
+                return;
+            }
+            std::vector<std::string> paths;
+            find_names(store, 0, {}, lower(f.disc), paths);
+            if (paths.empty()) note(f.disc + ": no file of that name in the game");
+            for (const std::string& path : paths) set_file(path, *host);
+        };
+        const auto join = [](std::string a, std::string_view b) {
+            if (a.empty()) return std::string(b);
+            if (b.empty()) return a;
+            if (a.back() == '/') a.pop_back();
+            while (b.starts_with('/')) b.remove_prefix(1);
+            return a + "/" + std::string(b);
+        };
+        const auto patch_folder = [&](auto&& self, const Loader& loader, const FolderPatch& folder,
+                                      const std::string& disc, const std::string& external) -> void {
+            const std::optional<fs::path> dir = loader.resolve(external);
+            std::error_code ec;
+            if (!dir || !fs::is_directory(*dir, ec)) {
+                note(external + ": no such folder in the mod");
+                return;
+            }
+            std::vector<fs::directory_entry> entries;
+            for (const auto& entry : fs::directory_iterator(*dir, ec)) entries.push_back(entry);
+            std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.path() < b.path(); });
+            for (const auto& entry : entries) {
+                const std::string name = utf8_name(entry.path());
+                if (entry.is_directory(ec)) {
+                    if (folder.recursive) self(self, loader, folder, join(disc, name), join(external, name));
+                    continue;
+                }
+                FilePatch f;
+                f.disc = join(disc, name);
+                f.external = join(external, name);
+                f.resize = folder.resize;
+                f.create = true;  // a folder's files add to the game's
+                f.length = folder.length;
+                patch_file(loader, f);
+            }
+        };
+        if (!layout.xmls.empty()) {
+            const std::map<std::string, SavedMod> saved = read_saved(settings().file);
+            const auto saved_it = saved.find(mod.id);
+            for (const RiivDisc& d : mod_discs(layout, saved_it != saved.end() ? &saved_it->second : nullptr, game_id,
+                                               nullptr)) {
+                for (const Patch& p : generate_patches(d, game_id)) {
+                    const Loader loader = make_loader(layout.sd_root, d.xml, p.root);
+                    for (const FilePatch& f : p.files) patch_file(loader, f);
+                    for (const FolderPatch& f : p.folders) {
+                        patch_folder(patch_folder, loader, f, f.disc.empty() ? std::string("/") : f.disc, f.external);
+                    }
+                    for (const SavePatch& save : p.saves) {
+                        // One save folder for the game: the mod higher in the list has it.
+                        if (const std::optional<fs::path> folder = loader.resolve(save.external)) {
+                            plan.save_folder = *folder;
+                            plan.save_clone = save.clone;
+                        }
+                    }
+                }
             }
         }
-        const std::uint32_t next = u32(entry + 8u);
-        index = next > index ? next : index + 1u;
+        if (!layout.files_root.empty()) {
+            const Loader loader{layout.files_root, layout.files_root};
+            const FolderPatch whole{"/", "/", true, true, true, 0};
+            std::error_code ec;
+            for (const auto& entry : fs::directory_iterator(layout.files_root, ec)) {
+                const std::string name = utf8_name(entry.path());
+                if (entry.is_directory(ec)) {
+                    // Beside the game's folders a mod keeps its notes and pictures: only what the game has counts.
+                    if (layout.files_root != mod.path || is_disc_folder(name)) {
+                        patch_folder(patch_folder, loader, whole, "/" + name, "/" + name);
+                    }
+                } else if (!mod_note(entry.path())) {
+                    FilePatch f;
+                    f.disc = "/" + name;
+                    f.external = "/" + name;
+                    f.create = true;
+                    patch_file(loader, f);
+                }
+            }
+        }
+        for (const fs::path& file : layout.loose) {
+            std::vector<std::string> paths;
+            find_names(store, 0, {}, lower(utf8_name(file)), paths);
+            if (paths.empty()) note(utf8_name(file) + ": no file of that name in the game");
+            for (const std::string& path : paths) set_file(path, file);
+        }
+        // Text in the language played: a mod with text for other languages only shows its own (the same language of
+        // another region first, else English, else what it has) unless its TEXT choice keeps the game's.
+        if (!language.empty() && mod.own_text) {
+            std::set<std::string> covered;
+            for (const Placed& p : placed) {
+                if (const std::string l = language_of(p.disc); !l.empty()) covered.insert(l);
+            }
+            if (!covered.empty() && covered.count(language) == 0u) {
+                const std::string twin = language.starts_with("Us")   ? "Eu" + language.substr(2)
+                                         : language.starts_with("Eu") ? "Us" + language.substr(2)
+                                                                      : std::string();
+                std::string source;
+                for (const std::string& candidate : {twin, std::string("UsEnglish"), std::string("EuEnglish")}) {
+                    if (!candidate.empty() && covered.count(candidate) != 0u) {
+                        source = candidate;
+                        break;
+                    }
+                }
+                if (source.empty()) source = *covered.begin();
+                for (const Placed& p : std::vector<Placed>(placed)) {
+                    if (language_of(p.disc) == source) {
+                        set_file("/" + language + p.disc.substr(source.size() + 1u), p.host);
+                    }
+                }
+            }
+        }
+        for (const Placed& p : placed) {
+            if (lower(p.disc).starts_with("/nebuladata/")) continue;  // the game's own tables
+            chosen[lower(p.disc)] = {p.disc, p.host};
+        }
     }
-    return folders;
+    for (auto& [key, file] : chosen) plan.files.push_back(std::move(file));
+    {
+        Session& s = session();
+        const std::lock_guard<std::mutex> lock(s.mutex);
+        s.mods = SessionMods{mods, active, static_cast<unsigned>(plan.files.size()), plan.code_patches};
+    }
+    return plan;
+}
+
+std::string plan_text(const DiscPlan& plan, const std::string& game_id) {
+    std::string text = game_id + "\n";
+    {
+        Settings& s = settings();
+        const std::lock_guard<std::mutex> lock(s.mutex);
+        if (!s.store.empty()) text += "base\t" + galaxy::path_text(s.store) + "\n";
+    }
+    for (const DiscPlan::File& file : plan.files) {
+        text += file.disc + "\t" + galaxy::path_text(file.host) + "\n";
+    }
+    return text;
+}
+
+std::string plan_signature(const DiscPlan& plan, const std::string& game_id) {
+    std::string text = "1 " + game_id + "\n";
+    for (const DiscPlan::File& file : plan.files) {
+        std::error_code ec;
+        const auto size = fs::file_size(file.host, ec);
+        const auto time = fs::last_write_time(file.host, ec).time_since_epoch().count();
+        text += file.disc + "\t" + galaxy::path_text(file.host) + "\t" + std::to_string(size) + "\t" +
+                std::to_string(time) + "\n";
+    }
+    return text;
 }
 
 SessionMods session_mods() {
@@ -1155,392 +1458,6 @@ bool mods_differ_from_session(std::span<const ModInfo> mods) {
     Session& s = session();
     const std::lock_guard<std::mutex> lock(s.mutex);
     return mods_signature(mods) != mods_signature(s.mods.started_with);
-}
-
-// A mod's files are cooked as the disc's were at import (D-01, D-04): each changed file the cooker reads, made only of
-// the mod's own bytes, is cooked once into the mods folder's .cooked cache (named by its bytes' hash) and read from
-// there. Patches in part over the game's cooked files are refused where they are placed (apply_mods).
-static void cook_mod_files(DiscNode& dir, const std::string& path, const std::uint8_t* partition, std::uint64_t partition_size,
-                    std::ostringstream& report, unsigned& cooked) {
-    for (DiscNode& node : dir.children) {
-        const std::string node_path = path + "/" + node.name;
-        if (node.directory) {
-            cook_mod_files(node, node_path, partition, partition_size, report, cooked);
-            continue;
-        }
-        // NebulaData's files come from the cooker already (main.dol's tables).
-        if (!node.changed || !cook::cooks(node.name) || node_path.starts_with("/NebulaData/")) continue;
-        const bool partial = std::any_of(node.pieces.begin(), node.pieces.end(),
-                                         [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; });
-        if (partial) {
-            report << "  " << node_path << ": patched in part over the game's file, used as patched (not cooked)\n";
-            continue;
-        }
-        const std::vector<std::uint8_t> bytes = VirtualDisc::materialize(node, partition, partition_size);
-        std::uint64_t hash = 0xCBF29CE484222325ull;
-        for (const std::uint8_t b : bytes) hash = (hash ^ b) * 0x100000001B3ull;
-        char name[40];
-        std::snprintf(name, sizeof(name), "%016llx-%zu", static_cast<unsigned long long>(hash), bytes.size());
-        const fs::path cache = mods_folder() / ".cooked" / name;
-        std::error_code ec;
-        if (!fs::is_regular_file(cache, ec)) {
-            std::string error;
-            const std::optional<std::vector<std::uint8_t>> out = cook::cook_file(node_path, bytes, &error);
-            if (!out) {
-                if (!error.empty()) report << "  " << node_path << ": " << error << '\n';
-                continue;
-            }
-            fs::create_directories(cache.parent_path(), ec);
-            const std::string text(out->begin(), out->end());
-            if (!io::write_text_file_atomically(cache, text)) {
-                report << "  " << node_path << ": its cooked copy cannot be written to " << utf8_name(cache) << '\n';
-                continue;
-            }
-        }
-        const std::uint64_t size = fs::file_size(cache, ec);
-        if (ec) continue;
-        node.pieces.clear();
-        VirtualDisc::patch(node, cache, size, 0u, 0u, 0u, true);
-        ++cooked;
-    }
-}
-
-std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_fst,
-                                       std::span<const std::uint8_t> partition_dol, std::uint64_t dol_offset,
-                                       const std::uint8_t* partition, std::uint64_t partition_size,
-                                       const std::string& game_id, int revision, int disc_number,
-                                       const std::string& language_folder) {
-    std::vector<ModInfo> mods = scan_mods(game_id);
-    {
-        Session& s = session();
-        const std::lock_guard<std::mutex> lock(s.mutex);
-        s.mods = SessionMods{mods, {}, 0, 0};
-    }
-    if (std::none_of(mods.begin(), mods.end(), [](const ModInfo& m) { return m.enabled; })) return nullptr;
-    auto active = std::make_unique<ActiveMods>();
-    std::string error;
-    std::ostringstream report;
-    if (!active->disc.load(partition_fst, partition_size, &error)) {
-        active->report = "mods: the disc's file table could not be read (" + error + "); no mod applied\n";
-        return active;
-    }
-    // main.dol as a file Riivolution can patch ("main.dol" disc paths).
-    DiscNode dol_node;
-    dol_node.name = "main.dol";
-    dol_node.size = partition_dol.size();
-    dol_node.partition_offset = dol_offset;
-    dol_node.pieces.push_back({DiscPiece::Source::Partition, 0, dol_node.size, dol_offset, {}});
-    std::vector<std::pair<std::string, MemoryPatch>> memory;  // (mod, patch) in load order
-    std::vector<Loader> memory_loaders;
-    std::map<std::string, std::string> save_owner;
-
-    // From the bottom of the list up: the mod on top changes a file last and wins it.
-    for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
-        const ModInfo& mod = *it;
-        if (!mod.enabled) continue;
-        const ModLayout layout = layout_of(mod.path);
-        unsigned changed = 0;
-        unsigned missing = 0;
-        std::vector<std::string> notes;
-        // Whole files this mod placed at a disc path (the text-language fallback copies them).
-        struct Placed {
-            std::string disc;
-            fs::path host;
-            std::uint64_t size = 0;
-            bool create = false;
-        };
-        std::vector<Placed> placed;
-        const auto patch_file = [&](const Loader& loader, const FilePatch& f) {
-            const std::optional<fs::path> host = loader.resolve(f.external);
-            std::error_code ec;
-            if (!host || !fs::is_regular_file(*host, ec)) {
-                ++missing;
-                return;
-            }
-            const std::uint64_t host_size = fs::file_size(*host, ec);
-            const bool whole = (f.offset & ~std::uint64_t{3}) == 0u && f.file_offset == 0u && f.length == 0u && f.resize;
-            std::vector<std::pair<DiscNode*, std::string>> nodes;
-            if (!f.disc.empty() && f.disc[0] == '/') {
-                nodes.emplace_back(active->disc.find_path(std::string_view(f.disc).substr(1), f.create), f.disc);
-            } else if (same_name(f.disc, "main.dol")) {
-                nodes.emplace_back(&dol_node, std::string());
-            } else {
-                // A file name alone: every disc file of that name, as Dolphin patches.
-                nodes = active->disc.find_names(f.disc);
-            }
-            for (const auto& [node, path] : nodes) {
-                if (node == nullptr || node->directory) continue;
-                // The import cooked this file (D-01): its bytes are no longer the disc file's, so a patch placed by
-                // the disc file's offsets would land in the wrong bytes. It is left as the game has it.
-                if (!whole && node != &dol_node && cook::cooks(node->name) &&
-                    std::any_of(node->pieces.begin(), node->pieces.end(),
-                                [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; })) {
-                    notes.push_back((path.empty() ? node->name : path) +
-                                    ": patched in part by the disc file's offsets, which the cooked file does not have (not applied)");
-                    continue;
-                }
-                VirtualDisc::patch(*node, *host, host_size, f.offset & ~std::uint64_t{3}, f.file_offset, f.length,
-                                   f.resize);
-                ++changed;
-                if (whole && !path.empty()) placed.push_back({path, *host, host_size, f.create});
-            }
-        };
-        const auto patch_folder = [&](auto&& self, const Loader& loader, const FolderPatch& folder, const std::string& disc_path,
-                                      const std::string& external) -> void {
-            const std::optional<fs::path> dir = loader.resolve(external);
-            std::error_code ec;
-            if (!dir || !fs::is_directory(*dir, ec)) {
-                ++missing;
-                return;
-            }
-            const auto join = [](std::string a, std::string_view b) {
-                if (a.empty()) return std::string(b);
-                if (b.empty()) return a;
-                if (a.back() == '/') a.pop_back();
-                while (b.starts_with('/')) b.remove_prefix(1);
-                return a + "/" + std::string(b);
-            };
-            std::vector<fs::directory_entry> entries;
-            for (const auto& entry : fs::directory_iterator(*dir, ec)) entries.push_back(entry);
-            std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) { return a.path() < b.path(); });
-            for (const auto& entry : entries) {
-                const std::string name = utf8_name(entry.path());
-                if (entry.is_directory(ec)) {
-                    if (folder.recursive) self(self, loader, folder, join(disc_path, name), join(external, name));
-                } else {
-                    FilePatch f;
-                    f.disc = join(disc_path, name);
-                    f.external = join(external, name);
-                    f.resize = folder.resize;
-                    f.create = folder.create;
-                    f.length = folder.length;
-                    patch_file(loader, f);
-                }
-            }
-        };
-        std::string problem;
-        if (!layout.xmls.empty()) {
-            const std::map<std::string, SavedMod> saved = read_saved(settings().file);
-            const auto saved_it = saved.find(mod.id);
-            for (const RiivDisc& d : mod_discs(layout, saved_it != saved.end() ? &saved_it->second : nullptr, game_id, &problem)) {
-                if (!valid_for_game(d, game_id, revision, disc_number)) {
-                    notes.push_back(utf8_name(d.xml) + ": for another revision or disc");
-                    continue;
-                }
-                for (const Patch& p : generate_patches(d, game_id)) {
-                    const Loader loader = make_loader(layout.sd_root, d.xml, p.root);
-                    for (const FilePatch& f : p.files) patch_file(loader, f);
-                    for (const FolderPatch& f : p.folders) patch_folder(patch_folder, loader, f, f.disc, f.external);
-                    for (const SavePatch& s : p.saves) {
-                        if (!active->save_folder.empty()) {
-                            // One save folder per game: the mod higher in the list has it.
-                            notes.push_back("savegame: replaces " + save_owner["save"] +
-                                            "'s save folder (one per game; the higher mod's is used)");
-                        }
-                        if (std::optional<fs::path> folder = loader.resolve(s.external)) {
-                            active->save_folder = *folder;
-                            active->save_clone = s.clone;
-                            save_owner["save"] = mod.id;
-                            notes.push_back("savegame: saves in " + folder->string());
-                        }
-                    }
-                    for (const MemoryPatch& m : p.memory) {
-                        memory.emplace_back(mod.id, m);
-                        memory_loaders.push_back(loader);
-                    }
-                }
-            }
-        }
-        if (!layout.files_root.empty()) {
-            // The disc's layout: every file over the game's, or added.
-            const Loader loader{layout.files_root, layout.files_root};
-            patch_folder(patch_folder, loader, FolderPatch{"/", "/", true, true, true, 0}, "/", "/");
-        }
-        unsigned loose_unplaced = 0;
-        for (const fs::path& file : layout.loose) {
-            // Loose files: every disc file of the name (Riivolution's file name alone).
-            std::error_code ec;
-            const std::string name = utf8_name(file);
-            const auto nodes = active->disc.find_names(name);
-            if (nodes.empty()) {
-                ++loose_unplaced;
-                notes.push_back(name + ": no file of that name on the disc (not used)");
-                continue;
-            }
-            const std::uint64_t size = fs::file_size(file, ec);
-            for (const auto& [node, path] : nodes) {
-                VirtualDisc::patch(*node, file, size, 0u, 0u, 0u, true);
-                ++changed;
-                placed.push_back({path, file, size, false});
-            }
-            if (nodes.size() > 1u) notes.push_back(name + ": replaces " + std::to_string(nodes.size()) + " disc files of that name");
-        }
-        // Text in the language played: a mod with text for other languages only shows its own (the same language
-        // of another region first, else English, else what it has) unless its TEXT choice keeps the game's.
-        if (!language_folder.empty() && mod.own_text) {
-            std::set<std::string> covered;
-            for (const Placed& p : placed) {
-                if (const std::string language = language_of(p.disc); !language.empty()) covered.insert(language);
-            }
-            if (!covered.empty() && covered.count(language_folder) == 0u) {
-                const std::string twin = language_folder.starts_with("Us") ? "Eu" + language_folder.substr(2)
-                                       : language_folder.starts_with("Eu") ? "Us" + language_folder.substr(2)
-                                                                           : std::string();
-                std::string source;
-                for (const std::string& candidate : {twin, std::string("UsEnglish"), std::string("EuEnglish")}) {
-                    if (!candidate.empty() && covered.count(candidate) != 0u) {
-                        source = candidate;
-                        break;
-                    }
-                }
-                if (source.empty()) source = *covered.begin();
-                unsigned copied = 0;
-                bool nebula_text = false;
-                for (const Placed& p : std::vector<Placed>(placed)) {
-                    if (language_of(p.disc) != source) continue;
-                    const std::string target = "/" + language_folder + p.disc.substr(source.size() + 1u);
-                    DiscNode* node = active->disc.find_path(std::string_view(target).substr(1), p.create);
-                    if (node == nullptr || node->directory) continue;
-                    VirtualDisc::patch(*node, p.host, p.size, 0u, 0u, 0u, true);
-                    nebula_text |= same_name(fs::path(p.disc).filename().string(), "NebulaText.txt");
-                    ++copied;
-                }
-                // Nebula's own text follows the mod's language (NebulaText reads "language = ..." from the played
-                // folder) unless the mod brings its own NebulaText.txt.
-                if (copied != 0u && !nebula_text) {
-                    const fs::path note = fs::temp_directory_path() / "Nebula" / ("NebulaText-" + source + ".txt");
-                    std::error_code ec;
-                    fs::create_directories(note.parent_path(), ec);
-                    const std::string text = "language = " + source + "\n";
-                    if (io::write_text_file_atomically(note, text)) {
-                        const std::string target = "/" + language_folder + "/MessageData/NebulaText.txt";
-                        if (DiscNode* node = active->disc.find_path(std::string_view(target).substr(1), true);
-                            node != nullptr && !node->directory) {
-                            VirtualDisc::patch(*node, note, text.size(), 0u, 0u, 0u, true);
-                        }
-                    }
-                }
-                if (copied != 0u) {
-                    notes.push_back("text: its " + source + " files stand in for " + language_folder + " (" +
-                                    std::to_string(copied) + "; it has no " + language_folder + " text)");
-                }
-            }
-        }
-        if (!layout.textures.empty()) active->texture_folders.push_back(layout.textures);
-        if (!layout.movies.empty()) active->movie_folders.push_back(layout.movies);
-        active->files_changed += changed;
-        active->active.push_back(mod.id);
-        report << "mod " << mod.id << ": " << changed << " file patch(es)";
-        if (missing != 0u) report << ", " << missing << " missing in the mod";
-        if (!layout.textures.empty()) report << ", textures";
-        if (!layout.movies.empty()) report << ", movies";
-        if (!layout.loose.empty()) report << ", " << (layout.loose.size() - loose_unplaced) << " loose file(s) placed by name";
-        if (!problem.empty()) report << " (" << problem << ")";
-        report << '\n';
-        for (const std::string& n : notes) report << "  " << n << '\n';
-    }
-
-    // Memory patches: the native game runs no PowerPC code; those over main.dol's data it reads are kept.
-    std::vector<std::uint8_t> dol = dol_node.changed ? VirtualDisc::materialize(dol_node, partition, partition_size)
-                                                     : std::vector<std::uint8_t>(partition_dol.begin(), partition_dol.end());
-    bool dol_changed = dol_node.changed;
-    {
-        const std::lock_guard<std::mutex> lock(s_dol_mutex);
-        s_dol.assign(partition_dol.begin(), partition_dol.end());
-    }
-    for (std::size_t i = 0; i < memory.size(); ++i) {
-        const auto& [mod, m] = memory[i];
-        std::vector<std::uint8_t> value = m.value;
-        if (!m.valuefile.empty()) {
-            if (std::optional<fs::path> file = memory_loaders[i].resolve(m.valuefile)) {
-                const std::string bytes = read_text(*file);
-                value.assign(bytes.begin(), bytes.end());
-            }
-        }
-        const std::uint32_t address = m.offset | 0x80000000u;
-        char line[200];
-        // `original` names the bytes a patch expects (Riivolution skips it elsewhere): written for another release.
-        const std::optional<std::size_t> at =
-            m.original.empty() ? std::nullopt : dol_offset_of(dol, address, m.original.size());
-        const bool other_release =
-            !m.original.empty() && (!at || !std::equal(m.original.begin(), m.original.end(), dol.begin() + *at));
-        if (other_release) {
-            std::snprintf(line, sizeof(line), "  %s: memory patch at %08X skipped (for another release: its "
-                          "original bytes differ)", mod.c_str(), address);
-        } else if (const NativeCodePatch* native = value.empty() ? nullptr : native_code_patch(game_id, address, value)) {
-            if (native->id != 0u) active->code_patches[native->id] = native->parameter;
-            std::snprintf(line, sizeof(line), "  %s: memory patch at %08X: %s%s", mod.c_str(), address, native->what,
-                          native->id != 0u ? " (native)" : " (not needed natively)");
-        } else if (m.ocarina || m.search || m.offset == 0u || value.empty()) {
-            std::snprintf(line, sizeof(line), "  %s: memory patch %s%s not supported (the native game runs no PowerPC code)",
-                          mod.c_str(), m.ocarina ? "(ocarina) " : m.search ? "(search) " : "",
-                          m.offset != 0u ? "" : "without an address");
-            ++active->unsupported;
-        } else if (dol_used(address, value.size(), game_id) && patch_dol(dol, address, value, m.original)) {
-            std::snprintf(line, sizeof(line), "  %s: memory patch at %08X (%zu bytes) applied to main.dol's data", mod.c_str(),
-                          address, value.size());
-            dol_changed = true;
-        } else {
-            std::snprintf(line, sizeof(line), "  %s: memory patch at %08X (%zu bytes) not supported (code the native game "
-                          "does not run)", mod.c_str(), address, value.size());
-            ++active->unsupported;
-        }
-        report << line << '\n';
-    }
-    if (dol_changed) {
-        // The native game reads its data tables from it: a main.dol without them would stop it at boot.
-        bool tables = true;
-        // The three the game stops without (the comet schedules and event flags fall back to the game's own).
-        const std::span<const DolTable> all = dol_tables(game_id);
-        for (const DolTable& t : all.first(std::min<std::size_t>(3u, all.size()))) {
-            tables = tables && dol_offset_of(dol, t.address, t.size).has_value();
-        }
-        if (tables) {
-            // The game reads them as files (B-05): the patched main.dol's, cooked, in the disc's NebulaData folder.
-            unsigned written = 0;
-            for (const char* name : cook::kDolTableFiles) {
-                std::string table_error;
-                const std::optional<std::vector<std::uint8_t>> table =
-                    cook::cook_dol_table(dol, game_id, name, &table_error);
-                if (!table) {
-                    if (!table_error.empty()) report << "  main.dol: " << table_error << '\n';
-                    continue;
-                }
-                const fs::path file = mods_folder() / ".cooked" / ("main.dol-" + std::string(name));
-                std::error_code ec;
-                fs::create_directories(file.parent_path(), ec);
-                if (!io::write_text_file_atomically(file, std::string(table->begin(), table->end()))) continue;
-                DiscNode* node = active->disc.find_path("NebulaData/" + std::string(name), true);
-                if (node == nullptr || node->directory) continue;
-                node->pieces.clear();
-                VirtualDisc::patch(*node, file, table->size(), 0u, 0u, 0u, true);
-                ++written;
-            }
-            report << "  main.dol's data tables from the mods' patches: " << written << " files\n";
-        } else {
-            report << "  main.dol from a mod lacks the game's data tables: the game's own kept\n";
-        }
-    }
-    unsigned cooked = 0;
-    if (DiscNode* disc_root = active->disc.find_path("", false)) {
-        cook_mod_files(*disc_root, std::string(), partition, partition_size, report, cooked);
-    }
-    if (cooked != 0u) report << "cooked " << cooked << " of the mods' files\n";
-    const std::uint64_t virtual_base = partition_size + 0x100000u;
-    active->fst = active->disc.build(virtual_base);
-    if (active->fst.empty()) {
-        report << "mods: the changed disc does not fit the disc's 16 GiB reach; no mod applied\n";
-        active->files_changed = 0;
-    }
-    active->report = report.str();
-    {
-        Session& s = session();
-        const std::lock_guard<std::mutex> lock(s.mutex);
-        s.mods.active = active->active;
-        s.mods.files_changed = active->files_changed;
-        s.mods.unsupported = active->unsupported;
-    }
-    return active;
 }
 
 }  // namespace galaxy::mods

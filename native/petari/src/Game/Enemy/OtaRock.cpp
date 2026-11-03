@@ -35,7 +35,7 @@ namespace NrvOtaRock {
 
 OtaRock::OtaRock(const char* pName)
     : LiveActor(pName), mNoThrowCocoNut(false), mCocoNutArray(nullptr), mFireBallArray(nullptr), mFixedPosition(nullptr),
-      mThrowCocoNutCounter(nullptr), mWaitFrame(0), _A4(), _D4(0.0f, 0.0f, 1.0f), mAnimScaleController(nullptr) {
+      mThrowCocoNutCounter(0), mWaitFrame(0), _A4(), _D4(0.0f, 0.0f, 1.0f), mAnimScaleController(0) {
     _A4.identity();
 }
 
@@ -306,17 +306,15 @@ void OtaRock::exeDown() {
         MR::startSound(this, "SE_EM_OTAROCK_LAST_DAMAGE");
         MR::startSound(this, "SE_EV_OTAROCK_DIE");
         MR::invalidateHitSensors(this);
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
 
         if (!mNoThrowCocoNut) {
             for (s32 i = 0; i < 4; i++) {
-                CocoNutBall* cocoNut = &mCocoNutArray[i];
                 if (!MR::isDead(&mCocoNutArray[i]))
                     mCocoNutArray[i].kill();
             }
         }
         for (s32 i = 0; i < 3; i++) {
-            FireBall* fireBall = &mFireBallArray[i];
             if (!MR::isDead(&mFireBallArray[i]))
                 mFireBallArray[i].kill();
         }

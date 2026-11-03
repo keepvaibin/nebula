@@ -1,90 +1,103 @@
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
-#include "JSystem/JUtility/JUTException.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // GXInit's projection (an orthographic identity-like one) until the game sets its own.
+    // An orthographic identity-like projection until the game sets its own.
     bool sPerspective = false;
     f32 sTerms[6] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f};
 
-    // The viewport as GX keeps it (set by the game each frame before anything reads it; a read before then stops).
+    // The viewport the game set (left, top, width, height, near, far; set each frame before anything reads it, a read
+    // before then stops) and the depth scale and offset it maps near and far through.
     bool sViewportSet = false;
     f32 sViewport[6] = {};
-    f32 sZScale = 16777216.0f;
-    f32 sZOffset = 0.0f;
+    f32 sDepthScale = 1.0f;
+    f32 sDepthOffset = 0.0f;
     // The scissor box: left, top, width, height.
     bool sScissorSet = false;
     u32 sScissor[4] = {};
 
-    void sendOp(const NebulaStateOp& rOp) {
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->state(pHost->user, &rOp, 1);
+    // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far values make.
+    void hostViewport(const f32* pViewport, f32* pOut) {
+        const f32 viewport[6] = {pViewport[0] * J3DNativeView::cUnitsAcross, pViewport[1] * J3DNativeView::cUnitsDown,
+                                 pViewport[2] * J3DNativeView::cUnitsAcross, pViewport[3] * J3DNativeView::cUnitsDown, pViewport[4] * sDepthScale + sDepthOffset,
+                                 pViewport[5] * sDepthScale + sDepthOffset};
+        for (u32 i = 0; i < 6; i++) {
+            pOut[i] = viewport[i];
+        }
     }
 
     void sendViewport() {
-        // GX's terms (__GXSetViewport): half sizes, centres offset by 342, the depth range scaled.
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_VIEWPORT;
-        const f32 zMin = sViewport[4] * sZScale;
-        const f32 zMax = sViewport[5] * sZScale;
-        op.f[0] = sViewport[2] / 2.0f;
-        op.f[1] = -sViewport[3] / 2.0f;
-        op.f[2] = zMax - zMin;
-        op.f[3] = sViewport[0] + (sViewport[2] / 2.0f) + 342.0f;
-        op.f[4] = sViewport[1] + (sViewport[3] / 2.0f) + 342.0f;
-        op.f[5] = zMax + sZOffset;
-        sendOp(op);
+        f32 viewport[6];
+        hostViewport(sViewport, viewport);
+        J3DNativeDraw::flush();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->view_viewport(pHost->user, viewport);
     }
 
     void send() {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_PROJECTION;
-        op.a[0] = sPerspective ? 0 : 1;
-        for (u32 i = 0; i < 6; i++) {
-            op.f[i] = sTerms[i];
-        }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->state(pHost->user, &op, 1);
+        J3DNativeDraw::flush();
+        pHost->view_projection(pHost->user, sPerspective ? 0 : 1, sTerms);
     }
 }  // namespace
 
 namespace J3DNativeView {
-    void captureReadback(u32 channel) {
+    void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count) {
+        J3DNativeDraw::flush();
+        static NebulaScreenProbe probes[NEBULA_SCREEN_PROBES_MAX];
+        const u32 sent = count < NEBULA_SCREEN_PROBES_MAX ? count : NEBULA_SCREEN_PROBES_MAX;
+        for (u32 i = 0; i < sent; i++) {
+            probes[i] = pProbes[i];
+            if (probes[i].x >= 0.0f) {
+                probes[i].x *= cUnitsAcross;
+                probes[i].y *= cUnitsDown;
+            }
+        }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->readback_capture(pHost->user, channel);
+        pHost->screen_probe(pHost->user, channel, what, probes, sent);
     }
 
-    u32 readbackColor(u32 channel, s32 x, s32 y) {
+    u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity) {
         const NebulaHostServices* pHost = nebula_host();
-        return pHost->readback_pixel(pHost->user, channel, 0, static_cast< u32 >(x), static_cast< u32 >(y));
+        return pHost->screen_probe_results(pHost->user, channel, pProbes, capacity);
     }
 
-    u32 readbackDepth(u32 channel, s32 x, s32 y) {
-        const NebulaHostServices* pHost = nebula_host();
-        return pHost->readback_pixel(pHost->user, channel, 1, static_cast< u32 >(x), static_cast< u32 >(y));
+    namespace {
+        // The matrix's terms: the orthographic one keeps its translation column, the perspective its third.
+        void setProjection(const f32 (*pMtx)[4], bool perspective) {
+            sPerspective = perspective;
+            sTerms[0] = pMtx[0][0];
+            sTerms[2] = pMtx[1][1];
+            sTerms[4] = pMtx[2][2];
+            sTerms[5] = pMtx[2][3];
+            sTerms[1] = perspective ? pMtx[0][2] : pMtx[0][3];
+            sTerms[3] = perspective ? pMtx[1][2] : pMtx[1][3];
+            send();
+        }
+    }  // namespace
+
+    void setPerspective(const f32 (*pMtx)[4]) {
+        setProjection(pMtx, true);
     }
 
-    u32 readbackSerial(u32 channel) {
-        const NebulaHostServices* pHost = nebula_host();
-        return pHost->readback_serial(pHost->user, channel);
+    void hostView(const f32 (*pMtx)[4], f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, f32* pOut) {
+        pOut[0] = pMtx[0][0];
+        pOut[1] = pMtx[0][2];
+        pOut[2] = pMtx[1][1];
+        pOut[3] = pMtx[1][2];
+        pOut[4] = pMtx[2][2];
+        pOut[5] = pMtx[2][3];
+        const f32 viewport[6] = {left, top, width, height, nearZ, farZ};
+        hostViewport(viewport, pOut + 6);
     }
 
-    void setProjection(const f32 (*pMtx)[4], GXProjectionType type) {
-        // GXSetProjection's terms: the orthographic one takes the translation column, the perspective one the third.
-        sPerspective = type == GX_PERSPECTIVE;
-        sTerms[0] = pMtx[0][0];
-        sTerms[2] = pMtx[1][1];
-        sTerms[4] = pMtx[2][2];
-        sTerms[5] = pMtx[2][3];
-        sTerms[1] = sPerspective ? pMtx[0][2] : pMtx[0][3];
-        sTerms[3] = sPerspective ? pMtx[1][2] : pMtx[1][3];
-        send();
+    void setOrthographic(const f32 (*pMtx)[4]) {
+        setProjection(pMtx, false);
     }
 
     void setProjectionv(const f32* pValues) {
@@ -122,7 +135,7 @@ namespace J3DNativeView {
 
     void getViewportv(f32* pValues) {
         if (!sViewportSet) {
-            JUTException::panic_f(__FILE__, __LINE__, "J3DNativeView: the viewport read before the game set one");
+            NEBULA_PANIC("J3DNativeView: the viewport read before the game set one");
         }
         for (u32 i = 0; i < 6; i++) {
             pValues[i] = sViewport[i];
@@ -130,8 +143,8 @@ namespace J3DNativeView {
     }
 
     void setZScaleOffset(f32 scale, f32 offset) {
-        sZOffset = offset * static_cast< f32 >(0x00FFFFFF);
-        sZScale = scale * static_cast< f32 >(0xFFFFFF) + 1.0f;
+        sDepthScale = scale;
+        sDepthOffset = offset;
         if (sViewportSet) {
             sendViewport();
         }
@@ -143,19 +156,14 @@ namespace J3DNativeView {
         sScissor[2] = width;
         sScissor[3] = height;
         sScissorSet = true;
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_SCISSOR;
-        op.f[0] = static_cast< f32 >(left);
-        op.f[1] = static_cast< f32 >(top);
-        op.f[2] = static_cast< f32 >(width);
-        op.f[3] = static_cast< f32 >(height);
-        sendOp(op);
+        J3DNativeDraw::flush();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->view_scissor(pHost->user, left * cUnitsAcross, top * cUnitsDown, width * cUnitsAcross, height * cUnitsDown);
     }
 
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight) {
         if (!sScissorSet) {
-            JUTException::panic_f(__FILE__, __LINE__, "J3DNativeView: the scissor read before the game set one");
+            NEBULA_PANIC("J3DNativeView: the scissor read before the game set one");
         }
         *pLeft = sScissor[0];
         *pTop = sScissor[1];
@@ -165,16 +173,12 @@ namespace J3DNativeView {
 };  // namespace J3DNativeView
 
 extern "C" {
-void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GXProjectionType type) {
-    J3DNativeView::setProjection(pMtx, type);
+void J3DNativeViewSetPerspective(const f32 (*pMtx)[4]) {
+    J3DNativeView::setPerspective(pMtx);
 }
 
-void J3DNativeViewSetProjectionv(const f32* pValues) {
-    J3DNativeView::setProjectionv(pValues);
-}
-
-void J3DNativeViewGetProjectionv(f32* pValues) {
-    J3DNativeView::getProjectionv(pValues);
+void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]) {
+    J3DNativeView::setOrthographic(pMtx);
 }
 
 void J3DNativeViewSetViewport(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ) {

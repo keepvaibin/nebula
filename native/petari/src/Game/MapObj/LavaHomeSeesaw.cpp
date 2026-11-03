@@ -13,7 +13,6 @@
 #include "JSystem/JGeometry/TMatrix.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 #include "math_types.hpp"
-#include "revolution/types.h"
 
 LavaHomeSeesaw::LavaHomeSeesaw(const char* pName) : LiveActor(pName), mSeesawRotator(), mMtxSetter(), _94(gZeroVec), mYOffset() {
 }
@@ -58,8 +57,8 @@ void LavaHomeSeesaw::init(const JMapInfoIter& rIter) {
     const char* name;
     MR::getObjectName(&name, rIter);
     initModelManagerWithAnm(name, nullptr, true);
-    mMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-    MR::newDifferedDLBuffer(this);
+    mMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+    MR::newDifferedMaterials(this);
     initSound(4, false);
     initHitSensor(1);
     MR::initCollisionParts(this, name, MR::addBodyMessageSensorMapObj(this), nullptr);

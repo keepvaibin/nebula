@@ -25,7 +25,7 @@ void AudMeNameConverter::init() {
     mEntries = new AudMeNameData[mNumEntries];
 
     for (s32 i = 0; i < mNumEntries; i++) {
-        mEntries[i].mName = meMgr->mParams.mNames[i];
+        mEntries[i].mName = meMgr->mParams.getName(i);
         mEntries[i].mID = i;
         mEntries[i].mHash = JGadget::getHashCode(mEntries[i].mName);
     }

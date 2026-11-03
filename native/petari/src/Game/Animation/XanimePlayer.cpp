@@ -5,7 +5,6 @@
 #include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DMtxCalc.hpp>
-#include <revolution/types.h>
 
 namespace {
     const char* dummy_name = "NULL";
@@ -427,9 +426,7 @@ void XanimePlayer::updateAfterMovement() {
         return;
     }
 
-    if (_20->checkState(1) != 0) {
-        f32 unusedCast = _20->getEnd();
-    } else if (!_88) {
+    if (_20->checkState(1) == 0 && !_88) {
         f32 rate = _20->getRate();
         f32 frame = _20->getFrame();
 

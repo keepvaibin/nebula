@@ -4,18 +4,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-void DinoPackunTail_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)1.1f;
-    (void)0.1f;
-    (void)0.9f;
-}
-
-void DinoPackunTail_FORCE_MATCH(TVec3f* pVec) {
-    pVec[0] + pVec[1];
-    pVec[2] + pVec[3];
-}
-
 DinoPackunTail::DinoPackunTail(u32 nodeCount) {
     mNodes = nullptr;
     mMaxNodes = 0;
@@ -105,7 +93,6 @@ void DinoPackunTail::registerJointCallBack() {
     }
 }
 
-// https://decomp.me/scratch/PqcAa
 void DinoPackunTail::updateJoint() {
     if (_1C) {
         addAccelKeepDistance();
@@ -167,7 +154,6 @@ void DinoPackunTail::addAccelKeepBend() {
     }
 }
 
-// https://decomp.me/scratch/aWhPK
 void DinoPackunTail::addAccelKeepDistance() {
     TVec3f v19;
     v19.set(mNodes[0]->mPosition);
@@ -191,7 +177,6 @@ void DinoPackunTail::addAccelKeepDistance() {
         nodes[i]->addNodeVelocityHost(v17 * v7);
 
         if (i != 0) {
-            DinoPackunTailNode** nodes = mNodes;
             getNodeRef(i - 1)->addNodeVelocityHost(-v17 * v7);
         }
 

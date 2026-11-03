@@ -22,9 +22,9 @@ public:
     virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
-    /* 0x8C */ TVec3f mFront;
-    /* 0x98 */ KoopaSequencer* mSequencer;
-    /* 0x9C */ KoopaSensorCtrl* mSensorCtrl;
-    /* 0xA0 */ KoopaParts* mParts;
-    /* 0xA4 */ ActorJointCtrl* mJointCtrl;
+    TVec3f mFront;
+    KoopaSequencer* mSequencer;
+    KoopaSensorCtrl* mSensorCtrl;
+    KoopaParts* mParts;
+    ActorJointCtrl* mJointCtrl;
 };

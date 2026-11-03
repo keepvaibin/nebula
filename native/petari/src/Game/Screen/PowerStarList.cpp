@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Screen/PowerStarList.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/FileSelectFunc.hpp"
@@ -10,7 +11,7 @@
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -20,7 +21,6 @@
 #include <nw4r/lyt/drawInfo.h>
 #include <nw4r/lyt/pane.h>
 
-extern "C" int swprintf(wchar_t* pBuffer, size_t length, const wchar_t* pFormat, ...);
 
 #define MAX_PAGES 5
 #define ITEMS_PER_PAGE 15
@@ -30,13 +30,13 @@ namespace {
     class ListItem {
     public:
         /// @brief Creates a new `ListItem`.
-        ListItem() NO_INLINE : mType(-1), mRaceId() {
+        ListItem() : mType(-1), mRaceId() {
         }
 
-        /* 0x0 */ s32 mType;
+        s32 mType;
         union {
-            /* 0x4 */ GalaxyStatusAccessor mGalaxyAccessor;
-            /* 0x4 */ s32 mRaceId;
+            GalaxyStatusAccessor mGalaxyAccessor;
+            s32 mRaceId;
         };
     };
 
@@ -89,7 +89,7 @@ namespace {
     const f32 cSeparatorOffset = 20.0f;
     const f32 cTimePaneDefaultHeight = 72.0f;
 
-    s32 getSortPriority(const GalaxyStatusAccessor* pAccessor) NO_INLINE {
+    s32 getSortPriority(const GalaxyStatusAccessor* pAccessor) {
         const char* pName = pAccessor->getName();
 
         if (pAccessor->getNormalScenarioNum() == 3) {
@@ -111,7 +111,7 @@ namespace {
         return 5;
     }
 
-    s32 getDisplayRaceBestTimeNum() NO_INLINE {
+    s32 getDisplayRaceBestTimeNum() {
         s32 num = 0;
 
         for (s32 idx = 0; idx < 5; idx++) {
@@ -219,7 +219,7 @@ void PowerStarList::init(const JMapInfoIter& rIter) {
 
     mArrowUpButtonCtrl = createButtonController("ArrowUpButton", "BoxButton1_00");
     mArrowDownButtonCtrl = createButtonController("ArrowDownButton", "BoxButton1_01");
-    // The Wii Message Board's capture button: no message board (B-31, Q5).
+    // No message board (B-31, Q5), no capture button.
     MR::hidePaneRecursive(this, "Capture");
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayoutOnPause(mSysInfoWindow);
@@ -265,10 +265,8 @@ ButtonPaneController* PowerStarList::createButtonController(const char* pParam1,
 
     pController->mWaitAnimName = "Wait";
     pController->invalidateAppearance();
-#ifdef TARGET_PC
     // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
     pController->mIsNebulaFocusable = false;
-#endif
 
     return pController;
 }
@@ -318,7 +316,7 @@ namespace {
     public:
         TextBuffer(LayoutActor* pActor, const char* const* pPaneNames, s32 rowsPerPane)
             : mActor(pActor), mPaneNames(pPaneNames), mRowsPerPane(rowsPerPane), mTail(mBuffer) {
-            swprintf(mBuffer, ARRAY_SIZE(mBuffer), L"");
+            MR::formatText(mBuffer, ARRAY_SIZE(mBuffer), u"");
         }
 
         void addNewLine(s32 row) {
@@ -335,7 +333,7 @@ namespace {
             if (row - paneIndex * mRowsPerPane == 0) {
                 MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex - 1], mBuffer);
                 mTail = mBuffer;
-                swprintf(mBuffer, ARRAY_SIZE(mBuffer), L"");
+                MR::formatText(mBuffer, ARRAY_SIZE(mBuffer), u"");
             }
         }
 
@@ -349,13 +347,17 @@ namespace {
             MR::setTextBoxMessageRecursive(mActor, mPaneNames[paneIndex], mBuffer);
         }
 
-        /* 0x000 */ LayoutActor* mActor;
-        /* 0x004 */ const char* const* mPaneNames;
-        /* 0x008 */ s32 mRowsPerPane;
-        /* 0x00C */ wchar_t mBuffer[256];
-        /* 0x20C */ wchar_t* mTail;
+        LayoutActor* mActor;
+        const char* const* mPaneNames;
+        s32 mRowsPerPane;
+        char16_t mBuffer[256];
+        char16_t* mTail;
     };
 };  // namespace
+
+namespace {
+    ListItem sListItems[MAX_ITEMS];
+}  // namespace
 
 void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     if (pageNumber >= 0) {
@@ -363,30 +365,30 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     }
 
     for (u32 idx = 0; idx < ARRAY_SIZE(::cGalaxyNamePaneTable); idx++) {
-        MR::setTextBoxMessageRecursive(this, ::cGalaxyNamePaneTable[idx], L"");
+        MR::setTextBoxMessageRecursive(this, ::cGalaxyNamePaneTable[idx], u"");
     }
 
     for (u32 idx = 0; idx < ARRAY_SIZE(::cStarNumPaneTable); idx++) {
-        MR::setTextBoxMessageRecursive(this, ::cStarNumPaneTable[idx], L"");
+        MR::setTextBoxMessageRecursive(this, ::cStarNumPaneTable[idx], u"");
     }
 
     for (u32 idx = 0; idx < ARRAY_SIZE(::cCoinPaneTable); idx++) {
-        MR::setTextBoxMessageRecursive(this, ::cCoinPaneTable[idx], L"");
+        MR::setTextBoxMessageRecursive(this, ::cCoinPaneTable[idx], u"");
     }
 
     for (u32 idx = 0; idx < ARRAY_SIZE(::cCrownPaneTable); idx++) {
-        MR::setTextBoxMessageRecursive(this, ::cCrownPaneTable[idx], L"");
+        MR::setTextBoxMessageRecursive(this, ::cCrownPaneTable[idx], u"");
     }
 
     for (u32 idx = 0; idx < ARRAY_SIZE(::cTimePaneTable); idx++) {
-        MR::setTextBoxMessageRecursive(this, ::cTimePaneTable[idx], L"");
+        MR::setTextBoxMessageRecursive(this, ::cTimePaneTable[idx], u"");
     }
 
     for (u32 idx = 0; idx < ARRAY_SIZE(::cSeparatorPaneTable); idx++) {
         MR::hidePaneRecursive(this, ::cSeparatorPaneTable[idx]);
     }
 
-    ListItem listItems[MAX_ITEMS];
+    ListItem* const listItems = sListItems;
 
     s32 itemCount = ::getSortedList(listItems);
     mPageNum = (itemCount - 1) / ITEMS_PER_PAGE + 1;
@@ -490,23 +492,23 @@ void PowerStarList::updateList(s32 pageNumber, bool isSinglePage) {
     timeBuffer.finish(row);
 }
 
-wchar_t* PowerStarList::makeGalaxyNameText(wchar_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
+char16_t* PowerStarList::makeGalaxyNameText(char16_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
     s32 offset;
     if (isFirstLine) {
-        const wchar_t* pName = MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName());
-        offset = swprintf(pBuffer, 0x100, pName);
+        const char16_t* pName = MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName());
+        offset = MR::formatText(pBuffer, 0x100, pName);
     } else {
-        const wchar_t* pName = MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName());
-        offset = swprintf(pBuffer, 0x100, L"%ls%s%ls", pBuffer, "\n", pName);
+        const char16_t* pName = MR::getGalaxyNameShortOnCurrentLanguage(pAccessor->getName());
+        offset = MR::formatText(pBuffer, 0x100, u"%ls%s%ls", pBuffer, "\n", pName);
     }
 
     return pBuffer + offset;
 }
 
-wchar_t* PowerStarList::makeStarNumText(wchar_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
-    wchar_t* pText = pBuffer;
+char16_t* PowerStarList::makeStarNumText(char16_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
+    char16_t* pText = pBuffer;
     if (!isFirstLine) {
-        *pText = L'\n';
+        *pText = u'\n';
         pText++;
     }
 
@@ -516,87 +518,87 @@ wchar_t* PowerStarList::makeStarNumText(wchar_t* pBuffer, const GalaxyStatusAcce
         if (!MR::isOnGameEventFlagPowerStarSuccess(pName, starId)) {
             continue;
         } else if (GameDataConst::isGrandStar(pName, starId)) {
-            *pText = L'K';
+            *pText = u'K';
             pText++;
         } else if (GameDataConst::isPowerStarGreen(pName, starId)) {
-            *pText = L'O';
+            *pText = u'O';
             pText++;
         } else if (GameDataConst::isPowerStarRed(pName, starId)) {
-            *pText = L'S';
+            *pText = u'S';
             pText++;
         } else if (pAccessor->isCometStar(starId)) {
-            *pText = L'e';
+            *pText = u'e';
             pText++;
         } else {
-            *pText = L'7';
+            *pText = u'7';
             pText++;
         }
     }
 
-    *pText = L'\0';
+    *pText = u'\0';
     return pText;
 }
 
-wchar_t* PowerStarList::makeCoinText(wchar_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
+char16_t* PowerStarList::makeCoinText(char16_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
     if (!isFirstLine) {
-        *pBuffer = L'\n';
+        *pBuffer = u'\n';
         pBuffer++;
     }
 
     s32 coinScore = MR::getCoinBestScore(pAccessor->getName());
 
-    pBuffer = MR::addPictureFontTag(pBuffer, L'A');
+    pBuffer = MR::addPictureFontTag(pBuffer, u'A');
 
-    *pBuffer = coinScore / 100 + L'0';
+    *pBuffer = coinScore / 100 + u'0';
 
     coinScore -= coinScore / 100 * 100;
     s32 value = coinScore / 10;
 
-    pBuffer[1] = value + L'0';
+    pBuffer[1] = value + u'0';
     coinScore -= 10 * value;
-    pBuffer[2] = coinScore + L'0';
-    pBuffer[3] = L'\0';
+    pBuffer[2] = coinScore + u'0';
+    pBuffer[3] = u'\0';
 
     return pBuffer + 3;
 }
 
-wchar_t* PowerStarList::makeCrownText(wchar_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
+char16_t* PowerStarList::makeCrownText(char16_t* pBuffer, const GalaxyStatusAccessor* pAccessor, bool isFirstLine) const {
     if (!isFirstLine) {
-        *pBuffer = L'\n';
+        *pBuffer = u'\n';
         pBuffer++;
     }
 
     if (MR::isStarComplete(pAccessor->getName())) {
-        *pBuffer = L'P';
+        *pBuffer = u'P';
         pBuffer++;
     }
 
-    *pBuffer = L'\0';
+    *pBuffer = u'\0';
     return pBuffer;
 }
 
-wchar_t* PowerStarList::makeRaceNameText(wchar_t* pBuffer, int raceId, bool isFirstLine) const {
+char16_t* PowerStarList::makeRaceNameText(char16_t* pBuffer, int raceId, bool isFirstLine) const {
     s32 offset;
     if (isFirstLine) {
-        const wchar_t* pName = MR::getRaceNameOnCurrentLanguage(raceId);
-        offset = swprintf(pBuffer, 0x100, pName);
+        const char16_t* pName = MR::getRaceNameOnCurrentLanguage(raceId);
+        offset = MR::formatText(pBuffer, 0x100, pName);
     } else {
-        const wchar_t* pName = MR::getRaceNameOnCurrentLanguage(raceId);
-        offset = swprintf(pBuffer, 0x100, L"%ls%s%ls", pBuffer, "\n", pName);
+        const char16_t* pName = MR::getRaceNameOnCurrentLanguage(raceId);
+        offset = MR::formatText(pBuffer, 0x100, u"%ls%s%ls", pBuffer, "\n", pName);
     }
 
     return pBuffer + offset;
 }
 
-wchar_t* PowerStarList::makeRaceTimeText(wchar_t* pBuffer, int raceId, bool isFirstLine) const {
-    wchar_t raceBest[10];
+char16_t* PowerStarList::makeRaceTimeText(char16_t* pBuffer, int raceId, bool isFirstLine) const {
+    char16_t raceBest[10];
     MR::makeRaceBestTimeString(raceBest, raceId);
 
     s32 offset;
     if (isFirstLine) {
-        offset = swprintf(pBuffer, 0x100, raceBest);
+        offset = MR::formatText(pBuffer, 0x100, raceBest);
     } else {
-        offset = swprintf(pBuffer, 0x100, L"%ls%s%ls", pBuffer, "\n", raceBest);
+        offset = MR::formatText(pBuffer, 0x100, u"%ls%s%ls", pBuffer, "\n", raceBest);
     }
 
     return pBuffer + offset;
@@ -686,9 +688,9 @@ void PowerStarList::exeWait() {
         updateButtonAppearance();
     }
 
-    if (mPageNo < mPageNum - 1 && (mArrowDownButtonCtrl->trySelect() || MR::testCorePadButtonDown(0) || MR::testSubPadStickTriggerDown(0))) {
+    if (mPageNo < mPageNum - 1 && (mArrowDownButtonCtrl->trySelect() || MR::isHeldDown(0) || MR::isMoveStickPressedDown(0))) {
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvPageNext));
-    } else if (mPageNo > 0 && (mArrowUpButtonCtrl->trySelect() || MR::testCorePadButtonUp(0) || MR::testSubPadStickTriggerUp(0))) {
+    } else if (mPageNo > 0 && (mArrowUpButtonCtrl->trySelect() || MR::isHeldUp(0) || MR::isMoveStickPressedUp(0))) {
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvPagePrev));
     }
 }

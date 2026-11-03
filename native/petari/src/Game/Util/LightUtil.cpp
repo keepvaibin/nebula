@@ -1,8 +1,6 @@
 #include "Game/Util/LightUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/LightDirector.hpp"
@@ -37,9 +35,7 @@ namespace MR {
     }
 
     void loadLightPlayer() {
-#ifdef TARGET_PC
         MotionSignal::playerLight();
-#endif
         MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->loadLightPlayer();
     }
 
@@ -52,9 +48,7 @@ namespace MR {
     }
 
     void requestPointLight(const LiveActor* pActor, TVec3f pos, Color8 color, f32 intensity, s32 duration) {
-#ifdef TARGET_PC
         GameLightSignal::pointRequest(pActor, pos, color, intensity);
-#endif
         return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mPointCtrl->requestPointLight(pActor, pos, color, intensity, duration);
     }
 };  // namespace MR

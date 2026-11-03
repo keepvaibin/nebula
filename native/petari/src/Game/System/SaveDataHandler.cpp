@@ -1,25 +1,33 @@
 #include "Game/System/SaveDataHandler.hpp"
+#include "Game/System/SaveFileFormat.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/SaveDataFileAccessor.hpp"
-#include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include "Game/System/NebulaClock.hpp"
 
 namespace {
     struct SaveFileSpec {
-        /* 0x00 */ const char* mName;
-        /* 0x04 */ u32 mBufferSize;
+        const char* mName;
+        u32 mBufferSize;
     };
 
     const char cSaveFileName[] = "GameData.bin";
     const SaveFileSpec cSaveFileSpecTable[] = {{"mario", 0xF80}, {"luigi", 0xF80}, {"config", 0x60}};
     const SaveFileSpec cSaveFileSpecSystem = {"sysconf", 0x80};
 };  // namespace
+
+// The file table keeps its system entry so a save stays the size every older save is (and that older builds read): nothing lives in it
+// now. An empty file: its version, no chunks.
+static void emptyFile(u8* pData, u32 size) {
+    MR::zeroMemory(pData, size);
+    pData[0] = 1;
+}
 
 namespace {
     NEW_NERVE(SaveDataHandlerWait, SaveDataHandler, Wait);
@@ -28,13 +36,13 @@ namespace {
     NEW_NERVE(SaveDataHandlerRemoveProcessingGameData, SaveDataHandler, RemoveProcessingGameData);
 };  // namespace
 
-SaveDataHandler::SaveDataHandler(const SysConfigFile* pSysConfigFile, const UserFile* pUserFile)
+SaveDataHandler::SaveDataHandler(const UserFile* pUserFile)
     : NerveExecutor("SaveDataHandler"), mSaveRequest(), _C(), _14(), _18() {
     mSaveRequest = new SaveRequest();
 
     createCommunicationBuffer();
     resetSaveData(_18);
-    initializeAllFileInSaveData(_18, pSysConfigFile, pUserFile);
+    initializeAllFileInSaveData(_18, pUserFile);
 
 
     initNerve(GET_NERVE_ANON(SaveDataHandlerWait));
@@ -51,32 +59,107 @@ void SaveDataHandler::requestCheckEnableToCreate() {
     setNerve(GET_NERVE_ANON(SaveDataHandlerProcessing));
 }
 
-void SaveDataHandler::requestLoadSaveData() {
+// `copy` 0 is the save; 1 and 2 are the host's copies of the last two (save_files.cpp).
+void SaveDataHandler::requestLoadSaveData(int copy) {
+    static const char* const cNames[] = {"GameData.bin", "GameData.bin.1", "GameData.bin.2"};
     MR::zeroMemory(_14, 0x10000);
-    mSaveRequest->setReadSeq(::cSaveFileName, _14, 0x10000, &_C);
+    mSaveRequest->setReadSeq(cNames[copy], _14, 0x10000, &_C);
     mSaveRequest->start();
 
     setNerve(GET_NERVE_ANON(SaveDataHandlerProcessing));
 }
 
 bool SaveDataHandler::requestVerifyAfterLoadGameDataFile() {
+    // Old saves are version 2, big-endian or little-endian; a little-endian one is laid out as version 3.
+    NebulaSaveFormat::Header header;
+    const NebulaSaveFormat::Error error = NebulaSaveFormat::validate(_14, _C, header);
+    if (error != NebulaSaveFormat::Error::None) {
+        JUTNativeLog("save: %s\n", NebulaSaveFormat::message(error));
+        return false;
+    }
+    const bool oldOrder = header.format == NebulaSaveFormat::Format::Wii2;
+    gOldSaveOrder = oldOrder;
+    JUTNativeLog("save: read a %s save\n", oldOrder ? "old order" : header.format == NebulaSaveFormat::Format::Switch2 ? "Switch" : "Nebula");
+
+    SaveDataFileAccessor file(_14);
     if (!isCorrectFileHeader(_14)) {
+        gOldSaveOrder = false;
         return false;
     }
 
-    const SaveDataFileAccessor file(_14);
-
-    if (_C != NebulaAlignUp32(file.getFileSize())) {
-        return false;
-    }
-
-    if (file.getCheckSum() != MR::calcCheckSum(_14 + sizeof(u32), file.getFileSize() - sizeof(u32))) {
-        return false;
+    if (oldOrder) {
+        convertFileHeader(_14);
+    } else {
+        file.setVersion(cSaveFileVersion);
     }
 
     copySaveDataEachFile(_18, _14);
 
+    if (oldOrder) {
+        convertUserFiles(_18);
+    }
+
     return true;
+}
+
+// The header and file table of a version 2 file (read in the old order) in host order; its file's contents are
+// converted after they are copied.
+void SaveDataHandler::convertFileHeader(u8* pBuffer) {
+    SaveDataFileAccessor file(pBuffer);
+    const u32 fileSize = file.getFileSize();
+    const u32 num = file.getUserFileInfoNum();
+    u32 offsets[24];
+    for (u32 i = 0; i < num; i++) {
+        offsets[i] = file.getFileOffset(i);
+    }
+    const u32 checkSum = file.getCheckSum();
+    gOldSaveOrder = false;
+    file.setCheckSum(checkSum);
+    file.setVersion(cSaveFileVersion);
+    file.setUserFileInfoNum(num);
+    file.setFileSize(fileSize);
+    for (u32 i = 0; i < num; i++) {
+        file.setFileOffset(i, offsets[i]);
+    }
+}
+
+// Each user file of a version 2 save, read in the old order and written back in host order. The next save writes
+// version 3.
+void SaveDataHandler::convertUserFiles(u8* pBuffer) {
+    SaveDataFileAccessor file(pBuffer);
+    UserFile* pUserFile = new UserFile();
+    const int num = file.getUserFileInfoNum();
+
+    for (int i = 0; i < num; i++) {
+        const char* pName = file.getFileName(i);
+        SaveDataUserFileInfo info;
+        file.makeUserFileInfo(&info, pName);
+        if (info.mData == nullptr) {
+            continue;
+        }
+
+        pUserFile->resetAllData();
+        gOldSaveOrder = true;
+        // A damaged file stays as it is, so its slot reads as damaged and not as an empty file.
+        if (info.mKind == 0) {
+            pUserFile->loadFromGameDataBinary(pName, info.mData, info.mDataSize);
+            gOldSaveOrder = false;
+            if (!pUserFile->mIsGameDataCorrupted) {
+                pUserFile->makeGameDataBinary(info.mData, info.mDataSize);
+            }
+        } else if (info.mKind == 1) {
+            pUserFile->loadFromConfigDataBinary(pName, info.mData, info.mDataSize);
+            gOldSaveOrder = false;
+            if (!pUserFile->mIsConfigDataCorrupted) {
+                pUserFile->makeConfigDataBinary(info.mData, info.mDataSize);
+            }
+        } else {
+            gOldSaveOrder = false;
+            emptyFile(info.mData, info.mDataSize);
+        }
+    }
+
+    delete pUserFile;
 }
 
 void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserFile) {
@@ -84,7 +167,7 @@ void SaveDataHandler::initializeUserFileMemory(int index, const UserFile* pUserF
 
     for (u32 i = 0; i < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); i++) {
         char fileName[16];
-        snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[i].mName, index);
+        nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[i].mName, index);
 
         SaveDataUserFileInfo userFileInfo;
         fileAccessor.makeUserFileInfo(&userFileInfo, fileName);
@@ -102,13 +185,13 @@ void SaveDataHandler::copyUserFileMemory(int indexDst, int indexSrc) {
 
     for (u32 i = 0; i < sizeof(::cSaveFileSpecTable) / sizeof(*::cSaveFileSpecTable); i++) {
         char srcFileName[16];
-        snprintf(srcFileName, sizeof(srcFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexSrc);
+        nebula_snprintf(srcFileName, sizeof(srcFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexSrc);
 
         SaveDataUserFileInfo srcUserFileInfo;
         fileAccessor.makeUserFileInfo(&srcUserFileInfo, srcFileName);
 
         char dstFileName[16];
-        snprintf(dstFileName, sizeof(dstFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexDst);
+        nebula_snprintf(dstFileName, sizeof(dstFileName), "%s%1d", ::cSaveFileSpecTable[i].mName, indexDst);
 
         SaveDataUserFileInfo dstUserFileInfo;
         fileAccessor.makeUserFileInfo(&dstUserFileInfo, dstFileName);
@@ -136,14 +219,6 @@ void SaveDataHandler::storeUserFile(const UserFile* pUserFile) {
     SaveDataUserFileInfo configFileInfo;
     fileAccessor.makeUserFileInfo(&configFileInfo, pUserFile->getConfigDataName());
     pUserFile->makeConfigDataBinary(configFileInfo.mData, configFileInfo.mDataSize);
-}
-
-void SaveDataHandler::storeSysConfigFile(const SysConfigFile* pSysConfigFile) {
-    SaveDataFileAccessor fileAccessor = SaveDataFileAccessor(_18);
-
-    SaveDataUserFileInfo userFileInfo;
-    fileAccessor.makeUserFileInfo(&userFileInfo, ::cSaveFileSpecSystem.mName);
-    pSysConfigFile->makeDataBinary(userFileInfo.mData, userFileInfo.mDataSize);
 }
 
 void SaveDataHandler::requestSaveSaveData() {
@@ -195,7 +270,7 @@ void SaveDataHandler::exeSaveProcessingGameData() {
         return;
     }
 
-    // Saved or not, the sequence ends (the console wrote the System Menu's banner next; a PC has no System Menu).
+    // Saved or not, the sequence ends.
     setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
 }
 
@@ -214,7 +289,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
     u32 offset = 0x140;
 
     file.setCheckSum(0);
-    file.setVersion(2);
+    file.setVersion(cSaveFileVersion);
     file.setUserFileInfoNum(19);
     file.setFileSize(0);
 
@@ -227,9 +302,9 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
             MR::zeroMemory(pName, SaveDataFileAccessor::cNameSize);
 
             char fileName[32];
-            snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[j].mName, i + 1);
+            nebula_snprintf(fileName, sizeof(fileName), "%s%1d", ::cSaveFileSpecTable[j].mName, i + 1);
 
-            snprintf(pName, SaveDataFileAccessor::cNameSize, "%s", fileName);
+            nebula_snprintf(pName, SaveDataFileAccessor::cNameSize, "%s", fileName);
             file.setFileOffset(fileIndex, offset);
 
             MR::zeroMemory(pBuffer + offset, ::cSaveFileSpecTable[j].mBufferSize);
@@ -242,7 +317,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
 
     MR::zeroMemory(pSystemName, SaveDataFileAccessor::cNameSize);
 
-    snprintf(pSystemName, SaveDataFileAccessor::cNameSize, "%s", ::cSaveFileSpecSystem.mName);
+    nebula_snprintf(pSystemName, SaveDataFileAccessor::cNameSize, "%s", ::cSaveFileSpecSystem.mName);
     file.setFileOffset(fileIndex, offset);
 
     MR::zeroMemory(pBuffer + offset, ::cSaveFileSpecSystem.mBufferSize);
@@ -256,7 +331,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
     }
 }
 
-void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const SysConfigFile* pSysConfigFile, const UserFile* pUserFile) {
+void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const UserFile* pUserFile) {
     SaveDataFileAccessor fileAccessor = SaveDataFileAccessor(pBuffer);
 
     const int num = fileAccessor.getUserFileInfoNum();
@@ -270,17 +345,13 @@ void SaveDataHandler::initializeAllFileInSaveData(u8* pBuffer, const SysConfigFi
         } else if (userFileInfo.mKind == 1) {
             pUserFile->makeConfigDataBinary(userFileInfo.mData, userFileInfo.mDataSize);
         } else {
-            pSysConfigFile->makeDataBinary(userFileInfo.mData, userFileInfo.mDataSize);
+            emptyFile(userFileInfo.mData, userFileInfo.mDataSize);
         }
     }
 }
 
 bool SaveDataHandler::isCorrectFileHeader(const u8* pBuffer) {
     const SaveDataFileAccessor file(const_cast< u8* >(pBuffer));
-
-    if (file.getVersion() != 2) {
-        return false;
-    }
 
     if (file.getFileSize() >= 0x10000) {
         return false;
@@ -305,20 +376,20 @@ void SaveDataHandler::copySaveDataEachFile(u8* pFileDst, const u8* pFileSrc) {
         dstFileAccessor.makeUserFileInfo(&dstUserFileInfo, pFileName);
 
         if (dstUserFileInfo.mData != nullptr) {
-            int deltaSize = dstUserFileInfo.mDataSize - srcUserFileInfo.mDataSize;
+            const u32 copySize = srcUserFileInfo.mDataSize < dstUserFileInfo.mDataSize ? srcUserFileInfo.mDataSize : dstUserFileInfo.mDataSize;
 
-            MR::copyMemory(dstUserFileInfo.mData, srcUserFileInfo.mData, dstUserFileInfo.mDataSize);
+            MR::copyMemory(dstUserFileInfo.mData, srcUserFileInfo.mData, copySize);
 
-            if (deltaSize > 0) {
-                MR::fillMemory(dstUserFileInfo.mData + dstUserFileInfo.mDataSize, 0, deltaSize);
+            if (copySize < dstUserFileInfo.mDataSize) {
+                MR::fillMemory(dstUserFileInfo.mData + copySize, 0, dstUserFileInfo.mDataSize - copySize);
             }
         }
     }
 }
 
 void SaveDataHandler::createCommunicationBuffer() {
-    _14 = new (MR::getStationedHeapGDDR3(), 32) u8[0x10000];
-    _18 = new (MR::getStationedHeapGDDR3(), 32) u8[0x10000];
+    _14 = new (MR::getStationedHeap(), 32) u8[0x10000];
+    _18 = new (MR::getStationedHeap(), 32) u8[0x10000];
 }
 
 bool SaveDataHandler::tryRemoveFile(const char* pFileName, bool* pIsRemoved) {

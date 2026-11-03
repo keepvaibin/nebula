@@ -21,9 +21,9 @@ public:
     void exeLand();
     void exeJumpFast();
 
-    /* 0x10 */ s32 mMaxAttacks;
-    /* 0x14 */ s32 mAttacks;
-    /* 0x18 */ f32 mJumpVelocity;
-    /* 0x1C */ f32 mGravity;
-    /* 0x20 */ s32 mJumpDelay;
+    s32 mMaxAttacks;
+    s32 mAttacks;
+    f32 mJumpVelocity;
+    f32 mGravity;
+    s32 mJumpDelay;
 };

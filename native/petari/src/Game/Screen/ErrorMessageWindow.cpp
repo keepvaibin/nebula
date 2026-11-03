@@ -1,4 +1,5 @@
 #include "Game/Screen/ErrorMessageWindow.hpp"
+#include "Game/System/NebulaText.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -58,7 +59,7 @@ void ErrorMessageWindow::exeHide() {
 
 void ErrorMessageWindow::exeAppear() {
     if (MR::isFirstStep(this)) {
-        const wchar_t* pMessage = nullptr;
+        const char16_t* pMessage = nullptr;
 
         switch (mMessageType) {
         case MessageType_System:
@@ -67,6 +68,12 @@ void ErrorMessageWindow::exeAppear() {
         case MessageType_Game:
             pMessage = MR::getGameMessageDirect(mMessageId);
             break;
+        case MessageType_Nebula: {
+            static char16_t sText[256];
+            NebulaText::get(sText, 256, mMessageId);
+            pMessage = sText;
+            break;
+        }
         }
 
         if (mTexture != nullptr) {
@@ -79,6 +86,8 @@ void ErrorMessageWindow::exeAppear() {
             MR::hidePane(this, "PicDummy");
             MR::hidePane(this, "ErrorTextHalf");
             MR::showPane(this, "ErrorMessage");
+            MR::setTextBoxHorizontalPositionCenterRecursive(this, "ErrorMessage");
+            MR::setTextBoxVerticalPositionCenterRecursive(this, "ErrorMessage");
             MR::setTextBoxMessageRecursive(this, "ErrorMessage", pMessage);
         }
 

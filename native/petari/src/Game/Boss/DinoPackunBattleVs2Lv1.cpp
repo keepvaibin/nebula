@@ -18,28 +18,6 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void DinoPackunBattleVs2Lv1_FORCE_MATCH_SDATA2() {
-    (void)1.05e+03f;
-    (void)6e+01f;
-    (void)1.5f;
-    (void)1.1f;
-    (void)1.2f;
-    (void)4e+01f;
-    (void)8e+01f;
-    (void)32.0f;
-    (void)132.0f;
-    (void)2e+03f;
-    (void)45.0f;
-    (void)1.4f;
-    (void)1.9f;
-    (void)1.6e+03f;
-    (void)1.8f;
-    (void)5e+01f;
-    (void)3e+01f;
-    (void)1.2e+02f;
-    (void)1.5e+02f;
-}
-
 namespace {
     static TVec3f sShotMouthFireOffset = TVec3f(150.0f, 150.0f, 0.0f);
 };  // namespace

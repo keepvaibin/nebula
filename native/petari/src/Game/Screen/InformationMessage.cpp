@@ -63,11 +63,11 @@ void InformationMessage::setMessage(const char* pMessageId) {
     MR::setTextBoxGameMessageRecursive(this, nullptr, pMessageId);
 }
 
-void InformationMessage::setMessage(const wchar_t* pMessage) {
+void InformationMessage::setMessage(const char16_t* pMessage) {
     MR::setTextBoxMessageRecursive(this, nullptr, pMessage);
 }
 
-void InformationMessage::setReplaceString(const wchar_t* pMessage, s32 param2) {
+void InformationMessage::setReplaceString(const char16_t* pMessage, s32 param2) {
     MR::setTextBoxArgStringRecursive(this, nullptr, pMessage, param2);
 }
 

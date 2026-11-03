@@ -10,55 +10,45 @@ class TalkMessageInfo;
 class TalkNodeCtrl;
 
 enum TalkMessageCtrl_Type {
-    /* 0x0 */ TalkMessageCtrl_Type0,
-    /* 0x1 */ TalkMessageCtrl_Type1,
-    /* 0x2 */ TalkMessageCtrl_Type2,
-    /* 0x3 */ TalkMessageCtrl_Type3,
-    /* 0x4 */ TalkMessageCtrl_Type4,
-    /* 0x5 */ TalkMessageCtrl_Type5,
-    /* 0x6 */ TalkMessageCtrl_Type6,
-    /* 0x7 */ TalkMessageCtrl_Type7,
-    /* 0x8 */ TalkMessageCtrl_Type8,
-    /* 0x9 */ TalkMessageCtrl_Type9,
-    /* 0xA */ TalkMessageCtrl_TypeA,
-#if (VERSION == RMGK01)
-    /* 0xB */ TalkMessageCtrl_TypeB,
-    /* 0xC */ TalkMessageCtrl_TypeC,
-    /* 0xD */ TalkMessageCtrl_TypeD,
-    /* 0xE */ TalkMessageCtrl_TypeE,
-#else
+    TalkMessageCtrl_Type0,
+    TalkMessageCtrl_Type1,
+    TalkMessageCtrl_Type2,
+    TalkMessageCtrl_Type3,
+    TalkMessageCtrl_Type4,
+    TalkMessageCtrl_Type5,
+    TalkMessageCtrl_Type6,
+    TalkMessageCtrl_Type7,
+    TalkMessageCtrl_Type8,
+    TalkMessageCtrl_Type9,
+    TalkMessageCtrl_TypeA,
     // After 0xA the branch types are the galaxy result (TypeE), the time-keep demo (TypeB), then a message read before
-    // (TypeC): TalkMessageCtrl::rootNodePre's jump table in RMGE01 (0x805A2434). Numbered B, C, E the nodes of those
+    // (TypeC), the order TalkMessageCtrl::rootNodePre branches on. Numbered B, C, E the nodes of those
     // types asked the wrong question, and a character's line after a galaxy took the wrong branch.
-    /* 0xB */ TalkMessageCtrl_TypeE,
-    /* 0xC */ TalkMessageCtrl_TypeB,
-    /* 0xD */ TalkMessageCtrl_TypeC,
-#endif
+    TalkMessageCtrl_TypeE,
+    TalkMessageCtrl_TypeB,
+    TalkMessageCtrl_TypeC,
 };
 
 enum BranchNode_Type {
-    /* 0x00 */ BranchNode_Type0,
-    /* 0x01 */ BranchNode_Type1,
-    /* 0x02 */ BranchNode_Type2,
-    /* 0x03 */ BranchNode_Type3,
-    /* 0x04 */ BranchNode_Type4,
-    /* 0x05 */ BranchNode_Type5,
-    /* 0x06 */ BranchNode_Type6,
-    /* 0x07 */ BranchNode_Type7,
-    /* 0x08 */ BranchNode_Type8,
-    /* 0x09 */ BranchNode_Type9,
-    /* 0x0A */ BranchNode_TypeA,
-    /* 0x0B */ BranchNode_TypeB,
-    /* 0x0C */ BranchNode_TypeC,
-    /* 0x0D */ BranchNode_TypeD,
-    /* 0x0E */ BranchNode_TypeE,
-    /* 0x0F */ BranchNode_TypeF,
-    /* 0x10 */ BranchNode_Type10,
-    /* 0x11 */ BranchNode_Type11,
-    /* 0x12 */ BranchNode_Type12,
-#if (VERSION == RMGK01)
-    /* 0x13 */ BranchNode_Type13,
-#endif
+    BranchNode_Type0,
+    BranchNode_Type1,
+    BranchNode_Type2,
+    BranchNode_Type3,
+    BranchNode_Type4,
+    BranchNode_Type5,
+    BranchNode_Type6,
+    BranchNode_Type7,
+    BranchNode_Type8,
+    BranchNode_Type9,
+    BranchNode_TypeA,
+    BranchNode_TypeB,
+    BranchNode_TypeC,
+    BranchNode_TypeD,
+    BranchNode_TypeE,
+    BranchNode_TypeF,
+    BranchNode_Type10,
+    BranchNode_Type11,
+    BranchNode_Type12,
 };
 
 class CustomTagArg {
@@ -67,7 +57,7 @@ public:
 
     inline CustomTagArg(int a1, TagType a2) : mIntArg(a1), mArgType(a2) {
     }
-    inline CustomTagArg(const wchar_t* a1, TagType a2) : mCharArg(a1), mArgType(a2) {
+    inline CustomTagArg(const char16_t* a1, TagType a2) : mCharArg(a1), mArgType(a2) {
     }
 
     inline void operator=(const CustomTagArg& rhs) {
@@ -76,11 +66,11 @@ public:
     }
 
     union {
-        /* 0x0 */ int mIntArg;
-        /* 0x0 */ const wchar_t* mCharArg;
+        int mIntArg;
+        const char16_t* mCharArg;
     };
 
-    /* 0x4 */ TagType mArgType;
+    TagType mArgType;
 };
 
 class TalkMessageCtrl : public NameObj {
@@ -115,7 +105,7 @@ public:
     void readMessage();
     bool isSelectYesNo() const;
 
-    void setMessageArg(const CustomTagArg& rArg) NO_INLINE {
+    void setMessageArg(const CustomTagArg& rArg) {
         mTagArg = rArg;
     }
 
@@ -127,25 +117,25 @@ public:
     void startCamera(s32);
     const char* getBranchID() const;
 
-    /* 0x0C */ LiveActor* mHostActor;
-    /* 0x10 */ TalkNodeCtrl* mNodeCtrl;
-    /* 0x14 */ s32 mZoneID;
-    /* 0x18 */ u32 _18;
-    /* 0x1C */ TVec3f _1C;
-    /* 0x28 */ MtxPtr mMtx;
-    /* 0x2C */ TVec3f mMsgBalloonFollowOffs;
-    /* 0x38 */ f32 mTalkDistance;
-    /* 0x3C */ u32 _3C;
-    /* 0x40 */ u32 mAlreadyDoneFlags;
-    /* 0x44 */ bool mIsOnRootNodeAuto;
-    /* 0x45 */ bool mIsOnReadNodeAuto;
-    /* 0x46 */ bool mIsStartOnlyFront;
-    /* 0x48 */ ActorCameraInfo* mCameraInfo;
-    /* 0x4C */ TalkMessageFuncBase* mBranchFunc;
-    /* 0x50 */ TalkMessageFuncBase* mEventFunc;
-    /* 0x54 */ TalkMessageFuncBase* mAnimeFunc;
-    /* 0x58 */ TalkMessageFuncBase* mKillFunc;
-    /* 0x5C */ CustomTagArg mTagArg;
+    LiveActor* mHostActor;
+    TalkNodeCtrl* mNodeCtrl;
+    s32 mZoneID;
+    u32 _18;
+    TVec3f _1C;
+    MtxPtr mMtx;
+    TVec3f mMsgBalloonFollowOffs;
+    f32 mTalkDistance;
+    u32 _3C;
+    u32 mAlreadyDoneFlags;
+    bool mIsOnRootNodeAuto;
+    bool mIsOnReadNodeAuto;
+    bool mIsStartOnlyFront;
+    ActorCameraInfo* mCameraInfo;
+    TalkMessageFuncBase* mBranchFunc;
+    TalkMessageFuncBase* mEventFunc;
+    TalkMessageFuncBase* mAnimeFunc;
+    TalkMessageFuncBase* mKillFunc;
+    CustomTagArg mTagArg;
 };
 
 class TalkFunction {
@@ -164,8 +154,8 @@ public:
     static void registerTalkSystem(TalkMessageCtrl*);
 
     static TalkMessageInfo* getMessageInfo(const TalkMessageCtrl*);
-    static const wchar_t* getSubMessage(const TalkMessageCtrl*);
-    static const wchar_t* getMessage(const TalkMessageCtrl*);
+    static const char16_t* getSubMessage(const TalkMessageCtrl*);
+    static const char16_t* getMessage(const TalkMessageCtrl*);
     static void onTalkStateEntry(TalkMessageCtrl*);
     static void onTalkStateNone(TalkMessageCtrl*);
     static void onTalkStateEnableStart(TalkMessageCtrl*);

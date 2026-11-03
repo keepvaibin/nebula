@@ -1,18 +1,20 @@
-// The settings overlay's game art from the cooked content (game_asset_extract.h): an archive's file, a TPL's
+// The settings overlay's game art from the asset store (game_asset_extract.h): a file below a folder, a TPL's
 // texture record.
 
 #include "galaxy/render/game_asset_extract.h"
+#include "galaxy/disc_files.h"
+#include "galaxy/path_text.h"
 #include "nebula_cooked_texture.h"
 
 #include <bit>
 #include <cstring>
-#include <fstream>
+#include <filesystem>
 
 namespace galaxy::render {
 
 namespace {
 
-constexpr std::size_t kMaxCosmeticArchiveSize = 64u * 1024u * 1024u;
+constexpr std::uint64_t kMaxCosmeticFileSize = 64u * 1024u * 1024u;
 
 [[nodiscard]] bool contains_bytes(
     std::span<const std::byte> data, std::size_t offset,
@@ -20,125 +22,66 @@ constexpr std::size_t kMaxCosmeticArchiveSize = 64u * 1024u * 1024u;
     return offset <= data.size() && count <= data.size() - offset;
 }
 
-[[nodiscard]] std::uint32_t read_be32(
+// The content folder's archives and TPLs are in host order, as the importer cooks them (cook/native_data.rs).
+[[nodiscard]] std::uint32_t read_u32(
     std::span<const std::byte> data, std::size_t offset) noexcept {
     if (!contains_bytes(data, offset, 4)) {
         return 0;
     }
-    return (static_cast<std::uint32_t>(data[offset]) << 24) |
-        (static_cast<std::uint32_t>(data[offset + 1]) << 16) |
-        (static_cast<std::uint32_t>(data[offset + 2]) << 8) |
-        static_cast<std::uint32_t>(data[offset + 3]);
+    return static_cast<std::uint32_t>(data[offset]) |
+        (static_cast<std::uint32_t>(data[offset + 1]) << 8) |
+        (static_cast<std::uint32_t>(data[offset + 2]) << 16) |
+        (static_cast<std::uint32_t>(data[offset + 3]) << 24);
 }
 
-[[nodiscard]] std::uint16_t read_be16(
+[[nodiscard]] std::uint16_t read_u16(
     std::span<const std::byte> data, std::size_t offset) noexcept {
     if (!contains_bytes(data, offset, 2)) {
         return 0;
     }
     return static_cast<std::uint16_t>(
-        (static_cast<std::uint32_t>(data[offset]) << 8) |
-        static_cast<std::uint32_t>(data[offset + 1]));
+        static_cast<std::uint32_t>(data[offset]) |
+        (static_cast<std::uint32_t>(data[offset + 1]) << 8));
 }
 
-}  // namespace
-
-std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
-    std::vector<RarcFile> result;
-    if (data.size() < 0x40 || std::memcmp(data.data(), "RARC", 4) != 0) {
-        return result;
-    }
-    const std::size_t file_data_off = static_cast<std::size_t>(read_be32(data, 0x0C)) + 0x20u;
-    const std::uint32_t num_nodes = read_be32(data, 0x20);
-    const std::size_t node_off = static_cast<std::size_t>(read_be32(data, 0x24)) + 0x20u;
-    const std::size_t entry_off = static_cast<std::size_t>(read_be32(data, 0x2C)) + 0x20u;
-    const std::size_t string_off = static_cast<std::size_t>(read_be32(data, 0x34)) + 0x20u;
-
-    // Header counts come from file data; bound them before looping.
-    if (num_nodes > 4096u ||
-        !contains_bytes(data, node_off, static_cast<std::size_t>(num_nodes) * 0x10u)) {
-        return result;
-    }
-    for (std::uint32_t n = 0; n < num_nodes; ++n) {
-        const std::size_t base =
-            static_cast<std::size_t>(node_off) + n * 0x10u;
-        const std::uint16_t entry_count = read_be16(data, base + 0x0A);
-        const std::uint32_t first_entry_idx = read_be32(data, base + 0x0C);
-        if (entry_count > 8192u) {
-            continue;
+// The file of that exact name at any depth below `folder`.
+[[nodiscard]] std::optional<disc::Entry> find_file(
+    const disc::AssetStore& store, const disc::Entry& folder, std::string_view name) {
+    for (std::uint32_t i = 0; i < folder.children; ++i) {
+        const std::optional<disc::Entry> entry = store.child(folder.index, i);
+        if (!entry) {
+            return std::nullopt;
         }
-        for (std::uint32_t e = 0; e < entry_count; ++e) {
-            const std::size_t ebase = static_cast<std::size_t>(entry_off) +
-                (static_cast<std::size_t>(first_entry_idx) + e) * 0x14u;
-            if (!contains_bytes(data, ebase, 0x14u)) {
-                continue;
+        if (entry->folder) {
+            if (std::optional<disc::Entry> found = find_file(store, *entry, name)) {
+                return found;
             }
-            const std::uint32_t type_and_name_off = read_be32(data, ebase + 4);
-            // Bit 17 of the (type << 16 | nameOffset) word marks a directory.
-            const bool is_dir = (type_and_name_off & 0x00020000u) != 0u;
-            const std::uint32_t name_off = type_and_name_off & 0xFFFFu;
-            const std::uint32_t data_off = read_be32(data, ebase + 8);
-            const std::uint32_t data_size = read_be32(data, ebase + 12);
-
-            const std::size_t name_start =
-                static_cast<std::size_t>(string_off) + name_off;
-            if (name_start >= data.size()) {
-                continue;
-            }
-            std::size_t name_end = name_start;
-            while (name_end < data.size() &&
-                   data[name_end] != std::byte{0}) {
-                ++name_end;
-            }
-            if (name_end == data.size()) {
-                continue;
-            }
-            std::string name(
-                reinterpret_cast<const char*>(data.data() + name_start),
-                name_end - name_start);
-            if (is_dir || name == "." || name == "..") {
-                continue;
-            }
-            const std::size_t file_start =
-                static_cast<std::size_t>(file_data_off) + data_off;
-            if (!contains_bytes(data, file_start, data_size)) {
-                continue;
-            }
-            result.push_back(RarcFile{
-                std::move(name),
-                data.subspan(file_start, data_size)});
-        }
-    }
-    return result;
-}
-
-std::optional<std::span<const std::byte>> rarc_find_file(
-    std::span<const std::byte> data, std::string_view name) {
-    for (const RarcFile& file : rarc_list_files(data)) {
-        if (file.name == name) {
-            return file.data;
+        } else if (name == entry->name) {
+            return entry;
         }
     }
     return std::nullopt;
 }
 
+}  // namespace
+
 std::optional<DecodedTexture> tpl_texture(std::span<const std::byte> data) noexcept try {
-    if (data.size() < 12 || read_be32(data, 0) != 0x0020AF30u) {
+    if (data.size() < 12 || read_u32(data, 0) != 0x0020AF30u) {
         return std::nullopt;
     }
-    const std::uint32_t num_images = read_be32(data, 4);
-    const std::size_t table_off = read_be32(data, 8);
+    const std::uint32_t num_images = read_u32(data, 4);
+    const std::size_t table_off = read_u32(data, 8);
     if (num_images == 0 || num_images > (data.size() / 8u) ||
         !contains_bytes(data, table_off, static_cast<std::size_t>(num_images) * 8u)) {
         return std::nullopt;
     }
-    const std::size_t header_off = read_be32(data, table_off);
+    const std::size_t header_off = read_u32(data, table_off);
     if (header_off == 0 || !contains_bytes(data, header_off, 36u)) {
         return std::nullopt;
     }
-    const std::uint16_t height = read_be16(data, header_off);
-    const std::uint16_t width = read_be16(data, header_off + 2);
-    const std::size_t data_off = read_be32(data, header_off + 8);
+    const std::uint16_t height = read_u16(data, header_off);
+    const std::uint16_t width = read_u16(data, header_off + 2);
+    const std::size_t data_off = read_u32(data, header_off + 8);
     if (!contains_bytes(data, data_off, NEBULA_TEXTURE_HEADER)) {
         return std::nullopt;
     }
@@ -172,34 +115,25 @@ std::optional<DecodedTexture> tpl_texture(std::span<const std::byte> data) noexc
 
 std::optional<DecodedTexture> load_game_texture(
     const std::string& content_root_utf8,
-    std::string_view arc_relative_path,
+    std::string_view folder,
     std::string_view texture_entry_name) noexcept try {
-    std::string full_path = content_root_utf8;
-    if (!full_path.empty() && full_path.back() != '\\' &&
-        full_path.back() != '/') {
-        full_path += '\\';
-    }
-    full_path += std::string(arc_relative_path);
-
-    std::ifstream file(full_path, std::ios::binary | std::ios::ate);
-    if (!file) {
+    disc::AssetStore store;
+    if (!store.open(text_path(content_root_utf8) / "game.pak")) {
         return std::nullopt;
     }
-    const std::streamsize size = file.tellg();
-    if (size <= 0 || static_cast<std::uintmax_t>(size) > kMaxCosmeticArchiveSize) {
+    const std::optional<disc::Entry> root = store.find(folder);
+    if (!root || !root->folder) {
         return std::nullopt;
     }
-    file.seekg(0);
-    std::vector<std::byte> raw(static_cast<std::size_t>(size));
-    if (!file.read(reinterpret_cast<char*>(raw.data()), size)) {
+    const std::optional<disc::Entry> file = find_file(store, *root, texture_entry_name);
+    if (!file || file->length > kMaxCosmeticFileSize) {
         return std::nullopt;
     }
-
-    const std::optional<std::span<const std::byte>> entry = rarc_find_file(raw, texture_entry_name);
-    if (!entry.has_value()) {
+    std::vector<std::byte> raw(static_cast<std::size_t>(file->length));
+    if (!store.read(file->position, raw.size(), raw.data())) {
         return std::nullopt;
     }
-    return tpl_texture(*entry);
+    return tpl_texture(raw);
 } catch (...) {
     // Cosmetic extraction failures must not reach the renderer's failure path.
     return std::nullopt;

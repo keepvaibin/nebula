@@ -26,7 +26,7 @@ void OceanBowlBloomDrawer::draw() const {
     u16 one = 1;
     for (s32 x = 0; x < 24; x++) {
         // Texture coordinates 0 and 1 are entries of the bowl's arrays (two floats each), the vertex's index in both.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 50, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 50, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
         for (s32 y = 0; y < 25; y++) {
             pPoint2 = mHost->getPoint(x, y);
             OceanBowlPoint* pPoint = mHost->getPoint(x + 1, y);

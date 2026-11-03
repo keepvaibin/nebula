@@ -10,7 +10,7 @@ namespace galaxy::render {
 
 // uv holds all eight texture coordinates;
 // mtx_indices holds the position/normal matrix index and the eight texture matrix indices
-// that the vertex shader uses to index the XF matrix palette; curve what a curved surface's
+// that the vertex shader uses to index the matrix palette; curve what a curved surface's
 // vertex carries (curved_surfaces.h's Model): its corner's displacement normal and its place's
 // crease normal (both packed, zero for none) and its place with the first crease neighbour
 // (place | neighbour << 16); the second crease neighbour rides in mtx_indices[2]'s high half.
@@ -30,8 +30,25 @@ static_assert(sizeof(RenderVertex) == 144, "fixed 144-byte vertex stride");
 // tracing shades its face flat (ray_tracing.hlsl kVertexFlatCorner). Bits 0-7 hold texture matrix 7's index, bits
 // 16-31 the second crease neighbour.
 inline constexpr std::uint32_t kVertexFlatCorner = 0x8000u;
+// mtx_indices[2] bits 8-11: a corner of a widened line or point (native_shapes.h widen_lines_points). A line's corner holds
+// its other end's position in tangent and that end's position row in curve[0].
+inline constexpr std::uint32_t kVertexWidenPoint = 0x100u;
+inline constexpr std::uint32_t kVertexWidenLine = 0x200u;
+inline constexpr std::uint32_t kVertexWidenRight = 0x400u;
+inline constexpr std::uint32_t kVertexWidenBottom = 0x800u;
 static_assert(offsetof(RenderVertex, mtx_indices) + 8u == 128u, "ray_tracing.hlsl reads mtx_indices[2] at byte 128");
 static_assert(sizeof(RenderVertex) % 16u == 0u,
               "vertex upload batching requires 16-byte stride alignment");
+
+// A point of the picture the game asks about (nebula_game_api.h NebulaScreenProbe): the frame's coordinates, negative
+// no point; user_x and user_y come back with the value.
+struct ScreenProbe {
+    float x, y, user_x, user_y, value;
+};
+inline constexpr std::uint32_t kScreenProbesMax = 256u;
+enum class ScreenProbeKind : std::uint8_t {
+    Alpha,
+    Depth,
+};
 
 }  // namespace galaxy::render

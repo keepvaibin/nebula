@@ -137,7 +137,7 @@ void Poihana::init(const JMapInfoIter& rIter) {
 
     s32 launchIntensity = ::sDefaultShootHeight;
     MR::getJMapInfoArg0NoInit(rIter, &launchIntensity);
-    mLaunchIntensity = MR::fastSqrtf(::sGravity * launchIntensity);
+    mLaunchIntensity = NebulaSqrt(::sGravity * launchIntensity);
 
     MR::getJMapInfoArg3NoInit(rIter, &mBehavior);
     MR::getJMapInfoArg4NoInit(rIter, &mCanDrown);
@@ -385,7 +385,7 @@ void Poihana::exeShootUp() {
     }
 }
 
-void Poihana::endShootUp() NO_INLINE {
+void Poihana::endShootUp() {
     endBind();
 
     MR::setSensorOffset(this, "binder", ::sNormalBinderPos);
@@ -532,7 +532,7 @@ void Poihana::exeDPDSwoon() {
     MR::updateActorStateAndNextNerve(this, mBindStarPointer, GET_NERVE(Poihana, PoihanaNrvWait));
 }
 
-void Poihana::endDPDSwoon() NO_INLINE {
+void Poihana::endDPDSwoon() {
     mBindStarPointer->kill();
 
     MR::setSensorOffset(this, "binder", ::sNormalBinderPos);
@@ -688,14 +688,14 @@ bool Poihana::tryToStartBind(HitSensor* pSender) {
         return false;
     }
 
-    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     mBindedActor = pSender->mHost;
     MR::startBckPlayer("Rise");
     MR::invalidateClipping(this);
     return true;
 }
 
-void Poihana::updateBindActorMtx() NO_INLINE {
+void Poihana::updateBindActorMtx() {
     TPos3f binderMtx;
     MR::makeMtxTR(binderMtx.toMtxPtr(), mBindedActor);
     MR::setBaseTRMtx(mBindedActor, binderMtx);
@@ -945,7 +945,7 @@ bool Poihana::isNeedForGetUp() const {
     return ret;
 }
 
-bool Poihana::isBackAttack(HitSensor* pMySensor) const NO_INLINE {
+bool Poihana::isBackAttack(HitSensor* pMySensor) const {
     TVec3f frontVec;
     MR::calcFrontVec(&frontVec, this);
     frontVec.negate();

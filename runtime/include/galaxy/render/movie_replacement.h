@@ -4,13 +4,13 @@
 // HD movie replacements: a video file (MP4 and what else the platform decodes) in place of one of the game's THP
 // movies. The game still plays its THP (its timing, sound, subtitles and rumble follow it); each frame it draws,
 // the texture cache shows the replacement's frame of the same time in place of the THP's Y, U and V planes, at the
-// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's TEV converts them; each is a
-// one-byte texture whose view repeats its value in every channel, as GX expands an I8 texture.
+// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's material converts them; each is a
+// one-byte texture whose view repeats its value in every channel.
 //
 // Files: <folder>/<name>.<ext> for the disc's /MovieData/<name>.thp, from the folders configure() gives (a later folder
 // wins). Decoding runs on its own thread a few frames ahead into upload buffers; the render thread only records copies.
 
-#include "galaxy/render/texture_backend.h"
+#include "galaxy/render/gpu_texture_backend.h"
 
 #include <array>
 #include <atomic>
@@ -27,7 +27,7 @@
 
 namespace galaxy::render {
 
-// The movie frame a submission draws (the game's THPGXYuv2RgbDraw), carried with it to the render thread.
+// The movie frame a submission draws (the game's movie draw), carried with it to the render thread.
 struct MovieFrameMark {
     static constexpr std::int32_t kNone = -1;     // no movie in this submission
     std::array<char, 64> name{};  // the disc path, e.g. /MovieData/PrologueA.thp

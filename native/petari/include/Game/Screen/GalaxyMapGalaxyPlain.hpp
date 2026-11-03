@@ -20,12 +20,12 @@ public:
 
     void show(const char*, const char*);
     void adjustTransInScreen();
-    void show(const wchar_t*, const char*);
+    void show(const char16_t*, const char*);
 
 private:
-    /* 0x20 */ const LayoutActor* mHost;
-    /* 0x24 */ const char* mPaneName;
-    /* 0x28 */ GalaxyNamePlate* mNamePlate;
-    /* 0x2C */ wchar_t* mGalaxyName;
-    /* 0x30 */ bool mIsShow;
+    const LayoutActor* mHost;
+    const char* mPaneName;
+    GalaxyNamePlate* mNamePlate;
+    char16_t* mGalaxyName;
+    bool mIsShow;
 };

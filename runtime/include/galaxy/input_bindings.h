@@ -4,7 +4,7 @@
 // XInput, Switch Pro Controller, Switch 2 Pro Controller, PlayStation
 // controllers, Steam Controller, generic HID game controllers). A scheme is a
 // controller family: DualShock 4, DualSense and DualSense Edge share
-// `playstation`; every generic HID controller shares `generic`. Each Wii input (target)
+// `playstation`; every generic HID controller shares `generic`. Each game input (target)
 // holds up to kBindingSlots physical inputs (sources). Persisted in
 // runtime_settings.ini as one `bind.<scheme>.<target>=<source>, ...` line per
 // target and `tune.<scheme>.<name>=<value>` lines for stick/motion tuning.
@@ -29,7 +29,7 @@ enum class ControlScheme : std::uint8_t {
 };
 inline constexpr std::size_t kControlSchemeCount = 7;
 
-enum class WiiTarget : std::uint8_t {
+enum class GameInput : std::uint8_t {
     A,
     B,
     One,
@@ -54,20 +54,20 @@ enum class WiiTarget : std::uint8_t {
     PointerLeft,
     PointerRight,
     PointerRecenter,
-    // Wii A while the player controls Mario, Wii B in menus (pointer_control.h).
+    // The game's A while the player controls Mario, its B in menus (pointer_control.h).
     JumpBack,
 };
-inline constexpr std::size_t kWiiTargetCount = 25;
+inline constexpr std::size_t kGameInputCount = 25;
 
-[[nodiscard]] constexpr std::uint32_t wii_target_bit(WiiTarget target) noexcept {
+[[nodiscard]] constexpr std::uint32_t game_input_bit(GameInput target) noexcept {
     return 1u << static_cast<unsigned>(target);
 }
 
 // Stick and pointer directions take an analog magnitude; every other target
 // is a level.
-[[nodiscard]] constexpr bool wii_target_is_analog(WiiTarget target) noexcept {
-    return (target >= WiiTarget::StickUp && target <= WiiTarget::StickRight) ||
-           (target >= WiiTarget::PointerUp && target <= WiiTarget::PointerRight);
+[[nodiscard]] constexpr bool game_input_is_analog(GameInput target) noexcept {
+    return (target >= GameInput::StickUp && target <= GameInput::StickRight) ||
+           (target >= GameInput::PointerUp && target <= GameInput::PointerRight);
 }
 
 enum class SourceKind : std::uint8_t {
@@ -77,6 +77,7 @@ enum class SourceKind : std::uint8_t {
     Button = 3,        // code: unified pad button bit index (pad::k*Bit)
     AxisPositive = 4,  // code: PadAxis
     AxisNegative = 5,  // code: PadAxis (sticks only)
+    KeyPosition = 6,   // code: letter at this physical position on a US keyboard (A..Z)
 };
 
 enum class MouseButton : std::uint8_t { Left, Right, Middle, X1, X2 };
@@ -95,11 +96,11 @@ inline constexpr std::size_t kBindingSlots = 4;
 using TargetBindings = std::array<InputSource, kBindingSlots>;
 
 struct BindingTable {
-    std::array<TargetBindings, kWiiTargetCount> targets{};
-    [[nodiscard]] TargetBindings& operator[](WiiTarget t) noexcept {
+    std::array<TargetBindings, kGameInputCount> targets{};
+    [[nodiscard]] TargetBindings& operator[](GameInput t) noexcept {
         return targets[static_cast<std::size_t>(t)];
     }
-    [[nodiscard]] const TargetBindings& operator[](WiiTarget t) const noexcept {
+    [[nodiscard]] const TargetBindings& operator[](GameInput t) const noexcept {
         return targets[static_cast<std::size_t>(t)];
     }
     friend bool operator==(const BindingTable&, const BindingTable&) = default;
@@ -161,6 +162,7 @@ struct PadSample {
 // Keyboard levels for all 256 virtual keys plus mouse buttons.
 struct KeyboardMouseLevels {
     std::array<std::uint64_t, 4> keys{};
+    std::uint32_t letter_positions = 0;
     std::uint8_t mouse = 0;  // bit per MouseButton
     void set_key(std::uint8_t vk, bool down) noexcept {
         const std::uint64_t mask = std::uint64_t{1} << (vk & 63u);
@@ -168,6 +170,14 @@ struct KeyboardMouseLevels {
     }
     [[nodiscard]] bool key(std::uint8_t vk) const noexcept {
         return ((keys[vk >> 6u] >> (vk & 63u)) & 1u) != 0u;
+    }
+    void set_position(std::uint8_t letter, bool down) noexcept {
+        if (letter < 'A' || letter > 'Z') return;
+        const auto mask = std::uint32_t{1} << (letter - 'A');
+        if (down) letter_positions |= mask; else letter_positions &= ~mask;
+    }
+    [[nodiscard]] bool position(std::uint8_t letter) const noexcept {
+        return letter >= 'A' && letter <= 'Z' && ((letter_positions >> (letter - 'A')) & 1u) != 0u;
     }
     [[nodiscard]] bool mouse_button(MouseButton b) const noexcept {
         return ((mouse >> static_cast<unsigned>(b)) & 1u) != 0u;
@@ -265,7 +275,7 @@ struct ControlsConfig {
 [[nodiscard]] BindingTable version3_binding_table(ControlScheme scheme);
 [[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
 // runtime_settings.ini `controls_version`; files without it are version 1.
-inline constexpr unsigned kControlsVersion = 5;
+inline constexpr unsigned kControlsVersion = 6;
 // Version 3 still-pointer defaults (pads), replaced in version 4.
 inline constexpr float kVersion3PointerHideSeconds = 4.0f;
 inline constexpr float kVersion3PointerHideRadius = 0.03f;
@@ -284,10 +294,10 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
 // Stable ini identifiers and overlay labels.
 [[nodiscard]] const char* control_scheme_id(ControlScheme scheme) noexcept;
 [[nodiscard]] const char* control_scheme_label(ControlScheme scheme) noexcept;
-[[nodiscard]] const char* wii_target_id(WiiTarget target) noexcept;
-[[nodiscard]] const char* wii_target_label(WiiTarget target) noexcept;
+[[nodiscard]] const char* game_input_id(GameInput target) noexcept;
+[[nodiscard]] const char* game_input_label(GameInput target) noexcept;
 [[nodiscard]] std::optional<ControlScheme> parse_control_scheme(std::string_view id) noexcept;
-[[nodiscard]] std::optional<WiiTarget> parse_wii_target(std::string_view id) noexcept;
+[[nodiscard]] std::optional<GameInput> parse_wii_target(std::string_view id) noexcept;
 
 // Textual source names are per scheme: "A" on a Switch scheme is the east
 // face button, on Xbox the south one. Keyboard names are key names
@@ -306,7 +316,7 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
 // targets refuse mouse buttons, Xbox has no readable Guide/Share, only the
 // Pro Controller 2 has GL/GR/C).
 [[nodiscard]] bool binding_source_allowed(
-    ControlScheme scheme, WiiTarget target, InputSource source) noexcept;
+    ControlScheme scheme, GameInput target, InputSource source) noexcept;
 // Appends `source` unless already present; a full list drops its last slot.
 void add_binding(TargetBindings& bindings, InputSource source) noexcept;
 
@@ -320,13 +330,13 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key, std::s
 
 // What a scheme's physical inputs ask of the Wii Remote + Nunchuk this report.
 struct LogicalInput {
-    std::uint32_t pressed = 0;  // wii_target_bit per active target
+    std::uint32_t pressed = 0;  // game_input_bit per active target
     float stick_x = 0.0f;
     float stick_y = 0.0f;       // up positive
     float pointer_x = 0.0f;
     float pointer_y = 0.0f;     // up positive
-    [[nodiscard]] bool held(WiiTarget target) const noexcept {
-        return (pressed & wii_target_bit(target)) != 0u;
+    [[nodiscard]] bool held(GameInput target) const noexcept {
+        return (pressed & game_input_bit(target)) != 0u;
     }
 };
 
@@ -354,21 +364,22 @@ inline constexpr float kStickDirectionRelease = 0.35f;
 [[nodiscard]] std::uint32_t shared_binding_targets(const BindingTable& table) noexcept;
 // Buttons OR; each analog axis keeps the larger magnitude.
 [[nodiscard]] LogicalInput merge_logical_input(const LogicalInput& a, const LogicalInput& b) noexcept;
-// Wii targets driven only by mouse buttons in `levels` (for the gated
+// Game targets driven only by mouse buttons in `levels` (for the gated
 // mouse-button path).
 [[nodiscard]] std::uint32_t mouse_bound_targets(
     const BindingTable& table, std::uint8_t mouse_buttons) noexcept;
 
 // Distinct virtual keys a keyboard table reads, in ascending order.
 struct KeyList {
-    std::array<std::uint8_t, kWiiTargetCount * kBindingSlots> keys{};
+    std::array<std::uint8_t, kGameInputCount * kBindingSlots> keys{};
     std::size_t count = 0;
 };
 [[nodiscard]] KeyList referenced_keys(const BindingTable& table) noexcept;
+[[nodiscard]] KeyList referenced_key_positions(const BindingTable& table) noexcept;
 
 // The overlay chord/navigation word (native_settings_pad.h, XInput layout) for
 // a unified button mask. Nintendo controllers swap the face buttons so their
-// labelled A changes and B closes, as on the console.
+// labelled A changes and B closes.
 [[nodiscard]] constexpr std::uint16_t settings_pad_buttons(
     ControlScheme scheme, std::uint32_t buttons) noexcept {
     std::uint32_t word = buttons & 0xffffu;
@@ -404,14 +415,34 @@ void set_controls_config(const ControlsConfig& config);
 [[nodiscard]] std::uint64_t controls_config_generation() noexcept;
 
 // The game's button icons (its picture font's A, B, C, Z, 1, 2, Plus, Minus, HOME and Control Pad): the style they are
-// drawn in and, for each, the controller's button its Wii button is bound to.
-enum class ButtonIconStyle : std::uint8_t { Wii, Xbox, Nintendo, PlayStation, Keyboard };
+// drawn in and, for each, the controller's button its game button is bound to.
+enum class ButtonIconStyle : std::uint8_t { Game, Xbox, Nintendo, PlayStation, Keyboard };
+// The style of a controller family's icons: a generic controller (Stadia, Luna and any other) has Xbox's by place.
+[[nodiscard]] constexpr ButtonIconStyle button_icon_style(ControlScheme scheme) noexcept {
+    switch (scheme) {
+    case ControlScheme::Xbox:
+    case ControlScheme::Steam:
+    case ControlScheme::Generic: return ButtonIconStyle::Xbox;
+    case ControlScheme::SwitchPro:
+    case ControlScheme::SwitchPro2: return ButtonIconStyle::Nintendo;
+    case ControlScheme::PlayStation: return ButtonIconStyle::PlayStation;
+    case ControlScheme::Keyboard: break;
+    }
+    return ButtonIconStyle::Game;
+}
+// A model whose buttons are not its family's (ControllerInfo::icons): the DualShock 3's Select and Start, the GameCube
+// pad's analog L and R, its ZL and Z shoulders and its Start.
+enum class ButtonIconModel : std::uint8_t { Standard, Sixaxis, GameCube };
 enum class ButtonIcon : std::uint8_t { A, B, C, Z, One, Two, Plus, Minus, Home, Pad };
 inline constexpr std::size_t kButtonIconCount = 10;
-// What an icon shows: the Wii's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
+// What an icon shows: the game's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
 // trigger or a stick's click (0 left, 1 right); Start (Xbox Menu, Plus, Options), Back (View, Minus, Share or Create),
-// Home; the D-pad (on a keyboard its four keys, ButtonIconSpec::pad_keys); a key or mouse button by its key icon.
-enum class ButtonGlyph : std::uint8_t { Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad, Key };
+// Home; the D-pad (on a keyboard its four keys, ButtonIconSpec::pad_keys); a key or mouse button by its key icon;
+// Capture (Share, the touchpad's click, Steam's quick access); Chat (Pro Controller 2 C, DualSense mute); a grip (0 left,
+// 1 right, 2 and 3 the Steam Controller's second pair); a trackpad's click (0 left, 1 right); a stick's direction (0 up,
+// 1 down, 2 left, 3 right; 4 on the right stick's).
+enum class ButtonGlyph : std::uint8_t {
+    Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad, Key, Capture, Chat, Grip, Trackpad, StickAxis };
 // The keyboard's icons: one for each key and mouse button (the game API's NEBULA_KEY_*, which these mirror), the keys
 // from kKeyIconLayoutFirst printing what the keyboard's layout puts on them, kKeyIconOther any key without its own.
 inline constexpr std::uint8_t kKeyIconLayoutFirst = 107;
@@ -428,7 +459,8 @@ inline constexpr std::uint8_t kKeyIconNone = 0xFF;  // a D-pad direction with no
 // The virtual key of layout key icon `index` (0 .. kKeyIconLayoutCount - 1).
 [[nodiscard]] std::uint8_t key_icon_layout_key(std::size_t index) noexcept;
 struct ButtonIconSpec {
-    ButtonIconStyle style = ButtonIconStyle::Wii;
+    ButtonIconStyle style = ButtonIconStyle::Game;
+    ButtonIconModel model = ButtonIconModel::Standard;
     std::array<ButtonGlyph, kButtonIconCount> glyphs{};
     std::array<std::uint8_t, kButtonIconCount> places{};
     // Keyboard: the D-pad's up, down, left and right keys (kKeyIconNone: none), and what the layout keys print (UCS-2
@@ -439,9 +471,11 @@ struct ButtonIconSpec {
     std::array<std::array<char, 8>, kButtonIconCount> other{};
     friend bool operator==(const ButtonIconSpec&, const ButtonIconSpec&) = default;
 };
-// The icons in `style` for a controller's `table`: each Wii button's first controller input (the keyboard's: its first
-// key or mouse button). In menus B is the button that goes back there (JumpBack's), in play Wii B's own. HOME and the
-// Control Pad keep the Wii's own on a controller; the keyboard shows HOME's key and the Control Pad's four.
-[[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept;
+// The icons in `style` for a controller's `table`: each game button's first controller input (the keyboard's: its first
+// key or mouse button). In menus B is the button that goes back there (JumpBack's), in play the game's B. HOME and the
+// Control Pad keep the game's own on a controller; the keyboard shows HOME's key and the Control Pad's four. `model`
+// counts only in its family's style.
+[[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu,
+                                              ButtonIconModel model = ButtonIconModel::Standard) noexcept;
 
 }  // namespace galaxy::input

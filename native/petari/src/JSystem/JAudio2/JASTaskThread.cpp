@@ -1,20 +1,17 @@
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "Game/System/NebulaArena.hpp"
 
-JASTaskThread::JASTaskThread(int priority, int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount, priority) {
-    _84 = false;
-    threadQueue_.init();
+JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : GameThread(stackSize, msgCount, JASDram) {
 }
 
 JASTaskThread::~JASTaskThread() {
     void* msg;
-    BOOL received;
     while (true) {
-        msg = waitMessage(&received);
+        const BOOL received = mQueue.receive(&msg, false);
         if (!received) {
             return;
         }
@@ -23,7 +20,6 @@ JASTaskThread::~JASTaskThread() {
 }
 
 void* JASTaskThread::allocCallStack(JASThreadCallback callback, const void* msg, u32 msgSize) {
-    ThreadMemPool* heap;
     u32 size = offsetof(JASThreadCallStack, msg) + msgSize;
     JASThreadCallStack* callStack = (JASThreadCallStack*)JASKernel::getCommandHeap()->alloc(size);
     if (callStack == NULL) {
@@ -57,7 +53,7 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, const void* msg, u32 m
         return 0;
     }
 
-    BOOL iVar2 = sendMessage(callstack);
+    BOOL iVar2 = mQueue.send(callstack, false);
     if (!iVar2) {
         JASKernel::getCommandHeap()->free(callstack);
     }
@@ -72,7 +68,7 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
         return 0;
     }
 
-    BOOL iVar2 = sendMessage(callstack);
+    BOOL iVar2 = mQueue.send(callstack, false);
     if (!iVar2) {
         JASKernel::getCommandHeap()->free(callstack);
     }
@@ -80,12 +76,12 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
 }
 
 void* JASTaskThread::run() {
+    GameThreads::leaveWorld();
     JASThreadCallStack* callstack;
     do {
-        callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
-        if (_84) {
-            threadQueue_.sleep();
-        }
+        void* msg;
+        mQueue.receive(&msg, true);
+        callstack = static_cast< JASThreadCallStack* >(msg);
 
         if (callstack->msgType_) {
             callstack->callback_(callstack->msg.buffer);
@@ -95,16 +91,4 @@ void* JASTaskThread::run() {
 
         JASKernel::getCommandHeap()->free(callstack);
     } while (true);
-}
-
-void JASTaskThread::pause(bool param_0) {
-    JASCriticalSection aJStack_14;
-    if (param_0) {
-        _84 = 1;
-    } else {
-        if (_84) {
-            threadQueue_.wakeup();
-        }
-        _84 = 0;
-    }
 }

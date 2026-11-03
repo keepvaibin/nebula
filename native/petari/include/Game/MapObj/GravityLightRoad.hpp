@@ -20,8 +20,8 @@ public:
     void exeDraw();
     void exeDisappear();
 
-    /* 0x8C */ LiveActor* mHost;
-    /* 0x90 */ f32 mSpeed;
-    /* 0x94 */ f32 mRadius;
-    /* 0x98 */ TVec3f mEndPos;
+    LiveActor* mHost;
+    f32 mSpeed;
+    f32 mRadius;
+    TVec3f mEndPos;
 };

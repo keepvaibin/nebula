@@ -185,7 +185,7 @@ void BlueStarCupsulePlanet::exePointable() {
 
     if (!isPointable()) {
         setNerve(GET_NERVE(BlueStarCupsulePlanet, BlueStarCupsulePlanetNrvWait));
-    } else if (MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    } else if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         if (MR::requestGCaptureTarget(this)) {
             MR::invalidateClipping(this);
             setNerve(GET_NERVE(BlueStarCupsulePlanet, BlueStarCupsulePlanetNrvHitPointer));
@@ -204,7 +204,7 @@ void BlueStarCupsulePlanet::exeHitPointer() {
     }
 
     if (MR::isStep(this, 3)) {
-        MR::startCSSound("CS_STAR_POWER", nullptr, WPAD_CHAN0);
+        MR::startCSSound("CS_STAR_POWER", nullptr, PLAYER_1);
     }
 
     updatePose();
@@ -212,7 +212,7 @@ void BlueStarCupsulePlanet::exeHitPointer() {
     MR::startLevelSound(this, "SE_OJ_LV_MAGIC_PNT_G_POINT");
 
     bool pointable = isPointable();
-    if (MR::isStarPointerPointing(this, WPAD_CHAN0, true, "\216\343" /* 弱 */) && pointable) {
+    if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */) && pointable) {
         MR::requestGCaptureTarget(this);
     }
 

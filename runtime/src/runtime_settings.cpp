@@ -1,4 +1,7 @@
+#include "galaxy/portable.h"
 #include "galaxy/runtime_settings.h"
+#include "galaxy/run_options.h"
+#include "../../tools/test_driver/switches.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/platform_paths.h"
@@ -48,7 +51,7 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     case RuntimeInputMode::RealWiimote:
         break;
     default:
-        settings.input_mode = RuntimeInputMode::Auto;
+        settings.input_mode = RuntimeInputMode::KeyboardMouse;
         break;
     }
     const auto sanitize_gain = [](float gain) {
@@ -142,6 +145,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.audio.ambience = parse_gain(value, settings.audio.ambience);
     } else if (std::strcmp(key, "audio_cutscene_gain") == 0) {
         settings.audio.cutscene = parse_gain(value, settings.audio.cutscene);
+    } else if (std::strcmp(key, "co_star") == 0) {
+        settings.co_star = std::strcmp(value, "true") == 0 || std::strcmp(value, "1") == 0;
     } else if (std::strcmp(key, "audio_wiimote_speaker_gain") == 0) {
         settings.audio.wiimote_speaker = parse_gain(value, settings.audio.wiimote_speaker);
     } else if (std::strcmp(key, "text_speed") == 0) {
@@ -152,50 +157,37 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.discord_status = value[0] != '0';
     } else if (std::strcmp(key, "button_icons") == 0) {
         for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::Keyboard); ++i) {
-            if (_stricmp(value, button_icons_key(static_cast<ButtonIcons>(i))) == 0) {
+            if (::galaxy::text_iequal(value, button_icons_key(static_cast<ButtonIcons>(i)))) {
                 settings.button_icons = static_cast<ButtonIcons>(i);
             }
         }
     } else if (std::strcmp(key, "language") == 0) {
-        if (_stricmp(value, game_language_key(GameLanguage::Auto)) == 0) settings.language = GameLanguage::Auto;
+        if (::galaxy::text_iequal(value, game_language_key(GameLanguage::Auto))) settings.language = GameLanguage::Auto;
         for (const GameLanguage language : kGameLanguages) {
-            if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
+            if (::galaxy::text_iequal(value, game_language_key(language))) settings.language = language;
         }
     }
 }
 
 std::filesystem::path settings_path() {
 #if defined(_WIN32)
-    wchar_t* override_value = nullptr;
-    std::size_t override_length = 0u;
-    const int query_error = _wdupenv_s(
-        &override_value,
-        &override_length,
-        L"GALAXY_RUNTIME_SETTINGS_PATH");
-    const std::unique_ptr<wchar_t, decltype(&std::free)> owned_override(
-        override_value, &std::free);
-    if (query_error != 0) {
-        throw std::runtime_error("cannot read GALAXY_RUNTIME_SETTINGS_PATH");
-    }
-    if (override_value != nullptr && override_length > 1u) {
-        if (override_length > MAX_PATH) {
-            throw std::runtime_error(
-                "GALAXY_RUNTIME_SETTINGS_PATH exceeds the supported path length");
-        }
+    if (const wchar_t* override_value = ::galaxy::run_options().runtime_settings_path_w; override_value != nullptr && override_value[0] != L'\0') {
         const std::filesystem::path path(override_value);
+        if (path.native().size() >= MAX_PATH) {
+            throw std::runtime_error("the settings path exceeds the supported path length");
+        }
         if (path.filename().empty()) {
-            throw std::runtime_error(
-                "GALAXY_RUNTIME_SETTINGS_PATH must name a settings file");
+            throw std::runtime_error("the settings path must name a settings file");
         }
         return path;
     }
 
 #else
-    if (const char* override_value = std::getenv("GALAXY_RUNTIME_SETTINGS_PATH");
+    if (const char* override_value = ::galaxy::run_options().runtime_settings_path;
         override_value != nullptr && override_value[0] != '\0') {
         const std::filesystem::path path(override_value);
         if (path.filename().empty()) {
-            throw std::runtime_error("GALAXY_RUNTIME_SETTINGS_PATH must name a settings file");
+            throw std::runtime_error("the settings path must name a settings file");
         }
         return path;
     }
@@ -205,21 +197,13 @@ std::filesystem::path settings_path() {
 }
 
 // A file of an older controls version carries that version's defaults: those bindings move to the
-// current defaults, and a version-1 file's keyboard_mouse becomes auto (from version 2 the one-source
-// modes are overrides). Choices that differ from the old defaults stay.
-void migrate_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls,
-                           unsigned version) {
+// current defaults. Choices that differ from the old defaults stay.
+void migrate_settings_file(input::ControlsConfig& controls, unsigned version) {
     if (version >= input::kControlsVersion) {
         return;
     }
     const unsigned changed = input::migrate_legacy_controls(controls, version);
-    const bool mode = version < 2u && settings.input_mode == RuntimeInputMode::KeyboardMouse;
-    if (mode) {
-        settings.input_mode = RuntimeInputMode::Auto;
-    }
-    std::fprintf(stderr, "[settings] controls version %u -> %u: %u defaults updated%s\n",
-                 version, input::kControlsVersion, changed,
-                 mode ? ", input_mode keyboard_mouse -> auto" : "");
+    std::fprintf(stderr, "[settings] controls version %u -> %u: %u defaults updated\n", version, input::kControlsVersion, changed);
 }
 
 void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls) {
@@ -277,33 +261,14 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
             apply_kv(settings, key_text.c_str(), value_text.c_str());
         }
     }
-    migrate_settings_file(settings, controls, controls_version);
+    migrate_settings_file(controls, controls_version);
 }
 
-void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
-    char value[128]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env) == 0 && length > 1u) {
-        apply_kv(settings, key, value);
-    }
-}
-
-void apply_env_overrides(RuntimeSettings& settings) {
-    apply_env(settings, "GALAXY_INPUT_MODE", "input_mode");
-    apply_env(settings, "GALAXY_AUDIO_MASTER_GAIN", "audio_master_gain");
-    apply_env(settings, "GALAXY_AUDIO_MUSIC_GAIN", "audio_music_gain");
-    apply_env(settings, "GALAXY_AUDIO_EFFECTS_GAIN", "audio_sfx_gain");
-    apply_env(settings, "GALAXY_AUDIO_SFX_GAIN", "audio_sfx_gain");
-    apply_env(settings, "GALAXY_AUDIO_VOICE_GAIN", "audio_voice_gain");
-    apply_env(
-        settings, "GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain");
-    apply_env(
-        settings, "GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain");
-    apply_env(
-        settings, "GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "audio_wiimote_speaker_gain");
-    apply_env(settings, "GALAXY_TEXT_SPEED", "text_speed");
-    apply_env(settings, "GALAXY_LANGUAGE", "language");
-}
+#if defined(NEBULA_RELEASE)
+void apply_env_overrides(RuntimeSettings&) {}
+#else
+#include "../../tools/test_driver/runtime_settings_env.inc"
+#endif
 
 }  // namespace
 
@@ -406,10 +371,13 @@ GameLanguage game_language_resolved(GameLanguage setting) noexcept {
 GameLanguage game_language_for_boot() noexcept {
     std::uint8_t running = s_running_language.load(std::memory_order_acquire);
     if (running == kNotAsked) {
-        std::uint8_t expected = kNotAsked;
         const auto chosen = static_cast<std::uint8_t>(game_language_resolved(get_runtime_settings().language));
-        running = s_running_language.compare_exchange_strong(expected, chosen, std::memory_order_acq_rel)
-            ? chosen : expected;
+        // An exchange that fails with the value still kNotAsked has chosen nothing: it is not an answer.
+        std::uint8_t expected = kNotAsked;
+        while (!s_running_language.compare_exchange_weak(expected, chosen, std::memory_order_acq_rel) &&
+               expected == kNotAsked) {
+        }
+        running = expected != kNotAsked ? expected : chosen;
     }
     return static_cast<GameLanguage>(running);
 }
@@ -472,8 +440,8 @@ namespace {
 // controller that is not connected, would fail it. The source the file names (Nebula Settings may have saved
 // a new one) is written back by the game's saves unless the game changed its own source since the file was
 // last read or written. Guarded by s_settings_lock.
-RuntimeInputMode s_file_input_mode = RuntimeInputMode::Auto;
-RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::Auto;
+RuntimeInputMode s_file_input_mode = RuntimeInputMode::KeyboardMouse;
+RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::KeyboardMouse;
 
 void record_input_mode_sync(RuntimeInputMode file_mode, RuntimeInputMode live_mode) {
     s_settings_lock.lock();
@@ -528,7 +496,7 @@ bool save_runtime_settings_to_file() {
         if (!contents) {
             return false;
         }
-        if (!io::write_text_file_atomically(path, contents.str())) {
+        if (!io::write_file_atomically(path, contents.str())) {
             return false;
         }
         record_input_mode_sync(input_mode, settings.input_mode);

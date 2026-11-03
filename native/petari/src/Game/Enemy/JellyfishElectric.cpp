@@ -93,8 +93,6 @@ void JellyfishElectric::kill() {
     LiveActor::kill();
 }
 
-#pragma push
-#pragma opt_propagation off
 void JellyfishElectric::control() {
     MR::requestPointLight(this, TVec3f(mPosition), ::sPointLightColor, 0.9999f, -1);
     MR::changeShowModelFlagSyncNearClipping(this, 700.0f);
@@ -117,7 +115,6 @@ void JellyfishElectric::control() {
         _94++;
     }
 }
-#pragma pop
 
 void JellyfishElectric::calcAndSetBaseMtx() {
     TPos3f pos;
@@ -330,7 +327,7 @@ bool JellyfishElectric::selectNerveAfterWait() {
         s32 rand;
 
         if (isNerve(GET_NERVE(JellyfishElectric, JellyfishElectricNrvWait))) {
-            rand = MR::getRandom(0l, 3l);
+            rand = MR::getRandom(0, 3);
         } else {
             rand = 0;
         }

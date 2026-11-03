@@ -26,30 +26,30 @@ constexpr double kPi = 3.14159265358979323846;
 
 // The game's side: 64 voices, 4 effect lines, a sound memory of big-endian waves.
 struct Game {
-    std::vector<NebulaAudioVoice> voices = std::vector<NebulaAudioVoice>(64);
-    std::vector<NebulaAudioEffect> effects = std::vector<NebulaAudioEffect>(4);
+    std::vector<NebulaVoice> voices = std::vector<NebulaVoice>(64);
+    std::vector<NebulaEffectLine> effects = std::vector<NebulaEffectLine>(4);
     std::vector<std::byte> sound = std::vector<std::byte>(1u << 20);
 
     void put16(std::uint32_t offset, std::int16_t value) {
-        sound[offset] = static_cast<std::byte>((static_cast<std::uint16_t>(value) >> 8u) & 0xFFu);
-        sound[offset + 1u] = static_cast<std::byte>(static_cast<std::uint16_t>(value) & 0xFFu);
+        std::memcpy(&sound[offset], &value, sizeof(value));
     }
     void attach(AudioMixer& mixer) {
-        mixer.setup(voices.data(), 64u, effects.data(), sound.data(), static_cast<std::uint32_t>(sound.size()));
+        mixer.setup(voices.data(), 64u, effects.data());
     }
     // A PCM16 voice over `samples` samples at offset `wave`, one send to `bus` at `volume`.
-    NebulaAudioVoice& pcm16(std::uint32_t index, std::uint32_t wave, std::uint32_t samples, std::uint16_t bus,
+    NebulaVoice& pcm16(std::uint32_t index, std::uint32_t wave, std::uint32_t samples, std::uint16_t bus,
                             std::int16_t volume, bool loop = false) {
-        NebulaAudioVoice& v = voices[index];
+        NebulaVoice& v = voices[index];
         v = {};
         v.active = 1u;
         v.starting = 1u;
-        v.pitch = 0x1000u;
+        v.rate = 32000.0f;
         v.format = NEBULA_AUDIO_PCM16;
         v.wave = reinterpret_cast<const std::uint8_t*>(sound.data()) + wave;
+        v.wave_end = reinterpret_cast<const std::uint8_t*>(sound.data()) + sound.size();
         v.end = samples;
         v.loop = loop ? 1u : 0u;
-        v.sends[0] = {bus, volume, volume, 0u};
+        v.sends[0] = {bus, volume / 65536.0f, volume / 65536.0f};
         return v;
     }
 };
@@ -96,17 +96,17 @@ void test_ramp() {
     for (std::uint32_t i = 0; i < 4096u; ++i) {
         game.put16(i * 2u, 16384);
     }
-    NebulaAudioVoice& v = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 0);
+    NebulaVoice& v = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 0);
     AudioMixer mixer(48000u);
     game.attach(mixer);
     (void)run(mixer, 2u);
-    v.sends[0].target = 16384;
+    v.sends[0].target = 0.25f;
     const std::vector<float> out = run(mixer, 1u);
     expect(near(out[0], 0.0, 1e-4), "ramp starts at the current volume", out[0]);
     const double full = 0.5 * 16384.0 / 65536.0;
     expect(near(out[2u * 100u], full, 1e-4), "ramp done by 65/80", out[2u * 100u]);
     expect(near(out[2u * 48u], full * (48.0 * 80.0 / 120.0 - 1.0) / 64.0, 2e-3), "ramp linear", out[2u * 48u]);
-    expect(v.sends[0].current == 16384, "current = target after the subframe", v.sends[0].current);
+    expect(v.sends[0].current == 0.25f, "current = target after the subframe", v.sends[0].current);
 }
 
 // The interpolation kernel keeps the response the game's sound was made with: at a sample position the weights
@@ -155,48 +155,12 @@ void test_resampled_sine() {
     expect(energy - tone_energy < tone_energy * 1e-3, "no other content", (energy - tone_energy) / tone_energy);
 }
 
-// ADPCM: the record's bookkeeping (next block, samples left, leftover in the block) as the stream player reads it.
-void test_adpcm_bookkeeping() {
-    Game game;
-    for (std::uint32_t b = 0; b < 64u; ++b) {
-        game.sound[b * 9u] = std::byte{0x00};  // scale 0, predictor 0: samples are the nibbles
-        for (std::uint32_t k = 1; k < 9u; ++k) {
-            game.sound[b * 9u + k] = std::byte{0x11};
-        }
-    }
-    NebulaAudioVoice& v = game.voices[0];
-    v = {};
-    v.active = 1u;
-    v.starting = 1u;
-    v.pitch = 0x1000u;
-    v.format = NEBULA_AUDIO_ADPCM4;
-    v.wave = reinterpret_cast<const std::uint8_t*>(game.sound.data());
-    v.end = 1000u;
-    v.leftover = 16u;
-    v.sends[0] = {NEBULA_AUDIO_BUS_LEFT, 32767, 32767, 0u};
-    AudioMixer mixer(48000u);
-    game.attach(mixer);
-    (void)run(mixer, 1u);
-    // 80 samples: 5 blocks.
-    expect(v.address == 45u, "next block (bytes from the wave)", v.address);
-    expect(v.left == 1000u - 80u, "samples left", v.left);
-    expect(v.leftover == 0u, "no leftover", v.leftover);
-    v.pitch = 0x0800u;  // 40 samples: two blocks and a half
-    (void)run(mixer, 1u);
-    expect(v.address == 45u + 27u, "three more blocks", v.address);
-    expect(v.leftover == 8u, "half a block left", v.leftover);
-    expect(v.left == 1000u - 80u - 48u, "samples left after a partial block", v.left);
-    (void)run(mixer, 30u);
-    expect(v.finished == 1u, "finishes at the end", v.finished);
-}
-
-// A looping PCM voice plays on from its loop start.
 void test_pcm_loop() {
     Game game;
     for (std::uint32_t i = 0; i < 100u; ++i) {
         game.put16(i * 2u, 1000);
     }
-    NebulaAudioVoice& v = game.pcm16(0u, 0u, 100u, NEBULA_AUDIO_BUS_LEFT, 32767, true);
+    NebulaVoice& v = game.pcm16(0u, 0u, 100u, NEBULA_AUDIO_BUS_LEFT, 32767, true);
     v.loop_start = 20u;
     AudioMixer mixer(48000u);
     game.attach(mixer);
@@ -213,12 +177,12 @@ void test_effect_delay() {
         game.put16(i * 2u, i < 80u ? 8192 : 0);
     }
     game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_EFFECT0, 32767);
-    NebulaAudioEffect& e = game.effects[0];
+    NebulaEffectLine& e = game.effects[0];
     e.filter = 1u;
     e.subframes = 4u;
     e.bus_a = NEBULA_AUDIO_BUS_LEFT;
-    e.volume_a = 16384;
-    e.fir[7] = 16384;  // one sample back, half
+    e.volume_a = 0.5f;
+    e.fir[7] = 0.5f;  // one sample back, half
     e.generation = 1u;
     AudioMixer mixer(48000u);
     game.attach(mixer);
@@ -247,19 +211,19 @@ void test_panner() {
     for (std::uint32_t i = 0; i < 4096u; ++i) {
         game.put16(i * 2u, 16384);
     }
-    NebulaAudioVoice& v = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_NONE, 0);
+    NebulaVoice& v = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_NONE, 0);
     v.panner = 1u;
-    v.pan = 0u;
-    v.rear = 0u;
-    v.panner_volume = 16384;
-    v.panner_target = 16384;
+    v.pan = 0.0f;
+    v.rear = 0.0f;
+    v.panner_volume = 0.25f;
+    v.panner_target = 0.25f;
     AudioMixer mixer(48000u);
     game.attach(mixer);
     std::vector<float> out = run(mixer, 2u);
     const double gain = std::sin(kPi * 127.0 / 256.0) * std::sin(kPi * 127.0 / 256.0);
     expect(near(out[2u * 200u], 0.5 * gain * 16384.0 / 65536.0, 1e-4), "pan left: left", out[2u * 200u]);
     expect(near(out[2u * 200u + 1u], 0.0, 1e-6), "pan left: right silent", out[2u * 200u + 1u]);
-    v.rear = 127u;
+    v.rear = 1.0f;
     out = run(mixer, 3u);
     const double rear = 0.5 * gain * 16384.0 / 65536.0;
     expect(near(out[2u * 300u], rear * 26500.0 / 32768.0 * 32767.0 / 32768.0, 2e-4), "rear left on left",
@@ -274,10 +238,10 @@ void test_fir_delay() {
     for (std::uint32_t i = 0; i < 4096u; ++i) {
         game.put16(i * 2u, i >= 200u ? 16384 : 0);
     }
-    NebulaAudioVoice& plain = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767);
-    NebulaAudioVoice& filtered = game.pcm16(1u, 0u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
-    filtered.filter = 8u;
-    filtered.fir[0] = 32767;
+    NebulaVoice& plain = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767);
+    NebulaVoice& filtered = game.pcm16(1u, 0u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
+    filtered.fir_taps = 8u;
+    filtered.fir[0] = 32767.0f / 32768.0f;
     (void)plain;
     AudioMixer mixer(48000u);
     game.attach(mixer);
@@ -298,12 +262,12 @@ void test_iir() {
         game.put16(i * 2u, 16384);
         game.put16(16384u + i * 2u, (i & 1u) != 0u ? 16384 : -16384);
     }
-    NebulaAudioVoice& dc = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767);
-    NebulaAudioVoice& nyquist = game.pcm16(1u, 16384u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
-    for (NebulaAudioVoice* v : {&dc, &nyquist}) {
-        v->filter = 0x20u;
-        v->iir[0] = 16384;
-        v->iir[1] = 16384;
+    NebulaVoice& dc = game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767);
+    NebulaVoice& nyquist = game.pcm16(1u, 16384u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
+    for (NebulaVoice* v : {&dc, &nyquist}) {
+        v->iir_on = 1u;
+        v->iir[0] = 0.5f;
+        v->iir[1] = 0.5f;
     }
     AudioMixer mixer(48000u);
     game.attach(mixer);
@@ -316,17 +280,17 @@ void test_iir() {
     expect(high < 0.25 * 0.5, "IIR lowers the top", high);
 }
 
-// Oscillators: a square of pitch p has p / 131072 cycles per 32 kHz sample.
+// Oscillators: `rate` is the frequency.
 void test_square() {
     Game game;
-    NebulaAudioVoice& v = game.voices[0];
+    NebulaVoice& v = game.voices[0];
     v = {};
     v.active = 1u;
     v.starting = 1u;
-    v.pitch = 0x2000u;  // 0.0625 cycles a 32 kHz sample: 2 kHz
+    v.rate = 2000.0f;
     v.format = NEBULA_AUDIO_OSCILLATOR;
     v.oscillator = NEBULA_AUDIO_SQUARE;
-    v.sends[0] = {NEBULA_AUDIO_BUS_LEFT, 32767, 32767, 0u};
+    v.sends[0] = {NEBULA_AUDIO_BUS_LEFT, 32767 / 65536.0f, 32767 / 65536.0f};
     AudioMixer mixer(48000u);
     game.attach(mixer);
     const std::vector<float> out = run(mixer, 10u);
@@ -338,76 +302,91 @@ void test_square() {
     expect(changes >= 99 && changes <= 100, "square frequency", changes);
 }
 
-// Volume categories: a muted music category silences a PCM16 voice no owner names.
+// Volume categories: a voice follows the setting the game names.
 void test_categories() {
     Game game;
     for (std::uint32_t i = 0; i < 4096u; ++i) {
         game.put16(i * 2u, 16384);
     }
-    game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767);
+    game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767).category = NEBULA_SOUND_MUSIC;
     AudioMixer mixer(48000u);
     game.attach(mixer);
     mixer.set_category_gains({1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f});
     const std::vector<float> out = run(mixer, 2u);
     expect(near(out[2u * 100u], 0.0, 1e-6), "muted music", out[2u * 100u]);
-    expect(mixer.voice_category(0u).decision.bus == galaxy::audio::NativeAudioBus::Music, "PCM16 is music");
-    // A voice the game names as a player voice effect (section 0, category 1) follows the voice gain; music ramps back
-    // up over 10 ms.
-    NebulaAudioVoice& named = game.pcm16(1u, 0u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
-    named.sound_route = 1u;
-    named.sound_id = 0x00010005u;
+    // A voice in the voices category follows that gain; music ramps back up over 10 ms.
+    NebulaVoice& named = game.pcm16(1u, 0u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
+    named.category = NEBULA_SOUND_VOICE;
     mixer.set_category_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     const std::vector<float> named_out = run(mixer, 7u);
-    expect(mixer.voice_category(1u).decision.bus == galaxy::audio::NativeAudioBus::Voice, "named player voice");
     expect(near(named_out[2u * 100u + 1u], 0.0, 1e-6), "muted voices", named_out[2u * 100u + 1u]);
     expect(near(named_out[2u * 800u], 0.5 * 32767.0 / 65536.0, 1e-3), "music back on", named_out[2u * 800u]);
 }
 
-// A THP audio record of `samples` samples per channel that holds each channel at its history (predictor 0 is
-// {1, 0}; every nibble 0), or with `nibble` and `scale` set and no predictor, plays nibble << scale.
-std::vector<std::uint8_t> thp_record(std::uint32_t samples, std::int16_t left, std::int16_t right, int nibble = 0,
-                                     int scale = 0) {
-    const std::uint32_t frames = (samples + 13u) / 14u;
-    const std::uint32_t channel = frames * 8u;
-    std::vector<std::uint8_t> r(0x50u + channel * 2u, 0);
-    const auto put32 = [&](std::size_t at, std::uint32_t v) {
-        r[at] = static_cast<std::uint8_t>(v >> 24u);
-        r[at + 1u] = static_cast<std::uint8_t>(v >> 16u);
-        r[at + 2u] = static_cast<std::uint8_t>(v >> 8u);
-        r[at + 3u] = static_cast<std::uint8_t>(v);
-    };
-    const auto put16 = [&](std::size_t at, std::int16_t v) {
-        r[at] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v) >> 8u);
-        r[at + 1u] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v));
-    };
-    put32(0u, channel);
-    put32(4u, samples);
-    if (nibble == 0) {
-        put16(8u, 2048);
-        put16(0x28u, 2048);
+// A movie frame's audio record: its stereo sample count, then a constant left and right.
+std::vector<std::uint8_t> thp_record(std::uint32_t samples, std::int16_t left, std::int16_t right) {
+    std::vector<std::uint8_t> record(4u + samples * 4u);
+    std::memcpy(record.data(), &samples, sizeof(samples));
+    for (std::uint32_t i = 0; i < samples; ++i) {
+        std::memcpy(record.data() + 4u + i * 4u, &left, sizeof(left));
+        std::memcpy(record.data() + 6u + i * 4u, &right, sizeof(right));
     }
-    put16(0x48u, left);
-    put16(0x4Cu, right);
-    for (std::uint32_t f = 0; f < frames * 2u; ++f) {
-        std::uint8_t* frame = r.data() + 0x50u + f * 8u;
-        frame[0] = static_cast<std::uint8_t>(scale & 0xF);
-        for (int k = 1; k < 8; ++k) {
-            frame[k] = static_cast<std::uint8_t>(((nibble & 0xF) << 4) | (nibble & 0xF));
-        }
-    }
-    return r;
+    return record;
 }
 
-// The movie's ADPCM: a nibble of 1 at scale 11 is 2048; held history stays.
-void test_movie_decode() {
-    std::vector<std::int16_t> out;
-    std::vector<std::uint8_t> r = thp_record(28u, 0, 0, 1, 11);
-    expect(galaxy::audio::MovieAudio::decode(r.data(), r.size(), out), "movie record decodes");
-    expect(out.size() == 56u && out[0] == 2048 && out[55] == 2048, "nibble 1 at scale 11", out.empty() ? 0 : out[0]);
-    r = thp_record(28u, 1000, -1000);
-    expect(galaxy::audio::MovieAudio::decode(r.data(), r.size(), out) && out[54] == 1000 && out[55] == -1000,
-           "held histories, left then right", out.empty() ? 0 : out[55]);
-    expect(!galaxy::audio::MovieAudio::decode(r.data(), 0x40u, out), "a short record is refused");
+// A movie record: its stereo sample count, then the samples.
+void test_movie_record() {
+    galaxy::audio::MovieAudio movie;
+    movie.open(false);
+    const std::uint32_t samples = 2u;
+    std::array<std::uint8_t, 4u + 8u> record{};
+    std::memcpy(record.data(), &samples, sizeof(samples));
+    const std::array<std::int16_t, 4> pcm{16384, -16384, 8192, -8192};
+    std::memcpy(record.data() + 4u, pcm.data(), sizeof(pcm));
+    expect(movie.push(record.data(), record.size()), "a record queues");
+    expect(movie.push(record.data(), record.size()), "the next queues");
+    expect(!movie.push(record.data(), 8u), "a short record is refused");
+    std::array<float, 4> out{};
+    movie.pull(out.data(), 2u);
+    expect(near(out[0], 0.5, 1e-4), "left", out[0]);
+    expect(near(out[1], -0.5, 1e-4), "right", out[1]);
+    expect(near(out[2], 0.25, 1e-4), "left, next", out[2]);
+}
+
+// The room the player reads its sound ahead by; two frames start it; after that any frame plays, so the last plays out.
+void test_movie_room() {
+    galaxy::audio::MovieAudio movie;
+    movie.open(false);
+    const std::vector<std::uint8_t> record = thp_record(100u, 2048, -2048);
+    expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames, "an empty queue has all its room");
+    expect(movie.push(record.data(), record.size()), "the first frame queues");
+    expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames - 1u, "one frame less room");
+    std::vector<float> out(2u * 150u, 0.0f);
+    movie.pull(out.data(), 150u);
+    expect(out[0] == 0.0f, "one frame waiting: silent", out[0]);
+    expect(movie.push(record.data(), record.size()), "the second frame queues");
+    movie.pull(out.data(), 150u);
+    expect(out[0] != 0.0f, "two frames waiting: it starts", out[0]);
+    std::fill(out.begin(), out.end(), 0.0f);
+    movie.pull(out.data(), 50u);
+    expect(out[0] != 0.0f, "the last frame plays out", out[0]);
+    expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames, "the queue is dry");
+    movie.set_unplayed(150u);
+    expect(near(movie.position(), 0.5, 1e-9), "half of the first frame played", movie.position());
+    movie.set_unplayed(100u);
+    expect(near(movie.position(), 1.0, 1e-9), "the first frame played", movie.position());
+    movie.set_unplayed(25u);
+    expect(near(movie.position(), 1.75, 1e-9), "three quarters of the second", movie.position());
+    movie.set_unplayed(0u);
+    expect(near(movie.position(), 2.0, 1e-9), "both played", movie.position());
+    expect(movie.push(record.data(), record.size()), "another frame queues");
+    std::fill(out.begin(), out.end(), 0.0f);
+    movie.pull(out.data(), 40u);
+    expect(out[0] != 0.0f, "a frame after a dry moment plays at once", out[0]);
+    for (std::size_t i = movie.room(); i != 0u; --i) {
+        expect(movie.push(record.data(), record.size()), "room for a frame");
+    }
+    expect(movie.room() == 0u && !movie.push(nullptr, 0u), "a full queue has no room");
 }
 
 // The movie's sound at 48 kHz: its level through the player's volume (a square law), and silent until the frame
@@ -453,7 +432,7 @@ void test_forced_stop() {
     for (std::uint32_t i = 0; i < 40960u; ++i) {
         game.put16(i * 2u, 1000);
     }
-    NebulaAudioVoice& v = game.pcm16(0u, 0u, 40960u, NEBULA_AUDIO_BUS_LEFT, 12000);
+    NebulaVoice& v = game.pcm16(0u, 0u, 40960u, NEBULA_AUDIO_BUS_LEFT, 12000);
     AudioMixer mixer(48000u);
     game.attach(mixer);
     (void)run(mixer, 1u);
@@ -470,7 +449,6 @@ int main() {
     test_ramp();
     test_kernel();
     test_resampled_sine();
-    test_adpcm_bookkeeping();
     test_pcm_loop();
     test_effect_delay();
     test_panner();
@@ -478,7 +456,8 @@ int main() {
     test_iir();
     test_square();
     test_categories();
-    test_movie_decode();
+    test_movie_record();
+    test_movie_room();
     test_stream();
     test_forced_stop();
     if (g_failures != 0) {

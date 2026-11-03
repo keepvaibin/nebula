@@ -11,7 +11,7 @@ public:
     int getCurrentPlacementZoneId() const;
 
 private:
-    /* 0xC */ int mCurrentZoneId;
+    int mCurrentZoneId;
 };
 
 namespace MR {

@@ -1,6 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
 
 struct NebulaAchievementIcon;
@@ -30,21 +29,20 @@ public:
 
 private:
     void loadTextures();
-    void start(const wchar_t* pName, const NebulaAchievementIcon* pIcon);
+    void start(const char16_t* pName, const NebulaAchievementIcon* pIcon);
     void setIcon(const NebulaAchievementIcon* pIcon, f32* pWidth, f32* pHeight);
     void place(f32 rise, f32 alpha, f32 iconScale);
 
-    /* 0x20 */ nw4r::lyt::Pane* mToast;
-    /* 0x24 */ nw4r::lyt::Pane* mWindow;
-    /* 0x28 */ nw4r::lyt::Pane* mText;
-    /* 0x2C */ nw4r::lyt::Pane* mGlyph;
-    /* 0x30 */ nw4r::lyt::Pane* mIcon;  // holds the glyph or the picture, centred on the icon's place
-    /* 0x34 */ nw4r::lyt::Picture* mPicture;
-    /* 0x38 */ nw4r::lyt::TexMap** mTextures;  // NebulaAchievements::getIconTexture's order; null when not loaded
-    /* 0x3C */ s32 mStep;
-    /* 0x40 */ s32 mFrame;
-    /* 0x44 */ s32 mHoldFrames;
-    /* 0x48 */ f32 mWidth;
-    /* 0x4C */ f32 mHeight;
+    nw4r::lyt::Pane* mToast;
+    nw4r::lyt::Pane* mWindow;
+    nw4r::lyt::Pane* mText;
+    nw4r::lyt::Pane* mGlyph;
+    nw4r::lyt::Pane* mIcon;  // holds the glyph or the picture, centred on the icon's place
+    nw4r::lyt::Picture* mPicture;
+    nw4r::lyt::TexMap** mTextures;  // NebulaAchievements::getIconTexture's order; null when not loaded
+    s32 mStep;
+    s32 mFrame;
+    s32 mHoldFrames;
+    f32 mWidth;
+    f32 mHeight;
 };
-#endif

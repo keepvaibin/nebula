@@ -1,13 +1,11 @@
 #include "Game/Screen/StarPointerGuidance.hpp"
 #include "Game/LiveActor/Nerve.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
-#endif
 
 namespace {
     static const s32 hOutScreenTime = 60;
@@ -78,7 +76,7 @@ void StarPointerGuidance::checkRequest2P() {
     } else {
         mRequestTime2P++;
 
-        if (!MR::isStarPointerInScreen(WPAD_CHAN1)) {
+        if (!MR::isStarPointerInScreen(PLAYER_2)) {
             if (mSpineFrame2P->getCurrentNerve() == GET_NERVE(StarPointerGuidance, HostTypeNrvEnd2P) ||
                 mSpineFrame2P->getCurrentNerve() == GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait)) {
                 mSpineFrame2P->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvAppear2P));
@@ -129,12 +127,8 @@ void StarPointerGuidance::checkRequest1P() {
     }
     mRequestTime1P++;
 
-#ifdef TARGET_PC
     // A pad that holds the menu (Nebula's menu focus) needs no pointer: the frame asking for it goes.
-    const bool isPointerWanted = !MR::isStarPointerInScreen(WPAD_CHAN0) && !NebulaMenuFocus::isActive();
-#else
-    const bool isPointerWanted = !MR::isStarPointerInScreen(WPAD_CHAN0);
-#endif
+    const bool isPointerWanted = !MR::isStarPointerInScreen(PLAYER_1) && !NebulaMenuFocus::isActive();
     if (isPointerWanted) {
         if (mOutScreenTime > ::hOutScreenTime || mRequestTime1P == 1) {
             if (mSpineGuidance->isCurrentNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvWaitBlueStarGuide))) {
@@ -144,7 +138,7 @@ void StarPointerGuidance::checkRequest1P() {
             if (mSpineFrame1P->isCurrentNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEnd1P)) ||
                 mSpineFrame1P->isCurrentNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEndWait))) {
                 mSpineFrame1P->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvAppear1P));
-                MR::startCSSound("CS_NOTICE_USE_DPD", "SE_SY_CS_NOTICE_USE_DPD", WPAD_CHAN0);
+                MR::startCSSound("CS_NOTICE_USE_DPD", "SE_SY_CS_NOTICE_USE_DPD", PLAYER_1);
             }
         } else {
             mOutScreenTime++;
@@ -291,7 +285,7 @@ s32 StarPointerGuidance::exeEndCore(Spine* pSpine, const char* pPaneName, u32 nu
 }
 
 bool StarPointerGuidance::request1PGuidance(const char* pMessageId, bool enableTimeOut) {
-    if (!MR::isConnectedWPad(WPAD_CHAN0) || !MR::isStarPointerValid(WPAD_CHAN0) && !MR::isStarPointerModeMarioLauncher()) {
+    if (!MR::isConnectedInput(PLAYER_1) || (!MR::isStarPointerValid(PLAYER_1) && !MR::isStarPointerModeMarioLauncher())) {
         return false;
     }
 

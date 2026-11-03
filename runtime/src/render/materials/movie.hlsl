@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The movie's frame (Game/Screen/THPDraw.cpp MovieDraw::drawFrame): its Y, U and V planes (textures 0, 1, 2; one
-// channel each, U and V at half size) to RGB with the console THP library's coefficients (in 8-bit units, its TEV
+// The movie's frame (Game/Screen/MovieDraw.cpp): its Y, U and V planes (textures 0, 1, 2; one
+// channel each, U and V at half size) to RGB with the THP coefficients (in 8-bit units, its material
 // stages' weights: 180/256 V for red, 88/256 U and 183/256 V for green, 227/256 U for blue). Opaque; depth ignored.
 struct MaterialConstants {
     float4 unused;

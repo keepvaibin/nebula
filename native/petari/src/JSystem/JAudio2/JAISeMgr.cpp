@@ -1,7 +1,6 @@
 #include "JSystem/JAudio2/JAISeMgr.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
 #include "JSystem/JAudio2/JAISoundInfo.hpp"
-#include "JSystem/JAudio2/JASReport.hpp"
 
 bool JAISeCategoryMgr::isUsingSeqData(const JAISeqDataRegion& seqDataRegion) {
     for (JSULink< JAISe >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
@@ -85,9 +84,8 @@ void JAISeCategoryMgr::sortByPriority_() {
             current = current->getNext();
         }
 
-        bool result = mSeList.remove(link);
-
-        result = mSeList.append(link);
+        mSeList.remove(link);
+        mSeList.append(link);
     }
 }
 
@@ -113,25 +111,17 @@ void JAISeCategoryMgr::stopSoundID(JAISoundID id) {
     }
 }
 
-void JAISeCategoryMgr::pause(bool param_0) {
-    for (JSULink< JAISe >* i = mSeList.getFirst(); i != mSeList.getEnd(); i = i->getNext()) {
-        i->getObject()->pause(param_0);
-    }
-}
-
 void JAISeCategoryMgr::JAISeMgr_mixOut_(const JAISoundParamsMove& params, JAISoundActivity activity) {
     JASSoundParams mixParams;
     mixParams.combine(params.mParams, mParams.mParams);
     JSULink< JAISe >* i = mSeList.getFirst();
     int maxActiveSe = getMaxActiveSe();
-    int sp28;
 
     if (maxActiveSe > 0) {
         while (i != mSeList.getEnd() && maxActiveSe > 0 && !i->getObject()->isFarAway()) {
             i->getObject()->JAISeCategoryMgr_mixOut_(true, mixParams, activity);
             i = i->getNext();
             maxActiveSe--;
-            sp28 = maxActiveSe;
         }
         for (; i != mSeList.getEnd(); i = i->getNext()) {
             i->getObject()->JAISeCategoryMgr_mixOut_(false, mixParams, activity);
@@ -183,15 +173,6 @@ void JAISeMgr::setCategoryArrangement(const JAISeCategoryArrangement& arrangemen
     for (int i = 0; i < NUM_CATEGORIES; i++) {
         mCategoryMgrs[i].setMaxActiveSe(arrangement.mItems[i].mMaxActiveSe);
         mCategoryMgrs[i].setMaxInactiveSe(arrangement.mItems[i].mMaxInactiveSe);
-    }
-}
-
-void JAISeMgr::getCategoryArrangement(JAISeCategoryArrangement* arrangement) {
-    for (int i = 0; i < NUM_CATEGORIES; i++) {
-        int active = mCategoryMgrs[i].getMaxActiveSe();
-        arrangement->mItems[i].mMaxActiveSe = active;
-        int inactive = mCategoryMgrs[i].getMaxInactiveSe();
-        arrangement->mItems[i].mMaxInactiveSe = inactive;
     }
 }
 
@@ -301,7 +282,6 @@ bool JAISeMgr::startSound(JAISoundID id, JAISoundHandle* handle, const TVec3f* p
 
     JAISe* se = newSe_(category, priority);
     if (se == nullptr) {
-        JASReport("cannot new Se %08x.", id.mID.mComposite);
         return false;
     }
 

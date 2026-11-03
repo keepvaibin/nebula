@@ -8,16 +8,6 @@
 #include "Game/Util/MessageUtil.hpp"
 #include <cstdio>
 
-void GalaxyMapDomeIcon_FORCE_MATCH(LayoutActor* pLayout) {
-    MR::startAnim(pLayout, "MapDomeIcon", 0);
-    MR::startAnim(pLayout, "DomeColor", 0);
-    MR::startAnim(pLayout, "AstroDome", 0);
-    MR::startAnim(pLayout, "Status", 0);
-    MR::startAnim(pLayout, "SelectIn", 0);
-    MR::startAnim(pLayout, "Blink", 0);
-    MR::startAnim(pLayout, "Wait", 0);
-}
-
 namespace {
     class AstroDomeCheckerBase {
     public:
@@ -28,8 +18,8 @@ namespace {
         virtual void execute(const char* pGalaxyName) {
         }
 
-        /* 0x04 */ char _4[11];
-        /* 0x0F */ bool mIsPass;
+        char _4[11];
+        bool mIsPass;
     };
 
     class CheckerIsExistNewGalaxy : public AstroDomeCheckerBase {
@@ -127,7 +117,7 @@ s32 GalaxyMapDomeIcon::calcDomeStatus() const {
 bool GalaxyMapDomeIcon::isComplete() const {
     JMapInfo mapInfo = JMapInfo();
 
-    mapInfo.attach(NebulaDiscTables::getGalaxyInfoTable());
+    mapInfo.attach(NebulaDataTables::getGalaxyInfoTable());
 
     CheckerIsComplete checker = CheckerIsComplete(_20);
 
@@ -187,7 +177,7 @@ void GalaxyMapDomeIcon::syncStatus() {
 bool GalaxyMapDomeIcon::hasNewGalaxy() const {
     JMapInfo mapInfo = JMapInfo();
 
-    mapInfo.attach(NebulaDiscTables::getGalaxyInfoTable());
+    mapInfo.attach(NebulaDataTables::getGalaxyInfoTable());
 
     CheckerIsExistNewGalaxy checker = CheckerIsExistNewGalaxy(_20);
 
@@ -201,7 +191,7 @@ bool GalaxyMapDomeIcon::hasNewGalaxy() const {
 
 namespace {
     AstroDomeCheckerBase::AstroDomeCheckerBase(int param1) {
-        snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
+        nebula_snprintf(_4, sizeof(_4), "Galaxy%1d", param1);
     }
 };  // namespace
 

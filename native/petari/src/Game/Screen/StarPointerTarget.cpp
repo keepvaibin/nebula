@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerTarget.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -8,7 +9,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
 namespace {
     static const f32 hZCheckAddDepth = 60.0f;
@@ -23,7 +24,7 @@ namespace {
 };  // namespace
 
 StarPointerTarget::StarPointerTarget(f32 radius, const TVec3f* pPosition, MtxPtr pMtx, TVec3f offset)
-    : mRadius3d(radius), mOffset(offset), mLastPointedChannel(WPAD_CHAN0), mPosition(pPosition), mMtx(pMtx) {
+    : mRadius3d(radius), mOffset(offset), mLastPointedChannel(PLAYER_1), mPosition(pPosition), mMtx(pMtx) {
 }
 
 bool StarPointerTarget::calcScreenPosition(TVec2f* pScreenPos) const {
@@ -181,6 +182,11 @@ StarPointerLayoutTarget* StarPointerLayoutTargetKeeper::getTarget(const char* pL
 }
 
 void StarPointerLayoutTargetKeeper::registerTarget(StarPointerLayoutTarget* pTarget) {
+    if (mNumTargets == mMaxNumTargets) {
+        mTargets = MR::growArray(mTargets, mMaxNumTargets);
+        mMaxNumTargets *= 2;
+    }
+
     mTargets[mNumTargets] = pTarget;
     mNumTargets++;
 }

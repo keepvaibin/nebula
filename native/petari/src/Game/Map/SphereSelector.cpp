@@ -114,7 +114,7 @@ bool SphereSelector::isMoveClickedPos() const {
 }
 
 void SphereSelector::playSelectedME() {
-    switch (MR::getRandom(0L, 4L)) {
+    switch (MR::getRandom(0, 4)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_SELECT1");
         break;
@@ -131,7 +131,7 @@ void SphereSelector::playSelectedME() {
 }
 
 void SphereSelector::playCanceledME() {
-    switch (MR::getRandom(0L, 4L)) {
+    switch (MR::getRandom(0, 4)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_CALCEL1");
         break;
@@ -266,7 +266,7 @@ void SphereSelectorFunction::registerTarget(LiveActor* pActor) {
 }
 
 bool SphereSelectorFunction::isPadButton() {
-    return MR::testCorePadButtonA(WPAD_CHAN0) && !MR::isDemoActive();
+    return MR::isHeldJump(PLAYER_1) && !MR::isDemoActive();
 }
 
 s32 SphereSelectorFunction::getSelectStartFrame() {
@@ -407,7 +407,7 @@ f32 SphereSelectorFunction::getHandleRotateSpeed() {
     return ::getSphereSelector()->mHandle->mRotateSpeed;
 }
 
-bool SphereSelectorFunction::isHandleHolding() NO_INLINE {
+bool SphereSelectorFunction::isHandleHolding() {
     return ::getSphereSelector()->mHandle->isHolding();
 }
 
@@ -436,7 +436,7 @@ LiveActor* SphereSelectorFunction::getPointingTarget() {
     return ::getSphereSelector()->mPointingTarget;
 }
 
-LiveActor* SphereSelectorFunction::getSelectedTarget() NO_INLINE {
+LiveActor* SphereSelectorFunction::getSelectedTarget() {
     return ::getSphereSelector()->mSelectedTarget;
 }
 

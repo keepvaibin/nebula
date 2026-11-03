@@ -6,8 +6,8 @@
 class HitSensor;
 class StarPiece;
 class StarPieceDirector;
-class StarPieceHostInfo;
-class StarPieceReceiverInfo;
+struct StarPieceHostInfo;
+struct StarPieceReceiverInfo;
 class StarPieceShooter;
 
 namespace MR {
@@ -55,25 +55,25 @@ public:
     StarPieceReceiverInfo* findReceiverInfo(const NameObj*);
     void calcShootGoalUsingPointingDepth();
 
-    /* 0x18 */ u32 mNumStarPieceNewed;
-    /* 0x1C */ u32 mNumStarPieceGettable;
-    /* 0x20 */ s32 mColorIndex;
-    /* 0x24 */ s32 mNumStarPiecesLaunched;
+    u32 mNumStarPieceNewed;
+    u32 mNumStarPieceGettable;
+    s32 mColorIndex;
+    s32 mNumStarPiecesLaunched;
 
-    /* 0x28 */ StarPieceHostInfo* mHostInfoArray[0x200];
+    StarPieceHostInfo* mHostInfoArray[0x200];
 
-    /* 0x828 */ u32 mNewHostInfoIndex;
+    u32 mNewHostInfoIndex;
 
-    /* 0x82C */ StarPieceReceiverInfo* mReceiverInfoArray[0x40];
-    /* 0x92C */ u32 mNewReceiverInfoIndex;
-    /* 0x930 */ bool mResetChasingStarPiece;
-    /* 0x934 */ StarPieceShooter* mStarPieceShooters[2];
+    StarPieceReceiverInfo* mReceiverInfoArray[0x40];
+    u32 mNewReceiverInfoIndex;
+    bool mResetChasingStarPiece;
+    StarPieceShooter* mStarPieceShooters[2];
 
     // only fist 16 entries ever get used
-    /* 0x93C */ bool mGetSoundArray[0x20];
+    bool mGetSoundArray[0x20];
 
-    /* 0x95C */ s32 mSoundIndex;
-    /* 0x960 */ bool mQueueNewGetSound;
+    s32 mSoundIndex;
+    bool mQueueNewGetSound;
 };
 
 class StarPieceShooter : public LiveActor {

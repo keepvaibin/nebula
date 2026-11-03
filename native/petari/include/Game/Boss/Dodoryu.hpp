@@ -18,7 +18,7 @@ namespace DodoryuSub {
 };  // namespace DodoryuSub
 
 class JointController;
-class JointControllerInfo;
+struct JointControllerInfo;
 class JointRumbler;
 class TalkMessageCtrl;
 
@@ -86,25 +86,25 @@ public:
     void updateRumblePad();
     void updateCameraTarget();
 
-    /* 0x08C */ TPos3f mBaseMtx;
-    /* 0x0BC */ TVec3f _BC;
-    /* 0x0C8 */ u8 _C8;
-    /* 0x0CC */ u32 _CC;
-    /* 0x0D0 */ MR::Vector< MR::FixedArray< DodoryuStateBase*, 16 > > mState;
-    /* 0x114 */ DodoryuSub::MoveStateHolder* mMoveStateHolder;
-    /* 0x118 */ DodoryuHill* mHill;
-    /* 0x11C */ DodoryuLeadHill* mLeadHill;
-    /* 0x120 */ DodoryuBank* mBank;
-    /* 0x124 */ DodoryuRabbit* mRabbit;
-    /* 0x128 */ TVec3f _128;
-    /* 0x134 */ TVec3f _134;
-    /* 0x140 */ AreaObj* mClosedAreaObj;
-    /* 0x144 */ u8 _144;
-    /* 0x148 */ CameraTargetMtx* _148;
-    /* 0x14C */ CameraTargetMtx* _14C;
-    /* 0x150 */ u8 _150;
-    /* 0x154 */ u32 _154;
-    /* 0x158 */ AnimScaleController* mAnimScaleCtrl;
+    TPos3f mBaseMtx;
+    TVec3f _BC;
+    u8 _C8;
+    u32 _CC;
+    MR::Vector< MR::FixedArray< DodoryuStateBase*, 16 > > mState;
+    DodoryuSub::MoveStateHolder* mMoveStateHolder;
+    DodoryuHill* mHill;
+    DodoryuLeadHill* mLeadHill;
+    DodoryuBank* mBank;
+    DodoryuRabbit* mRabbit;
+    TVec3f _128;
+    TVec3f _134;
+    AreaObj* mClosedAreaObj;
+    u8 _144;
+    CameraTargetMtx* _148;
+    CameraTargetMtx* _14C;
+    u8 _150;
+    u32 _154;
+    AnimScaleController* mAnimScaleCtrl;
 };
 
 class DodoryuBank : public ModelObj {
@@ -116,7 +116,7 @@ public:
 
     void exeAppear();
 
-    /* 0x90 */ TMtx34f _90;
+    TMtx34f _90;
 };
 
 class DodoryuRabbit : public ModelObj {
@@ -142,16 +142,16 @@ public:
     void exeReturn();
     void exePleasure();
 
-    /* 0x90 */ Dodoryu* mHost;
-    /* 0x94 */ TPos3f _94;
-    /* 0xC4 */ f32 _C4;
-    /* 0xC8 */ TalkMessageCtrl* mTalkCtrl;
-    /* 0xCC */ s32 _CC;
-    /* 0xD0 */ s32 _D0;
-    /* 0xD4 */ JointRumbler* _D4;
-    /* 0xD8 */ JointRumbler* _D8;
-    /* 0xDC */ bool mIsDisplayMessage;
-    /* 0xE0 */ TPos3f _E0;
+    Dodoryu* mHost;
+    TPos3f _94;
+    f32 _C4;
+    TalkMessageCtrl* mTalkCtrl;
+    s32 _CC;
+    s32 _D0;
+    JointRumbler* _D4;
+    JointRumbler* _D8;
+    bool mIsDisplayMessage;
+    TPos3f _E0;
 };
 
 class DodoryuLeadHill : public LiveActor {
@@ -165,7 +165,7 @@ public:
     void initJoint();
     bool calcJoint(TPos3f*, const JointControllerInfo&);
 
-    /* 0x8C */ MtxPtr mHostBaseMtx;
-    /* 0x90 */ f32 _90;
-    /* 0x94 */ JointController* _94[17];
+    MtxPtr mHostBaseMtx;
+    f32 _90;
+    JointController* _94[17];
 };

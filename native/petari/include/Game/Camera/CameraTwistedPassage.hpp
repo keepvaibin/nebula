@@ -16,8 +16,8 @@ public:
     f32 calcNearestCoord(const TVec3f&) const;
     f32 calcNearestCoordBetweenTwoRailCoord(f32, f32, const TVec3f&) const;
 
-    /* 0x4C */ RailRider* mRailRider;
-    /* 0x50 */ f32 mDistMin;
-    /* 0x54 */ f32 mDistMax;
-    /* 0x58 */ bool mIsReversed;
+    RailRider* mRailRider;
+    f32 mDistMin;
+    f32 mDistMax;
+    bool mIsReversed;
 };

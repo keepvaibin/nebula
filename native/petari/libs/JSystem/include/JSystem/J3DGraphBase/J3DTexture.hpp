@@ -7,15 +7,15 @@
 
 class J3DTexture {
 private:
-    /* 0x0 */ u16 mNum;
-    /* 0x2 */ u16 unk_0x2;
-    /* 0x4 */ ResTIMG* mpRes;
+    u16 mNum;
+    u16 unk_0x2;
+    ResTIMG* mpRes;
 
 public:
     J3DTexture(u16 num, ResTIMG* res) : mNum(num), unk_0x2(0), mpRes(res) {
     }
 
-    void loadGX(u16, GXTexMapID) const;
+    void loadGX(u16, u8) const;
     void entryNum(u16);
     void addResTIMG(u16, ResTIMG const*);
     virtual ~J3DTexture() {
@@ -31,14 +31,9 @@ public:
 
     void setResTIMG(u16 index, const ResTIMG& timg) {
         mpRes[index] = timg;
-        mpRes[index].mImageDataOffset = ((mpRes[index].mImageDataOffset + (uintptr_t)&timg - (uintptr_t)(mpRes + index)));
-        mpRes[index].mPaletteDataOffset = ((mpRes[index].mPaletteDataOffset + (uintptr_t)&timg - (uintptr_t)(mpRes + index)));
-        // The new image (and palette) handed to the renderer, as the model's own were at load.
-        J3DNativeTexture::registerImage(reinterpret_cast< const u8* >(&timg) + (s32)timg.mImageDataOffset, timg.mFormat, timg.mWidth,
-                                        timg.mHeight, timg.mMipmap ? timg.mImageNum : 1);
-        if (timg.mPaletteNum != 0) {
-            J3DNativeTexture::registerPalette(reinterpret_cast< const u8* >(&timg) + (s32)timg.mPaletteDataOffset, timg.mPaletteNum);
-        }
+        mpRes[index].mImage = timg.image();
+        // The new image handed to the renderer, as the model's own were at load.
+        J3DNativeTexture::registerRecord(timg.image());
     }
 };
 
@@ -71,8 +66,8 @@ public:
         mTexMtxInfo.setEffectMtx(effectMtx);
     }
 
-    /* 0x00 */ J3DTexMtxInfo mTexMtxInfo;
+    J3DTexMtxInfo mTexMtxInfo;
 
 private:
-    /* 0x64 */ Mtx mMtx;
-};  // Size: 0x94
+    Mtx mMtx;
+};

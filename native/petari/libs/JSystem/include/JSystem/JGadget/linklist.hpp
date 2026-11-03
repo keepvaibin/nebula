@@ -1,11 +1,11 @@
 #pragma once
 
+#include <iterator>
+
 #include <cstddef>
-#include <revolution/types.h>
 
 #include "JSystem/JGadget/predicate.hpp"
 
-#include "Inline.hpp"
 
 #ifndef JGADGET_LINKLIST_NOINLINE
 #define JGADGET_LINKLIST_NOINLINE
@@ -13,36 +13,16 @@
 
 #define JGADGET_LINK_LIST(type, node) JGadget::TLinkList< type, -offsetof(type, node) >
 
-namespace std {
-
-    struct input_iterator_tag {};
-    struct forward_iterator_tag : public input_iterator_tag {};
-    struct bidirectional_iterator_tag : public forward_iterator_tag {};
+namespace JGadget {
 
     template < typename Category, typename T, typename Distance = s32, typename Pointer = T*, typename Reference = T& >
-    class iterator {
+    class TIterator {
     public:
         typedef Category iterator_category;
         typedef T value_type;
         typedef Distance difference_type;
         typedef Pointer pointer;
         typedef Reference reference;
-        iterator& operator=(const iterator& rOther) NO_INLINE {
-            return *this;
-        }
-    };
-
-}  // namespace std
-
-namespace JGadget {
-
-    template < typename Category, typename T, typename Distance = s32, typename Pointer = T*, typename Reference = T& >
-    class TIterator : std::iterator< Category, T, Distance, Pointer, Reference > {
-    public:
-        const TIterator& operator=(const TIterator& rOther) NO_INLINE {
-            std::iterator< Category, T, Distance, Pointer, Reference >::operator=(rOther);
-            return *this;
-        }
     };
 
     class TLinkListNode {
@@ -164,16 +144,13 @@ namespace JGadget {
         TLinkListNode mEnd;
     };
 
-#ifdef TARGET_PC
     // NODE_OFFSET for a list named inside its element's own class: the offset (minus the node's offset in T) is then
     // T::nebulaListNodeOffset(), taken where the list's functions are compiled and T is complete.
     enum { NEBULA_NODE_OFFSET_OF_T = -0x7FFFFFFF - 1 };
-#endif
 
     template < typename T, int NODE_OFFSET >
     class TLinkList : public TNodeLinkList {
     public:
-#ifdef TARGET_PC
         static int nodeOffset() {
             if constexpr (NODE_OFFSET == NEBULA_NODE_OFFSET_OF_T) {
                 return T::nebulaListNodeOffset();
@@ -181,11 +158,6 @@ namespace JGadget {
                 return NODE_OFFSET;
             }
         }
-#else
-        static int nodeOffset() {
-            return NODE_OFFSET;
-        }
-#endif
 
         struct iterator : public TIterator< std::bidirectional_iterator_tag, T >, public TNodeLinkList::iterator {
             iterator() {};
@@ -240,11 +212,11 @@ namespace JGadget {
             return iterator(TNodeLinkList::begin());
         }
 
-        iterator end() NO_INLINE {
+        iterator end() {
             return iterator(TNodeLinkList::end());
         }
 
-        void Push_back(T* element) NO_INLINE {
+        void Push_back(T* element) {
             Insert(end(), element);
         }
 

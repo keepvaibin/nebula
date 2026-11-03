@@ -19,7 +19,7 @@
 
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/transform_history.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 
 #include <array>
 #include <cstdint>
@@ -97,9 +97,6 @@ inline constexpr float kTexStepLimit = 0.25f;
 // coordinates) translations unwrap by whole repeats and the matrix lerps,
 // unless any element steps (an atlas cell, a scale jump): then it shows b.
 void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float* out) noexcept;
-// A regular texgen (XF 0x1040 + i word) whose source row is the position,
-// normal or a binormal.
-[[nodiscard]] bool texgen_spatial(std::uint32_t texgen) noexcept;
 
 inline constexpr unsigned kPaletteWords = draw_rows::kRows * 4u;
 inline constexpr unsigned kNormalBase = draw_rows::kNormal * 4u;
@@ -122,7 +119,7 @@ struct RowView {
 // Whether rows first .. first + count - 1 hold the same words in a and b.
 [[nodiscard]] bool same_rows(RowView a, RowView b, unsigned first, unsigned count) noexcept;
 
-// One XF palette snapshot pair (a may be empty: no previous snapshot).
+// One palette snapshot pair (a may be empty: no previous snapshot).
 struct PaletteMotion {
     std::array<EyeMotion, 10> position{};
     std::array<NormalMotion, 10> normal{};
@@ -136,32 +133,19 @@ struct PaletteMotion {
     std::uint32_t snapped = 0;
 };
 // Only the PNMTX slots in `position_mask`, the normal matrices in
-// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: GX
+// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: game
 // light n) are interpolated: the parts its draws can read.
 inline constexpr std::uint16_t kAllPaletteSlots = 0x3FFu;
 void palette_motion(RowView a, RowView b, const CameraMotion& camera,
                     bool orthographic, PaletteMotion& out, std::uint16_t position_mask = kAllPaletteSlots,
                     std::uint16_t normal_mask = kAllPaletteSlots, std::uint8_t light_mask = 0xFFu) noexcept;
-// The GX lights a draw with these VS constants evaluates: the light masks of
-// its lit colour and alpha channels and the lights of its emboss texgens.
-[[nodiscard]] std::uint8_t used_lights(const VertexConstants& constants) noexcept;
 
 // Writes the palette at t: b's words with every changed part interpolated.
 void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
-// Pixel-stage colours of one draw state between two frames: TEV registers,
-// konstant colours, alpha-test references, fog colour (and range when its
-// shift is unchanged) and indirect matrices (rows of equal scale). Only when
-// the TEV program, texture setup and indirect commands are the same; any
-// other difference is a discrete change and shows b.
-[[nodiscard]] bool ps_colours_move(const PixelConstants& a, const PixelConstants& b) noexcept;
-void ps_colours_at(const PixelConstants& a, const PixelConstants& b, float t, PixelConstants& out) noexcept;
-// Channel ambient and material colours (vertex stage).
-[[nodiscard]] bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept;
 
-void channel_colours_at(const VertexConstants& a, const VertexConstants& b, float t, VertexConstants& out) noexcept;
-// One GX light (16 XF words) at t: color and attenuation lerped; position and
+// One light (16 words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A
 // null `a` (no previous snapshot) is b's light held still in the world.
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,

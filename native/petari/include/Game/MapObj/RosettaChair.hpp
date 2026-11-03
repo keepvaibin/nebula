@@ -12,7 +12,7 @@ public:
     void setDefaultPose();
     void startDemo();
 
-    /* 0x8C */ TVec3f mDefaultPosition;
-    /* 0x98 */ TVec3f mDefaultRotation;
-    /* 0xA0 */ TMtx34f mScaleMtx;
+    TVec3f mDefaultPosition;
+    TVec3f mDefaultRotation;
+    TMtx34f mScaleMtx;
 };

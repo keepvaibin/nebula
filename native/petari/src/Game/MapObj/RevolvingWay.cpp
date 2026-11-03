@@ -2,12 +2,12 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include <JSystem/JMath/JMath.hpp>
 
 namespace NrvRevolvingWay {
@@ -48,7 +48,7 @@ void RevolvingWay::exeWait() {
     addAccelMoment();
     MR::rotateQuatMoment(&mRotateQuat, mFriction);
     f32 friction;
-    if (MR::testCorePadButtonB(WPAD_CHAN0)) {
+    if (MR::isHeldFire(PLAYER_1)) {
         friction = 0.98f;
     } else {
         friction = 0.9f;
@@ -58,7 +58,7 @@ void RevolvingWay::exeWait() {
 
 void RevolvingWay::addAccelMoment() {
     TVec3f rotateMoment;
-    if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::testCorePadButtonB(WPAD_CHAN0) &&
+    if (MR::isStarPointerPointing(this, 0, true, "\216\343" /* 弱 */) && MR::isHeldFire(PLAYER_1) &&
         MR::calcStarPointerStrokeRotateMoment(&rotateMoment, mPosition, mRadius, 0)) {
         mFriction += rotateMoment * 0.04f;
         f32 mag = mFriction.length();

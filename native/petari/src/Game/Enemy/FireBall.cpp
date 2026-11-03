@@ -27,7 +27,7 @@ namespace {
     const s32 cReflectInvalidFrame = 60;
     const f32 cReflectCursorSpeed = 30.0f;
     const f32 cReflectRandomVelocityY = 1.0f;
-    static const GXColor color = {255, 192, 0, 255};
+    static const NebulaColor8 color = {255, 192, 0, 255};
 };  // namespace
 
 namespace NrvFireBall {

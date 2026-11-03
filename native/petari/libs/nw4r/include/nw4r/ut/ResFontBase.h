@@ -20,7 +20,7 @@ namespace nw4r {
                 virtual int GetCellWidth() const;
                 virtual int GetMaxCharWidth() const;
                 virtual Type GetType() const;
-                virtual GXTexFmt GetTextureFormat() const;
+                virtual u8 GetTextureFormat() const;
                 virtual int GetLineFeed() const;
                 virtual const CharWidths GetDefaultCharWidths() const;
                 virtual void SetDefaultCharWidths(const CharWidths& widths);

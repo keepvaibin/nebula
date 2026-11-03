@@ -17,6 +17,6 @@ public:
     void exeBlow();
     void exeBlowLand();
 
-    /* 0x10 */ TVec3f* mDirection;
-    /* 0x14 */ WalkerStateBlowDamageParam* mBlowDamageParam;
+    TVec3f* mDirection;
+    WalkerStateBlowDamageParam* mBlowDamageParam;
 };

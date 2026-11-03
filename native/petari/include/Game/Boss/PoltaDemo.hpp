@@ -23,6 +23,6 @@ public:
     void exePowerUpDemo();
     void exeDownDemo();
 
-    /* 0x14 */ const Nerve* mCurDemoNerve;
-    /* 0x18 */ const char* mCurDemoName;
+    const Nerve* mCurDemoNerve;
+    const char* mCurDemoName;
 };

@@ -12,8 +12,6 @@ void CameraSpiral::reset() {
     mTimer = 0;
 }
 
-#pragma push
-#pragma opt_propagation off
 
 CameraTargetObj* CameraSpiral::calc() {
     TVec3f watchPoint;
@@ -22,7 +20,7 @@ CameraTargetObj* CameraSpiral::calc() {
     const s32 timer = mTimer;
     f32 easeTime = timer < mStartTime ? 0.0f : timer - mStartTime;
 
-    f32 rate;
+    f32 rate = 0.0f;
     switch (mEaseType) {
     case EaseType_Linear: {
         f32 t = easeTime / getInterval();
@@ -80,7 +78,6 @@ CameraTargetObj* CameraSpiral::calc() {
 
     return CameraLocalUtil::getTarget(this);
 }
-#pragma pop
 
 CamTranslatorBase* CameraSpiral::createTranslator() {
     return new CamTranslatorSpiral(this);

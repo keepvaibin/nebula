@@ -1,7 +1,4 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#endif
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"
@@ -52,15 +49,6 @@ namespace {
     const MR::ActorMoveParam hTiredParam = {0.2f, 1.0f, 0.95f, 3.0f};
 
 };  // namespace
-
-void BegomanBaby_FORCE_MATCH_SDATA2() {
-    (void) 1.0f;
-    (void) 0.0f;
-    (void) MR::epsilon();
-    (void) 0.5f;
-    (void) 3.0f;
-    (void) 2.0f;
-}
 
 BegomanBaby::BegomanBaby(const char* pName) : BegomanBase(pName), mBabyDelegator(), mHost(), mAppearThreeStarPiece() {
     mWaterColumnMatrix.identity();
@@ -177,11 +165,7 @@ void BegomanBaby::control() {
         }
     }
 
-#ifdef TARGET_PC
     if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
-#else
-    if (MR::isBindedGroundDamageFire(this)) {
-#endif
         killWithGenItem();
         MR::emitEffect(this, "Fall");
         return;
@@ -201,11 +185,11 @@ void BegomanBaby::control() {
         preventSwingby(1.0f);
     }
 
-    if (!isNerve(GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait)) &&
+    if ((!isNerve(GET_NERVE(BegomanBaby, HostTypeNrvNoCalcWait)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvWait)) &&
             !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvSignAttack)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvPursue)) &&
             !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvTurn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvBrake)) &&
             !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvReturn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvProvoke)) &&
-            !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvLaunchTurn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvKeepDistance)) ||
+            !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvLaunchTurn)) && !isNerve(GET_NERVE(BegomanBaby, HostTypeNrvKeepDistance))) ||
         !BegomanBase::tryAndSetStarPointerBind(GET_NERVE(BegomanBaby, HostTypeNrvBindStarPointer))) {
         BegomanBase::control();
     }
@@ -325,8 +309,6 @@ void BegomanBaby::exeBlow() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void BegomanBaby::exeAfterLaunch() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Fly");
@@ -347,7 +329,6 @@ void BegomanBaby::exeAfterLaunch() {
         setNerve(GET_NERVE(BegomanBaby, HostTypeNrvAfterLaunchOnGround));
     }
 }
-#pragma pop
 
 void BegomanBaby::exeAfterLaunchOnGround() {
     if (MR::isFirstStep(this)) {

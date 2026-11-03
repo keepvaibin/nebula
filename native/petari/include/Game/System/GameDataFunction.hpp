@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/os.h>
+#include "Game/System/NebulaCalendar.hpp"
 
 class GameDataHolder;
 class GameDataSomeScenarioAccessor;
@@ -54,8 +54,6 @@ namespace GameDataFunction {
     void addStarPiece(int);
     void setLast1upStarPieceNum(int);
     s32 getLast1upStarPieceNum();
-    const wchar_t* getUserName();
-    u16 getUserFileIndex();
     void resetAllGameData();
     bool isOnJustGameEventFlag(const char*);
     bool canOnJustGameEventFlag(const char*);
@@ -69,12 +67,6 @@ namespace GameDataFunction {
     void resetGameDataGoToGalaxyRetry();
     void onCompleteEndingCurrentPlayer();
     bool isOnCompleteEndingMarioAndLuigi();
-    OSTime getSysConfigFileTimeAnnounced();
-    void updateSysConfigFileTimeAnnounced();
-    OSTime getSysConfigFileTimeSent();
-    void setSysConfigFileTimeSent(OSTime);
-    u32 getSysConfigFileSentBytes();
-    void setSysConfigFileSentBytes(u32);
     bool isLuigiLeftSupply();
     void offLuigiLeftSupply();
     bool isOnGameEventFlagNormalComet(const char*);

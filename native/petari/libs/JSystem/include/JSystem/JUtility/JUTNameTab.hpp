@@ -1,16 +1,16 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
+// In host order as the importer cooks models and animations.
 struct ResNTAB {
-    /* 0x0 */ NEBULA_BE(u16) mEntryNum;
-    /* 0x2 */ NEBULA_BE(u16) _2;
+    u16 mEntryNum;
+    u16 _2;
 
-    /* 0x4 */ struct Entry {
-        NEBULA_BE(u16) mKeyCode;
-        NEBULA_BE(u16) mOffs;
+    struct Entry {
+        u16 mKeyCode;
+        u16 mOffs;
     } mEntries[1];
 };
 
@@ -27,8 +27,8 @@ public:
     const char* getName(u16) const;
     u16 calcKeyCode(const char*) const;
 
-    /* 0x4 */ const ResNTAB* mResource;
-    /* 0x8 */ const char* mStrData;
-    /* 0xC */ u16 mNameNum;
-    /* 0xE */ u16 _E;
+    const ResNTAB* mResource;
+    const char* mStrData;
+    u16 mNameNum;
+    u16 _E;
 };

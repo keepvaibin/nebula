@@ -2,7 +2,7 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 #include <stdint.h>
 
@@ -18,36 +18,18 @@ enum {
 };
 
 J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
-    mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, JSU_OFFSET_VALUE(block.mpShapeInitData));
-    mIndexTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, JSU_OFFSET_VALUE(block.mpIndexTable));
-    mVtxDescList = JSUConvertOffsetToPtr< NEBULA_DISC(GXVtxDescList) >(&block, JSU_OFFSET_VALUE(block.mpVtxDescList)),
-    mMtxTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, JSU_OFFSET_VALUE(block.mpMtxTable));
-    mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, JSU_OFFSET_VALUE(block.mpDisplayListData)),
-    mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, JSU_OFFSET_VALUE(block.mpMtxInitData)),
-    mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, JSU_OFFSET_VALUE(block.mpDrawInitData));
+    mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, block.mpShapeInitData);
+    mIndexTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpIndexTable);
+    mMtxTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpMtxTable);
+    mShapeDrawData = JSUConvertOffsetToPtr< u8 >(&block, block.mpShapeDrawData),
+    mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, block.mpMtxInitData),
+    mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, block.mpDrawInitData);
 }
 
-#ifdef TARGET_PC
-GXVtxDescList* J3DShapeFactory::getVtxDescList(int no) const {
-    const BEData< GXVtxDescList >* src =
-        (const BEData< GXVtxDescList >*)((const u8*)mVtxDescList + mShapeInitData[mIndexTable[no]].mVtxDescListIndex);
-    int num = 0;
-    while (src[num].attr != GX_VA_NULL) {
-        num++;
-    }
-    GXVtxDescList* list = new GXVtxDescList[num + 1];
-    for (int i = 0; i <= num; i++) {
-        list[i] = src[i];
-    }
-    return list;
-}
-#endif
-
-J3DShape* J3DShapeFactory::create(int no, u32 flag, GXVtxDescList* vtxDesc) {
+J3DShape* J3DShapeFactory::create(int no, u32 flag) {
     J3DShape* shape = new J3DShape;
     shape->mMtxGroupNum = getMtxGroupNum(no);
     shape->mRadius = mShapeInitData[mIndexTable[no]].mRadius;
-    shape->mVtxDesc = getVtxDescList(no);
     shape->mShapeMtx = new J3DShapeMtx*[shape->mMtxGroupNum];
     shape->mShapeDraw = new J3DShapeDraw*[shape->mMtxGroupNum];
     shape->mMin = getMin(no);
@@ -110,66 +92,6 @@ J3DShapeMtx* J3DShapeFactory::newShapeMtx(u32 flag, int shapeNo, int mtxGroupNo)
 J3DShapeDraw* J3DShapeFactory::newShapeDraw(int shapeNo, int mtxGroupNo) const {
     J3DShapeInitData& shapeInitData = mShapeInitData[mIndexTable[shapeNo]];
     const J3DShapeDrawInitData& drawInitData = (&mDrawInitData[shapeInitData.mDrawInitDataIndex])[mtxGroupNo];
-    return new J3DShapeDraw(&mDisplayListData[drawInitData.mDisplayListIndex], drawInitData.mDisplayListSize);
+    return new J3DShapeDraw(reinterpret_cast< J3DShapeMesh* >(&mShapeDrawData[drawInitData.mShapeDrawIndex]));
 }
 
-s32 J3DShapeFactory::calcSize(int shapeNo, u32 flag) {
-    s32 size = 0x68;
-
-    u16 mtxGroupNo = getMtxGroupNum(shapeNo);
-    size += mtxGroupNo * 4;
-    size += mtxGroupNo * 4;
-
-    for (u32 i = 0; i < mtxGroupNo; i++) {
-        s32 shapeMtxSize = calcSizeShapeMtx(flag, shapeNo, i);
-        size += shapeMtxSize;
-        size += 0x0C;
-    }
-
-    return size;
-}
-
-s32 J3DShapeFactory::calcSizeShapeMtx(u32 flag, int shapeNo, int mtxGroupNo) const {
-    J3DShapeInitData& shapeInitData = mShapeInitData[mIndexTable[shapeNo]];
-    u32 ret = 0;
-
-    u32 mtxLoadType = getMdlDataFlag_MtxLoadType(flag);
-    switch (mtxLoadType) {
-    case J3DMdlDataFlag_ConcatView:
-        switch (shapeInitData.mShapeMtxType) {
-        case J3DShapeMtxType_Mtx:
-            ret = 0x08;
-            break;
-        case J3DShapeMtxType_BBoard:
-            ret = 0x08;
-            break;
-        case J3DShapeMtxType_YBBoard:
-            ret = 0x08;
-            break;
-        case J3DShapeMtxType_Multi:
-            ret = 0xC;
-            break;
-        default:
-            break;
-        }
-        break;
-
-    case 0:
-    default:
-        switch (shapeInitData.mShapeMtxType) {
-        case J3DShapeMtxType_Mtx:
-        case J3DShapeMtxType_BBoard:
-        case J3DShapeMtxType_YBBoard:
-            ret = 0x08;
-            break;
-        case J3DShapeMtxType_Multi:
-            ret = 0xC;
-            break;
-        default:
-            break;
-        }
-        break;
-    }
-
-    return ret;
-}

@@ -16,8 +16,8 @@ public:
     bool isHostInTheOtherSideOfMirror() const;
     TVec3f getHostCenterPos() const;
 
-    /* 0x8C */ LiveActor* mHost;
-    /* 0x90 */ TVec3f mCenter;
-    /* 0x9C */ f32 mRadius;
-    /* 0xA0 */ bool mIsDisconnected;
+    LiveActor* mHost;
+    TVec3f mCenter;
+    f32 mRadius;
+    bool mIsDisconnected;
 };

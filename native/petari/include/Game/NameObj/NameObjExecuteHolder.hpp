@@ -9,16 +9,18 @@ class NameObjExecuteInfo {
 
 public:
     NameObjExecuteInfo();
+    bool isDrawBufferOnly() const { return mDrawType == -1 && mDrawBufferType != -1; }
+    s32 getMovementType() const { return mMovementType; }
 
     void setConnectInfo(NameObj*, int, int, int, int);
     void initConnectting();
     void requestConnect(u8*);
     void requestDisconnect(u8*, bool);
-    void executeRequirementConnectMovement() NO_INLINE;
-    void executeRequirementDisconnectMovement() NO_INLINE;
-    void executeRequirementConnectDraw() NO_INLINE;
-    void executeRequirementDisconnectDraw() NO_INLINE;
-    void executeRequirementDisconnectDrawDelay() NO_INLINE;
+    void executeRequirementConnectMovement();
+    void executeRequirementDisconnectMovement();
+    void executeRequirementConnectDraw();
+    void executeRequirementDisconnectDraw();
+    void executeRequirementDisconnectDrawDelay();
     void requestMovementOn(int);
     void requestMovementOff(int);
     void findLightInfo() const;
@@ -28,14 +30,14 @@ public:
     void disconnectToDraw();
 
 private:
-    /* 0x0 */ NameObj* mExecutedObj;
-    /* 0x4 */ s8 _4;
-    /* 0x5 */ s8 _5;
-    /* 0x6 */ s8 mMovementType;
-    /* 0x7 */ s8 mCalcAnimType;
-    /* 0x8 */ s8 mDrawType;
-    /* 0x9 */ s8 mDrawBufferType;
-    /* 0xA */ s16 _A;
+    NameObj* mExecutedObj;
+    s8 _4;
+    s8 _5;
+    s8 mMovementType;
+    s8 mCalcAnimType;
+    s8 mDrawType;
+    s8 mDrawBufferType;
+    s16 _A;
 };
 
 class NameObjExecuteHolder : public NameObj {
@@ -59,14 +61,14 @@ public:
     NameObjExecuteInfo* getConnectToSceneInfo(const NameObj*) const;
 
 private:
-    /* 0x0C */ NameObjExecuteInfo* mExecuteArray;
-    /* 0x10 */ s32 mExecuteArrayMaxSize;
-    /* 0x14 */ s32 mExecuteArraySize;
-    /* 0x18 */ bool _18;
-    /* 0x19 */ bool _19;
-    /* 0x1A */ bool _1A;
-    /* 0x1B */ bool _1B;
-    /* 0x1C */ bool _1C;
+    NameObjExecuteInfo* mExecuteArray;
+    s32 mExecuteArrayMaxSize;
+    s32 mExecuteArraySize;
+    bool _18;
+    bool _19;
+    bool _1A;
+    bool _1B;
+    bool _1C;
 };
 
 namespace MR {
@@ -77,6 +79,8 @@ namespace MR {
     void connectToDrawTemporarily(NameObj*);
     void disconnectToDrawTemporarily(NameObj*);
     bool isConnectToDrawTemporarily(const NameObj*);
+    bool isDrawnFarWhenClipped(const NameObj*, bool hasRun);
+    bool isMovementPlanet(const NameObj*);
     void executeRequirementConnectMovement();
     void executeRequirementDisconnectMovement();
     void executeRequirementConnectDraw();

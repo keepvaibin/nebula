@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/types.h>
 
-class JASWaveArc;
+struct JASWaveArc;
 
 struct JASWaveInfo {
     JASWaveInfo() {
@@ -20,23 +19,19 @@ struct JASWaveInfo {
         mSampleLoopStart = other.mSampleLoopStart;
         mSampleLoopEnd = other.mSampleLoopEnd;
         mSampleCount = other.mSampleCount;
-        mpLastSample = other.mpLastSample;
-        mpPenultSample = other.mpPenultSample;
         _24 = other._24;
     }
 
-    /* 0x00 */ u8 mFormat;
-    /* 0x01 */ u8 mBaseKey;
-    /* 0x04 */ f32 mSampleRate;
-    /* 0x08 */ int mAWStartOffs;
-    /* 0x0C */ int mAWLength;
-    /* 0x10 */ u32 mLoopFlags;
-    /* 0x14 */ int mSampleLoopStart;
-    /* 0x18 */ int mSampleLoopEnd;
-    /* 0x1C */ int mSampleCount;
-    /* 0x20 */ s16 mpLastSample;
-    /* 0x22 */ s16 mpPenultSample;
-    /* 0x24 */ const u32* _24;
+    u8 mFormat;
+    u8 mBaseKey;
+    f32 mSampleRate;
+    int mAWStartOffs;
+    int mAWLength;
+    u32 mLoopFlags;
+    int mSampleLoopStart;
+    int mSampleLoopEnd;
+    int mSampleCount;
+    const u32* _24;
 
     static u32 one;
 };
@@ -47,6 +42,7 @@ public:
     }
     virtual const JASWaveInfo* getWaveInfo() const = 0;
     virtual const u8* getWavePtr() const = 0;
+    virtual const u8* getWaveLimit() const = 0;
 };
 
 class JASWaveBank {

@@ -5,6 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <new>
+#include "Game/Util/ByteView.hpp"
 
 DynamicCollisionObj::DynamicCollisionObj(const char* pName) : LiveActor(pName) {
     _A4 = 0;
@@ -117,7 +118,7 @@ void DynamicCollisionObj::updateCollisionHeader() {
     // Find highest number of bits to shift
     u32 max_entropy = 0;
     for (u32 component = 0; component < 3; component++) {
-        u32 bits_sel = 0x80000000;
+        u32 bits_sel = 1u << 31;
         u32 mask_sel = 0xFFFFFFFF;
         u32 val = masks[component];
         u32 i = 0;
@@ -149,11 +150,6 @@ void DynamicCollisionObj::updateCollisionHeader() {
     this->mKCLFile->mMin = min;
 }
 
-void DynamicCollisionObj_FORCE_MATCH(TVec2f* pDst, const TVec2f& rA) {
-    new (pDst) TVec2f(rA);
-    new (pDst + 1) TVec2f(rA);
-}
-
 void DynamicCollisionObj::createCollision() {
     s32 v = _94;
     mKCLFile = new KCLFile();
@@ -163,20 +159,16 @@ void DynamicCollisionObj::createCollision() {
     u16* u16array = new (4) u16[v + 3];
     mKCLFile->mOctree = u16array;
 
-#ifdef TARGET_PC
-    // One leaf octree entry, 0x80000002: the list two bytes on. The console's halves were its big-endian s32; the
-    // native KCollisionServer reads entries in host order (KCLOctreeSwap converts the disc's), so the s32 is written.
-    *reinterpret_cast< s32* >(u16array) = static_cast< s32 >(0x80000002);
-#else
-    u16array[0] = 0x8000;
-    u16array[1] = 2;
-#endif
+    // One leaf octree entry (the top bit): the list two bytes on. KCollisionServer reads entries in host order, so the s32
+    // is written.
+    writeBytes< s32 >(u16array, static_cast< s32 >((1u << 31) | 2u));
 
     s32 count = v;
     for (s32 i = 0; i <= v; i++) {
         u16array[i + 2] = count--;
     }
 
+    mKCLFile->mTriangleNum = v;
     mKCLFile->mThickness = 40.f;
     mKCLFile->mBlockXShift = -1;
     mKCLFile->mBlockXYShift = -1;

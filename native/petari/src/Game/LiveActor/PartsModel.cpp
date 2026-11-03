@@ -62,7 +62,7 @@ void PartsModel::init(const JMapInfoIter& rIter) {
 }
 
 void PartsModel::movement() {
-    if (MR::isDead(this) || MR::isDead(mHost) || MR::isClipped(mHost) || !_99 && MR::isHiddenModel(mHost)) {
+    if (MR::isDead(this) || MR::isDead(mHost) || (MR::isClipped(mHost) && !mHost->mFlag.mIsDrawnClipped) || (!_99 && MR::isHiddenModel(mHost))) {
         if (!mIsDead) {
             mIsDead = true;
 

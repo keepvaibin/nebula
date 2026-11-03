@@ -11,7 +11,7 @@
 #include "Game/Util/AreaObjUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -23,80 +23,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Inline.hpp"
 #include <cmath>
 
 #include "Game/Util/StringUtil.hpp"
-
-void SpinDriver_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)3.814697265625e-06f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)-1.0f;
-    (void)3.1415927410125732f;
-    (void)40.0f;
-    (void)0.0010000000474974513f;
-    (void)300.0f;
-    (void)122500.0f;
-    (void)6.2831854820251465f;
-    (void)-3.1415927410125732f;
-    (void)0.949999988079071f;
-    (void)15.0f;
-    (void)0.05000000074505806f;
-    (void)0.15000000596046448f;
-    (void)0.00800000037997961f;
-    (void)20.0f;
-    (void)200.0f;
-    (void)0.03999999910593033f;
-    (void)57600.0f;
-    (void)120.0f;
-    (void)1.5f;
-    (void)0.800000011920929f;
-    (void)0.4000000059604645f;
-}
-
-void SpinDriver_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("SpinDriver", "SpinDriver");
-    MR::isEqualString("body", "body");
-    MR::isEqualString("SpinDriverShadow", "SpinDriverShadow");
-    MR::isEqualString("\217\157\214\273" /* 出現 */, "\217\157\214\273" /* 出現 */);
-    MR::isEqualString("SE_PM_SPIN_ATTACK", "SE_PM_SPIN_ATTACK");
-    MR::isEqualString("Water", "Water");
-    MR::isEqualString("SE_PM_SPIN_DRV_IN_WATER_1", "SE_PM_SPIN_DRV_IN_WATER_1");
-    MR::isEqualString("Wait", "Wait");
-    MR::isEqualString("SE_SY_SPIN_DRIVER_APPEAR", "SE_SY_SPIN_DRIVER_APPEAR");
-    MR::isEqualString("SE_OJ_SPIN_DRV_APPEAR", "SE_OJ_SPIN_DRV_APPEAR");
-    MR::isEqualString("Appear", "Appear");
-    MR::isEqualString("SE_OJ_LV_SPIN_DRV_SHINE", "SE_OJ_LV_SPIN_DRV_SHINE");
-    MR::isEqualString("SpinDriverLight", "SpinDriverLight");
-    MR::isEqualString("CS_SPIN_BIND", "CS_SPIN_BIND");
-    MR::isEqualString("SpinDriverWait", "SpinDriverWait");
-    MR::isEqualString("SpinDriverCapture", "SpinDriverCapture");
-    MR::isEqualString("Active", "Active");
-    MR::isEqualString("SE_OJ_LV_SPIN_DRV_CAPTURE", "SE_OJ_LV_SPIN_DRV_CAPTURE");
-    MR::isEqualString("SpinDriverStart", "SpinDriverStart");
-    MR::isEqualString("Spin", "Spin");
-    MR::isEqualString("SpinDriverShoot", "SpinDriverShoot");
-    MR::isEqualString("CS_SPIN_DRIVE_SHORT", "CS_SPIN_DRIVE_SHORT");
-    MR::isEqualString("SE_SY_CS_SPIN_DRV_START", "SE_SY_CS_SPIN_DRV_START");
-    MR::isEqualString("ME_MAGIC", "ME_MAGIC");
-    MR::isEqualString("SE_SY_S_SPIN_DRV_ME_ALT", "SE_SY_S_SPIN_DRV_ME_ALT");
-    MR::isEqualString("SE_OJ_SPIN_DRV_JUMP", "SE_OJ_SPIN_DRV_JUMP");
-    MR::isEqualString("SE_PV_JUMP_JOY", "SE_PV_JUMP_JOY");
-    MR::isEqualString("SE_PM_SPIN_DIV_IN_WATER_2", "SE_PM_SPIN_DIV_IN_WATER_2");
-    MR::isEqualString("SpaceFlyShortStart", "SpaceFlyShortStart");
-    MR::isEqualString("SpinDriverFlyStart", "SpinDriverFlyStart");
-    MR::isEqualString("SpaceFlyShort", "SpaceFlyShort");
-    MR::isEqualString("SpinDriverFlyLoop", "SpinDriverFlyLoop");
-    MR::isEqualString("SpaceFlyEnd", "SpaceFlyEnd");
-    MR::isEqualString("SpinDriverFlyEnd", "SpinDriverFlyEnd");
-    MR::isEqualString("SE_PM_LV_SPIN_DRV_FLY", "SE_PM_LV_SPIN_DRV_FLY");
-    MR::isEqualString("Fall", "Fall");
-    MR::isEqualString("SpinDriverFall", "SpinDriverFall");
-    MR::isEqualString("SpaceFlyStart", "SpaceFlyStart");
-}
 
 namespace {
     // static const f32 sShadowMaxHeight = _;
@@ -345,7 +274,7 @@ bool SpinDriver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiv
 }
 
 bool SpinDriver::tryStartShoot() {
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         MR::startSound(_8C, "SE_PM_SPIN_ATTACK");
@@ -439,7 +368,7 @@ void SpinDriver::exeNonActive() {
         MR::startBpk(this, "Wait");
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         _108 += 0.05f;
@@ -479,7 +408,7 @@ void SpinDriver::exeWait() {
         MR::startBpk(this, "Wait");
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         _108 += 0.05f;
@@ -527,7 +456,7 @@ void SpinDriver::exeCapture() {
 
     _108 += 0.008f;
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, PLAYER_1);
 
     _13C = 60;
 
@@ -607,7 +536,7 @@ void SpinDriver::exeShoot() {
         MR::startBckPlayer("SpaceFlyShortStart", "SpinDriverFlyStart");
 
         MR::shakeCameraNormal();
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
     }
 
     if (mShootPath != nullptr) {
@@ -655,7 +584,7 @@ bool SpinDriver::startBind(HitSensor* pSensor) {
         return false;
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         if (MR::hasME()) {
@@ -811,19 +740,19 @@ void SpinDriver::updateCamera() {
     }
 }
 
-void SpinDriver::cancelCamera() NO_INLINE {
+void SpinDriver::cancelCamera() {
     if (mSpinDriverCamera != nullptr) {
         mSpinDriverCamera->cancel();
     }
 }
 
-void SpinDriver::endCamera() NO_INLINE {
+void SpinDriver::endCamera() {
     if (mSpinDriverCamera != nullptr) {
         mSpinDriverCamera->end();
     }
 }
 
-bool SpinDriver::canStartBind() const NO_INLINE {
+bool SpinDriver::canStartBind() const {
     return isNerve(GET_NERVE(SpinDriver, SpinDriverNrvWait));
 }
 
@@ -832,7 +761,7 @@ bool SpinDriver::canBind(HitSensor* pSensor) const {
         return false;
     }
 
-    bool isSwingOr2P = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOr2P = MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOr2P) {
         return true;
@@ -845,6 +774,3 @@ bool SpinDriver::canBind(HitSensor* pSensor) const {
     return false;
 }
 
-void SpinDriver_FORCE_MATCH(TQuat4f* pDest, const TQuat4f& rSrc) {
-    *pDest = rSrc;
-}

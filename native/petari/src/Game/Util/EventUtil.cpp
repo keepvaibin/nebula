@@ -16,59 +16,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
-#ifdef TARGET_PC
 #include "Game/System/NebulaAchievements.hpp"
-#endif
-
-void EventUtil_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */, "\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */);
-    MR::isEqualString("\203\145\203\214\203\124\203\175\203\212\203\111\217\211\225\317\220\147" /* テレサマリオ初変身 */, "\203\145\203\214\203\124\203\175\203\212\203\111\217\211\225\317\220\147" /* テレサマリオ初変身 */);
-    MR::isEqualString("\203\172\203\142\203\160\201\133\203\175\203\212\203\111\217\211\225\317\220\147" /* ホッパーマリオ初変身 */, "\203\172\203\142\203\160\201\133\203\175\203\212\203\111\217\211\225\317\220\147" /* ホッパーマリオ初変身 */);
-    MR::isEqualString("\203\164\203\100\203\103\203\101\203\175\203\212\203\111\217\211\225\317\220\147" /* ファイアマリオ初変身 */, "\203\164\203\100\203\103\203\101\203\175\203\212\203\111\217\211\225\317\220\147" /* ファイアマリオ初変身 */);
-    MR::isEqualString("\203\101\203\103\203\130\203\175\203\212\203\111\217\211\225\317\220\147" /* アイスマリオ初変身 */, "\203\101\203\103\203\130\203\175\203\212\203\111\217\211\225\317\220\147" /* アイスマリオ初変身 */);
-    MR::isEqualString("\203\164\203\211\203\103\203\223\203\117\203\175\203\212\203\111\217\211\225\317\220\147" /* フライングマリオ初変身 */, "\203\164\203\211\203\103\203\223\203\117\203\175\203\212\203\111\217\211\225\317\220\147" /* フライングマリオ初変身 */);
-    MR::isEqualString("\226\263\223\107\203\175\203\212\203\111\217\211\225\317\220\147" /* 無敵マリオ初変身 */, "\226\263\223\107\203\175\203\212\203\111\217\211\225\317\220\147" /* 無敵マリオ初変身 */);
-    MR::isEqualString("\203\211\203\103\203\164\203\101\203\142\203\166\203\114\203\155\203\122\211\360\220\340" /* ライフアップキノコ解説 */, "\203\211\203\103\203\164\203\101\203\142\203\166\203\114\203\155\203\122\211\360\220\340" /* ライフアップキノコ解説 */);
-    MR::isEqualString("\202\120\202\164\202\157\203\114\203\155\203\122\211\360\220\340" /* １ＵＰキノコ解説 */, "\202\120\202\164\202\157\203\114\203\155\203\122\211\360\220\340" /* １ＵＰキノコ解説 */);
-    MR::isEqualString("\203\116\203\142\203\160\217\120\227\210\214\343" /* クッパ襲来後 */, "\203\116\203\142\203\160\217\120\227\210\214\343" /* クッパ襲来後 */);
-    MR::isEqualString("\203\163\201\133\203\140\217\351\225\202\217\343\214\343" /* ピーチ城浮上後 */, "\203\163\201\133\203\140\217\351\225\202\217\343\214\343" /* ピーチ城浮上後 */);
-    MR::isEqualString("\203\140\203\122\203\113\203\103\203\150\203\146\203\202\217\111\227\271" /* チコガイドデモ終了 */, "\203\140\203\122\203\113\203\103\203\150\203\146\203\202\217\111\227\271" /* チコガイドデモ終了 */);
-    MR::isEqualString("\203\130\203\163\203\223\214\240\227\230" /* スピン権利 */, "\203\130\203\163\203\223\214\240\227\230" /* スピン権利 */);
-    MR::isEqualString("\223\126\213\205\213\126\203\214\203\116\203\140\203\203\201\133" /* 天球儀レクチャー */, "\223\126\213\205\213\126\203\214\203\116\203\140\203\203\201\133" /* 天球儀レクチャー */);
-    MR::isEqualString("\203\115\203\203\203\211\203\116\203\126\201\133\210\332\223\256\203\214\203\116\203\140\203\203\201\133" /* ギャラクシー移動レクチャー */, "\203\115\203\203\203\211\203\116\203\126\201\133\210\332\223\256\203\214\203\116\203\140\203\203\201\133" /* ギャラクシー移動レクチャー */);
-    MR::isEqualString("\203\130\203\136\201\133\203\163\201\133\203\130\203\214\203\116\203\140\203\203\201\133" /* スターピースレクチャー */, "\203\130\203\136\201\133\203\163\201\133\203\130\203\214\203\116\203\140\203\203\201\133" /* スターピースレクチャー */);
-    MR::isEqualString("\203\124\201\133\203\164\203\102\203\223\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* サーフィンチュートリアル */, "\203\124\201\133\203\164\203\102\203\223\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* サーフィンチュートリアル */);
-    MR::isEqualString("\203\136\203\175\203\122\203\215\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* タマコロチュートリアル */, "\203\136\203\175\203\122\203\215\203\140\203\205\201\133\203\147\203\212\203\101\203\213" /* タマコロチュートリアル */);
-    MR::isEqualString("RosettaTalkAboutTico", "RosettaTalkAboutTico");
-    MR::isEqualString("SpecialStarGrand7", "SpecialStarGrand7");
-    MR::isEqualString("ViewCompleteEnding", "ViewCompleteEnding");
-    MR::isEqualString("\203\157\203\147\203\211\201\133\217\356\225\361\202\140" /* バトラー情報Ａ */, "\203\157\203\147\203\211\201\133\217\356\225\361\202\140" /* バトラー情報Ａ */);
-    MR::isEqualString("SpecialStarGreenAll", "SpecialStarGreenAll");
-    MR::isEqualString("SpecialStarRed1", "SpecialStarRed1");
-    MR::isEqualString("ViewNormalEnding", "ViewNormalEnding");
-    MR::isEqualString("KoopaBattleVs3Galaxy", "KoopaBattleVs3Galaxy");
-    MR::isEqualString("EventCometStarter", "EventCometStarter");
-    MR::isEqualString("SpecialStarFindingLuigi3", "SpecialStarFindingLuigi3");
-    MR::isEqualString("SpecialStarLuigiRescued", "SpecialStarLuigiRescued");
-    MR::isEqualString("EventKinopioExplorerOrganize", "EventKinopioExplorerOrganize");
-    MR::isEqualString("EventKinopioExplorerRescued", "EventKinopioExplorerRescued");
-    MR::isEqualString("SpecialStarGrand5", "SpecialStarGrand5");
-    MR::isEqualString("WarpPodSaveBits", "WarpPodSaveBits");
-    MR::isEqualString("TicoGalaxyAlreadyTalk", "TicoGalaxyAlreadyTalk");
-    MR::isEqualString("AstroDome", "AstroDome");
-    MR::isEqualString("SpecialStarGrand%1d", "SpecialStarGrand%1d");
-    MR::isEqualString("Dark", "Dark");
-    MR::isEqualString("Ghost", "Ghost");
-    MR::isEqualString("Quick", "Quick");
-    MR::isEqualString("Purple", "Purple");
-    MR::isEqualString("Black", "Black");
-    MR::isEqualString("PowerStarComplete", "PowerStarComplete");
-    MR::isEqualString("StarPieceCounterStop", "StarPieceCounterStop");
-    MR::isEqualString("LuigiTalkAfterRescued", "LuigiTalkAfterRescued");
-    MR::isEqualString("EggStarGalaxy", "EggStarGalaxy");
-    MR::isEqualString("MessageAlreadyRead", "MessageAlreadyRead");
-    MR::isEqualString("MsgLedPattern", "MsgLedPattern");
-}
 
 namespace {
     ScenePlayingResult* getScenePlayingResult() {
@@ -83,18 +31,14 @@ namespace MR {
 
     void incPlayerLeft() {
         GameDataFunction::addPlayerLeft(1);
-#ifdef TARGET_PC
         NebulaAchievements::countStat(NebulaStat_OneUps, 1);
-#endif
     }
 
     void decPlayerLeft() {
         GameDataFunction::addPlayerLeft(-1);
         GameDataFunction::addMissPoint(1);
         GameDataFunction::incPlayerMissNum();
-#ifdef TARGET_PC
         NebulaAchievements::countStat(NebulaStat_LivesLost, 1);
-#endif
     }
 
     bool isPlayerLeftSupply() {
@@ -108,9 +52,7 @@ namespace MR {
     void incPlayerGameOverNum() {
         GameDataFunction::addMissPoint(3);
         GameDataFunction::incPlayerMissNum();
-#ifdef TARGET_PC
         NebulaAchievements::countStat(NebulaStat_GameOvers, 1);
-#endif
     }
 
     bool isPlayerLeftSupplyByMissAndGameOver() {
@@ -864,14 +806,6 @@ namespace MR {
         GameDataFunction::setGameEventValue("MessageAlreadyRead", value | mask);
     }
 
-    void offMsgLedPattern() {
-        GameDataFunction::setGameEventValue("MsgLedPattern", 0);
-    }
-
-    bool isMsgLedPattern() {
-        return static_cast< u16 >(GameDataFunction::getGameEventValue("MsgLedPattern")) != 0;
-    }
-
     void explainBeeMarioIfAtFirst() {
         if (!GameDataFunction::isOnGameEventFlag("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */)) {
             InformationObserverFunction::explainBee();
@@ -1023,7 +957,7 @@ namespace MR {
         }
 
         if (GameDataFunction::isEqualJustPowerStarNum(powerStarNumTarget) ||
-            GameDataFunction::isOnJustGameEventFlag("SpecialStarGrand5") && powerStarLeft == 0) {
+            (GameDataFunction::isOnJustGameEventFlag("SpecialStarGrand5") && powerStarLeft == 0)) {
             powerStarLeft += 1;
         }
 
@@ -1051,7 +985,7 @@ namespace MR {
             return false;
         }
 
-        snprintf(key, sizeof(key), "SpecialStarGrand%1d", scenarioNo + 1);
+        nebula_snprintf(key, sizeof(key), "SpecialStarGrand%1d", scenarioNo + 1);
 
         GameEventFlagAccessor accessor = GameEventFlagTable::makeAccessor(key);
 
@@ -1097,7 +1031,4 @@ namespace MR {
         return (mask & value) != 0;
     }
 
-    void onMsgLedPattern() {
-        GameDataFunction::setGameEventValue("MsgLedPattern", 1);
-    }
 };  // namespace MR

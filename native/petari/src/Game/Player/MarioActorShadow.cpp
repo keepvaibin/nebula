@@ -21,18 +21,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 
-void MarioActorShadow_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)-1.0f;
-    (void)500.0f;
-    (void)0.75f;
-    (void)1000.0f;
-    (void)4503599627370496.0;
-    (void)4503601774854144.0;
-}
-
 void MarioActor::initShadow() {
     _A08 = 1;
 
@@ -85,7 +73,7 @@ void MarioActor::calcViewReflectionModel() {
         getRealPos("All_Root", &root);
         TVec3f translation(mPosition - root);
         NebulaMtxTrans(offset.toMtxPtr(), translation.x, translation.y, translation.z);
-        updateReflectAlphaDL(_A09);
+        updateReflectAlphaList(_A09);
         break;
     }
     case 3: {
@@ -133,7 +121,7 @@ void MarioActor::calcViewReflectionModel() {
             _A25++;
         }
 
-        updateSimpleAlphaDL(_A25);
+        updateSimpleAlphaList(_A25);
         _B18 = position;
         break;
     }
@@ -184,7 +172,7 @@ void MarioActor::calcViewReflectionModel() {
             _A24++;
         }
 
-        updateSimpleAlphaDL(_A24);
+        updateSimpleAlphaList(_A24);
         _B18 = position;
         break;
     }
@@ -352,7 +340,6 @@ void MarioActor::drawShadow() const {
     }
 
     _214->drawAndCaptureTex(pSimple, mPosition);
-    _214->clearAlphaBuffer();
     if (mBeeWallWalk) {
         _214->_307 = 0;
     } else {
@@ -589,7 +576,7 @@ void MarioActor::drawSilhouette() const {
     pModel->mFlags._1C = true;
     pModel->directDraw(nullptr);
     pModel->mFlags._1C = false;
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DPass::writeAlpha(true);
+    J3DPass::writeColor(true);
+    J3DPass::constantAlpha(true, 0);
 }

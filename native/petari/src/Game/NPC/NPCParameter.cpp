@@ -4,7 +4,6 @@
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::~Vector();
 template MR::Vector< MR::FixedArray< NPCParameterBase*, 48 > >::Vector();

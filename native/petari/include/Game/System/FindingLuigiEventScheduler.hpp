@@ -1,5 +1,4 @@
 #pragma once
-#include <revolution/types.h>
 
 class GalaxyMoveArgument;
 
@@ -29,6 +28,6 @@ public:
     void update(const GalaxyMoveArgument&);
     void updateOnStageResult(const char*, s32);
 
-    /* 0x00 */ const char* mLuigiLostStageName;
-    /* 0x04 */ s32 mLuigiLostStarID;
+    const char* mLuigiLostStageName;
+    s32 mLuigiLostStarID;
 };

@@ -1,6 +1,6 @@
 #pragma once
+#include "Game/Util/Array.hpp"
 
-#include <revolution/types.h>
 
 class FurCtrl;
 class FurParam;
@@ -18,34 +18,30 @@ public:
     void offDraw(u32);
     void onDraw(u32);
 
-    /* 0x00 */ u8 mAddedToManager;
-    /* 0x01 */ u8 _1;
-    /* 0x02 */ u8 mCount;
-    /* 0x04 */ u8* mShapeIndices;
-    /* 0x08 */ u8* mDrawOrders;
-    /* 0x0C */ u32 _C;
-    /* 0x10 */ u32 _10;
-    /* 0x14 */ u32 _14;
-    /* 0x18 */ LiveActor* mActor;
-    /* 0x1C */ J3DModel* mModel;
-    /* 0x20 */ FurCtrl** mFurCtrls;
+    u8 mAddedToManager;
+    u8 _1;
+    u8 mCount;
+    u8* mShapeIndices;
+    u8* mDrawOrders;
+    u32 _C;
+    u32 _10;
+    u32 _14;
+    LiveActor* mActor;
+    J3DModel* mModel;
+    FurCtrl** mFurCtrls;
 };
 
 class FurBank {
 public:
     FurBank() : mCount() {
-        for (u32 i = 0; i < 32; i++) {
-            mEntries[i] = nullptr;
-            mLayerMasks[i] = 0;
-        }
     }
 
     FurMulti* check(J3DModelData*, u32);
     void regist(FurMulti*, u32);
 
-    /* 0x00 */ u32 mCount;
-    /* 0x04 */ FurMulti* mEntries[32];
-    /* 0x84 */ u32 mLayerMasks[32];
+    u32 mCount;
+    MR::GrowTable< FurMulti*, 32 > mEntries;
+    MR::GrowTable< u32, 32 > mLayerMasks;
 };
 
 namespace MR {

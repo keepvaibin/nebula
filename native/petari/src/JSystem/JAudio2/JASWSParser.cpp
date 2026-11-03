@@ -1,8 +1,7 @@
 #include "JSystem/JAudio2/JASWSParser.hpp"
 #include "JSystem/JAudio2/JASBasicWaveBank.hpp"
 #include "JSystem/JAudio2/JASSimpleWaveBank.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 u32 JASWSParser::getGroupCount(void const* stream) {
     THeader* header = (THeader*)stream;
@@ -10,7 +9,7 @@ u32 JASWSParser::getGroupCount(void const* stream) {
     return group->mGroupCount;
 }
 
-JASWaveBank* JASWSParser::createWaveBank(void const* stream, JKRHeap* heap) {
+JASWaveBank* JASWSParser::createWaveBank(void const* stream, NebulaArena* heap) {
     if (getGroupCount(stream) == 1) {
         return createSimpleWaveBank(stream, heap);
     } else {
@@ -18,14 +17,11 @@ JASWaveBank* JASWSParser::createWaveBank(void const* stream, JKRHeap* heap) {
     }
 }
 
-u32 JASWSParser::sUsedHeapSize;
 
-JASBasicWaveBank* JASWSParser::createBasicWaveBank(void const* stream, JKRHeap* heap) {
+JASBasicWaveBank* JASWSParser::createBasicWaveBank(void const* stream, NebulaArena* heap) {
     if (heap == nullptr) {
         heap = JASDram;
     }
-    u32 free_size = heap->getFreeSize();
-
     THeader* header = (THeader*)stream;
     JASBasicWaveBank* wave_bank = new (heap, 0) JASBasicWaveBank();
     if (wave_bank == nullptr) {
@@ -55,8 +51,6 @@ JASBasicWaveBank* JASWSParser::createBasicWaveBank(void const* stream, JKRHeap* 
             wave_info.mSampleLoopStart = wave->mSampleLoopStart;
             wave_info.mSampleLoopEnd = wave->mSampleLoopEnd;
             wave_info.mSampleCount = wave->mSampleCount;
-            wave_info.mpLastSample = wave->mpLastSample;
-            wave_info.mpPenultSample = wave->mpPenultSample;
             TCtrlWave* ctrl_wave = ctrl->mCtrlWaveOffsets[j].ptr(header);
             u16 waveId = JSULoHalf(ctrl_wave->mData);
             wave_bank->setWaveInfo(wave_group, j, waveId, wave_info);
@@ -67,16 +61,13 @@ JASBasicWaveBank* JASWSParser::createBasicWaveBank(void const* stream, JKRHeap* 
         wave_group->setFileName(archive->mFileName);
     }
     wave_bank->setWaveTableSize(waveTableSize + 1, heap);
-    sUsedHeapSize += (free_size - heap->getFreeSize());
     return wave_bank;
 }
 
-JASSimpleWaveBank* JASWSParser::createSimpleWaveBank(void const* stream, JKRHeap* heap) {
+JASSimpleWaveBank* JASWSParser::createSimpleWaveBank(void const* stream, NebulaArena* heap) {
     if (heap == nullptr) {
         heap = JASDram;
     }
-    u32 free_size = heap->getFreeSize();
-
     THeader* header = (THeader*)stream;
     TCtrlGroup* ctrl_group = header->mCtrlGroupOffset.ptr(header);
     if (ctrl_group->mGroupCount != 1) {
@@ -114,14 +105,11 @@ JASSimpleWaveBank* JASWSParser::createSimpleWaveBank(void const* stream, JKRHeap
         wave_info.mSampleLoopStart = wave->mSampleLoopStart;
         wave_info.mSampleLoopEnd = wave->mSampleLoopEnd;
         wave_info.mSampleCount = wave->mSampleCount;
-        wave_info.mpLastSample = wave->mpLastSample;
-        wave_info.mpPenultSample = wave->mpPenultSample;
         TCtrlWave* ctrl_wave = ctrl->mCtrlWaveOffsets[i].ptr(header);
         u32 tmp = JSULoHalf(ctrl_wave->mData);
         wave_bank->setWaveInfo(tmp, wave_info);
     }
     wave_bank->setFileName(archive->mFileName);
 
-    sUsedHeapSize += (free_size - heap->getFreeSize());
     return wave_bank;
 }

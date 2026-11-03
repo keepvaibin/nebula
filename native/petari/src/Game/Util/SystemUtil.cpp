@@ -1,10 +1,7 @@
 #include "Game/Util/SystemUtil.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include <revolution/os.h>
+#include "Game/System/GameThreads.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
-#ifdef TARGET_PC
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
-#endif
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/FunctionAsyncExecutor.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -32,7 +29,7 @@ namespace MR {
 };  // namespace MR
 
 namespace {
-    FunctionAsyncExecutor* getFunctionAsyncExecutor() NO_INLINE {
+    FunctionAsyncExecutor* getFunctionAsyncExecutor() {
         return MR::getGameSystemObjHolder()->mFunctionAsyncExecutor;
     }
 
@@ -40,7 +37,7 @@ namespace {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameDataTemporaryInGalaxy;
     }
 
-    NameObjHolder* getSceneNameObjHolder() NO_INLINE {
+    NameObjHolder* getSceneNameObjHolder() {
         return SingletonHolder< GameSystem >::get()->mSceneController->mObjHolder;
     }
 };  // namespace
@@ -75,11 +72,7 @@ namespace MR {
     }
 
     void waitEndChangeArchivePlayer() {
-        while (!GameSystemFunction::isEndChangeArchivePlayer()) {
-#ifdef TARGET_PC
-            NebulaKernel::poll();
-#endif
-        }
+        GameSystemFunction::waitEndChangeArchivePlayer();
     }
 
     void callMethodAllSceneNameObj(NameObjMethod pMethod) {
@@ -108,8 +101,8 @@ namespace MR {
         getGameSystemObjHolder()->clearRequestFileInfo(param1);
     }
 
-    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, int threadPriority, const char* pThreadName) {
-        ::getFunctionAsyncExecutor()->start(rFunc, threadPriority, pThreadName);
+    void startFunctionAsyncExecute(const MR::FunctorBase& rFunc, const char* pThreadName) {
+        ::getFunctionAsyncExecutor()->start(rFunc, pThreadName);
     }
 
     bool startFunctionAsyncExecuteOnMainThread(const MR::FunctorBase& rFunc, const char* pThreadName) {
@@ -134,24 +127,22 @@ namespace MR {
         return false;
     }
 
-    void suspendAsyncExecuteThread(const char* pThreadName) {
-        NebulaKernel::suspend(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+    namespace {
+        GameEvent sSceneInitializeResume;
     }
 
-    void resumeAsyncExecuteThread(const char* pThreadName) {
-        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
-
-        NebulaKernel::resume(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+    void waitSceneInitializeResume() {
+        sSceneInitializeResume.wait();
     }
 
-    bool isSuspendedAsyncExecuteThread(const char* pThreadName) {
-        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
-
-        if (pThread == nullptr) {
+    bool tryResumeSceneInitialize() {
+        if (!sSceneInitializeResume.isWaiting()) {
             return false;
         }
 
-        return NebulaKernel::isSuspended(pThread);
+        sSceneInitializeResume.signal();
+
+        return true;
     }
 
     bool isScreen16Per9() {
@@ -177,10 +168,6 @@ namespace MR {
     }
 
     // The output is 60 Hz: no PAL television to suggest PAL60 for.
-    bool isDisplayEncouragePal60Window() {
-        return false;
-    }
-
     JMapIdInfo* getPlayerRestartIdInfo() {
         return ::getGameDataTemporaryInGalaxy()->mPlayerRestartIdInfo;
     }

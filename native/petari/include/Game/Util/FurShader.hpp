@@ -1,10 +1,8 @@
 #pragma once
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DModel;
 class J3DModelData;
@@ -19,7 +17,7 @@ public:
 
         void setLengthMap(const ResTIMG*);
         f32 refer(f32, f32) const;
-        u16 getTexelOrder(u16, f32, GXTexWrapMode) const;
+        u16 getTexelOrder(u16, f32, u8) const;
 
         const ResTIMG* _0;
         const u8* _4;
@@ -43,14 +41,8 @@ public:
     void makeIndexData(J3DShape*) const;
     void checkBorderVtx(J3DModelData*, u32);
 
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ CShader::CIndex* mIndexArray;
-    /* 0x10 */ CShader::CLengthMap mLengthMap;
-    /* 0x1C */ f32 _1C;
-    /* 0x20 */ u8 _20;
-    /* 0x21 */ u8 _21;
-    /* 0x22 */ u8 _22;
-    /* 0x23 */ u8 _23;
-    /* 0x24 */ u8 _24;
-    /* 0x25 */ u8 _25;
+    f32 _8;
+    CShader::CIndex* mIndexArray;
+    CShader::CLengthMap mLengthMap;
+    f32 _1C;
 };

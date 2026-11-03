@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Post-processing settings, pass planning, FSR 1 constants, the AA self-test and the overlay's status text.
 #include "galaxy/render/post_process_settings.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/render_config.h"
 
 #include <algorithm>
@@ -53,20 +54,6 @@ unsigned deband_reduction(unsigned height) noexcept {
 
 unsigned deband_reduced_size(unsigned size, unsigned reduction) noexcept {
     return (size + reduction - 1u) / reduction;
-}
-
-bool deband_wanted() noexcept {
-    static const bool wanted = [] {
-#if defined(_MSC_VER)
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_DEBAND") != 0 || length <= 1u || value[0] != '0';
-#else
-        const char* value = std::getenv("GALAXY_DEBAND");
-        return value == nullptr || value[0] != '0';
-#endif
-    }();
-    return wanted;
 }
 
 void set_fsr_easu_constants(PostConstants& c, float in_w, float in_h, float out_w, float out_h) noexcept {

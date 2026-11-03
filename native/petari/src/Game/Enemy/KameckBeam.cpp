@@ -376,7 +376,7 @@ void KameckBeam::exeExplosion() {
     case BeamType_Turtle:
         if (tryChangeTurtle()) {
             MR::shakeCameraNormalWeak();
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             MR::emitEffect(this, "BeamTurtleBreak");
             return;
         }
@@ -386,7 +386,7 @@ void KameckBeam::exeExplosion() {
     case BeamType_FireBall3:
         if (tryChangeFire()) {
             MR::shakeCameraNormalWeak();
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             MR::emitEffect(this, "BeamFireBreak");
             MR::startSound(this, "SE_BM_KAMECK_FIRE_EXPLOSION");
             return;

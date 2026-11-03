@@ -1,4 +1,5 @@
 #include "Game/Ride/SwingRope.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -13,15 +14,14 @@
 #include "Game/Util/ActorShadowUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXEnum.h>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -38,8 +38,6 @@ namespace {
     static const f32 sHangPointGravityStretcn = 0.8f;
     static const f32 sHangPointFrictionRate = 0.995f;
     static const f32 sHangPointReboundRate = 0.7f;
-    static const f32 sPointSpeedToSlow = 10.0f;
-    static const f32 sPointNormalToSlow = 0.9999f;
     static const s32 sAnimInterpoleFrame = 10;
     static const s32 sAnimInterpoleFrameToSlowWait = 10;
     static const s32 sStepWaitAfterSwing = 0;
@@ -164,8 +162,6 @@ void SwingRope::exeFree() {
 
     SwingRopePoint* point;
     for (s32 idx = 0; idx < mNumPoints; idx++) {
-        f32 f1 = idx;
-        f32 f2 = mNumPoints - 1;
         point = mPoints[idx];
         point->updatePosAndAxis(front, calcFriction(idx));
         front.set(mPoints[idx]->mFront);
@@ -194,7 +190,7 @@ inline void SwingRope::exeFreeInvalid() {
 
 void SwingRope::exeBindSlideDownStart() {
     if (MR::isFirstStep(this)) {
-        MR::startBckPlayer("SwingRopeSlideDownStart", 0L);
+        MR::startBckPlayer("SwingRopeSlideDownStart", 0);
         mSlideSpeed = 0.0f;
     }
 
@@ -400,27 +396,12 @@ bool SwingRope::isAllPointsStop() const {
     return true;
 }
 
-bool SwingRope::isAllPointsSlow() const {
-    for (s32 idx = 0; idx < mNumPoints; idx++) {
-        if (MR::abs(mPoints[idx]->mVelocity.x) > ::sPointSpeedToSlow || MR::abs(mPoints[idx]->mVelocity.y) > ::sPointSpeedToSlow ||
-            MR::abs(mPoints[idx]->mVelocity.z) > ::sPointSpeedToSlow) {
-            return false;
-        }
-
-        if (mPoints[idx]->mUp.y < ::sPointNormalToSlow) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 bool SwingRope::isStretched() const {
     return MR::abs(mGrabCoord - mBasePos.distance(mSledPoint->mPosition)) < ::sCoordLooseToStretch;
 }
 
 bool SwingRope::tryJump() {
-    if (MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA()) {
         TVec3f front = mSledPoint->mFront;
 
         TVec3f jumpY = mGravity;
@@ -437,9 +418,9 @@ bool SwingRope::tryJump() {
             MR::normalize(&jumpXZ);
             front.set(jumpXZ);
             jumpXZ.scale(::sJumpSpeedMaxXZ);
-        } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isGamePadStickOperated(WPAD_CHAN0)) {
+        } else if (jumpXZ.length() < ::sJumpSpeedMinXZ && MR::isMoveStickOperated(PLAYER_1)) {
             TVec3f stick(0.0f, 0.0f, 0.0f);
-            MR::calcWorldStickDirectionXZ(&stick, WPAD_CHAN0);
+            MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
             front.set< f32 >(stick.x, stick.y, stick.z);
             jumpXZ.set(stick * ::sJumpSpeedRate);
             MR::vecKillElement(jumpXZ, mGravity, &jumpXZ);
@@ -454,7 +435,7 @@ bool SwingRope::tryJump() {
         MR::endActorCameraAtLanding(this, mCameraInfo);
         MR::startSound(mRider, "SE_PV_JUMP_S");
         MR::startSound(mRider, "SE_PM_JUMP_M");
-        MR::startBckPlayer("SwingRopeSpin", 0L);
+        MR::startBckPlayer("SwingRopeSpin", 0);
 
         MR::setPlayerFrontTargetVec(front, 1);
         MR::endBindAndPlayerWeakGravityJump(this, jumpVec);
@@ -470,7 +451,7 @@ bool SwingRope::tryJump() {
 void SwingRope::updateHangPoint() {
     TVec3f stick(0.0f, 0.0f, 0.0f);
     TVec3f front = mSledPoint->mFront;
-    MR::calcWorldStickDirectionXZ(&stick, WPAD_CHAN0);
+    MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
 
     if (!MR::isNearZero(stick)) {
         MR::vecBlend(mSledPoint->mFront, stick, &front, ::sHangPointBlendRateAxisZ);
@@ -662,7 +643,6 @@ void SwingRope::updateHangLowerPoints() {
     s32 nextIndex = grabIndex + 1;
 
     if (nextIndex <= mNumPoints - 1) {
-        f32 f = nextIndex + 1;
         mPoints[nextIndex]->setPosAndAxis(mFootPos, mSledPoint->mSide, mSledPoint->mUp, mSledPoint->mFront);
 
         TVec3f up, front, side;
@@ -705,7 +685,7 @@ namespace {
 
     void drawPolygon(const TVec3f& posA, const TVec3f& posB, const TVec3f& side, const TVec3f& front, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1,
                      u32 color2, f32 texY1, f32 texY2) {
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             sendPoint(posA, side, front, x1, y1, color1, 0.0f, texY1);
             sendPoint(posA, side, front, x2, y2, color2, 1.0f, texY1);
@@ -715,7 +695,7 @@ namespace {
     }
 
     void drawLine(const SwingRope* pRope, u32 color1, u32 color2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             const TVec3f& front = pRope->mPoints[0]->getFront();
             const TVec3f& side = pRope->mPoints[0]->getSide();
@@ -738,7 +718,7 @@ namespace {
     }
 
     void drawLineAtHanging(const SwingRope* pRope, u32 color1, u32 color2, f32 texY1, f32 texY2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             const TVec3f& front = pRope->mPoints[0]->getFront();
             const TVec3f& side = pRope->mPoints[0]->getSide();
@@ -800,34 +780,22 @@ void SwingRope::drawBind() const {
 
 SwingRopeGroup::SwingRopeGroup(const char* pName) : NameObj(pName) {
     mTexture = nullptr;
-    mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope.arc", "SwingRope.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("SwingRope.arc", "SwingRope.bti"));
 
     MR::registerPreDrawFunction(MR::Functor(this, &SwingRopeGroup::initDraw), MR::DrawType_SwingRope);
 }
 
 void SwingRopeGroup::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX3x4, GX_TG_TEX0, 60, GX_FALSE, 125);
-    mTexture->load(GX_TEXMAP0);
-
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_RASC, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-
-    J3DNativeState::setZMode(GX_ENABLE, GX_LEQUAL, GX_ENABLE);
-    J3DNativeState::setZCompLoc(GX_DISABLE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
+    // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, its alpha the texture's; drawn where
+    // the alpha is above 0, depth tested and written, no culling.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
+    material.early_depth = 0;
+    material.constants[0] = 1.0f;
+    material.constants[1] = 0.0f;
+    NativeShader::setTexture(material, 0, mTexture);
+    NativeShader::send(material);
+    J3DNativeShape::setCurrentIdentity();
 }

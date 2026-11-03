@@ -47,7 +47,7 @@ bool GalaxyStatusAccessor::isValidNormalComet(s32 scenarioNo) const {
 }
 
 bool GalaxyStatusAccessor::isCometStar(s32 scenarioNo) const {
-    return isExistAnyComet() && scenarioNo == getNormalCometScenarioNo() || isValidCoin100(scenarioNo);
+    return (isExistAnyComet() && scenarioNo == getNormalCometScenarioNo()) || isValidCoin100(scenarioNo);
 }
 
 bool GalaxyStatusAccessor::isExistGrandStar() const {
@@ -211,20 +211,6 @@ u32 GalaxyStatusAccessor::getActivePowerStarId(s32 scenarioNo) const {
 
     if (mScenarioData->getValueU32("PowerStarId", scenarioNo, &powerStarId)) {
         return powerStarId;
-    } else {
-        return 0;
-    }
-}
-
-// Note: this function's existence is implied by the leftover string in .data,
-// This ultimately gets stripped, leaving no symbol, however the string data remains.
-// Given the structure of the nearby functions, it is likely this function would
-// be structured similarly.
-u32 GalaxyStatusAccessor::getLuigiModeTimer(s32 scenarioNo) const {
-    u32 luigiModeTimer;
-
-    if (mScenarioData->getValueU32("LuigiModeTimer", scenarioNo, &luigiModeTimer)) {
-        return luigiModeTimer;
     } else {
         return 0;
     }

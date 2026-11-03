@@ -6,10 +6,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void BeeFlowerHover_FORCE_MATCH_SDATA2() {
-    (void)50.0f;
-}
-
 namespace {
     static const f32 sDefaultRotateSpeed = 50.0f;
     static const s32 sStepToRecoverStart = 60;
@@ -77,7 +73,7 @@ void BeeFlowerHover::init(const JMapInfoIter& rIter) {
 
     MR::getJMapInfoArg0NoInit(rIter, &_BC);
     _BC /= 100.0f;
-    mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f, -1);
+    mLodCtrlPlanet = MR::createLodCtrlPlanet(this, rIter, 100.0f);
     mLodCtrlPlanet->validate();
     initNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvWait));
     makeActorAppeared();
@@ -119,7 +115,7 @@ void BeeFlowerHover::exeHardTouch() {
         MR::invalidateCollisionParts(this);
         MR::invalidateShadow(this, 0);
         MR::onCalcShadowOneTime(this, 0);
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -147,10 +143,6 @@ void BeeFlowerHover::exeRecover() {
 void BeeFlowerHover::control() {
     if (!isNerve(GET_NERVE(BeeFlowerHover, BeeFlowerHoverNrvRecover))) {
         mLodCtrlPlanet->update();
-
-        if (mLodCtrlPlanet->isShowLowModel()) {
-            return;
-        }
     }
 
     TPos3f mtx;

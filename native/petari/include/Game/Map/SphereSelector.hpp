@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 class LiveActorGroup;
@@ -40,7 +40,7 @@ public:
     }
 
     bool isButtonAPressed() {
-        return MR::testCorePadButtonA(WPAD_CHAN0) && !MR::isDemoActive();
+        return MR::isHeldJump(PLAYER_1) && !MR::isDemoActive();
     }
 
     void sendSelectedMsgAndSetTarget(LiveActor* pTarget) {
@@ -49,16 +49,16 @@ public:
         }
     }
 
-    /* 0x8C */ LiveActorGroup* mSphereGroup;
-    /* 0x90 */ SphereSelectorHandle* mHandle;
-    /* 0x94 */ LiveActor* mSelectedTarget;
-    /* 0x98 */ LiveActor* _98;
-    /* 0x9C */ u32 _9C;
-    /* 0xA0 */ LiveActor* mPointingTarget;
-    /* 0xA4 */ s32 _A4;
-    /* 0xA8 */ TVec2f _A8;
-    /* 0xB0 */ bool mIsPointingInvalid;
-    /* 0xB1 */ bool _B1;  // Something for playing sounds the first time you click on a galaxy or cancel the selection
+    LiveActorGroup* mSphereGroup;
+    SphereSelectorHandle* mHandle;
+    LiveActor* mSelectedTarget;
+    LiveActor* _98;
+    u32 _9C;
+    LiveActor* mPointingTarget;
+    s32 _A4;
+    TVec2f _A8;
+    bool mIsPointingInvalid;
+    bool _B1;  // Something for playing sounds the first time you click on a galaxy or cancel the selection
 };
 
 class SphereSelectorFunction {
@@ -93,13 +93,13 @@ public:
     static void calcHandledRotateMtx(const TVec3f&, TPos3f*);
     static TVec3f& getHandleTrans();
     static f32 getHandleRotateSpeed();
-    static bool isHandleHolding() NO_INLINE;
+    static bool isHandleHolding();
     static void registerPointingTarget(LiveActor*, HandlePointingPriority);
     static bool tryRegisterPointingTarget(LiveActor*, HandlePointingPriority);
     static bool isPointingTarget();
     static bool isPointingTarget(const LiveActor*);
     static LiveActor* getPointingTarget();
-    static LiveActor* getSelectedTarget() NO_INLINE;
+    static LiveActor* getSelectedTarget();
     static TVec3f& getSelectedActorTrans();
     static void calcOffsetPos(TVec3f*, const TVec3f&, const TVec3f&, const TVec3f&, const TVec3f&);
 };

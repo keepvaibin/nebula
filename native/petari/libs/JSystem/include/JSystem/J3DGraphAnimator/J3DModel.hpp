@@ -1,12 +1,11 @@
 #pragma once
 
-#include "JSystem/J3DGraphAnimator/J3DSkinDeform.hpp"
+#include "JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp"
 #include "JSystem/J3DGraphAnimator/J3DVtxShader.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DModelData;
 class J3DMtxBuffer;
@@ -14,19 +13,11 @@ class J3DShapePacket;
 
 enum J3DMdlFlag {
     J3DMdlFlag_None = 0x0,
-    /* 0x00001 */ J3DMdlFlag_Unk1 = 0x1,
-    /* 0x00002 */ J3DMdlFlag_UseDefaultJ3D = 0x2,
-    /* 0x00004 */ J3DMdlFlag_SkinPosCpu = 0x4,
-    /* 0x00008 */ J3DMdlFlag_SkinNrmCpu = 0x8,
-    /* 0x00010 */ J3DMdlFlag_EnableLOD = 0x10,
-    /* 0x20000 */ J3DMdlFlag_UseSharedDL = 0x20000,
-    /* 0x40000 */ J3DMdlFlag_UseSingleDL = 0x40000,
-    /* 0x80000 */ J3DMdlFlag_DifferedDLBuffer = 0x80000,
-};
-
-struct J3DUnkCalc2 {
-    virtual void unk();
-    virtual void calc(J3DModelData* mpModelData);
+    J3DMdlFlag_Unk1 = 0x1,
+    J3DMdlFlag_UseDefaultJ3D = 0x2,
+    J3DMdlFlag_UseSharedSnapshot = 0x20000,
+    J3DMdlFlag_UseSingleSnapshot = 0x40000,
+    J3DMdlFlag_DifferedSnapshots = 0x80000,
 };
 
 typedef void (*J3DCalcCallBack)(J3DModel*, u32 timing);
@@ -46,12 +37,10 @@ public:
     s32 entryModelData(J3DModelData*, u32, u32);
     s32 createShapePacket(J3DModelData*);
     s32 createMatPacket(J3DModelData*, u32);
-    s32 newDifferedDisplayList(u32);
+    s32 newDifferedSnapshot(u32);
     void lock();
     void unlock();
     void diff();
-    s32 setDeformData(J3DDeformData*, u32);
-    s32 setSkinDeform(J3DSkinDeform*, u32);
     void calcAnmMtx();
     void calcWeightEnvelopeMtx();
     inline void calcNrmMtx();
@@ -59,7 +48,7 @@ public:
     void calcBBoardMtx();
     void prepareShapePackets();
     void ptrToIndex();
-    void makeDL();
+    void makeMesh();
     virtual void update();
     virtual void entry();
     virtual void calc();
@@ -83,10 +72,6 @@ public:
 
     bool checkFlag(u32 flag) const {
         return (mFlags & flag) ? true : false;
-    }
-
-    bool isCpuSkinningOn() const {
-        return (mFlags & J3DMdlFlag_SkinPosCpu) && (mFlags & J3DMdlFlag_SkinNrmCpu);
     }
 
     Mtx& getBaseTRMtx() {
@@ -163,28 +148,18 @@ public:
         return mMtxBuffer->getWeightAnmMtx(i);
     }
 
-    J3DSkinDeform* getSkinDeform() {
-        return mSkinDeform;
-    }
-
-    /* 0x04 */ J3DModelData* mModelData;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u32 mDiffFlag;
-    /* 0x10 */ J3DCalcCallBack mCalcCallBack;
-    /* 0x14 */ uintptr_t mUserArea;
-    /* 0x18 */ Vec mBaseScale;
-    /* 0x24 */ Mtx mBaseTransformMtx;
-    /* 0x54 */ Mtx mInternalView;
-    /* 0x84 */ J3DMtxBuffer* mMtxBuffer;
-    /* 0x88 */ J3DVertexBuffer mVertexBuffer;
-    /* 0xC0 */ J3DMatPacket* mMatPacket;
-    /* 0xC4 */ J3DShapePacket* mShapePacket;
-    /* 0xC8 */ J3DDeformData* mDeformData;
-    /* 0xCC */ J3DSkinDeform* mSkinDeform;
-    /* 0xD0 */ J3DVtxColorCalc* mVtxColorCalc;
-    /* 0xD4 */ J3DVtxShader* mUnkCalc1;
-    /* 0xD8 */ J3DUnkCalc2* mUnkCalc2;
-#ifdef TARGET_PC
+    J3DModelData* mModelData;
+    u32 mFlags;
+    u32 mDiffFlag;
+    J3DCalcCallBack mCalcCallBack;
+    uintptr_t mUserArea;
+    Vec mBaseScale;
+    Mtx mBaseTransformMtx;
+    Mtx mInternalView;
+    J3DMtxBuffer* mMtxBuffer;
+    J3DVertexBuffer mVertexBuffer;
+    J3DMatPacket* mMatPacket;
+    J3DShapePacket* mShapePacket;
+    J3DVtxShader* mUnkCalc1;
     u16 mMotionEpoch;  // counts the model's lives (MotionSignal)
-#endif
 };

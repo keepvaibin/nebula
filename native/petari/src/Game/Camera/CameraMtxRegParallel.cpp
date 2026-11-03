@@ -4,11 +4,6 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 
-void CameraMtxRegParallel_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)(MR::pi() / 2.0f);
-}
-
 CameraMtxRegParallel::~CameraMtxRegParallel() {
 }
 

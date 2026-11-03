@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
+
 #include "Game/Screen/LayoutActor.hpp"
 
 class ValueControl;
@@ -9,7 +11,7 @@ public:
     enum ResetOperation {
         ResetOperation_ApplicationReset,
         ResetOperation_Restart,
-        ResetOperation_ReturnToMenu,
+        ResetOperation_Quit,
     };
 
     /// @brief Creates a new `GameSystemResetAndPowerProcess`.
@@ -21,24 +23,23 @@ public:
     virtual void draw() const;
     virtual void control();
 
-    bool isActive() const NO_INLINE;
+    bool isActive() const;
     void setResetOperationApplicationReset();
-    void setResetOperationReturnToMenu();
+    void setResetOperationQuit();
     void requestReset(bool);
-    void requestGoWiiMenu(bool);
-    void notifyCheckDiskResult(bool);
-    void exePolling();
+    void requestQuitGame(bool);
+    void exeIdle();
     void exeWaitResetPermitted();
     void exePrepareReset();
     void exeReset();
     void exeWaitPrepareFadein();
     void exeFadein();
     void exitApplication();
-    bool tryPermitReset() NO_INLINE;
+    bool tryPermitReset();
     bool isResetAcceptAudio() const;
 
-    /* 0x24 */ ValueControl* mFadeinoutControl;
-    /* 0x58 */ volatile s32 mResetOperation;
-    /* 0x5C */ bool _5C;
-    /* 0x5E */ bool _5E;
+    ValueControl* mFadeinoutControl;
+    NebulaAtomic< s32 > mResetOperation;
+    bool _5C;
+    bool _5E;
 };

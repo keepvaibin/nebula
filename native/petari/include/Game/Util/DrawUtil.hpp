@@ -1,26 +1,19 @@
 #pragma once
 
-#include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class J3DModelData;
 class J3DModel;
 class J3DMaterial;
 class JUTTexture;
 
-class J2DOrthoGraphSimple : public J2DOrthoGraph {
-public:
-    J2DOrthoGraphSimple();
-
-    virtual ~J2DOrthoGraphSimple() {
-    }
-
-    virtual void setPort();
-};
 
 namespace MR {
+    void setupScreen2D();
+    void drawScreenColor(const NebulaColor8& rColor);
+    void drawScreenPicture(const JUTTexture& rTexture);
     void drawInit();
     void reinitGX();
     void loadViewMtxFor2DModel();
@@ -31,10 +24,13 @@ namespace MR {
     void clearZBuffer();
     void clearAlphaBuffer(u8);
     void clearAlphaBuffer(u8, const TVec2f&, const TVec2f&);
-    void fillScreenSetup(const GXColor&);
+    void fillScreenSetup(const NebulaColor8&);
     void fillScreenArea(const TVec2s&, const TVec2s&);
-    void fillScreen(const GXColor&);
+    void fillScreen(const NebulaColor8&);
     void setupShadowVolumeDraw();
+    // The volume draws' colour (runtime/src/render/materials/flat_color.hlsl), their blending, depth, culling and
+    // writes as the drawing state has them (each pass sets them).
+    void setShadowVolumeColor(const NebulaColor8& rColor);
     void drawSimpleModel(J3DModelData*);
     void fillSilhouetteColor();
     const JUTTexture* getMarioShadowTex();

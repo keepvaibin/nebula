@@ -10,9 +10,9 @@ class J3DMatPacket;
 class ModelObj;
 
 struct RailItem {
-    /* 0x0 */ ElectricRailType mRailType;
-    /* 0x4 */ const ElectricRailMoving* mHost;
-    /* 0x8 */ J3DMatPacket* mMatPacket;
+    ElectricRailType mRailType;
+    const ElectricRailMoving* mHost;
+    J3DMatPacket* mMatPacket;
 };
 
 class ElectricRailHolder : public LiveActor {
@@ -31,14 +31,14 @@ public:
     void registerRail(const LiveActor*, ElectricRailType);
     ModelObj* createModel(ElectricRailType) const;
 
-    /* 0x08C */ MR::FixedArray< ModelObj*, 4 > mRailModels;
-    /* 0x09C */ MR::Vector< MR::FixedArray< RailItem*, 64 > > mRailItems;
-    /* 0x1A0 */ bool mIsActive;
+    MR::FixedArray< ModelObj*, 4 > mRailModels;
+    MR::Vector< MR::FixedArray< RailItem*, 64 > > mRailItems;
+    bool mIsActive;
 };
 
 namespace ElectricRailFunction {
     void registerRail(const LiveActor*, ElectricRailType);
     bool isTouchRail(const HitSensor*, TVec3f*, TVec3f*);
     f32 getHitSensorRadius();
-    u32 calcDisplayListSize(u32, s32);
+    u32 calcMeshSize(u32, s32);
 };  // namespace ElectricRailFunction

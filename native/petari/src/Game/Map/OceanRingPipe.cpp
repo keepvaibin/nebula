@@ -10,7 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 OceanRingPipe::~OceanRingPipe() {
 }
@@ -143,7 +143,7 @@ void OceanRingPipe::initPoints() {
         MR::moveCoord(this, length);
     }
 
-    // The points and normals as the renderer reads them (the normals as GX reads S16 normals: 1.14 fixed point).
+    // The points and normals as the renderer reads them (the normals: 1.14 fixed point).
     NativeMesh::sendArray(_A0, NEBULA_SHAPE_ARRAY_POSITION, _94, _A0);
     f32* pNormals = new f32[3 * _94];
     for (s32 i = 0; i < _94; i++) {

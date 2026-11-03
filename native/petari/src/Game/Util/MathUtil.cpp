@@ -6,31 +6,8 @@
 #include <JSystem/JGeometry/TUtil.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
-
-void MathUtil_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-    (void)(MR::pi() / 2.0f);
-    (void)2.0f;
-}
-
-void MathUtil_DUMMY() {
-    TVec3f vec;
-    vec.setLength(1.0f);
-
-    TVec3f a, b, c;
-    a.sub(b, c);
-
-    TQuat4f rot;
-    rot.setRotate(a, 1.0f);
-}
 
 const Vec gZeroVec = {0.0f, 0.0f, 0.0f};
 
@@ -39,16 +16,6 @@ namespace {
 };  // namespace
 
 namespace MR {
-    void MathUtil_FORCE_MATCH_RODATA() {
-        (void)0.98;
-        (void)(1.0 - 0.98);
-        (void)255.0;
-        (void)1.0;
-        (void)4503599627370496.0;
-        (void)4503601774854144.0;
-        (void)360.0;
-    }
-
     void initAcosTable() {
         ::gAcosTable = new f32[256];
 
@@ -64,6 +31,9 @@ namespace MR {
     }
 
     f32 acosEx(f32 x) {
+        if (x != x) {
+            return 0.0f;
+        }
         if (MR::abs(x) < 0.98f) {
             return JMAAcosRadian(x);
         } else if (x < 0.0f) {
@@ -150,7 +120,6 @@ namespace MR {
     }
 
     f32 getEaseInValue(f32 x, f32 start, f32 end, f32 max) {
-        f32 t = x / max * pi() / 2.0f;
         return getInterpolateValue(1.0f - JMACosRadian(x / max * pi() / 2.0f), start, end);
     }
 
@@ -379,7 +348,7 @@ namespace MR {
             return;
         }
 
-        f32 discRoot = JMASqrt(discrim);
+        f32 discRoot = NebulaSqrt(discrim);
 
         f32 t1 = (max + discRoot) / end;
         f32 t2 = (max - discRoot) / end;
@@ -588,14 +557,6 @@ namespace MR {
         return turnQuat(pDst, rSrc, zDir, rTo, angle);
     }
 
-    void turnQuatZDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate) {
-        TVec3f zDir;
-        rSrc.getZDir(zDir);
-        TQuat4f rot;
-        rot.setRotate(zDir, rTo, rate);
-        pDst->mult(rot, rSrc);
-    }
-
     f32 sign(f32 x) {
         if (0.0f < x) {
             return 1.0f;
@@ -618,7 +579,6 @@ namespace MR {
             return;
         }
 
-        f32 degree = JMACosDegree(angle);
 
         rotateVecDegree(pDst, rBase, axis, angle);
     }
@@ -849,7 +809,7 @@ namespace MR {
             return true;
         }
 
-        f32 sinAngle = JMASqrt(1.0f - cosAngle * cosAngle);
+        f32 sinAngle = NebulaSqrt(1.0f - cosAngle * cosAngle);
         TVec3f rejectFrom = rTo.killElement(rFrom);
 
         if (isNearZero(rejectFrom)) {
@@ -1094,13 +1054,13 @@ namespace MR {
         return (s32)(JGeometry::TUtil< f32 >::clamp(start + (end - start) * t, 0.0f, 255.0f));
     }
 
-    GXColor lerp(GXColor start, GXColor end, f32 t) {
+    NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t) {
         u8 a = lerp(start.a, end.a, t);
         u8 b = lerp(start.b, end.b, t);
         u8 g = lerp(start.g, end.b, t);
         u8 r = lerp(start.r, end.r, t);
 
-        GXColor color = {r, g, b, a};
+        NebulaColor8 color = {r, g, b, a};
 
         return color;
     }
@@ -1154,8 +1114,7 @@ namespace MR {
     };
 };  // namespace MR
 
-f32 VecKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __REGISTER const Vec* pDst) {
-#ifdef TARGET_PC
+f32 VecKillElement(const Vec* pSrc, const Vec* pKill, const Vec* pDst) {
     const f32 sx = pSrc->x, sy = pSrc->y, sz = pSrc->z;
     const f32 kx = pKill->x, ky = pKill->y, kz = pKill->z;
     const f32 dot = (sx * kx + sy * ky) + sz * kz;
@@ -1165,25 +1124,6 @@ f32 VecKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __RE
     dst->y = sy - dot * ky;
     dst->z = sz - dot * kz;
     return dot;
-#elif defined(__MWERKS__)
-    __REGISTER f32 dot;
-    // clang-format off
-    asm volatile {
-        psq_l      f2, 4(pSrc),  0, 0
-        psq_l      f3, 4(pKill), 0, 0
-        psq_l      f5, 0(pSrc),  1, 0
-        psq_l      f4, 0(pKill), 1, 0
-        ps_mul     f6, f2, f3
-        ps_madd    f7, f5, f4, f6
-        ps_sum0    dot, f7, f6, f6
-        ps_merge00 dot, dot, dot
-        ps_nmsub   f5, dot, f4, f5
-        ps_nmsub   f2, dot, f3, f2
-        psq_st     f5, 0(pDst),  1, 0
-        psq_st     f2, 4(pDst),  0, 0
-    }  // clang-format on
-    return dot;
-#endif
 }
 
 namespace MR {
@@ -1198,50 +1138,20 @@ namespace MR {
     }
 
     void vecScaleAdd(const register TVec3f* pA1, const register TVec3f* pA2, register f32 a3) {
-#ifdef TARGET_PC
         // The original stores through pA1, declared const.
         TVec3f* dst = const_cast< TVec3f* >(pA1);
         dst->x = pA2->x * a3 + pA1->x;
         dst->y = pA2->y * a3 + pA1->y;
         dst->z = pA2->z * a3 + pA1->z;
-#elif defined(__MWERKS__)
-        __asm {
-            psq_l f0, 0(pA1), 0, 0
-            psq_l f3, 0(pA2), 0, 0
-            psq_l f2, 8(pA1), 1, 0
-            psq_l f4, 8(pA2), 1, 0
-            ps_madds0 f0, f3, a3, f0
-            ps_madds0 f2, f4, a3, f2
-            psq_st f0, 0(pA1), 0, 0
-            psq_st f2, 8(pA1), 1, 0
-        }
-
-#endif
     }
 
     void PSvecBlend(const register TVec3f* pA1, const register TVec3f* pA2, register TVec3f* pA3, register f32 a4, register f32 a5) {
-#ifdef TARGET_PC
         const f32 x = pA2->x * a5 + pA1->x * a4;
         const f32 y = pA2->y * a5 + pA1->y * a4;
         const f32 z = pA2->z * a5 + pA1->z * a4;
         pA3->x = x;
         pA3->y = y;
         pA3->z = z;
-#elif defined(__MWERKS__)
-        __asm {
-            psq_l     f0, 0(pA1), 0, 0
-            psq_l     f3, 8(pA1), 1, 0
-            ps_muls0  f4, f0, a4
-            psq_l     f0, 0(pA2), 0, 0
-            ps_muls0  f3, f3, a4
-            psq_l     f1, 8(pA2), 1, 0
-            ps_madds0 f4, f0, f2, f4
-            ps_madds0 f3, f1, f2, f3
-            psq_st    f4, 0(pA3), 0, 0
-            psq_st    f3, 8(pA3), 1, 0
-        }
-
-#endif
     }
 
     void vecBlend(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pDst, f32 rate) {
@@ -1332,7 +1242,7 @@ namespace MR {
         return;
     }
 
-    void blendColor(GXColor* pDst, const GXColor& rStart, const GXColor& rEnd, f32 t) {
+    void blendColor(NebulaColor8* pDst, const NebulaColor8& rStart, const NebulaColor8& rEnd, f32 t) {
         pDst->r = (s32)(getInterpolateValue(t, rStart.r, rEnd.r));
         pDst->g = (s32)(getInterpolateValue(t, rStart.g, rEnd.g));
         pDst->b = (s32)(getInterpolateValue(t, rStart.b, rEnd.b));
@@ -1605,22 +1515,6 @@ namespace MR {
         return fmod(x, y);
     }
 
-    void floatToFixed16(TVec3s* pDst, const TVec3f& rPSrc, u8 q) {
-        f32 scale = 1 << q;
-
-        pDst->x = (s32)(rPSrc.x * scale);
-        pDst->y = (s32)(rPSrc.y * scale);
-        pDst->z = (s32)(rPSrc.z * scale);
-    }
-
-    void fixed16ToFloat(TVec3f* pDst, const TVec3s& rPSrc, u8 q) {
-        f32 scale = 1.0f / (1 << q);
-
-        pDst->x = rPSrc.x * scale;
-        pDst->y = rPSrc.y * scale;
-        pDst->z = rPSrc.z * scale;
-    }
-
     void getRotatedAxisY(TVec3f* pDst, const TVec3f& rPSrc) {
         f32 var = rPSrc.x;
         f32 CosX = JMACosDegree(var);
@@ -1645,22 +1539,3 @@ namespace MR {
         NebulaMtxMultVec(mtx, &vec, pDst);
     }
 };  // namespace MR
-
-f32 JMASqrt(__REGISTER f32 value) {
-    if (!(value > 0.0f)) {
-        return value;
-    }
-
-#ifdef TARGET_PC
-    // The console refines frsqrte's estimate once; natively the root.
-    return __builtin_sqrtf(value);
-#else
-    __REGISTER f32 inverse;
-    __asm { frsqrte inverse, value }
-    f32 estimate = inverse * value;
-    inverse = -(estimate * inverse - 3.0f);
-    inverse *= estimate;
-    inverse *= 0.5f;
-    return inverse;
-#endif
-}

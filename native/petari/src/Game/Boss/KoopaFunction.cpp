@@ -491,11 +491,8 @@ void KoopaFunction::tryRestartKoopa() {
         MR::startAction(pKoopa->mParts->mKoopaJr, "DemoKoopaVs3Wait");
         MR::startAction(pKoopa->mParts->mKoopaJrShip, "DemoKoopaVs3Wait");
 
-        // This is super ugly but idk how to fix the register issue
-        // TODO: The following is an inline for `KoopaParts`.
-        pKoopa = (Koopa*)pKoopa->mParts;
-        ((KoopaParts*)pKoopa)->mPeach->mJointCtrl->startFaceCtrl(-1);
-        ((KoopaParts*)pKoopa)->mKoopaJr->mJointCtrl->startFaceCtrl(-1);
+        pKoopa->mParts->mPeach->mJointCtrl->startFaceCtrl(-1);
+        pKoopa->mParts->mKoopaJr->mJointCtrl->startFaceCtrl(-1);
     }
 }
 
@@ -520,7 +517,7 @@ bool KoopaFunction::tryKoopaShellAttackPlayer(HitSensor* pSender, HitSensor* pRe
 }
 
 void KoopaFunction::startKoopaSpinHitBlow(Koopa* pKoopa) {
-    MR::tryRumblePadVeryStrong(pKoopa, WPAD_CHAN0);
+    MR::tryRumblePadVeryStrong(pKoopa, PLAYER_1);
     MR::stopSceneForDefaultHit(::sKoopaHitBlowStopSceneStep);
     MR::startSpinHitSound(pKoopa);
     MR::startBlowHitSound(pKoopa);

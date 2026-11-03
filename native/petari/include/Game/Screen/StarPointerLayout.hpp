@@ -114,64 +114,33 @@ public:
         return mRadius;
     }
 
-    #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-    /* 0x20 */ TVec2f mPosition;
-    /* 0x28 */ StarPointerKind mPointerKind;
-    /* 0x2C */ AnimType mAnimType;
-    /* 0x30 */ s32 mTouchTimer;
-    /* 0x34 */ s32 mPadChannel;
-    /* 0x38 */ f32 mRadius;
-    /* 0x3C */ f32 _3C;
-    /* 0x40 */ StarPointerDirector* mDirector;
-    /* 0x44 */ StarPointerBlur* mBlur;
-    /* 0x48 */ StarPointerCommandStream* mCommandStream;
-    /* 0x4C */ StarPointerNumber* mNumber;
-    /* 0x50 */ const LiveActor* mActor;
-    /* 0x54 */ u64
+    TVec2f mPosition;
+    StarPointerKind mPointerKind;
+    AnimType mAnimType;
+    s32 mTouchTimer;
+    s32 mPadChannel;
+    f32 mRadius;
+    f32 _3C;
+    StarPointerDirector* mDirector;
+    StarPointerBlur* mBlur;
+    StarPointerCommandStream* mCommandStream;
+    StarPointerNumber* mNumber;
+    const LiveActor* mActor;
+    u64
         mNewTouchedID;  // NOTE: The use of this variable is a bit strange. It holds a unique identifier to check if the last touched object has
                         // changed (usually via pointer), but this identifier can be pretty much anything: actor pointer, layout pointer + pane string
                         // pointer, pointer to raw position data, etc. Basically: a pointer comparison with extra steps.
-    /* 0x60 */ u64 mTouchedID;
-    /* 0x68 */ bool mIsNewTouch;
-    /* 0x69 */ bool mStartTouch;
-    /* 0x6A */ bool mStartDisableShoot;
-    /* 0x6B */ bool mSingleTouch;
-    /* 0x6C */ bool mStartSingleTouch;
-    /* 0x6D */ bool mShootDisabled;
-    /* 0x6E */ bool mIsPointerValid;
-    /* 0x6F */ bool mIsAppear;
-    /* 0x70 */ s32 mAppearTime;
-    /* 0x74 */ u32 _74;
-    #else
-    /* 0x20 */ TVec2f mPosition;
-    /* 0x28 */ StarPointerKind mPointerKind;
-    /* 0x2C */ AnimType mAnimType;
-    /* 0x30 */ s32 mTouchTimer;
-    /* 0x34 */ s32 mPadChannel;
-    /* 0x38 */ f32 mRadius;
-    /* 0x3C */ f32 _3C;
-    /* 0x40 */ f32 mRotateAngle;
-    /* 0x44 */ StarPointerDirector* mDirector;
-    /* 0x48 */ StarPointerBlur* mBlur;
-    /* 0x4C */ StarPointerCommandStream* mCommandStream;
-    /* 0x50 */ StarPointerNumber* mNumber;
-    /* 0x54 */ const LiveActor* mActor;
-    /* 0x58 */ u64
-        mNewTouchedID;  // NOTE: The use of this variable is a bit strange. It holds a unique identifier to check if the last touched object has
-                        // changed (usually via pointer), but this identifier can be pretty much anything: actor pointer, layout pointer + pane string
-                        // pointer, pointer to raw position data, etc. Basically: a pointer comparison with extra steps.
-    /* 0x60 */ u64 mTouchedID;
-    /* 0x68 */ bool mIsNewTouch;
-    /* 0x69 */ bool mStartTouch;
-    /* 0x6A */ bool mStartDisableShoot;
-    /* 0x6B */ bool mSingleTouch;
-    /* 0x6C */ bool mStartSingleTouch;
-    /* 0x6D */ bool mShootDisabled;
-    /* 0x6E */ bool mIsPointerValid;
-    /* 0x6F */ bool mIsAppear;
-    /* 0x70 */ s32 mAppearTime;
-    /* 0x74 */ u32 _74;
-    #endif
+    u64 mTouchedID;
+    bool mIsNewTouch;
+    bool mStartTouch;
+    bool mStartDisableShoot;
+    bool mSingleTouch;
+    bool mStartSingleTouch;
+    bool mShootDisabled;
+    bool mIsPointerValid;
+    bool mIsAppear;
+    s32 mAppearTime;
+    u32 _74;
 };
 
 class StarPointerNumber : public LayoutActor {
@@ -181,11 +150,11 @@ public:
     virtual void control();
 
     bool isOffState() const;
-    void startAnimPosition(u32) NO_INLINE;
+    void startAnimPosition(u32);
 
-    /* 0x20 */ StarPointerLayout* mParent;
-    /* 0x24 */ s32 mPadChannel;
-    /* 0x28 */ AnimType mAnimType;
-    /* 0x2C */ bool mIsAppear;
-    /* 0x30 */ s32 mAppearTime;
+    StarPointerLayout* mParent;
+    s32 mPadChannel;
+    AnimType mAnimType;
+    bool mIsAppear;
+    s32 mAppearTime;
 };

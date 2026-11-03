@@ -28,10 +28,10 @@ android {
         applicationId = "dev.nebula.galaxy"
         minSdk = 31
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.0.0-test10"
+        versionCode = 11
+        versionName = "2.0.0-test1"
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += ((project.findProperty("nebulaAbis") as String?) ?: "arm64-v8a").split(",")
         }
     }
 

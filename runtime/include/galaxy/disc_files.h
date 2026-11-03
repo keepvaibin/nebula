@@ -1,10 +1,12 @@
-// The game partition's file table (the disc's FST): its files and folders by path, by index and by folder, as the
-// native game reads them (B-12). Paths follow the disc's rules: from the root, '/' returning to it, "." and ".."
-// steps, letters matched in either case.
+// The game's asset store (game.pak, crates/nebula-import/src/cook/store.rs): its files and folders by path, by index and by
+// folder, and its bytes. Paths from the root, '/' returning to it, "." and ".." steps, letters matched in either case. Only
+// the index stays in memory; any thread may read at once.
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,36 +15,92 @@
 namespace galaxy::disc {
 
 struct Entry {
-    std::int32_t index = -1;    // in the file table; 0 is the root folder
+    std::int32_t index = -1;    // 0 is the root folder
     bool folder = false;
-    std::uint32_t length = 0;   // a file's length in bytes
-    std::uint64_t position = 0; // a file's first byte in the partition
-    const char* name = nullptr; // valid while the table lives
+    std::uint64_t length = 0;   // a file's length in bytes; a folder's, from its first file to its last one's end
+    std::uint64_t position = 0; // the first byte in the store
+    std::uint32_t children = 0; // a folder's entries
+    const char* name = nullptr; // valid while the store is open
 };
 
-class FileTable {
+class AssetStore {
 public:
-    // A Wii disc's table: 12-byte big-endian entries (positions in 4-byte units), then the names. False when it is
-    // malformed (the table is then empty).
-    bool load(const std::uint8_t* fst, std::size_t size);
+    // Mods' cooked files over this store (cook/overlay.rs): found first, by the same paths. False when it cannot be read.
+    bool attach_overlay(const std::filesystem::path& path);
+    [[nodiscard]] bool has_overlay() const noexcept { return overlay_ != nullptr; }
+    AssetStore() = default;
+    AssetStore(const AssetStore&) = delete;
+    AssetStore& operator=(const AssetStore&) = delete;
+    ~AssetStore();
+
+    // False when the file cannot be read or is not a store (it is then empty).
+    bool open(const std::filesystem::path& path);
+    // A store's whole image in memory, kept by the caller.
+    bool load(const std::uint8_t* data, std::size_t size);
+    // `size` bytes at `position` of the store.
+    bool read(std::uint64_t position, std::size_t size, void* dst) const;
+    // `size` bytes at `position` where they are mapped, read-only, while the store is open; the pages are on their
+    // way in when this returns, so the first use does not wait for the drive. Null if out of range.
+    [[nodiscard]] const std::uint8_t* map(std::uint64_t position, std::size_t size) const;
+    // The same bytes as a view of their own, writable, the writes staying in this process's pages. Null when it cannot be
+    // had. Ended by unmap_private, or kept while the store is open.
+    [[nodiscard]] std::uint8_t* map_private(std::uint64_t position, std::size_t size) const;
+    void unmap_private(void* data, std::size_t size) const;
 
     [[nodiscard]] std::optional<Entry> entry(std::int32_t index) const;
     [[nodiscard]] std::optional<Entry> find(std::string_view path) const;
-    // The index-th entry of a folder, in the table's order.
+    // The index-th entry of a folder.
     [[nodiscard]] std::optional<Entry> child(std::int32_t folder, std::uint32_t index) const;
+    [[nodiscard]] std::string_view game_id() const noexcept { return game_id_; }
+    [[nodiscard]] unsigned revision() const noexcept { return revision_; }
+    // The game's language folders at the root ("UsEnglish", ...), in the store's order.
+    [[nodiscard]] std::vector<std::string> language_folders() const;
 
 private:
-    struct Raw {
-        bool folder;
+    struct Node {
+        std::uint64_t position;
+        std::uint64_t size;
         std::uint32_t name;
-        std::uint32_t parent_or_position;
-        std::uint32_t next_or_length;
+        std::uint32_t parent;
+        std::uint32_t flags;
+        std::uint32_t first;
+        std::uint32_t children;
+        std::uint32_t reserved;
+    };
+    struct Hash {
+        std::uint64_t hash;
+        std::uint32_t node;
+        std::uint32_t reserved;
     };
 
-    std::vector<Raw> entries_;
-    std::string names_;
-    std::vector<std::uint32_t> child_start_;  // per entry: its children's first slot in children_ (folders only)
-    std::vector<std::int32_t> children_;
+    void close();
+    [[nodiscard]] std::optional<Entry> find_own(std::string_view path) const;
+    bool parse(const std::uint8_t* header, const std::uint8_t* index, std::uint64_t index_at, std::uint64_t size);
+
+    // Positions past this are the overlay's; indices past count_ are its nodes.
+    static constexpr std::uint64_t kOverlayPosition = std::uint64_t{1} << 50u;
+    std::unique_ptr<AssetStore> overlay_;
+    std::vector<std::uint8_t> index_;
+    const std::uint8_t* image_ = nullptr;
+    const std::uint8_t* view_ = nullptr;
+    std::uint64_t size_ = 0;
+#if defined(_WIN32)
+    void* file_ = nullptr;
+    void* mapping_ = nullptr;
+#else
+    int file_ = -1;
+#endif
+    const Node* nodes_ = nullptr;
+    const Hash* hashes_ = nullptr;
+    const char* names_ = nullptr;
+    std::uint32_t count_ = 0;
+    std::string game_id_;
+    unsigned revision_ = 0;
 };
+
+// The store's first bytes hold this.
+inline constexpr char kStoreMagic[8] = {'N', 'B', 'S', 'T', 'O', 'R', 'E', '\0'};
+// The store's contents' form (cook/store.rs VERSION): a store of another version needs importing again.
+inline constexpr std::uint32_t kStoreVersion = 3u;
 
 }  // namespace galaxy::disc

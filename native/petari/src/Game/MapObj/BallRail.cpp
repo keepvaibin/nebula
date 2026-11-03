@@ -146,7 +146,7 @@ void BallRail::exeSetUp() {
     }
 
     if (MR::isStep(this, 15)) {
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
     }
 
     TVec3f& rVelocity = _90->mHost->mVelocity;

@@ -2,7 +2,7 @@
 #include "JSystem/J3DGraphAnimator/J3DJoint.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 Mtx J3DMtxBuffer::sNoUseDrawMtx;
 Mtx33 J3DMtxBuffer::sNoUseNrmMtx;
@@ -175,16 +175,14 @@ s32 J3DMtxBuffer::createBumpMtxArray(J3DModelData* i_modelData, u32 mtxNum) {
     return kJ3DError_Success;
 }
 
-static f32 J3DUnit01[] = {0.0f, 1.0f};
 
-#ifdef TARGET_PC
 // Each weighted envelope matrix is the weighted sum of (joint world matrix * inverse bind matrix) over its mix, the
 // products and sums in the order of the original's paired-single code.
 void J3DMtxBuffer::calcWeightEnvelopeMtx() {
     const int max = mJointTree->getWEvlpMtxNum();
     // The model file's mix tables.
-    const BE< u16 >* indices = mJointTree->getWEvlpMixMtxIndex();
-    const BE< f32 >* weights = mJointTree->getWEvlpMixWeight();
+    const u16* indices = mJointTree->getWEvlpMixMtxIndex();
+    const f32* weights = mJointTree->getWEvlpMixWeight();
 
     for (int i = 0; i < max; i++) {
         u8* pScale = &mpEvlpScaleFlagArr[i];
@@ -216,140 +214,8 @@ void J3DMtxBuffer::calcWeightEnvelopeMtx() {
         }
     }
 }
-#else
-void J3DMtxBuffer::calcWeightEnvelopeMtx() {
-    __REGISTER MtxPtr weightAnmMtx;
-    __REGISTER MtxPtr worldMtx;
-    __REGISTER MtxPtr invMtx;
-    __REGISTER f32 weight;
-    int idx;
-    int j;
-    int mixNum;
-    int i;
-    int max;
-    u16* indices;
-    __REGISTER f32* weights;
-    u8* pScale;
-
-    __REGISTER f32 var_f1;
-    __REGISTER f32 var_f2;
-    __REGISTER f32 var_f3;
-    __REGISTER f32 var_f4;
-    __REGISTER f32 var_f5;
-    __REGISTER f32 var_f6;
-    __REGISTER f32 var_f7;
-    __REGISTER f32 var_f8;
-    __REGISTER f32 var_f9;
-    __REGISTER f32 var_f9b;
-    __REGISTER f32 var_f10;
-    __REGISTER f32 var_f11;
-    __REGISTER f32 var_f12;
-    __REGISTER f32 var_f13;
-    __REGISTER f32 var_f31;
-    __REGISTER f32 var_f30;
-    __REGISTER f32 var_f29;
-    __REGISTER f32 var_f28;
-    __REGISTER f32 var_f27;
-    __REGISTER f32 var_f26;
-    __REGISTER f32 var_f25;
-    __REGISTER f32 var_f24;
-    __REGISTER f32* var_r7 = J3DUnit01;
-
-    i = -1;
-    max = mJointTree->getWEvlpMtxNum();
-    indices = mJointTree->getWEvlpMixMtxIndex() - 1;
-    weights = mJointTree->getWEvlpMixWeight() - 1;
-
-    asm {
-        psq_l var_f24, 0(var_r7), 0, 0
-        ps_merge00 var_f11, var_f24, var_f24
-        ps_merge00 var_f13, var_f24, var_f24
-        ps_merge00 var_f30, var_f24, var_f24
-    }
-
-    while (++i < max) {
-        pScale = &mpEvlpScaleFlagArr[i];
-        *pScale = 1;
-        weightAnmMtx = mpWeightEvlpMtx[i];
-
-        asm {
-            ps_merge00 var_f10, var_f24, var_f24
-            ps_merge00 var_f12, var_f24, var_f24
-            ps_merge00 var_f31, var_f24, var_f24
-        }
-
-        j = 0;
-        mixNum = mJointTree->getWEvlpMixMtxNum(i);
-        do {
-            idx = *++indices;
-            invMtx = mJointTree->getInvJointMtx((u16)idx);
-            worldMtx = mpAnmMtx[idx];
-
-            asm {
-                lfsu weight, 0x4(weights)
-                psq_l var_f2, 0x0(invMtx), 0, 0
-                psq_l var_f1, 0x0(worldMtx), 0, 0
-                psq_l var_f3, 0x10(worldMtx), 0, 0
-                ps_muls0 var_f29, var_f2, var_f1
-                psq_l var_f8, 0x10(invMtx), 0, 0
-                ps_muls0 var_f27, var_f2, var_f3
-                psq_l var_f5, 0x20(worldMtx), 0, 0
-                psq_l var_f7, 0x8(invMtx), 0, 0
-                ps_muls0 var_f25, var_f2, var_f5
-                ps_madds1 var_f29, var_f8, var_f1, var_f29
-                psq_l var_f9, 0x20(invMtx), 0, 0
-                psq_l var_f2, 0x8(worldMtx), 0, 0
-                ps_madds1 var_f27, var_f8, var_f3, var_f27
-                psq_l var_f4, 0x18(worldMtx), 0, 0
-                ps_madds0 var_f29, var_f9, var_f2, var_f29
-                ps_madds1 var_f25, var_f8, var_f5, var_f25
-                psq_l var_f6, 0x28(worldMtx), 0, 0
-                ps_madds0 var_f27, var_f9, var_f4, var_f27
-                psq_l var_f8, 0x18(invMtx), 0, 0
-                ps_muls0 var_f28, var_f7, var_f1
-                ps_muls0 var_f26, var_f7, var_f3
-                ps_madds0 var_f25, var_f9, var_f6, var_f25
-                psq_l var_f9b, 0x28(invMtx), 0, 0
-                ps_madds0 var_f10, var_f29, weight, var_f10
-                ps_muls0 var_f7, var_f7, var_f5
-                ps_madds1 var_f28, var_f8, var_f1, var_f28
-                ps_madds1 var_f26, var_f8, var_f3, var_f26
-                psq_st var_f10, 0x0(weightAnmMtx), 0, 0
-                ps_madds0 var_f12, var_f27, weight, var_f12
-                ps_madds1 var_f7, var_f8, var_f5, var_f7
-                ps_madds0 var_f28, var_f9b, var_f2, var_f28
-                ps_madds0 var_f26, var_f9b, var_f4, var_f26
-                psq_st var_f12, 0x10(weightAnmMtx), 0, 0
-                ps_madds0 var_f31, var_f25, weight, var_f31
-                ps_madds0 var_f7, var_f9b, var_f6, var_f7
-                ps_madd var_f28, var_f24, var_f2, var_f28
-                psq_st var_f31, 0x20(weightAnmMtx), 0, 0
-                ps_madd var_f26, var_f24, var_f4, var_f26
-                ps_madd var_f7, var_f24, var_f6, var_f7
-                ps_madds0 var_f11, var_f28, weight, var_f11
-                ps_madds0 var_f13, var_f26, weight, var_f13
-                ps_madds0 var_f30, var_f7, weight, var_f30
-            }
-
-            *pScale &= mpScaleFlagArr[idx];
-        } while (++j < mixNum);
-        asm {
-            psq_st var_f11, 8(weightAnmMtx), 0, 0
-            ps_merge00 var_f11, var_f24, var_f24
-            psq_st var_f13, 24(weightAnmMtx), 0, 0
-            ps_merge00 var_f13, var_f24, var_f24
-            psq_st var_f30, 40(weightAnmMtx), 0, 0
-            ps_merge00 var_f30, var_f24, var_f24
-        }
-    }
-}
-#endif
 
 void J3DMtxBuffer::calcDrawMtx(u32 mdlFlag, Vec const& param_1, Mtx const& param_2) {
-    Mtx *sp24, *sp20;
-    int sp1C = 0;
-    sp20 = mpAnmMtx;
-    sp24 = mpWeightEvlpMtx;
 
     MtxPtr viewMtx;
     Mtx viewBaseMtx;

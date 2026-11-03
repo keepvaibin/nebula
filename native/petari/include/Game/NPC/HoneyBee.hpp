@@ -5,16 +5,16 @@
 class HoneyBee : public NPCActor {
 public:
     enum InitAction {
-        /* 0x00 */ InitAction_Wait,
-        /* 0x01 */ InitAction_JumpLecture,
-        /* 0x02 */ InitAction_Fly,
-        /* 0x03 */ InitAction_Sleep,
-        /* 0x04 */ InitAction_Stick,
-        /* 0x05 */ InitAction_Gatekeeper,
-        /* 0x06 */ InitAction_DropLecture,
-        /* 0x07 */ InitAction_Flustered,
-        /* 0x08 */ InitAction_FlyLectureA,
-        /* 0x09 */ InitAction_FlyLectureB,
+        InitAction_Wait,
+        InitAction_JumpLecture,
+        InitAction_Fly,
+        InitAction_Sleep,
+        InitAction_Stick,
+        InitAction_Gatekeeper,
+        InitAction_DropLecture,
+        InitAction_Flustered,
+        InitAction_FlyLectureA,
+        InitAction_FlyLectureB,
     };
 
     /// @brief Creates a new `HoneyBee`.
@@ -35,9 +35,9 @@ public:
     void exeFlyLectureA();
     void exeFlyLectureB();
 
-    /* 0x15C */ s32 _15C;
-    /* 0x160 */ TMtx34f _160;
-    /* 0x190 */ TVec3f _190;
-    /* 0x19C */ s32 mArg0;
-    /* 0x1A0 */ f32 _1A0;
+    s32 _15C;
+    TMtx34f _160;
+    TVec3f _190;
+    s32 mArg0;
+    f32 _1A0;
 };

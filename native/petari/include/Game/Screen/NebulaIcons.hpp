@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef TARGET_PC
-#include <revolution/types.h>
 
 class LayoutActor;
 namespace nw4r {
@@ -14,14 +12,13 @@ namespace nw4r {
 // buttons: the host names the style (the controller in use, or the one chosen) and the button each stands for
 // (NebulaHostServices::button_icons). Every text and layout that shows a button through the picture font shows them.
 namespace NebulaIcons {
-    // The stationed GDDR heap's room for our sheets (RGBA8 records), widths and code map (HeapMemoryWatcher); a font
-    // that needs more keeps its own icons.
-    const u32 cStationedBytes = 0x300000;
     // Once the stationed resources are loaded (the picture font among them), before the stationed heaps shrink to fit:
     // the font's sheets, widths and code map of ours.
     void init();
-    // Each frame: the icons again when the host's choice changed.
+    // Each frame: the icons again when the host's choice changed, and a little more of their larger paintings.
     void update();
+    // A glyph sheet is being drawn from (CharWriter): ours are painted larger from the first time.
+    void noteDrawn(const void* pSheet);
     // `pActor` (an IconAButton) drawn with the A button over people and signs as the icons have it: ours in place of
     // its own two pictures while it draws, its own after.
     void drawWithIcons(const LayoutActor* pActor);
@@ -49,4 +46,3 @@ namespace NebulaIcons {
     nw4r::lyt::TexMap* joyConPicture(s32 half, s32 look);
     void joyConPictureSize(f32* pWidth, f32* pHeight);
 };  // namespace NebulaIcons
-#endif

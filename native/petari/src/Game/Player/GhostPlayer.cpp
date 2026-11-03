@@ -23,7 +23,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -37,12 +37,13 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include <nebula_format.h>
 
 namespace {
     struct AnimSoundInfo {
-        /* 0x00 */ const char* pAnimName;
-        /* 0x04 */ const char* pSoundBM;
-        /* 0x08 */ const char* pSoundBV;
+        const char* pAnimName;
+        const char* pSoundBM;
+        const char* pSoundBV;
     };
 
     const AnimSoundInfo sAnimSoundTable[] = {{"\203\127\203\203\203\223\203\166" /* ジャンプ */, "SE_BM_GHOST_MARIO_JUMP_S", "SE_BV_GHOST_MARIO_JUMP_S"},
@@ -111,8 +112,7 @@ namespace NrvGhostPlayer {
 
 void GhostPlayer::makeArchiveList(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
     char archiveName[256];
-    strcpy(archiveName, "GhostData");
-    strcat(archiveName, MR::getCurrentStageName());
+    nebula_snprintf(archiveName, sizeof(archiveName), "GhostData%s", MR::getCurrentStageName());
 
     pCollector->addArchive(archiveName);
 
@@ -141,19 +141,17 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     mCurrentPacket = nullptr;
     if (MR::isPlayerLuigi()) {
         const char* currentStageName = MR::getCurrentStageName();
-        sprintf(gstPath, "%sLuigi.gst", currentStageName);
+        nebula_sprintf(gstPath, "%sLuigi.gst", currentStageName);
     } else {
         const char* currentStageName = MR::getCurrentStageName();
-        sprintf(gstPath, "%s.gst", currentStageName);
+        nebula_sprintf(gstPath, "%s.gst", currentStageName);
     }
-    strcpy(arcPath, "GhostData");
-    strcat(arcPath, MR::getCurrentStageName());
-    strcat(arcPath, ".arc");
+    nebula_snprintf(arcPath, sizeof(arcPath), "GhostData%s.arc", MR::getCurrentStageName());
 
     mCurrentPacket = static_cast< GhostPacket* >(MR::loadResourceFromArc(arcPath, gstPath));
 
     if (MR::isFileExist(gstPath, false)) {
-        mCurrentPacket = static_cast< GhostPacket* >(MR::loadToMainRAM(gstPath, nullptr, nullptr, JKRDvdRipper::ALLOC_DIRECTION_FORWARD));
+        mCurrentPacket = static_cast< GhostPacket* >(MR::loadToMainRAM(gstPath, nullptr, nullptr, GameAssets::ALLOC_DIRECTION_FORWARD));
     }
 
     if (mCurrentPacket == nullptr) {
@@ -344,7 +342,7 @@ void GhostPlayer::exePreStartDemo0() {
 }
 
 bool GhostPlayer::isRequestSkipDemo() const {
-    if (MR::hasRetryGalaxySequence() && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::hasRetryGalaxySequence() && MR::isPressedJump(PLAYER_1)) {
         return true;
     }
     return false;
@@ -380,10 +378,10 @@ void GhostPlayer::exePreStartDemo2() {
         MR::endDemo(this, "\203\214\201\133\203\130\217\200\224\365" /* レース準備 */);
     }
 
-    if (MR::getPlayerTriggerZ()) {
+    if (MR::getPlayerPressedCrouch()) {
         MR::startBckPlayerJ("\203\214\201\133\203\130\203\116\203\211\203\105\203\140\203\223\203\117\212\112\216\156" /* レースクラウチング開始 */);
         MR::startSoundPlayer("SE_PV_SQUAT");
-    } else if (MR::testSubPadReleaseZ(WPAD_CHAN0)) {
+    } else if (MR::isReleasedCrouch(PLAYER_1)) {
         MR::startBckPlayerJ("\203\214\201\133\203\130\212\112\216\156" /* レース開始 */);
     }
 
@@ -602,9 +600,9 @@ void GhostPlayer::draw() const {
         mJetTurtleShadow->drawType1();
     }
 
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DPass::writeAlpha(false);
+    J3DPass::writeColor(true);
+    J3DPass::constantAlpha(false, 0);
 }
 
 u32 GhostPlayer::receiveGhostPacket(GhostPacket* pPacket) {

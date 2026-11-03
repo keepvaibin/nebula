@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TMatrix.hpp>
-#include <revolution/types.h>
 
 class LiveActor;
 
@@ -20,14 +19,14 @@ public:
         mMtx.getTrans(*pTrans);
     }
 
-    void copyRotate(TVec3f* pRotate) const NO_INLINE {
+    void copyRotate(TVec3f* pRotate) const {
         mMtx.getEuler(*pRotate);
         *pRotate = *pRotate * _180_PI;
     }
 
-    /* 0x00 */ MtxPtr mBaseMtx;
-    /* 0x04 */ TVec3f mLocalTrans;
-    /* 0x10 */ TVec3f mLocalRotate;
-    /* 0x1C */ TPos3f mMtx;
-    /* 0x4C */ bool mNormalizeScale;
+    MtxPtr mBaseMtx;
+    TVec3f mLocalTrans;
+    TVec3f mLocalRotate;
+    TPos3f mMtx;
+    bool mNormalizeScale;
 };

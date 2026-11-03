@@ -1,12 +1,12 @@
 #pragma once
 
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 class SpkMixingBuffer {
 public:
-    SpkMixingBuffer(JKRHeap*);
+    SpkMixingBuffer(NebulaArena*);
 
-    void mix(s32, NEBULA_BE(s16)*, s32, f32, s32);
+    void mix(s32, s16*, s32, f32, s32);
     const s16* getSamples(s32) const;
     bool update(s32);
 

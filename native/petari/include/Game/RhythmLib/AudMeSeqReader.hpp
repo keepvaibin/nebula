@@ -39,15 +39,18 @@ public:
     }
 
     u16 get16(u32 addr) const {
-        return *(NEBULA_BE(u16)*)(mSeqBuff + addr);
+        const u8* const p = mSeqBuff + addr;
+        return static_cast< u16 >((p[0] << 8) | p[1]);
     }
 
     u32 get24(u32 addr) const {
-        return (*(NEBULA_BE(u32)*)(mSeqBuff + addr - 1)) & 0xffffff;
+        const u8* const p = mSeqBuff + addr;
+        return (p[0] << 16) | (p[1] << 8) | p[2];
     }
 
     u32 get32(u32 addr) const {
-        return *(NEBULA_BE(u32)*)(mSeqBuff + addr);
+        const u8* const p = mSeqBuff + addr;
+        return (static_cast< u32 >(p[0]) << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
     }
 
     u8* getCur() {
@@ -79,9 +82,9 @@ public:
         return mLoopCounts[mNumStacks - 1];
     }
 
-    /* 0x00 */ u8* mSeqBuff;
-    /* 0x04 */ u8* mSeqCursor;
-    /* 0x08 */ u32 mNumStacks;
-    /* 0x0C */ u8* mStackPtrs[8];
-    /* 0x2C */ u16 mLoopCounts[8];
+    u8* mSeqBuff;
+    u8* mSeqCursor;
+    u32 mNumStacks;
+    u8* mStackPtrs[8];
+    u16 mLoopCounts[8];
 };

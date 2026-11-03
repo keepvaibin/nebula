@@ -1,7 +1,4 @@
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
-#endif
 #include "Game/Boss/BossKameckBarrier.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -18,13 +15,11 @@ BossKameckBarrier::BossKameckBarrier(const char* pName, const char* pModelName) 
 
 void BossKameckBarrier::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
-#ifdef TARGET_PC
     if (u32 bits = 0; NebulaHost::codePatch(NEBULA_PATCH_KAMECK_BARRIER_OFFSET_Y, &bits)) {
         f32 offset;
         memcpy(&offset, &bits, sizeof(offset));
         mPosition.y += offset;
     }
-#endif
     initModelManagerWithAnm(mModelName, nullptr, false);
     MR::connectToSceneEnemy(this);
     initHitSensor(1);

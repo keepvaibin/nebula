@@ -40,22 +40,19 @@ const TPos3f& CameraContext::getInvViewMtx() const {
 
 f32 CameraContext::getAspect() const {
     if (MR::isScreen16Per9()) {
-#ifdef TARGET_PC
         if (MR::getDisplay().wide) {
             return MR::getDisplay().content_aspect;
         }
-#endif
         return 16.0f / 9.0f;
     } else {
         return static_cast< f32 >(MR::getScreenWidth()) / MR::getScreenHeight();
     }
 }
 
-// The vertical field of view the picture is drawn with: the camera's, and below 4:3 (TARGET_PC's wide shapes) widened
+// The vertical field of view the picture is drawn with: the camera's, and below 4:3 (the native build's wide shapes) widened
 // so the view keeps 4:3's width and grows taller (Vert+). What projects as the picture does (particles, clipping,
 // blur, the pointer) uses it; the cameras' own framing keeps mFovy.
 f32 CameraContext::getRenderFovy() const {
-#ifdef TARGET_PC
     if (MR::isScreen16Per9() && MR::getDisplay().wide) {
         const f32 aspect = MR::getDisplay().content_aspect;
         if (aspect < 4.0f / 3.0f - 1e-4f) {
@@ -63,7 +60,6 @@ f32 CameraContext::getRenderFovy() const {
             return 2.0f * atanf(halfTan) * (180.0f / PI);
         }
     }
-#endif
     return mFovy;
 }
 
@@ -74,11 +70,6 @@ void CameraContext::setViewMtx(const TPos3f& rMtx, bool b1, bool b2, const TVec3
 
 void CameraContext::setNearZ(f32 near) {
     mNearZ = near;
-    updateProjectionMtx();
-}
-
-void CameraContext::setFarZ(f32 far) {
-    mFarZ = far;
     updateProjectionMtx();
 }
 

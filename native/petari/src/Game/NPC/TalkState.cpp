@@ -1,7 +1,5 @@
 #include "Game/NPC/TalkState.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkBalloon.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
@@ -10,7 +8,7 @@
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -82,8 +80,8 @@ void TalkStateShort::clos() {
 
 TalkStateEvent::TalkStateEvent() {
     _18 = nullptr;
-    _14 = nullptr;
-    _10 = nullptr;
+    _14 = 0;
+    _10 = 0;
     _1D = true;
 }
 
@@ -115,7 +113,6 @@ void TalkStateEvent::clos() {
 }
 
 bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
-#ifdef TARGET_PC
     // A skipped cutscene (NebulaCutsceneSkip): each page, shown whole, turns as soon as it is up; a question ends
     // the skip with the question on screen.
     if (NebulaCutsceneSkip::isSkipping()) {
@@ -129,9 +126,8 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
         mPageCount++;
         return !mBalloon->turnPage();
     }
-#endif
 
-    if (MR::testCorePadButtonA(0)) {
+    if (MR::isHeldJump(0)) {
         if (_10++ > 10) {
             for (int i = 0; i < 2; i++) {
                 mBalloon->skipMessage();
@@ -147,17 +143,15 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
 
     bool unknownBool = false;
 
-    if (_1C != nullptr) {
-        _1C = MR::testCorePadButtonA(0);
-    } else if (MR::testCorePadButtonA(0) && !MR::testCorePadTriggerA(0)) {
+    if (_1C != 0) {
+        _1C = MR::isHeldJump(0);
+    } else if (MR::isHeldJump(0) && !MR::isPressedJump(0)) {
         _1C = true;
         unknownBool = true;
     }
 
     if (TalkFunction::isSelectTalk(_04) && !mBalloon->hasNextPage()) {
-#ifdef TARGET_PC
         NebulaCutsceneSkip::endForQuestion();
-#endif
         return true;
     }
 
@@ -186,7 +180,7 @@ TalkStateNormal::TalkStateNormal() : TalkStateEvent() {
 }
 
 bool TalkStateNormal::test() {
-    if (!_18->isEnableTalkPlayerStateNormal() || !MR::testCorePadTriggerA(0)) {
+    if (!_18->isEnableTalkPlayerStateNormal() || !MR::isPressedJump(0)) {
         return false;
     }
 
@@ -220,7 +214,7 @@ bool TalkStateNormal::prep(const TalkMessageCtrl* pArg1) {
 
     if (!_18->isEnableTalkPlayerStateNormal()) {
         mAButton->term();
-    } else if (!MR::testCorePadTriggerA(0)) {
+    } else if (!MR::isPressedJump(0)) {
         TalkMessageInfo* info = TalkFunction::getMessageInfo(_04);
         if (!mAButton->isOpen()) {
             if (info->isBalloonSign()) {
@@ -247,7 +241,7 @@ void TalkStateNormal::updateButton() {
     TVec3f centerPlayer(*MR::getPlayerCenterPos());
     MR::getPlayerUpVec(&up);
 
-    f64 absolute = __fabs(camZ.dot(up));  // TODO: look at fabs again
+    f64 absolute = fabs(camZ.dot(up));  // TODO: look at fabs again
     f32 f1 = absolute;
     f32 f2 = camY.dot(up);
     f1 = f1 * f1;

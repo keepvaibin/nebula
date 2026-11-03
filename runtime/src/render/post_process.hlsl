@@ -24,7 +24,7 @@ cbuffer PostConstants : register(b0) {
     float4 g_params;
     // xy: viewport origin in render-target pixels.
     int4 g_origin;
-    // The pass input's picture inside its texture, from its top left (a handed-over EFB holds its 640 x 456 picture
+    // The pass input's picture inside its texture, from its top left (a handed-over scene target holds its 640 x 456 picture
     // in a taller texture): xy scale a picture coordinate into the texture, zw the texture coordinate of the picture's last
     // texel centre. Zero: the input is all picture.
     float4 g_source;
@@ -51,7 +51,7 @@ int2 ViewportPixel(float4 pos) {
 }
 
 // A picture coordinate (0-1 over the pass input's picture) in its texture. The SOURCE_BOX variants read a picture held
-// from the top left of a taller texture (a handed-over EFB), held inside it as the sampler's clamp holds a picture
+// from the top left of a taller texture (a handed-over scene target), held inside it as the sampler's clamp holds a picture
 // that fills its texture; the others read the texture as it is.
 float2 SourceUv(float2 uv) {
 #if defined(SOURCE_BOX)
@@ -322,13 +322,13 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 // second ring twice as far with half the threshold, where the first one smoothed. A pixel more than two levels from
 // one of its four neighbours is an edge or texture already, and stays without the far taps. The four pixels of a 2x2
 // quad share their taps' angle and distance (their reads fall in the same cache lines). Where that leaves a value
-// between two levels, a triangular dither of one level (Wannamaker 1992) keeps the 8-bit target from stepping it
+// between two levels, a triangular grain of one level (Wannamaker 1992) keeps the 8-bit target from stepping it
 // again; whole levels (flat colour, black, the HUD) stay exact.
 //
 // From 1080 lines the steps are wider than the reach needs to resolve, and the rings' arithmetic for every pixel is
 // most of the frame on a small GPU: the rings run on the picture reduced by a box (PASS_DEBAND_REDUCE, then
 // PASS_DEBAND_SMOOTH at the reduced size), and each pixel (PASS_DEBAND_APPLY) keeps its own edge test, takes the
-// smoothed picture where it lies within the threshold of it, and is dithered. g_params.zw scale a pixel position to
+// smoothed picture where it lies within the threshold of it, and is grained. g_params.zw scale a pixel position to
 // the smoothed picture's coordinates.
 Texture2D inputTex : register(t0);
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }

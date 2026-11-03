@@ -1,27 +1,26 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
-class JPAEmitterWorkData;
+struct JPAEmitterWorkData;
 
 struct JPAExTexShapeData {
     // Common header.
-    /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ NEBULA_BE(u32) mSize;
+    u8 mMagic[4];
+    u32 mSize;
 
-    /* 0x08 */ NEBULA_BE(u32) mFlags;
-    /* 0x0C */ NEBULA_BE(f32) mIndTexMtx[2][3];
-    /* 0x24 */ s8 mExpScale;
-    /* 0x25 */ s8 mIndTexIdx;
-    /* 0x26 */ s8 mSecTexIdx;
-};  // Size: 0x28
+    u32 mFlags;
+    f32 mIndTexMtx[2][3];
+    s8 mExpScale;
+    s8 mIndTexIdx;
+    s8 mSecTexIdx;
+};
 
 class JPAExTexShape {
 public:
     JPAExTexShape(u8 const*);
 
-#ifdef TARGET_PC
-    // A native copy of the resource's big-endian matrix, for GXSetIndTexMtx.
+    // The resource's matrix.
     void getIndTexMtx(f32 (*pMtx)[3]) const {
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 3; j++) {
@@ -29,11 +28,6 @@ public:
             }
         }
     }
-#else
-    const f32* getIndTexMtx() const {
-        return &mpData->mIndTexMtx[0][0];
-    }
-#endif
     s8 getExpScale() const {
         return mpData->mExpScale;
     }

@@ -21,12 +21,36 @@ inline constexpr std::uint16_t kDualShock4ProductId = 0x05c4;
 inline constexpr std::uint16_t kDualShock4SlimProductId = 0x09cc;
 inline constexpr std::uint16_t kDualSenseProductId = 0x0ce6;
 inline constexpr std::uint16_t kDualSenseEdgeProductId = 0x0df2;
+inline constexpr std::uint16_t kDualShock4DongleProductId = 0x0ba0;
+inline constexpr std::uint16_t kRazerVendorId = 0x1532;
 
 enum class Model : std::uint8_t { DualShock4, DualSense, DualSenseEdge };
 enum class Transport : std::uint8_t { Usb, Bluetooth };
 
 [[nodiscard]] std::optional<Model> model_for_product(std::uint16_t vendor, std::uint16_t product) noexcept;
 [[nodiscard]] const char* model_name(Model model) noexcept;
+
+// What one pad of this protocol has. Sony's own have everything; a licensed pad says in feature report 0x03.
+struct Capabilities {
+    bool official = true;
+    bool sensors = true;
+    bool touchpad = true;
+    bool lightbar = true;
+    bool vibration = true;
+    bool effects = true;           // takes output reports at all
+    bool alternate_layout = false; // licensed DualSense: 16-bit sensor clock in 1 us, touch one byte earlier
+    bool dongle = false;           // USB wireless adapter: a report with no pad connected is neutral
+};
+
+inline constexpr std::uint8_t kFeatureCapabilities = 0x03;
+inline constexpr std::size_t kCapabilityReportBytes = 48;
+
+// Before the query: what the product is known to be.
+[[nodiscard]] Capabilities capabilities_of_product(std::uint16_t vendor, std::uint16_t product) noexcept;
+// A licensed pad's answer to feature report 0x03 (byte 0 = report id; empty when it gave none). Its sensor scales, when
+// it states them, replace the nominal ones in `cal`.
+void apply_capability_report(Model model, std::uint16_t vendor, std::uint16_t product,
+                             std::span<const std::uint8_t> feature, Capabilities& caps, struct ImuCal& cal) noexcept;
 
 // Input report ids. Over Bluetooth a controller sends the short report 0x01
 // until a calibration feature report is read, then the full one.
@@ -73,7 +97,8 @@ struct SensorClock {
 // Options = Start, PS = Home, touchpad click = Capture, mute = Chat, Edge
 // paddles = GL/GR). Over Bluetooth a full report with a bad CRC is rejected.
 [[nodiscard]] bool decode_report(Model model, Transport transport, std::span<const std::uint8_t> report,
-                                 const ImuCal& cal, SensorClock& clock, switch_hid::DecodedState& out) noexcept;
+                                 const ImuCal& cal, SensorClock& clock, switch_hid::DecodedState& out,
+                                 const Capabilities& caps = {}) noexcept;
 
 // CRC-32 (reflected 0xEDB88320) of `seed` followed by `data`: the Bluetooth
 // report check. Input reports use seed 0xA1, output reports 0xA2.

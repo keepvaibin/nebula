@@ -36,20 +36,6 @@
 #include "Game/Util/TalkUtil.hpp"
 #include <cstdio>
 
-void Dodoryu_FORCE_MATCH(DodoryuStateBase* pState, TPos3f* pMtx, TVec3f* pVec) {
-    pVec->setAll< f32 >(0.0f);
-    pState->DodoryuStateBase::catchSendPlayerFlying(nullptr, nullptr);
-    pState->DodoryuStateBase::catchSendPlayerFlying(nullptr, nullptr);
-    pMtx->getXDir(*pVec);
-    pMtx->getXDir(*pVec);
-    pMtx->getYDir(*pVec);
-    pMtx->getYDir(*pVec);
-}
-
-f32 Dodoryu_FORCE_MATCH_CONVERSION(s32 value) {
-    return value;
-}
-
 namespace {
     static const Vec sHeadOffset = {50.0f, 30.0f, 0.0f};
     static const Vec sBodyOffset = {0.0f, 0.0f, 30.0f};
@@ -257,11 +243,6 @@ namespace {
     NEW_NERVE(DodoryuRabbitNrvRabbitPleasure, DodoryuRabbit, Pleasure);
 };  // namespace
 
-void Dodoryu_DUMMY() {
-    TVec3f vec;
-    vec.scale(1.0f);
-}
-
 Dodoryu::Dodoryu(const char* pName)
     : LiveActor(pName), _BC(0.0f, 0.0f, 0.0f), _C8(), _CC(), mState(), mMoveStateHolder(), mHill(), mLeadHill(), mBank(), mRabbit(),
       _128(0.0f, 1.0f, 0.0f), _134(1.0f, 0.0f, 0.0f), mClosedAreaObj(), _144(), _148(new CameraTargetMtx("\203\112\203\201\203\211\203\136\201\133\203\121\203\142\203\147\203\137\203\176\201\133" /* カメラターゲットダミー */)),
@@ -445,7 +426,7 @@ void Dodoryu::endPlayerCenterCamera() {
 
 void Dodoryu::getPlayerResetMtx(TPos3f* pMtx, u32 param2) const {
     char buf[64];
-    snprintf(buf, sizeof(buf), "\203\175\203\212\203\111\215\304\203\132\203\142\203\147%d" /* マリオ再セット%d */, param2 + 1);
+    nebula_snprintf(buf, sizeof(buf), "\203\175\203\212\203\111\215\304\203\132\203\142\203\147%d" /* マリオ再セット%d */, param2 + 1);
 
     MR::tryFindNamePos(buf, (MtxPtr)pMtx);
 }
@@ -543,9 +524,9 @@ void Dodoryu::tryRumblePad() {
     f32 playerDistance = MR::calcDistanceToPlayer(this);
 
     if (playerDistance < ::sRumblePadNearDist) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     } else if (playerDistance < ::sRumblePadFarDist) {
-        MR::tryRumblePadVeryWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 }
 
@@ -792,7 +773,7 @@ void Dodoryu::updateRumblePad() {
 
     _154++;
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, PLAYER_1);
 }
 
 void Dodoryu::updateCameraTarget() {
@@ -809,7 +790,7 @@ void Dodoryu::updateCameraTarget() {
     _14C->mMatrix.setInline(m1);
 }
 
-DodoryuBank::DodoryuBank() : ModelObj("\203\150\203\150\203\212\203\205\203\105\220\267\223\171" /* ドドリュウ盛土 */, "DodoryuBank", _90, MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
+DodoryuBank::DodoryuBank() : ModelObj("\203\150\203\150\203\212\203\205\203\105\220\267\223\171" /* ドドリュウ盛土 */, "DodoryuBank", reinterpret_cast< MtxPtr >(&_90), MR::DrawBufferType_MapObjStrongLight, -2, -2, false) {
     _90.identity();
 }
 
@@ -825,12 +806,8 @@ void DodoryuBank::exeAppear() {
     }
 }
 
-void Dodoryu_FORCE_MATCH_RABBIT(LiveActor* pActor) {
-    MR::startBck(pActor, "Jump");
-}
-
 DodoryuRabbit::DodoryuRabbit(Dodoryu* pHost, const JMapInfoIter& rIter)
-    : ModelObj("\203\150\203\150\203\212\203\205\203\105\202\311\222\307\202\355\202\352\202\351\203\105\203\124\203\115" /* ドドリュウに追われるウサギ */, "DodoryuRabbit", _94, MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
+    : ModelObj("\203\150\203\150\203\212\203\205\203\105\202\311\222\307\202\355\202\352\202\351\203\105\203\124\203\115" /* ドドリュウに追われるウサギ */, "DodoryuRabbit", reinterpret_cast< MtxPtr >(&_94), MR::DrawBufferType_NPC, -2, -2, false), mHost(pHost), _C4(), mTalkCtrl(), _CC(300),
       _D0(), _D4(), _D8(), mIsDisplayMessage() {
     _94.identity();
 
@@ -1130,7 +1107,7 @@ void DodoryuLeadHill::calcAndSetBaseMtx() {
 void DodoryuLeadHill::initJoint() {
     for (int i = 0; i < ARRAY_SIZE(_94); i++) {
         char buf[64];
-        snprintf(buf, sizeof(buf), "DodoryuLeadHill%d", i + 1);
+        nebula_snprintf(buf, sizeof(buf), "DodoryuLeadHill%d", i + 1);
 
         _94[i] = MR::createJointDelegatorWithNullChildFunc(this, &DodoryuLeadHill::calcJoint, buf);
     }

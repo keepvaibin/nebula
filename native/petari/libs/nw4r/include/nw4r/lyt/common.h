@@ -1,6 +1,5 @@
 #pragma once
 
-#include "nw4r/db/assert.h"
 #include "nw4r/lyt/resources.h"
 #include "nw4r/math/types.h"
 #include "nw4r/ut/Color.h"
@@ -51,12 +50,7 @@ namespace nw4r {
             };
 
             inline const char* GetStrTableStr(const void* pTable, int idx) {
-#ifdef TARGET_PC
-                // The table is the resource's: big-endian offsets.
-                const NEBULA_BE(u32)* offs = static_cast< const NEBULA_BE(u32)* >(pTable);
-#else
                 const u32* offs = static_cast< const u32* >(pTable);
-#endif
                 const char* pool = static_cast< const char* >(pTable);
                 return &pool[offs[idx]];
             }
@@ -77,17 +71,15 @@ namespace nw4r {
             bool TestFileHeader(const res::BinaryFileHeader&, u32);
 
             inline bool TestFileVersion(const res::BinaryFileHeader& fileHeader) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
                 u8 upper = ut::BitExtract(fileHeader.version, 8, 8);
                 u8 lower = ut::BitExtract(fileHeader.version, 0, 8);
                 return upper == 0 && lower >= 8 && lower <= 10;
-#else
-                return (ut::BitExtract(fileHeader.version, 8, 8) == 0 && ut::BitExtract(fileHeader.version, 0, 8) >= 9);
-#endif
             }
 
             inline s32 GetSignatureInt(const char sig[4]) {
-                return *reinterpret_cast< const NEBULA_BE(s32)* >(sig);
+                // The block kind's four characters, first character highest.
+                const u8* p = reinterpret_cast< const u8* >(sig);
+                return s32((u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]);
             }
 
             inline u8 GetVtxColorElement(const ut::Color* pColors, u32 idx) {
@@ -100,20 +92,10 @@ namespace nw4r {
             const Size GetTextureSize(Material* pMaterial, u8 texMapIdx);
 
             inline void SetHorizontalPosition(u8* pVar, u8 newVal) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-                NW4R_ASSERT_AT(256, newVal < HORIZONTALPOSITION_MAX);
-#else
-                NW4R_ASSERT_AT(252, newVal < HORIZONTALPOSITION_MAX);
-#endif
                 *pVar = u8(GetVerticalPosition(*pVar) * 3 + newVal);
             }
 
             inline void SetVerticalPosition(u8* pVar, u8 newVal) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-                NW4R_ASSERT_AT(265, newVal < VERTICALPOSITION_MAX);
-#else
-                NW4R_ASSERT_AT(261, newVal < VERTICALPOSITION_MAX);
-#endif
                 *pVar = u8(newVal * 3 + GetHorizontalPosition(*pVar));
             }
 

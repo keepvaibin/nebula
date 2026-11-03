@@ -1,42 +1,42 @@
 #pragma once
 
+#include "Game/System/GameAssets.hpp"
+
 #include "Game/System/ArchiveHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/System/FileHolder.hpp"
 #include "Game/System/FileLoaderThread.hpp"
-#include <JSystem/JKernel/JKRDvdRipper.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
-#include <cstdio>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
 
-class JKRArchive;
+#include "Game/System/NebulaArena.hpp"
+#include <cstdio>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
+
+class AssetFolder;
 
 class FileLoader {
 public:
     FileLoader();
 
-    void requestLoadToMainRAM(const char*, u8*, JKRHeap*, JKRDvdRipper::EAllocDirection, bool);
-    void requestMountArchive(const char*, JKRHeap*, bool);
+    void requestLoadToMainRAM(const char*, u8*, NebulaArena*, GameAssets::AllocDirection, bool);
+    void requestMountArchive(const char*, NebulaArena*, bool);
     bool isLoaded(const char*) const;
-    bool isMountedArchive(const char*) const;
     void* receiveFile(const char*);
-    JKRMemArchive* receiveArchive(const char*);
+    AssetFolder* receiveArchive(const char*);
     void receiveAllRequestedFile();
-    JKRMemArchive* createAndAddArchive(void*, JKRHeap*, const char*);
-    void getMountedArchiveAndHeap(const char*, JKRArchive**, JKRHeap**) const;
+    AssetFolder* createAndAddArchive(AssetFolder*, NebulaArena*, const char*);
+    void getMountedArchiveAndHeap(const char*, AssetFolder**, NebulaArena**) const;
     void clearRequestFileInfo(bool);
-    void removeHolderIfIsEqualHeap(JKRHeap*);
+    void removeHolderIfIsEqualHeap(NebulaArena*);
     void removeFile(const char*);
     bool isNeedToLoad(const char*) const;
     const RequestFileInfo* getRequestFileInfoConst(const char*) const;
-    RequestFileInfo* addRequest(const char*);
+    RequestFileInfo* addRequest(const char*, u32, u32, FileHolderFileEntry*);
 
-    /* 0x00 */ FileLoaderThread* mLoaderThread;
-    /* 0x04 */ NebulaMutex mMutex;
-    /* 0x1C */ RequestFileInfo* mRequestFileInfos;
-    /* 0x20 */ s32 mRequestedFileCount;
-    /* 0x24 */ FileHolder* mFileHolder;
-    /* 0x28 */ ArchiveHolder* mArchiveHolder;
+    FileLoaderThread* mLoaderThread;
+    GameMutex mMutex;
+    RequestFileInfo* mRequestFileInfos;
+    s32 mRequestedFileCount;
+    FileHolder* mFileHolder;
+    ArchiveHolder* mArchiveHolder;
 };

@@ -16,7 +16,7 @@ public:
         return mPoints[idx];
     }
 
-    /* 0x00 */ int mBufferSize;
-    /* 0x04 */ s32 mNumPoints;
-    /* 0x08 */ SpiderThreadMainPoint** mPoints;
+    int mBufferSize;
+    s32 mNumPoints;
+    SpiderThreadMainPoint** mPoints;
 };

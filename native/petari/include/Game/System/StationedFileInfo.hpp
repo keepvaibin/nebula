@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace MR {
     struct StationedFileInfo {
@@ -19,9 +18,9 @@ namespace MR {
             LOAD_TYPE_MOUNT_RESOURCE_LAYOUT = 5,
         };
 
-        /* 0x0 */ HeapType mHeapType;
-        /* 0x4 */ LoadType mLoadType;
-        /* 0x8 */ const char* mArchive;
+        HeapType mHeapType;
+        LoadType mLoadType;
+        const char* mArchive;
     };
 
     const StationedFileInfo* getStationedFileInfoTable();

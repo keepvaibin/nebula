@@ -12,8 +12,9 @@ if ($files.Count -eq 0) { Write-Output "release_check: no files under $Path"; ex
 # Text no shipped file may contain (ASCII and UTF-16): the test hooks' switches, a build machine's user path, and the
 # personal terms the release key's folder lists one per line (private-terms.txt; kept out of the repository, so no
 # name is ever written here).
-$forbidden = @("GALAXY_TEST_", "GALAXY_INPUT_AUTOPRESS", "GALAXY_PRESENT_SNAPSHOT", "GALAXY_INTERP_SNAPSHOT",
-               "GALAXY_TEST_TELEPORT", "C:\Users\")
+$forbidden = @("GALAXY_TEST_", "GALAXY_TRACE_", "GALAXY_DUMP_", "GALAXY_EXPORT_", "GALAXY_DEBUG_", "GALAXY_INPUT_",
+               "GALAXY_PRESENT_SNAPSHOT", "GALAXY_INTERP_SNAPSHOT", "GALAXY_AUDIO_WAV", "GALAXY_HIDE_WINDOW",
+               "GALAXY_BOOT_FAST", "GALAXY_PROFILE_GAME", "GALAXY_CRASH_DUMP_DIR", "GALAXY_VK_", "C:\Users\")
 $privateTerms = Join-Path $env:USERPROFILE ".nebula-release-key\private-terms.txt"
 if (Test-Path -LiteralPath $privateTerms) {
     $forbidden += Get-Content -LiteralPath $privateTerms | Where-Object { $_.Trim() -ne "" } | ForEach-Object { $_.Trim() }

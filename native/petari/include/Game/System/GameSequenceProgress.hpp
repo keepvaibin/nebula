@@ -33,8 +33,8 @@ public:
     void exeResetProcessing();
 
     inline static bool isCometStar(GalaxyMoveArgument);
-    static bool isScenePermittedIsUpdateWiiRemoteStatus() NO_INLINE;
-    static bool isSceneLongAutoSleepWiiRemote();
+    static bool isScenePermittedUpdateInputStatus();
+    static bool isSceneLongInputSleep();
     void updateGameDataBeforeChangeScene();
     void resetGameDataAfterChangeScene(const GalaxyMoveArgument&);
     void updateGameDataGalaxyVisitedFlag();
@@ -43,14 +43,14 @@ public:
     void offLuigiLeftSupply();
     void countDownGameEventValueFromNewPowerStar();
 
-    /* 0x08 */ StarPointerOnOffController* mStarPointerOnOffController;
-    /* 0x0C */ StorySequenceExecutor* mStorySequenceExecutor;
-    /* 0x10 */ FindingLuigiEventScheduler* mFindingLuigiEventScheduler;
-    /* 0x14 */ GalaxyCometScheduler* mGalaxyCometScheduler;
-    /* 0x18 */ LuigiLeftSupplier* mLuigiLeftSupplier;
-    /* 0x1C */ PlayerMissLeft* mPlayerMissLeft;
-    /* 0x20 */ s32 mMinFrame;
-    /* 0x24 */ bool mIsPlayTicoSound;
-    /* 0x25 */ bool mIsCancelScenarioSelect;
-    /* 0x26 */ bool mIsForceWipe;
+    StarPointerOnOffController* mStarPointerOnOffController;
+    StorySequenceExecutor* mStorySequenceExecutor;
+    FindingLuigiEventScheduler* mFindingLuigiEventScheduler;
+    GalaxyCometScheduler* mGalaxyCometScheduler;
+    LuigiLeftSupplier* mLuigiLeftSupplier;
+    PlayerMissLeft* mPlayerMissLeft;
+    s32 mMinFrame;
+    bool mIsPlayTicoSound;
+    bool mIsCancelScenarioSelect;
+    bool mIsForceWipe;
 };

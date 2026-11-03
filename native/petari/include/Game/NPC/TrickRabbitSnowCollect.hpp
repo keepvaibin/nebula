@@ -44,15 +44,15 @@ public:
     void exeEnd();
 
 private:
-    /* 0x8C */ TPos3f mBaseMtx;
-    /* 0xBC */ ActorCameraInfo* mCameraInfo;
-    /* 0xC0 */ ModelObj* mPowerStarDemoModel;
-    /* 0xC4 */ TalkMessageCtrl* mMsgCtrl;
-    /* 0xC8 */ BombTimerLayout* mTimerLayout;
-    /* 0xCC */ TrickRabbitSnow** mRabbit;
-    /* 0xD0 */ s32 mRabbitNum;
-    /* 0xD4 */ s32 mTimeLimit;
-    /* 0xD8 */ bool mIsDemo;
+    TPos3f mBaseMtx;
+    ActorCameraInfo* mCameraInfo;
+    ModelObj* mPowerStarDemoModel;
+    TalkMessageCtrl* mMsgCtrl;
+    BombTimerLayout* mTimerLayout;
+    TrickRabbitSnow** mRabbit;
+    s32 mRabbitNum;
+    s32 mTimeLimit;
+    bool mIsDemo;
 };
 
 class TrickRabbitCollectListener : public TrickRabbitSnowListener {
@@ -76,5 +76,5 @@ public:
     }
 
 private:
-    /* 0x04 */ TrickRabbitSnowCollect* mHost;
+    TrickRabbitSnowCollect* mHost;
 };

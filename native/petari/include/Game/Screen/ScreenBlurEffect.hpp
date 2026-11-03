@@ -19,9 +19,10 @@ public:
     void drawBlur() const;
     void captureBlur() const;
 
-    /* 0x14 */ JUTTexture* _14;
-    /* 0x18 */ JUTTexture* _18;
-    /* 0x1C */ f32 mScale;
-    /* 0x20 */ bool _20;
-    /* 0x24 */ f32 mIntensity;
+    JUTTexture* _14;
+    JUTTexture* _18;
+    JUTTexture* mFrameDepthKey;  // the frame's depth, in the depth pass
+    f32 mScale;
+    bool _20;
+    f32 mIntensity;
 };

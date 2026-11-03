@@ -95,6 +95,8 @@ void Rock::init(const JMapInfoIter& rIter) {
             setName("\203\123\201\133\203\213\203\150\203\217\203\223\203\217\203\223" /* ゴールドワンワン */);
             MR::declarePowerStar(this);
             break;
+        default:
+            break;
         }
 
         mAppearTime = ::cAppearMoveFrame;
@@ -391,7 +393,7 @@ void Rock::initMapToolInfo(const JMapInfoIter& rIter) {
     mAppearPos.set(mPosition);
 
     mRadius = getRadius() * ::cBinderRadius;
-    mRotateSpeed = (mMoveSpeed * 180.0f * ::cRotateSpeedRate) / (MR::pi() * mRadius);  // regswap
+    mRotateSpeed = (mMoveSpeed * 180.0f * ::cRotateSpeedRate) / (MR::pi() * mRadius);
 
     MR::getJMapInfoArg3NoInit(rIter, &mAppearTime);
 
@@ -593,7 +595,7 @@ bool Rock::tryFreeze(const Nerve* pNerve) {
 }
 
 void Rock::setBtkForEnvironmentMap(LiveActor* pActor, const char* pBtkName) {
-    f32 frame;
+    f32 frame = 0.0f;
 
     if (mRockType == NormalRock) {
         if (MR::isNearZero(mScale.x - 0.5f)) {
@@ -687,10 +689,6 @@ bool Rock::tryBreakReachedGoal() {
     }
 
     return false;
-}
-
-const char* Rock::getTouchEffect() const {
-    return mRockType == WanwanRollingMini ? "MiniTouch" : "Touch";
 }
 
 void Rock::exeAppear() {
@@ -932,8 +930,6 @@ void Rock::exeBreak() {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void Rock::exeFreeze() {
     if (MR::isFirstStep(this)) {
         mVelocity.zero();
@@ -985,4 +981,3 @@ void Rock::exeFreeze() {
         setNerve(mUnfreezeNerve);
     }
 }
-#pragma pop

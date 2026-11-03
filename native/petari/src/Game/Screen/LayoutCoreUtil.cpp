@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/Screen/ReplaceTagProcessor.hpp"
@@ -6,9 +7,9 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
-#include <revolution/mtx.h>
+#include <nebula_math.h>
 
-static const wchar_t sDefaultMsg[] = L"XXXXXXXX";
+static const char16_t sDefaultMsg[] = u"XXXXXXXX";
 
 namespace LayoutCoreUtil {
 
@@ -18,8 +19,8 @@ namespace LayoutCoreUtil {
         return pUserData;
     }
 
-    u16 setTextBoxMessage(nw4r::lyt::TextBox* pTextBox, const wchar_t* pMsg) {
-        wchar_t buffer[512];
+    u16 setTextBoxMessage(nw4r::lyt::TextBox* pTextBox, const char16_t* pMsg) {
+        char16_t buffer[512];
         ReplaceTagProcessor::Replace(buffer, pMsg);
         return pTextBox->SetString(buffer, 0, MR::getStringLengthWithMessageTag(buffer));
     }
@@ -47,7 +48,7 @@ namespace LayoutCoreUtil {
 
         pTextBox->mpTagProcessor = processor;
 
-        const wchar_t* message = nullptr;
+        const char16_t* message = nullptr;
         if (pMessageId != nullptr) {
             message = MR::getLayoutMessageDirect(pMessageId);
         }
@@ -57,15 +58,7 @@ namespace LayoutCoreUtil {
             setTextBoxMessage(pTextBox, message);
         } else {
             reallocateTextBoxMessage(pTextBox, allocSize - 1);
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-            const wchar_t* message = ::sDefaultMsg;
-#else
-            s32 maxNumChars = pTextBox->mSize.width / pTextBox->mFontSize.width;
-            wchar_t message[] = L"XXXXXXXX";
-
-            s32 end = maxNumChars <= 9 ? maxNumChars : 9;
-            message[end] = L'\0';
-#endif
+            const char16_t* message = ::sDefaultMsg;
             setTextBoxMessage(pTextBox, message);
         }
     }
@@ -77,31 +70,27 @@ namespace LayoutCoreUtil {
 
 namespace MR {
     void convertScreenPosToLayoutPos(TVec2f* pLayoutPos, const TVec2f& rScreenPos) {
-#ifdef TARGET_PC
         // The layout canvas setupDrawForNW4RLayout projects (pointer hit tests, panes following screen positions).
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
-            pLayoutPos->x = rScreenPos.x * display.canvas_width / MR::getScreenWidth() - display.canvas_width * 0.5f;
+            pLayoutPos->x = rScreenPos.x * display.layout_width / MR::getScreenWidth() - display.layout_width * 0.5f;
             pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f)) *
                             display.vertical_fit;
             return;
         }
-#endif
-        pLayoutPos->x = rScreenPos.x * 608.0f / MR::getScreenWidth() - 304.0f;
+        pLayoutPos->x = rScreenPos.x * NebulaFrameClock::cLayoutWidth / MR::getScreenWidth() - 304.0f;
         pLayoutPos->y = -(rScreenPos.y * MR::getScreenHeight() / MR::getScreenHeight() - (MR::getScreenHeight() * 0.5f));
     }
 
     void convertLayoutPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rLayoutPos) {
-#ifdef TARGET_PC
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             const NebulaDisplay& display = MR::getDisplay();
-            pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.canvas_width + MR::getScreenWidth() * 0.5f;
+            pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / display.layout_width + MR::getScreenWidth() * 0.5f;
             pScreenPos->y = MR::getScreenHeight() * 0.5f +
                             -(rLayoutPos.y / display.vertical_fit) * MR::getScreenHeight() / MR::getScreenHeight();
             return;
         }
-#endif
-        pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / 608.0f + MR::getScreenWidth() * 0.5f;
+        pScreenPos->x = rLayoutPos.x * MR::getScreenWidth() / NebulaFrameClock::cLayoutWidth + MR::getScreenWidth() * 0.5f;
         pScreenPos->y = MR::getScreenHeight() * 0.5f + -rLayoutPos.y * MR::getScreenHeight() / MR::getScreenHeight();
     }
 

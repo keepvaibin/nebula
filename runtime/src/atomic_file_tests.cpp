@@ -47,7 +47,7 @@ bool test_collision_exception_preserves_unowned_sibling(
     }
     bool collision_observed = false;
     const bool replaced =
-        galaxy::io::detail::write_text_file_atomically_with_collision_hook(
+        galaxy::io::detail::write_file_atomically_with_collision_hook(
             target,
             "new destination\n",
             [](void* user) {
@@ -82,7 +82,7 @@ int main() {
     passed &= test_collision_exception_preserves_unowned_sibling(root);
 
     passed &= expect(
-        galaxy::io::write_text_file_atomically(target, "version=old\n"),
+        galaxy::io::write_file_atomically(target, "version=old\n"),
         "initial atomic write succeeds");
 
     HANDLE locked = CreateFileW(
@@ -95,7 +95,7 @@ int main() {
         nullptr);
     passed &= expect(locked != INVALID_HANDLE_VALUE, "test target is locked");
     passed &= expect(
-        !galaxy::io::write_text_file_atomically(target, "version=new\n") &&
+        !galaxy::io::write_file_atomically(target, "version=new\n") &&
             read_text(target) == "version=old\n",
         "replace failure preserves the complete old destination");
     if (locked != INVALID_HANDLE_VALUE) {
@@ -113,7 +113,7 @@ int main() {
         temporary_count == 0u,
         "failed replacement removes its sibling temporary file");
     passed &= expect(
-        galaxy::io::write_text_file_atomically(target, "version=new\n") &&
+        galaxy::io::write_file_atomically(target, "version=new\n") &&
             read_text(target) == "version=new\n",
         "atomic replacement succeeds after the destination unlocks");
 
@@ -123,7 +123,7 @@ int main() {
         file << "block";
     }
     passed &= expect(
-        !galaxy::io::write_text_file_atomically(
+        !galaxy::io::write_file_atomically(
             blocking_parent / "settings.ini",
             "unreachable=1\n"),
         "invalid parent fails without replacing another path");

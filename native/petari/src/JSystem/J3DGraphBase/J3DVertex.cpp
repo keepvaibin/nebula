@@ -7,7 +7,8 @@ J3DVertexData::J3DVertexData() {
     mColNum = 0;
     mTexCoordNum = 0;
     mPacketNum = 0;
-    mVtxAttrFmtList = nullptr;
+    mNormalFloats = 3;
+    mNebulaArraysSent = false;
     mVtxPosArray = nullptr;
     mVtxNrmArray = nullptr;
     mVtxNBTArray = nullptr;
@@ -17,10 +18,6 @@ J3DVertexData::J3DVertexData() {
     for (int i = 0; i < 8; ++i) {
         mVtxTexCoordArray[i] = nullptr;
     }
-    mVtxPosFrac = 0;
-    mVtxPosType = GX_F32;
-    mVtxNrmFrac = 0;
-    mVtxNrmType = GX_F32;
     for (int i = 0; i < 13; ++i) {
         mNebulaArrayCount[i] = 0;
     }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <RFL_Types.h>
+#include <MiiTypes.h>
 
 class MiiFaceRecipe;
 
@@ -32,29 +32,29 @@ public:
     void createImageBuffer();
 
     /// @brief The position of the Mii data in the database.
-    /* 0x0C */ u16 mIndex;
+    u16 mIndex;
 
     /// @brief Determines if the background of the icon texture should be colored with the Mii character's favorite color.
-    /* 0x0E */ bool mIsFavoriteColorBG;
+    bool mIsFavoriteColorBG;
 
     /// @brief The width of the texture, in pixels.
-    /* 0x10 */ u16 mWidth;
+    u16 mWidth;
 
     /// @brief The height of the texture, in pixels.
-    /* 0x12 */ u16 mHeight;
+    u16 mHeight;
 
     /// @brief The pointer to the resource creator for the head of a Mii character.
-    /* 0x14 */ MiiFaceRecipe* mRecipe;
+    MiiFaceRecipe* mRecipe;
 
     /// @brief The pointer to the texture data buffer.
-    /* 0x18 */ u8* mImageBuffer;
+    u8* mImageBuffer;
 
     /// @brief Determines if the icon texture has been created.
-    /* 0x1C */ bool mIsCreated;
+    bool mIsCreated;
 
     /// @brief The error status for the creation of the icon texture.
-    /* 0x20 */ RFLErrcode mMakeIconResult;
+    MiiErrcode mMakeIconResult;
 
     /// @brief Determines if a request is open to create the icon texture.
-    /* 0x24 */ bool mIsRequestMakeIcon;
+    bool mIsRequestMakeIcon;
 };

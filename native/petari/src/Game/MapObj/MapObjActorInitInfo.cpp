@@ -4,12 +4,6 @@
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/MapPartsUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include "revolution/os.h"
-
-void MapObjActorInitInfo_FORCE_MATCH_STRINGS() {
-    JUTNativeLog("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
-    JUTNativeLog("\230\146\220\257" /* 惑星 */);
-}
 
 MapObjActorInitInfo::MapObjActorInitInfo()
     : mSetDefaultPosition(), mConnectToScene(), mInitBinder(), mHasEffect(), mHasSensors(), mHasShadows(), mCalcGravity(), mUseProjectMapMtx(),
@@ -17,7 +11,7 @@ MapObjActorInitInfo::MapObjActorInitInfo()
       mUseMirrorReflection(), mModelName(), mHioNode(), _1C(), mSensorRadius(), mSensorPosition(gZeroVec), mHasHitSensorCB(), mBinderRadius(),
       mBinderCenterY(), mEffectName(), mSound(), mSoundPos(), _48(), mNerve(), mGroupClipping(), mClippingRadius(), mFarClipping(), _5C(-1),
       mColorChangeArg(-1), mTextureChangeArg(-1), mIsAppearRiddleSE(), mSeesaw1AxisRotatorName(), mSeesaw1AxisRotatorRadius(), _74(), mShadowName(),
-      mShadowLength(-1.0f), _80(), mDummyChangeTexture(), _88(-1), _8C(), mNoUseLOD() {
+      mShadowLength(-1.0f), _80(), mDummyChangeTexture(), _8C(), mNoUseLOD() {
 }
 
 void MapObjActorInitInfo::setupHioNode(const char* pName) {
@@ -191,10 +185,6 @@ void MapObjActorUtil::setupInitInfoTypical(MapObjActorInitInfo* pInitInfo, const
 
     if (MR::isEqualString("SandUpDownTowerBreakableWallA", pName) || MR::isEqualString("SandUpDownTowerBreakableWallB", pName)) {
         pInitInfo->_80 = "SandUpDownTowerBreakableWallBreak";
-    }
-
-    if (MR::isEqualString("KoopaJrNormalShipA", pName)) {
-        pInitInfo->_88 = 34;
     }
 
     if (MR::isEqualString("KoopaStatue", pName)) {

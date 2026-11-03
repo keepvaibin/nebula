@@ -1,19 +1,20 @@
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
-#define USER_NAME_SIZE (RFL_NAME_LEN + 1)
+#define USER_NAME_SIZE (MII_NAME_LEN + 1)
 
 UserFile::UserFile()
     : mGameDataHolder(nullptr), mConfigDataHolder(nullptr), mIsPlayerMario(true), mIsGameDataCorrupted(false), mIsConfigDataCorrupted(false),
       mUserName(nullptr) {
     mGameDataHolder = new GameDataHolder(this);
     mConfigDataHolder = new ConfigDataHolder();
-    mUserName = new wchar_t[USER_NAME_SIZE];
+    mUserName = new char16_t[USER_NAME_SIZE];
 
-    MR::zeroMemory(mUserName, USER_NAME_SIZE * sizeof(wchar_t));
+    MR::zeroMemory(mUserName, USER_NAME_SIZE * sizeof(char16_t));
 }
 
 bool UserFile::isCreated() const {
@@ -48,7 +49,7 @@ bool UserFile::isOnCompleteEndingMarioAndLuigi() const {
     return mConfigDataHolder->isOnCompleteEndingMario() && mConfigDataHolder->isOnCompleteEndingLuigi();
 }
 
-OSTime UserFile::getLastModified() const {
+NebulaCalendar::SaveTime UserFile::getLastModified() const {
     return mConfigDataHolder->getLastModified();
 }
 
@@ -76,8 +77,8 @@ void UserFile::updateLastModified() {
     mConfigDataHolder->updateLastModified();
 }
 
-void UserFile::setUserName(const wchar_t* pUserName) {
-    MR::copyMemory(mUserName, pUserName, USER_NAME_SIZE * sizeof(wchar_t));
+void UserFile::setUserName(const char16_t* pUserName) {
+    MR::copyMemory(mUserName, pUserName, USER_NAME_SIZE * sizeof(char16_t));
 }
 
 const char* UserFile::getGameDataName() const {

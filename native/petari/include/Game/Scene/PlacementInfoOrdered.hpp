@@ -22,8 +22,8 @@ public:
             return MR::isEqualString(mName, rOther.mName) && mShapeId == rOther.mShapeId;
         }
 
-        /* 0x00 */ const char* mName;
-        /* 0x04 */ s32 mShapeId;
+        const char* mName;
+        s32 mShapeId;
     };
 
     class Index : public MR::BothDirLink< Index > {
@@ -36,7 +36,7 @@ public:
             return mInfoIter;
         }
 
-        /* 0x10 */ JMapInfoIter mInfoIter;
+        JMapInfoIter mInfoIter;
     };
 
     class SameIdSet : public Identifier {
@@ -53,8 +53,8 @@ public:
             return mPriority < rOther.mPriority;
         }
 
-        /* 0x08 */ s32 mPriority;
-        /* 0x0C */ MR::BothDirList< Index > mList;
+        s32 mPriority;
+        MR::BothDirList< Index > mList;
     };
 
     PlacementInfoOrdered(int);
@@ -73,9 +73,9 @@ public:
     Index* createIndex(const JMapInfoIter&);
     void attach(const JMapInfo*, PlacementInfoOrdered*);
 
-    /* 0x00 */ Index* mIndexArray;
-    /* 0x04 */ u32 mIndexCount;
-    /* 0x08 */ SameIdSet* mSetArray;
-    /* 0x0C */ SameIdSet** mOrderedSetArray;
-    /* 0x10 */ int mCount;
+    Index* mIndexArray;
+    u32 mIndexCount;
+    SameIdSet* mSetArray;
+    SameIdSet** mOrderedSetArray;
+    int mCount;
 };

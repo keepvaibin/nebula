@@ -9,11 +9,6 @@
 #include "Game/Util/StringUtil.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
 
-void FORCE_SUB_NO_INLINE() {
-    TVec3f a, b;
-    a = a - b;
-}
-
 LavaGalaxyParts::~LavaGalaxyParts() {
 }
 
@@ -65,7 +60,6 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     const char* objectName;
     MR::getObjectName(&objectName, rIter);
 
-    // FIXME: this is an inline
     const char* pName = objectName;
     bool isLavaStep;
     if (MR::isEqualString("LavaStepA", pName)) {
@@ -81,8 +75,8 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     if (isLavaStep) {
         initModelManagerWithAnm(objectName, nullptr, true);
 
-        mMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-        MR::newDifferedDLBuffer(this);
+        mMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+        MR::newDifferedMaterials(this);
     } else {
         initModelManagerWithAnm(objectName, nullptr, false);
     }
@@ -95,7 +89,6 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     f32 arg0 = -1.0f;
     MR::getJMapInfoArg0NoInit(rIter, &arg0);
 
-    // FIXME: this is an inline
     pName = objectName;
     bool isNonFloatingOrLavaStep;
     if (MR::isEqualString(pName, "LavaNonFloatingStepA")) {
@@ -111,7 +104,7 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     }
 
     if (isNonFloatingOrLavaStep) {
-        mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+        mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     }
 
     MR::connectToSceneMapObj(this);

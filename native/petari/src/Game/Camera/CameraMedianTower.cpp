@@ -5,13 +5,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraMedianTower_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)0.5f;
-}
-
 namespace {
     static const f32 sPartialRate = 0.5f;
     static const f32 sAngularVel = 0.5f;

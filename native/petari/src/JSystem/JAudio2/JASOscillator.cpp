@@ -79,7 +79,6 @@ void JASOscillator::initStart(JASOscillator::Data const* data) {
 }
 
 void JASOscillator::incCounter(f32 param_0) {
-    const short* v1;
     switch (_1C) {
     case 0:
     case 2:
@@ -151,7 +150,7 @@ void JASOscillator::update() {
         _08 = _10;
         _14++;
         _0C = _08;
-        const NEBULA_BE(s16)* ps = &psVar1[_14]._0;
+        const s16* ps = &psVar1[_14]._0;
         s16 r26 = ps[0];
         switch (r26) {
         case 0xf:

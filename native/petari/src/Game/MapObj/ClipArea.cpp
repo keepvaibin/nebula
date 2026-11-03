@@ -1,4 +1,5 @@
 #include "Game/MapObj/ClipArea.hpp"
+#include "Game/Util/DrawUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/MapObj/ClipAreaShape.hpp"
@@ -31,14 +32,14 @@ void ClipArea::draw() const {
         return;
     }
 
-    J3DNativeState::setTevColor(GX_TEVREG0, ::sShapeColor);
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_COPY);
+    MR::setShadowVolumeColor(::sShapeColor);
+    J3DPass::writeColor(false);
+    J3DPass::constantAlpha(false, 0);
+    J3DPass::cull(NEBULA_CULL_FRONT);
+    J3DPass::blend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_ONE);
     mShape->drawVolumeShape(mBaseMtx, mScale);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
+    J3DPass::cull(NEBULA_CULL_BACK);
+    J3DPass::subtractBlend();
     mShape->drawVolumeShape(mBaseMtx, mScale);
 }
 

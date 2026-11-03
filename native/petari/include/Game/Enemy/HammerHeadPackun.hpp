@@ -50,11 +50,11 @@ public:
 
     inline bool checkBlowAttack() const;
 
-    /* 0x8C */ PartsModel* mLeafModel;
-    /* 0x90 */ s32 mImmunityTime;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ TVec3f _A0;
-    /* 0xAC */ TVec3f _AC;
-    /* 0xB8 */ JointRumbler* mJointRumbler;
-    /* 0xBC */ s32 mNumbTime;
+    PartsModel* mLeafModel;
+    s32 mImmunityTime;
+    TVec3f _94;
+    TVec3f _A0;
+    TVec3f _AC;
+    JointRumbler* mJointRumbler;
+    s32 mNumbTime;
 };

@@ -1,6 +1,8 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
+#include <cstring>
+#include "Game/Util/ByteView.hpp"
 
 JMapInfo::JMapInfo() {
     mData = nullptr;
@@ -15,6 +17,14 @@ bool JMapInfo::attach(const void* pData) {
         return false;
     }
     mData = static_cast< const JMapData* >(pData);
+    // A table the importer cooked reads its field count below 64 K; one still big-endian, at least 16 M.
+    if (static_cast< u32 >(mData->mNumFields) >= 0x10000) {
+        const u8* pHead = static_cast< const u8* >(pData);
+        NEBULA_PANIC("JMapInfo: a table not in host order (the importer cooks it): %02x%02x%02x%02x %02x%02x%02x%02x "
+                              "%02x%02x%02x%02x %02x%02x%02x%02x",
+                              pHead[0], pHead[1], pHead[2], pHead[3], pHead[4], pHead[5], pHead[6], pHead[7], pHead[8],
+                              pHead[9], pHead[10], pHead[11], pHead[12], pHead[13], pHead[14], pHead[15]);
+    }
     return true;
 }
 
@@ -59,7 +69,9 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, const char** pValueOu
     switch (item->mType) {
     case JMAP_VALUE_TYPE_STRING_PTR: {
         const char* pStringTable = getEntryAddress(mData, mData->mDataOffset, getNumEntries());
-        *pValueOut = pStringTable + *reinterpret_cast< const NEBULA_BE(u32)* >(valuePtr);
+        u32 stringOffset;
+        memcpy(&stringOffset, valuePtr, sizeof(stringOffset));  // a table's columns are packed
+        *pValueOut = pStringTable + stringOffset;
         break;
     }
     default:
@@ -78,13 +90,13 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const
     switch (item->mType) {
     case JMAP_VALUE_TYPE_LONG:
     case JMAP_VALUE_TYPE_LONG_2:
-        rawValue = *reinterpret_cast< const NEBULA_BE(u32)* >(valuePtr);
+        rawValue = readBytes< u32 >(valuePtr);
         break;
     case JMAP_VALUE_TYPE_SHORT:
-        rawValue = *reinterpret_cast< const NEBULA_BE(u16)* >(valuePtr);
+        rawValue = readBytes< u16 >(valuePtr);
         break;
     case JMAP_VALUE_TYPE_BYTE:
-        rawValue = *reinterpret_cast< const u8* >(valuePtr);
+        rawValue = readBytes< u8 >(valuePtr);
         break;
     default:
         return false;
@@ -105,19 +117,19 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const
     switch (item->mType) {
     case JMAP_VALUE_TYPE_LONG:
         if (item->mMask == 0xffffffff) {
-            *pValueOut = *reinterpret_cast< const NEBULA_BE(s32)* >(valuePtr);
+            *pValueOut = readBytes< s32 >(valuePtr);
             break;
         }
         goto FAIL;
     case JMAP_VALUE_TYPE_SHORT:
         if (item->mMask == 0xffff) {
-            *pValueOut = *reinterpret_cast< const NEBULA_BE(s16)* >(valuePtr);
+            *pValueOut = readBytes< s16 >(valuePtr);
             break;
         }
         goto FAIL;
     case JMAP_VALUE_TYPE_BYTE:
         if (item->mMask == 0xff) {
-            *pValueOut = *reinterpret_cast< const s8* >(valuePtr);
+            *pValueOut = readBytes< s8 >(valuePtr);
             break;
         }
         goto FAIL;

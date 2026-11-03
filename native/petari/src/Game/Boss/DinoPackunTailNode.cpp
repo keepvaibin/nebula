@@ -5,14 +5,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 
-void DinoPackunTailNode_FORCE_MATCH_SDATA2() {
-    (void)90.0f;
-    (void)10.0f;
-    (void)0.001f;
-    (void)0.2f;
-    (void)5.0f;
-}
-
 typedef JointControlDelegator< DinoPackunTailNode > Delegator;
 
 typedef bool (DinoPackunTailNode::*func)(TPos3f*, const JointControllerInfo&);
@@ -86,7 +78,6 @@ bool DinoPackunTailNode::turnJointLocalXDir(TPos3f* pMtx, const JointControllerI
     return true;
 }
 
-// https://decomp.me/scratch/i48pg
 bool DinoPackunTailNode::calcJointScale(TPos3f* pMtx, const JointControllerInfo& rInfo) {
     if (!_B8) {
         return false;

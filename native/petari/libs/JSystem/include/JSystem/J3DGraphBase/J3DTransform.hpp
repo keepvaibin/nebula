@@ -1,56 +1,15 @@
 #pragma once
 
-#include "nebula_disc.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 struct J3DTransformInfo {
-    /* 0x00 */ Vec mScale;
-    /* 0x0C */ S16Vec mRotation;
-    /* 0x12 */ u16 _12;
-    /* 0x14 */ Vec mTranslate;
+    Vec mScale;
+    S16Vec mRotation;
+    u16 _12;
+    Vec mTranslate;
 
-#ifdef __MWERKS__
-    inline J3DTransformInfo& operator=(const __REGISTER J3DTransformInfo& b) {
-        __REGISTER const J3DTransformInfo& var_r31 = b;
-        __REGISTER J3DTransformInfo& var_r30 = *this;
-        __REGISTER f32 var_f31;
-        asm {
-            psq_l var_f31, J3DTransformInfo.mScale(var_r31), 0, 0
-            psq_st var_f31, J3DTransformInfo.mScale(var_r30), 0, 0
-        }
-        mScale.z = b.mScale.z;
-        *(u32*)&mRotation = *(u32*)&b.mRotation;
-        mRotation.z = b.mRotation.z;
-        asm {
-            psq_l var_f31, J3DTransformInfo.mTranslate(var_r31), 0, 0
-            psq_st var_f31, J3DTransformInfo.mTranslate(var_r30), 0, 0
-        }
-        mTranslate.z = b.mTranslate.z;
-        return *this;
-    }
-#endif
 };
-
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DTransformInfo > {
-    BEData< Vec > mScale;
-    BEData< S16Vec > mRotation;
-    BE< u16 > _12;
-    BEData< Vec > mTranslate;
-
-    operator J3DTransformInfo() const {
-        J3DTransformInfo info;
-        info.mScale = mScale;
-        info.mRotation = mRotation;
-        info._12 = _12;
-        info.mTranslate = mTranslate;
-        return info;
-    }
-};
-#endif
 
 struct J3DTextureSRTInfo;
 
@@ -72,4 +31,4 @@ void J3DScaleNrmMtx33(f32 (*)[3], const Vec&);
 void J3DMtxProjConcat(f32 (*)[4], f32 (*)[4], f32 (*)[4]);
 void J3DPSMtxArrayConcat(f32 (*)[4], f32 (*)[4], f32 (*)[4], u32);
 
-void J3DPSMtx33CopyFrom34(__REGISTER MtxPtr src, __REGISTER Mtx3P dst);
+void J3DPSMtx33CopyFrom34(MtxPtr src, Mtx3P dst);

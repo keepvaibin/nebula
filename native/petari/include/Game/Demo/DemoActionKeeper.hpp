@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class JMapInfoIter;
 class LiveActor;
@@ -22,18 +21,18 @@ public:
     void executeActionFirst() const;
     void executeActionLast() const;
 
-    /* 0x00 */ const char* mPartName;
-    /* 0x04 */ const char* mCastName;
-    /* 0x08 */ s32 mCastID;
-    /* 0x0C */ s32 mActionType;
-    /* 0x10 */ const char* mPosName;
-    /* 0x14 */ const char* mAnimName;
-    /* 0x18 */ s32 _18;
-    /* 0x1C */ s32 mCastCount;
-    /* 0x20 */ LiveActor** mCastList;
-    /* 0x24 */ MR::FunctorBase** mFunctors;
-    /* 0x28 */ const Nerve** mNerves;
-    /* 0x2C */ u8 _2C;
+    const char* mPartName;
+    const char* mCastName;
+    s32 mCastID;
+    s32 mActionType;
+    const char* mPosName;
+    const char* mAnimName;
+    s32 _18;
+    s32 mCastCount;
+    LiveActor** mCastList;
+    MR::FunctorBase** mFunctors;
+    const Nerve** mNerves;
+    u8 _2C;
 };
 
 class DemoActionKeeper {
@@ -49,7 +48,7 @@ public:
     bool isRegisteredDemoActionNerve(const LiveActor*) const;
     bool isRegisteredDemoAction(const LiveActor*, s32) const;
 
-    /* 0x00 */ const DemoExecutor* mDemoExecutor;
-    /* 0x04 */ s32 mNumInfos;
-    /* 0x08 */ DemoActionInfo** mInfoArray;
+    const DemoExecutor* mDemoExecutor;
+    s32 mNumInfos;
+    DemoActionInfo** mInfoArray;
 };

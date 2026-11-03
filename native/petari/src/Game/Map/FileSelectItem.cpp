@@ -12,7 +12,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -20,23 +20,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-
-void FileSelectItem_FORCE_MATCH_SDATA2() {
-    (void)1000.0f;
-    (void)900.0f;
-    (void)30.0f;
-    (void)27.0f;
-    (void)360.0f;
-    (void)-180.0f;
-    (void)0.03f;
-    (void)-25.0f;
-    (void)25.0f;
-    (void)0.98f;
-    (void)-0.5f;
-    (void)1.2f;
-    (void)10.0f;
-    (void)6.0f;
-}
 
 namespace {
     NEW_NERVE(FileSelectItemNrvNewWait, FileSelectItem, NewWait);
@@ -77,11 +60,6 @@ namespace FileSelectItemSub {
     NEW_NERVE(BlinkControllerNrvSleep, BlinkController, Sleep);
     NEW_NERVE(BlinkControllerNrvBlink, BlinkController, Blink);
 };  // namespace FileSelectItemSub
-
-void FileSelectItem_DUMMY() {
-    TVec3f vec;
-    vec.scale(1.0f);
-}
 
 FileSelectItem::FileSelectItem(s32 a1, bool a2, const FileSelectIconID& rID, const char* pName) : LiveActor(pName) {
     _8C = a2;
@@ -202,7 +180,7 @@ void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
     deleteCompleteEffect();
     mIconID->set(rID);
     if (rID.isMii()) {
-        mFaceParts->changeFaceModel(MiiFaceRecipe(RFLDataSource_Official, mIconID->getMiiIndex(), RFLResolution_256, 33));
+        mFaceParts->changeFaceModel(MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
         killAllModels();
         mFaceParts->makeActorAppeared();
     } else {
@@ -254,7 +232,7 @@ void FileSelectItem::onPointing() {
         _A0->onSelectIn();
         _144 = 1;
         mScaleCtrl->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvToBig));
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 }
 
@@ -288,7 +266,7 @@ void FileSelectItem::exeFormat() {
         emitVanish();
         killAllModels();
         mPlanetMapObj->makeActorAppeared();
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -321,7 +299,7 @@ void FileSelectItem::exeChangeFellow() {
             emitOpen();
         }
 
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -344,7 +322,7 @@ void FileSelectItem::exeChangeMii() {
     }
 
     if (MR::isStep(this, 39)) {
-        mFaceParts->changeFaceModel(MiiFaceRecipe(RFLDataSource_Official, mIconID->getMiiIndex(), RFLResolution_256, 33));
+        mFaceParts->changeFaceModel(MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
     }
 
     if (MR::isStep(this, 40)) {
@@ -359,7 +337,7 @@ void FileSelectItem::exeChangeMii() {
             emitOpen();
         }
 
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -431,7 +409,7 @@ void FileSelectItem::createMii() {
         mFaceParts = MiiFacePartsHolder::createPartsFromDefault("Mii\203\164\203\106\203\103\203\130" /* Miiフェイス */, 0);
     } else {
         mFaceParts = MiiFacePartsHolder::createPartsFromReceipe("Mii\203\164\203\106\203\103\203\130" /* Miiフェイス */,
-                                                                MiiFaceRecipe(RFLDataSource_Official, mIconID->getMiiIndex(), RFLResolution_256, 33));
+                                                                MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
     }
 
     mFaceParts->initFixedPosition(_104, TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));
@@ -656,7 +634,7 @@ void FileSelectItem::updateRotate() {
 }
 
 void FileSelectItem::playPointedME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY1");
 
@@ -681,7 +659,7 @@ void FileSelectItem::playPointedME() {
 }
 
 void FileSelectItem::playPointedNotUsingME() {
-    switch (MR::getRandom(0l, 5l)) {
+    switch (MR::getRandom(0, 5)) {
     case 0:
         MR::startSystemME("ME_ASTRO_DOME_HIT_GALAXY_N1");
 
@@ -826,7 +804,7 @@ namespace FileSelectItemSub {
 
     void BlinkController::exeOpen() {
         if (MR::isFirstStep(this)) {
-            _C = MR::getRandom(180l, 300l);
+            _C = MR::getRandom(180, 300);
             _10 = 0;
         }
 

@@ -16,7 +16,7 @@ namespace MR {
     bool isNPCItemFileExist(const char*);
     void initDefaultPose(NPCActor*, const JMapInfoIter&);
     void turnPlayerToActor(const LiveActor*, f32);
-    void decidePose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32) NO_INLINE;
+    void decidePose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&, f32, f32, f32);
     void setNPCActorPos(NPCActor*, const char*);
     void setNPCActorPos(NPCActor*, const TVec3f&);
     void setNPCActorPose(NPCActor*, const TVec3f&, const TVec3f&, const TVec3f&);
@@ -68,11 +68,11 @@ public:
     void exeDemo();
     void exeTerm();
 
-    /* 0x08 */ ModelObj* mStarModel;
-    /* 0x0C */ NPCActor* mActor;
-    /* 0x10 */ const Nerve* mNerve;
-    /* 0x14 */ const char* mActionName;
-    /* 0x18 */ const char* mAnimName;
+    ModelObj* mStarModel;
+    NPCActor* mActor;
+    const Nerve* mNerve;
+    const char* mActionName;
+    const char* mAnimName;
 };
 
 class FadeStarter : public NerveExecutor {
@@ -83,9 +83,9 @@ public:
     void exeFade();
     void exeTerm();
 
-    /* 0x08 */ NPCActor* mActor;
-    /* 0x0C */ const Nerve* _C;
-    /* 0x10 */ s32 _10;
+    NPCActor* mActor;
+    const Nerve* _C;
+    s32 _10;
 };
 
 class DemoStarter : public NerveExecutor {
@@ -99,5 +99,5 @@ public:
     void exeWait();
     void exeTerm();
 
-    /* 0x08 */ NPCActor* mActor;
+    NPCActor* mActor;
 };

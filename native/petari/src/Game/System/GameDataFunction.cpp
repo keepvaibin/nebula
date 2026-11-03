@@ -1,3 +1,4 @@
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataGalaxyStorage.hpp"
@@ -9,13 +10,12 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
-#include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <cstdio>
 
 namespace {
-    SaveDataHandleSequence* getSaveDataHandleSequence() NO_INLINE {
+    SaveDataHandleSequence* getSaveDataHandleSequence() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mSaveDataHandleSequence;
     }
 
@@ -23,7 +23,7 @@ namespace {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameDataTemporaryInGalaxy;
     }
 
-    GameSequenceProgress* getGameSequenceProgress() NO_INLINE {
+    GameSequenceProgress* getGameSequenceProgress() {
         return SingletonHolder< GameSystem >::get()->mSequenceDirector->mGameSequenceProgress;
     }
 };  // namespace
@@ -134,7 +134,7 @@ namespace GameDataFunction {
     void restoreGalaxyCometStatus(int cometId, u16* pCometStatus, u16* pPastSecond) {
         char eventValueName[20];
 
-        snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
+        nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
 
         *pCometStatus = getCurrentGameDataHolder()->getGameEventValue(eventValueName);
     }
@@ -231,22 +231,6 @@ namespace GameDataFunction {
         return ::getGameDataTemporaryInGalaxy()->mLast1upStarPieceNum;
     }
 
-    const wchar_t* getUserName() {
-        return ::getSaveDataHandleSequence()->getCurrentUserFile()->mUserName;
-    }
-
-    u16 getUserFileIndex() {
-        const char* pGameDataName = ::getSaveDataHandleSequence()->getCurrentUserFile()->getGameDataName();
-        s32 index = strlen(pGameDataName) - 1;
-        char ch = pGameDataName[index];
-
-        if (ch <= '0' || ch > '9') {
-            return 1;
-        }
-
-        return ch - '0';
-    }
-
     void resetAllGameData() {
         getCurrentGameDataHolder()->resetAllData();
     }
@@ -325,30 +309,6 @@ namespace GameDataFunction {
         return ::getSaveDataHandleSequence()->getCurrentUserFile()->isOnCompleteEndingMarioAndLuigi();
     }
 
-    OSTime getSysConfigFileTimeAnnounced() {
-        return ::getSaveDataHandleSequence()->getSysConfigFile()->getTimeAnnounced();
-    }
-
-    void updateSysConfigFileTimeAnnounced() {
-        ::getSaveDataHandleSequence()->getSysConfigFile()->updateTimeAnnounced();
-    }
-
-    OSTime getSysConfigFileTimeSent() {
-        return ::getSaveDataHandleSequence()->getSysConfigFile()->getTimeSent();
-    }
-
-    void setSysConfigFileTimeSent(OSTime timeSent) {
-        ::getSaveDataHandleSequence()->getSysConfigFile()->setTimeSent(timeSent);
-    }
-
-    u32 getSysConfigFileSentBytes() {
-        return ::getSaveDataHandleSequence()->getSysConfigFile()->getSentBytes();
-    }
-
-    void setSysConfigFileSentBytes(u32 sentBytes) {
-        ::getSaveDataHandleSequence()->getSysConfigFile()->setSentBytes(sentBytes);
-    }
-
     bool isLuigiLeftSupply() {
         return ::getGameSequenceProgress()->isLuigiLeftSupply();
     }
@@ -360,7 +320,7 @@ namespace GameDataFunction {
     bool isOnGameEventFlagNormalComet(const char* pGalaxyName) {
         char eventFlagName[64];
 
-        snprintf(eventFlagName, sizeof(eventFlagName), "NormalComet%s", pGalaxyName);
+        nebula_snprintf(eventFlagName, sizeof(eventFlagName), "NormalComet%s", pGalaxyName);
 
         return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName);
     }
@@ -368,7 +328,7 @@ namespace GameDataFunction {
     bool isOnGameEventFlagCoin100Comet(const char* pGalaxyName) {
         char eventFlagName[64];
 
-        snprintf(eventFlagName, sizeof(eventFlagName), "Coin100Comet%s", pGalaxyName);
+        nebula_snprintf(eventFlagName, sizeof(eventFlagName), "Coin100Comet%s", pGalaxyName);
 
         return getCurrentGameDataHolder()->isOnGameEventFlag(eventFlagName);
     }
@@ -376,7 +336,7 @@ namespace GameDataFunction {
     void updateGalaxyCometStatus(int cometId, u16 cometStatus, u16 pastSecond) {
         char eventValueName[20];
 
-        snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
+        nebula_snprintf(eventValueName, sizeof(eventValueName), "Comet%1dStatus", cometId);
 
         getCurrentGameDataHolder()->setGameEventValue(eventValueName, cometStatus);
     }
@@ -434,7 +394,7 @@ namespace GameDataFunction {
         char eventFlagName[32];
 
         for (int i = 1; i <= 3; i++) {
-            snprintf(eventFlagName, sizeof(eventFlagName), "SpecialStarGreen%1d", i);
+            nebula_snprintf(eventFlagName, sizeof(eventFlagName), "SpecialStarGreen%1d", i);
 
             if (pGameDataHolder->isOnGameEventFlag(eventFlagName)) {
                 greenStarNum++;

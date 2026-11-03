@@ -31,6 +31,7 @@ ItemBlock::ItemBlock(const char* pName) : LiveActor(pName) {
     mItemCount = 8;
     _98 = 0;
     mCalcShadow = false;
+    mNoCalcAnim = false;
 }
 
 void ItemBlock::init(const JMapInfoIter& rIter) {

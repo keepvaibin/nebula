@@ -1,14 +1,13 @@
 #pragma once
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <revolution/types.h>
 
 class BpkPlayer;
 class BrkPlayer;
 class BtkPlayer;
 class BtpPlayer;
 class BvaPlayer;
-class DisplayListMaker;
+class MaterialUpdater;
 class J3DFrameCtrl;
 class J3DModel;
 class J3DModelData;
@@ -26,8 +25,8 @@ public:
     void calcAnim();
     void calcView();
     void entry();
-    void newDifferedDLBuffer();
-    void updateDL(bool);
+    void newDifferedMaterials();
+    void updateList(bool);
     void startBck(const char*, const char*);
     void startBckWithInterpole(const char*, s32);
     void startBtk(const char*);
@@ -71,14 +70,14 @@ public:
     void changeBckSetting(const char*, const char*, XanimePlayer*);
     void init(const char*, const char*, bool);
 
-    /* 0x00 */ BtkPlayer* mBtkPlayer;
-    /* 0x04 */ BrkPlayer* mBrkPlayer;
-    /* 0x08 */ BtpPlayer* mBtpPlayer;
-    /* 0x0C */ BpkPlayer* mBpkPlayer;
-    /* 0x10 */ BvaPlayer* mBvaPlayer;
-    /* 0x14 */ XanimeResourceTable* mXanimeResourceTable;
-    /* 0x18 */ XanimePlayer* mXanimePlayer;
-    /* 0x1C */ J3DModel* mModel;
-    /* 0x20 */ ResourceHolder* mModelResourceHolder;
-    /* 0x24 */ DisplayListMaker* mDisplayListMaker;
+    BtkPlayer* mBtkPlayer;
+    BrkPlayer* mBrkPlayer;
+    BtpPlayer* mBtpPlayer;
+    BpkPlayer* mBpkPlayer;
+    BvaPlayer* mBvaPlayer;
+    XanimeResourceTable* mXanimeResourceTable;
+    XanimePlayer* mXanimePlayer;
+    J3DModel* mModel;
+    ResourceHolder* mModelResourceHolder;
+    MaterialUpdater* mMaterialUpdater;
 };

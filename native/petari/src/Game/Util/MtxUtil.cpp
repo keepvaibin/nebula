@@ -297,7 +297,7 @@ namespace MR {
         Quaternion quatA, quatB, quatR;
         NebulaQuatFromMtx(&quatA, pMtxA);
         NebulaQuatFromMtx(&quatB, pMtxB);
-        JMAQuatLerp(&quatA, &quatB, blend, &quatR);
+        NebulaQuatLerp(&quatA, &quatB, blend, &quatR);
         NebulaMtxQuat(pDst, &quatR);
     }
 
@@ -504,8 +504,6 @@ namespace MR {
         MR::makeMtxFrontUpPos(pDst, rFront, support, rPos);
     }
 
-#pragma push
-#pragma opt_propagation off
     void orthogonalize(TPos3f* pMtx) {
         TVec3f axisZ, axisY, axisX;
 
@@ -555,7 +553,6 @@ namespace MR {
         pMtx->mMtx[1][2] = zDir.y;
         pMtx->mMtx[2][2] = zDir.z;
     }
-#pragma pop
 
     void turnMtxToXDirRate(TPos3f* pMtx, const TVec3f& rDir, f32 rate) {
         TQuat4f quat;
@@ -840,43 +837,9 @@ namespace MR {
         MtxPtr mtxY = tmpMtxRotYRad(pRad->y);
         MtxPtr mtxZ = tmpMtxRotZRad(pRad->z);
 
-        MtxPtr first, second, third;
-
-        switch (order) {
-        case 0:
-            first = mtxY;
-            second = mtxX;
-            third = mtxZ;
-            break;
-        case 1:
-            second = mtxX;
-            first = mtxZ;
-            third = mtxY;
-            break;
-        case 2:
-            first = mtxX;
-            second = mtxY;
-            third = mtxZ;
-            break;
-        case 3:
-            first = mtxZ;
-            second = mtxY;
-            third = mtxX;
-            break;
-        case 4:
-            second = mtxZ;
-            first = mtxX;
-            third = mtxZ;
-            break;
-        case 5:
-            first = mtxY;
-            second = mtxZ;
-            third = mtxX;
-            break;
-        }
-
-        MR::multMtx(pDst, second, first);
-        MR::multMtx(pDst, pDst, third);
+        // Order 0 is Y, X, Z; order 5 is Y, Z, X.
+        MR::multMtx(pDst, order == 5 ? mtxZ : mtxX, mtxY);
+        MR::multMtx(pDst, pDst, order == 5 ? mtxX : mtxZ);
     }
 
     void rotAxisVecRad(const TVec3f& rAxis, const TVec3f& rVec, TVec3f* pOut, f32 rad) {
@@ -886,7 +849,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void MtxUtil_FORCE_MATCH(TVec3f* pA, TVec3f* pB, TRot3f* pMtx) {
-    *pA = *pA + *pB;
-    pMtx->getEuler(*pA);
-}

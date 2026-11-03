@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The ray tracer's material and stage sun tables (rt_materials.h) and the texture-pack hash.
 #include "galaxy/render/rt_materials.h"
+#include "galaxy/run_options.h"
 
-#include "galaxy/render/rt_surfaces.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
@@ -17,6 +17,8 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+
+#include "galaxy/path_text.h"
 #include <vector>
 
 namespace galaxy::render {
@@ -210,28 +212,20 @@ void apply_class(const std::string& text, RtMaterial& m) {
 }
 
 std::vector<std::string> table_paths() {
-    char value[4096]{};
-    std::size_t length = 0u;
     std::vector<std::string> paths;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_MATERIALS_FILE") == 0 && length > 1u) {
-        for (const std::string& path : split(value, ';')) {
-            if (!path.empty()) paths.push_back(path);
-        }
-        return paths;
-    }
     const std::filesystem::path dir = program_directory();
-    return {(dir / "rt-materials.tsv").string(), (dir / "rt-materials-lights.tsv").string()};
+    return {galaxy::path_text(dir / "rt-materials.tsv"), galaxy::path_text(dir / "rt-materials-lights.tsv")};
 }
 
 RtMaterialTable load() {
     RtMaterialTable table;
     for (const std::string& path : table_paths()) {
-        std::ifstream file(path);
+        std::ifstream file(galaxy::text_path(path));
         if (!file) {
             continue;
         }
         const std::size_t rows = table.read(file);
-        std::cerr << "[rt-materials] file=" << path << " rows=" << rows << " textures=" << table.size()
+        std::cerr << "[rt-materials] file=" << galaxy::path_text(galaxy::text_path(path).filename()) << " rows=" << rows << " textures=" << table.size()
                   << " skipped=" << table.skipped() << '\n';
     }
     return table;
@@ -245,15 +239,8 @@ const RtMaterialTable& table() {
 const RtStageSunTable& suns() {
     static const RtStageSunTable loaded = [] {
         RtStageSunTable t;
-        char value[4096]{};
-        std::size_t length = 0u;
-        std::string path;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_SUNS_FILE") == 0 && length > 1u) {
-            path = value;
-        } else {
-            path = (program_directory() / "rt-suns.tsv").string();
-        }
-        std::ifstream file(path);
+        const std::string path = galaxy::path_text(program_directory() / "rt-suns.tsv");
+        std::ifstream file(galaxy::text_path(path));
         if (file) {
             const std::size_t rows = t.read(file);
             std::cerr << "[rt-suns] file=" << path << " rows=" << rows << '\n';
@@ -418,23 +405,6 @@ const RtMaterial* RtMaterialTable::material(std::uint16_t index) const noexcept 
     return index != 0u && index <= materials_.size() ? &materials_[index - 1u] : nullptr;
 }
 
-float RtMaterialTable::model_light(std::string_view model) const {
-    const auto it = model_rows_.find(lower(std::string(model)));
-    if (it == model_rows_.end()) {
-        return 0.0f;
-    }
-    float light = 0.0f;
-    for (const std::uint16_t index : it->second) {
-        const RtMaterial* const m = material(index);
-        // As the physical emitters take it (rt_lighting.hlsl EmitTriangleCS): its colour, at most white, times the
-        // table's intensity where that passes 1.
-        if (m != nullptr && m->emission != RtEmission::None && !m->no_light && !m->hide) {
-            light = std::max(light, std::max(m->intensity, 1.0f));
-        }
-    }
-    return light;
-}
-
 std::vector<std::pair<std::uint16_t, const RtMaterial*>> RtMaterialTable::stage_materials(
     std::string_view stage) const {
     std::vector<std::pair<std::uint16_t, const RtMaterial*>> out;
@@ -565,12 +535,7 @@ std::uint16_t g_stage_untextured = 0u;
 
 namespace {
 bool log_glows() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_LOG_GLOWS") == 0 && length > 1u && value[0] == '1';
-    }();
-    return enabled;
+    return false;
 }
 struct TextureName {
     std::uint64_t pack;
@@ -645,7 +610,7 @@ void rt_materials_set_stage(std::string_view stage) {
     g_stage_serial.fetch_add(1u, std::memory_order_relaxed);
     g_stage_materials = table().stage_materials(stage);
     g_stage_identities = table().stage_identities(stage);
-    // Only a stage row names untextured surfaces: elsewhere they stay as the GX state shows them.
+    // Only a stage row names untextured surfaces: elsewhere they stay.
     const std::uint16_t untextured = table().index(kRtUntexturedHash);
     g_stage_untextured = 0u;
     for (const auto& [index, material] : g_stage_materials) {
@@ -672,26 +637,6 @@ const RtMaterial* rt_material(std::uint16_t index) noexcept {
         }
     }
     return table().material(index);
-}
-
-float rt_light_reach(const char* model, float radius) noexcept {
-    if (model == nullptr || !(radius > 0.0f)) {
-        return 0.0f;
-    }
-    // The model's resource name ("Tico.bdl", maybe with a folder): its name alone.
-    std::string_view name(model);
-    if (const std::size_t slash = name.find_last_of("/\\"); slash != std::string_view::npos) {
-        name.remove_prefix(slash + 1u);
-    }
-    name = name.substr(0u, name.find('.'));
-    const float light = table().model_light(name);
-    if (!(light > 0.0f)) {
-        return 0.0f;
-    }
-    // A ball of radius r and radiance L lights a surface facing it at distance d with L (r / d)^2 of a white
-    // surface's full light. Below 1/4096 of it (under one level of 255 once sRGB-encoded) it shows nothing: it reaches
-    // r sqrt(4096 L).
-    return std::min(radius * 64.0f * std::sqrt(light), 1.0e5f);
 }
 
 }  // namespace galaxy::render

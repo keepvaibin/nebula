@@ -1,0 +1,223 @@
+//! The game's asset store: game.pak as the game reads it (D-01). A 64-byte header, the files, then the index:
+//! little-endian, 64-bit offsets, no disc layout. Read by runtime/src/disc_files.cpp.
+//!
+//! Header: magic, version u32, node count u32, nodes u64, hashes u64, names u64, names' size u64, game id 6 bytes, disc
+//! number, revision.
+//! Node, 40 bytes: position u64 and size u64 (a file's bytes; a folder's, from its first file's first byte to its last
+//! one's end), name u32, parent u32, flags u32 (1: folder), first child u32, child count u32, reserved u32. Node 0 is the
+//! root; a folder's children are consecutive nodes. An archive of the source is a folder whose files lie side by side, so
+//! the game has it as one block.
+//! Hash, 16 bytes: FNV-1a 64 of the lower-case path without a leading '/', node u32, reserved u32; sorted by hash.
+
+use anyhow::{bail, Result};
+use std::collections::{BTreeMap, VecDeque};
+use std::fs::File;
+use std::io::{Seek, SeekFrom, Write};
+
+pub const MAGIC: &[u8; 8] = b"NBSTORE\0";
+pub const VERSION: u32 = 3;
+/// The files start past this.
+pub const HEADER: u64 = 64;
+
+/// A file in the store: its path from the root, with '/', and where its bytes are; or a folder with nothing in it.
+pub struct Placed {
+    pub path: String,
+    pub position: u64,
+    pub size: u64,
+    pub folder: bool,
+}
+
+struct Node {
+    name: String,
+    parent: usize,
+    file: Option<(u64, u64)>,
+    children: Vec<usize>,
+}
+
+/// FNV-1a 64 of a path, letters in lower case.
+pub fn path_hash(path: &str) -> u64 {
+    let mut hash = 0xCBF2_9CE4_8422_2325u64;
+    for byte in path.bytes() {
+        hash = (hash ^ byte.to_ascii_lowercase() as u64).wrapping_mul(0x0000_0100_0000_01B3);
+    }
+    hash
+}
+
+/// Writes the index at `at` and the header at 0; returns the store's size.
+pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8]) -> Result<u64> {
+    let mut nodes = vec![Node { name: String::new(), parent: 0, file: None, children: Vec::new() }];
+    let mut folders: BTreeMap<String, usize> = BTreeMap::new();
+    for file in files {
+        let mut parent = 0usize;
+        let mut prefix = String::new();
+        let mut parts = file.path.split('/').peekable();
+        while let Some(part) = parts.next() {
+            if !prefix.is_empty() {
+                prefix.push('/');
+            }
+            prefix.push_str(&part.to_ascii_lowercase());
+            if parts.peek().is_some() || file.folder {
+                parent = match folders.get(&prefix) {
+                    Some(&node) => node,
+                    None => {
+                        nodes.push(Node { name: part.to_string(), parent, file: None, children: Vec::new() });
+                        let node = nodes.len() - 1;
+                        nodes[parent].children.push(node);
+                        folders.insert(prefix.clone(), node);
+                        node
+                    }
+                };
+            } else {
+                nodes.push(Node { name: part.to_string(), parent, file: Some((file.position, file.size)), children: Vec::new() });
+                let node = nodes.len() - 1;
+                nodes[parent].children.push(node);
+            }
+        }
+    }
+
+    // Breadth first, so a folder's children are consecutive.
+    let mut order = Vec::with_capacity(nodes.len());
+    let mut new_index = vec![0u32; nodes.len()];
+    let mut queue = VecDeque::from([0usize]);
+    while let Some(node) = queue.pop_front() {
+        new_index[node] = order.len() as u32;
+        order.push(node);
+        queue.extend(nodes[node].children.iter().copied());
+    }
+
+    // Each folder's range: its children came after it, so backwards each is known before its parent.
+    let mut ranges: Vec<Option<(u64, u64)>> = nodes.iter().map(|n| n.file.map(|(at, size)| (at, at + size))).collect();
+    for &node in order.iter().rev().filter(|n| **n != 0) {
+        if let Some((start, end)) = ranges[node] {
+            let parent = &mut ranges[nodes[node].parent];
+            *parent = Some(parent.map_or((start, end), |(s, e)| (s.min(start), e.max(end))));
+        }
+    }
+
+    let mut names = vec![0u8];
+    let mut table = Vec::with_capacity(order.len() * 40);
+    let mut hashes = Vec::with_capacity(order.len());
+    let mut paths: Vec<String> = vec![String::new(); nodes.len()];
+    for &node in &order {
+        let n = &nodes[node];
+        if node != 0 {
+            let parent = &paths[n.parent];
+            paths[node] = if parent.is_empty() { n.name.clone() } else { format!("{parent}/{}", n.name) };
+        }
+        let name_at = if n.name.is_empty() {
+            0
+        } else {
+            let at = names.len() as u32;
+            names.extend_from_slice(n.name.as_bytes());
+            names.push(0);
+            at
+        };
+        let (start, end) = ranges[node].unwrap_or((0, 0));
+        let flags = if n.file.is_some() { 0u32 } else { 1u32 };
+        let first = n.children.first().map_or(0, |c| new_index[*c]);
+        table.extend_from_slice(&start.to_le_bytes());
+        table.extend_from_slice(&(end - start).to_le_bytes());
+        table.extend_from_slice(&name_at.to_le_bytes());
+        table.extend_from_slice(&new_index[n.parent].to_le_bytes());
+        table.extend_from_slice(&flags.to_le_bytes());
+        table.extend_from_slice(&first.to_le_bytes());
+        table.extend_from_slice(&(n.children.len() as u32).to_le_bytes());
+        table.extend_from_slice(&0u32.to_le_bytes());
+        hashes.push((path_hash(&paths[node]), new_index[node]));
+    }
+    hashes.sort_unstable();
+    if hashes.windows(2).any(|w| w[0].0 == w[1].0) {
+        bail!("two paths in the store have the same hash");
+    }
+
+    let nodes_at = at;
+    let hashes_at = nodes_at + table.len() as u64;
+    let names_at = hashes_at + hashes.len() as u64 * 16;
+    pak.seek(SeekFrom::Start(nodes_at))?;
+    pak.write_all(&table)?;
+    for (hash, node) in &hashes {
+        pak.write_all(&hash.to_le_bytes())?;
+        pak.write_all(&node.to_le_bytes())?;
+        pak.write_all(&0u32.to_le_bytes())?;
+    }
+    pak.write_all(&names)?;
+    let end = names_at + names.len() as u64;
+
+    let mut header = Vec::with_capacity(HEADER as usize);
+    header.extend_from_slice(MAGIC);
+    header.extend_from_slice(&VERSION.to_le_bytes());
+    header.extend_from_slice(&(order.len() as u32).to_le_bytes());
+    header.extend_from_slice(&nodes_at.to_le_bytes());
+    header.extend_from_slice(&hashes_at.to_le_bytes());
+    header.extend_from_slice(&names_at.to_le_bytes());
+    header.extend_from_slice(&(names.len() as u64).to_le_bytes());
+    header.extend_from_slice(game_id);
+    header.resize(HEADER as usize, 0);
+    pak.seek(SeekFrom::Start(0))?;
+    pak.write_all(&header)?;
+    Ok(end)
+}
+
+/// A file of a store on disk, by path.
+pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
+    use anyhow::Context;
+    use std::io::Read;
+    let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
+    let mut header = [0u8; HEADER as usize];
+    pak.read_exact(&mut header)?;
+    if &header[..8] != MAGIC {
+        bail!("{} is not an asset store", pak_path.display());
+    }
+    let word = |at: usize| u64::from_le_bytes(header[at..at + 8].try_into().unwrap());
+    let count = u32::from_le_bytes(header[12..16].try_into().unwrap()) as u64;
+    let (nodes_at, hashes_at) = (word(16), word(24));
+    let wanted = path_hash(path);
+    let mut hashes = vec![0u8; (count * 16) as usize];
+    pak.seek(SeekFrom::Start(hashes_at))?;
+    pak.read_exact(&mut hashes)?;
+    let entry = hashes
+        .chunks_exact(16)
+        .find(|e| u64::from_le_bytes(e[..8].try_into().unwrap()) == wanted)
+        .with_context(|| format!("the store has no {path}"))?;
+    let node = u32::from_le_bytes(entry[8..12].try_into().unwrap()) as u64;
+    let mut record = [0u8; 16];
+    pak.seek(SeekFrom::Start(nodes_at + node * 40))?;
+    pak.read_exact(&mut record)?;
+    let position = u64::from_le_bytes(record[..8].try_into().unwrap());
+    let size = u64::from_le_bytes(record[8..16].try_into().unwrap());
+    let mut bytes = vec![0u8; size as usize];
+    pak.seek(SeekFrom::Start(position))?;
+    pak.read_exact(&mut bytes)?;
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_holds_its_files_range_and_an_empty_one_stays() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("store");
+        let mut pak = File::create(&path).unwrap();
+        let file = |path: &str, position, size| Placed { path: path.to_string(), position, size, folder: false };
+        let files = [
+            file("x.arc/a.bin", 0x140, 2),
+            file("x.arc/sub/b.bin", 0x100, 3),
+            Placed { path: "empty.arc".to_string(), position: 0, size: 0, folder: true },
+        ];
+        write_index(&mut pak, 0x200, &files, b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let bytes = std::fs::read(&path).unwrap();
+        let word = |at: usize| u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap());
+        let nodes = word(16) as usize;
+        let count = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        // Breadth first: the root, x.arc, empty.arc, a.bin, sub, b.bin.
+        assert_eq!(count, 6);
+        let node = |i: usize| (word(nodes + i * 40), word(nodes + i * 40 + 8), u32::from_le_bytes(bytes[nodes + i * 40 + 24..nodes + i * 40 + 28].try_into().unwrap()));
+        assert_eq!(node(1), (0x100, 0x42, 1));
+        assert_eq!(node(2), (0, 0, 1));
+        assert_eq!(node(3), (0x140, 2, 0));
+        assert_eq!(node(4), (0x100, 3, 1));
+    }
+}

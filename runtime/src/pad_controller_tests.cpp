@@ -7,8 +7,12 @@
 #include "galaxy/generic_hid.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/playstation_controller.h"
+#include "galaxy/rumble.h"
+#include "galaxy/simple_pads.h"
 #include "galaxy/steam_controller.h"
+#include "galaxy/switch2_ble.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/wiimote_hid.h"
 
 #include <array>
 #include <cmath>
@@ -947,17 +951,17 @@ void test_generic() {
     const auto parsed = parse_input_source(ControlScheme::Generic, "Button8");
     expect(parsed && parsed->kind == SourceKind::Button && parsed->code == pad::kGripRightBit, "Button8 parses");
     const BindingTable defaults = default_binding_table(ControlScheme::Generic);
-    expect(defaults[WiiTarget::A][0] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kSouthBit)},
+    expect(defaults[GameInput::A][0] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kSouthBit)},
            "button 1 jumps");
-    expect(defaults[WiiTarget::Z][1] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kGripLeftBit)},
+    expect(defaults[GameInput::Z][1] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kGripLeftBit)},
            "button 7 crouches");
     expect(legacy_binding_table(ControlScheme::Generic) == defaults &&
                version3_binding_table(ControlScheme::Generic) == defaults,
            "migration never changes generic bindings");
-    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+    for (std::size_t t = 0; t < kGameInputCount; ++t) {
         for (const InputSource source : defaults.targets[t]) {
             if (!source.empty()) {
-                expect(binding_source_allowed(ControlScheme::Generic, static_cast<WiiTarget>(t), source),
+                expect(binding_source_allowed(ControlScheme::Generic, static_cast<GameInput>(t), source),
                        "every generic default is allowed");
             }
         }
@@ -967,6 +971,435 @@ void test_generic() {
 }
 
 // The trackpads: where a finger is (0 to 1 across, 0 to 1 down), and when it is lifted.
+void test_switch2_family() {
+    namespace sw = galaxy::input::switch_hid;
+    namespace rb = galaxy::input::rumble;
+    expect(sw::joycon_side_of_product(sw::kJoyCon2LeftProductId) == sw::JoyConSide::Left &&
+               sw::joycon_side_of_product(sw::kJoyCon2RightProductId) == sw::JoyConSide::Right &&
+               sw::joycon_side_of_product(sw::kGameCubeProductId) == sw::JoyConSide::None,
+           "Joy-Con 2 ids name their sides");
+
+    Bytes r(64, 0);
+    r[0] = 0x05;
+    r[6] = 0x40;  // C
+    sw::Switch2ImuState imu;
+    sw::DecodedState state;
+    expect(sw::decode_switch2_report(r, imu, state) && (state.buttons & bit(pad::kChatBit)) != 0u, "report 0x05: the C button");
+    sw::DecodedState half;
+    half.buttons = bit(pad::kChatBit);
+    expect((sw::combine_joycons({}, half).buttons & bit(pad::kChatBit)) != 0u, "a Joy-Con 2 pair keeps the right half's C");
+
+    r[61] = 20;  // left at rest above its zero of 16
+    r[62] = 200;
+    sw::apply_gamecube_triggers(r, {16u, 16u}, state);
+    expect(!state.left_trigger && state.right_trigger, "GameCube analog triggers past half way, from their own rest");
+    sw::DecodedState clicked;
+    clicked.left_trigger = true;
+    r[61] = 0;
+    sw::apply_gamecube_triggers(r, {16u, 16u}, clicked);
+    expect(clicked.left_trigger, "the digital bit stays");
+
+    Bytes joycon(64, 0xcc);
+    expect(rb::build_joycon2_rumble_report(3, rb::kLevelSteps, 100, joycon) == 64u && joycon[0] == 0x01u && joycon[1] == 0x53u &&
+               joycon[2] != 0u && joycon[0x11] == 0u && joycon[0x13] == 0u,
+           "Joy-Con 2 vibration: report 0x01, one motor");
+    Bytes pro(64, 0);
+    expect(rb::build_switch2_rumble_report(3, rb::kLevelSteps, 100, pro) == 64u && pro[0] == 0x02u && pro[0x12] == pro[2],
+           "Pro 2 vibration: report 0x02, two motors");
+    Bytes cube(64, 0xcc);
+    std::uint16_t error = 0;
+    int pulses = 0;
+    for (int i = 0; i < 32; ++i) {
+        expect(rb::build_gamecube_rumble_report(static_cast<std::uint8_t>(i), rb::kLevelSteps, 50, error, cube) == 64u && cube[0] == 0x03u,
+               "GameCube vibration: report 0x03");
+        pulses += cube[2];
+    }
+    expect(pulses > 0 && pulses < 32, "a GameCube motor at half strength pulses");
+    expect(rb::build_gamecube_rumble_report(0, 0, 0, error, cube) == 64u && cube[2] == 2u && error == 0u, "a GameCube motor stops with 2");
+}
+
+namespace simple = galaxy::input::simple_pads;
+
+simple::Layout layout_of(std::uint16_t vendor, std::uint16_t product) {
+    const auto found = simple::find_product(vendor, product);
+    return found ? found->layout : simple::Layout::None;
+}
+
+void test_input_only_switch() {
+    namespace sw = galaxy::input::switch_hid;
+    expect(layout_of(0x20d6, 0xa711) == simple::Layout::SwitchInputOnly && layout_of(0x0f0d, 0x00c1) == simple::Layout::SwitchInputOnly &&
+               layout_of(0x33dd, 0x0002) == simple::Layout::SwitchInputOnly && layout_of(0x0e6f, 0x0188) == simple::Layout::SwitchInputOnly,
+           "input-only Switch pads are known");
+    expect(simple::find_product(0x20d6, 0xa717) == std::nullopt, "an unlisted id stays with the generic path");
+    Bytes r(9, 0);
+    r[1] = 0x01 | 0x10 | 0x40;  // Y, L, ZL
+    r[2] = 0x01 | 0x20;         // Minus, Capture
+    r[3] = 0x02;                // east
+    r[4] = 0xff;
+    r[5] = 0x00;  // left stick right and up
+    r[6] = 0x80;
+    r[7] = 0x80;
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::SwitchInputOnly, r, report_state, state), "input-only report decodes");
+    expect(state.buttons == (bit(pad::kWestBit) | bit(pad::kLeftShoulderBit) | bit(pad::kBackBit) | bit(pad::kCaptureBit) | bit(pad::kDpadRightBit)),
+           "input-only buttons by their documented bits");
+    expect(state.normalized && close_to(state.axes[0], 1.0f) && close_to(state.axes[1], 1.0f) && close_to(state.axes[2], 0.0f),
+           "input-only sticks, up positive");
+    expect(close_to(state.axes[4], 1.0f) && close_to(state.axes[5], 0.0f), "input-only ZL is a full trigger");
+    r[3] = 8;
+    expect(simple::decode_report(simple::Layout::SwitchInputOnly, r, report_state, state) &&
+               (state.buttons & bit(pad::kDpadRightBit)) == 0u,
+           "hat 8 is centred");
+    r[0] = 0x05;
+    expect(!simple::decode_report(simple::Layout::SwitchInputOnly, r, report_state, state), "a report with an id is not this layout");
+}
+
+void test_stadia() {
+    namespace sw = galaxy::input::switch_hid;
+    Bytes r(11, 0);
+    r[0] = 0x03;
+    r[1] = 4;                // south
+    r[2] = 0x01 | 0x20;      // Capture, Menu
+    r[3] = 0x01 | 0x40;      // L3, A
+    r[4] = 0x80;
+    r[5] = 0xff;             // stick down
+    r[6] = r[7] = 0x80;
+    r[8] = 255;
+    r[9] = 0;
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::Stadia, r, report_state, state), "Stadia report 0x03");
+    expect(state.buttons == (bit(pad::kDpadDownBit) | bit(pad::kCaptureBit) | bit(pad::kStartBit) | bit(pad::kLeftStickBit) | bit(pad::kSouthBit)),
+           "Stadia buttons");
+    expect(close_to(state.axes[1], -1.0f) && close_to(state.axes[4], 1.0f) && close_to(state.axes[5], 0.0f), "Stadia axes");
+    Bytes out(16, 0xcc);
+    expect(simple::build_motor_report(simple::Layout::Stadia, 0x1234, out) == 5u && out[0] == 0x05u && out[1] == 0u && out[2] == 0u &&
+               out[3] == 0x34u && out[4] == 0x12u,
+           "Stadia motor report 0x05");
+}
+
+void test_luna() {
+    namespace sw = galaxy::input::switch_hid;
+    Bytes usb(10, 0);
+    usb[1] = 0x01 | 0x40;  // A, View
+    usb[2] = 0x01;         // Home
+    usb[3] = 0x06;         // west
+    usb[4] = usb[5] = usb[6] = usb[7] = 0x7f;
+    usb[8] = 255;
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::LunaUsb, usb, report_state, state) &&
+               state.buttons == (bit(pad::kSouthBit) | bit(pad::kBackBit) | bit(pad::kHomeBit) | bit(pad::kDpadLeftBit)),
+           "Luna USB buttons");
+    expect(close_to(state.axes[0], 0.0f) && close_to(state.axes[4], 1.0f), "Luna USB centre 0x7f and trigger");
+
+    Bytes bt(17, 0);
+    bt[0] = 0x01;
+    bt[2] = bt[4] = bt[6] = bt[8] = 0x7f;
+    bt[9] = 0xff;
+    bt[10] = 0x03;  // left trigger full, 10 bits
+    bt[13] = 1;     // north
+    bt[14] = 0x08;  // X
+    bt[15] = 0x08;  // Menu
+    bt[16] = 0x01;  // View
+    expect(simple::decode_report(simple::Layout::LunaBluetooth, bt, report_state, state) &&
+               state.buttons == (bit(pad::kDpadUpBit) | bit(pad::kWestBit) | bit(pad::kStartBit) | bit(pad::kBackBit)),
+           "Luna Bluetooth buttons");
+    expect(close_to(state.axes[4], 1.0f) && close_to(state.axes[5], 0.0f), "Luna Bluetooth 10-bit trigger");
+    Bytes guide{0x02, 0x01};
+    expect(!simple::decode_report(simple::Layout::LunaBluetooth, guide, report_state, state) && report_state.home, "Luna Home has its own report");
+    expect(simple::decode_report(simple::Layout::LunaBluetooth, bt, report_state, state) && (state.buttons & bit(pad::kHomeBit)) != 0u,
+           "and stays held in the state");
+    Bytes out(16, 0xcc);
+    expect(simple::build_motor_report(simple::Layout::LunaBluetooth, 65535, out) == 9u && out[0] == 0x03u && out[1] == 0x0fu && out[5] == 100u &&
+               out[8] == 0xebu,
+           "Luna Bluetooth motor report");
+    expect(simple::build_motor_report(simple::Layout::LunaUsb, 65535, out) == 0u, "no motor over USB");
+}
+
+void test_hori_steam() {
+    namespace sw = galaxy::input::switch_hid;
+    Bytes r(44, 0);
+    r[0] = 0x07;
+    r[1] = r[2] = r[3] = r[4] = 0x80;
+    r[5] = 0x08 | 0x10 | 0x40;  // centred, South, QAM
+    r[6] = 0x02 | 0x80;         // M1, Start
+    r[7] = 0x08 | 0x40;         // M2, FR
+    r[8] = 255;                 // right trigger first
+    r[9] = 0;
+    put16(r, 12, 16);  // 1 degree per second, negated, on axis 1
+    put16(r, 18, 4096);  // 1 g on axis 2
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::HoriSteam, r, report_state, state), "Hori Steam report");
+    expect(state.buttons == (bit(pad::kSouthBit) | bit(pad::kCaptureBit) | bit(pad::kGripLeftBit) | bit(pad::kStartBit) | bit(pad::kGripRightBit) | bit(pad::kGripRight2Bit)),
+           "Hori Steam buttons");
+    expect(close_to(state.axes[4], 0.0f) && close_to(state.axes[5], 1.0f), "Hori Steam right trigger comes first");
+    expect(state.imu_count == 1u && close_to(state.imu[0].gyro[1], -1.0f * kPi / 180.0f) && close_to(state.imu[0].accel[2], 1.0f),
+           "Hori Steam motion");
+    r[0] = 0x01;
+    expect(!simple::decode_report(simple::Layout::HoriSteam, r, report_state, state), "other reports are its firmware's");
+    expect(simple::find_product(0x0f0d, 0x0196)->scheme == ControlScheme::Steam, "its motion reaches the pointer row");
+}
+
+void test_sixaxis() {
+    namespace sw = galaxy::input::switch_hid;
+    Bytes r(49, 0);
+    r[0] = 0x01;
+    r[2] = 0x01 | 0x10;  // Select, up
+    r[3] = 0x40;         // Cross
+    r[4] = 0x01;         // PS
+    r[6] = r[7] = r[8] = r[9] = 0x80;
+    r[18] = 255;
+    const auto be = [&](std::size_t at, int v) {
+        r[at] = static_cast<std::uint8_t>(v >> 8);
+        r[at + 1] = static_cast<std::uint8_t>(v);
+    };
+    be(41, 511);
+    be(43, 511 + 113);
+    be(45, 511);
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::Sixaxis, r, report_state, state), "DualShock 3 report");
+    expect(state.buttons == (bit(pad::kBackBit) | bit(pad::kDpadUpBit) | bit(pad::kSouthBit) | bit(pad::kHomeBit)), "DualShock 3 buttons");
+    expect(close_to(state.axes[4], 1.0f), "DualShock 3 analog L2");
+    expect(state.imu_count == 1u && close_to(state.imu[0].accel[2], -1.0f) && close_to(state.imu[0].accel[0], 0.0f), "DualShock 3 accelerometer");
+    expect(!simple::has_gyro(simple::Layout::Sixaxis) && simple::has_gyro(simple::Layout::HoriSteam), "no gyro read from it");
+    r[1] = 0xff;
+    expect(!simple::decode_report(simple::Layout::Sixaxis, r, report_state, state), "byte 1 0xff is no report");
+    Bytes out(49, 0xcc);
+    expect(simple::build_motor_report(simple::Layout::Sixaxis, 0xff00, out) == 49u && out[0] == 0x01u && out[2] == 0xffu && out[5] == 0xffu && out[10] == 0x02u,
+           "DualShock 3 motor and player light");
+}
+
+void test_wii_u_pro() {
+    namespace sw = galaxy::input::switch_hid;
+    namespace wm = galaxy::input::wiimote;
+    expect(wm::is_wii_u_pro_name(L"Nintendo RVL-CNT-01-UC") && !wm::is_wii_u_pro_name(L"Nintendo RVL-CNT-01-TR") &&
+               !wm::is_wii_u_pro_name(L"Nintendo RVL-CNT-01"),
+           "a Wii U Pro by its name, not a remote");
+    Bytes r(22, 0xff);
+    r[0] = simple::kWiiUProReport;
+    const auto put_axes = [&](int lx, int rx, int ly, int ry) {
+        put16(r, 1, lx);
+        put16(r, 3, rx);
+        put16(r, 5, ly);
+        put16(r, 7, ry);
+    };
+    put_axes(2000, 2000, 2000, 2000);
+    simple::ReportState report_state;
+    sw::DecodedState state;
+    expect(simple::decode_report(simple::Layout::WiiUPro, r, report_state, state) && state.buttons == 0u && state.axes[0] == 0.0f,
+           "Wii U Pro at rest: held bits read 0, the first report is the centre");
+    put_axes(3000, 2000, 1000, 2500);
+    r[9] = static_cast<std::uint8_t>(~0x02u);   // R
+    r[10] = static_cast<std::uint8_t>(~(0x40u | 0x80u | 0x04u));  // B, ZL, ZR
+    r[11] = static_cast<std::uint8_t>(~0x02u);  // L3
+    expect(simple::decode_report(simple::Layout::WiiUPro, r, report_state, state), "Wii U Pro report");
+    expect(state.buttons == (bit(pad::kRightShoulderBit) | bit(pad::kSouthBit) | bit(pad::kLeftStickBit)), "Wii U Pro buttons");
+    expect(close_to(state.axes[0], 1.0f) && close_to(state.axes[1], -1.0f) && close_to(state.axes[2], 0.0f) && close_to(state.axes[3], 0.5f),
+           "Wii U Pro sticks: x, x, y, y; up positive");
+    expect(close_to(state.axes[4], 1.0f) && close_to(state.axes[5], 1.0f), "Wii U Pro's digital triggers");
+    Bytes out(22, 0xcc);
+    expect(simple::build_motor_report(simple::Layout::WiiUPro, 1000, out) != 0u && out[0] == wm::kOutRumble && (out[1] & 1u) == 1u, "its motor");
+    expect(simple::build_motor_report(simple::Layout::WiiUPro, 0, out) != 0u && (out[1] & 1u) == 0u, "its motor off");
+}
+
+void test_steam_classic_ble() {
+    namespace sw = galaxy::input::switch_hid;
+    expect(sv::model_of_product(0x1105) == sv::Model::Classic && sv::model_of_product(0x1106) == sv::Model::Classic, "Bluetooth ids of the 2015 controller");
+    // A state message over two segments: buttons, triggers, stick, right pad, accel, gyro.
+    Bytes message;
+    const unsigned mask = 0x10u | 0x20u | 0x80u | 0x200u | 0x400u | 0x800u;
+    message.push_back(static_cast<std::uint8_t>(4u | (mask & 0xf0u)));
+    message.push_back(static_cast<std::uint8_t>(mask >> 8));
+    message.insert(message.end(), {0x80, 0x00, 0x10});  // A, right pad finger
+    message.insert(message.end(), {0xcc, 0x00});        // left trigger, right trigger
+    const auto add16 = [&](int v) {
+        message.push_back(static_cast<std::uint8_t>(v & 0xff));
+        message.push_back(static_cast<std::uint8_t>((v >> 8) & 0xff));
+    };
+    add16(20000);
+    add16(0);  // stick
+    add16(0);
+    add16(0);  // right pad centred
+    add16(100);
+    add16(200);
+    add16(300);  // accel
+    add16(400);
+    add16(500);
+    add16(600);  // gyro
+    message.resize(36, 0);
+    const auto segment = [&](unsigned index, bool last) {
+        Bytes r(20, 0);
+        r[0] = 0x03;
+        r[1] = static_cast<std::uint8_t>(0x80u | (last ? 0x40u : 0u) | index);
+        std::copy_n(message.begin() + index * 18, 18, r.begin() + 2);
+        return r;
+    };
+    sv::ClassicState classic;
+    sw::DecodedState state;
+    expect(!sv::decode_classic_ble_report(segment(0, false), classic, state), "the first segment alone is no state");
+    expect(sv::decode_classic_ble_report(segment(1, true), classic, state), "the last completes it");
+    expect(state.buttons == bit(pad::kSouthBit) && state.touch_surface && state.touch_down, "its buttons and finger");
+    expect(close_to(state.axes[0], 20000.0f / 32767.0f) && state.axes[4] > 0.9f && state.axes[5] == 0.0f, "its axes");
+    expect(state.imu_count == 1u, "its motion");
+
+    Bytes only{};
+    only.resize(36, 0);
+    only[0] = static_cast<std::uint8_t>(4u | 0x20u);
+    only[2] = 0x00;
+    only[3] = 0xcc;
+    Bytes triggers(20, 0);
+    triggers[0] = 0x03;
+    triggers[1] = 0x80u | 0x40u;
+    std::copy_n(only.begin(), 18, triggers.begin() + 2);
+    expect(sv::decode_classic_ble_report(triggers, classic, state) && state.buttons == bit(pad::kSouthBit) && state.axes[5] > 0.9f && state.axes[4] == 0.0f,
+           "a chunk carries what changed; the rest stays");
+
+    Bytes bad = segment(1, true);
+    sv::ClassicState fresh;
+    expect(!sv::decode_classic_ble_report(bad, fresh, state), "a stray later segment is dropped");
+    Bytes empty(20, 0);
+    empty[0] = 0x03;
+    expect(!sv::decode_classic_ble_report(empty, fresh, state), "an empty segment is ignored");
+
+    Bytes feature(sv::kValveFeatureBytes, 0);
+    feature[1] = 0x87;
+    feature[2] = 30;
+    feature[3] = 0xaa;
+    feature[32] = 0xbb;
+    Bytes out(20, 0xcc);
+    expect(sv::build_classic_ble_segment(feature, 0, out) == 20u && out[0] == 0x03u && out[1] == 0x80u && out[2] == 0x87u && out[3] == 30u && out[4] == 0xaau,
+           "a feature's first segment");
+    expect(sv::build_classic_ble_segment(feature, 1, out) == 20u && out[1] == (0x80u | 0x40u | 1u) && out[2 + 13] == 0xbbu, "and its last");
+    expect(sv::build_classic_ble_segment(feature, 2, out) == 0u, "and no more");
+}
+
+void test_switch2_ble() {
+    namespace ble = galaxy::input::switch2_ble;
+    namespace sw = galaxy::input::switch_hid;
+    Bytes advert{0x01, 0x00, 0x03, 0x7e, 0x05, 0x67, 0x20};
+    auto seen = ble::parse_advert(advert, 0x112233445566ull);
+    expect(seen && seen->product == sw::kJoyCon2LeftProductId && seen->pairing, "a Joy-Con 2 (L) advertising");
+    advert[5] = 0x66;
+    expect(ble::parse_advert(advert, 0)->product == sw::kJoyCon2RightProductId, "a Joy-Con 2 (R) advertising");
+    advert[3] = 0x00;
+    expect(!ble::parse_advert(advert, 0), "another vendor's");
+    Bytes paired{0x01, 0x00, 0x03, 0x7e, 0x05, 0x67, 0x20, 0, 0, 0, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11};
+    seen = ble::parse_advert(paired, 0x112233445566ull);
+    expect(seen && !seen->pairing, "one paired with this host");
+    expect(!ble::parse_advert(paired, 0x665544332211ull), "one paired with another");
+    paired[10] = paired[11] = paired[12] = paired[13] = paired[14] = paired[15] = 0;
+    expect(ble::parse_advert(paired, 0x112233445566ull)->pairing, "one in pairing mode");
+
+    const std::array<std::uint8_t, 4> payload{0x27, 0, 0, 0};
+    const auto frame = ble::command(0x0c, 0x02, payload);
+    expect(frame == std::vector<std::uint8_t>{0x0c, 0x91, 0x01, 0x02, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00}, "a command's frame");
+    const auto read = ble::flash_read(0x1fc040);
+    expect(read == std::vector<std::uint8_t>{0x02, 0x91, 0x01, 0x04, 0x00, 0x08, 0x00, 0x00, 0x40, 0x7e, 0x00, 0x00, 0x40, 0xc0, 0x1f, 0x00}, "a flash read's frame");
+    Bytes reply(0x50, 0);
+    reply[0x10] = 0xb2;
+    const auto block = ble::flash_block(reply);
+    expect(block.size() == 0x40u && block[0] == 0xb2u, "the block in a reply");
+    expect(ble::flash_block(Bytes(8, 0)).empty(), "a short reply has none");
+    const auto commands = ble::set_up_commands();
+    expect(!commands.empty() && commands[0][0] == 0x03 && commands[0][3] == 0x0d && commands[0][2] == 0x01, "set-up starts output, over BLE");
+
+    Bytes value(ble::kCommonReportBytes, 0);
+    value[5] = 0x08;  // byte 6 of the USB report: A at byte 5 there is byte 4 here
+    value[4] = 0x08;
+    const auto report = ble::usb_report(value);
+    sw::Switch2ImuState imu;
+    sw::DecodedState state;
+    expect(report && (*report)[0] == sw::kSwitch2InputReport && sw::decode_switch2_report(*report, imu, state) && (state.buttons & bit(pad::kEastBit)) != 0u,
+           "the common report decodes as report 0x05");
+    expect(!ble::usb_report(Bytes(10, 0)), "a short value is no report");
+
+    const auto motor = ble::motor_value(3, galaxy::input::rumble::kLevelSteps, 100);
+    expect(motor[0] == 0x00u && motor[1] == 0x53u && motor[2] != 0u && motor[2] == motor[7] && motor[3] == motor[8] && motor[6] == motor[16],
+           "the vibration value: its sequence and the motor three times");
+}
+
+void test_licensed_playstation() {
+    expect(ps::model_for_product(0x054c, 0x0ba0) == ps::Model::DualShock4, "the DS4 wireless adapter reads as a DualShock 4");
+    expect(ps::model_for_product(0x0f0d, 0x0066) == ps::Model::DualShock4, "a licensed Hori pad reads as a DualShock 4");
+    expect(ps::model_for_product(0x358a, 0x0304) == ps::Model::DualSense, "Backbone reads as a DualSense");
+    expect(!ps::model_for_product(0x0f0d, 0x0001).has_value(), "an unknown Hori id is not claimed");
+
+    // A licensed pad has nothing until it says so.
+    ps::Capabilities caps = ps::capabilities_of_product(0x0f0d, 0x0066);
+    expect(!caps.official && !caps.sensors && !caps.touchpad, "a licensed pad starts with no sensors or touchpad");
+    ps::ImuCal cal;
+    Bytes report(ps::kCapabilityReportBytes, 0);
+    report[0] = ps::kFeatureCapabilities;
+    report[2] = 0x27;
+    report[4] = 0x02 | 0x08;  // sensors and vibration, no touchpad or light bar
+    report[10] = 1;           // gyro: 1/8 degree per second a count
+    report[12] = 8;
+    ps::apply_capability_report(ps::Model::DualShock4, 0x0f0d, 0x0066, report, caps, cal);
+    expect(caps.sensors && caps.vibration && !caps.touchpad && !caps.lightbar, "feature 0x03 sets what the pad has");
+    expect(close_to(cal.scale[0], 0.125f * 3.14159265f / 180.0f), "feature 0x03 sets the gyro's scale");
+
+    ps::Capabilities unanswered = ps::capabilities_of_product(0x0f0d, 0x0066);
+    ps::apply_capability_report(ps::Model::DualShock4, 0x0f0d, 0x0066, {}, unanswered, cal);
+    expect(!unanswered.sensors && !unanswered.vibration, "no answer: nothing assumed");
+    ps::Capabilities razer = ps::capabilities_of_product(0x1532, 0x1000);
+    ps::apply_capability_report(ps::Model::DualShock4, 0x1532, 0x1000, {}, razer, cal);
+    expect(razer.touchpad && razer.vibration && !razer.sensors, "a Razer DS4 pad: touchpad and vibration without asking");
+    expect(!ps::capabilities_of_product(0x0e6f, 0x0203).effects, "Victrix 0203 is sent no effects");
+
+    // No touchpad: the same bytes report none.
+    Bytes r = ds4_usb();
+    r.resize(std::max<std::size_t>(r.size(), 64u));
+    r[35] = 0x01;
+    ps::SensorClock clock;
+    switch_hid::DecodedState state;
+    ps::Capabilities none = caps;
+    expect(ps::decode_report(ps::Model::DualShock4, ps::Transport::Usb, r, ps::ImuCal{}, clock, state, none) && !state.touch_surface,
+           "a pad without a touchpad reports no surface");
+
+    // A DS4 finger at its documented offset (USB: report byte 35).
+    Bytes usb = ds4_usb();
+    usb.resize(std::max<std::size_t>(usb.size(), 64u));
+    usb[35] = 0x01;
+    usb[36] = 0x80;
+    usb[37] = 0xc7;
+    usb[38] = 0x1c;
+    const Decoded wired = decode(ps::Model::DualShock4, ps::Transport::Usb, usb);
+    expect(wired.ok && wired.state.touch_down && close_to(wired.state.touch_x, 1.0f) && close_to(wired.state.touch_y, 0.5f),
+           "DualShock 4 touchpad over USB: finger 1 at byte 35");
+
+    // The USB adapter with no pad connected: neutral, whatever the bytes.
+    ps::Capabilities dongle = ps::capabilities_of_product(0x054c, 0x0ba0);
+    expect(dongle.dongle && dongle.official, "the adapter is official");
+    Bytes absent = ds4_usb();
+    absent.resize(std::max<std::size_t>(absent.size(), 64u));
+    absent[1] = 0xff;
+    absent[31] = 0x04;
+    ps::SensorClock clock2;
+    expect(ps::decode_report(ps::Model::DualShock4, ps::Transport::Usb, absent, ps::ImuCal{}, clock2, state, dongle) &&
+               state.axes[0] == 0.0f && state.buttons == 0u,
+           "the adapter with no pad holds nothing");
+
+    // A licensed DualSense: touch one byte earlier than Sony's (report byte 32).
+    ps::Capabilities alternate;
+    alternate.official = false;
+    alternate.alternate_layout = true;
+    Bytes sense(64, 0);
+    sense[0] = ps::kReportState;
+    sense[1] = sense[2] = sense[3] = sense[4] = 0x80;
+    sense[32] = 0x01;
+    sense[33] = 0x80;
+    sense[34] = 0xc7;
+    sense[35] = 0x1c;
+    ps::SensorClock clock3;
+    expect(ps::decode_report(ps::Model::DualSense, ps::Transport::Usb, sense, ps::ImuCal{}, clock3, state, alternate) &&
+               state.touch_down && close_to(state.touch_x, 1.0f),
+           "a licensed DualSense's finger at its own offset");
+}
+
 void test_touch() {
     // DualSense USB: the first finger at packet byte 32 (report byte 33): x 960 of 1920, y 535 of 1070.
     Bytes r = ds5_usb();
@@ -983,10 +1416,10 @@ void test_touch() {
     expect(d.ok && d.state.touch_surface && !d.state.touch_down, "DualSense touchpad: the finger lifted (bit 7)");
     // DualShock 4 over Bluetooth: two bytes later; y over 920.
     Bytes bt = ds4_bluetooth();
-    bt[35] = 0x01;
-    bt[36] = 0x80;
-    bt[37] = 0xc7;
-    bt[38] = 0x1c;  // x 1920, y 460
+    bt[37] = 0x01;
+    bt[38] = 0x80;
+    bt[39] = 0xc7;
+    bt[40] = 0x1c;  // x 1920, y 460
     seal_input(bt);
     d = decode(ps::Model::DualShock4, ps::Transport::Bluetooth, bt);
     expect(d.ok && d.state.touch_down && close_to(d.state.touch_x, 1.0f) && close_to(d.state.touch_y, 0.5f),
@@ -1042,7 +1475,56 @@ void test_touch() {
            "2015 Steam Controller right pad: the right edge");
 }
 
+void test_report_mode_watch() {
+    namespace sw = galaxy::input::switch_hid;
+    using Watch = sw::ReportModeWatch;
+    const std::uint64_t ms = 1000u;
+    {
+        // Steam's start: simple reports, then full reports without motion; asked again each second until motion returns.
+        Watch w;
+        expect(!w.update(sw::kReportFullState, 3u, true, 1000 * ms), "motion arriving: nothing to ask");
+        expect(!w.update(sw::kReportSimpleState, 0u, true, 1100 * ms), "lost just now: not yet");
+        expect(!w.update(sw::kReportSubcommandReply, 0u, true, 1400 * ms), "a subcommand reply says nothing");
+        expect(w.update(sw::kReportSimpleState, 0u, true, 1400 * ms), "lost past the limit: ask");
+        expect(!w.update(sw::kReportFullState, 0u, true, 1500 * ms), "asked a moment ago");
+        expect(w.update(sw::kReportFullState, 0u, true, 2400 * ms), "full reports without motion: ask again");
+        expect(!w.update(sw::kReportFullState, 3u, true, 2500 * ms), "motion back");
+        expect(w.lost_since_us == 0u, "the loss is over");
+        expect(!w.update(sw::kReportFullState, 0u, true, 2600 * ms), "a new loss waits again");
+        expect(w.update(sw::kReportFullState, 0u, true, 3500 * ms), "a later loss is asked about too");
+    }
+    {
+        // A pad with no sensors, known in advance: full reports are all that is wanted.
+        Watch w;
+        for (std::uint64_t t = 1; t < 100; ++t) {
+            expect(!w.update(sw::kReportFullState, 0u, false, t * 1000 * ms), "no sensors wanted: never asked");
+        }
+        expect(w.update(sw::kReportSimpleState, 0u, false, 100'000 * ms) == false, "lost just now");
+        expect(w.update(sw::kReportSimpleState, 0u, false, 100'300 * ms), "its mode lost: asked");
+    }
+    {
+        // A pad that never answers: asked a few times, then left alone.
+        Watch w;
+        std::size_t asks = 0u;
+        for (std::uint64_t t = 1; t < 200; ++t) {
+            asks += w.update(sw::kReportSimpleState, 0u, true, t * 500 * ms) ? 1u : 0u;
+        }
+        expect(asks == Watch::kMostUnanswered, "a pad that never answers is asked a few times");
+    }
+    {
+        // One that has answered is asked for as long as it takes.
+        Watch w;
+        (void)w.update(sw::kReportFullState, 3u, true, 1000 * ms);
+        std::size_t asks = 0u;
+        for (std::uint64_t t = 1; t < 100; ++t) {
+            asks += w.update(sw::kReportFullState, 0u, true, 1000 * ms + t * 1000 * ms) ? 1u : 0u;
+        }
+        expect(asks >= 90u, "one that answered before is asked every second");
+    }
+}
+
 int main() {
+    test_report_mode_watch();
     test_crc();
     test_dualshock4_usb();
     test_dualshock4_motion();
@@ -1059,6 +1541,16 @@ int main() {
     test_device_list();
     test_generic();
     test_touch();
+    test_licensed_playstation();
+    test_switch2_family();
+    test_input_only_switch();
+    test_stadia();
+    test_luna();
+    test_hori_steam();
+    test_sixaxis();
+    test_wii_u_pro();
+    test_steam_classic_ble();
+    test_switch2_ble();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;

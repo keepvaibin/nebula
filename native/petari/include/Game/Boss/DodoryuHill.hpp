@@ -10,5 +10,5 @@ public:
 
     virtual bool notifyAppearAttackToPlayer(HitSensor*, HitSensor*);
 
-    /* 0xF8 */ Dodoryu* mHost;
+    Dodoryu* mHost;
 };

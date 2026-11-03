@@ -11,9 +11,9 @@ class ParabolicPath;
 class BossBegoman : public BegomanBase {
 public:
     enum FollowerKind {
-        /* 0x00 */ FollowerKind_BabyFollower,
-        /* 0x01 */ FollowerKind_SpikeFollower,
-        /* 0x02 */ FollowerKind_BothFollower,
+        FollowerKind_BabyFollower,
+        FollowerKind_SpikeFollower,
+        FollowerKind_BothFollower,
     };
 
     BossBegoman(const char*);
@@ -80,15 +80,15 @@ public:
 
     void startRotationLevelSound();
 
-    /* 0x100 */ BegomanBaby** mBabyFollowers;
-    /* 0x104 */ BegomanSpike** mSpikeFollowers;
-    /* 0x108 */ s32 mBabyFollowerNum;
-    /* 0x10C */ s32 mSpikeFollowerNum;
-    /* 0x110 */ FollowerKind mFollowerKind;
-    /* 0x114 */ ParabolicPath* mPath;
-    /* 0x118 */ BossBegomanHead* mHead;
-    /* 0x11C */ TPos3f mHeadMtx;
-    /* 0x14C */ s32 mHealth;
-    /* 0x150 */ f32 _150;
-    /* 0x154 */ ActorCameraInfo* mOpeningDemoInfo;
+    BegomanBaby** mBabyFollowers;
+    BegomanSpike** mSpikeFollowers;
+    s32 mBabyFollowerNum;
+    s32 mSpikeFollowerNum;
+    FollowerKind mFollowerKind;
+    ParabolicPath* mPath;
+    BossBegomanHead* mHead;
+    TPos3f mHeadMtx;
+    s32 mHealth;
+    f32 _150;
+    ActorCameraInfo* mOpeningDemoInfo;
 };

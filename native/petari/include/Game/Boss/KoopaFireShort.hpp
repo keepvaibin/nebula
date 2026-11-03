@@ -27,9 +27,9 @@ public:
     void updateFrontAndVelocity();
 
 private:
-    /* 0x8C */ const Koopa* mKoopa;
-    /* 0x90 */ TVec3f mFront;
-    /* 0x9C */ f32 mSpeed;
-    /* 0xA0 */ s32 mDuration;
-    /* 0xA4 */ f32 mOffset;
+    const Koopa* mKoopa;
+    TVec3f mFront;
+    f32 mSpeed;
+    s32 mDuration;
+    f32 mOffset;
 };

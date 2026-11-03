@@ -423,24 +423,6 @@ void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, RowVi
     }
 }
 
-void Program::channel_colours(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
-    const auto block = [&](std::uint32_t at, const float (*x)[4], const float (*y)[4]) {
-        float from[8], to[8];
-        bool moves = false;
-        for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
-            for (unsigned c = 0; c < 4u; ++c) {
-                const float fx = x[ch][c], fy = y[ch][c];
-                from[ch * 4u + c] = std::isfinite(fx) && std::isfinite(fy) ? fx : fy;
-                to[ch * 4u + c] = fy;
-                moves = moves || from[ch * 4u + c] != fy;
-            }
-        }
-        if (moves) lerp(dst + at, from, to, 4u * kMaxColorChannels);
-    };
-    block(kVsAmbient, a.chan_ambient, b.chan_ambient);
-    block(kVsMaterial, a.chan_material, b.chan_material);
-}
-
 void Program::projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
     float from[16], to[16];
     const float* x = &a.projection[0][0];
@@ -469,40 +451,6 @@ void Program::projection_params(std::uint32_t dst, const VertexConstants& a, con
         if (!std::isfinite(from[i]) || !std::isfinite(to[i])) from[i] = to[i];
     }
     if (std::memcmp(from, to, sizeof(from)) != 0) lerp(dst + kVsMotionPrevProj, from, to, 4u);
-}
-
-void Program::ps_colours(std::uint32_t dst, const PixelConstants& a, const PixelConstants& b) {
-    const auto range = [&](std::uint32_t at, const float* x, const float* y, unsigned count) {
-        float from[16], to[16];
-        bool moves = false;
-        for (unsigned i = 0; i < count; ++i) {
-            from[i] = std::isfinite(x[i]) && std::isfinite(y[i]) ? x[i] : y[i];
-            to[i] = y[i];
-            moves = moves || from[i] != to[i];
-        }
-        if (moves) lerp(dst + at, from, to, count);
-    };
-    range(kPsTevRegs, &a.tev_regs[0][0], &b.tev_regs[0][0], 16u);
-    range(kPsKonst, &a.konst[0][0], &b.konst[0][0], 16u);
-    range(kPsAlphaRefs, a.alpha_refs, b.alpha_refs, 2u);
-    range(kPsAlphaRefs + 3u, a.alpha_refs + 3, b.alpha_refs + 3, 1u);
-    range(kPsFog + 4u, a.fog_params + 4, b.fog_params + 4, 3u);
-    if (a.fog_params[2] == b.fog_params[2]) {
-        range(kPsFog, a.fog_params, b.fog_params, 2u);
-        range(kPsFog + 3u, a.fog_params + 3, b.fog_params + 3, 1u);
-    }
-    for (unsigned r = 0; r < 6u; ++r) {
-        if (a.ind_mtx[r][3] != b.ind_mtx[r][3] ||
-            std::memcmp(a.ind_mtx[r], b.ind_mtx[r], 3u * sizeof(std::int32_t)) == 0) {
-            continue;
-        }
-        float from[3], to[3];
-        for (unsigned c = 0; c < 3u; ++c) {
-            from[c] = static_cast<float>(a.ind_mtx[r][c]);
-            to[c] = static_cast<float>(b.ind_mtx[r][c]);
-        }
-        lerp(dst + kPsIndMtx + 4u * r, from, to, 3u, true);
-    }
 }
 
 void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* out) {

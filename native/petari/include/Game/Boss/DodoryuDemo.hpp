@@ -24,7 +24,7 @@ public:
     void exeHideReady();
     void exeHide();
 
-    /* 0x90 */ ActorCameraInfo mActorCameraInfo;
+    ActorCameraInfo mActorCameraInfo;
 };
 
 class DodoryuDemoAppear : public DodoryuStateBase {
@@ -39,7 +39,7 @@ public:
     void exeDemoWait();
     void exePlay();
 
-    /* 0x90 */ ActorCameraInfo mActorCameraInfo;
+    ActorCameraInfo mActorCameraInfo;
 };
 
 class DodoryuDemoAngry : public DodoryuStateBase {
@@ -54,7 +54,7 @@ public:
     void exeDemoWait();
     void exePlay();
 
-    /* 0x90 */ ActorCameraInfo mActorCameraInfo;
+    ActorCameraInfo mActorCameraInfo;
 };
 
 class DodoryuDemoDown : public DodoryuStateBase {
@@ -69,5 +69,5 @@ public:
     void exeDemoWait();
     void exePlay();
 
-    /* 0x90 */ ActorCameraInfo mActorCameraInfo;
+    ActorCameraInfo mActorCameraInfo;
 };

@@ -7,6 +7,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 
 namespace galaxy::crash {
 namespace {
@@ -48,11 +49,11 @@ bool gpu_lost(std::string_view text) noexcept {
     // DXGI_ERROR_DEVICE_REMOVED, _HUNG, _RESET, _DRIVER_INTERNAL_ERROR; Vulkan's device loss.
     return has(text, "887A0005") || has(text, "887A0006") || has(text, "887A0007") || has(text, "887A0020") ||
            has(text, "DEVICE REMOVED") || has(text, "DEVICE_REMOVED") || has(text, "DEVICE_HUNG") ||
-           has(text, "DEVICE_LOST") || has(text, "device lost");
+           has(text, "DEVICE_LOST") || has(text, "device lost") || has(text, "device removed") || has(text, "VkResult -4");
 }
 
 bool renderer_error(std::string_view text) noexcept {
-    return text.starts_with("renderer:") || has(text, "[Renderer") || has(text, "Renderer]") || has(text, "[GX]");
+    return text.starts_with("renderer:") || has(text, "[Renderer") || has(text, "Renderer]") || has(text, "[render");
 }
 
 bool out_of_memory(std::string_view text) noexcept {
@@ -73,7 +74,8 @@ constexpr const char* kReportIt =
 
 ScopedActivity::ScopedActivity(Activity activity, const std::filesystem::path& file) noexcept : previous_(t_activity) {
     try {
-        const std::u8string name = file.u8string();
+        // The name alone: a report goes to the team, and the folder can hold the player's user name.
+        const std::u8string name = file.filename().u8string();
         copy(t_activity_file, sizeof(t_activity_file),
              std::string_view(reinterpret_cast<const char*>(name.data()), name.size()));
     } catch (...) {
@@ -124,6 +126,10 @@ void set_session_mods(std::string_view lines, bool change_game) noexcept {
 std::string_view session_mods() noexcept { return std::string_view(s_session_mods, strnlen(s_session_mods, sizeof(s_session_mods))); }
 
 bool session_mods_change_game() noexcept { return s_session_change_game.load(std::memory_order_acquire); }
+
+bool is_gpu_lost(const char* text) noexcept {
+    return text != nullptr && gpu_lost(text);
+}
 
 Report classify(const Facts& facts) noexcept {
     Report r;
@@ -240,6 +246,39 @@ Report classify(const Facts& facts) noexcept {
     }
     put(r.detail, sizeof(r.detail), "%.*s", text_len, text.data());
     return r;
+}
+
+namespace {
+#include "crash_text_table.inc"
+}  // namespace
+
+std::string_view translated(std::string_view english, std::string_view language) noexcept {
+    std::size_t column = std::size(kLanguages);
+    for (std::size_t i = 0; i < std::size(kLanguages); ++i) {
+        if (language == kLanguages[i]) column = i;
+    }
+    if (column == std::size(kLanguages)) return english;
+    for (const auto& row : kRows) {
+        if (english == row[0]) return row[column][0] != '\0' ? std::string_view(row[column]) : english;
+    }
+    return english;
+}
+
+std::string translated_report(std::string_view report, std::string_view language) {
+    std::string out;
+    while (!report.empty()) {
+        const std::size_t end = std::min(report.find('\n'), report.size());
+        std::string_view line = report.substr(0, end);
+        report.remove_prefix(std::min(end + 1u, report.size()));
+        const std::size_t code = line.starts_with("NEB-") ? line.find(": ") : std::string_view::npos;
+        if (code != std::string_view::npos) {
+            out += line.substr(0, code + 2u);
+            line.remove_prefix(code + 2u);
+        }
+        out += translated(line, language);
+        if (end < std::string_view::npos && !report.empty()) out += '\n';
+    }
+    return out;
 }
 
 std::size_t format_report(const Report& report, std::string_view technical, char* out, std::size_t size) noexcept {

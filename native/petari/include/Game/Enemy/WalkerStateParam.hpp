@@ -1,17 +1,16 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class WalkerStateParam {
 public:
     WalkerStateParam();
 
-    /* 0x00 */ f32 mGravityAccel;
-    /* 0x04 */ f32 mAirFriction;
-    /* 0x08 */ f32 mGroundFriction;
-    /* 0x0C */ f32 mPlayerNearDistance;
-    /* 0x10 */ f32 mPlayerSightFanDegreeH;
-    /* 0x14 */ f32 mPlayerSightFanDegreeV;
+    f32 mGravityAccel;
+    f32 mAirFriction;
+    f32 mGroundFriction;
+    f32 mPlayerNearDistance;
+    f32 mPlayerSightFanDegreeH;
+    f32 mPlayerSightFanDegreeV;
 };

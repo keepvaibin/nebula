@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuTypes.h>
 
 namespace nw4r {
     namespace lyt {
@@ -18,15 +18,15 @@ public:
     void update();
     bool isEnd() const;
 
-    /* 0x00 */ s32 mStartDelay;
-    /* 0x04 */ s32 mEndDelay;
-    /* 0x08 */ s32 mFrame;
-    /* 0x0C */ s32 mCharIndex;
-    /* 0x10 */ s32 mWaitTime;
-    /* 0x14 */ u32 mCharCount;
-    /* 0x18 */ bool mEnabled;
-    /* 0x1C */ f32 mCharInterval;
-    /* 0x20 */ f32 mFadeSpeed;
+    s32 mStartDelay;
+    s32 mEndDelay;
+    s32 mFrame;
+    s32 mCharIndex;
+    s32 mWaitTime;
+    u32 mCharCount;
+    bool mEnabled;
+    f32 mCharInterval;
+    f32 mFadeSpeed;
 };
 
 class CustomTagProcessor : public MessageTagSkipTagProcessor {
@@ -38,12 +38,12 @@ public:
     virtual Operation CalcRect(nw4r::ut::Rect*, u16, ContextType*) override;
 
     void setArgNumber(s32, s32);
-    void setArgString(const wchar_t*, s32);
+    void setArgString(const char16_t*, s32);
     void initAlpha(f32, f32, s32, s32);
-    void reset(const wchar_t*);
-    MessageEditorMessageTag getReplaceTag(const wchar_t*, s32, s32, s32) const;
+    void reset(const char16_t*);
+    MessageEditorMessageTag getReplaceTag(const char16_t*, s32, s32, s32) const;
     bool isIgnoreTag(u16, ContextType*) const;
-    bool writeString(nw4r::ut::Rect*, const wchar_t*, ContextType*);
+    bool writeString(nw4r::ut::Rect*, const char16_t*, ContextType*);
     Operation exeDisplayGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeSoundGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exePictureGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
@@ -54,7 +54,7 @@ public:
     Operation exeStringGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeSystemGroupColor(nw4r::ut::Rect*, int, ContextType*);
     Operation exeSystemGroupRuby(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
-    Operation exeDisplayGroupWait(nw4r::ut::Rect*, u16, ContextType*) NO_INLINE;
+    Operation exeDisplayGroupWait(nw4r::ut::Rect*, u16, ContextType*);
     Operation exeDisplayGroupOffset(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeDisplayGroupCenter(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
     Operation exeFontGroup(nw4r::ut::Rect*, const MessageEditorMessageTag&, ContextType*);
@@ -70,38 +70,19 @@ public:
         static GroupFunctionInfo sGroupFunctionTable[];
     };
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    /* 0x04 */ bool mIsShadow;
-    /* 0x05 */ bool mIsText;
-    /* 0x06 */ bool mIsInfo;
-    /* 0x07 */ bool mNoCharSpace;
-    /* 0x08 */ CustomTagAlphaCtrl mAlphaCtrl;
-    /* 0x2C */ nw4r::lyt::TextBox* mTextBox;
-    /* 0x30 */ u8 mPlayedSounds;
-    /* 0x31 */ u8 mSoundIndex;
-    /* 0x32 */ u8 mColorIndex;
-    /* 0x33 */ GXColor mColorMappingMin;
-    /* 0x37 */ GXColor mColorMappingMax;
-    /* 0x40 */ f32 mRubyFontWidth;
-    /* 0x44 */ f32 mRubyFontHeight;
-    /* 0x48 */ f32 mFontWidth;
-    /* 0x4C */ f32 mFontHeight;
-#else
-    /* 0x04 */ bool mIsShadow;
-    /* 0x05 */ bool mIsText;
-    /* 0x06 */ bool mIsInfo;
-    /* 0x07 */ bool mNoCharSpace;
-    /* 0x08 */ CustomTagAlphaCtrl mAlphaCtrl;
-    /* 0x2C */ nw4r::lyt::TextBox* mTextBox;
-    /* 0x30 */ u8 mPlayedSounds;
-    /* 0x31 */ u8 mSoundIndex;
-    /* 0x32 */ u8 mColorIndex;
-    /* 0x34 */ u16 mPreviousChar;
-    /* 0x36 */ GXColor mColorMappingMin;
-    /* 0x3A */ GXColor mColorMappingMax;
-    /* 0x40 */ f32 mRubyFontWidth;
-    /* 0x44 */ f32 mRubyFontHeight;
-    /* 0x48 */ f32 mFontWidth;
-    /* 0x4C */ f32 mFontHeight;
-#endif
+    bool mIsShadow;
+    bool mIsText;
+    bool mIsInfo;
+    bool mNoCharSpace;
+    CustomTagAlphaCtrl mAlphaCtrl;
+    nw4r::lyt::TextBox* mTextBox;
+    u8 mPlayedSounds;
+    u8 mSoundIndex;
+    u8 mColorIndex;
+    NebulaColor8 mColorMappingMin;
+    NebulaColor8 mColorMappingMax;
+    f32 mRubyFontWidth;
+    f32 mRubyFontHeight;
+    f32 mFontWidth;
+    f32 mFontHeight;
 };

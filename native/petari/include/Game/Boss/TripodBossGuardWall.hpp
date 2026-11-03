@@ -32,10 +32,10 @@ public:
     void exeDemo();
     void exeRotate();
 
-    /* 0x08C */ CameraTargetMtx* mCameraTargetMtx;
-    /* 0x090 */ TripodBossGuardWallPart mParts[8];
-    /* 0x550 */ TPos3f mBaseMtx;
-    /* 0x580 */ TVec3f mStartTrans;
-    /* 0x58C */ s32 mJointID;
-    /* 0x590 */ ActorCameraInfo* mCameraInfo;
+    CameraTargetMtx* mCameraTargetMtx;
+    TripodBossGuardWallPart mParts[8];
+    TPos3f mBaseMtx;
+    TVec3f mStartTrans;
+    s32 mJointID;
+    ActorCameraInfo* mCameraInfo;
 };

@@ -48,7 +48,8 @@ private:
     /// @param i The index of the instance to be bubbled down.
     void bubbleDown(int i);
 
-    /* 0x00C */ PlanetGravity* mGravities[128];  //<Array of registered PlanetGravity instances
-    /* 0x20C */ s32 mNumGravities;               //<Number of registered PlanetGravity instances
-    /* 0x210 */ u32 _210;
+    PlanetGravity** mGravities;  //<Array of registered PlanetGravity instances
+    s32 mMaxGravities;
+    s32 mNumGravities;               //<Number of registered PlanetGravity instances
+    u32 _210;
 };

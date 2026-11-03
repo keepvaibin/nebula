@@ -1,7 +1,9 @@
 #pragma once
 
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+
 // The renderer's signals from the game (galaxy/motion_signals.h): host markers (the game object whose drawing
-// follows, scene signals), bloom phases, EFB clear quads, scene bounds and JPA stripe particles. Each reaches the
+// follows, scene signals), bloom phases, scene target clear quads, scene bounds and JPA stripe particles. Each reaches the
 // host as a record in the order the game makes them, between its drawing records.
 
 #include <stdint.h>
@@ -19,11 +21,12 @@ namespace NebulaRender {
     // over there must be handed over again.
     inline void memoryRewritten(const void* p, uint32_t size) {
         const NebulaHostServices* const host = nebula_host();
-        host->gpu_coherent(host->user, p, size);
+        host->memory_rewritten(host->user, p, size);
     }
 
     // A host marker, whatever the draw identities.
     inline void marker(uint8_t kind, uint16_t aux, uint64_t a, uint64_t b) {
+        J3DNativeDraw::flush();
         const NebulaHostServices* const host = nebula_host();
         host->marker(host->user, kind, aux, a, b);
     }
@@ -40,16 +43,14 @@ namespace NebulaRender {
     // and values).
     enum {
         kMarkerBloom = 15,
-        kBloomKeep = 1,
+        kBloomHold = 1,
         kBloomNormal = 2,
         kBloomSimple = 3,
-        kBloomRestore = 4,
     };
 
     inline void bloomMarker(uint16_t phase, uint32_t a, uint32_t b) {
         marker(kMarkerBloom, phase, a, b);
     }
-
 
     // A scene bound (NEBULA_SCENE_*); the 3D scene's begin carries the camera (world to eye, 3x4) and the player's up.
     void sceneMarker(uint32_t marker, const float (*view)[4]);

@@ -103,7 +103,7 @@ void AssemblyBlock::init(const JMapInfoIter& rIter) {
     MR::getJMapInfoArg1NoInit(rIter, &mTimer);
     MR::getJMapInfoArg7NoInit(rIter, &mObjArg7);
 
-    if (MR::getRandom(0l, 2l)) {
+    if (MR::getRandom(0, 2)) {
         mFloatRotateSpeed = ::sFloatRotSpeedNoSign;
     } else {
         mFloatRotateSpeed = -::sFloatRotSpeedNoSign;
@@ -184,7 +184,7 @@ void AssemblyBlock::exeAssembleWait() {
             MR::deleteEffect(this, "Blur");
         }
 
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::validateCollisionParts(this);
         MR::validateHitSensors(this);
     }
@@ -198,7 +198,7 @@ void AssemblyBlock::exeAssembleWait() {
 
 void AssemblyBlock::exeReturn() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::emitEffect(this, "Blur");
 
         if (_13C) {

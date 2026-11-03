@@ -13,24 +13,12 @@
 #include "Game/Util/VectorUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void CameraFollow_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)MR::epsilon();
-    (void)JGeometry::TUtil< f32 >::PI();
-    (void)(JGeometry::TUtil< f32 >::PI() / 2.0f);
-    (void)(-JGeometry::TUtil< f32 >::PI() / 2.0f);
-}
-
 namespace {
     static const f32 sCameraRadius = 15.0f;  // TODO: check if this makes sense as this const
     static const f32 sSlopeFrontDist = 500.0f;
     static const f32 sColCheckHeight = 100.0f;
     static const f32 sRoundAddition = 0.08f;
     static const f32 sRoundResetAddition = 0.2f;
-    static const f32 sCollisionCheckOffset = 50.0f;
-    static const f32 sCollisionCheckDist = 100.0f;
     static const f32 sRoundInterval = JGeometry::TUtil< f32 >::PI() / 4.0f;
     static const f32 sLookDownAngle = 75.0f * JGeometry::TUtil< f32 >::PI() / 180.0f;
 };  // namespace
@@ -148,22 +136,6 @@ void CameraFollow::calcRotPos() {
     TVec3f newPos;
     MR::polarToCross(watchPos, &newPos, length, angleX, angleY);
 
-    #if (VERSION == RMGK01)
-    Triangle tri;
-    TriangleFilterFunc filterFunc(&MR::isCameraCodeThrough);
-
-    TVec3f mapPos;
-    TVec3f front = newPos - mPos;
-    if (!MR::isNearZero(front)) {
-        MR::normalize(&front);
-
-        if (MR::getFirstPolyOnLineToMap(&mapPos, &tri, mPos - front * ::sCollisionCheckOffset, newPos - mPos + front * ::sCollisionCheckDist, nullptr,
-                                        &filterFunc)) {
-            newPos = mPos;
-            mIsRounding = true;
-        }
-    }
-    #endif
     
     mPos.set(newPos);
     mWatchPos.set(watchPos);

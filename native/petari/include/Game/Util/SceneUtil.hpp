@@ -2,9 +2,8 @@
 
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
-class JKRMemArchive;
+class AssetFolder;
 class JMapIdInfo;
 class JMapInfo;
 class JMapInfoIter;
@@ -29,8 +28,6 @@ namespace MR {
     bool isStageStarPieceFollowGroupLimit();
     bool isStageFileSelect();
     bool isStageKoopaVs();
-    bool isStageKoopaVs1();
-    bool isStageKoopaVs2();
     bool isStageKoopaVs3();
     bool isStageEpilogueDemo();
     bool isBeginScenarioStarter();
@@ -45,13 +42,11 @@ namespace MR {
     void playSceneForScenarioOpeningCamera();
     const JMapIdInfo& getCurrentMarioStartIdInfo();
     s32 getStartPosNum();
-#ifdef TARGET_PC
     // A start of the main zone (its MarioNo): where Mario arrives and the way he faces (degrees); false if it has none.
     bool getMarioStartPose(s32 marioNo, TVec3f* pTrans, TVec3f* pRotate);
-#endif
     s32 getCurrentStartZoneId();
     const JMapIdInfo& getInitializeStartIdInfo();
-    JKRMemArchive* getStageArchive(const char*);
+    AssetFolder* getStageArchive(const char*);
     s32 getGeneralPosNum();
     void getGeneralPosData(const char**, TVec3f*, TVec3f*, JMapLinkInfo**, int);
     s32 getChildObjNum(const JMapInfoIter&);

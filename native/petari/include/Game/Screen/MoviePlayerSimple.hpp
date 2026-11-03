@@ -2,19 +2,19 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
-#include "Game/Screen/THPSimplePlayerWrapper.hpp"
-class JKRExpHeap;
+#include "Game/Screen/MovieStream.hpp"
+class NebulaArena;
 
 struct Movie {
-    /* 0x00 */ const char* mMovieName;
-    /* 0x04 */ THPVideoInfo mVideoInfo;
-    /* 0x10 */ u8* mBuffer;
-    /* 0x14 */ u32 mCurrentFrame;
-    /* 0x18 */ bool _18;
-    /* 0x19 */ bool _19;
-    /* 0x1C */ s32 mFrameRateDefault;
-    /* 0x20 */ s32 _20;
-    /* 0x24 */ u32 _24;
+    const char* mMovieName;
+    MovieVideoInfo mVideoInfo;
+    u8* mBuffer;
+    u32 mCurrentFrame;
+    bool _18;
+    bool _19;
+    s32 mFrameRateDefault;
+    s32 _20;
+    u32 _24;
 };
 
 class MoviePlayerSimple : public LayoutActor, public JKRDisposer {
@@ -27,7 +27,6 @@ public:
 
     virtual void init(const JMapInfoIter&);
     virtual void draw() const;
-    virtual void control();
 
     void startMovie(const char*, bool);
     void stopMovie();
@@ -40,18 +39,16 @@ public:
     void setUnpauseHomeButtonFlag();
     void exeSimpleOff();
     void exeOpen();
-    void exePreload();
     void exePlaying();
     void exeSimpleSuspend();
     void play(bool);
     void stop();
-    u32 calcNeedMemoryForMovieWorks();
     void drawCinemaFrame() const;
 
 private:
-    /* 0x38 */ Movie* mMovie;
-    /* 0x3C */ JKRExpHeap* mHeap;
-    /* 0x40 */ THPSimplePlayerWrapper* mPlayerWrapper;
-    /* 0x44 */ bool _44;
-    /* 0x44 */ bool _45;
+    Movie* mMovie;
+    NebulaArena* mHeap;
+    MovieStream* mStream;
+    bool _44;
+    bool _45;
 };

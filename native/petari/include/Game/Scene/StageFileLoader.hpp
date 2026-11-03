@@ -1,6 +1,7 @@
 #pragma once
 
-#include <revolution/types.h>
+#include "Game/Util/Array.hpp"
+
 
 class StageFileLoader {
 public:
@@ -10,8 +11,7 @@ public:
     void waitLoadedStageFile();
     void makeStageArchiveNameList();
     static void makeStageArchiveName(char*, u32, const char*);
-    void mountFilesInStageMapFile(const char*);
 
-    /* 0x00 */ char* mStageFiles[0x18];
-    /* 0x60 */ s32 mZoneCount;
+    MR::GrowTable< char*, 0x18 > mStageFiles;
+    s32 mZoneCount;
 };

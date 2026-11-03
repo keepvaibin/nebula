@@ -24,7 +24,7 @@ namespace {
         if (data != 0) {
             s32 size = strlen(pPlanetName) + strlen(pSuffix) + 1;
             char* buf = new char[size];
-            snprintf(buf, size, "%s%s", pPlanetName, pSuffix);
+            nebula_snprintf(buf, size, "%s%s", pPlanetName, pSuffix);
 
             *ppDst = buf;
         } else {
@@ -135,7 +135,7 @@ namespace {
         },
         {
             "TeresaRoomPlanet",
-            createNameObj< PlanetMapAnimLow >,
+            createNameObj< PlanetMap >,
         },
         {
             "TridentPlanet",
@@ -277,7 +277,6 @@ namespace {
     }
 };  // namespace
 
-// FIXME: Scheduling issues
 PlanetMapCreator::PlanetMapCreator(const char* pName) : NameObj(pName), mPlanetMapData() {
     JMapInfo* pIter = MR::createCsvParser(::sArcName, ::sFileName);
 
@@ -345,8 +344,6 @@ void PlanetMapCreator::createPlanetMapDataTable(JMapInfo* pInfo) {
     }
 }
 
-#pragma push
-#pragma opt_loop_invariants off
 void PlanetMapCreator::addTableData(const JMapInfo* pInfo, s32 idx) {
     PlanetMapData* curData = mPlanetMapData[idx];
     MR::getCsvDataStr(&curData->mPlanetName, pInfo, "PlanetName", idx);
@@ -366,12 +363,11 @@ void PlanetMapCreator::addTableData(const JMapInfo* pInfo, s32 idx) {
 
     for (int i = 0; i < 8; i++) {
         char data[32];
-        snprintf(data, sizeof(data), "ForceLowScenarioName%d", i);
+        nebula_snprintf(data, sizeof(data), "ForceLowScenarioName%d", i);
 
         MR::getCsvDataStr(&curData->mForceScenarioData[i], pInfo, data, idx);
     }
 }
-#pragma pop
 
 PlanetMapData* PlanetMapCreator::getTableData(const char* pName) const {
     for (int i = 0; i < mTableCount; i++) {
@@ -391,7 +387,7 @@ bool PlanetMapCreator::isScenarioForceLow(const PlanetMapData* pData) const {
     }
 
     char name[64];
-    snprintf(name, sizeof(name), "%s_%d", MR::getCurrentStageName(), MR::getCurrentScenarioNo());
+    nebula_snprintf(name, sizeof(name), "%s_%d", MR::getCurrentStageName(), MR::getCurrentScenarioNo());
 
     for (int i = 0; i < 8; i++) {
         if (MR::isEqualString(pData->mForceScenarioData[i], "Low")) {

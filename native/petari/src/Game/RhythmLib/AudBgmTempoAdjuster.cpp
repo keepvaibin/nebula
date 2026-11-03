@@ -1,7 +1,7 @@
 #include "Game/RhythmLib/AudBgmTempoAdjuster.hpp"
 #include "Game/AudioLib/AudParams.hpp"
 #include <JSystem/JAudio2/JAIStream.hpp>
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
+#include "Game/System/GameThreads.hpp"
 
 AudBgmTempoAdjuster::AudBgmTempoAdjuster()
     : mStream(), mBeatMul(1.0f), mIntroBeats(), mLoopBeats(), mLoopStartSamples(), mLoopEndSamples(), mLoopSamples() {
@@ -25,13 +25,13 @@ void AudBgmTempoAdjuster::setInfo(f32 beatMul, u32 introBeats, u32 loopBeats, u3
 }
 
 void AudBgmTempoAdjuster::setStream(JAIStream* pStream) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     init();
     mStream = pStream;
 }
 
 void AudBgmTempoAdjuster::reject() {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mStream = nullptr;
     init();
 }
@@ -41,8 +41,8 @@ f32 AudBgmTempoAdjuster::beatProc(f32 tempo) {
         return 1.0f;
     }
 
-    f32 currSample = mStream->inner_.aramStream._0B8;
-    u32 loopCount = mStream->inner_.aramStream._0C4;
+    f32 currSample = mStream->inner_.mStream.mPosition;
+    u32 loopCount = mStream->inner_.mStream.mLoopCount;
 
     bool newStreamLoop = false;
     if (loopCount != mLoopCount) {
@@ -93,10 +93,10 @@ f32 AudBgmTempoAdjuster::calcAdjustRate(f32 syncSamples, f32 tempo) {
     bool early = false;
     if (rate < 0.0f) {
         early = true;
+        rate = -rate;
     }
 
-    rate *= rate;
-
+    // In proportion to the difference: it closes within the next beat. A square left a small difference for good.
     if (rate > 1.0f) {
         rate = 1.0f;
     }

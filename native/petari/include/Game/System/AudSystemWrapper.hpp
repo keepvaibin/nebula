@@ -1,16 +1,15 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class AudSystem;
-class JKRExpHeap;
-class JKRHeap;
-class JKRMemArchive;
-class JKRSolidHeap;
+class NebulaArena;
+class NebulaArena;
+class AssetFolder;
+class NebulaArena;
 
 class AudSystemWrapper {
 public:
-    AudSystemWrapper(JKRSolidHeap*, JKRHeap*);
+    AudSystemWrapper(NebulaArena*, NebulaArena*);
 
     void requestResourceForInitialize();
     void createAudioSystem();
@@ -32,17 +31,17 @@ public:
     void resumeReset();
     void receiveResourceForInitialize();
 
-    /* 0x00 */ AudSystem* mAudSystem;
-    /* 0x04 */ JKRSolidHeap* mSolidHeap;
-    /* 0x08 */ JKRHeap* mHeap;
-    /* 0x0C */ void* mSmrRes;
-    /* 0x10 */ JKRMemArchive* mJaiSeqRes;
-    /* 0x14 */ JKRMemArchive* mJaiChordRes;
-    /* 0x18 */ JKRMemArchive* mJaiMeRes;
-    /* 0x1C */ JKRMemArchive* mJaiRemixSeqRes;
-    /* 0x20 */ JKRExpHeap* mSpkHeap;
-    /* 0x24 */ JKRMemArchive* mSpkRes;
-    /* 0x28 */ bool _28;
-    /* 0x29 */ bool mIsResetDone;
-    /* 0x2A */ bool mDisableReset;
+    AudSystem* mAudSystem;
+    NebulaArena* mSolidHeap;
+    NebulaArena* mHeap;
+    void* mSmrRes;
+    AssetFolder* mJaiSeqRes;
+    AssetFolder* mJaiChordRes;
+    AssetFolder* mJaiMeRes;
+    AssetFolder* mJaiRemixSeqRes;
+    NebulaArena* mSpkHeap;
+    AssetFolder* mSpkRes;
+    bool _28;
+    bool mIsResetDone;
+    bool mDisableReset;
 };

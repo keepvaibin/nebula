@@ -1,11 +1,13 @@
 #define JPA_LIST_DEFER_INLINE
 #define JPA_FIELD_BLOCK_DEFER_INLINE
 #include "JSystem/JParticle/JPAResource.hpp"
+#include "Game/Util/NativeShader.hpp"
+#include "JSystem/JParticle/JPANativeColor.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
 #include "JSystem/JParticle/JPAChildShape.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
@@ -67,7 +69,7 @@ static u8 jpa_crd[32] ATTRIBUTE_ALIGN(32) = {
     0x00, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x00, 0x02, 0x00, 0x02, 0x02, 0x00, 0x02,
 };
 
-void JPAResource::init(JKRHeap* heap) {
+void JPAResource::init(NebulaArena* heap) {
     u32 is_glbl_clr_anm = mpBaseShape->isGlblClrAnm();
     u32 is_glbl_tex_anm = mpBaseShape->isGlblTexAnm();
     BOOL is_prm_anm = mpBaseShape->isPrmAnm();
@@ -106,7 +108,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcEmitterFuncListNum != 0) {
-        mpCalcEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpCalcEmitterFuncListNum * sizeof(EmitterFunc), 4);
+        mpCalcEmitterFuncList = (EmitterFunc*)NebulaArena::alloc(mpCalcEmitterFuncListNum * sizeof(EmitterFunc), 4, heap);
     }
 
     int func_no = 0;
@@ -202,7 +204,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcParticleFuncListNum != 0) {
-        mpCalcParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleFuncListNum * sizeof(ParticleFunc), 4);
+        mpCalcParticleFuncList = (ParticleFunc*)NebulaArena::alloc(mpCalcParticleFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -320,7 +322,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcParticleChildFuncListNum != 0) {
-        mpCalcParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleChildFuncListNum * sizeof(ParticleFunc), 4);
+        mpCalcParticleChildFuncList = (ParticleFunc*)NebulaArena::alloc(mpCalcParticleChildFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -363,7 +365,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawEmitterFuncListNum != 0) {
-        mpDrawEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterFuncListNum * sizeof(EmitterFunc), 4);
+        mpDrawEmitterFuncList = (EmitterFunc*)NebulaArena::alloc(mpDrawEmitterFuncListNum * sizeof(EmitterFunc), 4, heap);
     }
 
     func_no = 0;
@@ -459,7 +461,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawEmitterChildFuncListNum != 0) {
-        mpDrawEmitterChildFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterChildFuncListNum * sizeof(EmitterFunc), 4);
+        mpDrawEmitterChildFuncList = (EmitterFunc*)NebulaArena::alloc(mpDrawEmitterChildFuncListNum * sizeof(EmitterFunc), 4, heap);
     }
 
     func_no = 0;
@@ -505,7 +507,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawParticleFuncListNum != 0) {
-        mpDrawParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleFuncListNum * sizeof(ParticleFunc), 4);
+        mpDrawParticleFuncList = (ParticleFunc*)NebulaArena::alloc(mpDrawParticleFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -607,7 +609,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawParticleChildFuncListNum != 0) {
-        mpDrawParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleChildFuncListNum * sizeof(ParticleFunc), 4);
+        mpDrawParticleChildFuncList = (ParticleFunc*)NebulaArena::alloc(mpDrawParticleChildFuncListNum * sizeof(ParticleFunc), 4, heap);
     }
 
     func_no = 0;
@@ -761,7 +763,7 @@ void JPAResource::draw(JPAEmitterWorkData* work, JPABaseEmitter* emtr) {
     work->mpRes = this;
     work->mDrawCount = 0;
     calcWorkData_d(work);
-    mpBaseShape->setGX(work);
+    mpBaseShape->setPass(work);
     for (s32 i = 1; i <= emtr->getDrawTimes(); i++) {
         work->mDrawCount++;
         if (mpBaseShape->isDrawPrntAhead() && mpChildShape != NULL)
@@ -773,9 +775,7 @@ void JPAResource::draw(JPAEmitterWorkData* work, JPABaseEmitter* emtr) {
 }
 
 void JPAResource::drawP(JPAEmitterWorkData* work) {
-#ifdef TARGET_PC
     MotionSignal::drawEmitter(this, work->mpEmtr, false);
-#endif
     work->mpEmtr->clearStatus(0x80);
 
     work->mGlobalPtclScl.x = work->mpEmtr->mGlobalPScl.x * mpBaseShape->getBaseSizeX();
@@ -797,8 +797,8 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
 
     work->mDirType = mpBaseShape->getDirType();
     work->mRotType = mpBaseShape->getRotType();
-    work->mDLType = mpBaseShape->getType() == 4 || mpBaseShape->getType() == 8;
-    work->mPlaneType = work->mDLType ? 2 : mpBaseShape->getBasePlaneType();
+    work->mListType = mpBaseShape->getType() == 4 || mpBaseShape->getType() == 8;
+    work->mPlaneType = work->mListType ? 2 : mpBaseShape->getBasePlaneType();
     work->mPrjType = mpBaseShape->isPrjTex() ? (mpBaseShape->isTexCrdAnm() ? 2 : 1) : 0;
 
     work->mpAlivePtcl = &work->mpEmtr->mAlivePtclBase;
@@ -812,9 +812,6 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getLast();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
-#ifdef TARGET_PC
-            MotionSignal::drawParticle(node->getObject(), false);
-#endif
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -825,9 +822,6 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getFirst();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
-#ifdef TARGET_PC
-            MotionSignal::drawParticle(node->getObject(), false);
-#endif
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -837,15 +831,15 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
     }
 
 
+    JPAParticleBatch::flush();
+
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
     }
 }
 
 void JPAResource::drawC(JPAEmitterWorkData* work) {
-#ifdef TARGET_PC
     MotionSignal::drawEmitter(this, work->mpEmtr, true);
-#endif
     work->mpEmtr->setStatus(0x80);
 
     if (mpChildShape->isScaleInherited()) {
@@ -867,8 +861,8 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
 
     work->mDirType = mpChildShape->getDirType();
     work->mRotType = mpChildShape->getRotType();
-    work->mDLType = mpChildShape->getType() == 4 || mpChildShape->getType() == 8;
-    work->mPlaneType = work->mDLType ? 2 : mpChildShape->getBasePlaneType();
+    work->mListType = mpChildShape->getType() == 4 || mpChildShape->getType() == 8;
+    work->mPlaneType = work->mListType ? 2 : mpChildShape->getBasePlaneType();
     work->mPrjType = 0;
 
     work->mpAlivePtcl = &work->mpEmtr->mAlivePtclChld;
@@ -882,9 +876,6 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getLast();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
-#ifdef TARGET_PC
-            MotionSignal::drawParticle(node->getObject(), true);
-#endif
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -895,9 +886,6 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getFirst();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
-#ifdef TARGET_PC
-            MotionSignal::drawParticle(node->getObject(), true);
-#endif
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -910,14 +898,135 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
     }
+
+    JPAParticleBatch::flush();
 }
 
-void JPAResource::setPTev() {
-    GXTexCoordID tex_coord = GX_TEXCOORD1;
-    u8 tev_stages = 1;
-    u8 tex_gens = 1;
-    u8 ind_stages = 0;
+namespace {
+    // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
+    // textures the emitter's functions chose, the blending, depth and culling the
+    // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
+    // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
+    // env carry over from one emitter to the next.
+    NebulaNativeMaterial sParticle;
+    bool sParticleSent = false;
+    // The textures the emitter's functions chose, by slot.
+    const J3DNativeTexObj* sParticleTextures[4] = {nullptr, nullptr, nullptr, nullptr};
+    NebulaColor8 sPrm = {0, 0, 0, 0};
+    NebulaColor8 sEnv = {0, 0, 0, 0};
+    // The indirect matrix the emitter's extra texture shape gives (its rows scaled by 2^exponent), or none.
+    f32 sIndirect[2][4];
 
+    void putColor(f32* pOut, const NebulaColor8& rColor) {
+        pOut[0] = rColor.r / 255.0f;
+        pOut[1] = rColor.g / 255.0f;
+        pOut[2] = rColor.b / 255.0f;
+        pOut[3] = rColor.a / 255.0f;
+    }
+
+    // The material with the game's register file in its first constants (fog), then its own values over it: prm and
+    // env (register slots 1 and 2), the indirect matrix (rows 0-1), the alpha test's references.
+    void sendParticle(bool constantsOnly) {
+        NebulaNativeMaterial& rMaterial = sParticle;
+        memcpy(rMaterial.constants, J3DNativeMaterial::registers(), 84 * sizeof(f32));
+        putColor(rMaterial.constants + 4, sPrm);
+        putColor(rMaterial.constants + 8, sEnv);
+        for (u32 row = 0; row < 2; row++) {
+            for (u32 c = 0; c < 4; c++) {
+                rMaterial.constants[48 + row * 4 + c] = sIndirect[row][c];
+            }
+        }
+        rMaterial.constants[80] = rMaterial.constants[88 + 4] / 255.0f;
+        rMaterial.constants[81] = rMaterial.constants[88 + 5] / 255.0f;
+        rMaterial.constants_only = constantsOnly ? 3 : 2;
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::watch(&rMaterial);
+    J3DNativeState::sendMaterial(&rMaterial);
+    }
+
+    // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
+    // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
+    // shape and the manager set; its colours from JPANativeColor.
+    void sendParticleMaterial(const JPABaseShape* pShape, u32 flags) {
+        JPAParticleBatch::begin();
+        NebulaNativeMaterial& material = sParticle;
+        NativeShader::init(material, NEBULA_SHADER_PARTICLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.blend_op = NEBULA_NATIVE_KEPT;
+        material.depth_test = NEBULA_NATIVE_KEPT;
+        material.cull = NEBULA_NATIVE_KEPT;
+        material.early_depth = pShape->getZCompLoc() ? 1 : 0;
+        material.constants[84] = static_cast< f32 >(pShape->getTevColorMode());
+        material.constants[85] = static_cast< f32 >(pShape->getTevAlphaMode());
+        material.constants[86] = static_cast< f32 >(flags);
+        material.constants[88] = static_cast< f32 >(pShape->getAlphaCmp0());
+        material.constants[89] = static_cast< f32 >(pShape->getAlphaCmp1());
+        material.constants[90] = static_cast< f32 >(pShape->getAlphaOp());
+        // The references (whole values; sendParticle scales them into the alpha test's slots).
+        material.constants[92] = static_cast< f32 >(pShape->getAlphaRef0());
+        material.constants[93] = static_cast< f32 >(pShape->getAlphaRef1());
+        for (u32 slot = 0; slot < 4; slot++) {
+            if (sParticleTextures[slot] != nullptr) {
+                NativeShader::setTexObj(material, slot, sParticleTextures[slot]);
+            }
+        }
+        sParticleSent = true;
+        sendParticle(false);
+    }
+
+    void setIndirect(const f32 (*pMtx)[3], s8 scaleExp) {
+        f32 scale = 1.0f;
+        for (s32 e = scaleExp; e > 0; e--) {
+            scale *= 2.0f;
+        }
+        for (s32 e = scaleExp; e < 0; e++) {
+            scale *= 0.5f;
+        }
+        for (u32 row = 0; row < 2; row++) {
+            for (u32 c = 0; c < 3; c++) {
+                sIndirect[row][c] = pMtx[row][c] * scale;
+            }
+            sIndirect[row][3] = 0.0f;
+        }
+    }
+
+}  // namespace
+
+namespace JPANativeColor {
+    void texture(u32 slot, const J3DNativeTexObj* pTexture) {
+        if (sParticleTextures[slot] == pTexture) {
+            return;
+        }
+        JPAParticleBatch::flush();
+        sParticleTextures[slot] = pTexture;
+        NativeShader::setTexObj(sParticle, slot, pTexture);
+        if (sParticleSent) {
+            sendParticle(false);
+        }
+    }
+
+    u32 prmWord() {
+        return (static_cast< u32 >(sPrm.r) << 24) | (static_cast< u32 >(sPrm.g) << 16) | (static_cast< u32 >(sPrm.b) << 8) | sPrm.a;
+    }
+    u32 envWord() {
+        return (static_cast< u32 >(sEnv.r) << 24) | (static_cast< u32 >(sEnv.g) << 16) | (static_cast< u32 >(sEnv.b) << 8) | sEnv.a;
+    }
+    void prm(const NebulaColor8& rColor) {
+        sPrm = rColor;
+    }
+
+    void env(const NebulaColor8& rColor) {
+        sEnv = rColor;
+    }
+
+    void prmEnv(const NebulaColor8& rPrm, const NebulaColor8& rEnv) {
+        sPrm = rPrm;
+        sEnv = rEnv;
+    }
+}  // namespace JPANativeColor
+
+void JPAResource::setPTev() {
+    u32 flags = 0;
     int base_plane_type = (mpBaseShape->getType() == 3 || mpBaseShape->getType() == 7) ? mpBaseShape->getBasePlaneType() : 0;
     int center_offset;
     if (mpExtraShape != NULL) {
@@ -928,61 +1037,37 @@ void JPAResource::setPTev() {
     int pos_offset = center_offset + base_plane_type * 0x6C;
     int crd_offset = (mpBaseShape->getTilingS() + 2 * mpBaseShape->getTilingT()) * 8;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd + crd_offset);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
 
     if (mpExTexShape != NULL) {
         if (mpExTexShape->isUseIndirect()) {
-            J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP2);
-            J3DNativeState::setIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
-#ifdef TARGET_PC
             f32 indTexMtx[2][3];
             mpExTexShape->getIndTexMtx(indTexMtx);
-            J3DNativeState::setIndTexMtx(GX_ITM_0, indTexMtx, mpExTexShape->getExpScale());
-#else
-            J3DNativeState::setIndTexMtx(GX_ITM_0, (f32(*)[3])mpExTexShape->getIndTexMtx(), mpExTexShape->getExpScale());
-#endif
-            J3DNativeState::setTevIndirect(GX_TEVSTAGE0, GX_INDTEXSTAGE0, GX_ITF_8, GX_ITB_STU, GX_ITM_0, GX_ITW_OFF, GX_ITW_OFF, 0, 0, GX_ITBA_OFF);
-            ind_stages++;
-            tex_gens++;
-            tex_coord = GX_TEXCOORD2;
+            setIndirect(indTexMtx, mpExTexShape->getExpScale());
+            flags |= 1;
         }
         if (mpExTexShape->isUseSecTex()) {
-            J3DNativeState::setTevOrder(GX_TEVSTAGE1, tex_coord, GX_TEXMAP3, GX_COLOR_NULL);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_APREV, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            tev_stages++;
-            tex_gens++;
+            flags |= 2;
         }
     }
 
-    J3DNativeState::setNumTevStages(tev_stages);
-    J3DNativeState::setNumIndStages(ind_stages);
-    if (mpBaseShape->isClipOn()) {
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    } else {
-        J3DNativeState::setClipMode(GX_CLIP_DISABLE);
+    if (mpBaseShape->isPrjTex()) {
+        flags |= 4;
     }
-    J3DNativeState::setNumTexGens(tex_gens);
+    if (mpBaseShape->isClipOn()) {
+    } else {
+    }
+    sendParticleMaterial(mpBaseShape, flags);
 }
 
 void JPAResource::setCTev(JPAEmitterWorkData* work) {
     int base_plane_type = (mpChildShape->getType() == 3 || mpChildShape->getType() == 7) ? mpChildShape->getBasePlaneType() : 0;
     int pos_offset = 0x30 + base_plane_type * 0x6C;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR_NULL);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x3C, GX_FALSE, 0x7D);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setNumIndStages(0);
     if (mpChildShape->isClipOn()) {
-        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     } else {
-        J3DNativeState::setClipMode(GX_CLIP_DISABLE);
     }
-    J3DNativeState::setNumTexGens(1);
-    work->mpResMgr->CALL_INLINE_FUNC(load, work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GX_TEXMAP1);
+    work->mpResMgr->use(work->mpRes->getTexIdx(mpChildShape->getTexIdx()), 1);
+    sendParticleMaterial(mpBaseShape, 8);
 }
 
 void JPAResource::calc_p(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {

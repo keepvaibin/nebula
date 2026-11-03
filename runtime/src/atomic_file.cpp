@@ -1,4 +1,5 @@
 #include "galaxy/atomic_file.h"
+#include "galaxy/path_text.h"
 
 #if defined(_WIN32)
 
@@ -53,14 +54,14 @@ bool write_all(HANDLE file, std::string_view contents) noexcept {
 
 }  // namespace
 
-bool write_text_file_atomically(
+bool write_file_atomically(
     const std::filesystem::path& destination,
     std::string_view contents) noexcept {
-    return detail::write_text_file_atomically_with_collision_hook(
+    return detail::write_file_atomically_with_collision_hook(
         destination, contents, nullptr, nullptr);
 }
 
-bool detail::write_text_file_atomically_with_collision_hook(
+bool detail::write_file_atomically_with_collision_hook(
     const std::filesystem::path& destination,
     std::string_view contents,
     void (*on_collision)(void*),
@@ -165,7 +166,7 @@ std::atomic<std::uint64_t> s_temp_sequence{0u};
 std::filesystem::path make_sibling_temp_path(
     const std::filesystem::path& destination,
     std::uint64_t sequence) {
-    std::string name = destination.filename().string();
+    std::string name = galaxy::path_text(destination.filename());
     name += ".tmp.";
     name += std::to_string(getpid());
     name += ".";
@@ -190,14 +191,14 @@ bool write_all(int file, std::string_view contents) noexcept {
 
 }  // namespace
 
-bool write_text_file_atomically(
+bool write_file_atomically(
     const std::filesystem::path& destination,
     std::string_view contents) noexcept {
-    return detail::write_text_file_atomically_with_collision_hook(
+    return detail::write_file_atomically_with_collision_hook(
         destination, contents, nullptr, nullptr);
 }
 
-bool detail::write_text_file_atomically_with_collision_hook(
+bool detail::write_file_atomically_with_collision_hook(
     const std::filesystem::path& destination,
     std::string_view contents,
     void (*on_collision)(void*),

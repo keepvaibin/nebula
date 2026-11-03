@@ -26,8 +26,8 @@ public:
     WipeLayoutBase* findWipe(const char*) const;
 
 private:
-    /* 0x0C */ WipeLayoutBase* mCurrentWipeLayout;
-    /* 0x10 */ WipeLayoutBase** mWipeLayoutArray;
-    /* 0x14 */ u32 mWipeLayoutCapacity;
-    /* 0x18 */ u32 mWipeLayoutCount;
+    WipeLayoutBase* mCurrentWipeLayout;
+    WipeLayoutBase** mWipeLayoutArray;
+    u32 mWipeLayoutCapacity;
+    u32 mWipeLayoutCount;
 };

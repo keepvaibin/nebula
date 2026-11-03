@@ -115,16 +115,16 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
         MR::initDefaultPos(this, rIter);
     }
 
-    bool useDisplayList = rInfo.mUseProjectMapMtx || rInfo.mUseMirrorReflection || rInfo.mDummyChangeTexture != nullptr;
+    bool useMesh = rInfo.mUseProjectMapMtx || rInfo.mUseMirrorReflection || rInfo.mDummyChangeTexture != nullptr;
     if (rInfo.mModelName != nullptr) {
         mObjectName = rInfo.mModelName;
     }
 
-    initModelManagerWithAnm(mObjectName, nullptr, useDisplayList);
+    initModelManagerWithAnm(mObjectName, nullptr, useMesh);
 
     if (rInfo.mDummyChangeTexture != nullptr) {
-        MR::initDLMakerChangeTex(this, rInfo.mDummyChangeTexture);
-        MR::newDifferedDLBuffer(this);
+        MR::initMaterialChangeTex(this, rInfo.mDummyChangeTexture);
+        MR::newDifferedMaterials(this);
     }
 
     MtxPtr pJointMtx;
@@ -136,8 +136,8 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
     }
 
     if (rInfo.mUseProjectMapMtx) {
-        mMatrixSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-        MR::newDifferedDLBuffer(this);
+        mMatrixSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+        MR::newDifferedMaterials(this);
         _B4 = rInfo._48;
     }
 
@@ -319,33 +319,12 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
     }
 
     if (!rInfo.mNoUseLOD && LodCtrlFunction::isExistLodLowModel(mObjectName)) {
-        mPlanetLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, rInfo._88);
-
-        if (rInfo.mColorChangeArg > -1) {
-            const char* pColorName = ::cBrkNameColorChange;
-            if (MR::isExistBrk(this, pColorName)) {
-                MR::startBrk(mPlanetLodCtrl->_14, pColorName);
-                MR::setBrkFrameAndStop(mPlanetLodCtrl->_14, rInfo.mColorChangeArg);
-            }
-        }
-
-        if (rInfo.mTextureChangeArg > -1) {
-            const char* pTextureName = ::cBtpNameTexChange;
-            if (MR::isExistBtp(this, pTextureName)) {
-                MR::startBtp(mPlanetLodCtrl->_14, pTextureName);
-                MR::setBtpFrameAndStop(mPlanetLodCtrl->_14, rInfo.mTextureChangeArg);
-            }
-
-            if (MR::isExistBtk(this, pTextureName)) {
-                MR::startBtk(mPlanetLodCtrl->_14, ::cBtkNameTexChange);
-                MR::setBtkFrameAndStop(mPlanetLodCtrl->_14, rInfo.mTextureChangeArg);
-            }
-        }
+        mPlanetLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     }
 
     if (MR::isExistSubModel(mObjectName, "Bloom")) {
         char modelName[0x100];
-        snprintf(modelName, sizeof(modelName), "%sBloom", mObjectName);
+        nebula_snprintf(modelName, sizeof(modelName), "%sBloom", mObjectName);
         const char* pName = mName;
         mBloomModel = MR::createModelObjBloomModel(pName, modelName, getBaseMtx());
         mBloomModel->mScale.set(mScale);
@@ -571,9 +550,9 @@ bool MapObjActor::tryCreateBreakModel(const MapObjActorInitInfo& rInfo) {
     char buf[0x100];
 
     if (rInfo._80 != nullptr) {
-        snprintf(buf, sizeof(buf), "%s", rInfo._80);
+        nebula_snprintf(buf, sizeof(buf), "%s", rInfo._80);
     } else {
-        snprintf(buf, sizeof(buf), "%sBreak", mObjectName);
+        nebula_snprintf(buf, sizeof(buf), "%sBreak", mObjectName);
     }
 
     if (!MR::isExistModel(buf)) {
@@ -868,6 +847,6 @@ void MapObjActorUtil::killBloomModel(MapObjActor* pActor) {
 void MapObjActorUtil::appearBloomModel(MapObjActor* pActor) {
     pActor->mBloomModel->appear();
     char buf[0x100];
-    snprintf(buf, sizeof(buf), "%sBloom", pActor->mObjectName);
+    nebula_snprintf(buf, sizeof(buf), "%sBloom", pActor->mObjectName);
     MR::tryStartAllAnim(pActor->mBloomModel, buf);
 }

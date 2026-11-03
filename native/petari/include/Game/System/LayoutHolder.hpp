@@ -3,12 +3,11 @@
 #include "Game/System/ResourceInfo.hpp"
 #include <nw4r/lyt/resourceAccessor.h>
 
-class JKRArcFinder;
-class JKRArchive;
+class AssetFolder;
 
 class LayoutHolder : public nw4r::lyt::ResourceAccessor {
 public:
-    LayoutHolder(JKRArchive&);
+    LayoutHolder(AssetFolder&);
 
     virtual ~LayoutHolder();
     virtual void* GetResource(u32, const char*, u32*);
@@ -31,14 +30,13 @@ public:
 
     bool isAnimationHashEqual(u32, u32) const;
     void initializeArc();
-    JKRArcFinder* getFileFinder(const char*);
     u32 initEachResTable(ResTable*, const char* const*);
-    u32 count(const char*, const char*);
-    void mount(char*);
+    u32 count(const char*, s32);
+    void mount(s32);
     ResFileInfo* createAndRegisterObject(const char*, void*);
 
-    /* 0x04 */ JKRArchive* mArchive;
-    /* 0x08 */ ResTable mLayoutRes;
-    /* 0x10 */ ResTable mAnimRes;
-    /* 0x18 */ ResTable mResOther;
+    AssetFolder* mArchive;
+    ResTable mLayoutRes;
+    ResTable mAnimRes;
+    ResTable mResOther;
 };

@@ -1,15 +1,15 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace JMath {
     class TRandom_fast_ {
     public:
         TRandom_fast_() {};
 
-        TRandom_fast_(u32);
+        constexpr TRandom_fast_(u32 seed) : mSeed(seed) {
+        }
 
         inline u32 rand() {
             return mSeed = 0x19660d * mSeed + 0x3c6ef35f;

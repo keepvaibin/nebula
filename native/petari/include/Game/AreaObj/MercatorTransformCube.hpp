@@ -25,9 +25,9 @@ public:
     f32 getSphereRadius() const;
     f32 calcLocalHeight(const TVec3f& rPos) const;
     void calcUV(TVec2f*, const TVec3f&) const;
-    void calcLocalBoxSize(TVec3f*) const NO_INLINE;
+    void calcLocalBoxSize(TVec3f*) const;
 
-    /* 0x3C */ TMtx34f _3C;
+    TMtx34f _3C;
 };
 
 namespace MR {

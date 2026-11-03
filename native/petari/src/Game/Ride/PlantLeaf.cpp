@@ -67,7 +67,7 @@ void PlantLeaf::updateGrowUp(const TVec3f& rStalkPos, const TVec3f& rAxisY, f32 
 bool PlantLeaf::updateSpring(const TVec3f& rPos, f32 springPower, f32 growthPercent) {
     if (mPosition.squared(rPos) < ::sDistancePush * ::sDistancePush) {
         if (mSpringCoord == 0.0f && mSpringSpeed == 0.0f) {
-            MR::tryRumblePadWeak(this, WPAD_CHAN0);
+            MR::tryRumblePadWeak(this, PLAYER_1);
         }
 
         mSpringSpeed += springPower * ::sPlayerPushRate;
@@ -117,6 +117,6 @@ void PlantLeafDrawInit::initDraw() const {
     j3dSys.mVtxPos = pModelData->mVertexData.mVtxPosArray;
     j3dSys.mVtxNrm = pModelData->mVertexData.mVtxNrmArray;
     j3dSys.mVtxCol = pModelData->mVertexData.mVtxColorArray[0];
-    mMaterial->loadSharedDL();
+    mMaterial->loadSharedMaterial();
     mShape->loadPreDrawSetting();
 }

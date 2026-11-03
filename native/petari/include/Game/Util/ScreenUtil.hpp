@@ -1,47 +1,40 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/types.h>
-#ifdef TARGET_PC
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#endif
 
 struct ResTIMG;
 
 namespace MR {
-    u32 getViWidth();
+    u32 getPictureSpan();
     f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
-#ifdef TARGET_PC
     // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
-    // aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
+    // aspect and the layout canvas follow it (wide == 0: 16:9).
     inline const NebulaDisplay& getDisplay() {
         return NebulaFrameClock::display();
     }
-    // Between these, getScreenWidth keeps the Wii's 832: CollisionShadow sizes its softening circle in screen units but
+    // Between these, getScreenWidth keeps cWideScreenWidth: CollisionShadow sizes its softening circle in screen units but
     // draws it into a fixed 160x160 region.
-    void beginWiiScreenWidth();
-    void endWiiScreenWidth();
-#endif
-    inline s32 getScreenHeight() NO_INLINE {
-        return JUTVideo::getManager()->getEfbHeight();
+    void beginDesignScreenWidth();
+    void endDesignScreenWidth();
+    inline s32 getScreenHeight() {
+        return NebulaFrameClock::cScreenUnitsDown;
     }
     s32 getSafetyFrameWidth();
     s32 getSafetyFrameLeft();
     s32 getSafetyFrameRight();
-    s32 getFrameBufferWidth() NO_INLINE;
-    inline s32 getFrameBufferHeight() NO_INLINE {
-        return JUTVideo::getManager()->getEfbHeight();
+    s32 getScreenUnitsAcross();
+    inline s32 getScreenUnitsDown() {
+        return NebulaFrameClock::cScreenUnitsDown;
     }
-    void convertFrameBufferPosToScreenPos(TVec2f*, const TVec2f&);
-    void convertScreenPosToFrameBufferPos(TVec2f*, const TVec2f&);
+    void convertCanvasPosToScreenPos(TVec2f*, const TVec2f&);
+    void convertScreenPosToCanvasPos(TVec2f*, const TVec2f&);
     void startToCaptureScreen(const char*);
     void endToCaptureScreen(const char*);
     void captureScreenIfAllow(const char*);
     const ResTIMG* getScreenResTIMG();
-    u8* getScreenTexImage();
     void closeWipeCircle(s32 frame = -1);
     void forceOpenWipeCircle();
     void forceCloseWipeCircle();
@@ -109,13 +102,13 @@ namespace MR {
     bool isStopCinemaFrame();
     void appearInformationMessage(const char*, bool);
     void appearInformationMessageCenter(const char*, bool);
-    void appearInformationMessage(const wchar_t*, bool);
-    void setInformationMessageReplaceString(const wchar_t*, s32);
+    void appearInformationMessage(const char16_t*, bool);
+    void setInformationMessageReplaceString(const char16_t*, s32);
     void disappearInformationMessage();
     bool isDeadInformationMessage();
     void appearYesNoSelector(const char*, const char*, const char*);
-    bool isYesNoSelected() NO_INLINE;
-    bool isYesNoSelectedYes() NO_INLINE;
+    bool isYesNoSelected();
+    bool isYesNoSelectedYes();
     void setYesNoSelectorSE(const char*, const char*, const char*);
     void resetYesNoSelectorSE();
     void startMoviePlayer(const char*);

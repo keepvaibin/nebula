@@ -13,15 +13,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 
-void KoopaFireShort_FORCE_MATCH_SDATA2() {
-    (void)130.0f;
-    (void)50.0f;
-    (void)100.0f;
-    (void)200.0f;
-    (void)0.001f;
-    (void)15.0f;
-}
-
 namespace {
     // static const f32 sFlySpeedSlow = _;
     static const f32 sFlySpeedNormal = 15.0f;
@@ -167,7 +158,7 @@ void KoopaFireShort::exeFly() {
 
         mSpeed = 80.0f;
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN1);
+        MR::tryRumblePadMiddle(this, PLAYER_2);
 
         MR::scaleVelocity(this, mSpeed);
 

@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASInstEffect.hpp"
 
-class JASInstParam;
+struct JASInstParam;
 
 class JASInstSense : public JASInstEffect {
 public:
@@ -17,9 +17,9 @@ public:
     virtual void effect(int pitch, int velocity, JASInstParam* pParams) const;
     void setParams(int senseType, int maxPoint, f32 startLvl, f32 endLvl);
 
-    /* 0x04 */ u32 mType;
-    /* 0x08 */ u8 mSenseType;
-    /* 0x09 */ u8 mMaxPoint;
-    /* 0x0C */ f32 mStartLvl;
-    /* 0x10 */ f32 mEndLvl;
+    u32 mType;
+    u8 mSenseType;
+    u8 mMaxPoint;
+    f32 mStartLvl;
+    f32 mEndLvl;
 };

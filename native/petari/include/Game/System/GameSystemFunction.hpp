@@ -10,15 +10,15 @@ namespace GameSystemFunction {
     bool isDoneLoadSystemArchive();
     bool tryToLoadSystemArchive();
     void requestChangeArchivePlayer(bool);
-    bool isEndChangeArchivePlayer();
+    void waitEndChangeArchivePlayer();
     void activateScreenPreserver();
     void deactivateScreenPreserver();
     bool isOccurredSystemWarning();
     bool isResetProcessing();
     void setResetOperationApplicationReset();
-    void setResetOperationReturnToMenu();
+    void setResetOperationQuit();
     void requestResetGameSystem(bool);
-    void requestGoWiiMenu(bool);
+    void requestQuitGame(bool);
     void forceToDeactivateHomeButtonLayout();
     void resetCurrentScenarioNo();
     bool isPermitToResetSaveDataHandleSequence();
@@ -30,12 +30,9 @@ namespace GameSystemFunction {
     void requestResetAudioSystem(bool);
     bool isDoneResetAudioSystem();
     void resumeResetAudioSystem();
-    void stopControllerLeaveWatcher();
-    void startControllerLeaveWatcher();
-    void restartControllerLeaveWatcher();
     void resetAllControllerRumble();
-    void setAutoSleepTimeWiiRemote(bool);
-    bool setPermissionToCheckWiiRemoteConnectAndScreenDimming(bool);
+    void setInputSleepTime(bool);
+    bool setPermissionToCheckInput(bool);
     void onPauseBeginAllRumble();
     void onPauseEndAllRumble();
     void onHomeButtonMenuBeginAllRumble();
@@ -44,5 +41,5 @@ namespace GameSystemFunction {
     void prepareResetSystem();
     bool isPreparedFadeinSystem();
     void restartSceneController();
-    bool isDisplayStrapRemineder();
+    bool isBeforeTitle();
 };  // namespace GameSystemFunction

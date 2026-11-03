@@ -23,11 +23,11 @@ public:
     void exeMove();
     void exeDone();
 
-    /* 0x8C */ MapPartsRailMover* mRailMover;
-    /* 0x90 */ LodCtrl* mLodCtrl;
-    /* 0x94 */ TVec3f mRailEndPos;
-    /* 0xA0 */ const char* mObjectName;
-    /* 0xA4 */ bool mIsMoving;
-    /* 0xA5 */ bool mIsRegisteredDemo;
-    /* 0xA8 */ s32 mAlreadyDoneFlag;
+    MapPartsRailMover* mRailMover;
+    LodCtrl* mLodCtrl;
+    TVec3f mRailEndPos;
+    const char* mObjectName;
+    bool mIsMoving;
+    bool mIsRegisteredDemo;
+    s32 mAlreadyDoneFlag;
 };

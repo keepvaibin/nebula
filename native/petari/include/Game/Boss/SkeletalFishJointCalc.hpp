@@ -3,7 +3,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 class SkeletalFishRailControl;
-class JointControllerInfo;
+struct JointControllerInfo;
 
 class SkeletalFishJointCalc {
 public:

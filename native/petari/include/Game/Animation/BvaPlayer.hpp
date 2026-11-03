@@ -14,5 +14,5 @@ public:
     J3DAnmVisibilityFull* getAnmVisibility();
 
 private:
-    /* 0x20 */ J3DModel* mModel;
+    J3DModel* mModel;
 };

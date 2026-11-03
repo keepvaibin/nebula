@@ -109,7 +109,9 @@ void IKJointCtrlHolder::addCtrl(const IKJointCtrlParam& rParam) {
 
 void IKJointCtrlHolder::startUpdate() {
     _10 = false;
-    std::for_each(mControls, mControls + _8, std::mem_fun(&IKJointCtrl::disableCallBack));
+    for (auto it = mControls, end = mControls + _8; it != end; ++it) {
+        (*it)->disableCallBack();
+    }
 }
 
 void IKJointCtrlHolder::setEndPosition(const char* pName, const TVec3f& rPos, f32 a3) {
@@ -121,17 +123,23 @@ void IKJointCtrlHolder::setEndDirection(const char* pName, const TVec3f& rDirect
 }
 
 void IKJointCtrlHolder::endUpdate() {
-    std::for_each(mControls, mControls + _8, std::mem_fun(&IKJointCtrl::enableCallBack));
+    for (auto it = mControls, end = mControls + _8; it != end; ++it) {
+        (*it)->enableCallBack();
+    }
     _10 = true;
 }
 
 void IKJointCtrlHolder::endCtrlAll() {
-    std::for_each(mControls, mControls + _8, std::mem_fun(&IKJointCtrl::endCtrl));
+    for (auto it = mControls, end = mControls + _8; it != end; ++it) {
+        (*it)->endCtrl();
+    }
 }
 
 void IKJointCtrlHolder::setCallBackFunction() {
     if (_10) {
-        std::for_each(mControls, mControls + _8, std::mem_fun(&IKJointCtrl::setCallBackFunction));
+        for (auto it = mControls, end = mControls + _8; it != end; ++it) {
+            (*it)->setCallBackFunction();
+        }
     }
 }
 

@@ -8,6 +8,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.os.SystemClock;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
@@ -36,6 +37,8 @@ final class TouchControlsView extends View {
 
         /** The game is on a pointer screen: only the stick's own circle is the stick. */
         boolean menuContext();
+
+        boolean titleScreen();
     }
 
     // What each finger (by pointer id, 0..31) landed on: a button's index or one of these. Arrays, so a touch
@@ -46,6 +49,9 @@ final class TouchControlsView extends View {
     private static final int TARGET_POINTER = -2;
     private static final int TARGET_DPAD = -3;
     private static final float STICK_DEAD_ZONE = 0.06f;
+    // Places in `buttons`.
+    private static final int HOME_BUTTON = 6;
+    private static final int TWO_BUTTON = 9;
 
     private static final class Button {
         final int bit;
@@ -67,6 +73,11 @@ final class TouchControlsView extends View {
     private final List<Button> buttons = new ArrayList<>();
     private final int[] targets = new int[MAX_POINTERS];
     private final int[] pointerBits = new int[MAX_POINTERS];  // the buttons each finger holds
+    private final boolean[] zLeft = new boolean[MAX_POINTERS];
+    private final boolean[] zQuick = new boolean[MAX_POINTERS];
+    private final long[] zDownMs = new long[MAX_POINTERS];
+    private static final long Z_QUICK_SLIDE_MS = 180;
+    private static final float Z_QUICK_SLIDE_STICK = 0.3f;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -86,6 +97,9 @@ final class TouchControlsView extends View {
     private float stickRestX, stickRestY, stickRadius;
     private float stickBaseX, stickBaseY, stickKnobX, stickKnobY;
     private int stickPointer = -1;
+    private boolean pointerScreen = false;
+    private float homeX;
+    private float homeY;
     private float stickZoneRight, stickZoneTop;
 
     private int heldButtons;
@@ -125,6 +139,41 @@ final class TouchControlsView extends View {
     }
 
     /** Shown or hidden (hidden: every finger is the pointer). Hiding releases whatever was held. */
+    /** The game went to or from a pointer screen (GameActivity.menuContextChanged). */
+    void syncMenuContext() {
+        final boolean menu = listener.menuContext();
+        if (menu == pointerScreen) {
+            return;
+        }
+        pointerScreen = menu;
+        placeHome();
+        for (int i = 0; i < MAX_POINTERS; ++i) {
+            if (targets[i] != TARGET_POINTER) {
+                targets[i] = TARGET_NONE;
+            }
+        }
+        Arrays.fill(pointerBits, 0);
+        stickPointer = -1;
+        publish(0, 0.0f, 0.0f);
+        invalidate();
+    }
+
+    // HOME over the picture on a pointer screen: in the top corner, clear of the game's own buttons.
+    private void placeHome() {
+        final Button home = buttons.get(HOME_BUTTON);
+        home.x = pointerScreen ? buttons.get(TWO_BUTTON).x : homeX;
+        home.y = pointerScreen ? buttons.get(TWO_BUTTON).y : homeY;
+        if (pointerScreen && getWidth() > 0 && getHeight() > 0) {
+            // The file card (FileInfo: 286 canvas units either side, its foot 110 under the canvas's top) spans a screen
+            // narrower than 16:9 at the top: HOME goes under its foot.
+            final float aspect = (float) getWidth() / getHeight();
+            final float unit = aspect < 4.0f / 3.0f ? getWidth() / 608.0f : getHeight() / 456.0f;
+            if (home.x - home.radius < getWidth() / 2.0f + 286.0f * unit) {
+                home.y = Math.max(home.y, 118.0f * unit + home.radius);
+            }
+        }
+    }
+
     void setControlsShown(boolean value) {
         if (shown == value) {
             return;
@@ -193,6 +242,9 @@ final class TouchControlsView extends View {
         final float row12 = cx + 4.2f * rm > right - 4.4f * rm ? row + 2.8f * rm : row;
         place(buttons.get(9), right - rm, row12, rm);
         place(buttons.get(8), right - 3.4f * rm, row12, rm);
+        homeX = buttons.get(HOME_BUTTON).x;
+        homeY = buttons.get(HOME_BUTTON).y;
+        placeHome();
 
         // The stick at the bottom left; the D-pad at the top left, or on a tall screen (a phone upright, the Fold
         // open) just above the stick, where the thumb reaches it.
@@ -255,13 +307,16 @@ final class TouchControlsView extends View {
             return;
         }
         int target = TARGET_POINTER;
+        syncMenuContext();
         if (shown) {
             final int button = buttonAt(x, y);
             if (button >= 0) {
                 target = button;
+            } else if (pointerScreen) {
+                target = TARGET_POINTER;
             } else if (dpadBits(x, y) != 0 || Math.hypot(x - dpadX, y - dpadY) <= dpadRadius * 1.2f) {
                 target = TARGET_DPAD;
-            } else if (stickPointer < 0 && inStickZone(x, y)) {
+            } else if (stickPointer < 0 && !listener.titleScreen() && inStickZone(x, y)) {
                 target = TARGET_STICK;
                 stickPointer = id;
                 // The stick centres under the thumb, kept whole on the screen.
@@ -276,6 +331,8 @@ final class TouchControlsView extends View {
             listener.onPointer(0, id, x, y);
             return;
         }
+        zLeft[id] = false;
+        zDownMs[id] = SystemClock.uptimeMillis();
         update(id, x, y);
     }
 
@@ -321,9 +378,28 @@ final class TouchControlsView extends View {
             // A button finger slides: it holds the button it is over, if any.
             final int over = buttonAt(x, y);
             bits = over >= 0 ? buttons.get(over).bit : 0;
+            if (target >= 0 && target < buttons.size() && buttons.get(target).bit == Z) {
+                bits = slideFromZ(id, over, bits);
+            }
         }
         pointerBits[id] = bits;
         recompute();
+    }
+
+    // Z held and A pressed is the game's long jump while Mario still runs and its crouch jump once the crouch has stopped
+    // him, about nine frames after Z. A thumb's slide takes longer than that, so a quick slide with the stick pushed lets
+    // go of Z on the way (Mario keeps running) and gives it back on the button it reaches, both at once: the long jump.
+    // Held on Z first, or standing still, the slide keeps Z all the way: the crouch jump.
+    private int slideFromZ(int id, int over, int overBits) {
+        if (over >= 0 && buttons.get(over).bit == Z) {
+            zLeft[id] = false;
+            return Z;
+        }
+        if (!zLeft[id]) {
+            zLeft[id] = true;
+            zQuick[id] = SystemClock.uptimeMillis() - zDownMs[id] <= Z_QUICK_SLIDE_MS && Math.hypot(stickX, stickY) > Z_QUICK_SLIDE_STICK;
+        }
+        return over >= 0 || !zQuick[id] ? overBits | Z : 0;
     }
 
     private void recompute() {
@@ -372,6 +448,9 @@ final class TouchControlsView extends View {
         int best = -1;
         float bestDistance = Float.MAX_VALUE;
         for (int i = 0; i < buttons.size(); ++i) {
+            if (pointerScreen && i != HOME_BUTTON) {
+                continue;
+            }
             final Button button = buttons.get(i);
             final float distance = (float) Math.hypot(x - button.x, y - button.y);
             // A little beyond the drawn circle: thumbs land wide.
@@ -407,6 +486,11 @@ final class TouchControlsView extends View {
             return;
         }
         stroke.setStrokeWidth(1.6f * dp);
+        if (pointerScreen) {
+            final Button home = buttons.get(HOME_BUTTON);
+            drawButton(canvas, home, (heldButtons & home.bit) != 0);
+            return;
+        }
         for (Button button : buttons) {
             drawButton(canvas, button, (heldButtons & button.bit) != 0);
         }

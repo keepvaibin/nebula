@@ -3,7 +3,7 @@
 #include "Game/Camera/CameraShakeTask.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static const f32 sInfinityIntensity = 1.0f;
@@ -61,16 +61,9 @@ void CameraShaker::createSinglyVerticalTask() {
 }
 
 void CameraShaker::createSinglyHorizontalTask() {
-    // There is a bug with Nintendo's code.
-    // There are 3 horizontal tasks, but the loop runs seven, probably because the
-    // count was confused with vertical tasks. The game will read garbage memory from
-    // the horizontal float table and will set infinity tasks for values out of range,
-    // but it works because the infinity tasks are created afterwards and then set correctly.
-
     static const f32 cSinglyIntensity[] = {0.3f, 1.0f, 3.0f};
 
-    // Should be i < NR_HORIZONTAL_TASKS
-    for (u32 i = 0; i < NR_VERTICAL_TASKS; i++) {
+    for (u32 i = 0; i < NR_HORIZONTAL_TASKS; i++) {
         CameraShakePatternSingly* singly = new CameraShakePatternSingly(cSinglyIntensity[i]);
 
         singly->setDirection(TVec2f(1.0f, 0.0f));
@@ -156,7 +149,7 @@ void CameraShaker::addInfinityTaskOffset(TVec2f* pOffset) {
 }
 
 void CameraShaker::adjustOffsetToScreen(TVec2f* pOffset) {
-    pOffset->y *= 30.0f / (s32)JUTVideo::getManager()->getEfbHeight();
+    pOffset->y *= 30.0f / (s32)NebulaFrameClock::cScreenUnitsDown;
     pOffset->x *= 30.0f / MR::getScreenWidth();
 }
 

@@ -60,7 +60,7 @@ void PoltaStateAttackGround::exeAttack() {
     } else {
         if (MR::isGreaterStep(this, mAttackLength)) {
             setNerve(GET_NERVE(PoltaStateAttackGround, PoltaStateAttackGroundNrvToWait));
-            MR::tryRumblePadStrong(this, WPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             MR::startSound(getHost(), "SE_BM_POLTA_HIT_GROUND");
             MR::shakeCameraNormalStrong();
         }

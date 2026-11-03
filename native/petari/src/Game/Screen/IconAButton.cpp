@@ -3,9 +3,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
-#ifdef TARGET_PC
 #include "Game/Screen/NebulaIcons.hpp"
-#endif
 
 namespace NrvIconAButton {
     NEW_NERVE(IconAButtonNrvOpen, IconAButton, Open);
@@ -36,7 +34,7 @@ void IconAButton::init(const JMapInfoIter& rIter) {
 void IconAButton::setFollowActorPane(LayoutActor* pActor, const char* pName) {
     mFollowActor = pActor;
 
-    snprintf(mFollowPaneName, sizeof(mFollowPaneName), "%s", pName);
+    nebula_snprintf(mFollowPaneName, sizeof(mFollowPaneName), "%s", pName);
     MR::setFollowPos(&mFollowPos, this, nullptr);
 }
 
@@ -63,21 +61,6 @@ void IconAButton::openWithTalk() {
 void IconAButton::openWithRead() {
     open();
     MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemRead");
-}
-
-void IconAButton::openWithNext() {
-    open();
-    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemNext");
-}
-
-void IconAButton::openWithTerm() {
-    open();
-    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemTerm");
-}
-
-void IconAButton::openWithDecide() {
-    open();
-    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemDecide");
 }
 
 void IconAButton::openWithTurn() {
@@ -127,11 +110,9 @@ void IconAButton::control() {
     updateFollowPos();
 }
 
-#ifdef TARGET_PC
 void IconAButton::draw() const {
     NebulaIcons::drawWithIcons(this);
 }
-#endif
 
 void IconAButton::updateFollowPos() {
     if (mFollowActor != nullptr) {

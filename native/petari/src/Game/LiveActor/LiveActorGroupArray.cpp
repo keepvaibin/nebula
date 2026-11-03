@@ -11,13 +11,13 @@
 #include <cstring>
 
 namespace {
-    struct HasActor : std::binary_function< const MsgSharedGroup*, const LiveActor*, bool > {
+    struct HasActor {
         bool operator()(const MsgSharedGroup* pGroup, const LiveActor* pActor) const {
             return pGroup->hasActor(pActor);
         }
     };
 
-    struct HasGroupId : std::binary_function< const MsgSharedGroup*, const JMapIdInfo&, bool > {
+    struct HasGroupId {
         bool operator()(const MsgSharedGroup* pGroup, const JMapIdInfo& rIdInfo) const {
             return *pGroup->mIdInfo == rIdInfo;
         }
@@ -83,14 +83,10 @@ LiveActorGroup* LiveActorGroupArray::createGroup(const JMapInfoIter& rIter, cons
     return pGroup;
 }
 
-namespace {
-    std::binder2nd< HasGroupId, const JMapIdInfo& > makeGroupIdPredicate(const JMapIdInfo& rIdInfo) {
-        return std::binder2nd< HasGroupId, const JMapIdInfo& >(HasGroupId(), rIdInfo);
-    }
-};  // namespace
-
 LiveActorGroup* LiveActorGroupArray::findGroup(const JMapInfoIter& rIter) const {
-    MsgSharedGroup* const* it = std::find_if(mGroups.begin(), mGroups.end(), ::makeGroupIdPredicate(MR::createJMapIdInfoFromGroupId(rIter)));
+    const JMapIdInfo idInfo = MR::createJMapIdInfoFromGroupId(rIter);
+    MsgSharedGroup* const* it =
+        std::find_if(mGroups.begin(), mGroups.end(), [&](const auto& item) { return HasGroupId()(item, idInfo); });
 
     if (it != mGroups.end()) {
         return *it;
@@ -100,7 +96,7 @@ LiveActorGroup* LiveActorGroupArray::findGroup(const JMapInfoIter& rIter) const 
 }
 
 LiveActorGroup* LiveActorGroupArray::findGroup(const LiveActor* pActor) const {
-    MsgSharedGroup* const* it = std::find_if(mGroups.begin(), mGroups.end(), std::binder2nd< HasActor, const LiveActor* >(HasActor(), pActor));
+    MsgSharedGroup* const* it = std::find_if(mGroups.begin(), mGroups.end(), [&](const auto& item) { return HasActor()(item, pActor); });
 
     if (it != mGroups.end()) {
         return *it;
@@ -113,10 +109,10 @@ LiveActorGroup* LiveActorGroupArray::entry(LiveActor* pActor, const JMapInfoIter
     s32 groupID = -1;
     MR::getJMapInfoGroupID(rIter, &groupID);
 
-    // Function scope: pName points here past the if block (CodeWarrior keeps a block's locals for the whole frame).
+    // Function scope: pName points here past the if block .
     char defaultName[32];
     if (pName == nullptr) {
-        snprintf(defaultName, sizeof(defaultName), "group%02d", groupID);
+        nebula_snprintf(defaultName, sizeof(defaultName), "group%02d", groupID);
 
         pName = defaultName;
     }

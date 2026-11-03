@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/types.h>
 
-class JASTrack;
+struct JASTrack;
 
 class JASSeqParser {
 public:

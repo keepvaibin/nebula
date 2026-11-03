@@ -1,7 +1,5 @@
 #include "Game/MapObj/AstroCore.hpp"
-#ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
-#endif
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/MapObj/AstroDemoFunction.hpp"
@@ -39,9 +37,7 @@ void AstroCore::init(const JMapInfoIter& rIter) {
     info.setupNoAppearRiddleSE();
     initialize(rIter, info);
     AstroDemoFunction::tryRegisterGrandStarReturnWithFunctionAndSimpleCast(this, rIter, MR::Functor(this, &AstroCore::startDemo));
-#ifdef TARGET_PC
     GameLightSignal::registerStarCore(this);
-#endif
 }
 
 void AstroCore::exeWait() {
@@ -52,14 +48,14 @@ void AstroCore::exeWait() {
 
 void AstroCore::exeGrow() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
         MR::emitEffect(this, "ShockWave");
     }
 
     if (MR::isStep(this, ::sGrowTimeLag)) {
         MR::startSound(this, "SE_OJ_ASTRO_CORE_GROW");
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormalWeak();
         startAnimGrow();
     }
@@ -77,7 +73,7 @@ void AstroCore::startAnimGrow() {
     s32 v3 = MR::clamp(AstroDemoFunction::getOpenedAstroDomeNum() + 1, 0, 6);
     s32 v4 = MR::clamp(v3, 0, 6);
     char animName[32];
-    snprintf(animName, sizeof(animName), "Revival%d", v4);
+    nebula_snprintf(animName, sizeof(animName), "Revival%d", v4);
     MR::startAllAnim(this, animName);
     getSensor(nullptr)->mRadius = ::sSensorSizeTable[v3];
 }
@@ -86,7 +82,7 @@ void AstroCore::setStateBeforeGrow() {
     s32 v3 = MR::clamp(AstroDemoFunction::getOpenedAstroDomeNum(), 0, 6);
     s32 v4 = MR::clamp(v3, 0, 6);
     char animName[32];
-    snprintf(animName, sizeof(animName), "Revival%d", v4);
+    nebula_snprintf(animName, sizeof(animName), "Revival%d", v4);
     MR::startAllAnim(this, animName);
     MR::setAllAnimFrameAtEnd(this, animName);
     getSensor(nullptr)->mRadius = ::sSensorSizeTable[v3];

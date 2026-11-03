@@ -9,9 +9,7 @@
 #include "Game/MapObj/ElectricRailHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/gx/GXEnum.h>
 
 namespace {
     const char* cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};
@@ -67,7 +65,7 @@ void ElectricRailMoving::init(const JMapInfoIter& rIter) {
     MR::setClippingFar200m(this);
     MR::setGroupClipping(this, rIter, 16);
     initPoints();
-    initDisplayList();
+    initMesh();
     initSound(4, true);
     mSoundObject->setTrans(mSensorOffsets);
     initNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait));
@@ -76,14 +74,14 @@ void ElectricRailMoving::init(const JMapInfoIter& rIter) {
 
 void ElectricRailMoving::draw() const {
     if (MR::isValidDraw(this)) {
-        J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, 0x21, 0, 0x7D);
+        J3DPass::textureMatrix(1, 1);
         J3DNativeShape::setTexture(1, _9C, 2);
-        J3DNativeState::setTevColor(GX_TEVREG1, Color8(0xFF, 0xFF, 0xFF, _CC));
+        J3DPass::registerColor(J3D_REGISTER_1, Color8(0xFF, 0xFF, 0xFF, _CC));
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {
             mMesh.draw();
         } else {
-            drawRailGX(_F0);
+            drawRail(_F0);
         }
     }
 }
@@ -195,7 +193,6 @@ void ElectricRailMoving::initPoints() {
 
             TVec3f v16;
             v16.set(startPos);
-            u32 v8 = v6;
 
             for (s32 i = 1; i < mStackHeight; i++) {
                 v16.add(g);
@@ -228,21 +225,21 @@ void ElectricRailMoving::initPoints() {
     }
 }
 
-void ElectricRailMoving::initDisplayList() {
+void ElectricRailMoving::initMesh() {
     mMesh.init(NEBULA_SHAPE_TEXCOORD0, _E4 * 4 * mStackHeight);
     drawPlane(mMesh, 30.0f, 30.0f, -30.0f, -30.0f);
     drawPlane(mMesh, -30.0f, 30.0f, 30.0f, -30.0f);
     mMesh.send();
 }
 
-void ElectricRailMoving::drawRailGX(f32 a1) const {
+void ElectricRailMoving::drawRail(f32 a1) const {
     drawPlaneGX(a1, a1, -a1, -a1);
     drawPlaneGX(-a1, a1, a1, -a1);
 }
 
 void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f32 a5) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        rMesh.begin(GX_TRIANGLESTRIP, (2 * _E4) & 0xFFFE);
+        rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (2 * _E4) & 0xFFFE);
 
         for (s32 j = 0; j < _E4; j++) {
             setVertexAttribute(j, i, a2, a3, a4, a5, &rMesh);
@@ -252,7 +249,7 @@ void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f3
 
 void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, _E4 * 2, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, _E4 * 2, NEBULA_SHAPE_TEXCOORD0);
 
         for (s32 j = 0; j < _E4; j++) {
             setVertexAttribute(j, i, a1, a2, a3, a4, nullptr);
@@ -263,9 +260,7 @@ void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
 void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 a6, f32 a7, NativeMesh* pMesh) const {
     f32 railLength = MR::getRailTotalLength(this);
 
-    if (100.0f * a2 >= railLength) {
-        railLength = railLength;
-    } else {
+    if (100.0f * a2 < railLength) {
         railLength = 100.0f * a2;
     }
 
@@ -324,7 +319,6 @@ void ElectricRailMoving::updateHitSensorPos() {
         MR::calcGravityVector(this, mSensorOffsets[0], &v9, nullptr, 0);
         v9 *= -100.0f;
 
-        s32 v5 = 1;
 
         for (s32 i = 1; i < mStackHeight; i++) {
             mSensorOffsets[i].add(mSensorOffsets[i - 1], v9);
@@ -451,8 +445,6 @@ void ElectricRailMoving::calcPointPos(TVec3f* pOutPos, f32 c) const {
     pOutPos->lerp(_E8[v5], _E8[v5 + 1], (v6 / v7));
 }
 
-#pragma push
-#pragma global_optimizer off
 void ElectricRailMoving::move() {
     _EC = getRepeatedCoord(_EC + mMovementSpeed);
 
@@ -482,7 +474,6 @@ void ElectricRailMoving::move() {
 
     updatePointPosAndModel();
 }
-#pragma pop
 
 void ElectricRailMoving::exeDisappear() {
     if (MR::isFirstStep(this)) {
@@ -520,6 +511,3 @@ ElectricRailMoving::~ElectricRailMoving() {
 ElectricRailMovingPoint::~ElectricRailMovingPoint() {
 }
 
-void ElectricRailMoving_FORCE_MATCH(TVec3f* pVec, f32 scale) {
-    *pVec *= scale;
-}

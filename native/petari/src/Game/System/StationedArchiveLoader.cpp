@@ -4,22 +4,22 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/NebulaArena.hpp"
+#include "Game/System/GameAssets.hpp"
 
 StationedArchiveLoader::Condition::~Condition() {
 }
 
-JKRHeap* StationedArchiveLoader::Condition::getProperHeap(const MR::StationedFileInfo* pInfo) const {
+NebulaArena* StationedArchiveLoader::Condition::getProperHeap(const MR::StationedFileInfo* pInfo) const {
     return nullptr;
 }
 
-JKRHeap* StationedArchiveLoader::getProperHeap(const MR::StationedFileInfo* pInfo) {
+NebulaArena* StationedArchiveLoader::getProperHeap(const MR::StationedFileInfo* pInfo) {
     switch (pInfo->mHeapType) {
     case MR::StationedFileInfo::HEAP_TYPE_NAPA:
-        return MR::getStationedHeapNapa();
+        return MR::getStationedHeap();
     case MR::StationedFileInfo::HEAP_TYPE_GDDR:
-        return MR::getStationedHeapGDDR3();
+        return MR::getStationedHeap();
     default:
         return nullptr;
     }
@@ -31,7 +31,7 @@ void StationedArchiveLoader::loadResourcesFromTable(const StationedArchiveLoader
             continue;
         }
 
-        JKRHeap* pHeap = rCondition.getProperHeap(pInfo);
+        NebulaArena* pHeap = rCondition.getProperHeap(pInfo);
 
         if (pHeap == nullptr) {
             pHeap = StationedArchiveLoader::getProperHeap(pInfo);
@@ -39,7 +39,7 @@ void StationedArchiveLoader::loadResourcesFromTable(const StationedArchiveLoader
 
         switch (pInfo->mLoadType) {
         case MR::StationedFileInfo::LOAD_TYPE_FILE:
-            MR::loadToMainRAM(pInfo->mArchive, nullptr, pHeap, JKRDvdRipper::ALLOC_DIRECTION_FORWARD);
+            MR::loadToMainRAM(pInfo->mArchive, nullptr, pHeap, GameAssets::ALLOC_DIRECTION_FORWARD);
             break;
         case MR::StationedFileInfo::LOAD_TYPE_MOUNT:
         case MR::StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE_MARIO:
@@ -73,10 +73,10 @@ void StationedArchiveLoader::createAndAddResourcesFromTable(const Condition& rCo
     }
 }
 
-void StationedArchiveLoader::loadScenarioData(JKRHeap* pHeap) {
-    NebulaDisc::FolderEntry dirEntry;
+void StationedArchiveLoader::loadScenarioData(NebulaArena* pHeap) {
+    GameAssets::FolderEntry dirEntry;
 
-    for (u32 i = 0; NebulaDisc::folderEntry("/StageData", i, &dirEntry); i++) {
+    for (u32 i = 0; GameAssets::folderEntry("/StageData", i, &dirEntry); i++) {
         if (!dirEntry.mIsFolder) {
             continue;
         }

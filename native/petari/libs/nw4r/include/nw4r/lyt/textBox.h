@@ -33,18 +33,14 @@ namespace nw4r {
             virtual void SetVtxColorElement(u32, u8);
             virtual void AllocStringBuffer(u16);
             virtual void FreeStringBuffer();
-            virtual u16 SetString(const wchar_t*, u16 dstIdx = 0);
-            virtual u16 SetString(const wchar_t*, u16, u16);
+            virtual u16 SetString(const char16_t*, u16 dstIdx = 0);
+            virtual u16 SetString(const char16_t*, u16, u16);
 
-            const ut::Rect GetTextDrawRect(ut::TextWriterBase< wchar_t >*) const;
+            const ut::Rect GetTextDrawRect(ut::TextWriterBase< char16_t >*) const;
             void SetTextColor(ut::Color, ut::Color);
             void SetFont(const ut::Font*);
             u16 GetStringBufferLength() const;
-            #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-            u32 MakeDrawFlag() const NO_INLINE;
-            #else
             u32 MakeDrawFlag() const;
-            #endif
             f32 GetTextMagH() const;
             f32 GetTextMagV() const;
             void SetTextColor(u32, ut::Color);
@@ -53,7 +49,7 @@ namespace nw4r {
             f32 GetTextAlignMag() const;
 
             void Init(u16);
-            void SetTagProcessor(ut::TagProcessorBase< wchar_t >* pTagProcessor) {
+            void SetTagProcessor(ut::TagProcessorBase< char16_t >* pTagProcessor) {
                 mpTagProcessor = pTagProcessor;
             }
 
@@ -85,13 +81,13 @@ namespace nw4r {
                 return mBits.textAlignment;
             }
 
-            wchar_t* mTextBuf;
+            char16_t* mTextBuf;
             ut::Color mTextColors[2];
             const ut::Font* mpFont;
             Size mFontSize;
             f32 mLineSpace;
             f32 mCharSpace;
-            ut::TagProcessorBase< wchar_t >* mpTagProcessor;
+            ut::TagProcessorBase< char16_t >* mpTagProcessor;
             u16 mTextBufBytes;
             u16 mTextLen;
             u8 mTextPosition;

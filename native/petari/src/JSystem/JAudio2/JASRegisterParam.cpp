@@ -23,7 +23,7 @@ void JASRegisterParam::write(JASRegisterParam::RegID regID, u32 writeValue) {
         return;
     }
 
-    switch (regID) {
+    switch (static_cast< u32 >(regID)) {
     case 32:
         _0[0] = JSUHiByte(writeValue);
         _0[1] = JSULoByte(writeValue);
@@ -73,7 +73,7 @@ u32 JASRegisterParam::read(JASRegisterParam::RegID regID) {
     }
 
     u32 result = 0;
-    switch (regID) {
+    switch (static_cast< u32 >(regID)) {
     case 32:
         result = ((_0[0] & 0xff) << 8) | (_0[1] & 0xff);
         break;

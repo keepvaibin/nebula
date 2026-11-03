@@ -18,8 +18,8 @@ public:
     f32 getParam(f32) const;
     f32 getNearestParam(const TVec3f&, f32) const;
 
-    /* 0x00 */ LinearRailPart* mRailPartLinear;
-    /* 0x04 */ BezierRailPart* mRailPartBezier;
+    LinearRailPart* mRailPartLinear;
+    BezierRailPart* mRailPartBezier;
 };
 
 class LinearRailPart {
@@ -31,7 +31,7 @@ public:
 
     f32 getNearestParam(const TVec3f&, f32) const;
 
-    /* 0x00 */ TVec3f mStart;        // start point of the rail
-    /* 0x0C */ TVec3f mCtrlDegree1;  // synonymous with "velocity" of the rail
-    /* 0x18 */ f32 mLength;          // length of the rail
+    TVec3f mStart;        // start point of the rail
+    TVec3f mCtrlDegree1;  // synonymous with "velocity" of the rail
+    f32 mLength;          // length of the rail
 };

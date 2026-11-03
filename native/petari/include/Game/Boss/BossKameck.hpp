@@ -40,18 +40,18 @@ public:
     void startDemo();
     void hitBeam(s32);
 
-    /* 0x8C */ const char* mModelName;
-    /* 0x90 */ TQuat4f _90;
-    /* 0xA0 */ TVec3f _A0;
-    /* 0xAC */ BossKameckSequencer* mSequencer;
-    /* 0xB0 */ KameckHolder* mKameckHolder;
-    /* 0xB4 */ ActorJointCtrl* mJointCtrl;
-    /* 0xB8 */ ActiveActorList* mActorList;
-    /* 0xBC */ BossKameckBeamEventListener* mBeamEventListener;
-    /* 0xC0 */ BossKameckMoveRail** mMoveRail;
-    /* 0xC4 */ s32 mMoveRailNum;
-    /* 0xC8 */ TVec3f _C8;
-    /* 0xD4 */ s32 mObjArg7;
+    const char* mModelName;
+    TQuat4f _90;
+    TVec3f _A0;
+    BossKameckSequencer* mSequencer;
+    KameckHolder* mKameckHolder;
+    ActorJointCtrl* mJointCtrl;
+    ActiveActorList* mActorList;
+    BossKameckBeamEventListener* mBeamEventListener;
+    BossKameckMoveRail** mMoveRail;
+    s32 mMoveRailNum;
+    TVec3f _C8;
+    s32 mObjArg7;
 };
 
 class BossKameckBeamEventListener : public KameckBeamEventListener {
@@ -63,7 +63,7 @@ public:
         mBossKameck->hitBeam(type);
     }
 
-    /* 0x04 */ BossKameck* mBossKameck;
+    BossKameck* mBossKameck;
 };
 
 namespace MR {

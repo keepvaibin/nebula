@@ -1,17 +1,8 @@
 #include "Game/Camera/CameraSubjective.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
-
-void CameraSubjective_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-    (void)2.0f;
-}
 
 namespace {
     static const f32 sDistance = 200.0f;
@@ -45,16 +36,16 @@ CameraTargetObj* CameraSubjective::calc() {
     TVec2f accel(0.0f, 0.0f);
 
     TVec2f stick(0.0f, 0.0f);
-    if (MR::getSubPadStickX(WPAD_CHAN0) < -::sPadStickPlay) {
-        stick.x = (MR::getSubPadStickX(WPAD_CHAN0) + ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
-    } else if (MR::getSubPadStickX(WPAD_CHAN0) > ::sPadStickPlay) {
-        stick.x = (MR::getSubPadStickX(WPAD_CHAN0) - ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
+    if (MR::getMoveStickX(PLAYER_1) < -::sPadStickPlay) {
+        stick.x = (MR::getMoveStickX(PLAYER_1) + ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
+    } else if (MR::getMoveStickX(PLAYER_1) > ::sPadStickPlay) {
+        stick.x = (MR::getMoveStickX(PLAYER_1) - ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
     }
 
-    if (MR::getSubPadStickY(WPAD_CHAN0) < -::sPadStickPlay) {
-        stick.y = (MR::getSubPadStickY(WPAD_CHAN0) + ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
-    } else if (MR::getSubPadStickY(WPAD_CHAN0) > ::sPadStickPlay) {
-        stick.y = (MR::getSubPadStickY(WPAD_CHAN0) - ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
+    if (MR::getMoveStickY(PLAYER_1) < -::sPadStickPlay) {
+        stick.y = (MR::getMoveStickY(PLAYER_1) + ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
+    } else if (MR::getMoveStickY(PLAYER_1) > ::sPadStickPlay) {
+        stick.y = (MR::getMoveStickY(PLAYER_1) - ::sPadStickPlay) / (1.0f - ::sPadStickPlay);
     }
 
     if (stick.x > 1.0f) {

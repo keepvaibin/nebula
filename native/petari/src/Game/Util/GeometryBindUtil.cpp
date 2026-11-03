@@ -33,7 +33,7 @@ void BindCone::calcVertexPosition() {
 }
 
 void BindCone::calcGeneratrixLength() {
-    mGeneratrixLength = MR::fastSqrtf(mHeight * mHeight + mRadius * mRadius);
+    mGeneratrixLength = NebulaSqrt(mHeight * mHeight + mRadius * mRadius);
 }
 
 void BindCone::setPosition(const TVec3f& rPosition) {
@@ -129,7 +129,6 @@ namespace MR {
 
         if (within && wasInside != isInside) {
             if (pResult != nullptr) {
-                TVec3f correction(nextPosition - contactDirection * (distance + rSphere.getRadius()));
                 pResult->mContactPosition = closest;
                 pResult->mNormal = -contactDirection;
                 pResult->mIsBound = true;

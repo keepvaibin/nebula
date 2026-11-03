@@ -13,8 +13,8 @@ public:
 
     void exeSync();
 
-    /* 0x8C */ MsgSharedGroup* mSharedGroup;
-    /* 0x90 */ s32 mWaitSyncTime;
+    MsgSharedGroup* mSharedGroup;
+    s32 mWaitSyncTime;
 };
 
 class PressureBase : public LiveActor {
@@ -53,15 +53,15 @@ public:
     bool isShotTypeOnGravity() const;
     bool isShotTypeFollow() const;
 
-    /* 0x8C */ JointControlDelegator< PressureBase >* mJointController;
-    /* 0x90 */ TVec3f mFront;
-    /* 0x9C */ f32 mRelaxAngle;
-    /* 0xA0 */ f32 mBaseAngle;
-    /* 0xA4 */ s32 mWaitTime;
-    /* 0xA8 */ f32 mBallSpeed;
-    /* 0xAC */ s32 mShotType;
-    /* 0xB0 */ bool mIsShortShot;
-    /* 0xB4 */ PressureMessenger* mMessenger;
-    /* 0xB8 */ MsgSharedGroup* mGroup;
-    /* 0xBC */ bool _BC;
+    JointControlDelegator< PressureBase >* mJointController;
+    TVec3f mFront;
+    f32 mRelaxAngle;
+    f32 mBaseAngle;
+    s32 mWaitTime;
+    f32 mBallSpeed;
+    s32 mShotType;
+    bool mIsShortShot;
+    PressureMessenger* mMessenger;
+    MsgSharedGroup* mGroup;
+    bool _BC;
 };

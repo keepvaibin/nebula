@@ -5,14 +5,14 @@
 class CameraHolder;
 class CameraParamChunk;
 class CameraParamChunkID;
-class JKRHeap;
+class NebulaArena;
 
 class CameraParamChunkHolder : public NameObj {
 public:
     CameraParamChunkHolder(CameraHolder* pCameraHolder, const char* pName);
     virtual ~CameraParamChunkHolder();
 
-    CameraParamChunk* createChunk(const CameraParamChunkID&, JKRHeap*);
+    CameraParamChunk* createChunk(const CameraParamChunkID&, NebulaArena*);
     CameraParamChunk* getChunk(const CameraParamChunkID&);
     void sort();
     void loadCameraParameters();
@@ -22,10 +22,10 @@ public:
     void loadFile(s32);
     void arrangeChunk(CameraParamChunk*);
 
-    /* 0x0C */ CameraHolder* mCameraHolder;
-    /* 0x10 */ u32 mChunkCapacity;
-    /* 0x14 */ u32 mNrChunks;
-    /* 0x18 */ CameraParamChunk** mChunks;
-    /* 0x1C */ u32 mCameraVersion;
-    /* 0x20 */ bool mIsSorted;
+    CameraHolder* mCameraHolder;
+    u32 mChunkCapacity;
+    u32 mNrChunks;
+    CameraParamChunk** mChunks;
+    u32 mCameraVersion;
+    bool mIsSorted;
 };

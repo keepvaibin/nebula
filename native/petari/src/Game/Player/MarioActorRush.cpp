@@ -1,7 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#endif
 #include "Game/Map/HitInfo.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/Player/MarioActor.hpp"
@@ -16,10 +14,6 @@
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaHost.hpp"
-
-void MarioActorRush_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-}
 
 void MarioActor::settingRush() {
     rushDropThrowMemoSensor();
@@ -202,9 +196,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
     bool launched = false;
     if (_924 && (!pInfo->_1C || _924->mHost == pInfo->_1C)) {
         _934 = false;
-#ifdef TARGET_PC
         NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 0);
-#endif
         _935 = true;
         mMario->stopJump();
         s32 mode = pInfo->_4;

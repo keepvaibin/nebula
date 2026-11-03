@@ -15,14 +15,14 @@ public:
     virtual void movement();
     virtual void draw() const;
 
-    void initDisplayList();
+    void initMesh();
     void loadMaterial() const;
     void sendGD();
 
-    /* 0x8C */ const OceanRingPipe* mRingPipe;
-    /* 0x90 */ f32 mTexU;
-    /* 0x94 */ JUTTexture* mWaterPipeIndirectTex;
-    /* 0x98 */ JUTTexture* mWaterPipeHighLightTex;
+    const OceanRingPipe* mRingPipe;
+    f32 mTexU;
+    JUTTexture* mWaterPipeIndirectTex;
+    JUTTexture* mWaterPipeHighLightTex;
     // The pipe's surface as the renderer draws it.
     NativeMesh mMesh;
 };

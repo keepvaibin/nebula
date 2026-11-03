@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Util/EventUtil.hpp"
@@ -5,7 +6,6 @@
 #include <cctype>
 #include <cstdarg>
 #include <cstdio>
-#include <wstring.h>
 
 #define CENTISEC_PER_SEC 100
 #define SEC_PER_MIN 60
@@ -15,22 +15,90 @@
 #define FRAME_PER_HOUR (FRAME_PER_SEC * SEC_PER_MIN * MIN_PER_HOUR)
 
 extern "C" {
-int strcasecmp(const char*, const char*);
-int vswprintf(wchar_t*, size_t, const wchar_t*, va_list);
 };
+
+namespace {
+    // A decimal number at p after any spaces; false if there is none.
+    bool scanInt(const char*& rP, int* pValue) {
+        char* pEnd;
+        const long value = strtol(rP, &pEnd, 10);
+        if (pEnd == rP) {
+            return false;
+        }
+        rP = pEnd;
+        *pValue = static_cast< int >(value);
+        return true;
+    }
+
+    bool scanFloat(const char*& rP, f32* pValue) {
+        const char* p = rP;
+        while (*p == ' ' || (*p >= '\t' && *p <= '\r')) {
+            p++;
+        }
+        const bool negative = *p == '-';
+        if (*p == '-' || *p == '+') {
+            p++;
+        }
+        double value = 0.0;
+        double scale = 1.0;
+        bool any = false;
+        for (; *p >= '0' && *p <= '9'; p++) {
+            value = value * 10.0 + (*p - '0');
+            any = true;
+        }
+        if (*p == '.') {
+            for (p++; *p >= '0' && *p <= '9'; p++) {
+                value = value * 10.0 + (*p - '0');
+                scale *= 10.0;
+                any = true;
+            }
+        }
+        if (!any) {
+            return false;
+        }
+        if (*p == 'e' || *p == 'E') {
+            const char* pExponent = p + 1;
+            int exponent = 0;
+            if (scanInt(pExponent, &exponent)) {
+                p = pExponent;
+                for (; exponent > 0; exponent--) {
+                    value *= 10.0;
+                }
+                for (; exponent < 0; exponent++) {
+                    scale *= 10.0;
+                }
+            }
+        }
+        rP = p;
+        *pValue = static_cast< f32 >((negative ? -value : value) / scale);
+        return true;
+    }
+
+    // The list's opening brace after any spaces.
+    bool scanOpen(const char*& rP) {
+        while (*rP == ' ' || (*rP >= '\t' && *rP <= '\r')) {
+            rP++;
+        }
+        if (*rP != '{') {
+            return false;
+        }
+        rP++;
+        return true;
+    }
+}  // namespace
 
 namespace MR {
     struct Tag {
-        /* 0x00 */ u16 _0;
-        /* 0x02 */ u8 mDataSize;
-        /* 0x03 */ u8 _3;
-        /* 0x04 */ wchar_t mBuffer[1];
+        u16 _0;
+        u8 mDataSize;
+        u8 _3;
+        char16_t mBuffer[1];
     };
 
     struct TagHeader {
-        /* 0x00 */ u8 mDataSize;
-        /* 0x01 */ u8 mGroup;
-        /* 0x02 */ u16 mTag;
+        u8 mDataSize;
+        u8 mGroup;
+        u16 mTag;
     };
 
     void addFilePrefix(char* pDst, u32 size, const char* pChild, const char* pParent) {
@@ -38,22 +106,22 @@ namespace MR {
             pChild++;
         }
 
-        snprintf(pDst, size, "%s/%s", pParent, pChild);
+        nebula_snprintf(pDst, size, "%s/%s", pParent, pChild);
     }
 
-    void makeDateString(wchar_t* pDst, s32 size, s32 year, s32 month, s32 day) {
-        const wchar_t* pMessage = MR::getGameMessageDirect("System_Date000");
+    void makeDateString(char16_t* pDst, s32 size, s32 year, s32 month, s32 day) {
+        const char16_t* pMessage = MR::getGameMessageDirect("System_Date000");
 
         ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, year, month, day);
     }
 
-    void makeTimeString(wchar_t* pDst, s32 size, s32 hour, s32 minute) {
-        const wchar_t* pMessage = MR::getGameMessageDirect("System_Time002");
+    void makeTimeString(char16_t* pDst, s32 size, s32 hour, s32 minute) {
+        const char16_t* pMessage = MR::getGameMessageDirect("System_Time002");
 
         ReplaceTagFunction::ReplaceArgs(pDst, size, pMessage, hour, minute);
     }
 
-    void makeClearTimeString(wchar_t* pDst, u32 frame) {
+    void makeClearTimeString(char16_t* pDst, u32 frame) {
         s32 minute;
         s32 second;
         s32 centisecond;
@@ -70,12 +138,12 @@ namespace MR {
             centisecond = ((signedFrame % FRAME_PER_SEC) * CENTISEC_PER_SEC) / FRAME_PER_SEC;
         }
 
-        const wchar_t* pMessage = MR::getGameMessageDirect("System_Time000");
+        const char16_t* pMessage = MR::getGameMessageDirect("System_Time000");
 
         ReplaceTagFunction::ReplaceArgs(pDst, 9, pMessage, 0, minute, second, centisecond);
     }
 
-    void makeMinuteAndSecondString(wchar_t* pDst, u32 frame) {
+    void makeMinuteAndSecondString(char16_t* pDst, u32 frame) {
         s32 minute;
         s32 second;
 
@@ -87,22 +155,22 @@ namespace MR {
             second = (frame % FRAME_PER_MIN) / FRAME_PER_SEC;
         }
 
-        const wchar_t* pMessage = MR::getGameMessageDirect("System_Time001");
+        const char16_t* pMessage = MR::getGameMessageDirect("System_Time001");
 
         ReplaceTagFunction::ReplaceArgs(pDst, 16, pMessage, 0, minute, second);
     }
 
-    wchar_t* addNumberFontTag(wchar_t* pDst, int tag) {
-        return MR::addNumberFontTag(pDst, L"%d", tag);
+    char16_t* addNumberFontTag(char16_t* pDst, int tag) {
+        return MR::addNumberFontTag(pDst, u"%d", tag);
     }
 
     char* removeExtensionString(char* pDst, u32 size, const char* pPath) {
-        snprintf(pDst, size, "%s", pPath);
+        nebula_snprintf(pDst, size, "%s", pPath);
 
         char* pExtSeparator = strrchr(pDst, '.');
         char* pDirSeparator = strrchr(pDst, '/');
 
-        if (pExtSeparator < pDirSeparator || pDirSeparator + 1 == pExtSeparator) {
+        if (pExtSeparator < pDirSeparator || (pDirSeparator != nullptr && pDirSeparator + 1 == pExtSeparator)) {
             return pDirSeparator;
         }
 
@@ -111,11 +179,11 @@ namespace MR {
         return pDirSeparator;
     }
 
-    void makeRaceBestTimeString(wchar_t* pDst, int raceId) {
+    void makeRaceBestTimeString(char16_t* pDst, int raceId) {
         MR::makeClearTimeString(pDst, getRaceBestTime(raceId));
     }
 
-    void makeRaceCurrentTimeString(wchar_t* pDst) {
+    void makeRaceCurrentTimeString(char16_t* pDst) {
         MR::makeClearTimeString(pDst, getRaceCurrentTime());
     }
 
@@ -123,18 +191,18 @@ namespace MR {
         strncpy(pDst, pSrc, num);
     }
 
-    void copyString(wchar_t* pDst, const wchar_t* pSrc, u32 num) {
-        wcsncpy(pDst, pSrc, num);
+    void copyString(char16_t* pDst, const char16_t* pSrc, u32 num) {
+        MR::copyText(pDst, pSrc, num);
     }
 
-    wchar_t* addPictureFontCode(wchar_t* pDst, int code) {
+    char16_t* addPictureFontCode(char16_t* pDst, int code) {
         pDst[0] = code;
         pDst[1] = '\0';
 
         return &pDst[1];
     }
 
-    wchar_t* addPictureFontTag(wchar_t* pDst, int tag) {
+    char16_t* addPictureFontTag(char16_t* pDst, int tag) {
         Tag* pTag = reinterpret_cast< Tag* >(pDst);
 
         pTag->_0 = 26;
@@ -146,34 +214,28 @@ namespace MR {
         return &pTag->mBuffer[1];
     }
 
-    wchar_t* addPictureFontTagPlayerIcon(wchar_t* pDst) {
-        int tag = isPlayerLuigi() ? 76 : 66;
-
-        return MR::addPictureFontTag(pDst, tag);
-    }
-
-    wchar_t* addNewLine(wchar_t* pDst) {
+    char16_t* addNewLine(char16_t* pDst) {
         pDst[0] = '\n';
         pDst[1] = '\0';
 
         return &pDst[1];
     }
 
-    wchar_t* addNumberFontTag(wchar_t* pDst, const wchar_t* pFmt, ...) {
+    char16_t* addNumberFontTag(char16_t* pDst, const char16_t* pFmt, ...) {
         *pDst++ = 0x1A;
         TagHeader* pTag = reinterpret_cast< TagHeader* >(pDst);
-        pDst += sizeof(TagHeader) / sizeof(wchar_t);
+        pDst += sizeof(TagHeader) / sizeof(char16_t);
 
         va_list args;
         va_start(args, pFmt);
 
-        int num = vswprintf(pDst, 256, pFmt, args);
+        int num = MR::formatTextV(pDst, 256, pFmt, args);
         va_end(args);
 
         pDst += num;
         pTag->mGroup = 10;
         pTag->mTag = 0;
-        pTag->mDataSize = num * sizeof(wchar_t) + sizeof(TagHeader) + sizeof(wchar_t);
+        pTag->mDataSize = num * sizeof(char16_t) + sizeof(TagHeader) + sizeof(char16_t);
         *pDst = '\0';
 
         return pDst;
@@ -197,21 +259,15 @@ namespace MR {
         pDst[num] = '\0';
     }
 
-    int convertUTF16ToASCII(char* pDst, const wchar_t* pSrc, s32 num) {
+    int convertUTF16ToASCII(char* pDst, const char16_t* pSrc, s32 num) {
         u32 i;
 
         for (i = 0; i < num - 1; pDst++, pSrc++, i++) {
-            const char* p = reinterpret_cast< const char* >(pSrc);
-
-            if (p[0] != '\0') {
+            if (*pSrc == 0 || *pSrc > 0xFF) {
                 break;
             }
 
-            if (p[1] == '\0') {
-                break;
-            }
-
-            *pDst = p[1];
+            *pDst = static_cast< char >(*pSrc);
         }
 
         *pDst = '\0';
@@ -220,7 +276,7 @@ namespace MR {
     }
 
     int strcasecmp(const char* pStr1, const char* pStr2) {
-        return ::strcasecmp(pStr1, pStr2);
+        return ::nebula_stricmp(pStr1, pStr2);
     }
 
     bool isEqualString(const char* pStr1, const char* pStr2) {
@@ -228,7 +284,7 @@ namespace MR {
     }
 
     bool isEqualStringCase(const char* pStr1, const char* pStr2) {
-        return strcasecmp(pStr1, pStr2) == 0;
+        return ::nebula_stricmp(pStr1, pStr2) == 0;
     }
 
     bool isEqualSubString(const char* pStr, const char* pSubStr) {
@@ -241,7 +297,7 @@ namespace MR {
 
     bool isDigitStringTail(const char* pStr, int digitNum) {
         for (int i = 1; i <= digitNum; i++) {
-            int ch = pStr[strlen(pStr) - i];
+            int ch = static_cast< unsigned char >(pStr[strlen(pStr) - i]);
 
             if (isdigit(ch) == 0) {
                 return false;
@@ -265,15 +321,15 @@ namespace MR {
         return pStr == nullptr || MR::isEqualString(pStr, "");
     }
 
-    bool isMessageEditorNextTag(const wchar_t* pStr) {
+    bool isMessageEditorNextTag(const char16_t* pStr) {
         const Tag* pTag = reinterpret_cast< const Tag* >(pStr);
         u8 v1 = pTag->_3;
-        wchar_t v2 = pTag->mBuffer[0];
+        char16_t v2 = pTag->mBuffer[0];
 
         return v1 == 1 && v2 == 1;
     }
 
-    int getStringLengthWithMessageTag(const wchar_t* pMessage) {
+    int getStringLengthWithMessageTag(const char16_t* pMessage) {
         int length = 0;
 
         while (*pMessage != '\0') {
@@ -302,7 +358,11 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%d", pDst);
+        const char* p = pSrc;
+        int value;
+        if (scanInt(p, &value)) {
+            *pDst = value;
+        }
     }
 
     void scan16(const char* pSrc, const char* pSubStr, u16* pDst) {
@@ -312,7 +372,10 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%d", &temp);
+        const char* p = pSrc;
+        if (!scanInt(p, &temp)) {
+            return;
+        }
 
         *pDst = temp;
     }
@@ -324,7 +387,10 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%d", &temp);
+        const char* p = pSrc;
+        if (!scanInt(p, &temp)) {
+            return;
+        }
 
         *pDst = temp;
     }
@@ -334,7 +400,8 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%ff", pDst);
+        const char* p = pSrc;
+        scanFloat(p, pDst);
     }
 
     void scanu8x4(const char* pSrc, const char* pSubStr, u8* pDst) {
@@ -344,7 +411,16 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t{%d,%d,%d,%d}", &temp[0], &temp[1], &temp[2], &temp[3]);
+        const char* p = pSrc;
+        if (!scanOpen(p)) {
+            return;
+        }
+        for (s32 i = 0; i < 4 && scanInt(p, &temp[i]); i++) {
+            if (*p != ',') {
+                break;
+            }
+            p++;
+        }
 
         for (int i = 0; i < ARRAY_SIZE(temp); i++) {
             pDst[i] = temp[i];
@@ -358,7 +434,16 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t{%d,%d,%d,%d}", &temp[0], &temp[1], &temp[2], &temp[3]);
+        const char* p = pSrc;
+        if (!scanOpen(p)) {
+            return;
+        }
+        for (s32 i = 0; i < 4 && scanInt(p, &temp[i]); i++) {
+            if (*p != ',') {
+                break;
+            }
+            p++;
+        }
 
         for (int i = 0; i < ARRAY_SIZE(temp); i++) {
             pDst[i] = temp[i];
@@ -370,6 +455,18 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t{%ff,%ff,%ff,%ff}", &pDst[0], &pDst[1], &pDst[2], &pDst[3]);
+        const char* p = pSrc;
+        if (!scanOpen(p)) {
+            return;
+        }
+        for (s32 i = 0; i < 4 && scanFloat(p, &pDst[i]); i++) {
+            if (*p == 'f') {
+                p++;
+            }
+            if (*p != ',') {
+                break;
+            }
+            p++;
+        }
     }
 };  // namespace MR

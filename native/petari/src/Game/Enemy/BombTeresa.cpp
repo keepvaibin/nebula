@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointController.hpp"
 #include "Game/Util/JointUtil.hpp"
@@ -27,17 +27,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
-
-void BombTeresa_FORCE_MATCH_SDATA2() {
-    (void)70.0f;
-    (void)80.0f;
-    (void)20.0f;
-    (void)85.0f;
-    (void)0.1f;
-    (void)0.6f;
-}
+#include <nebula_math.h>
 
 namespace NrvBombTeresa {
     NEW_NERVE(BombTeresaNrvAppear, BombTeresa, Appear);
@@ -233,7 +223,7 @@ void BombTeresa::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         } else if (isEnableHitExplosionToEnemy()) {
             if (MR::sendMsgEnemyAttackExplosion(pReceiver, pSender)) {
-                MR::tryRumbleDefaultHit(this, WPAD_CHAN0);
+                MR::tryRumbleDefaultHit(this, PLAYER_1);
                 MR::zeroVelocity(this);
                 setNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion));
             } else {
@@ -637,8 +627,8 @@ void BombTeresa::exeDrift() {
     MR::vecBlend(_C4, v13, &_C4, MR::calcNerveEaseInRate(this, 15));
     MR::turnDirectionToTarget(this, &_AC, *MR::getPlayerPos(), 0.0f);
     if (_E8 <= 0) {
-        if (MR::isPadSwing(WPAD_CHAN0)) {
-            MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        if (MR::isSpin(PLAYER_1)) {
+            MR::tryRumblePadMiddle(this, PLAYER_1);
             _E8 = 40;
             _E0 += 20.0f;
             _E4 += 20.0f;
@@ -674,7 +664,7 @@ void BombTeresa::exeDrift() {
 void BombTeresa::exeDriftRelease() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Drift");
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::startSound(this, "SE_EM_BOMBTERE_THROW");
     }
 
@@ -702,7 +692,7 @@ void BombTeresa::endBindStarPointer() {
 void BombTeresa::exeExplosion() {
     if (MR::isFirstStep(this)) {
         MR::shakeCameraNormalStrong();
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::deleteEffect(this, "SpinBlur");
         MR::emitEffect(this, "Explosion");
         MR::hideModel(this);
@@ -764,11 +754,11 @@ void BombTeresa::exeReadyRestart() {
     }
 }
 
-bool BombTeresa::isTouchTongue() const NO_INLINE {
+bool BombTeresa::isTouchTongue() const {
     return isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift));
 }
 
-bool BombTeresa::isEnableDrift() const NO_INLINE {
+bool BombTeresa::isEnableDrift() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvBallAppear)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShadowAppear)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDriftRelease)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
@@ -779,7 +769,7 @@ bool BombTeresa::isEnableDrift() const NO_INLINE {
     return true;
 }
 
-bool BombTeresa::isEnablePointBind() const NO_INLINE {
+bool BombTeresa::isEnablePointBind() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvWait)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvWander)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvChase)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvAttackTongueFailed)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDirectTackleSign)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDirectTackle)) ||
@@ -790,7 +780,7 @@ bool BombTeresa::isEnablePointBind() const NO_INLINE {
     return false;
 }
 
-bool BombTeresa::isEnableDisperse() const NO_INLINE {
+bool BombTeresa::isEnableDisperse() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift))) {
         return false;
     }
@@ -798,7 +788,7 @@ bool BombTeresa::isEnableDisperse() const NO_INLINE {
     return isEnableDrift();
 }
 
-bool BombTeresa::isEnableHitExplosionToPlayer() const NO_INLINE {
+bool BombTeresa::isEnableHitExplosionToPlayer() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift))) {
         return MR::isGreaterStep(this, 190);
     }
@@ -806,7 +796,7 @@ bool BombTeresa::isEnableHitExplosionToPlayer() const NO_INLINE {
     return isEnableHitExplosion();
 }
 
-bool BombTeresa::isEnableHitExplosionToEnemy() const NO_INLINE {
+bool BombTeresa::isEnableHitExplosionToEnemy() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDriftRelease))) {
         return true;
     }
@@ -814,7 +804,7 @@ bool BombTeresa::isEnableHitExplosionToEnemy() const NO_INLINE {
     return false;
 }
 
-bool BombTeresa::isEnableHitExplosion() const NO_INLINE {
+bool BombTeresa::isEnableHitExplosion() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvBallAppear)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShadowAppear)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) ||
@@ -825,7 +815,7 @@ bool BombTeresa::isEnableHitExplosion() const NO_INLINE {
     return true;
 }
 
-bool BombTeresa::isEnableStarPieceAttack() const NO_INLINE {
+bool BombTeresa::isEnableStarPieceAttack() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvBallAppear)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShadowAppear)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDrift)) ||
@@ -836,7 +826,7 @@ bool BombTeresa::isEnableStarPieceAttack() const NO_INLINE {
     return true;
 }
 
-bool BombTeresa::isEnableShockWave() const NO_INLINE {
+bool BombTeresa::isEnableShockWave() const {
     if (isNerve(GET_NERVE(BombTeresa, BombTeresaNrvExplosion)) || isNerve(GET_NERVE(BombTeresa, BombTeresaNrvShock)) ||
         isNerve(GET_NERVE(BombTeresa, BombTeresaNrvDisperse))) {
         return false;
@@ -888,6 +878,3 @@ bool BombTeresa::requestDisperse() {
     return true;
 }
 
-void BombTeresa_FORCE_MATCH(TVec3f* pVec, f32 scale) {
-    *pVec *= scale;
-}

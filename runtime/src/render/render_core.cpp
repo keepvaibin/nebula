@@ -1,5 +1,5 @@
-// RenderCore: decodes the game's GX command stream and drives the renderer.
-// renderer_api.cpp exposes it through the galaxy::render API in renderer_api.h.
+// RenderCore: takes the game's records and drives the renderer.
+// render_api.cpp exposes it through the galaxy::render API in render_api.h.
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -7,6 +7,7 @@
 #define NOMINMAX
 #endif
 #pragma warning(push, 0)
+#include "galaxy/portable.h"
 #include <Windows.h>
 #if !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
@@ -19,26 +20,25 @@
 #include <immintrin.h>
 #endif
 #endif
+#include "galaxy/loss_report.h"
+#include "galaxy/run_options.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
 
+#include "galaxy/render/present_clock.h"
+#include "galaxy/portable.h"
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/native_shaders.h"
-#include "galaxy/render/dependency_range_memo.h"
-#include "galaxy/render/fifo_cache_fingerprint.h"
-#include "galaxy/render/rt_tev_eval.h"
+#include "galaxy/host_env.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
-#include "galaxy/render/enhanced_lighting.h"
-#include "galaxy/render/line_point_raster.h"
+#include "galaxy/render/line_point_params.h"
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/rt_surfaces.h"
-#include "galaxy/render/texture_sampling.h"
 #include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/shader_gen.h"
-#include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
+#include "galaxy/render/draw_constants.h"
+#include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/content_viewport.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -58,7 +58,9 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <fstream>
 #include <set>
+#include <tuple>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -69,35 +71,35 @@
 namespace galaxy::render {
 
 std::uint32_t pack_sampler_key(
-    const TexMode& mode,
+    const TextureSampler& mode,
     bool generated_mips,
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16,
     bool arbitrary,
-    std::uint8_t efb_scale_log2_x32) noexcept {
+    std::uint8_t mip_lines_log2_x32) noexcept {
     std::uint32_t min_filter =
-        static_cast<std::uint32_t>(mode.min_filter) & 0x7u;
+        min_filter_code(mode) & 0x7u;
     std::uint32_t min_lod =
-        static_cast<std::uint32_t>(mode.min_lod_x16) & 0xFFu;
+        static_cast<std::uint32_t>(lod_x16(mode.min_lod)) & 0xFFu;
     std::uint32_t max_lod =
-        static_cast<std::uint32_t>(mode.max_lod_x16) & 0xFFu;
+        static_cast<std::uint32_t>(lod_x16(mode.max_lod)) & 0xFFu;
     const bool source_mips = (min_filter & 0x3u) != 0u;
     bool full_chain = false;
     if (generated_mips && mip_levels > 1u &&
-        min_filter == static_cast<std::uint32_t>(TexMinFilter::Linear) &&
-        mode.mag_filter == TexMagFilter::Linear) {
+        min_filter == 4u &&
+        mode.mag_linear) {
         min_filter =
-            static_cast<std::uint32_t>(TexMinFilter::LinearMipLinear);
+            6u;
         max_lod = std::min<std::uint32_t>(
             0xFFu,
             static_cast<std::uint32_t>(mip_levels - 1u) * 16u);
         full_chain = true;
     }
     std::uint32_t lod_bias =
-        static_cast<std::uint32_t>(static_cast<std::uint8_t>(mode.lod_bias_x32)) & 0xFFu;
+        static_cast<std::uint32_t>(static_cast<std::uint8_t>(lod_bias_x32(mode.lod_bias))) & 0xFFu;
     if (arbitrary && source_mips) {
-        const int bias = static_cast<int>(static_cast<std::int8_t>(mode.lod_bias_x32)) +
-                         static_cast<int>(efb_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
+        const int bias = static_cast<int>(static_cast<std::int8_t>(lod_bias_x32(mode.lod_bias))) +
+                         static_cast<int>(mip_lines_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
         lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
             static_cast<std::int8_t>(std::clamp(bias, -128, 127))));
         max_lod = 0xFFu;
@@ -107,10 +109,7 @@ std::uint32_t pack_sampler_key(
             min_lod = min_lod == 0u ? 0u : std::min<std::uint32_t>(0xFFu, min_lod + lod_shift_x16);
             max_lod = std::min<std::uint32_t>(0xFFu, max_lod + lod_shift_x16);
         } else if (!full_chain) {
-            min_filter = static_cast<std::uint32_t>(
-                min_filter >= static_cast<std::uint32_t>(TexMinFilter::Linear)
-                    ? TexMinFilter::LinearMipLinear
-                    : TexMinFilter::NearMipNear);
+            min_filter = min_filter >= 4u ? 6u : 1u;  // between levels if linear, else the nearest level
             min_lod = 0u;
             max_lod = lod_shift_x16;
         }
@@ -118,7 +117,7 @@ std::uint32_t pack_sampler_key(
     return
           (static_cast<std::uint32_t>(mode.wrap_s) & 0x3u)
         | ((static_cast<std::uint32_t>(mode.wrap_t) & 0x3u) << 2)
-        | ((static_cast<std::uint32_t>(mode.mag_filter) & 0x1u) << 4)
+        | (((mode.mag_linear ? 1u : 0u) & 0x1u) << 4)
         | (min_filter << 5)
         | (lod_bias << 8)
         | (min_lod << 16)
@@ -129,78 +128,8 @@ void boot_step(const char* step) noexcept;
 
 namespace {
 
-static_assert(kFrameWidth == 640u && kFrameHeight == 456u);
 
-// Each texture coordinate's scale (texels per unit, s and t). A material sets them (BP 0x30-0x3F); after the game's own
-// TEV order, indirect order or texture changes (`derive`) a coordinate the stages sample takes the size of the texture
-// sampled with it - indirect stages, then TEV stages, the last one winning - as GX re-derived them then.
-std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const NativeDrawState& draw, bool derive) {
-    std::array<std::array<std::uint32_t, 2>, 8> scales{};
-    for (unsigned c = 0; c < 8u; ++c) {
-        scales[c] = {draw.coord[c].size_minus_one[0] + 1u, draw.coord[c].size_minus_one[1] + 1u};
-    }
-    if (!derive) {
-        return scales;
-    }
-    const GenMode gm = draw.gen;
-    for (unsigned i = 0; i < gm.num_ind_stages && i < 4u; ++i) {
-        const TexImage image = draw.texture[draw.ind_order[i].map].image;
-        scales[draw.ind_order[i].coord] = {std::max<std::uint32_t>(image.width, 1u),
-                                                   std::max<std::uint32_t>(image.height, 1u)};
-    }
-    for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        const TevOrder order = draw.tev[s].order;
-        if (order.tex_enable) {
-            const TexImage image = draw.texture[order.texmap].image;
-            scales[order.texcoord & 7u] = {std::max<std::uint32_t>(image.width, 1u),
-                                           std::max<std::uint32_t>(image.height, 1u)};
-        }
-    }
-    return scales;
-}
-
-std::atomic<unsigned> s_layer_2d_scale{0u};
-// The 3D image's scale as shown, at each scene's begin (scene_display_scale).
-std::atomic<unsigned> s_scene_display_scale{0u};
-
-// A TEV colour register (an 8-bit sRGB colour over 255) with `share` of its chroma taken, its luminance kept (linear
-// light, Rec. 709): a clear ice or crystal draw's tint (rt_materials.h kRtIceTintKept). A signed register outside 0..1
-// (a TEV bias) keeps its value.
-void clear_register_tint(float (&c)[4], float share) noexcept {
-    if (!(c[0] >= 0.0f && c[0] <= 1.0f && c[1] >= 0.0f && c[1] <= 1.0f && c[2] >= 0.0f && c[2] <= 1.0f)) {
-        return;
-    }
-    float lin[3];
-    for (unsigned i = 0; i < 3u; ++i) {
-        lin[i] = c[i] <= 0.04045f ? c[i] / 12.92f : std::pow((c[i] + 0.055f) / 1.055f, 2.4f);
-    }
-    const float y = 0.2126f * lin[0] + 0.7152f * lin[1] + 0.0722f * lin[2];
-    for (unsigned i = 0; i < 3u; ++i) {
-        const float l = lin[i] + (y - lin[i]) * share;
-        c[i] = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
-    }
-}
-
-// True when the alpha test passes every fragment.
-bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
-    const auto always = static_cast<std::uint8_t>(CompareFunc::Always);
-    const auto never = static_cast<std::uint8_t>(CompareFunc::Never);
-    const bool a0 = key.alpha_comp0 == always;
-    const bool a1 = key.alpha_comp1 == always;
-    const bool n0 = key.alpha_comp0 == never;
-    const bool n1 = key.alpha_comp1 == never;
-    switch (static_cast<AlphaTestLogic>(key.alpha_logic)) {
-    case AlphaTestLogic::And:
-        return a0 && a1;
-    case AlphaTestLogic::Or:
-        return a0 || a1;
-    case AlphaTestLogic::Xor:
-        return (a0 && n1) || (n0 && a1);
-    case AlphaTestLogic::Xnor:
-        return (a0 && a1) || (n0 && n1);
-    }
-    return false;
-}
+std::atomic<unsigned> s_layer_2d_lines{0u};
 
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
@@ -208,21 +137,13 @@ bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
 std::uint64_t g_snapshot_presents = 0u;
 
 std::string present_snapshot_path() {
-    const auto read_u64 = [](const char* name, std::uint64_t fallback) {
-        char value[32]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u
-            ? std::strtoull(value, nullptr, 10) : fallback;
-    };
-    static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
-    static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
-    static const std::uint64_t last = read_u64(
-        "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
+    static const std::uint64_t every = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_every, 0u);
+    static const std::uint64_t first = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_first, 0u);
+    static const std::uint64_t last = ::galaxy::run_option_u64(::galaxy::run_options().present_snapshot_last, std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
-        char value[MAX_PATH]{};
+        char value[1024]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_PRESENT_SNAPSHOT_DIR") == 0 && length > 1u
+        return ::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().present_snapshot_dir) == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
@@ -238,241 +159,12 @@ std::string present_snapshot_path() {
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 || length == 0) {
+    if (::galaxy::env_read(&length, value, sizeof(value), name) != 0 || length == 0) {
         return fallback;
     }
     char* end = nullptr;
     const auto parsed = std::strtoull(value, &end, 10);
     return end == value ? fallback : parsed;
-}
-
-// A present snapshot waits for the last one's readback instead of being skipped (a run of snapshots holds every
-// present); GALAXY_TEST_CAPTURE_NO_WAIT=1 skips instead.
-bool snapshot_waits() {
-    static const bool waits = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) == 0u;
-    return waits;
-}
-
-// GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
-// cycles ([rt-actor-light]); =2: the aim of every scene.
-std::uint64_t actor_light_trace_level() {
-    static const std::uint64_t level = read_env_u64("GALAXY_TRACE_LIGHTS", 0u);
-    return level;
-}
-
-bool trace_actor_lights_enabled() {
-    return actor_light_trace_level() != 0u;
-}
-
-// The light trace's cycle counter: the TSC on x86, the monotonic clock's nanoseconds elsewhere.
-std::uint64_t trace_cycles() noexcept {
-#if defined(_M_X64) || defined(__x86_64__)
-    return __rdtsc();
-#else
-    return static_cast<std::uint64_t>(galaxy::qpc_now());
-#endif
-}
-
-// Test hook: GALAXY_TEST_RENDER_STALL_MS=<ms>,<every N render chunks> makes
-// the render thread sleep, to reproduce a slow GPU/driver on any machine.
-struct RenderStallInjection {
-    std::uint32_t ms = 0u;
-    std::uint32_t every = 0u;
-};
-
-const RenderStallInjection& render_stall_injection() {
-    static const RenderStallInjection injection = [] {
-        RenderStallInjection result{};
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RENDER_STALL_MS") != 0 || length <= 1) {
-            return result;
-        }
-        const char* end = value + length - 1;
-        const char* comma = std::find(static_cast<const char*>(value), end, ',');
-        std::from_chars(value, comma, result.ms);
-        if (comma != end) {
-            std::from_chars(comma + 1, end, result.every);
-        }
-        if (result.every == 0u) {
-            result.ms = 0u;
-        }
-        return result;
-    }();
-    return injection;
-}
-
-bool trace_gx_stalls_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_TRACE_GX_STALLS") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-// A game frame presents when the chunk with its frame end ends, not at the next retrace (that finds it shown): about
-// 14 ms sooner at 60 fps. Not while frames interpolate (their sequences keep their own clock).
-// GALAXY_PRESENT_ON_COPY=0 waits for the retrace (A/B).
-bool present_on_copy_enabled() {
-    static const bool enabled = read_env_u64("GALAXY_PRESENT_ON_COPY", 1u) != 0u;
-    return enabled;
-}
-
-// GALAXY_GX_FRAME_TIMING_SAMPLE=N times every draw of one frame in N (N >= 2), so a recording holds
-// attributed frames among frames at full speed; the per-draw clocks are too costly for every frame.
-bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
-    static const std::uint64_t period = read_env_u64(
-        "GALAXY_GX_FRAME_TIMING_SAMPLE", 0u);
-    if (period < 2u) {
-        return false;
-    }
-    // frame_index is the count before this frame's increment.
-    return (frame_index + 1u) % period == 0u;
-}
-
-bool dependency_ranges_overlap(
-    std::uint64_t lhs_addr,
-    std::uint32_t lhs_size,
-    std::uint64_t rhs_addr,
-    std::uint32_t rhs_size) noexcept {
-    if (lhs_size == 0u || rhs_size == 0u) {
-        return false;
-    }
-    const std::uint64_t lhs_begin = lhs_addr;
-    const std::uint64_t rhs_begin = rhs_addr;
-    const std::uint64_t lhs_end = lhs_begin + lhs_size;
-    const std::uint64_t rhs_end = rhs_begin + rhs_size;
-    return lhs_begin < rhs_end && rhs_begin < lhs_end;
-}
-
-[[nodiscard]] std::uint16_t snapshot_read_be_u16(const std::byte* p) {
-    return static_cast<std::uint16_t>(
-        (static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[0])) << 8) |
-        static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[1])));
-}
-
-[[nodiscard]] std::size_t snapshot_component_byte_size(std::uint8_t fmt) {
-    switch (static_cast<ComponentFormat>(fmt)) {
-    case ComponentFormat::U8:
-    case ComponentFormat::S8:
-        return 1u;
-    case ComponentFormat::U16:
-    case ComponentFormat::S16:
-        return 2u;
-    case ComponentFormat::F32:
-        return 4u;
-    default:
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: unknown component format");
-    }
-}
-
-[[nodiscard]] std::size_t snapshot_color_byte_size(std::uint8_t fmt) {
-    switch (static_cast<ColorComponentFormat>(fmt)) {
-    case ColorComponentFormat::RGB565:
-    case ColorComponentFormat::RGBA4444:
-        return 2u;
-    case ColorComponentFormat::RGB888:
-    case ColorComponentFormat::RGBA6666:
-        return 3u;
-    case ColorComponentFormat::RGBX8888:
-    case ColorComponentFormat::RGBA8888:
-        return 4u;
-    default:
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: unknown color format");
-    }
-}
-
-[[nodiscard]] std::size_t snapshot_pos_component_count(std::uint8_t count) {
-    return count == 0u ? 2u : 3u;
-}
-
-[[nodiscard]] std::size_t snapshot_tex_component_count(std::uint8_t count) {
-    return count == 0u ? 1u : 2u;
-}
-
-[[nodiscard]] std::size_t snapshot_attr_direct_size_pos(
-    const VertexAttribute& attr) {
-    return snapshot_component_byte_size(attr.format) *
-        snapshot_pos_component_count(attr.count);
-}
-
-[[nodiscard]] std::size_t snapshot_normal_vector_size(
-    const VertexAttribute& attr) {
-    const std::size_t component_size =
-        snapshot_component_byte_size(attr.format);
-    if (component_size >
-        std::numeric_limits<std::size_t>::max() / 3u) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: normal vector size overflows");
-    }
-    return component_size * 3u;
-}
-
-[[nodiscard]] std::size_t snapshot_attr_direct_size_nrm(
-    const VertexAttribute& attr) {
-    const std::size_t normal_size = snapshot_normal_vector_size(attr);
-    if (attr.count != 0u &&
-        normal_size > std::numeric_limits<std::size_t>::max() / 3u) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: NBT element size overflows");
-    }
-    return attr.count != 0u ? normal_size * 3u : normal_size;
-}
-
-[[nodiscard]] bool snapshot_normal_has_nbt(const VertexDescriptor& desc) {
-    return desc.normal.count != 0u;
-}
-
-[[nodiscard]] bool snapshot_normal_uses_three_indices(
-    const VertexDescriptor& desc) {
-    return snapshot_normal_has_nbt(desc) && desc.normal_index_3;
-}
-
-[[nodiscard]] std::size_t snapshot_attr_direct_size_tex(
-    const VertexAttribute& attr) {
-    return snapshot_component_byte_size(attr.format) *
-        snapshot_tex_component_count(attr.count);
-}
-
-[[nodiscard]] std::uint32_t snapshot_tex_data_size(
-    TexFormat fmt,
-    std::uint32_t width,
-    std::uint32_t height) {
-    auto blocks = [](std::uint32_t dim, std::uint32_t block) {
-        return (dim + block - 1u) / block;
-    };
-    switch (fmt) {
-    case TexFormat::I4:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    case TexFormat::I8:
-    case TexFormat::IA4:
-        return blocks(width, 8u) * blocks(height, 4u) * 32u;
-    case TexFormat::IA8:
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-        return blocks(width, 4u) * blocks(height, 4u) * 32u;
-    case TexFormat::RGBA8:
-        return blocks(width, 4u) * blocks(height, 4u) * 64u;
-    case TexFormat::C4:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    case TexFormat::C8:
-        return blocks(width, 8u) * blocks(height, 4u) * 32u;
-    case TexFormat::C14X2:
-        return blocks(width, 4u) * blocks(height, 4u) * 32u;
-    case TexFormat::CMPR:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    default:
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: unknown texture format");
-    }
 }
 
 [[nodiscard]] unsigned snapshot_full_mip_chain_levels(
@@ -485,91 +177,44 @@ bool dependency_ranges_overlap(
     return levels;
 }
 
-[[nodiscard]] bool snapshot_generated_mips_color_format(TexFormat format) {
-    switch (format) {
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-    case TexFormat::RGBA8:
-    case TexFormat::C4:
-    case TexFormat::C8:
-    case TexFormat::C14X2:
-    case TexFormat::CMPR:
-        return true;
-    default:
-        return false;
+
+// A draw's facts the frame interpolation needs (InterpScene::spatial_texgens, light_masks), from its drawing state:
+// a regular texgen from position, normal or a binormal (rows 0, 1, 3, 4) maps space; lit channels and emboss texgens
+// name their lights.
+[[nodiscard]] std::pair<std::uint8_t, std::uint8_t> interp_draw_facts(const NativeDrawState& s) noexcept {
+    std::uint32_t spatial = 0u;
+    std::uint32_t lights = 0u;
+    for (unsigned i = 0; i < s.gen.num_texgens && i < 8u; ++i) {
+        const TexGen& g = s.texgen[i];
+        if (g.type == TexGenType::Regular &&
+            (g.source_row == 0u || g.source_row == 1u || g.source_row == 3u || g.source_row == 4u)) {
+            spatial |= 1u << i;
+        }
+        if (g.type == TexGenType::EmbossMap) {
+            lights |= 1u << (g.emboss_light & 7u);
+        }
     }
+    for (unsigned ch = 0; ch < s.gen.num_color_chans && ch < 2u; ++ch) {
+        for (const ChannelControl& control : {s.channel[ch], s.channel[2u + ch]}) {
+            if (control.lighting_enable) {
+                lights |= control.light_mask;
+            }
+        }
+    }
+    return {static_cast<std::uint8_t>(spatial), static_cast<std::uint8_t>(lights)};
 }
 
 [[nodiscard]] bool snapshot_should_generate_native_mips(
-    const TexImage& image,
-    const TexMode& mode) {
-    if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
-        mode.min_filter != TexMinFilter::Linear ||
-        mode.mag_filter != TexMagFilter::Linear ||
+    const TextureInfo& image,
+    const TextureSampler& mode) {
+    if ((min_filter_code(mode) & 0x3u) != 0u ||
+        min_filter_code(mode) != 4u ||
+        !mode.mag_linear ||
         (image.width < 64u && image.height < 64u) ||
-        !snapshot_generated_mips_color_format(image.format)) {
+        !image.colour) {
         return false;
     }
     return get_render_config().enhanced_mipmaps;
-}
-
-[[nodiscard]] std::uint32_t snapshot_texture_source_size(
-    const TexImage& image,
-    const TexMode& mode) {
-    unsigned source_levels = 1u;
-    const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
-    const unsigned full_chain =
-        snapshot_full_mip_chain_levels(image.width, image.height);
-    if (mip_mode != 0u) {
-        const unsigned wanted =
-            1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
-        source_levels = std::min(wanted, full_chain);
-    }
-    // Host-generated mips read only guest level 0, so no setting changes the footprint.
-
-    std::uint64_t total = 0;
-    for (unsigned level = 0; level < source_levels; ++level) {
-        total += snapshot_tex_data_size(
-            image.format,
-            std::max<std::uint32_t>(1u, image.width >> level),
-            std::max<std::uint32_t>(1u, image.height >> level));
-    }
-    if (total > std::numeric_limits<std::uint32_t>::max()) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: texture source is too large");
-    }
-    return static_cast<std::uint32_t>(total);
-}
-
-struct SnapshotArrayRange {
-    bool used = false;
-    std::uint32_t begin = 0;
-    std::uint64_t end = 0;
-};
-
-void record_indexed_array_access(
-    std::array<SnapshotArrayRange, 12>& array_ranges,
-    unsigned attr_index,
-    std::uint32_t address,
-    std::uint32_t size) {
-    if (attr_index >= array_ranges.size() || size == 0u) {
-        return;
-    }
-    SnapshotArrayRange& range = array_ranges[attr_index];
-    const std::uint64_t end =
-        static_cast<std::uint64_t>(address) + size;
-    if (end > 0x1'0000'0000ull) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: indexed array range overflows");
-    }
-    if (!range.used) {
-        range.used = true;
-        range.begin = address;
-        range.end = end;
-        return;
-    }
-    range.begin = std::min(range.begin, address);
-    range.end = std::max(range.end, end);
 }
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
@@ -589,12 +234,6 @@ struct GameWaitTimer {
         total.fetch_add(static_cast<std::uint64_t>(galaxy::qpc_now() - start), std::memory_order_relaxed);
     }
 };
-
-std::uint64_t trace_gx_stall_threshold_us() {
-    static const std::uint64_t threshold =
-        read_env_u64("GALAXY_TRACE_GX_STALL_US", 1000u);
-    return threshold;
-}
 
 std::uint64_t elapsed_us(
     std::chrono::steady_clock::time_point start,
@@ -627,17 +266,6 @@ ThreadCounterSample thread_cycle_count() noexcept {
 #endif
 }
 
-bool pso_cycles_requested() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_GX_PSO_CYCLES") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
 ThreadCounterSample thread_cpu_time_100ns() noexcept {
 #if defined(_WIN32)
     // Kernel plus user CPU time of this thread, in 100 ns units.
@@ -668,163 +296,9 @@ ThreadCounterSample thread_cpu_time_100ns() noexcept {
 // flush-total-us sums the sampled calls only and is not scaled up.
 constexpr std::uint64_t kFlushTimingSampleStride = 64u;
 
-struct ScopedFlushTiming {
-    std::chrono::steady_clock::time_point start{};
-    std::uint64_t* sampled_total_us = nullptr;
-    std::uint64_t* sampled_count = nullptr;
-    bool armed = false;
-
-    ScopedFlushTiming(
-        std::uint64_t& call_count,
-        std::uint64_t& sampled_total_us,
-        std::uint64_t& sampled_count) noexcept {
-        // call_count runs across the session, not per frame, so the samples spread over every call
-        // position even when a frame makes fewer than 64 flushes.
-        if ((call_count % kFlushTimingSampleStride) == 0u) {
-            start = std::chrono::steady_clock::now();
-            this->sampled_total_us = &sampled_total_us;
-            this->sampled_count = &sampled_count;
-            armed = true;
-        }
-        ++call_count;
-    }
-
-    ~ScopedFlushTiming() {
-        if (armed) {
-            *this->sampled_total_us += elapsed_us(
-                start, std::chrono::steady_clock::now());
-            ++*this->sampled_count;
-        }
-    }
-
-    ScopedFlushTiming(const ScopedFlushTiming&) = delete;
-    ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
-};
-
-void fill_ps_constants(const NativeDrawState& draw, PixelConstants& out, bool derive_scales) {
-    std::memset(&out, 0, sizeof(out));
-
-    const GenMode gm = draw.gen;
-
-    // stage_config[s]: colour operation, alpha operation (tev_color_word, tev_alpha_word), TEV order, ksel.
-    for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        out.stage_config[s][0] = tev_color_word(draw.tev[s]);
-        out.stage_config[s][1] = tev_alpha_word(draw.tev[s]);
-        const TevOrder ord = draw.tev[s].order;
-        out.stage_config[s][2] =
-              (static_cast<std::uint32_t>(ord.texmap)      )
-            | (static_cast<std::uint32_t>(ord.texcoord)  << 3)
-            | (ord.tex_enable ? (1u << 6) : 0u)
-            | (static_cast<std::uint32_t>(ord.ras_channel) << 7);
-        // Ksel: kcsel(4:0) | kasel(9:5).
-        out.stage_config[s][3] =
-              static_cast<std::uint32_t>(draw.tev[s].kcsel)
-            | (static_cast<std::uint32_t>(draw.tev[s].kasel) << 5);
-    }
-
-    // TEV registers PREV, REG0-2 (signed 11-bit per channel); the shader converts them back to
-    // integers for the TEV math.
-    {
-        for (unsigned r = 0; r < 4; ++r) {
-            for (unsigned c = 0; c < 4; ++c) {
-                out.tev_regs[r][c] = static_cast<float>(draw.tev_color[r][c]) / 255.0f;
-            }
-        }
-    }
-
-    // Konst colours K0-K3.
-    for (unsigned k = 0; k < 4; ++k) {
-        for (unsigned c = 0; c < 4; ++c) {
-            out.konst[k][c] = draw.konst[k][c] / 255.0f;
-        }
-    }
-
-    {
-        const AlphaCompare ac = draw.alpha;
-        out.alpha_refs[0] = ac.ref0 / 255.0f;
-        out.alpha_refs[1] = ac.ref1 / 255.0f;
-        // comp0 | comp1 << 3 | logic << 6, passed as the bits of a float.
-        const std::uint32_t packed =
-              static_cast<std::uint32_t>(ac.comp0)
-            | (static_cast<std::uint32_t>(ac.comp1) << 3)
-            | (static_cast<std::uint32_t>(ac.logic) << 6);
-        out.alpha_refs[2] = std::bit_cast<float>(packed);
-
-        // Constant destination alpha (PE_CMODE1).
-        const BlendMode bm = effective_blend(draw.blend, draw.pe.pixel_format == 1u);
-        out.alpha_refs[3] = bm.const_alpha_enable
-            ? (bm.const_alpha / 255.0f)
-            : 0.0f;
-    }
-
-    // Fog A and C as the pixel engine holds them; B's magnitude (u24) and shift (u5) are exact in
-    // float, and the shader reads them back with uint().
-    out.fog_params[0] = draw.fog.a;
-    out.fog_params[1] = static_cast<float>(draw.fog.b_magnitude);
-    out.fog_params[2] = static_cast<float>(draw.fog.b_shift & 0x1Fu);
-    out.fog_params[3] = draw.fog.c;
-    out.fog_params[4] = draw.fog.color[0] / 255.0f;
-    out.fog_params[5] = draw.fog.color[1] / 255.0f;
-    out.fog_params[6] = draw.fog.color[2] / 255.0f;
-    out.fog_params[7] = draw.fog.projection ? 1.0f : 0.0f;  // 1 = orthographic
-
-    // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
-    // before sampling.
-    const auto scales = coordinate_scales(draw, derive_scales);
-    for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        const TexImage img = draw.texture[m].image;
-        out.tex_dims[m][0] = static_cast<float>(img.width  > 0 ? img.width  : 1);
-        out.tex_dims[m][1] = static_cast<float>(img.height > 0 ? img.height : 1);
-        out.tex_dims[m][2] = static_cast<float>(scales[m][0]);
-        out.tex_dims[m][3] = static_cast<float>(scales[m][1]);
-    }
-
-    // Z-texture bias (BP 0xF4, 24-bit z24 units), normalized to [0,1).
-    out.ztex_params[0] = static_cast<float>(draw.z_texture.bias) / 16777216.0f;
-
-    // Indirect TEV commands and matrices; matrix rows are {ma,mc,me,17-scale} and
-    // {mb,md,mf,17-scale}, as in Dolphin's pixel constants.
-    for (unsigned word = 0; word < 16; ++word) {
-        out.ind_cmd[word / 4u][word & 3u] = ind_cmd_word(draw.ind[word]);
-    }
-    out.ind_misc[0] = ind_ref_word(draw);
-    out.ind_misc[1] = ind_scale_word(draw, 0u);
-    out.ind_misc[2] = ind_scale_word(draw, 1u);
-    out.ind_misc[3] = gm.num_ind_stages;
-    for (unsigned m = 0; m < 3; ++m) {
-        for (unsigned row = 0; row < 2u; ++row) {
-            for (unsigned c = 0; c < 3u; ++c) {
-                out.ind_mtx[m * 2u + row][c] = draw.ind_matrix[m].m[row][c];
-            }
-            out.ind_mtx[m * 2u + row][3] = -draw.ind_matrix[m].scale;
-        }
-    }
-}
-
-void gx_topology_for_primitive(
-    PrimitiveClass primitive,
-    gpu::Topology& topology,
-    gpu::TopologyType& topology_type) {
+void topology_for_primitive(gpu::Topology& topology, gpu::TopologyType& topology_type) {
     topology = gpu::kTopologyTriangleList;
     topology_type = gpu::kTopologyTypeTriangle;
-    switch (primitive) {
-    case PrimitiveClass::Lines:
-    case PrimitiveClass::LineStrip:
-        topology = gpu::kTopologyLineList;
-        topology_type = gpu::kTopologyTypeLine;
-        break;
-    case PrimitiveClass::Points:
-        topology = gpu::kTopologyPointList;
-        topology_type = gpu::kTopologyTypePoint;
-        break;
-    case PrimitiveClass::Quads:
-    case PrimitiveClass::Quads2:
-    case PrimitiveClass::Triangles:
-    case PrimitiveClass::TriangleStrip:
-    case PrimitiveClass::TriangleFan:
-    default:
-        break;
-    }
 }
 
 // The kinds of a draw's matrices (draw_matrices.h), in the order their blocks are appended (RenderCore::flush).
@@ -845,11 +319,10 @@ constexpr std::uint32_t matrix_kind_first_row(DrawMatrices::Kind kind) noexcept 
 
 }  // anonymous namespace
 
-void RenderCore::reset_fifo_session_state() {
+void RenderCore::reset_session_state() {
     // While no producer or render thread runs.
     matrices_ = DrawMatrices{};
     draw_state_ = NativeDrawState{};
-    applied_program_ = nullptr;
 
     // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
@@ -861,13 +334,11 @@ void RenderCore::reset_fifo_session_state() {
     cached_draw_run_primitive_indexed_ = false;
     cached_draw_run_no_pso_ = false;
     cached_draw_run_batch_compatible_known_ = false;
-    cached_draw_run_primitive_ = PrimitiveClass::Points;
+    cached_draw_run_primitive_ = Primitive::Points;
     cached_draw_run_vtxfmt_ = 0u;
     cached_draw_run_state_call_ = {};
 
     // Derived state below holds descriptors and resources of the previous renderer session.
-    ps_key_ = {};
-    vs_key_ = {};
     render_state_key_ = {};
     current_vs_hash_ = 0u;
     current_ps_hash_ = 0u;
@@ -875,7 +346,6 @@ void RenderCore::reset_fifo_session_state() {
     current_pso_key_ = {};
     current_pso_key_valid_ = false;
     current_pipeline_ = nullptr;
-    current_pipeline_is_uber_ = false;
     current_vs_constants_ = 0u;
     cpu_vs_constants_ = {};
     current_ps_constants_ = 0u;
@@ -892,24 +362,23 @@ void RenderCore::reset_fifo_session_state() {
     texture_bindings_dirty_ = true;
     current_texture_map_mask_ = 0u;
     current_texture_map_mask_valid_ = false;
-    native_material_.reset();
+    native_material_ = nullptr;
     current_texture_binding_key_ = {};
     current_texture_binding_key_mask_ = 0u;
     // Also clears current_texture_binding_key_valid_, so no key outlives its tables.
     clear_texture_binding_table_cache();
     texture_handle_cache_.clear();
 
-    // Frame stamps, seeding and XFB addresses restart with the new EFB/XFB resources.
+    // Frame stamps, seeding and display picture addresses restart with the new scene target/display picture resources.
     frame_index_ = 0u;
-    timing_frame_index_.store(0u, std::memory_order_relaxed);
-    efb_seeded_ = false;
+    scene_seeded_ = false;
     present_epoch_ = 0u;
-    xfb_serial_accounting_ = {};
-    reset_monotonic_cadence(xfb_copy_production_cadence_);
-    reset_monotonic_cadence(xfb_first_serial_present_cadence_);
-    last_presented_xfb_stamp_.store(
+    display_serial_accounting_ = {};
+    reset_monotonic_cadence(display_copy_production_cadence_);
+    reset_monotonic_cadence(display_first_serial_present_cadence_);
+    last_presented_display_stamp_.store(
         ~std::uint64_t{0}, std::memory_order_relaxed);
-    last_presented_xfb_serial_.store(
+    last_presented_display_serial_.store(
         ~std::uint64_t{0}, std::memory_order_relaxed);
     last_presented_slot_.store(0u, std::memory_order_relaxed);
 }
@@ -921,18 +390,25 @@ bool RenderCore::initialize(int w, int h) {
 
     cadence_diagnostics_ = cadence::global_session_if_enabled();
 
-    reset_fifo_session_state();
+    reset_session_state();
 
     const RenderConfig cfg = get_render_config();
 
     boot_step("begins");
-    if (!renderer_.initialize(w, h, cfg.efb_scale)) {
+    // The scene at the window's picture: its exact size, square pixels.
+    const auto start_aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport start_content =
+        galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kDesignContentAspect);
+    const FrameMap start_frame = start_content.width > 0 && start_content.height > 0
+                                     ? FrameMap(static_cast<unsigned>(start_content.width), static_cast<unsigned>(start_content.height))
+                                     : FrameMap{};
+    if (!renderer_.initialize(w, h, start_frame)) {
         std::cerr << "[RenderCore] RendererD3D12::initialize failed\n";
         return false;
     }
     boot_step("device rest");
 
-    if (!efb_copies_.initialize(renderer_.device(), cfg.efb_scale)) {
+    if (!display_pictures_.initialize(renderer_.device(), start_frame)) {
         std::cerr << "[RenderCore] EfbCopyManager::initialize failed\n";
         renderer_.shutdown();
         return false;
@@ -940,39 +416,32 @@ bool RenderCore::initialize(int w, int h) {
 
     if (!texture_cache_.initialize(renderer_.device())) {
         std::cerr << "[RenderCore] TextureCache::initialize failed\n";
-        efb_copies_.shutdown();
+        display_pictures_.shutdown();
         renderer_.shutdown();
         return false;
     }
     if (!texture_cache_.preallocate_upload_arenas(kFramesInFlight)) {
         std::cerr << "[RenderCore] TextureCache upload preallocation failed\n";
         texture_cache_.shutdown();
-        efb_copies_.shutdown();
+        display_pictures_.shutdown();
         renderer_.shutdown();
         return false;
     }
-    boot_step("efb copies and texture cache");
+    boot_step("frame reads and texture cache");
     // The resident decoded-vertex buffer (a 64 MB upload heap) is created here: creating it at first
     // use stalls gameplay.
     (void)ensure_resident_vertex_buffer();
     renderer_.create_first_use_resources();
     boot_step("first-use resources");
 
-    const std::filesystem::path cache_dir = shader_cache_directory();
-
-    // Few compile workers on small CPUs; more on large ones, to warm cached PSOs early.
-    const unsigned logical_cores = std::thread::hardware_concurrency();
-    const unsigned worker_count =
-        (logical_cores > 8u) ? 4u : (logical_cores > 4u) ? 2u : 1u;
-
-    if (!pipeline_cache_.initialize(
-            renderer_.device(),
-            renderer_.root_signature(),
-            cache_dir,
-            worker_count)) {
+#if defined(NEBULA_GPU_VULKAN)
+    if (!pipeline_cache_.initialize(renderer_.device(), renderer_.root_signature(), shader_cache_directory())) {
+#else
+    if (!pipeline_cache_.initialize(renderer_.device(), renderer_.root_signature())) {
+#endif
         std::cerr << "[RenderCore] PipelineCache::initialize failed\n";
         texture_cache_.shutdown();
-        efb_copies_.shutdown();
+        display_pictures_.shutdown();
         renderer_.shutdown();
         return false;
     }
@@ -983,20 +452,19 @@ bool RenderCore::initialize(int w, int h) {
     render_chunks_in_flight_ = 0;
     present_chunks_in_flight_ = 0;
     utility_chunks_in_flight_ = 0;
-    pending_pointer_depth_capture_ = {};
     render_thread_ = std::thread(&RenderCore::render_thread_main, this);
-    if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
+    {
         try {
             frame_telemetry_ = std::make_unique<galaxy::telemetry::Publisher>([this] {
-                const auto stats = xfb_present_stats();
+                const auto stats = display_present_stats();
                 return galaxy::telemetry::Counts{
-                    xfb_copy_count(), stats.first_serial_presentations, stats.presented,
+                    display_copy_count(), stats.first_serial_presentations, stats.presented,
                     stats.repeated_or_stale_serial_requests, stats.last_presented_copy_serial,
                     stats.last_presented_frame_stamp, stats.last_presented_slot,
-                    xfb_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
-                    xfb_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
+                    display_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
+                    display_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
             }, static_cast<std::uint64_t>(w), static_cast<std::uint64_t>(h),
-               get_render_config().efb_scale);
+               renderer_.frame_map().height);
         } catch (...) { /* Optional startup allocation cannot fail gameplay. */ }
     }
     return true;
@@ -1012,30 +480,30 @@ bool RenderCore::quit_requested() const noexcept {
     return initialized_ && renderer_.quit_requested();
 }
 
-std::uint64_t RenderCore::xfb_copy_count() const noexcept {
-    return stat_xfb_copies_.load(std::memory_order_relaxed);
+std::uint64_t RenderCore::display_copy_count() const noexcept {
+    return stat_display_copies_.load(std::memory_order_relaxed);
 }
 
-XfbPresentStats RenderCore::xfb_present_stats() const noexcept {
+DisplayPresentStats RenderCore::display_present_stats() const noexcept {
     const std::uint64_t last_stamp =
-        last_presented_xfb_stamp_.load(std::memory_order_relaxed);
+        last_presented_display_stamp_.load(std::memory_order_relaxed);
     const std::uint64_t last_serial =
-        last_presented_xfb_serial_.load(std::memory_order_relaxed);
-    return XfbPresentStats{
-        stat_xfb_present_requests_.load(std::memory_order_relaxed),
-        stat_xfb_present_presented_.load(std::memory_order_relaxed),
-        stat_xfb_first_serial_presentations_.load(std::memory_order_relaxed),
-        stat_xfb_repeated_or_stale_serial_requests_.load(
+        last_presented_display_serial_.load(std::memory_order_relaxed);
+    return DisplayPresentStats{
+        stat_display_present_requests_.load(std::memory_order_relaxed),
+        stat_display_present_presented_.load(std::memory_order_relaxed),
+        stat_display_first_serial_presentations_.load(std::memory_order_relaxed),
+        stat_display_repeated_or_stale_serial_requests_.load(
             std::memory_order_relaxed),
-        stat_xfb_present_skipped_duplicate_presents_.load(
+        stat_display_present_skipped_duplicate_presents_.load(
             std::memory_order_relaxed),
-        stat_xfb_present_duplicate_run_max_.load(std::memory_order_relaxed),
-        stat_xfb_out_of_order_serial_requests_.load(
+        stat_display_present_duplicate_run_max_.load(std::memory_order_relaxed),
+        stat_display_out_of_order_serial_requests_.load(
             std::memory_order_relaxed),
-        stat_xfb_present_serial_delta_zero_.load(std::memory_order_relaxed),
-        stat_xfb_present_serial_delta_one_.load(std::memory_order_relaxed),
-        stat_xfb_present_serial_delta_multi_.load(std::memory_order_relaxed),
-        stat_xfb_highest_first_presented_copy_serial_.load(
+        stat_display_present_serial_delta_zero_.load(std::memory_order_relaxed),
+        stat_display_present_serial_delta_one_.load(std::memory_order_relaxed),
+        stat_display_present_serial_delta_multi_.load(std::memory_order_relaxed),
+        stat_display_highest_first_presented_copy_serial_.load(
             std::memory_order_relaxed),
         last_stamp == ~std::uint64_t{0} ? 0u : last_stamp,
         last_serial == ~std::uint64_t{0} ? 0u : last_serial,
@@ -1070,7 +538,7 @@ void RenderCore::record_monotonic_cadence_sample(
             ? now_ns - accumulator.last_sample_ns
             : 0u;
     accumulator.last_sample_ns = now_ns;
-    static const bool monitor=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
+    static const bool monitor=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
     if(monitor) {
         ++accumulator.monitor_intervals; accumulator.monitor_total_ns+=interval_ns;
         accumulator.monitor_max_ns=std::max(accumulator.monitor_max_ns,interval_ns);
@@ -1125,16 +593,86 @@ void RenderCore::reset_monotonic_cadence(
     accumulator.published_last_sample_ns.store(0, std::memory_order_relaxed);
 }
 
+// GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
+void RenderCore::trace_memory() {
+    static const bool enabled = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) != 0u;
+    static std::uint64_t frames = 0u;
+    if (!enabled || ++frames % 600u != 0u) {
+        return;
+    }
+    std::uint64_t arrays = 0u;
+    for (const auto& [key, entry] : shape_arrays_) {
+        arrays += entry.array->floats.capacity() * sizeof(float) + entry.array->colors.capacity() * sizeof(std::uint32_t);
+    }
+    std::uint64_t geometry = 0u;
+    std::uint64_t vertices = 0u;
+    std::uint64_t split = 0u;
+    for (const auto& [key, shape] : record_shapes_) {
+        if (shape.geometry != nullptr) {
+            geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
+        }
+        vertices += shape.resident_vertices * sizeof(RenderVertex);
+        split += shape.split_indices.capacity() * sizeof(std::uint16_t);
+    }
+    const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
+    std::fprintf(stderr,
+                 "[memory] shape arrays %.1f (%zu), groups %.1f, expanded vertices %.1f, split indices %.1f (%zu shapes), images %.1f, decoded %.1f, "
+                 "upload arenas %.1f, texture pool %.1f, curved %.1f, record pool %.1f\n",
+                 mb(arrays), shape_arrays_.size(), mb(geometry), mb(vertices), mb(split), record_shapes_.size(), mb(texture_cache_.image_bytes()),
+                 mb(texture_cache_.decoded_map_stats().resident_bytes), mb(texture_cache_.upload_arena_bytes()), mb(texture_cache_.pool_bytes()),
+                 mb(curved::memory_bytes()),
+                 mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
+#if defined(_WIN32)
+    // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
+    static const bool heaps = ::galaxy::run_option_u64(::galaxy::run_options().trace_memory, 0u) == 2u;
+    if (heaps) {
+        HANDLE list[64];
+        const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
+        for (DWORD i = 0; i < count; ++i) {
+            std::unordered_map<std::uint64_t, std::uint64_t> by_size;
+            std::uint64_t busy = 0u;
+            std::uint64_t free_bytes = 0u;
+            HeapLock(list[i]);
+            PROCESS_HEAP_ENTRY entry{};
+            while (HeapWalk(list[i], &entry)) {
+                if ((entry.wFlags & PROCESS_HEAP_ENTRY_BUSY) != 0) {
+                    busy += entry.cbData;
+                    by_size[entry.cbData] += entry.cbData;
+                } else if ((entry.wFlags & (PROCESS_HEAP_REGION | PROCESS_HEAP_UNCOMMITTED_RANGE)) == 0) {
+                    free_bytes += entry.cbData;
+                }
+            }
+            HeapUnlock(list[i]);
+            if (busy < 1024u * 1024u) {
+                continue;
+            }
+            std::vector<std::pair<std::uint64_t, std::uint64_t>> sizes(by_size.begin(), by_size.end());
+            std::sort(sizes.begin(), sizes.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+            std::fprintf(stderr, "[memory] heap %lu: busy %.1f, free %.1f, largest by size:", i, mb(busy), mb(free_bytes));
+            for (std::size_t s = 0; s < sizes.size() && s < 14u; ++s) {
+                std::fprintf(stderr, " %llux%llu", static_cast<unsigned long long>(sizes[s].first), static_cast<unsigned long long>(sizes[s].second / sizes[s].first));
+            }
+            std::fprintf(stderr, "\n");
+        }
+    }
+#endif
+    [](auto& renderer) {
+        if constexpr (requires { renderer.trace_rings(); }) {
+            renderer.trace_rings();
+        }
+    }(renderer_);
+}
+
 void RenderCore::report_frame_tail_window() noexcept {
-    static const bool enabled=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
+    static const bool enabled=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_frame_tails, 0u)!=0u;
     if(!enabled) return;
-    const auto now=xfb_first_serial_present_cadence_.last_sample_ns;
+    const auto now=display_first_serial_present_cadence_.last_sample_ns;
     if(!frame_tail_report_ns_) { frame_tail_report_ns_=now; return; }
     if(now-frame_tail_report_ns_<2000000000u) return;
     const auto elapsed=now-frame_tail_report_ns_;frame_tail_report_ns_=now;
     try {
         std::ostringstream row;
-        row<<"[new-frame-tails] boundary=owned-XFB-copy-and-first-Present-return physical-display-time=unmeasured window-ns="<<elapsed;
+        row<<"[new-frame-tails] boundary=owned-display picture-copy-and-first-Present-return physical-display-time=unmeasured window-ns="<<elapsed;
         const auto append=[&](const char* name,MonotonicCadenceAccumulator& a) {
             const auto percentile=[&](unsigned p) {
                 const auto rank=(a.monitor_intervals*p+99u)/100u;
@@ -1157,13 +695,13 @@ void RenderCore::report_frame_tail_window() noexcept {
                <<percentile(50u)<<'/'<<percentile(75u)<<'/'<<percentile(90u);
             a.monitor_bins.fill(0u);a.monitor_intervals=a.monitor_total_ns=a.monitor_max_ns=0u;
         };
-        append("production",xfb_copy_production_cadence_);append("first-present",xfb_first_serial_present_cadence_);
+        append("production",display_copy_production_cadence_);append("first-present",display_first_serial_present_cadence_);
         row<<'\n';std::cerr<<row.str();
     } catch (...) { /* Optional monitoring must not unwind rendering. */ }
 }
 
-void RenderCore::record_pointer_response(const XfbTexture& texture) noexcept {
-    static const bool enabled=read_env_u64("GALAXY_MONITOR_POINTER_LATENCY",0u)!=0u;
+void RenderCore::record_pointer_response(const DisplayTexture& texture) noexcept {
+    static const bool enabled=::galaxy::diagnostics_recording()||::galaxy::run_option_u64(::galaxy::run_options().monitor_pointer_latency, 0u)!=0u;
     if (!enabled) return;
     const auto& stamp=texture.pointer_response;
     if (!stamp.serial || !stamp.selected_ns || !stamp.drawn_ns ||
@@ -1195,11 +733,11 @@ void RenderCore::record_pointer_response(const XfbTexture& texture) noexcept {
     };
     try {
         std::ostringstream row;
-        row<<"[mouse-response-latency] boundary=selected-KPAD-to-first-marked-XFB-Present-return physical-display-time=unmeasured"
+        row<<"[mouse-response-latency] boundary=selected-KPAD-to-first-marked-display picture-Present-return physical-display-time=unmeasured"
            <<" samples="<<pointer_response_count_<<" mean-us="<<pointer_latency_total_/pointer_response_count_/1000u
            <<" p50-upper-us="<<percentile(50u)<<" p95-upper-us="<<percentile(95u)<<" p99-upper-us="<<percentile(99u)
            <<" max-us="<<pointer_latency_max_/1000u<<" source-serial="<<stamp.serial<<" generation="<<stamp.generation
-           <<" xfb-serial="<<texture.copy_serial<<" selected-ns="<<stamp.selected_ns<<" processed-ns="<<stamp.processed_ns
+           <<" display-serial="<<texture.copy_serial<<" selected-ns="<<stamp.selected_ns<<" processed-ns="<<stamp.processed_ns
            <<" drawn-ns="<<stamp.drawn_ns<<" present-return-ns="<<now
            <<" acquisition-age-clock=GetTickCount64-coarse-ms acquisition-age-samples="<<pointer_acquisition_age_count_
            <<" acquisition-age-mean-ms="<<(pointer_acquisition_age_count_?pointer_acquisition_age_total_/pointer_acquisition_age_count_:0u)
@@ -1217,55 +755,53 @@ void RenderCore::record_pointer_response(const XfbTexture& texture) noexcept {
     } catch (...) { /* observational text must not unwind rendering */ }
 }
 
-bool RenderCore::subframes_shown() const {
-    // The renderer's mode, not the chunk's copy of it: a present between chunks follows a change at once.
-    return renderer_.interpolation_mode() && std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_}) > 0u;
-}
-
-void RenderCore::record_presented_xfb_copy(
-    const XfbTexture& texture) noexcept {
-    galaxy::timeline::record(galaxy::timeline::Event::XfbPresented, texture.slot,
+void RenderCore::record_presented_display_copy(
+    const DisplayTexture& texture) noexcept {
+    galaxy::timeline::record(galaxy::timeline::Event::DisplayPresented, texture.slot,
                          texture.copy_serial);
+    g_last_present_ns.store(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count(), std::memory_order_relaxed);
     record_pointer_response(texture);
-    ++stat_xfb_present_presented_;
-    const XfbSerialAccountingEvent event =
-        account_xfb_present_serial(
-            xfb_serial_accounting_,
+    ++stat_display_present_presented_;
+    const DisplaySerialAccountingEvent event =
+        account_display_present_serial(
+            display_serial_accounting_,
             texture.last_accounted_present_serial,
             texture.copy_serial);
-    last_presented_xfb_stamp_.store(
+    last_presented_display_stamp_.store(
         texture.frame_stamp, std::memory_order_relaxed);
-    last_presented_xfb_serial_.store(
+    last_presented_display_serial_.store(
         texture.copy_serial, std::memory_order_relaxed);
 
     if (event.first_presentation) {
-        ++stat_xfb_first_serial_presentations_;
-        stat_xfb_highest_first_presented_copy_serial_.store(
-            xfb_serial_accounting_.highest_presented_serial,
+        ++stat_display_first_serial_presentations_;
+        stat_display_highest_first_presented_copy_serial_.store(
+            display_serial_accounting_.highest_presented_serial,
             std::memory_order_relaxed);
-        record_monotonic_cadence_sample(xfb_first_serial_present_cadence_);
+        record_monotonic_cadence_sample(display_first_serial_present_cadence_);
         report_frame_tail_window();
+        trace_memory();
         if (event.below_high_water) {
-            ++stat_xfb_out_of_order_serial_requests_;
+            ++stat_display_out_of_order_serial_requests_;
         }
         if (event.delta_one) {
-            ++stat_xfb_present_serial_delta_one_;
+            ++stat_display_present_serial_delta_one_;
         } else if (event.delta_multi) {
-            ++stat_xfb_present_serial_delta_multi_;
+            ++stat_display_present_serial_delta_multi_;
         }
         return;
     }
 
-    ++stat_xfb_repeated_or_stale_serial_requests_;
+    ++stat_display_repeated_or_stale_serial_requests_;
     if (event.adjacent_repeat) {
-        ++stat_xfb_present_serial_delta_zero_;
+        ++stat_display_present_serial_delta_zero_;
     } else {
-        ++stat_xfb_out_of_order_serial_requests_;
+        ++stat_display_out_of_order_serial_requests_;
     }
     std::uint64_t observed =
-        stat_xfb_present_duplicate_run_max_.load(std::memory_order_relaxed);
+        stat_display_present_duplicate_run_max_.load(std::memory_order_relaxed);
     while (event.nonfirst_run > observed &&
-           !stat_xfb_present_duplicate_run_max_.compare_exchange_weak(
+           !stat_display_present_duplicate_run_max_.compare_exchange_weak(
                observed,
                event.nonfirst_run,
                std::memory_order_relaxed,
@@ -1273,32 +809,32 @@ void RenderCore::record_presented_xfb_copy(
     }
 }
 
-void RenderCore::record_skipped_duplicate_xfb_present(
-    const XfbTexture& texture) noexcept {
+void RenderCore::record_skipped_duplicate_display_present(
+    const DisplayTexture& texture) noexcept {
     if (texture.copy_serial !=
-        last_presented_xfb_serial_.load(std::memory_order_relaxed)) {
+        last_presented_display_serial_.load(std::memory_order_relaxed)) {
         return;
     }
 
-    const XfbSerialAccountingEvent event =
-        account_xfb_present_serial(
-            xfb_serial_accounting_,
+    const DisplaySerialAccountingEvent event =
+        account_display_present_serial(
+            display_serial_accounting_,
             texture.last_accounted_present_serial,
             texture.copy_serial);
     if (!event.not_first_presentation) {
         return;
     }
-    ++stat_xfb_repeated_or_stale_serial_requests_;
-    ++stat_xfb_present_skipped_duplicate_presents_;
+    ++stat_display_repeated_or_stale_serial_requests_;
+    ++stat_display_present_skipped_duplicate_presents_;
     if (event.adjacent_repeat) {
-        ++stat_xfb_present_serial_delta_zero_;
+        ++stat_display_present_serial_delta_zero_;
     } else {
-        ++stat_xfb_out_of_order_serial_requests_;
+        ++stat_display_out_of_order_serial_requests_;
     }
     std::uint64_t observed =
-        stat_xfb_present_duplicate_run_max_.load(std::memory_order_relaxed);
+        stat_display_present_duplicate_run_max_.load(std::memory_order_relaxed);
     while (event.nonfirst_run > observed &&
-           !stat_xfb_present_duplicate_run_max_.compare_exchange_weak(
+           !stat_display_present_duplicate_run_max_.compare_exchange_weak(
                observed,
                event.nonfirst_run,
                std::memory_order_relaxed,
@@ -1311,7 +847,7 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     if (device == nullptr) {
         return false;
     }
-    if (resident_vertex_buffer_ && resident_vertex_device_ == device) {
+    if (resident_vertex_gpu_ != 0u && resident_vertex_device_ == device) {
         return true;
     }
     if (resident_vertex_buffer_failed_ && resident_vertex_device_ == device) {
@@ -1322,15 +858,14 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     resident_vertex_device_ = device;
     UploadBuffer buffer = renderer_.create_resident_vertices(
         static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex),
-        "GX resident decoded vertices");
-    if (!buffer) {
+        "Resident decoded vertices");
+    if (buffer.gpu == 0u) {
         // Not fatal: every hit keeps using the per-frame ring upload.
         resident_vertex_buffer_failed_ = true;
-        std::cerr << "[gx-resident-vertices] buffer creation failed; "
+        std::cerr << "[render-resident-vertices] buffer creation failed; "
                      "decoded vertices stay on the frame ring\n";
         return false;
     }
-    resident_vertex_mapped_ = buffer.cpu;
     resident_vertex_gpu_ = buffer.gpu;
     resident_vertex_buffer_ = std::move(buffer);
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
@@ -1344,7 +879,6 @@ void RenderCore::release_resident_vertex_buffer() noexcept {
     // The GPU no longer reads the buffer (session reset before renderer initialization, or shutdown
     // after drain_gpu()). The arena reset bumps its epoch, invalidating every entry's block.
     resident_vertex_buffer_ = {};
-    resident_vertex_mapped_ = nullptr;
     resident_vertex_gpu_ = 0;
     renderer_.set_resident_vertices(0u, 0u);
     resident_vertex_device_ = nullptr;
@@ -1363,18 +897,11 @@ void RenderCore::render_frame(
         return;
     }
 
-    const bool trace_gx_stalls = trace_gx_stalls_enabled();
-    // frame_index_ belongs to the render thread; the producer samples on its published copy.
-    const bool producer_time_detail =
-        trace_gx_stalls ||
-        frame_gx_timing_sample_enabled(
-            timing_frame_index_.load(std::memory_order_relaxed));
     // Nothing to render: nothing attached (records, scene markers, captures).
-    const bool empty = producer_shape_records_.empty() && producer_fifo_marker_count_ == 0u &&
-        producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
+    const bool empty = producer_shape_records_.empty() && producer_stripe_particles_.empty();
     if (empty) {
         if (present_swap_chain) {
-            present_cached_xfb(black, true);
+            present_cached_display(black, true);
         } else {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             if (render_thread_error_ != nullptr) {
@@ -1388,22 +915,16 @@ void RenderCore::render_frame(
     galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, 0u);
     // Taken under the same condition that measures producer_wait_ns (the simulation thread's wait
     // for queue space), so a measured frame never subtracts a default time_point.
-    const auto wait_start = producer_time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
-    take_attached_pointer_depth_capture(chunk);
-    take_attached_fifo_markers(chunk);
     take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
-    chunk.safety_surround=producer_safety_surround_;
     chunk.movie_frame=producer_movie_frame_;
     chunk.services = services;
     chunk.present_swap_chain = present_swap_chain;
     chunk.black = black;
-    const RenderTimingConfig& timing = get_gx_timing_config();
+    const RenderTimingConfig& timing = get_frame_timing_config();
 
     std::uint64_t producer_wait_ns = 0;
     std::uint64_t diagnostic_queue_wait_ns = 0;
@@ -1455,12 +976,6 @@ void RenderCore::render_frame(
                       diagnostic_queue_wait_start_ns
                 : 0u;
         }
-        if (producer_time_detail) {
-            const auto wait_end = std::chrono::steady_clock::now();
-            producer_wait_ns = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    wait_end - wait_start).count());
-        }
         if (render_thread_error_ != nullptr) {
             // Rethrow the render thread's failure here rather than leave a frozen display.
             std::exception_ptr error = render_thread_error_;
@@ -1492,13 +1007,6 @@ void RenderCore::render_frame(
             diagnostic_queue_wait_ns);
     }
     queue_cv_.notify_one();
-    const std::uint64_t producer_wait_us = producer_wait_ns / 1000u;
-    if (trace_gx_stalls &&
-        producer_wait_us >= trace_gx_stall_threshold_us()) {
-        std::cerr << "[gx-queue-wait] wait-us=" << producer_wait_us
-                  << " queue-depth=" << queue_depth_after_push
-                  << " queue-limit=" << queue_depth_limit << '\n';
-    }
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
 }
 
@@ -1515,8 +1023,7 @@ void RenderCore::wait_for_render_idle() {
                (frame_queue_.empty() &&
                 render_chunks_in_flight_ == 0u &&
                 present_chunks_in_flight_ == 0u &&
-                utility_chunks_in_flight_ == 0u &&
-                !pending_pointer_depth_capture_.capture);
+                utility_chunks_in_flight_ == 0u);
     });
     if (render_thread_error_ != nullptr) {
         std::exception_ptr error = render_thread_error_;
@@ -1536,9 +1043,9 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
     if (draw_state_.projection_type != 0u) {
         return;
     }
-    const float scale = static_cast<float>(renderer_.efb_scale());
-    const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
-    const float height = 2.0f * std::fabs(draw_state_.viewport[1]) * scale;
+    const FrameMap& map = renderer_.frame_map();
+    const float width = std::fabs(draw_state_.viewport[2]) * map.sx;
+    const float height = std::fabs(draw_state_.viewport[3]) * map.sy;
     if (!(width > 0.0f) || !(height > 0.0f)) {
         return;
     }
@@ -1553,7 +1060,7 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
     }
     if (!scene_camera_captured_) {
         scene_camera_captured_ = true;
-        // GX perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
+        // game perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
         const float c = draw_state_.projection[2];
         const float e = draw_state_.projection[4];
         const float f = draw_state_.projection[5];
@@ -1591,7 +1098,6 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
             VertexConstants probe = cpu;
             probe.pos_base = scene.constants[r].pos_base;
             std::memcpy(probe.row_bases, scene.constants[r].row_bases, sizeof(probe.row_bases));
-            apply_uber_vs_key(vs_key_, probe);
             // Derived from the fields compared (write_scene_vs_constants).
             std::memcpy(probe.motion_prev_proj, scene.constants[r].motion_prev_proj,
                         offsetof(VertexConstants, motion_ctrl) + sizeof(probe.motion_ctrl) -
@@ -1629,9 +1135,9 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
     record.category = identity_category_;
     record.continuity = identity_continuity_;
     record.particle = identity_continuity_particle_;
-    record.palette = (vs_key_.flags & 0x01u) != 0u;
+    record.palette = cpu_vs_constants_.per_vertex != 0u;
     if (record.palette) {
-        // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
+        // Position matrix 0 (rows 0-2) stands for the per-vertex palette's object.
         for (unsigned i = 0; i < 12u; ++i) record.position[i] = matrices_.matrix_value(i / 4u, i % 4u);
         record.palette_offset = palette_offset;
     } else {
@@ -1656,15 +1162,15 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         // Not read back from `upload`: the ring is write-combined memory. Its matrix bases are the sequence's
         // palette source.
         scene.constants.push_back(cpu);
-        // Uber pipelines read the key from the constants: a sub-frame's copy
-        // needs it as the frame's upload has it.
-        apply_uber_vs_key(vs_key_, scene.constants.back());
         const std::int32_t m = history.current_matches().back();
         scene.prev_index.push_back(m);
         // Inline draws read normals, lights and indexed texture matrices from
         // the palette too: their snapshot is interpolated like a skinned one.
         scene.palette.push_back(record.palette || current_palette_required_ ? current_palette_shadow_ : -1);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
+        const auto [spatial, lights] = interp_draw_facts(draw_state_);
+        scene.spatial_texgens.push_back(spatial);
+        scene.light_masks.push_back(lights);
         scene.category.push_back(record.category);
     }
     if (!motion_scene_) {
@@ -1802,12 +1308,6 @@ std::uint64_t RenderCore::record_identity() noexcept {
     return key != 0u ? key : 1u;
 }
 
-std::uint32_t RenderCore::rt_light_key() noexcept {
-    const std::uint64_t key = mix64(mix64(rt_light_object_, rt_light_material_), rt_light_draws_++);
-    const auto folded = static_cast<std::uint32_t>(key ^ (key >> 32u));
-    return folded != 0u ? folded : 1u;
-}
-
 void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
@@ -1815,93 +1315,22 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint6
         renderer_.game_bloom(aux, static_cast<std::uint32_t>(a), static_cast<std::uint32_t>(b));
         return;
     }
-    // The traced draws' identity (rt_light_key): an object, a model's shape, an emitter (its object, then its resource
-    // or shape) or a particle (its pool node, its lifetime: the next particle in the node is another) starts it over.
-    if (kind == motion::kMarkerNameObj || kind == motion::kMarkerShapePacket || kind == motion::kMarkerEmitter ||
-        kind == motion::kMarkerParticle) {
-        rt_light_object_ = mix64(mix64(kind, a), kind == motion::kMarkerParticle ? (b & 0xFFFFu) : b);
-        rt_light_material_ = 0u;
-        rt_light_draws_ = 0u;
-    } else if (kind == motion::kMarkerMaterial) {
-        rt_light_material_ = static_cast<std::uint32_t>(a);
-        rt_light_draws_ = 0u;
-    }
     if (kind < identity_markers_by_kind_.size()) {
         if (identity_markers_by_kind_[kind]++ == 0u && rt_log_glows()) [[unlikely]] {
             std::fprintf(stderr, "[rt-identity] first marker of kind %u\n", static_cast<unsigned>(kind));
         }
     }
-    // The J3D material whose shapes draw next: the table's row for it, where it has one, over its texture's.
-    if (kind == motion::kMarkerMaterial) {
-        rt_material_identity_ = rt_material_by_identity(static_cast<std::uint32_t>(a));
-        rt_identity_seen_ = static_cast<std::uint32_t>(a);
-        // GALAXY_RT_LOG_GLOWS=1: each identity the first time it is seen, and the row it found.
-        if (rt_log_glows()) [[unlikely]] {
-            static std::unordered_set<std::uint32_t> logged;
-            if (logged.size() < 4096u && logged.insert(static_cast<std::uint32_t>(a)).second) {
-                std::fprintf(stderr, "[rt-identity] seen %08X -> material %u\n", static_cast<std::uint32_t>(a),
-                             static_cast<unsigned>(rt_material_identity_));
-            }
-        }
-        refresh_rt_material();
-        return;
-    }
-    // The effect an emitter's particles belong to (its marker follows the emitter's): its table row, where it has one,
-    // over their textures' (a fire's light by its name, whatever its sprites' textures).
-    if (kind == motion::kMarkerEffect) {
-        rt_effect_material_ = rt_material_by_identity(static_cast<std::uint32_t>(a));
-        if (rt_log_glows()) [[unlikely]] {
-            static std::unordered_set<std::uint32_t> logged;
-            if (a != 0u && logged.size() < 4096u && logged.insert(static_cast<std::uint32_t>(a)).second) {
-                std::fprintf(stderr, "[rt-effect] seen %08X -> material %u\n", static_cast<std::uint32_t>(a),
-                             static_cast<unsigned>(rt_effect_material_));
-            }
-        }
-        refresh_rt_material();
-        return;
-    }
-    // Draws the traced scene takes and the picture never shows (the player's body in the first-person view). The
-    // batch before them is drawn as it was.
-    if (kind == motion::kMarkerTraceOnly) {
-        flush_pending_draw_batch();
-        rt_trace_only_ = aux != 0u;
+    // Materials and effects name nothing the renderer keeps (the ray tracer's material rows went with it).
+    if (kind == motion::kMarkerMaterial || kind == motion::kMarkerEffect) {
         return;
     }
     if (kind >= motion::kMarkerCategory) {
-        // A draw list or phase begins: no emitter's particles until the next emitter.
-        if (rt_effect_material_ != 0u) {
-            rt_effect_material_ = 0u;
-            refresh_rt_material();
-        }
         on_motion_marker(kind, aux, a, b);
         return;
     }
-    // The drawing object for the material census and the named classes: a NameObj's draws follow
-    // its marker; emitters and particles are none.
-    if (kind != motion::kMarkerShapePacket && kind != motion::kMarkerMaterial) {
-        rt_identity_seen_ = 0u;
-    }
-    if (kind != motion::kMarkerShapePacket && rt_material_identity_ != 0u) {
-        // A NameObj's own draws, emitters and particles: no J3D material.
-        rt_material_identity_ = 0u;
-        refresh_rt_material();
-    }
-    // A particle keeps its emitter's effect; anything else (a new emitter, before its effect marker; an object; a
-    // model's shape) ends it.
-    if (kind != motion::kMarkerParticle && rt_effect_material_ != 0u) {
-        rt_effect_material_ = 0u;
-        refresh_rt_material();
-    }
     if (kind == motion::kMarkerNameObj) {
-        rt_object_ = a;
-        rt_object_fake_shadow_ = renderer_.rt_lighting() && rt_fake_shadow_object(a);
     } else if (kind == motion::kMarkerShapePacket) {
-        // A model from a draw buffer: a shadow drawer draws through GX directly, so the flag of the
-        // object before it does not apply.
-        rt_object_fake_shadow_ = false;
     } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
-        rt_object_ = 0u;
-        rt_object_fake_shadow_ = false;
     }
     if (!history_scene_) {
         return;
@@ -1932,32 +1361,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
-        // The game's sky lists (MR::DrawBufferType Sky 1, Air 2, AstroDomeSky 0x23) until the next list, draw type or
-        // phase. The sun list (Sun 3: its disc and glow) is neither sky nor scene: the sun is the key light, and its glow
-        // in the sky's light would count it twice and, the sky's level being its mean, darken the rest of the sky.
-        const bool list = aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu;
-        rt_sky_buffer_ = list && ((a & 0xFFFFu) == 1u || (a & 0xFFFFu) == 2u || (a & 0xFFFFu) == 0x23u);
-        rt_sun_buffer_ = list && (a & 0xFFFFu) == 3u;
-        // The game's shadow lists (MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27, AlphaShadow 0x29).
-        rt_fake_shadow_list_ = aux == motion::kCategoryDrawType &&
-                               ((a & 0xFFFFu) == 0x26u || (a & 0xFFFFu) == 0x27u || (a & 0xFFFFu) == 0x29u);
-        if (aux == motion::kCategoryPhase) {
-            note_rt_phase(static_cast<std::uint8_t>(a));
-        }
-        // The game's effects begin (its ShadowSurface draw type 0x26, the first list after the translucent ones in
-        // GameScene::draw3D): the effects layer opens while the water's composite is still to come, so that composite
-        // goes under what they draw.
-        if (aux == motion::kCategoryDrawType && (a & 0xFFFFu) == 0x26u && scene_phase_ && motion_scene_ &&
-            renderer_.rt_water_open()) {
-            flush_pending_draw_batch();
-            renderer_.begin_layer_window();
-        }
-        if (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) {
-            // The draw buffer (MR::DrawBufferType) the next draws come from (the census, the de-baking).
-            rt_draw_buffer_ = (a & 0xFFFFu) | (aux == motion::kCategoryBufferXlu ? 0x10000u : 0u);
-        } else if (aux == motion::kCategoryDrawType) {
-            rt_draw_buffer_ = 0xFFFFu;   // a draw type's list (plants, oceans, ropes): no buffer
-        }
         if (!history_scene_) {
             return;
         }
@@ -1973,16 +1376,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
     }
     case motion::kMarkerScene:
         ++motion_scene_markers_;
-        if ((aux & motion::kSceneCameraCut) != 0u) {
-            // A cut with this many objects appearing or reset is a stage load (another sky and other
-            // lights): stage loads bring thousands, cuts within a stage none.
-            constexpr std::uint32_t kStageObjectEvents = 256u;
-            rt_scene_cut_ = true;
-            rt_cut_objects_ = std::max(rt_cut_objects_, static_cast<std::uint32_t>(b));
-            if (b >= kStageObjectEvents && !scene_stage_known_) {
-                begin_rt_stage();
-            }
-        }
         if (!history_scene_) {
             return;
         }
@@ -1998,11 +1391,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         return;
     case motion::kMarkerPass:
         ++motion_mirror_markers_;
-        rt_mirror_pass_ = aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin);
-        if (rt_mirror_pass_) {
-            // The frame's A/B state before its scene begins (rt_hidden_draw reads it for the mirror's draws).
-            renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
-        }
         if (aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin)) {
             end_side_layer();
             begin_side_layer(kMirrorLayer);
@@ -2012,15 +1400,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         return;
     case motion::kMarkerLight: {
         ++motion_light_markers_;
-        const ActorLightLoad load = actor_light_load(aux, static_cast<std::uint32_t>(b));
-        // GX lights 0 and 1 of an ActorLightInfo or coin load (LightFunction::loadLightInfo).
-        const auto hooked = static_cast<std::uint8_t>(
-            aux <= static_cast<std::uint16_t>(motion::LightSite::Coin) ? load.written & 0x03u : 0u);
-        rt_known_lights_ = static_cast<std::uint8_t>((rt_known_lights_ & ~load.written) | hooked);
-        rt_follow_lights_ = static_cast<std::uint8_t>((rt_follow_lights_ & ~load.written) | load.follow);
-        if (rt_light_tracking_) {
-            rt_light_pending_ = static_cast<std::uint8_t>((rt_light_pending_ & ~load.written) | hooked);
-        }
         return;
     }
     case motion::kMarkerLayoutPane:
@@ -2040,12 +1419,12 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
     }
 }
 
-// GameScene::draw2D's entry (FifoMarker::Scene2DBegin).
+// GameScene::draw2D's entry (SceneMarker::Scene2DBegin).
 void RenderCore::on_scene_2d_begin() {
     if (scene_phase_) {
         // GameScene::draw3D returned before its clearZBuffer (movie, nerve):
         // the scene ends here.
-        on_fifo_marker(FifoMarker::SceneEnd, nullptr);
+        on_scene_marker(SceneMarker::SceneEnd, nullptr);
     }
     ++window_2d_scenes_;
 }
@@ -2069,10 +1448,48 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     if (chunk.shape_records.empty()) {
         chunk.shape_records.swap(producer_shape_records_);
         producer_shape_records_.reserve(count);
+        const std::size_t matrices = producer_record_pool_.matrices.size();
+        const std::size_t ops = producer_record_pool_.ops.size();
+        const std::size_t natives = producer_record_pool_.natives.size();
+        const std::size_t vertices = producer_record_pool_.vertices.size();
+        chunk.record_pool.scenes.swap(producer_record_pool_.scenes);
+        chunk.record_pool.vertices.swap(producer_record_pool_.vertices);
+        producer_record_pool_.vertices.reserve(vertices);
+        chunk.record_pool.probes.swap(producer_record_pool_.probes);
+        producer_record_pool_.probes.clear();
+        chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
+        chunk.record_pool.ops.swap(producer_record_pool_.ops);
+        chunk.record_pool.natives.swap(producer_record_pool_.natives);
+        producer_record_pool_.matrices.reserve(matrices);
+        producer_record_pool_.ops.reserve(ops);
+        producer_record_pool_.natives.reserve(natives);
         return;
     }
+    const auto first_matrix = static_cast<std::uint32_t>(chunk.record_pool.matrices.size());
+    const auto first_op = static_cast<std::uint32_t>(chunk.record_pool.ops.size());
+    chunk.record_pool.matrices.insert(chunk.record_pool.matrices.end(), producer_record_pool_.matrices.begin(),
+                                      producer_record_pool_.matrices.end());
+    chunk.record_pool.ops.insert(chunk.record_pool.ops.end(), producer_record_pool_.ops.begin(), producer_record_pool_.ops.end());
+    const auto first_native = static_cast<std::uint32_t>(chunk.record_pool.natives.size());
+    const auto first_vertex = static_cast<std::uint32_t>(chunk.record_pool.vertices.size());
+    const auto first_scene = static_cast<std::uint32_t>(chunk.record_pool.scenes.size());
+    chunk.record_pool.scenes.insert(chunk.record_pool.scenes.end(), producer_record_pool_.scenes.begin(), producer_record_pool_.scenes.end());
+    producer_record_pool_.scenes.clear();
+    chunk.record_pool.vertices.insert(chunk.record_pool.vertices.end(), producer_record_pool_.vertices.begin(), producer_record_pool_.vertices.end());
+    producer_record_pool_.vertices.clear();
+    const auto first_probe = static_cast<std::uint32_t>(chunk.record_pool.probes.size());
+    chunk.record_pool.probes.insert(chunk.record_pool.probes.end(), producer_record_pool_.probes.begin(), producer_record_pool_.probes.end());
+    producer_record_pool_.probes.clear();
+    chunk.record_pool.natives.insert(chunk.record_pool.natives.end(), producer_record_pool_.natives.begin(), producer_record_pool_.natives.end());
+    producer_record_pool_.matrices.clear();
+    producer_record_pool_.ops.clear();
+    producer_record_pool_.natives.clear();
     chunk.shape_records.reserve(chunk.shape_records.size() + count);
     for (shapes::Record& record : producer_shape_records_) {
+        record.matrix_first += first_matrix;
+        record.op_first += first_op;
+        record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe : first_vertex;
+        record.native_index += record.native_index == shapes::kNoNative ? 0u : record.kind == shapes::Record::Kind::Scene ? first_scene : first_native;
         chunk.shape_records.push_back(std::move(record));
     }
     producer_shape_records_.clear();
@@ -2080,31 +1497,6 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
 
 void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
-}
-
-void RenderCore::take_attached_fifo_markers(FrameChunk& chunk) noexcept {
-    chunk.fifo_marker_count = 0;
-    chunk.fifo_marker_view_mask = 0;
-    chunk.fifo_marker_sky_up_mask = 0;
-    for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
-        if (chunk.fifo_marker_count < chunk.fifo_markers.size()) {
-            const std::uint8_t index = chunk.fifo_marker_count++;
-            chunk.fifo_markers[index] = producer_fifo_markers_[i];
-            chunk.fifo_marker_serials[index] = producer_fifo_marker_serials_[i];
-            if ((producer_fifo_marker_view_mask_ & (1u << i)) != 0u) {
-                chunk.fifo_marker_views[index] = producer_fifo_marker_views_[i];
-                chunk.fifo_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
-            }
-            if ((producer_fifo_marker_sky_up_mask_ & (1u << i)) != 0u) {
-                chunk.fifo_marker_sky_up[index] = producer_fifo_marker_sky_up_[i];
-                chunk.fifo_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
-            }
-            chunk.fifo_marker_stages[index] = producer_fifo_marker_stages_[i];
-        }
-    }
-    producer_fifo_marker_count_ = 0;
-    producer_fifo_marker_view_mask_ = 0;
-    producer_fifo_marker_sky_up_mask_ = 0;
 }
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
@@ -2237,1680 +1629,9 @@ void RenderCore::cancel_screen_frame() {
     screen_frame_open_ = false;
 }
 
-bool RenderCore::rt_geometry_draw() const noexcept {
-    if (!(rt_state_eligible_ || rt_card_draw() || rt_alpha_draw()) || !scene_phase_ || side_layer_ != kSceneLayer ||
-        !renderer_.rt_scene_open()) {
-        return false;
-    }
-    using motion::ScenePhase;
-    return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
-}
-
-// Late geometry: opaque draws after the screen capture (indirect-textured models), after the trace.
-bool RenderCore::rt_late_draw() const noexcept {
-    static_assert(static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) == kRtLatePhase);
-    // Alpha-tested and card draws of this phase are traced too, as in the other phases (rt_alpha_draw).
-    return (rt_state_eligible_ || rt_alpha_draw() || rt_card_draw()) && scene_phase_ && side_layer_ == kSceneLayer &&
-           renderer_.rt_late_open() && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
-}
-
-unsigned RenderCore::rt_texgen_of_map(unsigned map) const noexcept {
-    for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
-        const KeyStage& stage = ps_key_.stages[s];
-        if (stage.tex_enable != 0u && stage.tex_map == map) {
-            const unsigned coord = stage.tex_coord;
-            return coord < vs_key_.num_texgens ? coord : 0xFFu;
-        }
-    }
-    return 0xFFu;
-}
-
-void RenderCore::begin_rt_sky_batch(RtDrawInfo& info) {
-    info = RtDrawInfo{};
-    info.surface = kRtDrawSky;
-    info.phase = rt_phase_;
-    info.channel = channel_word(draw_state_.channel[0]);
-    info.ambient = rgba_word(draw_state_.ambient_color[0]);
-    info.material = rgba_word(draw_state_.material_color[0]);
-    // The first TEV stage's texture (as the hits' material texture).
-    for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
-        const KeyStage& stage = ps_key_.stages[s];
-        if (stage.tex_enable == 0u) {
-            continue;
-        }
-        const unsigned map = stage.tex_map;
-        if (current_texture_table_.ptr != 0u && (current_texture_map_mask_ & (1u << map)) != 0u) {
-            info.texture = rt_texture_source(map);
-            info.texgen = rt_texgen_of_map(map);
-        }
-        break;
-    }
-    // Its alpha test (as alpha-tested geometry: the first GREATER or GEQUAL compare).
-    const AlphaCompare test = draw_state_.alpha;
-    if (test.comp0 == CompareFunc::Greater || test.comp0 == CompareFunc::GEqual) {
-        info.alpha_from = test.ref0 + (test.comp0 == CompareFunc::Greater ? 1u : 0u);
-    } else if (test.comp1 == CompareFunc::Greater || test.comp1 == CompareFunc::GEqual) {
-        info.alpha_from = test.ref1 + (test.comp1 == CompareFunc::Greater ? 1u : 0u);
-    }
-    info.alpha_from = std::min(info.alpha_from, 255u);
-    const BlendMode blend = draw_blend();
-    info.blend = (blend.blend_enable ? 1u : 0u) | (static_cast<std::uint32_t>(blend.src_factor) << 1u) |
-                 (static_cast<std::uint32_t>(blend.dst_factor) << 4u) | (blend.subtract ? 0x80u : 0u) |
-                 (blend.color_update ? 0x100u : 0u) | (blend.logic_op_enable ? 0x200u : 0u);
-    fill_rt_tev(info, 1.0f);
-}
-
-std::uint32_t RenderCore::debake_channels() const {
-    static const bool enabled = read_env_u64("GALAXY_RT_DEBAKE", 1u) != 0u;
-    using motion::ScenePhase;
-    if (!enabled || (enhanced_ps_flags_ & kEnhancedRtPhysical) == 0u || rt_sky_buffer_ || !scene_phase_ ||
-        side_layer_ != kSceneLayer || draw_state_.projection_type != 0u ||
-        !(rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
-          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
-          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
-          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa))) {
-        return 0u;
-    }
-    if (const RtMaterial* const material = rt_material(current_rt_material_);
-        material != nullptr && material->emission != RtEmission::None) {
-        return 0u;
-    }
-    // Unlit channels coloured by their vertices (bits 0-1); lit channels (bits 2-3; none with GALAXY_RT_DEBAKE_LIT=0).
-    // Vertex colours hold baked light on the terrain only (MR::DrawBufferType ClippedMapParts 0, Planet 4, PlanetLow 5,
-    // Environment 6-7, IndirectPlanet 0x1D, and the draw types' lists): the game lights its actors as they move, and
-    // map objects paint their vertices with their own colours, lit channels included, so neither is de-baked.
-    static const bool lit_enabled = read_env_u64("GALAXY_RT_DEBAKE_LIT", 1u) != 0u;
-    const std::uint32_t buffer = rt_draw_buffer_ & 0xFFFFu;
-    const bool terrain = buffer == 0xFFFFu || buffer == 0x00u || buffer == 0x04u || buffer == 0x05u ||
-                         buffer == 0x06u || buffer == 0x07u || buffer == 0x1Du;
-    const bool actor = !terrain;
-    std::uint32_t channels = 0u;
-    const unsigned count = std::min<unsigned>(draw_state_.gen.num_color_chans, 2u);
-    for (unsigned c = 0; c < count; ++c) {
-        const XfChannelCtrl ctrl = draw_state_.channel[c];
-        if (!ctrl.lighting_enable && ctrl.material_from_vertex && !actor) {
-            channels |= 1u << c;
-        } else if (ctrl.lighting_enable && lit_enabled && !(actor && ctrl.material_from_vertex)) {
-            channels |= 4u << c;
-        }
-    }
-    return channels;
-}
-
-void RenderCore::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float facing) const {
-    tev = RtTevMaterial{};
-    const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
-    const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
-    tev.header = stages | (texgens << 28u);
-    const auto scales = coordinate_scales(draw_state_, scales_from_textures_);
-    for (unsigned s = 0; s < stages; ++s) {
-        const KeyStage& typed = ps_key_.stages[s];
-        RtTevStage& stage = stages_out[s];
-        stage.color_env = tev_color_bits(typed);
-        stage.alpha_env = tev_alpha_bits(typed);
-        stage.order = tev_order_bits(typed);
-        stage.ksel = tev_select_bits(typed);
-        // The raster's coordinate scale: the texture coordinate's GX scale over its map's size.
-        const unsigned map = typed.tex_map;
-        const unsigned coord = typed.tex_coord;
-        const TexImage image = draw_state_.texture[map].image;
-        stage.scale_s = static_cast<float>(scales[coord][0]) / static_cast<float>(std::max<unsigned>(image.width, 1u));
-        stage.scale_t = static_cast<float>(scales[coord][1]) / static_cast<float>(std::max<unsigned>(image.height, 1u));
-        const TexMode tex_mode = draw_state_.texture[map].mode;
-        stage.pad[1] = static_cast<std::uint32_t>(tex_mode.wrap_s) | (static_cast<std::uint32_t>(tex_mode.wrap_t) << 2u);
-        // Its indirect command (the raster's: active with indirect stages and a nonzero command), and whether the
-        // program has indirect stages at all (rt_tev.hlsli carries the coordinates from stage to stage then).
-        if (ps_key_.num_ind_stages != 0u) {
-            stage.pad[1] |= (ind_command_bits(typed) << 8u) | (1u << 31u);
-        }
-        // A texture whose coordinates the vertex normals generate: an environment map, the game's painted reflection
-        // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place;
-        // GALAXY_RT_PAINTED_REFLECTION=1 keeps them.
-        static const bool painted = read_env_u64("GALAXY_RT_PAINTED_REFLECTION", 0u) != 0u;
-        stage.pad[0] = 0u;
-        if (!painted && typed.tex_enable != 0u && coord < texgens) {
-            const XfTexGen texgen = texgen_of(vs_key_.texgen[coord]);
-            if (texgen.type == TexGenType::Regular && texgen.source_row == 1u) {
-                stage.pad[0] = 1u;
-                tev.header |= 1u << 7u;
-            }
-        }
-    }
-    const AlphaCompare test = draw_state_.alpha;
-    tev.alpha_test = static_cast<std::uint32_t>(test.ref0) | (static_cast<std::uint32_t>(test.ref1) << 8u) |
-                     (static_cast<std::uint32_t>(test.comp0) << 16u) | (static_cast<std::uint32_t>(test.comp1) << 19u) |
-                     (static_cast<std::uint32_t>(test.logic) << 22u);
-    // Colour channels 0 and 1 (colour and alpha controls 0-3): the material register or the vertices' colour, lit at
-    // `facing` of every light in its mask over its ambient register, clamped as GX's channel.
-    const unsigned channels = std::min<unsigned>(draw_state_.gen.num_color_chans, 2u);
-    for (unsigned c = 0; c < 2u; ++c) {
-        if (c >= channels) {
-            tev.channel[c * 2u] = 0u;
-            tev.channel[c * 2u + 1u] = 0xFFFFFFFFu;
-            continue;
-        }
-        const XfChannelCtrl color = draw_state_.channel[c];
-        const XfChannelCtrl alpha = draw_state_.channel[2u + c];
-        tev.channel[c * 2u] = rgba_word(draw_state_.material_color[c]);
-        tev.header |= (color.material_from_vertex ? 1u : 0u) << (24u + 2u * c);
-        tev.header |= (alpha.material_from_vertex ? 1u : 0u) << (25u + 2u * c);
-        const std::uint32_t ambient = rgba_word(draw_state_.ambient_color[c]);
-        float sums[4]{};
-        for (unsigned k = 0; k < 4u; ++k) {
-            const XfChannelCtrl& ctrl = k < 3u ? color : alpha;
-            const unsigned shift = 24u - 8u * k;
-            float sum = 1.0f;
-            if (ctrl.lighting_enable) {
-                sum = static_cast<float>((ambient >> shift) & 0xFFu) / 255.0f;
-                for (unsigned n = 0; n < 8u; ++n) {
-                    if ((ctrl.light_mask & (1u << n)) != 0u) {
-                        sum += facing * static_cast<float>(matrices_.light(n).color[k]) / 255.0f;
-                    }
-                }
-            }
-            sums[k] = sum;
-        }
-        // The player's light rig under physical light: its level, not its hue (rt_player_rig_draw).
-        if (c == 0u && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u && rt_player_rig_draw()) {
-            const float level = 0.2126f * sums[0] + 0.7152f * sums[1] + 0.0722f * sums[2];
-            sums[0] = sums[1] = sums[2] = level;
-        }
-        std::uint32_t light = 0u;
-        for (unsigned k = 0; k < 4u; ++k) {
-            light |= static_cast<std::uint32_t>(std::lround(std::clamp(sums[k], 0.0f, 1.0f) * 255.0f)) << (24u - 8u * k);
-        }
-        tev.channel[c * 2u + 1u] = light;
-    }
-    for (unsigned k = 0; k < 4u; ++k) {
-        tev.konst[k] = konst_rgba(draw_state_, k);
-    }
-    const auto& regs = draw_state_.tev_color;
-    const auto half = [](float v) {
-        // IEEE half, round to nearest (registers are -1024..1023 over 255).
-        const std::uint32_t bits = std::bit_cast<std::uint32_t>(v);
-        const std::uint32_t sign = (bits >> 16u) & 0x8000u;
-        const int exponent = static_cast<int>((bits >> 23u) & 0xFFu) - 127 + 15;
-        if (exponent <= 0) {
-            return sign;
-        }
-        if (exponent >= 31) {
-            return sign | 0x7C00u;
-        }
-        std::uint32_t h = sign | (static_cast<std::uint32_t>(exponent) << 10u) | ((bits >> 13u) & 0x3FFu);
-        if ((bits & 0x1000u) != 0u) {
-            ++h;
-        }
-        return h;
-    };
-    for (unsigned r = 0; r < 4u; ++r) {
-        tev.regs[r * 2u] = half(static_cast<float>(regs[r][0]) / 255.0f) |
-                           (half(static_cast<float>(regs[r][1]) / 255.0f) << 16u);
-        tev.regs[r * 2u + 1u] = half(static_cast<float>(regs[r][2]) / 255.0f) |
-                                (half(static_cast<float>(regs[r][3]) / 255.0f) << 16u);
-    }
-}
-
-// Paint or baked light (apply_debake_model), from a model's distinct vertex colours (at most 2048 sampled per batch):
-// light baked over curved surfaces takes hundreds to thousands of values (39 or more in the game's models), shading
-// painted by hand a handful of exact ones (2-12). Hue is no cue, as the baked light is often coloured. One flat colour
-// is paint too. `hue_count` (saturated hues within 0.15 of chromaticity) is for the log.
-bool debake_colours_baked(const std::unordered_set<std::uint32_t>& colours, unsigned& hue_count, float& lo, float& hi) {
-    std::vector<std::array<float, 3>> hues;
-    lo = 1.0f;
-    hi = 0.0f;
-    for (const std::uint32_t c : colours) {
-        const float r = static_cast<float>((c >> 16u) & 0xFFu) / 255.0f;
-        const float g = static_cast<float>((c >> 8u) & 0xFFu) / 255.0f;
-        const float b = static_cast<float>(c & 0xFFu) / 255.0f;
-        const float peak = std::max({r, g, b});
-        const float least = std::min({r, g, b});
-        lo = std::min(lo, peak);
-        hi = std::max(hi, peak);
-        // Saturated (a paint's hue, not a light's tint) and bright enough for its hue to be known.
-        if (peak < 0.2f || 1.0f - least / peak < 0.35f) {
-            continue;
-        }
-        const std::array<float, 3> hue{r / peak, g / peak, b / peak};
-        const bool known = std::any_of(hues.begin(), hues.end(), [&hue](const std::array<float, 3>& h) {
-            return std::abs(h[0] - hue[0]) < 0.15f && std::abs(h[1] - hue[1]) < 0.15f && std::abs(h[2] - hue[2]) < 0.15f;
-        });
-        if (!known) {
-            hues.push_back(hue);
-        }
-    }
-    hue_count = static_cast<unsigned>(hues.size());
-    return colours.size() > 16u && hi - lo >= 0.08f;
-}
-
-// The nine real spherical harmonics (bands 0-2) at unit direction `n` (Sloan 2008, the same basis as rt_lighting.hlsl
-// sh9 and the de-baking shaders).
-void debake_sh9(const float* n, float* y) {
-    y[0] = 0.282095f;
-    y[1] = 0.488603f * n[1];
-    y[2] = 0.488603f * n[2];
-    y[3] = 0.488603f * n[0];
-    y[4] = 1.092548f * n[0] * n[1];
-    y[5] = 1.092548f * n[1] * n[2];
-    y[6] = 0.315392f * (3.0f * n[2] * n[2] - 1.0f);
-    y[7] = 1.092548f * n[0] * n[2];
-    y[8] = 0.546274f * (n[0] * n[0] - n[1] * n[1]);
-}
-
-// The light baked into a model's vertex colours as a function of the surface's facing: per channel the least-squares
-// fit of nine spherical harmonics of the vertex normal to the colour (Ramamoorthi & Hanrahan 2001: a distant light's
-// irradiance lies almost wholly in these bands), solved by Cholesky with a small ridge (1e-3 of the mean diagonal).
-// What the facing does not explain stays: paint, occlusion.
-void RenderCore::fit_debake_light(DebakeModel& model) {
-    model.fitted = false;
-    if (model.samples.size() < 32u) {
-        return;
-    }
-    double a[9][9]{};
-    double b[3][9]{};
-    double sum_y = 0.0;
-    double sum_y2 = 0.0;
-    for (const std::array<float, 6>& s : model.samples) {
-        float y[9];
-        debake_sh9(s.data(), y);
-        for (unsigned i = 0; i < 9u; ++i) {
-            for (unsigned j = 0; j <= i; ++j) {
-                a[i][j] += static_cast<double>(y[i]) * y[j];
-            }
-            for (unsigned c = 0; c < 3u; ++c) {
-                b[c][i] += static_cast<double>(y[i]) * s[3u + c];
-            }
-        }
-        const double lum = 0.2126 * s[3] + 0.7152 * s[4] + 0.0722 * s[5];
-        sum_y += lum;
-        sum_y2 += lum * lum;
-    }
-    double trace = 0.0;
-    for (unsigned i = 0; i < 9u; ++i) {
-        trace += a[i][i];
-    }
-    const double ridge = 1e-3 * trace / 9.0;
-    double l[9][9]{};
-    for (unsigned i = 0; i < 9u; ++i) {
-        for (unsigned j = 0; j <= i; ++j) {
-            double sum = a[i][j] + (i == j ? ridge : 0.0);
-            for (unsigned k = 0; k < j; ++k) {
-                sum -= l[i][k] * l[j][k];
-            }
-            if (i == j) {
-                if (sum <= 0.0) {
-                    return;
-                }
-                l[i][i] = std::sqrt(sum);
-            } else {
-                l[i][j] = sum / l[j][j];
-            }
-        }
-    }
-    for (unsigned c = 0; c < 3u; ++c) {
-        double z[9];
-        for (unsigned i = 0; i < 9u; ++i) {
-            double sum = b[c][i];
-            for (unsigned k = 0; k < i; ++k) {
-                sum -= l[i][k] * z[k];
-            }
-            z[i] = sum / l[i][i];
-        }
-        for (int i = 8; i >= 0; --i) {
-            double sum = z[i];
-            for (unsigned k = static_cast<unsigned>(i) + 1u; k < 9u; ++k) {
-                sum -= l[k][i] * z[k];
-            }
-            z[i] = sum / l[i][i];
-            model.sh[c * 9u + static_cast<unsigned>(i)] = static_cast<float>(z[i]);
-        }
-    }
-    // The most lit sampled facing, and how much of the luminance's variance the facing explains.
-    model.peak = {0.0f, 0.0f, 0.0f};
-    double sse = 0.0;
-    for (const std::array<float, 6>& s : model.samples) {
-        float y[9];
-        debake_sh9(s.data(), y);
-        float fit[3]{};
-        for (unsigned c = 0; c < 3u; ++c) {
-            for (unsigned i = 0; i < 9u; ++i) {
-                fit[c] += model.sh[c * 9u + i] * y[i];
-            }
-            model.peak[c] = std::max(model.peak[c], fit[c]);
-        }
-        const double lum = 0.2126 * s[3] + 0.7152 * s[4] + 0.0722 * s[5];
-        const double fitted = 0.2126 * fit[0] + 0.7152 * fit[1] + 0.0722 * fit[2];
-        sse += (lum - fitted) * (lum - fitted);
-    }
-    const double n = static_cast<double>(model.samples.size());
-    const double sst = sum_y2 - sum_y * sum_y / n;
-    model.fit_r2 = sst > 1e-9 ? static_cast<float>(std::max(0.0, 1.0 - sse / sst)) : 0.0f;
-    model.fitted = true;
-}
-
-std::uint32_t RenderCore::apply_debake_model(std::uint32_t channels) {
-    debake_model_level_ = 0u;
-    debake_fit_active_ = false;
-    if ((channels & 3u) == 0u) {
-        return channels;
-    }
-    // Indexed colours only (a model's arrays: a record's keys, else the GX array registers; the descriptor's VCD
-    // part is the same for every format).
-    std::uint64_t key = 0u;
-    if (record_inputs_ != nullptr) {
-        if (!record_inputs_->colored || record_inputs_->own_positions) {
-            return channels;
-        }
-        key = record_inputs_->colors;
-    } else {
-        // An immediate draw's colours are its own.
-        return channels;
-    }
-    if (const std::uint32_t stage = rt_materials_stage_serial(); stage != debake_models_stage_) {
-        debake_models_.clear();
-        debake_models_stage_ = stage;
-    }
-    DebakeModel& model = debake_models_[key];
-    if (!model.decided) {
-        if (model.frame == 0u) {
-            model.frame = frame_index_ + 1u;
-        }
-        if (frame_index_ + 1u <= model.frame || model.vertices == 0u) {
-            // Its first frame: drawn as the game paints it while its colours are sampled.
-            debake_sample_key_ = key;
-            return channels & ~3u;
-        }
-        unsigned hues = 0u;
-        float lo = 0.0f;
-        float hi = 0.0f;
-        model.baked = debake_colours_baked(model.colours, hues, lo, hi);
-        const std::size_t sampled = model.samples.size();
-        fit_debake_light(model);
-        model.level = static_cast<std::uint8_t>(std::lround(std::clamp(hi, 0.0f, 1.0f) * 255.0f));
-        model.decided = true;
-        static const bool log = read_env_u64("GALAXY_RT_DEBAKE_LOG", 0u) != 0u;
-        if (log) {
-            std::string sample;
-            unsigned shown = 0u;
-            for (const std::uint32_t c : model.colours) {
-                if (shown++ == 12u) {
-                    break;
-                }
-                char text[10];
-                std::snprintf(text, sizeof(text), " %06X", c);
-                sample += text;
-            }
-            std::fprintf(stderr,
-                         "[rt-debake] model=%08X:%08X buffer=%u vertices=%u colours=%zu hues=%u value=%.2f-%.2f %s "
-                         "normals=%zu fit=%d r2=%.2f peak=%.2f,%.2f,%.2f%s\n",
-                         static_cast<unsigned>(key & 0xFFFFFFFFu), static_cast<unsigned>(key >> 32u),
-                         rt_draw_buffer_ & 0xFFFFu, model.vertices, model.colours.size(), hues, lo, hi,
-                         model.baked ? "baked" : "paint", sampled, model.fitted ? 1 : 0, model.fit_r2, model.peak[0],
-                         model.peak[1], model.peak[2], sample.c_str());
-        }
-        model.colours = {};
-        model.samples = {};
-        if (model.baked) {
-            debake_model_order_.push_back(key);
-        }
-    }
-    // Its light as a function of the facing (its vertices have normals): the shaders take that out alone, whatever
-    // its colours count (GALAXY_RT_DEBAKE_FIT=0: the colours' verdict and each colour over its brightest channel).
-    static const bool by_fit = read_env_u64("GALAXY_RT_DEBAKE_FIT", 1u) != 0u;
-    if (by_fit && model.fitted) {
-        for (unsigned i = 0; i < 27u; ++i) {
-            debake_fit_sh_[i / 4u][i % 4u] = model.sh[i];
-        }
-        debake_fit_sh_[6][3] = 0.0f;
-        debake_fit_peak_[0] = model.peak[0];
-        debake_fit_peak_[1] = model.peak[1];
-        debake_fit_peak_[2] = model.peak[2];
-        debake_fit_peak_[3] = 0.0f;
-        debake_fit_active_ = true;
-        return channels;
-    }
-    if (!model.baked) {
-        return channels & ~3u;
-    }
-    // GALAXY_RT_DEBAKE_CYCLE=1 (diagnostics): one baked model de-baked at a time, the next every 120 frames, to find a
-    // model in the picture.
-    static const bool cycle = read_env_u64("GALAXY_RT_DEBAKE_CYCLE", 0u) != 0u;
-    if (cycle && !debake_model_order_.empty()) {
-        const std::size_t turn = static_cast<std::size_t>((frame_index_ / 120u) % debake_model_order_.size());
-        static std::size_t logged_turn = ~std::size_t{0};
-        if (turn != logged_turn) {
-            logged_turn = turn;
-            std::fprintf(stderr, "[rt-debake-cycle] frame=%llu turn=%zu model=%08X:%08X\n",
-                         static_cast<unsigned long long>(frame_index_), turn,
-                         static_cast<unsigned>(debake_model_order_[turn] & 0xFFFFFFFFu),
-                         static_cast<unsigned>(debake_model_order_[turn] >> 32u));
-        }
-        if (debake_model_order_[turn] != key) {
-            return channels & ~3u;
-        }
-    }
-    // GALAXY_RT_DEBAKE_LEVEL=1: de-baked to the model's brightest vertex; else to the program's neutral level.
-    static const bool brightest = read_env_u64("GALAXY_RT_DEBAKE_LEVEL", 0u) != 0u;
-    debake_model_level_ = brightest ? model.level : 0u;
-    return channels;
-}
-
-void RenderCore::sample_debake_model(std::uint64_t key, const DrawCall& call) {
-    const auto found = debake_models_.find(key);
-    if (found == debake_models_.end() || found->second.decided) {
-        return;
-    }
-    DebakeModel& model = found->second;
-    // The batch's decoded vertices: the frame ring or the resident buffer (both CPU-mapped upload memory, read
-    // sparsely: at most 2048 vertices a batch).
-    const gpu::Address va = call.vertex_view.BufferLocation;
-    const std::uint32_t bytes = call.vertex_view.SizeInBytes;
-    const std::byte* vertices = nullptr;
-    const std::uint64_t resident_bytes =
-        static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex);
-    if (resident_vertex_mapped_ != nullptr && va >= resident_vertex_gpu_ && va + bytes <= resident_vertex_gpu_ + resident_bytes) {
-        vertices = resident_vertex_mapped_ + (va - resident_vertex_gpu_);
-    } else {
-        vertices = renderer_.vertex_ring().cpu_at(va);
-    }
-    if (vertices == nullptr) {
-        return;
-    }
-    const std::uint32_t count = bytes / static_cast<std::uint32_t>(sizeof(RenderVertex));
-    const std::uint32_t step = std::max(count / 2048u, 1u);
-    for (std::uint32_t v = 0u; v < count && model.colours.size() < kDebakeModelColours; v += step) {
-        std::uint32_t colour = 0u;
-        std::memcpy(&colour, vertices + static_cast<std::size_t>(v) * sizeof(RenderVertex) + offsetof(RenderVertex, color0),
-                    sizeof(colour));
-        model.colours.insert(colour >> 8u);   // RGB (R in the high byte)
-        if (model.samples.size() < kDebakeModelSamples) {
-            float normal[3];
-            std::memcpy(normal, vertices + static_cast<std::size_t>(v) * sizeof(RenderVertex) + offsetof(RenderVertex, normal),
-                        sizeof(normal));
-            const float length2 = normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2];
-            if (std::isfinite(length2) && length2 > 0.25f) {
-                const float inv = 1.0f / std::sqrt(length2);
-                model.samples.push_back({normal[0] * inv, normal[1] * inv, normal[2] * inv,
-                                         static_cast<float>((colour >> 24u) & 0xFFu) / 255.0f,
-                                         static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
-                                         static_cast<float>((colour >> 8u) & 0xFFu) / 255.0f});
-            }
-        }
-    }
-    model.vertices += count;
-}
-
-std::uint32_t RenderCore::debake_state() {
-    const std::uint32_t channels = apply_debake_model(debake_channels());
-    if (channels == 0u) {
-        return 0u;
-    }
-    // The program's neutral light per de-baked channel (rt_tev_neutral_light), by the TEV state it depends on.
-    RtTevMaterial tev{};
-    std::array<RtTevStage, kRtTevMaxStages> stages{};
-    build_rt_tev(tev, stages.data(), 1.0f);
-    std::uint64_t key = combine64(channels, tev.header);
-    const auto words = [&key](const std::uint32_t* w, std::size_t n) {
-        for (std::size_t i = 0; i < n; ++i) {
-            key = combine64(key, w[i]);
-        }
-    };
-    words(&tev.alpha_test, 1u + 4u + 4u + 8u);
-    for (unsigned s = 0; s < (tev.header & 0x1Fu); ++s) {
-        words(&stages[s].color_env, 4u);
-    }
-    // A baked model's unlit channels: every vertex as bright as its brightest (the surface as the game shows it fully
-    // lit, the programs' doubling and clamping included), not the program's neutral level, which shows the texture
-    // 1:1 at about half the game's lit brightness.
-    const auto model_level = [this](std::uint32_t state) {
-        if (debake_model_level_ != 0u) {
-            for (unsigned c = 0; c < 2u; ++c) {
-                if ((state & (1u << c)) != 0u) {
-                    state = (state & ~(0xFFu << (8u + 8u * c))) |
-                            (static_cast<std::uint32_t>(debake_model_level_) << (8u + 8u * c));
-                }
-            }
-        }
-        return state;
-    };
-    const auto found = debake_levels_.find(key);
-    if (found != debake_levels_.end()) {
-        return model_level(found->second);
-    }
-    std::uint32_t state = channels;
-    for (unsigned c = 0; c < 2u; ++c) {
-        if ((channels & (5u << c)) != 0u) {
-            state |= rt_tev_neutral_light(tev, stages.data(), c, (channels & (4u << c)) != 0u) << (8u + 8u * c);
-        }
-    }
-    if (debake_levels_.size() > 65536u) {
-        debake_levels_.clear();
-    }
-    debake_levels_.emplace(key, state);
-    return model_level(state);
-}
-
-void RenderCore::fill_rt_tev(RtDrawInfo& info, float facing) {
-    RtTevMaterial& tev = info.tev;
-    build_rt_tev(tev, info.tev_stages.data(), facing);
-    const unsigned stages = tev.header & 0x1Fu;
-    const unsigned texgens = tev.header >> 28u;
-    // The two texture slots: the material texture's coordinates, then the next ones a stage reads (the raster's rule:
-    // coordinates past the draw's generators read generator 0).
-    unsigned slot0 = info.texgen < texgens ? info.texgen : 0xFFu;
-    unsigned slot1 = 0xFFu;
-    for (unsigned s = 0; s < stages; ++s) {
-        const KeyStage& stage = ps_key_.stages[s];
-        if (stage.tex_enable == 0u || texgens == 0u) {
-            continue;
-        }
-        const unsigned coord = stage.tex_coord < texgens ? stage.tex_coord : 0u;
-        if (slot0 == 0xFFu) {
-            slot0 = coord;
-        } else if (coord != slot0 && slot1 == 0xFFu) {
-            slot1 = coord;
-        }
-    }
-    // Indirect texturing (RtTevIndirect): its stages' maps and coordinates, their scales and matrices as the raster's
-    // (ShaderGenerator, fill_ps_constants); an indirect map's coordinates take a free slot.
-    info.tev_indirect = {};
-    const unsigned ind_stages = std::min<unsigned>(ps_key_.num_ind_stages, 4u);
-    if (ind_stages != 0u) {
-        RtTevIndirect& ind = info.tev_indirect;
-        ind.order = ind_order_bits(ps_key_) | (ind_stages << 24u);
-        const auto coord_size = [this](unsigned coord, unsigned axis) {
-            return coordinate_scales(draw_state_, scales_from_textures_)[coord & 7u][axis];
-        };
-        for (unsigned i = 0; i < ind_stages; ++i) {
-            const unsigned map = ps_key_.ind_order[i].map;
-            const unsigned coord_raw = ps_key_.ind_order[i].coord;
-            const unsigned coord = coord_raw < texgens ? coord_raw : 0u;
-            const std::uint32_t shifts = ps_key_.ind_order[i].scale_s | (ps_key_.ind_order[i].scale_t << 4u);
-            const TexImage image = draw_state_.texture[map].image;
-            ind.scale[i * 2u] = static_cast<float>(coord_size(coord, 0u)) /
-                                (std::ldexp(1.0f, static_cast<int>(shifts & 0xFu)) *
-                                 static_cast<float>(std::max<unsigned>(image.width, 1u)));
-            ind.scale[i * 2u + 1u] = static_cast<float>(coord_size(coord, 1u)) /
-                                     (std::ldexp(1.0f, static_cast<int>((shifts >> 4u) & 0xFu)) *
-                                      static_cast<float>(std::max<unsigned>(image.height, 1u)));
-            if (texgens != 0u && slot0 == 0xFFu) {
-                slot0 = coord;
-            } else if (texgens != 0u && coord != slot0 && slot1 == 0xFFu) {
-                slot1 = coord;
-            }
-        }
-        const auto pack = [](std::int32_t lo, std::int32_t hi) {
-            return (static_cast<std::uint32_t>(lo) & 0xFFFFu) | (static_cast<std::uint32_t>(hi) << 16u);
-        };
-        for (unsigned m = 0; m < 3u; ++m) {
-            const auto& mt = draw_state_.ind_matrix[m];
-            const std::int32_t shift = -mt.scale;
-            ind.matrix[m * 4u] = pack(mt.m[0][0], mt.m[0][1]);
-            ind.matrix[m * 4u + 1u] = pack(mt.m[0][2], shift);
-            ind.matrix[m * 4u + 2u] = pack(mt.m[1][0], mt.m[1][1]);
-            ind.matrix[m * 4u + 3u] = pack(mt.m[1][2], shift);
-        }
-        for (unsigned t = 0; t < 8u; ++t) {
-            ind.coord_size[t] = (coord_size(t, 0u) - 1u) | ((coord_size(t, 1u) - 1u) << 16u);
-        }
-    }
-    info.texgen = slot0;
-    info.texgen2 = slot1;
-    for (unsigned t = 0; t < 8u; ++t) {
-        const unsigned coord = t < texgens ? t : 0u;
-        tev.header |= (coord == slot1 ? 1u : 0u) << (8u + 2u * t);
-    }
-    // Bits 5-6: an unlit channel's vertex colour de-baked to its program's neutral light (pad[0] bits 0-15: the levels);
-    // pad[0] bits 16-17: a lit channel lit at its neutral light, its vertex colour's hue its material. As the raster's
-    // (debake_state; never the sky's).
-    // The painted reflection (environment-map stages, header bit 7) comes out only on metal, whose traced reflection
-    // takes its place; crystal, glass, glossy and unlit surfaces keep it as their look (their brilliance, sheen).
-    if (((info.surface & kRtDrawClassMask) >> kRtDrawClassShift) != static_cast<std::uint32_t>(RtSurfaceClass::Metal)) {
-        tev.header &= ~(1u << 7u);
-    }
-    const std::uint32_t debake = (info.surface & kRtDrawSky) != 0u ? 0u : debake_state();
-    // By the model's facing fit the traced triangles' colours come de-baked (ray_tracing.hlsl GeometryCS).
-    tev.header |= debake_fit_active_ ? 0u : (debake & 3u) << 5u;
-    tev.pad[0] = ((debake >> 8u) & 0xFFFFu) | (((debake >> 2u) & 3u) << 16u);
-    // A lit channel at its neutral light in its full light's hue (as the raster's, shader_gen): the ambient register or
-    // the vertices can hold the object's own colour.
-    for (unsigned c = 0; c < 2u; ++c) {
-        if ((debake & (4u << c)) != 0u) {
-            const std::uint32_t level = (debake >> (8u + 8u * c)) & 0xFFu;
-            const std::uint32_t light = tev.channel[c * 2u + 1u];
-            const std::uint32_t rgb[3] = {light >> 24u, (light >> 16u) & 0xFFu, (light >> 8u) & 0xFFu};
-            const std::uint32_t peak = std::max({rgb[0], rgb[1], rgb[2]});
-            std::uint32_t word = 0xFFu;
-            for (unsigned k = 0; k < 3u; ++k) {
-                const std::uint32_t v = peak != 0u ? (rgb[k] * level + peak / 2u) / peak : level;
-                word |= std::min(v, 255u) << (24u - 8u * k);
-            }
-            tev.channel[c * 2u + 1u] = word;
-        }
-    }
-    info.tev_maps = {};
-    if (current_texture_table_.ptr != 0u) {
-        for (unsigned m = 0; m < kMaxTextureMaps && m < 8u; ++m) {
-            if ((current_texture_map_mask_ & (1u << m)) != 0u) {
-                info.tev_maps[m] = rt_texture_source(m);
-            }
-        }
-    }
-}
-
-RtTextureSource RenderCore::rt_texture_source(unsigned map) const noexcept {
-    const TextureHandle& handle = current_texture_handles_[map];
-    if (handle.resource == nullptr) {
-        return {};
-    }
-#if defined(NEBULA_GPU_VULKAN)
-    return {};  // no ray tracing on Vulkan yet
-#else
-    D3D12_CPU_DESCRIPTOR_HANDLE view = texture_cache_.backend().srv_cpu_base();
-    view.ptr += static_cast<SIZE_T>(handle.srv_index) * texture_cache_.backend().srv_descriptor_stride();
-    return {static_cast<std::uintptr_t>(view.ptr), handle.resource, handle.from_efb_copy ? 0u : handle.pack,
-            handle.width, handle.height, handle.mip_levels};
-#endif
-}
-
-// An alpha-tested draw of the material table's foliage (grass tufts, flower carpets): traced as a card,
-// whole (kRtDrawCard: the lighting counts its hits where the raster drew it). GALAXY_RT_CARDS=0 leaves
-// cards out of the traced scene.
-bool RenderCore::rt_card_draw() const noexcept {
-    static const bool enabled = read_env_u64("GALAXY_RT_CARDS", 1u) != 0u;
-    if (!enabled || !rt_card_eligible_ || current_rt_material_ == 0u) {
-        return false;
-    }
-    const RtMaterial* const material = rt_material(current_rt_material_);
-    return material != nullptr && material->foliage;
-}
-
-// An alpha-tested opaque draw outside the foliage table: most such tests cut little or nothing, so it is traced
-// whole and the rays test its texture's alpha (kRtDrawAlphaTest). GALAXY_RT_ALPHA_GEOMETRY=0 leaves them out.
-bool RenderCore::rt_alpha_draw() const noexcept {
-    static const bool enabled = read_env_u64("GALAXY_RT_ALPHA_GEOMETRY", 1u) != 0u;
-    if (!enabled || !rt_card_eligible_ || rt_card_draw()) {
-        return false;
-    }
-    // A particle texture the table names a light source, drawn as opaque geometry, is that light's surface and is
-    // traced; other particle textures and the sky are not.
-    const RtMaterial* const material = current_rt_material_ != 0u ? rt_material(current_rt_material_) : nullptr;
-    return material == nullptr || ((!material->particle || material->emission != RtEmission::None) && !material->sky &&
-                                    !material->hide);
-}
-
-// Glows: additive draws of the translucent phases, after the trace and before the scene's end.
-bool RenderCore::rt_glow_draw() const noexcept {
-    if (!rt_glow_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
-        return false;
-    }
-    using motion::ScenePhase;
-    return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
-}
-
-// Light sprites: alpha-blended draws of the translucent phases whose texture the material table names as a
-// light: captured with the glows, their light found from what they add to the picture.
-bool RenderCore::rt_sprite_light_draw() const noexcept {
-    if (!rt_sprite_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
-        return false;
-    }
-    using motion::ScenePhase;
-    if (rt_phase_ != static_cast<std::uint8_t>(ScenePhase::Xlu) &&
-        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::ListXlu) &&
-        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::AfterIndirect)) {
-        return false;
-    }
-    const RtMaterial* const material = rt_material(current_rt_material_);
-    return material != nullptr && material->emission != RtEmission::None && !material->no_light;
-}
-
-// Water: alpha-blended draws of the translucent phases (seas, pools, lakes) before the image
-// effects; begin_rt_batch keeps those of the water class (indirect-textured) and the clear ones
-// (crystals, glass: environment-mapped or named).
-bool RenderCore::rt_water_draw() const noexcept {
-    if (!rt_water_wanted_ || !rt_water_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        !renderer_.rt_water_open()) {
-        return false;
-    }
-    // Particles are never a water surface: effects drawn with indexed positions (a waterfall's spray cloud, smoke,
-    // sparkles, bubbles) had the water pass's body painted over them, washed out.
-    if (const RtMaterial* const material = rt_material(current_rt_material_); material != nullptr && material->particle) {
-        return false;
-    }
-    using motion::ScenePhase;
-    return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
-           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
-}
-
-// The game's procedural water surfaces (OceanBowl, OceanSphere, OceanRing): direct vertices drawn in the translucent
-// phases with a material the table names water (particles have their own rows), alpha blended, or added from below
-// while the camera is in the water. Water as the models' surfaces are (rt_water_draw needs indexed positions to keep
-// particles out).
-bool RenderCore::rt_ocean_water_draw() const noexcept {
-    if (!rt_water_wanted_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open() ||
-        draw_positions_indexed() ||
-        draw_state_.projection_type != 0u) {
-        return false;
-    }
-    using motion::ScenePhase;
-    if (rt_phase_ != static_cast<std::uint8_t>(ScenePhase::Xlu) &&
-        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::ListXlu) &&
-        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::AfterIndirect)) {
-        return false;
-    }
-    const BlendMode blend = draw_blend();
-    if (!blend.blend_enable || blend.logic_op_enable || blend.subtract || !blend.color_update ||
-        blend.src_factor != BlendFactor::SrcAlpha ||
-        (blend.dst_factor != BlendFactor::InvSrcAlpha && blend.dst_factor != BlendFactor::One)) {
-        return false;
-    }
-    const RtMaterial* const material = rt_material(current_rt_material_);
-    return material != nullptr && material->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water) &&
-           !material->particle && !material->helper && !material->waterfall && material->emission == RtEmission::None;
-}
-
-// The material table entry of a draw: its first mapped texture's that has one. Lookup textures
-// (environment, indirect and mask maps, shared by many models) decide only a draw that maps nothing
-// else the table names. Falling water decides whatever comes before it: Beach Bowl's and the Twin Falls'
-// waterfalls map a ripple map and an indirect warp ahead of their fall texture.
-std::uint16_t RenderCore::rt_material_of(std::uint32_t map_mask,
-                                        const std::array<TextureHandle, kMaxTextureMaps>& handles,
-                                        unsigned& map) noexcept {
-    for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        if ((map_mask & (1u << m)) == 0u || handles[m].rt_material == 0u) {
-            continue;
-        }
-        const RtMaterial* const material = rt_material(handles[m].rt_material);
-        if (material != nullptr && material->waterfall && !material->helper) {
-            map = m;
-            return handles[m].rt_material;
-        }
-    }
-    std::uint16_t lookup = 0u;
-    unsigned lookup_map = 0xFFu;
-    unsigned first = 0xFFu;
-    std::uint16_t metal_helper = 0u;
-    for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        if ((map_mask & (1u << m)) == 0u) {
-            continue;
-        }
-        if (first == 0xFFu && handles[m].resource != nullptr) {
-            first = m;
-        }
-        if (handles[m].rt_material == 0u) {
-            continue;
-        }
-        const RtMaterial* const material = rt_material(handles[m].rt_material);
-        if (material == nullptr || !material->helper) {
-            map = m;
-            return handles[m].rt_material;
-        }
-        if (lookup == 0u) {
-            lookup = handles[m].rt_material;
-            lookup_map = m;
-        }
-        // A material of helpers alone (Spring Mario's spring: an indirect dummy, then its environment maps) takes
-        // the helper the table names metal over a shared dummy before it.
-        if (metal_helper == 0u && material != nullptr &&
-            material->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Metal)) {
-            metal_helper = handles[m].rt_material;
-        }
-    }
-    // A helper (an environment or indirect map) is not the surface's colour: the first bound map is.
-    map = first != 0xFFu ? first : lookup_map;
-    return metal_helper != 0u ? metal_helper : lookup;
-}
-
-void RenderCore::begin_rt_stage() {
-    renderer_.rt_reset_sky();
-    rt_fake_shadow_cache_.clear();
-    rt_world_held_ = {};
-    note_rt_stage();
-}
-
-// The loaded stage (as the game reports it) and its row of the sun table.
-void RenderCore::note_rt_stage() {
-    char name[sizeof(SceneStage)]{};
-    if (scene_stage_known_) {
-        std::memcpy(name, scene_stage_.data(), sizeof(name));
-    }
-    rt_materials_set_stage(name);
-    {
-        std::uint64_t h = 1469598103934665603ull;
-        for (const char* c = name; *c != 0; ++c) {
-            h = (h ^ static_cast<unsigned char>(*c)) * 1099511628211ull;
-        }
-        rt_stage_hash_ = h;
-    }
-    const RtStageSun* const sun = name[0] != 0 ? rt_stage_sun(name) : nullptr;
-    renderer_.rt_set_stage_sun(sun);
-    if (trace_actor_lights_enabled()) [[unlikely]] {
-        std::fprintf(stderr, "[rt-stage] name=%s sun=%s\n", name[0] != 0 ? name : "?",
-                     sun == nullptr                             ? "no row"
-                     : sun->source == RtStageSun::Source::Table ? "table"
-                     : sun->source == RtStageSun::Source::None  ? "none"
-                     : sun->source == RtStageSun::Source::Core  ? "core"
-                     : sun->source == RtStageSun::Source::Moon  ? "moon"
-                                                                : "game");
-    }
-}
-
-// The game's own shadow drawers (blob and volume shadows: 影描画[...], 板状シャドウボリューム描画): under
-// traced lighting every object casts its true shadow, so these are not drawn. Their names are read
-// once per object (cached until the next stage).
-bool RenderCore::rt_fake_shadow_object(std::uint64_t object) {
-    if (object == 0u) {
-        return false;
-    }
-    if (const auto it = rt_fake_shadow_cache_.find(object); it != rt_fake_shadow_cache_.end()) {
-        return it->second;
-    }
-    char name[48]{};
-    rt_object_name(name, sizeof(name));
-    static constexpr char kShadow[] = "\x89\x65\x95\x60\x89\xE6";           // 影描画
-    static constexpr char kPlateShadow[] = "\x94\xC2\x8F\xF3\x83\x56\x83\x83";  // 板状シャ...
-    // The drop shadows only (sphere, oval, cylinder, box volumes, plates, water-surface circles): the line,
-    // electric-rail and ring-beam volumes draw effects the traced light does not replace.
-    static constexpr char kLine[] = "\x83\x89\x83\x43\x83\x93";       // ライン
-    static constexpr char kRail[] = "\x93\x64\x8C\x82";               // 電撃
-    static constexpr char kRing[] = "\x83\x8A\x83\x93\x83\x4F";       // リング
-    const bool drawer = std::strncmp(name, kShadow, sizeof(kShadow) - 1u) == 0 ||
-                        std::strncmp(name, kPlateShadow, sizeof(kPlateShadow) - 1u) == 0;
-    const bool shadow = drawer && std::strstr(name, kLine) == nullptr && std::strstr(name, kRail) == nullptr &&
-                        std::strstr(name, kRing) == nullptr;
-    if (rt_fake_shadow_cache_.size() > 4096u) {
-        rt_fake_shadow_cache_.clear();
-    }
-    rt_fake_shadow_cache_.emplace(object, shadow);
-    return shadow;
-}
-
-bool RenderCore::rt_traced_clear_draw() const noexcept {
-    // Glass joins the water window (its draws after the trace); a clear solid is the scene's own geometry, unseen
-    // (drawn before the trace: the crystal cages).
-    const RtMaterial* const clear = rt_material(current_rt_material_);
-    return clear != nullptr && clear->traced && scene_phase_ && side_layer_ == kSceneLayer &&
-           renderer_.rt_engine_clear() && (clear->solid ? renderer_.rt_scene_open() : renderer_.rt_water_open());
-}
-
-bool RenderCore::rt_traced_solid_draw() const noexcept {
-    const RtMaterial* const clear = rt_material(current_rt_material_);
-    return clear != nullptr && clear->solid && rt_traced_clear_draw();
-}
-
-bool RenderCore::rt_hidden_draw() const noexcept {
-    // A trace-only draw is never drawn (rt_trace_only_: the game draws it only for the ray tracer).
-    if (rt_trace_only_) {
-        return true;
-    }
-    // GALAXY_RT_HIDE_MIRROR=1: the game's mirror pass (the world drawn from the mirrored camera into the
-    // texture mirrors project) is not drawn under traced reflections. Off by default: mirrored draws made after
-    // the reflection composite stay either way.
-    static const bool hide_mirror = read_env_u64("GALAXY_RT_HIDE_MIRROR", 0u) != 0u;
-    if (rt_mirror_pass_ && hide_mirror && renderer_.rt_reflections_active()) {
-        return true;
-    }
-    if (!scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
-        return false;
-    }
-    // A clear surface the engine traces (the table's `traced`): its reflection and what shows through are traced
-    // (rt_engine.hlsl EngineClearCS); the game's draw paints a fake reflection over it.
-    if (rt_traced_clear_draw()) {
-        return true;
-    }
-    // A spray sprite of the table's `mist` effects: a puff of drops the engine lights (note_rt_mist), not the game's
-    // painted cloud.
-    if (rt_mist_draw()) {
-        return true;
-    }
-    // The game's own shadows: its shadow lists by their draw type (every drawer the game files there: blob and volume
-    // shadows of items, enemies and objects), and the drawers known by name.
-    if (rt_fake_shadow_list_ || rt_object_fake_shadow_) {
-        return true;
-    }
-    // The alpha-shadow phase draws one object, Mario's drop shadow (MarioActor::drawShadow, the only member of
-    // MR::DrawType_AlphaShadow); under the traced shadows it would be a second one.
-    if (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AlphaShadow)) {
-        return true;
-    }
-    // GALAXY_RT_DEBUG_HIDE_PHASE=n (diagnostics): scene phase n's draws are not drawn under the traced lighting.
-    static const std::uint64_t debug_hide_phase = read_env_u64("GALAXY_RT_DEBUG_HIDE_PHASE", 255u);
-    if (debug_hide_phase < 255u && rt_phase_ == static_cast<std::uint8_t>(debug_hide_phase)) {
-        return true;
-    }
-    // GALAXY_RT_DEBUG_HIDE_MATERIAL_LO/_HI (diagnostics): the draws of the table's materials lo..hi (0: none) are not
-    // drawn under the traced lighting (bisecting a draw by material; mat_id.py names them).
-    // _PHASE: only in that scene phase.
-    static const std::uint64_t debug_hide_lo = read_env_u64("GALAXY_RT_DEBUG_HIDE_MATERIAL_LO", 1u);
-    static const std::uint64_t debug_hide_hi = read_env_u64("GALAXY_RT_DEBUG_HIDE_MATERIAL_HI", 0u);
-    static const std::uint64_t debug_hide_material_phase = read_env_u64("GALAXY_RT_DEBUG_HIDE_MATERIAL_PHASE", 255u);
-    if (current_rt_material_ >= debug_hide_lo && current_rt_material_ <= debug_hide_hi &&
-        (debug_hide_material_phase >= 255u || rt_phase_ == static_cast<std::uint8_t>(debug_hide_material_phase))) {
-        return true;
-    }
-    // The game's own mirror copies drawn in the translucent and image-effect phases (Mario's blended copy under glass)
-    // carry a mirrored position matrix; under traced reflections they would double what the trace reflects.
-    // GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them. Mario's reflection under ice (MarioActor::drawReflectModel, the
-    // indirect phase) stays: ice reflects at its own Fresnel (n 1.31), 2 % looking down, and a floor's traced mirror
-    // sees only his unlit underside, so under the trace alone he vanished from Freezeflame's rink (the owner, 27
-    // October 2026: ice reflects everything). The opaque phases keep any mirrored geometry the game builds with a
-    // negative scale.
-    static const bool keep_mirrors = read_env_u64("GALAXY_RT_KEEP_GAME_MIRRORS", 0u) != 0u;
-    const bool mirror_phase = rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
-                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
-                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect);
-    if (!keep_mirrors && mirror_phase && renderer_.rt_reflections_active()) {
-        const std::uint32_t base = draw_state_.position_matrix;
-        const auto m = [this, base](unsigned row, unsigned column) { return matrices_.matrix_value(base + row, column); };
-        const float det = m(0, 0) * (m(1, 1) * m(2, 2) - m(1, 2) * m(2, 1)) -
-                          m(0, 1) * (m(1, 0) * m(2, 2) - m(1, 2) * m(2, 0)) +
-                          m(0, 2) * (m(1, 0) * m(2, 1) - m(1, 1) * m(2, 0));
-        if (std::isfinite(det) && det < 0.0f) {
-            return true;
-        }
-    }
-    if (current_rt_material_ == 0u) {
-        return false;
-    }
-    const RtMaterial* const material = rt_material(current_rt_material_);
-    return material != nullptr && material->hide;
-}
-
-// The current object's name as the game reports it (game_object_name), Shift-JIS bytes with blanks as '_'. Returns a
-// key for the name (0 for none).
-std::uint64_t RenderCore::rt_object_name(char* out, std::size_t size) {
-    out[0] = 0;
-    if (rt_object_ == 0u) {
-        return 0u;
-    }
-    if (game_object_name(rt_object_, out, size)) {
-        for (char* c = out; *c != 0; ++c) {
-            const auto v = static_cast<unsigned char>(*c);
-            if (v <= 0x20u || v == 0x7Fu) {
-                *c = '_';
-            }
-        }
-        return rt_object_;
-    }
-    return 0u;
-}
-
-// The census line of the current scene draw: its object's name, class, blend and the texture its
-// environment stage (else stage 0) reads.
-void RenderCore::note_rt_material() {
-    RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
-    RtMaterialNote note{};
-    char name[48]{};
-    rt_object_name(name, sizeof(name));
-    surface.surface_class = rt_named_class(name, surface.surface_class);
-    note.name = name;
-    note.object = rt_object_;
-    note.surface = surface;
-    note.stages = ps_key_.num_tev_stages;
-    note.texgens = vs_key_.num_texgens;
-    note.indirect = ps_key_.num_ind_stages;
-    note.channel = channel_word(draw_state_.channel[0]);
-    const unsigned stage = surface.env_stage < 16u ? surface.env_stage : 0u;
-    note.combiner = surface.env_stage < 16u ? tev_color_bits(ps_key_.stages[stage]) : 0u;
-    const BlendMode blend = draw_blend();
-    note.blend = !blend.blend_enable ? 0u
-                 : blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha ? 1u
-                 : blend.dst_factor == BlendFactor::One ? 2u
-                                                         : 3u;
-    const unsigned map = ps_key_.stages[stage].tex_map;
-    const TexImage& image = draw_state_.texture[map].image;
-    note.texture = image.address;
-    note.texture_size = static_cast<std::uint32_t>(image.width) | static_cast<std::uint32_t>(image.height) << 16u;
-    note.texture_format = static_cast<std::uint32_t>(image.format);
-    note.phase = rt_phase_;
-    note.buffer = rt_draw_buffer_;
-    note.pack = rt_texture_source(map).pack;
-    note.material_pack = current_rt_map_ < kMaxTextureMaps ? rt_texture_source(current_rt_map_).pack : 0u;
-    galaxy::render::note_rt_material(note);
-}
-
-// A water or clear draw the composites replace (Beach Bowl's ocean, drawn after the game's effects) is in no effects
-// layer: the water's composite goes over it as over the game's water before the effects. Its keys were set before its
-// textures named its material (flush_draw_state), so once its batch knows it is water its call takes the same pipeline
-// without the layer.
-void RenderCore::exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt) {
-    if (call.aux_target != 3u || !rt || (info.surface & kRtDrawWater) == 0u) {
-        return;
-    }
-    PixelShaderKey ps = ps_key_;
-    ps.reserved = static_cast<std::uint8_t>(ps.reserved & ~kPsKeyLayer);
-    RenderStateKey rs = render_state_key_;
-    rs.blend_bits &= ~kRenderStateLayerTarget;
-    const PsoKey key{current_vs_hash_, ps.hash(), rs};
-    gpu::Pipeline* const pipeline = pipeline_cache_.get(key, ps, vs_key_);
-    if (pipeline == nullptr) {
-        return;
-    }
-    call.pipeline = pipeline;
-    call.aux_target = pipeline_cache_.last_get_used_uber() ? 0u : 2u;
-}
-
-bool RenderCore::rt_mist_draw() const noexcept {
-    if (current_rt_material_ == 0u || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_mist_open()) {
-        return false;
-    }
-    const RtMaterial* const material = rt_material(current_rt_material_);
-    return material != nullptr && material->mist;
-}
-
-// A spray sprite (JPA's quad: JPADrawBillboard and its kin, one particle a draw at its own position matrix) as a puff
-// of drops: a Gaussian cloud at the quad's centre (the middle of its corners' eye-space box: a parallelogram's centre),
-// its width sigma half the quad's half side (its corners' farthest from the centre over root 2: the cloud reaches the
-// quad's edges at two sigma), its optical depth through its centre its table row's (`intensity`: a fully opaque
-// sprite's; else 2) times the sprite's opacity (TEV register 0's alpha, the particle's colour JPA sets: its alpha is
-// the texture's times it). A Gaussian cloud of depth tau covers 2 pi sigma^2 Ein(tau), a quarter of pi Ein(tau) of the
-// side squared, as much as the sprite's texture (its mean alpha times the side squared): the cloud textures (mean
-// alpha 0.52) depth 2, the steam's (0.26) 0.8, the droplets' dots (0.14) 0.4. The corners are the draw's vertices in
-// the frame's vertex ring, else JPA's centred quad (JPAResource jpa_pos: +-25 units).
-void RenderCore::note_rt_mist(const DrawCall& call) {
-    const std::uint32_t base = draw_state_.position_matrix;
-    float m[3][4];
-    for (unsigned r = 0; r < 3u; ++r) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            m[r][c] = matrices_.matrix_value(base + r, c);
-        }
-    }
-    std::array<std::array<float, 3>, 6> corners{{{-25.0f, 25.0f, 0.0f},
-                                                 {25.0f, 25.0f, 0.0f},
-                                                 {25.0f, -25.0f, 0.0f},
-                                                 {-25.0f, -25.0f, 0.0f}}};
-    std::size_t count = 4u;
-    const std::uint32_t vertices = call.vertex_view.SizeInBytes / static_cast<std::uint32_t>(sizeof(RenderVertex));
-    if (const std::byte* cpu = renderer_.vertex_ring().cpu_at(call.vertex_view.BufferLocation);
-        cpu != nullptr && vertices >= 3u && vertices <= corners.size()) {
-        for (std::uint32_t i = 0; i < vertices; ++i) {
-            RenderVertex v;
-            std::memcpy(&v, cpu + static_cast<std::size_t>(i) * sizeof(RenderVertex), sizeof(v));
-            corners[i] = {v.position[0], v.position[1], v.position[2]};
-        }
-        count = vertices;
-    }
-    float lo[3] = {1.0e30f, 1.0e30f, 1.0e30f};
-    float hi[3] = {-1.0e30f, -1.0e30f, -1.0e30f};
-    std::array<std::array<float, 3>, 6> eye{};
-    for (std::size_t i = 0; i < count; ++i) {
-        for (unsigned r = 0; r < 3u; ++r) {
-            eye[i][r] = m[r][0] * corners[i][0] + m[r][1] * corners[i][1] + m[r][2] * corners[i][2] + m[r][3];
-            lo[r] = std::min(lo[r], eye[i][r]);
-            hi[r] = std::max(hi[r], eye[i][r]);
-        }
-    }
-    const float centre[3] = {0.5f * (lo[0] + hi[0]), 0.5f * (lo[1] + hi[1]), 0.5f * (lo[2] + hi[2])};
-    float reach2 = 0.0f;
-    for (std::size_t i = 0; i < count; ++i) {
-        const float dx = eye[i][0] - centre[0];
-        const float dy = eye[i][1] - centre[1];
-        const float dz = eye[i][2] - centre[2];
-        reach2 = std::max(reach2, dx * dx + dy * dy + dz * dz);
-    }
-    const float sigma = 0.5f * std::sqrt(0.5f * reach2);
-    const float opacity = std::clamp(static_cast<float>(draw_state_.tev_color[1][3]) / 255.0f, 0.0f, 1.0f);
-    const RtMaterial* const material = rt_material(current_rt_material_);
-    const float depth = material != nullptr && material->intensity > 0.0f ? material->intensity : 2.0f;
-    // Its brightness: the row's colour (white 1).
-    const float white =
-        material != nullptr ? (material->color[0] + material->color[1] + material->color[2]) / 3.0f : 1.0f;
-    if (opacity > 1e-3f) {
-        renderer_.rt_note_mist(centre, sigma, depth * opacity, white);
-    }
-}
-
-bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
-    // A spray sprite under the engine's mist: its puff, never traced or drawn (rt_hidden_draw).
-    if (rt_mist_draw()) {
-        note_rt_mist(call);
-        return false;
-    }
-    // An untextured surface (no texture coordinates) takes its stage's `untextured` row, for this draw only: the
-    // texture binding that sets current_rt_material_ runs only when the textures change.
-    struct RestoreMaterial {
-        std::uint16_t& slot;
-        std::uint16_t value;
-        ~RestoreMaterial() { slot = value; }
-    } restore_material{current_rt_material_, current_rt_material_};
-    if (vs_key_.num_texgens == 0u && rt_geometry_draw()) {
-        if (const std::uint16_t untextured = rt_stage_untextured_material(); untextured != 0u) {
-            current_rt_material_ = untextured;
-        }
-    }
-    if (rt_material_census() && scene_phase_ && side_layer_ == kSceneLayer &&
-        draw_state_.projection_type == 0u) [[unlikely]] {
-        note_rt_material();
-    }
-    // GALAXY_RT_UNTRACED=1: once per table material, phase, outcome and reason, what became of a perspective
-    // scene draw (why a character casts no traced shadow): traced as geometry or a card, a glow, water, a
-    // lens, late geometry, or left out (no window open, hidden, flat, or untraced with its reasons: blend
-    // bits, colour and depth writes, cull-all, z texture, the alpha test, eligible, scene open).
-    static const bool untraced_log = read_env_u64("GALAXY_RT_UNTRACED", 0u) != 0u;
-    const bool log_outcome = untraced_log && scene_phase_ && side_layer_ == kSceneLayer && current_rt_material_ != 0u &&
-                             draw_state_.projection_type == 0u;
-    const auto outcome = [&](const char* what) {
-        if (!log_outcome) [[likely]] {
-            return;
-        }
-        const std::uint32_t bb = render_state_key_.blend_bits;
-        const std::uint32_t reasons =
-            ((bb & ((1u << 0u) | (1u << 8u))) != 0u ? 1u : 0u) | ((bb & (1u << 25u)) == 0u ? 2u : 0u) |
-            ((render_state_key_.zmode_bits & (1u << 4u)) == 0u ? 4u : 0u) |
-            (render_state_key_.cull == static_cast<std::uint8_t>(CullMode::All) ? 8u : 0u) |
-            ((ps_key_.flags & 0x02u) != 0u ? 16u : 0u) | (!alpha_test_keeps_all(ps_key_) ? 32u : 0u) |
-            (rt_state_eligible_ ? 64u : 0u) | (renderer_.rt_scene_open() ? 128u : 0u);
-        static std::unordered_set<std::uint64_t> logged;
-        const bool water_open = renderer_.rt_water_open();
-        const std::uint64_t key = static_cast<std::uint64_t>(current_rt_material_) |
-                                  (static_cast<std::uint64_t>(rt_phase_) << 16u) |
-                                  (static_cast<std::uint64_t>(reasons) << 24u) |
-                                  (static_cast<std::uint64_t>(static_cast<unsigned char>(what[0])) << 32u) |
-                                  (static_cast<std::uint64_t>(static_cast<unsigned char>(what[1])) << 40u) |
-                                  (static_cast<std::uint64_t>(water_open ? 1u : 0u) << 48u);
-        static std::unordered_set<std::uint64_t> identities;
-        const bool new_identity =
-            identities.size() < 65536u &&
-            identities.insert(key ^ (static_cast<std::uint64_t>(rt_identity_seen_) * 0x9E3779B97F4A7C15ull)).second;
-        if (logged.size() < 8192u && (logged.insert(key).second || new_identity)) {
-            const RtMaterial* const logged_material = rt_material(current_rt_material_);
-            std::fprintf(stderr,
-                         "[rt-untraced] material=%u phase=%u buffer=%u%s reasons=0x%02X outcome=%s identity=%08X "
-                         "water-open=%d tint=%.3f\n",
-                         static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
-                         static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu), (rt_draw_buffer_ & 0x10000u) != 0u ? "x" : "o",
-                         reasons, what, rt_identity_seen_, water_open ? 1 : 0,
-                         logged_material != nullptr ? static_cast<double>(logged_material->tint_kept) : 1.0);
-        }
-    };
-    note_scene_ao_view(call);
-    // The game's sky lists: the traced sky's geometry, whatever their viewport (the sky and air layers draw at the far
-    // plane through a flattened one).
-    if (rt_sun_buffer_ && scene_phase_ && side_layer_ == kSceneLayer &&
-        (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u) {
-        outcome("sun");
-        return false;
-    }
-    const bool sky = rt_sky_buffer_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_sky_open() &&
-                     draw_state_.projection_type == 0u && !rt_hidden_draw();
-    if (!scene_phase_ || !(sky || renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
-                           renderer_.rt_late_open())) {
-        outcome("closed");
-        return false;
-    }
-    // What the traced lighting hides from the picture (the game's drop-shadow volumes, the table's faked
-    // light cones) stays out of the traced scene too, or an invisible shadow volume would cast its own shadow.
-    if (rt_hidden_draw() && !rt_traced_clear_draw() && !rt_trace_only_) {
-        outcome("hidden");
-        return false;
-    }
-    // GALAXY_RT_DEBUG_UNTRACE=id[,id...] (diagnostics): those table materials' draws stay out of the traced scene, still
-    // drawn; with GALAXY_RT_DEBUG_UNTRACE_AB=1 on odd presents only, so two snapshots in a row differ by what they add
-    // to the traced picture (a character's image in a crystal, a lamp's light).
-    static const std::vector<std::uint16_t> debug_untrace = [] {
-        std::vector<std::uint16_t> ids;
-        char value[512]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_DEBUG_UNTRACE") == 0 && length > 1u) {
-            for (const char* p = value; *p != '\0';) {
-                char* end = nullptr;
-                const unsigned long id = std::strtoul(p, &end, 10);
-                if (end == p) {
-                    break;
-                }
-                ids.push_back(static_cast<std::uint16_t>(id));
-                p = *end == ',' ? end + 1 : end;
-            }
-        }
-        return ids;
-    }();
-    static const bool debug_untrace_ab = read_env_u64("GALAXY_RT_DEBUG_UNTRACE_AB", 0u) != 0u;
-    if (!debug_untrace.empty() && (!debug_untrace_ab || ((g_snapshot_presents + 1u) & 1u) != 0u) &&
-        std::find(debug_untrace.begin(), debug_untrace.end(), current_rt_material_) != debug_untrace.end())
-        [[unlikely]] {
-        outcome("debug untraced");
-        return false;
-    }
-    const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
-    const bool flat = !call.has_viewport || !viewport.valid() || viewport.max_depth - viewport.min_depth < 0.5f;
-    static const bool log_viewports = read_env_u64("GALAXY_RT_LOG_VIEWPORTS", 0u) != 0u;
-    if (log_viewports) [[unlikely]] {
-        static std::unordered_set<std::uint64_t> seen;
-        const std::uint64_t key = static_cast<std::uint64_t>(current_rt_material_) |
-                                  (static_cast<std::uint64_t>(rt_phase_) << 16u) |
-                                  (static_cast<std::uint64_t>(static_cast<std::uint32_t>(viewport.x) & 0xFFFu) << 24u) |
-                                  (static_cast<std::uint64_t>(static_cast<std::uint32_t>(viewport.width) & 0xFFFu) << 36u) |
-                                  (static_cast<std::uint64_t>(static_cast<std::uint32_t>(viewport.height) & 0xFFFu) << 48u);
-        if (seen.size() < 4096u && seen.insert(key).second) {
-            std::fprintf(stderr, "[rt-vp] material=%u phase=%u buffer=%u vp=%.0f,%.0f,%.0f,%.0f depth=%.2f,%.2f\n",
-                         static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
-                         static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu), viewport.x, viewport.y, viewport.width,
-                         viewport.height, viewport.min_depth, viewport.max_depth);
-        }
-    }
-    // MR::clearZBuffer: a depth write through a flattened viewport puts the far plane under
-    // everything drawn before (the sky and air layers); that geometry occludes nothing.
-    // After the scene's trace a depth clear starts no new traced scene: the water window drawn since stays open for its
-    // trace (some stages clear the depth late in the frame).
-    if (flat && (render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
-        if (!rt_scene_traced_) {
-            renderer_.rt_begin_scene();
-            rt_view_set_ = false;
-        }
-        if (!sky) {
-            return false;
-        }
-    }
-    if (sky) {
-        begin_rt_sky_batch(info);
-        return true;
-    }
-    if (flat) {
-        outcome("flat");
-        return false;
-    }
-    // The engine's traced glass goes by the water window whatever its state (never solid geometry); its clear solids
-    // are solid geometry no camera ray takes.
-    const bool translucent = !rt_geometry_draw() || (rt_traced_clear_draw() && !rt_traced_solid_draw());
-    // A trace-only draw is solid geometry or a card: a translucent one would be a glow or water no picture shows.
-    if (rt_trace_only_ && translucent) {
-        outcome("trace-only translucent");
-        return false;
-    }
-    // A black hole's lens (the table's `lens`): captured with the glows for the finish's bending.
-    const RtMaterial* const lens_material = translucent ? rt_material(current_rt_material_) : nullptr;
-    const bool lens = lens_material != nullptr && lens_material->lens && renderer_.rt_glow_open();
-    bool clear_added = false;
-    if (translucent && !lens && renderer_.rt_water_open() && rt_glow_draw()) {
-        const RtMaterial* const clear = rt_material(current_rt_material_);
-        const bool position_indexed = draw_positions_indexed();
-        clear_added = clear != nullptr && !clear->particle && !clear->waterfall && clear->emission == RtEmission::None &&
-                      (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                       clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
-                      position_indexed;
-    }
-    // A helper row (an environment map) is the draw's own surface when it is the only texture the draw samples (clear
-    // materials made of a highlight map alone), or when every texture it samples is a helper (glass spheres mapping an
-    // indirect lens and an environment map).
-    bool own_helper = std::popcount(current_texture_map_mask_) == 1;
-    if (!own_helper && current_texture_map_mask_ != 0u) {
-        own_helper = true;
-        for (unsigned m = 0; m < kMaxTextureMaps && own_helper; ++m) {
-            if ((current_texture_map_mask_ & (1u << m)) != 0u) {
-                const RtMaterial* const helper = rt_material(current_texture_handles_[m].rt_material);
-                own_helper = helper != nullptr && helper->helper;
-            }
-        }
-    }
-    // A blended clear model the table names glass or crystal, whatever its blend (the air bubble: source alpha over the
-    // source colour): a surface of the water pass, its reflections over what it drew. One the table also names an
-    // emitter (the rotating steps' soft glow) stays glass: blended, it is in no traced geometry that could emit.
-    bool clear_blended = false;
-    if (translucent && !lens && !clear_added && renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
-        (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
-         rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
-         rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect))) {
-        const RtMaterial* const clear = rt_material(current_rt_material_);
-        const BlendMode blend = draw_blend();
-        const bool position_indexed = draw_positions_indexed();
-        clear_blended = clear != nullptr && !clear->particle && (!clear->helper || own_helper) && !clear->waterfall &&
-                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) &&
-                        blend.blend_enable && !blend.logic_op_enable && !blend.subtract && blend.color_update &&
-                        blend.dst_factor != BlendFactor::One &&
-                        position_indexed;
-    }
-    // A blended coat the table names metal (the Observatory's gold rings: an environment-mapped layer the translucent
-    // phase draws over the model's dark base, after the composite): a surface of the water pass, its traced reflection
-    // in place of the game's painted one.
-    bool metal_coat = false;
-    if (translucent && !lens && !clear_added && !clear_blended && renderer_.rt_water_open() && scene_phase_ &&
-        side_layer_ == kSceneLayer &&
-        (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
-         rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu))) {
-        const RtMaterial* const metal = rt_material(current_rt_material_);
-        const BlendMode blend = draw_blend();
-        const bool position_indexed = draw_positions_indexed();
-        metal_coat = metal != nullptr && !metal->particle && (!metal->helper || own_helper) && metal->metallic >= 0.5f &&
-                     metal->emission == RtEmission::None && blend.blend_enable && !blend.logic_op_enable &&
-                     !blend.subtract && blend.color_update && position_indexed;
-    }
-    // The table's traced clear surfaces join the water window under the engine whatever their blend (their draw is
-    // hidden: the engine traces them, rt_engine.hlsl EngineClearCS).
-    const RtMaterial* const traced_clear = translucent && !lens ? rt_material(current_rt_material_) : nullptr;
-    const bool traced = traced_clear != nullptr && traced_clear->traced && !traced_clear->solid &&
-                        renderer_.rt_engine_clear() &&
-                        renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
-                        draw_positions_indexed();
-    const bool ocean = translucent && !lens && rt_ocean_water_draw();
-    const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced && !ocean &&
-                      (rt_glow_draw() || rt_sprite_light_draw());
-    if (glow && current_rt_material_ == 0u) {
-        note_rt_unnamed_glow(draw_state_.texture[ps_key_.stages[0].tex_map].image.address);
-    }
-    bool water =
-        translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw() || ocean);
-    // An opaque late draw the table names water or crystal (ice drawn after the indirect capture with the game's own
-    // refraction): a surface of the water pass, its reflections laid over what it drew.
-    bool opaque_clear = false;
-    if (!water && translucent && !glow && !lens && rt_late_draw() && renderer_.rt_water_open()) {
-        const RtMaterial* const clear = rt_material(current_rt_material_);
-        const bool position_indexed = draw_positions_indexed();
-        opaque_clear = clear != nullptr && !clear->particle && (!clear->helper || own_helper) &&
-                       (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
-                       position_indexed;
-        water = opaque_clear;
-    }
-    const bool late = translucent && !glow && !water && !lens && rt_late_draw();
-    if (const RtMaterial* clear = rt_material(current_rt_material_);
-        clear != nullptr && rt_log_glows() &&
-        (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water) ||
-         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal))) [[unlikely]] {
-        static std::unordered_set<std::uint32_t> logged;
-        if (logged.insert(current_rt_material_ | (static_cast<std::uint32_t>(rt_phase_) << 16u) |
-                          (water ? 1u << 24u : 0u) | (renderer_.rt_water_open() ? 1u << 25u : 0u) |
-                          (side_layer_ == kSceneLayer ? 1u << 26u : 0u)).second) {
-            const BlendMode blend = draw_blend();
-            const bool position_indexed = draw_positions_indexed();
-            std::fprintf(stderr,
-                         "[rt-clear] material=%u class=%u phase=%u blend=%d src=%u dst=%u indexed=%d geometry=%d "
-                         "water-eligible=%d glow=%d water=%d late=%d water-open=%d scene-layer=%d maps=%02X\n",
-                         static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(clear->surface_class),
-                         static_cast<unsigned>(rt_phase_), blend.blend_enable ? 1 : 0,
-                         static_cast<unsigned>(blend.src_factor), static_cast<unsigned>(blend.dst_factor),
-                         position_indexed ? 1 : 0, translucent ? 0 : 1,
-                         rt_water_eligible_ ? 1 : 0, glow ? 1 : 0, water ? 1 : 0, late ? 1 : 0,
-                         renderer_.rt_water_open() ? 1 : 0, side_layer_ == kSceneLayer ? 1 : 0,
-                         static_cast<unsigned>(current_texture_map_mask_));
-        }
-    }
-    outcome(translucent ? (glow ? "glow" : water ? "water" : lens ? "lens" : late ? "late" : "untraced")
-                        : rt_state_eligible_ ? "geometry" : "card");
-    if (translucent && !glow && !water && !lens && !late) {
-        return false;
-    }
-    const auto projection = [this](unsigned i) {
-        return draw_state_.projection[i];
-    };
-    for (unsigned i = 0; i < 6u; ++i) {
-        info.projection[i] = projection(i);
-    }
-    info.min_depth = viewport.min_depth;
-    info.max_depth = viewport.max_depth;
-    info.cull = render_state_key_.cull;
-    info.phase = rt_phase_;
-    // The surface class (rt_surfaces.h) for reflections; diagnostics for GALAXY_RT_DUMP.
-    RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
-    if (surface.surface_class == RtSurfaceClass::Metal || surface.surface_class == RtSurfaceClass::Glossy) {
-        // Clear materials the GX state shows as metal or gloss go by their object's name.
-        char name[48];
-        const std::uint64_t pointer = rt_object_name(name, sizeof(name));
-        if (pointer != 0u) {
-            if (rt_named_.size() > 4096u) {
-                rt_named_.clear();
-            }
-            auto [it, inserted] = rt_named_.try_emplace(pointer, std::uint8_t{0});
-            if (inserted) {
-                it->second = static_cast<std::uint8_t>(rt_named_class(name, surface.surface_class)) + 1u;
-            }
-            if (it->second == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) + 1u) {
-                surface.surface_class = RtSurfaceClass::Crystal;
-            }
-        }
-    }
-    // The material table (rt_materials.h) gives this texture's class where it names one; particles
-    // are never traced geometry or water (glows still light, and so do the table's emitting ones).
-    if (const RtMaterial* material = rt_material(current_rt_material_); material != nullptr) {
-        if (material->particle && material->emission == RtEmission::None && !glow) {
-            return false;
-        }
-        // Sky domes and backdrops drawn among the scene (after its depth clear): never traced, or every
-        // ray towards the sun meets them.
-        if (material->sky && !glow) {
-            return false;
-        }
-        if (material->surface_class != 0xFFu) {
-            surface.surface_class = static_cast<RtSurfaceClass>(material->surface_class);
-        }
-    }
-    info.rt_material = current_rt_material_;
-    info.light_key = rt_light_key();
-    // (An untextured draw's map register holds an earlier draw's texture: not logged.)
-    if (current_rt_material_ == 0u && !glow && current_texture_map_mask_ != 0u && rt_log_glows()) {
-        note_rt_unnamed_surface(draw_state_.texture[ps_key_.stages[0].tex_map].image.address);
-    }
-    // High quality's textured hits: the material texture (the scene keeps its own view of it).
-    if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
-        info.texture = rt_texture_source(current_rt_map_);
-        info.texture_map = current_rt_map_;
-        const TexMode mode = draw_state_.texture[current_rt_map_].mode;
-        info.texture_wrap = static_cast<std::uint32_t>(mode.wrap_s) | (static_cast<std::uint32_t>(mode.wrap_t) << 2u);
-        info.texgen = rt_texgen_of_map(current_rt_map_);
-    }
-    if ((water && !metal_coat && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
-        // A blended environment map is glass, not metal (unless the table names it a metal coat); an added one over
-        // ice is the ice's gloss.
-        surface.surface_class = RtSurfaceClass::Crystal;
-    }
-    if (water && !metal_coat && surface.surface_class != RtSurfaceClass::Water &&
-        surface.surface_class != RtSurfaceClass::Crystal) {
-        return false;
-    }
-    info.shading = {ps_key_.num_tev_stages | (static_cast<std::uint32_t>(vs_key_.num_texgens) << 8u) |
-                        (static_cast<std::uint32_t>(ps_key_.num_ind_stages) << 16u) |
-                        (static_cast<std::uint32_t>(surface.features) << 24u),
-                    (surface.env_stage < 16u ? tev_color_bits(ps_key_.stages[surface.env_stage]) : 0u) |
-                        (static_cast<std::uint32_t>(surface.env_stage) << 24u),
-                    channel_bits(vs_key_.channel[0]), channel_bits(vs_key_.channel[1])};
-    info.channel = channel_word(draw_state_.channel[0]);
-    info.ambient = rgba_word(draw_state_.ambient_color[0]);
-    info.material = rgba_word(draw_state_.material_color[0]);
-    {
-        const auto& fog = draw_state_.fog;
-        info.fog = {std::bit_cast<std::uint32_t>(fog.a),
-                    fog.b_magnitude | ((fog.b_shift & 0x1Fu) << 24u) |
-                        ((static_cast<std::uint32_t>(ps_key_.fog_type) & 7u) << 29u),
-                    std::bit_cast<std::uint32_t>(fog.c),
-                    static_cast<std::uint32_t>(fog.color[0]) << 16u | static_cast<std::uint32_t>(fog.color[1]) << 8u |
-                        fog.color[2] | (fog.projection ? 1u << 24u : 0u)};
-    }
-    {
-        const XfChannelCtrl color = draw_state_.channel[0u];
-        info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
-        info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
-        // The lighting reads its ambient register and light 0 colour (RtDrawInfo).
-        if (info.surface != 0u && (color.light_mask & 1u) != 0u && !color.ambient_from_vertex &&
-            (rt_draw_lights_ & 1u) != 0u && rt_light_aim_.blend >= 1.0f) {
-            info.surface |= kRtDrawSunKey;
-        }
-        if (info.surface != 0u && (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u &&
-            (ps_key_.ind_reserved & kEnhancedLit) != 0u && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u) {
-            info.surface |= kRtDrawDelit;
-        }
-        if (lens) {
-            info.surface = kRtDrawGlow | kRtDrawLens;
-        } else if (glow) {
-            info.surface = kRtDrawGlow;
-            // How much of its colour the picture takes (a glow light source emits that; RtDrawInfo.blend).
-            const BlendMode blend = draw_blend();
-            info.blend = (blend.blend_enable ? 1u : 0u) | (static_cast<std::uint32_t>(blend.src_factor) << 1u) |
-                         (static_cast<std::uint32_t>(blend.dst_factor) << 4u) | (blend.subtract ? 0x80u : 0u) |
-                         (blend.color_update ? 0x100u : 0u) | (blend.logic_op_enable ? 0x200u : 0u);
-        } else if (water) {
-            const RtMaterial* const fall = rt_material(current_rt_material_);
-            const RtSurfaceClass water_class = metal_coat ? RtSurfaceClass::Metal : surface.surface_class;
-            info.surface = kRtDrawWater | (static_cast<std::uint32_t>(water_class) << kRtDrawClassShift) |
-                           (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u) |
-                           (fall != nullptr && fall->mirror ? kRtDrawWaterMirror : 0u) |
-                           (fall != nullptr && fall->ice && !metal_coat ? kRtDrawWaterIce : 0u) |
-                           (opaque_clear ? kRtDrawWaterOpaque : 0u);
-        } else {
-            info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
-            info.surface |= rt_trace_only_ || rt_traced_solid_draw() ? kRtDrawUnseen : 0u;
-            if (!rt_state_eligible_) {
-                info.surface |= rt_card_draw() ? kRtDrawCard : kRtDrawAlphaTest;
-                // The alpha its test passes from (GREATER ref: ref + 1, GEQUAL ref: ref, the first such compare;
-                // other tests keep it solid) and the alpha map: TEV stage 0's texture.
-                const AlphaCompare test = draw_state_.alpha;
-                std::uint32_t from = 0u;
-                if (test.comp0 == CompareFunc::Greater || test.comp0 == CompareFunc::GEqual) {
-                    from = test.ref0 + (test.comp0 == CompareFunc::Greater ? 1u : 0u);
-                } else if (test.comp1 == CompareFunc::Greater || test.comp1 == CompareFunc::GEqual) {
-                    from = test.ref1 + (test.comp1 == CompareFunc::Greater ? 1u : 0u);
-                }
-                const unsigned map = ps_key_.stages[0].tex_map;
-                if (from != 0u && from <= 255u && current_texture_table_.ptr != 0u && map < kMaxTextureMaps) {
-                    info.alpha = rt_texture_source(map);
-                    info.alpha_from = info.alpha.resource != nullptr ? from : 0u;
-                }
-                if (log_outcome) [[unlikely]] {
-                    static std::unordered_set<std::uint32_t> logged_alpha;
-                    if (logged_alpha.insert(current_rt_material_).second) {
-                        const KeyStage& stage0 = ps_key_.stages[0];
-                        std::fprintf(stderr,
-                                     "[rt-alpha] material=%u card=%d comp0=%u ref0=%u comp1=%u ref1=%u logic=%u from=%u "
-                                     "map=%u coord=%u enable=%d mask=%02X texgens=%u stages=%u alpha-map=%d rt-map=%u\n",
-                                     static_cast<unsigned>(current_rt_material_), rt_card_draw() ? 1 : 0,
-                                     static_cast<unsigned>(test.comp0), static_cast<unsigned>(test.ref0),
-                                     static_cast<unsigned>(test.comp1), static_cast<unsigned>(test.ref1),
-                                     static_cast<unsigned>(test.logic), from, map,
-                                     static_cast<unsigned>(stage0.tex_coord), static_cast<int>(stage0.tex_enable), static_cast<unsigned>(current_texture_map_mask_),
-                                     static_cast<unsigned>(vs_key_.num_texgens),
-                                     static_cast<unsigned>(ps_key_.num_tev_stages), info.alpha.resource != nullptr ? 1 : 0,
-                                     current_rt_map_);
-                    }
-                }
-            }
-            // No traced shadow from a material the table marks shadow 0 (a helper row, an environment map or
-            // a mask, speaks for its texture, not for the draw), nor from a clear dielectric (crystal, ice,
-            // glass), which passes about 91 % of the light ((1 - F)^2 at F0 0.047), nor from water (F0 0.02:
-            // 96 % passes): the far side of Bonefin's ocean sphere, drawn opaque with the whole sphere's triangles,
-            // closed its inside off from the sun and the sky and read black.
-            if (const RtMaterial* shade = rt_material(current_rt_material_);
-                (shade != nullptr && !shade->shadow && !shade->helper) ||
-                surface.surface_class == RtSurfaceClass::Crystal || surface.surface_class == RtSurfaceClass::Water) {
-                info.surface |= kRtDrawNoShadow;
-            }
-        }
-    }
-    {
-        const std::uint8_t mask = draw_state_.channel[0u].light_mask;
-        unsigned found = 0u;
-        for (unsigned n = 0; n < 8u && found < 2u; ++n) {
-            if ((mask & (1u << n)) == 0u) {
-                continue;
-            }
-            const NativeLight& light = matrices_.light(n);
-            info.light_index[found] = n;
-            for (unsigned k = 0; k < 3u; ++k) {
-                info.light[found][k] = light.position[k];
-                info.light[found][3u + k] = light.direction[k];
-            }
-            info.light_color[found] = light_color_word(light);
-            ++found;
-        }
-    }
-    fill_rt_tev(info, renderer_.rt_physical() ? 1.0f : 0.55f);
-    // A water draw's waves: the first TEV stage that moves its texture coordinates by an indirect texture (the game's
-    // wave map). Its texture slots become the wave map's coordinates and the water texture's (rt_reflections.hlsl
-    // water_wave); RtDrawInfo.wave_params: flags (bit 0 waves, bits 1-3 the s t u bias, bits 4-5 the format), the wave
-    // map's coordinate scale (slot 0 to its 0-1 coordinates, as the uber shader samples it), the indirect matrix's
-    // direction part (s from x, s from y, t from x, t from y; unit scale), the water texture's coordinate scale (slot 1).
-    if ((info.surface & kRtDrawWater) != 0u && ps_key_.num_ind_stages != 0u && vs_key_.num_texgens != 0u &&
-        current_texture_table_.ptr != 0u) {
-        const unsigned texgens = vs_key_.num_texgens;
-        for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
-            const KeyStage& typed = ps_key_.stages[s];
-            const unsigned ind_stage = typed.ind_stage;
-            const unsigned matrix = typed.ind_matrix & 3u;
-            if (!indirect_active(typed) || ind_stage >= ps_key_.num_ind_stages || matrix == 0u ||
-                (typed.ind_matrix >> 2u) != 0u) {
-                continue;
-            }
-            const KeyIndirectOrder& wave_order = ps_key_.ind_order[ind_stage];
-            const unsigned wave_map = wave_order.map;
-            const unsigned wave_coord_raw = wave_order.coord;
-            const unsigned wave_coord = wave_coord_raw < texgens ? wave_coord_raw : 0u;
-            const unsigned main_map = typed.tex_map;
-            const unsigned main_coord_raw = typed.tex_coord;
-            const unsigned main_coord = main_coord_raw < texgens ? main_coord_raw : 0u;
-            if ((current_texture_map_mask_ & (1u << wave_map)) == 0u) {
-                break;
-            }
-            const auto coord_size = [&](unsigned coord, unsigned axis) {
-                return static_cast<float>(coordinate_scales(draw_state_, scales_from_textures_)[coord & 7u][axis]);
-            };
-            const TexImage wave_image = draw_state_.texture[wave_map].image;
-            const TexImage main_image = draw_state_.texture[main_map].image;
-            const auto& mt = draw_state_.ind_matrix[(matrix - 1u) % 3u];
-            // s = ma x + mc y (+ me z), t = mb x + md y (+ mf z): the map's x and y as a slope, z left out.
-            float m[4] = {static_cast<float>(mt.m[0][0]), static_cast<float>(mt.m[0][1]), static_cast<float>(mt.m[1][0]),
-                          static_cast<float>(mt.m[1][1])};
-            const float norm = std::sqrt(0.5f * (m[0] * m[0] + m[1] * m[1] + m[2] * m[2] + m[3] * m[3]));
-            if (norm <= 0.0f) {
-                break;
-            }
-            info.wave = rt_texture_source(wave_map);
-            if (info.wave.resource == nullptr) {
-                break;
-            }
-            const std::uint32_t flags = 1u | (std::uint32_t{typed.ind_bias} << 1u) | (std::uint32_t{typed.ind_format} << 4u);
-            info.wave_params = {std::bit_cast<float>(flags),
-                                coord_size(wave_coord, 0u) / static_cast<float>(1u << wave_order.scale_s) /
-                                    static_cast<float>(std::max<unsigned>(wave_image.width, 1u)),
-                                coord_size(wave_coord, 1u) / static_cast<float>(1u << wave_order.scale_t) /
-                                    static_cast<float>(std::max<unsigned>(wave_image.height, 1u)),
-                                m[0] / norm,
-                                m[1] / norm,
-                                m[2] / norm,
-                                m[3] / norm,
-                                coord_size(main_coord, 0u) / static_cast<float>(std::max<unsigned>(main_image.width, 1u)),
-                                coord_size(main_coord, 1u) / static_cast<float>(std::max<unsigned>(main_image.height, 1u)),
-                                0.0f,
-                                0.0f,
-                                0.0f};
-            info.texgen = wave_coord;
-            info.texgen2 = main_coord;
-            break;
-        }
-    }
-    if (!rt_view_set_) {
-        renderer_.rt_set_view(scene_depth_view(viewport));
-        rt_view_set_ = true;
-        note_interp_rt_projection();
-    }
-    return true;
-}
-
-// The recording scene's projection as the ray tracer took its view (scene_depth_view, before the jitter): its
-// sub-frames rebuild their own from it and the scene before's.
-void RenderCore::note_interp_rt_projection() {
-    if (!interp_recording_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u) {
-        return;
-    }
-    InterpScene& scene = interp_scenes_[interp_scene_];
-    if (!scene.valid) {
-        return;
-    }
-    for (unsigned i = 0; i < 6u; ++i) {
-        scene.rt_projection[i] = draw_state_.projection[i];
-    }
-    const float scale = static_cast<float>(renderer_.efb_scale());
-    scene.rt_viewport[0] = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
-    scene.rt_viewport[1] =
-        2.0f * std::fabs(draw_state_.viewport[1]) * scale;
-    scene.rt_projection_known = true;
-}
-
-RtView RenderCore::scene_depth_view(const ScaledGxViewport& viewport) const {
-    const auto projection = [this](unsigned i) {
-        return draw_state_.projection[i];
+RtView RenderCore::scene_depth_view(const float terms[6], const ScaledViewport& viewport) const {
+    const auto projection = [terms](unsigned i) {
+        return terms[i];
     };
     // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
     constexpr float kFarEps = 1.0f - 1e-7f;
@@ -3919,10 +1640,9 @@ RtView RenderCore::scene_depth_view(const ScaledGxViewport& viewport) const {
     // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
     // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
     // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
-    if (temporal_scene_ && draw_state_.projection_type == 0u) {
-        const float scale = static_cast<float>(renderer_.efb_scale());
-        const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
-        const float height = 2.0f * std::fabs(draw_state_.viewport[1]) * scale;
+    if (temporal_scene_) {
+        const float width = viewport.width;
+        const float height = viewport.height;
         if (width > 0.0f && height > 0.0f) {
             view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
             view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
@@ -3937,408 +1657,24 @@ RtView RenderCore::scene_depth_view(const ScaledGxViewport& viewport) const {
     return view;
 }
 
-// The first perspective scene draw with depth since the scene began or the game last cleared its depth
-// (MR::clearZBuffer draws through a flattened viewport after the sky and air layers, which may project otherwise).
-void RenderCore::note_scene_ao_view(const DrawCall& call) {
-    if (ao_scene_applied_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        draw_state_.projection_type != 0u || !call.has_viewport) {
+// The game's opaque surfaces are drawn: the occlusion from their depth, multiplied into their colour under what blends.
+void RenderCore::apply_scene_ao(const std::array<float, 12>& view) {
+    if (!ambient_occlusion_ || !scene_phase_ || side_layer_ != kSceneLayer) {
         return;
     }
-    const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
+    const ScaledViewport viewport = viewport_pixels(view.data() + 6, renderer_.frame_map());
     if (!viewport.valid()) {
         return;
     }
-    if (viewport.max_depth - viewport.min_depth < 0.5f) {
-        if ((render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
-            ao_view_set_ = false;
-        }
-        return;
-    }
-    if (!ao_view_set_) {
-        renderer_.set_scene_ao_view(scene_depth_view(viewport));
-        ao_view_set_ = true;
-    }
-}
-
-void RenderCore::apply_scene_ao() {
-    if (ao_scene_applied_ || side_layer_ != kSceneLayer) {
-        return;
-    }
-    ao_scene_applied_ = true;
-    if (!ao_view_set_) {
-        return;
-    }
     flush_pending_draw_batch();
+    renderer_.set_scene_ao_view(scene_depth_view(view.data(), viewport));
     renderer_.record_scene_ao();
 }
 
-// The scene's key light (actor_lights.h): the game's visible sun (GALAXY_RT_SUN overrides it), else the sun its sky
-// shows (rt_sky_sun.h), else the world-fixed GX light 0 most of the previous scene's lit draws took (the stage's last
-// one while they take none), else none. The ray tracer lights a scene without the game's sun from that key.
-// GALAXY_RT_ACTOR_LIGHTS=1 also turns each scene's follow-camera lights towards the key (over kActorLightRampScenes
-// scenes when a key comes or goes, over a few when it changes; without a key or the scene camera they stay the
-// game's); =2 does that and keys the ray tracer in odd scenes only, for frame-to-frame comparison. Off by default:
-// the characters keep the game's lights, with the traced shadows, occlusion and lights on top.
-void RenderCore::aim_rt_scene_lights(const std::array<float, 12>* view) {
-    static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 0u);
-    const std::array<RtWorldKey, 8> candidates = rt_world_keys_;
-    const std::uint32_t candidate_count = rt_world_key_count_;
-    const RtWorldKey* world = nullptr;
-    for (std::uint32_t i = 0; i < candidate_count; ++i) {
-        if (world == nullptr || candidates[i].draws > world->draws) {
-            world = &candidates[i];
-        }
-    }
-    // The stage's last world key lights its scenes whose lit draws take none (the game's
-    // follow-camera lights only).
-    if (world != nullptr) {
-        rt_world_held_ = *world;
-    }
-    const RtWorldKey* world_key = world != nullptr ? world : rt_world_held_.draws != 0u ? &rt_world_held_ : nullptr;
-    rt_world_key_count_ = 0u;
-    rt_light_aim_ = {};
-    rt_known_lights_ = 0u;
-    rt_follow_lights_ = 0u;
-    rt_light_pending_ = 0u;
-    ++rt_light_serial_;
-    rt_light_tracking_ = view != nullptr && mode != 0u;
-    // The ray tracer's key (a stage without the game's sun: its table sun, the sun its sky shows, the bright
-    // side of a daylight sky) holds whatever the actor lights do, so stages lit only by a table sun keep their
-    // shadows; GALAXY_RT_KEY=0: none.
-    static const bool key_on = read_env_u64("GALAXY_RT_KEY", 1u) != 0u;
-    const bool keying = view != nullptr && (mode != 0u || key_on);
-    if (view != nullptr) {
-        rt_scene_view_ = *view;
-    }
-    {
-        // The player's light rig (LightFunction::loadActorLightInfo: its ambient, lights 0 and 1) as XF colour words.
-        GameAreaLight rig{};
-        rt_player_rig_known_ = game_area_light(GameAreaLightKind::Player, rig, 2000u);
-        const auto word = [](const std::array<float, 3>& rgb) {
-            std::uint32_t w = 0u;
-            for (unsigned k = 0; k < 3u; ++k) {
-                w |= static_cast<std::uint32_t>(std::lround(std::clamp(rgb[k], 0.0f, 1.0f) * 255.0f)) << (24u - 8u * k);
-            }
-            return w;
-        };
-        rt_player_rig_ = {word(rig.ambient), word(rig.lights[0].color), word(rig.lights[1].color)};
-    }
-    // The game's sun holds from its first arrival after a camera cut to the next cut (a stage
-    // load cuts): it stops arriving while the game pauses BrightSun, its direction stays.
-    const std::uint64_t sun_updates = game_sun_updates();
-    if (rt_scene_cut_) {
-        if (trace_actor_lights_enabled()) [[unlikely]] {
-            std::fprintf(stderr, "[rt-key] cut scene=%u held=%d objects=%u\n", rt_light_serial_,
-                         rt_sun_held_ ? 1 : 0, rt_cut_objects_);
-        }
-        rt_scene_cut_ = false;
-        rt_cut_objects_ = 0u;
-        rt_sun_held_ = false;
-        rt_sun_cut_updates_ = sun_updates;
-    } else if (sun_updates != rt_sun_cut_updates_) {
-        rt_sun_held_ = true;
-    }
-    renderer_.rt_hold_sun(rt_sun_held_);
-    // Sources: 1 the game's visible sun, 2 the sun its sky shows, 3 a world-fixed light, 4 the
-    // bright side of a daylight sky.
-    std::uint8_t source = 0u;
-    std::array<float, 3> target{};
-    std::array<float, 3> sky_color{};
-    float sky_strength = 1.0f;
-    const RtStageSun* const stage_sun = renderer_.rt_stage_sun();
-    if (stage_sun != nullptr && stage_sun->source == RtStageSun::Source::None) {
-        // The stage has no sun or sky key (rt-suns.tsv): its own lights carry it.
-    } else if (keying && stage_sun != nullptr &&
-               (stage_sun->source == RtStageSun::Source::Table || stage_sun->source == RtStageSun::Source::Moon)) {
-        // The stage's sun where its sky shows it, or its moon (rt-suns.tsv): lit as the sky's own sun.
-        source = 2u;
-        target = {stage_sun->direction[0], stage_sun->direction[1], stage_sun->direction[2]};
-        rt_light_key_color_ = 0xFFF6E600u;
-    } else if (keying && renderer_.rt_sun_direction(target)) {
-        source = 1u;
-    } else if (keying && mode != 0u && renderer_.rt_sky_sun(target, sky_color)) {
-        source = 2u;
-        const auto byte = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
-        rt_light_key_color_ = byte(sky_color[0]) << 24u | byte(sky_color[1]) << 16u | byte(sky_color[2]) << 8u;
-    } else if (keying && world_key != nullptr) {
-        source = 3u;
-        target = world_key->direction;
-        rt_light_key_color_ = world_key->color;
-    } else if (keying && mode != 0u && renderer_.rt_sky_key(target, sky_strength)) {
-        source = 4u;
-        rt_light_key_color_ = 0xFFF6E600u;   // daylight: warm white
-    } else if (keying && mode == 0u) {
-        // A stage without the game's sun or a table row: its key is the game's own world-fixed white light
-        // (700000 700000 700000, the direction it shades its characters from), decided once per stage: on when
-        // the sky detectors find a sun or a daylight sky in its first 120 scenes, fixed in the world from then
-        // on, so the key does not swing with the view.
-        if (rt_fixed_key_stage_ != rt_stage_hash_) {
-            rt_fixed_key_stage_ = rt_stage_hash_;
-            rt_fixed_key_on_ = false;
-            rt_fixed_key_scenes_ = 0u;
-        }
-        if (!rt_fixed_key_on_ && rt_fixed_key_scenes_ < 120u) {
-            ++rt_fixed_key_scenes_;
-            std::array<float, 3> probe{};
-            std::array<float, 3> probe_color{};
-            float probe_strength = 1.0f;
-            rt_fixed_key_on_ = renderer_.rt_sky_sun(probe, probe_color) || renderer_.rt_sky_key(probe, probe_strength);
-        }
-        if (rt_fixed_key_on_) {
-            source = 3u;
-            target = {0.57735027f, 0.57735027f, 0.57735027f};
-            rt_light_key_color_ = 0xFFF6E600u;
-        }
-    }
-    const bool found = source != 0u;
-    const float step = mode == 2u ? 1.0f : 1.0f / kActorLightRampScenes;
-    if (found) {
-        const float length = std::sqrt(target[0] * target[0] + target[1] * target[1] + target[2] * target[2]);
-        for (float& v : target) v /= length > 1e-6f ? length : 1.0f;
-        const float turn = rt_light_world_[0] * target[0] + rt_light_world_[1] * target[1] +
-                           rt_light_world_[2] * target[2];
-        if (rt_light_blend_ <= 0.0f || mode == 2u || turn > 0.99996f) {
-            rt_light_world_ = target;
-        } else {
-            // A changed key: an eighth of the way per scene.
-            float moved[3]{};
-            float moved_length = 0.0f;
-            for (unsigned i = 0; i < 3u; ++i) {
-                moved[i] = rt_light_world_[i] + (target[i] - rt_light_world_[i]) * 0.125f;
-                moved_length += moved[i] * moved[i];
-            }
-            moved_length = std::sqrt(moved_length);
-            for (unsigned i = 0; i < 3u && moved_length > 1e-6f; ++i) {
-                rt_light_world_[i] = moved[i] / moved_length;
-            }
-        }
-        rt_key_source_ = source;
-        rt_light_blend_ = std::min(rt_light_blend_ + step, 1.0f);
-    } else {
-        rt_light_blend_ = std::max(rt_light_blend_ - step, 0.0f);
-    }
-    if (!keying) {
-        rt_light_blend_ = 0.0f;
-    }
-    const bool enabled = mode == 1u || (mode == 2u && (rt_light_serial_ & 1u) != 0u);
-    if (enabled && rt_light_blend_ > 0.0f) {
-        rt_light_aim_ = aim_at_key(*view, rt_light_world_);
-        rt_light_aim_.blend = rt_light_blend_;
-    }
-    // The ray tracer's sun when the game shows none: the same key.
-    const std::uint32_t c = rt_light_key_color_;
-    const std::array<float, 3> key_color{static_cast<float>(c >> 24u) / 255.0f,
-                                         static_cast<float>((c >> 16u) & 0xFFu) / 255.0f,
-                                         static_cast<float>((c >> 8u) & 0xFFu) / 255.0f};
-    renderer_.rt_set_key_light((enabled || (mode == 0u && key_on)) && rt_key_source_ >= 2u && rt_light_blend_ > 0.0f,
-                               rt_light_world_, key_color,
-                               rt_light_blend_ * (rt_key_source_ == 4u ? sky_strength : 1.0f),
-                               rt_key_source_ == 2u || rt_key_source_ == 4u);
-    static constexpr const char* kSources[5] = {"none", "sun", "sky", "world", "daylight"};
-    if (trace_actor_lights_enabled()) [[unlikely]] {
-        // Key changes: its source, or a target more than a degree away.
-        static int traced_source = -1;
-        static std::array<float, 3> traced_target{};
-        const float same = traced_target[0] * target[0] + traced_target[1] * target[1] + traced_target[2] * target[2];
-        if (source != traced_source || (found && same < 0.99985f)) {
-            std::fprintf(stderr, "[rt-key] change scene=%u source=%s target=(%.3f %.3f %.3f) color=%08x held=%d\n",
-                         rt_light_serial_, kSources[source], target[0], target[1], target[2],
-                         source >= 2u ? rt_light_key_color_ : 0u, rt_sun_held_ ? 1 : 0);
-            traced_source = source;
-            traced_target = target;
-        }
-    }
-    if (trace_actor_lights_enabled() && rt_light_serial_ % 240u == 1u) [[unlikely]] {
-        for (std::uint32_t i = 0; i < candidate_count; ++i) {
-            const RtWorldKey& k = candidates[i];
-            const float n = static_cast<float>(std::max(k.ambient_draws, 1u));
-            std::fprintf(stderr,
-                         "[rt-key] scene=%u candidate %u world=(%.3f %.3f %.3f) color=%08x draws=%u "
-                         "ambient=(%.3f %.3f %.3f)/%u%s\n",
-                         rt_light_serial_, i, k.direction[0], k.direction[1], k.direction[2], k.color, k.draws,
-                         k.ambient[0] / n, k.ambient[1] / n, k.ambient[2] / n, k.ambient_draws,
-                         &k == world ? " key" : "");
-        }
-        std::fprintf(stderr, "[rt-key] scene=%u key=%s world=(%.3f %.3f %.3f) color=%08x blend=%.3f\n",
-                     rt_light_serial_, kSources[rt_light_blend_ > 0.0f ? rt_key_source_ : 0u], rt_light_world_[0],
-                     rt_light_world_[1], rt_light_world_[2], rt_light_key_color_, rt_light_blend_);
-    }
-    const bool report =
-        actor_light_trace_level() >= 2u || (trace_actor_lights_enabled() && rt_light_serial_ % 600u == 1u);
-    if (report) [[unlikely]] {
-        // Running totals: snapshots with moved lights, snapshots added for them, TSC cycles of the
-        // actor-light work and the timed regions they span, palette snapshots and their cycles
-        // (allocation and copy), TSC and clock; `pair`: the mean cycles of one empty timing pair.
-        static const std::uint64_t pair = [] {
-            std::uint64_t total = 0u;
-            for (unsigned i = 0; i < 4096u; ++i) {
-                const std::uint64_t a = trace_cycles();
-                total += trace_cycles() - a;
-            }
-            return total / 4096u;
-        }();
-        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch());
-        std::fprintf(stderr,
-                     "[rt-actor-light] scene=%u aim=%s key=(%.3f %.3f %.3f) moved=%llu added=%llu cycles=%llu "
-                     "regions=%llu pair=%llu snapshots=%llu snapshot-cycles=%llu tsc=%llu ns=%lld blend=%.3f\n",
-                     rt_light_serial_, kSources[rt_light_aim_.valid ? rt_key_source_ : 0u],
-                     rt_light_aim_.key[0], rt_light_aim_.key[1], rt_light_aim_.key[2],
-                     static_cast<unsigned long long>(rt_light_uploads_),
-                     static_cast<unsigned long long>(rt_light_forced_),
-                     static_cast<unsigned long long>(rt_light_cycles_),
-                     static_cast<unsigned long long>(rt_light_regions_), static_cast<unsigned long long>(pair),
-                     static_cast<unsigned long long>(rt_snapshot_count_),
-                     static_cast<unsigned long long>(rt_snapshot_cycles_),
-                     static_cast<unsigned long long>(trace_cycles()),
-                     static_cast<long long>(ns.count()), rt_light_blend_);
-    }
-}
-
-// A draw lit by the game's player light rig: its channel 0 ambient and lights 0 and 1 hold the rig's colours. The
-// rig's hue is the game's character grading (the prologue's night: a cyan key, a blue fill and a blue ambient on
-// Mario); under physical light the traced light gives the colour, the rig its level only (shader_gen, fill_rt_tev).
-bool RenderCore::rt_player_rig_draw() const noexcept {
-    if (!rt_player_rig_known_ || draw_state_.gen.num_color_chans == 0u) {
-        return false;
-    }
-    const XfChannelCtrl color = draw_state_.channel[0u];
-    if (!color.lighting_enable || (color.light_mask & 3u) != 3u) {
-        return false;
-    }
-    const auto rgb = [this](unsigned n) { return light_color_word(matrices_.light(n)) & 0xFFFFFF00u; };
-    return (rgba_word(draw_state_.ambient_color[0]) & 0xFFFFFF00u) == rt_player_rig_[0] &&
-           rgb(0u) == rt_player_rig_[1] && rgb(1u) == rt_player_rig_[2];
-}
-
-// The lights a lit scene draw has moved: its follow-camera lights 0 and 1 that still hold the
-// positions their load gave them.
-std::uint32_t RenderCore::rt_aimed_lights() const noexcept {
-    if (!rt_light_aim_.valid || !scene_phase_ || side_layer_ != kSceneLayer) {
-        return 0u;
-    }
-    std::uint32_t lights = 0u;
-    for (unsigned n = 0; n < 2u; ++n) {
-        if ((rt_follow_lights_ & (1u << n)) != 0u &&
-            std::memcmp(matrices_.light(n).position, rt_light_positions_[n].data(), sizeof(rt_light_positions_[n])) ==
-                0) {
-            lights |= 1u << n;
-        }
-    }
-    return lights != 0u ? (rt_light_serial_ << 8u) | lights : 0u;
-}
-
-// Moves the flushed draw's lights in a copy of the light rows (draw_rows::kLightRows rows).
-void RenderCore::write_rt_lights(std::uint32_t* lights) noexcept {
-    if (!rt_light_aim_.valid) {
-        return;
-    }
-    const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
-    aim_actor_lights(lights, matrices_.lights(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
-                     static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_);
-    if (start != 0u) [[unlikely]] {
-        rt_light_cycles_ += trace_cycles() - start;
-        ++rt_light_regions_;
-    }
-}
-
-// A lit scene draw's world-fixed GX light 0 (loaded by an ActorLightInfo or coin without the
-// follow-camera flag, still holding that load's position, far enough to be a direction): a key
-// light candidate, by its world direction from the camera and its colour.
-void RenderCore::note_rt_world_key() noexcept {
-    if ((rt_known_lights_ & ~rt_follow_lights_ & 1u) == 0u || !scene_phase_ || side_layer_ != kSceneLayer) {
-        return;
-    }
-    const XfChannelCtrl channel = draw_state_.channel[0u];
-    if (!channel.lighting_enable || (channel.light_mask & 1u) == 0u) {
-        return;
-    }
-    const float* const p = matrices_.light(0u).position;
-    if (std::memcmp(p, rt_light_positions_[0].data(), sizeof(rt_light_positions_[0])) != 0) {
-        return;
-    }
-    const float distance2 = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
-    if (!(distance2 > kActorLightFar * kActorLightFar) || !std::isfinite(distance2)) {
-        return;
-    }
-    // Eye to world: the transposed rotation of the scene camera.
-    const std::array<float, 12>& v = rt_scene_view_;
-    const float inverse = 1.0f / std::sqrt(distance2);
-    const std::array<float, 3> direction{(v[0] * p[0] + v[4] * p[1] + v[8] * p[2]) * inverse,
-                                         (v[1] * p[0] + v[5] * p[1] + v[9] * p[2]) * inverse,
-                                         (v[2] * p[0] + v[6] * p[1] + v[10] * p[2]) * inverse};
-    const std::uint32_t color = light_color_word(matrices_.light(0u));
-    RtWorldKey* found = nullptr;
-    for (std::uint32_t i = 0; i < rt_world_key_count_ && found == nullptr; ++i) {
-        RtWorldKey& key = rt_world_keys_[i];
-        if (key.color == color && key.direction[0] * direction[0] + key.direction[1] * direction[1] +
-                                          key.direction[2] * direction[2] > 0.9995f) {
-            found = &key;
-        }
-    }
-    if (found == nullptr) {
-        if (rt_world_key_count_ == rt_world_keys_.size()) {
-            return;
-        }
-        found = &rt_world_keys_[rt_world_key_count_++];
-        *found = {direction, color};
-    }
-    ++found->draws;
-    if (!channel.ambient_from_vertex) {
-        const std::uint32_t a = rgba_word(draw_state_.ambient_color[0]);
-        found->ambient[0] += static_cast<float>(a >> 24u) / 255.0f;
-        found->ambient[1] += static_cast<float>((a >> 16u) & 0xFFu) / 255.0f;
-        found->ambient[2] += static_cast<float>((a >> 8u) & 0xFFu) / 255.0f;
-        ++found->ambient_draws;
-    }
-}
-
-// SceneFunction phases run opaque first (0, 1, the shadows 6 and 7, then 2 and 4), then the
-// translucent lists (3, 5), indirect (8) and image effects (9).
-void RenderCore::note_rt_phase(std::uint8_t phase) {
-    if (!scene_phase_) {
-        return;
-    }
-    rt_phase_ = phase;
-    using motion::ScenePhase;
-    if (phase == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
-        phase == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
-        phase == static_cast<std::uint8_t>(ScenePhase::AfterIndirect) ||
-        phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
-        trace_rt_scene();
-        apply_scene_ao();
-    }
-    if (phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
-        trace_rt_water();
-    }
-}
-
-// The water drawn since the trace reflects, before the image effects (or at the scene's end).
-void RenderCore::trace_rt_water() {
-    if (renderer_.rt_log_seq()) {
-        std::fprintf(stderr, "[rt-seq] backend water request open=%d phase=%u\n", renderer_.rt_water_open() ? 1 : 0,
-                     static_cast<unsigned>(rt_phase_));
-    }
-    if (!renderer_.rt_water_open()) {
-        return;
-    }
-    flush_pending_draw_batch();
-    renderer_.rt_trace_water();
-}
-
-void RenderCore::trace_rt_scene() {
-    if (rt_scene_traced_) {
-        return;
-    }
-    rt_scene_traced_ = true;
-    flush_pending_draw_batch();
-    renderer_.rt_trace_scene();
-}
-
-void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
+void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
                                bool sky_up_known, const SceneStage* stage) {
     flush_pending_draw_batch();
-    if (marker == FifoMarker::SceneBegin) {
+    if (marker == SceneMarker::SceneBegin) {
         end_side_layer();
         // A frame recorded as screen-only (its frame before drew no scene) draws one after all: the scene's record
         // replaces it.
@@ -4347,89 +1683,30 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             cancel_screen_frame();
         }
     }
-    scene_phase_ = marker == FifoMarker::SceneBegin;
-    if (marker == FifoMarker::SceneBegin) {
-        ao_view_set_ = false;
-        ao_scene_applied_ = !ambient_occlusion_;
+    scene_phase_ = marker == SceneMarker::SceneBegin;
+    if (marker == SceneMarker::SceneBegin) {
         // The game names its stage: a new one starts the tracer's stage state over.
         if (stage != nullptr && (*stage)[0] != 0 && (!scene_stage_known_ || *stage != scene_stage_)) {
             scene_stage_ = *stage;
             scene_stage_known_ = true;
-            begin_rt_stage();
-        }
-        // The file select stays the game's own picture: there is no stage light or world to trace, and its menu
-        // lights colour the heads.
-        {
-            static constexpr char kFileSelect[] = "FileSelect";
-            renderer_.rt_set_scene_untraced(scene_stage_known_ &&
-                                            std::strncmp(scene_stage_.data(), kFileSelect, sizeof(kFileSelect)) == 0);
         }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
-        const std::uint32_t known = sky_up_known ? 1u : 0u;
+        const bool wide = enhanced_lighting_ && get_render_config().wide_scene;
+        const std::uint32_t known = (sky_up_known ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
             cpu_vs_constants_.sky_up = sky_up;
             cpu_vs_constants_.sky_up_known = known;
             sky_up_dirty_ = true;
         }
-        // The same up for the ray tracer's physical camera (the ground under the player).
-        {
-            float up[3] = {0.0f, 1.0f, 0.0f};
-            if (sky_up_known) {
-                decode_octahedral(sky_up, up);
-            }
-            renderer_.rt_set_scene_up({up[0], up[1], up[2]});
-        }
-        rt_mirror_pass_ = false;
-        rt_trace_only_ = false;
         renderer_.set_scene_view(view);
-        // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
-        renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
-        renderer_.rt_set_presents(g_snapshot_presents + 1u);
-        rt_phase_ = 0xFFu;
-        rt_view_set_ = false;
-        rt_scene_traced_ = !renderer_.rt_active() || renderer_.rt_scene_untraced();
-        rt_sky_buffer_ = false;
-        rt_sun_buffer_ = false;
-        rt_fake_shadow_list_ = false;
-        if (!rt_scene_traced_) {
-            renderer_.rt_begin_scene();
-            renderer_.rt_begin_sky();
-            renderer_.rt_set_camera(view);
-        }
-        // GALAXY_RT_AB: the game's own frames keep the aim's state and leave the lights the game's.
-        aim_rt_scene_lights(renderer_.rt_lighting() || renderer_.rt_ab_original() ? view : nullptr);
-        if (renderer_.rt_ab_original()) {
-            rt_light_aim_ = {};
-        }
-        // This scene's ray-tracing state for the enhanced pipelines (and the de-lit draws: under
-        // traced lighting every lit and environment-mapped scene draw takes the enhanced path).
-        enhanced_ps_flags_ = (enhanced_ps_flags_ & ~(kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical)) |
-                             (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                             (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u) |
-                             (renderer_.rt_physical() ? kEnhancedRtPhysical : 0u);
     } else {
-        {
-            if (renderer_.rt_log_seq()) {
-                std::fprintf(stderr, "[rt-seq] scene-end layer=%u scene-phase=%d traced=%d water-open=%d\n",
-                             side_layer_, scene_phase_ ? 1 : 0, rt_scene_traced_ ? 1 : 0,
-                             renderer_.rt_water_open() ? 1 : 0);
-            }
-        }
         if (side_layer_ == kMirrorLayer) {
             end_side_layer();
         }
-        trace_rt_scene();
-        apply_scene_ao();
-        if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
-            trace_rt_water();
-            renderer_.rt_capture_picture();
-        }
-        // The camera (in rt_capture_picture with the lighting; else here) brings the RGBA8 EFB back.
-        renderer_.end_hdr_scene();
     }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
-    if (marker == FifoMarker::SceneBegin) {
+    if (marker == SceneMarker::SceneBegin) {
         temporal_scene_ = renderer_.scene_temporal_begin(
             scene_jitter_px_[0], scene_jitter_px_[1]);
         // A temporal scene writes the motion, and so does one the ray tracing engine lights (its histories follow
@@ -4511,70 +1788,30 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
     if (was_motion != motion_scene_) {
         current_pipeline_ = nullptr;
     }
-    // Scene end: the 2D layer renders into the output-resolution EFB. A new
-    // scene that begins before a display copy restores the render EFB.
+    // Scene end: the 2D layer renders into the output-resolution scene target. A new
+    // scene that begins before a display copy restores the render scene target.
     bool switched = false;
     display_copy_on_output_ = false;
-    if (marker == FifoMarker::SceneEnd) {
+    if (marker == SceneMarker::SceneEnd) {
+        renderer_.end_wide_scene();
         renderer_.record_scene_aa();
-        switched = renderer_.begin_output_efb();
-    } else if (renderer_.output_efb_active()) {
-        renderer_.end_output_efb();
+        switched = renderer_.begin_output_scene();
+    } else if (renderer_.output_scene_active()) {
+        renderer_.end_output_scene();
         switched = true;
     }
+    if (marker == SceneMarker::SceneBegin) {
+        renderer_.begin_wide_scene(enhanced_lighting_ && get_render_config().wide_scene);
+    }
     if (switched) {
-        efb_copies_.set_efb_scale(renderer_.efb_scale());
+        display_pictures_.set_frame_map(renderer_.frame_map());
         frame_bindings_dirty_ = true;
     }
-    if (marker == FifoMarker::SceneEnd) {
-        s_layer_2d_scale.store(renderer_.efb_scale(), std::memory_order_relaxed);
+    if (marker == SceneMarker::SceneEnd) {
+        s_layer_2d_lines.store(renderer_.frame_map().height, std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
-    if (marker == FifoMarker::SceneBegin) {
-        s_scene_display_scale.store(renderer_.scene_display_scale(), std::memory_order_relaxed);
-    }
-    // While ray tracing runs the scene layer draws into the HDR scene EFB (renderer_d3d12 begin_hdr_scene): from here,
-    // with the render EFB back.
-    if (marker == FifoMarker::SceneBegin && renderer_.rt_active()) {
-        renderer_.begin_hdr_scene();
-    }
-}
-
-void RenderCore::take_attached_pointer_depth_capture(FrameChunk& chunk) {
-    if (!producer_pointer_depth_capture_) return;
-    chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
-    chunk.pointer_depth_in_frame = true;
-    producer_pointer_depth_capture_.reset();
-}
-
-// Render thread, inside the frame's parse: the field joins this command list.
-void RenderCore::record_pointer_depth_capture_in_frame(FrameChunk& chunk) {
-    auto capture = std::move(chunk.pointer_depth_capture);
-    chunk.pointer_depth_capture.reset();
-    chunk.pointer_depth_in_frame = false;
-    if (!capture) return;
-    const auto start = std::chrono::steady_clock::now();
-    bool recorded = false;
-    try {
-        recorded = renderer_.record_pointer_depth_capture_in_frame();
-    } catch (...) {
-        capture->error = std::current_exception();
-    }
-    if (!recorded) {
-        capture->success = false;
-        capture->publish_complete();
-        return;
-    }
-    const std::lock_guard<std::mutex> lock(queue_mutex_);
-    // The fence is assigned at end_frame; adopt_pointer_depth_fence_if_needed
-    // copies it before any wait or completion poll.
-    pending_pointer_depth_capture_ = {std::move(capture), 0u, start};
-}
-
-void RenderCore::adopt_pointer_depth_fence_if_needed() {
-    if (pending_pointer_depth_capture_.capture &&
-        pending_pointer_depth_capture_.fence_value == 0u) {
-        pending_pointer_depth_capture_.fence_value = renderer_.pointer_depth_capture_fence();
+    if (marker == SceneMarker::SceneBegin) {
     }
 }
 
@@ -4761,16 +1998,6 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     if (configured == 0u) {
         return configured;
     }
-    // GALAXY_TEST_INTERP_SUBFRAMES=<k>: every sequence takes k sub-frames (at most the configured count), whatever the
-    // GPU's and the cadence's governors would allow: what a capped rate shows, held for a test.
-    static const std::uint64_t forced = read_env_u64("GALAXY_TEST_INTERP_SUBFRAMES", 0u);
-    if (forced != 0u) [[unlikely]] {
-        const auto subframes = static_cast<unsigned>(std::min<std::uint64_t>(forced, configured));
-        if (subframes < configured) {
-            rate = 60.0 * static_cast<double>(subframes + 1u);
-        }
-        return subframes;
-    }
     const unsigned allowed = std::min(configured, interp_cadence_cap_);
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
@@ -4809,7 +2036,7 @@ unsigned RenderCore::interp_gpu_governor(double& rate) {
     return subframes;
 }
 
-// Sub-frames must never cost the game its own frames. Each game frame shown is timed against the VI period: an
+// Sub-frames must never cost the game its own frames. Each game frame shown is timed against the frame period: an
 // interval above 1.5 periods missed VIs. A miss is the sub-frames' when the interval would not have missed without
 // their render-thread time: the game waited on the render thread, and would have waited that much less (at most what
 // it waited). The rest are the game's own, as a scene's first frames, whose decoding, uploads and pipelines keep the
@@ -4840,7 +2067,7 @@ void RenderCore::restart_interp_governors() {
 
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
     // Since the frame before: the game's waits on the render thread, and the render thread's sub-frame time.
     const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
@@ -5028,22 +2255,6 @@ void RenderCore::supersede_interp_sequence() {
     ++interp_superseded_;
 }
 
-std::string RenderCore::interp_snapshot_path(const char* suffix) const {
-    static const std::string directory = [] {
-        char value[MAX_PATH]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_SNAPSHOT_DIR") == 0 &&
-                       length > 1u
-            ? std::string(value) : std::string{};
-    }();
-    static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
-    static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
-    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
-        return {};
-    }
-    return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
-}
-
 // t of the next slot in the playing sequence (see advance_interp_sequence).
 double RenderCore::interp_slot_t() const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
@@ -5088,6 +2299,55 @@ void RenderCore::interp_sleep_us(std::int64_t us) {
     std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
+namespace {
+// GALAXY_TRACE_INTERP_SLOTS=<file>: each present slot, kept in memory and written once after 30 s, so the timing measured is the
+// timing played. tools/verify/interp_slots.py reads it.
+struct InterpSlotRecord {
+    std::int64_t slot;
+    std::int64_t began;
+    std::int64_t ended;
+    double t;
+    std::uint32_t sequence;
+    std::uint32_t kind;  // 0 a sub-frame, 1 the game frame itself
+};
+std::vector<InterpSlotRecord> g_interp_slots;
+
+void write_interp_slots() {
+    const char* const path = ::galaxy::run_options().trace_interp_slots;
+    if (path == nullptr) {
+        return;
+    }
+    if (std::FILE* const file = ::galaxy::open_file(path, "w")) {
+        std::fprintf(file, "frequency %lld\n", static_cast<long long>(galaxy::qpc_frequency()));
+        for (const InterpSlotRecord& r : g_interp_slots) {
+            std::fprintf(file, "%lld %lld %lld %.6f %u %u\n", static_cast<long long>(r.slot), static_cast<long long>(r.began),
+                         static_cast<long long>(r.ended), r.t, r.sequence, r.kind);
+        }
+        std::fclose(file);
+    }
+}
+
+void note_interp_slot(std::int64_t slot, std::int64_t began, double t, std::uint32_t sequence, std::uint32_t kind) {
+    static bool trace = [] {
+        if (::galaxy::run_options().trace_interp_slots == nullptr) {
+            return false;
+        }
+        g_interp_slots.reserve(4'000'000u);
+        return true;
+    }();
+    if (!trace) {
+        return;
+    }
+    g_interp_slots.push_back({slot, began, galaxy::qpc_now(), t, sequence, kind});
+    // 30 s of slots, then the one stall of writing them, after anything measured.
+    if (g_interp_slots.size() == g_interp_slots.capacity() ||
+        began - g_interp_slots.front().began > 30 * galaxy::qpc_frequency()) {
+        write_interp_slots();
+        trace = false;
+    }
+}
+}  // namespace
+
 void RenderCore::advance_interp_sequence(bool flush) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     flush = flush || interp_sequence_.flush_requested;
@@ -5115,30 +2375,16 @@ void RenderCore::advance_interp_sequence(bool flush) {
         if (!flush && t < 1.0 - 1e-3 && sequence.next < 7u && sequence.subframes != 0u &&
             renderer_.replay_playing()) {
             const auto start = std::chrono::steady_clock::now();
-            std::string snapshot =
-                interp_snapshot_path(("sub" + std::to_string(sequence.next + 1u)).c_str());
-            if (snapshot.empty()) {
-                snapshot = present_snapshot_path();  // sub-frames count as presents
-            }
-            // GALAXY_TEST_CAPTURE_NO_WAIT=1: a sub-frame is saved only when the last save's readback is done (else
-            // skipped), never waited for: waiting holds the CPU behind the GPU and hides what a race between them shows.
-            static const bool capture_no_wait = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) != 0u;
+            const std::string snapshot = present_snapshot_path();  // sub-frames count as presents
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
-                renderer_.set_capture_waits(!capture_no_wait);
+                renderer_.set_capture_waits(true);
             }
-            // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
-            // reproduce the frame, 0 the frame before).
-            static const double force_t = [] {
-                char value[32]{};
-                std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
-                    ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
-            }();
             const std::int64_t subframe_start = galaxy::qpc_now();
-            const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
+            const bool presented = render_interp_subframe(static_cast<float>(t));
             interp_subframe_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - subframe_start);
+            note_interp_slot(slot, subframe_start, t, static_cast<std::uint32_t>(interp_sequence_serial_), 0u);
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
                 renderer_.set_capture_waits(false);
@@ -5150,7 +2396,6 @@ void RenderCore::advance_interp_sequence(bool flush) {
                 ++interp_presented_;
                 interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
                 note_present_vblank(slot);
-                note_interp_timeline(slot, force_t >= 0.0 ? force_t : t, false);
             } else {
                 ++interp_failed_;
             }
@@ -5160,16 +2405,13 @@ void RenderCore::advance_interp_sequence(bool flush) {
             return;
         }
         sequence.active = false;
-        interp_snapshot_path_ = interp_snapshot_path("real");
-        renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
-        present_cached_xfb_on_thread(false, false, true, sequence.picture_slot);
+        const std::int64_t real_start = galaxy::qpc_now();
+        present_cached_display_on_thread(false, false, true, sequence.picture_slot);
+        note_interp_slot(slot, real_start, 1.0, static_cast<std::uint32_t>(interp_sequence_serial_), 1u);
         note_present_vblank(slot);
-        note_interp_timeline(slot, 1.0, true);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
-        renderer_.set_capture_waits(false);
-        interp_snapshot_path_.clear();
         ++interp_sequences_;
         report_interp_stats();
         return;
@@ -5181,7 +2423,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
 void RenderCore::note_present_vblank(std::int64_t slot) {
-    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     std::int64_t vblank = 0;
     std::int64_t period = 0;
     if (!trace || !renderer_.vblank_grid(vblank, period)) {
@@ -5206,32 +2448,6 @@ void RenderCore::note_present_vblank(std::int64_t slot) {
     interp_slot_to_vblank_max_ms_ = std::max(interp_slot_to_vblank_max_ms_, slot_to_vblank_ms);
 }
 
-// The line: the slot's time and the present's (QPC ticks), the game frame shown (the played log's serial; t
-// between the frame before, 0, and it, 1), whether it was the game's own frame, and the sequence's camera: whether
-// it cut (by the game's flag or the thresholds), how far it moved and turned, and whether it chained past skipped logs.
-void RenderCore::note_interp_timeline(std::int64_t slot, double t, bool real) {
-    static std::FILE* const file = [] {
-        char path[MAX_PATH]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, path, sizeof(path), "GALAXY_INTERP_TIMELINE") != 0 || length <= 1u) {
-            return static_cast<std::FILE*>(nullptr);
-        }
-        std::FILE* opened = nullptr;
-        if (fopen_s(&opened, path, "w") == 0 && opened != nullptr) {
-            std::fprintf(opened, "slot_qpc,present_qpc,frame,t,real,frequency,cut,game_cut,moved,turn,chained\n");
-        }
-        return opened;
-    }();
-    if (file == nullptr) {
-        return;
-    }
-    std::fprintf(file, "%lld,%lld,%llu,%.6f,%d,%lld,%d,%d,%.1f,%.2f,%d\n", static_cast<long long>(slot),
-                 static_cast<long long>(galaxy::qpc_now()), static_cast<unsigned long long>(interp_last_played_serial_),
-                 t, real ? 1 : 0, static_cast<long long>(galaxy::qpc_frequency()), interp_camera_.cut ? 1 : 0,
-                 interp_camera_game_cut_ ? 1 : 0, static_cast<double>(interp_camera_.moved),
-                 static_cast<double>(interp_camera_.turn_degrees), interp_sequence_.chained ? 1 : 0);
-}
-
 // A game frame presented while interpolating, without sub-frames: why.
 void RenderCore::note_interp_real_present() {
     const std::int64_t now = galaxy::qpc_now();
@@ -5248,7 +2464,7 @@ void RenderCore::note_interp_real_present() {
 }
 
 void RenderCore::report_interp_stats() {
-    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    static const bool trace = ::galaxy::run_option_u64(::galaxy::run_options().trace_present_stats, 0u) != 0u;
     if (!trace) {
         return;
     }
@@ -5358,9 +2574,6 @@ void RenderCore::report_interp_stats() {
             << " gpu-phase-ms(eval/replay/present)=" << gpu_phase[0] / gpu_divisor << '/'
             << gpu_phase[1] / gpu_divisor << '/' << gpu_phase[2] / gpu_divisor
             << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
-            << " colour-records-per-subframe="
-            << (interp_presented_ != 0u
-                    ? static_cast<double>(std::exchange(interp_ps_moving_total_, 0u)) / presented : 0.0)
             << " vertex-blend-draws-per-subframe="
             << (interp_presented_ != 0u
                     ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
@@ -5534,7 +2747,6 @@ bool RenderCore::render_interp_subframe(float t) {
                 interp_snapped_ += motion.position.snapped ? 1u : 0u;
             }
             if (before != nullptr && !(camera.known && camera.cut)) {
-                motion.colour_moves = channel_colours_move(*before, now);
                 motion.tex_moves =
                     std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
                                 sizeof(now.inline_tex_matrices)) != 0 ||
@@ -5569,18 +2781,18 @@ bool RenderCore::render_interp_subframe(float t) {
                 // matrix index when it is lit; the lights its channels and
                 // emboss texgens evaluate (texture rows are taken whole).
                 InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
-                entry.light_mask |= used_lights(now);
+                entry.light_mask |= scene.light_masks[r];
                 if (scene.per_vertex[r] != 0u) {
                     entry.position_mask = kAllPaletteSlots;
                     entry.normal_mask = kAllPaletteSlots;
                 } else if ((now.flags & 0x02u) != 0u) {
-                    const std::uint32_t slot = (now.matrix_index_a & 0x3Fu) / 3u;
+                    const std::uint32_t slot = (now.draw_rows[0][0] & 0x3Fu) / 3u;
                     if (slot < 10u) entry.normal_mask |= static_cast<std::uint16_t>(1u << slot);
                 }
                 motion.palette = index;
             }
             if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.colour_moves || motion.palette >= 0) {
+                motion.palette >= 0) {
                 interp_pending_.push_back(motion);
             }
         }
@@ -5600,7 +2812,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 motion.palette = -1;
             }
             if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.colour_moves || motion.palette >= 0) {
+                motion.palette >= 0) {
                 interp_moving_.push_back(motion);
             }
         }
@@ -5611,20 +2823,6 @@ bool RenderCore::render_interp_subframe(float t) {
                                            ? std::span<const std::int32_t>(prev_index)
                                            : std::span<const std::int32_t>{});
         const auto colours_start = std::chrono::steady_clock::now();
-        // Pixel-constant records pair through the paired draws.
-        interp_ps_moving_.clear();
-        if (before_valid && !(interp_camera_.known && interp_camera_.cut)) {
-            const std::span<const std::int32_t> pairs = renderer_.ps_record_pairs();
-            const std::size_t records = std::min(pairs.size(), scene.ps_constants.size());
-            for (std::size_t p = 0; p < records; ++p) {
-                const std::int32_t q = pairs[p];
-                if (q >= 0 && static_cast<std::size_t>(q) < before_scene.ps_constants.size() &&
-                    ps_colours_move(before_scene.ps_constants[static_cast<std::size_t>(q)],
-                                    scene.ps_constants[p])) {
-                    interp_ps_moving_.push_back({static_cast<std::uint32_t>(p), static_cast<std::uint32_t>(q)});
-                }
-            }
-        }
         const auto program_start = std::chrono::steady_clock::now();
         interp_sequence_.ready = prepare_interp_sequence(scene, before_scene, before_valid);
         const auto prepare_end = std::chrono::steady_clock::now();
@@ -5643,7 +2841,6 @@ bool RenderCore::render_interp_subframe(float t) {
     }
     const Affine34 camera_t = camera_at(interp_camera_, t);
     interp_moving_records_ += interp_moving_.size();
-    interp_ps_moving_total_ += interp_ps_moving_.size();
     // The frame presented before: earlier in this sequence; this sequence's t = 0 when it was the scene before at
     // t = 1; or the last sub-frame of the scene before's sequence, at t' of that pair, when the scene arrived first
     // (on the display's vblanks every sequence ends so: no slot meets t = 1). That frame sits at t' - 1 on this
@@ -5711,7 +2908,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     interp_program_.set_endpoint_cameras(camera_at(interp_camera_, 0.0f), camera_at(interp_camera_, 1.0f));
     interp_vs_slot_.assign(count, -1);
     interp_record_palette_slot_.assign(count, -1);
-    interp_ps_slot_.assign(scene.ps_constants.size(), -1);
     interp_palette_slot_.assign(interp_palette_motions_.size(), -1);
     interp_palette_source_.clear();
     interp_palette_entry_.clear();
@@ -5732,7 +2928,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     const bool motion = renderer_.temporal_interpolation();
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
                       static_cast<std::uint32_t>(interp_palette_source_.size()),
-                      static_cast<std::uint32_t>(interp_ps_moving_.size()),
                       motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u};
     const interp_gpu::Layout& layout = interp_layout_;
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
@@ -5752,16 +2947,13 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             // Per texgen: projection and environment maps lerp whole; texture
             // coordinate matrices scroll (wrap-aware) or step.
             for (unsigned i = 0; i < kMaxTexGens; ++i) {
-                const bool spatial = texgen_spatial(recorded.texgen_config[i][0]);
+                const bool spatial = ((scene.spatial_texgens[moving.record] >> i) & 1u) != 0u;
                 interp_program_.tex_matrix(base + interp_gpu::kVsTex + 12u * i, &before->inline_tex_matrices[i][0][0],
                                            &recorded.inline_tex_matrices[i][0][0], spatial);
                 interp_program_.tex_matrix(base + interp_gpu::kVsPost + 12u * i,
                                            &before->inline_post_matrices[i][0][0],
                                            &recorded.inline_post_matrices[i][0][0], spatial);
             }
-        }
-        if (moving.colour_moves && before != nullptr) {
-            interp_program_.channel_colours(base, *before, recorded);
         }
         if (moving.projection_moves && before != nullptr) {
             interp_program_.projection(base, *before, recorded);
@@ -5819,19 +3011,12 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             interp_program_.at_previous(false);
         }
     }
-    for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
-        const auto [p, q] = interp_ps_moving_[k];
-        interp_ps_slot_[p] = static_cast<std::int32_t>(k);
-        interp_program_.ps_colours(layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
-                                   before_scene.ps_constants[q], scene.ps_constants[p]);
-    }
     interp_program_ops_ += interp_program_.ops.size();
     interp_program_words_ += interp_program_.payload.size();
     Renderer::ReplaySequence sequence{};
     sequence.layout = layout;
     sequence.record_vs_slot = interp_vs_slot_;
     sequence.record_palette_slot = interp_record_palette_slot_;
-    sequence.ps_slot = interp_ps_slot_;
     sequence.palette_source = interp_palette_source_;
     sequence.program = &interp_program_;
     sequence.vertex_blend = true;
@@ -5857,7 +3042,7 @@ bool RenderCore::skip_for_present_rate() {
     return false;
 }
 
-void RenderCore::present_cached_xfb(
+void RenderCore::present_cached_display(
     bool black,
     bool present_swap_chain) {
     if (!initialized_ || !present_swap_chain) {
@@ -5881,8 +3066,7 @@ void RenderCore::present_cached_xfb(
                 queue_cv_.notify_one();
                 return;
             }
-            if (!back.efb_peek_only &&
-                !back.present_only && !back.present_swap_chain) {
+            if (!back.present_only && !back.present_swap_chain) {
                 back.present_swap_chain = true;
                 back.black = black;
                 queue_cv_.notify_one();
@@ -5901,14 +3085,14 @@ void RenderCore::present_cached_xfb(
 // Consumer loop (render thread): frames execute in submission order; queued
 // frames are drained before a stop so the last presents land.
 void RenderCore::render_thread_main() {
-    galaxy::host::name_current_thread(L"Nebula GX Render");
+    galaxy::host::name_current_thread(L"Nebula Render");
     galaxy::host::perf_hint_add_current_thread();
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
     {
         // Opt the process out of EcoQoS throttling, so hybrid CPUs do not park the
-        // simulation, render or DSP threads on efficiency cores.
+        // simulation, render or audio threads on efficiency cores.
         static std::once_flag power_throttling_once;
         std::call_once(power_throttling_once, [] {
             galaxy::host::opt_out_of_power_throttling_process();
@@ -5916,67 +3100,20 @@ void RenderCore::render_thread_main() {
             // 1 ms timer granularity: otherwise sleeps, condition-variable timeouts and
             // waitable timers round to the 15.6 ms scheduler tick, delaying fence
             // polling and every sub-frame wait.
-            if (HMODULE winmm = LoadLibraryW(L"winmm.dll")) {
-                using TimeBeginPeriodFn = UINT(WINAPI*)(UINT);
-                if (auto begin = reinterpret_cast<TimeBeginPeriodFn>(
-                        GetProcAddress(winmm, "timeBeginPeriod"))) {
-                    (void)begin(1);
-                }
-            }
+            galaxy::host::hold_high_resolution_timer(true);
 #endif
         });
     }
-    EfbPeekRequest* active_peek = nullptr;
-    std::shared_ptr<PointerDepthCapture> active_pointer_depth;
-    // Called with queue_mutex_ held. Never leave a stack-owned utility request
-    // queued after its worker has failed. Notify while holding its mutex, so a
-    // waiter cannot destroy the request before the final cv access finishes.
+    // Called with queue_mutex_ held.
     const auto fail_queued_utilities = [&](std::exception_ptr error) {
         render_thread_error_ = error;
         stop_render_thread_ = true;
-        const auto fail_request = [&](EfbPeekRequest* request) {
-            if (request != nullptr) {
-                const std::lock_guard<std::mutex> request_lock(request->mutex);
-                request->error = error;
-                request->success = false;
-                request->done = true;
-                request->cv.notify_one();
-            }
-        };
-        fail_request(active_peek);
-        active_peek = nullptr;
-        if (active_pointer_depth) {
-            active_pointer_depth->error = error;
-            active_pointer_depth->success = false;
-            active_pointer_depth->publish_complete();
-            active_pointer_depth.reset();
-        }
-        if (pending_pointer_depth_capture_.capture) {
-            auto capture = std::move(pending_pointer_depth_capture_.capture);
-            pending_pointer_depth_capture_ = {};
-            capture->error = error;
-            capture->success = false;
-            capture->publish_complete();
-        }
-        for (FrameChunk& queued : frame_queue_) {
-            if (queued.efb_peek_only) {
-                EfbPeekRequest* request = queued.efb_peek_request;
-                queued.efb_peek_request = nullptr;
-                fail_request(request);
-                if (queued.pointer_depth_capture) {
-                    queued.pointer_depth_capture->error=error;
-                    queued.pointer_depth_capture->success=false;
-                    queued.pointer_depth_capture->publish_complete();
-                }
-            }
-        }
         queue_space_cv_.notify_all();
     };
     try {
     for (;;) {
         try {
-            poll_completed_pointer_depth_capture();
-            poll_async_peek_fields();
+            poll_screen_probes();
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             fail_queued_utilities(std::current_exception());
@@ -5986,15 +3123,12 @@ void RenderCore::render_thread_main() {
         bool have_chunk = false;
         bool idle_present = false;
         bool overlay_idle = false;
-        std::uint64_t shutdown_fence = 0;
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             const RenderConfig cfg = get_render_config();
             idle_present = cfg.frame_rate_decouple &&
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
-            const bool poll_pointer_depth =
-                static_cast<bool>(pending_pointer_depth_capture_.capture) ||
-                renderer_.any_async_peek_field_pending();
+            const bool poll_probes = probe_flights_active_ != 0u;
             // Draining for a stop: queued frames present without sub-frames.
             interp_stopping_ = stop_render_thread_;
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
@@ -6032,7 +3166,7 @@ void RenderCore::render_thread_main() {
                     interp_sleep_us(remaining_us);
                     lock.lock();
                 }
-            } else if (idle_present || poll_pointer_depth) {
+            } else if (idle_present || poll_probes) {
                 // Fences are polled at the top of the loop, outside queue_mutex_:
                 // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
@@ -6069,16 +3203,12 @@ void RenderCore::render_thread_main() {
             }
             if (frame_queue_.empty()) {
                 if (stop_render_thread_) {
-                    if (!pending_pointer_depth_capture_.capture) {
-                        break;  // stop requested, queue and capture fences drained
-                    }
-                    shutdown_fence = pending_pointer_depth_capture_.fence_value;
+                    break;  // stop requested, queue drained
                 }
             } else {
                 chunk = std::move(frame_queue_.front());
                 frame_queue_.pop_front();
-                if (!chunk.efb_peek_only &&
-                    !chunk.present_only && !chunk.present_swap_chain &&
+                if (!chunk.present_only && !chunk.present_swap_chain &&
                     !frame_queue_.empty() &&
                     frame_queue_.front().present_only) {
                     FrameChunk present = std::move(frame_queue_.front());
@@ -6086,11 +3216,7 @@ void RenderCore::render_thread_main() {
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.black = present.black;
                 }
-                if (chunk.efb_peek_only) {
-                    active_peek = chunk.efb_peek_request;
-                    active_pointer_depth = chunk.pointer_depth_capture;
-                    ++utility_chunks_in_flight_;
-                } else if (chunk.present_only) {
+                if (chunk.present_only) {
                     ++present_chunks_in_flight_;
                 } else {
                     galaxy::timeline::record(galaxy::timeline::Event::RenderBegin, 0u, 0u);
@@ -6104,29 +3230,21 @@ void RenderCore::render_thread_main() {
         }
 
         try {
-            if (shutdown_fence != 0u) {
-                // Shutdown finishes the pointer capture in flight.
-                renderer_.wait_for_fence_value(shutdown_fence);
-                poll_completed_pointer_depth_capture();
-            } else if (have_chunk) {
+            if (have_chunk) {
                 queue_space_cv_.notify_all();
-                if (chunk.efb_peek_only) {
-                    execute_efb_peek_on_thread(chunk);
-                    active_peek = nullptr;
-                    active_pointer_depth.reset();
-                } else if (chunk.present_only) {
+                if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
                     if (chunk.black) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
-                        present_cached_xfb_on_thread(true, false);
+                        present_cached_display_on_thread(true, false);
                     } else if (interp_log_waiting_ && renderer_.replay_available()) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
                         start_interp_sequence(interp_log_slot_);
                         advance_interp_sequence(false);
                     } else if (!interp_sequence_.active) {
-                        present_cached_xfb_on_thread(false, false);
+                        present_cached_display_on_thread(false, false);
                     } else {
                         ++interp_present_skipped_;
                     }
@@ -6134,19 +3252,12 @@ void RenderCore::render_thread_main() {
                     if (interp_sequence_.active && interp_sequence_.flush_requested) {
                         advance_interp_sequence(true);
                     }
-                    if (const RenderStallInjection& stall = render_stall_injection(); stall.ms != 0u) {
-                        static std::uint32_t chunks = 0u;
-                        if (++chunks % stall.every == 0u) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(stall.ms));
-                        }
-                    }
                     render_frame_on_thread(chunk);
                     run_pending_interp_start();
                     {
                         std::lock_guard<std::mutex> lock(queue_mutex_);
                         render_chunk_started_ns_ = 0u;
                     }
-                    submit_async_peek_fields_if_requested();
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
@@ -6156,7 +3267,7 @@ void RenderCore::render_thread_main() {
                 const std::int64_t now = galaxy::qpc_now();
                 if (now >= overlay_idle_due_qpc_) {
                     if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
-                        present_cached_xfb_on_thread(false, false, false,
+                        present_cached_display_on_thread(false, false, false,
                                                      last_presented_slot_.load(std::memory_order_relaxed));
                     }
                     overlay_idle_due_qpc_ += interp_slot_period_qpc_;
@@ -6169,11 +3280,7 @@ void RenderCore::render_thread_main() {
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (have_chunk) {
-                if (chunk.efb_peek_only) {
-                    if (utility_chunks_in_flight_ != 0u) {
-                        --utility_chunks_in_flight_;
-                    }
-                } else if (chunk.present_only) {
+                if (chunk.present_only) {
                     if (present_chunks_in_flight_ != 0u) {
                         --present_chunks_in_flight_;
                     }
@@ -6185,13 +3292,7 @@ void RenderCore::render_thread_main() {
             break;
         }
 
-        if (have_chunk && chunk.efb_peek_only) {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            if (utility_chunks_in_flight_ != 0u) {
-                --utility_chunks_in_flight_;
-            }
-            queue_space_cv_.notify_all();
-        } else if (have_chunk && chunk.present_only) {
+        if (have_chunk && chunk.present_only) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (present_chunks_in_flight_ != 0u) {
                 --present_chunks_in_flight_;
@@ -6215,236 +3316,62 @@ void RenderCore::render_thread_main() {
     }
 }
 
-std::uint32_t RenderCore::readback_serial(std::uint16_t token) const noexcept {
-    const std::uint32_t key = async_peek_key(EfbPeekKind::Color, token);
-    for (const AsyncPeekFieldState& state : async_peek_) {
-        if (state.key.load(std::memory_order_acquire) == key) {
-            return state.publications.load(std::memory_order_acquire);
-        }
+std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity) {
+    if (channel >= kScreenProbeChannels) {
+        return 0u;
     }
-    return 0u;
+    const std::lock_guard guard(probe_answers_lock_);
+    const ScreenProbeAnswers& answers = probe_answers_[channel];
+    const std::uint32_t count = std::min(answers.count, capacity);
+    std::memcpy(probes, answers.probes.data(), count * sizeof(ScreenProbe));
+    return count;
 }
 
-std::size_t RenderCore::async_peek_channel(EfbPeekKind kind, std::uint16_t token) {
-    const std::uint32_t key = async_peek_key(kind, token);
-    std::size_t oldest = 0;
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        if (async_peek_[index].key.load(std::memory_order_relaxed) == key) {
-            return index;
-        }
-        if (async_peek_[index].last_request < async_peek_[oldest].last_request) {
-            oldest = index;
-        }
-    }
-    AsyncPeekFieldState& state = async_peek_[oldest];
-    state.generation.fetch_add(1u, std::memory_order_acq_rel);
-    state.publications.store(0u, std::memory_order_release);
-    state.key.store(key, std::memory_order_release);
-    return oldest;
-}
-
-bool RenderCore::read_async_peek_field(
-    AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
-    const std::uint64_t published = state.published.load(std::memory_order_acquire);
-    if ((published & 0xFFFFFFFFu) == 0u ||
-        (published >> 32u) != state.generation.load(std::memory_order_acquire)) {
-        return false;
-    }
-    const std::uint8_t* field = state.rgba[static_cast<std::size_t>((published & 0xFFFFFFFFu) - 1u)];
-    if (field == nullptr) {
-        return false;
-    }
-    // Same packing the full-field conversion produced: 0x00RRGGBB for depth,
-    // 0xAARRGGBB for colour.
-    const std::uint8_t* pixel =
-        field + (static_cast<std::size_t>(y) * kFrameWidth + x) * 4u;
-    const std::uint32_t rgb = (std::uint32_t{pixel[0]} << 16u) |
-        (std::uint32_t{pixel[1]} << 8u) | pixel[2];
-    value = kind == EfbPeekKind::Depth ? rgb : (std::uint32_t{pixel[3]} << 24u) | rgb;
-    state.published_answers.fetch_add(1u, std::memory_order_relaxed);
-    return true;
-}
-
-bool RenderCore::peek_efb_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
-    std::uint16_t token,
-    std::uint32_t& value) {
-    if (!initialized_ || x >= kFrameWidth || y >= kFrameHeight) {
-        return false;
-    }
-    AsyncPeekFieldState& state = async_peek_[async_peek_channel(kind, token)];
-    state.last_request = ++async_peek_requests_;
-    state.requested.store(true, std::memory_order_release);
-    if (read_async_peek_field(state, x, y, kind, value)) {
-        return true;
-    }
-    // A channel just bound: the latest field of the kind, so a new token never stalls on the
-    // synchronous path.
-    AsyncPeekFieldState* latest = nullptr;
-    for (AsyncPeekFieldState& other : async_peek_) {
-        const std::uint32_t key = other.key.load(std::memory_order_relaxed);
-        if (&other != &state && key != kAsyncPeekUnbound && async_peek_key_kind(key) == kind &&
-            (latest == nullptr || other.last_request > latest->last_request) &&
-            (other.published.load(std::memory_order_acquire) & 0xFFFFFFFFu) != 0u) {
-            latest = &other;
-        }
-    }
-    return latest != nullptr &&
-        read_async_peek_field(*latest, x, y, kind, value);
-}
-
-void RenderCore::poll_async_peek_fields() {
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        if (!renderer_.async_peek_field_pending(index)) {
-            continue;
-        }
-        AsyncPeekFieldState& state = async_peek_[index];
-        const int slot = state.pending_slot;
-        if (slot < 0) {
-            continue;
-        }
-        if (renderer_.try_complete_async_peek_field(index)) {
-            state.pending_slot = -1;
-            ++state.completed;
-            state.published.store(
-                (std::uint64_t{state.pending_generation} << 32u) | static_cast<std::uint32_t>(slot + 1),
-                std::memory_order_release);
-            if (state.pending_generation == state.generation.load(std::memory_order_acquire)) {
-                state.publications.fetch_add(1u, std::memory_order_release);
-            }
-        }
-    }
-}
-
-void RenderCore::submit_async_peek_fields_if_requested() {
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        AsyncPeekFieldState& state = async_peek_[index];
-        if (!state.requested.load(std::memory_order_acquire)) {
-            continue;
-        }
-        // Token channels record at their token (record_async_peek_fields_at_token).
-        const std::uint32_t key = state.key.load(std::memory_order_acquire);
-        if (key == kAsyncPeekUnbound || (key & 0xFFFFu) != 0u) {
-            continue;
-        }
-        if (renderer_.async_peek_field_pending(index)) {
-            // Keep the request alive for the next rendered chunk.
-            continue;
-        }
-        state.requested.store(false, std::memory_order_relaxed);
-        // Never the published slot: a reader may be converting its pixel.
-        const std::uint64_t published = state.published.load(std::memory_order_relaxed);
-        const int slot = (published & 0xFFFFFFFFu) == 0u
-            ? 0 : static_cast<int>(published & 0xFFFFFFFFu) % 3;
-        const std::uint32_t generation = state.generation.load(std::memory_order_acquire);
-        if (renderer_.submit_async_peek_field(
-                index, async_peek_key_kind(key), static_cast<std::size_t>(slot)) != 0u) {
-            // The slot pointers are fixed once the resources exist; record
-            // them before the first publication so readers never race a write.
-            if (state.rgba[0] == nullptr) {
-                for (std::size_t i = 0; i < state.rgba.size(); ++i) {
-                    state.rgba[i] = renderer_.async_peek_field_rgba(index, i);
-                }
-            }
-            state.pending_slot = slot;
-            state.pending_generation = generation;
-        }
-    }
-}
-
-void RenderCore::poll_completed_pointer_depth_capture() {
-    if (!pending_pointer_depth_capture_.capture) {
+void RenderCore::record_screen_probes(const shapes::Record& record) {
+    const auto channel = static_cast<std::uint32_t>(record.key);
+    if (channel >= kScreenProbeChannels || record.vertex_count == 0u || probe_flights_active_ == probe_flights_.size()) {
         return;
     }
-    adopt_pointer_depth_fence_if_needed();
-    auto capture = pending_pointer_depth_capture_.capture;
-    const std::uint8_t* rgba = nullptr;
-    if (!renderer_.try_complete_pointer_depth_capture_in_place(rgba)) {
-        return;
-    }
-    capture->rgba = rgba;
-    if (rgba == nullptr) {
-        throw std::runtime_error("pointer depth readback is not mapped");
-    }
-    capture->success = true;
-    capture->worker_ns = static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now() -
-            pending_pointer_depth_capture_.started).count());
-    // The mutex protects the idle predicate. Completion publication protects
-    // the pixel/status stores; no guest code can run on this render owner.
-    const std::lock_guard<std::mutex> lock(queue_mutex_);
-    pending_pointer_depth_capture_ = {};
-    capture->publish_complete();
-    queue_space_cv_.notify_all();
-}
-
-void RenderCore::drain_pending_pointer_depth_capture() {
-    adopt_pointer_depth_fence_if_needed();
-    if (pending_pointer_depth_capture_.capture) {
-        // Scalar game peeks and a second field share the utility allocator and
-        // descriptors. Preserve the first field before either can reuse them.
-        renderer_.wait_for_fence_value(
-            pending_pointer_depth_capture_.fence_value);
-        poll_completed_pointer_depth_capture();
-        if (pending_pointer_depth_capture_.capture) {
-            throw std::logic_error("completed pointer depth fence was not published");
-        }
+    ScreenProbeFlight& flight = probe_flights_[(probe_flight_first_ + probe_flights_active_) % probe_flights_.size()];
+    const std::span<const ScreenProbe> probes(current_record_pool_->probes.data() + record.vertex_first, record.vertex_count);
+    flight.kind = record.marker_aux != 0u ? ScreenProbeKind::Depth : ScreenProbeKind::Alpha;
+    flight.slot = (probe_flight_first_ + probe_flights_active_) % probe_flights_.size();
+    if (renderer_.record_screen_probes(flight.slot, flight.kind, probes)) {
+        flight.channel = channel;
+        flight.count = record.vertex_count;
+        std::copy(probes.begin(), probes.end(), flight.probes.begin());
+        ++probe_flights_active_;
     }
 }
 
-void RenderCore::execute_efb_peek_on_thread(FrameChunk& chunk) {
-    drain_pending_pointer_depth_capture();
-    if (chunk.pointer_depth_capture) {
-        auto& capture=*chunk.pointer_depth_capture;
-        const auto start=std::chrono::steady_clock::now();
-        try {
-            capture.success=renderer_.capture_pointer_depth(capture.pixels);
-            if (!capture.success) throw std::runtime_error("owned pointer depth capture failed");
-        } catch (...) {
-            capture.error=std::current_exception();
-            capture.success=false;
-            // render_thread_main owns the active request and publishes failure
-            // once, together with all pending/queued requests, before stopping.
-            throw;
+void RenderCore::poll_screen_probes() {
+    while (probe_flights_active_ != 0u) {
+        ScreenProbeFlight& flight = probe_flights_[probe_flight_first_];
+        const std::uint8_t* const rgba = renderer_.screen_probes_finished(flight.slot);
+        if (rgba == nullptr) {
+            return;
         }
-        capture.worker_ns=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count());
-        capture.publish_complete();
-        return;
-    }
-    EfbPeekRequest* request = chunk.efb_peek_request;
-    if (request == nullptr) {
-        return;
-    }
-
-    try {
-        std::uint32_t value = 0;
-        const bool success =
-            request->depth_pixels.empty()
-                ? renderer_.peek_efb(request->x, request->y, request->kind, value)
-                : renderer_.capture_pointer_depth(request->depth_pixels);
+        for (std::uint32_t i = 0; i < flight.count; ++i) {
+            const std::uint8_t* const pixel = rgba + std::size_t{i} * 4u;
+            flight.probes[i].value = flight.probes[i].x < 0.0f ? 0.0f
+                : flight.kind == ScreenProbeKind::Depth
+                    ? static_cast<float>((std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2]) / 16777215.0f
+                    : static_cast<float>(pixel[3]) / 255.0f;
+        }
         {
-            std::lock_guard<std::mutex> lock(request->mutex);
-            request->value = value;
-            request->success = success;
-            request->done = true;
-            request->cv.notify_one();
+            const std::lock_guard guard(probe_answers_lock_);
+            ScreenProbeAnswers& answers = probe_answers_[flight.channel];
+            answers.count = flight.count;
+            std::copy_n(flight.probes.begin(), flight.count, answers.probes.begin());
         }
-    } catch (...) {
-        {
-            std::lock_guard<std::mutex> lock(request->mutex);
-            request->error = std::current_exception();
-            request->done = true;
-            request->cv.notify_one();
-        }
+        probe_flight_first_ = (probe_flight_first_ + 1u) % probe_flights_.size();
+        --probe_flights_active_;
     }
 }
 
 void RenderCore::present_vi_black(bool in_frame) {
-    const XfbTexture* layout = efb_copies_.latest();
-    if (layout == nullptr || (vi_black_shown_ && !native_settings_overlay_visible())) {
+    const DisplayTexture* layout = display_pictures_.latest();
+    if (layout == nullptr || (black_shown_ && !native_settings_overlay_visible())) {
         return;
     }
     const std::string snapshot_path = present_snapshot_path();
@@ -6461,34 +3388,34 @@ void RenderCore::present_vi_black(bool in_frame) {
     if (!in_frame) {
         renderer_.end_frame();
     }
-    vi_black_shown_ = true;
-    // The frame the VI shows next is new to the display, even when it repeats the last XFB.
-    last_presented_xfb_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
+    black_shown_ = true;
+    // The frame shown next is new to the display, even when it repeats the last display picture.
+    last_presented_display_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
 
 void RenderCore::present_latest_frame_on_thread() {
-    present_cached_xfb_on_thread(false, true, false);
+    present_cached_display_on_thread(false, true, false);
 }
 
-void RenderCore::present_cached_xfb_on_thread(
+void RenderCore::present_cached_display_on_thread(
     bool black,
     bool sleep_if_missing,
-    bool count_game_xfb_present,
+    bool count_game_display_present,
     std::optional<std::uint32_t> slot) {
-    if (count_game_xfb_present) {
-        ++stat_xfb_present_requests_;
+    if (count_game_display_present) {
+        ++stat_display_present_requests_;
     }
     const std::uint64_t current_present_epoch =
-        present_epoch_ + (count_game_xfb_present ? 1u : 0u);
+        present_epoch_ + (count_game_display_present ? 1u : 0u);
     if (black) {
-        if (count_game_xfb_present) {
+        if (count_game_display_present) {
             present_epoch_ = current_present_epoch;
             present_vi_black(false);
         }
         return;
     }
-    vi_black_shown_ = false;
-    const XfbTexture* selected = slot ? efb_copies_.picture(*slot) : efb_copies_.latest();
+    black_shown_ = false;
+    const DisplayTexture* selected = slot ? display_pictures_.picture(*slot) : display_pictures_.latest();
     if (selected == nullptr) {
         if (sleep_if_missing) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -6497,27 +3424,26 @@ void RenderCore::present_cached_xfb_on_thread(
     }
     const bool duplicate_stamp =
         selected->copy_serial ==
-        last_presented_xfb_serial_.load(std::memory_order_relaxed);
+        last_presented_display_serial_.load(std::memory_order_relaxed);
     const bool skip_duplicate_present =
-        count_game_xfb_present &&
+        count_game_display_present &&
         duplicate_stamp &&
         !native_settings_overlay_visible();
-    if (count_game_xfb_present && !skip_duplicate_present &&
+    if (count_game_display_present && !skip_duplicate_present &&
         !native_settings_overlay_visible() && skip_for_present_rate()) {
         return;
     }
     if (skip_duplicate_present) {
-        record_skipped_duplicate_xfb_present(*selected);
+        record_skipped_duplicate_display_present(*selected);
         return;
     }
-    const std::string snapshot_path = !interp_snapshot_path_.empty() ? interp_snapshot_path_
-        : !count_game_xfb_present ? std::string{} : present_snapshot_path();
+    const std::string snapshot_path = !count_game_display_present ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
-        renderer_.set_capture_waits(snapshot_waits());
+        renderer_.set_capture_waits(true);
     }
     const bool game_frame_only =
-        interp_recording_ && count_game_xfb_present && !interp_presenting_real_ && !duplicate_stamp;
+        interp_recording_ && count_game_display_present && !interp_presenting_real_ && !duplicate_stamp;
     if (game_frame_only) {
         note_interp_real_present();
     }
@@ -6540,8 +3466,8 @@ void RenderCore::present_cached_xfb_on_thread(
     }
     if (!replayed) {
         renderer_.begin_frame(true);
-        // Present-only frames acquire no XFB textures, so EfbCopyManager retirement advances with
-        // render frames only; otherwise render-then-present would age XFBs twice per VI.
+        // Present-only frames acquire no display picture textures, so DisplayPictures retirement advances with
+        // render frames only; otherwise render-then-present would age pictures twice per frame.
         (void)renderer_.present(selected, !snapshot_path.empty());
     }
     if (!snapshot_path.empty()) {
@@ -6551,86 +3477,27 @@ void RenderCore::present_cached_xfb_on_thread(
     if (!replayed) {
         renderer_.end_frame();
     }
-    if (count_game_xfb_present) {
+    if (count_game_display_present) {
         present_epoch_ = current_present_epoch;
-        record_presented_xfb_copy(*selected);
+        record_presented_display_copy(*selected);
         last_presented_slot_.store(selected->slot, std::memory_order_relaxed);
     }
     renderer_.debug_log_backbuffer_readback();
 }
 
 void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
+    // GALAXY_TEST_GPU_LOST_FRAME=n (with GALAXY_TEST_GPU_LOST_TIMES, default 1, processes): the card is lost at frame n.
+    static const std::uint64_t lose_at = ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_frame, 0u);
+    if (lose_at != 0u && frame_index_ == lose_at) [[unlikely]] {
+        if (read_env_u64("NEBULA_GPU_RESTARTS", 0u) < ::galaxy::run_option_u64(::galaxy::run_options().test_gpu_lost_times, 1u)) {
+            renderer_.test_lose_device();
+        }
+    }
+    pipeline_cache_.merge_prepared();
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
-    render_safety_surround_=chunk.safety_surround;
     render_movie_frame_=chunk.movie_frame;
-    const bool trace_gx_stalls = trace_gx_stalls_enabled();
-    // Per-draw clock reads run on stall-traced and sampled frames only.
-    frame_time_sample_ = frame_gx_timing_sample_enabled(frame_index_);
-    frame_time_detail_ = trace_gx_stalls || frame_time_sample_;
-    // Thread CPU time and cycles of the frame and of its PSO resolution, on request or with the stall trace.
-    pso_cycles_enabled = pso_cycles_requested() || trace_gx_stalls;
-    // Per-frame phase timing takes a few clock reads and is always on.
-    constexpr bool frame_timing_enabled = true;
-    const ThreadCounterSample frame_cpu_start = pso_cycles_enabled
-        ? thread_cpu_time_100ns() : ThreadCounterSample{};
-    const ThreadCounterSample frame_cycles_start = pso_cycles_enabled
-        ? thread_cycle_count() : ThreadCounterSample{};
-    const auto render_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    frame_draws_issued_ = 0;
-    frame_draw_batches_ = 0;
-    frame_draws_no_pso_ = 0;
-    frame_xfb_copies_ = 0;
-    frame_tex_copies_ = 0;
-    frame_efb_alias_updates_ = 0;
-    frame_efb_alias_noops_ = 0;
-    frame_texture_binding_cache_hits_ = 0;
-    frame_texture_binding_cache_misses_ = 0;
-    frame_texture_binding_cache_prunes_ = 0;
-    frame_nontri_skips_ = 0;
-    frame_scissor_skips_ = 0;
-    frame_flush_us_ = 0;
-    frame_flush_pso_us_ = 0;
-    frame_flush_pso_cycles_ = 0;
-    frame_flush_pso_cycles_valid_ = pso_cycles_enabled;
-    frame_flush_total_us_ = 0;
-    frame_flush_timed_samples_ = 0;
-    // frame_flush_timed_calls_ runs across frames (ScopedFlushTiming).
-    frame_pso_memo_hits_ = 0;
-    frame_pso_get_calls_ = 0;
-    frame_pso_get_us_ = 0;
-    frame_pso_get_max_us_ = 0;
-    frame_flush_calls_ = 0;
-    frame_pso_resolutions_ = 0;
-    frame_pso_route_early_ = 0;
-    // Baseline for the per-frame pipeline-compile deltas on the [gx-frame-timing] line.
-    frame_compile_stats_baseline_ = pipeline_cache_.compile_stats();
-    frame_replay_prepared_batches_ = 0;
-    frame_replay_packet_batches_ = 0;
-    frame_native_shape_draws_ = 0;
-    frame_native_shape_misses_ = 0;
-    frame_replay_simple_batches_ = 0;
-    frame_replay_generic_draws_ = 0;
-    for (PipelineMemoEntry& entry : pipeline_memo_) {
-        entry.hash = 0u;
-    }
-    frame_flush_matrix_us_ = 0;
-    frame_matrix_upload_bytes_ = 0;
-    frame_flush_constants_us_ = 0;
-    frame_flush_texture_us_ = 0;
     frame_texture_decode_join_us_ = 0;
-    frame_vertex_load_us_ = 0;
-    frame_cached_vertex_validation_us_ = 0;
-    frame_cached_vertex_upload_us_ = 0;
-    frame_draw_record_us_ = 0;
-    frame_efb_copy_us_ = 0;
-    frame_resident_vertex_hits_ = 0;
-    frame_resident_vertex_bytes_ = 0;
-    frame_curved_flat_triangles_ = 0;
-    frame_curved_patch_triangles_ = 0;
-    frame_curved_split_draws_ = 0;
     pending_draw_batch_ = {};
     const RenderServices* services = chunk.services;
 
@@ -6643,21 +3510,11 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // GALAXY_RT_AB), set for all its chunks before anything asks rt_effect_on.
             set_rt_effect_frame(g_snapshot_presents + 1u);
             const RenderConfig render = get_render_config();
-            // Under ray-traced lighting the traced light replaces enhanced lighting (de-lit characters relit by
-            // the trace wash out), and the draws it does not relight (water, glass) are lit per pixel: the
-            // ray-traced picture is tuned with it, and the menu hides LIGHTING while ray tracing is on.
-            const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
-            const bool per_pixel = render.per_pixel_lighting || renderer_.rt_lighting();
-            // GALAXY_TEST_CURVED_AB=1: curved surfaces off in frames that end in an odd present (same-run pictures).
-            static const bool curved_ab = read_env_u64("GALAXY_TEST_CURVED_AB", 0u) != 0u;
-            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
-                               !(curved_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
-            // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
-            static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
-            curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
-            rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
+            const bool enhanced = render.enhanced_lighting;
+            const bool per_pixel = render.per_pixel_lighting;
+            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered();
             ambient_occlusion_ =
-                render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
+                render.ambient_occlusion && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
             if (per_pixel != per_pixel_lighting_ || enhanced != enhanced_lighting_) {
                 per_pixel_lighting_ = per_pixel;
@@ -6665,11 +3522,9 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
             }
-            enhanced_ps_flags_ = (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
         }
         renderer_.begin_frame(chunk.present_swap_chain);
-        xfb_copied_in_chunk_ = false;
+        display_copied_in_chunk_ = false;
         {
             // Interpolated redraw: present rate above 60 with the temporal
             // upscaler off. Decided per render chunk.
@@ -6687,29 +3542,18 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 interp_shown_scene_ = -1;
             }
             const bool wanted =
-                interp_recording_ || renderer_.temporal_mode() || renderer_.rt_active();
+                interp_recording_ || renderer_.temporal_mode();
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
-            // How the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM): without the renderer's bloom, not
-            // at all; NATIVE, its own chain over a scene the renderer keeps; ENHANCED, drawn by the renderer.
-            // GALAXY_TEST_BLOOM_ROUTE=0-2 (tests): that route, 0 the console's chain as it is for comparison.
-            static const std::uint64_t test_route = read_env_u64("GALAXY_TEST_BLOOM_ROUTE", 3u);
-            const unsigned route = !renderer_.game_bloom_ready()                          ? 0u
-                                   : test_route <= 2u                                  ? static_cast<unsigned>(test_route)
-                                   : get_render_config().bloom_mode == kBloomEnhanced ? 2u
-                                                                                       : 1u;
-            bloom_route_.store(route, std::memory_order_relaxed);
-            // The game draws for traced light: the whole stage at full detail, and out-of-view shadow casters and
-            // light sources (NEBULA_OPTION_RT_SHADOW_CASTERS; GALAXY_RT_OFFSCREEN_CASTERS=0: as without it).
-            static const bool offscreen_casters = read_env_u64("GALAXY_RT_OFFSCREEN_CASTERS", 1u) != 0u;
-            rt_shadow_casters_wanted_.store(offscreen_casters && renderer_.rt_lighting(), std::memory_order_relaxed);
+            // Whether the renderer's bloom is built (NEBULA_OPTION_BLOOM): without it, no bloom.
+            bloom_route_.store(renderer_.game_bloom_ready() ? 1u : 0u, std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
-        // begin_frame() applies a pending internal-resolution change, so copies take the scale the EFB
+        // begin_frame() applies a pending internal-resolution change, so copies take the scale the scene target
         // has now, not the setting, which can change in between.
-        if (renderer_.efb_scale() != efb_copies_.efb_scale()) {
-            efb_copies_.set_efb_scale(renderer_.efb_scale());
+        if (renderer_.frame_map() != display_pictures_.frame_map()) {
+            display_pictures_.set_frame_map(renderer_.frame_map());
         }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
@@ -6734,7 +3578,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 resident_vertices_.advance_frame();
             }
         }
-        efb_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+        display_pictures_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();
         if (retirement_revision != seen_texture_retirement_revision_) {
@@ -6747,14 +3591,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             seen_texture_retirement_revision_ = retirement_revision;
         }
         clear_frame_texture_binding_table_cache();
-        pipeline_cache_.drain_completions();
-        // Publish point for PipelineCache::published_. Every pipeline the memo
-        // can hold is either already visible here or is resolved by get() on
-        // this same thread later in the frame, so the memo stays valid until
-        // this clear runs again at the start of the next frame.
-        for (PipelineMemoEntry& entry : pipeline_memo_) {
-            entry.hash = 0u;
-        }
         // New decoded textures upload through this frame's command list.
         renderer_.attach_texture_uploads(texture_cache_);
         {
@@ -6763,6 +3599,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 generation != texture_pack_mods_generation_) {
                 texture_pack_mods_generation_ = generation;
                 texture_pack_mod_folders_ = texture_pack_mod_folders();
+                texture_pack_mod_categories_off_ = texture_pack_mod_categories_off();
             }
             static const std::filesystem::path dumps = texture_dump_directory();
             TexturePackSettings settings{};
@@ -6772,9 +3609,13 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // Each mod's pack, the lowest in the mods list first (the last wins a texture).
             if (std::filesystem::path packs = texture_pack_test_directory(); !packs.empty()) {
                 settings.packs.push_back(std::move(packs));
+                settings.pack_categories_off.push_back(0u);
             }
             settings.packs.insert(settings.packs.end(), texture_pack_mod_folders_.begin(),
                                   texture_pack_mod_folders_.end());
+            settings.pack_categories_off.insert(settings.pack_categories_off.end(),
+                                                texture_pack_mod_categories_off_.begin(),
+                                                texture_pack_mod_categories_off_.end());
             settings.dumps = dumps;
             settings.budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
             if (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_)) {
@@ -6832,7 +3673,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
     // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
-    // is written again in this frame slot even when the GX state did not change.
+    // is written again in this frame slot even when the state did not change.
     frame_bindings_dirty_ = true;
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
@@ -6842,71 +3683,31 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     matrix_blocks_valid_ = false;
     scene_chunk_restart_ = true;
 
-    // Bind EFB with default (null) viewport. The XF viewport registers
-    // will provide the actual values once processed from the FIFO.
-    renderer_.bind_efb(nullptr);
+    // Bind scene target with default (null) viewport. The viewport
+    // will provide the actual values once its records run.
+    renderer_.bind_scene();
 
-    // GX keeps the EFB across frames; only an EFB copy with the clear bit set clears it (on_efb_copy,
-    // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
-    if (!efb_seeded_) {
-        efb_seeded_ = true;
-        renderer_.clear_efb(0u, 0x00FFFFFFu, true, true, true);
+    // game keeps the scene target across frames; only an scene target copy with the clear bit set clears it (on_frame_output,
+    // with the copy's clear values). One initial clear (depth = far) seeds the targets.
+    if (!scene_seeded_) {
+        scene_seeded_ = true;
+        renderer_.clear_scene(0u, true, true, true);
     }
 
-    const auto parse_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (!chunk.shape_records.empty() || chunk.fifo_marker_count != 0u ||
-        !chunk.stripe_particles.empty() || chunk.pointer_depth_in_frame) {
+    if (!chunk.shape_records.empty() || !chunk.stripe_particles.empty()) {
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
         // on workers.
         texture_cache_.set_async_decode_allowed(true);
         try {
-            // The chunk's records, scene markers and pointer capture in the order the game made them.
-            const bool capture_in_frame =
-                chunk.pointer_depth_in_frame && chunk.pointer_depth_capture != nullptr;
-            std::vector<StreamSplit>& splits = stream_splits_;
-            splits.clear();
-            if (capture_in_frame) {
-                splits.push_back({0u, -1, -1});
-            }
-            for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
-                splits.push_back({chunk.fifo_marker_serials[i], static_cast<int>(chunk.fifo_markers[i]),
-                                  static_cast<int>(i)});
-            }
-            for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
-                splits.push_back({chunk.shape_records[i].serial, kSplitShapeRecord, static_cast<int>(i)});
-            }
-            // In the order the game made them (a marker before the records made after it).
-            std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
-                return a.serial != b.serial ? a.serial < b.serial
-                                            : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
-            });
             parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
                                                : std::span<const StripeParticleMark>{};
             parse_stripe_next_ = 0u;
-            for (std::size_t i = 0; i < splits.size(); ++i) {
-                const StreamSplit split = splits[i];
-                if (split.marker == kSplitShapeRecord) {
-                    on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
-                } else if (split.marker < 0) {
-                    record_pointer_depth_capture_in_frame(chunk);
-                } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin)) {
-                    on_scene_2d_begin();
-                } else if (split.marker != static_cast<int>(FifoMarker::Scene2DEnd)) {
-                    const auto index = static_cast<std::size_t>(split.view);
-                    const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
-                    on_fifo_marker(static_cast<FifoMarker>(split.marker),
-                        split.view >= 0 &&
-                                (chunk.fifo_marker_view_mask & (1u << index)) != 0u
-                            ? &chunk.fifo_marker_views[index]
-                            : nullptr,
-                        sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up,
-                        split.view >= 0 ? &chunk.fifo_marker_stages[index] : nullptr);
-                }
+            current_record_pool_ = &chunk.record_pool;
+            for (const shapes::Record& record : chunk.shape_records) {
+                on_shape_record(record);
             }
             parse_stripes_ = {};
             if (!chunk.stripe_particles.empty()) [[unlikely]] {
@@ -6925,79 +3726,67 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         const std::uint64_t diagnostic_parse_end_ns =
             cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
         cadence_diagnostics_->record_phase(
-            cadence::TimingPhase::RenderFifoParse,
+            cadence::TimingPhase::RenderRecords,
             diagnostic_parse_end_ns >= diagnostic_parse_start_ns
                 ? diagnostic_parse_end_ns - diagnostic_parse_start_ns
                 : 0u);
     }
-    const auto parse_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
-    const auto post_parse_flush_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     {
         const cadence::ScopedPhaseTimer post_parse_flush_timer{
             cadence_diagnostics_,
             cadence::TimingPhase::RenderPostParseFlush};
         flush_pending_draw_batch();
     }
-    const auto post_parse_flush_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t post_parse_flush_us = frame_timing_enabled
-        ? elapsed_us(post_parse_flush_start, post_parse_flush_end)
-        : 0u;
 
     // The chunk with a game frame's end presents its picture (present_on_copy_enabled); a present between frames
     // shows the newest. Not while the output is black, the settings overlay draws over every present, or presents are paced elsewhere
     // (interpolation, a temporal upscaler, frame generation).
-    const bool copy_present = !chunk.present_swap_chain && xfb_copied_in_chunk_ && present_on_copy_enabled() &&
+    const bool copy_present = !chunk.present_swap_chain && display_copied_in_chunk_ &&
         frame_end_presents_.load(std::memory_order_relaxed) &&
-        !interp_recording_ && !vi_black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
+        !interp_recording_ && !black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
         !frame_generation_running();
     const bool presents = chunk.present_swap_chain || copy_present;
     if (presents) {
-        ++stat_xfb_present_requests_;
+        ++stat_display_present_requests_;
     }
     const std::uint64_t current_present_epoch =
         presents ? present_epoch_ + 1u : present_epoch_;
-    const XfbTexture* const selected_xfb = chunk.black ? nullptr : efb_copies_.latest();
-    const bool duplicate_xfb_present =
-        selected_xfb != nullptr &&
-        selected_xfb->copy_serial ==
-            last_presented_xfb_serial_.load(std::memory_order_relaxed);
+    const DisplayTexture* const selected_display = chunk.black ? nullptr : display_pictures_.latest();
+    const bool duplicate_display_present =
+        selected_display != nullptr &&
+        selected_display->copy_serial ==
+            last_presented_display_serial_.load(std::memory_order_relaxed);
     const bool skip_duplicate_present =
         presents &&
-        duplicate_xfb_present &&
+        duplicate_display_present &&
         !native_settings_overlay_visible();
     const bool skip_rate_present =
         presents &&
-        selected_xfb != nullptr &&
+        selected_display != nullptr &&
         !skip_duplicate_present &&
         !native_settings_overlay_visible() &&
         skip_for_present_rate();
     bool present_swap_chain =
-        presents && selected_xfb != nullptr &&
+        presents && selected_display != nullptr &&
         !skip_duplicate_present && !skip_rate_present;
     const bool present_black = chunk.present_swap_chain && chunk.black;
     if (present_black) {
         supersede_interp_sequence();
         interp_log_waiting_ = false;
     } else if (presents) {
-        vi_black_shown_ = false;
+        black_shown_ = false;
     }
     if (interp_recording_) {
         note_interp_log_completion();
         // The ready frame's own present: its sub-frames come first, the real
         // frame after them (started by the render loop after this chunk).
-        // As on the VI-present path, a present while a completed log waits
+        // As on the present path, a present while a completed log waits
         // starts that log's sequence, even one the duplicate or rate checks
-        // would drop: the VI may still name the previous XFB (the guest flips
+        // would drop: the frame clock may still name the previous display picture (the game flips
         // at the next retrace), and the waiting frame would be skipped when
         // the next one closes first.
-        if (interp_log_waiting_ && chunk.present_swap_chain && selected_xfb != nullptr &&
+        if (interp_log_waiting_ && chunk.present_swap_chain && selected_display != nullptr &&
             renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;
@@ -7005,63 +3794,39 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // Another frame presents now: the playing one is superseded.
             supersede_interp_sequence();
         }
-        if (present_swap_chain && !duplicate_xfb_present) {
+        if (present_swap_chain && !duplicate_display_present) {
             note_interp_real_present();
         }
     }
-    const auto pre_present_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t pre_present_us = frame_timing_enabled
-        ? elapsed_us(post_parse_flush_end, pre_present_end)
-        : 0u;
-    std::uint64_t present_record_us = 0;
     if (present_swap_chain) {
-        const auto present_record_start = frame_timing_enabled
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         if (copy_present) {
             renderer_.wait_for_frame_latency_before_present();
-            copy_presented_serial_ = selected_xfb->copy_serial;
+            copy_presented_serial_ = selected_display->copy_serial;
         }
         const std::string snapshot_path = present_snapshot_path();
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
-            renderer_.set_capture_waits(snapshot_waits());
+            renderer_.set_capture_waits(true);
         }
-        renderer_.present(selected_xfb, !snapshot_path.empty());
+        renderer_.present(selected_display, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, {});
             renderer_.set_capture_waits(false);
         }
-        if (frame_timing_enabled) {
-            present_record_us =
-                elapsed_us(present_record_start, std::chrono::steady_clock::now());
-        }
     } else if (present_black) {
         present_vi_black(true);
     }
-    // A VI naming the frame its copy already presented skipped nothing.
-    if (skip_duplicate_present && selected_xfb->copy_serial != copy_presented_serial_) {
-        record_skipped_duplicate_xfb_present(*selected_xfb);
+    // A present naming the frame its copy already presented skipped nothing.
+    if (skip_duplicate_present && selected_display->copy_serial != copy_presented_serial_) {
+        record_skipped_duplicate_display_present(*selected_display);
     }
-    const auto end_frame_start = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     struct SubmissionContext {
         RenderCore* backend;
         FrameChunk* chunk;
     } submission_context{this, &chunk};
     // Every staging byte the command list copies from must be written.
     {
-        const auto join_start = frame_timing_enabled
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         texture_cache_.finish_pending_decodes();
-        if (frame_timing_enabled) {
-            frame_texture_decode_join_us_ =
-                elapsed_us(join_start, std::chrono::steady_clock::now());
-        }
     }
     (void)renderer_.end_frame(
         present_swap_chain,
@@ -7072,234 +3837,18 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         },
         &submission_context);
     if (presents && present_swap_chain &&
-        selected_xfb != nullptr) {
+        selected_display != nullptr) {
         present_epoch_ = current_present_epoch;
-        record_presented_xfb_copy(*selected_xfb);
-        last_presented_slot_.store(selected_xfb->slot, std::memory_order_relaxed);
+        record_presented_display_copy(*selected_display);
+        last_presented_slot_.store(selected_display->slot, std::memory_order_relaxed);
     } else if (present_black) {
         present_epoch_ = current_present_epoch;
     }
-    const auto end_frame_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const std::uint64_t end_frame_us = frame_timing_enabled
-        ? elapsed_us(end_frame_start, end_frame_end)
-        : 0u;
-    const auto gpu_submit_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     // Nonblocking: a later frame writes a finished present snapshot.
     renderer_.debug_log_backbuffer_readback();
 
     ++frame_index_;
-    timing_frame_index_.store(frame_index_, std::memory_order_relaxed);
-    const auto render_end = frame_timing_enabled
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    // Per-frame pipeline-compile counts for the [gx-frame-timing] line. CompileStats counters only
-    // grow within a session (PipelineCache::shutdown() ends it), so the subtraction cannot underflow.
-    {
-        const PipelineCache::CompileStats now = pipeline_cache_.compile_stats();
-        const PipelineCache::CompileStats& was = frame_compile_stats_baseline_;
-        frame_pso_compiles_ = now.pso_compiles - was.pso_compiles;
-        frame_pso_library_loads_ = now.pso_library_loads - was.pso_library_loads;
-        frame_shader_pair_compiles_ =
-            now.shader_pair_compiles - was.shader_pair_compiles;
-        frame_blobs_from_cache_ = now.blobs_from_cache - was.blobs_from_cache;
-        frame_blob_compile_us_ = now.blob_compile_us - was.blob_compile_us;
-    }
 
-    // Capture beside the wall endpoint, before diagnostic formatting/logging.
-    const ThreadCounterSample frame_cpu_interval = thread_counter_interval(
-        frame_cpu_start, pso_cycles_enabled
-            ? thread_cpu_time_100ns() : ThreadCounterSample{});
-    const ThreadCounterSample frame_cycles_interval = thread_counter_interval(
-        frame_cycles_start, pso_cycles_enabled
-            ? thread_cycle_count() : ThreadCounterSample{});
-
-
-
-    // [gx-frame-timing]: stall-traced frames over GALAXY_TRACE_GX_STALL_US (selected=1) and frames
-    // sampled by GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). The per-draw *-us fields are measured on
-    // those frames only (detail=1); fifo-*-us fields only with the stall trace (the parser profile).
-    if (trace_gx_stalls || frame_time_sample_) {
-        const std::uint64_t total_us = elapsed_us(render_start, render_end);
-        // Wall-clock time since the previous emitted line: total-us covers only this function's span,
-        // so it cannot tell a busy render thread from an idle one. On a sampled run it spans the
-        // sample interval.
-        std::uint64_t frame_interval_us = 0u;
-        if (last_frame_timing_emit_valid_) {
-            frame_interval_us = elapsed_us(last_frame_timing_emit_, render_start);
-        }
-        last_frame_timing_emit_ = render_start;
-        last_frame_timing_emit_valid_ = true;
-        const std::uint64_t parse_us = elapsed_us(parse_start, parse_end);
-        const std::uint64_t submit_us = elapsed_us(parse_end, gpu_submit_end);
-        const std::uint64_t producer_wait_us = chunk.producer_wait_ns / 1000u;
-        if (frame_time_sample_ ||
-            total_us >= trace_gx_stall_threshold_us() ||
-            producer_wait_us >= trace_gx_stall_threshold_us()) {
-            std::ostringstream timing_message;
-            timing_message << "[gx-frame-timing] frame=" << frame_index_
-                  // A frame can be both selected and sampled; selected=0 rows are the unbiased sample.
-                  << " selected="
-                  << ((total_us >= trace_gx_stall_threshold_us() ||
-                       producer_wait_us >= trace_gx_stall_threshold_us())
-                          ? 1
-                          : 0)
-                  << " sample=" << (frame_time_sample_ ? 1 : 0)
-                  << " profile=" << (trace_gx_stalls ? 1 : 0)
-                  << " detail=" << (frame_time_detail_ ? 1 : 0)
-                  << " total-us=" << total_us
-                  << " frame-interval-us=" << frame_interval_us
-                  << " thread-cpu-us=" << frame_cpu_interval.value / 10u
-                  << " thread-cpu-valid=" << (frame_cpu_interval.available ? 1 : 0)
-                  << " thread-cycles=" << frame_cycles_interval.value
-                  << " thread-cycles-valid=" << (frame_cycles_interval.available ? 1 : 0)
-                  << " parse-us=" << parse_us
-                  << " submit-us=" << submit_us
-                  << " post-parse-flush-us=" << post_parse_flush_us
-                  << " pre-present-us=" << pre_present_us
-                  << " present-record-us=" << present_record_us
-                  << " end-frame-us=" << end_frame_us
-                  << " begin-latency-wait-us="
-                  << renderer_.last_latency_wait_us()
-                  << " begin-slot-wait-us="
-                  << renderer_.last_frame_slot_wait_us()
-                  << " begin-timestamp-us="
-                  << renderer_.last_timestamp_read_us()
-                  << " begin-reset-us="
-                  << renderer_.last_begin_reset_us()
-                  << " producer-wait-us=" << producer_wait_us
-                  << " draws=" << frame_draws_issued_
-                  << " draw-batches=" << frame_draw_batches_
-                  << " no-pso=" << frame_draws_no_pso_
-                  << " xfb-copies=" << frame_xfb_copies_
-                  << " tex-copies=" << frame_tex_copies_
-                  << " efb-alias-updates=" << frame_efb_alias_updates_
-                  << " efb-alias-noops=" << frame_efb_alias_noops_
-                  << " texture-binding-cache-hits="
-                  << frame_texture_binding_cache_hits_
-                  << " texture-binding-cache-misses="
-                  << frame_texture_binding_cache_misses_
-                  << " texture-binding-cache-prunes="
-                  << frame_texture_binding_cache_prunes_
-                  << " nontri-skips=" << frame_nontri_skips_
-                  << " scissor-skips=" << frame_scissor_skips_
-                  << " flush-us=" << frame_flush_us_
-                  << " flush-pso-us=" << frame_flush_pso_us_
-                  << " flush-pso-cycles=" << frame_flush_pso_cycles_
-                  << " flush-pso-cycles-valid=" << (frame_flush_pso_cycles_valid_ ? 1 : 0)
-                  << " pso-memo-hits=" << frame_pso_memo_hits_
-                  << " pso-get-calls=" << frame_pso_get_calls_
-                  << " pso-get-us=" << frame_pso_get_us_
-                  << " pso-get-max-us=" << frame_pso_get_max_us_
-                  // pso-route-early + pso-route-memo + pso-route-get = pso-resolutions. flush-us times the
-                  // flush bodies (detail=1 only, early reuse excluded); flush-total-us and flush-mean-us
-                  // come from ScopedFlushTiming's sampled whole calls.
-                  << " flush-calls=" << frame_flush_calls_
-                  << " flush-total-us=" << frame_flush_total_us_
-                  << " flush-timed-samples=" << frame_flush_timed_samples_
-                  << " flush-mean-us="
-                  << (frame_flush_timed_samples_ != 0u
-                          ? frame_flush_total_us_ /
-                                frame_flush_timed_samples_
-                          : 0u)
-                  << " pso-resolutions=" << frame_pso_resolutions_
-                  << " pso-route-early=" << frame_pso_route_early_
-                  // Builds done this frame, against the resolutions requested above.
-                  << " pso-compiles=" << frame_pso_compiles_
-                  << " pso-library-loads=" << frame_pso_library_loads_
-                  << " pso-shader-pairs=" << frame_shader_pair_compiles_
-                  << " pso-blob-us=" << frame_blob_compile_us_
-                  << " pso-blobs-from-cache=" << frame_blobs_from_cache_
-                  << " pso-route-memo=" << frame_pso_memo_hits_
-                  << " pso-route-get=" << frame_pso_get_calls_
-                  // replay-generic-draws: draws the batched paths refused. The packet and simple counts
-                  // are offers; fifo-call-dl-replay-packet-run-count counts accepted packet runs.
-                  << " replay-prepared-batches="
-                  << frame_replay_prepared_batches_
-                  << " replay-packet-offers=" << frame_replay_packet_batches_
-                  << " native-shape-draws=" << frame_native_shape_draws_
-                  << " native-shape-misses=" << frame_native_shape_misses_
-                  << " replay-simple-offers=" << frame_replay_simple_batches_
-                  << " replay-generic-draws=" << frame_replay_generic_draws_
-                  << " flush-matrix-us=" << frame_flush_matrix_us_
-                  << " flush-matrix-bytes=" << frame_matrix_upload_bytes_
-                  << " flush-constants-us=" << frame_flush_constants_us_
-                  << " flush-texture-us=" << frame_flush_texture_us_
-                  << " tex-decode-join-us=" << frame_texture_decode_join_us_
-                  << " tex-async-decodes-total=" << texture_cache_.async_decode_jobs()
-                  << " vertex-load-us=" << frame_vertex_load_us_
-                  << " cached-vertex-validation-us=" << frame_cached_vertex_validation_us_
-                  << " cached-vertex-upload-us=" << frame_cached_vertex_upload_us_
-                  << " immutable-vertex-reused-bytes=" << renderer_.vertex_ring().reused_bytes()
-                  << " immutable-vertex-copied-bytes=" << renderer_.vertex_ring().copied_bytes()
-                  << " immutable-vertex-uploads=" << renderer_.vertex_ring().immutable_upload_calls()
-                  << " draw-record-us=" << frame_draw_record_us_
-                  << " efb-copy-us=" << frame_efb_copy_us_
-                  << " resident-vtx-hits=" << frame_resident_vertex_hits_
-                  << " curved-split-draws=" << frame_curved_split_draws_
-                  << " curved-flat-tris=" << frame_curved_flat_triangles_
-                  << " curved-patch-tris=" << frame_curved_patch_triangles_
-                  << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
-                  << " resident-vtx-used-bytes="
-                  << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
-                         sizeof(RenderVertex)
-                  << " decoded-tex-resident-bytes="
-                  << texture_cache_.decoded_map_stats().resident_bytes
-                  << " decoded-tex-budget-bytes="
-                  << texture_cache_.decoded_map_stats().budget_bytes
-                  << " decoded-tex-evicted-entries="
-                  << texture_cache_.decoded_map_stats().evicted_entries
-                  << " decoded-tex-evicted-bytes="
-                  << texture_cache_.decoded_map_stats().evicted_bytes
-                  << " decoded-tex-entries="
-                  << texture_cache_.decoded_map_stats().entries
-                  // EFB-copy destinations are allocated at the internal resolution (bytes grow with efb_scale^2).
-                  << " efb-copy-dest-bytes="
-                  << renderer_.efb_copy_dest_bytes()
-                  << " efb-copy-dest-budget-bytes="
-                  << renderer_.efb_copy_dest_budget_bytes()
-                  << '\n';
-            std::cerr << timing_message.str();
-        }
-    }
-
-    // Retire completed pipeline-cache writes without waiting on disk I/O.
-    pipeline_cache_.poll_disk_flush();
-    if (pipeline_cache_.has_unsaved_records()) {
-        // Preserve learned configurations during play without serializing cache
-        // validation, reflection or replacement writes with frame submission.
-        static auto last_unsaved_flush = std::chrono::steady_clock::now();
-        const auto now = std::chrono::steady_clock::now();
-        if (now - last_unsaved_flush >= std::chrono::seconds(20)) {
-            last_unsaved_flush = now;
-            pipeline_cache_.flush_disk_async();
-        }
-    }
-    ReportPipelineCoverage();
-}
-
-// Pipeline-cache coverage, printed only when the on-disk coverage changes. While
-// shader-records-on-disk keeps up with shader-records, the remaining misses are new configurations.
-void RenderCore::ReportPipelineCoverage() {
-    const PipelineCache::CompileStats stats = pipeline_cache_.compile_stats();
-    if (stats.shader_records_on_disk == last_reported_shader_records_ &&
-        stats.pso_keys_on_disk == last_reported_pso_records_) {
-        return;
-    }
-    last_reported_shader_records_ = stats.shader_records_on_disk;
-    last_reported_pso_records_ = stats.pso_keys_on_disk;
-    std::cerr << "[pso-cache-coverage] frame=" << (frame_index_ + 1u)
-              << " shader-records=" << stats.shader_records
-              << " shader-records-on-disk=" << stats.shader_records_on_disk
-              << " pso-keys=" << stats.pso_keys
-              << " pso-keys-on-disk=" << stats.pso_keys_on_disk
-              << " pso-compiles=" << stats.pso_compiles
-              << " pso-library-loads=" << stats.pso_library_loads
-              << " shader-pair-compiles=" << stats.shader_pair_compiles
-              << " blobs-from-cache=" << stats.blobs_from_cache << '\n';
 }
 
 RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
@@ -7311,40 +3860,30 @@ RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
             continue;
         }
         key.maps[m] = draw_state_.texture[m];
-        key.palettes[m] = palette_address(draw_state_, m);
-        if (key.palettes[m] == 0u) {
-            key.maps[m].tlut = TlutRef{};
-        }
     }
     return key;
 }
 
-RenderCore::TextureHandleKey RenderCore::texture_handle_key(
-    const TexImage& image,
-    const TexMode& mode,
-    std::uint64_t palette_address, TlutFormat palette_format) const {
+RenderCore::TextureHandleKey RenderCore::texture_handle_key(std::uint64_t texture, const TextureSampler& mode) const {
+    const TextureInfo image = texture_cache_.info_of(texture);
     unsigned levels = 1u;
     bool generated_mips = false;
-    const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
+    const unsigned mip_mode = min_filter_code(mode) & 0x3u;
     const unsigned full_chain =
         snapshot_full_mip_chain_levels(image.width, image.height);
     if (mip_mode != 0u) {
         const unsigned wanted =
-            1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
+            1u + (static_cast<unsigned>(lod_x16(mode.max_lod)) + 15u) / 16u;
         levels = std::min(wanted, full_chain);
     } else if (snapshot_should_generate_native_mips(image, mode)) {
         levels = full_chain;
         generated_mips = levels > 1u;
     }
-    const bool palettized = image.format == TexFormat::C4 ||
-        image.format == TexFormat::C8 || image.format == TexFormat::C14X2;
     return TextureHandleKey{
-        image.address,
+        image.key,
         image.width,
         image.height,
-        static_cast<std::uint8_t>(image.format),
-        static_cast<std::uint8_t>(palettized ? palette_format : TlutFormat{}),
-        palettized ? palette_address : 0u,
+        image.layout,
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
         static_cast<std::uint8_t>(generated_mips ? 1u : 0u),
     };
@@ -7354,8 +3893,8 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
     std::uint8_t map_mask,
     const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
     std::array<std::uint32_t, kMaxTextureMaps> keys{};
-    const auto efb_scale_log2_x32 = static_cast<std::uint8_t>(std::clamp(
-        std::lround(32.0 * std::log2(static_cast<double>(std::max(1u, renderer_.efb_scale())))), 0l, 127l));
+    const auto mip_lines_log2_x32 = static_cast<std::uint8_t>(std::clamp(
+        std::lround(32.0 * std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines))), 0l, 127l));
     for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
         if ((map_mask & (1u << map)) == 0u) {
             continue;
@@ -7363,7 +3902,7 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
         const TextureHandle& handle = handles[map];
         keys[map] = pack_sampler_key(
             draw_state_.texture[map].mode, handle.generated_mips, handle.mip_levels,
-            handle.lod_shift_x16, handle.lod_arbitrary, efb_scale_log2_x32);
+            handle.lod_shift_x16, handle.lod_arbitrary, mip_lines_log2_x32);
     }
     // Unused slots still get valid zero-key descriptors, but cannot fragment
     // the table cache. map_mask includes both direct and indirect sampling.
@@ -7375,7 +3914,7 @@ void RenderCore::clear_frame_texture_binding_table_cache() {
     frame_texture_binding_tables_.clear();
     frame_texture_handle_cache_.clear();
     // Dropping the tables invalidates the remembered binding key with them, so flush_draw_state can
-    // trust a valid key without re-deriving it from the BP registers.
+    // trust a valid key without re-deriving it from the state.
     current_texture_binding_key_valid_ = false;
 }
 
@@ -7388,26 +3927,10 @@ void RenderCore::clear_texture_binding_table_cache() {
 
 void RenderCore::invalidate_texture_handle_cache_dependency(
     const TextureBindingDependency& dependency) {
-    const auto ranges_overlap =
-        [](std::uint64_t a_begin,
-           std::uint64_t a_size,
-           std::uint64_t b_begin,
-           std::uint64_t b_size) noexcept {
-        return a_size != 0u && b_size != 0u &&
-            a_begin < b_begin + b_size &&
-            b_begin < a_begin + a_size;
-    };
-    const std::uint64_t dep_size = dependency.source_bytes;
-    const auto erase_matching =
-        [&dependency, &ranges_overlap, dep_size](auto& cache) {
+    // A texture is its key: the handles made for that key go.
+    const auto erase_matching = [&dependency](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
-            const TextureHandleKey& key = it->first;
-            const std::uint64_t key_size = it->second.source_bytes;
-            if (ranges_overlap(
-                    dependency.address,
-                    dep_size,
-                    key.address,
-                    key_size)) {
+            if (it->first.address == dependency.address) {
                 it = cache.erase(it);
             } else {
                 ++it;
@@ -7418,71 +3941,40 @@ void RenderCore::invalidate_texture_handle_cache_dependency(
     erase_matching(frame_texture_handle_cache_);
 }
 
-void RenderCore::invalidate_texture_binding_cache_range(
-    std::uint64_t address,
-    std::uint32_t size) {
-    if (size == 0u) {
-        return;
-    }
-
-    const auto erase_matching_handles = [&](auto& cache) {
+void RenderCore::invalidate_texture_binding_cache_key(std::uint64_t key) {
+    const auto erase_matching_handles = [key](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
-            const TextureHandleKey& key = it->first;
-            if (dependency_ranges_overlap(
-                    address,
-                    size,
-                    key.address,
-                    it->second.source_bytes)) {
+            if (it->first.address == key) {
                 it = cache.erase(it);
             } else {
                 ++it;
             }
         }
     };
-    const auto erase_matching_tables = [&](auto& cache) {
+    const auto erase_matching_tables = [key](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
             const TextureBindingTables& tables = it->second;
-            bool overlaps = false;
-            for (unsigned i = 0; i < tables.dependency_count; ++i) {
-                const TextureBindingDependency& dependency =
-                    tables.dependencies[i];
-                if (dependency_ranges_overlap(
-                        address,
-                        size,
-                        dependency.address,
-                        dependency.source_bytes)) {
-                    overlaps = true;
-                    break;
-                }
+            bool names_key = false;
+            for (unsigned i = 0; i < tables.dependency_count && !names_key; ++i) {
+                names_key = tables.dependencies[i].address == key;
             }
-            if (overlaps) {
+            if (names_key) {
                 it = cache.erase(it);
             } else {
                 ++it;
             }
         }
     };
-
     erase_matching_handles(texture_handle_cache_);
     erase_matching_handles(frame_texture_handle_cache_);
     erase_matching_tables(frame_texture_binding_tables_);
 }
 
 void RenderCore::mark_texture_binding_alias_dirty(
-    const EfbCopyParams& params) {
-    const std::uint16_t alias_width = static_cast<std::uint16_t>(
-        params.half_scale
-            ? std::max<std::uint16_t>(1u, params.src_width / 2u)
-            : params.src_width);
-    const std::uint16_t alias_height = static_cast<std::uint16_t>(
-        params.half_scale
-            ? std::max<std::uint16_t>(1u, params.src_height / 2u)
-            : params.src_height);
+    const FramePassRequest& params) {
     DirtyTextureAlias dirty{};
-    dirty.dependency.address = params.dest_addr;
-    dirty.dependency.width = alias_width;
-    dirty.dependency.height = alias_height;
-    dirty.dependency.source_bytes = efb_copy_source_bytes(params);
+    dirty.dependency.address = params.key;
+    dirty.dependency.source_bytes = 1u;  // the picture is found by its key (the capture buffer) alone
     dirty_texture_aliases_.push_back(dirty);
     invalidate_texture_handle_cache_dependency(dirty.dependency);
 }
@@ -7491,17 +3983,8 @@ void RenderCore::prune_dirty_texture_binding_tables() {
     if (dirty_texture_aliases_.empty()) {
         return;
     }
-    const auto dependencies_overlap =
-        [](
-            const TextureBindingDependency& a,
-            const TextureBindingDependency& b) {
-        const std::uint64_t a_size = a.source_bytes;
-        const std::uint64_t b_size = b.source_bytes;
-        return a_size != 0u && b_size != 0u &&
-            static_cast<std::uint64_t>(a.address) <
-                static_cast<std::uint64_t>(b.address) + b_size &&
-            static_cast<std::uint64_t>(b.address) <
-                static_cast<std::uint64_t>(a.address) + a_size;
+    const auto dependencies_overlap = [](const TextureBindingDependency& a, const TextureBindingDependency& b) {
+        return a.address == b.address;  // a texture is its key
     };
     const auto prune_cache = [this, &dependencies_overlap](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
@@ -7520,7 +4003,6 @@ void RenderCore::prune_dirty_texture_binding_tables() {
                 }
             }
             if (erase) {
-                ++frame_texture_binding_cache_prunes_;
                 it = cache.erase(it);
             } else {
                 ++it;
@@ -7542,29 +4024,8 @@ bool RenderCore::curved_draw(std::uint8_t vtxfmt) const {
     return record_inputs_ != nullptr && record_inputs_->curved != nullptr && record_inputs_->curved->bends;
 }
 
-bool RenderCore::draw_positions_indexed() const noexcept {
-    if (record_inputs_ != nullptr) {
-        return !record_inputs_->own_positions;
-    }
-    // An immediate draw's positions are its own.
-    return false;
-}
-
 namespace {
 
-// GALAXY_GPU_DRAWS=1: each pipeline's keys once, to name the renderer's [gpu-draws] lines.
-void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs, const PixelShaderKey& ps,
-                       const RenderStateKey& rs) {
-    static const bool enabled = read_env_u64("GALAXY_GPU_DRAWS", 0u) != 0u;
-    static std::unordered_set<const gpu::Pipeline*> described;
-    if (!enabled || pipeline == nullptr || !described.insert(pipeline).second) {
-        return;
-    }
-    std::fprintf(stderr, "[pso-desc] pso=%p %s %s blend=0x%08x z=0x%x cull=%u topo=0x%02x\n",
-                 static_cast<const void*>(pipeline), ShaderGenerator::describe(vs).c_str(),
-                 ShaderGenerator::describe(ps).c_str(), rs.blend_bits, static_cast<unsigned>(rs.zmode_bits),
-                 static_cast<unsigned>(rs.cull), static_cast<unsigned>(rs.primitive_topology));
-}
 
 }  // namespace
 
@@ -7605,55 +4066,21 @@ std::uint32_t RenderCore::split_curved_triangles(std::span<const RenderVertex> v
     return static_cast<std::uint32_t>(flat_indices);
 }
 
-gpu::Pipeline* RenderCore::resolve_flat_pipeline(const PsoKey& curved_key) {
-    // A triangle a factor-one patch outputs unchanged draws the same pixels in a triangle list, but in another place
-    // in the draw's order: only where that order cannot show. Opaque: no blending or logic op, a depth test that
-    // passes by nearness, written. Or a sum: both factors one, added or subtracted (the shadow volumes' alpha), into a
-    // fixed-point EFB (its clamped sums do not depend on their order; float sums round by it), with depth not written
-    // and no other target.
-    const RenderStateKey& rs = curved_key.render_state;
-    const unsigned depth_func = (rs.zmode_bits >> 1u) & 0x7u;
-    const bool ordered_by_depth = (rs.zmode_bits & 0x11u) == 0x11u &&
-        (depth_func == 1u || depth_func == 3u || depth_func == 4u || depth_func == 6u);
-    const bool opaque = (rs.blend_bits & 0x101u) == 0u && ordered_by_depth;
-    constexpr std::uint32_t kOtherTargets =
-        kRenderStateMotionTarget | kRenderStateReactiveTarget | kRenderStateLayerTarget;
-    const bool sum = (rs.blend_bits & 0x1FDu) == 0x25u && (rs.blend_bits & kOtherTargets) == 0u &&
-                     (rs.samples_log2 & kEfbVariantHdr) == 0u && (rs.zmode_bits & 0x10u) == 0u;
-    if (!opaque && !sum) {
-        return nullptr;
-    }
-    VertexShaderKey vs_key = vs_key_;
-    vs_key.flags = static_cast<std::uint8_t>(vs_key.flags & ~kVsKeyCurved);
-    const PsoKey key{vs_key.hash(), curved_key.ps_hash, flat_render_state(rs)};
-    const std::uint64_t hash = key.hash();
-    PipelineMemoEntry& memo = pipeline_memo_[hash & kPipelineMemoMask];
-    if (memo.hash == hash && memo.pipeline != nullptr && memo.key == key) {
-        return memo.pipeline;
-    }
-    gpu::Pipeline* const pipeline = pipeline_cache_.get_if_ready(key, ps_key_, vs_key);
-    if (pipeline == nullptr) {
-        return nullptr;
-    }
-    describe_pipeline(pipeline, vs_key, ps_key_, key.render_state);
-    memo.hash = hash;
-    memo.key = key;
-    memo.pipeline = pipeline;
-    return pipeline;
-}
-
 gpu::Pipeline* RenderCore::flush_draw_state(
     gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
-    const bool time_detail = frame_time_detail_;
     // Always counted: the denominator of every *_us field.
-    ++frame_flush_calls_;
     if (screen_run_ && !frame_scene_seen_ && !screen_frame_open_ && interp_recording_ && !history_scene_) [[unlikely]] {
         begin_screen_frame();
     }
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
-    const bool curved = native_material_ == nullptr && primitive_topology_type == gpu::kTopologyTypeTriangle &&
-                        curved_draw(vtxfmt);
+    // Every draw takes its material's native shader (E-04); one without a native material is not drawn. The count of
+    // those in the log every 65,536 (GALAXY_LOG_NATIVE_MATERIALS=1).
+    if (native_material_ == nullptr) [[unlikely]] {
+        galaxy::loss::note(galaxy::loss::Kind::DrawNoMaterial);
+        return nullptr;
+    }
+    const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
     const std::uint32_t dirty =
@@ -7679,50 +4106,34 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             ? ((record_inputs_->positions * 0x9E3779B97F4A7C15ull) ^ record_inputs_->colors ^
                (static_cast<std::uint64_t>(matrix_bits) << 1u) ^ 1u)
             : static_cast<std::uint64_t>(matrix_bits) << 1u;
-    const bool vertex_source_changed = vertex_source != vs_key_vertex_source_;
-    vs_key_vertex_source_ = vertex_source;
+    const bool vertex_source_changed = vertex_source != vertex_source_;
+    vertex_source_ = vertex_source;
     if (!dirty_needs_body &&
         !vertex_source_changed &&
         !texture_bindings_dirty_ &&
         !frame_bindings_dirty_ &&
         (!matrix_palette_stale_ || !current_palette_required_) &&
         !inline_matrices_stale_ &&
-        rt_light_pending_ == 0u &&
         current_pipeline_ != nullptr &&
-        !current_pipeline_is_uber_ &&
         current_vs_constants_ != 0 &&
         current_ps_constants_ != 0 &&
         (current_texture_map_mask_ == 0u ||
          current_texture_table_.ptr != 0) &&
         curved == current_curved_ && (curved || render_state_key_.primitive_topology == topology_key)) {
-        ++frame_pso_route_early_;
         return current_pipeline_;
     }
 
-    // Body timing, on detail frames only, excludes the reuse decision above; ScopedFlushTiming's
-    // sampled whole-call timing includes it.
-    const auto flush_start = time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
     // Rebuild canonical keys only for their dirty inputs; hash only changed
     // keys. Uniform updates still upload their constants below.
-    const bool tev_dirty  = (dirty & kStateDirtyTev)         != 0;
     const bool rs_dirty   = (dirty & kStateDirtyRenderState)  != 0;
     const bool xf_dirty   = (dirty & kStateDirtyVertexShader)    != 0;
     const bool vcd_dirty  = dirty == ~0u;  // the vertex inputs' layout: only after a reset
-    const bool tev_c_dirty = (dirty & kStateDirtyPixelConstants) != 0;
     const bool vs_c_dirty = (dirty & kStateDirtyVertexConstants) != 0;
 
-    // sampled_texture_map_mask walks every TEV stage; only kDirtyTev can move the mask (per-object
-    // matrix loads set kDirtyXfMatrices alone), so it is recomputed only then or after a reset.
-    if (native_material_ != nullptr) {
-        current_texture_map_mask_ = native_texture_mask_;
-        current_texture_map_mask_valid_ = true;
-    } else if (!current_texture_map_mask_valid_ || tev_dirty) {
-        current_texture_map_mask_ = sampled_texture_map_mask(draw_state_);
-        current_texture_map_mask_valid_ = true;
-    }
+    // The maps the native material samples.
+    current_texture_map_mask_ = native_texture_mask_;
+    current_texture_map_mask_valid_ = true;
     const std::uint8_t texture_map_mask = current_texture_map_mask_;
     // TextureBindingKey depends only on the map mask and the sampled maps' images, modes and palettes, whose
     // changes set kDirtyTex, so the last key is reused until one of them changes (dropping the table cache also
@@ -7736,31 +4147,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     TextureBindingKey texture_binding_key = texture_binding_key_fresh
         ? current_texture_binding_key_
         : capture_texture_binding_key(texture_map_mask);
-    // Lit translucents: blended (not additive) scene draws of the translucent phases while the ray
-    // tracer's lighting texture is ready, with map 7 free for it.
-    {
-        const BlendMode b = draw_blend();
-        using motion::ScenePhase;
-        const bool blended =
-            b.blend_enable && !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
-            b.src_factor != BlendFactor::SrcColor && b.src_factor != BlendFactor::InvSrcColor &&
-            b.dst_factor != BlendFactor::SrcColor && b.dst_factor != BlendFactor::InvSrcColor &&
-            (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
-             rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu));
-        // GALAXY_RT_LIT_LATE=1: the opaque draws after the screen capture take the light texture too. Off by
-        // default: those draws turn see-through and dark with it.
-        static const bool lit_late = read_env_u64("GALAXY_RT_LIT_LATE", 0u) != 0u;
-        const bool late = lit_late && !b.blend_enable && !b.logic_op_enable && b.color_update &&
-                          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
-        lit_translucent_ = scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u &&
-                           (blended || late) && renderer_.rt_light_texture_ready() &&
-                           renderer_.rt_light_texture() != nullptr;
-        lit_late_ = lit_translucent_ && !blended;
-        if ((texture_map_mask & 0x80u) == 0u) {
-            texture_binding_key.lit_translucent = lit_translucent_ ? kLitTranslucentKey : 0u;
-        }
-    }
-    // A dirty BP input requires a fresh capture, but writes to unused maps,
+    lit_translucent_ = false;
+    lit_late_ = false;
+    // A dirty input requires a fresh capture, but writes to unused maps,
     // image1/2 or restored register values can leave the effective key equal.
     // Explicit frame/resource invalidation still forces work through tex_dirty.
     const bool texture_binding_changed =
@@ -7771,242 +4160,26 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     const bool tex_dirty = frame_bindings_dirty_ ||
         texture_bindings_dirty_ || texture_binding_changed;
 
-    if (tev_dirty || !shader_key_hashes_valid_) {
-        const auto next = build_pixel_shader_key(draw_state_, renderer_.efb_scale());
-        if (!shader_key_hashes_valid_ || !(next == ps_key_)) {
-            ps_key_ = next;
-            current_ps_hash_ = ps_key_.hash();
-        }
-    }
-    if (xf_dirty || vcd_dirty || vertex_source_changed || !shader_key_hashes_valid_) {
-        const auto next = build_vertex_shader_key(draw_state_, matrix_bits);
-        if (!shader_key_hashes_valid_ || !(next == vs_key_)) {
-            vs_key_ = next;
-            current_vs_hash_ = vs_key_.hash();
-        }
-    }
-    // Glows: additive scene draws shine at the ray tracer's glow exposure (output_flags bit 5).
-    bool glow_changed = false;
-    {
-        const BlendMode b = draw_blend();
-        const bool glow = scene_phase_ && side_layer_ == kSceneLayer && b.blend_enable && !b.logic_op_enable &&
-                          !b.subtract && b.color_update && b.dst_factor == BlendFactor::One &&
-                          (renderer_.rt_physical() || renderer_.rt_glow_exposure() > 1.0f);
-        const auto flags = static_cast<std::uint8_t>(glow ? (ps_key_.output_flags | 0x20u)
-                                                          : (ps_key_.output_flags & ~0x20u));
-        if (flags != ps_key_.output_flags) {
-            ps_key_.output_flags = flags;
-            current_ps_hash_ = ps_key_.hash();
-            glow_changed = true;
-        }
-        // Lit translucents (output_flags bit 6): the lighting texture in map 7.
-        const auto lit_flags = static_cast<std::uint8_t>(
-            (ps_key_.output_flags & ~0xC0u) | (lit_translucent_ ? 0x40u : 0u) | (lit_late_ ? 0x80u : 0u));
-        if (lit_flags != ps_key_.output_flags) {
-            ps_key_.output_flags = lit_flags;
-            current_ps_hash_ = ps_key_.hash();
-            glow_changed = true;
-        }
-        // Indexed positions: a model (a star's fiery surface); direct ones: sprites and sparks.
-        const bool position_indexed = draw_positions_indexed();
-        const std::uint8_t kind =
-            !glow ? 0u : position_indexed ? 2u : 1u;
-        if (kind != glow_kind_) {
-            glow_kind_ = kind;
-            glow_changed = true;
-        }
-    }
-    // Per-pixel and enhanced lighting need the extra position/normal
-    // interpolants, which the line and point geometry shaders do not carry.
-    const bool triangles = topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle);
-    // Physical ray tracing: the vertex shaders take a channel's baked vertex light to its program's neutral level (flags
-    // bits 2-3, levels in bits 8-23).
-    // Bit 6: by the model's facing fit (debake_sh, debake_peak).
-    debake_sample_key_ = 0u;
-    debake_fit_active_ = false;
-    {
-        const std::uint32_t state = triangles ? debake_state() : 0u;
-        const bool fit = debake_fit_active_ && (state & 3u) != 0u;
-        if (fit && cpu_vs_constants_.sky_up_known != 0u) {
-            // The level it is de-baked to: its baked light at the player's up, the exposure's reference (a white surface
-            // facing the player's up shows white), the up taken into the model's space by its position matrix; at most
-            // its most lit facing's, at least a quarter of it.
-            float up[3];
-            decode_octahedral(cpu_vs_constants_.sky_up, up);
-            const unsigned row = std::min<unsigned>(draw_state_.position_matrix, 61u);
-            float model_up[3]{};
-            for (unsigned c = 0; c < 3u; ++c) {
-                for (unsigned r = 0; r < 3u; ++r) {
-                    model_up[c] += matrices_.matrix_value(row + r, c) * up[r];
-                }
-            }
-            const float length = std::sqrt(model_up[0] * model_up[0] + model_up[1] * model_up[1] + model_up[2] * model_up[2]);
-            if (std::isfinite(length) && length > 1e-6f) {
-                for (float& v : model_up) {
-                    v /= length;
-                }
-                float y[9];
-                debake_sh9(model_up, y);
-                for (unsigned c = 0; c < 3u; ++c) {
-                    float light = 0.0f;
-                    for (unsigned i = 0; i < 9u; ++i) {
-                        light += debake_fit_sh_[(c * 9u + i) / 4u][(c * 9u + i) % 4u] * y[i];
-                    }
-                    debake_fit_peak_[c] = std::clamp(light, 0.25f * debake_fit_peak_[c], debake_fit_peak_[c]);
-                }
-            }
-        }
-        // Bit 7: lit by the game's player light rig (rt_player_rig_draw): its level, not its hue.
-        const bool rig = triangles && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u && rt_player_rig_draw();
-        const std::uint32_t debake = ((state & 3u) << 2u) | (((state >> 2u) & 3u) << 4u) | (state & 0xFFFF00u) |
-                                     (fit ? 64u : 0u) | (rig ? 128u : 0u);
-        bool changed = cpu_vs_constants_.debake != debake;
-        if (fit && (std::memcmp(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_)) != 0 ||
-                    std::memcmp(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_)) != 0)) {
-            std::memcpy(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_));
-            std::memcpy(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_));
-            changed = true;
-        }
-        if (changed) {
-            cpu_vs_constants_.debake = debake;
-            sky_up_dirty_ = true;   // the scene constants' upload
-        }
-    }
-    // The vertex shaders carry interpolation's vertex blend only in frames recorded for interpolated redraws, and the
-    // de-baking only under physical ray tracing (kVsFeature*).
-    const std::uint32_t vs_features = (interp_recording_ ? kVsFeatureVertexBlend : 0u) |
-                                      ((enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u ? kVsFeatureDebake : 0u);
-    const bool vs_features_changed = vs_key_.features != vs_features;
-    if (vs_features_changed) {
-        vs_key_.features = vs_features;
-        current_vs_hash_ = vs_key_.hash();
-    }
-    bool enhanced = false;
-    bool enhanced_changed = false;
-    {
-        // Perspective scene draws only: the view vector is the eye-space position. The material
-        // follows the keys, which change only with their dirty bits.
-        // GALAXY_RT_DELIGHT=1: the opaque draws are de-lit under traced lighting. Off by default: de-lighting
-        // does not change the traced light, and its enhanced path clamps the TEV where the game wraps.
-        static const bool delight = read_env_u64("GALAXY_RT_DELIGHT", 0u) != 0u;
-        // The traced lighting de-lights the opaque phases only (it relights what it traces); translucent
-        // draws (water, glass, seaweed) keep the game's lit colour.
-        using motion::ScenePhase;
-        const bool opaque_phase = rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
-                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
-                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
-                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
-        // Ray tracing in the game's light units (kEnhancedRtPhysical) needs every lit opaque draw at its full light
-        // (the albedo the traced light multiplies), whatever the lighting setting.
-        const bool physical = opaque_phase && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u;
-        const bool gate = (enhanced_lighting_ || physical ||
-                           (delight && opaque_phase && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) &&
-                          triangles &&
-                          scene_phase_ && side_layer_ == kSceneLayer &&
-                          draw_state_.projection_type == 0u;
-        if (gate != enhanced_gate_ || tev_dirty || xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
-            enhanced_gate_ = gate;
-            enhanced_material_ = gate ? enhanced_lighting_material(vs_key_, ps_key_) : 0u;
-        }
-        const std::uint32_t material = enhanced_material_;
-        enhanced = material != 0u;
-        if (((vs_key_.flags & kVsKeyEnhancedLighting) != 0u) != enhanced) {
-            vs_key_.flags ^= kVsKeyEnhancedLighting;
-            current_vs_hash_ = vs_key_.hash();
-        }
-        enhanced_changed = ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) != enhanced;
-        if (enhanced_changed || ps_key_.ind_reserved != material) {
-            ps_key_.reserved = static_cast<std::uint8_t>(enhanced ? ps_key_.reserved | kPsKeyEnhancedLighting
-                                                                  : ps_key_.reserved & ~kPsKeyEnhancedLighting);
-            ps_key_.ind_reserved = material;
-            current_ps_hash_ = ps_key_.hash();
-        }
-        // The scene draws of a ray-traced scene keep the branches only ray tracing takes (kPsKeyRtPaths).
-        constexpr std::uint32_t kRtBits = kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical;
-        const bool rt_scene = scene_phase_ && (enhanced_ps_flags_ & kRtBits) != 0u;
-        if (((ps_key_.reserved & kPsKeyRtPaths) != 0u) != rt_scene) {
-            ps_key_.reserved ^= kPsKeyRtPaths;
-            current_ps_hash_ = ps_key_.hash();
-        }
-    }
-    {
-        const bool ppl = per_pixel_lighting_ && !enhanced && (vs_key_.flags & 0x02u) != 0u && triangles;
-        if (((vs_key_.flags & kVsKeyPerPixelLighting) != 0u) != ppl) {
-            vs_key_.flags ^= kVsKeyPerPixelLighting;
-            current_vs_hash_ = vs_key_.hash();
-        }
-        if (((ps_key_.reserved & kPsKeyPerPixelLighting) != 0u) != ppl) {
-            ps_key_.reserved ^= kPsKeyPerPixelLighting;
-            current_ps_hash_ = ps_key_.hash();
-        }
-        const bool ppl_finite = ppl && (vs_key_.flags & kVsKeyFiniteLightAttn) != 0u;
-        if (((ps_key_.reserved & kPsKeyPplFiniteLightAttn) != 0u) != ppl_finite) {
-            ps_key_.reserved ^= kPsKeyPplFiniteLightAttn;
-            current_ps_hash_ = ps_key_.hash();
-        }
-    }
-    shader_key_hashes_valid_ = true;
     if (rs_dirty) {
-        render_state_key_ = build_render_state_key(draw_state_);
+        render_state_key_ = for_device_blending(build_render_state_key(draw_state_));
     }
-    // The EFB's variant (its samples per pixel, MSAA, the output EFB has one; the HDR scene EFB) decides the
+    // The scene target's variant (its samples per pixel, MSAA, the output scene target has one; the HDR scene scene target) decides the
     // pipeline's too.
-    const std::uint8_t samples_log2 = renderer_.efb_variant();
+    const std::uint8_t samples_log2 = renderer_.scene_variant();
     // A curved draw after another keeps its patch topology (its variant is settled below).
     const bool keep_patch =
         curved && (render_state_key_.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
-    const bool topology_dirty =
-        (!keep_patch && render_state_key_.primitive_topology != topology_key) ||
-        render_state_key_.samples_log2 != samples_log2;
     if (!keep_patch) {
         render_state_key_.primitive_topology = topology_key;
     }
     render_state_key_.samples_log2 = samples_log2;
-    if (renderer_.rt_active()) {
-        // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
-        // perspective projection. Shadow volumes, z-only passes and screen quads stay out, and so
-        // do alpha-tested cut-outs (foliage, fences) and z-textured surfaces, whose depth is not
-        // their triangles'. The material table's foliage cards are the exception (rt_card_draw).
-        const std::uint32_t bb = render_state_key_.blend_bits;
-        const bool traceable =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) &&
-            (bb & ((1u << 0u) | (1u << 8u))) == 0u && (bb & (1u << 25u)) != 0u &&
-            (render_state_key_.zmode_bits & (1u << 4u)) != 0u &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u &&
-            (ps_key_.flags & 0x02u) == 0u;
-        rt_state_eligible_ = traceable && alpha_test_keeps_all(ps_key_);
-        rt_card_eligible_ = traceable && !rt_state_eligible_;
-        const BlendMode blend = draw_blend();
-        rt_glow_eligible_ =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
-            !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u;
-        // Water and clear materials are models (indexed positions); particles (steam, smoke, haze with
-        // indirect warps) are direct-vertex sprites and never water.
-        const bool position_indexed = draw_positions_indexed();
-        rt_sprite_eligible_ =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
-            !blend.logic_op_enable && !blend.subtract && blend.color_update &&
-            blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u;
-        rt_water_eligible_ =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
-            !blend.logic_op_enable && !blend.subtract && blend.color_update &&
-            blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u &&
-            position_indexed;
-    }
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
     // Blended triangles (no dual-source alpha) write the reactive mask.
-    // The game's scene runs on an RGBA6 EFB (MainLoopFramework::preGX), where every blend that reads the source alpha
-    // is dual-source (needs_dual_src_alpha): it blends at the TEV's 8-bit alpha, not the EFB's 6-bit one, and under
-    // constant destination alpha (GXSetDstAlpha: the translucent lists, Mario, shadows) writes the constant instead.
+    // The game's scene runs on an 8-bit scene target (MainLoopFramework::preGX), where every blend that reads the source alpha
+    // is dual-source (needs_dual_src_alpha): it blends at the material's 8-bit alpha, not the scene target's 6-bit one, and under
+    // constant destination alpha (the state: the translucent lists, Mario, shadows) writes the constant instead.
     // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the
     // water's and clear surfaces' cover: a fall's spray was painted over). In a temporal scene such a draw blends
     // single-source instead, at the same 8-bit alpha (ShaderGenerator's reactive variant), and writes the mask; a
@@ -8022,7 +4195,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const bool single_source =
             blend_mode.blend_enable && !blend_mode.subtract &&
             (src_alpha_factor(blend_mode.src_factor) || src_alpha_factor(blend_mode.dst_factor)) &&
-            draw_state_.pe.pixel_format == 1u && (!constant_alpha || blend_mode.const_alpha == 0u);
+            draw_state_.frame_alpha && (!constant_alpha || blend_mode.const_alpha == 0u);
         const std::uint32_t dual_bit = motion_scene_ && single_source ? 0u : (1u << 27);
         std::uint32_t bb = render_state_key_.blend_bits;
         const bool candidate = motion_scene_ &&
@@ -8032,7 +4205,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const bool reactive = candidate && (bb & 1u) != 0u;
         // Dual-source and constant alpha as the key builders made them, but for a reactive draw drawn single-source.
         if (single_source) {
-            const bool dual = !reactive;
+            const bool dual = !reactive && dual_source_blending();
             const auto set_bit = [&motion_key_changed](auto& word, auto mask, bool on) {
                 if (((word & mask) != 0u) != on) {
                     word ^= mask;
@@ -8043,35 +4216,17 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             set_bit(bb, 1u << 28, constant_alpha && dual);
             set_bit(bb, kRenderStateZeroAlpha, constant_alpha && !dual);
             render_state_key_.blend_bits = bb;
-            const std::uint8_t flags = ps_key_.flags;
-            set_bit(ps_key_.flags, std::uint8_t{0x80u}, dual);
-            set_bit(ps_key_.flags, std::uint8_t{0x04u}, constant_alpha && dual);
-            if (ps_key_.flags != flags) {
-                current_ps_hash_ = ps_key_.hash();
-            }
-        }
-        if (((vs_key_.flags & kVsKeyMotion) != 0u) != writer) {
-            vs_key_.flags ^= kVsKeyMotion;
-            current_vs_hash_ = vs_key_.hash();
-            motion_key_changed = true;
         }
         // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
-        // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
-        const auto reads_efb = [has_alpha = draw_state_.pe.pixel_format == 1u](BlendFactor f, bool source) {
+        // read the scene target (its colour or, on an scene target with alpha, its alpha) blends the same into the layer's targets.
+        const auto reads_scene = [has_alpha = draw_state_.frame_alpha](BlendFactor f, bool source) {
             const auto v = static_cast<std::uint32_t>(f);
-            return (source && (v == 2u || v == 3u)) || (has_alpha && (v == 6u || v == 7u));
+            (void)source;
+            return v == 8u || v == 9u || (has_alpha && (v == 6u || v == 7u));  // the destination's colour or alpha
         };
         const bool layer = reactive && renderer_.layer_window() &&
                            (blend_mode.subtract ||
-                            (!reads_efb(blend_mode.src_factor, true) && !reads_efb(blend_mode.dst_factor, false)));
-        const std::uint8_t ps_bits =
-            (writer ? kPsKeyMotion : 0u) | (reactive ? kPsKeyReactive : 0u) | (layer ? kPsKeyLayer : 0u);
-        if ((ps_key_.reserved & (kPsKeyMotion | kPsKeyReactive | kPsKeyLayer)) != ps_bits) {
-            ps_key_.reserved = static_cast<std::uint8_t>(
-                (ps_key_.reserved & ~(kPsKeyMotion | kPsKeyReactive | kPsKeyLayer)) | ps_bits);
-            current_ps_hash_ = ps_key_.hash();
-            motion_key_changed = true;
-        }
+                            (!reads_scene(blend_mode.src_factor, true) && !reads_scene(blend_mode.dst_factor, false)));
         const std::uint32_t rs_bits = (writer ? kRenderStateMotionTarget : 0u) |
                                       (reactive ? kRenderStateReactiveTarget : 0u) |
                                       (layer ? kRenderStateLayerTarget : 0u);
@@ -8085,143 +4240,28 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
 
     // Curved surfaces: the vertex stage's curve outputs and the patches of its output variant's hull and domain shaders.
-    bool curved_changed = curved != current_curved_;
     current_curved_ = curved;
-    if (((vs_key_.flags & kVsKeyCurved) != 0u) != curved) {
-        vs_key_.flags ^= kVsKeyCurved;
-        current_vs_hash_ = vs_key_.hash();
-        curved_changed = true;
-    }
     if (curved) {
-        const auto patch = static_cast<std::uint8_t>(
-            kTopologyPatch |
-            ((vs_key_.flags & (kVsKeyPerPixelLighting | kVsKeyEnhancedLighting)) != 0u ? kCurvedPerPixel : 0u) |
-            ((vs_key_.flags & kVsKeyMotion) != 0u ? kCurvedMotion : 0u));
-        curved_changed = curved_changed || render_state_key_.primitive_topology != patch;
-        render_state_key_.primitive_topology = patch;
+        render_state_key_.primitive_topology = static_cast<std::uint8_t>(kTopologyPatch);
     }
-    if (native_material_ != nullptr) {
-        // A native material's pipeline: its build-compiled shaders under the draw's render state.
-        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
+    {
+        // The native material's pipeline: its build-compiled shaders under the draw's render state.
+        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_,
+                                                       per_pixel_lighting_ || enhanced_lighting_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
-        static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
-        if (log_native) [[unlikely]] {
-            static std::set<std::pair<std::uint32_t, const void*>> logged;
-            if (logged.emplace(native_material_->shader, current_pipeline_).second) {
-                std::fprintf(stderr, "[native-material] shader=%u pipeline=%p blend=0x%08x z=0x%x cull=%u maps=0x%02x\n",
-                             native_material_->shader, static_cast<const void*>(current_pipeline_),
-                             render_state_key_.blend_bits, static_cast<unsigned>(render_state_key_.zmode_bits),
-                             static_cast<unsigned>(render_state_key_.cull), static_cast<unsigned>(native_texture_mask_));
-            }
-        }
-        current_pipeline_is_uber_ = false;
         current_pso_key_valid_ = false;
+        // A curved native draw goes whole through its patch stages (native_curved.hlsl).
         current_flat_pipeline_ = nullptr;
-    } else if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
-        tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
-        motion_key_changed || curved_changed || vs_features_changed) {
-        const PsoKey pso_key{
-            current_vs_hash_,
-            current_ps_hash_,
-            render_state_key_,
-        };
-        const std::uint64_t pso_key_hash = pso_key.hash();
-        const auto pso_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        // Thread cycles of this PSO resolution (GALAXY_GX_PSO_CYCLES), instrumentation included.
-        const ThreadCounterSample pso_cycles_start = pso_cycles_enabled
-            ? thread_cycle_count() : ThreadCounterSample{};
-        // An unchanged key resolves to current_pipeline_: the shader hashes, render state and topology
-        // do not depend on matrices, and the palette uploads by its own stale flag. The hash is
-        // compared first (a different hash proves a different key); an equal hash is confirmed
-        // against the whole key.
-        const bool pso_key_changed =
-            current_pipeline_ == nullptr ||
-            current_pipeline_is_uber_ ||
-            !current_pso_key_valid_ ||
-            current_pso_key_hash_ != pso_key_hash ||
-            !(current_pso_key_ == pso_key);
-        if (pso_key_changed) {
-            // Always counted, so the three routes sum to it.
-            ++frame_pso_resolutions_;
-            // The frame-scoped memo first: the published map cannot change between begin_frame()'s
-            // drain_completions() and the frame's last draw, so a hit returns what get() would.
-            gpu::Pipeline* resolved = nullptr;
-            // One indexed probe. The hash picks the victim; the exact key
-            // confirms the hit, so a collision is a miss, never a wrong
-            // pipeline.
-            PipelineMemoEntry& memo_slot =
-                pipeline_memo_[pso_key_hash & kPipelineMemoMask];
-            const bool memo_hit =
-                memo_slot.hash == pso_key_hash &&
-                memo_slot.pipeline != nullptr &&
-                memo_slot.key == pso_key;
-            bool resolved_uber = false;
-            if (memo_hit) {
-                resolved = memo_slot.pipeline;
-                // Always counted, like the get() calls.
-                ++frame_pso_memo_hits_;
-            } else {
-                ++frame_pso_get_calls_;
-                const auto get_start = time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
-                resolved = pipeline_cache_.get(pso_key, ps_key_, vs_key_);
-                resolved_uber = pipeline_cache_.last_get_used_uber();
-                if (time_detail) {
-                    const std::uint64_t get_us =
-                        elapsed_us(get_start, std::chrono::steady_clock::now());
-                    frame_pso_get_us_ += get_us;
-                    frame_pso_get_max_us_ =
-                        std::max(frame_pso_get_max_us_, get_us);
-                }
-                // An uber stand-in is never memoized: the next resolution
-                // should find the specialization once it is published.
-                if (resolved != nullptr && !resolved_uber) {
-                    memo_slot.hash = pso_key_hash;
-                    memo_slot.key = pso_key;
-                    memo_slot.pipeline = resolved;
-                }
-            }
-            current_pipeline_ = resolved;
-            current_pipeline_is_uber_ = resolved_uber;
-            current_pso_key_ = pso_key;
-            current_pso_key_hash_ = pso_key_hash;
-            current_pso_key_valid_ = current_pipeline_ != nullptr;
-            current_flat_pipeline_ = curved && resolved != nullptr && !resolved_uber
-                ? resolve_flat_pipeline(pso_key) : nullptr;
-            if (!resolved_uber) {
-                describe_pipeline(resolved, vs_key_, ps_key_, render_state_key_);
-            }
-        }
-        if (time_detail) {
-            frame_flush_pso_us_ +=
-                elapsed_us(pso_start, std::chrono::steady_clock::now());
-        }
-        if (pso_cycles_enabled) {
-            const ThreadCounterSample interval = thread_counter_interval(
-                pso_cycles_start, thread_cycle_count());
-            if (frame_flush_pso_cycles_valid_ && interval.available &&
-                interval.value <= std::numeric_limits<std::uint64_t>::max() -
-                    frame_flush_pso_cycles_) {
-                frame_flush_pso_cycles_ += interval.value;
-            } else {
-                // An incomplete numerator must not look like a complete total.
-                frame_flush_pso_cycles_ = 0u;
-                frame_flush_pso_cycles_valid_ = false;
-            }
-        }
     }
     if (current_pipeline_ == nullptr) {
         // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged
         // why): the draw is skipped.
+        galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
         return nullptr;
     }
     // An effects-layer draw binds the reactive mask and the layer's targets, uber stand-in or not (its variant writes
     // them); other stand-ins stay single-target.
     current_pipeline_aux_ = (render_state_key_.blend_bits & kRenderStateLayerTarget) != 0u ? 3u
-        : current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
 
@@ -8229,70 +4269,11 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // normals, post-transform matrices, lights): a kind's block is appended when its rows changed, and the draw's
     // moved lights (the ray tracer's aim) take a light block of their own. A draw names its blocks by their first rows
     // (VertexConstants::pos_base, row_bases), valid until begin_frame() rewinds the ring.
-    const unsigned active_texgen_mask =
-        vs_key_.num_texgens >= 8u
-            ? 0xFFu
-            : ((1u << vs_key_.num_texgens) - 1u);
-    bool emboss_palette_required = false;
-    for (unsigned texgen = 0; texgen < vs_key_.num_texgens; ++texgen) {
-        emboss_palette_required |= draw_state_.texgen[texgen].type == TexGenType::EmbossMap;
-    }
-    // Enhanced lighting reads the lights in the pixel shader, unlit draws included.
-    const bool palette_required =
-        emboss_palette_required ||
-        (vs_key_.flags & (0x03u | kVsKeyEnhancedLighting)) != 0u ||
-        (vs_key_.texmtx_idx_mask & active_texgen_mask) != 0u;
+    // A native material's shader may read any block (palette positions, normals, lights, per-vertex texture matrices).
+    const bool palette_required = true;
     current_palette_required_ = palette_required;
-    // Actor lights (actor_lights.h): a lit scene draw's follow-camera lights are moved in its
-    // snapshot; one moved otherwise (other lights, another scene's aim) is not reused for it. A
-    // light load's positions are taken at the first draw after it; a lit draw's world-fixed key
-    // light is counted.
-    if (rt_light_tracking_ || rt_palette_lights_ != 0u) [[unlikely]] {
-        const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
-        for (unsigned n = 0; n < 2u; ++n) {
-            if ((rt_light_pending_ & (1u << n)) != 0u) {
-                std::memcpy(rt_light_positions_[n].data(), matrices_.light(n).position, sizeof(rt_light_positions_[n]));
-            }
-        }
-        rt_light_pending_ = 0u;
-        if (rt_light_tracking_ && (vs_key_.flags & 0x02u) != 0u) {
-            note_rt_world_key();
-        }
-        const std::uint32_t lights = (vs_key_.flags & 0x02u) != 0u ? rt_aimed_lights() : rt_palette_lights_;
-        if (lights != rt_palette_lights_) {
-            // Counts the snapshots this adds: the palette had not moved since the last one.
-            rt_light_forced_ += !matrix_palette_stale_ && current_matrix_palette_ != 0u ? 1u : 0u;
-            matrix_palette_stale_ = true;
-            matrix_blocks_forced_ = true;
-        }
-        rt_draw_lights_ = lights;
-        static unsigned traced = 0u;
-        if (start != 0u) [[unlikely]] {
-            rt_light_cycles_ += trace_cycles() - start;
-            ++rt_light_regions_;
-        }
-        if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
-            ++traced;
-            const NativeLight& l = matrices_.light(0u);
-            const NativeLight& l1 = matrices_.light(1u);
-            std::fprintf(stderr,
-                         "[rt-actor-light] draw scene=%u lights=%u channels=%08x %08x %08x %08x "
-                         "light0=%08x attn=(%g %g %g / %g %g %g) pos=(%g %g %g) light1=%08x pos=(%g %g %g)\n",
-                         rt_light_serial_, lights & 0xFFu, channel_word(draw_state_.channel[0]),
-                         channel_word(draw_state_.channel[1]),
-                         channel_word(draw_state_.channel[2]),
-                         channel_word(draw_state_.channel[3]), light_color_word(l), l.angle[0], l.angle[1],
-                         l.angle[2], l.distance[0], l.distance[1], l.distance[2], l.position[0], l.position[1],
-                         l.position[2], light_color_word(l1), l1.position[0], l1.position[1], l1.position[2]);
-        }
-    } else {
-        rt_draw_lights_ = 0u;
-    }
     if (palette_required && (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
         // Clock reads on detail frames only; the upload counts below are always kept.
-        const auto matrix_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         std::uint32_t kinds = matrices_.changed();
         if (!matrix_blocks_valid_ || renderer_.matrix_ring().epoch() != matrix_blocks_epoch_) {
             // Blocks from before the ring's latest rewind are another segment's: every kind is appended again.
@@ -8301,9 +4282,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
         scene_kinds_pending_ |= kinds;
         if (kinds != 0u || matrix_blocks_forced_) {
-            const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             // The changed kinds' blocks, then the draw's moved lights (a light block of its own: the game's stay).
-            const bool moved = rt_draw_lights_ != 0u;
+            constexpr bool moved = false;  // no moved light blocks (they were the ray tracer's)
             std::uint32_t rows = moved ? draw_rows::kLightRows : 0u;
             for (const DrawMatrices::Kind kind : kMatrixKinds) {
                 rows += (kinds & kind) != 0u ? DrawMatrices::row_count(kind) : 0u;
@@ -8330,21 +4310,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             }
             draw_light_base_ = matrix_block_base_[kLightKind];
             std::array<std::uint32_t, draw_rows::kLightRows * 4u> moved_lights{};
-            if (moved) [[unlikely]] {
-                // The game's light rows with the aim applied, for this draw.
-                std::memcpy(moved_lights.data(), matrices_.rows(DrawMatrices::kLights), sizeof(moved_lights));
-                write_rt_lights(moved_lights.data());
-                std::memcpy(out, moved_lights.data(), sizeof(moved_lights));
-                draw_light_base_ = next;
-                ++rt_light_uploads_;
-            }
-            if (snapshot_start != 0u) [[unlikely]] {
-                rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
-                ++rt_snapshot_count_;
-            }
             current_matrix_palette_ = bytes != 0u ? mtx_alloc.gpu : current_matrix_palette_;
-            rt_palette_lights_ = rt_draw_lights_;
-            if (interp_recording_ && history_scene_) [[unlikely]] {
+                if (interp_recording_ && history_scene_) [[unlikely]] {
                 InterpScene& scene = interp_scenes_[interp_scene_];
                 // The kinds that changed since the scene's last shadow (all of them for its first) join the scene's
                 // rows; the shadow's table names each row's current one.
@@ -8379,15 +4346,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             matrix_blocks_forced_ = false;
             matrix_bases_changed_ = true;
             matrices_.clear_changed();
-            frame_matrix_upload_bytes_ += bytes;
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
         // frame's segment.
         matrix_palette_stale_ = false;
-        if (time_detail) {
-            frame_flush_matrix_us_ +=
-                elapsed_us(matrix_start, std::chrono::steady_clock::now());
-        }
     }
     // The rows' binding: the ring from its start (draws name their blocks' rows from it).
     draw_matrix_palette_ = current_matrix_palette_ != 0u ? renderer_.matrix_ring().gpu_base() : 0u;
@@ -8396,44 +4358,62 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     cpu_vs_constants_.row_bases[1] = matrix_block_base_[1];
     cpu_vs_constants_.row_bases[2] = matrix_block_base_[3];
     cpu_vs_constants_.row_bases[3] = draw_light_base_;
+    // The shape's per-vertex position matrix indices (VertexConstants::flags bit 0; the uber shaders take the key's
+    // bit): the native vertex shaders and the ray tracer read the constants' bit, so a change uploads them again.
+    const std::uint32_t per_vertex = matrix_bits & 1u;
+    const bool per_vertex_changed = std::exchange(cpu_vs_constants_.per_vertex, per_vertex) != per_vertex;
 
+    // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
+    // native_tex_matrix reads the vertex's index for those texgens).
+    const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
+    // The header word as the last upload wrote it (a draw's from its key): any change uploads again, or a native
+    // draw after a game one would read that draw's mask.
+    // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
+    // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
+    // frame, as the old path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
+    const BlendMode& pe_blend = draw_state_.blend;
+    const bool frame_alpha = draw_state_.frame_alpha;
+    const std::uint32_t native_pe = frame_alpha && pe_blend.const_alpha_enable && pe_blend.alpha_update &&
+                                            (render_state_key_.blend_bits & kRenderStateZeroAlpha) == 0u
+                                        ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
+                                        : 0u;
+    const std::uint32_t header_texmtx = native_texmtx | native_pe << 8u;
+    const bool native_texmtx_changed = std::exchange(native_texmtx_, header_texmtx) != header_texmtx;
     // Upload VS constants when scalar state, fixed inline matrices or the matrix blocks change.
-    if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
+    if (native_texmtx_changed || per_vertex_changed || std::exchange(sky_up_dirty_, false) || vs_c_dirty ||
+        xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u || std::exchange(matrix_bases_changed_, false) ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
-        const auto constants_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
         const VertexConstants& vs_c = cpu_vs_constants_.update(
-            matrices_, draw_state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
+            matrices_, draw_state_, dirty, RasterScale{renderer_.frame_map().sx, renderer_.frame_map().sy}, frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
         if (history_scene_) [[unlikely]] {
             write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }
-        apply_uber_vs_key(vs_key_, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
+        {
+            // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
+            auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
+            native_vs->draw_header[1] = renderer_.frame_map().height;
+            native_vs->draw_header[2] = native_pe;
+            native_vs->draw_header[3] = native_texmtx;
+            for (unsigned i = 0; i < 8u; ++i) {
+                native_vs->post_rows[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
+                                                 (draw_state_.post_texgen[i].normalize ? 0x100u : 0u);
+            }
+        }
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
-        if (time_detail) {
-            frame_flush_constants_us_ +=
-                elapsed_us(constants_start, std::chrono::steady_clock::now());
-        }
     }
 
     // Texture tables are refreshed only when a texture input changed. tex_dirty covers every input:
     // the binding key is captured only under kDirtyTex or the two binding flags, so otherwise the
     // result would be the current tables. dirty_texture_aliases_ outlives a flush (cleared by
-    // prune_dirty_texture_binding_tables()) and is honoured even without tex_dirty, or an EFB-alias
+    // prune_dirty_texture_binding_tables()) and is honoured even without tex_dirty, or an scene target-alias
     // copy followed by matrix-only flushes would keep its entries for the rest of the frame. Most
     // flushes carry kDirtyXfMatrices alone (the game loads matrices per object with LOAD_INDX).
     if (tex_dirty || !dirty_texture_aliases_.empty()) {
-        const auto texture_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        std::uint64_t texture_get_us = 0;
-        std::uint64_t texture_table_us = 0;
-        std::uint64_t sampler_table_us = 0;
         if (texture_bindings_dirty_) {
             prune_dirty_texture_binding_tables();
         }
@@ -8457,29 +4437,21 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 for (const auto& handle : frame_binding_it->second.texture_handles) {
                     texture_cache_.touch_cached_handle(handle);
                 }
-                texture_rt_material_ =
-                    rt_material_of(texture_map_mask, frame_binding_it->second.texture_handles, current_rt_map_);
-                refresh_rt_material();
                 binding_cache_hit = true;
-                ++frame_texture_binding_cache_hits_;
             }
 
             if (!binding_cache_hit) {
-                ++frame_texture_binding_cache_misses_;
                 std::array<TextureHandle, kMaxTextureMaps> texture_handles{};
                 TextureBindingTables binding_tables{};
                 TextureTableKey table_key{};
                 table_key.map_mask = texture_map_mask;
                 for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
                     if ((texture_map_mask & (1u << m)) != 0u) {
-                        const TexImage img = draw_state_.texture[m].image;
-                        const TexMode mode = draw_state_.texture[m].mode;
-                        const TlutFormat palette_format = draw_state_.texture[m].tlut.format;
-                        const std::uint64_t palette = palette_address(draw_state_, m);
-                        const TextureHandleKey handle_key =
-                            texture_handle_key(img, mode, palette, palette_format);
-                        if (renderer_.target_picture(img.address, img.width, img.height, texture_handles[m])) {
-                            // A target pass's picture (E-07), in whatever format the draw names it.
+                        const std::uint64_t texture = draw_state_.texture[m].texture;
+                        const TextureSampler mode = draw_state_.texture[m].mode;
+                        const TextureHandleKey handle_key = texture_handle_key(texture, mode);
+                        if (renderer_.target_picture(texture, texture_handles[m])) {
+                            // A target pass's picture (E-07) under its key.
                         } else if (const auto handle_it =
                                 frame_texture_handle_cache_.find(handle_key);
                             handle_it != frame_texture_handle_cache_.end()) {
@@ -8490,15 +4462,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                                 persistent_it != texture_handle_cache_.end()) {
                                 texture_handles[m] = persistent_it->second;
                             } else {
-                                const auto get_start = time_detail
-                                    ? std::chrono::steady_clock::now()
-                                    : std::chrono::steady_clock::time_point{};
-                                texture_handles[m] = texture_cache_.get(img, mode, palette, palette_format);
-                                if (time_detail) {
-                                    texture_get_us += elapsed_us(
-                                        get_start,
-                                        std::chrono::steady_clock::now());
-                                }
+                                texture_handles[m] = texture_cache_.get(texture, mode);
                                 texture_handle_cache_.emplace(
                                     handle_key,
                                     texture_handles[m]);
@@ -8511,10 +4475,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                         binding_tables.dependencies[
                             binding_tables.dependency_count++] =
                             TextureBindingDependency{
-                                img.address,
-                                img.width,
-                                img.height,
-                                static_cast<std::uint8_t>(img.format),
+                                texture,
+                                texture_handles[m].width,
+                                texture_handles[m].height,
+                                0u,
                                 texture_handles[m].source_bytes,
                             };
                     }
@@ -8525,15 +4489,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     table_key.widths[m] = th.width;
                     table_key.heights[m] = th.height;
                 }
-                const bool lit_table = lit_translucent_ && texture_handles[7].resource == nullptr;
-                if (lit_table) {
-                    table_key.resources[7] = reinterpret_cast<std::uintptr_t>(renderer_.rt_light_texture());
-                    table_key.srv_indices[7] = 0xFFFFFFFFu;
-                }
-
-                const auto table_start = time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
                 if (const auto table_it =
                         frame_texture_tables_.find(table_key);
                     table_it != frame_texture_tables_.end()) {
@@ -8543,12 +4498,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     // stage count, so the root table has a stable size
                     // matching the root signature.
                     current_texture_table_ = renderer_.texture_table_for(
-                        texture_handles.data(), kMaxTextureMaps, texture_cache_, lit_table);
+                        texture_handles.data(), kMaxTextureMaps, texture_cache_);
                     frame_texture_tables_.emplace(table_key, current_texture_table_);
-                }
-                if (time_detail) {
-                    texture_table_us = elapsed_us(
-                        table_start, std::chrono::steady_clock::now());
                 }
 
                 // Per-map sampler state from TexMode0/1 (wrap, filters, LOD
@@ -8557,15 +4508,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 // cached for this frame's fence-owned sampler heap.
                 const auto samp_keys = capture_sampler_keys(
                     texture_map_mask, texture_handles);
-                const auto sampler_start = time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
                 current_sampler_table_ =
                     renderer_.sampler_table_for(samp_keys.data());
-                if (time_detail) {
-                    sampler_table_us = elapsed_us(
-                        sampler_start, std::chrono::steady_clock::now());
-                }
                 TextureBindingTables cached_tables{
                     current_texture_table_,
                     current_sampler_table_,
@@ -8577,50 +4521,18 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     texture_binding_key,
                     cached_tables);
                 current_texture_handles_ = texture_handles;
-                texture_rt_material_ = rt_material_of(texture_map_mask, texture_handles, current_rt_map_);
-                refresh_rt_material();
             }
         }
         current_texture_map_mask_ = texture_map_mask;
+        // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's maps as the texture cache resolved them (once per map
+        // and image).
         current_texture_binding_key_ = texture_binding_key;
         current_texture_binding_key_valid_ = true;
         current_texture_binding_key_mask_ = texture_map_mask;
-        if (time_detail) {
-            const std::uint64_t total_texture_us =
-                elapsed_us(texture_start, std::chrono::steady_clock::now());
-            frame_flush_texture_us_ += total_texture_us;
-            if (trace_gx_stalls_enabled() &&
-                total_texture_us >= trace_gx_stall_threshold_us()) {
-                std::cerr
-                    << "[gx-texture-flush] frame=" << frame_index_
-                    << " map-mask=0x" << std::hex
-                    << static_cast<unsigned>(texture_map_mask)
-                    << std::dec
-                    << " get-us=" << texture_get_us
-                    << " table-us=" << texture_table_us
-                    << " sampler-us=" << sampler_table_us
-                    << " total-us=" << total_texture_us
-                    << "\n";
-            }
-        }
     }
 
-    // Upload PS constants when TEV stage config / fog / alpha / tex dims change, or an enhanced
-    // draw's material table entry does (after the texture binding, which finds it).
-    const std::uint32_t enhanced_material_bits =
-        (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u ? enhanced_table_material(rt_material(current_rt_material_)) : 0u;
-    // A glow's gain follows its material (a light source's radiance): another material is another gain. A lit
-    // translucent's material decides whether it is falling water (its constants' tex_dims[7].w).
-    const std::uint16_t glow_material = (ps_key_.output_flags & 0x60u) != 0u ? current_rt_material_ : 0u;
-    // A clear ice or crystal draw under physical light (rt_materials.h kRtIceTintKept): the share of its art's tint it
-    // loses, in its TEV and konst registers here and its rasterized colours in the pixel shader (ztex_params.w).
-    float tint_cleared = 0.0f;
-    if (const RtMaterial* const tinted = rt_material(current_rt_material_);
-        tinted != nullptr && tinted->tint_kept < 1.0f && scene_phase_ && renderer_.rt_physical()) {
-        tint_cleared = 1.0f - std::clamp(tinted->tint_kept, 0.0f, 1.0f);
-    }
-    if (native_material_ != nullptr) {
-        // A native material's constants (its MaterialConstants), uploaded once per material.
+    {
+        // The native material's constants (its MaterialConstants), uploaded once per material.
         if (native_constants_dirty_ || frame_bindings_dirty_ || current_ps_constants_ == 0u) {
             UploadRing::Allocation alloc =
                 renderer_.constant_ring().allocate(sizeof(native_material_->constants), 256u);
@@ -8629,138 +4541,12 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             current_ps_record_ = -1;
             native_constants_dirty_ = false;
         }
-    } else if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
-        dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
-        glow_material != glow_material_ || tint_cleared != ps_tint_cleared_) {
-        enhanced_material_bits_ = enhanced_material_bits;
-        glow_material_ = glow_material;
-        ps_tint_cleared_ = tint_cleared;
-        const auto constants_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        PixelConstants ps_c{};
-        fill_ps_constants(draw_state_, ps_c, scales_from_textures_);
-        if (tint_cleared > 0.0f) {
-            for (auto& reg : ps_c.tev_regs) {
-                clear_register_tint(reg, tint_cleared);
-            }
-            for (auto& reg : ps_c.konst) {
-                clear_register_tint(reg, tint_cleared);
-            }
-            // Its maps that are textures clear their texels too (a seesaw's blue IceFace01); the screen captures it
-            // shows through it (the ice's and the crystals' refraction, the floors' mirror) keep their colours.
-            // alpha_refs.z bits 8-15, above the alpha test's packed modes.
-            std::uint32_t textures = 0u;
-            for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-                if ((current_texture_map_mask_ & (1u << m)) != 0u && !current_texture_handles_[m].from_efb_copy) {
-                    textures |= 1u << m;
-                }
-            }
-            ps_c.alpha_refs[2] = std::bit_cast<float>(std::bit_cast<std::uint32_t>(ps_c.alpha_refs[2]) | (textures << 8u));
-        }
-        ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        // A glow's gain (output_flags bit 5): 1 under physical light (the game's additive effects as it drew them;
-        // their light reaches the scene as the engine's emitting geometry), the art model's glow exposure otherwise.
-        ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
-                              : renderer_.rt_physical() ? 1.0f
-                                                        : renderer_.rt_glow_exposure(glow_kind_ == 2u);
-        // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light),
-        // an effect that is light (`luminous`: sparkles, glows, fire; the game draws them unlit, at the brightness they
-        // shine, and lit by the surface behind them a sparkle grew into a flat orange star) or a clear surface (glass,
-        // crystal, ice, water: the lit scene shows through it). Falling water is white water, a foam of bubbles and
-        // drops that scatters what reaches it: it takes the light at its own sheet (rt_engine.hlsl water_light).
-        bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
-        float recolour = 0.0f;
-        if (const RtMaterial* const m = rt_material(current_rt_material_);
-            m != nullptr && (ps_key_.output_flags & 0x60u) != 0u) {
-            const bool emits = m->emission != RtEmission::None && !m->no_light && !m->hide;
-            const bool clear = (m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                                m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
-                               !m->waterfall;
-            takes_light = takes_light && !emits && !clear && !m->luminous;
-            // `recolour`: a light source's sprite in the table's colour rather than the one the game draws its glow
-            // in, as RGB8 + 1, negated.
-            if (emits && m->recolour) {
-                const auto byte = [](float v) {
-                    return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
-                };
-                recolour = -static_cast<float>(1u + byte(m->color[0]) + (byte(m->color[1]) << 8u) +
-                                               (byte(m->color[2]) << 16u));
-            }
-        }
-        // Else the tint the draw loses, between -1 and 0 (below any recolour code, which is at most -1). A tinted draw
-        // that takes the light (a translucent of an unclear class) keeps its rasterized colours' tint.
-        ps_c.ztex_params[3] =
-            takes_light ? renderer_.rt_light_texture_scale() : recolour != 0.0f ? recolour : -tint_cleared;
-        // A lit translucent's kind (shader_gen; map 7 is the light texture there, so its texture dimensions are free
-        // and always set here: fill_ps_constants leaves map 7's texcoord scale, at least 1, in them): 0 an effect or
-        // any other translucent, 1 falling water (clear where the art paints its water hue), 2 water, glass or
-        // crystal (the water pass's surfaces). Only 0 covers what lies behind for the water's composites (the
-        // reactive mask).
-        if ((ps_key_.output_flags & 0x40u) != 0u) {
-            float kind = 0.0f;
-            if (const RtMaterial* const m = rt_material(current_rt_material_); m != nullptr) {
-                const bool clear_class = m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                                         m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water);
-                // Falling water: kind 1 plus 0.4 x its aeration (the share of its clear water's light its bubbles
-                // scatter: the table's, else rt_engine.hlsl kFallAeration's 0.36), below 1.5.
-                kind = takes_light && m->waterfall ? 1.0f + 0.4f * (m->aeration >= 0.0f ? m->aeration : 0.36f)
-                       : clear_class               ? 2.0f
-                                                   : 0.0f;
-                // Falling water's clear water colour as the art paints it (the table row's; white: none).
-                if (kind < 1.5f && kind >= 1.0f) {
-                    ps_c.tex_dims[7][0] = m->color[0];
-                    ps_c.tex_dims[7][1] = m->color[1];
-                    ps_c.tex_dims[7][2] = m->color[2];
-                }
-            }
-            ps_c.tex_dims[7][3] = kind;
-        }
-        // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind, lighting texture and J3D
-        // material identity (mat_id.py names the material, material_names.py --find the identity).
-        if (scene_phase_ && rt_log_glows()) [[unlikely]] {
-            static std::set<std::uint64_t> logged;
-            const std::uint64_t key = (static_cast<std::uint64_t>(rt_identity_seen_) << 40u) |
-                                      (static_cast<std::uint64_t>(current_rt_material_) << 24u) |
-                                      (static_cast<std::uint64_t>(rt_phase_) << 8u) | glow_kind_ |
-                                      (ps_c.ztex_params[3] > 0.0f ? 0x80u : 0u);
-            if (logged.insert(key).second) {
-                std::fprintf(stderr,
-                             "[rt-draw-material] material=%u phase=%u kind=%u gain=%.2f lit-scale=%.3f identity=%08X\n",
-                             static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
-                             static_cast<unsigned>(glow_kind_), ps_c.ztex_params[2], ps_c.ztex_params[3],
-                             rt_identity_seen_);
-            }
-        }
-        uber_ps_memo_.apply(ps_key_, ps_c);
-        if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
-            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | enhanced_material_bits;
-        }
-
-        UploadRing::Allocation ps_alloc =
-            renderer_.constant_ring().allocate(sizeof(PixelConstants), 256u);
-        std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
-        current_ps_constants_ = ps_alloc.gpu;
-        if (interp_recording_ && history_scene_) [[unlikely]] {
-            ps_record_restart_ = false;
-            InterpScene& scene = interp_scenes_[interp_scene_];
-            current_ps_record_ = static_cast<std::int32_t>(scene.ps_constants.size());
-            scene.ps_constants.push_back(ps_c);
-        }
-        if (time_detail) {
-            frame_flush_constants_us_ +=
-                elapsed_us(constants_start, std::chrono::steady_clock::now());
-        }
     }
 
     frame_bindings_dirty_ = false;
     texture_bindings_dirty_ = false;
     // The frame's detail flag guards both endpoints. A zero on an ordinary
     // frame denotes an unavailable timing, not zero renderer work.
-    if (time_detail) {
-        frame_flush_us_ +=
-            elapsed_us(flush_start, std::chrono::steady_clock::now());
-    }
     return current_pipeline_;
 }
 
@@ -8791,9 +4577,9 @@ bool RenderCore::draw_calls_batch_compatible(
         return true;
     }
     return std::memcmp(
-               lhs.xf_viewport,
-               rhs.xf_viewport,
-               sizeof(lhs.xf_viewport)) == 0;
+               lhs.viewport,
+               rhs.viewport,
+               sizeof(lhs.viewport)) == 0;
 }
 
 void RenderCore::flush_pending_draw_batch() {
@@ -8801,65 +4587,45 @@ void RenderCore::flush_pending_draw_batch() {
         return;
     }
 
-    const bool time_detail = frame_time_detail_;
-    const auto draw_record_start = time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     if (!pending_stripe_vertices_.empty()) [[unlikely]] {
         renderer_.note_stripe_vertices(pending_stripe_vertices_);
         pending_stripe_vertices_.clear();
     }
-    // A hidden draw stays out of the picture and of the traced scene, unless the engine traces it (clear glass whose
-    // game draw paints a fake reflection: hidden, its geometry the engine's glass) or it is trace-only.
-    if (pending_draw_batch_.rt && (!pending_draw_batch_.hidden || pending_draw_batch_.traced)) {
-        renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
-    }
     if (!pending_draw_batch_.hidden) {
         const DrawCall& call = pending_draw_batch_.call;
         if (call.topology == gpu::kTopologyTrianglePatches) {
-            frame_curved_flat_triangles_ += call.flat_index_count / 3u;
-            frame_curved_patch_triangles_ += (call.index_count - call.flat_index_count) / 3u;
-            frame_curved_split_draws_ += call.flat_pipeline != nullptr ? 1u : 0u;
         }
         renderer_.draw(call);
     }
-    if (pending_draw_batch_.debake_model != 0u) [[unlikely]] {
-        sample_debake_model(pending_draw_batch_.debake_model, pending_draw_batch_.call);
-    }
-    if (time_detail) {
-        frame_draw_record_us_ +=
-            elapsed_us(draw_record_start, std::chrono::steady_clock::now());
-    }
-    ++frame_draw_batches_;
     pending_draw_batch_ = {};
 }
 
 bool RenderCore::begin_cached_draw_run(
-    PrimitiveClass primitive,
+    Primitive primitive,
     std::uint8_t vtxfmt,
     std::size_t draw_count) {
     (void)draw_count;
     if (cached_draw_run_active_) {
         throw std::runtime_error(
-            "RenderCore: nested cached display-list draw run");
+            "RenderCore: nested cached draw run");
     }
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
-    gx_topology_for_primitive(primitive, topology, topology_type);
+    topology_for_primitive(topology, topology_type);
 
     const ScissorRect sc = draw_state_.scissor;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
-    // GX_CULL_ALL.
+    // cull all.
     cached_draw_run_scissor_reject_ =
         cull_all_suppresses_primitive(draw_state_.gen.cull, primitive) ||
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
         sc.x1 < 0 || sc.y1 < 0 ||
-        sc.x0 >= static_cast<std::int32_t>(kFrameWidth) ||
-        sc.y0 >= static_cast<std::int32_t>(kFrameHeight);
+        sc.x0 >= static_cast<std::int32_t>(kFrameUnits) ||
+        sc.y0 >= static_cast<std::int32_t>(kFrameUnits);
     cached_draw_run_primitive_ = primitive;
     cached_draw_run_vtxfmt_ = vtxfmt;
     cached_draw_run_primitive_indexed_ =
-        primitive != PrimitiveClass::Triangles;
+        primitive != Primitive::Triangles;
     cached_draw_run_no_pso_ = false;
     cached_draw_run_batch_compatible_known_ = false;
     cached_draw_run_state_call_ = {};
@@ -8870,10 +4636,6 @@ bool RenderCore::begin_cached_draw_run(
 
     gpu::Pipeline* pso = nullptr;
     {
-        ScopedFlushTiming flush_timing{
-            frame_flush_timed_calls_,
-            frame_flush_total_us_,
-            frame_flush_timed_samples_};
         pso = flush_draw_state(topology_type, vtxfmt);
     }
     if (pso == nullptr) {
@@ -8901,11 +4663,11 @@ bool RenderCore::begin_cached_draw_run(
     cached_draw_run_state_call_.topology       = draw_topology(topology);
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
-        cached_draw_run_state_call_.xf_viewport[i] = draw_state_.viewport[i];
+        cached_draw_run_state_call_.viewport[i] = draw_state_.viewport[i];
     }
     cached_draw_run_state_call_.has_viewport =
-        cached_draw_run_state_call_.xf_viewport[0] > 0.0f &&
-        cached_draw_run_state_call_.xf_viewport[1] < 0.0f;
+        cached_draw_run_state_call_.viewport[2] > 0.0f &&
+        cached_draw_run_state_call_.viewport[3] > 0.0f;
     return true;
 }
 
@@ -8915,20 +4677,12 @@ void RenderCore::end_cached_draw_run() {
     cached_draw_run_primitive_indexed_ = false;
     cached_draw_run_no_pso_ = false;
     cached_draw_run_batch_compatible_known_ = false;
-    cached_draw_run_primitive_ = PrimitiveClass::Points;
+    cached_draw_run_primitive_ = Primitive::Points;
     cached_draw_run_vtxfmt_ = 0;
     cached_draw_run_state_call_ = {};
 }
 
 void RenderCore::on_shape_record(const shapes::Record& record) {
-    // State set outside materials (state ops, immediates, a draw's own texgens, markers, readbacks) may change what a
-    // program set: the next material applies its program whole.
-    using Kind = shapes::Record::Kind;
-    if (!(record.kind == Kind::Material || record.kind == Kind::MaterialProgram || record.kind == Kind::Array ||
-          record.kind == Kind::Geometry || record.kind == Kind::TextureImage ||
-          (record.kind == Kind::Draw && record.texgens.empty()))) {
-        applied_program_ = nullptr;
-    }
     switch (record.kind) {
     case shapes::Record::Kind::Array:
         shape_arrays_[record.key] = ShapeArrayEntry{record.array, ++shape_array_versions_};
@@ -8940,111 +4694,95 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         shape.geometry = record.geometry;
         return;
     }
+    case shapes::Record::Kind::Forget:
+        for (auto it = shape_arrays_.begin(); it != shape_arrays_.end();) {
+            it = it->first >= record.key && it->first < record.position ? shape_arrays_.erase(it) : std::next(it);
+        }
+        for (auto it = record_shapes_.begin(); it != record_shapes_.end();) {
+            if (it->first >= record.key && it->first < record.position) {
+                release_record_shape(it->second);
+                it = record_shapes_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        curved::forget_models(record.key, record.position);
+        flush_pending_draw_batch();
+        for (const std::uint64_t key : texture_cache_.forget_range(record.key, record.position)) {
+            invalidate_texture_binding_cache_key(key);
+        }
+        // A map still set to an image of that memory (the state outlives the scene, and a first draw may set no texture) holds nothing now.
+        for (TextureMap& map : draw_state_.texture) {
+            if (map.texture >= record.key && map.texture < record.position) {
+                map.texture = 0u;
+            }
+        }
+        apply_native_material(nullptr);
+        texture_bindings_dirty_ = true;
+        current_texture_binding_key_valid_ = false;
+        return;
     case shapes::Record::Kind::Draw:
+        draw_state_.apply_pass(record.pass);
         draw_record_shape(record);
         return;
-    case shapes::Record::Kind::MaterialProgram: {
-        // One object per distinct program (instances of a model register equal ones), so a draw after another of the
-        // same program finds the drawing state already holding it.
-        const auto& bytes = *record.program;
-        const std::uint64_t content = fnv1a64(&bytes, sizeof(material::Program));
-        std::shared_ptr<const material::Program>* shared = nullptr;
-        for (auto& candidate : material_program_contents_[content]) {
-            if (std::memcmp(candidate.get(), &bytes, sizeof(material::Program)) == 0) {
-                shared = &candidate;
-                break;
-            }
-        }
-        if (shared == nullptr) {
-            shared = &material_program_contents_[content].emplace_back(record.program);
-            ++material_census_.distinct;
-        }
-        ++material_census_.registrations;
-        auto& registered = material_programs_[record.key];
-        material_census_.changed += registered != nullptr && registered != *shared ? 1u : 0u;
-        registered = *shared;
-        return;
-    }
     case shapes::Record::Kind::NativeMaterial:
-        apply_native_material(record.native);
+        apply_native_material(record.native_index != shapes::kNoNative ? &current_record_pool_->natives[record.native_index] : nullptr);
         return;
-    case shapes::Record::Kind::Material: {
-        end_native_material();
-        const auto program = material_programs_.find(record.key);
-        if (program == material_programs_.end()) {
-            return;  // the game registers every program before its first use
-        }
-        apply_record_material(*program->second, *record.material);
-        const std::uint32_t palettes = draw_state_.palette_revision;
-        const bool whole = applied_program_ != program->second.get();
-        draw_state_.apply(*program->second, *record.material, whole);
-        applied_program_ = program->second.get();
-        static const bool census = read_env_u64("GALAXY_TEST_MATERIAL_CENSUS", 0u) != 0u;
-        if (census) [[unlikely]] {
-            MaterialCensus& c = material_census_;
-            c.values_only += whole ? 0u : 1u;
-            if ((++c.applications & 0xFFFFu) == 0u) {
-                std::fprintf(stderr,
-                             "[material-census] applications=%llu values-only=%llu registrations=%llu "
-                             "distinct-programs=%llu keys-registered=%zu program-changes=%llu\n",
-                             static_cast<unsigned long long>(c.applications),
-                             static_cast<unsigned long long>(c.values_only),
-                             static_cast<unsigned long long>(c.registrations),
-                             static_cast<unsigned long long>(c.distinct), material_programs_.size(),
-                             static_cast<unsigned long long>(c.changed));
-            }
-        }
-        if (draw_state_.palette_revision != palettes) {
-            on_palettes_changed();
-        }
-        return;
-    }
     case shapes::Record::Kind::State: {
-        end_native_material();
-        // The game's TEV order, indirect order or texture object changes: GX re-derived the coordinate scales then.
-        for (const state::Op& op : record.state) {
-            if (op.kind == state::kTevStageOrder || op.kind == state::kIndTexOrder ||
-                (op.kind == state::kTexImage && op.a[1] != 0u)) {
-                scales_from_textures_ = true;
-                break;
-            }
-        }
-        for (const state::Op& op : record.state) {
+        // A native material stays through state changes (the game folds a change of its values into it and ends it
+        // before a change of its program: J3DNativeMaterial); its fixed-function state and textures take them here.
+        for (std::uint32_t op_index = 0; op_index < record.op_count; ++op_index) {
+            const state::Op& op = current_record_pool_->ops[record.op_first + op_index];
             if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
             }
-            const std::uint32_t palettes = draw_state_.palette_revision;
             draw_state_.apply(op);
-            if (draw_state_.palette_revision != palettes) {
-                on_palettes_changed();
-            }
         }
         return;
     }
     case shapes::Record::Kind::TextureImage:
         flush_pending_draw_batch();
         texture_cache_.register_image(record.key, record.image);
-        // New bytes at that address: bindings made from what was there before are out of date too (a buffer the game
+        // New bytes for that key: bindings made from what it held before are out of date too (a buffer the game
         // reuses for its next image, as the Mii library's part textures).
         if (record.image != nullptr) {
-            invalidate_texture_binding_cache_range(record.key,
-                                                   static_cast<std::uint32_t>(record.image->size()));
+            invalidate_texture_binding_cache_key(record.key);
         }
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;
+    case shapes::Record::Kind::TextureHd:
+        flush_pending_draw_batch();
+        texture_cache_.register_replacement(record.key, record.image);
+        invalidate_texture_binding_cache_key(record.key);
+        texture_bindings_dirty_ = true;
+        current_texture_binding_key_valid_ = false;
+        return;
+    case shapes::Record::Kind::Scene: {
+        const auto marker = static_cast<SceneMarker>(static_cast<int>(record.key));
+        if (marker == SceneMarker::Scene2DBegin) {
+            on_scene_2d_begin();
+        } else if (marker == SceneMarker::SceneOpaqueEnd) {
+            apply_scene_ao(current_record_pool_->scenes[record.native_index].view);
+        } else if (marker != SceneMarker::Scene2DEnd) {
+            const shapes::SceneInfo& info = current_record_pool_->scenes[record.native_index];
+            on_scene_marker(marker, info.view_valid ? &info.view : nullptr, info.sky_up, info.sky_up_valid, &info.stage);
+        }
+        return;
+    }
     case shapes::Record::Kind::Immediate:
         apply_record_matrices(record);
-        draw_record_immediate(*record.immediate);
+        draw_state_.apply_pass(record.pass);
+        draw_record_immediate(record);
         return;
     case shapes::Record::Kind::Marker:
         on_host_marker(static_cast<std::uint8_t>(record.key), static_cast<std::uint16_t>(record.marker_aux),
                        record.marker[0], record.marker[1]);
         return;
     case shapes::Record::Kind::Readback:
-        // The picture here, as the channel's next field (its reads take the latest finished one).
+        // The picture here at the game's points.
         flush_pending_draw_batch();
-        record_async_peek_fields_at_token(static_cast<std::uint16_t>(record.key));
+        record_screen_probes(record);
         return;
     case shapes::Record::Kind::TargetBegin:
         begin_target_pass(record);
@@ -9052,36 +4790,59 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::TargetEnd:
         end_target_pass(record);
         return;
-    case shapes::Record::Kind::TargetCapture: {
-        const std::uint16_t rect[4] = {record.target_x, record.target_y, record.target_width, record.target_height};
-        on_efb_copy(capture_copy_params(record.key, rect, record.target_channels, record.target_flags),
-                    (record.target_flags & 8u) != 0u ? 3u : draw_state_.pe.pixel_format);
+    case shapes::Record::Kind::FramePass: {
+        FramePassRequest request{};
+        request.key = record.key;
+        request.channels = record.target_channels < 7u ? record.target_channels : 0u;
+        on_frame_output(request);
         return;
     }
-    case shapes::Record::Kind::FrameShow:
-        on_efb_copy(frame_show_params(record.target_width, record.target_height, record.target_flags),
-                    draw_state_.pe.pixel_format);
-        return;
-    case shapes::Record::Kind::FrameClear: {
-        // The values a draw would store: 8-bit colour, and on a frame with 6-bit alpha its alpha at 6 bits.
+    case shapes::Record::Kind::FrameTake: {
+        // In the settings that cannot swap the target (MSAA, HDR, interpolation), a pass over the frame.
         flush_pending_draw_batch();
-        std::uint32_t rgba = record.target_clear_rgba;
-        if (draw_state_.pe.pixel_format == 1u) {
-            const std::uint32_t alpha = rgba & 255u;
-            rgba = (rgba & ~255u) | (alpha & 0xFCu) | (alpha >> 6u);
+        FramePassRequest request{};
+        request.key = record.key;
+        bool changed = false;
+        if (renderer_.can_take_scene()) {
+            const FrameMap& map = renderer_.frame_map();
+            const auto width = static_cast<std::uint16_t>(map.width);
+            const auto height = static_cast<std::uint16_t>(map.height);
+            const bool forgot = texture_cache_.forget(record.key) != 0u;
+            gpu::TextureRef released;
+            changed = renderer_.take_scene(record.key, display_pictures_.take_idle_texture(width, height), texture_cache_, released);
+            display_pictures_.release_texture(std::move(released), width, height);
+            changed = changed || forgot;
+            frame_bindings_dirty_ = true;
+        } else {
+            changed = renderer_.draw_frame_pass(request, texture_cache_);
         }
-        renderer_.clear_efb(rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+        if (changed) {
+            mark_texture_binding_alias_dirty(request);
+            texture_bindings_dirty_ = true;
+        }
+        return;
+    }
+    case shapes::Record::Kind::FrameShow: {
+        FramePassRequest request{};
+        request.display = true;
+        on_frame_output(request);
+        return;
+    }
+    case shapes::Record::Kind::FrameClear: {
+        // The values as the game gave them (alpha 255 on a frame without alpha).
+        flush_pending_draw_batch();
+        renderer_.clear_scene(record.target_clear_rgba, (record.target_channels & 1u) != 0u,
                             (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
                             record.target_y, record.target_width, record.target_height,
-                            static_cast<std::uint8_t>(draw_state_.pe.pixel_format | kEfbClearExact));
+                            frame_format());
         return;
     }
     case shapes::Record::Kind::TargetClear:
         if (renderer_.target_pass_active()) {
             flush_pending_draw_batch();
-            renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+            renderer_.clear_scene(record.target_clear_rgba, (record.target_channels & 1u) != 0u,
                                 (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u,
-                                target_pass_size_[0], target_pass_size_[1], draw_state_.pe.pixel_format);
+                                target_pass_size_[0], target_pass_size_[1], frame_format());
         }
         return;
     }
@@ -9091,7 +4852,24 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
 // as the game asked.
 void RenderCore::begin_target_pass(const shapes::Record& record) {
     flush_pending_draw_batch();
+    // The frame sampled in the pass: its pictures come first, while the frame is still the scene target.
+    const bool over_frame = record.target_frame_key != 0u || record.target_depth_key != 0u;
+    if (over_frame) {
+        for (const std::uint64_t key : {record.target_frame_key, record.target_depth_key}) {
+            if (key != 0u) {
+                texture_cache_.forget(key);
+                FramePassRequest alias{};
+                alias.key = key;
+                mark_texture_binding_alias_dirty(alias);
+            }
+        }
+        renderer_.open_frame_for_pass(record.target_frame_key, record.target_channels, record.target_depth_key, texture_cache_);
+        texture_bindings_dirty_ = true;
+    }
     if (!renderer_.begin_target_pass(record.key, record.target_width, record.target_height)) {
+        if (over_frame) {
+            renderer_.close_frame_for_pass(texture_cache_);
+        }
         static bool warned = false;
         if (!warned) {
             warned = true;
@@ -9102,8 +4880,8 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
     }
     target_pass_size_ = {record.target_width, record.target_height};
     frame_bindings_dirty_ = true;
-    renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
-                        record.target_width, record.target_height, draw_state_.pe.pixel_format);
+    renderer_.clear_scene(record.target_clear_rgba, true, true, true, 0u, 0u,
+                        record.target_width, record.target_height, frame_format());
 }
 
 // The pass's end: its picture, at full precision, becomes the texture at its key, then the frame's targets come
@@ -9115,32 +4893,23 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
     flush_pending_draw_batch();
     renderer_.end_target_pass(record.target_channels, texture_cache_);
     frame_bindings_dirty_ = true;
+    texture_bindings_dirty_ = true;
 }
 
-void RenderCore::apply_native_material(std::shared_ptr<const material::Native> native) {
+void RenderCore::apply_native_material(const material::Native* native) {
     if (native == nullptr) {
+        end_native_material();  // NEBULA_SHADER_NONE: the game ended it
         return;
     }
     const material::Native& m = *native;
-    BlendMode& blend = draw_state_.blend;
-    blend.blend_enable = m.blend != material::kNativeBlendOpaque;
-    blend.logic_op_enable = false;
-    blend.subtract = m.blend == material::kNativeBlendSubtract;
-    blend.color_update = true;
-    blend.src_factor = m.blend == material::kNativeBlendOpaque ? BlendFactor::One : BlendFactor::SrcAlpha;
-    blend.dst_factor = m.blend == material::kNativeBlendAlpha ? BlendFactor::InvSrcAlpha
-                       : m.blend == material::kNativeBlendOpaque ? BlendFactor::Zero
-                                                                  : BlendFactor::One;
-    draw_state_.z.test_enable = m.depth != material::kNativeDepthOff;
-    draw_state_.z.func = m.depth == material::kNativeDepthGEqual ? CompareFunc::GEqual
-                         : m.depth == material::kNativeDepthAlways ? CompareFunc::Always
-                                                                   : CompareFunc::LEqual;
-    draw_state_.z.update_enable = m.depth != material::kNativeDepthOff && m.depth_write != 0u;
-    draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Back
-                           : m.cull == material::kNativeCullFront ? CullMode::Front
-                                                                  : CullMode::None;
-    // The shader tests its own alpha.
-    draw_state_.alpha = AlphaCompare{0u, 0u, CompareFunc::Always, CompareFunc::Always, AlphaTestLogic::And};
+    if ((m.constants_only & 1u) == 0u) {
+    }
+    if ((m.constants_only & 1u) != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
+        native_material_storage_ = m;
+        native_material_ = &native_material_storage_;
+        native_constants_dirty_ = true;
+        return;
+    }
     native_texture_mask_ = 0u;
     for (unsigned map = 0; map < 8u; ++map) {
         const auto& t = m.textures[map];
@@ -9149,28 +4918,39 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         }
         // The map as the native material names it: its image, size and format, and its sampling.
         TextureMap& out = draw_state_.texture[map];
-        out.image.address = t.image;
-        out.image.width = t.width;
-        out.image.height = t.height;
-        out.image.format = static_cast<TexFormat>(t.format & 15u);
+        out.texture = t.image;
         out.mode.wrap_s = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_s, 2u));
         out.mode.wrap_t = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_t, 2u));
-        out.mode.mag_filter = t.mag_linear != 0u ? TexMagFilter::Linear : TexMagFilter::Near;
-        out.mode.min_filter = t.mip_filter == 0u ? (t.min_linear != 0u ? TexMinFilter::Linear : TexMinFilter::Near)
-                              : t.mip_filter == 1u
-                                  ? (t.min_linear != 0u ? TexMinFilter::LinearMipNear : TexMinFilter::NearMipNear)
-                                  : (t.min_linear != 0u ? TexMinFilter::LinearMipLinear : TexMinFilter::NearMipLinear);
-        out.mode.lod_bias_x32 = static_cast<std::int8_t>(static_cast<std::int32_t>(32.0f * t.lod_bias));
-        out.mode.max_aniso = static_cast<std::uint8_t>(t.anisotropy & 3u);
-        out.mode.min_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.min_lod));
-        out.mode.max_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.max_lod));
+        out.mode.mag_linear = t.mag_linear != 0u;
+        out.mode.min_linear = t.min_linear != 0u;
+        out.mode.mip = static_cast<std::uint8_t>(std::min<std::uint8_t>(t.mip_filter, 2u));
+        out.mode.lod_bias = t.lod_bias;
+        out.mode.anisotropy = static_cast<std::uint8_t>(t.anisotropy & 3u);
+        out.mode.min_lod = t.min_lod;
+        out.mode.max_lod = t.max_lod;
         out.edge_lod = t.edge_lod != 0u;
         out.bias_clamp = false;
-        out.tlut = TlutRef{};
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
-    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
-    native_material_ = std::move(native);
+    // Its texgens' post-transform matrices, as a material's texgens set them (a draw's own texgens replace them:
+    // apply_record_matrices).
+    for (unsigned i = 0; i < 8u; ++i) {
+        if (m.texgen_post[i] == material::kNativeKept) {
+            continue;  // the draw's texgens as they are (an instance's differed list that loads none)
+        }
+        draw_state_.post_texgen[i] = PostTexGen{static_cast<std::uint8_t>(m.texgen_post[i] & 0x3Fu),
+                                                  (m.texgen_post[i] & 0x80u) != 0u};
+    }
+    draw_state_.dirty |= kStateDirtyVertexConstants;
+    // The material's own lights (a J3D colour block that loads them) into the light rows its shader reads.
+    for (unsigned n = 0; n < 8u; ++n) {
+        if ((m.light_mask & (1u << n)) != 0u) {
+            matrices_.set_light(n, m.light[n]);
+        }
+    }
+    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
+    native_material_storage_ = m;
+    native_material_ = &native_material_storage_;
     native_constants_dirty_ = true;
     current_texture_map_mask_valid_ = false;
     texture_bindings_dirty_ = true;
@@ -9180,18 +4960,13 @@ void RenderCore::end_native_material() {
     if (native_material_ == nullptr) {
         return;
     }
-    native_material_.reset();
-    // The GX state's pipeline, constants and textures are rebuilt at the next draw.
-    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
+    native_material_ = nullptr;
+    // The state's pipeline, constants and textures are rebuilt at the next draw, and the next material loads
+    // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
+    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     current_pso_key_valid_ = false;
     current_texture_map_mask_valid_ = false;
     texture_bindings_dirty_ = true;
-}
-
-void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {
-    material::load_matrices(program, values, matrices_);
-    // The material wrote its coordinate scales.
-    scales_from_textures_ = false;
 }
 
 void RenderCore::release_record_shape(RecordShape& shape) noexcept {
@@ -9202,7 +4977,8 @@ void RenderCore::release_record_shape(RecordShape& shape) noexcept {
 }
 
 void RenderCore::apply_record_matrices(const shapes::Record& record) {
-    for (const shapes::Matrix& m : record.matrices) {
+    for (std::uint32_t matrix_index = 0; matrix_index < record.matrix_count; ++matrix_index) {
+        const shapes::Matrix& m = current_record_pool_->matrices[record.matrix_first + matrix_index];
         switch (m.kind) {
         case shapes::MatrixKind::Position:
             matrices_.set_position(m.place, m.values.data(), m.model_matrix);
@@ -9223,24 +4999,25 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
     }
     if (record.has_current) {
         const auto& c = record.current;
-        const std::uint32_t before_a = matrix_index_a(draw_state_), before_b = matrix_index_b(draw_state_);
-        draw_state_.position_matrix = static_cast<std::uint8_t>(3u * (c[0] % 10u));
+        const std::uint8_t before_position = draw_state_.position_matrix;
+        std::uint8_t before_texture[8];
+        std::memcpy(before_texture, draw_state_.texture_matrix, sizeof(before_texture));
+        draw_state_.position_matrix = static_cast<std::uint8_t>(c[0] % 10u);
         for (unsigned i = 0; i < 8u; ++i) {
-            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(30u + 3u * std::min<unsigned>(c[1u + i], 10u));
+            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(10u + std::min<unsigned>(c[1u + i], 10u));
         }
-        if (matrix_index_a(draw_state_) != before_a || matrix_index_b(draw_state_) != before_b) {
+        if (draw_state_.position_matrix != before_position ||
+            std::memcmp(before_texture, draw_state_.texture_matrix, sizeof(before_texture)) != 0) {
             draw_state_.dirty |= kStateDirtyVertexConstants;
         }
     }
-    for (const auto& g : record.texgens) {
-        const std::uint32_t gen = material::tex_gen_word(g[1], g[2]);
-        const std::uint32_t post = static_cast<std::uint32_t>(g[4] - 64u) | static_cast<std::uint32_t>(g[3]) << 8u;
-        const std::uint32_t before = texgen_word(draw_state_.texgen[g[0] & 7u]);
-        const std::uint32_t before_post = post_texgen_word(draw_state_.post_texgen[g[0] & 7u]);
-        draw_state_.texgen[g[0] & 7u] = decode_xf_texgen(gen);
-        draw_state_.post_texgen[g[0] & 7u] = decode_xf_post_texgen(post);
-        if (texgen_word(draw_state_.texgen[g[0] & 7u]) != before ||
-            post_texgen_word(draw_state_.post_texgen[g[0] & 7u]) != before_post) {
+    for (std::uint8_t texgen_index = 0; texgen_index < record.texgen_count; ++texgen_index) {
+        const auto& g = record.texgens[texgen_index];
+        const TexGen gen = material::tex_gen(g[1], g[2]);
+        const PostTexGen post = material::post_tex_gen(g[4], g[3]);
+        if (!(draw_state_.texgen[g[0] & 7u] == gen) || !(draw_state_.post_texgen[g[0] & 7u] == post)) {
+            draw_state_.texgen[g[0] & 7u] = gen;
+            draw_state_.post_texgen[g[0] & 7u] = post;
             draw_state_.dirty |= kStateDirtyVertexShader | kStateDirtyVertexConstants;
         }
     }
@@ -9253,7 +5030,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     }
     const auto found = record_shapes_.find(record.key);
     if (found == record_shapes_.end() || found->second.geometry == nullptr) {
-        ++frame_native_shape_misses_;
         static bool warned = false;
         if (!warned) {
             warned = true;
@@ -9286,12 +5062,15 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     // Corners without a position matrix of their own take the one J3DCurrentMtx::load set.
     const auto position_matrix = static_cast<std::uint8_t>(
         (geometry.attributes & shapes::kPositionMatrix) != 0u ? 0u : draw_state_.position_matrix);
-    if (!shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix) {
+    if (!ensure_resident_vertex_buffer()) {
+        return;
+    }
+    const bool stale = !shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix;
+    if (stale || shape.resident_epoch != resident_vertices_.epoch()) {
         // The model's analysis for its curved surfaces (its first draw waits for it).
         shape.curved = curved::find_model(keys[0]);
-        if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), shape.vertices) ||
-            shape.vertices.empty() || shape.vertices.size() > 0x10000u) {
-            ++frame_native_shape_misses_;
+        if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_) ||
+            expand_scratch_.empty() || expand_scratch_.size() > 0x10000u) {
             static bool warned = false;
             if (!warned) {
                 warned = true;
@@ -9301,32 +5080,38 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.expanded = false;
             return;
         }
-        release_record_shape(shape);
-        shape.expanded = true;
-        shape.versions = versions;
-        shape.position_matrix = position_matrix;
-        shape.split_built = false;
-        shape.split_indices.clear();
-    }
-    if (!ensure_resident_vertex_buffer()) {
-        return;
-    }
-    const auto units = static_cast<std::uint32_t>(shape.vertices.size());
-    if (shape.resident_epoch != resident_vertices_.epoch()) {
+        if (stale) {
+            release_record_shape(shape);
+            shape.expanded = true;
+            shape.versions = versions;
+            shape.position_matrix = position_matrix;
+            shape.split_built = false;
+            shape.split_indices.clear();
+        }
+        // The block holds the vertices and, behind them, the indices: both written once, for every draw of the shape.
+        const auto expanded_units = static_cast<std::uint32_t>(expand_scratch_.size());
+        const auto index_bytes = static_cast<std::uint32_t>(geometry.indices.size() * sizeof(std::uint16_t));
+        const std::uint32_t index_units =
+            (index_bytes + static_cast<std::uint32_t>(sizeof(RenderVertex)) - 1u) / static_cast<std::uint32_t>(sizeof(RenderVertex));
+        const std::uint32_t block_units = expanded_units + index_units;
         shape.resident_epoch = 0u;
-        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(units);
+        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(block_units);
         if (!offset.has_value()) {
             return;
         }
         // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
-        std::memcpy(resident_vertex_mapped_ + static_cast<std::size_t>(*offset) * sizeof(RenderVertex),
-                    shape.vertices.data(), static_cast<std::size_t>(units) * sizeof(RenderVertex));
-        renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
-                                         static_cast<std::uint64_t>(units) * sizeof(RenderVertex));
+        std::byte* const staged = renderer_.stage_resident_vertices(
+            static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
+            static_cast<std::uint64_t>(block_units) * sizeof(RenderVertex));
+        std::memcpy(staged, expand_scratch_.data(), static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex));
+        std::memcpy(staged + static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex), geometry.indices.data(),
+                    index_bytes);
         shape.resident_epoch = resident_vertices_.epoch();
         shape.resident_offset = *offset;
-        shape.resident_units = units;
+        shape.resident_units = block_units;
+        shape.resident_vertices = expanded_units;
     }
+    const std::uint32_t units = shape.resident_vertices;
 
     RecordVertexInputs inputs;
     inputs.matrix_bits = ((geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u) |
@@ -9348,46 +5133,44 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     };
     record_inputs_ = &inputs;
     RecordScope scope{this};
-    if (!begin_cached_draw_run(PrimitiveClass::Triangles, 0u, 1u)) {
+    if (!begin_cached_draw_run(Primitive::Triangles, 0u, 1u)) {
         return;
     }
     scope.run = true;
-    ++frame_native_shape_draws_;
     if (cached_draw_run_scissor_reject_) {
-        ++frame_scissor_skips_;
         return;
     }
     if (cached_draw_run_no_pso_) {
         ++stat_draws_no_pso_;
-        ++frame_draws_no_pso_;
         return;
     }
     flush_pending_draw_batch();
     cached_draw_run_batch_compatible_known_ = false;
 
-    const bool curved = current_curved_ && curved_split_ && current_flat_pipeline_ != nullptr;
+    const bool curved = current_curved_ && current_flat_pipeline_ != nullptr;
     if (curved && !shape.split_built) {
         shape.split_built = true;
-        shape.split_flat_indices = split_curved_triangles(shape.vertices, geometry.indices, shape.split_indices);
+        (void)shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_);
+        shape.split_flat_indices = split_curved_triangles(expand_scratch_, geometry.indices, shape.split_indices);
     }
     const bool split = curved && !shape.split_indices.empty();
     const std::vector<std::uint16_t>& indices = split ? shape.split_indices : geometry.indices;
-    const UploadRing::Allocation ib = renderer_.index_ring().upload_immutable(
-        indices.data(), indices.size() * sizeof(std::uint16_t), sizeof(std::uint16_t),
-        split ? shape.split_upload_token : shape.index_upload_token);
+    // A split curved surface's indices are their own, a feature's; every other draw reads the shape's block.
+    const UploadRing::Allocation ib = split ? renderer_.index_ring().upload_immutable(
+                                                  indices.data(), indices.size() * sizeof(std::uint16_t),
+                                                  sizeof(std::uint16_t), shape.split_upload_token)
+                                            : UploadRing::Allocation{};
     const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
     const auto index_count = static_cast<std::uint32_t>(indices.size());
     const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(RenderVertex);
     ++stat_draws_issued_;
-    ++frame_draws_issued_;
-    ++frame_resident_vertex_hits_;
-    frame_resident_vertex_bytes_ += static_cast<std::uint64_t>(units) * sizeof(RenderVertex);
 
     const gpu::VertexView vbv = gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset,
                                                  units * static_cast<std::uint32_t>(sizeof(RenderVertex)),
                                                  static_cast<std::uint32_t>(sizeof(RenderVertex)));
     const gpu::IndexView ibv = gpu::index_view(
-        renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
+        split ? renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t)
+              : resident_vertex_gpu_ + vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex),
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     DrawCall call = cached_draw_run_state_call_;
     call.vertex_view = vbv;
@@ -9401,16 +5184,14 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         call.curve_sort = renderer_.sort_curved(
             vbv.BufferLocation, ibv.BufferLocation + shape.split_flat_indices * sizeof(std::uint16_t),
             (index_count - shape.split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
-            (vs_key_.flags & 0x01u) != 0u);
+            cpu_vs_constants_.per_vertex != 0u);
         call.curve_sort_list = renderer_.curve_sort_list();
     }
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
-    pending_draw_batch_.rt = native_material_ == nullptr && begin_rt_batch(call, pending_draw_batch_.rt_info);
-    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
-    pending_draw_batch_.hidden = rt_hidden_draw();
-    pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
-    pending_draw_batch_.debake_model = debake_sample_key_;
+    pending_draw_batch_.rt = false;
+    pending_draw_batch_.hidden = false;
+    pending_draw_batch_.traced = false;
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = shape.resident_offset;
     pending_draw_batch_.vertex_count = units;
@@ -9422,22 +5203,17 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.sealed = true;
 }
 
-void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
+void RenderCore::draw_record_immediate(const shapes::Record& record) {
     display_copy_on_output_ = false;
-    const auto primitive = static_cast<PrimitiveClass>(immediate.primitive >> 3u);
-    const shapes::Geometry& geometry = immediate.geometry;
-    const auto count = static_cast<std::uint32_t>(geometry.corners.size());
-    shapes::primitive_indices(immediate.primitive, count, immediate_indices_);
+    const auto primitive = record.primitive == shapes::kWideQuads ? Primitive::Triangles : static_cast<Primitive>(record.primitive);
+    const std::uint32_t count = record.vertex_count;
+    shapes::primitive_indices(record.primitive, count, immediate_indices_);
     if (immediate_indices_.empty() || count > 0x10000u) {
         return;
     }
-    shapes::DrawArrays arrays{};
-    for (unsigned i = 0; i < 12u; ++i) {
-        arrays[i] = geometry.arrays[i] != 0u ? &immediate.arrays[i] : nullptr;
-    }
     RecordVertexInputs inputs;
-    inputs.matrix_bits = (geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u;
-    inputs.colored = (geometry.attributes & shapes::kColor0) != 0u;
+    inputs.matrix_bits = (record.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u;
+    inputs.colored = (record.attributes & shapes::kColor0) != 0u;
     inputs.own_positions = true;
     struct RecordScope {
         RenderCore* backend = nullptr;
@@ -9456,21 +5232,14 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     }
     scope.run = true;
     if (cached_draw_run_scissor_reject_) {
-        ++frame_scissor_skips_;
         return;
     }
     if (cached_draw_run_no_pso_) {
         ++stat_draws_no_pso_;
-        ++frame_draws_no_pso_;
-        return;
-    }
-    // Vertices without a position matrix of their own take the current one (as GX's direct vertices did).
-    const std::uint8_t position_matrix = draw_state_.position_matrix;
-    if (!shapes::expand(geometry, arrays, position_matrix, nullptr, immediate_vertices_)) {
         return;
     }
     const DrawCall& state_call = cached_draw_run_state_call_;
-    // Consecutive draws with the same state share one GPU draw (as GX's direct draws batch): the vertices and indices
+    // Consecutive draws with the same state share one GPU draw : the vertices and indices
     // follow the batch's in the rings, the indices counted from its first vertex.
     bool append = pending_draw_batch_.active && !pending_draw_batch_.resident && pending_draw_batch_.indexed &&
                   pending_draw_batch_.vertex_count + count <= 0x10000u &&
@@ -9481,7 +5250,8 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     cached_draw_run_batch_compatible_known_ = false;
     const UploadRing::Allocation vb =
         renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertex), 16u);
-    std::memcpy(vb.cpu, immediate_vertices_.data(), static_cast<std::size_t>(count) * sizeof(RenderVertex));
+    // The rings are write-combined: this copy is the only touch, never a read.
+    std::memcpy(vb.cpu, current_record_pool_->vertices.data() + record.vertex_first, static_cast<std::size_t>(count) * sizeof(RenderVertex));
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(
         static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));
@@ -9498,7 +5268,6 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
         indices[i] = static_cast<std::uint16_t>(immediate_indices_[i] + bias);
     }
     ++stat_draws_issued_;
-    ++frame_draws_issued_;
     if (append) {
         pending_draw_batch_.call.index_count += index_count;
         pending_draw_batch_.call.vertex_view.SizeInBytes += count * static_cast<std::uint32_t>(sizeof(RenderVertex));
@@ -9522,11 +5291,9 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     call.index_count = index_count;
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
-    pending_draw_batch_.rt = native_material_ == nullptr && begin_rt_batch(call, pending_draw_batch_.rt_info);
-    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
-    pending_draw_batch_.hidden = rt_hidden_draw();
-    pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
-    pending_draw_batch_.debake_model = debake_sample_key_;
+    pending_draw_batch_.rt = false;
+    pending_draw_batch_.hidden = false;
+    pending_draw_batch_.traced = false;
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = base_vertex;
     pending_draw_batch_.vertex_count = count;
@@ -9538,166 +5305,66 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.sealed = false;
 }
 
-void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format) {
+void RenderCore::on_frame_output(const FramePassRequest& params) {
     flush_pending_draw_batch();
-    if (params.copy_to_xfb) {
-        galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, stat_xfb_copies_);
-        xfb_copied_in_chunk_ = true;
+    if (params.display) {
+        galaxy::timeline::record(galaxy::timeline::Event::DisplayCopy, stat_display_copies_);
+        display_copied_in_chunk_ = true;
     }
-    const bool time_copy = frame_time_detail_;
-    const auto copy_start = time_copy
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
 
 
-    if (params.copy_to_xfb) {
-        XfbTexture* xfb = efb_copies_.acquire_xfb(params, frame_index_);
-        if (xfb != nullptr) {
+    if (params.display) {
+        DisplayTexture* display_picture = display_pictures_.acquire_display(params, frame_index_);
+        if (display_picture != nullptr) {
             end_side_layer();
             mirror_opened_scene_ = false;
             // The frame ends: the next is recorded as screen-only from its first draw when this one drew no scene.
             screen_run_ = !frame_scene_seen_;
             frame_scene_seen_ = false;
             screen_frame_open_ = false;
-            if (renderer_.can_hand_over_display_copy(params, *xfb)) {
-                // Native presentation: the XFB takes the EFB's colour target, and the EFB continues on a texture of
-                // its size the XFB pool released.
-                const auto scale = renderer_.efb_scale();
-                efb_copies_.adopt_picture(
-                    *xfb, renderer_.hand_over_efb_color(efb_copies_.take_idle_texture(
-                              static_cast<std::uint16_t>(kFrameWidth * scale),
-                              static_cast<std::uint16_t>(kFrameHeight * scale))));
+            if (renderer_.can_hand_over_display_copy(params, *display_picture)) {
+                // Native presentation: the display picture takes the scene target's colour target, and the scene target continues on a texture of
+                // its size the display picture pool released.
+                const FrameMap& map = renderer_.frame_map();
+                display_pictures_.adopt_picture(
+                    *display_picture, renderer_.hand_over_scene_color(display_pictures_.take_idle_texture(
+                              static_cast<std::uint16_t>(map.width), static_cast<std::uint16_t>(map.height))));
             } else {
-                renderer_.copy_efb_to_xfb(params, *xfb);
+                renderer_.copy_scene_to_display(params, *display_picture);
             }
             // The display copy ends the 2D layer: later work and the next
-            // frame use the render-resolution EFB again.
-            display_copy_on_output_ = renderer_.output_efb_active() && !params.clear;
-            if (renderer_.output_efb_active()) {
-                renderer_.end_output_efb();
-                efb_copies_.set_efb_scale(renderer_.efb_scale());
+            // frame use the render-resolution scene target again.
+            display_copy_on_output_ = renderer_.output_scene_active();
+            if (renderer_.output_scene_active()) {
+                renderer_.end_output_scene();
+                display_pictures_.set_frame_map(renderer_.frame_map());
                 frame_bindings_dirty_ = true;
             }
-            static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;
-            if (trace_layout) {
-                const std::array<unsigned,7> current{params.src_x,params.src_y,params.src_width,params.src_height,
-                    xfb->width,xfb->height,renderer_.efb_scale()};
-                static std::array<std::array<unsigned,7>,8> seen{};
-                static unsigned count{};
-                if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
-                    seen[count++]=current;
-                    const auto scale=renderer_.efb_scale();
-                    std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
-                        <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
-                        <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
-                        <<" scaled-xfb="<<xfb->width<<'x'<<xfb->height<<" guest-stride="<<params.dest_stride
-                        <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<xfb->copy_serial<<'\n';
-                }
-            }
-            xfb->pointer_response=render_pointer_response_;
-            xfb->prerecorded_movie=render_movie_content_;
-            xfb->safety_surround=render_safety_surround_;
-            efb_copies_.mark_xfb_copied(*xfb, frame_index_);
-            ++stat_xfb_copies_;
-            ++frame_xfb_copies_;
-            record_monotonic_cadence_sample(xfb_copy_production_cadence_);
+            display_picture->pointer_response=render_pointer_response_;
+            display_picture->prerecorded_movie=render_movie_content_;
+            display_pictures_.mark_display_copied(*display_picture, frame_index_);
+            ++stat_display_copies_;
+            record_monotonic_cadence_sample(display_copy_production_cadence_);
         }
     } else {
-        ++frame_tex_copies_;
-        // The copy overwrites its destination: an image handed over there (memory the game freed and reused, as
-        // the Mii library's face masks reuse its part textures' buffers) no longer describes those bytes. The
-        // extent is the destination's tile rows (4 lines each, the shortest tile) over the source height.
-        const TextureCache::MemoryRange copied{
-            params.dest_addr, params.dest_stride * ((static_cast<std::uint32_t>(params.src_height) + 3u) / 4u)};
-        texture_cache_.drop_registered_images(std::span<const TextureCache::MemoryRange>(&copied, 1u));
-        const bool decoded_evicted = texture_cache_.invalidate_range(copied.address, copied.size) != 0u;
-        // Depth-source copy when the PE pixel format is Z24 at copy time
-        // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
-        const bool is_depth_copy = pixel_format == 3u;
+        // The capture replaces what its buffer (the key) held: an image handed over there no longer describes it.
+        const bool decoded_evicted = texture_cache_.forget(params.key) != 0u;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
-        // console's single EFB holds it, not the scene the output-resolution 2D layer was drawn over.
-        const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
-        display_copy_on_output_ = display_copy_on_output_ && !params.clear;
+        // game's single scene target holds it, not the scene the output-resolution 2D layer was drawn over.
+        const bool from_display = display_copy_on_output_;
         const bool alias_updated = from_display
-            ? renderer_.copy_output_efb_to_texture(params, texture_cache_)
-            : renderer_.copy_efb_to_texture(params, texture_cache_, is_depth_copy);
+            ? renderer_.draw_frame_pass_from_output(params, texture_cache_)
+            : renderer_.draw_frame_pass(params, texture_cache_);
         if (alias_updated || decoded_evicted) {
-            ++frame_efb_alias_updates_;
             // One address can alternate between format-keyed GPU resources, and the game need not
-            // rewrite the BP texture registers after a copy, so the next draw refreshes every frame table
+            // rewrite the texture state after a copy, so the next draw refreshes every frame table
             // that referenced this alias. A reused texture is updated in place; its SRV stays valid.
             mark_texture_binding_alias_dirty(params);
             texture_bindings_dirty_ = true;
         } else {
-            ++frame_efb_alias_noops_;
         }
     }
 
-    // GX clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
-    // copy-clear registers, honoring the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
-    // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate, alphaEnable =
-    // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest. GXCopyTex's
-    // own clear settings leave those enables as they were.
-    if (params.clear) {
-        renderer_.clear_efb(
-            rgba_word(params.clear_color),
-            params.clear_z,
-            draw_state_.blend.color_update, draw_state_.blend.alpha_update, draw_state_.z.update_enable,
-            params.src_x, params.src_y,
-            params.src_width, params.src_height,
-            pixel_format);
-    }
-    const std::uint64_t copy_us = time_copy
-        ? elapsed_us(copy_start, std::chrono::steady_clock::now())
-        : 0u;
-    if (time_copy) {
-        frame_efb_copy_us_ += copy_us;
-    }
-    if (trace_gx_stalls_enabled() &&
-        copy_us >= trace_gx_stall_threshold_us()) {
-        std::cerr << "[gx-efb-copy-timing] frame=" << frame_index_
-                  << " kind=" << (params.copy_to_xfb ? "xfb" : "tex")
-                  << " us=" << copy_us
-                  << " src=" << params.src_width << 'x' << params.src_height
-                  << " dst=0x" << std::hex << params.dest_addr << std::dec
-                  << " clear=" << (params.clear ? 1 : 0) << '\n';
-    }
-}
-
-void RenderCore::record_async_peek_fields_at_token(std::uint16_t token) {
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        AsyncPeekFieldState& state = async_peek_[index];
-        const std::uint32_t key = state.key.load(std::memory_order_acquire);
-        if (key == kAsyncPeekUnbound || (key & 0xFFFFu) != token ||
-            !state.requested.load(std::memory_order_acquire) || renderer_.async_peek_field_pending(index)) {
-            continue;
-        }
-        // Never the published slot: a reader may be converting its pixel.
-        const std::uint64_t published = state.published.load(std::memory_order_relaxed);
-        const int slot = (published & 0xFFFFFFFFu) == 0u
-            ? 0 : static_cast<int>(published & 0xFFFFFFFFu) % 3;
-        const std::uint32_t generation = state.generation.load(std::memory_order_acquire);
-        if (renderer_.record_async_peek_field_in_frame(
-                index, async_peek_key_kind(key), static_cast<std::size_t>(slot))) {
-            state.requested.store(false, std::memory_order_relaxed);
-            if (state.rgba[0] == nullptr) {
-                for (std::size_t i = 0; i < state.rgba.size(); ++i) {
-                    state.rgba[i] = renderer_.async_peek_field_rgba(index, i);
-                }
-            }
-            state.pending_slot = slot;
-            state.pending_generation = generation;
-        }
-    }
-}
-
-void RenderCore::on_invalidate_textures() {
-    flush_pending_draw_batch();
-    texture_cache_.invalidate_all();
-    texture_handle_cache_.clear();
-    clear_texture_binding_table_cache();
-    texture_bindings_dirty_ = true;
-    current_texture_binding_key_valid_ = false;
 }
 
 void RenderCore::load_light(const state::Op& op) {
@@ -9713,21 +5380,6 @@ void RenderCore::load_light(const state::Op& op) {
     }
 }
 
-void RenderCore::on_palettes_changed() {
-    // Bindings made before the palette places changed name the earlier palettes.
-    flush_pending_draw_batch();
-    texture_handle_cache_.clear();
-    clear_texture_binding_table_cache();
-    texture_bindings_dirty_ = true;
-    current_texture_binding_key_valid_ = false;
-}
-
-void RenderCore::on_invalidate_vertex_cache() {
-    flush_pending_draw_batch();
-    // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
-    // vertices are already invalidated by guest writes and checked byte for byte before each hit.
-}
-
 void boot_step(const char* step) noexcept {
     static std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
     const auto now = std::chrono::steady_clock::now();
@@ -9736,12 +5388,9 @@ void boot_step(const char* step) noexcept {
     last = now;
 }
 
-unsigned layer_2d_scale() noexcept {
-    return s_layer_2d_scale.load(std::memory_order_relaxed);
+unsigned layer_2d_lines() noexcept {
+    return s_layer_2d_lines.load(std::memory_order_relaxed);
 }
 
-unsigned scene_display_scale() noexcept {
-    return s_scene_display_scale.load(std::memory_order_relaxed);
-}
 
 }  // namespace galaxy::render

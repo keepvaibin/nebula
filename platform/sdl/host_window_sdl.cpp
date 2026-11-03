@@ -1,17 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game window and input on SDL3 platforms (sdl_host.h, host_window.h and the window functions of renderer_api.h):
+// The game window and input on SDL3 platforms (sdl_host.h, host_window.h and the window functions of render_api.h):
 // the SDL window and its Vulkan surface; its events (size, focus, quit, the finger and the mouse as the pointer, keys,
 // gamepads); on Android the activity's touch controls and HOME Menu through JNI.
 
+#include "galaxy/content_viewport.h"
+#include "galaxy/switch_controller.h"
+#include "galaxy/controller_hid.h"
+#include "galaxy/input/host_input.h"
+#include "galaxy/mod_import.h"
+#include "galaxy/native_settings_pad.h"
+#include "galaxy/render_api.h"
+#include "galaxy/render/host_window.h"
+#include <deque>
 #include "sdl_host.h"
 
 #include "galaxy/render/display_modes.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/vk/vk_context.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/input_bindings.h"
-#include "galaxy/native_host.h"
+#include "galaxy/game_paths.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
@@ -54,16 +63,27 @@ namespace {
 std::mutex g_input_mutex;
 InputState g_input;                 // guarded by g_input_mutex
 SDL_Window* g_window = nullptr;
-std::atomic<int> g_home_choice{-1};
-std::atomic<bool> g_home_visible{false};
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_menu_context{false};
+std::atomic<bool> g_title_screen{false};
 
 // SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
 // their own, which the Java VM refuses to attach (it aborts the process), so they leave requests here instead, done
 // after each pump (every 4 ms at most).
 std::thread::id g_sdl_thread;
-std::atomic<int> g_home_request{0};  // 1 show the HOME Menu, 2 hide it
+// Keys the settings menu takes from other threads and from the pads, in order, on SDL's thread.
+std::mutex g_menu_keys_mutex;
+std::deque<std::uintptr_t> g_menu_keys;
+galaxy::input::NativeSettingsPadState g_menu_pad{};
+std::optional<galaxy::input::DeviceKey> g_capture_device;
+std::optional<galaxy::input::InputSource> g_capture_result;
+std::uint32_t g_capture_previous = 0u;
+// Each pad's motion integrator and last sample time, touch surface state: SDL's thread.
+std::array<galaxy::input::switch_hid::SwitchMotion, kMaxPads> g_motion{};
+std::array<std::uint64_t, kMaxPads> g_motion_us{};
+std::array<bool, kMaxPads> g_touch_down{};
+std::array<float, kMaxPads> g_touch_x{};
+std::array<float, kMaxPads> g_touch_y{};
 std::atomic<std::uint32_t> g_rumble_pad{0};
 std::atomic<std::uint32_t> g_rumble_level{0};
 // What SDL's thread last sent, and when (it renews a rumble that lasts).
@@ -71,10 +91,13 @@ std::uint32_t g_rumble_sent_pad = 0;
 std::uint32_t g_rumble_sent_level = 0;
 std::uint64_t g_rumble_sent_ms = 0;
 
-// An on-screen button stays pressed for the game at least this long: the game reads the remote once a frame, and a
-// quick tap would otherwise end between two reads.
-constexpr std::uint64_t kMinTouchPressMs = 80;
-std::array<std::uint64_t, 32> g_touch_held_until{};  // per TouchButton bit, steady ms; guarded by g_input_mutex
+// A finger's travel on a pointer screen, in pixels, not yet turned into the wheel's steps. Guarded by g_input_mutex.
+float g_menu_swipe_px = 0.0f;
+float g_finger_last_y = 0.0f;
+// On-screen buttons pressed since the game's last read: a quick tap can end between two reads, and is not lost
+// (native_game_input then holds it for the game's frames). Guarded by g_input_mutex.
+std::uint32_t g_touch_pressed = 0u;
+bool g_back_held = false;  // Android's back gesture held as the HOME button; guarded by g_input_mutex
 std::array<SDL_Gamepad*, kMaxPads> g_gamepads{};
 
 // A touch that ends within this time, having moved less than this fraction of the window's shorter side, is a tap.
@@ -248,6 +271,55 @@ float axis(SDL_Gamepad* pad, SDL_GamepadAxis which) noexcept {
     return std::clamp(static_cast<float>(SDL_GetGamepadAxis(pad, which)) / 32767.0f, -1.0f, 1.0f);
 }
 
+// A pad's gyro, accelerometer and touch surface into g_input.motion, as the Windows host's worker does.
+void sample_pad_motion(std::size_t index, SDL_Gamepad* gamepad, const galaxy::input::PadSample& sample) {
+    namespace sw = galaxy::input::switch_hid;
+    PadMotion& motion = g_input.motion[index];
+    const galaxy::input::SchemeTuning& tuning = galaxy::input::get_controls_config().tune(sample.scheme);
+    float gyro[3]{};
+    float accel[3]{};
+    if (SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_GYRO, gyro, 3) && SDL_GetGamepadSensorData(gamepad, SDL_SENSOR_ACCEL, accel, 3)) {
+        const std::uint64_t now_us = galaxy::steady_ms() * 1000u;
+        const float dt = g_motion_us[index] != 0u ? std::min(0.1f, static_cast<float>(now_us - g_motion_us[index]) * 1e-6f) : 0.004f;
+        g_motion_us[index] = now_us;
+        sw::ImuSample imu{};
+        for (int axis_index = 0; axis_index < 3; ++axis_index) {
+            imu.gyro[axis_index] = gyro[axis_index];  // radians a second
+            imu.accel[axis_index] = accel[axis_index] / SDL_STANDARD_GRAVITY;
+        }
+        sw::MotionSettings settings{};
+        settings.shake = tuning.motion_shake != galaxy::input::MotionShake::Off;
+        settings.shake_sensitivity = tuning.shake_sensitivity;
+        settings.gyro_pointer = tuning.gyro_pointer;
+        settings.gyro_sensitivity = tuning.gyro_sensitivity;
+        settings.picture_aspect = static_cast<float>(galaxy::kDesignContentAspect);
+        const sw::SwitchMotion::Output out = g_motion[index].feed(imu, dt, now_us, settings);
+        motion.imu_live = true;
+        motion.gyro_x = std::clamp(motion.gyro_x + out.pointer_x, -4.0f, 4.0f);
+        motion.gyro_y = std::clamp(motion.gyro_y + out.pointer_y, -4.0f, 4.0f);
+        motion.gravity = g_motion[index].gravity();
+        motion.gravity_valid = g_motion[index].gravity_ready();
+        if (out.shake_started) {
+            motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
+        }
+    }
+    if (SDL_GetNumGamepadTouchpads(gamepad) > 0) {
+        bool down = false;
+        float x = 0.0f;
+        float y = 0.0f;
+        if (SDL_GetGamepadTouchpadFinger(gamepad, 0, 0, &down, &x, &y, nullptr)) {
+            motion.touch_live = true;
+            if (down && g_touch_down[index]) {
+                motion.touch_dx = std::clamp(motion.touch_dx + x - g_touch_x[index], -2.0f, 2.0f);
+                motion.touch_dy = std::clamp(motion.touch_dy + y - g_touch_y[index], -2.0f, 2.0f);
+            }
+            g_touch_down[index] = down;
+            g_touch_x[index] = x;
+            g_touch_y[index] = y;
+        }
+    }
+}
+
 void sample_gamepads() {
     namespace pad = galaxy::input::pad;
     for (std::size_t i = 0; i < kMaxPads; ++i) {
@@ -291,6 +363,25 @@ void sample_gamepads() {
             g_last_input.store(kLastPad + static_cast<std::uint32_t>(sample.scheme), std::memory_order_relaxed);
             g_last_pad.store(g_input.pad_ids[i], std::memory_order_relaxed);
         }
+        sample_pad_motion(i, gamepad, sample);
+        if (g_capture_device.has_value() && g_capture_device->scheme == sample.scheme && !g_capture_result.has_value()) {
+            const std::uint32_t fresh = bits & ~g_capture_previous;
+            if (fresh != 0u) {
+                g_capture_result = galaxy::input::InputSource{galaxy::input::SourceKind::Button, static_cast<std::uint8_t>(std::countr_zero(fresh))};
+            } else {
+                for (std::size_t axis_index = 0; axis_index < std::size(sample.axes); ++axis_index) {
+                    if (sample.axes[axis_index] >= 0.6f) {
+                        g_capture_result = galaxy::input::InputSource{galaxy::input::SourceKind::AxisPositive, static_cast<std::uint8_t>(axis_index)};
+                        break;
+                    }
+                    if (sample.axes[axis_index] <= -0.6f) {
+                        g_capture_result = galaxy::input::InputSource{galaxy::input::SourceKind::AxisNegative, static_cast<std::uint8_t>(axis_index)};
+                        break;
+                    }
+                }
+            }
+        }
+        g_capture_previous = bits;
     }
 }
 
@@ -299,6 +390,8 @@ void open_gamepad(SDL_JoystickID id) {
         if (slot == nullptr) {
             slot = SDL_OpenGamepad(id);
             if (slot != nullptr) {
+                (void)SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_GYRO, true);
+                (void)SDL_SetGamepadSensorEnabled(slot, SDL_SENSOR_ACCEL, true);
                 std::fprintf(stderr, "[input] gamepad \"%s\" connected\n", SDL_GetGamepadName(slot));
             }
             return;
@@ -334,6 +427,11 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
     }
     const float side = static_cast<float>(std::max(1, std::min(g_input.window_width, g_input.window_height)));
     g_finger_travel = std::max(g_finger_travel, std::hypot(x - g_finger_down_x, y - g_finger_down_y) / side);
+    // A swipe on a pointer screen scrolls, once it has gone further than a tap can, the list following the finger.
+    if (!down && g_finger_travel > kTapTravel && g_menu_context.load(std::memory_order_relaxed)) {
+        g_menu_swipe_px += y - g_finger_last_y;
+    }
+    g_finger_last_y = y;
     g_input.finger_x = x;
     g_input.finger_y = y;
     g_input.finger_ms = now;
@@ -344,7 +442,6 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
             ++g_input.taps;
             g_input.tap_x = x;
             g_input.tap_y = y;
-            g_input.tap_down_ms = g_finger_down_ms;
         }
     }
 }
@@ -380,11 +477,32 @@ bool start() noexcept {
     return true;
 }
 
-// Requests from other threads (g_home_request, rumble), on SDL's thread.
+// Requests from other threads (menu keys, rumble), on SDL's thread.
 void run_requests() {
+    for (;;) {
+        std::uintptr_t key = 0u;
+        {
+            const std::lock_guard<std::mutex> lock(g_menu_keys_mutex);
+            if (g_menu_keys.empty()) {
+                break;
+            }
+            key = g_menu_keys.front();
+            g_menu_keys.pop_front();
+        }
+        (void)galaxy::render::native_settings_pad_key(key);
+    }
 #if defined(__ANDROID__)
-    if (const int request = g_home_request.exchange(0, std::memory_order_acq_rel); request != 0) {
-        call_activity(request == 1 ? "showHomeMenu" : "hideHomeMenu");
+    // The on-screen controls stand aside while a menu takes the screen's touches.
+    static bool s_captured = false;
+    if (const bool captured = galaxy::render::native_window_input_captured(); captured != s_captured) {
+        s_captured = captured;
+        call_activity(captured ? "menuOpened" : "menuClosed");
+    }
+    // The controls follow the game to and from a pointer screen.
+    static bool s_pointer_screen = false;
+    if (const bool pointer_screen = g_menu_context.load(std::memory_order_relaxed); pointer_screen != s_pointer_screen) {
+        s_pointer_screen = pointer_screen;
+        call_activity("menuContextChanged");
     }
 #endif
     const std::uint32_t pad = g_rumble_pad.load(std::memory_order_relaxed);
@@ -444,6 +562,13 @@ void pump_events(int timeout_ms) noexcept {
         wait_cpu = 0;
         waits = 0;
     }
+    struct MenuKey {
+        int key;
+        bool down;
+        bool repeat;
+    };
+    std::vector<MenuKey> menu_keys;
+    int menu_wheel = 0;
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
@@ -485,8 +610,7 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_MOUSE_WHEEL: {
             // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it.
             const float notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
-            galaxy::render::host_window::pointer_wheel.fetch_add(static_cast<std::int32_t>(std::lround(notches * 120.0f)),
-                                                             std::memory_order_relaxed);
+            menu_wheel += static_cast<int>(std::lround(notches * 120.0f));
             break;
         }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -509,17 +633,20 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
             if (event.key.scancode == SDL_SCANCODE_AC_BACK) {
-                // Android's back gesture: the HOME button, as the HOME Menu opens with it.
-                if (event.type == SDL_EVENT_KEY_DOWN) {
-                    g_input.touch_buttons |= kTouchHome;
-                    g_touch_held_until[std::countr_zero(static_cast<std::uint32_t>(kTouchHome))] =
-                        galaxy::steady_ms() + kMinTouchPressMs;
-                } else {
-                    g_input.touch_buttons &= ~kTouchHome;
+                // Android's back gesture: the HOME button, as the HOME Menu opens with it; in an open menu, back.
+                const bool down = event.type == SDL_EVENT_KEY_DOWN;
+                if (!down) {
+                    g_back_held = false;
+                }
+                if (galaxy::render::native_window_input_captured()) {
+                    menu_keys.push_back({virtual_key(SDL_SCANCODE_ESCAPE), down, event.key.repeat});
+                } else if (down) {
+                    g_back_held = true;
+                    g_touch_pressed |= kTouchHome;
                 }
                 break;
             }
-            set_key(virtual_key(event.key.scancode), event.type == SDL_EVENT_KEY_DOWN);
+            menu_keys.push_back({virtual_key(event.key.scancode), event.type == SDL_EVENT_KEY_DOWN, event.key.repeat});
             break;
         case SDL_EVENT_GAMEPAD_ADDED:
             open_gamepad(event.gdevice.which);
@@ -533,6 +660,59 @@ void pump_events(int timeout_ms) noexcept {
         any = SDL_PollEvent(&event);
     }
     sample_gamepads();
+    }
+    // Pad 0 of the connected ones drives the menu as a controller does on Windows.
+    {
+        const InputState state = input_state();
+        for (const galaxy::input::PadSample& sample : state.pads) {
+            if (!sample.connected) {
+                continue;
+            }
+            namespace pad = galaxy::input::pad;
+            namespace menu = galaxy::input::settings_pad;
+            std::uint16_t buttons = 0u;
+            const auto map = [&](std::uint32_t bit, std::uint16_t to) {
+                if ((sample.buttons & pad::bit(bit)) != 0u) buttons |= to;
+            };
+            map(pad::kDpadUpBit, menu::kUp);
+            map(pad::kDpadDownBit, menu::kDown);
+            map(pad::kDpadLeftBit, menu::kLeft);
+            map(pad::kDpadRightBit, menu::kRight);
+            map(pad::kStartBit, menu::kStart);
+            map(pad::kBackBit, menu::kBack);
+            map(pad::kLeftShoulderBit, menu::kShoulderLeft);
+            map(pad::kRightShoulderBit, menu::kShoulderRight);
+            map(pad::kSouthBit, menu::kA);
+            map(pad::kEastBit, menu::kB);
+            map(pad::kWestBit, menu::kX);
+            map(pad::kNorthBit, menu::kY);
+            const galaxy::input::NativeSettingsPadStep step = galaxy::input::native_settings_pad_step(
+                g_menu_pad, buttons, sample.axes[0], sample.axes[1], galaxy::render::native_settings_overlay_visible(), galaxy::steady_ms());
+            for (std::size_t i = 0; i < step.key_count; ++i) {
+                galaxy::render::native_settings_post_key(step.keys[i]);
+            }
+            break;
+        }
+    }
+    {
+        // A tenth of the window's height is a wheel notch. The game's list scrolls it itself and takes no key from it.
+        const std::lock_guard<std::mutex> lock(g_input_mutex);
+        const float notch_px = static_cast<float>(std::max(1, g_input.window_height)) / 10.0f;
+        const int steps = static_cast<int>(g_menu_swipe_px * 120.0f / notch_px);
+        if (steps != 0) {
+            g_menu_swipe_px -= static_cast<float>(steps) * notch_px / 120.0f;
+            galaxy::render::host_window::pointer_wheel.fetch_add(steps, std::memory_order_relaxed);
+        }
+    }
+    if (menu_wheel != 0 && !galaxy::render::native_settings_wheel(menu_wheel)) {
+        galaxy::render::host_window::pointer_wheel.fetch_add(menu_wheel, std::memory_order_relaxed);
+    }
+    for (const MenuKey& key : menu_keys) {
+        const bool taken = key.down && galaxy::render::native_settings_handle_window_key(static_cast<std::uintptr_t>(key.key), key.repeat, static_cast<std::uint32_t>(key.key));
+        if (!taken) {
+            std::lock_guard<std::mutex> lock(g_input_mutex);
+            set_key(key.key, key.down);
+        }
     }
     run_requests();
 }
@@ -550,6 +730,10 @@ void show_fatal(const char* message) noexcept {
     }
 }
 
+void set_title_screen(bool title) noexcept {
+    g_title_screen.store(title, std::memory_order_relaxed);
+}
+
 void set_menu_context(bool menu) noexcept {
     g_menu_context.store(menu, std::memory_order_relaxed);
 }
@@ -561,11 +745,18 @@ bool in_background() noexcept {
 InputState input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     InputState state = g_input;
-    const std::uint64_t now = galaxy::steady_ms();
-    for (std::uint32_t bit = 0; bit < g_touch_held_until.size(); ++bit) {
-        if (g_touch_held_until[bit] > now) {
-            state.touch_buttons |= 1u << bit;
-        }
+    state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
+    return state;
+}
+
+InputState take_input_state() noexcept {
+    std::lock_guard<std::mutex> lock(g_input_mutex);
+    InputState state = g_input;
+    state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
+    g_touch_pressed = 0u;
+    for (PadMotion& motion : g_input.motion) {
+        motion.gyro_x = motion.gyro_y = 0.0f;
+        motion.touch_dx = motion.touch_dy = 0.0f;
     }
     return state;
 }
@@ -576,40 +767,49 @@ void rumble(std::uint32_t pad_id, float strength) noexcept {
     g_rumble_pad.store(pad_id, std::memory_order_relaxed);
 }
 
-void home_menu_show() noexcept {
-    g_home_choice.store(-1, std::memory_order_relaxed);
-    g_home_visible.store(true, std::memory_order_release);
-    g_home_request.store(1, std::memory_order_release);
-}
-
-void home_menu_hide() noexcept {
-    g_home_visible.store(false, std::memory_order_release);
-    g_home_request.store(2, std::memory_order_release);
-}
-
-int home_menu_choice() noexcept {
-    return g_home_choice.load(std::memory_order_acquire);
-}
-
 }  // namespace galaxy::sdl
 
 #if defined(__ANDROID__)
 // The activity's on-screen controls (GameActivity.java): every change of the held buttons or the stick.
+// The phone's accelerometer (metres a second squared) and gyroscope (radians a second) on the screen's axes as it is turned:
+// x right, y up, z out of the glass. As a controller lying flat: x right, y out of the face, z toward the player.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePhoneMotion(
+    JNIEnv*, jclass, jfloat ax, jfloat ay, jfloat az, jfloat gx, jfloat gy, jfloat gz, jlong time_ns) {
+    namespace sw = galaxy::input::switch_hid;
+    static sw::SwitchMotion s_motion;
+    static std::int64_t s_last_ns = 0;
+    const float dt = s_last_ns != 0 ? std::min(0.1f, static_cast<float>(time_ns - s_last_ns) * 1e-9f) : 0.0f;
+    s_last_ns = time_ns;
+    sw::ImuSample imu{};
+    imu.gyro[0] = gx;
+    imu.gyro[1] = gz;
+    imu.gyro[2] = -gy;
+    imu.accel[0] = ax / SDL_STANDARD_GRAVITY;
+    imu.accel[1] = az / SDL_STANDARD_GRAVITY;
+    imu.accel[2] = -ay / SDL_STANDARD_GRAVITY;
+    sw::MotionSettings settings{};
+    settings.gyro_pointer = false;
+    const std::uint64_t now_us = galaxy::steady_ms() * 1000u;
+    const sw::SwitchMotion::Output out = s_motion.feed(imu, dt, now_us, settings);
+    std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    galaxy::sdl::PadMotion& motion = galaxy::sdl::g_input.device_motion;
+    motion.imu_live = true;
+    motion.gravity = s_motion.gravity();
+    motion.gravity_valid = s_motion.gravity_ready();
+    if (out.shake_started) {
+        motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchControls(
     JNIEnv*, jclass, jint buttons, jfloat stick_x, jfloat stick_y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
-    const std::uint32_t back = galaxy::sdl::g_input.touch_buttons & galaxy::sdl::kTouchHome;
     const auto held = static_cast<std::uint32_t>(buttons);
-    const std::uint32_t pressed = held & ~galaxy::sdl::g_input.touch_buttons;
-    if (pressed != 0u) {
-        const std::uint64_t until = galaxy::steady_ms() + galaxy::sdl::kMinTouchPressMs;
-        for (std::uint32_t bit = 0; bit < galaxy::sdl::g_touch_held_until.size(); ++bit) {
-            if ((pressed & (1u << bit)) != 0u) {
-                galaxy::sdl::g_touch_held_until[bit] = until;
-            }
-        }
+    if ((held & ~galaxy::sdl::g_input.touch_buttons) != 0u) {
+        galaxy::sdl::g_last_input.store(galaxy::sdl::kLastNone, std::memory_order_relaxed);
     }
-    galaxy::sdl::g_input.touch_buttons = held | back;
+    galaxy::sdl::g_touch_pressed |= held & ~galaxy::sdl::g_input.touch_buttons;
+    galaxy::sdl::g_input.touch_buttons = held;
     galaxy::sdl::g_input.touch_stick_x = std::clamp(stick_x, -1.0f, 1.0f);
     galaxy::sdl::g_input.touch_stick_y = std::clamp(stick_y, -1.0f, 1.0f);
 }
@@ -619,17 +819,19 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouc
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePointer(
     JNIEnv*, jclass, jint action, jint id, jfloat x, jfloat y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    if (action == 0) {
+        galaxy::sdl::g_last_input.store(galaxy::sdl::kLastNone, std::memory_order_relaxed);
+    }
     galaxy::sdl::finger_event(static_cast<std::uint64_t>(id), x, y, action == 0, action == 2);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTitleScreen(JNIEnv*, jclass) {
+    return galaxy::sdl::g_title_screen.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Whether the game is on a pointer screen (set_menu_context), for the controls deciding what a touch is.
 extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeMenuContext(JNIEnv*, jclass) {
     return galaxy::sdl::g_menu_context.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
-}
-
-// The HOME Menu's choice (0 return, 1 quit, 2 reset).
-extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeHomeChoice(JNIEnv*, jclass, jint choice) {
-    galaxy::sdl::g_home_choice.store(static_cast<int>(choice), std::memory_order_release);
 }
 
 // The activity in sight (onStart) or not (onStop): the host stops the game's clocks while it is not, and nothing
@@ -639,7 +841,8 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSetV
     if (!visible) {
         galaxy::sdl::g_input.keys = {};
         galaxy::sdl::g_input.touch_buttons = 0;
-        galaxy::sdl::g_touch_held_until.fill(0);
+        galaxy::sdl::g_back_held = false;
+        galaxy::sdl::g_touch_pressed = 0u;
         galaxy::sdl::g_input.touch_stick_x = 0.0f;
         galaxy::sdl::g_input.touch_stick_y = 0.0f;
         galaxy::sdl::g_input.finger_down = false;
@@ -671,42 +874,12 @@ namespace galaxy::render::host_window {
 
 unsigned backbuffer_width = 0;
 unsigned backbuffer_height = 0;
-std::atomic<double> measured_present_hz{0.0};
-std::atomic<std::int32_t> pointer_wheel{0};
-std::string native_settings_content_root;
 std::atomic<bool> borderless_active{true};
-std::atomic<bool> exclusive_fullscreen_active{false};
-std::atomic<unsigned> efb_scale_rejected{0u};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
-std::atomic<bool> follow_window_rearm{false};
-
-unsigned display_efb_scale_cap() {
-    // The internal resolution whose picture covers the display the window is on.
-    const SDL_DisplayID display = galaxy::sdl::g_window != nullptr ? SDL_GetDisplayForWindow(galaxy::sdl::g_window)
-                                                                   : SDL_GetPrimaryDisplay();
-    const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(display);
-    if (mode == nullptr || mode->w <= 0 || mode->h <= 0) {
-        return kMaxEfbScale;
-    }
-    const float density = mode->pixel_density > 0.0f ? mode->pixel_density : 1.0f;
-    return efb_scale_covering(static_cast<unsigned>(static_cast<float>(mode->w) * density),
-                              static_cast<unsigned>(static_cast<float>(mode->h) * density), kMaxEfbScale);
-}
-
-bool flush_native_settings_if_dirty() {
-    return true;  // the app's settings screens write the files
-}
-
-void poll_render_config_file() {}
-
-bool hidden_window_mode_enabled() {
-    const char* value = std::getenv("GALAXY_HIDE_WINDOW");
-    return value != nullptr && value[0] == '1';
-}
 
 OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
     const bool hidden = hidden_window_mode_enabled();
@@ -764,9 +937,66 @@ bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_
     return galaxy::sdl::display_grid(retrace_ns, period_ns, vsync_ns, now_ns);
 }
 
-// The overlay, the HOME Menu and the hint are the platform's own screens on SDL platforms (Android: the activity's).
-void draw_native_settings_overlay(UiCanvas&) {}
-void draw_home_menu(UiCanvas&) {}
+// What the settings menu asks of its platform (host_window.h).
+std::vector<SettingsMonitor> settings_monitors() {
+    const galaxy::sdl::InputState state = galaxy::sdl::input_state();
+    SettingsMonitor monitor;
+    monitor.id = "display";
+    monitor.name = "Display";
+    monitor.width = static_cast<unsigned>(state.window_width);
+    monitor.height = static_cast<unsigned>(state.window_height);
+    monitor.refresh_hz = galaxy::sdl::g_window != nullptr ? static_cast<unsigned>(std::lround(display_refresh_hz(galaxy::sdl::g_window))) : 0u;
+    monitor.max_client_width = state.window_width;
+    monitor.max_client_height = state.window_height;
+    monitor.primary = true;
+    monitor.resolutions.emplace_back(monitor.width, monitor.height);
+    return {std::move(monitor)};
+}
+
+bool window_modal_active() noexcept {
+    return false;
+}
+
+void test_resize_window(unsigned long, unsigned long) noexcept {}
+
+// Android's files come through the app's own screens.
+void pick_files(FilePick, std::function<void(std::vector<std::filesystem::path>)> done) {
+    done({});
+}
+
+void open_folder(const std::filesystem::path&) {}
+
+UpscalerCaps upscaler_caps() noexcept {
+    return {};
+}
+
+unsigned dlss_min_width(unsigned, unsigned, unsigned) noexcept {
+    return 0u;
+}
+
+bool launcher_available() {
+    return false;
+}
+
+bool dlss_files_present() {
+    return false;
+}
+
+bool frame_generation_files_present() {
+    return false;
+}
+
+bool start_dlss_install() {
+    return false;
+}
+
+DlssInstall poll_dlss_install() {
+    return DlssInstall::Failed;
+}
+
+bool restart_game(bool) {
+    return false;
+}
 
 std::vector<const char*> vulkan_instance_extensions() {
     Uint32 count = 0;
@@ -818,21 +1048,13 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
 
 }  // namespace galaxy::render::host_window
 
-// The window functions the host and the backend call (renderer_api.h).
+// The window functions the host and the backend call (render_api.h).
 
 namespace galaxy::render {
-
-void set_native_settings_content_root(const std::string& utf8_path) {
-    host_window::native_settings_content_root = utf8_path;
-}
 
 HostClientExtent current_host_client_extent() noexcept {
     const galaxy::sdl::InputState state = galaxy::sdl::input_state();
     return {state.window_width, state.window_height};
-}
-
-HostClientExtent aspect_latch_extent() noexcept {
-    return current_host_client_extent();
 }
 
 HostPointerState poll_host_pointer_state() noexcept {
@@ -853,58 +1075,110 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
     return {};
 }
 
-// The settings menu is the Windows host's (host_window_win32.cpp: its pages, draft and keys); the SDL hosts do not
-// have it yet, so it stays closed.
-bool native_settings_overlay_visible() noexcept {
-    return false;
-}
-
-NativeSettingsView native_settings_view() {
-    return {};
-}
-
-void native_settings_input(NativeSettingsInput, int) {}
-
-void request_sharp_2d(bool) noexcept {}
-
-bool native_window_input_captured() noexcept {
-    return home_menu_visible();
-}
-
-void home_menu_open() noexcept {
-    galaxy::sdl::home_menu_show();
-}
-
-int home_menu_poll() noexcept {
-    return galaxy::sdl::home_menu_choice();
-}
-
-void home_menu_close() noexcept {
-    galaxy::sdl::home_menu_hide();
-}
-
-bool home_menu_visible() noexcept {
-    return galaxy::sdl::g_home_visible.load(std::memory_order_acquire);
-}
-
-// The activity shows its own HOME Menu: the game draws none.
-int home_menu_view(bool) noexcept {
-    return -1;
-}
-
-void home_menu_point(unsigned) noexcept {}
-
-void home_menu_choose(unsigned) noexcept {}
-
-void native_settings_post_key(std::uintptr_t) noexcept {}
-
-std::int32_t take_pointer_wheel() noexcept {
-    return host_window::pointer_wheel.exchange(0, std::memory_order_relaxed);
+void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_menu_keys_mutex);
+    galaxy::sdl::g_menu_keys.push_back(virtual_key);
 }
 
 }  // namespace galaxy::render
 
 namespace galaxy::host {
+
+// What the settings menu's CONTROLS page asks of the host.
+std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept {
+    const galaxy::sdl::InputState state = galaxy::sdl::input_state();
+    std::size_t count = 0u;
+    for (std::size_t i = 0; i < galaxy::sdl::kMaxPads && count < out.size(); ++i) {
+        if (state.pads[i].connected) {
+            input::ControllerInfo info;
+            info.scheme = state.pads[i].scheme;
+            info.slot = static_cast<std::uint8_t>(i);
+            info.model = state.pads[i].scheme == input::ControlScheme::PlayStation ? "PlayStation controller"
+                         : state.pads[i].scheme == input::ControlScheme::SwitchPro  ? "Switch controller"
+                                                                                    : "Controller";
+            out[count++] = info;
+        }
+    }
+    return count;
+}
+
+std::optional<input::DeviceKey> last_input_device() noexcept {
+    const std::uint32_t last = galaxy::sdl::g_last_input.load(std::memory_order_relaxed);
+    if (last == galaxy::sdl::kLastKeyboard) {
+        return input::DeviceKey{input::ControlScheme::Keyboard, input::kKeyboardSlot};
+    }
+    if (last >= galaxy::sdl::kLastPad) {
+        return input::DeviceKey{static_cast<input::ControlScheme>(last - galaxy::sdl::kLastPad), 0u};
+    }
+    return std::nullopt;
+}
+
+void arm_controller_binding_capture(input::ControlScheme scheme, std::uint8_t slot) noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    galaxy::sdl::g_capture_result.reset();
+    galaxy::sdl::g_capture_device = input::DeviceKey{scheme, slot};
+}
+
+void cancel_controller_binding_capture() noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    galaxy::sdl::g_capture_device.reset();
+    galaxy::sdl::g_capture_result.reset();
+}
+
+std::optional<input::InputSource> take_controller_binding_capture() noexcept {
+    const std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    std::optional<input::InputSource> result = galaxy::sdl::g_capture_result;
+    if (result.has_value()) {
+        galaxy::sdl::g_capture_device.reset();
+        galaxy::sdl::g_capture_result.reset();
+    }
+    return result;
+}
+
+input::ButtonIconStyle button_icons_auto_style() noexcept {
+    return input::ButtonIconStyle::Game;
+}
+
+void note_keyboard_input() noexcept {
+    galaxy::sdl::g_last_input.store(galaxy::sdl::kLastKeyboard, std::memory_order_relaxed);
+}
+
+namespace {
+std::atomic<bool> g_input_missing_shown{false};
+}  // namespace
+
+void set_input_missing_shown(bool shown) noexcept {
+    g_input_missing_shown.store(shown, std::memory_order_relaxed);
+}
+
+bool input_missing_shown() noexcept {
+    return g_input_missing_shown.load(std::memory_order_relaxed);
+}
+
+#if defined(__ANDROID__)
+bool physical_keyboard_attached() noexcept {
+    return SDL_HasKeyboard();
+}
+#endif
+
+bool keyboard_or_mouse_attached() noexcept {
+#if defined(__ANDROID__)
+    return true;  // the touch controls are always in hand
+#else
+    return SDL_HasKeyboard() || SDL_HasMouse();
+#endif
+}
+
+// A second player on this system: not yet.
+bool native_game_co_star(galaxy::input::PlayerInput*) noexcept {
+    return false;
+}
+
+JoyConStatus joycon_status() noexcept {
+    return {};
+}
+
+void set_joycon_pairing(bool) noexcept {}
 
 // The game's button icons (the Windows host's rules, native_host.cpp): the ButtonIcons setting; Auto's the keyboard's
 // after a key or mouse button (always in the keyboard and mouse input mode, never in the controller one), a
@@ -919,7 +1193,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     const RuntimeInputMode mode = get_runtime_settings().input_mode;
     const bool keyboard = mode == RuntimeInputMode::KeyboardMouse ||
                           (mode != RuntimeInputMode::Controller && last == galaxy::sdl::kLastKeyboard);
-    ButtonIconStyle style = ButtonIconStyle::Wii;
+    ButtonIconStyle style = ButtonIconStyle::Game;
     if (keyboard) {
         style = ButtonIconStyle::Keyboard;
     } else if (pad.has_value()) {
@@ -935,7 +1209,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     }
     switch (get_runtime_settings().button_icons) {
     case ButtonIcons::Auto: break;
-    case ButtonIcons::Wii: style = ButtonIconStyle::Wii; break;
+    case ButtonIcons::Game: style = ButtonIconStyle::Game; break;
     case ButtonIcons::Xbox: style = ButtonIconStyle::Xbox; break;
     case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
     case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
@@ -950,7 +1224,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     // The game's thread asks each frame: worked out again only when the bindings, the style, the controller or the
     // context change.
     static std::uint64_t s_generation = ~std::uint64_t{0};
-    static ButtonIconStyle s_style = ButtonIconStyle::Wii;
+    static ButtonIconStyle s_style = ButtonIconStyle::Game;
     static ControlScheme s_scheme = ControlScheme::Keyboard;
     static bool s_menu = false;
     static input::ButtonIconSpec s_spec;
@@ -966,3 +1240,21 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
 }
 
 }  // namespace galaxy::host
+
+#if defined(__ANDROID__) || defined(__APPLE__)
+// Mods come in through the app on these systems: nothing here reads an archive.
+namespace galaxy::mods {
+
+bool is_mod_archive(const std::filesystem::path&) {
+    return false;
+}
+
+ImportResult import_mod(const std::filesystem::path&, const std::filesystem::path&, const std::function<void(const ImportProgress&)>&,
+                        const std::atomic<bool>*) {
+    ImportResult result;
+    result.message = "MODS ARE ADDED FROM THE APP ON THIS SYSTEM";
+    return result;
+}
+
+}  // namespace galaxy::mods
+#endif

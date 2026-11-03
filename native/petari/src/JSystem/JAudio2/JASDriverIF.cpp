@@ -1,21 +1,19 @@
 #include "JSystem/JAudio2/JASDriverIF.hpp"
-#include "Game/System/NebulaKernel.hpp"
-#include <revolution/os.h>
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
-#include "JSystem/JAudio2/JASDspInterface.hpp"
+#include "JSystem/JAudio2/JASVoice.hpp"
 
-void JASDriver::setDSPLevel(f32 param_0) {
-    JASDsp::setDSPMixerLevel(param_0);
+void JASDriver::setOutputLevel(f32 param_0) {
+    JASVoice::setOutputLevel(param_0);
 }
 
-u16 JASDriver::MAX_MIXERLEVEL = 0x2EE0;
-
-u16 JASDriver::getChannelLevel_dsp() {
-    return JASDriver::MAX_MIXERLEVEL;
+// A full channel's gain on its way to the mix.
+f32 JASDriver::getChannelGain() {
+    return 0.18310547f;
 }
 
-f32 JASDriver::getDSPLevel() {
-    return JASDsp::getDSPMixerLevel();
+f32 JASDriver::getOutputLevel() {
+    return JASVoice::getOutputLevel();
 }
 
 u32 JASDriver::JAS_SYSTEM_OUTPUT_MODE = 0x00000001;
@@ -28,14 +26,10 @@ u32 JASDriver::getOutputMode() {
     return JASDriver::JAS_SYSTEM_OUTPUT_MODE;
 }
 
+GameEvent JASDriver::sSubFrameDone;
+
 void JASDriver::waitSubFrame() {
-    u32 r31 = getSubFrameCounter();
-    do {
-        NebulaKernel::yield();
-#ifdef TARGET_PC
-        NebulaKernel::poll();
-#endif
-    } while (r31 == getSubFrameCounter());
+    sSubFrameDone.wait();
 }
 
 JASCallbackMgr JASDriver::sSyncCallback;
@@ -67,6 +61,6 @@ void JASDriver::syncCallback() {
     sSyncCallback.callback();
 }
 
-void JASDriver::updateDacCallback() {
+void JASDriver::updateFrameCallback() {
     sUpdateDacCallback.callback();
 }

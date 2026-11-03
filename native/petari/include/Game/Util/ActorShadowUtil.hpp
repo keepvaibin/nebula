@@ -68,7 +68,6 @@ namespace MR {
     void invalidateShadowAll(LiveActor*);
     void validateShadowAll(LiveActor*);
     void offShadowVisibleSyncHost(LiveActor*, const char*);
-    void onShadowVisibleSyncHostAll(LiveActor*);
     void offShadowVisibleSyncHostAll(LiveActor*);
     void onShadowFollowHostScale(LiveActor*, const char*);
     void onShadowFollowHostScaleAll(LiveActor*);

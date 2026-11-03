@@ -2,7 +2,6 @@
 
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class J3DAnmTransform;
 class J3DModel;
@@ -15,7 +14,7 @@ public:
     /// @brief Creates a new `XanimeFrameCtrl`.
     XanimeFrameCtrl();
 
-    /* 0x14 */ s32 _14;
+    s32 _14;
 };
 
 class XanimePlayer {
@@ -75,29 +74,29 @@ public:
         return _20->getRate();
     }
 
-    /* 0x00 */ J3DModel* mModel;
-    /* 0x04 */ J3DModelData* mModelData;
-    /* 0x08 */ f32 _08;
-    /* 0x0C */ f32 _0C;
-    /* 0x10 */ f32 mWeights[4];
-    /* 0x20 */ XanimeFrameCtrl* _20;
-    /* 0x24 */ XanimeFrameCtrl _24[2];
-    /* 0x54 */ u8 _54;
-    /* 0x55 */ u8 _55;
-    /* 0x58 */ const char* mCurrentBckName;
-    /* 0x5C */ const XanimeGroupInfo* mDefaultAnimation;
-    /* 0x60 */ const XanimeGroupInfo* mCurrentAnimation;
-    /* 0x64 */ const XanimeGroupInfo* mPrevAnimation;
-    /* 0x68 */ const XanimeGroupInfo* _68;
-    /* 0x6C */ XanimeCore* mCore;
-    /* 0x70 */ XanimeResourceTable* mResourceTable;
-    /* 0x74 */ XanimeGroupInfo* mSimpleGroup;
-    /* 0x78 */ s32 _78;
-    /* 0x7C */ bool _7C;
-    /* 0x7D */ bool _7D;
-    /* 0x7E */ bool _7E;
-    /* 0x7F */ bool _7F;
-    /* 0x80 */ bool _80;
-    /* 0x84 */ f32 _84;
-    /* 0x88 */ bool _88;
+    J3DModel* mModel;
+    J3DModelData* mModelData;
+    f32 _08;
+    f32 _0C;
+    f32 mWeights[4];
+    XanimeFrameCtrl* _20;
+    XanimeFrameCtrl _24[2];
+    u8 _54;
+    u8 _55;
+    const char* mCurrentBckName;
+    const XanimeGroupInfo* mDefaultAnimation;
+    const XanimeGroupInfo* mCurrentAnimation;
+    const XanimeGroupInfo* mPrevAnimation;
+    const XanimeGroupInfo* _68;
+    XanimeCore* mCore;
+    XanimeResourceTable* mResourceTable;
+    XanimeGroupInfo* mSimpleGroup;
+    s32 _78;
+    bool _7C;
+    bool _7D;
+    bool _7E;
+    bool _7F;
+    bool _80;
+    f32 _84;
+    bool _88;
 };

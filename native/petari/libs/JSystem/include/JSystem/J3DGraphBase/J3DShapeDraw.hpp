@@ -1,34 +1,35 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_game_api.h>
+#include <nebula_math.h>
+
+// A shape group's mesh as the cook made it: its distinct corners (the arrays' entries they read) and its triangles.
+struct J3DShapeMesh {
+    NebulaShapeCorner* corners() {
+        return reinterpret_cast< NebulaShapeCorner* >(this + 1);
+    }
+    const u16* indices() {
+        return reinterpret_cast< const u16* >(corners() + mCornerCount);
+    }
+
+    u32 mAttributes;  // NEBULA_SHAPE_*
+    u32 mCornerCount;
+    u32 mIndexCount;
+    u32 mPlaces;  // the position matrix places its corners read (bit k: place k; 0: none of their own)
+};
 
 class J3DShapeDraw {
 public:
-    u32 countVertex(u32);
-    void addTexMtxIndexInDL(u32, u32, u32);
-    J3DShapeDraw(u8 const*, u32);
+    explicit J3DShapeDraw(J3DShapeMesh* pMesh);
     void draw() const;
 
     virtual ~J3DShapeDraw();
 
-    u8* getDisplayList() const {
-        return (u8*)mDisplayList;
-    }
-    u32 getDisplayListSize() const {
-        return mDisplayListSize;
-    }
-    void setDisplayListSize(u32 size) {
-        mDisplayListSize = size;
+    J3DShapeMesh* getMesh() const {
+        return mMesh;
     }
 
 private:
-    /* 0x04 */ u32 mDisplayListSize;
-    /* 0x08 */ void* mDisplayList;
-
-public:
-    // The position matrix places its corners read (bit k: place k; 0: none of their own), set when it is registered
-    // (J3DNativeShape::registerShape).
-    u16 mNebulaPlaces = 0;
+    J3DShapeMesh* mMesh;
 };

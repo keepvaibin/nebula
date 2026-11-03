@@ -1,14 +1,13 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/types.h>
 
 class BossStinkBug;
 class HitSensor;
 
 namespace BossStinkBugFunction {
     void addHeightOffset(TVec3f*, const BossStinkBug*, f32);
-    void addLocalHeightOffset(TVec3f*, BossStinkBug*, f32) NO_INLINE;
+    void addLocalHeightOffset(TVec3f*, BossStinkBug*, f32);
     void calcDiffCurrentRailPosition(TVec3f*, BossStinkBug*, f32, f32);
     void moveRail(BossStinkBug*, f32, f32, f32);
     void turnRailGround(BossStinkBug*, const TVec3f&, f32, bool);

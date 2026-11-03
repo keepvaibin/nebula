@@ -1,7 +1,5 @@
 #include "Game/NPC/TalkBalloon.hpp"
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
 #include "Game/NPC/TalkMessageInfo.hpp"
@@ -18,7 +16,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace NrvTalkBalloonShort {
     NEW_NERVE(TalkBalloonShortNrvOpen, TalkBalloonShort, Open);
@@ -78,11 +76,11 @@ void TalkBalloon::close() {
     MR::startAnim(this, "End", 0);
 }
 
-inline f32 fmin(f32 a, f32 b) {
+inline f32 smaller(f32 a, f32 b) {
     return b >= a ? a : b;
 }
 
-inline f32 fmax(f32 a, f32 b) {
+inline f32 larger(f32 a, f32 b) {
     return b >= a ? b : a;
 }
 
@@ -105,10 +103,10 @@ void TalkBalloon::updateBalloon() {
         if (v2.x * v3.y - v2.y * v3.x > 0.0f) {
             f32 halfMax = paneAnimFrameMax;
             halfMax *= 0.5f;
-            paneAnimFrameMax = fmin(paneAnimFrameMax, halfMax + cosine);
+            paneAnimFrameMax = smaller(paneAnimFrameMax, halfMax + cosine);
         } else {
             f32 half = 0.5f;
-            paneAnimFrameMax = fmax(0.0f, paneAnimFrameMax * half - cosine);
+            paneAnimFrameMax = larger(0.0f, paneAnimFrameMax * half - cosine);
         }
 
         if (!_29) {
@@ -135,11 +133,7 @@ void TalkBalloon::updateBalloon() {
 
 void TalkBalloon::updateTalking() {
     updateBalloon();
-#ifdef TARGET_PC
     mTextFormer->updateTalkingAtTextSpeed();
-#else
-    mTextFormer->updateTalking();
-#endif
 }
 
 bool TalkBalloon::isTextAppearedAll() {
@@ -175,7 +169,7 @@ void TalkBalloonShort::open(TalkMessageCtrl* pCtrl) {
     LayoutActor::appear();
     TalkTextFormer* tempFormer = mTextFormer;
 
-    const wchar_t* message;
+    const char16_t* message;
     if (TalkFunction::isComposeTalk(pCtrl)) {
         message = TalkFunction::getSubMessage(pCtrl);
     } else {
@@ -263,7 +257,7 @@ void TalkBalloonEvent::open(TalkMessageCtrl* pCtrl) {
     mMessageCtrl = pCtrl;
     LayoutActor::appear();
     TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
-    mTextFormer->formMessage(reinterpret_cast< const wchar_t* >(info->_0), _2C);
+    mTextFormer->formMessage(reinterpret_cast< const char16_t* >(info->_0), _2C);
     mTextFormer->setArg(pCtrl->mTagArg, 0);
     mAButton->kill();
     mAButton->setFollowActorPane(this, "AButtonPosition");
@@ -298,7 +292,7 @@ void TalkBalloonEvent::updateBeak() {
     TVec2f v1(messageCtrl->_1C.x, messageCtrl->_1C.y);
 
     if (0.0f <= v1.x && v1.x < MR::getScreenWidth() && 120.0f <= v1.y &&
-        v1.y < static_cast< s32 >(JUTVideo::getManager()->getEfbHeight())) {
+        v1.y < static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown)) {
         MR::showPane(this, "ShaBeak");
         MR::showPane(this, "PicBeak");
     } else {
@@ -388,7 +382,7 @@ TalkBalloonInfo::TalkBalloonInfo(const char* pName) : TalkBalloon(pName) {
 
 void TalkBalloonInfo::open(TalkMessageCtrl* pCtrl) {
     TalkMessageInfo* info = TalkFunction::getMessageInfo(pCtrl);
-    MR::appearInformationMessage(reinterpret_cast< const wchar_t* >(info->_0), true);
+    MR::appearInformationMessage(reinterpret_cast< const char16_t* >(info->_0), true);
 }
 
 void TalkBalloonInfo::close() {
@@ -408,7 +402,7 @@ void TalkBalloonIcon::open(TalkMessageCtrl* pCtrl) {
     MR::showScreen(this);
     LayoutActor::appear();
 
-    const wchar_t* message = TalkFunction::getMessage(pCtrl);
+    const char16_t* message = TalkFunction::getMessage(pCtrl);
     TalkTextFormer* former = mTextFormer;
 
     former->formMessage(message, 2);

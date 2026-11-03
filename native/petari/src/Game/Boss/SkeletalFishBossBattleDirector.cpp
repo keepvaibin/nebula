@@ -19,10 +19,6 @@ SkeletalFishBossBattleDirector::SkeletalFishBossBattleDirector(SkeletalFishBoss*
     _D4 = 0;
     MR::connectToSceneEnemyMovement(this);
 
-    for (s32 i = 0; i < ARRAY_SIZE(mColumns); i++) {
-        mColumns[i] = nullptr;
-    }
-
     for (s32 i = 0; i < ARRAY_SIZE(mGuardModels); i++) {
         ModelObj* guardMdl = new ModelObj("\203\146\203\202\227\160\203\130\203\112\203\213\203\126\203\203\201\133\203\116\203\113\201\133\203\150" /* デモ用スカルシャークガード */, "SkeletalFishGuard", nullptr, MR::DrawBufferType_Enemy, -2, -2, false);
         mGuardModels[i] = guardMdl;
@@ -38,7 +34,7 @@ void SkeletalFishBossBattleDirector::initiate() {
 
     for (s32 i = 0; i < group->getObjNum(); i++) {
         if (strcmp(group->getActor(i)->getName(), "\212\103\222\352\211\316\216\122\213\220\221\345\220\316\222\214" /* 海底火山巨大石柱 */) == 0 || strcmp(group->getActor(i)->getName(), "\212\103\222\352\211\316\216\122\220\316\222\214\201\151\217\254\201\152" /* 海底火山石柱（小） */) == 0) {
-            mColumns[_90] = static_cast< SubmarineVolcanoBigColumn* >(group->getActor(i));
+            mColumns.at(_90) = static_cast< SubmarineVolcanoBigColumn* >(group->getActor(i));
             _90++;
         }
 
@@ -48,7 +44,7 @@ void SkeletalFishBossBattleDirector::initiate() {
             }
         }
 
-        _94[_D4] = group->getActor(i);
+        _94.at(_D4) = group->getActor(i);
         MR::invalidateClipping(_94[_D4]);
         _D4++;
     }
@@ -67,7 +63,7 @@ void SkeletalFishBossBattleDirector::startPowerUpDemo2() {
 void SkeletalFishBossBattleDirector::playGuardAnim(const char* pAnimName, s32 numGuards) {
     for (s32 i = 0; i < numGuards; i++) {
         char animName[0x80];
-        snprintf(animName, sizeof(animName), "%s%c", pAnimName, i + 'A');
+        nebula_snprintf(animName, sizeof(animName), "%s%c", pAnimName, i + 'A');
         mGuardModels[i]->makeActorAppeared();
         MR::requestMovementOn(mGuardModels[i]);
         MR::startBck(mGuardModels[i], animName);

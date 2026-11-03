@@ -22,7 +22,7 @@ public:
     virtual void end() {
     }
 
-    virtual bool receiveMsg(u32 msg) NO_INLINE {
+    virtual bool receiveMsg(u32 msg) {
         return false;
     }
 
@@ -37,7 +37,7 @@ public:
     bool isNerve(const Nerve* pNerve) const;
     bool isFirstStep() const;
 
-    /* 0x0C */ Spine* mSpine;
-    /* 0x10 */ LiveActor* mHost;
-    /* 0x14 */ bool mIsActive;
+    Spine* mSpine;
+    LiveActor* mHost;
+    bool mIsActive;
 };

@@ -12,14 +12,6 @@ namespace {
     static const f32 sPlayerRadius = 75.0f;
 };  // namespace
 
-void CamKarikariEffector_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-    (void)0.5f;
-    f32 f5 = MR::pi();
-}
-
 CamKarikariEffector::CamKarikariEffector() : mCounter(0) {
 }
 
@@ -37,8 +29,6 @@ namespace {
     }
 }
 
-#pragma push
-#pragma global_optimizer off
 void CamKarikariEffector::update(CameraMan* pCameraMan) {
     if (MR::isPlayerDead()) {
         CameraLocalUtil::setFovy(pCameraMan, CameraLocalUtil::getFovy(pCameraMan));
@@ -101,4 +91,3 @@ void CamKarikariEffector::update(CameraMan* pCameraMan) {
         CameraLocalUtil::setFovy(pCameraMan, (fovy * 180.0f * t) / MR::pi() + (1.0f - t) * CameraLocalUtil::getFovy(pCameraMan));
     }
 }
-#pragma pop

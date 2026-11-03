@@ -25,31 +25,6 @@ MarioAnimator::MarioAnimator(MarioActor* pActor) : MarioModule(pActor) {
     init();
 }
 
-void MarioAnimator_FORCE_MATCH_SDATA2() {
-    (void)79.0f;
-    (void)59.0f;
-    (void)0.00100000005f;
-    (void)0.899999976f;
-    (void)0.100000001f;
-    (void)0.949999988f;
-    (void)0.0500000007f;
-    (void)0.25f;
-    (void)0.970000029f;
-    (void)0.0299999993f;
-    (void)10.0f;
-    (void)1.41421294f;
-    (void)6.28318548f;
-    (void)30.0f;
-    (void)-2607.59448f;
-    (void)2607.59448f;
-    (void)0.699999988f;
-    (void)60.0f;
-    (void)5.0f;
-    (void)-0.707000017f;
-    (void)0.707000017f;
-    (void)-0.5f;
-}
-
 void MarioAnimator::init() {
     XanimeSwapTable* luigiAnimations = nullptr;
     if (gIsLuigi) {
@@ -943,8 +918,6 @@ u16 MarioAnimator::getUpperJointID() const {
 
 const char* jname_chest = "Spine1";
 
-#pragma push
-#pragma opt_propagation off
 void MarioAnimator::updateJointRumble() {
     u32 timer = _74;
     if (timer == 0) {
@@ -1001,7 +974,6 @@ void MarioAnimator::updateJointRumble() {
     XjointTransform* hipJt = core->getJointTransform(static_cast< u16 >(MR::getJointIndex(mActor, "Spine2")));
     hipJt->_64 = _AC.toMtxPtr();
 }
-#pragma pop
 
 void MarioAnimator::addRumblePower(f32 power, u32 time) {
     if (_70 < power) {

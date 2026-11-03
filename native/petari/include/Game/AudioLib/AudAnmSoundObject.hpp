@@ -3,13 +3,13 @@
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include <JSystem/JAudio2/JAUSoundAnimator.hpp>
 
-class JAISoundStarter;
-class JASSoundParams;
+struct JAISoundStarter;
+struct JASSoundParams;
 class JAUSoundAnimationSound;
 
 class AudAnmSoundObject : public AudSoundObject, public JAUSoundAnimator {
 public:
-    AudAnmSoundObject(TVec3f*, u8, JKRHeap*);
+    AudAnmSoundObject(TVec3f*, u8, NebulaArena*);
 
     void update(f32);
     void modifySoundParams(JASSoundParams*, const JAUSoundAnimationSound*, f32);

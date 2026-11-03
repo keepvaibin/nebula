@@ -9,16 +9,6 @@
 #include "Game/MapObj/SpinDriverUtil.hpp"
 #include "Game/Util.hpp"
 
-void SuperSpinDriver_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)MR::epsilon();
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-}
-
 namespace {
     static const f32 sCanBindTime = 90;
     static s32 cSpaceFlyStartFrame = 10;
@@ -41,11 +31,6 @@ namespace NrvSuperSpinDriver {
 };  // namespace NrvSuperSpinDriver
 
 // Fix JGeometry inlining
-void SuperSpinDriver_DUMMY() {
-    TQuat4f e;
-    e = e;
-}
-
 SuperSpinDriver::SuperSpinDriver(const char* pName, s32 color)
     : LiveActor(pName), mBindActor(), mShootPath(), mSpinDriverCamera(), mOperateRing(), mPathDrawer(), mEmptyModel(), _A4(0, 0, 0, 1),
       _B4(0, 0, 0, 1), _C4(0, 0, 0), _D0(0, 0, 0), mShootPathDirection(0, 1, 0), _E8(0, 0, 1), _F4(1, 0, 0), _100(0, 1, 0),
@@ -339,7 +324,7 @@ bool SuperSpinDriver::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pR
 
     if (msg == ACTMES_RUSH_CANCEL) {
         if (isNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvShootStart)) ||
-            isNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvShoot)) && MR::isLessStep(this, 40)) {
+            (isNerve(GET_NERVE(SuperSpinDriver, SuperSpinDriverNrvShoot)) && MR::isLessStep(this, 40))) {
             return false;
         }
 
@@ -442,7 +427,7 @@ bool SuperSpinDriver::tryForceCancel() {
 }
 
 bool SuperSpinDriver::tryShootStart() {
-    bool isSwingOrPointed = MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    bool isSwingOrPointed = MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 
     if (isSwingOrPointed) {
         MR::deleteEffect(this, "SuperSpinDriverLight");
@@ -665,7 +650,7 @@ void SuperSpinDriver::exeCapture() {
         _134 = rate;
         updateBindActorPoseToShoot((f64)rate);
         _144 += 0.0040f;
-        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         _178 = 60;
 
         if (!tryEndCapture()) {
@@ -719,7 +704,7 @@ void SuperSpinDriver::exeShootStart() {
     _C4 = mPosition * rate + _118 * (1.0f - rate);
     _144 *= 0.8f;
 
-    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
 
     if (tryShoot()) {
         return;
@@ -751,7 +736,7 @@ void SuperSpinDriver::exeShoot() {
         MR::startBckPlayer("SpaceFlyStart", "SuperSpinDriverFlyStart");
         MR::shakeCameraStrong();
 
-        MR::tryRumblePadVeryStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
         mShootPathDirection.set(_100);
         mOperateRing->reset();
         startPathDraw();
@@ -912,7 +897,6 @@ void SuperSpinDriver::updateOperateRate() {
         if (MR::isLessStep(this, _154)) {
             rate = 0.0f;
         } else if (MR::isLessStep(this, _158)) {
-            s32 min = _154;
             rate = MR::normalize(getNerveStep(), _154, _154 + MR::min(5, _15C - _158));
         } else if (MR::isLessStep(this, _15C)) {
             rate = 1.0f - MR::normalize(getNerveStep(), _158, _15C);
@@ -1023,7 +1007,7 @@ bool SuperSpinDriver::isNerveEnableBind() const {
 }
 
 bool SuperSpinDriver::isSwingOr2PTrigger() const {
-    return MR::isPadSwing(WPAD_CHAN0) || MR::isPlayerPointedBy2POnTriggerButton();
+    return MR::isSpin(PLAYER_1) || MR::isPlayerPointedBy2POnTriggerButton();
 }
 
 bool SuperSpinDriver::isFarPlayer() const {

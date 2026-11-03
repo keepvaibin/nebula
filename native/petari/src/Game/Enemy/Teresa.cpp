@@ -24,45 +24,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 
-void Teresa_FORCE_MATCH_SDATA2() {
-    (void)3e+03f;
-    (void)6e+02f;
-    (void)8e+01f;
-    (void)7e+01f;
-    (void)85.0f;
-    (void)6e+01f;
-    (void)0.95f;
-    (void)0.1f;
-    (void)0.2f;
-    (void)0.9f;
-    (void)2e+01f;
-    (void)2e+02f;
-    (void)1.8e+03f;
-    (void)2e+03f;
-    (void)1.5e+03f;
-    (void)1e+04f;
-    (void)0.9995f;
-    (void)1e+01f;
-    (void)0.35f;
-    (void)0.9997f;
-    (void)0.98f;
-    (void)0.999f;
-    (void)0.75f;
-    (void)0.99f;
-    (void)0.96f;
-    (void)1.5e+02f;
-    (void)0.4f;
-    (void)4e+01f;
-    (void)-0.2f;
-    (void)4.0f;
-    (void)0.12f;
-    (void)-1.25f;
-    (void)53.0f;
-    (void)0.3f;
-    (void)0.02f;
-    (void)9.0f;
-}
-
 namespace {
     static Color8 sPointLightColor(255, 255, 255, 255);
 };  // namespace
@@ -1159,6 +1120,3 @@ bool Teresa::isShay() const {
     return isNotSquat;
 }
 
-void Teresa_FORCE_MATCH(TVec3f* pVec, f32 scale) {
-    *pVec *= scale;
-}

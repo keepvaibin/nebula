@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class CameraTargetObj;
 class CameraTargetMtx;
@@ -31,8 +30,8 @@ public:
 
     void setTarget() const;
 
-    /* 0x00 */ CameraTargetObj* mTargetObj;
-    /* 0x04 */ CameraTargetMtx* mTargetMtx;
-    /* 0x08 */ const LiveActor* mLiveActor;
-    /* 0x0C */ MarioActor* mMarioActor;
+    CameraTargetObj* mTargetObj;
+    CameraTargetMtx* mTargetMtx;
+    const LiveActor* mLiveActor;
+    MarioActor* mMarioActor;
 };

@@ -57,7 +57,7 @@ public:
     bool requestPressDown();
     bool tryOpeningDemo();
     bool tryOpeningDemoEnd();
-    bool canNonActive() const NO_INLINE;
+    bool canNonActive() const;
     void setNonActive();
     bool tryActive();
     bool tryAppearEnd();
@@ -72,18 +72,18 @@ public:
     void setBeamType(s32);
     void makeActorDeadForce();
 
-    /* 0x8C */ KameckBeam* mBeam;
-    /* 0x90 */ ActiveActorList* mActiveActorList;
-    /* 0x94 */ SmallKameckBeamEventListener* mBeamEventListener;
-    /* 0x98 */ AnimScaleController* mAnimScaleController;
-    /* 0x9C */ WalkerStateBindStarPointer* mStateBindStarPointer;
-    /* 0xA0 */ TQuat4f mRotateQuat;
-    /* 0xB0 */ TVec3f mFrontVec;
-    /* 0xBC */ s32 mBeamType;
-    /* 0xC0 */ s32 mMoveStep;
-    /* 0xC4 */ f32 mRailCoord;
-    /* 0xC8 */ f32 mRailNextPointCoord;
-    /* 0xCC */ f32 mActiveDistance;
+    KameckBeam* mBeam;
+    ActiveActorList* mActiveActorList;
+    SmallKameckBeamEventListener* mBeamEventListener;
+    AnimScaleController* mAnimScaleController;
+    WalkerStateBindStarPointer* mStateBindStarPointer;
+    TQuat4f mRotateQuat;
+    TVec3f mFrontVec;
+    s32 mBeamType;
+    s32 mMoveStep;
+    f32 mRailCoord;
+    f32 mRailNextPointCoord;
+    f32 mActiveDistance;
 };
 
 class SmallKameckBeamEventListener : public KameckBeamEventListener {
@@ -93,7 +93,7 @@ public:
 
     virtual void hitBeam(s32 beamType);
 
-    /* 0x04 */ Kameck* mHost;
+    Kameck* mHost;
 };
 
 namespace MR {

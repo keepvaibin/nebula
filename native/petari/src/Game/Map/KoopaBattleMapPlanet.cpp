@@ -14,18 +14,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-void FORCE_MATCH_KOOPABATTLEMAPPLANET_SDATA2() {
-    (void)100.0f;
-    (void)1180.0f;
-    (void)1200.0f;
-    (void)1230.0f;
-    (void)0.995f;
-}
-
 namespace {
-    static const f32 sRotateAccelWeak = 0.0f;    // ?
-    static const f32 sRotateAccelStrong = 0.0f;  // ?
-    static const f32 sRotateSpeedMax = 0.0f;     // ?
     static const f32 sRotateFriction = 0.995f;
 };  // namespace
 

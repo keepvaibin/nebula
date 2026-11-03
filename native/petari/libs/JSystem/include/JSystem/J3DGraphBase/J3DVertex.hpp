@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class J3DModel;
 class J3DAnmVtxColor;
@@ -12,9 +11,9 @@ struct J3DVtxColorCalc {
     void calc(J3DModel*);
     virtual void calc(J3DVertexBuffer*);
 
-    /* 0x0 */ void* vtable;  // inlined vtable?
-    /* 0x4 */ u32 mFlags;
-    /* 0x8 */ J3DAnmVtxColor* mpVtxColor;
+    void* vtable;  // inlined vtable?
+    u32 mFlags;
+    J3DAnmVtxColor* mpVtxColor;
 };
 
 class J3DDrawMtxData {
@@ -23,10 +22,10 @@ public:
 
     ~J3DDrawMtxData();
 
-    /* 0x0 */ u16 mEntryNum;
-    /* 0x2 */ u16 mDrawFullWgtMtxNum;
-    /* 0x4 */ u8* mDrawMtxFlag;
-    /* 0x8 */ NEBULA_BE(u16)* mDrawMtxIndex;
+    u16 mEntryNum;
+    u16 mDrawFullWgtMtxNum;
+    u8* mDrawMtxFlag;
+    u16* mDrawMtxIndex;
 };
 
 class J3DVertexData {
@@ -43,7 +42,7 @@ public:
         return mVtxNrmArray;
     }
 
-    GXColor* getVtxColorArray(u8 idx) const {
+    NebulaColor8* getVtxColorArray(u8 idx) const {
         return mVtxColorArray[idx];
     }
 
@@ -63,63 +62,28 @@ public:
         return mVtxNum;
     }
 
-    GXVtxAttrFmtList* getVtxAttrFmtList() const {
-        return mVtxAttrFmtList;
-    }
-
-    u8 getVtxPosFrac() const {
-        return mVtxPosFrac;
-    }
-
-    u8 getVtxNrmFrac() const {
-        return mVtxNrmFrac;
-    }
-
-    int getVtxPosType() const {
-        return mVtxPosType;
-    }
-
-    int getVtxNrmType() const {
-        return mVtxNrmType;
-    }
-
-    void setVtxPosFrac(u8 frac) {
-        mVtxPosFrac = frac;
-    }
-
-    void setVtxPosType(GXCompType type) {
-        mVtxPosType = type;
-    }
-
-    void setVtxNrmFrac(u8 frac) {
-        mVtxNrmFrac = frac;
-    }
-
-    void setVtxNrmType(GXCompType type) {
-        mVtxNrmType = type;
+    u32 getNormalFloats() const {
+        return mNormalFloats;
     }
 
     friend class J3DModelLoader;
 
-    /* 0x00 */ u32 mVtxNum;
-    /* 0x04 */ u32 mNrmNum;
-    /* 0x08 */ u32 mColNum;
-    /* 0x0C */ u32 mTexCoordNum;
-    /* 0x10 */ u32 mPacketNum;
+    u32 mVtxNum;
+    u32 mNrmNum;
+    u32 mColNum;
+    u32 mTexCoordNum;
+    u32 mPacketNum;
     // A native copy on native builds (J3DModelLoader::readVertex); the vertex arrays stay as the file has them.
-    /* 0x14 */ GXVtxAttrFmtList* mVtxAttrFmtList;
-    /* 0x18 */ void* mVtxPosArray;
-    /* 0x1C */ void* mVtxNrmArray;
-    /* 0x20 */ void* mVtxNBTArray;
-    /* 0x24 */ GXColor* mVtxColorArray[2];
-    /* 0x2C */ void* mVtxTexCoordArray[8];
-    /* 0x4C */ u8 mVtxPosFrac;
-    /* 0x50 */ GXCompType mVtxPosType;
-    /* 0x54 */ u8 mVtxNrmFrac;
-    /* 0x58 */ GXCompType mVtxNrmType;
+    void* mVtxPosArray;
+    void* mVtxNrmArray;
+    void* mVtxNBTArray;
+    NebulaColor8* mVtxColorArray[2];
+    void* mVtxTexCoordArray[8];
     // Entries of each array the renderer has as values (J3DNativeShape): position, normal, NBT, colour 0-1,
     // texture coordinates 0-7.
-    u32 mNebulaArrayCount[13];
+    u32 mNebulaArrayCount[13];  // entries of each array, position first
+    u32 mNormalFloats;          // floats per normal entry: 3, or 9 (NBT)
+    bool mNebulaArraysSent;
 };
 
 class J3DVertexBuffer {
@@ -171,7 +135,7 @@ public:
         return mCurrentVtxNrm;
     }
 
-    void setCurrentVtxCol(GXColor* pVtxCol) {
+    void setCurrentVtxCol(NebulaColor8* pVtxCol) {
         mCurrentVtxCol = pVtxCol;
     }
 
@@ -225,13 +189,13 @@ public:
         return mVtxNrmArray[index];
     }
 
-    /* 0x00 */ J3DVertexData* mVtxData;
-    /* 0x04 */ void* mVtxPosArray[2];
-    /* 0x0C */ void* mVtxNrmArray[2];
-    /* 0x14 */ GXColor* mVtxColArray[2];
-    /* 0x1C */ void* mTransformedVtxPosArray[2];
-    /* 0x24 */ void* mTransformedVtxNrmArray[2];
-    /* 0x2C */ void* mCurrentVtxPos;
-    /* 0x30 */ void* mCurrentVtxNrm;
-    /* 0x34 */ GXColor* mCurrentVtxCol;
+    J3DVertexData* mVtxData;
+    void* mVtxPosArray[2];
+    void* mVtxNrmArray[2];
+    NebulaColor8* mVtxColArray[2];
+    void* mTransformedVtxPosArray[2];
+    void* mTransformedVtxNrmArray[2];
+    void* mCurrentVtxPos;
+    void* mCurrentVtxNrm;
+    NebulaColor8* mCurrentVtxCol;
 };

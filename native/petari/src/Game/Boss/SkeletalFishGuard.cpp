@@ -28,7 +28,6 @@ namespace {
     NEW_NERVE(SkeletalFishGuardNrvApart, SkeletalFishGuard, Apart);
     NEW_NERVE(SkeletalFishGuardNrvFollow, SkeletalFishGuard, Follow);
     NEW_NERVE(SkeletalFishGuardNrvStraight, SkeletalFishGuard, Straight);
-    NEW_NERVE(SkeletalFishGuardNrvDefence, SkeletalFishGuard, Defence);
     NEW_NERVE(SkeletalFishGuardNrvKill, SkeletalFishGuard, Kill);
     NEW_NERVE_ONEND(SkeletalFishGuardNrvNumb, SkeletalFishGuard, Numb, Numb);
 };  // namespace
@@ -348,7 +347,6 @@ void SkeletalFishGuard::calcAndSetBaseMtx() {
         if (MR::isNearZero(stack_24)) {
             MtxPtr mtx = getBaseMtx();
             TPos3f stack_A0;
-            f32 x, y, z;
             stack_A0.setInline(mtx);
             stack_A0.getXDir(stack_24);
             stack_A0.getYDir(stack_30);
@@ -426,7 +424,6 @@ void SkeletalFishGuard::rotateHorizontal(const TVec3f& rA2, f32 scalar) {
     TVec3f v10 = rA2.killElement(mGravity);
     if (!MR::isNearZero(v10)) {
         MR::normalize(&v10);
-        // TODO: this looks like an inline. Possible fakematch.
         TVec3f* v11 = &_D0;
         TVec3f* g = &mGravity;
         TVec3f v9 = _D0.killElement(*g);
@@ -541,15 +538,13 @@ void SkeletalFishGuard::calcTarget(TVec3f* pA1, TVec3f* pA2, TVec3f* pA3, s32 a4
     pA2->add(*pA1, v21 * _94.x + v22 * -_94.y);
 }
 
-bool SkeletalFishGuard::isInScreen() const NO_INLINE {
+bool SkeletalFishGuard::isInScreen() const {
     TVec2f screen;
     return MR::calcScreenPosition(&screen, mPosition);
 }
 
 // this is the only way I could match this
 // TODO fix
-#pragma push
-#pragma opt_propagation off
 bool SkeletalFishGuard::isPlayerInAttackRange() const {
     const TVec3f& rPosition = mPosition;
     TVec3f v7 = *MR::getPlayerCenterPos() - rPosition;
@@ -571,7 +566,6 @@ bool SkeletalFishGuard::isPlayerInAttackRange() const {
 
     return true;
 }
-#pragma pop
 
 bool SkeletalFishGuard::isLineOfSightClear() const {
     TVec3f v12 = *MR::getPlayerCenterPos() - mPosition;
@@ -588,7 +582,6 @@ bool SkeletalFishGuard::isLineOfSightClear() const {
     v11.orthogonalize2(_100);
     v12.orthogonalize2(_100);
 
-    bool ret = true;
 
     if (!MR::isNearZero(v11) && !MR::isNearZero(v12)) {
         f64 angle = MR::asin(mFishBoss->getBodyThickness() / v11.length());

@@ -1,4 +1,5 @@
 #include "Game/Map/OceanRingDrawer.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -11,18 +12,11 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
-#include "Game/Util/SchedulerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 namespace {
-    const f32 sPointNumInPart = 0.0f;
-    const f32 sDistancePartDL = 13000.0f;
-    const f32 sFlowSpeedTexRate = 0.0f;
-    const f32 sFlowSpeedTexRateMin = 0.0f;
-    const f32 sTexRate0 = 0.0f;
-    const f32 sTexRate1 = 0.0f;
-    const f32 sTexRate2 = 0.0f;
+    const f32 sDistancePartMesh = 13000.0f;
     const f32 sTexSpeed0U = -0.003f;
     const f32 sTexSpeed0V = -0.001f;
     const f32 sTexSpeed1U = -0.002f;
@@ -31,13 +25,9 @@ namespace {
     const f32 sIndirectScale = 0.1f;
     const f32 sBloomCameraOffsetZ = 3000.0f;
     const f32 sDistancePartDrawBloom = 4000.0f;
-    const f32 sBloomCameraUpMin = 0.0f;
-    const f32 sBloomCameraUpMax = 0.0f;
-    const f32 sBloomCameraDepthMin = 0.0f;
-    const f32 sBloomCameraDepthMax = 0.0f;
 
-    static GXColor color1 = {0x28, 0x28, 0x28, 0x14};
-    static GXColor color2 = {0x76, 0xD7, 0xFF, 0xFF};
+    static NebulaColor8 color1 = {0x28, 0x28, 0x28, 0x14};
+    static NebulaColor8 color2 = {0x76, 0xD7, 0xFF, 0xFF};
     static u8 unknownVal = 1;
 };  // namespace
 
@@ -50,7 +40,7 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
     _1C = *pTexCoordU0;
     _20 = *pTexCoordU1;
     _24 = *pTexCoordU2;
-    initDisplayList(pTexCoordU0, pTexCoordU1, pTexCoordU2);
+    initMesh(pTexCoordU0, pTexCoordU1, pTexCoordU2);
 
     for (int i = 0; i < a4; i++) {
         int v12 = a3 + i;
@@ -65,14 +55,14 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
     mPosition.scale(1.0f / a4);
 }
 
-void OceanRingPartDrawer::initDisplayList(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
+void OceanRingPartDrawer::initMesh(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
     mMesh.init(NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2, 2 * mOceanRing->mStride * (_14 - 1));
     drawGD(pTexCoordU0, pTexCoordU1, pTexCoordU2);
     mMesh.send();
 }
 
 void OceanRingPartDrawer::draw() const {
-    if (mPosition.distance(*MR::getPlayerPos()) < ::sDistancePartDL) {
+    if (mPosition.distance(*MR::getPlayerPos()) < ::sDistancePartMesh) {
         drawDynamic();
     } else {
         mMesh.draw();
@@ -118,7 +108,7 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
-        mMesh.begin(GX_TRIANGLESTRIP, (u16)mOceanRing->mStride << 1);
+        mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (u16)mOceanRing->mStride << 1);
 
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
@@ -196,7 +186,7 @@ void OceanRingPartDrawer::drawDynamic() const {
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
             J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
@@ -229,7 +219,6 @@ void OceanRingPartDrawer::drawDynamic() const {
 
 void OceanRingPartDrawer::drawDynamicBloom() const {
     f32 f30 = 0.05f;
-    f32 f29;
     f32 f28;
     f32 f27;
     f32 f26;
@@ -238,7 +227,6 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
     f32 f21 = 1.0f;
 
     f28 = f30 * f21;
-    f29 = 0.1f * f21;
     f27 = _1C;
     f25 = _20;
     f26 = _1C;
@@ -260,7 +248,7 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
             WaterPoint* pPoint2 = mOceanRing->getPoint(j, indexPlusOne);
@@ -297,10 +285,10 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     mWaterTex = nullptr;
     mWaterIndTex = nullptr;
 
-    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
+    mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
     initParts();
-    initDisplayList();
+    initMesh();
 }
 
 void OceanRingDrawer::update() {
@@ -368,7 +356,7 @@ void OceanRingDrawer::initParts() {
     mPartDrawers[last] = new OceanRingPartDrawer(mRing, w, v, flag, &a, &b, &c);
 }
 
-void OceanRingDrawer::initDisplayList() {
+void OceanRingDrawer::initMesh() {
     s32 flag = 0;
 
     if (MR::isLoopRail(mRing)) {
@@ -400,7 +388,7 @@ void OceanRingDrawer::drawGD() {
     f32 V10 = 0.05f * m;
     f32 V20 = 0.1f * m;
 
-    mMesh.begin(GX_TRIANGLESTRIP, (flag + mRing->mSegCount) * 2);
+    mMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (flag + mRing->mSegCount) * 2);
 
     scalex = 1.0f;
     f32 V0 = V00 * scalex;
@@ -440,14 +428,6 @@ void OceanRingDrawer::drawGD() {
 
 void OceanRingDrawer::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(4);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX1, 0x21, 0, 0x7D);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD2, GX_TG_MTX2x4, GX_TG_TEX2, 0x24, 0, 0x7D);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD3, GX_TG_MTX3x4, GX_TG_POS, 0x27, 0, 0x7D);
 
     TMtx34f mtx;
     mtx.identity();
@@ -462,71 +442,31 @@ void OceanRingDrawer::loadMaterial() const {
     J3DNativeShape::setTexture(2, mtx.toMtxPtr(), 2);
     MR::loadTexProjectionMtx(39);
 
-    mWaterTex->load(GX_TEXMAP0);
-    JUTTexture tex(MR::getScreenResTIMG(), 0);
-    tex.load(GX_TEXMAP1);
-    mWaterIndTex->load(GX_TEXMAP2);
-
-    if (::unknownVal != 0 && MR::isCameraInWater()) {
-        J3DNativeState::setNumIndStages(0);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE2);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE3);
-    } else {
-        J3DNativeState::setNumIndStages(1);
-        J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD2, GX_TEXMAP2);
-        J3DNativeState::setTevIndWarp(GX_TEVSTAGE3, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
-
-        Mtx23 new_mtx;
-        new_mtx[0][0] = ::sIndirectScale;
-        new_mtx[0][1] = 0.0f;
-        new_mtx[0][2] = 0.0f;
-        new_mtx[1][0] = 0.0f;
-        new_mtx[1][1] = ::sIndirectScale;
-        new_mtx[1][2] = 0.0f;
-
-        J3DNativeState::setIndTexMtx(GX_ITM_0, new_mtx, 0);
-    }
-
-    J3DNativeState::setNumTevStages(4);
-    J3DNativeState::setTevColor(GX_TEVREG0, (GXColor&)::color1);
-    J3DNativeState::setTevColor(GX_TEVREG1, (GXColor&)::color2);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 0, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 0, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, 0, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, 0, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE2, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE2, GX_CC_CPREV, GX_CC_A0, GX_CC_C0, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE2, GX_TEV_COMP_R8_EQ, GX_TB_ZERO, GX_CS_SCALE_1, 0, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE2, GX_CA_KONST, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 0, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE3, GX_TEXCOORD3, GX_TEXMAP1, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE3, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C1, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE3, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE3, GX_CA_RASA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE3, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 0, GX_TEVPREV);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(1, GX_LEQUAL, 0);
-    J3DNativeState::setZCompLoc(1);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    // runtime/src/render/materials/ocean_ring.hlsl: the water (texture 0) at the first two scrolls, color1's highlight,
+    // the screen behind (texture 1, by texture matrix 3) tinted by color2 and warped by the indirect texture (2, the third
+    // scroll) unless the camera is in the water; blended by the vertex alpha where above zero, depth tested and not
+    // written, no culling.
+    JUTTexture screen(MR::getScreenResTIMG());
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
+                       NEBULA_CULL_NONE);
+    NativeShader::setColor(material, 0, ::color1.r, ::color1.g, ::color1.b, ::color1.a);
+    NativeShader::setColor(material, 4, ::color2.r, ::color2.g, ::color2.b, ::color2.a);
+    material.constants[8] = ::sIndirectScale;
+    material.constants[9] = ::unknownVal != 0 && MR::isCameraInWater() ? 0.0f : 1.0f;
+    material.constants[10] = static_cast< f32 >(screen.getWidth());
+    material.constants[11] = static_cast< f32 >(screen.getHeight());
+    NativeShader::setTexture(material, 0, mWaterTex);
+    NativeShader::setTexture(material, 1, &screen);
+    NativeShader::setTexture(material, 2, mWaterIndTex);
+    NativeShader::send(material);
+    static const u8 kPlaces[8] = {0, 1, 2, 3,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
 }
 
 void OceanRingDrawer::loadMaterialBloom() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(0);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX1, 0x21, 0, 0x7D);
 
     TMtx34f mtx;
     mtx.identity();
@@ -536,39 +476,26 @@ void OceanRingDrawer::loadMaterialBloom() const {
     mtx.mMtx[0][2] = _14;
     mtx.mMtx[1][2] = _18;
     J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
-    mWaterTex->load(GX_TEXMAP0);
-    J3DNativeState::setNumIndStages(0);
     TVec3f zDir = MR::getCamZdir();
     f32 v6 = ((MR::clamp(zDir.y, -0.2f, 0.1f) - -0.2f) / 0.3f);
     f32 v8 = ((MR::clamp(WaterAreaFunction::getCameraWaterDepth(), 150.0f, 300.0f) - 150.0f) / 150.0f);
 
-    if (v6 >= v8) {
-        v8 = v8;
-    } else {
+    if (v6 < v8) {
         v8 = v6;
     }
 
     f32 v18 = (150.0f + (105.0f * v8));
     u8 v19 = (s32)(v18);
-    J3DNativeState::setNumTevStages(2);
-    Color8 v14(80, 80, 80, v19);
-    Color8 v13(80, 80, 80, 255);
-    J3DNativeState::setTevColor(GX_TEVREG0, (GXColor&)v14);
-    J3DNativeState::setTevColor(GX_TEVREG1, (GXColor&)v13);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_C1);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1u, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1u, GX_TEVPREV);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1u, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_APREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1u, GX_TEVPREV);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(1u, GX_LEQUAL, 1u);
-    J3DNativeState::setZCompLoc(1u);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    // runtime/src/render/materials/ocean_ring_bloom.hlsl: (80, 80, 80) plus the water (texture 0) at the first two
+    // scrolls times (80, 80, 80, v19); blended by alpha where above zero, depth tested and written, no culling.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
+    NativeShader::setColor(material, 0, 80, 80, 80, v19);
+    NativeShader::setColor(material, 4, 80, 80, 80, 255);
+    NativeShader::setTexture(material, 0, mWaterTex);
+    NativeShader::send(material);
+    static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                  J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+    J3DNativeShape::setCurrent(0, kPlaces);
 }

@@ -274,8 +274,6 @@ void HomingKiller::control() {
 }
 
 void HomingKiller::calcAndSetBaseMtx() {
-    // FIXME: Regswap in inline
-    // https://decomp.me/scratch/5jw7T
 
     TPos3f mtx2;
     TPos3f mtx;
@@ -709,7 +707,6 @@ bool HomingKiller::isChasing() const {
 
     return false;
 }
-#pragma opt_propagation off
 void HomingKiller::exeAppear() {
     if (MR::isFirstStep(this)) {
         MR::startBck(this, "Start");
@@ -769,7 +766,6 @@ void HomingKiller::exeAppear() {
         }
     }
 }
-#pragma opt_propagation on
 
 void HomingKiller::exeMoveStart() {
     if (processMove() && !tryFreeze(GET_NERVE(HomingKiller, HomingKillerNrvMoveStart)) && !tryChaseStart() && MR::isBckStopped(this)) {

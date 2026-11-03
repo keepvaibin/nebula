@@ -1,3 +1,4 @@
+#include "Game/Util/Color.hpp"
 #include "Game/Scene/PlayTimerScene.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/TimeLimitLayout.hpp"
@@ -9,7 +10,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/ValueControl.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static const u32 sTimeUpWaitFrame = 36000;
@@ -92,15 +93,9 @@ void PlayTimerScene::draw() const {
         return;
     }
 
-    J2DOrthoGraphSimple graph;
-    graph.setPort();
+    MR::setupScreen2D();
     u8 alpha = MR::lerp(0, 255, _20->getValue());
-    JUtility::TColor color(0, 0, 0, alpha);
-    graph.setColor(color);
-
-    f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
-    f32 width = MR::getScreenWidth();
-    graph.fillBox(0.0f, 0.0f, width, height);
+    MR::drawScreenColor(Color8(0, 0, 0, alpha));
 }
 
 bool PlayTimerScene::isActive() const {

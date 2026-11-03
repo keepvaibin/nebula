@@ -9,33 +9,21 @@ namespace {
 void J3DTexMtxInfo::operator=(J3DTexMtxInfo const& param_0) {
     mProjection = param_0.mProjection;
     mInfo = param_0.mInfo;
-    JMath::gekko_ps_copy3(&mCenter, &param_0.mCenter);
+    JMath::copyFloats3(&mCenter, &param_0.mCenter);
     mSRT = param_0.mSRT;
-    JMath::gekko_ps_copy16(&mEffectMtx, &param_0.mEffectMtx);
+    JMath::copyFloats16(&mEffectMtx, &param_0.mEffectMtx);
 }
 
 void J3DTexMtxInfo::setEffectMtx(Mtx param_0) {
-#ifdef TARGET_PC
-    JMath::gekko_ps_copy12(&mEffectMtx, param_0);
+    JMath::copyFloats12(&mEffectMtx, param_0);
     mEffectMtx[3][0] = kIdentityZero;
     mEffectMtx[3][1] = kIdentityZero;
     mEffectMtx[3][2] = kIdentityZero;
     mEffectMtx[3][3] = kIdentityW;
-#elif defined(__MWERKS__)
-    JMath::gekko_ps_copy12(&mEffectMtx, param_0);
-    register f32 zero = kIdentityZero;
-    register f32* mtx = &mEffectMtx[0][0];
-    asm {
-        psq_st zero, 0x30(mtx), 0, 0
-    }
-    ;
-    mEffectMtx[3][2] = kIdentityZero;
-    mEffectMtx[3][3] = kIdentityW;
-#endif
 }
 
 J3DIndTexMtxInfo& J3DIndTexMtxInfo::operator=(J3DIndTexMtxInfo const& param_0) {
-    JMath::gekko_ps_copy6(field_0x0, param_0.field_0x0);
+    JMath::copyFloats6(field_0x0, param_0.field_0x0);
     field_0x18 = param_0.field_0x18;
     return *this;
 }

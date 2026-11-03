@@ -1,12 +1,12 @@
 #include "Game/Speaker/SpkWave.hpp"
-#include <JSystem/JAudio2/JASCriticalSection.hpp>
-#include <revolution/os.h>
+#include "Game/System/GameThreads.hpp"
+#include "Game/Util/ByteView.hpp"
 
 SpkWave::SpkWave() : mResource(nullptr) {
 }
 
 void SpkWave::setResource(void* pResource) {
-    JASCriticalSection crit;
+    GameAudioExclusion crit;
     mResource = pResource;
 }
 
@@ -34,7 +34,7 @@ u32 SpkWave::getLoopEndPos(s32 wave) const {
     return getWaveData(wave)->mLoopEndPos;
 }
 
-NEBULA_BE(s16)* SpkWave::getWave(s32 wave) const {
+s16* SpkWave::getWave(s32 wave) const {
     if (mResource == nullptr) {
         return nullptr;
     }
@@ -43,5 +43,5 @@ NEBULA_BE(s16)* SpkWave::getWave(s32 wave) const {
 }
 
 WaveData* SpkWave::getWaveData(s32 wave) const {
-    return (WaveData*)((uintptr_t)mResource + *(NEBULA_BE(u32)*)((uintptr_t)mResource + wave * 4 + 8));
+    return (WaveData*)((uintptr_t)mResource + readBytes< u32 >(static_cast< const u8* >(mResource) + wave * 4 + 8));
 }

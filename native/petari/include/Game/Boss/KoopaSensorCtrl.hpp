@@ -14,5 +14,5 @@ public:
 
 private:
     /// @brief The pointer to the owning Bowser actor instance.
-    /* 0x0 */ Koopa* mHost;
+    Koopa* mHost;
 };

@@ -16,7 +16,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -26,8 +26,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
-#include <revolution/mtx.h>
-#include <revolution/types.h>
+#include <nebula_math.h>
 #include "Game/System/NebulaInput.hpp"
 
 namespace {
@@ -170,7 +169,7 @@ void Plant::exeSeedWait() {
         MR::startBck(mSeedPartsModel, "Bud");
         MR::startSound(this, "SE_OJ_PLANT_BUD");
         mTopPartsModel->kill();
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 }
 
@@ -218,7 +217,7 @@ void Plant::exeHangWaitGrowUp() {
     f32 growthPercent = mStalk->mGrowthPercent;
     mStalk->calcPosAndAxisY(&mPosition, &mUp, mRailCoord * growthPercent);
 
-    if (MR::isPadSwing(WPAD_CHAN0) && mRailCoord < MR::getRailTotalLength(this)) {
+    if (MR::isSpin(PLAYER_1) && mRailCoord < MR::getRailTotalLength(this)) {
         setNerve(GET_NERVE(Plant, PlantNrvHangUpGrowUp));
     }
 }
@@ -510,7 +509,7 @@ bool Plant::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
             }
         }
 
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::startSound(mRider, "SE_PM_GRAB_OBJ");
         MR::startSound(mRider, "SE_PV_CATCH");
         MR::startMultiActorCameraNoTarget(this, mCameraInfo, "\222\315\202\334\202\350" /* 掴まり */);
@@ -557,7 +556,7 @@ bool Plant::updateGrowUp() {
         mLeaves[leaf]->updateGrowUp(pos, axisY, growthPercent, 10.0f);
     }
 
-    MR::tryRumblePadWeak(this, WPAD_CHAN0);
+    MR::tryRumblePadWeak(this, PLAYER_1);
     MR::startLevelSound(this, "SE_OJ_LV_PLANT_GROW");
 
     if (growStalk) {
@@ -636,7 +635,7 @@ void Plant::startGrowUp() {
 }
 
 bool Plant::tryHangUp() {
-    if (!MR::isPadSwing(WPAD_CHAN0)) {
+    if (!MR::isSpin(PLAYER_1)) {
         if (mGrabbedTop) {
             mGrabbedTop = false;
         }
@@ -649,7 +648,7 @@ bool Plant::tryHangUp() {
     }
 
     MR::reverseRailDirection(this);
-    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     mRideVelocity = ::sHangUpPlayerSpeedMin;
     setNerve(GET_NERVE(Plant, PlantNrvHangUp));
     return true;
@@ -696,10 +695,10 @@ bool Plant::tryAccelHangUp() {
         return false;
     }
 
-    if (MR::isPadSwing(WPAD_CHAN0)) {
+    if (MR::isSpin(PLAYER_1)) {
         mAccelTimer = ::sHangAccelInvalidTime;
         mRideVelocity += ::sHangUpAccel;
-        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         f32 speed;
         if (mRideVelocity >= ::sHangUpPlayerSpeedMin) {
             speed = mRideVelocity;

@@ -8,9 +8,9 @@
 
 class SpkSystem : JASGlobalInstance< SpkSystem > {
 public:
-    SpkSystem(JKRHeap*);
+    SpkSystem(NebulaArena*);
 
-    void setResource(JKRArchive*, u16, u16);
+    void setResource(AssetFolder*, u16, u16);
     void framework();
     void startSound(s32, s32, SpkSoundHandle*);
     static void newSoundMemPool(s32);
@@ -20,8 +20,8 @@ public:
     static void extensionProcess(s32, s32);
     static f32 getDeviceVolume(s32);
 
-    /* 0x00 */ JKRHeap* mHeap;
-    /* 0x04 */ SpkData* mData;
-    /* 0x08 */ SpkMixingBuffer* mMixBuffer;
-    /* 0x0C */ SpkSoundHolder* mSoundHolder;
+    NebulaArena* mHeap;
+    SpkData* mData;
+    SpkMixingBuffer* mMixBuffer;
+    SpkSoundHolder* mSoundHolder;
 };

@@ -10,7 +10,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -18,15 +18,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
-
-void Karikari_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-    (void)0.5f;
-    (void)3.0f;
-    (void)2.0f;
-}
 
 namespace {
     volatile static const f32 sSize = 30.0f;  // TODO: is this really volatile or is this just a hack
@@ -765,8 +756,6 @@ bool Karikari::tryDPDRelease(const TVec2f& rVel) {
 }
 
 bool Karikari::tryDPDAttacked() {
-    // FIXME: TVec2 copy operations are done via memregs, not float regs
-    // https://decomp.me/scratch/W6YWF
 
     if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
         MR::startDPDHitSound();
@@ -774,7 +763,7 @@ bool Karikari::tryDPDAttacked() {
         TVec2f pointerVel(*MR::getStarPointerScreenVelocity(padChannel));
         TVec2f pointingPos;
         TVec2f screenPos;
-        MR::getCorePadPointingPosBasedOnScreen(&pointingPos, padChannel);
+        MR::getPointerPosOnScreen(&pointingPos, padChannel);
         MR::calcScreenPosition(&screenPos, mPosition);
         TVec2f fromCursorPos = screenPos;
         fromCursorPos.sub(pointingPos);

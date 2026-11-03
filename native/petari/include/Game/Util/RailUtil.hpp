@@ -2,9 +2,8 @@
 
 #include <JSystem/JGeometry.hpp>
 #include <JSystem/JGeometry/TBox.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class LiveActor;
 class RailRider;
@@ -13,7 +12,7 @@ namespace MR {
     void moveTransToOtherActorRailPos(LiveActor*, const LiveActor*);
     void moveTransToCurrentRailPos(LiveActor*);
 
-    void moveCoord(LiveActor*, f32) NO_INLINE;
+    void moveCoord(LiveActor*, f32);
     void moveCoordAndTransToRailPoint(LiveActor*, s32);
     s32 moveCoordAndCheckPassPointNo(LiveActor*, f32);
     s32 moveCoordAndFollowTransAndCheckPassPointNo(LiveActor*);
@@ -65,7 +64,7 @@ namespace MR {
     void calcRailStartPointPos(TVec3f*, const LiveActor*);
     void calcRailEndPointPos(TVec3f*, const LiveActor*);
     void calcRailStartPointDirection(TVec3f*, const LiveActor*);
-    void calcRailEndPointDirection(TVec3f*, const LiveActor*) NO_INLINE;
+    void calcRailEndPointDirection(TVec3f*, const LiveActor*);
     void calcRailStartPointPosAndDirection(TVec3f*, TVec3f*, const LiveActor*);
     void calcRailEndPointPosAndDirection(TVec3f*, TVec3f*, const LiveActor*);
 

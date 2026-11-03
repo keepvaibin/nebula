@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JAudio2/JASGlobal.hpp>
-#include "nebula_disc.hpp"
 #include <JSystem/JAudio2/JASHeapCtrl.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JSupport/JSUList.hpp>
@@ -10,26 +9,31 @@ class AudMeHandle;
 class AudMeTrack;
 
 struct AudMePlayingParams {
-    /* 0x0 */ u8 mPriority;
-    /* 0x1 */ u8 mChordVolume;
-    /* 0x2 */ u8 _2;
-    /* 0x3 */ u8 _3;
-    /* 0x4 */ NEBULA_BE(u16) _4;
-    /* 0x6 */ u8 _6;
-    /* 0x7 */ u8 _7;
+    u8 mPriority;
+    u8 mChordVolume;
+    u8 _2;
+    u8 _3;
+    u16 _4;
+    u8 _6;
+    u8 _7;
 };
 
 class AudMePlayingParamsHolder {
 public:
-    AudMePlayingParamsHolder() : mNumEntries(), mParams(), mNames() {
+    AudMePlayingParamsHolder() : mNumEntries(), mParams(), mBase(), mNameOffsets() {
     }
 
     void setResource(void*);
 
-    /* 0x0 */ u32 mNumEntries;
-    /* 0x4 */ AudMePlayingParams* mParams;
-    // The file's name offsets, relocated in place.
-    /* 0x8 */ NEBULA_SELFREL(const char)* mNames;
+    u32 mNumEntries;
+    AudMePlayingParams* mParams;
+    // The ME table file (host order, as the importer cooks it) and its name offsets from the file's start.
+    const u8* mBase;
+    const u32* mNameOffsets;
+
+    const char* getName(u32 index) const {
+        return reinterpret_cast< const char* >(mBase + mNameOffsets[index]);
+    }
 };
 
 class AudMe : public JSULink< AudMe >, public JASPoolAllocObject< AudMe > {
@@ -46,9 +50,9 @@ public:
     };
 
     struct MoveParam_ {
-        /* 0x0 */ f32 mValue;
-        /* 0x4 */ f32 mTarget;
-        /* 0x8 */ f32 mDelta;
+        f32 mValue;
+        f32 mTarget;
+        f32 mDelta;
     };
 
     AudMe();
@@ -69,38 +73,38 @@ public:
     void doneStop();
     void setPauseFlag(bool);
 
-    /* 0x10 */ AudMeHandle* mHandle;
-    /* 0x14 */ AudMeTrack* mTrack;
-    /* 0x18 */ u32 _18;
-    /* 0x1C */ const TVec3f* mPos;
-    /* 0x20 */ s32 mMeId;
-    /* 0x24 */ s32 _24;     // mStopTime
-    /* 0x28 */ u32 mTimer;  // mTimer
-    /* 0x2C */ union {
+    AudMeHandle* mHandle;
+    AudMeTrack* mTrack;
+    u32 _18;
+    const TVec3f* mPos;
+    s32 mMeId;
+    s32 _24;     // mStopTime
+    u32 mTimer;  // mTimer
+    union {
         struct {
-            /* 0x2C */ MoveParam_ mVolumeParam;
-            /* 0x38 */ MoveParam_ mPitchParam;
-            /* 0x44 */ MoveParam_ mFxMixParam;
-            /* 0x50 */ MoveParam_ mPanParam;
-            /* 0x5C */ MoveParam_ mDolbyParam;
-            /* 0x68 */ MoveParam_ mDistFilterParam;
+            MoveParam_ mVolumeParam;
+            MoveParam_ mPitchParam;
+            MoveParam_ mFxMixParam;
+            MoveParam_ mPanParam;
+            MoveParam_ mDolbyParam;
+            MoveParam_ mDistFilterParam;
         };
-        /* 0x2C */ MoveParam_ mMoveParams[TIMED_PARAMS];
+        MoveParam_ mMoveParams[TIMED_PARAMS];
     };
-    /* 0x74 */ s32 _74;
-    /* 0x78 */ void* mData;
-    /* 0x7C */ u32 _7C;
-    /* 0x80 */ f32 _80;
-    /* 0x84 */ f32 mVolume;
-    /* 0x88 */ f32 _88;
-    /* 0x8C */ f32 _8C;
-    /* 0x90 */ s32 mPriority;
-    /* 0x94 */ s32 _94;
+    s32 _74;
+    void* mData;
+    u32 _7C;
+    f32 _80;
+    f32 mVolume;
+    f32 _88;
+    f32 _8C;
+    s32 mPriority;
+    s32 _94;
 };
 
 struct AudMeTable {
-    /* 0x0 */ NEBULA_BE(s32) mNumEntries;
-    /* 0x4 */ NEBULA_BE(s32) mSeqStartPos[1];
+    s32 mNumEntries;
+    s32 mSeqStartPos[1];
 };
 
 class AudMeMgr : public JASGlobalInstance< AudMeMgr > {
@@ -123,9 +127,9 @@ public:
         return mParams.mParams[index].mPriority;
     }
 
-    /* 0x00 */ AudMeTable* mMeSeq;
-    /* 0x04 */ JSUList< AudMe > mMeList;
-    /* 0x10 */ u8 _10[64];  // mNotes?
-    /* 0x50 */ f32 _50;
-    /* 0x54 */ AudMePlayingParamsHolder mParams;
+    AudMeTable* mMeSeq;
+    JSUList< AudMe > mMeList;
+    u8 _10[64];  // mNotes?
+    f32 _50;
+    AudMePlayingParamsHolder mParams;
 };

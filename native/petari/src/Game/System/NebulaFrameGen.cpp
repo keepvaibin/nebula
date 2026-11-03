@@ -1,8 +1,6 @@
 #include "Game/System/NebulaFrameGen.hpp"
 
-#ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 
@@ -23,4 +21,3 @@ namespace NebulaFrameGen {
         NebulaHost::gameContext(NEBULA_CONTEXT_FRAME_GENERATION, playing && !menu ? 1 : 0);
     }
 };  // namespace NebulaFrameGen
-#endif

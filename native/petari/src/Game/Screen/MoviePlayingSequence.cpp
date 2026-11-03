@@ -1,7 +1,9 @@
 #include "Game/Screen/MoviePlayingSequence.hpp"
-#ifdef TARGET_PC
+#include <nebula_game_api.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#endif
 #include "Game/Demo/DemoPadRumbler.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/MarioAccess.hpp"
@@ -9,7 +11,7 @@
 #include "Game/Screen/MovieSubtitles.hpp"
 #include "Game/Screen/MovieSubtitlesDataTable.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -175,7 +177,7 @@ namespace {
         }
     }
 
-    const char* getMovieName(const MoviePlayingInfo* pInfo) NO_INLINE {
+    const char* getMovieName(const MoviePlayingInfo* pInfo) {
         if (MR::isPlayerLuigi() && pInfo->mMovieNameLuigi != nullptr) {
             return pInfo->mMovieNameLuigi;
         } else {
@@ -264,11 +266,10 @@ void MoviePlayingSequence::exeWait() {
 
 void MoviePlayingSequence::exePlayWait() {
     if (MR::isFirstStep(this)) {
-#ifdef TARGET_PC
         // An HD replacement's decoder starts here, the play wait before the THP opens, so its first frames are ready
         // with the game's.
-        __NebulaMovieFrame(::getMovieName(mInfo), -2, 0.0f, nullptr, nullptr, nullptr, 0, 0);
-#endif
+        const NebulaHostServices* const host = nebula_host();
+        host->movie_frame(host->user, ::getMovieName(mInfo), NEBULA_MOVIE_OPENING, 0.0f, nullptr, nullptr, nullptr, 0, 0);
         MR::startStarPointerModeDemo(this);
         MR::stopSubBGM(60);
         MR::stopStageBGM(60);
@@ -374,14 +375,12 @@ bool MoviePlayingSequence::trySkip() {
         return false;
     }
 
-#ifdef TARGET_PC
     if (NebulaCutsceneSkip::takeMovieSkip()) {
         MR::stopMoviePlayer();
         MR::forceCloseWipeFade();
         setNerve(GET_NERVE(MoviePlayingSequence, HostTypeEndWait));
         return true;
     }
-#endif
 
     if (!MR::isEqualStringCase(mInfo->mMovieName, "/MovieData/FinalBattle.thp")) {
         return false;
@@ -391,7 +390,7 @@ bool MoviePlayingSequence::trySkip() {
         return false;
     }
 
-    if (!MR::testCorePadButtonA(WPAD_CHAN0)) {
+    if (!MR::isHeldJump(PLAYER_1)) {
         return false;
     }
 

@@ -1,9 +1,8 @@
 #pragma once
 
 #include <nebula_game_api.h>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 // Geometry the game builds itself (outside its models) as typed records (nebula_game_api.h shape_array,
 // shape_geometry, shape_draw): the values its corners give as the mesh's own arrays, arrays the game keeps (and
@@ -27,8 +26,8 @@ public:
     // Slot `slot` reads the game's array named `pKey` (its values sent with sendArray) by the indices corners give.
     void useArray(u32 slot, const void* pKey);
 
-    // A primitive as GXBegin starts it: `count` corners follow, each its values or indices then corner().
-    void begin(GXPrimitive primitive, u16 count);
+    // A primitive as u8 starts it: `count` corners follow, each its values or indices then corner().
+    void begin(NebulaPrimitive primitive, u16 count);
     void position(f32 x, f32 y, f32 z);
     void normal(f32 x, f32 y, f32 z);
     void color(u8 r, u8 g, u8 b, u8 a);

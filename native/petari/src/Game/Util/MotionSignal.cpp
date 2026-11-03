@@ -1,4 +1,3 @@
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ModelManager.hpp"
@@ -23,7 +22,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <nebula_game_api.h>
 #include <nw4r/lyt/pane.h>
-#include <revolution/os.h>
 #include "Game/Util/RenderSignals.hpp"
 #include "Game/System/NebulaHost.hpp"
 
@@ -43,7 +41,6 @@ namespace {
         Kind_StarPointer = 11,
         Kind_Material = 12,
         Kind_Effect = 13,
-        Kind_TraceOnly = 14,
     };
 
     enum {
@@ -229,19 +226,11 @@ namespace MotionSignal {
         NebulaRender::hostMarker(Kind_Pass, begin ? Pass_MirrorBegin : Pass_MirrorEnd, 0, 0);
     }
 
-    bool traceOnlyWanted() {
-        return NebulaRender::sDrawIdentities != 0 && NebulaHost::option(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
-    }
-
-    void traceOnly(bool begin) {
-        NebulaRender::hostMarker(Kind_TraceOnly, begin ? 1 : 0, 0, 0);
-    }
-
     void lightImpl(u16 site, const void* pInfo, u32 followCamera) {
         NebulaRender::hostMarker(Kind_Light, site, pInfo != nullptr ? id(pInfo) : 0, followCamera);
     }
 
-    // Bit 0: light A (GX light 0) follows the camera; bit 1: light B (GX light 1). The renderer moves those lights
+    // Bit 0: light A follows the camera; bit 1: light B. The renderer moves those lights
     // with the camera under ray tracing.
     void actorLight(const ActorLightInfo* pInfo) {
         if (NebulaRender::sDrawIdentities != 0) {
@@ -367,4 +356,3 @@ namespace MotionSignal {
         sCameraCutPending = true;
     }
 };  // namespace MotionSignal
-#endif

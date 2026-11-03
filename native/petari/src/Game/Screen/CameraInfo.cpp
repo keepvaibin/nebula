@@ -1,7 +1,7 @@
 #include "Game/Screen/CameraInfo.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -190,8 +190,8 @@ bool CameraInfo::tryShow() {
         return false;
     }
 
-    bool isTriggerAnyDir = MR::testCorePadTriggerUp(WPAD_CHAN0) || MR::testCorePadTriggerDown(WPAD_CHAN0) || MR::testCorePadTriggerLeft(WPAD_CHAN0) ||
-                           MR::testCorePadTriggerRight(WPAD_CHAN0);
+    bool isTriggerAnyDir = MR::isPressedUp(PLAYER_1) || MR::isPressedDown(PLAYER_1) || MR::isPressedLeft(PLAYER_1) ||
+                           MR::isPressedRight(PLAYER_1);
 
     if (!isTriggerAnyDir) {
         return false;
@@ -215,8 +215,8 @@ bool CameraInfo::tryHide() {
         return false;
     }
 
-    bool isTriggerAnyDir = MR::testCorePadTriggerUp(WPAD_CHAN0) || MR::testCorePadTriggerDown(WPAD_CHAN0) || MR::testCorePadTriggerLeft(WPAD_CHAN0) ||
-                           MR::testCorePadTriggerRight(WPAD_CHAN0);
+    bool isTriggerAnyDir = MR::isPressedUp(PLAYER_1) || MR::isPressedDown(PLAYER_1) || MR::isPressedLeft(PLAYER_1) ||
+                           MR::isPressedRight(PLAYER_1);
 
     if (isTriggerAnyDir || getNerveStep() == 0) {
         mStep = 0;

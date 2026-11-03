@@ -1,3 +1,4 @@
+#include "Game/Util/SortUtil.hpp"
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/Map/CollisionCategorizedKeeper.hpp"
 #include "Game/Map/CollisionDirector.hpp"
@@ -64,7 +65,7 @@ u32 Binder::copyPlaneArrayAndSortingSensor(HitInfo** pPlanes, u32 capacity) {
             pPlanes[count++] = &mRoofInfo;
         }
 
-        std::sort(pPlanes, pPlanes + count, compSensor);
+        MR::sort(pPlanes, pPlanes + count, compSensor);
         return count;
     }
 
@@ -72,7 +73,7 @@ u32 Binder::copyPlaneArrayAndSortingSensor(HitInfo** pPlanes, u32 capacity) {
         pPlanes[i] = &mPlane[i];
     }
 
-    std::sort(pPlanes, pPlanes + mPlaneNum, compSensor);
+    MR::sort(pPlanes, pPlanes + mPlaneNum, compSensor);
     return mPlaneNum;
 }
 
@@ -84,6 +85,11 @@ bool Binder::compSensor(const HitInfo* pPlane1, const HitInfo* pPlane2) {
 // collision sphere starts from the host position + binder offset, transformed by the host matrix when applicable
 // checks our movement in small steps, pushes the sphere out of overlapping geometry, then slides the remaining movement along the contact surface
 // records ground, wall, and roof contacts, stores our push-out vector, and optionally follows moving ground before returning the result
+namespace {
+    // Binders move on the game's main thread, one at a time.
+    HitInfo sLocalPlanes[32];
+}  // namespace
+
 const TVec3f Binder::bind(const TVec3f& rVelocity) {
     const bool stopAtFirstHit = _1EC._5 != 0;
     _1EC._5 = false;
@@ -122,11 +128,10 @@ const TVec3f Binder::bind(const TVec3f& rVelocity) {
     }
 
     TVec3f startPosition(position);
-    HitInfo localPlanes[32];
     u32 capacity = _24;
     HitInfo* planes;
     if (capacity == 0) {
-        planes = localPlanes;
+        planes = sLocalPlanes;
         capacity = 32;
     } else {
         planes = mPlane;

@@ -57,7 +57,7 @@ void MechaKoopaPartsHead::exeDemoBreak() {
         MR::shakeCameraInfinity(this, 0.2f, 2.0f);
     }
 
-    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
     MR::startLevelSound(this, "SE_BM_LV_MECHA_KOOPA_PRE_BREAK");
 
     if (MR::isStep(this, ::sStepToBreakFaceEffect)) {
@@ -81,7 +81,7 @@ void MechaKoopaPartsHead::exeDemoBreak() {
 void MechaKoopaPartsHead::exeDemoWhiteFadeOut() {
     if (MR::isFirstStep(this)) {
         MR::stopShakingCamera(this);
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraStrong();
         MR::startSound(this, "SE_BM_MECHA_KOOPA_EXPLODE");
         MR::closeWipeWhiteFade(::sStepForWhiteFadeOut);

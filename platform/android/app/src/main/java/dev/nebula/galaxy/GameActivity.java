@@ -3,6 +3,10 @@ package dev.nebula.galaxy;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
 import android.os.Process;
@@ -13,6 +17,7 @@ import android.view.Display;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -35,35 +40,54 @@ import org.libsdl.app.SDLSurface;
  * The game: SDL's activity running libmain.so (native/host/host_main.cpp built by platform/sdl), with the touch
  * controls and the HOME Menu over the picture. It has its own process, which ends with the game.
  */
-public class GameActivity extends SDLActivity {
+public class GameActivity extends SDLActivity implements SensorEventListener {
     private static final String TAG = "Nebula";
+    private SensorManager sensors;
+    private final float[] phoneGyro = new float[3];
 
     // libmain.so (platform/sdl/host_window_sdl.cpp).
     static native void nativeTouchControls(int buttons, float stickX, float stickY);
     static native void nativePointer(int action, int id, float x, float y);
     static native boolean nativeMenuContext();
-    static native void nativeHomeChoice(int choice);
+    static native boolean nativeTitleScreen();
     static native void nativeSetVisible(boolean visible);
     static native void nativeSurfaceWithdrawn();
     static native void nativeSurfaceReturned();
+    static native void nativePhoneMotion(float ax, float ay, float az, float gx, float gy, float gz, long timeNs);
 
     private TouchControlsView controls;
-    private HomeMenuView homeMenu;
+    private boolean menuOpen;
     private String controlsMode = "auto";
     private boolean controlsWanted = true;   // the player's choice in the HOME Menu
-    private float menuAxis;                  // a controller stick's last direction in the HOME Menu
 
     @Override
     protected String[] getLibraries() {
         return new String[] {"SDL3", "main"};
     }
 
+    /** The game's language follows the device's where the disc has it (runtime_settings.cpp reads LANG). */
+    private static void passLocale() {
+        try {
+            android.system.Os.setenv("LANG", java.util.Locale.getDefault().getLanguage(), true);
+        } catch (android.system.ErrnoException ignored) {
+            // No language passed: the game plays in English.
+        }
+    }
+
     @Override
     protected String[] getArguments() {
+        passLocale();
+        // The launcher's Record diagnostics: this run only.
+        final SharedPreferences prefs = GameFiles.controls(this);
+        final boolean record = prefs.getBoolean(GameFiles.RECORD_NEXT_RUN, false);
+        if (record) {
+            prefs.edit().remove(GameFiles.RECORD_NEXT_RUN).commit();
+        }
         return new String[] {
             "--pak", GameFiles.pak(this).getPath(),
-            "--nand", GameFiles.nand(this).getPath(),
+            "--saves", GameFiles.nand(this).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
+            "--diagnostics", record ? "1" : "0",
         };
     }
 
@@ -171,6 +195,11 @@ public class GameActivity extends SDLActivity {
             }
 
             @Override
+            public boolean titleScreen() {
+                return nativeTitleScreen();
+            }
+
+            @Override
             public boolean menuContext() {
                 return nativeMenuContext();
             }
@@ -180,23 +209,7 @@ public class GameActivity extends SDLActivity {
         mLayout.addView(controls, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        homeMenu = new HomeMenuView(this, new HomeMenuView.Listener() {
-            @Override
-            public void onHomeChoice(int choice) {
-                nativeHomeChoice(choice);
-                applyControlsVisibility();
-            }
-
-            @Override
-            public void onTouchControlsToggled(boolean shown) {
-                controlsWanted = shown;
-            }
-        });
-        mLayout.addView(homeMenu, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
-
         controlsWanted = !"never".equals(controlsMode) && !("auto".equals(controlsMode) && controllerConnected());
-        homeMenu.setControlsShown(controlsWanted);
         applyControlsVisibility();
         final InputManager input = getSystemService(InputManager.class);
         input.registerInputDeviceListener(new InputManager.InputDeviceListener() {
@@ -238,12 +251,59 @@ public class GameActivity extends SDLActivity {
         super.onStart();
         if (!mBrokenLibraries) {
             nativeSetVisible(true);
+            listenToPhoneMotion(true);
         }
+    }
+
+    // The phone's own sensors: tilt for the sections the game steers by tilting, a shake for the spin.
+    private void listenToPhoneMotion(boolean listen) {
+        if (sensors == null) {
+            sensors = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        }
+        if (sensors == null) {
+            return;
+        }
+        if (!listen) {
+            sensors.unregisterListener(this);
+            return;
+        }
+        final Sensor accelerometer = sensors.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        final Sensor gyroscope = sensors.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
+        if (accelerometer != null) {
+            sensors.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+        }
+        if (gyroscope != null) {
+            sensors.registerListener(this, gyroscope, SensorManager.SENSOR_DELAY_GAME);
+        }
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        // From the phone's axes to the screen's as it is turned: x right, y up, z out of the glass.
+        final Display display = getDisplay();
+        final int rotation = display != null ? display.getRotation() : Surface.ROTATION_0;
+        final float dx = event.values[0];
+        final float dy = event.values[1];
+        final float x = rotation == Surface.ROTATION_90 ? -dy : rotation == Surface.ROTATION_180 ? -dx : rotation == Surface.ROTATION_270 ? dy : dx;
+        final float y = rotation == Surface.ROTATION_90 ? dx : rotation == Surface.ROTATION_180 ? -dy : rotation == Surface.ROTATION_270 ? -dx : dy;
+        final float z = event.values[2];
+        if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            phoneGyro[0] = x;
+            phoneGyro[1] = y;
+            phoneGyro[2] = z;
+        } else {
+            nativePhoneMotion(x, y, z, phoneGyro[0], phoneGyro[1], phoneGyro[2], event.timestamp);
+        }
+    }
+
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
     @Override
     protected void onStop() {
         if (!mBrokenLibraries) {
+            listenToPhoneMotion(false);
             nativeSetVisible(false);
         }
         super.onStop();
@@ -259,29 +319,33 @@ public class GameActivity extends SDLActivity {
     }
 
     // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
-    public void showHomeMenu() {
+    public void menuOpened() {
         runOnUiThread(() -> {
-            if (homeMenu != null) {
-                controls.setControlsShown(false);
-                homeMenu.setControlsShown(controlsWanted);
-                homeMenu.show();
+            menuOpen = true;
+            applyControlsVisibility();
+        });
+    }
+
+    // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
+    public void menuContextChanged() {
+        runOnUiThread(() -> {
+            if (controls != null) {
+                controls.syncMenuContext();
             }
         });
     }
 
     // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
-    public void hideHomeMenu() {
+    public void menuClosed() {
         runOnUiThread(() -> {
-            if (homeMenu != null) {
-                homeMenu.hide();
-                applyControlsVisibility();
-            }
+            menuOpen = false;
+            applyControlsVisibility();
         });
     }
 
     private void applyControlsVisibility() {
         if (controls != null) {
-            controls.setControlsShown(controlsWanted && (homeMenu == null || !homeMenu.showing()));
+            controls.setControlsShown(controlsWanted && !menuOpen);
         }
     }
 
@@ -325,9 +389,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (homeMenu != null && homeMenu.showing()) {
-            return homeMenu.handleKey(event);
-        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }
@@ -336,22 +397,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        if (homeMenu != null && homeMenu.showing()) {
-            // A stick or hat pad moves the menu's focus, once per push.
-            if (fromController(event.getSource()) && event.getAction() == MotionEvent.ACTION_MOVE) {
-                float axis = event.getAxisValue(MotionEvent.AXIS_HAT_Y);
-                if (Math.abs(axis) < 0.5f) {
-                    axis = event.getAxisValue(MotionEvent.AXIS_Y);
-                }
-                final float direction = axis > 0.6f ? 1.0f : axis < -0.6f ? -1.0f : 0.0f;
-                if (direction != 0.0f && direction != menuAxis) {
-                    final int code = direction > 0 ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_UP;
-                    homeMenu.handleKey(new KeyEvent(KeyEvent.ACTION_DOWN, code));
-                }
-                menuAxis = direction;
-            }
-            return true;
-        }
         if (fromController(event.getSource()) && "auto".equals(controlsMode)) {
             hideControlsForController();
         }

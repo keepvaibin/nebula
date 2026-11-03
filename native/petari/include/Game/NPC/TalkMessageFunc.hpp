@@ -1,13 +1,12 @@
 #pragma once
 
-#include "Inline.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 class TalkMessageFuncBase {
 public:
     virtual bool operator()(u32) const = 0;
     virtual TalkMessageFuncBase* clone() const = 0;
-    virtual TalkMessageFuncBase* clone(JKRHeap*) const = 0;
+    virtual TalkMessageFuncBase* clone(NebulaArena*) const = 0;
 };
 
 template < typename T, typename U >
@@ -27,7 +26,7 @@ public:
         return new TalkMessageFuncM(*this);
     }
 
-    virtual TalkMessageFuncM* clone(JKRHeap* pHeap) const {
+    virtual TalkMessageFuncM* clone(NebulaArena* pHeap) const {
         return new (pHeap, 0) TalkMessageFuncM(*this);
     };
 
@@ -36,7 +35,7 @@ public:
 };
 
 template < class T >
-static TalkMessageFuncM< T*, bool (T::*)(u32) > TalkMessageFunc(T* a1, bool (T::*a2)(u32)) NO_INLINE {
+static TalkMessageFuncM< T*, bool (T::*)(u32) > TalkMessageFunc(T* a1, bool (T::*a2)(u32)) {
     return TalkMessageFuncM< T*, bool (T::*)(u32) >(a1, a2);
 }
 

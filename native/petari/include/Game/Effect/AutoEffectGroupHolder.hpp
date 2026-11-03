@@ -1,6 +1,7 @@
 #pragma once
 
-#include <revolution/types.h>
+#include "Game/Util/Array.hpp"
+
 
 class AutoEffectGroup;
 class EffectKeeper;
@@ -16,8 +17,8 @@ public:
     AutoEffectGroup* find(const char* pName) const;
     bool isExist(const char* pName) const;
 
-    /* 0x000 */ AutoEffectGroup* mGroups[0x100];
-    /* 0x400 */ s32 mCount;
+    MR::GrowTable< AutoEffectGroup*, 0x100 > mGroups;
+    s32 mCount;
 };
 
 namespace MR {

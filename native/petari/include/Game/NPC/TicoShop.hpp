@@ -20,8 +20,8 @@ public:
 
     void exeDemo();
 
-    /* 0x19C */ BenefitItemOneUp* mOneUp;
-    /* 0x1A0 */ BenefitItemLifeUp* mLifeUp;
-    /* 0x1A4 */ bool mChoseOneUp;
-    /* 0x1A5 */ bool mChoseLifeUp;
+    BenefitItemOneUp* mOneUp;
+    BenefitItemLifeUp* mLifeUp;
+    bool mChoseOneUp;
+    bool mChoseLifeUp;
 };

@@ -1,9 +1,8 @@
 #pragma once
 
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class OceanSpherePoint {
 public:
@@ -12,10 +11,10 @@ public:
     void updatePos(f32 radius, f32 wave1Time, f32 wave2Time);
     f32 calcHeight(f32 wave1Time, f32 wave2Time, f32 wave1Pos, f32 wave2Pos) const;
 
-    /* 0x00 */ TVec3f mPos;
-    /* 0x0C */ const TVec3f* mCenter;
-    /* 0x10 */ TVec3f mNormal;
-    /* 0x1C */ f32 mWave1Pos;
-    /* 0x20 */ f32 mWave2Pos;
-    /* 0x24 */ TVec2f mTexCoord;
+    TVec3f mPos;
+    const TVec3f* mCenter;
+    TVec3f mNormal;
+    f32 mWave1Pos;
+    f32 mWave2Pos;
+    TVec2f mTexCoord;
 };

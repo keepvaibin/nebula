@@ -17,5 +17,5 @@ public:
     virtual void activateTripodBoss();
     virtual void exeWaitOwn();
 
-    /* 0xF0 */ MapPartsRotator* mRotator;
+    MapPartsRotator* mRotator;
 };

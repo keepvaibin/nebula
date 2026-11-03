@@ -1,9 +1,9 @@
 #pragma once
 
 #include "JSystem/JGeometry/TVec.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
-class JKRHeap;
+class NebulaArena;
 class JPABaseEmitter;
 class JPABaseParticle;
 class JPAEmitterCallBack;
@@ -117,32 +117,32 @@ public:
     f32 getCalcCurrentPositionZ(const JPABaseEmitter*) const;
 
 public:
-    /* 0x00 */ JGeometry::TVec3< f32 > mPosition;
-    /* 0x0C */ JGeometry::TVec3< f32 > mLocalPosition;
-    /* 0x18 */ JGeometry::TVec3< f32 > mOffsetPosition;
-    /* 0x24 */ JGeometry::TVec3< f32 > mVelocity;
-    /* 0x30 */ JGeometry::TVec3< f32 > mVelType1;
-    /* 0x3C */ JGeometry::TVec3< f32 > mVelType0;
-    /* 0x48 */ JGeometry::TVec3< f32 > mVelType2;
-    /* 0x54 */ JGeometry::TVec3< f32 > mBaseAxis;
-    /* 0x60 */ f32 mParticleScaleX;
-    /* 0x64 */ f32 mParticleScaleY;
-    /* 0x68 */ f32 mScaleOut;
-    /* 0x6C */ f32 mAlphaWaveRandom;
-    /* 0x70 */ f32 mMoment;
-    /* 0x74 */ f32 mDrag;
-    /* 0x78 */ u32 mUserWork;
-    /* 0x7C */ u32 mStatus;
-    /* 0x80 */ s16 mAge;
-    /* 0x82 */ s16 mLifeTime;
-    /* 0x84 */ f32 mTime;
-    /* 0x88 */ s16 mRotateAngle;
-    /* 0x8A */ s16 mRotateSpeed;
-    /* 0x8C */ GXColor mPrmClr;
-    /* 0x90 */ GXColor mEnvClr;
-    /* 0x94 */ u8 mTexAnmIdx;
-    /* 0x95 */ u8 mAnmRandom;
-    /* 0x96 */ u8 mPrmColorAlphaAnm;
+    JGeometry::TVec3< f32 > mPosition;
+    JGeometry::TVec3< f32 > mLocalPosition;
+    JGeometry::TVec3< f32 > mOffsetPosition;
+    JGeometry::TVec3< f32 > mVelocity;
+    JGeometry::TVec3< f32 > mVelType1;
+    JGeometry::TVec3< f32 > mVelType0;
+    JGeometry::TVec3< f32 > mVelType2;
+    JGeometry::TVec3< f32 > mBaseAxis;
+    f32 mParticleScaleX;
+    f32 mParticleScaleY;
+    f32 mScaleOut;
+    f32 mAlphaWaveRandom;
+    f32 mMoment;
+    f32 mDrag;
+    u32 mUserWork;
+    u32 mStatus;
+    s16 mAge;
+    s16 mLifeTime;
+    f32 mTime;
+    s16 mRotateAngle;
+    s16 mRotateSpeed;
+    NebulaColor8 mPrmClr;
+    NebulaColor8 mEnvClr;
+    u8 mTexAnmIdx;
+    u8 mAnmRandom;
+    u8 mPrmColorAlphaAnm;
 };
 
 class JPAParticleCallBack {

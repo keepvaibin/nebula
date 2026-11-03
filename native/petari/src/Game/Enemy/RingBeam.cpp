@@ -20,12 +20,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void RingBeam_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    f32 f3 = MR::epsilon();
-}
-
 namespace NrvRingBeam {
     NEW_NERVE(RingBeamNrvSpread, RingBeam, Spread);
 };  // namespace NrvRingBeam
@@ -80,7 +74,7 @@ void RingBeamShadowDrawer::drawShape() const {
         NebulaMtxMultVec(mtx, &XDirScaled, &XDirScaled);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getTrans(Trans);
@@ -92,7 +86,7 @@ void RingBeamShadowDrawer::drawShape() const {
         J3DNativeDraw::position(temp.x, temp.y, temp.z);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -109,7 +103,7 @@ void RingBeamShadowDrawer::drawShape() const {
         J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -124,7 +118,7 @@ void RingBeamShadowDrawer::drawShape() const {
         J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -142,7 +136,7 @@ void RingBeamShadowDrawer::drawShape() const {
 
 void RingBeamShadowDrawer::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
 };
 
 bool RingBeamShadowDrawer::isDraw() const {
@@ -232,7 +226,7 @@ void RingBeam::setRadius(f32 radius) {
         _a0->_20 = radius;
     }
     getSensor("Beam")->mRadius = radius;
-    char* str = "Spread";
+    const char* str = "Spread";
     MR::startBckNoInterpole(this, str);
     MR::startBckNoInterpole(mBloomModel, str);
     radius = (radius / 2000.0f) * MR::getBckFrameMax(this);
@@ -300,7 +294,7 @@ void RingBeam::exeSpread() {
         if (!MR::isPowerStarGetDemoActive()) {
             MR::startSound(this, "SE_EM_JUMPRING_APPEAR");
         }
-        char* str = "Spread";
+        const char* str = "Spread";
         MR::startBckNoInterpole(this, str);
         MR::startBckNoInterpole(mBloomModel, str);
         startBrk("Erase");

@@ -4,7 +4,7 @@
 
 s32 GalaxyNameSortTable::getGalaxySortIndex(const char* pName) {
     JMapInfo info;
-    info.attach(NebulaDiscTables::getGalaxyInfoTable());
+    info.attach(NebulaDataTables::getGalaxyInfoTable());
 
     JMapInfoIter iter = info.findElement("name", pName, 0);
 

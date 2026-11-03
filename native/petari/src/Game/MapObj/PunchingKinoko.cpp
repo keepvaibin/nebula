@@ -2,14 +2,8 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
-
-void PunchingKinoko_FORCE_EMIT_SCALE() {
-    TVec3f vec;
-    vec.scale(0.0f);
-}
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace NrvPunchingKinoko {
     NEW_NERVE(PunchingKinokoNrvWait, PunchingKinoko, Wait);
@@ -309,7 +303,7 @@ bool PunchingKinoko::requestPunch(HitSensor* pOtherSensor, HitSensor* pMySensor)
         mGroundChecker->mVelocity.add(stack_14 * 50.0f);
         MR::startSpinHitSound(this);
         MR::startBlowHitSound(this);
-        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::stopScene(5);
         setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunched));
 
@@ -373,7 +367,7 @@ void PunchingKinoko::exeWait() {
                 mGroundChecker->mVelocity.add(stack_2C * 35.0f);
                 MR::startBlowHitSound(this);
                 MR::start2PAttackAssistSound();
-                MR::tryRumblePadWeak(this, WPAD_CHAN1);
+                MR::tryRumblePadWeak(this, PLAYER_2);
                 mStarPointerHitCoolDown = 30;
                 setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPointSnaped));
                 return;

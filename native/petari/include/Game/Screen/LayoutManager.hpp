@@ -20,17 +20,17 @@ class LayoutHolder;
 class LayoutPaneCtrl;
 
 struct LayoutGroupCtrlLink {
-    /* 0x00 */ LayoutGroupCtrl* mGroupCtrl;
-    /* 0x04 */ LayoutGroupCtrlLink* mNext;
+    LayoutGroupCtrl* mGroupCtrl;
+    LayoutGroupCtrlLink* mNext;
 };
 
 struct LayoutPaneInfo {
-    /* 0x00 */ const char* mName;
-    /* 0x04 */ LayoutPaneCtrl* mPaneCtrl;
-    /* 0x08 */ LayoutGroupCtrlLink* mGroupCtrlLink;
-    /* 0x0C */ MtxPtr mMtxRef;
-    /* 0x10 */ u32 mChildCount;
-    /* 0x14 */ nw4r::lyt::Pane* mPane;
+    const char* mName;
+    LayoutPaneCtrl* mPaneCtrl;
+    LayoutGroupCtrlLink* mGroupCtrlLink;
+    MtxPtr mMtxRef;
+    u32 mChildCount;
+    nw4r::lyt::Pane* mPane;
 };
 
 class LayoutManager {
@@ -64,11 +64,9 @@ public:
     void initArc(const char*, const char*);
     void initDrawInfo();
     void initPaneInfo();
-#ifdef TARGET_PC
     // The pane list again after code changed the layout's tree (moved or added panes); before any pane or group
     // control exists.
     void rebuildPaneInfo();
-#endif
     void initPaneInfoRecursive(u32&, nw4r::lyt::Pane*);
     u32 countPanes(nw4r::lyt::Pane*);
     void initGroupCtrlList();
@@ -86,22 +84,20 @@ public:
     void replaceIndDummyTexture();
     void removeUnnecessaryPanes(nw4r::lyt::Pane*);
 
-    /* 0x00 */ LayoutHolder* mLayoutHolder;
-    /* 0x04 */ nw4r::lyt::Layout* mLayout;
-    /* 0x08 */ nw4r::lyt::AnimTransform** mAnimTransList;
-    /* 0x0C */ nw4r::lyt::DrawInfo mDrawInfo;
-    /* 0x60 */ bool mIsScreenHidden;
-    /* 0x61 */ bool _61;
-    /* 0x64 */ nw4r::lyt::TexMap* mIndDummyTexMap;
-    /* 0x68 */ u32 mPaneCount;
-    /* 0x6C */ LayoutPaneInfo* mPaneInfoList;
-    /* 0x70 */ u32 mGroupCtrlCount;
-    /* 0x74 */ LayoutGroupCtrl** mGroupCtrlList;
-    /* 0x78 */ char* mLayoutName;
-#ifdef TARGET_PC
+    LayoutHolder* mLayoutHolder;
+    nw4r::lyt::Layout* mLayout;
+    nw4r::lyt::AnimTransform** mAnimTransList;
+    nw4r::lyt::DrawInfo mDrawInfo;
+    bool mIsScreenHidden;
+    bool _61;
+    nw4r::lyt::TexMap* mIndDummyTexMap;
+    u32 mPaneCount;
+    LayoutPaneInfo* mPaneInfoList;
+    u32 mGroupCtrlCount;
+    LayoutGroupCtrl** mGroupCtrlList;
+    char* mLayoutName;
     // LayoutAspect::fit's rules for this layout and their panes (count -1 until looked up).
     const void* mFitRules;
     s32 mFitRuleCount;
     nw4r::lyt::Pane* mFitPanes[8];
-#endif
 };

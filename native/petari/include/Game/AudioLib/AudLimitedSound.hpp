@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JAudio2/JAISound.hpp>
-#include <revolution/types.h>
 
 class AudLimitedSoundInfo {
 public:
@@ -13,6 +12,6 @@ public:
     void update();
     bool isFree();
 
-    /* 0x00 */ JAISoundID mSoundID;
-    /* 0x04 */ s32 mDelay;
+    JAISoundID mSoundID;
+    s32 mDelay;
 };

@@ -18,101 +18,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <cstring>
-#include <revolution/mtx.h>
-
-void MarioCollision_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)3e+01f;
-    (void)0.3f;
-    (void)0.707f;
-    (void)1.01f;
-    (void)-0.99f;
-    (void)5.0f;
-    (void)4e+01f;
-    (void)1.1e+02f;
-    (void)5e+01f;
-    (void)6e+01f;
-    (void)-0.707f;
-    (void)45.0f;
-    (void)0.2f;
-    (void)1.2e+02f;
-    (void)8e+01f;
-    (void)0.7853982f;
-    (void)1e+02f;
-    (void)4e+02f;
-    (void)1e+01f;
-    (void)0.1f;
-    (void)2.5e+03f;
-    (void)1.5e+02f;
-    (void)0.10471976f;
-    (void)2.3561945f;
-    (void)0.17f;
-    (void)1.4959966f;
-    (void)-3e+01f;
-    (void)2e+02f;
-    (void)-1e+01f;
-    (void)5e+03f;
-    (void)25.0f;
-    (void)1.8e+02f;
-    (void)3.14159f;
-    (void)-0.999f;
-    (void)-0.9f;
-    (void)2.0943952f;
-    (void)6.0f;
-    (void)-6.0f;
-    (void)55.0f;
-    (void)0.99f;
-    (void)-0.01f;
-    (void)8.0f;
-    (void)2e+01f;
-    (void)2.1e+02f;
-    (void)-2607.5945f;
-    (void)2607.5945f;
-    (void)15.0f;
-    (void)2e+03f;
-    (void)0.125f;
-}
-
-void MarioCollision_FORCE_MATCH_STRINGS(const TVec3f& rPosition) {
-    MR::getAreaObj("Fur", rPosition);
-    MR::getAreaObj("\202\337\202\350\202\261\202\335" /* めりこみ */, rPosition);
-    MR::getAreaObj("\213\363\222\206\210\352\211\361\223\135" /* 空中一回転 */, rPosition);
-    MR::getAreaObj("Spine1", rPosition);
-    MR::getAreaObj("\203\175\203\223\203\172\201\133\203\213\202\314\202\323\202\275(\203\116\203\142\203\160\221\104)" /* マンホールのふた(クッパ船) */, rPosition);
-    MR::getAreaObj("GhostThroughCode", rPosition);
-    MR::getAreaObj("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */, rPosition);
-    MR::getAreaObj("\225\307\211\237\202\265" /* 壁押し */, rPosition);
-    MR::getAreaObj("\221\117\225\373WKFALL" /* 前方WKFALL */, rPosition);
-    MR::getAreaObj("+\213\164-\215\266WKFALL" /* +逆-左WKFALL */, rPosition);
-    MR::getAreaObj("+\215\266WKFALL" /* +左WKFALL */, rPosition);
-    MR::getAreaObj("+\213\164-\211\105WKFALL" /* +逆-右WKFALL */, rPosition);
-    MR::getAreaObj("+\211\105WKFALL" /* +右WKFALL */, rPosition);
-    MR::getAreaObj("+\214\343\202\3531WKFALL" /* +後ろ1WKFALL */, rPosition);
-    MR::getAreaObj("+\214\343\202\3532WKFALL" /* +後ろ2WKFALL */, rPosition);
-    MR::getAreaObj("+SIDEFALL", rPosition);
-    MR::getAreaObj("-L-SIDEFALL", rPosition);
-    MR::getAreaObj("+R-SIDEFALL", rPosition);
-    MR::getAreaObj("+F-SIDEFALL", rPosition);
-    MR::getAreaObj("force Trans", rPosition);
-    MR::getAreaObj("force Trs2", rPosition);
-    MR::getAreaObj("force Trs3", rPosition);
-    MR::getAreaObj("no-g(back)", rPosition);
-    MR::getAreaObj("no-g", rPosition);
-    MR::getAreaObj("CubeCamera", rPosition);
-    MR::getAreaObj("PullBackCube", rPosition);
-    MR::getAreaObj("PullBackCylinder", rPosition);
-    MR::getAreaObj("PlaneCollisionCube", rPosition);
-    MR::getAreaObj("TowerModeCylinder", rPosition);
-    MR::getAreaObj("ForbidTriangleJumpCube", rPosition);
-    MR::getAreaObj("GlaringLightArea", rPosition);
-    MR::getAreaObj("FallsCube", rPosition);
-    MR::getAreaObj("\220\205\225\307\203\161\203\142\203\147" /* 水壁ヒット */, rPosition);
-    MR::getAreaObj("HeavySteeringCube", rPosition);
-    MR::getAreaObj("DashChargeCylinder", rPosition);
-    MR::getAreaObj("RasterScrollCube", rPosition);
-    MR::getAreaObj("ForbidJumpCube", rPosition);
-    MR::getAreaObj("DarkMatterCube", rPosition);
-}
+#include <nebula_math.h>
 
 bool Mario::isIgnoreTriangle(const Triangle* pTriangle) {
     return MR::isNearZero(pTriangle->getNormal(0)->dot(*getGravityVec()));
@@ -274,6 +180,10 @@ void Mario::doSwimmingHitCheck(const HitInfo* pHit, u32 type) {
     }
 }
 
+namespace {
+    Triangle sPunchTriangles[256];
+}  // namespace
+
 void Mario::doSpinPunchAroundPolygons() {
     if (!mActor->isPunching()) {
         return;
@@ -284,7 +194,7 @@ void Mario::doSpinPunchAroundPolygons() {
     }
 
     TVec3f center = mPosition + mVelocity + mHeadVec * 80.0f;
-    Triangle triangles[256];
+    Triangle* const triangles = sPunchTriangles;
     u32 count = MR::createAreaPolygonList(triangles, 256, center + mFrontVec * 120.0f + mSideVec * 120.0f + mHeadVec * 120.0f,
                                           center - mFrontVec * 120.0f - mSideVec * 120.0f - mHeadVec * 120.0f);
 
@@ -678,7 +588,7 @@ void Mario::checkAllWall(const TVec3f& rPosition, f32 radius) {
             }
         }
 
-        f32 groundAngle;
+        f32 groundAngle = 0.0f;
 
         if (mMovementStates._1) {
             groundAngle = calcAngleD(_368);
@@ -839,9 +749,6 @@ void Mario::checkAllWall(const TVec3f& rPosition, f32 radius) {
     }
 }
 
-#pragma push
-#pragma opt_propagation off
-#pragma opt_lifetimes off
 void Mario::calcFrontFloor() {
     Triangle wall;
     Triangle floor;
@@ -925,7 +832,6 @@ void Mario::calcFrontFloor() {
         mMovementStates._39 = false;
     }
 }
-#pragma pop
 
 const TVec3f& Mario::getWallNorm() const {
     if (mMovementStates._8) {
@@ -947,7 +853,7 @@ const TVec3f& Mario::getWallNorm() const {
     return mFrontVec;
 }
 
-// No wall: a zero normal. The console returned a stack temporary its caller read before anything overwrote it.
+// No wall: a zero normal.
 static const TVec3f sZeroNormal(0.0f, 0.0f, 0.0f);
 
 const TVec3f& Mario::getSideWallNorm() const {
@@ -1698,7 +1604,7 @@ bool Mario::updateBinderInfo() {
                     mJumpVec = horizontal;
                 }
 
-                startPadVib(0UL);
+                startPadVib(0u);
                 firstCeiling = false;
                 *_4C8 = *triangle;
             }

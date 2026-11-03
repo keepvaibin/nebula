@@ -2,7 +2,7 @@
 #include "JSystem/JAudio2/JAIAudience.hpp"
 #include "JSystem/JAudio2/JAISeqMgr.hpp"
 #include "JSystem/JAudio2/JAISoundChild.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/GameThreads.hpp"
 
 namespace {
 
@@ -20,10 +20,8 @@ JAISeq::JAISeq(JAISeqMgr* seqMgr, JAISoundStrategyMgr< JAISeq >* soundStrategyMg
     for (int i = 0; i < NUM_CHILDREN; i++) {
         inner_.mSoundChild[i] = nullptr;
     }
-#ifdef TARGET_PC
     inner_.outputTrack.mNebulaOwner = this;
     inner_.outputTrack.mNebulaOwnerRoute = 2;
-#endif
 }
 
 void JAISeq::JAISeqMgr_startID_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience, int category, int numTracks) {
@@ -143,7 +141,6 @@ bool JAISeq::prepare_(const JASSoundParams& params, JAISoundActivity activity) {
 }
 
 void JAISeq::JAISeqMgr_calc_() {
-    // FIXME: inline moment
     if (inner_.outputTrack.getStatus() == JASTrack::STATUS_STOPPED ||
         (inner_.outputTrack.getStatus() == JASTrack::STATUS_FREE && mStatus.isStopped())) {
         die_();
@@ -191,7 +188,7 @@ bool JAISeq::JAISound_tryDie_() {
     mStatus.mState.flags.flag1 = true;
 
     {
-        JASCriticalSection cs;
+        GameAudioExclusion cs;
         inner_.outputTrack.stopSeq();
     }
 

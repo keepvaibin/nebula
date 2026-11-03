@@ -15,5 +15,5 @@ public:
     void exeSpout();
     void switchEmitGlow();
 
-    /* 0xC4 */ bool mIsCoinFlower;
+    bool mIsCoinFlower;
 };

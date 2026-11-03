@@ -7,11 +7,6 @@
 #include "Game/LiveActor/ShadowDrawer.hpp"
 #include "Game/Util/CameraUtil.hpp"
 
-void ShadowVolumeBox_FORCE_MATCH_SDATA2() {
-    f32 f1 = 0.0f;
-    f32 f2 = 0.5f;
-}
-
 ShadowVolumeBox::ShadowVolumeBox() : ShadowVolumeDrawer("\211\145\225\140\211\346[\203\173\203\212\203\205\201\133\203\200\203\173\203\142\203\116\203\130]" /* 影描画[ボリュームボックス] */), mSize(100.0f, 100.0f, 100.0f) {
     for (u32 idx = 0; idx < ARRAY_SIZE(mPoints); idx++) {
         mPoints[idx].zero();
@@ -24,7 +19,7 @@ void ShadowVolumeBox::setSize(const TVec3f& rSize) {
 
 void ShadowVolumeBox::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
     makeVertexBuffer();
 }
 
@@ -137,7 +132,7 @@ void ShadowVolumeBox::makeVertexBuffer() const {
 }
 
 void ShadowVolumeBox::drawShape() const {
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 14, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 14, 0);
     {
         TDDraw::sendPoint(mPoints[0]);
         TDDraw::sendPoint(mPoints[1]);
@@ -156,7 +151,7 @@ void ShadowVolumeBox::drawShape() const {
     }
 
 
-    J3DNativeDraw::begin(GX_TRIANGLEFAN, 8, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, 8, 0);
     {
         TDDraw::sendPoint(mPoints[12]);
         TDDraw::sendPoint(mPoints[0]);
@@ -169,7 +164,7 @@ void ShadowVolumeBox::drawShape() const {
     }
 
 
-    J3DNativeDraw::begin(GX_TRIANGLEFAN, 8, 0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_FAN, 8, 0);
     {
         TDDraw::sendPoint(mPoints[13]);
         TDDraw::sendPoint(mPoints[1]);

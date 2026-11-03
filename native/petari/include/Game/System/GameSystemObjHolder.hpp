@@ -1,12 +1,11 @@
 #pragma once
 
 #include <JSystem/JMath/random.hpp>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 namespace JMath {
-    struct TRandom_fast_;
+    class TRandom_fast_;
 };  // namespace JMath
 
 class AudSystemWrapper;
@@ -17,7 +16,7 @@ class NameObjHolder;
 class ParticleResourceHolder;
 class ScreenPreserver;
 class StarPointerDirector;
-class WPadHolder;
+class PlayerInputs;
 
 class GameSystemObjHolder {
 public:
@@ -35,31 +34,31 @@ public:
     void drawBeforeEndRender();
     void captureIfAllowForScreenPreserver();
     // The picture's width on a television's 720-pixel line, as chosen at boot: the safety frame scales from it.
-    u16 getViWidth() const {
-        return mViWidth;
+    u16 getPictureSpan() const {
+        return mPictureSpan;
     }
-    void initDvd();
+    void initStore();
     void initNAND();
     void initAudio();
-    void initRenderMode();
+    void initPicture();
     void initNameObj();
     void initFunctionAsyncExecutor();
     void initResourceHolderManager();
     void initGameController();
-    void initWPad();
+    void initPlayerInput();
     void initStarPointerDirector();
     void initDisplay();
 
-    /* 0x00 */ NameObjHolder* mObjHolder;
-    /* 0x04 */ ParticleResourceHolder* mParticleResHolder;
-    u16 mViWidth;
-    /* 0x18 */ CaptureScreenDirector* mCaptureScreenDirector;
-    /* 0x1C */ ScreenPreserver* mScreenPreserver;
-    /* 0x20 */ AudSystemWrapper* mAudioSystem;
-    /* 0x24 */ WPadHolder* mWPadHolder;
-    /* 0x28 */ FunctionAsyncExecutor* mFunctionAsyncExecutor;
-    /* 0x2C */ MessageHolder* mMessageHolder;
-    /* 0x30 */ StarPointerDirector* mStarPointerDirector;
-    /* 0x34 */ JMath::TRandom_fast_ mRandom;
-    /* 0x38 */ u32 mLanguage;
+    NameObjHolder* mObjHolder;
+    ParticleResourceHolder* mParticleResHolder;
+    u16 mPictureSpan;
+    CaptureScreenDirector* mCaptureScreenDirector;
+    ScreenPreserver* mScreenPreserver;
+    AudSystemWrapper* mAudioSystem;
+    PlayerInputs* mPlayerInputs;
+    FunctionAsyncExecutor* mFunctionAsyncExecutor;
+    MessageHolder* mMessageHolder;
+    StarPointerDirector* mStarPointerDirector;
+    JMath::TRandom_fast_ mRandom;
+    u32 mLanguage;
 };

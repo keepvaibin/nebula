@@ -54,8 +54,8 @@ public:
     void endBindStarPointer();
     bool calcHeadJoint(TPos3f*, const JointControllerInfo&);
 
-    /* 0x100 */ JointControlDelegator< BegomanBaby >* mBabyDelegator;
-    /* 0x104 */ TPos3f mWaterColumnMatrix;
-    /* 0x134 */ NameObj* mHost;
-    /* 0x138 */ bool mAppearThreeStarPiece;
+    JointControlDelegator< BegomanBaby >* mBabyDelegator;
+    TPos3f mWaterColumnMatrix;
+    NameObj* mHost;
+    bool mAppearThreeStarPiece;
 };

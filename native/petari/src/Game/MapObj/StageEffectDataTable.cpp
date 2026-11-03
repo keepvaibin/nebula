@@ -5,7 +5,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <revolution/types.h>
 
 namespace {
     enum CameraShakeType {
@@ -18,28 +17,28 @@ namespace {
     };
 
     struct StageEffectCameraData {
-        /* 0x00 */ const char* mObjectName;
-        /* 0x04 */ CameraShakeType mStartShakeType;
-        /* 0x08 */ f32 mMovingShakeIntensity;
-        /* 0x0C */ f32 mMovingShakeSpeed;
-        /* 0x10 */ CameraShakeType mStopShakeType;
-        /* 0x14 */ f32 mShakeDistance;
+        const char* mObjectName;
+        CameraShakeType mStartShakeType;
+        f32 mMovingShakeIntensity;
+        f32 mMovingShakeSpeed;
+        CameraShakeType mStopShakeType;
+        f32 mShakeDistance;
     };
 
     struct StageEffectPadData {
-        /* 0x00 */ const char* mObjectName;
-        /* 0x04 */ const char* mStartRumblePattern;
-        /* 0x04 */ const char* mMovingRumblePattern;
-        /* 0x0C */ const char* mStopRumblePattern;
+        const char* mObjectName;
+        const char* mStartRumblePattern;
+        const char* mMovingRumblePattern;
+        const char* mStopRumblePattern;
     };
 
     struct StageEffectSoundData {
-        /* 0x00 */ const char* mObjectName;
-        /* 0x04 */ const char* mStartSoundEffect;
-        /* 0x08 */ const char* mMovingSoundEffect;
-        /* 0x0C */ const char* mStopSoundEffect;
-        /* 0x10 */ s32 mStopSoundEffectSteps;
-        /* 0x14 */ s32 mSoundEffectType;
+        const char* mObjectName;
+        const char* mStartSoundEffect;
+        const char* mMovingSoundEffect;
+        const char* mStopSoundEffect;
+        s32 mStopSoundEffectSteps;
+        s32 mSoundEffectType;
     };
 
     static const StageEffectCameraData sStageEffectCameraDataTable[] = {

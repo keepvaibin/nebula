@@ -1,9 +1,7 @@
 #include "nw4r/lyt/animation.h"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
-#ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#endif
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/drawInfo.h"
 #include "nw4r/lyt/layout.h"
@@ -33,7 +31,6 @@ namespace nw4r {
             }
         }  // namespace detail
 
-#ifdef TARGET_PC
         // A pane made in code (Nebula's own panes, Picture(const TexMap&)): at the origin, unscaled, visible.
         Pane::Pane() {
             Init();
@@ -49,7 +46,6 @@ namespace nw4r {
             mFlag = 0;
             SetVisible(true);
         }
-#endif
 
         Pane::Pane(const res::Pane* pRes) {
             Init();
@@ -260,9 +256,7 @@ namespace nw4r {
                 return;
             }
 
-#ifdef TARGET_PC
             MotionSignal::layoutPane(this);
-#endif
             DrawSelf(rInfo);
             for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
                 it->Draw(rInfo);
@@ -371,7 +365,7 @@ namespace nw4r {
             }
 
             J3DNativeShape::setPosition(0, *pMtx);
-            J3DNativeState::setCurrentMtx(GX_PNMTX0);
+            J3DPass::positionMatrix(0);
         }
 
         const math::VEC2 Pane::GetVtxPos() const {

@@ -24,7 +24,6 @@ namespace NrvSpringJetWater {
 SpringJetWater::SpringJetWater(const char* pName) : LiveActor(pName), mObjName(), mUp(0.0f, 1.0f, 0.0f) {
 }
 
-// https://decomp.me/scratch/e7fUQ
 void SpringJetWater::init(const JMapInfoIter& rIter) {
     MR::initDefaultPos(this, rIter);
     TPos3f mtx;
@@ -89,10 +88,6 @@ void SpringJetWater::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
             }
         }
     }
-}
-
-void SpringJetWater_DUMMY() {
-    MR::isDemoPartFirstStep("\227\116\202\253\220\205\217\343\217\270" /* 湧き水上昇 */);
 }
 
 void SpringJetWater::exeWait() {

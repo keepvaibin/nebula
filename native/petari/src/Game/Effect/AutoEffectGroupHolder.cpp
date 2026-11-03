@@ -13,7 +13,7 @@ namespace MR {
             return MR::strcasecmp(pValue->getName(), mName) == 0;
         }
 
-        /* 0x00 */ const char* mName;
+        const char* mName;
     };
 };  // namespace MR
 
@@ -21,9 +21,9 @@ AutoEffectGroupHolder::AutoEffectGroupHolder() : mCount() {
 }
 
 AutoEffectGroup* AutoEffectGroupHolder::find(const char* pName) const {
-    AutoEffectGroup* const* pGroup = std::find_if(mGroups, mGroups + mCount, MR::eq_ptr_case< AutoEffectGroup* >(pName));
+    AutoEffectGroup* const* pGroup = std::find_if(mGroups.begin(), mGroups.begin() + mCount, MR::eq_ptr_case< AutoEffectGroup* >(pName));
 
-    if (pGroup != mGroups + mCount) {
+    if (pGroup != mGroups.begin() + mCount) {
         return *pGroup;
     }
 
@@ -31,7 +31,7 @@ AutoEffectGroup* AutoEffectGroupHolder::find(const char* pName) const {
 }
 
 bool AutoEffectGroupHolder::isExist(const char* pName) const {
-    return std::find_if(mGroups, mGroups + mCount, MR::eq_ptr_case< AutoEffectGroup* >(pName)) != mGroups + mCount;
+    return std::find_if(mGroups.begin(), mGroups.begin() + mCount, MR::eq_ptr_case< AutoEffectGroup* >(pName)) != mGroups + mCount;
 }
 
 namespace MR {
@@ -48,7 +48,7 @@ namespace MR {
             }
 
             const s32 index = pHolder->mCount++;
-            pHolder->mGroups[index] = pGroup;
+            pHolder->mGroups.at(index) = pGroup;
             return true;
         }
 

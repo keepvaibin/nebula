@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class JAISoundHandle;
 
@@ -13,5 +12,5 @@ public:
     void modifyTempo(JAISoundHandle*, f32);
     void modifyPitch(JAISoundHandle*, f32);
 
-    /* 0x00 */ u32 mSteps;
+    u32 mSteps;
 };

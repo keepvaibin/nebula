@@ -1,20 +1,17 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
-struct JASDSPChannel;
+struct JASVoiceSlot;
 
-namespace JASDsp {
-    struct TChannel;
-};  // namespace JASDsp
+struct JASVoice;
 
 class JASChannelParams {
 public:
@@ -36,17 +33,17 @@ public:
         mDolby = 0.0f;
     }
 
-    /* 0x00 */ f32 mVolume;
-    /* 0x04 */ f32 mPitch;
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ f32 mPan;
-    /* 0x10 */ f32 mFxMix;
-    /* 0x14 */ f32 mDolby;
+    f32 mVolume;
+    f32 mPitch;
+    f32 _8;
+    f32 mPan;
+    f32 mFxMix;
+    f32 mDolby;
 };
 
 class JASChannel : public JASPoolAllocObject_MultiThreaded< JASChannel > {
 public:
-    typedef void (*Callback)(u32, JASChannel*, JASDsp::TChannel*, void*);
+    typedef void (*Callback)(u32, JASChannel*, JASVoice*, void*);
     static const int BUSOUT_CPUCH = 6;
     static const int OSC_NUM = 2;
 
@@ -69,25 +66,18 @@ public:
     };
 
     struct PanVector {
-        /* 0x0 */ f32 mSound;
-        /* 0x4 */ f32 mEffect;
-        /* 0x8 */ f32 mChannel;
+        f32 mSound;
+        f32 mEffect;
+        f32 mChannel;
     };
 
     union MixConfig {
         u16 whole;
         struct {
-#ifdef TARGET_PC
-            // whole is set as one u16 (0x150: bus 1, mode 5): fields from the least significant bit up, so each has the
-            // console's bits.
+            // whole is set as one u16 (0x150: bus 1, mode 5): fields from the least significant bit up.
             u8 lower1 : 4;
             u8 lower0 : 4;
             u8 upper : 8;
-#else
-            u8 upper : 8;
-            u8 lower0 : 4;
-            u8 lower1 : 4;
-#endif
         };
     };
 
@@ -102,12 +92,12 @@ public:
     static f32 calcPan(JASChannel::PanVector const*);
     void effectOsc(u32, JASOscillator::EffectParams*);
     void setKeySweepTarget(s32, u32);
-    void updateEffectorParam(JASDsp::TChannel*, u16*, JASOscillator::EffectParams const&);
-    static s32 dspUpdateCallback(u32, JASDsp::TChannel*, void*);
-    s32 initialUpdateDSPChannel(JASDsp::TChannel*);
-    s32 updateDSPChannel(JASDsp::TChannel*);
-    void updateAutoMixer(JASDsp::TChannel*, f32, f32, f32, f32);
-    void updateMixer(f32, f32, f32, f32, u16*);
+    void updateEffectorParam(JASVoice*, f32*, JASOscillator::EffectParams const&);
+    static s32 voiceUpdateCallback(u32, JASVoice*, void*);
+    s32 initialUpdateVoice(JASVoice*);
+    s32 updateVoice(JASVoice*);
+    void updateAutoMixer(JASVoice*, f32, f32, f32, f32);
+    void updateMixer(f32, f32, f32, f32, f32*);
     void free();
     static void initBankDisposeMsgQueue();
     static void receiveBankDisposeMsg();
@@ -191,34 +181,36 @@ public:
         return mMixConfig[0].whole == 0xffff;
     }
 
-    /* 0x00 */ int mStatus;
-    /* 0x04 */ bool mPauseFlag;
-    /* 0x08 */ JASDSPChannel* mDspCh;
-    /* 0x0C */ Callback mCallback;
-    /* 0x10 */ void* mCallbackData;
-    /* 0x14 */ u32 mUpdateTimer;
-    /* 0x18 */ const void* mBankDisposeID;
-    /* 0x1C */ JASOscillator mOscillators[2];
-    /* 0x5C */ JASLfo mVibrate;
-    /* 0x74 */ JASLfo mTremolo;
-    /* 0x8C */ MixConfig mMixConfig[BUSOUT_CPUCH];
-    /* 0x98 */ u16 mPriority;
-    /* 0x9C */ JASChannelParams mParams;
-    /* 0xB4 */ JASSoundParams mSoundParams;
-    /* 0xC8 */ s16 mKey;
-    /* 0xCA */ u16 mVelocity;
-    /* 0xCC */ f32 mKeySweep;
-    /* 0xD0 */ f32 mKeySweepTarget;
-    /* 0xD4 */ u32 mKeySweepCount;
-    /* 0xD8 */ u32 mSkipSamples;
-    /* 0xDC */ u32 mChannelType;
-    /* 0xE0 */ JASWaveInfo mWaveInfo;
+    int mStatus;
+    bool mPauseFlag;
+    JASVoiceSlot* mSlot;
+    Callback mCallback;
+    void* mCallbackData;
+    u32 mUpdateTimer;
+    const void* mBankDisposeID;
+    JASOscillator mOscillators[2];
+    JASLfo mVibrate;
+    JASLfo mTremolo;
+    MixConfig mMixConfig[BUSOUT_CPUCH];
+    u16 mPriority;
+    JASChannelParams mParams;
+    JASSoundParams mSoundParams;
+    s16 mKey;
+    u16 mVelocity;
+    f32 mKeySweep;
+    f32 mKeySweepTarget;
+    u32 mKeySweepCount;
+    u32 mSkipSamples;
+    u32 mChannelType;
+    JASWaveInfo mWaveInfo;
     union {
-        /* 0x104 */ const u8* mWavePtr;
-        /* 0x104 */ int mProgNo;
+        const u8* mWavePtr;
+        int mProgNo;
     };
+    // The end of a wave outside the sound memory (a stream's).
+    const u8* mWaveLimit;
 
-    static NebulaMessageQueue sBankDisposeMsgQ;
+    static GameMessageQueue sBankDisposeMsgQ;
     static void* sBankDisposeMsg[16];
     static void* sBankDisposeList[16];
     static int sBankDisposeListSize;

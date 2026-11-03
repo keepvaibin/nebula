@@ -37,7 +37,7 @@ public:
         return mStreamMgr;
     }
 
-    /* 0x004 */ JAISeMgr mSeMgr;
-    /* 0x72C */ JAISeqMgr mSeqMgr;
-    /* 0x7A4 */ JAIStreamMgr mStreamMgr;
+    JAISeMgr mSeMgr;
+    JAISeqMgr mSeqMgr;
+    JAIStreamMgr mStreamMgr;
 };

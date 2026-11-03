@@ -2,6 +2,7 @@
 // The Mii library and Mii import (mii_import.h).
 
 #include "galaxy/mii_import.h"
+#include "galaxy/path_text.h"
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/mii_formats.h"
@@ -134,19 +135,27 @@ void set_create_id(MiiFields& mii, std::uint32_t mii_part) {
     }
 }
 
+// The folder is read every start; a file past this holds no Miis (the largest database is 2 MB). Reads as empty.
+constexpr std::uintmax_t kMiiFileLimit = 64u << 20u;
+
 std::vector<std::byte> read_file(const std::filesystem::path& path) {
+    std::error_code error;
+    const std::uintmax_t size = std::filesystem::file_size(path, error);
+    if (error || size > kMiiFileLimit) {
+        return {};
+    }
     std::ifstream in(path, std::ios::binary);
     if (!in) {
         return {};
     }
-    std::vector<char> chars((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    std::vector<std::byte> bytes(chars.size());
-    std::transform(chars.begin(), chars.end(), bytes.begin(), [](char c) { return static_cast<std::byte>(c); });
+    std::vector<std::byte> bytes(static_cast<std::size_t>(size));
+    in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(size));
+    bytes.resize(static_cast<std::size_t>(in.gcount()));
     return bytes;
 }
 
 std::string lower_extension(const std::filesystem::path& path) {
-    std::string ext = path.extension().string();
+    std::string ext = galaxy::path_text(path.extension());
     if (!ext.empty() && ext.front() == '.') ext.erase(0, 1);
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return ext;
@@ -204,7 +213,7 @@ void load(Library& lib) {
     for (const auto& [slot, record] : console) {
         lib.miis.slots[slot] = decode_wii_mii(record);
     }
-    (void)io::write_text_file_atomically(lib.file, write_mii_library(lib.miis));
+    (void)io::write_file_atomically(lib.file, write_mii_library(lib.miis));
 }
 
 // A copy of a file Miis came from, kept in the library folder that every start imports again: none for a file already
@@ -227,7 +236,7 @@ bool keep_in_library(const std::filesystem::path& folder, const std::filesystem:
         name += file.extension();
         const std::filesystem::path target = folder / name;
         if (!std::filesystem::exists(target, error)) {
-            return io::write_text_file_atomically(
+            return io::write_file_atomically(
                 target, std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
         }
         const std::vector<std::byte> kept = read_file(target);
@@ -463,7 +472,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         total.converted += contents.converted;
     }
     if (!placed.empty()) {
-        if (!io::write_text_file_atomically(lib.file, write_mii_library(miis))) {
+        if (!io::write_file_atomically(lib.file, write_mii_library(miis))) {
             if (message != nullptr) *message = "COULD NOT WRITE THE MII LIBRARY";
             return MiiMergeResult{};
         }

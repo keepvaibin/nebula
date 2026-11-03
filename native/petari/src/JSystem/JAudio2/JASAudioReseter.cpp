@@ -1,14 +1,14 @@
 #include "JSystem/JAudio2/JASAudioReseter.hpp"
-#include "JSystem/JAudio2/JASAudioThread.hpp"
-#include "JSystem/JAudio2/JASCriticalSection.hpp"
-#include "JSystem/JAudio2/JASDSPChannel.hpp"
+#include "JSystem/JAudio2/JASAiCtrl.hpp"
+#include "Game/System/GameThreads.hpp"
+#include "JSystem/JAudio2/JASVoiceSlot.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 
 JASAudioReseter::JASAudioReseter() {
     mTime = 0;
     mDoneFlag = true;
     mThreadStopFlag = false;
-    mDSPLevel = JASDriver::getDSPLevel();
+    mDSPLevel = JASDriver::getOutputLevel();
 }
 
 JASAudioReseter::~JASAudioReseter() {
@@ -19,11 +19,11 @@ bool JASAudioReseter::start(u32 time, bool threadStopFlag) {
         return false;
     }
     mThreadStopFlag = threadStopFlag;
-    JASCriticalSection critical;
+    GameAudioExclusion critical;
     if (!JASDriver::registerSyncCallback(callback, this)) {
         return false;
     } else {
-        mDSPLevel = JASDriver::getDSPLevel();
+        mDSPLevel = JASDriver::getOutputLevel();
         mTime = time;
         mDoneFlag = false;
         return true;
@@ -31,7 +31,7 @@ bool JASAudioReseter::start(u32 time, bool threadStopFlag) {
 }
 
 void JASAudioReseter::resume() {
-    JASDriver::setDSPLevel(mDSPLevel);
+    JASDriver::setOutputLevel(mDSPLevel);
 }
 
 s32 JASAudioReseter::checkDone() const {
@@ -41,20 +41,20 @@ s32 JASAudioReseter::checkDone() const {
 s32 JASAudioReseter::calc() {
     if (mTime == 0) {
         for (size_t i = 0; i < 64; i++) {
-            JASDSPChannel* handle = JASDSPChannel::getHandle(i);
+            JASVoiceSlot* handle = JASVoiceSlot::getHandle(i);
             if (handle->getStatus() == 0) {
                 handle->drop();
             }
         }
         if (mThreadStopFlag != false) {
-            JASAudioThread::getInstance()->stop();
+            JASDriver::stopClock();
         }
         mDoneFlag = 1;
         return -1;
     }
 
     mTime--;
-    JASDriver::setDSPLevel(mTime * JASDriver::getDSPLevel() / (mTime + 1));
+    JASDriver::setOutputLevel(mTime * JASDriver::getOutputLevel() / (mTime + 1));
     return 0;
 }
 

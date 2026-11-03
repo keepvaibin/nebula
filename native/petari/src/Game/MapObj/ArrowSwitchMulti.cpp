@@ -158,11 +158,6 @@ void ArrowSwitchMulti::exeWait() {
     }
 }
 
-void ArrowSwitchMulti_FORCE_MATCH_SDATA2_2() {
-    // TODO: why?
-    (void)360.0f;
-}
-
 void ArrowSwitchMulti::exeRotate() {
     if (MR::isFirstStep(this)) {
         MR::startSound(this, "SE_OJ_ARROW_SWITCH_ON");
@@ -173,7 +168,7 @@ void ArrowSwitchMulti::exeRotate() {
     mRotAngle = MR::repeat(mRotAngle, -180.0f, 360.0f);
     f32 diff = MR::repeat(::sRotYTargetList[mRotYTargetIndex] - mRotAngle, -180.0f, 360.0f);
 
-    if (mIsRotPlus && diff < 0.0f || !mIsRotPlus && diff > 0.0f) {
+    if ((mIsRotPlus && diff < 0.0f) || (!mIsRotPlus && diff > 0.0f)) {
         mRotAngle = ::sRotYTargetList[mRotYTargetIndex];
         mRotSpeed = 0.0f;
 

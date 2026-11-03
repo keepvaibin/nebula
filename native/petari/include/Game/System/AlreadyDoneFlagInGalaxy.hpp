@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <revolution/types.h>
 
 class JMapInfoIter;
 
@@ -19,9 +18,9 @@ public:
         return isEqual(other);
     }
 
-    /* 0x0 */ u16 _0;
-    /* 0x2 */ u16 _2;
-    /* 0x4 */ u16 _4;
+    u16 _0;
+    u16 _2;
+    u16 _4;
 };
 
 class AlreadyDoneFlagInGalaxy {
@@ -32,5 +31,5 @@ public:
     u32 setupFlag(const char*, const JMapInfoIter&, u32*);
     void updateValue(int, u32);
 
-    /* 0x0 */ MR::Vector< MR::AssignableArray< AlreadyDoneInfo > > mDoneInfos;
+    MR::Vector< MR::AssignableArray< AlreadyDoneInfo > > mDoneInfos;
 };

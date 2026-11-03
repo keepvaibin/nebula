@@ -1,18 +1,18 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
+#include "JSystem/JUtility/JUTNativeLog.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/SaveErrorSequence.hpp"
 #include "Game/System/SaveRequest.hpp"
 #include "Game/System/SaveDataHandler.hpp"
-#include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 
 namespace {
@@ -32,13 +32,11 @@ namespace {
 };  // namespace
 
 SaveDataHandleSequence::SaveDataHandleSequence()
-    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mSysConfigFile(), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
+    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), _24(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), _2A(), _2B(), _2C(), mWorkUserFile(),
       mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
-#ifdef TARGET_PC
       ,
       mWindowFollows(false)
-#endif
 {
     mTempBuffer = new (32) u8[SaveDataHandler::getEnoughtTempBufferSize()];
 
@@ -46,10 +44,9 @@ SaveDataHandleSequence::SaveDataHandleSequence()
 }
 
 void SaveDataHandleSequence::initAfterResourceLoaded() {
-    mSysConfigFile = new SysConfigFile();
     mCurrentUserFile = new UserFile();
     mBackupUserFile = new UserFile();
-    mSaveDataHandler = new SaveDataHandler(mSysConfigFile, mCurrentUserFile);
+    mSaveDataHandler = new SaveDataHandler(mCurrentUserFile);
 
     mSysInfoWindowConfirm = MR::createSysInfoWindowExecuteWithChildren();
     mSysInfoWindowConfirm->kill();
@@ -129,9 +126,7 @@ void SaveDataHandleSequence::startDeleteUserFile(int index) {
 void SaveDataHandleSequence::startSave(bool isConfirmRemind, bool isSaveAndQuitMsg) {
     mIsConfirmRemind = isConfirmRemind;
     mIsSaveAndQuitMsg = isSaveAndQuitMsg;
-#ifdef TARGET_PC
     mWindowFollows = false;
-#endif
     mWorkUserFile = mCurrentUserFile;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveConfirm));
@@ -140,9 +135,7 @@ void SaveDataHandleSequence::startSave(bool isConfirmRemind, bool isSaveAndQuitM
 void SaveDataHandleSequence::startSaveBackup(bool isConfirmRemind, bool isSaveAndQuitMsg) {
     mIsConfirmRemind = isConfirmRemind;
     mIsSaveAndQuitMsg = isSaveAndQuitMsg;
-#ifdef TARGET_PC
     mWindowFollows = false;
-#endif
     mWorkUserFile = mBackupUserFile;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveConfirm));
@@ -299,13 +292,11 @@ void SaveDataHandleSequence::exeSaveConfirm() {
         const char* const pSystemMessageId = mIsSaveAndQuitMsg ? "System_Save07" : "System_Save00";
 
         if (!tryConfirm(pSystemMessageId, &isSelectedYes)) {
-#ifdef TARGET_PC
             // Yes opens Saving...; No, the reminder when there is one.
             if (MR::isFirstStep(this)) {
                 mSysInfoWindowConfirm->setDimHandOver((_2A ? SysInfoWindow::DimHandOver_None : SysInfoWindow::DimHandOver_Yes) |
                                                       (mIsConfirmRemind ? SysInfoWindow::DimHandOver_No : SysInfoWindow::DimHandOver_None));
             }
-#endif
             return;
         }
 
@@ -329,7 +320,6 @@ void SaveDataHandleSequence::exeSave() {
             (*mJustBeforeSaveFunc)();
         }
 
-        mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
         mSaveDataHandler->storeUserFile(mWorkUserFile);
     }
 
@@ -344,12 +334,10 @@ void SaveDataHandleSequence::exeSave() {
     } else if (trySave()) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveWindowDisappear));
     }
-#ifdef TARGET_PC
     // Saving... is followed by the done message (or an error's window).
     else if (MR::isFirstStep(this)) {
         mSysInfoWindowSave->setDimHandOver(SysInfoWindow::DimHandOver_Always);
     }
-#endif
 }
 
 void SaveDataHandleSequence::exeSaveWindowDisappear() {
@@ -372,11 +360,9 @@ void SaveDataHandleSequence::exeSaveWindowDisappear() {
 
 void SaveDataHandleSequence::exeSaveDoneKeyWait() {
     if (!tryProcessDoneKeyWait("System_Save02")) {
-#ifdef TARGET_PC
         if (MR::isFirstStep(this) && mWindowFollows) {
             mSysInfoWindowSave->setDimHandOver(SysInfoWindow::DimHandOver_Always);
         }
-#endif
         return;
     }
 
@@ -391,7 +377,6 @@ void SaveDataHandleSequence::exeSaveAllWithoutKeyWait() {
             (*mJustBeforeSaveFunc)();
         }
 
-        mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
     }
 
     if (tryNoSave()) {
@@ -433,7 +418,6 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
             (*mJustBeforeSaveFunc)();
         }
 
-        mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
     }
 
     if (tryNoSave()) {
@@ -467,7 +451,7 @@ void SaveDataHandleSequence::exeSaveAllWithoutWindow() {
 
 void SaveDataHandleSequence::exePreLoad() {
     if (MR::isFirstStep(this)) {
-        mSaveDataHandler->requestLoadSaveData();
+        mSaveDataHandler->requestLoadSaveData(mSaveCopyLoading);
     }
 
     if (!mSaveDataHandler->isDone()) {
@@ -478,8 +462,12 @@ void SaveDataHandleSequence::exePreLoad() {
 
     if (result == SaveRequest::Result_Done) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoadDone));
+    } else if (result == SaveRequest::Result_NoFile && mSaveCopyLoading != 0) {
+        tryNextSaveCopy();
     } else if (result == SaveRequest::Result_NoFile) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceCheckEnableToCreate));
+    } else if (result == SaveRequest::Result_Corrupted && mSaveCopyLoading != 0) {
+        tryNextSaveCopy();
     } else if (result == SaveRequest::Result_Corrupted) {
         mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
 
@@ -490,14 +478,25 @@ void SaveDataHandleSequence::exePreLoad() {
     }
 }
 
+// A damaged save falls back on the copies of the last two; the game asks to remove the file only when none is good.
+void SaveDataHandleSequence::tryNextSaveCopy() {
+    if (mSaveCopyLoading < 2) {
+        mSaveCopyLoading++;
+        JUTNativeLog("save: damaged, trying copy %d\n", mSaveCopyLoading);
+        setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoad));
+        return;
+    }
+    mSaveCopyLoading = 0;
+    mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
+    mSaveErrorSequence->startRemoveFile();
+
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+}
+
 void SaveDataHandleSequence::exePreLoadDone() {
     if (!mSaveDataHandler->requestVerifyAfterLoadGameDataFile()) {
-        mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
-        mSaveErrorSequence->startRemoveFile();
-
-        setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+        tryNextSaveCopy();
     } else {
-        restoreSysConfigFile(mSysConfigFile);
         _24 = 2;
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
@@ -508,12 +507,10 @@ void SaveDataHandleSequence::exeNoSaveConfirmRemind() {
     bool isSelectedYes = false;
 
     if (!tryConfirm("ConfirmEndGame", &isSelectedYes)) {
-#ifdef TARGET_PC
         // No asks the save's question again.
         if (MR::isFirstStep(this)) {
             mSysInfoWindowConfirm->setDimHandOver(SysInfoWindow::DimHandOver_No);
         }
-#endif
         return;
     }
 
@@ -543,10 +540,6 @@ GameDataHolder* SaveDataHandleSequence::getHolder() {
     return mCurrentUserFile->mGameDataHolder;
 }
 
-SysConfigFile* SaveDataHandleSequence::getSysConfigFile() {
-    return mSysConfigFile;
-}
-
 UserFile* SaveDataHandleSequence::getCurrentUserFile() {
     return mCurrentUserFile;
 }
@@ -555,17 +548,9 @@ UserFile* SaveDataHandleSequence::getBackupUserFile() {
     return mBackupUserFile;
 }
 
-void SaveDataHandleSequence_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("%s%1d", "%s%1d");
-    MR::isEqualString("mario", "mario");
-    MR::isEqualString("luigi", "luigi");
-    MR::isEqualString("config%1d", "config%1d");
-    MR::isEqualString("sysconf", "sysconf");
-}
-
 void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int index) {
     char dataName[16];
-    snprintf(dataName, sizeof(dataName), "config%1d", index);
+    nebula_snprintf(dataName, sizeof(dataName), "config%1d", index);
 
     mSaveDataHandler->restoreGameDataFile(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
     pUserFile->loadFromConfigDataBinary(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
@@ -573,18 +558,12 @@ void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int 
 
 void SaveDataHandleSequence::restoreUserFileGameData(UserFile* pUserFile, int index, bool isPlayerMario) {
     char dataName[16];
-    snprintf(dataName, sizeof(dataName), "%s%1d", isPlayerMario ? "mario" : "luigi", index);
+    nebula_snprintf(dataName, sizeof(dataName), "%s%1d", isPlayerMario ? "mario" : "luigi", index);
 
     mSaveDataHandler->restoreGameDataFile(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
     pUserFile->loadFromGameDataBinary(dataName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
 
     pUserFile->mIsPlayerMario = isPlayerMario;
-}
-
-void SaveDataHandleSequence::restoreSysConfigFile(SysConfigFile* pSysConfigFile) {
-    const char* pName = "sysconf";
-    mSaveDataHandler->restoreGameDataFile(pName, mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
-    pSysConfigFile->loadFromDataBinary(mTempBuffer, SaveDataHandler::getEnoughtTempBufferSize());
 }
 
 bool SaveDataHandleSequence::trySave() {
@@ -731,7 +710,7 @@ bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerve
 }
 
 void SaveDataHandleSequence::syncNoSaveFlagsFromErrorSequence() {
-    // The console's "no room to create the save" answer, which a host's disk never gives.
+    // "No room to create the save", which a host's disk never gives.
     _2C = false;
 
     bool isResultFileCorrupted = mSaveErrorSequence->isResultFileCorrupted();

@@ -1,188 +1,88 @@
-#include "Game/System/HeapMemoryWatcher.hpp"
-#ifdef TARGET_PC
-#include "Game/Screen/NebulaIcons.hpp"
-#endif
-#include "Game/System/NebulaAuxMemory.hpp"
-#include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
-#include <revolution/os.h>
-#include "JSystem/JUtility/JUTException.hpp"
+#include <nebula_game_api.h>
 
-JKRExpHeap* HeapMemoryWatcher::sRootHeapGDDR3;
+extern "C" const NebulaHostServices* nebula_host(void);
+
+#include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/GameAssets.hpp"
+#include "Game/Screen/NebulaIcons.hpp"
+#include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaArena.hpp"
+
 
 namespace {
-    JKRExpHeap* createExpHeap(u32 size, JKRHeap* pHeap, bool a3) NO_INLINE {
-        JKRExpHeap* heap;
-
-        if (a3) {
-            void* data = new (pHeap, -4) u8[size];
-            heap = JKRExpHeap::create(data, size, pHeap, true);
-        } else {
-            heap = JKRExpHeap::create(size, pHeap, true);
-        }
+    NebulaArena* createArena(NebulaArena* pHeap) {
+        NebulaArena* heap = NebulaArena::create(pHeap);
 
         if (MR::isEqualCurrentHeap(heap)) {
-            JKRHeap::sRootHeap->becomeCurrentHeap();
+            NebulaArena::sRootHeap->becomeCurrentHeap();
         }
 
         return heap;
     }
 
-    JKRSolidHeap* createSolidHeap(u32 size, JKRHeap* pHeap) {
-        JKRSolidHeap* heap = JKRSolidHeap::create(size, pHeap, true);
-
-        if (MR::isEqualCurrentHeap(heap)) {
-            JKRHeap::sRootHeap->becomeCurrentHeap();
-        }
-
-        return heap;
-    }
-
-    void destroyHeapAndSetNULL(JKRHeap** pHeap) {
+    void destroyHeapAndSetNULL(NebulaArena** pHeap) {
         if (*pHeap != nullptr) {
-            JKRHeap::destroy(*pHeap);
+            NebulaArena::destroy(*pHeap);
             *pHeap = nullptr;
         }
     }
 };  // namespace
 
-JKRHeap* HeapMemoryWatcher::getHeapNapa(const JKRHeap* pHeap) {
-    if (pHeap == mStationedHeapNapa || pHeap == mStationedHeapGDDR) {
-        return mStationedHeapNapa;
-    }
-
-    if (pHeap == mSceneHeapNapa || pHeap == mSceneHeapGDDR) {
-        return mSceneHeapNapa;
-    }
-
-    return nullptr;
-}
-
-JKRHeap* HeapMemoryWatcher::getHeapGDDR3(const JKRHeap* pHeap) {
-    if (pHeap == mStationedHeapNapa || pHeap == mStationedHeapGDDR) {
-        return mStationedHeapGDDR;
-    }
-
-    if (pHeap == mSceneHeapNapa || pHeap == mSceneHeapGDDR) {
-        return mSceneHeapGDDR;
-    }
-
-    return nullptr;
-}
-
-void HeapMemoryWatcher::createFileCacheHeapOnGameHeap(u32 size) {
-    mFileCacheHeap = ::createSolidHeap(size, mGameHeapGDDR);
+void HeapMemoryWatcher::createFileCacheHeapOnGameHeap() {
+    mFileCacheHeap = ::createArena(mGameHeap);
 }
 
 void HeapMemoryWatcher::createSceneHeapOnGameHeap() {
-    mSceneHeapNapa = ::createSolidHeap(-1, mGameHeapNapa);
-    mSceneHeapGDDR = ::createSolidHeap(-1, mGameHeapGDDR);
+    mSceneHeap = ::createArena(mGameHeap);
 }
 
 void HeapMemoryWatcher::adjustStationedHeaps() {
-    MR::adjustHeapSize(mStationedHeapNapa, 0);
-    MR::adjustHeapSize(mStationedHeapGDDR, 0);
 }
 
 void HeapMemoryWatcher::setCurrentHeapToStationedHeap() {
-    MR::becomeCurrentHeap(mStationedHeapNapa);
+    MR::becomeCurrentHeap(mStationedHeap);
 }
 
 void HeapMemoryWatcher::setCurrentHeapToGameHeap() {
-    MR::becomeCurrentHeap(JKRHeap::sSystemHeap);
+    MR::becomeCurrentHeap(NebulaArena::sSystemHeap);
 }
 
 void HeapMemoryWatcher::setCurrentHeapToSceneHeap() {
-    MR::becomeCurrentHeap(mSceneHeapNapa);
+    MR::becomeCurrentHeap(mSceneHeap);
 }
 
 void HeapMemoryWatcher::destroySceneHeap() {
-    ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mSceneHeapNapa));
-    ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mSceneHeapGDDR));
+    ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mSceneHeap));
 }
 
 void HeapMemoryWatcher::destroyGameHeap() {
-    if (mSceneHeapNapa != nullptr) {
-        ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mSceneHeapNapa));
-    }
-
-    if (mSceneHeapGDDR != nullptr) {
-        ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mSceneHeapGDDR));
+    if (mSceneHeap != nullptr) {
+        ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mSceneHeap));
     }
 
     if (mFileCacheHeap != nullptr) {
-        ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mFileCacheHeap));
+        ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mFileCacheHeap));
     }
 
-    ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mGameHeapNapa));
-    ::destroyHeapAndSetNULL(reinterpret_cast< JKRHeap** >(&mGameHeapGDDR));
+    ::destroyHeapAndSetNULL(reinterpret_cast< NebulaArena** >(&mGameHeap));
     createGameHeap();
 }
 
-extern "C" void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
-
-void HeapMemoryWatcher::createRootHeap() {
-    JKRExpHeap* pHeap;
-    void* newHi;
-    uintptr_t arenaHi, arenaLo;
-
-    JKRExpHeap::createRoot(1, true);
-    // MEM2's arena: its first 14 MB are the auxiliary memory, the rest the GDDR3 root heap.
-    void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
-    nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
-    arenaLo = reinterpret_cast< uintptr_t >(mem2Lo);
-    arenaHi = reinterpret_cast< uintptr_t >(mem2Hi);
-    newHi = reinterpret_cast< void* >(arenaLo + 0xE00000);
-    NebulaAuxMemory::init(mem2Lo, 0xE00000);
-    JKRHeap::setAltAramStartAdr(arenaLo);
-    pHeap = JKRExpHeap::create(newHi, (u32)(arenaHi - reinterpret_cast< uintptr_t >(newHi)), JKRHeap::sRootHeap, true);
-
-    if (MR::isEqualCurrentHeap(pHeap)) {
-        JKRHeap::sRootHeap->becomeCurrentHeap();
-    }
-
-    HeapMemoryWatcher::sRootHeapGDDR3 = pHeap;
-}
-
 void HeapMemoryWatcher::createHeaps() {
-    MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(JKRHeap::sRootHeap);
-    ::createExpHeap(0x40000, JKRHeap::sRootHeap, false)->becomeSystemHeap();
-    mAudSystemHeap = ::createSolidHeap(0x1E0000, JKRHeap::sRootHeap);
-    mStationedHeapNapa = ::createExpHeap(0x900000, JKRHeap::sRootHeap, false);
-    JKRHeap* pRootHeapGDDR = HeapMemoryWatcher::sRootHeapGDDR3;
-    // The controller layer's heap as the console sized it (its work memory, 32 bytes here, and 0xD0).
-    u32 wpadHeapSize = 0x20 + 0xD0;
-    mWPadHeap = ::createExpHeap(wpadHeapSize, pRootHeapGDDR, false);
-    mHomeButtonLayoutHeap = ::createExpHeap(0x80000, HeapMemoryWatcher::sRootHeapGDDR3, false);
-#ifdef TARGET_PC
-    // Room for what Nebula keeps the whole game (the picture font's icon sheets).
-    mStationedHeapGDDR = ::createExpHeap(0x1400000 + NebulaIcons::cStationedBytes, HeapMemoryWatcher::sRootHeapGDDR3, false);
-#else
-    mStationedHeapGDDR = ::createExpHeap(0x1400000, HeapMemoryWatcher::sRootHeapGDDR3, false);
-#endif
+    MR::CurrentHeapRestorer heapRestorer = MR::CurrentHeapRestorer(NebulaArena::sRootHeap);
+    ::createArena(NebulaArena::sRootHeap)->becomeSystemHeap();
+    mAudSystemHeap = ::createArena(NebulaArena::sRootHeap);
+    mStationedHeap = ::createArena(NebulaArena::sRootHeap);
     createGameHeap();
 }
 
 void HeapMemoryWatcher::createGameHeap() {
-    mGameHeapNapa = ::createExpHeap(-1, JKRHeap::sRootHeap, false);
-    mGameHeapGDDR = ::createExpHeap(-1, HeapMemoryWatcher::sRootHeapGDDR3, false);
+    mGameHeap = ::createArena(NebulaArena::sRootHeap);
 }
 
 HeapMemoryWatcher::HeapMemoryWatcher()
-    : mStationedHeapNapa(nullptr), mStationedHeapGDDR(nullptr), mGameHeapNapa(nullptr), mGameHeapGDDR(nullptr), mFileCacheHeap(nullptr),
-      mSceneHeapNapa(nullptr), mSceneHeapGDDR(nullptr), mWPadHeap(nullptr), mHomeButtonLayoutHeap(nullptr), mAudSystemHeap(nullptr) {
-    JKRHeap::setErrorHandler(HeapMemoryWatcher::memoryErrorCallback);
+    : mStationedHeap(nullptr), mGameHeap(nullptr), mFileCacheHeap(nullptr), mSceneHeap(nullptr), mAudSystemHeap(nullptr) {
     createHeaps();
-}
-
-// Natively the report names the heap and the request, for the host's crash report.
-void HeapMemoryWatcher::memoryErrorCallback(void* pHeap, u32 size, int alignment) {
-    if (static_cast< JKRHeap* >(pHeap)->getHeapType() == 'EXPH') {
-        static_cast< JKRExpHeap* >(pHeap)->reportBlocks();
-    }
-    JUTException::panic_f(__FILE__, 537, "out of memory: heap %p (%d bytes free), %u bytes, alignment %d", pHeap,
-            static_cast< JKRHeap* >(pHeap)->getFreeSize(), size, alignment);
 }
 
 void HeapMemoryWatcher::checkRestMemory() {

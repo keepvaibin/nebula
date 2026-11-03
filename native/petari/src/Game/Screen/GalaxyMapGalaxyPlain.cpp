@@ -1,3 +1,4 @@
+#include "Game/Util/TextString.hpp"
 #include "Game/Screen/GalaxyMapGalaxyPlain.hpp"
 #include "Game/Screen/GalaxyNamePlate.hpp"
 #include "Game/Util/EventUtil.hpp"
@@ -6,13 +7,12 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 #define GALAXY_NAME_BUFFER_SIZE 128
 
 #ifdef __cplusplus
 extern "C" {
-extern int swprintf(wchar_t*, size_t, const wchar_t*, ...);
 };
 #endif
 
@@ -24,13 +24,13 @@ void GalaxyMapGalaxyPlain::show(const char* pGalaxyName, const char* pPaneName) 
     appear();
 
     mPaneName = pPaneName;
-    wchar_t* pDstGalaxyName = mGalaxyName;
+    char16_t* pDstGalaxyName = mGalaxyName;
 
     if (!MR::isOnGameEventFlagGalaxyOpen(pGalaxyName)) {
-        swprintf(pDstGalaxyName, GALAXY_NAME_BUFFER_SIZE, L"?");
+        MR::formatText(pDstGalaxyName, GALAXY_NAME_BUFFER_SIZE, u"?");
     } else {
-        const wchar_t* pShortGalaxyName = MR::getGalaxyNameShortOnCurrentLanguage(pGalaxyName);
-        wchar_t* pFontTagIter = pDstGalaxyName + swprintf(pDstGalaxyName, GALAXY_NAME_BUFFER_SIZE, L"%ls ", pShortGalaxyName);
+        const char16_t* pShortGalaxyName = MR::getGalaxyNameShortOnCurrentLanguage(pGalaxyName);
+        char16_t* pFontTagIter = pDstGalaxyName + MR::formatText(pDstGalaxyName, GALAXY_NAME_BUFFER_SIZE, u"%ls ", pShortGalaxyName);
 
         if (MR::isStarComplete(pGalaxyName)) {
             MR::addPictureFontTag(pFontTagIter, 80);
@@ -70,7 +70,7 @@ void GalaxyMapGalaxyPlain::init(const JMapInfoIter& rIter) {
     mNamePlate->initWithoutIter();
     mNamePlate->setShowBalloonNozzle(false);
 
-    mGalaxyName = new (MR::getSceneHeapGDDR3(), 0) wchar_t[GALAXY_NAME_BUFFER_SIZE];
+    mGalaxyName = new (MR::getSceneHeap(), 0) char16_t[GALAXY_NAME_BUFFER_SIZE];
 }
 
 void GalaxyMapGalaxyPlain::appear() {
@@ -103,7 +103,7 @@ void GalaxyMapGalaxyPlain::draw() const {
     }
 }
 
-void GalaxyMapGalaxyPlain::show(const wchar_t* pGalaxyName, const char* pPaneName) {
+void GalaxyMapGalaxyPlain::show(const char16_t* pGalaxyName, const char* pPaneName) {
     appear();
 
     mPaneName = pPaneName;

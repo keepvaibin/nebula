@@ -13,7 +13,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/JMapUtil.hpp"
@@ -27,12 +27,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriangleFilter.hpp"
 #include "Game/System/NebulaInput.hpp"
-
-void MarioLauncher_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)-1.0f;
-    (void)(MR::pi() / 2.0f);
-}
 
 namespace {
     static const f32 sEjectSpeed = 40.0f;
@@ -168,7 +162,6 @@ void MarioLauncher::exeReady() {
     }
 
     s32 maxFrame = MR::getBckFrameMaxPlayer();
-    f32 f1 = MR::calcNerveEaseInRate(this, maxFrame);
 
     MR::blendMtx(mPlayerBaseMtx, mLauncherBaseMtx, MR::calcNerveRate(this, maxFrame), mPlayerMtx);
 
@@ -227,28 +220,23 @@ void MarioLauncher::exeAim() {
         MR::hideModel(this);
     }
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    if (MR::isStarPointerInScreen(WPAD_CHAN0)) {
-        mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
+    if (MR::isStarPointerInScreen(PLAYER_1)) {
+        mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(PLAYER_1));
         MR::requestMarioLauncherGuidance();
     } else {
         mLayout->mLayout->kill();
         MR::requestMarioLauncherGuidance();
     }
-#elif (VERSION == RMGK01)
-    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
-    MR::requestMarioLauncherGuidance();
-#endif
     MR::startSystemLevelSE("SE_SY_LV_MARIO_LAUNCHER_AIM");
 
-    if (MR::testSystemTriggerA() || MR::testCorePadTriggerA(WPAD_CHAN0)) {
+    if (MR::testSystemTriggerA() || MR::isPressedJump(PLAYER_1)) {
         if (doEject()) {
             setNerve(GET_NERVE(MarioLauncher, MarioLauncherNrvFlight));
         }
         return;
     }
 
-    if (MR::testSystemTriggerB() || MR::testCorePadTriggerB(WPAD_CHAN0)) {
+    if (MR::testSystemTriggerB() || MR::isPressedFire(PLAYER_1)) {
         if (doReject()) {
             setNerve(GET_NERVE(MarioLauncher, MarioLauncherNrvReject));
         }
@@ -462,7 +450,7 @@ bool MarioLauncher::doPrep() {
 }
 
 bool MarioLauncher::doAim() {
-    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
+    mLayout->appearAt(MR::getStarPointerScreenPositionOrEdge(PLAYER_1));
     MR::requestMarioLauncherGuidance();
     mLayout->appear();
 
@@ -516,11 +504,9 @@ void MarioLauncherLayout::kill() {
 }
 
 bool MarioLauncher::doEject() {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+    if (!MR::isStarPointerInScreen(PLAYER_1)) {
         return false;
     }
-#endif
 
     TVec3f back;
     MR::calcUpVec(&back, this);
@@ -530,11 +516,7 @@ bool MarioLauncher::doEject() {
     }
 
     TVec3f shootDir;
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    MR::calcWorldRayDirectionFromScreen(&shootDir, *MR::getStarPointerScreenPosition(WPAD_CHAN0));
-#elif (VERSION == RMGK01)
-    MR::calcWorldRayDirectionFromScreen(&shootDir, MR::getStarPointerScreenPositionOrEdge(WPAD_CHAN0));
-#endif
+    MR::calcWorldRayDirectionFromScreen(&shootDir, *MR::getStarPointerScreenPosition(PLAYER_1));
     MR::normalize(&shootDir);
 
     mShell->getPosition().set(mCameraTargetMtx.getPosition());
@@ -549,7 +531,7 @@ bool MarioLauncher::doEject() {
     MR::startBckPlayer("CannonFlyStart");
 
     MR::shakeCameraStrong();
-    MR::tryRumblePadStrong(this, WPAD_CHAN0);
+    MR::tryRumblePadStrong(this, PLAYER_1);
 
     MR::setEffectHostMtx(this, "LocusSmoke", mEffectMtxSmoke);
     MR::setEffectHostMtx(this, "Gravity", mEffectMtxGravity);

@@ -10,7 +10,7 @@ namespace nw4r {
             Init(texNum);
             mpMaterial = Layout::NewObj< Material >();
             if (mpMaterial) {
-                mpMaterial->ReserveGXMem(texNum, texNum, texNum, 0, false, 0, 0, false, false, false, false);
+                mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
             }
         }
 
@@ -19,13 +19,13 @@ namespace nw4r {
             Init(texNum);
             mpMaterial = Layout::NewObj< Material >();
             if (mpMaterial) {
-                mpMaterial->ReserveGXMem(texNum, texNum, texNum, 0, false, 0, 0, false, false, false, false);
+                mpMaterial->ReserveStorage(texNum, texNum, texNum, 0, false, false, false, false);
                 Append(texMap);
             }
         }
 
         Picture::Picture(const res::Picture* pRes, const ResBlockSet& rBlockSet) : Pane(pRes) {
-            u8 num = ut::Min< u8 >(pRes->texCoordNum, GX_MAX_TEXCOORD);
+            u8 num = ut::Min< u8 >(pRes->texCoordNum, 8);
             Init(num);
 
             for (int i = 0; i < 4; i++) {
@@ -39,7 +39,7 @@ namespace nw4r {
             void* pMaterialBuf = Layout::AllocMemory(sizeof(Material));
 
             if (pMaterialBuf != NULL) {
-                const NEBULA_BE(u32)* const pMatOffsetTbl = detail::ConvertOffsToPtr< NEBULA_BE(u32) >(rBlockSet.pMaterialList, sizeof(res::MaterialList));
+                const u32* const pMatOffsetTbl = detail::ConvertOffsToPtr< u32 >(rBlockSet.pMaterialList, sizeof(res::MaterialList));
 
                 const res::Material* const pResMaterial =
                     detail::ConvertOffsToPtr< res::Material >(rBlockSet.pMaterialList, pMatOffsetTbl[pRes->materialIdx]);
@@ -117,7 +117,7 @@ namespace nw4r {
 
             LoadMtx(rInfo);
 
-            bool useVtxColor = mpMaterial->SetupGX(detail::IsModulateVertexColor(mVtxColors, mGlbAlpha), mGlbAlpha);
+            bool useVtxColor = mpMaterial->Setup(detail::IsModulateVertexColor(mVtxColors, mGlbAlpha), mGlbAlpha);
 
             detail::DrawQuad(GetVtxPos(), mSize, mTexCoordAry.GetSize(), mTexCoordAry.GetArray(), useVtxColor ? mVtxColors : NULL, mGlbAlpha);
         }

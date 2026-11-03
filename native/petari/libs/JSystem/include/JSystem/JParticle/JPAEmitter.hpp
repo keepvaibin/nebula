@@ -8,7 +8,6 @@
 #include "JSystem/JParticle/JPARandom.hpp"
 #include "JSystem/JParticle/JPAResource.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution/types.h>
 #include <stdint.h>
 
 class JPAResourceManager;
@@ -18,52 +17,52 @@ class JPAParticleCallBack;
 
 struct JPAEmitterWorkData {
     struct JPAVolumeCalcData {
-        /* 0x00 */ JGeometry::TVec3< f32 > mVolumePos;
-        /* 0x0C */ JGeometry::TVec3< f32 > mVelOmni;
-        /* 0x18 */ JGeometry::TVec3< f32 > mVelAxis;
+        JGeometry::TVec3< f32 > mVolumePos;
+        JGeometry::TVec3< f32 > mVelOmni;
+        JGeometry::TVec3< f32 > mVelAxis;
     };
 
     JPAEmitterWorkData() : mRndm(0) {
     }
 
-    /* 0x00 */ JPABaseEmitter* mpEmtr;
-    /* 0x04 */ JPAResource* mpRes;
-    /* 0x08 */ JPAResourceManager* mpResMgr;
-    /* 0x0C */ JPARandom mRndm;
-    /* 0x10 */ JPAVolumeCalcData mVolumeCalcData;
-    /* 0x34 */ f32 mVolumeSize;
-    /* 0x38 */ f32 mVolumeMinRad;
-    /* 0x3C */ f32 mVolumeSweep;
-    /* 0x40 */ s32 mEmitCount;
-    /* 0x44 */ s32 mVolumeEmitIdx;
-    /* 0x48 */ Mtx mDirectionMtx;
-    /* 0x78 */ Mtx mRotationMtx;
-    /* 0xA8 */ Mtx mGlobalRot;
-    /* 0xD8 */ Mtx mGlobalSR;
-    /* 0x108 */ JGeometry::TVec3< f32 > mEmitterPos;
-    /* 0x114 */ JGeometry::TVec3< f32 > mGlobalScl;
-    /* 0x120 */ JGeometry::TVec3< f32 > mGlobalEmtrDir;
-    /* 0x12C */ JGeometry::TVec3< f32 > mPublicScale;
-    /* 0x138 */ JGeometry::TVec3< f32 > mGlobalPos;
-    /* 0x144 */ JGeometry::TVec2< f32 > mGlobalPtclScl;
-    /* 0x14C */ JGeometry::TVec2< f32 > mPivot;
-    /* 0x154 */ Mtx mYBBCamMtx;
-    /* 0x184 */ Mtx mPosCamMtx;
-    /* 0x1B4 */ Mtx mPrjMtx;
-    /* 0x1E4 */ JPAList< JPABaseParticle >* mpAlivePtcl;
-    /* 0x1E8 */ JPANode< JPABaseParticle >* mpCurNode;
-    /* 0x1EC */ s32 mVolumeAngleNum;
-    /* 0x1F0 */ s32 mVolumeAngleMax;
-    /* 0x1F4 */ s32 mVolumeX;
-    /* 0x1F8 */ s32 mDivNumber;
-    /* 0x1FC */ f32 mScaleAnm;
-    /* 0x200 */ u32 mDirType;
-    /* 0x204 */ u32 mRotType;
-    /* 0x208 */ u32 mPlaneType;
-    /* 0x20C */ u32 mDLType;
-    /* 0x210 */ u32 mPrjType;
-    /* 0x214 */ s16 mClrKeyFrame;
-    /* 0x216 */ u8 mDrawCount;
+    JPABaseEmitter* mpEmtr;
+    JPAResource* mpRes;
+    JPAResourceManager* mpResMgr;
+    JPARandom mRndm;
+    JPAVolumeCalcData mVolumeCalcData;
+    f32 mVolumeSize;
+    f32 mVolumeMinRad;
+    f32 mVolumeSweep;
+    s32 mEmitCount;
+    s32 mVolumeEmitIdx;
+    Mtx mDirectionMtx;
+    Mtx mRotationMtx;
+    Mtx mGlobalRot;
+    Mtx mGlobalSR;
+    JGeometry::TVec3< f32 > mEmitterPos;
+    JGeometry::TVec3< f32 > mGlobalScl;
+    JGeometry::TVec3< f32 > mGlobalEmtrDir;
+    JGeometry::TVec3< f32 > mPublicScale;
+    JGeometry::TVec3< f32 > mGlobalPos;
+    JGeometry::TVec2< f32 > mGlobalPtclScl;
+    JGeometry::TVec2< f32 > mPivot;
+    Mtx mYBBCamMtx;
+    Mtx mPosCamMtx;
+    Mtx mPrjMtx;
+    JPAList< JPABaseParticle >* mpAlivePtcl;
+    JPANode< JPABaseParticle >* mpCurNode;
+    s32 mVolumeAngleNum;
+    s32 mVolumeAngleMax;
+    s32 mVolumeX;
+    s32 mDivNumber;
+    f32 mScaleAnm;
+    u32 mDirType;
+    u32 mRotType;
+    u32 mPlaneType;
+    u32 mListType;
+    u32 mPrjType;
+    s16 mClrKeyFrame;
+    u8 mDrawCount;
 };
 
 enum {
@@ -90,7 +89,7 @@ public:
     JPABaseParticle* createParticle();
     u32 getCurrentCreateNumber() const;
     u8 getDrawCount() const;
-    bool loadTexture(u8, GXTexMapID);
+    bool loadTexture(u8, u8);
 
     void initStatus(u32 status) {
         mStatus = status;
@@ -105,7 +104,7 @@ public:
         return (mStatus & status);
     }
     /* SMG1 change -- returns u32 instead of bool */
-    u32 checkFlag(u32 flag) const NO_INLINE {
+    u32 checkFlag(u32 flag) const {
         return (mpRes->getDyn()->getFlag() & flag);
     }
     u8 getResourceManagerID() const {
@@ -169,10 +168,10 @@ public:
     u8 getGlobalAlpha() const {
         return mGlobalPrmClr.a;
     }
-    void getGlobalPrmColor(GXColor& color) {
+    void getGlobalPrmColor(NebulaColor8& color) {
         color = mGlobalPrmClr;
     }
-    void getGlobalPrmColor(_GXColor* color) const {
+    void getGlobalPrmColor(NebulaColor8* color) const {
         *color = mGlobalPrmClr;
     }
     void setGlobalPrmColor(u8 r, u8 g, u8 b) {
@@ -220,7 +219,6 @@ public:
         mGlobalPScl.set(scaleX, scaleY);
     }
     void getGlobalParticleScale(JGeometry::TVec3< f32 >& scale) const {
-        // TODO: Possible fakematch. Debug and Wii indicate TVec3::set, but using it breaks regalloc
         //       in dPa_gen_b_light8PcallBack::draw on GCN (where the call to set would normally be
         //       inlined).
 #if PLATFORM_GCN
@@ -232,7 +230,6 @@ public:
 #endif
     }
     void getGlobalParticleScale(JGeometry::TVec3< f32 >* scale) const {
-        // TODO: Possible fakematch. Debug and Wii indicate TVec3::set, but using it breaks regalloc
         //       in dPa_gen_b_light8PcallBack::draw on GCN (where the call to set would normally be
         //       inlined).
 #if PLATFORM_GCN
@@ -258,13 +255,13 @@ public:
     f32 get_r_f() {
         return mRndm.get_rndm_f();
     }
-    f32 get_r_zp() NO_INLINE {
+    f32 get_r_zp() {
         return mRndm.get_rndm_zp();
     }
-    f32 get_r_zh() NO_INLINE {
+    f32 get_r_zh() {
         return mRndm.get_rndm_zh();
     }
-    s16 get_r_ss() NO_INLINE {
+    s16 get_r_ss() {
         return mRndm.get_rndm_ss();
     }
 
@@ -341,58 +338,52 @@ public:
     }
 
 public:
-    /* 0x00 */ JGeometry::TVec3< f32 > mLocalScl;
-    /* 0x0C */ JGeometry::TVec3< f32 > mLocalTrs;
-    /* 0x18 */ JGeometry::TVec3< f32 > mLocalDir;
-    /* 0x24 */ s32 mMaxFrame;
-    /* 0x28 */ f32 mRate;
-    /* 0x2C */ f32 mVolumeSweep;
-    /* 0x30 */ f32 mVolumeMinRad;
-    /* 0x34 */ f32 mAwayFromCenterSpeed;
-    /* 0x38 */ f32 mAwayFromAxisSpeed;
-    /* 0x3C */ f32 mDirSpeed;
-    /* 0x40 */ f32 mSpread;
-    /* 0x44 */ f32 mRndmDirSpeed;
-    /* 0x48 */ f32 mAirResist;
-    /* 0x4C */ JGeometry::TVec3< s16 > mLocalRot;
-    /* 0x52 */ s16 mLifeTime;
-    /* 0x54 */ u16 mVolumeSize;
-    /* 0x56 */ u8 mRateStep;
-    /* 0x58 */ JSULink< JPABaseEmitter > mLink;
-    /* 0x68 */ Mtx mGlobalRot;
-    /* 0x98 */ JGeometry::TVec3< f32 > mGlobalScl;
-    /* 0xA4 */ JGeometry::TVec3< f32 > mGlobalTrs;
-    /* 0xB0 */ JGeometry::TVec2< f32 > mGlobalPScl;
-    /* 0xB8 */ GXColor mGlobalPrmClr;
-    /* 0xBC */ GXColor mGlobalEnvClr;
-#ifdef TARGET_PC
-    /* 0xC0 */ uintptr_t mpUserWork;  // a pointer natively too (EffectSystemUtil's SingleEmitter)
-#else
-    /* 0xC0 */ s32 mpUserWork;
-#endif
-    /* 0xC4 */ JPARandom mRndm;
-    /* 0xC8 */ JPAList< JPABaseParticle > mAlivePtclBase;
-    /* 0xD4 */ JPAList< JPABaseParticle > mAlivePtclChld;
-    /* 0xE0 */ JPAList< JPABaseParticle >* mpPtclPool;
-    /* 0xE4 */ JPAEmitterManager* mpEmtrMgr;
-    /* 0xE8 */ JPAResource* mpRes;
-    /* 0xEC */ JPAEmitterCallBack* mpEmtrCallBack;
-    /* 0xF0 */ JPAParticleCallBack* mpPtclCallBack;
-    /* 0xF4 */ u32 mStatus;
-    /* 0xF8 */ f32 mEmitCount;
-    /* 0xFC */ f32 mScaleOut;
-    /* 0x100 */ u32 mTick;
-    /* 0x104 */ s16 mWaitTime;
-    /* 0x106 */ s16 mRateStepTimer;
-    /* 0x108 */ GXColor mPrmClr;
-    /* 0x10C */ GXColor mEnvClr;
-    /* 0x110 */ u8 mDrawTimes;
-    /* 0x111 */ u8 mTexAnmIdx;
-    /* 0x112 */ u8 mGroupID;
-    /* 0x113 */ u8 mResMgrID;
-#ifdef TARGET_PC
+    JGeometry::TVec3< f32 > mLocalScl;
+    JGeometry::TVec3< f32 > mLocalTrs;
+    JGeometry::TVec3< f32 > mLocalDir;
+    s32 mMaxFrame;
+    f32 mRate;
+    f32 mVolumeSweep;
+    f32 mVolumeMinRad;
+    f32 mAwayFromCenterSpeed;
+    f32 mAwayFromAxisSpeed;
+    f32 mDirSpeed;
+    f32 mSpread;
+    f32 mRndmDirSpeed;
+    f32 mAirResist;
+    JGeometry::TVec3< s16 > mLocalRot;
+    s16 mLifeTime;
+    u16 mVolumeSize;
+    u8 mRateStep;
+    JSULink< JPABaseEmitter > mLink;
+    Mtx mGlobalRot;
+    JGeometry::TVec3< f32 > mGlobalScl;
+    JGeometry::TVec3< f32 > mGlobalTrs;
+    JGeometry::TVec2< f32 > mGlobalPScl;
+    NebulaColor8 mGlobalPrmClr;
+    NebulaColor8 mGlobalEnvClr;
+    uintptr_t mpUserWork;  // a pointer natively too (EffectSystemUtil's SingleEmitter)
+    JPARandom mRndm;
+    JPAList< JPABaseParticle > mAlivePtclBase;
+    JPAList< JPABaseParticle > mAlivePtclChld;
+    JPAList< JPABaseParticle >* mpPtclPool;
+    JPAEmitterManager* mpEmtrMgr;
+    JPAResource* mpRes;
+    JPAEmitterCallBack* mpEmtrCallBack;
+    JPAParticleCallBack* mpPtclCallBack;
+    u32 mStatus;
+    f32 mEmitCount;
+    f32 mScaleOut;
+    u32 mTick;
+    s16 mWaitTime;
+    s16 mRateStepTimer;
+    NebulaColor8 mPrmClr;
+    NebulaColor8 mEnvClr;
+    u8 mDrawTimes;
+    u8 mTexAnmIdx;
+    u8 mGroupID;
+    u8 mResMgrID;
     u16 mMotionEpoch;  // counts the pooled emitter's effects (MotionSignal)
-#endif
 };
 
 enum {

@@ -22,10 +22,10 @@ public:
     f32 calcAndSetTargetPos(TVec3f* pPos, const TVec3f& rReferencePos);
     f32 calcTimeRate() const;
     bool isBreak() const;
-    bool isTypeNormal() const NO_INLINE;
+    bool isTypeNormal() const;
     bool isTypeDemoFar() const;
     bool isTypeDemoNear() const;
-    bool isTypeNoRequestFire() const NO_INLINE;
+    bool isTypeNoRequestFire() const;
 
     void exeWaitSwitch();
     void exeWaitKoopaFire();
@@ -33,17 +33,17 @@ public:
     void exeFall();
     void exeDisappear();
 
-    /* 0x8C */ s32 mTimeToBreak;  // Obj_arg0
-    /* 0x90 */ s32 mFireAttackStep;
-    /* 0x94 */ s32 mArg1;   // Obj_arg1
-    /* 0x98 */ s32 mArg5;   // Obj_arg5
-    /* 0x9C */ bool mArg6;  // Obj_arg6
-    /* 0xA0 */ s32 mType;   // Obj_arg2
-    /* 0xA4 */ bool mIsBig;
-    /* 0xA5 */ bool mIsTurn;
-    /* 0xA6 */ bool _A6;
-    /* 0xA8 */ s32 _A8;
-    /* 0xAC */ TVec3f _AC;
-    /* 0xB8 */ s32 mWaitFallStep;  // Obj_arg3
-    /* 0xBC */ s32 mFallStep;      // Obj_arg4
+    s32 mTimeToBreak;  // Obj_arg0
+    s32 mFireAttackStep;
+    s32 mArg1;   // Obj_arg1
+    s32 mArg5;   // Obj_arg5
+    bool mArg6;  // Obj_arg6
+    s32 mType;   // Obj_arg2
+    bool mIsBig;
+    bool mIsTurn;
+    bool _A6;
+    s32 _A8;
+    TVec3f _AC;
+    s32 mWaitFallStep;  // Obj_arg3
+    s32 mFallStep;      // Obj_arg4
 };

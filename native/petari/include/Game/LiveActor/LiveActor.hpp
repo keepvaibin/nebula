@@ -31,62 +31,69 @@ public:
 
     /// @brief Intializes the `LiveActor` while being placed into a scene.
     /// @param rIter A reference to an iterator over a `JMapInfo`.
-    /* 0x0C */ virtual void init(const JMapInfoIter& rIter) override;
+    virtual void init(const JMapInfoIter& rIter) override;
 
-    /* 0x14 */ virtual void movement();
-    /* 0x1C */ virtual void calcAnim();
-    /* 0x20 */ virtual void calcViewAndEntry();
-    /* 0x24 */ virtual void appear();
-    /* 0x28 */ virtual void makeActorAppeared();
-    /* 0x2C */ virtual void kill();
-    /* 0x30 */ virtual void makeActorDead();
-    /* 0x34 */ virtual bool receiveMessage(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
+    virtual void movement() override;
+    virtual void calcAnim() override;
+    virtual void calcViewAndEntry() override;
+    virtual void appear();
+    virtual void makeActorAppeared();
+    virtual void kill();
+    virtual void makeActorDead();
+    virtual bool receiveMessage(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
 
     /// @brief Gets the base matrix of the model used for the actor.
     /// @returns A MtxPtr to the base matrix. NULL if there is no model present.
-    /* 0x38 */ virtual MtxPtr getBaseMtx() const;
-    /* 0x3C */ virtual MtxPtr getTakingMtx() const;
-    /* 0x40 */ virtual void startClipped();
-    /* 0x44 */ virtual void endClipped();
+    virtual MtxPtr getBaseMtx() const;
+    virtual MtxPtr getTakingMtx() const;
+    virtual void startClipped();
+    virtual void endClipped();
 
-    /* 0x48 */ virtual void control() {
+    virtual void control() {
     }
 
     /// @brief Calculates and sets the base matrix of the actor.
-    /* 0x4C */ virtual void calcAndSetBaseMtx();
+    virtual void calcAndSetBaseMtx();
+    void prepareDrawClipped();
 
-    /* 0x50 */ virtual void updateHitSensor(HitSensor* pSensor) {
+    // What a startClipped or endClipped in progress changes, its actor's overrides and parts included: everything (the
+    // actor left or entered both its running distance and the camera's view), its running alone (still seen past its
+    // distance) or its being seen alone (past its distance, entering or leaving the view).
+    enum ClipScope { ClipScope_All, ClipScope_Run, ClipScope_Seen };
+    static ClipScope sClipScope;
+
+    virtual void updateHitSensor(HitSensor* pSensor) {
     }
 
-    /* 0x54 */ virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
+    virtual void attackSensor(HitSensor* pSender, HitSensor* pReceiver);
 
-    /* 0x58 */ virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    /* 0x5C */ virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    /* 0x60 */ virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    /* 0x64 */ virtual bool receiveMsgTake(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgTake(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    /* 0x68 */ virtual bool receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgTaken(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    /* 0x6C */ virtual bool receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveMsgThrow(HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
-    /* 0x70 */ virtual bool receiveMsgApart(HitSensor* pSender, HitSensor* pReceiver);
+    virtual bool receiveMsgApart(HitSensor* pSender, HitSensor* pReceiver);
 
-    /* 0x74 */ virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    virtual bool receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
         return false;
     }
 
@@ -140,48 +147,48 @@ public:
     void updateBinder();
 
     /// @brief The three-dimensional location vector.
-    /* 0x0C */ TVec3f mPosition;
+    TVec3f mPosition;
 
     /// @brief The three-dimensional rotation vector, in degrees.
-    /* 0x18 */ TVec3f mRotation;
+    TVec3f mRotation;
 
     /// @brief The three-dimensional scale vector.
-    /* 0x24 */ TVec3f mScale;
+    TVec3f mScale;
 
     /// @brief The three-dimensional velocity vector, in units per step.
-    /* 0x30 */ TVec3f mVelocity;
+    TVec3f mVelocity;
 
     /// @brief The three-dimensional gravity unit vector.
-    /* 0x3C */ TVec3f mGravity;
+    TVec3f mGravity;
 
     /// @brief A pointer to a `ModelManager` instance, used for drawing a 3D model.
-    /* 0x48 */ ModelManager* mModelManager;
+    ModelManager* mModelManager;
 
     /// @brief A pointer to an `ActorAnimKeeper` instance, used for storing and playing model animations.
-    /* 0x4C */ ActorAnimKeeper* mAnimKeeper;
+    ActorAnimKeeper* mAnimKeeper;
 
-    /* 0x50 */ Spine* mSpine;
+    Spine* mSpine;
 
     /// @brief A pointer to a `HitSensorKeeper` instance, used for storing `HitSensor` instances.
-    /* 0x54 */ HitSensorKeeper* mSensorKeeper;
+    HitSensorKeeper* mSensorKeeper;
 
-    /* 0x58 */ Binder* mBinder;
+    Binder* mBinder;
 
     /// @brief A pointer to a `RailRider` instance, used for allowing the actor to ride on paths.
-    /* 0x5C */ RailRider* mRailRider;
-    /* 0x60 */ EffectKeeper* mEffectKeeper;
-    /* 0x64 */ AudAnmSoundObject* mSoundObject;
+    RailRider* mRailRider;
+    EffectKeeper* mEffectKeeper;
+    AudAnmSoundObject* mSoundObject;
 
     /// @brief Flags relating to drawing, animation calculation, etc.
-    /* 0x68 */ LiveActorFlag mFlag;
+    LiveActorFlag mFlag;
 
-    /* 0x74 */ ShadowControllerList* mShadowControllerList;
-    /* 0x78 */ CollisionParts* mCollisionParts;
+    ShadowControllerList* mShadowControllerList;
+    CollisionParts* mCollisionParts;
 
     /// @brief A pointer to a `StageSwitchCtrl` instance, used for activating and deactivating switches.
-    /* 0x7C */ StageSwitchCtrl* mStageSwitchCtrl;
+    StageSwitchCtrl* mStageSwitchCtrl;
 
-    /* 0x80 */ StarPointerTarget* mStarPointerTarget;
-    /* 0x84 */ ActorLightCtrl* mActorLightCtrl;
-    /* 0x88 */ ActorPadAndCameraCtrl* mCameraCtrl;
+    StarPointerTarget* mStarPointerTarget;
+    ActorLightCtrl* mActorLightCtrl;
+    ActorPadAndCameraCtrl* mCameraCtrl;
 };

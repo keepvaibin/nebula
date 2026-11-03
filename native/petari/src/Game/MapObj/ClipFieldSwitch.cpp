@@ -3,10 +3,6 @@
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/Util.hpp"
 
-void ClipFieldSwitch_FORCE_MATCH_SDATA2() {
-    (void)1000.0f;
-}
-
 ClipFieldSwitch::~ClipFieldSwitch() {
 }
 

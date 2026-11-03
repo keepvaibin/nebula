@@ -11,8 +11,8 @@
 #include "Game/Util/StringUtil.hpp"
 
 struct OffsetPair {
-    /* 0x00 */ f32 x;
-    /* 0x04 */ f32 z;
+    f32 x;
+    f32 z;
 };
 
 namespace {
@@ -185,7 +185,7 @@ bool KoopaBattleMapStair::isBreak() const {
     return isNerve(GET_NERVE(KoopaBattleMapStair, KoopaBattleMapStairNrvWaitFall));
 }
 
-bool KoopaBattleMapStair::isTypeNormal() const NO_INLINE {
+bool KoopaBattleMapStair::isTypeNormal() const {
     return mType == Type_Normal;
 }
 
@@ -197,7 +197,7 @@ bool KoopaBattleMapStair::isTypeDemoNear() const {
     return mType == Type_DemoNear;
 }
 
-bool KoopaBattleMapStair::isTypeNoRequestFire() const NO_INLINE {
+bool KoopaBattleMapStair::isTypeNoRequestFire() const {
     return mType == Type_NoRequestFire;
 }
 

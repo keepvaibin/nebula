@@ -1,5 +1,5 @@
 #include "Game/System/ResourceHolder.hpp"
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/GameThreads.hpp"
 #include "Game/Animation/MaterialAnmBuffer.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -10,13 +10,11 @@
 #include <JSystem/J3DGraphLoader/J3DModelLoader.hpp>
 #include <cstdio>
 #include <cstring>
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
-#ifdef TARGET_PC
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 #include "Game/Util/MotionSignal.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
-#endif
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 
 namespace {
     static const ArchiveName sModelExt[] = {".bdl", ".bmd", nullptr};
@@ -39,7 +37,7 @@ namespace {
     // static const __ sPlanetLowSizeBorder = ;
 };  // namespace
 
-ResourceHolder::ResourceHolder(JKRArchive& rArchive)
+ResourceHolder::ResourceHolder(AssetFolder& rArchive)
     : mModelResTable(&mDefaultTable), mMotionResTable(&mDefaultTable), mBtkResTable(&mDefaultTable), mBpkResTable(&mDefaultTable),
       mBtpResTable(&mDefaultTable), mBlkResTable(&mDefaultTable), mBrkResTable(&mDefaultTable), mBasResTable(&mDefaultTable),
       mBmtResTable(&mDefaultTable), mBvaResTable(&mDefaultTable), mBanmtResTable(&mDefaultTable), mFileInfoTable(&mDefaultTable), mArchive(&rArchive),
@@ -78,14 +76,21 @@ void ResourceHolder::newMaterialAnmBuffer(J3DModelData* pModelData) {
 
 void ResourceHolder::newBckCtrl() {
     MR::CurrentHeapRestorer heap(mHeap);
-    mBckCtrl = new BckCtrl(this, mArchive->mLoaderName);
+    // Its table has the archive's name.
+    char name[128];
+    MR::copyString(name, mArchive->getName(), sizeof(name));
+    if (char* pDot = strrchr(name, '.')) {
+        *pDot = '\0';
+    }
+
+    mBckCtrl = new BckCtrl(this, name);
 }
 
 Mtx44& ResourceHolder::getInitEffectMtx(int materialIndex, int mtxIndex) const {
     return mBackupMaterialData[materialIndex * 8 + mtxIndex];
 }
 
-void ResourceHolder::initializeArc(JKRArchive& rArchive) {
+void ResourceHolder::initializeArc(AssetFolder& rArchive) {
     u32 fileInfoSize = rArchive.countResource();
     fileInfoSize -= initEachResTable(&mModelResTable, &rArchive, ::sModelExt);
     fileInfoSize -= initEachResTable(&mMotionResTable, &rArchive, ::sMotionExt);
@@ -104,21 +109,13 @@ void ResourceHolder::initializeArc(JKRArchive& rArchive) {
         mFileInfoTable->newFileInfoTable(fileInfoSize);
     }
 
-    mount(&rArchive, nullptr);
+    mount(&rArchive, rArchive.getEntry());
 }
 
-JKRFileFinder* ResourceHolder::getFileFinder(JKRArchive* pArchive, const char* pName) {
-    if (pName == nullptr) {
-        return pArchive->getFirstFile("/");
-    }
-
-    return pArchive->getFirstFile(pName);
-}
-
-u32 ResourceHolder::initEachResTable(ResTable** pResTable, JKRArchive* pArchive, const ArchiveName* pExtNames) {
+u32 ResourceHolder::initEachResTable(ResTable** pResTable, AssetFolder* pArchive, const ArchiveName* pExtNames) {
     u32 numResources = 0;
     for (s32 idx = 0; pExtNames[idx] != nullptr; idx++) {
-        numResources += count(pArchive, pExtNames[idx], nullptr);
+        numResources += count(pArchive, pExtNames[idx], pArchive->getEntry());
     }
 
     if (numResources != 0) {
@@ -129,51 +126,34 @@ u32 ResourceHolder::initEachResTable(ResTable** pResTable, JKRArchive* pArchive,
     return numResources;
 }
 
-s32 ResourceHolder::count(JKRArchive* pArchive, const char* pExtName, const char* pPath) {
+s32 ResourceHolder::count(AssetFolder* pArchive, const char* pExtName, s32 folder) {
     s32 num = 0;
-    JKRFileFinder* finder = getFileFinder(pArchive, pPath);
+    AssetFolder::Item item;
 
-    while (finder->mHasMoreFiles) {
-        if (finder->mFileIsFolder) {
-            if (finder->mName[0] != '.') {
-                char path[128];
-                sprintf(path, "%s%s%s", pPath, "/", finder->mName);
-                num += count(pArchive, pExtName, path);
-            }
-        } else {
-            if (pExtName == nullptr || strstr(finder->mName, pExtName) != nullptr) {
-                num++;
-            }
+    for (u32 i = 0; pArchive->getItem(folder, i, &item); i++) {
+        if (item.mIsFolder) {
+            num += count(pArchive, pExtName, item.mEntry);
+        } else if (pExtName == nullptr || strstr(item.mName, pExtName) != nullptr) {
+            num++;
         }
-        finder->findNextFile();
     }
 
-    delete finder;
     return num;
 }
 
-void ResourceHolder::mount(JKRArchive* pArchive, char* pPath) {
-    JKRFileFinder* finder = getFileFinder(pArchive, pPath);
+void ResourceHolder::mount(AssetFolder* pArchive, s32 folder) {
+    AssetFolder::Item item;
 
-    while (finder->mHasMoreFiles) {
-        if (finder->mFileIsFolder) {
-            if (finder->mName[0] != '.') {
-                char path[128];
-                snprintf(path, 128, "%s/%s", pPath, finder->mName);
-                mount(pArchive, path);
-            }
+    for (u32 i = 0; pArchive->getItem(folder, i, &item); i++) {
+        if (item.mIsFolder) {
+            mount(pArchive, item.mEntry);
         } else {
-            u32 fileID = pArchive->getFileAttribute(finder->mFileID);
-            ResFileInfo* info = createAndRegisterObject(finder->mName, pArchive->getResource(finder->mFileID));
-            info->_8 = pArchive->getResource(finder->mFileID);
-            info->_4 = pArchive->getResSize(info->_8);
-            info->_C = finder->mFileID;
+            ResFileInfo* info = createAndRegisterObject(item.mName, item.mData);
+            info->_8 = item.mData;
+            info->_4 = item.mSize;
             mTotalResourceSize += info->_4;
         }
-        finder->findNextFile();
     }
-
-    delete finder;
 }
 
 ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pData) {
@@ -226,29 +206,22 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
 
     if (strstr(pName, ".bdl") != nullptr) {
         (MR::MutexHolder< 0 >::sMutex).lock();
-        J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryDisplayList(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
+        J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryMaterials(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
         (MR::MutexHolder< 0 >::sMutex).unlock();
         MR::initEnvelopeAndEnvMapOrProjMapModelData(modelData);
-        if (MR::isUseFur(modelData) || MR::strcasecmp(pName, "MarioShadow.bdl") == 0) {
-            MR::downFracVtx(modelData);
-        }
         // Lists for its materials, made from their MAT3 data as a .bmd model's are (J3DModelLoader skips the file's).
-        modelData->newSharedDisplayList(0);
-#ifdef TARGET_PC
+        modelData->newSharedSnapshot(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
-#endif
         return mModelResTable->add(pName, modelData, true);
     }
 
     if (strstr(pName, ".bmd") != nullptr) {
         J3DModelData* modelData =
             J3DModelLoaderDataBase::load(pData, J3DMLF_Material_PE_Full | J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials | J3DMLF_21);
-        modelData->newSharedDisplayList(0);
-#ifdef TARGET_PC
+        modelData->newSharedSnapshot(0);
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
-#endif
         return mModelResTable->add(pName, modelData, true);
     }
 

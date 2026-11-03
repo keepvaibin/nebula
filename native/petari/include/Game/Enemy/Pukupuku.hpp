@@ -28,9 +28,9 @@ public:
     void emitWaterColumIfNeed(bool, bool);
     void emitGroundHitEffect();
 
-    /* 0x10 */ ParabolicPath* mPath;
-    /* 0x14 */ ValueControl* mValueCtrl;
-    /* 0x18 */ u8 _18;
+    ParabolicPath* mPath;
+    ValueControl* mValueCtrl;
+    u8 _18;
 };
 
 class Pukupuku : public LiveActor {
@@ -49,7 +49,7 @@ public:
     void updatePoseByRailIgnoreUpScale();
     void rotatePoseByLocalZ();
     void calcGroundHitMtx(TPos3f* pMtx) const;
-    bool isReadyToJumpFromLand() const NO_INLINE;
+    bool isReadyToJumpFromLand() const;
     bool isDamaged() const;
     void exeWait();
     void exeMoveWater();
@@ -81,18 +81,18 @@ public:
         updateMoveWaterAfterJump();
     }
 
-    /* 0x8C */ PukupukuStateLanding* mStateLanding;
-    /* 0x90 */ TVec3f _90;
-    /* 0x9C */ TVec3f _9C;
-    /* 0xA8 */ TQuat4f _A8;
-    /* 0xB8 */ AnimScaleController* mScaleCtrl;
-    /* 0xBC */ WalkerStateBindStarPointer* mStarPointer;
-    /* 0xC0 */ const char* _C0;
-    /* 0xC4 */ Nerve* _C4;
-    /* 0xC8 */ f32 _C8;
-    /* 0xCC */ f32 _CC;
-    /* 0xD0 */ u8 _D0;
-    /* 0xD1 */ u8 _D1;
-    /* 0xD2 */ u8 _D2;
-    /* 0xD3 */ u8 _D3;
+    PukupukuStateLanding* mStateLanding;
+    TVec3f _90;
+    TVec3f _9C;
+    TQuat4f _A8;
+    AnimScaleController* mScaleCtrl;
+    WalkerStateBindStarPointer* mStarPointer;
+    const char* _C0;
+    Nerve* _C4;
+    f32 _C8;
+    f32 _CC;
+    u8 _D0;
+    u8 _D1;
+    u8 _D2;
+    u8 _D3;
 };

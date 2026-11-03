@@ -4,9 +4,9 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 
 namespace {
@@ -15,9 +15,9 @@ namespace {
 };  // namespace
 
 CaptureScreenDirector::CaptureScreenDirector() : NameObj("\211\346\226\312\203\114\203\203\203\166\203\140\203\203" /* 画面キャプチャ */), _C(nullptr), mTimingType("Indirect"), mTexture(nullptr), _18(false) {
-    MR::CurrentHeapRestorer heapRestorer(MR::getStationedHeapGDDR3());
+    MR::CurrentHeapRestorer heapRestorer(MR::getStationedHeap());
 
-    mTexture = new JUTTexture(JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), GX_TF_RGB565);
+    mTexture = new JUTTexture(NebulaFrameClock::cScreenUnitsAcross, NebulaFrameClock::cScreenUnitsDown);
 }
 
 void CaptureScreenDirector::captureIfAllow(const char* pName) {
@@ -31,7 +31,7 @@ void CaptureScreenDirector::captureIfAllow(const char* pName) {
 }
 
 void CaptureScreenDirector::capture() {
-    mTexture->capture(0, 0, GX_TF_RGB565, false, 0);
+    mTexture->frameColor();
 }
 
 void CaptureScreenDirector::requestCaptureTiming(const char* pName) {
@@ -55,10 +55,6 @@ void CaptureScreenDirector::invalidateCaptureTiming(const char* pName) {
 
 const ResTIMG* CaptureScreenDirector::getResTIMG() const {
     return mTexture->mTIMG;
-}
-
-u8* CaptureScreenDirector::getTexImage() const {
-    return mTexture->mImage;
 }
 
 const TimingInfo* CaptureScreenDirector::getUsingTiming() const {

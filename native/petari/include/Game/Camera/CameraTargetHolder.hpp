@@ -1,8 +1,7 @@
 #pragma once
 
-#include <revolution/gx.h>
-#include <revolution/mtx.h>
-#include <revolution/os.h>
+#include <NebulaGpu.h>
+#include <nebula_math.h>
 
 class CameraTargetActor;
 class CameraTargetObj;
@@ -24,7 +23,7 @@ public:
     bool isOnGround() const;
     bool isMoving() const;
 
-    /* 0x4 */ CameraTargetObj* mTarget;
-    /* 0x8 */ CameraTargetActor* mTargetActor;
-    /* 0xC */ CameraTargetPlayer* mTargetPlayer;
+    CameraTargetObj* mTarget;
+    CameraTargetActor* mTargetActor;
+    CameraTargetPlayer* mTargetPlayer;
 };

@@ -101,7 +101,7 @@ void CoinCounter::updateCounter() {
         }
     }
 
-    char* pPaneName = "Position001";
+    const char* pPaneName = "Position001";
 
     if (mCoinDisplayNum >= 100) {
         pPaneName = "Position100";

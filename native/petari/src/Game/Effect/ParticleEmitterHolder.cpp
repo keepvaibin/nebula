@@ -3,15 +3,18 @@
 #include "Game/Effect/EffectSystemUtil.hpp"
 #include "Game/Effect/ParticleEmitter.hpp"
 
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JParticle/JPAEmitter.hpp>
 #include <algorithm>
 
 ParticleEmitterHolder::ParticleEmitterHolder(const EffectSystem* pEffectSystem, int numEmitters) : mEffectSystem(pEffectSystem) {
-    mEmitters.init(numEmitters);
+    mFirst.mEmitters.init(numEmitters);
+    mFirst.mNext = nullptr;
 }
 
 void ParticleEmitterHolder::update(bool param1) {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         JPABaseEmitter* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
             continue;
@@ -36,7 +39,8 @@ void ParticleEmitterHolder::update(bool param1) {
 }
 
 void ParticleEmitterHolder::forceDeleteAllOneTimeEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         if (pEmitter->mEmitter == nullptr) {
             continue;
         }
@@ -50,13 +54,15 @@ void ParticleEmitterHolder::forceDeleteAllOneTimeEmitters() {
 }
 
 void ParticleEmitterHolder::forceDeleteAllEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         mEffectSystem->forceDeleteEmitter(pEmitter);
     }
 }
 
 void ParticleEmitterHolder::requestMovementOnAllEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         JPABaseEmitter* pBaseEmitter = pEmitter->mEmitter;
         if (pBaseEmitter == nullptr) {
             continue;
@@ -71,16 +77,28 @@ void ParticleEmitterHolder::requestMovementOnAllEmitters() {
 }
 
 ParticleEmitter* ParticleEmitterHolder::findAvailableParticleEmitter() {
-    ParticleEmitter* res = std::find_if_array(mEmitters.begin(), mEmitters.end(), std::not1(std::mem_func(&ParticleEmitter::isValid)));
-    if (res == mEmitters.end()) {
-        return nullptr;
+    Chunk* pLast = nullptr;
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext) {
+        for (auto& item : pChunk->mEmitters) {
+            if (!item.isValid()) {
+                return &item;
+            }
+        }
+        pLast = pChunk;
     }
 
-    return res;
+    // Full: as many again, in the heap this lies in. Effects keep pointers to the records, so the old ones stay.
+    Chunk* pChunk = new (NebulaArena::findFromRoot(this), 0) Chunk();
+    pChunk->mEmitters.mArr = new (NebulaArena::findFromRoot(this), 0) ParticleEmitter[mFirst.mEmitters.size()];
+    pChunk->mEmitters.mMaxSize = mFirst.mEmitters.size();
+    pChunk->mNext = nullptr;
+    pLast->mNext = pChunk;
+    return &pChunk->mEmitters[0];
 }
 
 void ParticleEmitterHolder::requestMovementOffAllLoopEmitters() {
-    for (ParticleEmitter* pEmitter = mEmitters.begin(); pEmitter != mEmitters.end(); pEmitter++) {
+    for (Chunk* pChunk = &mFirst; pChunk != nullptr; pChunk = pChunk->mNext)
+    for (ParticleEmitter* pEmitter = pChunk->mEmitters.begin(); pEmitter != pChunk->mEmitters.end(); pEmitter++) {
         if (pEmitter->mEmitter == nullptr) {
             continue;
         }
@@ -97,6 +115,3 @@ inline bool ParticleEmitter::isValid() const {
     return mEmitter != nullptr;
 }
 
-inline bool ParticleEmitter::isContinuousParticle() const NO_INLINE {
-    return mEmitter != nullptr && mEmitter->mMaxFrame == 0;
-}
