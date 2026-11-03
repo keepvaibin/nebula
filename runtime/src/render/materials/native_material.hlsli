@@ -40,7 +40,7 @@ SamplerState samp[8] : register(s0);
 // How much of this pixel lies on the contour where `value` rounds to `level` (both 0-255): a line of the same share of the
 // picture at every resolution, its edge antialiased.
 float level_line(float value, float level) {
-    return saturate((0.5 - abs(value - level)) / max(fwidth(value), 0.001) + 0.5);
+    return saturate((0.5 - abs(value - level)) / max(abs(ddx_fine(value)) + abs(ddy_fine(value)), 0.001) + 0.5);
 }
 
 // The draw's matrix rows (draw_matrices.h): position rows from pos_base (place k at 3k), texture rows from
