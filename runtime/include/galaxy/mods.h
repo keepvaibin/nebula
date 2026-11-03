@@ -16,6 +16,8 @@
 #pragma once
 
 
+#include "galaxy/texture_categories.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -50,6 +52,12 @@ struct ModOverlap {
     unsigned textures = 0;
 };
 
+// A texture of a pack: its hash and what its folder's words say (kCategoryCount: nothing).
+struct PackTexture {
+    std::uint64_t hash = 0;
+    std::uint8_t folder_category = galaxy::textures::kCategoryCount;
+};
+
 struct ModInfo {
     std::string id;  // its folder's name
     std::filesystem::path path;
@@ -67,6 +75,16 @@ struct ModInfo {
     unsigned changed_textures = 0;            // textures its packs replace
     std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures
     std::vector<ModOption> options;
+    // A texture pack, sorted: its textures, how many of each category and of this game's textures, and the categories
+    // turned off (category_bit). A pack's manifest.json (a resource pack's) names it.
+    std::shared_ptr<const std::vector<PackTexture>> pack_textures;
+    galaxy::textures::CategoryCounts category_textures{};
+    unsigned game_textures = 0;
+    bool categories_final = false;  // the game's textures were known when they were counted
+    std::uint32_t categories_off = 0;
+    std::string pack_title;
+    std::string pack_author;
+    std::string pack_description;
     std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
 };
 
@@ -74,6 +92,12 @@ struct ModInfo {
 [[nodiscard]] bool changes_disc(const ModInfo& mod) noexcept;
 // The enabled mods' textures/ and movies/ folders, lowest in the list first (the last wins), for the live renderer.
 [[nodiscard]] std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods);
+// The categories off in each of texture_folders' folders, in its order.
+[[nodiscard]] std::vector<std::uint32_t> texture_folder_categories_off(std::span<const ModInfo> mods);
+// A pack's textures counted by category again, once the game's textures are sorted; true when anything changed.
+bool update_pack_categories(ModInfo& mod);
+// The store the game's textures are sorted from (game.pak); the sorting starts when a mod has a pack.
+void set_mods_store_file(const std::filesystem::path& store);
 [[nodiscard]] std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods);
 
 // The mods folder, the file of their choices and the game they are for (boot.bin's six characters).

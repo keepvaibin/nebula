@@ -465,6 +465,60 @@ bool has_pack_textures(const fs::path& dir) {
     return false;
 }
 
+// A string field of a resource pack's manifest.json ("name": "..."); a small reading, enough for its flat fields.
+std::string json_string(const std::string& text, std::string_view field) {
+    const std::string key = "\"" + std::string(field) + "\"";
+    std::size_t at = text.find(key);
+    if (at == std::string::npos) return {};
+    at = text.find(':', at + key.size());
+    if (at == std::string::npos) return {};
+    at = text.find_first_not_of(" \t\r\n[", at + 1u);
+    if (at == std::string::npos || text[at] != '"') return {};
+    std::string value;
+    for (++at; at < text.size() && text[at] != '"'; ++at) {
+        if (text[at] == '\\' && at + 1u < text.size()) ++at;
+        value.push_back(text[at]);
+    }
+    return value;
+}
+
+void read_pack(ModInfo& mod, const fs::path& textures) {
+    auto list = std::make_shared<std::vector<PackTexture>>();
+    std::error_code error;
+    for (auto it = fs::recursive_directory_iterator(textures, fs::directory_options::skip_permission_denied, error);
+         !error && it != fs::recursive_directory_iterator(); it.increment(error)) {
+        if (!it->is_regular_file(error)) continue;
+        const std::string stem = lower(utf8_name(it->path().stem()));
+        if (stem.find("_mip") != std::string::npos) continue;
+        const std::optional<std::uint64_t> hash = galaxy::textures::hash_of_pack_name(stem);
+        if (!hash) continue;
+        PackTexture texture;
+        texture.hash = *hash;
+        const std::string folder = utf8_name(it->path().parent_path().lexically_relative(textures));
+        if (const auto named = galaxy::textures::category_of_pack_folder(galaxy::path_text(
+                it->path().parent_path().lexically_relative(textures)))) {
+            texture.folder_category = static_cast<std::uint8_t>(*named);
+        }
+        (void)folder;
+        list->push_back(texture);
+    }
+    mod.pack_textures = std::move(list);
+    // A resource pack's manifest, in the mod or one folder down.
+    std::vector<fs::path> places{mod.path, textures};
+    for (const auto& entry : fs::directory_iterator(mod.path, error)) {
+        if (entry.is_directory(error)) places.push_back(entry.path());
+    }
+    for (const fs::path& place : places) {
+        const std::optional<fs::path> manifest = child_any_case(place, "manifest.json", false);
+        if (!manifest) continue;
+        const std::string text = read_text(*manifest);
+        mod.pack_title = json_string(text, "name");
+        mod.pack_author = json_string(text, "authors");
+        mod.pack_description = json_string(text, "description");
+        break;
+    }
+}
+
 ModLayout layout_of(const fs::path& mod) {
     ModLayout layout;
     std::error_code error;
@@ -516,6 +570,7 @@ ModLayout layout_of(const fs::path& mod) {
 }
 
 struct SavedMod {
+    std::uint32_t categories_off = 0;
     bool enabled = true;
     unsigned order = 0;
     bool has_order = false;
@@ -555,11 +610,14 @@ std::string unescape_key(std::string_view s) {
 }
 
 struct Settings {
+    fs::path store;
     std::mutex mutex;
     fs::path folder;
     fs::path file;
     std::string game_id;
 };
+
+void start_texture_sorting();
 
 Settings& settings() {
     static Settings s;
@@ -570,6 +628,14 @@ struct Session {
     std::mutex mutex;
     SessionMods mods;
 };
+
+void start_texture_sorting() {
+    Settings& s = settings();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    if (!s.store.empty() && !s.file.empty()) {
+        galaxy::textures::start_index(s.store, s.file.parent_path() / "texture_index.bin");
+    }
+}
 
 Session& session() {
     static Session s;
@@ -613,6 +679,8 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
             current->has_order = true;
         } else if (key == "text") {
             current->own_text = value != "game";
+        } else if (key == "textures_off") {
+            current->categories_off = static_cast<std::uint32_t>(std::strtoul(value.c_str(), nullptr, 10));
         } else if (key.starts_with("option.")) {
             current->options[unescape_key(std::string_view(key).substr(7))] =
                 static_cast<unsigned>(std::strtoul(value.c_str(), nullptr, 10));
@@ -742,6 +810,7 @@ std::filesystem::path mods_folder() {
 }
 
 std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
+    // (The packs' categories wait for start_texture_sorting's index and are counted again when it is ready.)
     fs::path folder;
     fs::path file;
     std::string game_id = requested_game_id;
@@ -780,6 +849,12 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         const SavedMod* s = it != saved.end() ? &it->second : nullptr;
         mod.enabled = s == nullptr || s->enabled;
         mod.own_text = s == nullptr || s->own_text;
+        mod.categories_off = s != nullptr ? s->categories_off : 0u;
+        if (mod.textures) {
+            read_pack(mod, layout.textures);
+            start_texture_sorting();
+            update_pack_categories(mod);
+        }
         std::set<std::string> languages;
         if (!layout.files_root.empty()) {
             for (const char* language : kLanguageFolders) {
@@ -933,6 +1008,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         out << "enabled=" << (mod.enabled ? 1 : 0) << '\n';
         out << "order=" << mod.order << '\n';
         if (!mod.own_text) out << "text=game\n";
+        if (mod.categories_off != 0u) out << "textures_off=" << mod.categories_off << '\n';
         for (const ModOption& o : mod.options) out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
     }
     return io::write_file_atomically(file, out.str());
@@ -950,6 +1026,46 @@ std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods
         if (!layout.textures.empty()) out.push_back(layout.textures);
     }
     return out;
+}
+
+std::vector<std::uint32_t> texture_folder_categories_off(std::span<const ModInfo> mods) {
+    std::vector<std::uint32_t> out;
+    for (auto it = mods.rbegin(); it != mods.rend(); ++it) {
+        if (!it->enabled || !it->textures) continue;
+        if (!layout_of(it->path).textures.empty()) out.push_back(it->categories_off);
+    }
+    return out;
+}
+
+bool update_pack_categories(ModInfo& mod) {
+    if (mod.pack_textures == nullptr || mod.categories_final) return false;
+    const bool sorted = galaxy::textures::index_ready();
+    galaxy::textures::CategoryCounts counts{};
+    unsigned game_textures = 0;
+    for (const PackTexture& texture : *mod.pack_textures) {
+        std::optional<galaxy::textures::Category> category = galaxy::textures::category_of_hash(texture.hash);
+        if (category) {
+            ++game_textures;
+        } else if (texture.folder_category < galaxy::textures::kCategoryCount) {
+            category = static_cast<galaxy::textures::Category>(texture.folder_category);
+        }
+        ++counts[static_cast<std::size_t>(category.value_or(galaxy::textures::Category::Other))];
+    }
+    const bool changed = counts != mod.category_textures || game_textures != mod.game_textures;
+    mod.category_textures = counts;
+    mod.game_textures = game_textures;
+    mod.categories_final = sorted;
+    // A pack with none of this game's textures is for another game (or another release's other art).
+    if (sorted && game_textures == 0u && !mod.pack_textures->empty() && mod.problem.empty()) {
+        mod.problem = "THESE TEXTURES ARE FOR ANOTHER GAME";
+    }
+    return changed || sorted;
+}
+
+void set_mods_store_file(const std::filesystem::path& store) {
+    Settings& s = settings();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    s.store = store;
 }
 
 std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods) {

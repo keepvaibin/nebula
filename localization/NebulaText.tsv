@@ -444,6 +444,29 @@ S.ENABLED_(TOP_HAS_PRIORITY)	On (the higher one wins)		Activés (le plus haut pr
 S.DISABLED	Off		Désactivés	Désactivés	Desactivados	Desactivados	Aus	Disattivate	Uit	Desligados	オフ	꺼짐	已停用	已停用
 S.RIIVOLUTION	Riivolution		Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution	Riivolution
 S.FILES	files		fichiers	fichiers	archivos	archivos	Dateien	file	bestanden	arquivos	ファイル	파일	文件	檔案
+S.MARIO_AND_LUIGI	Mario and Luigi		Mario et Luigi	Mario et Luigi	Mario y Luigi	Mario y Luigi	Mario und Luigi	Mario e Luigi	Mario en Luigi	Mario e Luigi	マリオとルイージ	마리오와 루이지	马力欧和路易吉	瑪利歐和路易吉
+S.CHARACTERS	Characters		Personnages	Personnages	Personajes	Personajes	Figuren	Personaggi	Personages	Personagens	キャラクター	캐릭터	角色	角色
+S.ENEMIES	Enemies		Ennemis	Ennemis	Enemigos	Enemigos	Gegner	Nemici	Vijanden	Inimigos	敵	적	敌人	敵人
+S.BOSSES	Bosses		Boss	Boss	Jefes	Jefes	Bosse	Boss	Eindbazen	Chefes	ボス	보스	头目	頭目
+S.ITEMS	Items		Objets	Objets	Objetos	Objetos	Items	Oggetti	Voorwerpen	Itens	アイテム	아이템	道具	道具
+S.PLANETS_AND_LANDS	Planets and lands		Planètes et terrains	Planètes et terrains	Planetas y terrenos	Planetas y terrenos	Planeten und Gelände	Pianeti e terreni	Planeten en terrein	Planetas e terrenos	惑星と地形	행성과 지형	星球和地形	星球和地形
+S.OBJECTS	Objects		Décors	Décors	Elementos	Elementos	Objekte	Elementi	Objecten	Objetos	オブジェクト	오브젝트	物体	物體
+S.SKIES	Skies		Ciels	Ciels	Cielos	Cielos	Himmel	Cieli	Luchten	Céus	空	하늘	天空	天空
+S.PARTICLES_AND_EFFECTS	Particles and effects		Particules et effets	Particules et effets	Partículas y efectos	Partículas y efectos	Partikel und Effekte	Particelle ed effetti	Deeltjes en effecten	Partículas e efeitos	パーティクルとエフェクト	파티클과 효과	粒子和特效	粒子和特效
+S.HUD	HUD		ATH	ATH	HUD	HUD	HUD	HUD	HUD	HUD	HUD	HUD	HUD	HUD
+S.MENUS	Menus		Menus	Menus	Menús	Menús	Menüs	Menu	Menu's	Menus	メニュー	메뉴	菜单	選單
+S.GALAXY_MAP	Galaxy map		Carte des galaxies	Carte des galaxies	Mapa de galaxias	Mapa de galaxias	Galaxienkarte	Mappa delle galassie	Sterrenstelselkaart	Mapa das galáxias	銀河マップ	은하 지도	星系地图	星系地圖
+S.BUTTONS_AND_ICONS	Buttons and icons		Boutons et icônes	Boutons et icônes	Botones e iconos	Botones e iconos	Tasten und Symbole	Pulsanti e icone	Knoppen en pictogrammen	Botões e ícones	ボタンとアイコン	버튼과 아이콘	按钮和图标	按鈕和圖示
+S.FONTS	Fonts		Polices	Polices	Fuentes	Fuentes	Schriften	Caratteri	Lettertypen	Fontes	フォント	글꼴	字体	字型
+S.STORY_ART	Story art		Illustrations de l’histoire	Illustrations de l’histoire	Ilustraciones de la historia	Ilustraciones de la historia	Story-Bilder	Illustrazioni della storia	Verhaalafbeeldingen	Ilustrações da história	物語の絵	스토리 그림	故事插图	故事插圖
+S.OTHER	Other		Autres	Autres	Otros	Otros	Sonstiges	Altro	Overig	Outros	その他	기타	其他	其他
+S.TEXTURE_CATEGORIES	Texture categories		Catégories de textures	Catégories de textures	Categorías de texturas	Categorías de texturas	Texturkategorien	Categorie di texture	Textuurcategorieën	Categorias de texturas	テクスチャの分類	텍스처 분류	纹理分类	紋理分類
+S.SORTING_TEXTURES	Sorting textures		Tri des textures	Tri des textures	Ordenando texturas	Ordenando texturas	Texturen werden sortiert	Ordinamento texture	Texturen sorteren	Organizando texturas	テクスチャを分類中	텍스처 분류 중	正在分类纹理	正在分類紋理
+S.ALL_ON	All on		Tout activer	Tout activer	Todo sí	Todo sí	Alle an	Tutto sì	Alles aan	Tudo sim	すべてオン	모두 켜기	全部开启	全部開啟
+S.ALL_OFF	All off		Tout désactiver	Tout désactiver	Todo no	Todo no	Alle aus	Tutto no	Alles uit	Tudo não	すべてオフ	모두 끄기	全部关闭	全部關閉
+S.THESE_TEXTURES_ARE_FOR_ANOTHER_GAME	These textures are for another game		Ces textures sont pour un autre jeu	Ces textures sont pour un autre jeu	Estas texturas son de otro juego	Estas texturas son de otro juego	Diese Texturen sind für ein anderes Spiel	Queste texture sono per un altro gioco	Deze texturen zijn voor een ander spel	Estas texturas são de outro jogo	このテクスチャは別のゲーム用です	다른 게임용 텍스처입니다	这些纹理属于其他游戏	這些紋理屬於其他遊戲
+S.THE_GAME'S_TEXTURES_ARE_BEING_SORTED	The game's textures are being sorted		Tri des textures du jeu en cours	Tri des textures du jeu en cours	Se están ordenando las texturas del juego	Se están ordenando las texturas del juego	Die Spieltexturen werden sortiert	Ordinamento delle texture del gioco	De texturen van het spel worden gesorteerd	As texturas do jogo estão sendo organizadas	ゲームのテクスチャを分類中	게임 텍스처 분류 중	正在分类游戏纹理	正在分類遊戲紋理
+S.THIS_HAPPENS_ONCE	This happens once		Cela n’arrive qu’une fois	Cela n’arrive qu’une fois	Solo ocurre una vez	Solo ocurre una vez	Das passiert nur einmal	Accade una sola volta	Dit gebeurt maar één keer	Isso só acontece uma vez	最初の一度だけです	한 번만 진행됩니다	只会进行一次	只會進行一次
 S.TEXTURES	textures		textures	textures	texturas	texturas	Texturen	texture	texturen	texturas	テクスチャ	텍스처	纹理	材質
 S.MOVIES	Movies		Vidéos	Vidéos	Videos	Vídeos	Videos	Filmati	Filmpjes	Vídeos	ムービー	영상	视频	影片
 S.TEXT	Text		Texte	Texte	Texto	Texto	Text	Testo	Tekst	Texto	テキスト	텍스트	文字	文字

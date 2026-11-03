@@ -1,3 +1,4 @@
+#include "galaxy/texture_categories.h"
 // SPDX-License-Identifier: GPL-3.0-only
 // Texture packs: hashes, names, DDS layouts and decodes, PNG round trips, the index, loads, the budget and dumps, and
 // the texture cache swapping a replacement in on a WARP device.
@@ -495,7 +496,7 @@ void test_priority(const std::filesystem::path& root) {
     }
     write_png(packs / "A HD pack" / "RMGE01" / (texture_pack_name(only_a) + ".png"), 32u, 32u, pixels.data());
     const std::vector<std::filesystem::path> folders{packs};
-    const auto index = TexturePacks::build_index(folders, 1u);
+    const auto index = TexturePacks::build_index(folders, {}, 1u);
     const auto file_of = [&](const std::shared_ptr<TexturePacks::Index>& in, std::uint64_t hash) {
         for (const auto& record : in->records) {
             if (record.name.hash == hash) return record.file;
@@ -510,7 +511,7 @@ void test_priority(const std::filesystem::path& root) {
     std::filesystem::create_directories(mod);
     write_png(mod / (texture_pack_name(shared) + ".png"), 32u, 32u, pixels.data());
     const std::vector<std::filesystem::path> with_mod{packs, mod};
-    expect(file_of(TexturePacks::build_index(with_mod, 2u), shared.hash).parent_path() == mod,
+    expect(file_of(TexturePacks::build_index(with_mod, {}, 2u), shared.hash).parent_path() == mod,
            "a mod's textures win over the TexturePacks folder");
 }
 
@@ -617,7 +618,33 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
 
 }  // namespace
 
+// A category off leaves its textures out of a pack's index; the others stay.
+void test_categories_off() {
+    using galaxy::textures::Category;
+    galaxy::textures::set_index_for_tests({{0x1111111111111111ull, Category::MarioLuigi}, {0x2222222222222222ull, Category::Items}});
+    const std::filesystem::path root = std::filesystem::temp_directory_path() / "nebula_pack_categories";
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    std::filesystem::create_directories(root / "Misc", error);
+    for (const char* name : {"tex1_8x8_1111111111111111_14.png", "tex1_8x8_2222222222222222_14.png",
+                             "Misc/tex1_8x8_3333333333333333_14.png"}) {
+        std::ofstream(root / name, std::ios::binary) << "x";
+    }
+    const std::vector<std::filesystem::path> packs{root};
+    const auto count = [&packs](std::uint32_t off) {
+        const std::vector<std::uint32_t> categories_off{off};
+        return TexturePacks::build_index(packs, categories_off, 1u)->records.size();
+    };
+    expect(count(0u) == 3u, "every texture with nothing off");
+    expect(count(galaxy::textures::category_bit(Category::MarioLuigi)) == 2u, "a category off leaves its texture out");
+    expect(count(galaxy::textures::category_bit(Category::MarioLuigi) | galaxy::textures::category_bit(Category::Items)) == 1u,
+          "two categories off");
+    expect(count(galaxy::textures::category_bit(Category::Other)) == 2u, "a texture the game does not hold is Other");
+    std::filesystem::remove_all(root, error);
+}
+
 int main() {
+    test_categories_off();
     const std::filesystem::path root =
         std::filesystem::temp_directory_path() / ("nebula-texture-pack-test-" + std::to_string(GetCurrentProcessId()));
     std::filesystem::remove_all(root);

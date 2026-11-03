@@ -3596,6 +3596,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 generation != texture_pack_mods_generation_) {
                 texture_pack_mods_generation_ = generation;
                 texture_pack_mod_folders_ = texture_pack_mod_folders();
+                texture_pack_mod_categories_off_ = texture_pack_mod_categories_off();
             }
             static const std::filesystem::path dumps = texture_dump_directory();
             TexturePackSettings settings{};
@@ -3605,9 +3606,13 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // Each mod's pack, the lowest in the mods list first (the last wins a texture).
             if (std::filesystem::path packs = texture_pack_test_directory(); !packs.empty()) {
                 settings.packs.push_back(std::move(packs));
+                settings.pack_categories_off.push_back(0u);
             }
             settings.packs.insert(settings.packs.end(), texture_pack_mod_folders_.begin(),
                                   texture_pack_mod_folders_.end());
+            settings.pack_categories_off.insert(settings.pack_categories_off.end(),
+                                                texture_pack_mod_categories_off_.begin(),
+                                                texture_pack_mod_categories_off_.end());
             settings.dumps = dumps;
             settings.budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
             if (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_)) {

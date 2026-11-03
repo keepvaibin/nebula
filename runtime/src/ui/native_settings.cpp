@@ -213,7 +213,7 @@ constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTR
 #if defined(__ANDROID__)
 constexpr unsigned kShownTabs[] = {0u, 2u, 3u, 4u, 7u};  // nothing on SYSTEM there: diagnostics are the launcher's
 #else
-constexpr unsigned kShownTabs[] = {0u, 2u, 3u, 4u, 6u, 7u};
+constexpr unsigned kShownTabs[] = {0u, 2u, 3u, 4u, 5u, 6u, 7u};
 #endif
 constexpr unsigned kShownTabCount = static_cast<unsigned>(std::size(kShownTabs));
 
@@ -1919,7 +1919,8 @@ std::vector<galaxy::mods::ModInfo>& mods_list() {
 // With s_mods_mutex held: the texture packs and movies of the mods mods.ini has on to the renderer now (disc changes
 // wait for the next start).
 void apply_live_mods() {
-    set_texture_pack_mod_folders(galaxy::mods::texture_folders(s_mods_saved));
+    set_texture_pack_mod_folders(galaxy::mods::texture_folders(s_mods_saved),
+                                 galaxy::mods::texture_folder_categories_off(s_mods_saved));
     set_movie_mod_folders(galaxy::mods::movie_folders(s_mods_saved));
 }
 
@@ -2176,7 +2177,7 @@ void select_mods_row(const RenderConfig& render, const std::string& key) {
 
 // What a mod changes, its conflicts by the draft's order, or why it does nothing: the line under the page.
 std::string mod_details(const galaxy::mods::ModInfo& mod) {
-    if (!mod.problem.empty() && (mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
+    if (!mod.problem.empty() && (mod.pack_textures != nullptr || mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
         return mods_ui_text(mod.problem, 120u);
     }
     std::string kinds;
@@ -2211,7 +2212,7 @@ void close_mod_options(const RenderConfig& render);
 // Whether a mod has options to show: its Riivolution choices, or the text it shows in a language it lacks.
 bool mod_has_options(const galaxy::mods::ModInfo& mod, const std::string& playing) {
     const bool covers = std::find(mod.languages.begin(), mod.languages.end(), playing) != mod.languages.end();
-    return !mod.options.empty() || (!mod.languages.empty() && !covers && !playing.empty());
+    return !mod.options.empty() || mod.textures || (!mod.languages.empty() && !covers && !playing.empty());
 }
 
 // A mod's options instead of the lists: its Riivolution choices and the text it shows, part of the draft. Done,
@@ -2261,6 +2262,36 @@ std::vector<SettingsRow> mod_options_page(std::size_t i) {
                             s_mods[i].own_text = !s_mods[i].own_text;
                         },
                         "THIS MOD HAS NO " + language_name(playing) + " TEXT. ITS OWN TEXT MATCHES ITS CHANGES"});
+    }
+    // A pack's textures by what they are: each kind on or off, applied with the rest of the page.
+    if (mod.textures) {
+        SettingsRow heading{"TEXTURE CATEGORIES", {}, nullptr, {}, true};
+        rows.push_back(std::move(heading));
+        if (!mod.categories_final) {
+            rows.push_back({"SORTING TEXTURES", {}, nullptr, "THE GAME'S TEXTURES ARE BEING SORTED. THIS HAPPENS ONCE"});
+        }
+        for (std::size_t c = 0; c < galaxy::textures::kCategoryCount; ++c) {
+            const unsigned count = mod.category_textures[c];
+            if (count == 0u) continue;
+            const auto category = static_cast<galaxy::textures::Category>(c);
+            const bool off = (mod.categories_off & galaxy::textures::category_bit(category)) != 0u;
+            rows.push_back({galaxy::textures::category_name(category),
+                            std::string(off ? "OFF" : "ON") + " (" + std::to_string(count) + ")",
+                            [i, category](RenderConfig&, int delta) {
+                                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                if (i >= s_mods.size() || delta == 0) return;
+                                s_mods[i].categories_off ^= galaxy::textures::category_bit(category);
+                            },
+                            mods_ui_text(mod.pack_title.empty() ? mod.id : mod.pack_title, 40u)});
+        }
+        rows.push_back(button_row({}, {"ALL ON", "ALL OFF"},
+                                  [i](RenderConfig&, unsigned button) {
+                                      const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                      if (i < s_mods.size()) {
+                                          s_mods[i].categories_off = button == 0u ? 0u : 0xFFFFFFFFu;
+                                      }
+                                  },
+                                  {}));
     }
     rows.push_back(button_row({}, {"DONE"}, [](RenderConfig& draft, unsigned) { close_mod_options(draft); }, {}));
     return rows;
@@ -2327,6 +2358,10 @@ std::vector<SettingsRow> mods_page(const RenderConfig&) {
     std::vector<SettingsRow> rows;
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     std::vector<galaxy::mods::ModInfo>& mods = mods_list();
+    // The packs' categories, once the game's textures are sorted.
+    for (galaxy::mods::ModInfo& mod : mods) {
+        (void)galaxy::mods::update_pack_categories(mod);
+    }
     const auto open = std::find_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.id == s_mod_options; });
     if (open != mods.end()) {
         return mod_options_page(static_cast<std::size_t>(open - mods.begin()));
