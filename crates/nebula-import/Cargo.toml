@@ -10,7 +10,7 @@ rust-version.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# A build that takes extracted game folders only: no disc image is read, and no key is asked for.
+# A build that takes extracted game folders only: no disc image is read.
 folders-only = []
 
 [dependencies]

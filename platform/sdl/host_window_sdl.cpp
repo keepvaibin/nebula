@@ -90,10 +90,10 @@ std::uint32_t g_rumble_sent_pad = 0;
 std::uint32_t g_rumble_sent_level = 0;
 std::uint64_t g_rumble_sent_ms = 0;
 
-// An on-screen button stays pressed for the game at least this long: the game reads the remote once a frame, and a
-// quick tap would otherwise end between two reads.
-constexpr std::uint64_t kMinTouchPressMs = 80;
-std::array<std::uint64_t, 32> g_touch_held_until{};  // per TouchButton bit, steady ms; guarded by g_input_mutex
+// On-screen buttons pressed since the game's last read: a quick tap can end between two reads, and is not lost
+// (native_game_input then holds it for the game's frames). Guarded by g_input_mutex.
+std::uint32_t g_touch_pressed = 0u;
+bool g_back_held = false;  // Android's back gesture held as the HOME button; guarded by g_input_mutex
 std::array<SDL_Gamepad*, kMaxPads> g_gamepads{};
 
 // A touch that ends within this time, having moved less than this fraction of the window's shorter side, is a tap.
@@ -433,7 +433,6 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
             ++g_input.taps;
             g_input.tap_x = x;
             g_input.tap_y = y;
-            g_input.tap_down_ms = g_finger_down_ms;
         }
     }
 }
@@ -489,6 +488,12 @@ void run_requests() {
     if (const bool captured = galaxy::render::native_window_input_captured(); captured != s_captured) {
         s_captured = captured;
         call_activity(captured ? "menuOpened" : "menuClosed");
+    }
+    // The controls follow the game to and from a pointer screen.
+    static bool s_pointer_screen = false;
+    if (const bool pointer_screen = g_menu_context.load(std::memory_order_relaxed); pointer_screen != s_pointer_screen) {
+        s_pointer_screen = pointer_screen;
+        call_activity("menuContextChanged");
     }
 #endif
     const std::uint32_t pad = g_rumble_pad.load(std::memory_order_relaxed);
@@ -619,13 +624,16 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP:
             if (event.key.scancode == SDL_SCANCODE_AC_BACK) {
-                // Android's back gesture: the HOME button, as the HOME Menu opens with it.
-                if (event.type == SDL_EVENT_KEY_DOWN) {
-                    g_input.touch_buttons |= kTouchHome;
-                    g_touch_held_until[std::countr_zero(static_cast<std::uint32_t>(kTouchHome))] =
-                        galaxy::steady_ms() + kMinTouchPressMs;
-                } else {
-                    g_input.touch_buttons &= ~kTouchHome;
+                // Android's back gesture: the HOME button, as the HOME Menu opens with it; in an open menu, back.
+                const bool down = event.type == SDL_EVENT_KEY_DOWN;
+                if (!down) {
+                    g_back_held = false;
+                }
+                if (galaxy::render::native_window_input_captured()) {
+                    menu_keys.push_back({virtual_key(SDL_SCANCODE_ESCAPE), down, event.key.repeat});
+                } else if (down) {
+                    g_back_held = true;
+                    g_touch_pressed |= kTouchHome;
                 }
                 break;
             }
@@ -714,18 +722,15 @@ bool in_background() noexcept {
 InputState input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     InputState state = g_input;
-    const std::uint64_t now = galaxy::steady_ms();
-    for (std::uint32_t bit = 0; bit < g_touch_held_until.size(); ++bit) {
-        if (g_touch_held_until[bit] > now) {
-            state.touch_buttons |= 1u << bit;
-        }
-    }
+    state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
     return state;
 }
 
 InputState take_input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     InputState state = g_input;
+    state.touch_buttons |= g_touch_pressed | (g_back_held ? kTouchHome : 0u);
+    g_touch_pressed = 0u;
     for (PadMotion& motion : g_input.motion) {
         motion.gyro_x = motion.gyro_y = 0.0f;
         motion.touch_dx = motion.touch_dy = 0.0f;
@@ -746,18 +751,9 @@ void rumble(std::uint32_t pad_id, float strength) noexcept {
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchControls(
     JNIEnv*, jclass, jint buttons, jfloat stick_x, jfloat stick_y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
-    const std::uint32_t back = galaxy::sdl::g_input.touch_buttons & galaxy::sdl::kTouchHome;
     const auto held = static_cast<std::uint32_t>(buttons);
-    const std::uint32_t pressed = held & ~galaxy::sdl::g_input.touch_buttons;
-    if (pressed != 0u) {
-        const std::uint64_t until = galaxy::steady_ms() + galaxy::sdl::kMinTouchPressMs;
-        for (std::uint32_t bit = 0; bit < galaxy::sdl::g_touch_held_until.size(); ++bit) {
-            if ((pressed & (1u << bit)) != 0u) {
-                galaxy::sdl::g_touch_held_until[bit] = until;
-            }
-        }
-    }
-    galaxy::sdl::g_input.touch_buttons = held | back;
+    galaxy::sdl::g_touch_pressed |= held & ~galaxy::sdl::g_input.touch_buttons;
+    galaxy::sdl::g_input.touch_buttons = held;
     galaxy::sdl::g_input.touch_stick_x = std::clamp(stick_x, -1.0f, 1.0f);
     galaxy::sdl::g_input.touch_stick_y = std::clamp(stick_y, -1.0f, 1.0f);
 }
@@ -782,7 +778,8 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSetV
     if (!visible) {
         galaxy::sdl::g_input.keys = {};
         galaxy::sdl::g_input.touch_buttons = 0;
-        galaxy::sdl::g_touch_held_until.fill(0);
+        galaxy::sdl::g_back_held = false;
+        galaxy::sdl::g_touch_pressed = 0u;
         galaxy::sdl::g_input.touch_stick_x = 0.0f;
         galaxy::sdl::g_input.touch_stick_y = 0.0f;
         galaxy::sdl::g_input.finger_down = false;
@@ -1096,7 +1093,11 @@ bool input_missing_shown() noexcept {
 }
 
 bool keyboard_or_mouse_attached() noexcept {
+#if defined(__ANDROID__)
+    return true;  // the touch controls are always in hand
+#else
     return SDL_HasKeyboard() || SDL_HasMouse();
+#endif
 }
 
 // A second player on this system: not yet.

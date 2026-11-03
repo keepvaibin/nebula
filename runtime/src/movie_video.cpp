@@ -505,6 +505,9 @@ namespace exact_sse2 {
 
 // The column pass of the inverse DCT, every column at once: the same operations in the same order as
 // transform_column, so the same planes as the scalar pass (the kernels test).
+#if defined(__clang__) && !GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+#pragma clang attribute push(__attribute__((target("avx,fma"))), apply_to = function)
+#endif
 template <class Vec, class Ops>
 inline void transform_columns(const Vec* x, Vec* out) noexcept {
   const Vec bias = Ops::set(kOutputBias);
@@ -537,6 +540,9 @@ inline void transform_columns(const Vec* x, Vec* out) noexcept {
   out[6] = Ops::sub(even1, odd6);
   out[7] = Ops::sub(even0, odd7);
 }
+#if defined(__clang__) && !GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+#pragma clang attribute pop
+#endif
 
 #define MOVIE_VIDEO_COLUMNS_SIMD 1
 #if GALAXY_FUSED_MULTIPLY_ADD_IS_BASE

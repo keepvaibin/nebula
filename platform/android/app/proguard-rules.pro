@@ -4,8 +4,7 @@
 # Called from libmain.so and libnebula_import.so by name.
 -keep class dev.nebula.galaxy.GameActivity {
     native <methods>;
-    public void showHomeMenu();
-    public void hideHomeMenu();
+    public void *();
 }
 -keep class dev.nebula.galaxy.Importer {
     native <methods>;

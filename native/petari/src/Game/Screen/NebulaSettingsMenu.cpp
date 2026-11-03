@@ -14,6 +14,7 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -186,7 +187,12 @@ namespace {
 
     // The HOME Menu (the host's NEBULA_HBM_VIEW): its rows top to bottom, then "are you sure?" about the choice it asks
     // about (1 leave, 2 reset), answered no or yes as the game's own questions are.
-    const char* const cHomeRows[] = {"HomeMenuReturn", "HomeMenuReset", "QuitToDesktop"};
+#if defined(__ANDROID__)
+    const char* const cQuitRow = "Quit";  // no desktop to quit to
+#else
+    const char* const cQuitRow = "QuitToDesktop";
+#endif
+    const char* const cHomeRows[] = {"HomeMenuReturn", "HomeMenuReset", cQuitRow};
     const char* const cHomeAnswers[] = {"HomeMenuNo", "HomeMenuYes"};
     const s32 cHomeRowNum = sizeof(cHomeRows) / sizeof(cHomeRows[0]);
     const s32 cHomeAnswerNum = sizeof(cHomeAnswers) / sizeof(cHomeAnswers[0]);
@@ -1522,7 +1528,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     mHoverButton = nullptr;
     mHoverModButton = -1;
     // A binding that waits for an input takes the mouse's buttons itself, wherever the pointer is.
-    if (!MR::isStarPointerInScreen(PLAYER_1) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
+    if (!MR::isPointerInScreen(PLAYER_1) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
         rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_PAD) {
         mDragRow = -1;
         mDragging = false;
@@ -1532,7 +1538,11 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         mSliderRow = -1;
         return;
     }
-    TVec2f screen = MR::getStarPointerScreenPositionOrEdge(PLAYER_1);
+    // The player's pointer as StarPointerController maps it to the screen.
+    TVec2f screen;
+    MR::getPointerPastPos(&screen, 0, PLAYER_1);
+    screen.x = (screen.x + 1.0f) * MR::getScreenWidth() * 0.5f;
+    screen.y = (screen.y + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) * 0.5f;
     TVec2f layout;
     MR::convertScreenPosToLayoutPos(&layout, screen);
     const f32 x = layout.x / mScaleX;

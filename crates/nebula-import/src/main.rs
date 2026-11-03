@@ -1,7 +1,6 @@
 //! Windows Setup's importer.
 //!
-//! Every command takes `--key <file or 32 hexadecimal digits>`: the Wii common key a disc image opens with, which this program
-//! does not hold. A folder needs none. Built with the `folders-only` feature it refuses disc images.
+//! Built with the `folders-only` feature it refuses disc images.
 //!
 //!   nebula-import identify <disc image or folder>
 //!       One JSON line (InputIdentity::to_json). Exit code 0 when Nebula supports the game, 2 when it does not.
@@ -34,16 +33,6 @@ fn main() -> ExitCode {
 }
 
 fn run(arguments: &[OsString]) -> Result<ExitCode> {
-    // --key <file or hex>: anywhere in the command, before the command's own arguments are matched.
-    let mut rest = arguments.to_vec();
-    if let Some(at) = rest.iter().position(|argument| argument == "--key") {
-        let Some(key) = rest.get(at + 1) else {
-            bail!("--key needs a file or 32 hexadecimal digits");
-        };
-        nebula_import::set_disc_key(key)?;
-        rest.drain(at..at + 2);
-    }
-    let arguments = rest.as_slice();
     match arguments {
         [command, input] if command == "identify" => {
             let identity = identify_input(Path::new(input))?;
@@ -79,7 +68,7 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         _ => bail!(
-            "usage: nebula-import [--key <file or hex>] identify <image> | nebula-import import <image> --output <content folder> | \
+            "usage: nebula-import identify <image> | nebula-import import <image> --output <content folder> | \
              nebula-import cook <content folder> --output <content folder>"
         ),
     }

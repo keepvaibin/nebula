@@ -46,6 +46,9 @@ final class TouchControlsView extends View {
     private static final int TARGET_POINTER = -2;
     private static final int TARGET_DPAD = -3;
     private static final float STICK_DEAD_ZONE = 0.06f;
+    // Places in `buttons`.
+    private static final int HOME_BUTTON = 6;
+    private static final int TWO_BUTTON = 9;
 
     private static final class Button {
         final int bit;
@@ -86,6 +89,9 @@ final class TouchControlsView extends View {
     private float stickRestX, stickRestY, stickRadius;
     private float stickBaseX, stickBaseY, stickKnobX, stickKnobY;
     private int stickPointer = -1;
+    private boolean pointerScreen = false;
+    private float homeX;
+    private float homeY;
     private float stickZoneRight, stickZoneTop;
 
     private int heldButtons;
@@ -125,6 +131,32 @@ final class TouchControlsView extends View {
     }
 
     /** Shown or hidden (hidden: every finger is the pointer). Hiding releases whatever was held. */
+    /** The game went to or from a pointer screen (GameActivity.menuContextChanged). */
+    void syncMenuContext() {
+        final boolean menu = listener.menuContext();
+        if (menu == pointerScreen) {
+            return;
+        }
+        pointerScreen = menu;
+        placeHome();
+        for (int i = 0; i < MAX_POINTERS; ++i) {
+            if (targets[i] != TARGET_POINTER) {
+                targets[i] = TARGET_NONE;
+            }
+        }
+        Arrays.fill(pointerBits, 0);
+        stickPointer = -1;
+        publish(0, 0.0f, 0.0f);
+        invalidate();
+    }
+
+    // HOME over the picture on a pointer screen: in the top corner, clear of the game's own buttons.
+    private void placeHome() {
+        final Button home = buttons.get(HOME_BUTTON);
+        home.x = pointerScreen ? buttons.get(TWO_BUTTON).x : homeX;
+        home.y = pointerScreen ? buttons.get(TWO_BUTTON).y : homeY;
+    }
+
     void setControlsShown(boolean value) {
         if (shown == value) {
             return;
@@ -193,6 +225,9 @@ final class TouchControlsView extends View {
         final float row12 = cx + 4.2f * rm > right - 4.4f * rm ? row + 2.8f * rm : row;
         place(buttons.get(9), right - rm, row12, rm);
         place(buttons.get(8), right - 3.4f * rm, row12, rm);
+        homeX = buttons.get(HOME_BUTTON).x;
+        homeY = buttons.get(HOME_BUTTON).y;
+        placeHome();
 
         // The stick at the bottom left; the D-pad at the top left, or on a tall screen (a phone upright, the Fold
         // open) just above the stick, where the thumb reaches it.
@@ -255,10 +290,13 @@ final class TouchControlsView extends View {
             return;
         }
         int target = TARGET_POINTER;
+        syncMenuContext();
         if (shown) {
             final int button = buttonAt(x, y);
             if (button >= 0) {
                 target = button;
+            } else if (pointerScreen) {
+                target = TARGET_POINTER;
             } else if (dpadBits(x, y) != 0 || Math.hypot(x - dpadX, y - dpadY) <= dpadRadius * 1.2f) {
                 target = TARGET_DPAD;
             } else if (stickPointer < 0 && inStickZone(x, y)) {
@@ -372,6 +410,9 @@ final class TouchControlsView extends View {
         int best = -1;
         float bestDistance = Float.MAX_VALUE;
         for (int i = 0; i < buttons.size(); ++i) {
+            if (pointerScreen && i != HOME_BUTTON) {
+                continue;
+            }
             final Button button = buttons.get(i);
             final float distance = (float) Math.hypot(x - button.x, y - button.y);
             // A little beyond the drawn circle: thumbs land wide.
@@ -407,6 +448,11 @@ final class TouchControlsView extends View {
             return;
         }
         stroke.setStrokeWidth(1.6f * dp);
+        if (pointerScreen) {
+            final Button home = buttons.get(HOME_BUTTON);
+            drawButton(canvas, home, (heldButtons & home.bit) != 0);
+            return;
+        }
         for (Button button : buttons) {
             drawButton(canvas, button, (heldButtons & button.bit) != 0);
         }

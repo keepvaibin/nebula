@@ -150,19 +150,12 @@ private fun WelcomeScreen(onChoose: () -> Unit) {
         GlassCard(Modifier.fillMaxWidth()) {
             Step(1, "Choose your disc image", "The copy you made of your own Wii disc: ISO, RVZ, WIA, WBFS, CISO or GCZ.")
             Gap(18.dp)
-            Step(2, "Nebula sets the game up", "It copies the game into its own storage (about 3.4 GB). The disc image is only read.")
+            Step(2, "Nebula sets the game up", "It copies the game into its own storage (about 3.9 GB). The disc image is only read.")
             Gap(18.dp)
             Step(3, "Play", "With the touch controls, or a controller.")
         }
         Gap(28.dp)
         PrimaryAction("Choose disc image", Icons.Rounded.FolderOpen, onChoose, Modifier.fillMaxWidth())
-        Gap(20.dp)
-        Text(
-            "Nebula contains no Nintendo code or data.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Night.TextFaint,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 
@@ -504,7 +497,7 @@ private fun AboutScreen(model: LauncherModel) {
             Gap(20.dp)
             Lead(
                 "Nebula runs Super Mario Galaxy natively: the game's code is Petari's decompilation, compiled for this " +
-                    "device, drawing with Vulkan. It contains no Nintendo code or data. The game's files come from " +
+                    "device, drawing with Vulkan. The game's files come from " +
                     "your own disc. Nebula is not affiliated with or endorsed by Nintendo.",
             )
             Gap(24.dp)

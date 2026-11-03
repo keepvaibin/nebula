@@ -56,11 +56,21 @@ public class GameActivity extends SDLActivity {
         return new String[] {"SDL3", "main"};
     }
 
+    /** The game's language follows the device's where the disc has it (runtime_settings.cpp reads LANG). */
+    private static void passLocale() {
+        try {
+            android.system.Os.setenv("LANG", java.util.Locale.getDefault().getLanguage(), true);
+        } catch (android.system.ErrnoException ignored) {
+            // No language passed: the game plays in English.
+        }
+    }
+
     @Override
     protected String[] getArguments() {
+        passLocale();
         return new String[] {
             "--pak", GameFiles.pak(this).getPath(),
-            "--nand", GameFiles.nand(this).getPath(),
+            "--saves", GameFiles.nand(this).getPath(),
             "--module", getApplicationInfo().nativeLibraryDir + "/libsmg_game.so",
         };
     }
@@ -178,8 +188,6 @@ public class GameActivity extends SDLActivity {
         mLayout.addView(controls, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-                ViewGroup.LayoutParams.MATCH_PARENT));
-
         controlsWanted = !"never".equals(controlsMode) && !("auto".equals(controlsMode) && controllerConnected());
         applyControlsVisibility();
         final InputManager input = getSystemService(InputManager.class);
@@ -247,6 +255,15 @@ public class GameActivity extends SDLActivity {
         runOnUiThread(() -> {
             menuOpen = true;
             applyControlsVisibility();
+        });
+    }
+
+    // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
+    public void menuContextChanged() {
+        runOnUiThread(() -> {
+            if (controls != null) {
+                controls.syncMenuContext();
+            }
         });
     }
 

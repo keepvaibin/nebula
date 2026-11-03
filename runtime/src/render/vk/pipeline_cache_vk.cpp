@@ -291,7 +291,7 @@ void PipelineCacheVk::start_prepare() {
                     }
                     return;
                 }
-                const RenderStateKey rs = native_render_state(seed_render_state(seeds[i]));
+                const RenderStateKey rs = for_device_blending(native_render_state(seed_render_state(seeds[i])));
                 const VkPipeline pipeline = create_native(seeds[i].shader, rs, native_shader_variant(rs.blend_bits));
                 const std::lock_guard guard(prepared_lock_);
                 prepared_.push_back({seeds[i].shader, rs, pipeline});

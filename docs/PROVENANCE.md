@@ -49,9 +49,8 @@ Mario Galaxy (low-resolution bloom copies) and Dolphin's scaled EFB copy filteri
 - Petari and Dusklight are decompilations of Nintendo games, dedicated to the public domain (CC0) by their
   contributors for their own work. Nebula's game module is compiled from Petari's source in `native/petari`;
   Dusklight is used for interface layouts, behaviour and design.
-- Nebula holds no Wii key: `third_party/nod` is the `nod` disc library with its keys removed, and the player gives
-  the common key a disc image needs (a file or its digits). An extracted game folder needs none, and a build with the
-  importer's `folders-only` feature reads folders only.
+- The importer uses the `nod` disc library, which contains the Wii common keys needed to read a Wii disc partition.
+  An extracted game folder needs none, and a build with the importer's `folders-only` feature reads folders only.
 
 ## Not distributed
 

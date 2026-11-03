@@ -35,11 +35,15 @@ namespace in = galaxy::input;
 constexpr std::uint64_t kTouchPointerHoldMs = 1500;
 // A pad or key pointer at rest hides after this long, as the Wii's does when the remote points away.
 constexpr std::uint64_t kStickPointerHoldMs = 3000;
-// A tap in a menu is A for this many reports (100 a second), as long as a finger's press, once the pointer has rested
-// where the finger touched this long: the game takes A on what the pointer is over, which it finds a few frames
-// after the pointer arrives, and reads the remote once a frame (a shorter press can fall between two reads).
-constexpr std::uint8_t kTapPressReports = 10;
-constexpr std::uint64_t kTapHoverMs = 200;
+// A tap in a menu is A, counted in the game's frames so it lands at any frame rate: the game takes A on what the pointer
+// is over, which it finds some frames after the pointer arrives (InputPointer wants five valid samples, then the menu
+// its hover), and reads the remote once a frame.
+constexpr std::uint64_t kTapHoverFrames = 8;
+constexpr std::uint64_t kTapPressFrames = 3;
+// An on-screen button's press reaches the game for at least this many of its frames, however quick the finger.
+constexpr std::uint64_t kTouchPressFrames = 3;
+// The game's star pointer mode on the title (StarPointerMode_Title): its prompt asks for A and B, so the controls stay.
+constexpr std::int32_t kStarPointerModeTitle = 4;
 constexpr float kTriggerThreshold = 96.0f / 255.0f;  // the Windows host's XInput trigger threshold
 
 const in::ControlsConfig& live_controls() {
@@ -98,21 +102,43 @@ float g_rumble_strength = 1.0f;
 
 }  // namespace
 
-in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
-    // A menu that takes the screen takes the input: the game sees nothing held.
-    if (galaxy::render::native_window_input_captured()) {
-        (void)sdl::take_input_state();
-        return {};
-    }
-    const in::PlayContext context =
-        star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
+in::PlayerInput native_game_input(std::uint64_t frame, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
+    // A menu that takes the screen takes the keys and pads on the window thread. The game draws it under its own
+    // pointer, so the finger and the mouse still reach the game, as the mouse does on Windows.
+    const bool captured = galaxy::render::native_window_input_captured();
+    const in::PlayContext context = captured ? in::PlayContext::Menu
+        : star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
         : in::PlayContext::Play;
-    sdl::set_menu_context(context == in::PlayContext::Menu);
+    sdl::set_menu_context(context == in::PlayContext::Menu && (captured || star_pointer_mode != kStarPointerModeTitle));
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
-    const sdl::InputState state = sdl::take_input_state();
+    sdl::InputState state = sdl::take_input_state();
+    static std::array<std::uint64_t, 32> s_touch_press_end{};
+    for (std::uint32_t bit = 0; bit < s_touch_press_end.size(); ++bit) {
+        if (captured) {
+            s_touch_press_end[bit] = 0u;  // a press that opened the menu does not outlast it
+        } else if ((state.touch_buttons & (1u << bit)) != 0u) {
+            if (s_touch_press_end[bit] <= frame) {
+                s_touch_press_end[bit] = frame + kTouchPressFrames;
+            }
+        } else if (frame < s_touch_press_end[bit]) {
+            state.touch_buttons |= 1u << bit;
+        }
+    }
+    if (captured) {
+        const auto mouse = state.keys.mouse;
+        state.keys = {};
+        state.keys.mouse = mouse;
+        state.touch_buttons = 0u;
+        state.touch_stick_x = 0.0f;
+        state.touch_stick_y = 0.0f;
+        for (std::size_t i = 0; i < sdl::kMaxPads; ++i) {
+            state.pads[i] = {};
+            state.motion[i] = {};
+        }
+    }
     const in::ControlsConfig& config = live_controls();
     in::PlayerInput snapshot{};
 
@@ -234,8 +260,11 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
     }
     // A tap in a menu points there and presses A.
     static std::uint64_t s_taps = state.taps;
-    static std::uint8_t s_tap_reports = 0;
-    static std::uint64_t s_tap_due_ms = 0;  // 0: no press waiting
+    static bool s_tap_waiting = false;
+    static std::uint64_t s_tap_due_frame = 0;
+    static std::uint64_t s_tap_press_end_frame = 0;
+    static bool s_pointer_shown = false;
+    static std::uint64_t s_pointer_shown_frame = 0;  // since when the game has had the pointer
     if (state.taps != s_taps) {
         s_taps = state.taps;
         if (context == in::PlayContext::Menu && project_window_point(state, state.tap_x, state.tap_y, x, y)) {
@@ -243,18 +272,30 @@ in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode,
             s_pointer_y = y;
             s_pointer_ms = now;
             s_hold_ms = kTouchPointerHoldMs;
-            s_tap_due_ms = std::max(now, state.tap_down_ms + kTapHoverMs);
+            if (!s_pointer_shown) {
+                s_pointer_shown_frame = frame;
+            }
+            s_tap_waiting = true;
+            s_tap_due_frame = s_pointer_shown_frame + kTapHoverFrames;
         }
     }
-    if (s_tap_due_ms != 0 && now >= s_tap_due_ms) {
-        s_tap_due_ms = 0;
-        s_tap_reports = kTapPressReports;
+    if (s_tap_waiting && frame >= s_tap_due_frame) {
+        s_tap_waiting = false;
+        s_tap_press_end_frame = frame + kTapPressFrames;
     }
-    if (s_tap_reports != 0) {
+    const bool tap_pressing = frame < s_tap_press_end_frame;
+    if (tap_pressing) {
         snapshot.buttons.a = true;
-        --s_tap_reports;
+    }
+    // The pointer stays until the press has landed, however slowly the frames come.
+    if (s_tap_waiting || tap_pressing) {
+        s_pointer_ms = now;
     }
     const bool pointer_active = s_pointer_ms != 0 && now - s_pointer_ms <= s_hold_ms;
+    if (pointer_active && !s_pointer_shown) {
+        s_pointer_shown_frame = frame;
+    }
+    s_pointer_shown = pointer_active;
     in::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
 
     // Tilt sections steer with the stick.

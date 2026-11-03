@@ -153,7 +153,12 @@ std::atomic<bool> s_native_settings_visible{false};
 galaxy::ui::HomeMenuModel s_home_menu;
 constexpr unsigned kHomeMenuRows = galaxy::ui::HomeMenuModel::rows;
 constexpr unsigned kHomeMenuAnswers = galaxy::ui::HomeMenuModel::answers;
-constexpr const char* kHomeMenuRowText[kHomeMenuRows] = {"RETURN TO GAME", "RESET", "QUIT TO DESKTOP"};
+#if defined(__ANDROID__)
+constexpr const char* kHomeMenuQuitText = "QUIT";
+#else
+constexpr const char* kHomeMenuQuitText = "QUIT TO DESKTOP";
+#endif
+constexpr const char* kHomeMenuRowText[kHomeMenuRows] = {"RETURN TO GAME", "RESET", kHomeMenuQuitText};
 constexpr const char* kHomeMenuAnswerText[kHomeMenuAnswers] = {"NO", "YES"};
 
 bool handle_home_menu_key(std::uintptr_t key, bool was_down) {
@@ -273,10 +278,6 @@ galaxy::input::ControlScheme s_controls_scheme = galaxy::input::ControlScheme::K
 galaxy::input::DeviceKey s_controls_device{};
 galaxy::input::DeviceList s_controls_devices{};
 std::uint64_t s_controls_devices_ms = 0u;
-// Tests stand in for the attached controllers.
-std::optional<std::vector<galaxy::input::ControllerInfo>> s_test_controllers;
-std::optional<galaxy::input::DeviceKey> s_test_active_device;
-std::optional<galaxy::host::JoyConStatus> s_test_joycons;
 std::size_t s_capture_target = galaxy::input::kGameInputCount;
 std::uint64_t s_capture_deadline_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
@@ -556,20 +557,10 @@ std::uint64_t s_joycon_paired_ms = 0u;
 std::uint64_t s_joycon_opened_ms = 0u;
 constexpr std::uint64_t kJoyConPairedShowMs = 1500u;
 
-// The Joy-Con halves as the controller worker has them. GALAXY_TEST_JOYCON=<bits>[,<bits>@<ms>...] (NEBULA_JOYCON_*
-// bits, each from that many milliseconds after the Pair Joy-Con screen opens) stands in for them: screenshots and
-// recordings of the screen without Joy-Con, 16 making a pair.
-galaxy::host::JoyConStatus joycon_status_now() {
-    if (s_test_joycons) {
-        return *s_test_joycons;
-    }
-    return galaxy::host::joycon_status();
-}
-
 void open_joycon_pairing() {
     s_joycon_pairing = true;
     s_joycon_opened_ms = galaxy::steady_ms();
-    s_joycon_paired_at_open = joycon_status_now().paired;
+    s_joycon_paired_at_open = galaxy::host::joycon_status().paired;
     s_joycon_paired_ms = 0u;
     galaxy::host::set_joycon_pairing(true);
     std::cerr << "[settings] pair joy-con\n";
@@ -641,7 +632,7 @@ void refresh_controls_devices(bool force);
 std::vector<ControlsRowInfo> controls_rows() {
     using galaxy::input::GameInput;
     std::vector<ControlsRowInfo> rows{{ControlsRow::InputMode}};
-    const galaxy::host::JoyConStatus joycons = joycon_status_now();
+    const galaxy::host::JoyConStatus joycons = galaxy::host::joycon_status();
     if ((s_input_mode_draft == RuntimeInputMode::Auto || s_input_mode_draft == RuntimeInputMode::Controller) &&
         joycons.lefts + joycons.rights != 0u) {
         rows.push_back({ControlsRow::PairJoyCon});
@@ -765,16 +756,8 @@ void refresh_controls_devices(bool force) {
     }
     s_controls_devices_ms = now;
     std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
-    std::size_t count = 0;
-    std::optional<galaxy::input::DeviceKey> active;
-    if (s_test_controllers) {
-        count = std::min(s_test_controllers->size(), connected.size());
-        std::copy_n(s_test_controllers->begin(), count, connected.begin());
-        active = s_test_active_device;
-    } else {
-        count = galaxy::host::connected_controllers(connected);
-        active = galaxy::host::last_input_device();
-    }
+    const std::size_t count = galaxy::host::connected_controllers(connected);
+    const std::optional<galaxy::input::DeviceKey> active = galaxy::host::last_input_device();
     galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count),
                                      active, s_controls_devices);
     // Only what the input mode reads: the keyboard and mouse alone, or the controllers alone.
@@ -3367,7 +3350,7 @@ NativeSettingsView build_native_settings_view() {
     const std::uint64_t now_ms = galaxy::steady_ms();
     if (s_joycon_pairing) {
         // The halves; a pair made since the screen opened shows a moment, then the screen closes.
-        const galaxy::host::JoyConStatus joycons = joycon_status_now();
+        const galaxy::host::JoyConStatus joycons = galaxy::host::joycon_status();
         if (joycons.paired != s_joycon_paired_at_open && s_joycon_paired_ms == 0u) {
             s_joycon_paired_ms = now_ms;
             std::cerr << "[settings] joy-con paired\n";
@@ -3466,7 +3449,7 @@ void draw_home_menu(UiCanvas& renderer) {
     ui_rect(renderer, x, y, w, h, panel);
     ui_rect(renderer, x, y, 6, h, rail);
     ui_text(renderer, x + 14 * scale, y + 8 * scale, scale,
-            asking == 0 ? "HOME MENU" : (asking == 1 ? "QUIT TO DESKTOP?" : "RESET?"), text);
+            asking == 0 ? "HOME MENU" : (asking == 1 ? "QUIT?" : "RESET?"), text);
     const unsigned selected = s_home_menu.row.load(std::memory_order_relaxed) % count;
     for (unsigned row = 0; row < count; ++row) {
         const int ry = rows_y + static_cast<int>(row) * row_h;

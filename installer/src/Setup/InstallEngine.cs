@@ -27,8 +27,6 @@ namespace Nebula.Setup
         public InstallMode Mode;
         /// <summary>ISO/RVZ/other image or extracted folder; null to keep the installed game content.</summary>
         public string GameInput;
-        /// <summary>The Wii key a disc image opens with: 32 hexadecimal digits or a file; null for an extracted folder.</summary>
-        public string DiscKey;
         public string InstallRoot;
         public bool DesktopShortcut;
         /// <summary>Download NVIDIA DLSS into the user data folder (the player accepted NVIDIA's license).</summary>
@@ -299,19 +297,10 @@ namespace Nebula.Setup
             catch (UnauthorizedAccessException error) { Log("Could not remove " + dir + ": " + error.Message); }
         }
 
-        /// <summary>An importer command with the player's key, when one was given.</summary>
-        private string[] WithKey(params string[] arguments)
-        {
-            if (string.IsNullOrEmpty(request.DiscKey)) return arguments;
-            var all = new List<string> { "--key", request.DiscKey };
-            all.AddRange(arguments);
-            return all.ToArray();
-        }
-
         private void Identify(string input)
         {
             var lines = new List<string>();
-            int code = RunTool(ImporterPath, WithKey("identify", input), delegate(string line) { lines.Add(line); });
+            int code = RunTool(ImporterPath, new[] { "identify", input }, delegate(string line) { lines.Add(line); });
             string json = string.Join("\n", lines);
             Log(json);
             Dictionary<string, object> identity;
@@ -326,7 +315,7 @@ namespace Nebula.Setup
         /// <summary>The content folder (game.pak and the files beside it) from the player's disc image or extracted folder.</summary>
         private void Import(string input, string content)
         {
-            int code = RunTool(ImporterPath, WithKey("import", input, "--output", content), delegate(string line)
+            int code = RunTool(ImporterPath, new[] { "import", input, "--output", content }, delegate(string line)
             {
                 var match = ImportProgress.Match(line);
                 if (match.Success)
