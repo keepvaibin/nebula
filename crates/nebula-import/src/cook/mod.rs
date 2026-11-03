@@ -354,6 +354,10 @@ pub fn write_cooked_pak(
     for (name, items) in extra {
         placed.extend(place(&mut pak, &mut at, &format!("{}/{name}", dol::FOLDER), items, stats)?);
     }
+    // Where the disc's waves lie: a cooked archive no longer says, and mods' wave archives need it (overlay.rs).
+    let layout = audio_data::layout_text(&waves).into_bytes();
+    let item = StoreItem { path: String::new(), order: 0, bytes: Some(layout) };
+    placed.extend(place(&mut pak, &mut at, overlay::WAVE_LAYOUT, vec![item], stats)?);
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;

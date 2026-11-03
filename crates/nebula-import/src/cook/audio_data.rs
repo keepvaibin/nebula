@@ -269,6 +269,41 @@ pub fn wave_archive(bytes: &[u8], places: &[WavePlace]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// A layout as the store keeps it (NebulaData/WaveLayout.txt): a cooked archive no longer says where the disc's waves
+/// lie, and a mod's wave archive is laid out as the disc's. One wave a line: file, then its numbers.
+pub fn layout_text(layout: &BTreeMap<String, Vec<WavePlace>>) -> String {
+    let mut text = String::new();
+    for (name, waves) in layout {
+        for w in waves {
+            text.push_str(&format!(
+                "{name}\t{} {} {} {} {} {}\n",
+                w.offset, w.length, w.format, w.samples, w.new_offset, w.new_length
+            ));
+        }
+    }
+    text
+}
+
+pub fn parse_layout_text(text: &str) -> Result<BTreeMap<String, Vec<WavePlace>>> {
+    let mut layout: BTreeMap<String, Vec<WavePlace>> = BTreeMap::new();
+    for line in text.lines().filter(|line| !line.is_empty()) {
+        let (name, numbers) = line.split_once('\t').with_context(|| format!("a wave layout line {line:?}"))?;
+        let n: Vec<usize> = numbers.split(' ').map(str::parse).collect::<std::result::Result<_, _>>().with_context(|| format!("a wave layout line {line:?}"))?;
+        let [offset, length, format, samples, new_offset, new_length] = n[..] else {
+            bail!("a wave layout line {line:?}");
+        };
+        layout.entry(name.to_string()).or_default().push(WavePlace {
+            offset,
+            length,
+            format: format as u8,
+            samples,
+            new_offset,
+            new_length,
+        });
+    }
+    Ok(layout)
+}
+
 /// The file name a wave system uses for a path.
 pub fn wave_archive_key(path: &str) -> String {
     path.rsplit('/').next().unwrap_or(path).to_ascii_lowercase()
@@ -277,6 +312,17 @@ pub fn wave_archive_key(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_layout_survives_its_text() {
+        let mut layout = BTreeMap::new();
+        layout.insert(
+            "a.aw".to_string(),
+            vec![WavePlace { offset: 16, length: 90, format: 0, samples: 160, new_offset: 0, new_length: 320 }],
+        );
+        assert_eq!(parse_layout_text(&layout_text(&layout)).unwrap(), layout);
+        assert!(parse_layout_text("a.aw\t1 2\n").is_err());
+    }
 
     #[test]
     fn a_stream_cooked() {
