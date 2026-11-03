@@ -1613,7 +1613,7 @@ void test_button_icons() {
         button_icon_spec(ButtonIconStyle::Nintendo, default_binding_table(ControlScheme::SwitchPro), true);
     expect(icon(nintendo, ButtonIcon::A) == Glyph{ButtonGlyph::Face, 1u}, "Switch: A is the east button");
     expect(icon(nintendo, ButtonIcon::B) == Glyph{ButtonGlyph::Face, 0u}, "Switch in menus: B is the south button");
-    const ButtonIconSpec wii = button_icon_spec(ButtonIconStyle::Wii, xbox, false);
+    const ButtonIconSpec wii = button_icon_spec(ButtonIconStyle::Game, xbox, false);
     bool kept = true;
     for (const ButtonGlyph glyph : wii.glyphs) kept = kept && glyph == ButtonGlyph::Keep;
     expect(kept, "the Wii style keeps every icon");

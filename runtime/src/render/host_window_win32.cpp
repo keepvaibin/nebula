@@ -2926,7 +2926,7 @@ public:
             case ButtonIconStyle::Nintendo: state.auto_icons = ButtonIcons::Nintendo; break;
             case ButtonIconStyle::PlayStation: state.auto_icons = ButtonIcons::PlayStation; break;
             case ButtonIconStyle::Keyboard: state.auto_icons = ButtonIcons::Keyboard; break;
-            default: state.auto_icons = ButtonIcons::Wii; break;
+            default: state.auto_icons = ButtonIcons::Game; break;
             }
         }
         state.display_language = game_language_resolved(settings.language);

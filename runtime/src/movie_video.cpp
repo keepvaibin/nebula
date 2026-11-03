@@ -494,7 +494,7 @@ void write_block(u8* output, u16 width, u16 height, u16 blockX, u16 blockY, cons
 }
 
 // One instantiation of movie_video_idct.inl per fused multiply-add, both
-// bit-identical to the console's paired-single decoder. AArch64 and an x86 CPU
+// bit-identical to the reference decoder. AArch64 and an x86 CPU
 // with FMA3 run the instruction; any other runs the exact SSE2 sequence.
 // Neither calls the C runtime's fma, which is a soft-float routine on x86 CPUs
 // without FMA3.

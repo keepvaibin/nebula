@@ -100,7 +100,7 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
 [[nodiscard]] std::optional<input::DeviceKey> last_input_device() noexcept;
 // The game's button icons now (ButtonIcons setting, the controller last used and its bindings); `menu`: a menu shows.
 [[nodiscard]] input::ButtonIconSpec button_icons(bool menu) noexcept;
-// The style the Auto setting shows now (the controller in use; Wii's before the game first asks).
+// The style the Auto setting shows now (the controller in use; the game's before it first asks).
 [[nodiscard]] input::ButtonIconStyle button_icons_auto_style() noexcept;
 // A person typed or clicked (overlay keys included).
 void note_keyboard_input() noexcept;

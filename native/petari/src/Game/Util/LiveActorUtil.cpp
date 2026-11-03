@@ -1083,7 +1083,7 @@ namespace MR {
             setBrkFrame(pActor, getBrkCtrl(pActor)->getEnd());
         }
 
-        // The visibility animation's own frame (the decompilation set the colour animation's here, which leaves every
+        // The visibility animation's own frame (setting the colour animation's here would leave every
         // shape a BVA shows only at its end hidden).
         if (isExistBva(pActor, pName)) {
             setBvaFrame(pActor, getBvaCtrl(pActor)->getEnd());

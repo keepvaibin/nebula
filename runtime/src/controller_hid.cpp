@@ -1698,7 +1698,7 @@ private:
         sw::DecodedState decoded{};
         if (!decode(device, report, decoded)) return;
         // A Joy-Con half keeps its state for its pair, which publishes in the right half's slot; the pointer and the
-        // tilt follow the right half alone, a shake of either counts (as a Nunchuk's does on the console).
+        // tilt follow the right half alone, a shake of either counts .
         Device* target = &device;
         bool pointing = true;
         sw::DecodedState moved = decoded;  // the motion this report carries (a Joy-Con half's own)
