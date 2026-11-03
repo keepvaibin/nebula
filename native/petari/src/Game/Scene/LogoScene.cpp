@@ -3,61 +3,19 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/LogoFader.hpp"
-#include "Game/Screen/SimpleLayout.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/MainLoopFramework.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
-#include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"
-#include <cstring>
-#include <nw4r/lyt/layout.h>
-#include <nw4r/lyt/pane.h>
 
-namespace {
-    // The strap screen's white backing (PicBG) as it shows, under the fader's black (LogoFader::draw blends its rate as
-    // a byte): the grey of the borders around a fitted picture.
-    f32 getStrapSurround(const SimpleLayout* pStrap, const LogoFader* pFader) {
-        if (pStrap == nullptr || pFader == nullptr || pStrap->mFlag.mIsDead || pStrap->mFlag.mIsHidden) {
-            return 0.0f;
-        }
-        const nw4r::lyt::Pane* pRoot = pStrap->mLayoutManager->mLayout->mpRootPane;
-        if (pRoot == nullptr || strcmp(pRoot->mName, "RootPane") != 0) {
-            return 0.0f;
-        }
-        bool identified = false;
-        const nw4r::lyt::Pane* pBacking = nullptr;
-        for (nw4r::lyt::PaneList::ConstIterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
-            identified |= strcmp(it->mName, "WiiRemoteStrap") == 0;
-            if (strcmp(it->mName, "PicBG") == 0) {
-                pBacking = &*it;
-            }
-        }
-        if (!identified || pBacking == nullptr) {
-            return 0.0f;
-        }
-        f32 rate = !pFader->mFlag.mIsDead && !pFader->mFlag.mIsHidden ? pFader->mRate : 0.0f;
-        rate = rate < 0.0f ? 0.0f : rate > 1.0f ? 1.0f : rate;
-        const u32 fade = static_cast< u32 >(rate * 255.0f);
-        return (pBacking->mGlbAlpha / 255.0f) * ((255 - fade) / 255.0f);
-    }
-};  // namespace
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/NebulaHost.hpp"
 
 
 namespace {
-    const s32 FADEINOUT_FRAME = 60;
-    const s32 STRAP_DISPLAY_MIN_FRAME = 450;
-    const s32 STRAP_DISPLAY_MAX_FRAME = 1200;
-
-
-    NEW_NERVE(LogoSceneStrapFadein, LogoScene, StrapFadein);
-    NEW_NERVE(LogoSceneStrapDisplay, LogoScene, StrapDisplay);
-    NEW_NERVE(LogoSceneStrapFadeout, LogoScene, StrapFadeout);
     NEW_NERVE(LogoSceneMountGameData, LogoScene, MountGameData);
     NEW_NERVE(LogoSceneWaitRayTracing, LogoScene, WaitRayTracing);
     NEW_NERVE(LogoSceneWaitReadDoneSystemArchive, LogoScene, WaitReadDoneSystemArchive);
@@ -66,7 +24,7 @@ namespace {
 
 LogoScene::LogoScene()
     : Scene("LogoScene"),
-      mStrapLayout(), mLogoFader() {
+      mLogoFader() {
     MainLoopFramework::getManager()->mUseAlpha = false;
 }
 
@@ -96,7 +54,6 @@ void LogoScene::calcAnim() {
 }
 
 void LogoScene::draw() const {
-    NebulaHost::sceneSurround(getStrapSurround(mStrapLayout, mLogoFader));
     MR::drawInit();
 
     NebulaColor8 color;
@@ -119,46 +76,10 @@ void LogoScene::draw() const {
     CategoryList::execute(MR::DrawType_WipeLayout);
 }
 
-bool LogoScene::isDisplayStrapRemineder() const {
-    return isNerve(GET_NERVE_ANON(LogoSceneDeactive)) ||
-           isNerve(GET_NERVE_ANON(LogoSceneStrapFadein)) || isNerve(GET_NERVE_ANON(LogoSceneStrapDisplay)) ||
-           isNerve(GET_NERVE_ANON(LogoSceneStrapFadeout)) || isNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
+bool LogoScene::isBeforeTitle() const {
+    return isNerve(GET_NERVE_ANON(LogoSceneDeactive)) || isNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
 }
 
-
-void LogoScene::exeStrapFadein() {
-    if (MR::isFirstStep(this)) {
-        MR::startAnim(mStrapLayout, "Strap", 0);
-        MR::setAnimFrameAndStop(mStrapLayout, 0.0f, 0);
-
-        mLogoFader->mMaxStep = FADEINOUT_FRAME;
-    }
-
-    if (tryFadeinLayout(mStrapLayout)) {
-        setNerve(GET_NERVE_ANON(LogoSceneStrapDisplay));
-    }
-}
-
-void LogoScene::exeStrapDisplay() {
-    if (MR::isFirstStep(this)) {
-        MR::startAnim(mStrapLayout, "Strap", 0);
-    }
-
-    if (MR::isStep(this, STRAP_DISPLAY_MAX_FRAME - 1)) {
-        MR::setAnimRate(mStrapLayout, 0.0f, 0);
-    }
-
-    if (MR::isGreaterStep(this, STRAP_DISPLAY_MIN_FRAME) &&
-        (MR::isPressedAnyWithoutHome(PLAYER_1) || MR::isGreaterEqualStep(this, STRAP_DISPLAY_MAX_FRAME))) {
-        setNerve(GET_NERVE_ANON(LogoSceneStrapFadeout));
-    }
-}
-
-void LogoScene::exeStrapFadeout() {
-    if (tryFadeoutLayout(mStrapLayout)) {
-        setNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
-    }
-}
 
 void LogoScene::exeMountGameData() {
     if (MR::isFirstStep(this)) {
@@ -192,40 +113,11 @@ void LogoScene::exeDeactive() {
 }
 
 void LogoScene::initLayout() {
-    mStrapLayout = MR::createSimpleLayout("\203\130\203\147\203\211\203\142\203\166\222\205\227\160\211\346\226\312" /* ストラップ着用画面 */, "WiiRemoteStrap", 1);
-    mStrapLayout->kill();
-
     mLogoFader = new LogoFader("\203\215\203\123\203\164\203\106\201\133\203\137" /* ロゴフェーダ */);
     mLogoFader->initWithoutIter();
     mLogoFader->setBlank();
     mLogoFader->appear();
     MR::connectToSceneLayout(mLogoFader);
 
-}
-
-bool LogoScene::tryFadeinLayout(LayoutActor* pActor) {
-    if (MR::isFirstStep(this)) {
-        mLogoFader->startFadeIn();
-        pActor->appear();
-    }
-
-    if (mLogoFader->isFadeEnd()) {
-        return true;
-    }
-
-    return false;
-}
-
-bool LogoScene::tryFadeoutLayout(LayoutActor* pActor) {
-    if (MR::isFirstStep(this)) {
-        mLogoFader->startFadeOut();
-    }
-
-    if (mLogoFader->isFadeEnd()) {
-        pActor->kill();
-        return true;
-    }
-
-    return false;
 }
 

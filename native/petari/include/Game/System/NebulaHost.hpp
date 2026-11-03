@@ -22,9 +22,6 @@ namespace NebulaHost {
         return nebula_host()->test_scene_frame(nebula_host()->user, pAction);
     }
 
-    inline void sceneSurround(f32 intensity) {
-        nebula_host()->scene_surround(nebula_host()->user, intensity);
-    }
 
     // An object as the host names it (markers, lights, names): its address.
     inline u64 objectId(const void* pObject) {

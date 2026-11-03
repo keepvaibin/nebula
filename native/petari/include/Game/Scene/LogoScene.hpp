@@ -2,9 +2,7 @@
 
 #include "Game/Scene/Scene.hpp"
 
-class LayoutActor;
 class LogoFader;
-class SimpleLayout;
 
 class LogoScene : public Scene {
 public:
@@ -19,23 +17,14 @@ public:
     virtual void calcAnim();
     virtual void draw() const;
 
-    bool isDisplayStrapRemineder() const;
+    bool isBeforeTitle() const;
 
-
-    void exeStrapFadein();
-    void exeStrapDisplay();
-    void exeStrapFadeout();
     void exeMountGameData();
     void exeWaitRayTracing();
     void exeWaitReadDoneSystemArchive();
     void exeDeactive();
     void initLayout();
-    bool tryFadeinLayout(LayoutActor* pActor);
-    bool tryFadeoutLayout(LayoutActor* pActor);
-    bool tryFadeinLayout();
-    bool tryFadeoutLayout();
 
 private:
-    SimpleLayout* mStrapLayout;
     LogoFader* mLogoFader;
 };

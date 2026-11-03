@@ -38,7 +38,7 @@ int main() {
         galaxy::ui::RenderConfig render;
         auto rows = galaxy::ui::general_page(runtime, runtime, host);
         check(row(rows, "BUTTON ICONS").value == "AUTO (KEYBOARD AND MOUSE)", "auto icon label");
-        check(row(rows, "MIIS ON THIS CONSOLE").value == "3 OF 100", "Mii count label");
+        check(row(rows, "YOUR MIIS").value == "3 OF 100", "Mii count label");
         row(rows, "TEXT SPEED").change(render, 1);
         check(runtime.text_speed == 2, "text speed action");
         row(rows, "LANGUAGE").change(render, 1);

@@ -37,6 +37,12 @@ cbuffer MaterialBlock : register(b1) {
 Texture2D tex[8] : register(t0);
 SamplerState samp[8] : register(s0);
 
+// How much of this pixel lies on the contour where `value` rounds to `level` (both 0-255): a line of the same share of the
+// picture at every resolution, its edge antialiased.
+float level_line(float value, float level) {
+    return saturate((0.5 - abs(value - level)) / max(fwidth(value), 0.001) + 0.5);
+}
+
 // The draw's matrix rows (draw_matrices.h): position rows from pos_base (place k at 3k), texture rows from
 // row_bases.y (rows 30-63), normal rows from row_bases.x, light n's four rows at row_bases.w + 4n.
 StructuredBuffer<float4> mtx_rows : register(t3, space1);

@@ -1684,7 +1684,6 @@ void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayText
         copy.geometry[3] = sampling.step_y;
         recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
         recording_log_.copies.push_back(copy);
-        recording_log_.surround = dest.safety_surround;
         recording_log_.movie = dest.prerecorded_movie;
     }
     {

@@ -15,6 +15,13 @@ calibration, its battery level, and drives its motor; the game's pictures of a W
 With INPUT on auto it takes over at its first button press and hands back when a key, a mouse button or a controller
 is used; INPUT on Wii Remote uses it alone. Its speaker's sounds play from the PC. A test session never opens it.
 
+## Input modes
+
+CONTROLS > INPUT: Keyboard and mouse (the default), Auto, Controller, Wii Remote. Keyboard and mouse takes nothing from
+controllers; the settings menu still answers them. If the chosen mode has nothing to play with (Controller with no
+controller, Wii Remote with no remote, Auto with nothing attached at all) the game stops and says so until one is
+back. F1 or Enter opens the settings menu from there to choose another mode.
+
 ## Default maps
 
 Controllers follow Super Mario Galaxy on Nintendo Switch (3D All-Stars; the

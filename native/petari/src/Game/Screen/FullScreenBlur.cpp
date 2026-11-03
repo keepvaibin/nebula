@@ -9,6 +9,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace MR {
     void drawFullScreenBlur(f32 param1) {
@@ -28,12 +29,12 @@ namespace MR {
         NativeShader::setColor(layer, 0, 0, 0, 0, param3);
         NativeShader::setTexture(layer, 0, &texture);
         NativeShader::send(layer);
-        TDDraw::drawTexture(TVec2f(-param1, -param1), &texture, TVec2f(screenWidth + param1 * 2.0f, 456.0f + param1 * 2.0f));
+        TDDraw::drawTexture(TVec2f(-param1, -param1), &texture, TVec2f(screenWidth + param1 * 2.0f, NebulaFrameClock::cScreenHeight + param1 * 2.0f));
 
         NativeShader::setColor(layer, 0, 0, 0, 0, param4);
         NativeShader::setTexture(layer, 0, MR::getFullScreenBlurTexture());
         NativeShader::send(layer);
-        TDDraw::drawTexture(TVec2f(-param2, -param2), MR::getFullScreenBlurTexture(), TVec2f(screenWidth + param2 * 2.0f, 456.0f + param2 * 2.0f));
+        TDDraw::drawTexture(TVec2f(-param2, -param2), MR::getFullScreenBlurTexture(), TVec2f(screenWidth + param2 * 2.0f, NebulaFrameClock::cScreenHeight + param2 * 2.0f));
 
         // The next frame's blur: the screen shrunk into the blur texture (128x64), a pass into its own target.
         JUTTexture* pBlur = MR::getFullScreenBlurTexture();
@@ -42,7 +43,7 @@ namespace MR {
         TDDraw::setupNative(&shrink, 1, 1, 2);
         NativeShader::setTexture(shrink, 0, &texture);
         NativeShader::send(shrink);
-        TDDraw::drawTexture(TVec2f(0.0f, 0.0f), &texture, TVec2f((screenWidth / 640.0f) * 128.0f, 64.0f));
+        TDDraw::drawTexture(TVec2f(0.0f, 0.0f), &texture, TVec2f((screenWidth / static_cast< f32 >(NebulaFrameClock::cScreenUnitsAcross)) * 128.0f, 64.0f));
         J3DNativeTarget::end(pBlur->mImage, NEBULA_TARGET_RGB);
         MR::loadProjectionMtx();
         MR::loadViewMtx();

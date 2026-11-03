@@ -289,7 +289,6 @@ std::uint64_t s_controls_devices_ms = 0u;
 std::optional<std::vector<galaxy::input::ControllerInfo>> s_test_controllers;
 std::optional<galaxy::input::DeviceKey> s_test_active_device;
 std::optional<galaxy::host::JoyConStatus> s_test_joycons;
-std::optional<bool> s_test_wii_remote;
 std::size_t s_capture_target = galaxy::input::kWiiTargetCount;
 std::uint64_t s_capture_deadline_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
@@ -532,7 +531,6 @@ unsigned pending_settings_changes() {
     changes += d.curved_surfaces != live.curved_surfaces;
     changes += lighting_mode(d) != lighting_mode(live);
     changes += d.ambient_occlusion != live.ambient_occlusion;
-    changes += d.bloom_mode != live.bloom_mode;
     changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
@@ -676,22 +674,6 @@ std::vector<ControlsRow> controls_tail_rows() {
 
 void refresh_controls_devices(bool force);
 
-// A real Wii Remote is paired and on (its HID interface is present), looked for at most once a second: the WII REMOTE
-// input mode is offered while one is.
-bool wii_remote_present() {
-    if (s_test_wii_remote) {
-        return *s_test_wii_remote;
-    }
-    static std::uint64_t s_checked_ms = 0u;
-    static bool s_present = false;
-    const std::uint64_t now = GetTickCount64();
-    if (s_checked_ms == 0u || now - s_checked_ms >= 1000u) {
-        s_checked_ms = now;
-        static constexpr std::uint16_t kRemotes[] = {0x0306u, 0x0330u};
-        s_present = !galaxy::host::hid_interface_paths(0x057Eu, kRemotes).empty();
-    }
-    return s_present;
-}
 
 // The CONTROLS page's rows top to bottom: the input mode; PAIR JOY-CON while a Joy-Con half is connected (Auto,
 // Controller only); then, but in the Wii Remote mode (its buttons are its own), the device being set up and, while
@@ -927,13 +909,7 @@ void expire_display_confirmation() {
     }
 }
 
-// A controller is attached (the tests' stand-ins where they set them).
-bool controller_attached() {
-    return s_test_controllers ? !s_test_controllers->empty() : galaxy::host::controller_present_now();
-}
-
-// Applies the CONTROLS draft. Controller input is selected only while a
-// controller is attached.
+// Applies the CONTROLS draft.
 void apply_controls_draft() {
     const galaxy::input::ControlsConfig live = galaxy::input::get_controls_config();
     if (!(s_controls_draft == live)) {
@@ -942,16 +918,8 @@ void apply_controls_draft() {
     }
     RuntimeSettings runtime = get_runtime_settings();
     if (s_input_mode_draft != runtime.input_mode) {
-        if (s_input_mode_draft == RuntimeInputMode::Controller && !controller_attached()) {
-            show_controls_message("NO CONTROLLER CONNECTED");
-            s_input_mode_draft = runtime.input_mode;
-        } else if (s_input_mode_draft == RuntimeInputMode::RealWiimote && !wii_remote_present()) {
-            show_controls_message("NO WII REMOTE CONNECTED");
-            s_input_mode_draft = runtime.input_mode;
-        } else {
-            runtime.input_mode = s_input_mode_draft;
-            set_runtime_settings(runtime);
-        }
+        runtime.input_mode = s_input_mode_draft;
+        set_runtime_settings(runtime);
     }
 }
 
@@ -990,7 +958,6 @@ void apply_native_settings_draft() {
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.enhanced_lighting = next.enhanced_lighting;
     applied.ambient_occlusion = next.ambient_occlusion;
-    applied.bloom_mode = next.bloom_mode;
     applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
@@ -1139,17 +1106,13 @@ void adjust_native_setting_unlogged(int delta) {
         };
         switch (info.kind) {
         case ControlsRow::InputMode: {
-            // The Wii Remote's own mode while one is paired and on (or chosen already).
-            std::vector<RuntimeInputMode> modes{RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse,
-                                                RuntimeInputMode::Controller};
-            if (wii_remote_present() || s_input_mode_draft == RuntimeInputMode::RealWiimote) {
-                modes.push_back(RuntimeInputMode::RealWiimote);
-            }
+            static constexpr RuntimeInputMode kModes[] = {RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse,
+                                                          RuntimeInputMode::Controller, RuntimeInputMode::RealWiimote};
             unsigned index = 0u;
-            for (unsigned i = 0; i < modes.size(); ++i) {
-                if (modes[i] == s_input_mode_draft) index = i;
+            for (unsigned i = 0; i < std::size(kModes); ++i) {
+                if (kModes[i] == s_input_mode_draft) index = i;
             }
-            s_input_mode_draft = modes[step(index, static_cast<unsigned>(modes.size()))];
+            s_input_mode_draft = kModes[step(index, static_cast<unsigned>(std::size(kModes)))];
             refresh_controls_devices(true);
             return;
         }
@@ -1598,6 +1561,11 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
     }
     if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
         handle_controls_key(key, was_down, from_pad)) {
+        return true;
+    }
+    if (key == VK_RETURN && !was_down && !s_native_settings_visible.load(std::memory_order_relaxed) &&
+        galaxy::host::input_missing_shown()) {
+        set_native_settings_visible(true);
         return true;
     }
     if (key == VK_F1) {
@@ -5106,7 +5074,6 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_test_active_device.reset();
     // No Joy-Con half and no Wii Remote, whatever this machine has, until a test sets them.
     s_test_joycons = galaxy::host::JoyConStatus{};
-    s_test_wii_remote = false;
     s_settings_first_row = 0u;
     s_controls_message_until_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);
@@ -5135,10 +5102,6 @@ void native_settings_set_joycons_for_tests(unsigned lefts, unsigned rights) {
     status.lefts = static_cast<std::uint8_t>(lefts);
     status.rights = static_cast<std::uint8_t>(rights);
     s_test_joycons = status;
-}
-void native_settings_set_wii_remote_for_tests(bool present) {
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    s_test_wii_remote = present;
 }
 RenderConfig native_settings_draft_for_tests() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);

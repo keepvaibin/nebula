@@ -23,6 +23,7 @@ public:
     JUTTexture* _24;
     JUTTexture* _28;
     JUTTexture* mQuarter;  // the blur's source
+    JUTTexture* mBlurScratch;
     f32 mIntensity;
     s32 mBlurMaxDist;
     s32 mBlurMinDist;

@@ -253,7 +253,6 @@ void RendererVk::ReplayLog::clear() {
     copies.clear();
     blooms.clear();
     tables.clear();
-    surround = 0.0f;
     movie = false;
     stripe_draws.clear();
     stripe_vertices.clear();
@@ -1126,7 +1125,6 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         subframe_display_.width = static_cast<std::uint16_t>(display->width);
         subframe_display_.height = static_cast<std::uint16_t>(display->height);
     }
-    subframe_display_.safety_surround = run_log_.surround;
     subframe_display_.prerecorded_movie = run_log_.movie;
 
     const auto record_start = std::chrono::steady_clock::now();

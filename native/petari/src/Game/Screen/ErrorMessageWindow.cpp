@@ -86,6 +86,8 @@ void ErrorMessageWindow::exeAppear() {
             MR::hidePane(this, "PicDummy");
             MR::hidePane(this, "ErrorTextHalf");
             MR::showPane(this, "ErrorMessage");
+            MR::setTextBoxHorizontalPositionCenterRecursive(this, "ErrorMessage");
+            MR::setTextBoxVerticalPositionCenterRecursive(this, "ErrorMessage");
             MR::setTextBoxMessageRecursive(this, "ErrorMessage", pMessage);
         }
 

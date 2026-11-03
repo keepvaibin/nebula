@@ -37,10 +37,9 @@ float4 material_color(NativeVaryings i) {
         discard;
     }
     const bool high = material.params.x != 0.0;
-    float3 c8 = round(tex[0].Sample(samp[0], i.uv[0].xy).rgb * 255.0);
-    c8 = floor(c8 * round(tex[0].Sample(samp[0], i.uv[0].zw).rgb * 255.0) / 255.0 * 0.5 + 0.5);
-    if (high && c8.r == round(material.highlight.a * 255.0)) {
-        c8 += round(material.highlight.rgb * 255.0);
+    float3 c8 = tex[0].Sample(samp[0], i.uv[0].xy).rgb * tex[0].Sample(samp[0], i.uv[0].zw).rgb * 127.5;
+    if (high) {
+        c8 += material.highlight.rgb * 255.0 * level_line(c8.r, material.highlight.a * 255.0);
     }
     float2 screen = i.uv[2].z != 0.0 ? i.uv[2].xy / i.uv[2].z : i.uv[2].xy;
     if (high) {

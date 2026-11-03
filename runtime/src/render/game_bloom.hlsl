@@ -14,7 +14,7 @@
 cbuffer BloomConstants : register(b0) {
     uint4 c_size;     // the output's texels (x, y); Down: the box (z); Box, Blur: the Gaussians (z), the axis (w)
     float4 c_sigma;   // Blur: the Gaussians' widths along the axis (texels)
-    float4 c_params;  // per pass (above); Composite: intensity, strength, kind (0 scene, 1 normal, 2 simple), 1: 8 bits
+    float4 c_params;  // per pass (above); Composite: intensity, strength, kind (0 scene, 1 normal, 2 simple)
     float4 c_uv;      // Down: the source region (texels: x, y); Composite: frame pixel to level-1 UV (x, y), level-2 (z, w)
 };
 
@@ -23,7 +23,7 @@ Texture2D<float4> t_second : register(t1);
 Texture2D<float4> t_third : register(t2);
 // Vulkan (game_bloom_vk.cpp) writes the work images as storage images of a known format: no device feature needed.
 #ifdef BLOOM_STORAGE_FORMAT
-#define WORK_FORMAT [[vk::image_format("rgba16f")]]
+#define WORK_FORMAT [[spv::format_rgba16f]]
 #else
 #define WORK_FORMAT
 #endif
@@ -153,11 +153,5 @@ float4 CompositePS(float4 position : SV_Position) : SV_Target0 {
     } else if (c_params.z == 2.0f) {
         bloom = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb * (c_params.x * c_params.y);
     }
-    if (c_params.w == 0.0f) {
-        return float4(scene + bloom, kept.a);
-    }
-    // Into 8 bits: the scene as it was, the bloom stochastically rounded (interleaved gradient noise, Jimenez 2014), so
-    // its gradients come out smooth instead of in bands.
-    const float u = frac(52.9829189f * frac(dot(floor(position.xy), float2(0.06711056f, 0.00583715f))));
-    return float4(saturate((round(saturate(scene) * 255.0f) + floor(bloom * 255.0f + u)) / 255.0f), kept.a);
+    return float4(scene + bloom, kept.a);
 }

@@ -104,6 +104,12 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
 [[nodiscard]] input::ButtonIconStyle button_icons_auto_style() noexcept;
 // A person typed or clicked (overlay keys included).
 void note_keyboard_input() noexcept;
+// The system lists a keyboard or a mouse.
+[[nodiscard]] bool keyboard_or_mouse_attached() noexcept;
+// The chosen input mode has nothing to play with (input_missing): the game shows its message, and Enter opens the
+// settings menu as F1 does.
+void set_input_missing_shown(bool shown) noexcept;
+[[nodiscard]] bool input_missing_shown() noexcept;
 // Synchronous check (settings UI only): a controller is attached now.
 [[nodiscard]] bool controller_present_now() noexcept;
 
