@@ -836,7 +836,7 @@ void RendererD3D12::carry_over_scene_contents() {
     settle_owed_scene();
     if (!scene_carry_color_ || !scene_carry_depth_ || scene_msaa_.samples > 1u) {
         if (scene_msaa_.samples > 1u && scene_carry_color_) {
-            const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+            const auto far_values = make_scene_clear_values(0u, 0u);
             const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
             command_list_->ClearRenderTargetView(scene_rtv_, black, 0u, nullptr);
             command_list_->ClearDepthStencilView(scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -925,7 +925,7 @@ void RendererD3D12::carry_over_scene_contents() {
         command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
         command_list_->DrawInstanced(3, 1, 0, 0);
     } else {
-        const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_scene_clear_values(0u, 0u);
         command_list_->ClearDepthStencilView(
             scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
@@ -2090,10 +2090,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         scd.SampleDesc.Count = 1;
         scd.Scaling      = DXGI_SCALING_STRETCH;
         scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
-        // ALLOW_MODE_SWITCH lets exclusive fullscreen switch the monitor to
-        // the selected resolution and refresh rate.
-        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
-                    DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
         ComPtr<IDXGISwapChain1> sc1;
         // Through Streamline's factory when it runs: its presents go through it.
         d3d_check(streamline::swap_chain_factory(factory.Get())
@@ -2374,11 +2371,6 @@ void RendererD3D12::shutdown() {
         CloseHandle(frame_latency_waitable_);
         frame_latency_waitable_ = nullptr;
     }
-    if (swap_chain_ && exclusive_fullscreen_active_) {
-        swap_chain_->SetFullscreenState(FALSE, nullptr);
-        exclusive_fullscreen_active_ = false;
-        host_window::exclusive_fullscreen_active.store(false, std::memory_order_release);
-    }
     s_blit_root_sig.Reset();
     post_process_.shutdown();
     ambient_occlusion_.shutdown();
@@ -2558,104 +2550,15 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
     }
 }
 
-bool RendererD3D12::enter_exclusive_fullscreen(
-    const std::wstring& monitor_device, unsigned width, unsigned height,
-    unsigned refresh_hz) {
-    if (!swap_chain_ || !adapter3_) {
-        return false;
-    }
-    ComPtr<IDXGIOutput> output;
-    for (UINT index = 0u;; ++index) {
-        ComPtr<IDXGIOutput> candidate;
-        if (adapter3_->EnumOutputs(index, &candidate) == DXGI_ERROR_NOT_FOUND) {
-            break;
-        }
-        DXGI_OUTPUT_DESC desc{};
-        if (candidate && SUCCEEDED(candidate->GetDesc(&desc)) &&
-            _wcsicmp(desc.DeviceName, monitor_device.c_str()) == 0) {
-            output = candidate;
-            break;
-        }
-    }
-    if (!output) {
-        // The monitor is driven by another GPU (hybrid laptops): borderless
-        // fullscreen on it is the closest equivalent.
-        std::cerr << "[Renderer] exclusive fullscreen: monitor not on the rendering GPU;"
-                     " using borderless\n";
-        return false;
-    }
-    DXGI_MODE_DESC wanted{};
-    wanted.Width = width;
-    wanted.Height = height;
-    wanted.RefreshRate = {refresh_hz, refresh_hz != 0u ? 1u : 0u};
-    wanted.Format = kBackbufferFormat;
-    DXGI_MODE_DESC closest{};
-    if (width == 0u || height == 0u ||
-        FAILED(output->FindClosestMatchingMode(&wanted, &closest, device_.Get()))) {
-        DXGI_OUTPUT_DESC desc{};
-        (void)output->GetDesc(&desc);
-        closest = wanted;
-        closest.Width = static_cast<UINT>(desc.DesktopCoordinates.right - desc.DesktopCoordinates.left);
-        closest.Height = static_cast<UINT>(desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top);
-        closest.RefreshRate = {0u, 0u};
-    }
-    wait_for_gpu();
-    (void)swap_chain_->ResizeTarget(&closest);
-    const HRESULT hr = swap_chain_->SetFullscreenState(TRUE, output.Get());
-    if (FAILED(hr)) {
-        std::cerr << "[Renderer] exclusive fullscreen unavailable hr=0x" << std::hex
-                  << static_cast<unsigned long>(hr) << std::dec << "; using borderless\n";
-        return false;
-    }
-    exclusive_fullscreen_active_ = true;
-    host_window::exclusive_fullscreen_active.store(true, std::memory_order_release);
-    resize_swap_chain(closest.Width, closest.Height, true);
-    std::cout << "[Renderer] exclusive fullscreen " << closest.Width << 'x' << closest.Height
-              << " @ " << (closest.RefreshRate.Denominator != 0u
-                               ? closest.RefreshRate.Numerator / closest.RefreshRate.Denominator
-                               : 0u)
-              << " Hz\n";
-    return true;
-}
-
-void RendererD3D12::leave_exclusive_fullscreen() {
-    if (!swap_chain_ || !exclusive_fullscreen_active_) {
-        return;
-    }
-    wait_for_gpu();
-    (void)swap_chain_->SetFullscreenState(FALSE, nullptr);
-    exclusive_fullscreen_active_ = false;
-    host_window::exclusive_fullscreen_active.store(false, std::memory_order_release);
-}
-
 void RendererD3D12::reconcile_display_state() {
     if (!swap_chain_ || window_ == nullptr || host_window::hidden_window_mode_enabled()) {
         return;
     }
     const RenderConfig cfg = get_render_config();
-    const unsigned mode = std::min(cfg.display_mode, kDisplayExclusive);
+    const unsigned mode = std::min(cfg.display_mode, kDisplayBorderless);
     AppliedDisplay& applied = applied_display_;
-    const bool same_display = applied.valid && applied.mode == mode &&
-        applied.monitor == cfg.monitor &&
-        (mode != kDisplayExclusive ||
-         (applied.fullscreen_width == cfg.fullscreen_width &&
-          applied.fullscreen_height == cfg.fullscreen_height &&
-          applied.fullscreen_refresh_hz == cfg.fullscreen_refresh_hz));
+    const bool same_display = applied.valid && applied.mode == mode && applied.monitor == cfg.monitor;
     if (same_display) {
-        if (mode == kDisplayExclusive) {
-            // Alt+Tab leaves exclusive fullscreen; return once the game is
-            // in front again. Checked twice a second.
-            if (++display_checks_ % 30u == 0u) {
-                BOOL fullscreen = FALSE;
-                if (SUCCEEDED(swap_chain_->GetFullscreenState(&fullscreen, nullptr)) &&
-                    !fullscreen && GetForegroundWindow() == window_) {
-                    exclusive_fullscreen_active_ = false;
-                    host_window::exclusive_fullscreen_active.store(false, std::memory_order_release);
-                    applied.valid = false;
-                }
-            }
-            return;
-        }
         if (mode != kDisplayWindowed ||
             (applied.window_width == cfg.window_width &&
              applied.window_height == cfg.window_height) ||
@@ -2668,9 +2571,6 @@ void RendererD3D12::reconcile_display_state() {
     const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
     if (monitor == nullptr) {
         return;
-    }
-    if (exclusive_fullscreen_active_) {
-        leave_exclusive_fullscreen();
     }
     host_window::WindowPlacement placement{};
     if (mode == kDisplayWindowed) {
@@ -2689,31 +2589,19 @@ void RendererD3D12::reconcile_display_state() {
         std::cerr << "[Renderer] display change: the window did not respond\n";
         return;
     }
-    bool exclusive = false;
-    if (mode == kDisplayExclusive) {
-        exclusive = enter_exclusive_fullscreen(monitor->device, cfg.fullscreen_width,
-                                               cfg.fullscreen_height, cfg.fullscreen_refresh_hz);
-    }
-    if (!exclusive) {
-        // The placed window's client size (WM_SIZE can lag behind the
-        // cross-thread placement).
-        RECT client{};
-        if (GetClientRect(window_, &client) && client.right > 0 && client.bottom > 0) {
-            resize_swap_chain(static_cast<UINT>(client.right),
-                              static_cast<UINT>(client.bottom), false);
-        }
+    // The placed window's client size (WM_SIZE can lag behind the
+    // cross-thread placement).
+    RECT client{};
+    if (GetClientRect(window_, &client) && client.right > 0 && client.bottom > 0) {
+        resize_swap_chain(static_cast<UINT>(client.right),
+                          static_cast<UINT>(client.bottom), false);
     }
     applied.valid = true;
     applied.mode = mode;
     applied.monitor = cfg.monitor;
-    applied.fullscreen_width = cfg.fullscreen_width;
-    applied.fullscreen_height = cfg.fullscreen_height;
-    applied.fullscreen_refresh_hz = cfg.fullscreen_refresh_hz;
     applied.window_width = cfg.window_width;
     applied.window_height = cfg.window_height;
-    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed"
-                                           : mode == kDisplayBorderless ? "borderless"
-                                                                        : "fullscreen")
+    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed" : "borderless")
               << ' ' << narrow_utf8(monitor->device) << ' ' << host_window::backbuffer_width << 'x'
               << host_window::backbuffer_height << '\n';
 }
@@ -3937,8 +3825,7 @@ void RendererD3D12::present_to_swap_chain() {
     const UINT vsync = generating ? std::min(1u, cfg.vsync_interval)
                                   : present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
     const UINT present_flags =
-        (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
-                                           : 0u;
+        0u;
     // Interpolation presents on its own slot clock.
     const double pace_wait_ms =
         ring_mode_ == RingMode::Interp ? 0.0 : present_pacer_.pace(cfg.vsync_interval, presented_max_fps(cfg));
@@ -4147,7 +4034,6 @@ void RendererD3D12::present_to_swap_chain() {
                 << telemetry_present_max_ms_
                 << " vsync=" << vsync
                 << " present-flags=" << present_flags
-                << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
                 << " remote-session="
                 << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
                 << " gpu-timing=" << (false ? "disabled" :
@@ -5976,7 +5862,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         }
         replay_playing_ = true;
         bind_scene();
-        const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_scene_clear_values(0u, 0u);
         // The log before's vertices are gone once its segment came round (a
         // later game frame records there while this sequence still plays).
         const bool blend = sequence.vertex_blend && prev_run_valid_ &&
@@ -6017,7 +5903,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::Clear: {
                 const ReplayClear& c = run_clears_[op.index];
-                clear_scene(c.rgba, c.depth24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+                clear_scene(c.rgba, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
                 break;
             }
             case ReplayKind::Copy: {
@@ -7398,7 +7284,7 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
                 hand_over_scene_color(game_bloom_.take_kept_image(command_list_.Get(), in, frame_index_, kFramesInFlight));
             scene_owed_.Reset();
             game_bloom_.keep_picture(std::move(picture), in);
-            clear_scene(0u, 0x00FFFFFFu, true, true, false);
+            clear_scene(0u, true, true, false);
             return;
         }
         static_cast<void>(game_bloom_.keep(command_list_.Get(), in, frame_index_, kFramesInFlight));
@@ -7458,7 +7344,7 @@ bool RendererD3D12::begin_output_scene() {
     scene_temporal_ = false;
     if (upscaled) {
         swap_scene_sets();
-        const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_scene_clear_values(0u, 0u);
         command_list_->ClearDepthStencilView(
             scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
@@ -7494,7 +7380,7 @@ bool RendererD3D12::begin_output_scene() {
         record_conversion_blit(alt_scene_.color.Get(), w, h, {}, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
         swap_scene_sets();
     }
-    const auto far_values = make_scene_clear_values(0u, 0x00FFFFFFu, 0u);
+    const auto far_values = make_scene_clear_values(0u, 0u);
     command_list_->ClearDepthStencilView(
         scene_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
         far_values.reversed_depth, 0u, 0u, nullptr);
@@ -7542,7 +7428,7 @@ void RendererD3D12::bind_scene() {
 }
 
 void RendererD3D12::clear_scene(
-    std::uint32_t clear_rgba, std::uint32_t clear_depth,
+    std::uint32_t clear_rgba,
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
@@ -7551,10 +7437,10 @@ void RendererD3D12::clear_scene(
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
-        replay_clears_.push_back({clear_rgba, clear_depth, color_enable, alpha_enable,
+        replay_clears_.push_back({clear_rgba, color_enable, alpha_enable,
                                   depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
-        log_start_clear_ = {clear_rgba, clear_depth, color_enable, alpha_enable,
+        log_start_clear_ = {clear_rgba, color_enable, alpha_enable,
                             depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format};
         log_start_clear_valid_ = true;
     }
@@ -7587,7 +7473,7 @@ void RendererD3D12::clear_scene(
         const bool rgba = color_enable && (alpha_enable || pixel_format != 1u);
         restore_owed_scene(rgba ? &rect : nullptr);
     }
-    const auto clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
+    const auto clear = make_scene_clear_values(clear_rgba, pixel_format);
     if (color_enable || alpha_enable) {
         if (pixel_format != 1u) alpha_enable = true;
         const float* col = clear.color.data();
@@ -7615,9 +7501,7 @@ void RendererD3D12::clear_scene(
         }
     }
     if (depth_enable) {
-        // REVERSED-Z buffer: game depth24 (near=0, far=2^24) inverts into the D3D depth value.
-        // 0xFFFFFF ("clear to farthest") becomes about 0.0 here, which the flipped
-        // GEQUAL-style funcs pass.
+        // Reversed depth: far is 0, which the flipped compares pass.
         command_list_->ClearDepthStencilView(
             dsv, D3D12_CLEAR_FLAG_DEPTH, clear.reversed_depth, 0, num_rects, rects);
     }
@@ -7737,13 +7621,9 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_scissor_input_valid_ = true;
     }
 
-    // Per-draw XF viewport with its depth range: SMG clears depth by drawing fullscreen quads with
+    // Per-draw viewport with its depth range: the game clears depth by drawing fullscreen quads with
     // the state near == far == 1.0, so such a quad writes z = FAR whatever its geometry z.
-    // XF layout: wd, ht, zRange, xOrig, yOrig, farZ.
-    // Depth range (the REVERSED-Z form for backends
-    // without reversed-range support):
-    //   min_filter = (farZ - zRange) / 2^24,  max_filter = farZ / 2^24
-    //   MinDepth = 1 - max_filter,  MaxDepth = 1 - min_filter
+    // Reversed: MinDepth = 1 - far, MaxDepth = 1 - near.
     // Composes with the negated projection z (fill_projection): game near maps to the depth MaxDepth
     // side, game far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {

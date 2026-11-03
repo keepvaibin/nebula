@@ -502,14 +502,9 @@ public:
             scene_view_ = *view;
         }
     }
-    // copy-clear: color and 24-bit depth from the caller
-    // (converted depth24 / 0xFFFFFF into the D24 target).  The clear is scoped to
-    // the given rect in unscaled scene target pixels (w==0 -> full target), matching
-    // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
-    // .
+    // Colour from the caller, depth to far, within the rect in target pixels (w == 0: the whole target).
     void clear_scene(
         std::uint32_t clear_rgba,
-        std::uint32_t clear_depth,
         bool color_enable,
         bool alpha_enable,
         bool depth_enable,
@@ -673,13 +668,9 @@ private:
     // (required after a fullscreen transition with the flip model).
     void resize_swap_chain(UINT width, UINT height, bool force);
     // Brings the window and swap chain to the configured display (monitor,
-    // windowed/borderless/exclusive fullscreen, mode, window size) at a frame
+    // windowed or borderless, mode, window size) at a frame
     // boundary.
     void reconcile_display_state();
-    [[nodiscard]] bool enter_exclusive_fullscreen(
-        const std::wstring& monitor_device, unsigned width, unsigned height,
-        unsigned refresh_hz);
-    void leave_exclusive_fullscreen();
     void reap_debug_capture_writers(bool wait_for_all);
     void queue_debug_ppm_capture(
         const char* tag,
@@ -793,21 +784,16 @@ private:
     std::array<std::uint64_t, kFramesInFlight> fence_values_{};
     HANDLE fence_event_ = nullptr;
     HANDLE frame_latency_waitable_ = nullptr;
-    bool exclusive_fullscreen_active_ = false;
     // The display the window and swap chain were last brought to.
     struct AppliedDisplay {
         bool valid = false;
         unsigned mode = 0;
         std::array<char, 64> monitor{};
-        unsigned fullscreen_width = 0;
-        unsigned fullscreen_height = 0;
-        unsigned fullscreen_refresh_hz = 0;
         unsigned window_width = 0;
         unsigned window_height = 0;
     };
     AppliedDisplay applied_display_{};
     std::uint64_t display_checks_ = 0;
-    bool tearing_supported_ = false;
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> timestamp_query_heap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> timestamp_readback_;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
@@ -1055,7 +1041,7 @@ private:
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample
     };
     struct ReplayClear {
-        std::uint32_t rgba = 0, depth24 = 0;
+        std::uint32_t rgba = 0;
         bool color = false, alpha = false, depth = false;
         unsigned x = 0, y = 0, w = 0, h = 0;
         std::uint8_t format = 0;

@@ -66,7 +66,6 @@ std::atomic<std::int32_t> pointer_wheel{0};
 std::string native_settings_content_root;
 std::atomic<std::uintptr_t> settings_window{0};
 std::atomic<bool> borderless_active{false};
-std::atomic<bool> exclusive_fullscreen_active{false};
 std::atomic<std::uintptr_t> pointer_hwnd{0};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
@@ -319,9 +318,6 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
         return hz;
     }
     const MonitorInfo* monitor = settings_monitor(render);
-    if (render.display_mode == kDisplayExclusive && render.fullscreen_refresh_hz != 0u) {
-        return render.fullscreen_refresh_hz;
-    }
     return monitor != nullptr ? monitor->current.refresh_hz : 0u;
 }
 
@@ -349,17 +345,12 @@ const MonitorInfo* settings_monitor(const RenderConfig& render) {
     return find_monitor(s_settings_monitors, widen_utf8(render.monitor.data()));
 }
 
-// The picture size the settings target: the fullscreen mode, the monitor
-// (borderless) or the window.
+// The picture size the settings target: the monitor (borderless) or the window.
 std::pair<unsigned, unsigned> settings_output_size(const RenderConfig& render) {
     const MonitorInfo* monitor = settings_monitor(render);
     const unsigned desktop_w = monitor ? monitor->current.width : host_window::backbuffer_width;
     const unsigned desktop_h = monitor ? monitor->current.height : host_window::backbuffer_height;
     switch (render.display_mode) {
-    case kDisplayExclusive:
-        return render.fullscreen_width != 0u && render.fullscreen_height != 0u
-            ? std::pair{render.fullscreen_width, render.fullscreen_height}
-            : std::pair{desktop_w, desktop_h};
     case kDisplayBorderless:
         return {desktop_w, desktop_h};
     default:
@@ -372,10 +363,6 @@ float settings_render_fraction(const RenderConfig& render) {
     const MonitorInfo* monitor = settings_monitor(render);
     unsigned width = monitor ? monitor->current.width : host_window::backbuffer_width;
     unsigned height = monitor ? monitor->current.height : host_window::backbuffer_height;
-    if (render.display_mode == kDisplayExclusive && render.fullscreen_width != 0u) {
-        width = render.fullscreen_width;
-        height = render.fullscreen_height;
-    }
     return upscaler_render_fraction(render, width, height);
 }
 
@@ -508,11 +495,6 @@ unsigned pending_settings_changes() {
     unsigned changes = 0u;
     changes += d.display_mode != live.display_mode;
     changes += d.monitor != live.monitor;
-    changes += d.display_mode == kDisplayExclusive &&
-        (d.fullscreen_width != live.fullscreen_width ||
-         d.fullscreen_height != live.fullscreen_height);
-    changes += d.display_mode == kDisplayExclusive &&
-        d.fullscreen_refresh_hz != live.fullscreen_refresh_hz;
     changes += d.display_mode == kDisplayWindowed &&
         (d.window_width != live.window_width || d.window_height != live.window_height);
     changes += d.aspect_mode != live.aspect_mode;
@@ -907,17 +889,11 @@ void revert_display_settings() {
     const RenderConfig& previous = s_display_confirm_previous;
     render.display_mode = previous.display_mode;
     render.monitor = previous.monitor;
-    render.fullscreen_width = previous.fullscreen_width;
-    render.fullscreen_height = previous.fullscreen_height;
-    render.fullscreen_refresh_hz = previous.fullscreen_refresh_hz;
     render.window_width = previous.window_width;
     render.window_height = previous.window_height;
     set_render_config(render);
     s_settings_draft.display_mode = render.display_mode;
     s_settings_draft.monitor = render.monitor;
-    s_settings_draft.fullscreen_width = render.fullscreen_width;
-    s_settings_draft.fullscreen_height = render.fullscreen_height;
-    s_settings_draft.fullscreen_refresh_hz = render.fullscreen_refresh_hz;
     s_settings_draft.window_width = render.window_width;
     s_settings_draft.window_height = render.window_height;
     s_settings_save.dirty.store(true, std::memory_order_release);
@@ -957,9 +933,6 @@ void apply_native_settings_draft() {
     RenderConfig applied = live;
     applied.display_mode = next.display_mode;
     applied.monitor = next.monitor;
-    applied.fullscreen_width = next.fullscreen_width;
-    applied.fullscreen_height = next.fullscreen_height;
-    applied.fullscreen_refresh_hz = next.fullscreen_refresh_hz;
     applied.window_width = next.window_width;
     applied.window_height = next.window_height;
     applied.aspect_mode = next.aspect_mode;
@@ -3443,11 +3416,10 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     OpenedWindow opened;
     quit_request.store(false, std::memory_order_release);
     const bool hidden_window = hidden_window_mode_enabled();
-    // The configured monitor and display mode. Exclusive fullscreen starts as borderless on that monitor; the first
-    // frame's display check switches the mode once the swap chain exists. Hidden test windows stay windowed.
+    // The configured monitor and display mode. Hidden test windows stay windowed.
     const RenderConfig start_config = get_render_config();
     const unsigned start_mode = hidden_window
-        ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayExclusive);
+        ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayBorderless);
     const bool fullscreen_window = start_mode != kDisplayWindowed;
     const std::vector<MonitorInfo> start_monitors = enumerate_monitors();
     store_monitor_cache(start_monitors);
@@ -3686,8 +3658,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         clear_pointer_buttons();
     }
     if (msg == WM_EXITSIZEMOVE &&
-        !host_window::borderless_active.load(std::memory_order_acquire) &&
-        !host_window::exclusive_fullscreen_active.load(std::memory_order_acquire)) {
+        !host_window::borderless_active.load(std::memory_order_acquire)) {
         // A size the player drags the window to becomes the windowed size.
         RECT client{};
         if (GetClientRect(hwnd, &client) && client.right > 0 && client.bottom > 0) {

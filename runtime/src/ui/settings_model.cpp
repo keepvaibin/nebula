@@ -51,9 +51,6 @@ float step_gain(float current, int delta) {
 
 bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
     return a.display_mode != b.display_mode || a.monitor != b.monitor ||
-        a.fullscreen_width != b.fullscreen_width ||
-        a.fullscreen_height != b.fullscreen_height ||
-        a.fullscreen_refresh_hz != b.fullscreen_refresh_hz ||
         (a.display_mode == render::kDisplayWindowed &&
          (a.window_width != b.window_width || a.window_height != b.window_height));
 }

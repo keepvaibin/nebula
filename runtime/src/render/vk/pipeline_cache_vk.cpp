@@ -429,7 +429,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << rs.samples_log2);
 
-    // Reversed-Z against the game's depth24 (the projection negates z; RendererVk's viewport maps the game's depth range), so the
+    // Reversed-Z against the game's depth (the projection negates z; RendererVk's viewport maps the game's depth range), so the
     // compare directions flip, as on D3D12.
     static constexpr VkCompareOp kDepthCompare[8] = {
         VK_COMPARE_OP_NEVER,   VK_COMPARE_OP_GREATER,   VK_COMPARE_OP_EQUAL,         VK_COMPARE_OP_GREATER_OR_EQUAL,

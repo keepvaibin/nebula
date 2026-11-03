@@ -2183,7 +2183,7 @@ uint32_t svc_screen_probe_results(void*, uint32_t channel, NebulaScreenProbe* pr
 }
 
 // A pass into a texture target (E-07): its start and end as records in draw order.
-void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba, uint32_t clear_z) {
+void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
@@ -2192,11 +2192,10 @@ void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint
     record.target_width = width;
     record.target_height = height;
     record.target_clear_rgba = clear_rgba;
-    record.target_clear_z = clear_z & 0xFFFFFFu;
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)key, (void)width, (void)height, (void)clear_rgba, (void)clear_z;
+    (void)key, (void)width, (void)height, (void)clear_rgba;
 #endif
 }
 
@@ -2214,18 +2213,17 @@ void svc_target_end(void*, uint64_t key, uint32_t channels) {
 #endif
 }
 
-void svc_target_clear(void*, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels) {
+void svc_target_clear(void*, uint32_t clear_rgba, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::TargetClear;
     record.target_clear_rgba = clear_rgba;
-    record.target_clear_z = clear_z & 0xFFFFFFu;
     record.target_channels = static_cast<std::uint8_t>(channels & 7u);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)clear_rgba, (void)clear_z, (void)channels;
+    (void)clear_rgba, (void)channels;
 #endif
 }
 
@@ -2246,7 +2244,7 @@ void svc_frame_read(void*, uint64_t key, uint32_t channels, uint32_t flags) {
 
 // A clear of the frame's rectangle.
 void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
-                     uint32_t clear_z, uint32_t channels) {
+                     uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
@@ -2256,12 +2254,11 @@ void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_
     record.target_width = width;
     record.target_height = height;
     record.target_clear_rgba = clear_rgba;
-    record.target_clear_z = clear_z & 0xFFFFFFu;
     record.target_channels = static_cast<std::uint8_t>(channels & 7u);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)left, (void)top, (void)width, (void)height, (void)clear_rgba, (void)clear_z, (void)channels;
+    (void)left, (void)top, (void)width, (void)height, (void)clear_rgba, (void)channels;
 #endif
 }
 

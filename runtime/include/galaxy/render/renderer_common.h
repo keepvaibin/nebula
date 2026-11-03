@@ -107,7 +107,7 @@ struct SceneClearValues {
 };
 // A clear's values as given; on a frame without alpha (frame_format 0, 1 with alpha) alpha 255.
 [[nodiscard]] SceneClearValues make_scene_clear_values(
-    std::uint32_t rgba, std::uint32_t depth24,
+    std::uint32_t rgba,
     std::uint8_t frame_format) noexcept;
 
 // The scene target conversion shader's root constants (16 dwords).

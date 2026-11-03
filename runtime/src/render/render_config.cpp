@@ -199,9 +199,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         const std::size_t length = std::min(std::strlen(val), cfg.gpu.size() - 1u);
         std::memcpy(cfg.gpu.data(), val, length);
     }
-    else if (std::strcmp(key, "fullscreen_width") == 0) cfg.fullscreen_width = std::min(parse_uint(val, 0u), 16384u);
-    else if (std::strcmp(key, "fullscreen_height") == 0) cfg.fullscreen_height = std::min(parse_uint(val, 0u), 16384u);
-    else if (std::strcmp(key, "fullscreen_refresh_hz") == 0) cfg.fullscreen_refresh_hz = std::min(parse_uint(val, 0u), 1000u);
     else if (std::strcmp(key, "aspect") == 0) {
         cfg.aspect_mode = parse_aspect_mode(val, cfg.aspect_mode);
     }
@@ -665,9 +662,6 @@ bool save_render_config_to_file() {
              << "display_mode=" << cfg.display_mode << '\n'
              << "monitor=" << cfg.monitor.data() << '\n'
              << "gpu=" << gpu.data() << '\n'
-             << "fullscreen_width=" << cfg.fullscreen_width << '\n'
-             << "fullscreen_height=" << cfg.fullscreen_height << '\n'
-             << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
              << "aspect=" << kAspectNames[std::min(cfg.aspect_mode, kAspectModeCount - 1u)] << '\n';
     if (!contents) {
         return false;

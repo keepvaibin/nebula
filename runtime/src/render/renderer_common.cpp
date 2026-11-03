@@ -314,15 +314,13 @@ SceneConversionShaderConstants make_screen_probe_constants(float x, float y, con
     }};
 }
 
-SceneClearValues make_scene_clear_values(std::uint32_t rgba,
-    std::uint32_t depth24, std::uint8_t frame_format) noexcept {
+SceneClearValues make_scene_clear_values(std::uint32_t rgba, std::uint8_t frame_format) noexcept {
     const std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
     const std::uint32_t b = (rgba >> 8u) & 255u;
     const std::uint32_t a = (frame_format & 1u) != 0u ? rgba & 255u : 255u;
-    depth24 &= 0xffffffu;
     return {{{static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
               static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f}},
-            1.0f - static_cast<float>(depth24) / 16777216.0f};
+            0.0f};
 }
 
 std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const noexcept {

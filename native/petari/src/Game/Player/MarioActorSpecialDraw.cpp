@@ -122,7 +122,7 @@ void MarioActor::captureScreenBox() const {
 
     J3DNativeTarget::read(_B44, NEBULA_TARGET_RGB);
     // The box's alpha becomes the model's mask; its depth follows the depth writes in force.
-    J3DNativeTarget::clearFrame((s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), 0, 0xFFFFFF,
+    J3DNativeTarget::clearFrame((s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), 0,
                                 NEBULA_CLEAR_ALPHA | (J3DNativeState::pass()->depth_write != 0 ? NEBULA_CLEAR_DEPTH : 0));
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
