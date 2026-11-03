@@ -11,8 +11,11 @@
         } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {
             MR::forceKillPlayerByAbyss();
         } else if (action.kind == NEBULA_TEST_GET_STAR || action.kind == NEBULA_TEST_GET_GRAND_STAR) {
-            sPendingStar = action.kind;
-            sPendingStarId = action.scenario;
+            // The title's stage is no galaxy (a run that reached a game over): no star belongs to it.
+            if (!MR::isStageFileSelect()) {
+                sPendingStar = action.kind;
+                sPendingStarId = action.scenario;
+            }
         } else if (action.kind == NEBULA_TEST_SET_PLAYER) {
             // GameDataHolder::isDataMario reads the file's name ("mario1" or "luigi1").
             nebula_snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "%s1",
@@ -86,6 +89,17 @@
             }
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER_WATER || action.kind == NEBULA_TEST_PLACE_PLAYER_ACTOR) {
             testWalkPlace(action.kind, action.scenario, action.position[0] != 0.0f);
+        } else if (action.kind == NEBULA_TEST_APPEAR_ACTOR) {
+            AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
+            for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {
+                LiveActor* pActor = pGroup->getActor(i);
+                if (pActor != nullptr && pActor->mModelManager != nullptr && MR::isDead(pActor) &&
+                    MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
+                    JUTNativeLog("test: appear %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
+                             pActor->mPosition.z);
+                    pActor->appear();
+                }
+            }
         } else if (action.kind == NEBULA_TEST_KILL_ACTOR) {
             // Killed as their defeat ends (LiveActor::kill): what they leave appears, a KuriboChief's key.
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
@@ -102,7 +116,8 @@
             // The shaker keeps its owner only to stop it; nothing stops this one.
             MR::shakeCameraInfinity(nullptr, 0.2f, 2.0f);
         } else if (action.kind == NEBULA_TEST_START_MOVIE) {
-            if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
+            if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder) &&
+                MR::getSceneObj< MoviePlayingSequenceHolder >(SceneObj_MoviePlayingSequenceHolder)->getSequence(action.scenario) != nullptr) {
                 MR::startMovie(action.scenario);
             } else {
                 JUTNativeLog("test: no movie sequence in this stage\n");
