@@ -562,12 +562,30 @@ fs::path gSaveRoot;
 
 // The game's save folder under it (title/00010000/<the game's four-character code in hex>/data, as an install has it).
 std::string gSaveDataPath;
+// The native switches the enabled mods' code patches set (NEBULA_PATCH_*), for the session.
+std::map<std::uint32_t, std::uint32_t> gModPatches;
+
+int svc_code_patch(void*, uint32_t id, uint32_t* value) {
+    const auto it = gModPatches.find(id);
+    if (it == gModPatches.end()) {
+        return 0;
+    }
+    if (value != nullptr) {
+        *value = it->second;
+    }
+    return 1;
+}
+
+// A mod's own save folder (Riivolution's savegame): the game's save files go there instead.
+fs::path gModSaveRoot;
 
 bool nand_path(const char* path, fs::path* out) {
     if (path == nullptr || path[0] != '/') {
         return false;
     }
-    fs::path result = gSaveRoot;
+    fs::path result = !gModSaveRoot.empty() && !gSaveDataPath.empty() && std::string_view(path).starts_with(gSaveDataPath)
+                          ? gModSaveRoot
+                          : gSaveRoot;
     for (const fs::path& part : fs::path(path + 1)) {
         if (part == ".." || part == ".") {
             return false;
@@ -3627,6 +3645,97 @@ std::string json_text(std::string_view text) {
 }
 
 
+// The mods' disc files, cooked once into a store the game reads over its own (cook/overlay.rs): by the cooker beside
+// this program, again when what they change has changed. A failure leaves the game as it is and says why in the log.
+void prepare_mod_files(const fs::path& settings_folder, const std::string& game_id) {
+    const std::string language = galaxy::mods::language_folder(
+        game_id, static_cast<unsigned>(galaxy::game_language_resolved(galaxy::get_runtime_settings().language)));
+    const galaxy::mods::DiscPlan plan = galaxy::mods::plan_disc_changes(gPak.store, game_id, language);
+    gModPatches = plan.native_patches;
+    if (!plan.save_folder.empty() && !gSaveDataPath.empty()) {
+        // A clone starts from the player's save the first time, the rest starts new; the player's stays as it is.
+        const fs::path mine = gSaveRoot / gSaveDataPath.substr(1);
+        const fs::path theirs = plan.save_folder / gSaveDataPath.substr(1);
+        std::error_code save_error;
+        if (!fs::exists(theirs, save_error)) {
+            fs::create_directories(theirs, save_error);
+            if (plan.save_clone) {
+                fs::copy(mine, theirs, fs::copy_options::recursive | fs::copy_options::skip_existing, save_error);
+            }
+        }
+        gModSaveRoot = plan.save_folder;
+        log_line("mods:", "saves go to the mod's save folder");
+    }
+    for (const std::string& note : plan.notes) {
+        log_line("mods:", note.c_str());
+    }
+    if (plan.files.empty()) {
+        return;
+    }
+    const fs::path folder = settings_folder / "mods" / ".cooked";
+    const fs::path overlay = folder / "mods.pak";
+    const fs::path signature_file = folder / "mods.signature";
+    const std::string signature = galaxy::mods::plan_signature(plan, game_id);
+    std::error_code error;
+    fs::create_directories(folder, error);
+    std::string kept;
+    {
+        std::ifstream in(signature_file, std::ios::binary);
+        kept.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    if (kept != signature || !fs::is_regular_file(overlay, error)) {
+        const fs::path plan_file = folder / "mods.plan";
+        if (!galaxy::io::write_file_atomically(plan_file, galaxy::mods::plan_text(plan, game_id))) {
+            log_line("mods:", "the plan could not be written");
+            return;
+        }
+        fs::remove(signature_file, error);
+#if defined(_WIN32)
+        wchar_t exe[MAX_PATH] = {};
+        GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        const fs::path cooker = fs::path(exe).parent_path() / "nebula-import.exe";
+        std::wstring command = L"\"" + cooker.wstring() + L"\" overlay \"" + plan_file.wstring() + L"\" --output \"" +
+                               overlay.wstring() + L"\"";
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process{};
+        DWORD exit_code = 1;
+        if (CreateProcessW(cooker.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
+                           &startup, &process)) {
+            WaitForSingleObject(process.hProcess, INFINITE);
+            GetExitCodeProcess(process.hProcess, &exit_code);
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+        } else {
+            log_line("mods:", "the cooker (nebula-import) could not start");
+        }
+        if (exit_code != 0u) {
+            log_line("mods:", "the mods' files could not be cooked: the game runs without them");
+            return;
+        }
+#else
+        // The importer's library, as the launcher loads it.
+        using CookOverlay = int (*)(const char*, const char*);
+        void* const library = dlopen("libnebula_import.so", RTLD_NOW | RTLD_LOCAL);
+        const auto cook = library != nullptr ? reinterpret_cast<CookOverlay>(dlsym(library, "nebula_cook_overlay")) : nullptr;
+        if (cook == nullptr || cook(utf8_of(plan_file).c_str(), utf8_of(overlay).c_str()) != 0) {
+            log_line("mods:", "the mods' files could not be cooked: the game runs without them");
+            return;
+        }
+#endif
+        if (!galaxy::io::write_file_atomically(signature_file, signature)) {
+            log_line("mods:", "the signature could not be written");
+        }
+    }
+    if (gPak.store.attach_overlay(overlay)) {
+        char text[96];
+        std::snprintf(text, sizeof(text), "%zu files applied", plan.files.size());
+        log_line("mods:", text);
+    } else {
+        log_line("mods:", "the mods' files could not be read: the game runs without them");
+    }
+}
+
 // The game id from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that is not one:
 // the tools then work without it.
 bool read_game_id(const fs::path& path, std::string& id) {
@@ -3690,7 +3799,8 @@ int run_mods_tool() {
                    ",\"order\":" + std::to_string(mod.order) + ",\"riivolution\":" + (mod.riivolution ? "true" : "false") +
                    ",\"files\":" + ((mod.files || mod.loose) ? "true" : "false") + ",\"textures\":" +
                    (mod.textures ? "true" : "false") + ",\"movies\":" + (mod.movies ? "true" : "false") +
-                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
+                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"native_patches\":" +
+                   std::to_string(mod.native_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
             for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
             out += "],\"options\":[";
             for (std::size_t o = 0; o < mod.options.size(); ++o) {
@@ -3911,6 +4021,7 @@ int main(int argc, char** argv) {
                                                              galaxy::mods::texture_folder_categories_off(mods));
                 galaxy::render::set_movie_mod_folders(galaxy::mods::movie_folders(mods));
             }
+            prepare_mod_files(settings_folder, game_id);
         }
         {
             // The session's mods, for crash reports: one line each, and whether one changes the game itself.
@@ -4007,6 +4118,7 @@ int main(int argc, char** argv) {
     services.clock_ns = svc_clock_ns;
     services.calendar_ns = svc_calendar_ns;
     services.stripe_particle = svc_stripe_particle;
+    services.code_patch = svc_code_patch;
     services.asset_find = svc_asset_find;
     services.asset_entry = svc_asset_entry;
     services.asset_child = svc_asset_child;

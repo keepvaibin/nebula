@@ -54,6 +54,14 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             println!("game.pak: {size} bytes");
             Ok(ExitCode::SUCCESS)
         }
+        [command, plan, option, output] if command == "overlay" && option == "--output" => {
+            let (stats, failed) = cook::overlay::cook_plan(Path::new(plan), Path::new(output))?;
+            for (path, reason) in &failed {
+                println!("LEFT OUT {path}: {reason}");
+            }
+            println!("{}", stats.summary());
+            Ok(ExitCode::SUCCESS)
+        }
         [command, input, option, output] if command == "cook" && option == "--output" => {
             println!("STEP 1/1 Cooking the game files");
             let mut reported = 0u64;

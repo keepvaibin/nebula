@@ -11,6 +11,7 @@ pub mod formats;
 pub mod material;
 pub mod mesh;
 pub mod native_data;
+pub mod overlay;
 pub mod store;
 pub mod texture;
 pub mod thp;

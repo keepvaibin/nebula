@@ -28,11 +28,31 @@
 #include <string_view>
 #include <vector>
 
+namespace galaxy::disc {
+class AssetStore;
+}
+
 namespace galaxy::mods {
 
 // Whether one part of a path a mod names stays one plain name inside its folder: no drive or stream (':'), separator,
 // name of only dots and spaces, or device name.
 [[nodiscard]] bool safe_path_part(std::string_view part);
+
+// nebula_game_api.h's NEBULA_PATCH_*: native equivalents of the code patches mods.cpp recognises.
+enum : std::uint32_t {
+    kPatchFlipPanelGroup = 1,
+    kPatchFlipPanelObserverGroup,
+    kPatchWaterBazookaShotFlag,
+    kPatchKameckBarrierOffsetY,
+    kPatchSkeletalFishBabyNoBubble,
+    kPatchDodoryuShellOnly,
+    kPatchMissStarPieces,
+    kPatchNoHiddenStarTable,
+    kPatchNoSuddenDeathDodoryu,
+    kPatchBegomanFireProof,
+    kPatchMessengerAlwaysEx,
+    kPatchMessengerExOneUps,
+};
 
 // A Riivolution option (its XML's options): its choices; `selected` 0 is off, else a choice (1-based).
 struct ModOption {
@@ -70,6 +90,7 @@ struct ModInfo {
     bool loose = false;                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
+    unsigned native_patches = 0;              // patches over the game's code that the game has natively
     unsigned code_patches = 0;                // patches over the game's original code: the mod stays off (problem says so)
     unsigned changed_files = 0;               // disc files it changes (its choices as they stand)
     unsigned changed_textures = 0;            // textures its packs replace
@@ -127,6 +148,26 @@ struct SessionMods {
     unsigned unsupported = 0;
 };
 [[nodiscard]] SessionMods session_mods();
+// What the enabled mods change at this start, the one higher in the list winning a file: each disc path and the file
+// that holds it. Records the session. `language` is the folder of the language played, `store` the game's files.
+struct DiscPlan {
+    struct File {
+        std::string disc;
+        std::filesystem::path host;
+    };
+    std::vector<File> files;
+    std::vector<std::string> notes;  // what could not apply, for the log
+    unsigned code_patches = 0;
+    std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to
+    std::filesystem::path save_folder;
+    bool save_clone = true;
+};
+[[nodiscard]] DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::string& game_id,
+                                         const std::string& language);
+// The plan as the cooker reads it (its first line the game id), and what names this plan's result: the files' sizes
+// and times with it, so that a changed mod is cooked again.
+[[nodiscard]] std::string plan_text(const DiscPlan& plan, const std::string& game_id);
+[[nodiscard]] std::string plan_signature(const DiscPlan& plan, const std::string& game_id);
 // Whether `mods` (the settings' current choices) differ from what this session started with (a restart applies them).
 [[nodiscard]] bool mods_differ_from_session(std::span<const ModInfo> mods);
 

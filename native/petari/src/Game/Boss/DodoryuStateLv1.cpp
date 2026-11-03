@@ -344,7 +344,8 @@ bool DodoryuStateLv1::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         return true;
     }
 
-    if (MR::isMsgPlayerHitAll(msg)) {
+    if (NebulaHost::codePatch(NEBULA_PATCH_DODORYU_SHELL_ONLY, nullptr) ? MR::isMsgJetTurtleAttack(msg)
+                                                                      : MR::isMsgPlayerHitAll(msg)) {
         _98.set(pReceiver->mPosition - pSender->mPosition);
 
         if (!calcVerticalizedDir(&_98, _98)) {
