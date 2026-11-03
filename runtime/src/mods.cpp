@@ -1382,6 +1382,11 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
 
 std::string plan_text(const DiscPlan& plan, const std::string& game_id) {
     std::string text = game_id + "\n";
+    {
+        Settings& s = settings();
+        const std::lock_guard<std::mutex> lock(s.mutex);
+        if (!s.store.empty()) text += "base\t" + galaxy::path_text(s.store) + "\n";
+    }
     for (const DiscPlan::File& file : plan.files) {
         text += file.disc + "\t" + galaxy::path_text(file.host) + "\n";
     }

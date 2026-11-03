@@ -9,9 +9,17 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// Where the store keeps the disc's wave layout.
+pub const WAVE_LAYOUT: &str = "NebulaData/WaveLayout.txt";
+
 pub struct Change {
     pub path: String,
     pub source: PathBuf,
+}
+
+/// The game's store a plan names (`base<TAB>path`, after the game id), if it does.
+fn plan_base(text: &str) -> Option<PathBuf> {
+    text.lines().nth(1)?.strip_prefix("base\t").map(PathBuf::from)
 }
 
 /// The plan's game id and files.
@@ -22,7 +30,7 @@ pub fn read_plan(text: &str) -> Result<(String, Vec<Change>)> {
         bail!("the plan's game id is {game_id:?}");
     }
     let mut changes = Vec::new();
-    for line in lines.filter(|line| !line.is_empty()) {
+    for line in lines.filter(|line| !line.is_empty() && !line.starts_with("base\t")) {
         let (path, source) = line.split_once('\t').with_context(|| format!("the plan's line {line:?}"))?;
         changes.push(Change { path: path.trim_start_matches('/').to_string(), source: PathBuf::from(source) });
     }
@@ -34,10 +42,13 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
     if cooks(&change.path) || archive::is_compressed(&bytes) {
         return cook_entry(&change.path, bytes, stats);
     }
+    if bytes.is_empty() {
+        bail!("the mod's file is empty");
+    }
     if change.path.to_ascii_lowercase().ends_with(".aw") {
         let places = waves
             .get(&audio_data::wave_archive_key(&change.path))
-            .context("its wave layout is in the sound archive (AudioRes/SMR.szs), which the mod does not bring")?;
+            .context("its wave layout is not known: the mod brings no sound archive, and the game was imported before Nebula kept the layout (import it again)")?;
         let cooked = audio_data::wave_archive(&bytes, places).context("wave archive")?;
         return Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]);
     }
@@ -46,7 +57,7 @@ fn cook_change(change: &Change, bytes: Vec<u8>, waves: &BTreeMap<String, Vec<aud
 
 /// Writes the store. A file that cannot be cooked is left out and named, so that the rest of a mod still loads; its
 /// paths and reasons are returned.
-pub fn write_overlay(game_id: &str, changes: &[Change], output: &Path, stats: &mut Stats) -> Result<Vec<(String, String)>> {
+pub fn write_overlay(game_id: &str, changes: &[Change], base: Option<&Path>, output: &Path, stats: &mut Stats) -> Result<Vec<(String, String)>> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("{} cannot be created", parent.display()))?;
     }
@@ -54,7 +65,11 @@ pub fn write_overlay(game_id: &str, changes: &[Change], output: &Path, stats: &m
     let mut pak = File::create(&temporary).with_context(|| format!("{} cannot be created", temporary.display()))?;
     pak.write_all(&[0u8; store::HEADER as usize])?;
     let mut at = store::HEADER.div_ceil(ALIGN) * ALIGN;
+    // The game's layout (a store from before it kept one has none), unless a mod brings its own sound archive.
     let mut waves = BTreeMap::new();
+    if let Some(bytes) = base.and_then(|base| store::read_file(base, WAVE_LAYOUT).ok()) {
+        waves = audio_data::parse_layout_text(&String::from_utf8_lossy(&bytes)).context("the game's wave layout")?;
+    }
     for change in changes.iter().filter(|c| c.path.to_ascii_lowercase().ends_with("audiores/smr.szs")) {
         let bytes = fs::read(&change.source).with_context(|| format!("{} cannot be read", change.source.display()))?;
         waves = audio_data::wave_layout(&bytes).context("the mod's sound archive")?;
@@ -92,7 +107,7 @@ pub fn cook_plan(plan: &Path, output: &Path) -> Result<(Stats, Vec<(String, Stri
     let text = fs::read_to_string(plan).with_context(|| format!("{} cannot be read", plan.display()))?;
     let (game_id, changes) = read_plan(&text)?;
     let mut stats = Stats::default();
-    let failed = write_overlay(&game_id, &changes, output, &mut stats)?;
+    let failed = write_overlay(&game_id, &changes, plan_base(&text).as_deref(), output, &mut stats)?;
     Ok((stats, failed))
 }
 
@@ -109,6 +124,9 @@ mod tests {
         assert_eq!(changes[1].source, PathBuf::from("/m/B.arc"));
         assert!(read_plan("").is_err());
         assert!(read_plan("short\n").is_err());
+        let with_base = "RMGE01\nbase\tD:/g/game.pak\nStageData/A.arc\t/m/A.arc\n";
+        assert_eq!(plan_base(with_base), Some(PathBuf::from("D:/g/game.pak")));
+        assert_eq!(read_plan(with_base).unwrap().1.len(), 1);
     }
 
     #[test]
@@ -123,7 +141,7 @@ mod tests {
         ];
         let output = dir.join("mods.pak");
         let mut stats = Stats::default();
-        let failed = write_overlay("RMGE01", &changes, &output, &mut stats).unwrap();
+        let failed = write_overlay("RMGE01", &changes, None, &output, &mut stats).unwrap();
         assert_eq!(failed.len(), 1);
         assert_eq!(failed[0].0, "StageData/missing.txt");
         assert_eq!(store::read_file(&output, "StageData/note.txt").unwrap(), b"hello");
