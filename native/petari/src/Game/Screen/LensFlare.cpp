@@ -317,6 +317,10 @@ namespace MR {
         }
 
         LensFlareDirector* pDirector = ::getLensFlareDirector();
+        if (pDirector->mBrightObjCount == static_cast< u32 >(pDirector->mBrightObjArray.size())) {
+            pDirector->mBrightObjArray.grow();
+        }
+
         pDirector->mBrightObjArray[pDirector->mBrightObjCount++] = pBrightObj;
     }
 
