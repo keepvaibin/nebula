@@ -62,7 +62,7 @@ pub fn cook_model(bytes: &[u8]) -> Result<Vec<u8>> {
                 let (used_maps, used_coords) = used_masks(&p);
                 descriptors.extend_from_slice(&[used_maps, used_coords, 0, 0]);
                 for pass in 0..64 {
-                    let id = cooked_shader(&pass_program(&p, pass)).unwrap_or(0);
+                    let id = pass_shader(&pass_program(&p, pass), pass);
                     descriptors.extend_from_slice(&id.to_le_bytes());
                 }
             }
@@ -619,21 +619,52 @@ pub fn pass_program(source: &[u8], pass: u32) -> Vec<u8> {
     p
 }
 
-/// Resolve a source material directly to this build's precompiled J3D shader.
-/// The one-based ID stays independent of the runtime API enum's base value.
-pub fn cooked_shader(bytes: &[u8]) -> Result<u32> {
+/// While set, a material this build has no shader for is noted here instead of refused: the tool that lists what mods
+/// need (`nebula-import mod-materials`), never a game's cook.
+pub static NOTE_MISSING: std::sync::Mutex<Option<Vec<[u8; PROGRAM_BYTES]>>> = std::sync::Mutex::new(None);
+/// The same for a material's pass variants, with the pass (a file's refusal never comes from these: the game logs and
+/// skips a pass with no shader).
+pub static NOTE_PASSES: std::sync::Mutex<Option<Vec<(u8, [u8; PROGRAM_BYTES])>>> = std::sync::Mutex::new(None);
+
+fn pass_shader(bytes: &[u8], pass: u32) -> u32 {
+    match built_in_shader(bytes) {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            if let (Some(noted), Ok(program)) = (NOTE_PASSES.lock().unwrap_or_else(|e| e.into_inner()).as_mut(), normalize_program(bytes)) {
+                noted.push((pass as u8, program));
+            }
+            0
+        }
+        Err(_) => 0,
+    }
+}
+
+fn built_in_shader(bytes: &[u8]) -> Result<Option<u32>> {
     const KEYS: &[(u64, u32)] = include!("material_shader_keys.inc");
     let hash = shader_key(bytes)?
         .iter()
         .fold(0xcbf29ce484222325u64, |h, &b| {
             (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
         });
-    let index = KEYS
-        .binary_search_by_key(&hash, |&(key, _)| key)
-        .map_err(|_| {
-            anyhow::anyhow!("source material shader {hash:016x} absent from this build")
-        })?;
-    Ok(KEYS[index].1)
+    Ok(KEYS.binary_search_by_key(&hash, |&(key, _)| key).ok().map(|index| KEYS[index].1))
+}
+
+/// Resolve a source material directly to this build's precompiled J3D shader.
+/// The one-based ID stays independent of the runtime API enum's base value.
+pub fn cooked_shader(bytes: &[u8]) -> Result<u32> {
+    if let Some(id) = built_in_shader(bytes)? {
+        return Ok(id);
+    }
+    if let Some(noted) = NOTE_MISSING.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
+        noted.push(normalize_program(bytes)?);
+        return Ok(1);
+    }
+    let hash = shader_key(bytes)?
+        .iter()
+        .fold(0xcbf29ce484222325u64, |h, &b| {
+            (h ^ u64::from(b)).wrapping_mul(0x100000001b3)
+        });
+    bail!("source material shader {hash:016x} absent from this build");
 }
 
 /// The build's shader table, passed explicitly so a cook cannot silently use a

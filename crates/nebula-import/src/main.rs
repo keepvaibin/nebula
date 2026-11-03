@@ -54,6 +54,28 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             println!("game.pak: {size} bytes");
             Ok(ExitCode::SUCCESS)
         }
+        [command, plan, option, output] if command == "mod-materials" && option == "--output" => {
+            // The materials a plan's models need that this build has no shader for, as records for
+            // tools/dev/gen_j3d_materials.py append.
+            *cook::material::NOTE_MISSING.lock().unwrap() = Some(Vec::new());
+            *cook::material::NOTE_PASSES.lock().unwrap() = Some(Vec::new());
+            let scratch = Path::new(output).with_extension("scratch");
+            cook::overlay::cook_plan(Path::new(plan), &scratch)?;
+            let _ = std::fs::remove_file(&scratch);
+            let noted = cook::material::NOTE_MISSING.lock().unwrap().take().unwrap_or_default();
+            let passes = cook::material::NOTE_PASSES.lock().unwrap().take().unwrap_or_default();
+            println!("{} materials without a shader, {} pass variants", noted.len(), passes.len());
+            std::fs::write(output, noted.concat())?;
+            let mut records = Vec::new();
+            for (pass, program) in passes {
+                records.push(pass);
+                records.extend_from_slice(&program);
+            }
+            let mut name = output.clone();
+            name.push(".passes");
+            std::fs::write(name, records)?;
+            Ok(ExitCode::SUCCESS)
+        }
         [command, plan, option, output] if command == "overlay" && option == "--output" => {
             let (stats, failed) = cook::overlay::cook_plan(Path::new(plan), Path::new(output))?;
             for (path, reason) in &failed {
