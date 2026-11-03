@@ -772,7 +772,7 @@ void report_thread_cpu(double tsc_hz) {
     std::vector<ThreadSample> threads;
     ULONG needed = 0;
     LONG status = system_query != nullptr ? system_query(5, buffer.data(), (ULONG)buffer.size(), &needed) : -1;
-    if (status == (LONG)0xC0000004 /* STATUS_INFO_LENGTH_MISMATCH */ && needed != 0) {
+    if (status == static_cast<LONG>((3u << 30) | 4u) /* STATUS_INFO_LENGTH_MISMATCH */ && needed != 0) {
         buffer.resize(needed + (1u << 20));
         status = system_query(5, buffer.data(), (ULONG)buffer.size(), &needed);
     }
@@ -1235,7 +1235,9 @@ bool retry_start_for_gpu_memory(const std::string& reason) {
     static const bool test_once = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_START_NO_GPU_MEMORY")) != nullptr;
     const char* before = std::getenv("NEBULA_GPU_START_RETRIES");
     const int count = before != nullptr ? std::atoi(before) : 0;
-    const bool wanted = reason.find("0x8007000E") != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
+    char out_of_memory[16];
+    std::snprintf(out_of_memory, sizeof(out_of_memory), "0x%08lX", static_cast<unsigned long>(E_OUTOFMEMORY));
+    const bool wanted = reason.find(out_of_memory) != std::string::npos || reason.find("VK_ERROR_OUT_OF") != std::string::npos ||
                         reason.find("VkResult -1") != std::string::npos || reason.find("VkResult -2") != std::string::npos ||
                         (test_once && count == 0);
     if (!wanted || count >= 5) {

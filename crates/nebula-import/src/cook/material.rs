@@ -279,8 +279,8 @@ impl<'a> Mat3<'a> {
             5..=16 => 16,
             _ => bail!("unsupported stage capacity"),
         };
-        let color = flags & 0xc0000000;
-        if color == 0xc0000000 {
+        let color = flags & (3u32 << 30);
+        if color == 3u32 << 30 {
             bail!("unsupported color block flags");
         }
         let mut p = [0u8; PROGRAM_BYTES];

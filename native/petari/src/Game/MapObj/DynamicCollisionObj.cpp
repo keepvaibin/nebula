@@ -118,7 +118,7 @@ void DynamicCollisionObj::updateCollisionHeader() {
     // Find highest number of bits to shift
     u32 max_entropy = 0;
     for (u32 component = 0; component < 3; component++) {
-        u32 bits_sel = 0x80000000;
+        u32 bits_sel = 1u << 31;
         u32 mask_sel = 0xFFFFFFFF;
         u32 val = masks[component];
         u32 i = 0;
@@ -159,9 +159,9 @@ void DynamicCollisionObj::createCollision() {
     u16* u16array = new (4) u16[v + 3];
     mKCLFile->mOctree = u16array;
 
-    // One leaf octree entry, 0x80000002: the list two bytes on. KCollisionServer reads entries in host order, so the s32
+    // One leaf octree entry (the top bit): the list two bytes on. KCollisionServer reads entries in host order, so the s32
     // is written.
-    writeBytes< s32 >(u16array, static_cast< s32 >(0x80000002));
+    writeBytes< s32 >(u16array, static_cast< s32 >((1u << 31) | 2u));
 
     s32 count = v;
     for (s32 i = 0; i <= v; i++) {

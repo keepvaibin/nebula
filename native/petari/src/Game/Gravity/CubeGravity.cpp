@@ -160,7 +160,7 @@ bool CubeGravity::calcEdgeGravity(const TVec3f& rPosition, s32 area, TVec3f* pDe
     // return here. The intent is that area should be neither even nor negative, since all edges
     // are odd and positive. However, this mistake does not really matter since the switch will
     // return if this does not.
-    if (!(((area & 1) ^ ((area & 0x80000000) >> 31)) - ((area & 0x80000000) >> 31)) ||
+    if (!(((area & 1) ^ ((area >> 31) & 1)) - ((area >> 31) & 1)) ||
         area == ENCODE_REGION(REGION_BETWEEN_X, REGION_BETWEEN_Y, REGION_BETWEEN_Z)) {
         return false;
     }

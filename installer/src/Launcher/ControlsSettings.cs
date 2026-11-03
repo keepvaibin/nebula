@@ -680,7 +680,7 @@ namespace Nebula.Launcher
 
         private void TryOpen(string path)
         {
-            var handle = CreateFileW(path, 0xC0000000, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
+            var handle = CreateFileW(path, 3u << 30, 3, IntPtr.Zero, 3, 0, IntPtr.Zero);
             if (handle.IsInvalid) return;
             var attributes = new HiddAttributes { Size = Marshal.SizeOf(typeof(HiddAttributes)) };
             if (!HidD_GetAttributes(handle, ref attributes) || attributes.Vendor != 0x057e ||

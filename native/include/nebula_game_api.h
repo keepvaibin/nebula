@@ -28,6 +28,9 @@ extern "C" {
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
 
+/* A colour word, R << 24 | G << 16 | B << 8 | A. */
+#define NEBULA_RGBA(r, g, b, a) (((uint32_t)(r) << 24) | ((uint32_t)(g) << 16) | ((uint32_t)(b) << 8) | (uint32_t)(a))
+
 typedef struct NebulaHostThread NebulaHostThread;
 
 /* Audio (the host's mixer): the game's voices mix at the output device's rate, one subframe (1/400 s: 80 samples
