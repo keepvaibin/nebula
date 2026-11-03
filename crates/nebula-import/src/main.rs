@@ -54,6 +54,20 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             println!("game.pak: {size} bytes");
             Ok(ExitCode::SUCCESS)
         }
+        [command, records, option, output] if command == "shader-source" && option == "--output" => {
+            // One line a record: its shader's text on one line with its newlines as \u{1}, or "! why".
+            let bytes = std::fs::read(records)?;
+            let mut text = String::new();
+            for record in bytes.chunks_exact(756) {
+                match cook::shader_source::material_source(record) {
+                    Ok(source) => text.push_str(&source.replace('\n', "\u{1}")),
+                    Err(error) => text.push_str(&format!("! {error}")),
+                }
+                text.push('\n');
+            }
+            std::fs::write(output, text)?;
+            Ok(ExitCode::SUCCESS)
+        }
         [command, plan, option, output] if command == "mod-materials" && option == "--output" => {
             // The materials a plan's models need that this build has no shader for, as records for
             // tools/dev/gen_j3d_materials.py append.
