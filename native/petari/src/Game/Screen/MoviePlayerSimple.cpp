@@ -88,6 +88,9 @@ void MoviePlayerSimple::draw() const {
         u32 v4 = (MR::getScreenUnitsAcross() - frameBufferWidth) / 2;
         u32 v5 = (MR::getScreenUnitsDown() - ySize) / 2;
         MovieDraw::setLinearFilter(true);
+        if (mStream->hasSound() && isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying))) {
+            mStream->decodeHeardFrame();
+        }
         mMovie->mCurrentFrame = mStream->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
     }
 }
@@ -177,6 +180,18 @@ void MoviePlayerSimple::exeOpen() {
 }
 
 void MoviePlayerSimple::exePlaying() {
+    // The sound keeps the time, whatever the game's frame rate or the screen's: draw shows the frame being heard.
+    if (mStream->hasSound()) {
+        mStream->feedSound(0);
+
+        if (!mMovie->_18 && mStream->getSoundPosition() >= mStream->getTotalFrame()) {
+            mMovie->_24 = 0;
+            stop();
+            setNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
+        }
+        return;
+    }
+
     if (mMovie->mCurrentFrame + 1 == mStream->getTotalFrame()) {
         mMovie->_24 = 0;
 
@@ -188,7 +203,7 @@ void MoviePlayerSimple::exePlaying() {
     }
 
     if (!mMovie->_19) {
-        s32 result = mStream->decode(0);
+        s32 result = mStream->decode();
 
         switch (result) {
         case 0:
@@ -197,8 +212,6 @@ void MoviePlayerSimple::exePlaying() {
         case 2:
             mMovie->_24++;
             break;
-        case 3:
-            return;
         }
     }
 

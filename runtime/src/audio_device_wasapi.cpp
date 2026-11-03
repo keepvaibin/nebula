@@ -107,6 +107,8 @@ public:
 
     [[nodiscard]] std::uint32_t rate() const override { return rate_.load(std::memory_order_relaxed); }
 
+    [[nodiscard]] std::uint32_t queued_frames() const override { return queued_.load(std::memory_order_relaxed); }
+
     void start(Render render) override {
         {
             std::lock_guard<std::mutex> lock(start_lock_);
@@ -199,6 +201,7 @@ private:
             if (padding >= fill_frames_) {
                 continue;
             }
+            queued_.store(padding, std::memory_order_relaxed);
             const UINT32 frames = fill_frames_ - padding;
             if (FAILED(renderer_->GetBuffer(frames, &data))) {
                 return;
@@ -258,6 +261,7 @@ private:
     std::mutex start_lock_;
     std::condition_variable start_wake_;
     Render render_;
+    std::atomic<std::uint32_t> queued_{0u};
     std::atomic<std::uint32_t> rate_{48000u};
     ComPtr<IAudioClient> client_;
     ComPtr<IAudioRenderClient> renderer_;

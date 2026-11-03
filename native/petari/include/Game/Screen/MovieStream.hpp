@@ -28,7 +28,8 @@ struct MovieVideoInfo {
     u32 mHeight;
 };
 
-// A movie in the mapped store: decodes the next frame into its Y, U and V planes and hands the frame's sound to the host's mixer.
+// A movie in the mapped store. Its sound is read ahead into the host's mixer; its picture is the frame being heard, decoded
+// into the Y, U and V planes when that frame comes up. A movie with no sound takes its frames in turn from decode().
 class MovieStream {
 public:
     MovieStream();
@@ -40,7 +41,14 @@ public:
     void setBuffer(u8*);
     void start(bool);
     void stop();
-    s32 decode(s32);
+    s32 decode();
+    bool hasSound() const;
+    // Keeps the mixer's queue full enough that a stall in the game does not reach the sound.
+    void feedSound(s32 track);
+    // Where playing has reached, in frames from the start through any loops; the frame count once the sound has gone out.
+    f64 getSoundPosition() const;
+    // Puts the frame nearest that place in the planes. A next frame comes in turn; only a whole frame late are any passed over.
+    s32 decodeHeardFrame();
     s32 drawCurrentFrame(u32, u32, u32, u32);
     const MovieVideoInfo& getVideoInfo() const {
         return mVideoInfo;
@@ -52,6 +60,9 @@ public:
 
 private:
     void rewind();
+    void rewindSound();
+    // The frame at the picture's place, undecoded: moves on to the next.
+    const MovieFrameHeader* stepPicture();
 
     bool mOpen;
     bool mPlaying;
@@ -63,6 +74,11 @@ private:
     u32 mCurOffset;
     u32 mFrameSize;
     s32 mFrame;
+    u32 mSoundOffset;
+    u32 mSoundFrameSize;
+    s32 mSoundFrame;
+    s32 mSoundFed;
+    s32 mPicturesTaken;
     u8* mPlaneY;
     u8* mPlaneU;
     u8* mPlaneV;
