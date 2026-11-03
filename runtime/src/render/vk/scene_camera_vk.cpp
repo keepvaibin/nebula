@@ -28,12 +28,12 @@ VkShaderModule module_of(UtilitySpirv shader) {
 bool SceneCameraVk::initialize() {
     shutdown();
     const VkDevice device = Context::get().device();
-    VkDescriptorSetLayoutBinding bindings[3]{};
-    for (std::uint32_t i = 0; i < 3u; ++i) {
-        bindings[i] = {i, i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, kStages, nullptr};
+    VkDescriptorSetLayoutBinding bindings[4]{};
+    for (std::uint32_t i = 0; i < 4u; ++i) {
+        bindings[i] = {i, i != 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, kStages, nullptr};
     }
     VkDescriptorSetLayoutCreateInfo set_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-    set_info.bindingCount = 3;
+    set_info.bindingCount = 4;
     set_info.pBindings = bindings;
     const VkPushConstantRange push{kStages, 0, sizeof(camera::Constants)};
     VkPipelineLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
@@ -166,21 +166,25 @@ VkPipeline SceneCameraVk::pipeline(Kind kind, VkRenderPass pass, unsigned sample
     return out;
 }
 
-VkDescriptorSet SceneCameraVk::set_of(const SetAllocator& allocate, const Texture& sampled) const {
+VkDescriptorSet SceneCameraVk::set_of(const SetAllocator& allocate, const Texture& sampled, const Texture* depth,
+                                      VkImageLayout depth_layout) const {
     const VkDescriptorSet set = allocate(set_layout_);
-    const VkDescriptorImageInfo infos[3] = {{VK_NULL_HANDLE, sampled.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+    // Only the meter reads the depth; elsewhere the slot holds the exposure, an image in the layout it is in.
+    const VkDescriptorImageInfo infos[4] = {{VK_NULL_HANDLE, sampled.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                                             {VK_NULL_HANDLE, exposure_->view, VK_IMAGE_LAYOUT_GENERAL},
-                                            {VK_NULL_HANDLE, exposure_->view, VK_IMAGE_LAYOUT_GENERAL}};
-    VkWriteDescriptorSet writes[3]{};
-    for (std::uint32_t i = 0; i < 3u; ++i) {
+                                            {VK_NULL_HANDLE, exposure_->view, VK_IMAGE_LAYOUT_GENERAL},
+                                            {VK_NULL_HANDLE, depth != nullptr ? depth->view : exposure_->view,
+                                             depth != nullptr ? depth_layout : VK_IMAGE_LAYOUT_GENERAL}};
+    VkWriteDescriptorSet writes[4]{};
+    for (std::uint32_t i = 0; i < 4u; ++i) {
         writes[i] = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
         writes[i].dstSet = set;
         writes[i].dstBinding = i;
         writes[i].descriptorCount = 1;
-        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[i].descriptorType = i != 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         writes[i].pImageInfo = &infos[i];
     }
-    vkUpdateDescriptorSets(Context::get().device(), 3, writes, 0, nullptr);
+    vkUpdateDescriptorSets(Context::get().device(), 4, writes, 0, nullptr);
     return set;
 }
 
@@ -208,7 +212,8 @@ void SceneCameraVk::widen(VkCommandBuffer commands, VkRenderPass pass, unsigned 
     }
 }
 
-void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, float seconds, const SetAllocator& allocate) {
+void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout,
+                          float seconds, const SetAllocator& allocate) {
     VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
     barrier.srcAccessMask = exposure_ready_ ? VK_ACCESS_SHADER_READ_BIT : 0u;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
@@ -224,7 +229,7 @@ void SceneCameraVk::meter(VkCommandBuffer commands, const Texture& wide, float s
     constants.height = static_cast<float>(wide.height);
     constants.seconds = exposure_ready_ ? seconds : -1.0f;
     exposure_ready_ = true;
-    const VkDescriptorSet set = set_of(allocate, wide);
+    const VkDescriptorSet set = set_of(allocate, wide, &depth, depth_layout);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, meter_);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, layout_, 0, 1, &set, 0, nullptr);
     vkCmdPushConstants(commands, layout_, kStages, 0, sizeof(constants), &constants);

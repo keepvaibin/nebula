@@ -62,7 +62,7 @@ struct RenderConfig {
     // Fresnel on environment maps (enhanced_lighting.h). Takes precedence over per_pixel_lighting for those draws.
     bool     enhanced_lighting   = false;
     // The enhanced lighting's scene in a wide target with its camera (scene_camera.h). No row: its look is not accepted.
-    bool     wide_scene          = false;
+    bool     wide_scene          = true;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
     // Which: SSAO instead of GTAO.

@@ -28,7 +28,8 @@ public:
     void widen(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& picture,
                const SetAllocator& allocate);
     // `wide` is the resolved wide colour, sampled. Below zero `seconds` starts the eye open.
-    void meter(VkCommandBuffer commands, const Texture& wide, float seconds, const SetAllocator& allocate);
+    void meter(VkCommandBuffer commands, const Texture& wide, const Texture& depth, VkImageLayout depth_layout, float seconds,
+               const SetAllocator& allocate);
     // `wide` is the wide colour, sampled: the multisampled target when `per_sample`, else the resolved one.
     void draw(VkCommandBuffer commands, VkRenderPass pass, unsigned samples_log2, const Texture& wide, bool per_sample,
               const SetAllocator& allocate);
@@ -37,7 +38,8 @@ public:
 private:
     enum Kind : unsigned { kWiden, kCamera, kCameraSamples, kKinds };
     [[nodiscard]] VkPipeline pipeline(Kind kind, VkRenderPass pass, unsigned samples_log2);
-    [[nodiscard]] VkDescriptorSet set_of(const SetAllocator& allocate, const Texture& sampled) const;
+    [[nodiscard]] VkDescriptorSet set_of(const SetAllocator& allocate, const Texture& sampled, const Texture* depth = nullptr,
+                                         VkImageLayout depth_layout = VK_IMAGE_LAYOUT_GENERAL) const;
     void full_screen(VkCommandBuffer commands, VkPipeline pipeline, VkDescriptorSet set, unsigned width,
                      unsigned height) const;
 
