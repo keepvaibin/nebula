@@ -18,6 +18,11 @@
 #include <vector>
 
 namespace galaxy::host {
+#if defined(NEBULA_RELEASE)
+const char* test_data_paths_error(int, char**) {
+    return nullptr;
+}
+#else
 const char* test_data_paths_error(int argc, char** argv) {
     bool test = read_env_flag_uncached(nebula_switch::hide_window_name(), false);
     wchar_t* environment = GetEnvironmentStringsW();
@@ -61,6 +66,7 @@ const char* test_data_paths_error(int argc, char** argv) {
     }
     return nullptr;
 }
+#endif
 
 namespace {
 std::atomic<bool> g_env_flag_cache_enabled{false};
