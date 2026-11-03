@@ -5,6 +5,7 @@
 #include "galaxy/generic_hid.h"
 #include "galaxy/playstation_controller.h"
 #include "galaxy/simple_pads.h"
+#include "galaxy/wiimote_hid.h"
 #include "galaxy/rumble.h"
 #include "galaxy/steam_controller.h"
 
@@ -49,6 +50,7 @@ namespace {
 namespace sw = input::switch_hid;
 namespace ps = input::playstation;
 namespace simple = input::simple_pads;
+namespace wm = input::wiimote;
 namespace sv = input::steam;
 namespace gh = input::generic_hid;
 using input::ControlScheme;
@@ -276,6 +278,7 @@ enum class OffKind : std::uint8_t {
     Stadia,
     LunaBluetooth,
     Sixaxis,
+    WiiUPro,
     DualShock4Usb,
     DualShock4Bluetooth,
     DualSenseUsb,
@@ -569,7 +572,10 @@ bool bluetooth_path(const std::wstring& path) {
 ControllerLink link_of(const HidCandidate& candidate) {
     if (candidate.info.scheme == ControlScheme::Steam) {
         if (sv::is_receiver_product(candidate.product)) return ControllerLink::Wireless;
-        return candidate.product == sv::kControllerBleProductId ? ControllerLink::Bluetooth : ControllerLink::Usb;
+        return candidate.product == sv::kControllerBleProductId || candidate.product == sv::kClassicBleProductId ||
+                       candidate.product == sv::kClassicBleBootloaderlessProductId
+                   ? ControllerLink::Bluetooth
+                   : ControllerLink::Usb;
     }
     return bluetooth_path(candidate.path) ? ControllerLink::Bluetooth : ControllerLink::Usb;
 }
@@ -645,6 +651,12 @@ const std::string& steam_input_devices() {
     return list;
 }
 
+bool is_wii_u_pro(HANDLE handle) noexcept {
+    std::array<wchar_t, 64> name{};
+    return HidD_GetProductString(handle, name.data(), static_cast<ULONG>((name.size() - 1u) * sizeof(wchar_t))) &&
+           wm::is_wii_u_pro_name(name.data());
+}
+
 std::vector<HidCandidate> enumerate_hid_pads() {
     std::vector<HidCandidate> found;
     for_each_hid_interface([&](const std::wstring& path, HDEVINFO set, SP_DEVINFO_DATA& info) {
@@ -656,9 +668,16 @@ std::vector<HidCandidate> enumerate_hid_pads() {
         const std::optional<HIDD_ATTRIBUTES> attributes = hid_attributes(path, &probe);
         if (!attributes) return;
         if (sv::listed_device(steam_input_devices(), attributes->VendorID, attributes->ProductID)) return;
+        // A Wii U Pro Controller shares a Wii Remote's product id; its name differs.
+        const bool wii_u_pro = attributes->VendorID == wm::kVendorId && attributes->ProductID == wm::kProductIdTr &&
+                               is_wii_u_pro(probe.get());
         // PDP's id for a wireless pad on its charging cable.
         if (attributes->VendorID == 0x0e6f && attributes->ProductID == 0x018a) return;
         auto product = find_product(attributes->VendorID, attributes->ProductID);
+        if (wii_u_pro) {
+            product = ProductInfo{ControlScheme::SwitchPro, "Wii U Pro Controller", {}};
+            product->simple = simple::Layout::WiiUPro;
+        }
         if (!product) product = find_generic(probe.get(), attributes->VendorID, path);
         if (!product) return;
         // A Steam controller's other interfaces are its keyboard and mouse (a receiver's, its unused ones).
@@ -993,6 +1012,23 @@ void init_sixaxis(Device& device) {
     (void)get_feature_report(device.handle.get(), device.read_event.get(), feature.data(), 9, 200);
 }
 
+// Its extension awake, reporting extension bytes alone without being asked.
+void init_wii_u_pro(Device& device) {
+    std::array<std::uint8_t, wm::kOutputBytes> out{};
+    const auto send = [&](std::size_t used) {
+        std::vector<std::uint8_t> report(std::max<std::size_t>(device.output_length, out.size()), 0);
+        std::copy_n(out.begin(), used, report.begin());
+        (void)write_report(device.handle.get(), device.write_event.get(), report.data(), device.output_length, 200);
+        Sleep(20);
+    };
+    const std::uint8_t first = 0x55;
+    const std::uint8_t second = 0x00;
+    send(wm::build_write(wm::kRegisters, wm::kExtensionSetup1, std::span(&first, 1), false, out));
+    send(wm::build_write(wm::kRegisters, wm::kExtensionSetup2, std::span(&second, 1), false, out));
+    send(wm::build_leds(0x01, false, out));
+    send(wm::build_report_mode(simple::kWiiUProReport, true, false, out));
+}
+
 // The motor-off report for a HID controller.
 bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, OffKind kind) noexcept {
     std::array<std::uint8_t, kLargestOutputReport> report{};
@@ -1024,6 +1060,9 @@ bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, 
         break;
     case OffKind::Sixaxis:
         built = simple::build_motor_report(simple::Layout::Sixaxis, 0, out);
+        break;
+    case OffKind::WiiUPro:
+        built = simple::build_motor_report(simple::Layout::WiiUPro, 0, out);
         break;
     case OffKind::DualShock4Usb:
         built = ps::build_output_report(ps::Model::DualShock4, ps::Transport::Usb, stop, out);
@@ -1057,6 +1096,7 @@ OffKind off_kind_of(const Device& device) noexcept {
     case simple::Layout::Stadia: return OffKind::Stadia;
     case simple::Layout::LunaBluetooth: return OffKind::LunaBluetooth;
     case simple::Layout::Sixaxis: return OffKind::Sixaxis;
+    case simple::Layout::WiiUPro: return OffKind::WiiUPro;
     default: return OffKind::None;
     }
     switch (device.scheme) {
@@ -1291,6 +1331,21 @@ void send_light_bar(Device& device) {
 // The settings a Steam controller needs from the host: its keyboard and mouse off, its sensors on. The 2026 one and
 // the Deck fall back to them unless the settings come again (the Deck's watchdog, every sv::kDeckWatchdogMs); the
 // 2015 one keeps them, sent again now and then for a controller that reconnects.
+// A Valve feature report, a segment at a time over Bluetooth.
+void queue_valve_feature(Device& device, std::span<const std::uint8_t> report, std::size_t built, bool motor, bool replace = true) {
+    if (built == 0u) return;
+    if (device.scheme != ControlScheme::Steam || !device.bluetooth || device.steam_model != sv::Model::Classic) {
+        queue_output(device, report.data(), built, true, motor, replace);
+        return;
+    }
+    std::array<std::uint8_t, sv::kClassicBleSegmentBytes> segment{};
+    for (unsigned i = 0;; ++i) {
+        const std::size_t size = sv::build_classic_ble_segment(report.first(built), i, segment);
+        if (size == 0u) return;
+        queue_output(device, segment.data(), size, true, motor, replace);
+    }
+}
+
 void send_steam_settings(Device& device, std::uint64_t now) {
     const bool deck = device.steam_model == sv::Model::Deck;
     device.steam_settings_due_us = now + static_cast<std::uint64_t>(deck ? sv::kDeckWatchdogMs : sv::kSettingsRefreshMs) * 1000u;
@@ -1302,10 +1357,10 @@ void send_steam_settings(Device& device, std::uint64_t now) {
         return;
     }
     std::array<std::uint8_t, sv::kValveFeatureBytes> report{};
-    queue_output(device, report.data(), sv::build_clear_mappings_report(report), true, false);
+    queue_valve_feature(device, report, sv::build_clear_mappings_report(report), false);
     const std::size_t built = deck && device.steam_configured ? sv::build_deck_watchdog_report(report)
                                                               : sv::build_valve_settings_report(device.steam_model, report);
-    queue_output(device, report.data(), built, true, false);
+    queue_valve_feature(device, report, built, false);
     device.steam_configured = true;
 }
 
@@ -1567,6 +1622,7 @@ private:
         device->write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         if (device->simple != simple::Layout::None) {
             if (device->simple == simple::Layout::Sixaxis) init_sixaxis(*device);
+            if (device->simple == simple::Layout::WiiUPro) init_wii_u_pro(*device);
             return device;
         }
         switch (device->scheme) {
@@ -1824,6 +1880,11 @@ private:
                                      decoded, device.ps_caps);
         case ControlScheme::Steam: {
             const bool classic = device.steam_model == sv::Model::Classic;
+            if (classic && device.bluetooth) {
+                if (!sv::decode_classic_ble_report(report, device.steam_classic, decoded)) return false;
+                if (!device.published) publish_device(device);
+                return true;
+            }
             switch (classic ? sv::decode_classic_wireless_event(report) : sv::decode_wireless_event(report)) {
             case sv::WirelessEvent::Connected:
                 if (!device.published) publish_device(device);
@@ -2194,8 +2255,7 @@ private:
                 const std::uint16_t on_us = static_cast<std::uint16_t>(
                     300u + static_cast<std::uint32_t>(speed) * (sv::kClassicPulsePeriodUs - 1300u) / 65535u);
                 for (std::uint8_t pad = 0; pad < 2; ++pad) {
-                    queue_output(device, report.data(), sv::build_classic_haptic_report(pad, on_us, report), true, true,
-                                 pad == 0);
+                    queue_valve_feature(device, report, sv::build_classic_haptic_report(pad, on_us, report), true, pad == 0);
                 }
             }
         } else if (device.steam_model == sv::Model::Deck) {
