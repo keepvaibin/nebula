@@ -45,7 +45,7 @@ public:
         ID3D12Resource* depth = nullptr;  // the scene target's single-sample depth, in a shader-readable state
         unsigned width = 0;               // its size in pixels
         unsigned height = 0;
-        unsigned scene_target_scale = 1;           // scene target pixels per game pixel
+        unsigned occlusion_divisor = 1;  // scene target pixels per occlusion pixel, across and down
         D3D12_CPU_DESCRIPTOR_HANDLE color_rtv{};  // the scene target's colour (multisampled with MSAA)
         unsigned samples = 1;
         bool hdr = false;                 // the colour is the HDR scene scene target (kSceneHdrColorFormat)

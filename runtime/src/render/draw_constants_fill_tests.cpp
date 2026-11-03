@@ -15,7 +15,7 @@ int main() {
     bool ok = true;
     std::uint32_t seed = 0x43505539u;
     const auto next = [&] {seed ^= seed << 13u;seed ^= seed >> 17u;seed ^= seed << 5u;return seed;};
-    unsigned scale = 1u;
+    galaxy::render::RasterScale scale{1.0f, 1.0f};
     std::array<std::uint32_t,12> words{};
     std::array<float,12> values{};
     for (unsigned i = 0; i < 8192u; ++i) {
@@ -62,7 +62,7 @@ int main() {
             typed=true;
             break;
         }
-        case 10: scale=1u+next()%16u;break;
+        case 10: {const float across=static_cast<float>(1u+next()%16u);scale=galaxy::render::RasterScale{across,across};break;}
         case 11: frame=true;break;
         }
         const std::uint32_t dirty=(state.consume_any_change()?kStateDirtyMatrices:0u)|(typed?kStateDirtyVertexConstants:0u);

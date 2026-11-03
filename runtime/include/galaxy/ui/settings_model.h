@@ -37,7 +37,7 @@ const char* game_language_name(GameLanguage language);
 unsigned native_settings_first_row(unsigned first, unsigned selected, unsigned count);
 float step_gain(float current, int delta);
 bool display_settings_differ(const RenderConfig& a, const RenderConfig& b);
-unsigned quality_render_scale(unsigned output_scale, unsigned quality);
+float quality_render_fraction(unsigned quality);
 std::string percent_text(float value);
 std::string mods_ui_text(std::string_view text, std::size_t width);
 std::string upper_ascii(std::string text);

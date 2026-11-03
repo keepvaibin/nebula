@@ -71,7 +71,7 @@ namespace galaxy::render {
 // base level: the replacement shows its own); a game sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
 // by index: the bias moves its LOD back to the game's at the console's resolution
-// (scene_target_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
+// (mip_lines_log2_x32: 32 x log2 of the frame's lines over kAuthoredLines), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
     const TextureSampler& mode,
@@ -79,7 +79,7 @@ namespace galaxy::render {
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16 = 0u,
     bool arbitrary = false,
-    std::uint8_t scene_target_scale_log2_x32 = 0u) noexcept;
+    std::uint8_t mip_lines_log2_x32 = 0u) noexcept;
 
 // FNV-1a step over a whole 64-bit word (seed with kMix64OffsetBasis). Only bucket selection:
 // each key's operator== decides identity.
@@ -976,7 +976,7 @@ private:
     void begin_target_pass(const shapes::Record& record);
     void end_target_pass(const shapes::Record& record);
     // The open target pass's size (game units), for its closing copy.
-    std::array<std::uint16_t, 2> target_pass_size_{};
+    std::array<std::uint32_t, 2> target_pass_size_{};
     // A draw record's matrices and current matrices, into the matrix state its draw reads.
     void apply_record_matrices(const shapes::Record& record);
     // Gives back a group's resident block.

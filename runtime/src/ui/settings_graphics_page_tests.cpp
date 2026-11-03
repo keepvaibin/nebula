@@ -16,7 +16,7 @@ public:
     galaxy::ui::GraphicsPageState query(const galaxy::ui::RenderConfig&) const override {
         galaxy::ui::GraphicsPageState state;
         state.upscalers = {0, 1};
-        state.render_scale = 2;
+        state.render_percent = 50;
         state.frame_rates.refresh_hz = 144;
         state.ray_tracing_offered = rt;
         state.anti_aliasing_text = "ANTI-ALIASING: OFF";

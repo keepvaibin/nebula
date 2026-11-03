@@ -4,6 +4,7 @@
 #include "galaxy/render/drawing_state.h"
 
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstring>
 #include <iterator>
@@ -179,11 +180,11 @@ void NativeDrawState::set_op(const state::Op& op) {
         }
         break;
     case state::kScissor: {
-        // Left, top, width, height: the box's corners, inclusive.
-        const auto left = static_cast<std::int32_t>(op.f[0]);
-        const auto top = static_cast<std::int32_t>(op.f[1]);
-        scissor = ScissorRect{left, top, left + static_cast<std::int32_t>(op.f[2]) - 1,
-                              top + static_cast<std::int32_t>(op.f[3]) - 1};
+        // Left, top, width, height in frame units: the box's corners, inclusive.
+        const auto left = static_cast<std::int32_t>(std::lround(op.f[0]));
+        const auto top = static_cast<std::int32_t>(std::lround(op.f[1]));
+        scissor = ScissorRect{left, top, left + static_cast<std::int32_t>(std::lround(op.f[2])) - 1,
+                              top + static_cast<std::int32_t>(std::lround(op.f[3])) - 1};
         break;
     }
     default:

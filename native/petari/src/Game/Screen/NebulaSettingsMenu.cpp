@@ -24,6 +24,7 @@
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
 #include "Game/System/NebulaInput.hpp"
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 
 using namespace NebulaUi;
@@ -2449,10 +2450,10 @@ void NebulaSettingsScreen::placeJoyCon(f32 top) {
 // The Pair Joy-Con pictures at the 2D layer's density, painted for about `budgetMicros` this frame; that density in
 // pixels per menu unit.
 void NebulaSettingsScreen::paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const {
-    const u32 scale = NebulaHost::layer2DScale();
-    const f32 layer = scale != 0u ? static_cast< f32 >(scale) : 3.0f;
-    *pPixelsX = 640.0f * layer / mWidth;
-    *pPixelsY = 456.0f * layer / mHeight;
+    const u32 lines = NebulaHost::layer2DLines();
+    const f32 height = lines != 0u ? static_cast< f32 >(lines) : 1368.0f;
+    *pPixelsX = height * NebulaFrameClock::display().content_aspect / mWidth;
+    *pPixelsY = height / mHeight;
     NebulaIcons::setJoyConDensity(*pPixelsX * cJoyConUnit, *pPixelsY * cJoyConUnit);
     (void)NebulaIcons::paintJoyConAhead(budgetMicros);
 }

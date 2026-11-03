@@ -1090,17 +1090,17 @@ bool RendererVk::record_replay_list(ReplayList& list) {
                         constants_sets(64u, {.images = kFrameSets * 8u, .storage_images = vk_detail::kPassStorageImages}));
     }
     // The scene scene target's scale (the output scene target's place while the live frame's 2D layer is in it).
-    const unsigned scene_scale = output_scene_active_ ? alt_scene_map_.scale() : scene_map_.scale();
+    const FrameMap scene_map = output_scene_active_ ? alt_scene_map_ : scene_map_;
     const unsigned scene_samples = output_scene_active_ ? alt_scene_.samples : scene_.samples;
-    if (replay_scene_.color && (replay_scene_map_ != scene_scale || replay_scene_.samples != scene_samples)) {
+    if (replay_scene_.color && (replay_scene_map_ != scene_map || replay_scene_.samples != scene_samples)) {
         destroy_scene_set(replay_scene_);
     }
     if (!replay_scene_.color) {
-        if (!create_scene_set(replay_scene_, scene_scale, scene_samples)) {
+        if (!create_scene_set(replay_scene_, scene_map, scene_samples)) {
             replay_failure_ = 5u;
             return false;
         }
-        replay_scene_map_ = scene_scale;
+        replay_scene_map_ = scene_map;
     }
     const ReplayCopy* display = nullptr;
     for (const ReplayCopy& copy : run_log_.copies) {
@@ -1207,7 +1207,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             break;
         case ReplayKind::OutputSceneBegin:
             if (!output_scene_active_) {
-                (void)enter_output_scene(op.index);
+                (void)enter_output_scene(output_frame_for_window());
             }
             break;
         case ReplayKind::SwapSceneSets:
@@ -1510,7 +1510,7 @@ void RendererVk::release_replay_resources() noexcept {
         }
         *set = SceneSet{};
     }
-    replay_alt_scale_ = 0u;
+    replay_alt_scale_ = FrameMap{};
     subframe_display_ = DisplayTexture{};
 }
 

@@ -202,8 +202,6 @@ public:
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
-    // The 3D image's scale over the Wii's 640 x 456 as it is shown (no temporal upscaler here: the scene target's).
-    [[nodiscard]] unsigned scene_display_scale() const noexcept { return scene_map_.scale(); }
     // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
     [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
 
@@ -259,7 +257,7 @@ public:
     // the scene target's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
     // between passes (made again only when its size or the scene target's scale changes); the pass is drawn once, never
     // replayed by sub-frames. False when the target cannot be made or a pass is open.
-    [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height);
+    [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint32_t width, std::uint32_t height);
     // Ends it: the scene target comes back and the target's picture is what draws sampling `key` at that size read (at full
     // precision, in any format, through `channels`: NebulaTargetChannels).
     void end_target_pass(std::uint8_t channels, TextureCache& textures);
@@ -317,7 +315,6 @@ public:
     void set_debug_capture_paths(std::string scene_ppm_path, std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
-    [[nodiscard]] unsigned covering_scale() const noexcept { return scene_map_.scale(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
     // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the pipelines' sample count.
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
@@ -498,7 +495,7 @@ private:
     std::vector<VkDescriptorPool> persistent_overflow_;
 
     // The scene target.
-    FrameMap scene_map_ = FrameMap(1u);  // the bound scene target's map (E-08)
+    FrameMap scene_map_{};  // the bound scene target's map (E-08)
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
     bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
     // An scene target: its targets, their framebuffer and the conversion inputs reading them. The live one, and the private
@@ -543,7 +540,7 @@ private:
         SceneSet set;
         FrameMap map{};
         std::uint64_t used = 0;
-        std::uint16_t width = 0, height = 0;  // game units
+        std::uint32_t width = 0, height = 0;  // frame units
     };
     // The pictures draws sample by key (target passes' and captures'), each through its own view slot
     // (TextureCache::allocate_view) reading its channels; a capture's `bytes` is its footprint at the key, over which a
@@ -551,7 +548,7 @@ private:
     struct Picture {
         std::uint32_t view = ~0u;
         gpu::TextureRef viewed;
-        std::uint16_t width = 0, height = 0;  // game units, the size draws sample it at
+        std::uint32_t width = 0, height = 0;  // frame units, the size draws sample it at
         std::uint8_t channels = 0;
         std::uint32_t bytes = 0;
         VkImageView sampled = VK_NULL_HANDLE;  // the view reading `channels` (none: the texture's own view)
@@ -559,7 +556,7 @@ private:
     std::unordered_map<std::uint64_t, Picture> pictures_;
     // `texture` becomes picture `key` (`width` x `height` game units, read through `channels`): true when draws
     // must look it up again (a new view, or a capture replacing others).
-    bool publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
+    bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
     bool publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                          TextureCache& textures);
@@ -572,8 +569,8 @@ private:
     FrameMap target_scene_map_{};
     bool target_pass_active_ = false;
     bool output_scene_active_ = false;
-    [[nodiscard]] unsigned output_scene_target_scale_for_window() const;
-    bool enter_output_scene(unsigned scale);
+    [[nodiscard]] FrameMap output_frame_for_window() const;
+    bool enter_output_scene(const FrameMap& output);
     void swap_scene_sets();
     void swap_target_set();
     gpu::TextureRef scene_carry_color_;  // the previous targets, read once after a resolution change
@@ -945,8 +942,8 @@ private:
     FrameMap replay_scene_map_{};
     SceneSet replay_alt_scene_;  // the replay's output scene target
     FrameMap replay_alt_scale_{};
-    bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameWidth,
-                        unsigned height = kFrameHeight);
+    bool create_scene_set(SceneSet& set, const FrameMap& map, unsigned samples = 1u, unsigned width = kFrameUnits,
+                        unsigned height = kFrameUnits);
     void destroy_scene_set(SceneSet& set);
     DisplayTexture subframe_display_;
     bool replaying_ = false;

@@ -2,6 +2,8 @@
 
 #include "galaxy/render/line_point_params.h"
 
+#include "galaxy/render/capture.h"
+
 #include "galaxy/render/render_config.h"
 
 #include <algorithm>
@@ -13,19 +15,17 @@ LinePointRasterParams make_line_point_raster_params(
     const LinePointValues& values,
     float viewport_width,
     float viewport_height,
-    RasterScale scale,
-    unsigned fallback_scene_width,
-    unsigned fallback_scene_height) noexcept {
+    RasterScale scale) noexcept {
     const bool valid_viewport =
         std::isfinite(viewport_width) &&
         std::isfinite(viewport_height) &&
         viewport_width > 0.0f && viewport_height > 0.0f;
     const float logical_width = valid_viewport
         ? viewport_width
-        : static_cast<float>(std::max(fallback_scene_width, 1u));
+        : static_cast<float>(kFrameUnits);
     const float logical_height = valid_viewport
         ? viewport_height
-        : static_cast<float>(std::max(fallback_scene_height, 1u));
+        : static_cast<float>(kFrameUnits);
     return LinePointRasterParams{
         logical_width * scale.x,
         logical_height * scale.y,
