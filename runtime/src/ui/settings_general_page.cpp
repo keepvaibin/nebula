@@ -76,7 +76,7 @@ std::vector<SettingsRow> general_page(const RuntimeSettings& runtime, RuntimeSet
         const int count = state.mii_count;
         char mii_text[32]{};
         std::snprintf(mii_text, sizeof(mii_text), "%d OF 100", count);
-        rows.push_back({"MIIS ON THIS CONSOLE", mii_text, nullptr, "THE MII ICON PICKER ON THE FILE SELECT SHOWS THEM"});
+        rows.push_back({"YOUR MIIS", mii_text, nullptr, "THE MII ICON PICKER ON THE FILE SELECT SHOWS THEM"});
         rows.push_back(button_row("MIIS FOLDER", {"OPEN"}, [&draft_runtime, &host](RenderConfig&, unsigned) { host.act(GeneralPageAction::OpenMiiFolder); },
                                   "FILES PUT HERE ARE IMPORTED AT EVERY START"));
     }
