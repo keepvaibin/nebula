@@ -72,19 +72,12 @@ struct SavePatch {
     std::string external;
     bool clone = true;
 };
-struct MemoryPatch {
-    std::uint32_t offset = 0;
-    std::vector<std::uint8_t> value, original;
-    std::string valuefile;
-    bool ocarina = false, search = false;
-    std::uint32_t align = 1;
-};
 struct Patch {
     std::string id, root;
     std::vector<FilePatch> files;
     std::vector<FolderPatch> folders;
     std::vector<SavePatch> saves;
-    std::vector<MemoryPatch> memory;
+    unsigned memory = 0;  // patches over the console's code: not supported
 };
 struct PatchRef {
     std::string id;
@@ -231,14 +224,7 @@ std::optional<RiivDisc> parse_riivolution(const fs::path& xml, std::string* erro
             } else if (n.name == "savegame") {
                 patch.saves.push_back({n.attribute("external"), n.attribute_bool("clone", true)});
             } else if (n.name == "memory") {
-                MemoryPatch& m = patch.memory.emplace_back();
-                m.offset = static_cast<std::uint32_t>(n.attribute_uint("offset", 0));
-                m.value = hex_bytes(n.attribute("value"));
-                m.valuefile = n.attribute("valuefile");
-                m.original = hex_bytes(n.attribute("original"));
-                m.ocarina = n.attribute_bool("ocarina", false);
-                m.search = n.attribute_bool("search", false);
-                m.align = static_cast<std::uint32_t>(n.attribute_uint("align", 1));
+                ++patch.memory;
             }
         }
     }
@@ -375,7 +361,6 @@ std::vector<Patch> generate_patches(const RiivDisc& d, const std::string& game_i
                     f.external = replace_variables(f.external, with);
                 }
                 for (SavePatch& sp : p.saves) sp.external = replace_variables(sp.external, with);
-                for (MemoryPatch& m : p.memory) m.valuefile = replace_variables(m.valuefile, with);
                 active.push_back(std::move(p));
             }
         }
@@ -627,15 +612,6 @@ std::map<std::string, SavedMod> read_saved(const fs::path& file) {
     return saved;
 }
 
-bool dol_used(std::uint32_t address, std::size_t size, const std::string& game_id);
-std::optional<std::size_t> dol_offset_of(std::span<const std::uint8_t> dol, std::uint32_t address, std::size_t size);
-struct NativeCodePatch;
-const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32_t address,
-                                         std::span<const std::uint8_t> value);
-// main.dol as this session's game has it (the scan checks a patch's `original` against it).
-std::mutex s_dol_mutex;
-std::vector<std::uint8_t> s_dol;
-
 // The region a choice's name stands for ('E', 'P', 'J', 'K'), else 0: NTSC/USA, PAL/EUR, JP/NTSC-J, KOR.
 char choice_region(std::string_view name) {
     std::vector<std::string> words;
@@ -727,11 +703,6 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
     s.folder = folder;
     s.file = settings_file;
     s.game_id = game_id;
-}
-
-void set_game_dol(std::span<const std::uint8_t> dol) {
-    const std::lock_guard<std::mutex> lock(s_dol_mutex);
-    s_dol.assign(dol.begin(), dol.end());
 }
 
 std::string mods_game_id() {
@@ -845,24 +816,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                             }
                         }
                     }
-                    for (const MemoryPatch& m : p.memory) {
-                        const std::uint32_t address = m.offset | 0x80000000u;
-                        {
-                            // For another release (its original bytes differ from this disc's): skipped, as
-                            // Riivolution does.
-                            const std::lock_guard<std::mutex> lock(s_dol_mutex);
-                            if (!m.original.empty() && !s_dol.empty()) {
-                                const std::optional<std::size_t> at = dol_offset_of(s_dol, address, m.original.size());
-                                if (!at || !std::equal(m.original.begin(), m.original.end(), s_dol.begin() + *at)) continue;
-                            }
-                        }
-                        if (!m.ocarina && !m.search && !m.value.empty() && native_code_patch(region_id, address, m.value)) {
-                            ++mod.native_patches;
-                        } else if (m.ocarina || m.search ||
-                                   !dol_used(address, std::max<std::size_t>(m.value.size(), 1u), region_id)) {
-                            ++mod.code_patches;
-                        }
-                    }
+                    mod.code_patches += p.memory;
                 }
             }
         }
@@ -872,6 +826,10 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         if (!layout.textures.empty()) list_textures(layout.textures, changed_textures[mod.id]);
         mod.changed_files = static_cast<unsigned>(changed_paths[mod.id].size());
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
+        if (mod.code_patches != 0u) {
+            mod.enabled = false;
+            mod.problem = "CHANGES THE CONSOLE'S CODE: NOT SUPPORTED";
+        }
         if (!mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
             mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";
         }
@@ -923,7 +881,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
 }
 
 void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled) {
-    if (index >= mods.size() || mods[index].enabled == enabled) return;
+    if (index >= mods.size() || mods[index].enabled == enabled || mods[index].code_patches != 0u) return;
     ModInfo mod = std::move(mods[index]);
     mods.erase(mods.begin() + static_cast<std::ptrdiff_t>(index));
     mod.enabled = enabled;
@@ -954,116 +912,6 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         for (const ModOption& o : mod.options) out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
     }
     return io::write_file_atomically(file, out.str());
-}
-
-namespace {
-
-struct DolTable {
-    std::uint32_t address;
-    std::uint32_t size;
-};
-
-// Native equivalents of known patches to the console's code, matched by their exact bytes for a release (the disc's
-// region): each sets the game's NEBULA_PATCH_* switch (nebula_game_api.h); id 0 has no native counterpart because
-// Nebula does the job itself. Covers Kaizo Mario Galaxy Rebalanced 2.1 (NTSC and the shared UEJ patches) and Super
-// Lillie Galaxy's crash debugger.
-struct NativeCodePatch {
-    char region;
-    std::uint32_t address;
-    const char* value;
-    std::uint32_t id;
-    std::uint32_t parameter;
-    const char* what;
-};
-
-constexpr NativeCodePatch kNativeCodePatches[] = {
-    {'E', 0x801DD690, "38C00080", kPatchFlipPanelObserverGroup, 0x80, "flip panel observer groups of 128"},
-    {'E', 0x801DCE48, "38C00080", kPatchFlipPanelGroup, 0x80, "flip panel groups of 128"},
-    {'E', 0x80153D84, "39000001", kPatchWaterBazookaShotFlag, 1, "water bazooka shots' flag"},
-    {'E', 0x80001800, "C4BB8000C03E00103C608000C0031800EC00082AD01E0010809E008C4E800020", kPatchKameckBarrierOffsetY,
-     0xC4BB8000u, "Kamek's barrier 1500 lower"},
-    {'E', 0x800382B8, "4BFC954D", kPatchKameckBarrierOffsetY, 0xC4BB8000u, "Kamek's barrier 1500 lower"},
-    {'E', 0x8007679C, "60000000", kPatchSkeletalFishBabyNoBubble, 1, "no air bubble from hit skeletal fish"},
-    {'E', 0x80054490, "4836F0A9", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
-    {'E', 0x800564C4, "4836D075", kPatchDodoryuShellOnly, 1, "Dodoryu hurt by shells only"},
-    {'E', 0x803F82D8, "4BC0A058", kPatchMissStarPieces, 0xFFFFFC19u, "every star bit lost after a miss"},
-    {'E', 0x80002330, "3860FC19483ADFB980010034483F5FA0", kPatchMissStarPieces, 0xFFFFFC19u,
-     "every star bit lost after a miss"},
-    {'E', 0x803F6298, "38600000", kPatchNoHiddenStarTable, 1, "hidden stars without their table"},
-    {'E', 0x803F5D40, "386000004E800020", kPatchNoSuddenDeathDodoryu, 1, "no sudden-death Dodoryu"},
-    {'E', 0x800D02C0, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x800D5DD8, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x800D7D50, "38600000", kPatchBegomanFireProof, 1, "Begomans survive fire ground"},
-    {'E', 0x80275440, "60000000", kPatchMessengerAlwaysEx, 1, "the 1-up messenger's larger supply"},
-    {'E', 0x80275458, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x802750F0, "2C1F0063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x802750FC, "38800063", kPatchMessengerExOneUps, 99, "99 1-ups from the messenger"},
-    {'E', 0x8039AA2C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-    {'E', 0x8039AAF0, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-    {'E', 0x804A432C, "60000000", 0, 0, "the console's crash debugger (Nebula reports crashes itself)"},
-};
-
-const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32_t address,
-                                         std::span<const std::uint8_t> value) {
-    if (game_id.size() < 4u) return nullptr;
-    for (const NativeCodePatch& patch : kNativeCodePatches) {
-        if (patch.region != game_id[3] || patch.address != (address | 0x80000000u)) continue;
-        const std::vector<std::uint8_t> bytes = hex_bytes(patch.value);
-        if (bytes.size() == value.size() && std::equal(bytes.begin(), bytes.end(), value.begin())) return &patch;
-    }
-    return nullptr;
-}
-
-// The tables the game reads from main.dol's data (the cooker's NebulaData files, crates/nebula-import/src/cook/dol.rs),
-// by release (the USA release's comet schedules and event flags too).
-std::span<const DolTable> dol_tables(const std::string& game_id) {
-    static constexpr DolTable kKorea[] = {{0x8053DC20, 0x1E0}, {0x8053DE00, 0xD20}, {0x8053F5E0, 0x1CAC0}};
-    static constexpr DolTable kOthers[] = {{0x8053C620, 0x1E0}, {0x8053C800, 0xD20}, {0x8053DFE0, 0x9AC0}};
-    static constexpr DolTable kUsa[] = {{0x8053C620, 0x1E0}, {0x8053C800, 0xD20}, {0x8053DFE0, 0x9AC0},
-                                        {0x8053AEF0, 0x3F0}, {0x8053B320, 0xEB0}};
-    if (game_id.size() >= 4u && game_id[3] == 'K') return kKorea;
-    if (game_id.size() >= 4u && game_id[3] == 'E') return kUsa;
-    return kOthers;
-}
-
-bool dol_used(std::uint32_t address, std::size_t size, const std::string& game_id) {
-    for (const DolTable& t : dol_tables(game_id)) {
-        if (address >= t.address && address - t.address < t.size && size <= t.size - (address - t.address)) return true;
-    }
-    return false;
-}
-
-// A console address's offset in main.dol's image.
-std::optional<std::size_t> dol_offset_of(std::span<const std::uint8_t> dol, std::uint32_t address, std::size_t size) {
-    if (dol.size() < 0x100u) return std::nullopt;
-    const auto be = [&](std::size_t at) {
-        return static_cast<std::uint32_t>(dol[at]) << 24u | static_cast<std::uint32_t>(dol[at + 1]) << 16u |
-               static_cast<std::uint32_t>(dol[at + 2]) << 8u | static_cast<std::uint32_t>(dol[at + 3]);
-    };
-    for (unsigned s = 0; s < 18u; ++s) {
-        const std::uint32_t offset = be(s * 4u);
-        const std::uint32_t start = be(0x48 + s * 4u);
-        const std::uint32_t length = be(0x90 + s * 4u);
-        if (length == 0u || address < start || address - start >= length || size > length - (address - start)) continue;
-        const std::size_t at = offset + (address - start);
-        if (at + size > dol.size()) return std::nullopt;
-        return at;
-    }
-    return std::nullopt;
-}
-
-}  // namespace
-
-bool patch_dol(std::vector<std::uint8_t>& dol, std::uint32_t address, std::span<const std::uint8_t> value,
-               std::span<const std::uint8_t> original) {
-    const std::optional<std::size_t> at = dol_offset_of(dol, address, value.size());
-    if (!at) return false;
-    if (!original.empty()) {
-        if (original.size() > value.size() && !dol_offset_of(dol, address, original.size())) return false;
-        if (!std::equal(original.begin(), original.end(), dol.begin() + static_cast<std::ptrdiff_t>(*at))) return false;
-    }
-    std::copy(value.begin(), value.end(), dol.begin() + static_cast<std::ptrdiff_t>(*at));
-    return true;
 }
 
 bool changes_disc(const ModInfo& mod) noexcept {

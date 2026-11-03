@@ -512,8 +512,13 @@ u32 CollisionParts::checkStrikeLine(HitInfo* pHitInfo, u32 maxHits, const TVec3f
     return hitCount;
 }
 
+namespace {
+    // Area lists are asked for on the game's main thread.
+    KC_PrismData* sAreaPrisms[512];
+}  // namespace
+
 u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles, const TVec3f& rMin, const TVec3f& rMax) {
-    KC_PrismData* prisms[512];
+    KC_PrismData** const prisms = sAreaPrisms;
     TPos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());
     rotation.zeroTrans();
@@ -534,7 +539,7 @@ u32 CollisionParts::createAreaPolygonList(Triangle* pTriangles, u32 maxTriangles
 }
 
 u32 CollisionParts::createAreaPolygonListArray(Triangle* pTriangles, u32 maxTriangles, TVec3f* pPoints, u32 numPoints) {
-    KC_PrismData* prisms[512];
+    KC_PrismData** const prisms = sAreaPrisms;
     TVec3f localPoints[32];
     TPos3f rotation;
     NebulaMtxCopy(mInvBaseMatrix.toMtxPtr(), rotation.toMtxPtr());

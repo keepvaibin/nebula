@@ -35,8 +35,8 @@ typedef struct Mii_CharModelRes {
     u8 maskDl[0x380];
     u8 glassesDl[0x40];
 
-    // The parts' textures as records (nebula_cooked_texture.h): their texels in a native layout (at most four bytes
-    // each: twice the console's 16-bit and four times its 8-bit sizes) after a 64-byte header.
+    // The parts' textures as records (nebula_cooked_texture.h): their texels, at most four bytes each, after a 64-byte
+    // header.
     u8 faceTex[0x8000 + 0x40];
     u8 capTex[0x2000 + 0x40];
     u8 noseTex[0x2000 + 0x40];

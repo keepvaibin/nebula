@@ -206,7 +206,7 @@ void BegomanSpike::control() {
         }
     }
 
-    if (!NebulaHost::codePatch(NEBULA_PATCH_BEGOMAN_FIRE_PROOF, nullptr) && MR::isBindedGroundDamageFire(this)) {
+    if (MR::isBindedGroundDamageFire(this)) {
         kill();
         MR::emitEffect(this, "Fall");
         return;

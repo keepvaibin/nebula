@@ -164,7 +164,12 @@ namespace {
     bool nativeDrawn(u32 shader) {
         const NebulaHostServices* pHost = nebula_host();
         // Tests: only a range of the J3D materials (GALAXY_TEST_NATIVE_J3D).
-        static const u32 sRange = pHost->option(pHost->user, NEBULA_OPTION_TEST_NATIVE_J3D);
+        static u32 sRange = 0;
+        static bool sRangeRead = false;
+        if (!sRangeRead) {
+            sRange = pHost->option(pHost->user, NEBULA_OPTION_TEST_NATIVE_J3D);
+            sRangeRead = true;
+        }
         const u32 number = shader - NEBULA_SHADER_J3D_FIRST + 1;
         return sRange == 0 || (number >= (sRange >> 16) && number <= (sRange & 0xFFFF));
     }

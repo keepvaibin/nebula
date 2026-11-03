@@ -219,7 +219,7 @@ fs::path crash_folder() {
     return fs::path(local) / "Nebula" / "crashes";
 #endif
 #else
-    if (const char* dir = std::getenv(NEBULA_TEST_ENV("GALAXY_CRASH_DUMP_DIR")); dir != nullptr && dir[0] != 0) return fs::path(dir);
+    if (const char* dir = NEBULA_TEST_GETENV("GALAXY_CRASH_DUMP_DIR"); dir != nullptr && dir[0] != 0) return fs::path(dir);
 #endif
     return fs::path("crashes");
 }
@@ -227,7 +227,7 @@ fs::path crash_folder() {
 // The player sees the report; hidden test runs (GALAXY_HIDE_WINDOW) and the headless host keep it in its file.
 bool crash_dialog_wanted() {
 #if defined(NEBULA_HOST_RENDERER) || defined(NEBULA_HOST_SDL)
-    const char* hidden = std::getenv(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
+    const char* hidden = NEBULA_TEST_GETENV("GALAXY_HIDE_WINDOW");
     return !(hidden != nullptr && hidden[0] != 0 && hidden[0] != '0');
 #else
     return false;
@@ -594,7 +594,7 @@ bool gSuspended = false;  // guarded by gSuspendLock
 constexpr auto kBootPeriod = std::chrono::microseconds(2000);
 constexpr uint32_t kBootFrames = 600;
 std::atomic<bool> gBootFast{[] {
-    const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_BOOT_FAST"));
+    const char* value = NEBULA_TEST_GETENV("GALAXY_BOOT_FAST");
     return value == nullptr || value[0] != '0';
 }()};
 
@@ -612,7 +612,7 @@ void end_boot_fast(const char* why) {
 // complete inside their call, and the steady clock counts frames. Two runs of one build then match frame for frame.
 bool deterministic_mode() {
     static const bool deterministic = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_DETERMINISTIC"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_DETERMINISTIC");
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }();
     return deterministic;
@@ -656,7 +656,7 @@ void audio_frame_tick() {
     // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and its sound
     // pools fill; it must refuse new sounds, not crash.
     static const uint64_t stall_after = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_AI_STALL_AFTER"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_AI_STALL_AFTER");
         return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
     }();
     if (stall_after == 0 || gSoundBlocks.load(std::memory_order_relaxed) < stall_after) {
@@ -1232,7 +1232,7 @@ bool restart_after_gpu_loss(const char* what) {
 // five times, two seconds apart; after that it is a fault to report.
 bool retry_start_for_gpu_memory(const std::string& reason) {
 #if defined(_WIN32)
-    static const bool test_once = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_START_NO_GPU_MEMORY")) != nullptr;
+    static const bool test_once = NEBULA_TEST_GETENV("GALAXY_TEST_START_NO_GPU_MEMORY") != nullptr;
     const char* before = std::getenv("NEBULA_GPU_START_RETRIES");
     const int count = before != nullptr ? std::atoi(before) : 0;
     char out_of_memory[16];
@@ -1696,9 +1696,9 @@ struct FrameHash {
 FrameHash& frame_hash() {
     static FrameHash h;
     static const bool opened = [] {
-        const char* path = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_FRAME_HASH"));
+        const char* path = NEBULA_TEST_GETENV("GALAXY_TEST_FRAME_HASH");
         if (path != nullptr && path[0] != '\0') {
-            const char* dir = std::getenv(NEBULA_TEST_ENV("GALAXY_PRESENT_SNAPSHOT_DIR"));
+            const char* dir = NEBULA_TEST_GETENV("GALAXY_PRESENT_SNAPSHOT_DIR");
             const std::string file = std::strcmp(path, "1") == 0 && dir != nullptr
                                          ? std::string(dir) + "\\frame_hash.txt"
                                          : std::string(path);
@@ -2431,7 +2431,7 @@ int32_t svc_pointer_wheel(void*) {
 uint32_t svc_art_export(void*, const NebulaArtExport* art) {
 #if defined(NEBULA_HOST_RENDERER)
     static const std::filesystem::path folder = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_EXPORT_ART"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_EXPORT_ART");
         if (value == nullptr || value[0] == '\0') return std::filesystem::path{};
         // This run's names only.
         std::error_code error;
@@ -2551,7 +2551,7 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
 void* svc_memory_reserve(void*, uint64_t size) {
 #if defined(_WIN32)
     static uintptr_t at = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_MEMORY_AT"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_MEMORY_AT");
         return value != nullptr ? static_cast<uintptr_t>(std::strtoull(value, nullptr, 16)) : uintptr_t{0};
     }();
     void* const block = VirtualAlloc(reinterpret_cast<void*>(at), static_cast<SIZE_T>(size), MEM_RESERVE, PAGE_NOACCESS);
@@ -2712,7 +2712,7 @@ void svc_unlock(void*, int which) {
 // GALAXY_TEST_DISC_DELAY_US: a slow drive (each way to the store takes this long), so waits on loads are exercised.
 void test_drive_delay() {
     static const uint32_t delay_us = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_DISC_DELAY_US"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_DISC_DELAY_US");
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
     }();
     if (delay_us != 0) {
@@ -2736,7 +2736,7 @@ void* svc_asset_map_private(void*, int32_t file) {
         return nullptr;
     }
     void* const data = gPak.store.map_private(entry->position, static_cast<std::size_t>(entry->length));
-    static const bool trace_reads = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_FILE_READS")) != nullptr;
+    static const bool trace_reads = NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr;
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d mapped size %llu %s at %p\n", static_cast<unsigned long long>(gDeterministicFrames.load()), file,
                      static_cast<unsigned long long>(entry->length), entry->name != nullptr ? entry->name : "?", data);
@@ -2745,7 +2745,7 @@ void* svc_asset_map_private(void*, int32_t file) {
 }
 
 void svc_asset_unmap(void*, void* data, uint64_t size) {
-    static const bool trace_reads = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_FILE_READS")) != nullptr;
+    static const bool trace_reads = NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr;
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu unmapped %p size %llu\n", static_cast<unsigned long long>(gDeterministicFrames.load()), data, static_cast<unsigned long long>(size));
     }
@@ -2756,7 +2756,7 @@ int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size,
     test_drive_delay();
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TRACE_FILE_READS=1: each read with the frame it came on: two runs of deterministic mode compare by it.
-    static const bool trace_reads = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_FILE_READS")) != nullptr;
+    static const bool trace_reads = NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr;
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
     if (trace_reads) {
         std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
@@ -2788,7 +2788,7 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
 #if defined(NEBULA_HOST_RENDERER)
     // GALAXY_TRACE_VI_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
     static const bool trace_vi = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_VI_TIMES"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TRACE_VI_TIMES");
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }();
     if (trace_vi) std::fprintf(stderr, "[latency] retrace vi=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
@@ -2814,7 +2814,7 @@ void svc_frame_begun(void*, int black, uint32_t frame) {
     }
     // GALAXY_TEST_MII_IMPORT=<frame>:<file>: imports the file at that frame, as the settings do.
     {
-        static const char* const test_import = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_MII_IMPORT"));
+        static const char* const test_import = NEBULA_TEST_GETENV("GALAXY_TEST_MII_IMPORT");
         static bool test_imported = false;
         if (test_import != nullptr && !test_imported) {
             const char* const colon = std::strchr(test_import, ':');
@@ -2940,21 +2940,27 @@ uint32_t svc_option(void*, uint32_t what) {
         return 0;
     case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
         static const bool dump = [] {
-            const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_DUMP_LAYOUTS"));
+            const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_DUMP_LAYOUTS");
             return value != nullptr && value[0] == '1';
         }();
         return dump ? 1u : 0u;
     }
     case NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS: {
         static const uint32_t shader = [] {
-            const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_DUMP_DRAW_INPUTS"));
+            const char* value = NEBULA_TEST_GETENV("GALAXY_DUMP_DRAW_INPUTS");
             return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
         }();
         return shader;
     }
+    case NEBULA_OPTION_TEST_ARENA_FILL: {
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_ARENA_FILL");
+        return value != nullptr ? 0x100u | (static_cast<uint32_t>(std::strtoul(value, nullptr, 16)) & 0xFFu) : 0u;
+    }
+    case NEBULA_OPTION_TEST_TRACE_LOADS:
+        return NEBULA_TEST_GETENV("GALAXY_TRACE_LOADS") != nullptr ? 1u : 0u;
     case NEBULA_OPTION_TEST_NATIVE_J3D: {
         static const uint32_t range = [] {
-            const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_NATIVE_J3D"));
+            const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_NATIVE_J3D");
             unsigned lo = 0, hi = 0;
             return value != nullptr && std::sscanf(value, "%u-%u", &lo, &hi) == 2 && lo != 0u && hi >= lo
                        ? (std::min(lo, 0xFFFFu) << 16u) | std::min(hi, 0xFFFFu)
@@ -2981,7 +2987,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
     // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each operation takes this long), so the windows that open
     // and close around a save are exercised as on a busy disk.
     static const uint32_t test_delay_us = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_NAND_DELAY_US"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_NAND_DELAY_US");
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
     }();
     *request->status = NEBULA_SAVE_PENDING;
@@ -3133,7 +3139,7 @@ std::atomic<uint8_t> gInputConnected{1};
 bool input_device_missing(bool wii_remote) {
     static unsigned tick = 0;
     static bool missing = false;
-    static const char* const test_ms = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_INPUT_LOST_AT_MS"));
+    static const char* const test_ms = NEBULA_TEST_GETENV("GALAXY_TEST_INPUT_LOST_AT_MS");
     if (test_ms != nullptr) {
         // Tests: lost for ten seconds from this long after the first look.
         static const auto first = std::chrono::steady_clock::now();
@@ -3154,7 +3160,7 @@ bool input_device_missing(bool wii_remote) {
 // The controls now (under gInputSampleLock). Each sample renews the motor's state (a stale one stops).
 NebulaInputSample controls_sample() {
     static const bool frame_clock = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_SCRIPT_CLOCK"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_SCRIPT_CLOCK");
         return value != nullptr && std::strcmp(value, "frames") == 0;
     }();
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
@@ -3202,7 +3208,7 @@ uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, Nebul
     gInputRead.store(true, std::memory_order_release);
     // GALAXY_INPUT_READ_SAMPLE=0: only the 10 ms samples (the timing before samples followed the game's reads).
     static const bool sample_on_read = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_INPUT_READ_SAMPLE"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_INPUT_READ_SAMPLE");
         return value == nullptr || value[0] != '0';
     }();
     if (sample_on_read && gControlsInput.load(std::memory_order_acquire)) {
@@ -3385,7 +3391,7 @@ void svc_audio_mix(void*, float gain) {
 }
 
 void svc_audio_frame(void*) {
-    static const bool trace_frames = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_FILE_READS")) != nullptr;
+    static const bool trace_frames = NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr;
     if (trace_frames) {
         std::fprintf(stderr, "[read] sound frame %llu at frame %llu\n", static_cast<unsigned long long>(gSoundBlocks.load(std::memory_order_relaxed)),
                      static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)));
@@ -3414,7 +3420,7 @@ void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t millis
 }
 
 void svc_audio_control(void*, uint32_t what, uint32_t value) {
-    if (std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_FILE_READS")) != nullptr) {
+    if (NEBULA_TEST_GETENV("GALAXY_TRACE_FILE_READS") != nullptr) {
         std::fprintf(stderr, "[read] sound clock %u at frame %llu\n", what, static_cast<unsigned long long>(gDeterministicFrames.load()));
     }
     {
@@ -3445,7 +3451,7 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
     case NEBULA_HBM_POLL: {
         // GALAXY_TEST_HOME_ROW=<row>:<polls>: picks a row by the keys a player would press, and answers yes when it
         // asks (reset, leave).
-        static const char* test = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_HOME_ROW"));
+        static const char* test = NEBULA_TEST_GETENV("GALAXY_TEST_HOME_ROW");
         static unsigned polls = 0;
         if (test != nullptr && galaxy::render::home_menu_visible()) {
             unsigned row = 0, after = 0;
@@ -3508,10 +3514,14 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
+#if defined(NEBULA_RELEASE)
+    (void)action;
+    return 0;
+#else
     // GALAXY_TEST_GAME_STALL_MS=<ms>: the game's main thread stops that long every 120 scene frames; the sound must not
     // notice (sound blocks x 7 = sound subframes in the status line).
     static const int stall_ms = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_GAME_STALL_MS"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_GAME_STALL_MS");
         return value != nullptr ? std::atoi(value) : 0;
     }();
     static uint32_t stall_frames = 0;
@@ -3542,7 +3552,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     static uint64_t scene_frames = 0, since_stop = 0, stop_frame = 0;
     if (!loaded) {
         loaded = true;
-        if (const char* tour = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_GALAXY_TOUR"))) {
+        if (const char* tour = NEBULA_TEST_GETENV("GALAXY_TEST_GALAXY_TOUR")) {
             if (FILE* file = std::fopen(tour, "r")) {
                 char stage[64];
                 int scenario = 0;
@@ -3552,7 +3562,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                 std::fclose(file);
             }
             touring = true;
-            if (const char* frames = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_GALAXY_TOUR_FRAMES"))) {
+            if (const char* frames = NEBULA_TEST_GETENV("GALAXY_TEST_GALAXY_TOUR_FRAMES")) {
                 tour_frames = std::max<uint64_t>(std::strtoull(frames, nullptr, 10), 60u);
             }
             char text[64];
@@ -3560,7 +3570,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                           static_cast<unsigned long long>(tour_frames));
             log_line("tour:", text);
         }
-        if (const char* list = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_EVENTS"))) {
+        if (const char* list = NEBULA_TEST_GETENV("GALAXY_TEST_EVENTS")) {
             std::string entries = list;
             size_t start = 0;
             while (start < entries.size()) {
@@ -3593,7 +3603,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                 start = end + 1;
             }
         }
-        if (const char* list = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_TELEPORT"))) {
+        if (const char* list = NEBULA_TEST_GETENV("GALAXY_TEST_TELEPORT")) {
             std::string entries = list;
             size_t start = 0;
             while (start < entries.size()) {
@@ -3633,7 +3643,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 #endif
     static std::vector<std::string> event_flags = [] {
         std::vector<std::string> names;
-        if (const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_EVENT_FLAGS"))) {
+        if (const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_EVENT_FLAGS")) {
             std::string list = value;
             for (std::size_t start = 0; start < list.size();) {
                 const std::size_t comma = std::min(list.find(',', start), list.size());
@@ -3651,7 +3661,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         return 1;
     }
     static const int32_t grand_stars = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_GRAND_STARS"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_GRAND_STARS");
         return value != nullptr ? std::atoi(value) : 0;
     }();
     static bool grand_stars_set = false;
@@ -3715,7 +3725,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         uint32_t seed;
         uint32_t forms;
     } walk = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_WALK"));
+        const char* value = NEBULA_TEST_GETENV("GALAXY_TEST_WALK");
         unsigned every = 300u, seed = 0u, forms = 0u;
         if (value == nullptr) {
             return decltype(walk){0, 0u, 0u, 0u};
@@ -3742,6 +3752,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         }
     }
     return 0;
+#endif
 }
 
 // A restart starts this executable again with the same arguments (the game's boot); the
@@ -3995,8 +4006,7 @@ int run_mods_tool() {
                    ",\"order\":" + std::to_string(mod.order) + ",\"riivolution\":" + (mod.riivolution ? "true" : "false") +
                    ",\"files\":" + ((mod.files || mod.loose) ? "true" : "false") + ",\"textures\":" +
                    (mod.textures ? "true" : "false") + ",\"movies\":" + (mod.movies ? "true" : "false") +
-                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"native_patches\":" +
-                   std::to_string(mod.native_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
+                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
             for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
             out += "],\"options\":[";
             for (std::size_t o = 0; o < mod.options.size(); ++o) {
@@ -4070,7 +4080,7 @@ int main(int argc, char** argv) {
     // settings, the last start's to previous.log. A test or a shell capturing the output to a pipe or a file keeps it.
     {
         const DWORD output = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
-        if (output != FILE_TYPE_PIPE && output != FILE_TYPE_DISK && std::getenv(NEBULA_TEST_ENV("GALAXY_LOG_TO_CONSOLE")) == nullptr) {
+        if (output != FILE_TYPE_PIPE && output != FILE_TYPE_DISK && NEBULA_TEST_GETENV("GALAXY_LOG_TO_CONSOLE") == nullptr) {
             const fs::path settings = galaxy::runtime_settings_folder();
             std::error_code error;
             if (!settings.empty() && fs::create_directories(settings / "logs", error) | fs::is_directory(settings / "logs", error)) {
@@ -4101,7 +4111,7 @@ int main(int argc, char** argv) {
 #if defined(_WIN32)
     // GALAXY_TEST_CPU_AFFINITY: the logical processors the process may use (hex mask; 0xF = two cores with SMT, a
     // 2C/4T laptop's shape).
-    if (const char* mask = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_CPU_AFFINITY"))) {
+    if (const char* mask = NEBULA_TEST_GETENV("GALAXY_TEST_CPU_AFFINITY")) {
         SetProcessAffinityMask(GetCurrentProcess(), static_cast<DWORD_PTR>(std::strtoull(mask, nullptr, 16)));
     }
     install_crash_reporter();
@@ -4241,6 +4251,13 @@ int main(int argc, char** argv) {
     services.size = sizeof(services);
     services.log = svc_log;
     services.fatal = svc_fatal;
+    services.heap_alloc = [](void*, size_t size) -> void* { return std::malloc(size); };
+    services.heap_realloc = [](void*, void* data, size_t size) -> void* { return std::realloc(data, size); };
+    services.heap_free = [](void*, void* data) { std::free(data); };
+    services.thread_slots = [](void*) -> void** {
+        static thread_local void* slots[NEBULA_THREAD_SLOTS];
+        return slots;
+    };
     services.scene_marker = svc_scene_marker;
     services.movie_frame = svc_movie_frame;
     services.presence = svc_presence;
@@ -4262,7 +4279,6 @@ int main(int argc, char** argv) {
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
     services.shape_forget = svc_shape_forget;
-    services.code_patch = [](void*, uint32_t, uint32_t*) -> int { return 0; };  // mods are out until section W
     services.shape_draw = svc_shape_draw;
     services.native_material = svc_native_material;
     services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
@@ -4343,7 +4359,7 @@ int main(int argc, char** argv) {
     }
     galaxy::render::set_native_settings_content_root(utf8_of(galaxy::host::locate_game(pak).content_root));
     // Discord: never from a hidden test run, which must leave the player's status alone.
-    if (const char* hidden = std::getenv(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW")); hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
+    if (const char* hidden = NEBULA_TEST_GETENV("GALAXY_HIDE_WINDOW"); hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
         const char* id = std::getenv("GALAXY_DISCORD_CLIENT_ID");
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
         galaxy::discord::start(id != nullptr ? id : kDiscordClientId);
@@ -4355,7 +4371,7 @@ int main(int argc, char** argv) {
     gNative.log = native_log;
     if (const bool started = galaxy::render::initialize(static_cast<int>(render_config.window_width),
                                                         static_cast<int>(render_config.window_height));
-        !started || (std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_START_NO_GPU_MEMORY")) != nullptr &&
+        !started || (NEBULA_TEST_GETENV("GALAXY_TEST_START_NO_GPU_MEMORY") != nullptr &&
                      std::getenv("NEBULA_GPU_START_RETRIES") == nullptr)) {
         const std::string reason = galaxy::render::startup_failure();
         if (retry_start_for_gpu_memory(reason)) {
@@ -4413,7 +4429,7 @@ int main(int argc, char** argv) {
         gModule.run();
     });
 #if defined(_WIN32)
-    if (const char* profile = std::getenv(NEBULA_TEST_ENV("GALAXY_PROFILE_GAME")); profile != nullptr && std::atof(profile) > 0.0) {
+    if (const char* profile = NEBULA_TEST_GETENV("GALAXY_PROFILE_GAME"); profile != nullptr && std::atof(profile) > 0.0) {
         const HANDLE sampled = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
                                           GetThreadId(static_cast<HANDLE>(game.native_handle())));
         if (sampled != nullptr) {
@@ -4428,7 +4444,7 @@ int main(int argc, char** argv) {
     DuplicateHandle(GetCurrentProcess(), static_cast<HANDLE>(game.native_handle()), GetCurrentProcess(), &game_thread,
                     THREAD_QUERY_LIMITED_INFORMATION, FALSE, 0);
     uint64_t game_cycles_last = 0;
-    const char* trace_env = std::getenv(NEBULA_TEST_ENV("GALAXY_TRACE_THREAD_CPU"));
+    const char* trace_env = NEBULA_TEST_GETENV("GALAXY_TRACE_THREAD_CPU");
     const bool trace_thread_cpu = trace_env != nullptr && trace_env[0] == '1';
     // Thread cycles count at the time-stamp counter's rate, measured here against the performance counter.
     const double tsc_hz = [] {

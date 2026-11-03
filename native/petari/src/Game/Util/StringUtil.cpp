@@ -17,6 +17,76 @@
 extern "C" {
 };
 
+namespace {
+    // A decimal number at p after any spaces; false if there is none.
+    bool scanInt(const char*& rP, int* pValue) {
+        char* pEnd;
+        const long value = strtol(rP, &pEnd, 10);
+        if (pEnd == rP) {
+            return false;
+        }
+        rP = pEnd;
+        *pValue = static_cast< int >(value);
+        return true;
+    }
+
+    bool scanFloat(const char*& rP, f32* pValue) {
+        const char* p = rP;
+        while (*p == ' ' || (*p >= '\t' && *p <= '\r')) {
+            p++;
+        }
+        const bool negative = *p == '-';
+        if (*p == '-' || *p == '+') {
+            p++;
+        }
+        double value = 0.0;
+        double scale = 1.0;
+        bool any = false;
+        for (; *p >= '0' && *p <= '9'; p++) {
+            value = value * 10.0 + (*p - '0');
+            any = true;
+        }
+        if (*p == '.') {
+            for (p++; *p >= '0' && *p <= '9'; p++) {
+                value = value * 10.0 + (*p - '0');
+                scale *= 10.0;
+                any = true;
+            }
+        }
+        if (!any) {
+            return false;
+        }
+        if (*p == 'e' || *p == 'E') {
+            const char* pExponent = p + 1;
+            int exponent = 0;
+            if (scanInt(pExponent, &exponent)) {
+                p = pExponent;
+                for (; exponent > 0; exponent--) {
+                    value *= 10.0;
+                }
+                for (; exponent < 0; exponent++) {
+                    scale *= 10.0;
+                }
+            }
+        }
+        rP = p;
+        *pValue = static_cast< f32 >((negative ? -value : value) / scale);
+        return true;
+    }
+
+    // The list's opening brace after any spaces.
+    bool scanOpen(const char*& rP) {
+        while (*rP == ' ' || (*rP >= '\t' && *rP <= '\r')) {
+            rP++;
+        }
+        if (*rP != '{') {
+            return false;
+        }
+        rP++;
+        return true;
+    }
+}  // namespace
+
 namespace MR {
     struct Tag {
         u16 _0;
@@ -288,7 +358,11 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%d", pDst);
+        const char* p = pSrc;
+        int value;
+        if (scanInt(p, &value)) {
+            *pDst = value;
+        }
     }
 
     void scan16(const char* pSrc, const char* pSubStr, u16* pDst) {
@@ -298,7 +372,10 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%d", &temp);
+        const char* p = pSrc;
+        if (!scanInt(p, &temp)) {
+            return;
+        }
 
         *pDst = temp;
     }
@@ -310,7 +387,10 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%d", &temp);
+        const char* p = pSrc;
+        if (!scanInt(p, &temp)) {
+            return;
+        }
 
         *pDst = temp;
     }
@@ -320,7 +400,8 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t%ff", pDst);
+        const char* p = pSrc;
+        scanFloat(p, pDst);
     }
 
     void scanu8x4(const char* pSrc, const char* pSubStr, u8* pDst) {
@@ -330,7 +411,16 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t{%d,%d,%d,%d}", &temp[0], &temp[1], &temp[2], &temp[3]);
+        const char* p = pSrc;
+        if (!scanOpen(p)) {
+            return;
+        }
+        for (s32 i = 0; i < 4 && scanInt(p, &temp[i]); i++) {
+            if (*p != ',') {
+                break;
+            }
+            p++;
+        }
 
         for (int i = 0; i < ARRAY_SIZE(temp); i++) {
             pDst[i] = temp[i];
@@ -344,7 +434,16 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t{%d,%d,%d,%d}", &temp[0], &temp[1], &temp[2], &temp[3]);
+        const char* p = pSrc;
+        if (!scanOpen(p)) {
+            return;
+        }
+        for (s32 i = 0; i < 4 && scanInt(p, &temp[i]); i++) {
+            if (*p != ',') {
+                break;
+            }
+            p++;
+        }
 
         for (int i = 0; i < ARRAY_SIZE(temp); i++) {
             pDst[i] = temp[i];
@@ -356,6 +455,18 @@ namespace MR {
             return;
         }
 
-        sscanf(pSrc, "\t{%ff,%ff,%ff,%ff}", &pDst[0], &pDst[1], &pDst[2], &pDst[3]);
+        const char* p = pSrc;
+        if (!scanOpen(p)) {
+            return;
+        }
+        for (s32 i = 0; i < 4 && scanFloat(p, &pDst[i]); i++) {
+            if (*p == 'f') {
+                p++;
+            }
+            if (*p != ',') {
+                break;
+            }
+            p++;
+        }
     }
 };  // namespace MR

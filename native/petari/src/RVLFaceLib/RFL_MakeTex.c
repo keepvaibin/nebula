@@ -1,4 +1,5 @@
 #include "RVLFaceLibInternal.h"
+#include <stdlib.h>
 #include "RFL_Native.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
@@ -26,8 +27,8 @@ void Mii_BeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
 
 void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resolution) {
     int i;
-    Mii_CharInfo infos[MiiExp_Max];
-    Mii_FaceParts parts[MiiExp_Max];
+    Mii_CharInfo* const infos = malloc(sizeof(Mii_CharInfo) * MiiExp_Max);
+    Mii_FaceParts* const parts = malloc(sizeof(Mii_FaceParts) * MiiExp_Max);
     u8** eyeBuf[MiiExp_Max];
     u8** mouthBuf[MiiExp_Max];
     Mii_Texture** eyeTex[MiiExp_Max];
@@ -441,6 +442,9 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
     }
 
     J3DNativeViewSetScissor(sx, sy, sw, sh);
+
+    free(infos);
+    free(parts);
 }
 
 void Mii_InitRFLTexture(Mii_TexObj* tobj) {
@@ -463,8 +467,7 @@ void Mii_Setup2DCameraAndParam(void) {
     J3DPassWriteAlpha(1);
 }
 
-// The parts' forms (runtime/src/render/materials/mii_texture.hlsl): the console's stages over the texture's channels as RFL ran
-// them, with their colours.
+// The parts' forms (runtime/src/render/materials/mii_texture.hlsl), with their colours.
 void Mii_SetTev4Mole(void) {
     Mii_NativeTextureForm(0, MII_I_MOLE_COLOR0, MII_I_MOLE_COLOR0);
 }
@@ -611,8 +614,7 @@ void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_
     Mii_SetTev4Mole();
     Mii_DrawFaceParts(&face->mole);
 
-    // The parts' colours stay; their alpha is drawn again on a cleared alpha channel (the console's copy cleared
-    // alpha only, colour updates being off).
+    // The parts' colours stay; their alpha is drawn again on a cleared alpha channel.
     J3DPassWriteColor(0);
     J3DNativeTargetClear(0x00000000, 0xFFFFFF, 2u | 4u);
     J3DPassBlend(NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_ONE);

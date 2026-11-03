@@ -1,0 +1,20 @@
+/* What a Windows image needs without a C runtime: the list of static constructors and the compiler's small helpers. A frame over a
+   page would need a stack probe, which is not here: the link fails on one. */
+int _fltused = 1;
+
+void _purecall(void) {
+    __builtin_trap();
+}
+
+/* Static constructors: the compiler lists them between these two in the sections it sorts by name. */
+typedef void (*Constructor)(void);
+__attribute__((section(".CRT$XCA"), used)) static Constructor sConstructorsBegin = 0;
+__attribute__((section(".CRT$XCZ"), used)) static Constructor sConstructorsEnd = 0;
+
+void nebula_run_constructors(void) {
+    for (Constructor* p = &sConstructorsBegin + 1; p < &sConstructorsEnd; ++p) {
+        if (*p != 0) {
+            (*p)();
+        }
+    }
+}

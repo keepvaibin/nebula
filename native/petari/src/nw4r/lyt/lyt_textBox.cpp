@@ -323,8 +323,7 @@ namespace nw4r {
 
         u32 TextBox::MakeDrawFlag() const {
             u32 flag = 0;
-            // textAlignment: the console's compiler packed the bit-field from the high bit (bits 5-6, read as
-            // mBitsu8 >> 5); this compiler packs it from the low bit, where those bits are always 0.
+            // textAlignment is bits 5-6 of the byte: mBitsu8 >> 5.
             switch (GetTextAlignment()) {
             case 0:
             default:

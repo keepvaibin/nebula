@@ -13,7 +13,7 @@ static_assert(sizeof(JASVoice) == sizeof(NebulaVoice), "a voice is the API's rec
 static_assert(sizeof(JASEffectLine) == sizeof(NebulaEffectLine), "an effect line is the API's record");
 
 namespace {
-    // The output gain: four times the game's DSP level (4 before the game first sets it).
+    // The output gain: four times the game's level (4 before the game first sets it).
     f32 sMixerGain = 4.0f;
     // An effect line has been started.
     bool sEffectStarted[4];

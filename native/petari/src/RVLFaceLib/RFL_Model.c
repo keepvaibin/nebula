@@ -809,7 +809,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
 
         // The shape's primitives as Mii_DrawShape reads them: the primitive (bit 0 set when its vertices have
         // texture coordinates), the vertex count (high byte first), then each vertex's position, normal and texture
-        // coordinate indices - the size of the console's display list of them.
+        // coordinate indices.
         u8* out = (u8*)shape->dlBuf;
 
         for (i = 0; i < primitiveNum; i++) {

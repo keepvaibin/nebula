@@ -3,7 +3,7 @@ import hashlib, os, re, sys
 def table(D):
     out = []
     for f in os.listdir(D):
-        if f.startswith('present_') and f.endswith('.ppm') and 'xfb' not in f:
+        if f.startswith('present_') and f.endswith('.ppm') and 'xfb' not in f and 'display' not in f:
             out.append((int(re.search(r'(\d+)', f).group(1)), hashlib.md5(open(os.path.join(D, f), 'rb').read()).hexdigest()))
     return sorted(out)
 a = table(sys.argv[1])

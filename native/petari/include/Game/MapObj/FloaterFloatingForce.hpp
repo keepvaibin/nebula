@@ -19,7 +19,7 @@ public:
 
     virtual const TVec3f& getCurrentVelocity() const {
         // Zero.
-        static const TVec3f zero(0.0f, 0.0f, 0.0f);
+        static TVec3f zero;
         return zero;
     }
 

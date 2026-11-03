@@ -1,4 +1,5 @@
 #include "Game/NPC/MiiFaceIconHolder.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/MiiFaceIcon.hpp"
 #include "Game/NameObj/NameObjAdaptor.hpp"
@@ -22,6 +23,11 @@ void MiiFaceIconHolder::drawIcons() {
 }
 
 void MiiFaceIconHolder::registerIcon(MiiFaceIcon* pIcon) {
+    if (mIconNum == mIconNumMax) {
+        mIcon = MR::growArray(mIcon, static_cast< s32 >(mIconNumMax));
+        mIconNumMax *= 2;
+    }
+
     mIcon[mIconNum++] = pIcon;
 }
 

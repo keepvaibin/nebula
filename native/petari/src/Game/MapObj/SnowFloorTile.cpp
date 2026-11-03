@@ -246,6 +246,13 @@ bool SnowFloorTile::doErase(const TVec3f& rPosition, f32 radius, f32 amount) {
     return false;
 }
 
+namespace {
+    // Floors move on the game's main thread.
+    u16 sXs[4096];
+    u16 sYs[4096];
+    f32 sWeights[4096];
+}  // namespace
+
 f32 SnowFloorTile::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
     f32 outerRadius;
     f32 removed = 0.0f;
@@ -255,9 +262,9 @@ f32 SnowFloorTile::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
     u32 count = 0;
     TVec2f unitDirection(to - from);
     unitDirection.normalize();
-    u16 xs[4096];
-    u16 ys[4096];
-    f32 weights[4096];
+    u16* const xs = sXs;
+    u16* const ys = sYs;
+    f32* const weights = sWeights;
     outerRadius = 1.732051f * radius;
     to.x *= mTextureSize;
     to.y *= mTextureSize;

@@ -11,7 +11,7 @@ namespace {
     NebulaNativeMaterial sMaterial;
 
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
-        static const nw4r::ut::Color fog = 0;
+        const nw4r::ut::Color fog = 0;
         J3DPass::noFog();
         NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);

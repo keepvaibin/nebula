@@ -8,8 +8,6 @@ public:
     JAU_JASInitializer();
     void initJASystem(NebulaArena* pHeap);
 
-    u32 audioMemory_;
-    u32 audioMemSize_;
     int heapSize_;
     int field_0x1c;
     int field_0x20;

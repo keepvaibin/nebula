@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/Array.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
@@ -120,8 +121,8 @@ public:
 
     s32 mCurrentRace;
     RaceManagerLayout* mLayout;
-    AbstractRacer* mRacer[10];
-    AbstractAudience* mAudience[10];
+    MR::FixedArray< AbstractRacer*, 10 > mRacer;
+    MR::FixedArray< AbstractAudience*, 10 > mAudience;
     u32 mRacerNum;
     u32 mAudienceNum;
     u32 mRank;

@@ -2568,7 +2568,7 @@ void select_mods_row(const RenderConfig& render, const std::string& key) {
 
 // What a mod changes, its conflicts by the draft's order, or why it does nothing: the line under the page.
 std::string mod_details(const galaxy::mods::ModInfo& mod) {
-    if (!mod.problem.empty() && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
+    if (!mod.problem.empty() && (mod.code_patches != 0u || (!mod.files && !mod.textures && !mod.movies && !mod.loose))) {
         return mods_ui_text(mod.problem, 120u);
     }
     std::string kinds;
@@ -2583,10 +2583,6 @@ std::string mod_details(const galaxy::mods::ModInfo& mod) {
             if (languages.find(name) == std::string::npos) languages += languages.empty() ? name : ", " + name;
         }
         kinds += ". TEXT: " + languages;
-    }
-    if (mod.code_patches != 0u) {
-        kinds += ". " + std::to_string(mod.code_patches) + " CODE CHANGE" + (mod.code_patches == 1u ? "" : "S") +
-                 " CANNOT RUN IN NEBULA";
     }
     for (const galaxy::mods::ModOverlap& overlap : mod.overlaps) {
         std::string what;

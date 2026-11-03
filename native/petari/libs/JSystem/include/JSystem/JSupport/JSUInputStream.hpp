@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/System/ConsoleSave.hpp"
+#include "Game/System/OldSave.hpp"
 #include "JSystem/JSupport/JSUIosBase.hpp"
 
 class JSUInputStream : public JSUIosBase {
@@ -15,11 +15,11 @@ public:
 
     s32 read(void*, s32);
 
-    // Scalars: host order, or the console's while a save is converted.
+    // Scalars: host order, or an old save's while one is converted.
     template < typename T >
     typename JSUScalar< T >::Result read(T* pData, s32 size) {
         const s32 got = read(static_cast< void* >(pData), size);
-        if (gSaveConsoleOrder && size % (s32)sizeof(T) == 0) {
+        if (gOldSaveOrder && size % (s32)sizeof(T) == 0) {
             for (s32 i = 0; i < size / (s32)sizeof(T); i++) {
                 pData[i] = saveScalar(pData[i]);
             }
