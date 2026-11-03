@@ -107,7 +107,7 @@ enum class FilePick { Miis, ModArchives, ModFolders };
 void pick_files(FilePick kind, std::function<void(std::vector<std::filesystem::path>)> done);
 void open_folder(const std::filesystem::path& folder);
 struct UpscalerCaps {
-    bool dlss = false, frame_generation = false, frame_generation_dynamic = false;
+    bool dlss = false, xess = false, frame_generation = false, frame_generation_dynamic = false;
     unsigned frame_generation_max = 0, frames_presented = 1;
 };
 [[nodiscard]] UpscalerCaps upscaler_caps() noexcept;

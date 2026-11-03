@@ -31,7 +31,10 @@ enum NativeShaderVariant : unsigned {
     kNativeVariantPixelDual = 8u,
     kNativeVariantPixelSample = 9u,
     kNativeVariantPixelSampleDual = 10u,
-    kNativeVariants = 11u,
+    kNativeVariantPixelReactive = 11u,
+    kNativeVariantPixelLayer = 12u,
+    kNativeVariantPixelMotion = 13u,
+    kNativeVariants = 14u,
 };
 
 [[nodiscard]] constexpr unsigned native_shader_variant(std::uint32_t blend_bits) noexcept {

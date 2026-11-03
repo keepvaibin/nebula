@@ -158,7 +158,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss", "xess"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
     } else if (std::strcmp(key, "frame_generation") == 0) {
         cfg.frame_generation = std::min(parse_uint(val, cfg.frame_generation), 5u);
@@ -245,7 +245,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 3u);
+    cfg.upscaler = std::min(cfg.upscaler, 4u);
     cfg.frame_generation = std::min(cfg.frame_generation, 5u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);

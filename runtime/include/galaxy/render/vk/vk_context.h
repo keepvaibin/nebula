@@ -120,6 +120,10 @@ public:
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
     // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).
     [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
+    // What FSR 3's compute passes need, enabled (temporal_upscaler_vk.cpp).
+    [[nodiscard]] bool temporal_upscaling() const noexcept { return temporal_upscaling_; }
+    // What XeSS asked for, enabled (Context::create).
+    [[nodiscard]] bool xess_upscaling() const noexcept { return xess_upscaling_; }
     [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
     // The largest device-local heap's use and budget (the driver's with VK_EXT_memory_budget, else VMA's estimate).
     bool device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
@@ -218,6 +222,9 @@ private:
     bool display_timing_ = false;  // VK_GOOGLE_display_timing
     bool depth_clamp_ = false;
     bool depth_clip_enable_ = false;
+    bool temporal_upscaling_ = false;
+    bool xess_upscaling_ = false;
+    bool xess_instance_ready_ = false;
     bool debug_names_ = false;
     struct Pending {
         std::uint64_t value;

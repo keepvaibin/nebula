@@ -495,8 +495,23 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         blend.logicOpEnable = VK_TRUE;
         blend.logicOp = logic_op_mode((bb >> 9u) & 0xfu);
     }
-    blend.attachmentCount = 1;
-    blend.pAttachments = &target;
+    // A temporal scene's second target: a writer's motion vectors, a blended draw's reactive mask (its largest).
+    VkPipelineColorBlendAttachmentState targets[2]{target, {}};
+    const unsigned aux = (bb & kRenderStateMotionTarget) != 0u ? 1u : (bb & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
+    if (aux == 1u) {
+        targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT;
+    } else if (aux == 2u) {
+        targets[1].blendEnable = VK_TRUE;
+        targets[1].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        targets[1].dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        targets[1].colorBlendOp = VK_BLEND_OP_MAX;
+        targets[1].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        targets[1].dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+        targets[1].alphaBlendOp = VK_BLEND_OP_MAX;
+        targets[1].colorWriteMask = VK_COLOR_COMPONENT_R_BIT;
+    }
+    blend.attachmentCount = aux != 0u ? 2u : 1u;
+    blend.pAttachments = targets;
 
     const VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic{VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
@@ -516,7 +531,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = layout_->layout;
-    info.renderPass = layout_->pass_for(rs.samples_log2, false);
+    info.renderPass = aux != 0u ? layout_->aux_pass_for(rs.samples_log2, aux) : layout_->pass_for(rs.samples_log2, false);
     const TestRefusals& refuse = test_refusals();
     if ((refuse.dual_source && dual_source && layout_->dual_source_blend) || (refuse.depth_clip && raster.pNext) ||
         (refuse.depth_clamp && raster.depthClampEnable) || (refuse.logic_op && blend.logicOpEnable) ||

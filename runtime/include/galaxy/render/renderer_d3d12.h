@@ -992,6 +992,7 @@ private:
     std::future<std::unique_ptr<TemporalUpscaler>> temporal_pending_;
     unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
     unsigned temporal_quality_ = 0;
+    std::int64_t temporal_last_upscale_us_ = 0;
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).
     bool streamline_frame_open_ = false;
     // DLSS Frame Generation's HUD-less picture: the upscaled scene before the 2D layer (taken at

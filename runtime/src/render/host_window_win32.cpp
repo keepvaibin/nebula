@@ -3,6 +3,7 @@
 // settings menu asks of its platform (host_window.h).
 
 #include "galaxy/render/host_window_win32.h"
+#include "galaxy/render/xess_library.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/run_options.h"
 #include "galaxy/path_text.h"
@@ -1345,6 +1346,7 @@ void open_folder(const std::filesystem::path& folder) {
 
 UpscalerCaps upscaler_caps() noexcept {
     UpscalerCaps caps;
+    caps.xess = xess_library::available();
     caps.dlss = streamline::dlss_supported();
     caps.frame_generation = streamline::frame_generation_supported();
     caps.frame_generation_dynamic = streamline::frame_generation_dynamic();
