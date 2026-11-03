@@ -66,7 +66,7 @@ namespace {
 
 bool xinput_requires_focus() {
     static const bool requires_focus =
-        read_env_flag("GALAXY_XINPUT_REQUIRE_FOCUS", true);
+        read_env_flag(nebula_switch::xinput_require_focus_name(), true);
     return requires_focus;
 }
 

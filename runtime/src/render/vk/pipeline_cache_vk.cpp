@@ -276,7 +276,7 @@ void PipelineCacheVk::stop_prepare() noexcept {
 void PipelineCacheVk::start_prepare() {
     std::size_t env_length = 0;
     char env_value[8] = {};
-    (void)getenv_s(&env_length, env_value, sizeof(env_value), "GALAXY_NO_PIPELINE_PREPARE");
+    (void)getenv_s(&env_length, env_value, sizeof(env_value), nebula_switch::no_pipeline_prepare_name());
     if (pipeline_seeds().empty() || env_length != 0u) {
         return;
     }

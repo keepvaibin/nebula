@@ -130,7 +130,7 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     pd.VS = code(g_ao_apply_vs, sizeof(g_ao_apply_vs));
     pd.PS = code(g_ao_apply_ps, sizeof(g_ao_apply_ps));
     D3D12_RENDER_TARGET_BLEND_DESC& blend = pd.BlendState.RenderTarget[0];
-    blend.BlendEnable = view ? FALSE : TRUE;
+    blend.BlendEnable = false ? FALSE : TRUE;
     blend.SrcBlend = D3D12_BLEND_ZERO;
     blend.DestBlend = D3D12_BLEND_SRC_COLOR;
     blend.BlendOp = D3D12_BLEND_OP_ADD;
@@ -212,12 +212,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         return false;
     }
     // GALAXY_AO_VIEW=1: the scene shows the occlusion alone (white: open), to judge it by itself.
-    static const bool view = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_AO_VIEW") == 0 && length > 1 && value[0] == '1';
-    }();
-    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr, view);
+    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr, false);
     const unsigned divisor = std::max(in.occlusion_divisor, 1u);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
@@ -259,7 +254,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     c.size[0] = width;
     c.size[1] = height;
     c.size[2] = divisor;
-    c.size[3] = view ? 1u : 0u;
+    c.size[3] = 0u;
 
     // Two SRV tables (t0 the scene target depth, t1 an occlusion target, t2 the distances: {denoised} for the distance,
     // occlusion and multiply passes, {raw} for the denoise), then the three targets' UAVs.

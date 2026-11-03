@@ -138,7 +138,7 @@ void copy_adapter_description(
 DXGI_GPU_PREFERENCE adapter_preference() {
     char value[16]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_GPU_PREFERENCE") == 0 &&
+    if (getenv_s(&length, value, sizeof(value), nebula_switch::gpu_preference_name()) == 0 &&
         length > 1 && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M')) {
         return DXGI_GPU_PREFERENCE_MINIMUM_POWER;
     }
@@ -1654,7 +1654,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
     {
         char buf[16]{};
         std::size_t len = 0;
-        if (getenv_s(&len, buf, sizeof(buf), "GALAXY_D3D_DEBUG") == 0 &&
+        if (getenv_s(&len, buf, sizeof(buf), nebula_switch::d3d_debug_name()) == 0 &&
             len > 0) {
             d3d_debug_level =
                 static_cast<unsigned>(std::strtoul(buf, nullptr, 10));
@@ -1677,7 +1677,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         {
             char dred_env[8]{};
             std::size_t dred_len = 0;
-            if (getenv_s(&dred_len, dred_env, sizeof(dred_env), "GALAXY_D3D_DRED") == 0 && dred_len > 0 &&
+            if (getenv_s(&dred_len, dred_env, sizeof(dred_env), nebula_switch::d3d_dred_name()) == 0 && dred_len > 0 &&
                 dred_env[0] != '0') {
                 ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dred;
                 if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
@@ -2041,7 +2041,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const bool passes = [] {
                 char value[8]{};
                 std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_GPU_PASSES") == 0 && length > 1u &&
+                return getenv_s(&length, value, sizeof(value), nebula_switch::gpu_passes_name()) == 0 && length > 1u &&
                        value[0] == '1';
             }();
             if (passes) {
@@ -2066,7 +2066,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
             const bool draws = [] {
                 char value[8]{};
                 std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_GPU_DRAWS") == 0 && length > 1u &&
+                return getenv_s(&length, value, sizeof(value), nebula_switch::gpu_draws_name()) == 0 && length > 1u &&
                        value[0] == '1';
             }();
             if (draws) {

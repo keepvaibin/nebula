@@ -3975,7 +3975,7 @@ int main(int argc, char** argv) {
     galaxy::render::set_native_settings_content_root(utf8_of(galaxy::host::locate_game(pak).content_root));
     // Discord: never from a hidden test run, which must leave the player's status alone.
     if (const char* hidden = nebula_switch::hide_window(); hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
-        const char* id = std::getenv("GALAXY_DISCORD_CLIENT_ID");
+        const char* id = std::getenv(nebula_switch::discord_client_id_name());
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
         galaxy::discord::start(id != nullptr ? id : kDiscordClientId);
     }
