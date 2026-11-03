@@ -51,7 +51,7 @@
             android:exported="false"
             android:process=":game"
             android:theme="@style/Theme.Nebula.Game"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="fullUser"
             android:resizeableActivity="true"
             android:preferMinimalPostProcessing="true"
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />

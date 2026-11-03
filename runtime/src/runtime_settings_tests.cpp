@@ -161,8 +161,16 @@ int main() {
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
-            galaxy::RuntimeInputMode::KeyboardMouse,
-        "missing settings default to keyboard and mouse");
+            galaxy::RuntimeInputMode::Auto,
+        "missing settings default to Auto");
+    static_assert(!galaxy::input_missing(galaxy::RuntimeInputMode::Phone, false, false, false));
+    write_text(settings_path, "input_mode=phone\nmenu_text_size=130\ncontrols_version=2\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().input_mode == galaxy::RuntimeInputMode::Phone, "file input_mode=phone loads");
+    passed &= expect(galaxy::get_runtime_settings().menu_text_size == 130u, "the menu's text size loads");
+    write_text(settings_path, "menu_text_size=5000\ncontrols_version=2\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().menu_text_size == 200u, "a menu text size past the end is held at it");
     using Mode = galaxy::RuntimeInputMode;
     static_assert(!galaxy::input_missing(Mode::KeyboardMouse, false, false, false));
     static_assert(galaxy::input_missing(Mode::Controller, false, true, true));

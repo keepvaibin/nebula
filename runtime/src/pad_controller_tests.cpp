@@ -805,6 +805,16 @@ void test_device_list() {
     build_device_list({}, std::nullopt, list);
     expect(list.count == 1 && label_of(list, 0) == "Keyboard and mouse", "no controllers: keyboard and mouse only");
     expect(list.entries[0].key.scheme == ControlScheme::Keyboard && !list.entries[0].active, "keyboard entry");
+    build_device_list({}, std::nullopt, list, false);
+    expect(list.count == 0, "nothing attached: nothing listed");
+    build_device_list({}, std::nullopt, list, false, true);
+    expect(list.count == 1 && label_of(list, 0) == "Phone" && is_phone(list.entries[0].key) && list.entries[0].active,
+           "a phone with nothing attached: its screen, in use");
+    build_device_list({}, std::nullopt, list, true, true);
+    expect(list.count == 2 && is_phone(list.entries[0].key) && !is_phone(list.entries[1].key) &&
+               label_of(list, 1) == "Keyboard and mouse",
+           "a phone with a keyboard: its screen first");
+    expect(!is_phone(DeviceKey{ControlScheme::Keyboard, kKeyboardSlot}), "the keyboard is not the phone");
 
     const std::array<ControllerInfo, 4> mixed{
         controller(ControlScheme::PlayStation, 1, ControllerLink::Usb, "DualSense"),

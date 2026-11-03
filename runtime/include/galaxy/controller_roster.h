@@ -46,16 +46,21 @@ struct DeviceEntry {
 };
 
 struct DeviceList {
-    std::array<DeviceEntry, kMaxControllers + 1> entries{};
+    std::array<DeviceEntry, kMaxControllers + 2> entries{};
     std::size_t count = 0;
 };
 
-// Keyboard and mouse first, then the controllers by scheme and slot (more than
-// kMaxControllers are dropped). Controllers of one model are numbered; wired,
-// Bluetooth and wireless links are named, then the note. `active` marks the
-// entry with that key.
+// The phone's own screen: a device with no bindings, the keyboard's scheme with a slot of its own.
+inline constexpr std::uint8_t kPhoneSlot = 0xFEu;
+[[nodiscard]] constexpr bool is_phone(DeviceKey key) noexcept {
+    return key.scheme == ControlScheme::Keyboard && key.slot == kPhoneSlot;
+}
+
+// What is there, in the order it is offered: the phone's screen (`phone`), the keyboard and mouse only when one is attached
+// (`keyboard`), then the controllers by scheme and slot (more than kMaxControllers are dropped). Controllers of one model
+// are numbered; wired, Bluetooth and wireless links are named, then the note. `active` marks the entry with that key.
 void build_device_list(std::span<const ControllerInfo> connected, std::optional<DeviceKey> active,
-                       DeviceList& out) noexcept;
+                       DeviceList& out, bool keyboard = true, bool phone = false) noexcept;
 
 // The entry to edit after the list changed: `previous` if it is still there,
 // else another controller of its scheme (same bindings), else the keyboard.

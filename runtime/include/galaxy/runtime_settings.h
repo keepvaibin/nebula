@@ -15,6 +15,7 @@ enum class RuntimeInputMode : std::uint32_t {
     KeyboardMouse = 1,
     Controller = 2,
     RealWiimote = 3,
+    Phone = 4,  // the on-screen controls alone (phones and tablets)
 };
 
 struct RuntimeAudioSettings {
@@ -54,11 +55,8 @@ inline constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLan
                                                   GameLanguage::Japanese};
 
 struct RuntimeSettings {
-#if defined(__ANDROID__)
-    RuntimeInputMode input_mode = RuntimeInputMode::Auto;  // the touch controls, and a pad when one is in hand
-#else
-    RuntimeInputMode input_mode = RuntimeInputMode::KeyboardMouse;
-#endif
+    // Auto: whatever is attached and in use.
+    RuntimeInputMode input_mode = RuntimeInputMode::Auto;
     RuntimeAudioSettings audio{};
     // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3; 4 each page at once (instant).
     unsigned text_speed = 1u;
@@ -69,6 +67,8 @@ struct RuntimeSettings {
     ButtonIcons button_icons = ButtonIcons::Auto;
     // Co-star mode: with two controllers attached, the second plays player 2.
     bool co_star = false;
+    // The menus' text and everything around it, in percent; 0: as large as the screen's size calls for.
+    unsigned menu_text_size = 0u;
 
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
@@ -106,6 +106,7 @@ struct RuntimeInputModeState {
     case RuntimeInputMode::Controller: return !controller;
     case RuntimeInputMode::RealWiimote: return !wii_remote;
     case RuntimeInputMode::Auto: return !controller && !wii_remote && !keyboard_or_mouse;
+    case RuntimeInputMode::Phone:
     case RuntimeInputMode::KeyboardMouse: break;
     }
     return false;

@@ -287,6 +287,8 @@ void native_settings_window_resized(unsigned width, unsigned height);
 // The settings the menu would apply (its draft), for tests.
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
+// The mods saved differ from the ones this run started with.
+[[nodiscard]] bool native_settings_mods_changed();
 
 // The settings menu as it stands, for the native game's own menu (NebulaSettingsMenu) and the overlay alike: the
 // pages, the open page's rows (the overlay's English), the selection and what the line under the page says.

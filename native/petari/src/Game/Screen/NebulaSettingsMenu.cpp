@@ -35,6 +35,8 @@ namespace {
     // Screen units (NebulaUi::readScreen): 456 high, 810 wide at 16:9.
     const f32 cMargin = 16.0f;     // the window from the screen's edges
     const f32 cMaxWidth = 900.0f;  // a wide screen keeps a window that reads as one
+    const f32 cReadableTextDp = 14.0f;  // a row's text on the screen, at the least, unless the player chooses otherwise
+    const f32 cZoomMax = 1.8f;
     const f32 cPad = 26.0f;        // the window's inside
     const f32 cTitleSize = 21.0f;
     const f32 cTabHeight = 30.0f;
@@ -875,6 +877,10 @@ private:
 
     // The layout, again whenever the screen's shape changes.
     f32 mScaleX;
+    f32 mZoom = 1.0f;  // the menu's size (arrange): every measure below is in its own units
+    f32 mScreenWidth = 0.0f;
+    f32 mScreenHeight = 0.0f;
+    s32 mTextSizeChosen = 0;
     f32 mWidth;
     f32 mHeight;
     f32 mPanelWidth;
@@ -1175,7 +1181,23 @@ bool NebulaSettingsScreen::build() {
 // Where everything goes for the screen's shape: the window as large as the screen allows, at most cMaxWidth wide.
 void NebulaSettingsScreen::arrange() {
     readScreen(&mScaleX, &mWidth, &mHeight);
-    mRoot->mScale = nw4r::math::VEC2(mScaleX, 1.0f);
+    mTextSizeChosen = static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE));
+    mScreenWidth = mWidth;
+    mScreenHeight = mHeight;
+    // The menu's size: the player's, or large enough that its text is readable on this screen.
+    const s32 chosen = static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE));
+    const s32 wide = static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_WINDOW_WIDTH_DP));
+    mZoom = 1.0f;
+    if (chosen != 0) {
+        mZoom = static_cast< f32 >(chosen) / 100.0f;
+    } else if (wide > 0) {
+        const f32 textDp = cTextSize * static_cast< f32 >(wide) / mWidth;
+        mZoom = textDp < cReadableTextDp ? cReadableTextDp / textDp : 1.0f;
+        mZoom = mZoom > cZoomMax ? cZoomMax : mZoom;
+    }
+    mWidth /= mZoom;
+    mHeight /= mZoom;
+    mRoot->mScale = nw4r::math::VEC2(mScaleX * mZoom, mZoom);
     mPanelWidth = mWidth - cMargin * 2.0f;
     mPanelWidth = mPanelWidth > cMaxWidth ? cMaxWidth : mPanelWidth;
     mPanelHeight = mHeight - cMargin * 2.0f;
@@ -1566,8 +1588,8 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     screen.y = (screen.y + 1.0f) * static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown) * 0.5f;
     TVec2f layout;
     MR::convertScreenPosToLayoutPos(&layout, screen);
-    const f32 x = layout.x / mScaleX;
-    const f32 y = layout.y - mMenu->mTranslate.y;
+    const f32 x = layout.x / (mScaleX * mZoom);
+    const f32 y = layout.y / mZoom - mMenu->mTranslate.y;
     if (__builtin_fabsf(x - mPointerX) > 0.5f || __builtin_fabsf(y - mPointerY) > 0.5f) {
         mPointerMode = true;
     }
@@ -2583,7 +2605,8 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     f32 width;
     f32 height;
     readScreen(&scaleX, &width, &height);
-    if (scaleX != mScaleX || __builtin_fabsf(width - mWidth) > 0.5f || __builtin_fabsf(height - mHeight) > 0.5f) {
+    if (scaleX != mScaleX || __builtin_fabsf(width - mScreenWidth) > 0.5f || __builtin_fabsf(height - mScreenHeight) > 0.5f ||
+        static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_MENU_TEXT_SIZE)) != mTextSizeChosen) {
         arrange();
     }
     if (!mHome && rView.page == rView.controls_page && rView.status != NEBULA_SETTINGS_STATUS_JOYCON) {
