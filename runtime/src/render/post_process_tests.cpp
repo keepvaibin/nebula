@@ -1,5 +1,6 @@
 // plan_post_process, the AA status texts, the start-up self-test and the scene
 // anti-aliasing on the WARP software device (no GPU or window needed).
+#include "galaxy/test_hooks.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/renderer_d3d12.h"
 
@@ -158,19 +159,19 @@ void self_test_on_warp() {
     expect(s.fxaa_ok, "fxaa self-test passes");
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after self-test");
     // Injected failures: each AA pass is replaced or reported, the chain stays up.
-    _putenv_s("GALAXY_TEST_POST_FAULT", "selftest");
+    _putenv_s(nebula_switch::test_post_fault_name(), "selftest");
     galaxy::render::PostProcessor no_smaa;
     expect(no_smaa.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "initialize with a failing smaa self-test");
     expect(!no_smaa.status().smaa_ok && no_smaa.status().fxaa_ok &&
                std::strcmp(no_smaa.status().smaa_reason.data(), "SELF-TEST") == 0,
            "smaa self-test failure reported, fxaa kept");
-    _putenv_s("GALAXY_TEST_POST_FAULT", "smaa,fxaa");
+    _putenv_s(nebula_switch::test_post_fault_name(), "smaa,fxaa");
     galaxy::render::PostProcessor no_aa;
     expect(no_aa.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "scaling survives failed aa pipelines");
     expect(!no_aa.status().smaa_ok && !no_aa.status().fxaa_ok &&
                std::strcmp(no_aa.status().smaa_reason.data(), "PIPELINES") == 0,
            "aa pipeline failures reported");
-    _putenv_s("GALAXY_TEST_POST_FAULT", "");
+    _putenv_s(nebula_switch::test_post_fault_name(), "");
     galaxy::render::PostProcessor nothing;
     expect(!nothing.initialize(nullptr, nullptr, PostProcessSettings{}), "no device: initialize fails");
     expect(!nothing.status().initialized && !nothing.status().smaa_ok, "no device: nothing available");

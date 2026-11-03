@@ -151,7 +151,7 @@ bool trace_present_stats_enabled() {
         std::size_t length = 0;
         return getenv_s(
                    &length, value, sizeof(value),
-                   NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS")) == 0 &&
+                   nebula_switch::trace_present_stats_name()) == 0 &&
                length > 1 && value[0] != '0';
     }();
     return enabled;

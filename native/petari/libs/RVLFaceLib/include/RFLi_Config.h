@@ -65,7 +65,7 @@ extern "C" {
  */
 
 #define MII_I_CREATE_ID_MASK_TEMPORARY 0x20000000
-#define MII_I_CREATE_ID_MASK_NOT_SPECIAL 0x80000000
+#define MII_I_CREATE_ID_MASK_NOT_SPECIAL (1u << 31)
 
 /**
  * Face texture

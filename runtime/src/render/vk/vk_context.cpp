@@ -773,7 +773,7 @@ std::uint64_t Context::register_address(VkBuffer buffer) {
     } else if (next_address_id_ < kAddressSlots) {
         id = next_address_id_++;
     } else {
-        std::fprintf(stderr, "[vulkan] GX address space exhausted (%zu buffers)\n", kAddressSlots - 1u);
+        std::fprintf(stderr, "[vulkan] buffer address space exhausted (%zu buffers)\n", kAddressSlots - 1u);
         return 0u;
     }
     address_slots_[id].store(buffer, std::memory_order_release);

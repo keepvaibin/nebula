@@ -35,17 +35,14 @@ namespace Nebula.Launcher
         {
             bool record = mode != RecordingMode.None, detailed = mode == RecordingMode.Detailed;
             var env = start.EnvironmentVariables;
-            foreach (var flag in new[] { "GALAXY_TRACE_PRESENT_STATS", "GALAXY_MONITOR_POINTER_LATENCY",
+            foreach (var flag in new[] { "GALAXY_MONITOR_POINTER_LATENCY",
                 "GALAXY_MONITOR_FRAME_TAILS", "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_FRAME_TELEMETRY" })
                 env[flag] = record ? "1" : "0";
-            env["GALAXY_TRACE_GX_STALLS"] = detailed ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE"] = record ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE_EVENTS"] = "4000000";
             env["GALAXY_GPU_TIMESTAMPS"] = detailed ? "1" : "0";
-            env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
             env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailed ? "32" : "0";
             env["GALAXY_GX_PSO_CYCLES"] = detailed ? "1" : "0";
-            env["GALAXY_TRACE_RENDER_STALL_US"] = "20000";
         }
 
         public static void ValidatePair(string app)

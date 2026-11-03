@@ -25,7 +25,7 @@ object Night {
     val Glass = Color(0xE0101328)
     val GlassEdge = Color(0x24FFFFFF)
     val TextDim = Color(0xB3FFFFFF)
-    val TextFaint = Color(0x80FFFFFF)
+    val TextFaint = Color.White.copy(alpha = 0.5f)
     val Error = Color(0xFFFFB4AB)
     val Success = Color(0xFF9EE6B8)
 }

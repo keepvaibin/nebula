@@ -1,3 +1,4 @@
+#include "galaxy/test_hooks.h"
 #include "galaxy/host_env.h"
 #include "galaxy/test_data_paths.h"
 
@@ -43,7 +44,7 @@ int main() {
         check(galaxy::host::test_data_paths_error(3, argv), "save argument escape rejected");
         _wputenv_s(L"NEBULA_WORK", L"");
         _putenv_s("GALAXY_HIDE_WINDOW", "0");
-        _putenv_s("GALAXY_TEST_PATH_GUARD", "1");
+        _putenv_s(nebula_switch::test_path_guard_name(), "1");
         check(galaxy::host::test_data_paths_error(1, argv), "test variable activates guard");
         std::cout << "test data paths: passed\n";
         return 0;
