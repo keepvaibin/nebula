@@ -250,13 +250,13 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
             } else {
                 std::snprintf(text, sizeof(text), "%u%%", value);
             }
-            rows.push_back({"  INTENSITY", text,
+            rows.push_back({"BLOOM", text,
                             [&host](RenderConfig& draft, int delta) {
                                 draft.bloom = static_cast<unsigned>(std::clamp(
                                     static_cast<int>(std::min(draft.bloom, kMaxBloom)) + delta * 10, 0,
                                     static_cast<int>(kMaxBloom)));
                             },
-                            "THE ENHANCED GLOW'S STRENGTH"});
+                            "HOW STRONGLY BRIGHT THINGS GLOW"});
             rows.back().slider_steps = static_cast<std::uint16_t>(kMaxBloom / 10u);
             rows.back().slider_at = static_cast<std::uint16_t>(value / 10u);
         }

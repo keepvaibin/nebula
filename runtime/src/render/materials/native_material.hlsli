@@ -357,7 +357,13 @@ struct NativeOut { float4 color : SV_Target0; };
 NativeOut native_ps(NativeVaryings i) {
     // The material's colour as it is; the target rounds it once. A constant destination alpha replaces the alpha
     // written; the blender reads the material's alpha (SV_Target1 for dual-source blending).
+#if NATIVE_PIXEL_LIT
+    // A wide scene target keeps what the enhanced lighting adds past white; an 8-bit one rounds it to white.
+    const float4 lit_color = material_color(i);
+    const float4 c0 = float4(max(lit_color.rgb, 0.0), saturate(lit_color.a));
+#else
     const float4 c0 = saturate(material_color(i));
+#endif
     const uint pe = vs_header.z;
     const float stage_alpha = c0.a;
     float4 c = c0;

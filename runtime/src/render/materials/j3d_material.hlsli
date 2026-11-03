@@ -199,7 +199,8 @@ float3 enh_finish(float3 frag, EnhShade e) {
     const float3 c = enh_lin(saturate(frag));
     const float peak = max(max(c.r, c.g), max(c.b, 1e-4));
     const float3 f0 = saturate(c * (max(peak, kEnhMetalF0) / peak));
-    return enh_srgb(enh_shoulder(c + e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw)));
+    const float3 lit = c + e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw);
+    return enh_srgb((draw_indices.w & 4u) != 0u ? lit : enh_shoulder(lit));
 }
 
 float4 enh_env(float4 t) {
