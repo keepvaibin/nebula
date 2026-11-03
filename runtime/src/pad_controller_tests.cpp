@@ -10,6 +10,7 @@
 #include "galaxy/rumble.h"
 #include "galaxy/simple_pads.h"
 #include "galaxy/steam_controller.h"
+#include "galaxy/switch2_ble.h"
 #include "galaxy/switch_controller.h"
 #include "galaxy/wiimote_hid.h"
 
@@ -1276,6 +1277,51 @@ void test_steam_classic_ble() {
     expect(sv::build_classic_ble_segment(feature, 2, out) == 0u, "and no more");
 }
 
+void test_switch2_ble() {
+    namespace ble = galaxy::input::switch2_ble;
+    namespace sw = galaxy::input::switch_hid;
+    Bytes advert{0x01, 0x00, 0x03, 0x7e, 0x05, 0x67, 0x20};
+    auto seen = ble::parse_advert(advert, 0x112233445566ull);
+    expect(seen && seen->product == sw::kJoyCon2LeftProductId && seen->pairing, "a Joy-Con 2 (L) advertising");
+    advert[5] = 0x66;
+    expect(ble::parse_advert(advert, 0)->product == sw::kJoyCon2RightProductId, "a Joy-Con 2 (R) advertising");
+    advert[3] = 0x00;
+    expect(!ble::parse_advert(advert, 0), "another vendor's");
+    Bytes paired{0x01, 0x00, 0x03, 0x7e, 0x05, 0x67, 0x20, 0, 0, 0, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11};
+    seen = ble::parse_advert(paired, 0x112233445566ull);
+    expect(seen && !seen->pairing, "one paired with this host");
+    expect(!ble::parse_advert(paired, 0x665544332211ull), "one paired with another");
+    paired[10] = paired[11] = paired[12] = paired[13] = paired[14] = paired[15] = 0;
+    expect(ble::parse_advert(paired, 0x112233445566ull)->pairing, "one in pairing mode");
+
+    const std::array<std::uint8_t, 4> payload{0x27, 0, 0, 0};
+    const auto frame = ble::command(0x0c, 0x02, payload);
+    expect(frame == std::vector<std::uint8_t>{0x0c, 0x91, 0x01, 0x02, 0x00, 0x04, 0x00, 0x00, 0x27, 0x00, 0x00, 0x00}, "a command's frame");
+    const auto read = ble::flash_read(0x1fc040);
+    expect(read == std::vector<std::uint8_t>{0x02, 0x91, 0x01, 0x04, 0x00, 0x08, 0x00, 0x00, 0x40, 0x7e, 0x00, 0x00, 0x40, 0xc0, 0x1f, 0x00}, "a flash read's frame");
+    Bytes reply(0x50, 0);
+    reply[0x10] = 0xb2;
+    const auto block = ble::flash_block(reply);
+    expect(block.size() == 0x40u && block[0] == 0xb2u, "the block in a reply");
+    expect(ble::flash_block(Bytes(8, 0)).empty(), "a short reply has none");
+    const auto commands = ble::set_up_commands();
+    expect(!commands.empty() && commands[0][0] == 0x03 && commands[0][3] == 0x0d && commands[0][2] == 0x01, "set-up starts output, over BLE");
+
+    Bytes value(ble::kCommonReportBytes, 0);
+    value[5] = 0x08;  // byte 6 of the USB report: A at byte 5 there is byte 4 here
+    value[4] = 0x08;
+    const auto report = ble::usb_report(value);
+    sw::Switch2ImuState imu;
+    sw::DecodedState state;
+    expect(report && (*report)[0] == sw::kSwitch2InputReport && sw::decode_switch2_report(*report, imu, state) && (state.buttons & bit(pad::kEastBit)) != 0u,
+           "the common report decodes as report 0x05");
+    expect(!ble::usb_report(Bytes(10, 0)), "a short value is no report");
+
+    const auto motor = ble::motor_value(3, galaxy::input::rumble::kLevelSteps, 100);
+    expect(motor[0] == 0x00u && motor[1] == 0x53u && motor[2] != 0u && motor[2] == motor[7] && motor[3] == motor[8] && motor[6] == motor[16],
+           "the vibration value: its sequence and the motor three times");
+}
+
 void test_licensed_playstation() {
     expect(ps::model_for_product(0x054c, 0x0ba0) == ps::Model::DualShock4, "the DS4 wireless adapter reads as a DualShock 4");
     expect(ps::model_for_product(0x0f0d, 0x0066) == ps::Model::DualShock4, "a licensed Hori pad reads as a DualShock 4");
@@ -1455,6 +1501,7 @@ int main() {
     test_sixaxis();
     test_wii_u_pro();
     test_steam_classic_ble();
+    test_switch2_ble();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;
