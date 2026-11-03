@@ -543,6 +543,23 @@ bool finite(const Vec3& a) noexcept {
 
 }  // namespace
 
+bool ReportModeWatch::update(std::uint8_t report_id, std::size_t imu_count, bool wants_motion,
+                             std::uint64_t now_us) noexcept {
+    if (report_id != kReportFullState && report_id != kReportSimpleState) return false;
+    if (report_id == kReportFullState && (imu_count != 0u || !wants_motion)) {
+        answered = true;
+        unanswered = 0u;
+        lost_since_us = 0u;
+        return false;
+    }
+    if (lost_since_us == 0u) lost_since_us = now_us;
+    if (now_us - lost_since_us < kLostUs || (asked_us != 0u && now_us - asked_us < kAskUs)) return false;
+    if (!answered && unanswered >= kMostUnanswered) return false;
+    asked_us = now_us;
+    if (!answered) ++unanswered;
+    return true;
+}
+
 float SwitchMotion::shake_accel_threshold_g(std::uint8_t sensitivity) noexcept {
     static constexpr float kThresholds[kShakeSensitivitySteps] = {1.50f, 1.20f, 0.95f, 0.75f, 0.60f};
     return kThresholds[std::clamp<int>(sensitivity, 1, kShakeSensitivitySteps) - 1];

@@ -245,6 +245,21 @@ struct MotionSettings {
     float picture_aspect = 16.0f / 9.0f;
 };
 
+// Another program holding the same controller can change its report mode or turn its sensors off: Steam does, 1 to 3 s
+// after the controller connects. update() takes each state report and is true when the mode, sensors and motor should
+// be asked for again: after kLostUs without full reports with motion, at most once per kAskUs. A controller that has
+// never answered is asked kMostUnanswered times, so a pad without the mode or the sensors is left alone.
+struct ReportModeWatch {
+    static constexpr std::uint64_t kLostUs = 250'000;
+    static constexpr std::uint64_t kAskUs = 1'000'000;
+    static constexpr std::uint8_t kMostUnanswered = 8;
+    std::uint64_t lost_since_us = 0;
+    std::uint64_t asked_us = 0;
+    std::uint8_t unanswered = 0;
+    bool answered = false;
+    bool update(std::uint8_t report_id, std::size_t imu_count, bool wants_motion, std::uint64_t now_us) noexcept;
+};
+
 class SwitchMotion {
 public:
     static constexpr std::uint64_t kShakeHoldUs = 60'000;
