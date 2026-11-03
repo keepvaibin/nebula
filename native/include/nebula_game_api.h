@@ -962,9 +962,11 @@ typedef struct NebulaHostServices {
     /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,
        u32, then the samples, PCM16, left and right in turn, of the track played) for the mixer; 0 when the queue is full (null asks only that).
        sound at 32 kHz; 0 when NEBULA_MOVIE_AUDIO_QUEUE_FRAMES already wait (nothing taken). A null record asks for the frames there is room for.
-       movie_audio_control: NEBULA_MOVIE_AUDIO_*. */
+       movie_audio_control: NEBULA_MOVIE_AUDIO_*. movie_audio_position: where the output has reached in the sound since the movie opened or was
+       reset, in frames and the fraction of the one being heard. */
     int (*movie_audio)(void* user, const void* record, uint32_t size);
     void (*movie_audio_control)(void* user, uint32_t what, int32_t value, int32_t milliseconds);
+    double (*movie_audio_position)(void* user);
     void (*sound_clock)(void* user, uint32_t what, uint32_t value);
 
     /* The HOME Menu (NEBULA_HBM_*). */

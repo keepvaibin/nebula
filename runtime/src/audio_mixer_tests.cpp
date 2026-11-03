@@ -353,7 +353,7 @@ void test_movie_record() {
     expect(near(out[2], 0.25, 1e-4), "left, next", out[2]);
 }
 
-// The room the player paces its pictures by; once started, the last frame plays out; a dry queue waits for two again.
+// The room the player reads its sound ahead by; two frames start it; after that any frame plays, so the last plays out.
 void test_movie_room() {
     galaxy::audio::MovieAudio movie;
     movie.open(false);
@@ -371,10 +371,18 @@ void test_movie_room() {
     movie.pull(out.data(), 50u);
     expect(out[0] != 0.0f, "the last frame plays out", out[0]);
     expect(movie.room() == galaxy::audio::MovieAudio::kQueueFrames, "the queue is dry");
+    movie.set_unplayed(150u);
+    expect(near(movie.position(), 0.5, 1e-9), "half of the first frame played", movie.position());
+    movie.set_unplayed(100u);
+    expect(near(movie.position(), 1.0, 1e-9), "the first frame played", movie.position());
+    movie.set_unplayed(25u);
+    expect(near(movie.position(), 1.75, 1e-9), "three quarters of the second", movie.position());
+    movie.set_unplayed(0u);
+    expect(near(movie.position(), 2.0, 1e-9), "both played", movie.position());
     expect(movie.push(record.data(), record.size()), "another frame queues");
     std::fill(out.begin(), out.end(), 0.0f);
     movie.pull(out.data(), 40u);
-    expect(out[0] == 0.0f, "after running dry, one frame waits again", out[0]);
+    expect(out[0] != 0.0f, "a frame after a dry moment plays at once", out[0]);
     for (std::size_t i = movie.room(); i != 0u; --i) {
         expect(movie.push(record.data(), record.size()), "room for a frame");
     }

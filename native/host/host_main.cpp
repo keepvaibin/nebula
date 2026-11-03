@@ -3316,6 +3316,14 @@ int svc_movie_audio(void*, const void* record, uint32_t size) {
 #endif
 }
 
+double svc_movie_audio_position(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    return gAudio->movie_audio_position();
+#else
+    return 0.0;
+#endif
+}
+
 void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t milliseconds) {
 #if defined(NEBULA_HOST_RENDERER)
     gAudio->movie_audio_control(what, value, milliseconds);
@@ -3951,6 +3959,7 @@ int main(int argc, char** argv) {
     services.voices_mix = svc_audio_mix;
     services.voices_frame = svc_audio_frame;
     services.movie_audio = svc_movie_audio;
+    services.movie_audio_position = svc_movie_audio_position;
     services.movie_audio_control = svc_movie_audio_control;
     services.sound_clock = svc_audio_control;
     services.hbm = svc_hbm;

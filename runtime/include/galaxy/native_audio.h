@@ -29,6 +29,7 @@ public:
     void frame();
     // The movie player's sound (nebula_game_api.h movie_audio*).
     int movie_audio(const void* record, std::uint32_t size);
+    double movie_audio_position();
     void movie_audio_control(std::uint32_t what, std::int32_t value, std::int32_t milliseconds);
     // The device stopped while the app is out of sight.
     void set_paused(bool paused);

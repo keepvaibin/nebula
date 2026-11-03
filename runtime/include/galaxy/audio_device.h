@@ -16,6 +16,8 @@ public:
     [[nodiscard]] virtual std::uint32_t rate() const = 0;
     virtual void start(Render render) = 0;
     virtual void set_paused(bool paused) = 0;
+    // The frames given to the device that it has not played yet, as of the last call of the render function.
+    [[nodiscard]] virtual std::uint32_t queued_frames() const { return 0u; }
 };
 
 // The system's default output, followed when it changes; with none, the clock pulls until one appears.

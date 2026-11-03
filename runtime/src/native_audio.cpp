@@ -322,6 +322,10 @@ struct NativeGameAudio::State {
             filled += take;
         }
         std::fill(out + filled * 2u, out + static_cast<std::size_t>(frames) * 2u, 0.0f);
+        // What the mixer made and has not been played: what waits here, what just went out and what the device holds. A
+        // movie's picture follows this.
+        const std::uint64_t unplayed = pending.size() / 2u - pending_read + frames + device->queued_frames();
+        mixer->movie().set_unplayed(static_cast<std::size_t>(unplayed * galaxy::audio::MovieAudio::kRate / rate));
     }
 };
 
@@ -423,6 +427,10 @@ int NativeGameAudio::movie_audio(const void* record, std::uint32_t size) {
         return static_cast<int>(movie.room());
     }
     return movie.push(static_cast<const std::uint8_t*>(record), size) ? 1 : 0;
+}
+
+double NativeGameAudio::movie_audio_position() {
+    return state_->mixer != nullptr ? state_->mixer->movie().position() : 0.0;
 }
 
 void NativeGameAudio::movie_audio_control(std::uint32_t what, std::int32_t value, std::int32_t milliseconds) {
