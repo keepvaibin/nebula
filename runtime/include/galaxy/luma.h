@@ -53,6 +53,12 @@ struct Dependency {
     std::string version;  // needs: the oldest that will do; conflicts: only those below this
 };
 
+enum class SaveMode {
+    Shared,  // the player's normal saves
+    Own,     // saves of its own, from nothing or from its starting files
+    Copy,    // saves of its own, from a copy of the player's
+};
+
 struct Manifest {
     std::uint32_t format = 0;
     std::string id;
@@ -73,8 +79,10 @@ struct Manifest {
     std::vector<std::string> load_before;
     std::vector<Option> options;
     std::vector<Layer> layers;
-    std::string save_path;
-    bool save_copy = false;
+    SaveMode save_mode = SaveMode::Shared;
+    std::string save_tag;   // the family of saves; the mod's id when it names none
+    std::string save_path;  // starting files in the mod
+    bool save_player_can_change = false;
     bool has_plugins = false;
 };
 

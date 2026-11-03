@@ -2933,6 +2933,10 @@ void svc_game_light(void*, uint32_t kind, uint64_t id, const float* v) {
 #endif
 }
 
+// While their files cook at the start: the phase NEBULA_OPTION_RT_PREPARATION reports, and where the cooker says how far it is.
+std::atomic<uint32_t> gModsPreparing{0u};
+fs::path gModsProgressFile;
+
 uint32_t svc_option(void*, uint32_t what) {
     switch (what) {
     case NEBULA_OPTION_TEXT_SPEED:
@@ -2982,10 +2986,21 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
+    case NEBULA_OPTION_MODS_PREPARING:
+        return gModsPreparing.load(std::memory_order_acquire) != 0u ? 1u : 0u;
     case NEBULA_OPTION_RT_PREPARATION:
-    case NEBULA_OPTION_RT_PREPARE_PROGRESS:
-        // The ray tracer is parked (no shaders to prepare): the game's preparation screen never shows.
-        return 0;
+        // The ray tracer is parked: only mods' files bring the game's preparation screen.
+        return gModsPreparing.load(std::memory_order_acquire);
+    case NEBULA_OPTION_RT_PREPARE_PROGRESS: {
+        if (gModsPreparing.load(std::memory_order_acquire) == 0u) {
+            return 0;
+        }
+        std::ifstream in(gModsProgressFile);
+        uint64_t done = 0;
+        uint64_t total = 0;
+        in >> done >> total;
+        return total != 0u ? static_cast<uint32_t>(done * 10000u / total) : 0u;
+    }
     case NEBULA_OPTION_TEST_ARENA_FILL: {
         const char* value = ::galaxy::run_options().test_arena_fill;
         return value != nullptr ? 0x100u | (static_cast<uint32_t>(std::strtoul(value, nullptr, 16)) & 0xFFu) : 0u;
@@ -3697,7 +3712,9 @@ void prepare_mod_files(const fs::path& settings_folder, const std::string& game_
         std::error_code save_error;
         if (!fs::exists(theirs, save_error)) {
             fs::create_directories(theirs, save_error);
-            if (plan.save_clone) {
+            if (!plan.save_start.empty()) {
+                fs::copy(plan.save_start, plan.save_folder, fs::copy_options::recursive | fs::copy_options::skip_existing, save_error);
+            } else if (plan.save_clone) {
                 fs::copy(mine, theirs, fs::copy_options::recursive | fs::copy_options::skip_existing, save_error);
             }
         }
@@ -3739,12 +3756,14 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
         kept.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
     }
     if (kept != signature || !fs::is_regular_file(overlay, error)) {
+        const auto cook_now = [plan, folder, overlay, signature_file, signature, game_id]() -> bool {
         const fs::path plan_file = folder / "mods.plan";
         if (!galaxy::io::write_file_atomically(plan_file, galaxy::mods::plan_text(plan, game_id))) {
             log_line("mods:", "the plan could not be written");
-            return;
+            return false;
         }
-        fs::remove(signature_file, error);
+        std::error_code cook_error;
+        fs::remove(signature_file, cook_error);
 #if defined(_WIN32)
         wchar_t exe[MAX_PATH] = {};
         GetModuleFileNameW(nullptr, exe, MAX_PATH);
@@ -3766,7 +3785,7 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
         }
         if (exit_code != 0u) {
             log_line("mods:", "the mods' files could not be cooked: the game runs without them");
-            return;
+            return false;
         }
 #else
         // The importer's library, as the launcher loads it.
@@ -3775,11 +3794,37 @@ void cook_mod_files(const galaxy::mods::DiscPlan& plan, const fs::path& settings
         const auto cook = library != nullptr ? reinterpret_cast<CookOverlay>(dlsym(library, "nebula_cook_overlay")) : nullptr;
         if (cook == nullptr || cook(utf8_of(plan_file).c_str(), utf8_of(overlay).c_str()) != 0) {
             log_line("mods:", "the mods' files could not be cooked: the game runs without them");
-            return;
+            return false;
         }
 #endif
         if (!galaxy::io::write_file_atomically(signature_file, signature)) {
             log_line("mods:", "the signature could not be written");
+        }
+            return true;
+        };
+#if defined(NEBULA_HOST_RENDERER)
+        // The game's own screen while they cook; then it starts again with them, so that they are there from its first file.
+        // A hidden test run cooks first, as its measurements start from the game with its mods.
+        bool screen = ::galaxy::run_options().hide_window == nullptr;
+#if !defined(NEBULA_RELEASE)
+        screen = screen || std::getenv("GALAXY_TEST_MODS_SCREEN") != nullptr;
+#endif
+        if (screen) {
+            gModsProgressFile = overlay;
+            gModsProgressFile.replace_extension("progress");
+            gModsPreparing.store(2u, std::memory_order_release);
+            log_line("mods:", "preparing their files");
+            std::thread([cook_now]() {
+                if (cook_now()) {
+                    finish_and_exit(true);
+                }
+                gModsPreparing.store(0u, std::memory_order_release);
+            }).detach();
+            return;
+        }
+#endif
+        if (!cook_now()) {
+            return;
         }
     }
     if (gPak.store.attach_overlay(overlay)) {

@@ -576,6 +576,18 @@ bool json_true(const std::string& text, std::string_view field) {
 // The language played, as language_folder takes it (the host says; English until it does).
 std::atomic<unsigned> s_played_language{1u};
 
+// The option a .luma's author may offer: its saves or the player's.
+constexpr const char* kSavesOption = "nebula-saves";
+
+// The family of saves a .luma plays on, as things stand; empty: the player's normal saves.
+std::string own_saves_tag(const ModInfo& mod) {
+    if (!mod.luma || mod.luma->save_mode == luma::SaveMode::Shared) return {};
+    for (const ModOption& option : mod.options) {
+        if (option.key == kSavesOption && option.selected == 2u) return {};
+    }
+    return mod.luma->save_tag;
+}
+
 // What a .luma's layers are used under, as things stand.
 luma::Situation situation_of(const ModInfo& mod, const std::string& game_id, const std::string& language) {
     luma::Situation situation;
@@ -698,6 +710,13 @@ void start_texture_sorting();
 Settings& settings() {
     static Settings s;
     return s;
+}
+
+// Where a family's saves are kept: beside the mods and not in one, so updating or removing a mod keeps them.
+fs::path saves_of(const std::string& tag) {
+    Settings& s = settings();
+    const std::lock_guard<std::mutex> lock(s.mutex);
+    return s.folder / ".saves" / from_utf8(tag);
 }
 
 struct Session {
@@ -1055,6 +1074,20 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
                     }
                     mod.options.push_back(std::move(option));
                 }
+                if (manifest->save_player_can_change && manifest->save_mode != luma::SaveMode::Shared) {
+                    ModOption option;
+                    option.key = kSavesOption;
+                    option.name = "SAVES";
+                    option.choices = {"THIS MOD'S SAVES", "YOUR NORMAL SAVES"};
+                    option.choice_ids = {"own", "normal"};
+                    option.other_region.assign(2u, false);
+                    option.must_choose = true;
+                    option.selected = 1u;
+                    if (s != nullptr) {
+                        if (const auto it_id = s->choice_ids.find(option.key); it_id != s->choice_ids.end() && it_id->second == "normal") option.selected = 2u;
+                    }
+                    mod.options.push_back(std::move(option));
+                }
                 const luma::Situation situation = situation_of(mod, region_id, playing);
                 for (const luma::Layer& layer : manifest->layers) {
                     if (!luma::layer_used(layer, situation)) continue;
@@ -1156,6 +1189,18 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
             if (!need.version.empty() && luma::compare_versions(them->luma->version, need.version) < 0) {
                 mod.problem = "THIS MOD NEEDS A NEWER VERSION OF: " + title(*them);
                 break;
+            }
+        }
+        if (!mod.problem.empty()) continue;
+        // One family of saves at a time: the higher on the list has them.
+        if (const std::string tag = own_saves_tag(mod); !tag.empty() && mod.enabled) {
+            for (const ModInfo& above : mods) {
+                if (&above == &mod) break;
+                const std::string theirs = above.enabled && above.problem.empty() ? own_saves_tag(above) : std::string();
+                if (!theirs.empty() && theirs != tag) {
+                    mod.problem = "THIS MOD CAN'T RUN WITH: " + title(above);
+                    break;
+                }
             }
         }
         if (!mod.problem.empty()) continue;
@@ -1374,9 +1419,10 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
             plan.notes.push_back(mod.id + ": " + mod.problem);
             continue;
         }
-        if (mod.package && mod.luma && !mod.luma->save_path.empty()) {
-            plan.save_folder = mod.path / fs::path(from_utf8(mod.luma->save_path));
-            plan.save_clone = mod.luma->save_copy;
+        if (const std::string tag = own_saves_tag(mod); !tag.empty()) {
+            plan.save_folder = saves_of(tag);
+            plan.save_clone = mod.luma->save_mode == luma::SaveMode::Copy;
+            plan.save_start = mod.luma->save_path.empty() ? fs::path() : mod.path / fs::path(from_utf8(mod.luma->save_path));
         }
         if (mod.package) plan.luma_folders.push_back(mod.path);
         if (!changes_disc(mod)) continue;
@@ -1559,6 +1605,12 @@ DiscPlan plan_disc_changes(const galaxy::disc::AssetStore& store, const std::str
         }
         for (const Placed& p : placed) {
             if (lower(p.disc).starts_with("/nebuladata/")) continue;  // the game's own tables
+            // A save's shape follows the galaxy list: a mod that adds a galaxy never plays on normal saves.
+            if (plan.save_folder.empty() && lower(p.disc).starts_with("/stagedata/") && lower(p.disc).ends_with("scenario.arc") && !store.find(p.disc)) {
+                plan.save_folder = saves_of(mod.luma ? mod.luma->save_tag : mod.id);
+                plan.save_clone = false;
+                note("it adds a galaxy, so it keeps its own saves");
+            }
             chosen[lower(p.disc)] = {p.disc, p.host};
         }
     }
