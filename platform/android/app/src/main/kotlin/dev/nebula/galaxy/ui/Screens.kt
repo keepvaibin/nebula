@@ -441,22 +441,6 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
                     )
-                    Text(
-                        "Sharper pictures take more power. Takes effect the next time the game starts.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Night.TextDim,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                    )
-                    for (scale in 1..GraphicsSettings.MAX_SCALE) {
-                        ChoiceRow(
-                            "${scale}×" + if (scale == 1) " (the Wii's)" else "",
-                            "${640 * scale} × ${528 * scale}",
-                            !graphics.matchScreen && graphics.scale == scale,
-                        ) { model.updateGraphics(graphics.copy(scale = scale, matchScreen = false)) }
-                    }
-                    ChoiceRow("Match the screen", "The smallest that covers this display", graphics.matchScreen) {
-                        model.updateGraphics(graphics.copy(matchScreen = true))
-                    }
                     SwitchRow("Menus and HUD at the screen's resolution", "Sharp text at any internal resolution",
                         graphics.hudAtScreen) {
                         model.updateGraphics(graphics.copy(hudAtScreen = it))
