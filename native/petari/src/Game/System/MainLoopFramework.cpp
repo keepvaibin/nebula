@@ -58,7 +58,7 @@ void MainLoopFramework::beginRender() {
         mRenderCounter = 0;
     }
     if (mDoRenderFrame) {
-        clearEfb(mClearColor);
+        clearFrame(mClearColor);
         preGX();
     }
 }
@@ -70,7 +70,7 @@ void MainLoopFramework::endRender() {
             mPreRenderCallback();
         }
         prepareCopyDisp();
-        J3DNativeState::showFrame(NebulaFrameClock::cCanvasWidth, NebulaFrameClock::cCanvasHeight);
+        J3DNativeState::showFrame();
     }
 }
 
@@ -80,14 +80,14 @@ void MainLoopFramework::endFrame() {
 
 // The frame cleared to `color` (its alpha when the frame keeps alpha) and the far depth, with the view, matrix and
 // pixel state the frame's first draws start from.
-void MainLoopFramework::clearEfb(NebulaColor8 color) {
-    u16 fbWidth = NebulaFrameClock::cCanvasWidth;
-    u16 efbHeight = NebulaFrameClock::cCanvasHeight;
+void MainLoopFramework::clearFrame(NebulaColor8 color) {
+    u16 frameWidth = NebulaFrameClock::cScreenUnitsAcross;
+    u16 frameHeight = NebulaFrameClock::cScreenUnitsDown;
     Mtx44 proj;
-    NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
+    NebulaMtxOrtho(proj, 0.0f, frameHeight, 0.0f, frameWidth, 0.0f, 1.0f);
     J3DNativeView::setOrthographic(proj);
-    J3DNativeView::setViewport(0.0f, 0.0f, fbWidth, efbHeight, 0.0f, 1.0f);
-    J3DNativeView::setScissor(0, 0, fbWidth, efbHeight);
+    J3DNativeView::setViewport(0.0f, 0.0f, frameWidth, frameHeight, 0.0f, 1.0f);
+    J3DNativeView::setScissor(0, 0, frameWidth, frameHeight);
     Mtx identity;
     NebulaMtxIdentity(identity);
     J3DNativeShape::setPosition(0, identity);
@@ -102,7 +102,7 @@ void MainLoopFramework::clearEfb(NebulaColor8 color) {
     J3DPass::cull(NEBULA_CULL_BACK);
     const u32 rgba = (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
                      (static_cast< u32 >(color.b) << 8) | color.a;
-    J3DNativeTarget::clearFrame(0, 0, fbWidth, efbHeight, rgba, 0xFFFFFF,
+    J3DNativeTarget::clearFrame(0, 0, frameWidth, frameHeight, rgba, 0xFFFFFF,
                                 NEBULA_CLEAR_COLOR | (mUseAlpha ? NEBULA_CLEAR_ALPHA : 0u) | NEBULA_CLEAR_DEPTH);
 }
 

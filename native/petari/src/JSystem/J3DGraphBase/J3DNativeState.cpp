@@ -3,6 +3,7 @@
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <math.h>
 #include <string.h>
@@ -202,10 +203,10 @@ namespace J3DNativeState {
         setFrameAlpha(false);
     }
 
-    void showFrame(u16 width, u16 height) {
+    void showFrame() {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_show(pHost->user, width, height, 0u);
+        pHost->frame_show(pHost->user);
     }
 
     void endFrame() {
@@ -323,14 +324,14 @@ namespace J3DPass {
 
     void lineWidth(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
-        sPass.line_width = pixels;
+        sPass.line_width = pixels * J3DNativeView::cUnitsDown;
         sPass.line_divisor = spreadTexture ? 1 : 0;
         sPass.line_offsets = spreadTexture ? 7 : 0;
     }
 
     void pointSize(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
-        sPass.point_size = pixels;
+        sPass.point_size = pixels * J3DNativeView::cUnitsDown;
         sPass.point_divisor = spreadTexture ? 1 : 0;
         sPass.point_offsets = spreadTexture ? 7 : 0;
     }

@@ -577,8 +577,7 @@ bool RendererD3D12::create_scene_targets(const FrameMap& map) {
     // copies into the new ones.
     const std::uint64_t width = map.width;
     const std::uint64_t height = map.height;
-    if (width == 0u || height == 0u || map.scale() > kMaxSceneScale ||
-        width > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+    if (width == 0u || height == 0u || width > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         height > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         width > static_cast<std::uint64_t>(
             std::numeric_limits<LONG>::max()) ||
@@ -1418,11 +1417,9 @@ bool RendererD3D12::can_hand_over_display_copy(const CaptureRequest& params, con
         !post_process_.ready() || !post_process_.reads_held_pictures()) {
         return false;
     }
-    const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(params.src_width, params.src_height, frame_);
+    const FrameExtent extent = capture_extent(false, frame_);
     // The display's vertical filter is applied when the frame is presented (present: filter_display_picture).
-    return !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
-           params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
-           dest.width == extent.width && dest.height == extent.height;
+    return !params.half_scale && dest.width == extent.width && dest.height == extent.height;
 }
 
 gpu::TextureRef RendererD3D12::hand_over_scene_color(gpu::TextureRef fresh) {
@@ -1568,17 +1565,17 @@ void RendererD3D12::apply_window_size() {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     if (content.width <= 0 || content.height <= 0) {
         return;
     }
     FrameMap wanted(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
-    const unsigned covering = wanted.scale();
-    const unsigned render_scale = host_window::upscaler_render_scale(render, covering);
-    if (render_scale != covering) {
-        wanted = FrameMap(render_scale);
+    upscale_output_ = wanted;
+    const float render_fraction = host_window::upscaler_render_fraction(render, wanted.width, wanted.height);
+    if (render_fraction < 1.0f) {
+        wanted = FrameMap(std::max(static_cast<unsigned>(std::lround(wanted.width * render_fraction)), 1u),
+                          std::max(static_cast<unsigned>(std::lround(wanted.height * render_fraction)), 1u));
     }
-    upscale_output_scale_ = covering;
     const unsigned samples = wanted_msaa_samples();
     if (wanted == frame_ && samples == scene_msaa_.samples) {
         return;
@@ -1613,7 +1610,7 @@ void RendererD3D12::apply_window_size() {
     frame_ = wanted;
     refresh_scene_conversion_source_views();
     invalidate_draw_bindings();
-    bound_scissor_input_scale_ = 0u;
+    bound_scissor_input_map_ = FrameMap{};
     std::cout << "[Renderer] internal resolution " << previous.width << "x" << previous.height << " -> "
               << frame_.width << "x" << frame_.height;
     if (scene_msaa_.samples > 1u) {
@@ -4570,15 +4567,8 @@ bool RendererD3D12::temporal_mode() const {
     return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported());
 }
 
-unsigned RendererD3D12::scene_display_scale() const {
-    if (temporal_ != nullptr && temporal_mode() && temporal_output_w_ > frame_.width) {
-        return temporal_output_w_ / kFrameWidth;
-    }
-    return frame_.scale();
-}
-
 bool RendererD3D12::ensure_motion_target() {
-    if (motion_target_ && motion_target_scale_ == frame_.scale()) {
+    if (motion_target_ && motion_target_map_ == frame_) {
         return true;
     }
     if (motion_target_) {
@@ -4594,7 +4584,7 @@ bool RendererD3D12::ensure_motion_target() {
     layer_color_.Reset();
     layer_trans_.Reset();
     layer_window_ = false;
-    motion_target_scale_ = 0u;
+    motion_target_map_ = FrameMap{};
     if (!motion_rtv_heap_) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 4;
@@ -4657,7 +4647,7 @@ bool RendererD3D12::ensure_motion_target() {
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
     command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
-    motion_target_scale_ = frame_.scale();
+    motion_target_map_ = frame_;
     return true;
 }
 
@@ -4754,8 +4744,8 @@ RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
     TemporalInterpKey key{};
     key.upscaler = cfg.upscaler;
     key.quality = cfg.temporal_quality;
-    key.scene_target_scale = output_scene_active_ ? alt_scene_.map.scale() : frame_.scale();  // the render scene target's
-    key.output_scale = upscale_output_scale_;
+    key.scene_map = output_scene_active_ ? alt_scene_.map : frame_;  // the render scene target's
+    key.output_map = upscale_output_;
     key.max_fps = presented_max_fps(cfg);
     key.vsync = cfg.vsync_interval;
     key.refresh_hz = display_refresh_hz_;
@@ -5870,10 +5860,10 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
         return false;
     }
     const ReplayCopy* display = nullptr;
-    unsigned output_scale = 0u;  // the log switches to the output scene target at this scale
+    FrameMap output_map{};  // the log switches to the output scene target at this size
     for (const ReplayCopy& copy : run_copies_) {
         if (copy.mode == 1u) display = &copy;
-        if (copy.mode == 2u) output_scale = copy.width / kFrameWidth;
+        if (copy.mode == 2u) output_map = FrameMap(copy.width, copy.height);
     }
     if (display == nullptr || run_start_output_active_) {
         // Logs begin at the ring advance after a display copy, on the render
@@ -5970,7 +5960,7 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
     sequence_.ready = true;
     sequence_.first = true;
     sequence_.serial = ++sequence_serial_;
-    sequence_.output_scale = output_scale;
+    sequence_.output_map = output_map;
     sequence_.overrides = sequence;
     sequence_.alloc_segment = ring_segment_;
     sequence_.program = table.gpu;
@@ -5994,7 +5984,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
     settle_owed_scene();
     const ReplaySequence& sequence = sequence_.overrides;
     const interp_gpu::Layout& layout = sequence.layout;
-    const unsigned output_scale = sequence_.output_scale;
+    const FrameMap output_map = sequence_.output_map;
     const bool temporal = temporal_interp_ && temporal_ != nullptr;
     if (!entry.list) {
         d3d_check(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&entry.allocator)),
@@ -6074,22 +6064,22 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         // EFBs (its chunks interleave with the sub-frames) stay intact: one at the
         // render scene target's scale and, for a log that switches to the output scene target (HUD
         // at output resolution), one at that scale.
-        const unsigned render_scale = output_scene_active_ ? alt_scene_.map.scale() : frame_.scale();
+        const FrameMap render_map = output_scene_active_ ? alt_scene_.map : frame_;
         const unsigned render_samples = output_scene_active_ ? alt_scene_.msaa.samples : scene_msaa_.samples;
-        if (((!replay_scene_.color || replay_scene_.map != render_scale ||
+        if (((!replay_scene_.color || replay_scene_.map != render_map ||
               replay_scene_.msaa.samples != render_samples) &&
-             !create_scene_set(replay_scene_, replay_scene_rtv_heap_, replay_scene_dsv_heap_, render_scale, true, false,
+             !create_scene_set(replay_scene_, replay_scene_rtv_heap_, replay_scene_dsv_heap_, render_map, true, false,
                              render_samples)) ||
-            (output_scale != 0u &&
-             (!replay_output_scene_.color || replay_output_scene_.map != output_scale) &&
+            (!output_map.empty() &&
+             (!replay_output_scene_.color || replay_output_scene_.map != output_map) &&
              !create_scene_set(replay_output_scene_, replay_output_scene_rtv_heap_,
-                             replay_output_scene_dsv_heap_, output_scale, false, true))) {
+                             replay_output_scene_dsv_heap_, output_map, false, true))) {
             command_list_->Close();
             entry.sequence = 0u;
             replay_failure_ = 5u;
             return false;
         }
-        if (output_scale != 0u) {
+        if (!output_map.empty()) {
             // Its conversion-source views live in this game frame's descriptor
             // segment (the persistent prefix is sized for the live sets).
             write_scene_set_views(replay_output_scene_, srv_ring_.allocate(2u));
@@ -6102,7 +6092,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             swap_scene_sets();
         }
         swap_scene_with(replay_scene_);
-        if (output_scale != 0u) {
+        if (!output_map.empty()) {
             std::swap(alt_scene_, replay_output_scene_);
         }
         // Sub-frames write their motion vectors and reactive mask to their own
@@ -6232,7 +6222,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         if (output_scene_active_) {
             swap_scene_sets();
         }
-        if (output_scale != 0u) {
+        if (!output_map.empty()) {
             std::swap(alt_scene_, replay_output_scene_);
         }
         swap_scene_with(replay_scene_);
@@ -6502,7 +6492,7 @@ bool RendererD3D12::present_replay_subframe(const SubframeTime& given, const Aff
 // Motion and reactive targets of the sub-frames, at the replay scene target's scale
 // (the scale current while a replay records).
 bool RendererD3D12::ensure_replay_motion_targets() {
-    if (replay_motion_.target && replay_motion_.scale == frame_.scale()) {
+    if (replay_motion_.target && replay_motion_.map == frame_) {
         return true;
     }
     if (replay_motion_.target) {
@@ -6570,7 +6560,7 @@ bool RendererD3D12::ensure_replay_motion_targets() {
     device_->CreateRenderTargetView(replay_motion_.reactive.Get(), nullptr, replay_motion_.reactive_rtv);
     device_->CreateRenderTargetView(replay_motion_.layer_color.Get(), nullptr, replay_motion_.layer_color_rtv);
     device_->CreateRenderTargetView(replay_motion_.layer_trans.Get(), nullptr, replay_motion_.layer_trans_rtv);
-    replay_motion_.scale = frame_.scale();
+    replay_motion_.map = frame_;
     return true;
 }
 
@@ -6696,9 +6686,9 @@ void RendererD3D12::record_layer_begin() {
 // Command lists recorded before this point may name the old context; none is
 // open, so waiting for the GPU is enough before it goes.
 void RendererD3D12::prepare_temporal_upscaler() {
-    const unsigned render_scale = output_scene_active_ ? alt_scene_.map.scale() : frame_.scale();
-    const unsigned output_scale = upscale_output_scale_;
-    if (!temporal_mode() || output_scale == 0u || render_scale > output_scale) {
+    const FrameMap render_map = output_scene_active_ ? alt_scene_.map : frame_;
+    const FrameMap output_map = upscale_output_;
+    if (!temporal_mode() || output_map.empty() || render_map.width > output_map.width) {
         if (temporal_) {
             wait_for_gpu();
             temporal_.reset();
@@ -6709,10 +6699,10 @@ void RendererD3D12::prepare_temporal_upscaler() {
         temporal_history_valid_ = false;
         return;
     }
-    const unsigned rw = kFrameWidth * render_scale;
-    const unsigned rh = kFrameHeight * render_scale;
-    const unsigned ow = kFrameWidth * output_scale;
-    const unsigned oh = kFrameHeight * output_scale;
+    const unsigned rw = render_map.width;
+    const unsigned rh = render_map.height;
+    const unsigned ow = output_map.width;
+    const unsigned oh = output_map.height;
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 4u);
@@ -6828,7 +6818,7 @@ bool RendererD3D12::temporal_inputs_match(const TemporalUpscaleInputs& in) const
     return match;
 }
 
-bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
+bool RendererD3D12::record_temporal_upscale(const FrameMap& output) {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::Upscale};
     if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
@@ -6843,8 +6833,8 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.output = alt_scene_.color.Get();
     in.render_width = frame_.width;
     in.render_height = frame_.height;
-    in.output_width = kFrameWidth * output_scale;
-    in.output_height = kFrameHeight * output_scale;
+    in.output_width = output.width;
+    in.output_height = output.height;
     in.jitter_x = scene_jitter_[0];
     in.jitter_y = scene_jitter_[1];
     in.camera_near = scene_camera_[0];
@@ -6873,30 +6863,26 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     return recorded;
 }
 
-unsigned RendererD3D12::output_scene_target_scale_for_window() const {
+FrameMap RendererD3D12::output_frame_for_window() const {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const double content_aspect =
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect;
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         content_aspect);
     if (content.width <= 0 || content.height <= 0) {
-        return 0u;
+        return FrameMap{};
     }
-    // The smallest integer scale whose 640x456 picture covers the window's
-    // content rectangle on both axes (the launcher's Match Output rule).
-    const double needed = std::max(content.width / static_cast<double>(kFrameWidth),
-                                   content.height / 456.0);
-    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxSceneScale);
+    return FrameMap(static_cast<unsigned>(content.width), static_cast<unsigned>(content.height));
 }
 
-bool RendererD3D12::ensure_output_scene(unsigned scale) {
+bool RendererD3D12::ensure_output_scene(const FrameMap& map) {
     settle_owed_scene();
-    if (alt_scene_.color && alt_scene_.map == scale) {
+    if (alt_scene_.color && alt_scene_.map == map) {
         return true;
     }
-    const UINT w = kFrameWidth * scale;
-    const UINT h = kFrameHeight * scale;
+    const UINT w = map.width;
+    const UINT h = map.height;
     if (w > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         h > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION) {
         return false;
@@ -6909,7 +6895,7 @@ bool RendererD3D12::ensure_output_scene(unsigned scale) {
     }
     alt_scene_.color.Reset();
     alt_scene_.depth.Reset();
-    alt_scene_.map = 0u;
+    alt_scene_.map = FrameMap{};
     if (!alt_scene_rtv_heap_) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 1;
@@ -6977,8 +6963,7 @@ bool RendererD3D12::ensure_output_scene(unsigned scale) {
     alt_scene_.conv_color_srv = alt_scene_.conv_table->gpu;
     alt_scene_.conv_depth_srv = alt_scene_.conv_table->gpu;
     alt_scene_.conv_depth_srv.ptr += stride;
-    alt_scene_.map = scale;
-    std::cout << "[Renderer] output scene target " << scale << "x (" << w << "x" << h << ")\n";
+    alt_scene_.map = map;
     return true;
 }
 
@@ -7012,7 +6997,7 @@ bool RendererD3D12::create_scene_set(
     }
     set.color.Reset();
     set.depth.Reset();
-    set.map = 0u;
+    set.map = FrameMap{};
     if (!rtv_heap) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
         dhd.NumDescriptors = 1;
@@ -7089,7 +7074,7 @@ void RendererD3D12::swap_scene_with(SceneTargetSet& other) {
     std::swap(conv_scene_color_srv_, other.conv_color_srv);
     std::swap(conv_scene_depth_srv_, other.conv_depth_srv);
     invalidate_draw_bindings();
-    bound_scissor_input_scale_ = 0u;
+    bound_scissor_input_map_ = FrameMap{};
 }
 
 void RendererD3D12::swap_scene_sets() {
@@ -7109,7 +7094,7 @@ void RendererD3D12::swap_scene_sets() {
     std::swap(conv_scene_depth_srv_, alt_scene_.conv_depth_srv);
     output_scene_active_ = !output_scene_active_;
     invalidate_draw_bindings();
-    bound_scissor_input_scale_ = 0u;
+    bound_scissor_input_map_ = FrameMap{};
     bind_scene();
 }
 
@@ -7129,11 +7114,11 @@ void RendererD3D12::swap_target_set() {
     std::swap(conv_scene_depth_srv_, target_scene_.conv_depth_srv);
     target_pass_active_ = !target_pass_active_;
     invalidate_draw_bindings();
-    bound_scissor_input_scale_ = 0u;
+    bound_scissor_input_map_ = FrameMap{};
     bind_scene();
 }
 
-bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height) {
+bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint32_t width, std::uint32_t height) {
     if (target_pass_active_ || width == 0u || height == 0u) {
         return false;
     }
@@ -7211,7 +7196,7 @@ bool RendererD3D12::target_picture(std::uint64_t key, TextureHandle& out) const 
     return true;
 }
 
-bool RendererD3D12::publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+bool RendererD3D12::publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height,
                                     gpu::TextureRef texture, std::uint8_t channels, std::uint32_t bytes,
                                     TextureCache& textures) {
     bool changed = false;
@@ -7261,12 +7246,10 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint16_t width, std:
 
 bool RendererD3D12::publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                           TextureCache& textures) {
-    const auto size = [&](std::uint16_t extent) {
-        return static_cast<std::uint16_t>(params.half_scale ? std::max(1, extent / 2) : extent);
-    };
+    const FrameExtent size = capture_extent(params.half_scale, frame_);
     // A one-channel conversion is read in every channel (NEBULA_TARGET_RED).
     const std::uint8_t channels = scene_copy_single_channel(params.channels, is_depth_copy) ? 3u : 0u;
-    return publish_picture(params.key, size(params.src_width), size(params.src_height), std::move(texture),
+    return publish_picture(params.key, size.width, size.height, std::move(texture),
                            channels, 0u, textures);
 }
 
@@ -7284,7 +7267,7 @@ void RendererD3D12::take_fg_hudless_scene() {
         }
         fg_hudless_scene_target_.color.Reset();
         fg_hudless_scene_target_.depth.Reset();
-        if (!create_scene_set(fg_hudless_scene_target_, fg_hudless_rtv_heap_, fg_hudless_dsv_heap_, frame_.scale())) {
+        if (!create_scene_set(fg_hudless_scene_target_, fg_hudless_rtv_heap_, fg_hudless_dsv_heap_, frame_)) {
             return;
         }
     }
@@ -7308,7 +7291,7 @@ void RendererD3D12::take_fg_hudless_scene() {
 }
 
 // The display copy of the taken scene: the same copy into the HUD-less display picture.
-void RendererD3D12::copy_fg_hudless_display(const CaptureRequest& params, const DisplayTexture& dest) {
+void RendererD3D12::copy_fg_hudless_display(const CaptureRequest& /*params*/, const DisplayTexture& dest) {
     const bool taken = fg_hudless_scene_;
     fg_hudless_scene_ = false;
     if (!taken || replay_recording_ || fg_hudless_scene_target_.map != frame_ || !dest.texture) {
@@ -7341,7 +7324,7 @@ void RendererD3D12::copy_fg_hudless_display(const CaptureRequest& params, const 
     b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &b);
     const SceneCopySamplingGeometry sampling =
-        compute_scene_copy_sampling_geometry(params, dest.width, dest.height, frame_);
+        capture_sampling_geometry(dest.width, dest.height, frame_);
     swap_scene_with(fg_hudless_scene_target_);
     record_conversion_blit(fg_hudless_display_.texture.Get(), dest.width, dest.height, fg_hudless_display_.rtv, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     swap_scene_with(fg_hudless_scene_target_);
@@ -7449,11 +7432,11 @@ void RendererD3D12::record_scene_aa() {
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SceneAa, 0u});
     }
-    // The 640x456 picture the display copy takes decides AUTO.
+    // The picture the display copy takes decides AUTO.
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
-        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+        aspect ? aspect->content_aspect : galaxy::kDesignContentAspect);
     const D3D12_RESOURCE_DESC desc = scene_color_->GetDesc();
     static_cast<void>(post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, scene_color_.Get(), scene_rtv_, static_cast<unsigned>(desc.Width),
@@ -7490,7 +7473,7 @@ void RendererD3D12::record_scene_ao() {
     in.depth = scene_depth_.Get();
     in.width = static_cast<unsigned>(desc.Width);
     in.height = desc.Height;
-    in.scene_target_scale = frame_.scale();
+    in.occlusion_divisor = static_cast<unsigned>(std::lround(frame_.height / kAuthoredLines));
     in.color_rtv = scene_rtv_;
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;
@@ -7519,7 +7502,7 @@ void RendererD3D12::game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32
 }
 
 // The game's bloom on the scene target's single-sample colour (MSAA resolves it first); the composite lands on every sample of
-// a multisampled scene target. The game's frame is its 640 x 456 at the internal scale.
+// a multisampled scene target.
 void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::Bloom};
@@ -7533,9 +7516,7 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
     in.rtv = scene_rtv_;
     in.samples = scene_msaa_.samples;
     in.hdr = scene_hdr_;
-    in.scale = frame_.sy;
-    in.logical_width = kFrameWidth;
-    in.logical_height = kFrameHeight;
+    in.scale = static_cast<float>(frame_.height / kAuthoredLines);
     in.frame_width = std::min(frame_.width, static_cast<unsigned>(desc.Width));
     in.frame_height = std::min(frame_.height, static_cast<unsigned>(desc.Height));
     if (bloom.phase == motion::kBloomKeep) {
@@ -7591,22 +7572,19 @@ bool RendererD3D12::begin_output_scene() {
     // internal scale their letters would lose strokes on a wide or large window. Otherwise the game's layouts keep at
     // least the Wii's own density on a window wider than 16:9 or narrower than 4:3, never above the window's.
     const bool full = temporal || get_render_config().hud_output_resolution || sharp_2d_requested();
-    const unsigned layout = full ? 0u : galaxy::layout_density_scale(galaxy::experimental_effective_host_aspect());
-    if (output_scene_active_ || !frame_.whole() || (!full && layout <= frame_.scale())) {
+    if (output_scene_active_ || !full) {
         return false;
     }
     // A temporal upscaler outputs the internal resolution; the 2D layer alone
     // goes to the window's.
-    const unsigned scale = temporal ? temporal_output_w_ / kFrameWidth
-                           : full   ? output_scene_target_scale_for_window()
-                                    : std::min(output_scene_target_scale_for_window(), layout);
-    if (scale == 0u || scale < frame_.scale() || (scale == frame_.scale() && !temporal) ||
-        !ensure_output_scene(scale)) {
+    const FrameMap output = temporal ? FrameMap(temporal_output_w_, temporal_output_h_) : output_frame_for_window();
+    if (output.empty() || output.width < frame_.width || (output == frame_ && !temporal) ||
+        !ensure_output_scene(output)) {
         temporal_history_valid_ = false;
         return false;
     }
     scene_temporal_ = temporal;
-    const bool upscaled = temporal && !temporal_interp_ && record_temporal_upscale(scale);
+    const bool upscaled = temporal && !temporal_interp_ && record_temporal_upscale(output);
     scene_temporal_ = false;
     if (upscaled) {
         swap_scene_sets();
@@ -7620,12 +7598,9 @@ bool RendererD3D12::begin_output_scene() {
     // The whole scene scene target, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).
     CaptureRequest params{};
-    params.src_width = static_cast<std::uint16_t>(kFrameWidth);
-    params.src_height = static_cast<std::uint16_t>(kFrameHeight);
-    const unsigned w = kFrameWidth * scale;
-    const unsigned h = kFrameHeight * scale;
-    const SceneCopySamplingGeometry sampling =
-        compute_scene_copy_sampling_geometry(params, w, h, frame_);
+    const unsigned w = output.width;
+    const unsigned h = output.height;
+    const SceneCopySamplingGeometry sampling = capture_sampling_geometry(w, h, frame_);
     if (replay_recording_) [[unlikely]] {
         ReplayCopy copy{};
         copy.width = w;
@@ -7723,13 +7698,11 @@ void RendererD3D12::clear_scene(
     UINT num_rects = 0;
     const D3D12_RECT* rects = nullptr;
     if (rect_w != 0 && rect_h != 0) {
-        const ScaledSceneRect scaled = compute_scaled_scene_rect(
+        const ScaledSceneRect scaled = rect_pixels(
             static_cast<std::int32_t>(rect_x),
             static_cast<std::int32_t>(rect_y),
             static_cast<std::int32_t>(rect_x + rect_w),
             static_cast<std::int32_t>(rect_y + rect_h),
-            kFrameWidth,
-            kFrameHeight,
             frame_);
         rect = D3D12_RECT{
             scaled.left, scaled.top, scaled.right, scaled.bottom};
@@ -7864,18 +7837,16 @@ void RendererD3D12::draw(const DrawCall& call) {
     // rasterizes nothing (also how CullMode::All is expressed). The raw input
     // is cached only after a nonempty one has been applied.
     if (!bound_scissor_valid_ || !bound_scissor_input_valid_ ||
-        bound_scissor_input_scale_ != frame_.scale() ||
+        bound_scissor_input_map_ != frame_ ||
         call.scissor.left != bound_scissor_input_.left ||
         call.scissor.top != bound_scissor_input_.top ||
         call.scissor.right != bound_scissor_input_.right ||
         call.scissor.bottom != bound_scissor_input_.bottom) {
-        const ScaledSceneRect scaled = compute_scaled_scene_rect(
+        const ScaledSceneRect scaled = rect_pixels(
             call.scissor.left,
             call.scissor.top,
             call.scissor.right,
             call.scissor.bottom,
-            kFrameWidth,
-            kFrameHeight,
             frame_);
         if (scaled.empty()) {
             return;  // nothing can rasterize
@@ -7892,7 +7863,7 @@ void RendererD3D12::draw(const DrawCall& call) {
             bound_scissor_valid_ = true;
         }
         bound_scissor_input_ = call.scissor;
-        bound_scissor_input_scale_ = frame_.scale();
+        bound_scissor_input_map_ = frame_;
         bound_scissor_input_valid_ = true;
     }
 
@@ -7907,7 +7878,7 @@ void RendererD3D12::draw(const DrawCall& call) {
     // side, console far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {
         const ScaledViewport scaled =
-            compute_scaled_viewport(call.viewport, frame_);
+            viewport_pixels(call.viewport, frame_);
         D3D12_VIEWPORT vp{
             scaled.x,
             scaled.y,
@@ -8171,8 +8142,7 @@ void RendererD3D12::copy_scene_to_display(const CaptureRequest& params, DisplayT
     command_list_->ResourceBarrier(1, &b);
 
     const SceneCopySamplingGeometry sampling =
-        compute_scene_copy_sampling_geometry(
-            params, dest.width, dest.height, frame_);
+        capture_sampling_geometry(dest.width, dest.height, frame_);
     const bool recording = replay_recording_;
     if (recording) [[unlikely]] {
         ReplayCopy copy{};
@@ -8227,16 +8197,7 @@ bool RendererD3D12::copy_scene_to_texture(
     settle_owed_scene();
     const GpuPassScope pass{*this, GpuPass::SceneCopy};
     // half_scale halves both dimensions; the 2x step through the linear-filtered source is the box filter.
-    const UINT dw_unscaled = params.half_scale
-        ? std::max<UINT>(1u, params.src_width / 2u)
-        : params.src_width;
-    const UINT dh_unscaled = params.half_scale
-        ? std::max<UINT>(1u, params.src_height / 2u)
-        : params.src_height;
-    const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
-        static_cast<std::uint16_t>(dw_unscaled),
-        static_cast<std::uint16_t>(dh_unscaled),
-        frame_);
+        const FrameExtent extent = capture_extent(params.half_scale, frame_);
     const UINT w = extent.width;
     const UINT h = extent.height;
     if (w == 0 || h == 0) {
@@ -8402,7 +8363,7 @@ bool RendererD3D12::copy_scene_to_texture(
     command_list_->ResourceBarrier(1, &b);
 
     const SceneCopySamplingGeometry sampling =
-        compute_scene_copy_sampling_geometry(params, w, h, frame_);
+        capture_sampling_geometry(w, h, frame_);
 
 
     const bool recording = replay_recording_;
@@ -8882,7 +8843,7 @@ bool RendererD3D12::present(
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
     bound_rt_aux_ = 0u;
     const auto content_aspect=galaxy::presentation_content_aspect(
-        ultrawide ? ultrawide->content_aspect : galaxy::kWiiContentAspect,source->prerecorded_movie);
+        ultrawide ? ultrawide->content_aspect : galaxy::kDesignContentAspect,source->prerecorded_movie);
     galaxy::ContentViewport content_viewport = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width),static_cast<int>(host_window::backbuffer_height),
         content_aspect);

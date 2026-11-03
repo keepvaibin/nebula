@@ -242,11 +242,8 @@ void boot_step(const char* step) noexcept;
 void request_sharp_2d(bool on) noexcept;
 [[nodiscard]] bool sharp_2d_requested() noexcept;
 // The scale the 2D layer was last drawn at (the scene target in use as the scene ended: the output scene target, else the render scene target),
-// over the Wii's 640 x 456; 0 before the first scene ends. Any thread.
-[[nodiscard]] unsigned layer_2d_scale() noexcept;
-// The 3D image's scale over the Wii's 640 x 456 as the last scene showed it (the temporal upscaler's output, else the
-// render scene target's); 0 before the first scene. Any thread.
-[[nodiscard]] unsigned scene_display_scale() noexcept;
+// in lines; 0 before the first scene ends. Any thread.
+[[nodiscard]] unsigned layer_2d_lines() noexcept;
 // The mouse wheel's turn since the last call, in 120ths of a notch, positive away from the player (host_window's
 // pointer_wheel: the settings menu takes the wheel itself while it shows). Any thread.
 [[nodiscard]] std::int32_t take_pointer_wheel() noexcept;

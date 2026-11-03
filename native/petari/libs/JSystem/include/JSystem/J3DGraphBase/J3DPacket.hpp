@@ -29,7 +29,7 @@ enum J3DDiffFlag {
     J3DDiffFlag_Fog = 0x10000000,
     J3DDiffFlag_Blend = 0x20000000,
     J3DDiffFlag_Unk40000000 = 0x40000000,
-    J3DDiffFlag_Changed = 0x80000000,
+    J3DDiffFlag_Changed = 1u << 31,
 };
 
 // A material's typed snapshot (J3DNativeMaterial), where J3D kept the material's display list: made with its owner

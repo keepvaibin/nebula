@@ -218,8 +218,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         return getenv_s(&length, value, sizeof(value), "GALAXY_AO_VIEW") == 0 && length > 1 && value[0] == '1';
     }();
     ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr, view);
-    // The game's resolution: one occlusion pixel per internal-scale x internal-scale scene target pixels.
-    const unsigned divisor = std::max(in.scene_target_scale, 1u);
+    const unsigned divisor = std::max(in.occlusion_divisor, 1u);
     const unsigned width = (in.width + divisor - 1u) / divisor;
     const unsigned height = (in.height + divisor - 1u) / divisor;
     if (apply == nullptr ||

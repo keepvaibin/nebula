@@ -18,14 +18,14 @@ struct ContentViewport {
     int height = 0;
 };
 
-inline constexpr double kWiiContentAspect = 16.0 / 9.0;
+inline constexpr double kDesignContentAspect = 16.0 / 9.0;
 
 // Movies keep their 16:9 composition at every gameplay aspect except 4:3, where
 // the game's own 4:3 movie path (with its authored crop) applies.
 [[nodiscard]] inline double presentation_content_aspect(double gameplay_aspect,
     bool prerecorded_movie) noexcept {
     return prerecorded_movie && std::abs(gameplay_aspect-4.0/3.0)>1e-10
-        ? kWiiContentAspect : gameplay_aspect;
+        ? kDesignContentAspect : gameplay_aspect;
 }
 
 struct PresentationContentSnapshot {
@@ -78,7 +78,7 @@ inline PresentationContentPublication g_presentation_content;
 [[nodiscard]] inline ContentViewport fit_content_viewport(
     int surface_width,
     int surface_height,
-    double content_aspect = kWiiContentAspect) noexcept {
+    double content_aspect = kDesignContentAspect) noexcept {
     if (surface_width <= 1 || surface_height <= 1 ||
         !std::isfinite(content_aspect) || content_aspect <= 0.0) {
         return {};

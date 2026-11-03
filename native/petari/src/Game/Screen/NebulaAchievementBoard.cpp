@@ -104,7 +104,7 @@ namespace {
     const u32 cFocus = 0xFFFFFFFF;
     const u32 cWhite = 0xFFFFFFFF;
     const u32 cTextShadow = 0x00000070;
-    const u32 cSubText = 0xD2DCFFFF;
+    const u32 cSubText = NEBULA_RGBA(0xD2, 0xDC, 0xFF, 0xFF);
     const u32 cLockedText = 0xA6AED6FF;
     const u32 cLockedSubText = 0x7E88B8FF;
     const u32 cGold = 0xFFD860FF;

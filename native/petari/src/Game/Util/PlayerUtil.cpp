@@ -518,7 +518,7 @@ namespace MR {
 
     void endBindAndPlayerForceWeakGravityJumpInputOff(LiveActor* pActor, const TVec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
 
         MarioAccess::endRush(&info);
     }
@@ -532,14 +532,14 @@ namespace MR {
 
     void endBindAndSpinDriverJump(LiveActor* pActor, const TVec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
 
         MarioAccess::endRush(&info);
     }
 
     void endBindAndPlayerDamage(LiveActor* pActor, const TVec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
         info.mFlags.mDamageType = 1;
 
         MarioAccess::endRush(&info);
@@ -547,7 +547,7 @@ namespace MR {
 
     void endBindAndPlayerFlip(LiveActor* pActor, const TVec3f& rParam2) {
         RushEndInfo info = RushEndInfo(pActor, 3, rParam2, true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
         info.mFlags.mDamageType = 6;
 
         MarioAccess::endRush(&info);
@@ -602,7 +602,7 @@ namespace MR {
 
     void endBindAndPlayerAcidDamage(LiveActor* pActor) {
         RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
         info.mFlags.mDamageType = 4;
 
         MarioAccess::endRush(&info);
@@ -610,7 +610,7 @@ namespace MR {
 
     void endBindAndPlayerFreezeDamage(LiveActor* pActor) {
         RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
         info.mFlags.mDamageType = 3;
 
         MarioAccess::endRush(&info);
@@ -618,7 +618,7 @@ namespace MR {
 
     void endBindAndPlayerFireDamage(LiveActor* pActor) {
         RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
         info.mFlags.mDamageType = 2;
 
         MarioAccess::endRush(&info);
@@ -626,7 +626,7 @@ namespace MR {
 
     void endBindAndPlayerElectricDamage(LiveActor* pActor) {
         RushEndInfo info = RushEndInfo(pActor, 3, TVec3f(0.0f, 0.0f, 0.0f), true, 0);
-        info._20 |= 0xC0000000;
+        info._20 |= 3u << 30;
         info.mFlags.mDamageType = 5;
 
         MarioAccess::endRush(&info);

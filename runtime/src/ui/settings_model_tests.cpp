@@ -39,7 +39,7 @@ int main() {
         check(interpolation_targets(Interpolation::kFrameGeneration, fixed) == std::vector<unsigned>{120, 180, 0}, "fixed generation whole multiples");
         check(native_settings_first_row(0, 9, 12) == 1, "scroll selected row into view");
         check(native_settings_first_row(3, 1, 12) == 1, "scroll backwards");
-        check(quality_render_scale(1, 4) == 1 && quality_render_scale(6, 4) == 2, "resolution scale floor and quality ratio");
+        check(quality_render_fraction(0) == 1.0f && quality_render_fraction(3) == 0.5f, "render fraction by quality");
         auto row = button_row("actions", {"ONE", "TWO"}, {}, "help");
         check(row.value == "ONE|TWO" && row.buttons.size() == 2, "button row view");
         std::cout << "settings model: passed\n";

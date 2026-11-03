@@ -17,10 +17,9 @@ SettingsRow button_row(std::string label, std::vector<std::string> buttons, std:
     row.press = std::move(press);
     return row;
 }
-unsigned quality_render_scale(unsigned output_scale, unsigned quality) {
+float quality_render_fraction(unsigned quality) {
     static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
-    const long scale = std::lround(static_cast<float>(output_scale) / kRatio[std::min(quality, 4u)]);
-    return std::clamp(static_cast<unsigned>(std::max(scale, 1l)), 1u, std::max(output_scale, 1u));
+    return 1.0f / kRatio[std::min(quality, 4u)];
 }
 
 const char* game_language_name(GameLanguage language) {

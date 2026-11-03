@@ -194,7 +194,7 @@ void record_scene_identity_copy(
 class RendererD3D12 final : public UiCanvas {
 public:
     // Creates the Win32 window, device, queue, swap chain, scene target targets at
-    // kFrameWidth x kFrameHeight x scene_target_scale, the shared root signature, the
+    // at the frame's size, the shared root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     [[nodiscard]] std::string startup_failure() const { return init_error_; }
@@ -251,7 +251,7 @@ public:
     // the scene target's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
     // between passes (made again only when its size or the scene target's scale changes); the pass is drawn once, never
     // replayed by sub-frames. False when the target cannot be made or a pass is open.
-    [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height);
+    [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint32_t width, std::uint32_t height);
     // Ends it: the scene target comes back and the target's picture is what draws sampling `key` at that size read (at full
     // precision, in any format, through `channels`: NebulaTargetChannels).
     void end_target_pass(std::uint8_t channels, TextureCache& textures);
@@ -281,8 +281,6 @@ public:
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
-    // The 3D image's scale over the Wii's 640 x 456 as it is shown: the temporal upscaler's output, else the scene target's.
-    [[nodiscard]] unsigned scene_display_scale() const;
     // At the start of the game's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
@@ -582,7 +580,6 @@ public:
         std::string backbuffer_ppm_path);
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
-    [[nodiscard]] unsigned covering_scale() const noexcept { return frame_.scale(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return frame_; }
     // The scene target's samples per pixel as a power of two (MSAA; 0 for one sample).
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
@@ -605,7 +602,7 @@ public:
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
     // Bytes held by the scene target-copy destination cache. Destinations are allocated at the
-    // internal resolution, so this grows with scene_target_scale^2 against a fixed budget.
+    // internal resolution, so this grows with the frame's area against a fixed budget.
     [[nodiscard]] std::uint64_t scene_copy_dest_bytes() const {
         return scene_copy_dests_bytes_;
     }
@@ -707,21 +704,21 @@ private:
     // resolve_scene for a reader recording into `list`: another list resolves (what the frame's list submitted before
     // it) without clearing the frame's pending resolve, which can hold draws not submitted yet.
     void resolve_scene_on(ID3D12GraphicsCommandList* list, bool color, bool depth);
-    [[nodiscard]] unsigned output_scene_target_scale_for_window() const;
+    [[nodiscard]] FrameMap output_frame_for_window() const;
     [[nodiscard]] bool ensure_motion_target();
-    [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
-    [[nodiscard]] bool ensure_output_scene(unsigned scale);
+    [[nodiscard]] bool record_temporal_upscale(const FrameMap& output);
+    [[nodiscard]] bool ensure_output_scene(const FrameMap& map);
     void swap_scene_sets();
     void swap_target_set();
     // Live internal-resolution change, applied between frames by begin_frame
-    // when get_render_config().scene_target_scale differs from the live targets.
+    // when the frame's size differs from the live targets.
     void apply_window_size();
     // Creates, replaces or releases the temporal upscaler for the live render
     // and output scales, from begin_frame before its command list records.
     void prepare_temporal_upscaler();
     // The INTERNAL RESOLUTION row's scale, taken by apply_window_size: the
     // temporal upscaler's output (its quality mode renders below it).
-    unsigned upscale_output_scale_ = 0;
+    FrameMap upscale_output_{};
     // Hands changed presentation settings (overlay or config) to the
     // post-processor at the frame boundary.
     void sync_post_process_settings();
@@ -931,7 +928,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> scene_depth_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap_;
-    FrameMap frame_ = FrameMap(1u);  // the bound scene target's map (E-08)
+    FrameMap frame_{};  // the bound scene target's map (E-08)
     D3D12_CPU_DESCRIPTOR_HANDLE scene_rtv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE scene_dsv_{};
     // The inactive scene target target set (the output-resolution one between frames).
@@ -976,7 +973,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;
         std::uint64_t used = 0;
-        std::uint16_t width = 0, height = 0;  // game units
+        std::uint32_t width = 0, height = 0;  // frame units
     };
     // The pictures draws sample by key (target passes' and captures'), each through its own view slot
     // (TextureCache::allocate_view) reading its channels; a capture's `bytes` is its footprint at the key, over which a
@@ -984,14 +981,14 @@ private:
     struct Picture {
         std::uint32_t view = ~0u;
         gpu::TextureRef viewed;
-        std::uint16_t width = 0, height = 0;  // game units, the size draws sample it at
+        std::uint32_t width = 0, height = 0;  // frame units, the size draws sample it at
         std::uint8_t channels = 0;
         std::uint32_t bytes = 0;
     };
     std::unordered_map<std::uint64_t, Picture> pictures_;
     // `texture` becomes picture `key` (`width` x `height` game units, read through `channels`): true when draws
     // must look it up again (a new view, or a capture replacing others).
-    bool publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
+    bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
     bool publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                          TextureCache& textures);
@@ -1043,7 +1040,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> motion_target_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};
-    unsigned motion_target_scale_ = 0;
+    FrameMap motion_target_map_{};
     // Interpolated redraw state (see begin_replay_record).
     struct ReplayCopy {
         ID3D12Resource* dest = nullptr;
@@ -1166,7 +1163,7 @@ private:
     bool create_scene_set(SceneTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, const FrameMap& map,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
-                        bool hdr = false, unsigned width = kFrameWidth, unsigned height = kFrameHeight);
+                        bool hdr = false, unsigned width = kFrameUnits, unsigned height = kFrameUnits);
     void write_scene_set_views(SceneTargetSet& set, const DescriptorRing::Table& table);
     void swap_scene_with(SceneTargetSet& other);
     bool replay_playing_ = false;
@@ -1326,7 +1323,7 @@ private:
         D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE layer_color_rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE layer_trans_rtv{};
-        unsigned scale = 0;
+        FrameMap map{};
     };
     ReplayMotionTargets replay_motion_{};
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_motion_rtv_heap_;
@@ -1341,8 +1338,8 @@ private:
     struct TemporalInterpKey {
         unsigned upscaler = 0;
         unsigned quality = 0;
-        unsigned scene_target_scale = 0;
-        unsigned output_scale = 0;
+        FrameMap scene_map{};
+        FrameMap output_map{};
         float max_fps = 0.0f;
         unsigned vsync = 0;
         double refresh_hz = 0.0;
@@ -1359,7 +1356,7 @@ private:
         bool first = false;             // the next sub-frame copies the base blocks
         bool validated = false;         // the blend pairs were checked on the GPU
         std::uint64_t serial = 0;
-        unsigned output_scale = 0;
+        FrameMap output_map{};
         ReplaySequence overrides{};
         unsigned alloc_segment = 0;     // ring segment of the sequence's program
         D3D12_GPU_VIRTUAL_ADDRESS program = 0;
@@ -1589,7 +1586,7 @@ private:
     D3D12_RECT bound_scissor_{};
     // Successful nonempty input that produced the currently bound scissor.
     D3D12_RECT bound_scissor_input_{};
-    unsigned bound_scissor_input_scale_ = 0;
+    FrameMap bound_scissor_input_map_{};
     bool bound_scissor_input_valid_ = false;
     D3D12_VIEWPORT bound_viewport_{};
     bool bound_scissor_valid_ = false;
@@ -1684,7 +1681,7 @@ private:
         std::uint64_t bytes = 0;
     };
     // One texture per destination key, at the copy's scaled extent in kSceneColorFormat
-    // (a full 640x456 copy: 1.11 MB at 1x, 17.81 MB at 4x, 40.08 MB at 6x). Bounded in
+    // (a full frame copy). Bounded in
     // bytes, not entries, since an entry's cost varies with the copy extent and the
     // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
     // is well above a scene's working set (a few XFBs across a couple of formats plus one

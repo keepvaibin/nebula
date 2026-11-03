@@ -485,7 +485,7 @@ namespace NebulaUi {
         f32 canvasWidth = 608.0f;
         f32 canvasHeight = 456.0f;
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
-            canvasWidth = MR::getDisplay().canvas_width;
+            canvasWidth = MR::getDisplay().layout_width;
             canvasHeight = 456.0f * MR::getDisplay().vertical_fit;
         }
         *pScaleX = MR::isScreen16Per9() ? 0.75f : 1.0f;
@@ -509,7 +509,7 @@ namespace NebulaUi {
         f32 canvasHeight;
         readScreen(&scaleX, &width, &canvasHeight);
         const f32 canvasWidth = width * scaleX;
-        const f32 frameWidth = static_cast< f32 >(MR::getCanvasWidth());
+        const f32 frameWidth = static_cast< f32 >(MR::getScreenUnitsAcross());
         const f32 frameHeight = static_cast< f32 >(MR::getScreenHeight());
         const f32 x0f = (left * scaleX / canvasWidth + 0.5f) * frameWidth;
         const f32 x1f = (right * scaleX / canvasWidth + 0.5f) * frameWidth;

@@ -97,7 +97,7 @@ void MarioActor::calcScreenBoxRange() {
     _B40 = height;
     TBox2f capture(_B34, _B38, _B34 + _B3C, _B38 + _B40);
     s32 screenHeight = MR::getScreenHeight();
-    TBox2f screen(0.0f, 0.0f, MR::getCanvasWidth(), screenHeight);
+    TBox2f screen(0.0f, 0.0f, MR::getScreenUnitsAcross(), screenHeight);
     TBox2f clipped(capture);
 
     if (!clipped.intersect(screen)) {
@@ -141,7 +141,7 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
-    const f32 canvasWidth = MR::getCanvasWidth();
+    const f32 canvasWidth = MR::getScreenUnitsAcross();
     const f32 canvasHeight = MR::getScreenHeight();
     const f32 u0 = static_cast< s32 >(_B34) / canvasWidth;
     const f32 v0 = static_cast< s32 >(_B38) / canvasHeight;
@@ -452,7 +452,7 @@ namespace {
     // runtime/src/render/materials/frame_ripple.hlsl over the whole screen: the frame's rows moved by the wave.
     void drawFrameRipple(const void* pFrame, f32 amplitude, f32 phase, f32 perRow, f32 kind) {
         J3DNativeTexObj texture;
-        const u16 width = MR::getCanvasWidth();
+        const u16 width = MR::getScreenUnitsAcross();
         const u16 height = MR::getScreenHeight();
         NebulaNativeMaterial material;
         TDDraw::setupNative(&material, 1, 0, 2);

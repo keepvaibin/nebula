@@ -13,7 +13,7 @@ struct TexturePackSummary {
 
 struct GraphicsPageState {
     std::vector<unsigned> upscalers;
-    unsigned render_scale = 1;
+    unsigned render_percent = 100;
     bool dlss_supported = false;
     bool dlss_installed = false;
     bool ray_tracing_offered = false;

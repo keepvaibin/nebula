@@ -41,7 +41,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
                         },
                         "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
     }
-    const unsigned render_scale = state.render_scale;
+    const unsigned render_percent = state.render_percent;
     // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
     const bool rt_offered = state.ray_tracing_offered;
     const bool rt_on = rt_offered && render.ray_tracing_enabled;
@@ -52,9 +52,9 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
         const bool temporal = render.upscaler >= 2u;
         const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
         const unsigned upscaler = std::min(render.upscaler, 3u);
-        std::snprintf(text, sizeof(text), "%s (%uX)",
+        std::snprintf(text, sizeof(text), "%s (%u%%)",
                       upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
-                      render_scale);
+                      render_percent);
         rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
                         [&host](RenderConfig& draft, int delta) {
                             if (draft.upscaler >= 2u) {

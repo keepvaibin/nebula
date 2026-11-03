@@ -30,7 +30,7 @@ int main() {
     Facts fault;
     fault.kind = Facts::Kind::Fault;
     fault.in_game = true;
-    fault.text = "exception 0xC0000005 at smg_game.dll+0x1234";
+    fault.text = "exception 0x40000005 at smg_game.dll+0x1234";
     expect(code_of(fault) == "NEB-C01", "a crash in the game's code");
 
     Facts overflow = fault;
@@ -75,11 +75,11 @@ int main() {
 
     Facts gpu;
     gpu.kind = Facts::Kind::Startup;
-    gpu.text = "renderer: [RendererD3D12] Present HRESULT=0x887A0005";
+    gpu.text = "renderer: [RendererD3D12] Present HRESULT=0x487A0005";
     expect(code_of(gpu) == "NEB-G01", "the graphics card was lost mid-game");
     Facts renderer;
     renderer.kind = Facts::Kind::Exception;
-    renderer.text = "[RendererD3D12] CreateCommittedResource HRESULT=0x80070057";
+    renderer.text = "[RendererD3D12] CreateCommittedResource HRESULT=0x40070057";
     expect(code_of(renderer) == "NEB-G02", "another renderer error");
     Facts memory;
     memory.kind = Facts::Kind::Exception;
@@ -130,11 +130,11 @@ int main() {
 
     set_session_mods("  Kaizo (Riivolution, game files)\n", true);
     char text[2048];
-    const std::size_t length = format_report(named, "exception 0xC0000005", text, sizeof(text));
+    const std::size_t length = format_report(named, "exception 0x40000005", text, sizeof(text));
     const std::string report(text, length);
     expect(report.starts_with("NEB-M02: A mod's file crashed the game\n"), "the report's first line");
     expect(report.find("Mods this session:\n  Kaizo (Riivolution, game files)") != std::string::npos, "the mods");
-    expect(report.find("Technical details:\nexception 0xC0000005") != std::string::npos, "the technical line");
+    expect(report.find("Technical details:\nexception 0x40000005") != std::string::npos, "the technical line");
     char tiny[8];
     expect(format_report(named, "", tiny, sizeof(tiny)) == 7u && tiny[7] == '\0', "a short buffer is cut");
 

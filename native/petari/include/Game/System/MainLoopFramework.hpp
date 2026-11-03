@@ -30,7 +30,7 @@ public:
     void beginRender();
     void endRender();
     void endFrame();
-    void clearEfb(NebulaColor8);
+    void clearFrame(NebulaColor8);
     static void setForOSResetSystem();
 
     Color8 mClearColor;

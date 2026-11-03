@@ -31,23 +31,18 @@ struct LinePointValues {
     std::uint8_t point_coords = 0;
 };
 
-// `viewport_width` / `viewport_height` are the viewport's size in frame pixels (both > 0); any other viewport (not
-// yet set) takes the fallback frame size.
-// Target pixels per game unit across and down.
+// `viewport_width` / `viewport_height` are the viewport's size in frame units (both > 0); any other viewport
+// (none yet set) takes the whole frame. Target pixels per frame unit across and down.
 struct RasterScale {
     float x = 1.0f;
     float y = 1.0f;
     constexpr RasterScale(float across, float down) noexcept : x(across), y(down) {}
-    constexpr RasterScale(unsigned whole) noexcept  // NOLINT: a whole scale, at least 1
-        : x(whole == 0u ? 1.0f : static_cast<float>(whole)), y(whole == 0u ? 1.0f : static_cast<float>(whole)) {}
 };
 
 [[nodiscard]] LinePointRasterParams make_line_point_raster_params(
     const LinePointValues& values,
     float viewport_width,
     float viewport_height,
-    RasterScale scale,
-    unsigned fallback_scene_width = 640u,
-    unsigned fallback_scene_height = 456u) noexcept;
+    RasterScale scale) noexcept;
 
 }  // namespace galaxy::render
