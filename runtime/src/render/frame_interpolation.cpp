@@ -438,7 +438,7 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
             d[i] = da[i] + (db[i] - da[i]) * t;
         }
     }
-    // Keep the interpolated direction at the interpolated length (console spot
+    // Keep the interpolated direction at the interpolated length (spot
     // directions are unit vectors; specular half-angle vectors are not).
     const float la = vector_length(da);
     const float lb = vector_length(db);

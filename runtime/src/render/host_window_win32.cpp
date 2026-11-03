@@ -2178,7 +2178,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
 // GAME > GALAXY SELECT: the galaxy and star the TRAVEL row goes to.
 ui::AdvancedPageModel s_advanced_page;
 
-// Mii import (GENERAL page): the last import's result and the console's Mii count (read again after an import).
+// Mii import (GENERAL page): the last import's result and the Mii count (read again after an import).
 std::mutex s_mii_mutex;
 std::string s_mii_status;
 std::atomic<int> s_mii_count{-1};
@@ -2194,7 +2194,7 @@ bool opens_on_desktop(const char* what) {
 }
 
 // The file picker on its own thread (a COM apartment of its own; the game keeps running): the files chosen are
-// imported into the console's Mii database and the running game's.
+// imported into the Mii database and the running game's.
 void start_mii_import_dialog() {
     if (!opens_on_desktop("the Mii picker")) {
         return;
@@ -2208,7 +2208,7 @@ void start_mii_import_dialog() {
         std::vector<std::filesystem::path> files;
         IFileOpenDialog* dialog = nullptr;
         if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
-            // Every console's Mii files (galaxy::host::read_mii_file); the Mii Studio code as text.
+            // Every kind of Mii file (galaxy::host::read_mii_file); the Mii Studio code as text.
             const COMDLG_FILTERSPEC filters[] = {
                 {L"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
                  L"*.mii;*.rcd;*.rsd;*.mae;*.miigx;*.ncd;*.nsd;*.cfcd;*.cfsd;*.ffcd;*.ffsd;*.charinfo;*.nfsd;*.nfcd;"

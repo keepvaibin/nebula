@@ -453,8 +453,8 @@ void PresentPacer::sleep_before(double remaining_ms) {
 constexpr double kSmoothPresentMaxWaitUs = 2000.0;
 
 double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
-    // Gameplay is paced by the VI scheduler. A bounded render-thread wait
-    // smooths the handoff to DXGI when a VI edge arrives a little early; the cap
+    // Gameplay is paced by the frame clock. A bounded render-thread wait
+    // smooths the handoff to DXGI when a frame edge arrives a little early; the cap
     // keeps it from throttling the producer or hiding missing XFBs behind
     // duplicated presents.
     if (vsync_interval != 0u ||

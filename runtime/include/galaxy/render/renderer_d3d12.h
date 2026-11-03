@@ -8,7 +8,7 @@
 // CPU/GPU sync happens only in shutdown() and on resize.
 //
 // All draws target the offscreen scene target (color RGBA8 + depth
-// D24_UNORM_S8_UINT, which keeps 24-bit Z parity with the Wii). present()
+// D24_UNORM_S8_UINT, with 24-bit depth). present()
 // aspect-fits an display picture into the swap-chain backbuffer.
 //
 // begin_frame() is the sole PSO-publication point: it drains the
@@ -108,7 +108,7 @@ inline constexpr DXGI_FORMAT kSceneDepthSrvFormat =
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 // Builds the graphics root signature used by RendererD3D12. Root
-// CBV b0 is visible to both VS and GS because native console line/point expansion
+// CBV b0 is visible to both VS and GS because line and point expansion
 // reads its scale-aware raster constants in the geometry stage.
 [[nodiscard]] HRESULT create_draw_root_signature(
     ID3D12Device* device,
@@ -216,7 +216,7 @@ public:
     // Advances the frame ring: waits on the fence of frame N-kFramesInFlight
     // only, resets that slot's command allocator, opens the command list,
     // and rewinds the slot's ring segments. Swap-chain latency is waited in
-    // present(), after console/scene target work is recorded but before the backbuffer is
+    // present(), after scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     // Test only (GALAXY_TEST_GPU_LOST_FRAME): the device removed, as a driver reset leaves it.
     void test_lose_device();
@@ -260,7 +260,7 @@ public:
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_scene();
     // An scene target-to-texture copy from the output scene target after end_output_scene: the picture its display copy took (the
-    // scene with the 2D layer), which the console's single scene target still holds until something draws.
+    // scene with the 2D layer), which the single scene target still holds until something draws.
     [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
     // The scene's anti-aliasing (post_process.h) in the render scene target at the end of the 3D scene,
     // before the 2D layer and begin_output_scene. A temporal upscaler antialiases the scene itself.
@@ -506,7 +506,7 @@ public:
     // (converted depth24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled scene target pixels (w==0 -> full target), matching
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
-    // (Dolphin BPStructs ClearScreen(srcRect)).
+    // .
     void clear_scene(
         std::uint32_t clear_rgba,
         std::uint32_t clear_depth,
@@ -555,7 +555,7 @@ public:
     // Stretch-blit `source` to the backbuffer. A null/invalid source is a
     // runtime bug: callers must keep the last valid swap-chain image instead
     // of submitting a black frame. `black` presents black with the overlays
-    // (the VI's own black output); `source` then only sets the layout.
+    // (black output); `source` then only sets the layout.
     // `capture_backbuffer` records the final post-blit swap-chain image.
     // Returns whether an optional backbuffer capture was recorded. Busy
     // diagnostic buffers never suppress the required blit/presentation.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // nw4r's CharWriter (nw4r/ut/ut_CharWriter.cpp): the glyph sheet (texture 0, the first coordinate) mapped between two
-// colours (the console's lerp(C0, C1, tex); 0 and 1 without a mapping: the glyph as it is), times the vertex colour. An
+// colours (lerp(C0, C1, tex); 0 and 1 without a mapping: the glyph as it is), times the vertex colour. An
 // intensity font (I4/I8): the vertex colour at the glyph's alpha.
 struct MaterialConstants {
     float4 color_min;  // rgba, 0-1

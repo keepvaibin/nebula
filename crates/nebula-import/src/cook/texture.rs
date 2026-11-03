@@ -1,5 +1,5 @@
 //! A disc texture cooked into Nebula's texture record (native/include/nebula_cooked_texture.h): its image decoded
-//! once from the console's tiled formats into texels the renderer samples as they are, palettes applied.
+//! once from the disc's tiled formats into texels the renderer samples as they are, palettes applied.
 //!
 //! The arithmetic is the renderer's own before cooking (texture_cache.cpp's scalar loops): bit replication for 3-, 4-,
 //! 5- and 6-bit channels, CMPR's 5/8 + 3/8 colours and its averaged three-colour mode, RGBA8's AR/GB tile halves. The
@@ -7,7 +7,7 @@
 
 use anyhow::{bail, Result};
 
-/// The console's texel formats (GXTexFmt).
+/// The disc's texel formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Format {
     I4 = 0x0,
@@ -214,7 +214,7 @@ fn decode_level(image: &Image, src: &[u8], width: u32, height: u32, palette: &[[
     }
 }
 
-/// One 4x4 CMPR block at (ox, oy): DXT1 with big-endian colours, the console's 5/8 + 3/8 interpolation, and its
+/// One 4x4 CMPR block at (ox, oy): DXT1 with big-endian colours, 5/8 + 3/8 interpolation, and its
 /// three-colour mode's fourth entry the average with zero alpha.
 fn cmpr_block(block: &[u8], ox: usize, oy: usize, w: usize, h: usize, out: &mut [[u8; 4]]) {
     if ox >= w || oy >= h {
@@ -240,7 +240,7 @@ fn cmpr_block(block: &[u8], ox: usize, oy: usize, w: usize, h: usize, out: &mut 
     }
 }
 
-/// xxh64 with seed 0 (texture packs' hash of a texture's level 0, Dolphin's naming; rt_materials.cpp).
+/// xxh64 with seed 0 (texture packs' hash of a texture's level 0; rt_materials.cpp).
 pub fn xxh64(data: &[u8]) -> u64 {
     const K1: u64 = 0x9E37_79B1_85EB_CA87;
     const K2: u64 = 0xC2B2_AE3D_27D4_EB4F;
@@ -546,7 +546,7 @@ fn remove_texel_checker(p: &mut [[u8; 4]], w: usize, h: usize) -> bool {
 
 /// One CMPR level as the record's BLOCK4 layout: its 4x4 blocks in row order, ceil(w / 4) across, each 8 bytes:
 /// the two RGB565 colours (little-endian) and sixteen 2-bit indices (little-endian, texel (x, y) at bit 2 * (4y + x)),
-/// BC1's block. The colours between them are the console's: 5/8 + 3/8 in four-colour blocks (c0 > c1), the average and
+/// BC1's block. The colours between them: 5/8 + 3/8 in four-colour blocks (c0 > c1), the average and
 /// transparent black in three-colour ones (nebula_cooked_texture.h).
 fn block4_level(src: &[u8], width: u32, height: u32, out: &mut Vec<u8>) {
     let tiles_x = width.div_ceil(8) as usize;

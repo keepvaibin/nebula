@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// HLSL to SPIR-V through glslang's HLSL front end (docs/VULKAN.md). The generated console shaders and the renderer's own
+// HLSL to SPIR-V through glslang's HLSL front end (docs/VULKAN.md). The generated shaders and the renderer's own
 // shaders keep their D3D12 register declarations; annotate() adds the Vulkan binding each register maps to, so the
 // D3D12 sources (and the hashes their caches use) stay as they are.
 #pragma once

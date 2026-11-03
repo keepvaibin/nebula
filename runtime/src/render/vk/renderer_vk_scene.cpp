@@ -566,7 +566,7 @@ void RendererVk::clear_scene(std::uint32_t clear_rgba, std::uint32_t clear_depth
         reset_draw_bindings();
         bind_scene();
     } else if (depth_enable) {
-        // Reversed-Z: the console's farthest (0xFFFFFF) clears to about 0.
+        // Reversed-Z: the game's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
         attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         attachment.clearValue.depthStencil = {clear.reversed_depth, 0u};
@@ -947,7 +947,7 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
     in.frame_height = std::min(scene_map_.height, scene_.color->height);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     end_scene_pass();
-    if (bloom.phase == motion::kBloomKeep) {
+    if (bloom.phase == motion::kBloomHold) {
         if (bloom_.ready() && scene_.samples <= 1u && !logging() && !replaying_ && ring_mode_ != RingMode::Interp) {
             // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
             // bloom's objects on black into the new target, over the same depth.
@@ -1477,7 +1477,7 @@ void RendererVk::draw(const DrawCall& call) {
         bound_.sampler_table = call.sampler_table.ptr;
     }
 
-    // The console scissor, scaled and clamped; an empty one rasterises nothing (also CullMode::All).
+    // The game scissor, scaled and clamped; an empty one rasterises nothing (also CullMode::All).
     if (!bound_.scissor_input_valid || call.scissor.left != bound_.scissor_input.left ||
         call.scissor.top != bound_.scissor_input.top || call.scissor.right != bound_.scissor_input.right ||
         call.scissor.bottom != bound_.scissor_input.bottom) {

@@ -70,7 +70,7 @@ namespace galaxy::render {
 // range starting at its base level starts at the replacement's (close up, the game magnifies its
 // base level: the replacement shows its own); a game sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
-// by index: the bias moves its LOD back to the game's at the console's resolution
+// by index: the bias moves its LOD back to the one its levels were painted for
 // (mip_lines_log2_x32: 32 x log2 of the frame's lines over kAuthoredLines), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
@@ -668,7 +668,7 @@ private:
     [[nodiscard]] std::string interp_snapshot_path(const char* suffix) const;
     void run_pending_interp_start();
     InterpSequence interp_sequence_{};
-    // A recorded frame whose present arrives as a separate VI present.
+    // A recorded frame whose present arrives as a separate present.
     bool interp_log_waiting_ = false;
     std::uint32_t interp_log_slot_ = 0;
     bool interp_stopping_ = false;        // render thread draining for a stop
@@ -773,7 +773,7 @@ private:
     std::uint64_t interp_started_ = 0;
     std::uint64_t interp_last_played_serial_ = 0;
     std::uint64_t interp_logs_skipped_ = 0;     // completed logs replaced before playing
-    std::uint64_t interp_present_skipped_ = 0;  // VI presents while a sequence played
+    std::uint64_t interp_present_skipped_ = 0;  // presents while a sequence played
     // Game frames presented without sub-frames, by reason: overlay, no 3D
     // scene, several scenes, (unused), log already gone, unmatched.
     std::array<std::uint64_t, 6> interp_real_only_{};
@@ -969,7 +969,7 @@ private:
     // Vertices the game sent as it drew them, through the frame's rings.
     void draw_record_immediate(const shapes::Record& record);
     // A material record into the drawing state (native_material.h).
-    // A native material (E-04): its state into the drawing state; its pipeline and constants replace the console ones for
+    // A native material (E-04): its state into the drawing state; its pipeline and constants for
     // the draws until end_native_material (the next material or drawing-state change).
     void apply_native_material(const material::Native* native);
     void end_native_material();
@@ -1012,16 +1012,6 @@ private:
     // shows every other frame at full game speed.
     [[nodiscard]] bool skip_for_present_rate();
     std::int64_t next_rate_present_qpc_ = 0;
-
-    // texture base registers store physical addresses (MEM1 0x00000000 and
-    // MEM2 0x10000000), while the CPU can write through cached/uncached
-    // aliases. Dirty notifications are normalized to this physical window.
-    static constexpr std::uint32_t kMem1PhysicalBase = 0x00000000u;
-    // The native game's memory (docs/NATIVE_PORT.md): MEM1 and MEM2 enlarged for 8-byte pointers; the console's
-    // 24 and 64 MB fit inside.
-    static constexpr std::uint32_t kMem1Size = 0x04000000u;
-    static constexpr std::uint32_t kMem2PhysicalBase = 0x10000000u;
-    static constexpr std::uint32_t kMem2Size = 0x10000000u;
 
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     RenderStateKey render_state_key_{};

@@ -22,7 +22,7 @@
 
 namespace galaxy::render {
 
-// Row-major 3x4 affine in console layout: p' = M * [p, 1].
+// Row-major 3x4 affine in row order: p' = M * [p, 1].
 using Affine34 = std::array<float, 12>;
 
 [[nodiscard]] Affine34 affine_identity() noexcept;
