@@ -91,6 +91,8 @@ public:
     bool isFollowHostScale() const;
     void onVisibleSyncHost();
     void offVisibleSyncHost();
+    // Apart from the actor's clipping, as a table asks; a character hidden is still not there.
+    void offVisibleSyncHostUnlessHidden();
     void validate();
     void invalidate();
 
@@ -128,7 +130,8 @@ public:
     f32 mDropLength;
     u8 _70;
     u8 _71;
-    u8 _72;
+    u8 _72;  // 1: follows the actor; 0: its own, for a shadow that comes first (MeteorStrike); or cVisibleUnlessHidden
+    static const u8 cVisibleUnlessHidden = 2;
 };
 
 namespace MR {

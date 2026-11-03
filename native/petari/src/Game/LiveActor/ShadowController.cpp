@@ -270,6 +270,16 @@ bool ShadowController::isDraw() const {
         return false;
     }
 
+    // An actor that isn't there has no shadow, whatever its table says: the hungry Lumas of the Observatory wait dead until
+    // their time comes, and their tables keep the shadow apart from the actor.
+    if (mActor->mFlag.mIsDead) {
+        return false;
+    }
+
+    if (_72 == cVisibleUnlessHidden) {
+        return !mActor->mFlag.mIsHiddenModel;
+    }
+
     if (!_72) {
         return true;
     }
@@ -443,6 +453,10 @@ void ShadowController::onVisibleSyncHost() {
 
 void ShadowController::offVisibleSyncHost() {
     _72 = 0;
+}
+
+void ShadowController::offVisibleSyncHostUnlessHidden() {
+    _72 = cVisibleUnlessHidden;
 }
 
 void ShadowController::validate() {

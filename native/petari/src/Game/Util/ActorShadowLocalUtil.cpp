@@ -339,7 +339,7 @@ namespace ActorShadow {
         if (syncShow) {
             pController->onVisibleSyncHost();
         } else {
-            pController->offVisibleSyncHost();
+            pController->offVisibleSyncHostUnlessHidden();
         }
     }
 
