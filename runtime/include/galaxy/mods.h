@@ -87,7 +87,8 @@ struct ModInfo {
     bool files = false;
     bool textures = false;
     bool movies = false;
-    bool loose = false;                       // loose files placed by name
+    bool loose = false;
+    bool package = false;  // converted by LumaLink: nebula-mod.json, files.pak                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
     unsigned native_patches = 0;              // patches over the game's code that the game has natively
@@ -156,6 +157,8 @@ struct DiscPlan {
         std::filesystem::path host;
     };
     std::vector<File> files;
+    // Stores of converted mods (LumaLink's packages), bottom of the list first; read over the rest.
+    std::vector<std::filesystem::path> stores;
     std::vector<std::string> notes;  // what could not apply, for the log
     unsigned code_patches = 0;
     std::map<std::uint32_t, std::uint32_t> native_patches;  // kPatch*: what each is set to

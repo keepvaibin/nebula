@@ -34,6 +34,8 @@ AssetStore::~AssetStore() {
 }
 
 bool AssetStore::attach_overlay(const std::filesystem::path& path) {
+    // Over the last one attached: the newest wins.
+    if (overlay_ != nullptr) return overlay_->attach_overlay(path);
     auto overlay = std::make_unique<AssetStore>();
     if (!overlay->open(path)) return false;
     overlay_ = std::move(overlay);
