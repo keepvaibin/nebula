@@ -2270,6 +2270,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
                 std::cerr << "[post-process] aa=" << cfg.aa_mode << " smaa-quality=" << cfg.smaa_quality
                           << " upscaler=" << cfg.upscaler << " sharpness=" << cfg.sharpness << '\n';
             }
+            set_curved_surfaces_offered(true);
             if (!ambient_occlusion_.initialize(device_.Get())) {
                 std::cerr << "[ambient-occlusion] unavailable\n";
             }
