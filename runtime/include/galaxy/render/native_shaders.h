@@ -25,7 +25,13 @@ enum NativeShaderVariant : unsigned {
     kNativeVariantLayer = 2u,     // + the reactive mask and the effects layer's targets
     kNativeVariantMotion = 3u,    // + the motion vector
     kNativeVariantDual = 4u,      // + the material alpha for dual-source blending (render state bit 27)
-    kNativeVariants = 5u,
+    kNativeVariantSample = 5u,      // an alpha-tested material under MSAA: base, per sample
+    kNativeVariantSampleDual = 6u,  // dual, per sample
+    kNativeVariantPixel = 7u,            // lit at the pixel (j3d_material.hlsli), plainly or enhanced
+    kNativeVariantPixelDual = 8u,
+    kNativeVariantPixelSample = 9u,
+    kNativeVariantPixelSampleDual = 10u,
+    kNativeVariants = 11u,
 };
 
 [[nodiscard]] constexpr unsigned native_shader_variant(std::uint32_t blend_bits) noexcept {
@@ -37,11 +43,20 @@ enum NativeShaderVariant : unsigned {
 }
 
 // `shader` (NebulaShaderId)'s vertex (pixel false) or pixel shader in `variant`; empty when the build has none.
+// The variant a draw takes. In a target of 2^samples_log2 samples an alpha-tested material shades per sample, where it has
+// that variant and the device can (per_sample); lit at the pixel where the material lights and the setting asks.
+[[nodiscard]] unsigned native_draw_variant(std::uint32_t shader, unsigned variant, unsigned samples_log2, bool per_sample,
+                                           bool pixel_lit) noexcept;
+[[nodiscard]] constexpr bool native_variant_dual(unsigned variant) noexcept {
+    return variant == kNativeVariantDual || variant == kNativeVariantSampleDual || variant == kNativeVariantPixelDual ||
+           variant == kNativeVariantPixelSampleDual;
+}
+
 [[nodiscard]] NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
 
 // The curved surfaces' hull (domain false) or domain stage for every native material (native_curved.hlsl), by
 // whether the output layout carries motion vectors (kNativeVariantMotion).
-[[nodiscard]] NativeShaderBytes native_curved_bytes(bool motion, bool domain) noexcept;
+[[nodiscard]] NativeShaderBytes native_curved_bytes(unsigned variant, bool domain) noexcept;
 
 
 // A native pipeline's render state: the draw's (its dual-source and constant-alpha bits the shader's dual variant

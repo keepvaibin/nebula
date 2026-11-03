@@ -77,10 +77,6 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
     {
         std::string value = state.anti_aliasing_text;
         if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
-        if (render.aa_mode != 0u && render.msaa_samples > 1u && render.upscaler != 2u && render.upscaler != 3u &&
-            !render.ray_tracing_enabled) {
-            value += " (OFF WITH MSAA)";
-        }
         rows.push_back({"ANTI-ALIASING", value,
                         [&host](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
                         "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
@@ -254,13 +250,13 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render, const Graphic
             } else {
                 std::snprintf(text, sizeof(text), "%u%%", value);
             }
-            rows.push_back({"  INTENSITY", text,
+            rows.push_back({"BLOOM", text,
                             [&host](RenderConfig& draft, int delta) {
                                 draft.bloom = static_cast<unsigned>(std::clamp(
                                     static_cast<int>(std::min(draft.bloom, kMaxBloom)) + delta * 10, 0,
                                     static_cast<int>(kMaxBloom)));
                             },
-                            "THE ENHANCED GLOW'S STRENGTH"});
+                            "HOW STRONGLY BRIGHT THINGS GLOW"});
             rows.back().slider_steps = static_cast<std::uint16_t>(kMaxBloom / 10u);
             rows.back().slider_at = static_cast<std::uint16_t>(value / 10u);
         }

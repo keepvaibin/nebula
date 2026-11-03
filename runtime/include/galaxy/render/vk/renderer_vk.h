@@ -25,8 +25,11 @@
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/render_config.h"
+#include "galaxy/render/render_state_key.h"
 #include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/gpu_upload_ring.h"
+#include "galaxy/render/vk/ambient_occlusion_vk.h"
+#include "galaxy/render/vk/scene_camera_vk.h"
 #include "galaxy/render/vk/game_bloom_vk.h"
 #include "galaxy/render/vk/post_process_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
@@ -37,6 +40,7 @@
 #include "galaxy/render_api.h"
 
 #include <array>
+#include <chrono>
 #include <atomic>
 #include <bit>
 #include <cstddef>
@@ -68,7 +72,14 @@ struct RenderLayout {
     // resolved into the single-sample target as each pass ends. Index 0 is scene_pass / scene_pass_clear.
     std::array<VkRenderPass, 4> ms_passes{};
     std::array<VkRenderPass, 4> ms_passes_clear{};
+    // The same passes over the wide scene's colour format (kSceneVariantHdr), by samples.
+    std::array<VkRenderPass, 4> wide_passes{};
+    std::array<VkRenderPass, 4> wide_passes_clear{};
     [[nodiscard]] VkRenderPass pass_for(unsigned samples_log2, bool clear) const noexcept {
+        if ((samples_log2 & kSceneVariantHdr) != 0u) {
+            const unsigned samples = samples_log2 & kSceneVariantSamplesMask;
+            return clear ? wide_passes_clear[samples] : wide_passes[samples];
+        }
         if (samples_log2 == 0u) {
             return clear ? scene_pass_clear : scene_pass;
         }
@@ -108,10 +119,10 @@ public:
     [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
     // SMAA or FXAA of the 3D scene in the scene target before the 2D layer draws (PostProcessorVk).
     void record_scene_aa();
-    // Ambient occlusion (D3D12's ambient_occlusion.h) is not on Vulkan yet.
-    [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return false; }
-    void set_scene_ao_view(const RtView&) noexcept {}
-    void record_scene_ao() noexcept {}
+    // Ambient occlusion of the opaque scene (ambient_occlusion_vk.h).
+    [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ao_.ready(); }
+    void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    void record_scene_ao();
     // The game's bloom through the renderer (galaxy/motion_signals.h kMarkerBloom; game_bloom_vk.h): until its
     // passes have compiled, the game draws its own chains.
     [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
@@ -173,8 +184,10 @@ public:
     [[nodiscard]] bool rt_log_seq() const noexcept { return false; }
     [[nodiscard]] bool rt_scene_untraced() const noexcept { return false; }
     void rt_set_scene_untraced(bool) noexcept {}
-    void begin_hdr_scene() noexcept {}
-    void end_hdr_scene() noexcept {}
+    // The 3D scene in a wide target while `wanted` (the enhanced lighting), its camera at the end (scene_camera_vk.h);
+    // sub-frames replay both.
+    void begin_wide_scene(bool wanted);
+    void end_wide_scene();
     void rt_begin_scene() {}
     void rt_capture_picture() {}
     void rt_trace_scene() {}
@@ -329,7 +342,9 @@ public:
         return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
     }
     // The pipelines' scene target variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene scene target here.
-    [[nodiscard]] std::uint8_t scene_variant() const noexcept { return scene_samples_log2(); }
+    [[nodiscard]] std::uint8_t scene_variant() const noexcept {
+        return static_cast<std::uint8_t>(scene_samples_log2() | (scene_.wide ? kSceneVariantHdr : 0u));
+    }
     [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &draw_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
@@ -432,6 +447,8 @@ private:
     // Presentation post-processing: SMAA or FXAA of the scene, FSR 1 or the box resample, RCAS.
     vk::PostProcessorVk post_;
     vk::GameBloomVk bloom_;
+    vk::AmbientOcclusionVk ao_;
+    RtView scene_ao_view_{};
     void sync_post_process();
     // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
     gpu::TextureRef oriented_;
@@ -522,8 +539,18 @@ private:
         // Its colour is an image a hand-over gave it (E-10): framebuffer and colour input per image (scene_framebuffer).
         bool turned = false;
         std::uint64_t depth_serial = 0;  // its depth target's (create_scene_set): the per-image framebuffers' key
+        bool wide = false;  // the wide scene's colour (kSceneVariantHdr), over the scene target's own depth
+        bool wide_read = false;  // its colour is in the sampling layout, since the last camera
     };
     SceneSet scene_;
+    // The wide scene's colour targets (begin_wide_scene): the live frames' and the sub-frames'.
+    SceneSet wide_scene_;
+    SceneSet replay_wide_scene_;
+    bool ensure_wide_set(SceneSet& set);
+    void record_wide_begin();
+    void record_wide_end();
+    vk::SceneCameraVk scene_camera_;
+    std::chrono::steady_clock::time_point camera_metered_{};
     std::uint64_t scene_depth_serial_ = 0;
     // E-10: the picture the scene target owes (hand_over_scene_color), the image the scene target had at the last frame submission while a
     // hand-over in the open frame replaced it, the open frame's input set for a turned scene target colour, the separate
@@ -592,7 +619,7 @@ private:
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
     enum class SceneUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
-    std::array<std::array<VkPipeline, 4>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
+    std::array<std::array<VkPipeline, 8>, static_cast<std::size_t>(SceneUtility::Count)> scene_utility_pipelines_{};
     [[nodiscard]] VkPipeline scene_utility_pipeline(SceneUtility kind);
     unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the scene target's formats render and sample
     VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
@@ -704,7 +731,7 @@ private:
     // OutputSceneBegin: the scene resampled into the output scene target at the op's scale; SwapSceneSets: the scene target and the output
     // scene target trade places.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindScene, Clear, Copy, SceneAa, OutputSceneBegin, SwapSceneSets, Bloom
+        Draw, BindScene, Clear, Copy, SceneAa, SceneAo, OutputSceneBegin, SwapSceneSets, Bloom, WideBegin, WideEnd
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
@@ -1026,7 +1053,7 @@ private:
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Camera, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);

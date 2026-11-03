@@ -1,13 +1,34 @@
 // J3D material 470 (tools/dev/gen_j3d_materials.py from the game's material set; E-04)
 #include "j3d_material.hlsli"
 
+void j3d_channels(float3 eye, float3 nrm, float4 vtx0, float4 vtx1, out float4 lit0, out float4 lit1) {
+    lit0 = vtx0;
+    lit1 = vtx1;
+    lit0.rgb = material.mat_color[0].rgb;
+    lit0.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(0u, 2u, 2u, eye, nrm).a) / 255.0);
+    lit1 = vtx1;
+}
+#if NATIVE_PIXEL_LIT
+void j3d_channels_enhanced(float3 eye, float3 nrm, float4 vtx0, float4 vtx1, out float4 lit0, out float4 lit1) {
+    lit0 = vtx0;
+    lit1 = vtx1;
+    lit0.rgb = material.mat_color[0].rgb;
+    lit0.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(0u, 2u, 2u, eye, nrm).a) / 255.0);
+    lit1 = vtx1;
+}
+#endif
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const uint nq = v.pn_row & 31u;
     const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
     const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
-    o.color.rgb = material.mat_color[0].rgb;
-    o.color.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(0u, 2u, 2u, v.eye, nrm).a) / 255.0);
+#if NATIVE_PIXEL_LIT
+    o.color = v.color0;
     o.color1 = v.color1;
+    o.lit_eye = v.eye;
+    o.lit_nrm = nrm;
+#else
+    j3d_channels(v.eye, nrm, v.color0, v.color1, o.color, o.color1);
+#endif
     {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
@@ -29,6 +50,10 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     j3d_vertex_override(v, o);
 }
 float4 material_color(NativeVaryings i) {
+#if NATIVE_PIXEL_LIT
+    j3d_pixel_begin(i);
+    j3d_pixel_channels(i);
+#endif
     [branch] if (material.ovr.x != 0.0) {
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw);
         const float4 ras = float4(0.0, 0.0, 0.0, 0.0);
@@ -62,6 +87,9 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
+#if NATIVE_PIXEL_LIT
+    if (j3d_enhanced()) prev.rgb = enh_finish(prev.rgb, g_enh);
+#endif
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

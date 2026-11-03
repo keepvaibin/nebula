@@ -6,6 +6,7 @@
 
 #include "galaxy/render/curved_surfaces.h"
 
+#include <cstring>
 #include <cstdio>
 #include <memory>
 #include <vector>
@@ -69,6 +70,16 @@ int main() {
         passed &= expect(v.uv[1][0] == 2.0f && v.uv[1][1] == 2.5f && v.uv[0][0] == 0.0f, "texture coordinates");
         passed &= expect(v.mtx_indices[0] == (3u | 30u << 16u) && v.mtx_indices[1] == 0u && v.mtx_indices[2] == 0u,
                          "matrix slots as the shaders read them");
+    }
+
+    // A coordinate that starts from the corner's own position matrix reads its rows, not a texture place's.
+    {
+        Geometry from_position = g;
+        from_position.corners[0].texture_matrix[1] = kCornerPositionMatrix;
+        std::vector<RenderVertex> own;
+        passed &= expect(expand(from_position, arrays, 0u, nullptr, own) && own.size() == 1u &&
+                             own[0].mtx_indices[0] == (3u | 3u << 16u),
+                         "a coordinate from the position matrix takes the corner's rows");
     }
 
     // Without per-corner position matrices, the draw's.

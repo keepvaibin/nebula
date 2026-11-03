@@ -219,6 +219,12 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
             post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_);
+            if (!ao_.initialize()) {
+                std::cerr << "[ambient-occlusion] off on this device" << std::endl;
+            }
+            if (!scene_camera_.initialize()) {
+                std::cerr << "[scene-camera] off on this device" << std::endl;
+            }
             post_.set_present_pass(present_pass_);
         } else {
             PostProcessStatus off{};
@@ -274,7 +280,10 @@ bool RendererVk::create_layouts() {
         depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
     }
 
-    const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Curved surfaces' patch stages read the draw constants too.
+    const VkShaderStageFlags stage_passes =
+        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+        (context.tessellation_shader() ? VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT : 0u);
     {
         // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
         const VkDescriptorSetLayoutBinding bindings[] = {
@@ -383,9 +392,10 @@ bool RendererVk::create_layouts() {
     }
     // The scene target pass keeps both targets in their attachment layouts; whoever samples them transitions and returns them.
     // With MSAA its targets are multisampled and a third attachment, the single-sample colour, takes their resolve.
+    for (const bool wide : {false, true})
     for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
         VkAttachmentDescription attachments[3]{};
-        attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
+        attachments[0].format = wide ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
         attachments[0].samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -442,14 +452,17 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
-                                     samples_log2 != 0u ? &draw_layout_.ms_passes[samples_log2] : &draw_layout_.scene_pass),
+                                     wide                ? &draw_layout_.wide_passes[samples_log2]
+                                     : samples_log2 != 0u ? &draw_layout_.ms_passes[samples_log2]
+                                                         : &draw_layout_.scene_pass),
                   "scene target render pass");
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
-                                     samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
-                                                        : &draw_layout_.scene_pass_clear),
+                                     wide                ? &draw_layout_.wide_passes_clear[samples_log2]
+                                     : samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
+                                                         : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
     // One RGBA8 target written whole (copies, screen probes): its old contents are dropped; it ends shader-readable.
@@ -493,6 +506,7 @@ bool RendererVk::create_layouts() {
     }
     draw_layout_.depth_format = depth_format_;
     draw_layout_.tessellation = context.tessellation_shader();
+    set_curved_surfaces_offered(context.tessellation_shader());
     draw_layout_.dual_source_blend = context.dual_source_blend();
     set_dual_source_blending(context.dual_source_blend());
     draw_layout_.logic_op = context.logic_op();
@@ -866,7 +880,7 @@ bool RendererVk::create_utility_pipelines() {
 
 VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
     const unsigned samples_log2 = scene_samples_log2();
-    VkPipeline& pipeline = scene_utility_pipelines_[static_cast<unsigned>(kind)][samples_log2];
+    VkPipeline& pipeline = scene_utility_pipelines_[static_cast<unsigned>(kind)][scene_variant()];
     if (pipeline != VK_NULL_HANDLE) {
         return pipeline;
     }
@@ -874,7 +888,7 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
         !vk::Context::get().quirks().clear_with_draw) {
         return VK_NULL_HANDLE;
     }
-    const VkRenderPass pass = draw_layout_.pass_for(samples_log2, false);
+    const VkRenderPass pass = draw_layout_.pass_for(scene_variant(), false);
     const auto samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
     constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT;
@@ -1418,7 +1432,7 @@ void RendererVk::report_present_stats() {
     message << " gpu-samples=" << stats_.gpu_samples << " gpu-total-ms=" << stats_.gpu_ms;
     if (pass_queries_ != VK_NULL_HANDLE) {
         static constexpr const char* kPassNames[] = {"scene", "resolve", "frame-read", "display-copy", "bloom", "scene-aa",
-                                                     "scene-ao", "upscale", "rt", "present", "curve-sort"};
+                                                     "scene-ao", "upscale", "rt", "present", "curve-sort", "camera"};
         static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
         message << " gpu-pass-ms=";
         for (std::size_t pass = 0; pass < std::size(kPassNames); ++pass) {

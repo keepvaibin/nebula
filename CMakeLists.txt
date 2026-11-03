@@ -275,7 +275,7 @@ endforeach()
 set(galaxy_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/ambient_occlusion.hlsl")
 set(galaxy_ao_headers "")
 foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
-        apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
+        upsample_cs:UpsampleCS:cs_5_0 apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
     string(REPLACE ":" ";" galaxy_ao_pair "${galaxy_ao_pass}")
     list(GET galaxy_ao_pair 0 galaxy_ao_name)
     list(GET galaxy_ao_pair 1 galaxy_ao_entry)
@@ -287,10 +287,29 @@ foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoi
     endif()
     add_custom_command(OUTPUT "${galaxy_ao_header}"
         COMMAND "${GALAXY_FXC}" /nologo /T ${galaxy_ao_profile} /E ${galaxy_ao_entry} /O3 /Ges ${galaxy_ao_stage}
-            /Vn g_ao_${galaxy_ao_name} /Fh "${galaxy_ao_header}" "${galaxy_ao_hlsl}"
+            /DAO_PASS_${galaxy_ao_name}=1 /Vn g_ao_${galaxy_ao_name} /Fh "${galaxy_ao_header}" "${galaxy_ao_hlsl}"
         DEPENDS "${galaxy_ao_hlsl}"
         VERBATIM)
     list(APPEND galaxy_ao_headers "${galaxy_ao_header}")
+endforeach()
+
+# The wide scene's camera (runtime/src/render/scene_camera.hlsl), compiled by fxc like the post passes.
+set(galaxy_camera_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/scene_camera.hlsl")
+set(galaxy_camera_headers "")
+foreach(galaxy_camera_pass meter_cs:MeterCS:cs_5_0:CAMERA_METER vs:CameraVS:vs_5_0:CAMERA_PLAIN ps:CameraPS:ps_5_0:CAMERA_PLAIN
+        samples_ps:CameraPS:ps_5_0:CAMERA_SAMPLES widen_ps:WidenPS:ps_5_0:CAMERA_PLAIN)
+    string(REPLACE ":" ";" galaxy_camera_pair "${galaxy_camera_pass}")
+    list(GET galaxy_camera_pair 0 galaxy_camera_name)
+    list(GET galaxy_camera_pair 1 galaxy_camera_entry)
+    list(GET galaxy_camera_pair 2 galaxy_camera_profile)
+    list(GET galaxy_camera_pair 3 galaxy_camera_define)
+    set(galaxy_camera_header "${galaxy_post_dir}/camera_${galaxy_camera_name}.h")
+    add_custom_command(OUTPUT "${galaxy_camera_header}"
+        COMMAND "${GALAXY_FXC}" /nologo /T ${galaxy_camera_profile} /E ${galaxy_camera_entry} /O3 /Ges
+            /D${galaxy_camera_define}=1 /Vn g_camera_${galaxy_camera_name} /Fh "${galaxy_camera_header}" "${galaxy_camera_hlsl}"
+        DEPENDS "${galaxy_camera_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_camera_headers "${galaxy_camera_header}")
 endforeach()
 
 # The game's bloom (runtime/src/render/game_bloom.hlsl), compiled by fxc like the post passes.
@@ -376,6 +395,8 @@ runtime/src/render/host_window_win32.cpp
     ${galaxy_post_headers}
     runtime/src/render/ambient_occlusion.cpp
     ${galaxy_ao_headers}
+    runtime/src/render/scene_camera.cpp
+    ${galaxy_camera_headers}
     runtime/src/render/game_bloom.cpp
     ${galaxy_bloom_headers}
     runtime/src/render/temporal_upscaler.cpp
@@ -674,6 +695,8 @@ runtime/src/render/host_window_win32.cpp
         runtime/src/render/vk/renderer_vk_replay.cpp
         runtime/src/render/vk/post_process_vk.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
+        runtime/src/render/vk/ambient_occlusion_vk.cpp
+        runtime/src/render/vk/scene_camera_vk.cpp
         ${galaxy_native_spirv_sources}
         runtime/src/render/vk/surface_win32.cpp)
     target_include_directories(galaxy_render_vk PUBLIC runtime/include)

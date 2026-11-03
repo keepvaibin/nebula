@@ -219,16 +219,15 @@ VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStat
     VkShaderModule hs = VK_NULL_HANDLE;
     VkShaderModule ds = VK_NULL_HANDLE;
     if ((rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch) {
-        const bool motion = variant == kNativeVariantMotion;
-        const NativeShaderBytes hull = native_curved_bytes(motion, false);
-        const NativeShaderBytes domain = native_curved_bytes(motion, true);
+        const NativeShaderBytes hull = native_curved_bytes(variant, false);
+        const NativeShaderBytes domain = native_curved_bytes(variant, true);
         hs = native_module(hull.data, hull.size, vk::ShaderStage::Hull);
         ds = native_module(domain.data, domain.size, vk::ShaderStage::Domain);
     }
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         // The dual variant's second output is the 8-bit combiner alpha the colour blends against (render state bit 27),
         // as the old path's dual-source pipelines.
-        const bool dual = variant == kNativeVariantDual;
+        const bool dual = native_variant_dual(variant);
         const auto make = [&](std::uint32_t compat, VkResult& result) {
             return create_pipeline(rs, vs, ps, dual, false, compat, result, hs, ds);
         };
@@ -238,9 +237,10 @@ VkPipeline PipelineCacheVk::create_native(std::uint32_t shader, const RenderStat
     return pipeline;
 }
 
-VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
+VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKey& render_state, bool pixel_lit) {
     const RenderStateKey rs = native_render_state(render_state);
-    const unsigned variant = native_shader_variant(rs.blend_bits);
+    const unsigned variant = native_draw_variant(shader, native_shader_variant(rs.blend_bits), rs.samples_log2 & kSceneVariantSamplesMask,
+                                                 vk::Context::get().sample_rate_shading(), pixel_lit);
     const std::uint32_t id = shader * kNativeVariants + variant;
     const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
     auto& bucket = native_pipelines_[hash];
@@ -424,7 +424,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     default: raster.cullMode = VK_CULL_MODE_NONE; break;
     }
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << rs.samples_log2);
+    multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << (rs.samples_log2 & kSceneVariantSamplesMask));
 
     // Reversed-Z against the game's depth (the projection negates z; RendererVk's viewport maps the game's depth range), so the
     // compare directions flip, as on D3D12.

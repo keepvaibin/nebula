@@ -23,6 +23,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_ENHANCED_LIGHTING", "enhanced_lighting");
     apply_env(cfg, "GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion");
     apply_env(cfg, "GALAXY_BLOOM", "bloom");
+    apply_env(cfg, "GALAXY_WIDE_SCENE", "wide_scene");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
     apply_env(cfg, "GALAXY_HUD_OUTPUT_RESOLUTION", "hud_output_resolution");
     apply_env(cfg, "GALAXY_AA", "aa");

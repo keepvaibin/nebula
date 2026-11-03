@@ -114,7 +114,9 @@ bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t pos
             static_cast<std::uint8_t>(3u * ((a & kPositionMatrix) != 0u ? c.position_matrix : position_matrix));
         std::uint8_t tex[8]{};
         for (unsigned t = 0; t < 8u; ++t) {
-            if ((a & (kTextureMatrix0 << t)) != 0u) tex[t] = static_cast<std::uint8_t>(30u + 3u * c.texture_matrix[t]);
+            if ((a & (kTextureMatrix0 << t)) != 0u) {
+                tex[t] = c.texture_matrix[t] == kCornerPositionMatrix ? pn : static_cast<std::uint8_t>(30u + 3u * c.texture_matrix[t]);
+            }
         }
         v.mtx_indices[0] = pn | static_cast<std::uint32_t>(tex[0]) << 8u | static_cast<std::uint32_t>(tex[1]) << 16u |
                            static_cast<std::uint32_t>(tex[2]) << 24u;

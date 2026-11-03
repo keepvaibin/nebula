@@ -61,6 +61,8 @@ struct RenderConfig {
     // Lit and environment-mapped draws shaded per pixel in linear light, with highlights, a sky/ground ambient and
     // Fresnel on environment maps (enhanced_lighting.h). Takes precedence over per_pixel_lighting for those draws.
     bool     enhanced_lighting   = false;
+    // The enhanced lighting's scene in a wide target with its camera (scene_camera.h). No row: its look is not accepted.
+    bool     wide_scene          = false;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
     // The game's bloom (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).

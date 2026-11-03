@@ -1629,9 +1629,9 @@ void RenderCore::cancel_screen_frame() {
     screen_frame_open_ = false;
 }
 
-RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
-    const auto projection = [this](unsigned i) {
-        return draw_state_.projection[i];
+RtView RenderCore::scene_depth_view(const float terms[6], const ScaledViewport& viewport) const {
+    const auto projection = [terms](unsigned i) {
+        return terms[i];
     };
     // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
     constexpr float kFarEps = 1.0f - 1e-7f;
@@ -1640,10 +1640,9 @@ RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
     // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
     // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
-    if (temporal_scene_ && draw_state_.projection_type == 0u) {
-        const FrameMap& map = renderer_.frame_map();
-        const float width = std::fabs(draw_state_.viewport[2]) * map.sx;
-        const float height = std::fabs(draw_state_.viewport[3]) * map.sy;
+    if (temporal_scene_) {
+        const float width = viewport.width;
+        const float height = viewport.height;
         if (width > 0.0f && height > 0.0f) {
             view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
             view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
@@ -1658,15 +1657,17 @@ RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     return view;
 }
 
-void RenderCore::apply_scene_ao() {
-    if (ao_scene_applied_ || side_layer_ != kSceneLayer) {
+// The game's opaque surfaces are drawn: the occlusion from their depth, multiplied into their colour under what blends.
+void RenderCore::apply_scene_ao(const std::array<float, 12>& view) {
+    if (!ambient_occlusion_ || !scene_phase_ || side_layer_ != kSceneLayer) {
         return;
     }
-    ao_scene_applied_ = true;
-    if (!ao_view_set_) {
+    const ScaledViewport viewport = viewport_pixels(view.data() + 6, renderer_.frame_map());
+    if (!viewport.valid()) {
         return;
     }
     flush_pending_draw_batch();
+    renderer_.set_scene_ao_view(scene_depth_view(view.data(), viewport));
     renderer_.record_scene_ao();
 }
 
@@ -1684,15 +1685,14 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
     }
     scene_phase_ = marker == SceneMarker::SceneBegin;
     if (marker == SceneMarker::SceneBegin) {
-        ao_view_set_ = false;
-        ao_scene_applied_ = !ambient_occlusion_;
         // The game names its stage: a new one starts the tracer's stage state over.
         if (stage != nullptr && (*stage)[0] != 0 && (!scene_stage_known_ || *stage != scene_stage_)) {
             scene_stage_ = *stage;
             scene_stage_known_ = true;
         }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
-        const std::uint32_t known = sky_up_known ? 1u : 0u;
+        const bool wide = enhanced_lighting_ && get_render_config().wide_scene;
+        const std::uint32_t known = (sky_up_known ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u) | (wide ? 4u : 0u);
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
             cpu_vs_constants_.sky_up = sky_up;
             cpu_vs_constants_.sky_up_known = known;
@@ -1703,7 +1703,6 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         if (side_layer_ == kMirrorLayer) {
             end_side_layer();
         }
-        apply_scene_ao();
     }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
@@ -1794,11 +1793,15 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
     bool switched = false;
     display_copy_on_output_ = false;
     if (marker == SceneMarker::SceneEnd) {
+        renderer_.end_wide_scene();
         renderer_.record_scene_aa();
         switched = renderer_.begin_output_scene();
     } else if (renderer_.output_scene_active()) {
         renderer_.end_output_scene();
         switched = true;
+    }
+    if (marker == SceneMarker::SceneBegin) {
+        renderer_.begin_wide_scene(enhanced_lighting_ && get_render_config().wide_scene);
     }
     if (switched) {
         display_pictures_.set_frame_map(renderer_.frame_map());
@@ -4243,7 +4246,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     {
         // The native material's pipeline: its build-compiled shaders under the draw's render state.
-        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
+        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_,
+                                                       per_pixel_lighting_ || enhanced_lighting_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
         current_pso_key_valid_ = false;
         // A curved native draw goes whole through its patch stages (native_curved.hlsl).
@@ -4758,6 +4762,8 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         const auto marker = static_cast<SceneMarker>(static_cast<int>(record.key));
         if (marker == SceneMarker::Scene2DBegin) {
             on_scene_2d_begin();
+        } else if (marker == SceneMarker::SceneOpaqueEnd) {
+            apply_scene_ao(current_record_pool_->scenes[record.native_index].view);
         } else if (marker != SceneMarker::Scene2DEnd) {
             const shapes::SceneInfo& info = current_record_pool_->scenes[record.native_index];
             on_scene_marker(marker, info.view_valid ? &info.view : nullptr, info.sky_up, info.sky_up_valid, &info.stage);
