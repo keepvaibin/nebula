@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 113u
+#define NEBULA_GAME_API_VERSION 115u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -294,7 +294,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_FUR = 29,                  /* FurDrawer: a fur shell over the body texture, lit */
     NEBULA_SHADER_PARTICLE = 30,             /* JPA particles: the texture by the emitter's colours, its colour mode */
     NEBULA_SHADER_OCEAN_BOWL_BLOOM = 31,     /* Beach Bowl's sea from under water: the water at two scrolls over grey */
-    NEBULA_SHADER_MII_FACE = 32,             /* Mii faces: a part's form, RFL's light or the Mii NPCs' stages */
+    NEBULA_SHADER_MII_FACE = 32,             /* Mii faces: a part's form, Mii's light or the Mii NPCs' stages */
     NEBULA_SHADER_MII_TEXTURE = 33,          /* a Mii's face texture parts: eyes, eyebrows, mouth, mustache, mole */
     NEBULA_SHADER_IMAGE_EFFECT = 34,         /* the game's screen texture passes: modulate, threshold, masks, edge */
     NEBULA_SHADER_GAUSSIAN_BLUR = 35,        /* ImageEffectLocalUtil::blurTexture: one axis of a Gaussian */
@@ -303,6 +303,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_MOVIE = 38,      /* MovieDraw (THPDraw): a movie frame's Y, U and V planes to RGB */
     NEBULA_SHADER_WATER_CAMERA = 39, /* WaterCameraFilter: the screen warped and darkened under water */
     NEBULA_SHADER_FRAME_RIPPLE = 40, /* MarioActor's heat and cold ripples: the frame, each row moved by a wave */
+    NEBULA_SHADER_FRAME_DEPTH = 41, /* the frame's depth as the game reads it, averaged over the pass's pixel */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256
@@ -849,11 +850,7 @@ typedef enum NebulaClearChannels {
     NEBULA_CLEAR_DEPTH = 4u
 } NebulaClearChannels;
 
-/* How frame_read takes its picture. */
-typedef enum NebulaCaptureFlags {
-    NEBULA_CAPTURE_HALF = 2u,  /* half size: each picture texel averages 2x2 of the frame's */
-    NEBULA_CAPTURE_DEPTH = 8u  /* the red channel holds the depth */
-} NebulaCaptureFlags;
+/* How frame_pass takes its picture. */
 
 /* A point of the picture the game asks about (NebulaHostServices::screen_probe). */
 #define NEBULA_SCREEN_PROBES_MAX 256u
@@ -1084,14 +1081,21 @@ typedef struct NebulaHostServices {
        frame; its top left `width` x `height` (in NEBULA_FRAME_UNITS) cleared to `clear_rgba`
        (R << 24 | G << 16 | B << 8 | A) and depth to far. */
     void (*target_begin)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba);
+    /* As target_begin, and until target_end the pass samples the frame: texture `frame_key` is the frame carrying
+       `frame_channels` (NebulaTargetChannels), texture `depth_key` its depth. A key of 0: not sampled. */
+    void (*target_begin_over_frame)(void* user, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba,
+                                    uint64_t frame_key, uint32_t frame_channels, uint64_t depth_key);
     /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
        naming `key` reads it, whatever format it names), carrying `channels` (NebulaTargetChannels). */
     void (*target_end)(void* user, uint64_t key, uint32_t channels);
     /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` and far. */
     void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t channels);
     /* The whole frame drawn so far becomes texture `key` as target_end's pictures do, carrying `channels`
-       (NebulaTargetChannels); `flags`: NebulaCaptureFlags. */
-    void (*frame_read)(void* user, uint64_t key, uint32_t channels, uint32_t flags);
+       (NebulaTargetChannels); `flags`: NebulaFramePassFlags. */
+    void (*frame_pass)(void* user, uint64_t key, uint32_t channels);
+    /* The frame drawn so far becomes texture `key` itself, every channel; the frame goes on in another target, which
+       the next draw must fill whole. */
+    void (*frame_take)(void* user, uint64_t key);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);

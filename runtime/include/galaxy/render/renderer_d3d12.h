@@ -26,7 +26,7 @@
 #include <wrl/client.h>
 
 #include "galaxy/render/utility_shaders.h"
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/temporal_upscaler.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/interp_gpu.h"
@@ -251,7 +251,7 @@ public:
     void end_output_scene();
     // An scene target-to-texture copy from the output scene target after end_output_scene: the picture its display copy took (the
     // scene with the 2D layer), which the single scene target still holds until something draws.
-    [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
+    [[nodiscard]] bool draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures);
     // The scene's anti-aliasing (post_process.h) in the render scene target at the end of the 3D scene,
     // before the 2D layer and begin_output_scene. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
@@ -517,25 +517,28 @@ public:
     // The command list being recorded (DrawCall::curve_sort_list).
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
-    // scene target copy paths (record into the current command list). Both run the
-    // conversion blit (
-    // half-scale box / display picture y-scale stretch / depth-source packing) instead
-    // of a raw CopyTextureRegion, 
-    // semantics. `is_depth_copy` is true when the PE pixel format is Depth24 at copy time
-    void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
+    // Passes over the frame into a picture, recorded into the current command list.
+    void copy_scene_to_display(const FramePassRequest& params, DisplayTexture& dest);
     // Native presentation: whether this display copy can take the scene target's colour target instead of copying it
     // (hand_over_scene_color): an exact copy of the scene target's top rows (the identity filter, no gamma or scaling) on the
     // plain path (one sample a pixel, no HDR scene, ray tracing, temporal upscaler, output-resolution 2D layer,
     // interpolation or frame generation, post-processing ready).
-    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const;
+    [[nodiscard]] bool can_hand_over_display_copy(const FramePassRequest& params, const DisplayTexture& dest) const;
     // Gives the scene target's colour target (the picture of this display copy, as an display picture keeps it) to the caller and continues
     // the scene target on `fresh` (a released texture of the scene target's description, or null for a new one). The picture is owed to
     // the scene target until a clear covers it (settle_owed_scene).
     [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh);
-    [[nodiscard]] bool copy_scene_to_texture(
-        const CaptureRequest& params,
-        TextureCache& textures,
-        bool is_depth_copy);
+    // The frame so far becomes picture `key`; the frame goes on in `fresh`, not owed its contents. `released` is the
+    // picture `key` had.
+    [[nodiscard]] bool can_take_scene() const noexcept;
+    bool take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureCache& textures, gpu::TextureRef& released);
+    // The frame, and its depth, as pictures for the next target pass (a key of 0: not wanted); end_target_pass gives
+    // them back, or close_frame_for_pass when the pass could not begin.
+    void open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key, TextureCache& textures);
+    void close_frame_for_pass(TextureCache& textures);
+    [[nodiscard]] bool draw_frame_pass(
+        const FramePassRequest& params,
+        TextureCache& textures);
 
     // Stretch-blit `source` to the backbuffer. A null/invalid source is a
     // runtime bug: callers must keep the last valid swap-chain image instead
@@ -588,11 +591,7 @@ public:
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
     // Bytes held by the scene target-copy destination cache. Destinations are allocated at the
     // internal resolution, so this grows with the frame's area against a fixed budget.
-    [[nodiscard]] std::uint64_t scene_copy_dest_bytes() const {
-        return scene_copy_dests_bytes_;
-    }
     // The copy-destination byte budget (192 MiB), reported next to the live bytes.
-    [[nodiscard]] static std::uint64_t scene_copy_dest_budget_bytes();
     [[nodiscard]] std::uint64_t last_latency_wait_us() const {
         return last_latency_wait_us_;
     }
@@ -723,9 +722,16 @@ private:
     }
     // Copies the owed picture back, all of it or (`kept`) all but that rect, which a clear is about to cover.
     void restore_owed_scene(const D3D12_RECT* kept);
-    // The conversion views after a handover: a table per handover in turn, as the GPU reads views when it runs.
-    std::array<std::optional<DescriptorRing::Table>, kFramesInFlight + 1u> conv_scene_tables_{};
-    unsigned conv_scene_table_next_ = 0;
+    // The conversion views after a handover, several in a frame: a table of its own, as the GPU reads views when it
+    // runs, used again once the frames that could read it are done.
+    std::uint64_t frame_pass_color_key_ = 0u;
+    std::uint64_t frame_pass_depth_key_ = 0u;
+    struct ConvSceneTable {
+        DescriptorRing::Table table;
+        std::uint64_t free_from = 0u;
+    };
+    std::vector<ConvSceneTable> conv_scene_tables_;
+    std::size_t conv_scene_table_ = ~std::size_t{0};
     // Presents so far (the native-presentation A/B alternates by them); handovers, and how their pictures were settled:
     // a clear covered all of it, a clear left bands to copy back, or something read or wrote the scene target first.
     std::uint64_t presented_frames_ = 0;
@@ -751,7 +757,6 @@ private:
         unsigned dest_w,
         unsigned dest_h,
         D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-        bool is_depth_copy,
         std::uint8_t copy_format,
         float src_x,
         float src_y,
@@ -791,7 +796,7 @@ private:
     // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
     // list; the time to the next mark (or the list's end) is that pass's.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, SceneCopy, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
@@ -966,8 +971,7 @@ private:
     // must look it up again (a new view, or a capture replacing others).
     bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
-    bool publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
-                         TextureCache& textures);
+    bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureCache& textures);
     static constexpr std::uint64_t kTargetIdleFrames = 600u;
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     std::uint64_t target_key_ = 0;
@@ -998,7 +1002,7 @@ private:
     bool fg_hudless_taken_ = false;              // a picture's HUD-less copy is waiting
     std::uint32_t fg_hudless_slot_ = 0u;         // the picture it went with
     void take_fg_hudless_scene();
-    void copy_fg_hudless_display(const CaptureRequest& params, const DisplayTexture& dest);
+    void copy_fg_hudless_display(const FramePassRequest& params, const DisplayTexture& dest);
     void present_fg_hudless(const DisplayTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
@@ -1022,8 +1026,7 @@ private:
         ID3D12Resource* dest = nullptr;
         unsigned width = 0;
         unsigned height = 0;
-        CaptureRequest params{};
-        bool depth = false;
+        FramePassRequest params{};
         std::uint8_t format = 0;
         float geometry[4]{};  // src x, y, step x, y
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-scene target resample
@@ -1483,7 +1486,7 @@ private:
     RtView scene_ao_view_{};
     // scene target-copy destination textures (render targets) are placed in shared
     // heaps rather than committed one by one (gpu_placed_textures.h).
-    PlacedTextureAllocator scene_copy_heap_{
+    PlacedTextureAllocator frame_pass_heap_{
         D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
 
     // Settings overlay: the game's window-frame corner texture (read from
@@ -1642,17 +1645,12 @@ private:
     // depth-source). SMG reuses one address with different copy formats, and each format
     // needs its own converted texture. The resource is reused across copies and recreated
     // only on size change; the TextureCache alias is refreshed per copy (cheap when unchanged).
-    struct SceneCopyDest {
+    struct FramePassTarget {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         UINT width = 0;
         UINT height = 0;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         bool rtv_valid = false;
-        // Last copy that used this destination, for the bound below. A destination
-        // is a pure function of its key, so evicting one only costs a re-creation.
-        std::uint64_t last_used = 0;
-        // Resident bytes of `texture`, for the byte budget below.
-        std::uint64_t bytes = 0;
     };
     // One texture per destination key, at the copy's scaled extent in kSceneColorFormat
     // (a full frame copy). Bounded in
@@ -1660,17 +1658,15 @@ private:
     // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
     // is well above a scene's working set (a few pictures across a couple of formats plus one
     // bloom workspace).
-    std::unordered_map<std::uint64_t, SceneCopyDest> scene_copy_dests_;
-    std::uint64_t scene_copy_dests_tick_ = 0;
-    std::uint64_t scene_copy_dests_bytes_ = 0;
+    std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
     // Render-owner-only aggregate work counts, reported once at shutdown.
     // Payload bytes are copied pixels, not a device allocation-size estimate.
-    std::uint64_t scene_copy_requests_ = 0;
-    std::uint64_t scene_shader_copies_ = 0;
+    std::uint64_t frame_pass_requests_ = 0;
+    std::uint64_t frame_passes_drawn_ = 0;
     using RetiredResourceList =
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>
-        retired_scene_copy_textures_;
+        retired_frame_pass_targets_;
     // Interpolation: copy textures retired during a game-frame ring segment.
     std::array<RetiredResourceList, kInterpSegments> retired_segment_textures_;
 
@@ -1680,7 +1676,6 @@ private:
     // CPU-only scratch slot. scene target source SRVs occupy an immutable prefix of the
     // active shader-visible heap.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_r8_;  // into one-channel copies
     Microsoft::WRL::ComPtr<ID3D12PipelineState> display_filter_pipeline_;  // 1:1 display copies without gamma
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};

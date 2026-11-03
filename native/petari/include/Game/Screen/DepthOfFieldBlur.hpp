@@ -18,7 +18,8 @@ public:
     void drawFinal() const;
 
     JUTTexture* _14;
-    JUTTexture* _1C;
+    JUTTexture* mFrameKey;       // the frame, in the blur source's pass
+    JUTTexture* mFrameDepthKey;  // its depth, in the depth pass
     JUTTexture* _20;
     JUTTexture* _24;
     JUTTexture* _28;

@@ -1,4 +1,4 @@
-#include <RFLi_Heap.h>
+#include <MiiInternalHeap.h>
 
 #include "Game/System/NebulaArena.hpp"
 

@@ -82,7 +82,6 @@ void set_deband_constants(PostConstants& constants, unsigned width, unsigned hei
 // The reduced picture's size along an axis of `size` pixels.
 [[nodiscard]] unsigned deband_reduced_size(unsigned size, unsigned reduction) noexcept;
 // The deband pass runs (GALAXY_DEBAND=0: off, for comparisons).
-[[nodiscard]] bool deband_wanted() noexcept;
 
 // The AA start-up self-test: a 32 x 32 white-over-black edge stepping down one row every four columns, the jagged
 // case both passes exist for. A working pass blends a few dozen pixels along the steps and leaves flat areas alone.

@@ -951,17 +951,17 @@ void test_generic() {
     const auto parsed = parse_input_source(ControlScheme::Generic, "Button8");
     expect(parsed && parsed->kind == SourceKind::Button && parsed->code == pad::kGripRightBit, "Button8 parses");
     const BindingTable defaults = default_binding_table(ControlScheme::Generic);
-    expect(defaults[WiiTarget::A][0] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kSouthBit)},
+    expect(defaults[GameInput::A][0] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kSouthBit)},
            "button 1 jumps");
-    expect(defaults[WiiTarget::Z][1] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kGripLeftBit)},
+    expect(defaults[GameInput::Z][1] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kGripLeftBit)},
            "button 7 crouches");
     expect(legacy_binding_table(ControlScheme::Generic) == defaults &&
                version3_binding_table(ControlScheme::Generic) == defaults,
            "migration never changes generic bindings");
-    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+    for (std::size_t t = 0; t < kGameInputCount; ++t) {
         for (const InputSource source : defaults.targets[t]) {
             if (!source.empty()) {
-                expect(binding_source_allowed(ControlScheme::Generic, static_cast<WiiTarget>(t), source),
+                expect(binding_source_allowed(ControlScheme::Generic, static_cast<GameInput>(t), source),
                        "every generic default is allowed");
             }
         }

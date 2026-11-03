@@ -62,12 +62,13 @@ namespace {
 };  // namespace
 
 DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
-    : ImageEffectBase(pName), _14(), _1C(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
+    : ImageEffectBase(pName), _14(), mFrameKey(), mFrameDepthKey(), _20(), _24(), _28(), mIntensity(1.0f), mBlurMaxDist(248), mBlurMinDist(242) {
     MR::connectToSceneImageEffect(this);
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createDOFTexture();
     _14 = MR::getImageEffectResource()->_0;
-    _1C = MR::getImageEffectResource()->_4;
+    mFrameKey = ImageEffectLocalUtil::createFrameKey();
+    mFrameDepthKey = ImageEffectLocalUtil::createFrameKey();
     _20 = MR::getImageEffectResource()->_8;
     _24 = MR::getImageEffectResource()->_C;
     _28 = new JUTTexture(128, 2);
@@ -92,13 +93,12 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    _1C->frameColor(true);
     J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0);
     drawZAlphaTex();
     J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
-    _20->frameDepth(true);
+    ImageEffectLocalUtil::drawFrameDepth(_20, mFrameDepthKey);
     drawFinal();
     MR::loadProjectionMtx();
     MR::loadViewMtx();
@@ -158,8 +158,12 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 }
 
 void DepthOfFieldBlur::createBlurTexture() const {
-    J3DNativeTarget::begin(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0);
-    ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    J3DNativeTarget::beginOverFrame(mQuarter->mImage, mQuarter->getWidth(), mQuarter->getHeight(), 0, mFrameKey->mImage, NEBULA_TARGET_RGB,
+                                    nullptr);
+    const NebulaColor8 none = {0, 0, 0, 0};
+    ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_QuarterBox, none, none);
+    ImageEffectLocalUtil::drawTexture(mFrameKey, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    ImageEffectLocalUtil::setupDrawTexture();
     J3DNativeTarget::end(mQuarter->mImage, NEBULA_TARGET_RGB);
     ImageEffectLocalUtil::blurTexture(mQuarter, mBlurScratch, _24, mIntensity * get_10() * 0.005f, NEBULA_TARGET_RGB);
 }

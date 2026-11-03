@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/NameObj/NameObj.hpp"
-#include <RFL_Types.h>
+#include <MiiTypes.h>
 
 class MiiFaceRecipe;
 

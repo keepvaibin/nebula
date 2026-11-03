@@ -3,7 +3,7 @@
 // copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/vk/renderer_vk.h"
 #include "galaxy/platform_time.h"
 
@@ -45,7 +45,7 @@ bool env_flag(const char* name, bool fallback) {
 }
 
 bool trace_present_stats_enabled() {
-    static const bool enabled = env_flag(nebula_switch::trace_present_stats_name(), false);
+    static const bool enabled = ::galaxy::run_option_flag(::galaxy::run_options().trace_present_stats, false);
     return enabled;
 }
 
@@ -170,11 +170,11 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             query_info.queryCount = kFramesInFlight * 2u;
             vk::check(vkCreateQueryPool(device, &query_info, nullptr, &timestamps_), "vkCreateQueryPool");
             timestamp_period_ns_ = vk::Context::get().properties().limits.timestampPeriod;
-            if (env_flag(nebula_switch::gpu_draws_name(), false)) {
+            if (::galaxy::run_option_flag(::galaxy::run_options().gpu_draws, false)) {
                 query_info.queryCount = kFramesInFlight * kGpuDrawSlots;
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &draw_queries_), "vkCreateQueryPool");
             }
-            if (env_flag(nebula_switch::gpu_passes_name(), false)) {
+            if (::galaxy::run_option_flag(::galaxy::run_options().gpu_passes, false)) {
                 query_info.queryCount = kFramesInFlight * (kGpuPassSlots + 2u);
                 vk::check(vkCreateQueryPool(device, &query_info, nullptr, &pass_queries_), "vkCreateQueryPool");
                 if (vk::Context::get().pipeline_statistics()) {
@@ -239,10 +239,10 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
 
 bool RendererVk::create_surface_and_device() {
     const bool prefer_integrated = [] {
-        const char* value = std::getenv(nebula_switch::gpu_preference_name());
+        const char* value = ::galaxy::run_options().gpu_preference;
         return value != nullptr && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M');
     }();
-    const bool validation = env_flag(nebula_switch::vulkan_validation_name(), false);
+    const bool validation = ::galaxy::run_option_flag(::galaxy::run_options().vulkan_validation, false);
     const host_window::NativeWindow window = window_;
     const auto make_surface = [window](VkInstance instance) {
         return host_window::create_vulkan_surface(instance, window);
@@ -490,8 +490,6 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_), "copy render pass");
-        attachment.format = VK_FORMAT_R8_UNORM;
-        vk::check(vkCreateRenderPass(device, &info, nullptr, &grey_pass_), "one-channel copy render pass");
     }
     draw_layout_.depth_format = depth_format_;
     draw_layout_.tessellation = context.tessellation_shader();
@@ -836,8 +834,6 @@ bool RendererVk::create_utility_pipelines() {
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
                                                    vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
-    grey_conversion_pipeline_ = create_utility_pipeline(grey_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
-                                                        vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
     display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
                                                        vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
     for (unsigned kind = 0u; kind < static_cast<unsigned>(SceneUtility::Count); ++kind) {
@@ -911,8 +907,7 @@ void RendererVk::shutdown() {
         scene_shown_image_ = VK_NULL_HANDLE;
         turn_source_ = VK_NULL_HANDLE;
         release_replay_resources();
-        scene_copy_dests_.clear();
-        scene_copy_dests_bytes_ = 0u;
+        frame_pass_targets_.clear();
         for (Frame& frame : frames_) {
             frame.retired.clear();
             if (frame.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, frame.pool, nullptr);
@@ -950,7 +945,7 @@ void RendererVk::shutdown() {
         draw_queries_ = VK_NULL_HANDLE;
         destroy_swapchain();
         for (VkRenderPass pass :
-             {present_pass_, color_pass_, grey_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear}) {
+             {present_pass_, color_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
         for (auto* passes : {&draw_layout_.ms_passes, &draw_layout_.ms_passes_clear}) {
@@ -959,7 +954,7 @@ void RendererVk::shutdown() {
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = grey_pass_ = draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
+        present_pass_ = color_pass_ = draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
         for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, conversion_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GameBloom: the game's bloom at the internal resolution (game_bloom.h).
 #include "galaxy/render/game_bloom.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 
 #include "galaxy/render/game_bloom_shape.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -305,25 +305,6 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     const float* const sigma1y = widths.y1;
     const float* const sigma2x = widths.x2;
     const float* const sigma2y = widths.y2;
-    // GALAXY_BLOOM_LOG=1: each kind's shape and widths once; 2: every 600th pass of each kind (which stages bloom).
-    static const unsigned log = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), nebula_switch::bloom_log_name()) == 0 && length > 1
-                   ? static_cast<unsigned>(value[0] - '0')
-                   : 0u;
-    }();
-    static std::uint64_t passes[3]{};
-    if (log != 0u && (log == 1u ? passes[static_cast<unsigned>(p.kind)]++ == 0u
-                                : passes[static_cast<unsigned>(p.kind)]++ % 600u == 0u)) {
-        std::cerr << "[bloom] " << (normal ? "normal" : "simple") << " level 1 " << s.w1 << 'x' << s.h1 << " ("
-                  << s.f << " px a texel, footprint " << s.box << "), level 2 " << s.w2 << 'x' << s.h2
-                  << "; sigma 1 " << sigma1x[0] << '/' << sigma1y[0] << ' ' << sigma1x[1] << '/' << sigma1y[1]
-                  << "; sigma 2 " << sigma2x[0] << '/' << sigma2y[0] << ' ' << sigma2x[1] << '/' << sigma2y[1] << ' '
-                  << sigma2x[2] << '/' << sigma2y[2] << "; threshold " << p.threshold << " taps " << p.tap1 << '/'
-                  << p.tap2 << " intensity " << p.intensity << " ring " << p.ring_x << '/' << p.ring_y << " frame "
-                  << frame_index << '\n';
-    }
 
     const UINT increment = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
     const auto table = [&](const std::array<ID3D12Resource*, 3>& srvs, const std::array<DXGI_FORMAT, 3>& formats,

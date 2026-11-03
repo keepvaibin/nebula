@@ -99,9 +99,9 @@ public:
     void exeWaitBind();
     void exeTitle();
     void exeTitleEnd();
-    void exeRFLError();
-    void exeRFLWait();
-    void exeRFLWaitEnd();
+    void exeMiiDataError();
+    void exeMiiDataWait();
+    void exeMiiDataWaitEnd();
     void exeFileSelectStart();
     void exeFileSelect();
     void exeFileConfirmStart();

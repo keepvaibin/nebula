@@ -6,7 +6,7 @@
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include "Game/System/NebulaArena.hpp"
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 MiiFaceParts::MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe)
     : LiveActor(pName), mCharModel(nullptr), _90(nullptr), mRecipe(nullptr), _CC(nullptr), _D0(false) {

@@ -76,7 +76,7 @@ add_library(galaxy_render_vk STATIC
     ${rt}/render/drawing_state.cpp
     ${rt}/render/draw_matrices.cpp
     ${rt}/render/shader_keys.cpp
-    ${rt}/render/capture.cpp
+    ${rt}/render/frame_pass.cpp
     ${rt}/render/line_point_params.cpp
     ${rt}/render/shader_gen.cpp
     ${rt}/render/uber_shaders.cpp
@@ -110,6 +110,7 @@ add_library(galaxy_render_vk STATIC
     ${galaxy_post_embed_cpp}
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/test_driver/run_options.cpp
     ${rt}/achievements.cpp
     ${rt}/stats.cpp
     ${rt}/input_bindings.cpp

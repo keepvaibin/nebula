@@ -5,7 +5,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 ImageEffectResource::ImageEffectResource()
-    : _0(nullptr), _4(nullptr), _8(nullptr), _C(nullptr) {
+    : _0(nullptr), _8(nullptr), _C(nullptr) {
 }
 
 void ImageEffectResource::createBlurTexture() {
@@ -21,10 +21,6 @@ void ImageEffectResource::createBlurTexture() {
 void ImageEffectResource::createDOFTexture() {
     if (_0 == nullptr) {
         _0 = createTexture(1.0f);
-    }
-
-    if (_4 == nullptr) {
-        _4 = createTexture(0.5f);
     }
 
     if (_C == nullptr) {

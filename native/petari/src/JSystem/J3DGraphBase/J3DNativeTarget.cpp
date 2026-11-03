@@ -16,6 +16,17 @@ namespace J3DNativeTarget {
                             clearRgba);
     }
 
+    void beginOverFrame(const void* pKey, u16 width, u16 height, u32 clearRgba, const void* pFrameKey,
+                        NebulaTargetChannels channels, const void* pDepthKey) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->target_begin_over_frame(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)),
+                                       static_cast< u32 >(width * J3DNativeView::cUnitsAcross),
+                                       static_cast< u32 >(height * J3DNativeView::cUnitsDown), clearRgba,
+                                       static_cast< u64 >(reinterpret_cast< uintptr_t >(pFrameKey)), static_cast< u32 >(channels),
+                                       static_cast< u64 >(reinterpret_cast< uintptr_t >(pDepthKey)));
+    }
+
     void end(const void* pKey, NebulaTargetChannels channels) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
@@ -34,11 +45,15 @@ namespace J3DNativeTarget {
                            static_cast< u32 >(width * J3DNativeView::cUnitsAcross), static_cast< u32 >(height * J3DNativeView::cUnitsDown), clearRgba, channels);
     }
 
-    void read(const void* pKey, NebulaTargetChannels channels, u32 flags) {
+    void framePass(const void* pKey, NebulaTargetChannels channels) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_read(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)), static_cast< u32 >(channels),
-                          flags);
+        pHost->frame_pass(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)), static_cast< u32 >(channels));
+    }
+    void take(const void* pKey) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->frame_take(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)));
     }
 };  // namespace J3DNativeTarget
 

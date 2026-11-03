@@ -103,7 +103,7 @@ namespace J3DNativeState {
 
 extern "C" {
 #endif
-// The same for the C sources (RVLFaceLib).
+// The same for the C sources (MiiLib).
 void J3DNativeStateInitLightColor(J3DNativeLight* pObj, NebulaColor8 color);
 void J3DNativeStateInitLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z);
 void J3DNativeStateSendLight(const J3DNativeLight* pLight, u8 index);

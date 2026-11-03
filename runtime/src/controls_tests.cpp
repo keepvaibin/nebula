@@ -51,9 +51,9 @@ void test_names_round_trip() {
         const auto scheme = static_cast<ControlScheme>(s);
         expect(parse_control_scheme(control_scheme_id(scheme)) == scheme, "scheme id round trip");
         const BindingTable table = default_binding_table(scheme);
-        for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
-            const auto target = static_cast<WiiTarget>(t);
-            expect(parse_wii_target(wii_target_id(target)) == target, "target id round trip");
+        for (std::size_t t = 0; t < kGameInputCount; ++t) {
+            const auto target = static_cast<GameInput>(t);
+            expect(parse_wii_target(game_input_id(target)) == target, "target id round trip");
             const std::string text = format_target_bindings(scheme, table[target]);
             TargetBindings parsed{};
             expect(parse_target_bindings(scheme, text, parsed), "default bindings parse");
@@ -99,24 +99,24 @@ void test_names_round_trip() {
     expect(!parse_target_bindings(ControlScheme::Keyboard, "Space, NoSuchKey", bad) &&
                bad[0] == InputSource{SourceKind::Key, 'X'},
            "an unknown name rejects the line and keeps the bindings");
-    expect(!binding_source_allowed(ControlScheme::Keyboard, WiiTarget::StickUp,
+    expect(!binding_source_allowed(ControlScheme::Keyboard, GameInput::StickUp,
                                    {SourceKind::Mouse, 0}),
            "mouse buttons cannot drive the stick");
-    expect(!binding_source_allowed(ControlScheme::Xbox, WiiTarget::Home,
+    expect(!binding_source_allowed(ControlScheme::Xbox, GameInput::Home,
                                    {SourceKind::Button, pad::kHomeBit}),
            "XInput cannot read Guide");
-    expect(binding_source_allowed(ControlScheme::SwitchPro2, WiiTarget::C,
+    expect(binding_source_allowed(ControlScheme::SwitchPro2, GameInput::C,
                                   {SourceKind::Button, pad::kGripLeftBit}) &&
-               !binding_source_allowed(ControlScheme::SwitchPro, WiiTarget::C,
+               !binding_source_allowed(ControlScheme::SwitchPro, GameInput::C,
                                        {SourceKind::Button, pad::kGripLeftBit}),
            "GL exists only on the Pro Controller 2");
 }
 
 void test_ini_round_trip() {
     ControlsConfig config = default_controls_config();
-    config.table(ControlScheme::Xbox)[WiiTarget::A] = {};
-    add_binding(config.table(ControlScheme::Xbox)[WiiTarget::A], {SourceKind::Button, pad::kNorthBit});
-    add_binding(config.table(ControlScheme::Keyboard)[WiiTarget::NunchukShake], {SourceKind::Key, 'F'});
+    config.table(ControlScheme::Xbox)[GameInput::A] = {};
+    add_binding(config.table(ControlScheme::Xbox)[GameInput::A], {SourceKind::Button, pad::kNorthBit});
+    add_binding(config.table(ControlScheme::Keyboard)[GameInput::NunchukShake], {SourceKind::Key, 'F'});
     config.tune(ControlScheme::SwitchPro).gyro_pointer = false;
     config.tune(ControlScheme::SwitchPro2).gyro_sensitivity = 1.7f;
     config.tune(ControlScheme::SwitchPro).shake_sensitivity = 5;
@@ -138,7 +138,7 @@ void test_ini_round_trip() {
         expect(apply_controls_setting(parsed, line.substr(0, eq), line.substr(eq + 1u)), "line is owned");
         ++lines;
     }
-    expect(lines >= kControlSchemeCount * kWiiTargetCount, "one line per binding");
+    expect(lines >= kControlSchemeCount * kGameInputCount, "one line per binding");
     expect(parsed == config, "controls survive the ini round trip exactly");
     expect(text.find("bind.keyboard.a=Space, Enter, MouseLeft\n") != std::string::npos,
            "keyboard A line is stable text");
@@ -180,7 +180,7 @@ void test_evaluation() {
     levels.set_key('L', true);
     levels = project_key_positions(levels, KeyPositionMap{});
     LogicalInput kb = evaluate_keyboard_bindings(config.table(ControlScheme::Keyboard), levels);
-    expect(kb.held(WiiTarget::A) && !kb.held(WiiTarget::B), "Enter presses A");
+    expect(kb.held(GameInput::A) && !kb.held(GameInput::B), "Enter presses A");
     expect(approx(kb.stick_x, 1.0f) && approx(kb.stick_y, 1.0f), "WD gives up-right stick");
     expect(approx(kb.pointer_x, 1.0f) && approx(kb.pointer_y, 0.0f), "L moves the pointer right");
     levels.set_key('A', true);
@@ -190,7 +190,7 @@ void test_evaluation() {
     levels = {};
     levels.mouse = 1u << static_cast<unsigned>(MouseButton::Right);
     expect(mouse_bound_targets(config.table(ControlScheme::Keyboard), levels.mouse) ==
-               wii_target_bit(WiiTarget::B),
+               game_input_bit(GameInput::B),
            "right mouse button drives B");
 
     PadSample sample{};
@@ -202,35 +202,35 @@ void test_evaluation() {
     sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 96.0f / 255.0f;
     const float threshold = 96.0f / 255.0f;
     LogicalInput pad = evaluate_pad_bindings(config.table(ControlScheme::Xbox), sample, threshold);
-    expect(pad.held(WiiTarget::A) && pad.held(WiiTarget::B), "XInput A and LB map to A and B");
-    expect(pad.held(WiiTarget::Shake) && !pad.held(WiiTarget::Z), "right trigger at the threshold spins");
-    expect(approx(pad.stick_x, -0.4f) && !pad.held(WiiTarget::StickLeft), "analog stick passes through");
+    expect(pad.held(GameInput::A) && pad.held(GameInput::B), "XInput A and LB map to A and B");
+    expect(pad.held(GameInput::Shake) && !pad.held(GameInput::Z), "right trigger at the threshold spins");
+    expect(approx(pad.stick_x, -0.4f) && !pad.held(GameInput::StickLeft), "analog stick passes through");
     expect(approx(pad.pointer_y, 0.8f), "right stick drives the pointer");
     sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 95.0f / 255.0f;
     pad = evaluate_pad_bindings(config.table(ControlScheme::Xbox), sample, threshold);
-    expect(!pad.held(WiiTarget::Z), "below the threshold the trigger is released");
+    expect(!pad.held(GameInput::Z), "below the threshold the trigger is released");
 
     // Axis direction bound to a digital target.
     BindingTable custom = config.table(ControlScheme::Xbox);
-    custom[WiiTarget::One] = {};
-    add_binding(custom[WiiTarget::One], {SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::LeftY)});
+    custom[GameInput::One] = {};
+    add_binding(custom[GameInput::One], {SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::LeftY)});
     sample = {};
     sample.connected = true;
     sample.axes[static_cast<std::size_t>(PadAxis::LeftY)] = -0.49f;
-    expect(!evaluate_pad_bindings(custom, sample, threshold).held(WiiTarget::One), "half axis below 0.5");
+    expect(!evaluate_pad_bindings(custom, sample, threshold).held(GameInput::One), "half axis below 0.5");
     sample.axes[static_cast<std::size_t>(PadAxis::LeftY)] = -0.5f;
-    expect(evaluate_pad_bindings(custom, sample, threshold).held(WiiTarget::One), "half axis at 0.5");
+    expect(evaluate_pad_bindings(custom, sample, threshold).held(GameInput::One), "half axis at 0.5");
     sample.connected = false;
     expect(evaluate_pad_bindings(custom, sample, threshold).pressed == 0u, "disconnected pad is neutral");
 
     LogicalInput a{};
-    a.pressed = wii_target_bit(WiiTarget::A);
+    a.pressed = game_input_bit(GameInput::A);
     a.stick_x = 0.3f;
     LogicalInput b{};
-    b.pressed = wii_target_bit(WiiTarget::B);
+    b.pressed = game_input_bit(GameInput::B);
     b.stick_x = -0.6f;
     const LogicalInput merged = merge_logical_input(a, b);
-    expect(merged.held(WiiTarget::A) && merged.held(WiiTarget::B) && approx(merged.stick_x, -0.6f),
+    expect(merged.held(GameInput::A) && merged.held(GameInput::B) && approx(merged.stick_x, -0.6f),
            "merge ORs buttons and keeps the larger axis");
 
     const KeyList keys = referenced_keys(config.table(ControlScheme::Keyboard));
@@ -357,8 +357,8 @@ void test_switch_pro_decoding() {
     expect(sample.axes[3] > 0.5f && approx(sample.axes[5], 1.0f), "right stick up, ZR full");
     const LogicalInput logic = evaluate_pad_bindings(
         default_binding_table(ControlScheme::SwitchPro), sample, 96.0f / 255.0f);
-    expect(logic.held(WiiTarget::A) && logic.held(WiiTarget::B) && logic.held(WiiTarget::Plus) &&
-               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && !logic.held(WiiTarget::Z) && logic.held(WiiTarget::Shake),
+    expect(logic.held(GameInput::A) && logic.held(GameInput::B) && logic.held(GameInput::Plus) &&
+               logic.held(GameInput::Home) && logic.held(GameInput::DpadUp) && !logic.held(GameInput::Z) && logic.held(GameInput::Shake),
            "Switch defaults: A->A, L->B, ZR->spin, Plus, Home, D-pad");
 
     // Simple 0x3F report (Bluetooth default mode).
@@ -504,7 +504,7 @@ void test_joycons() {
     const PadSample sample = pad_sample_from(pair, ControlScheme::SwitchPro, StickCal{}, StickCal{}, 0.12f, 0.12f);
     const LogicalInput logic = evaluate_pad_bindings(default_binding_table(ControlScheme::SwitchPro), sample,
                                                      96.0f / 255.0f);
-    expect(logic.held(WiiTarget::Plus) && logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp),
+    expect(logic.held(GameInput::Plus) && logic.held(GameInput::Home) && logic.held(GameInput::DpadUp),
            "a pair drives the Switch bindings");
 
     // Pairing.
@@ -1264,26 +1264,26 @@ void test_defaults_and_migration() {
     const auto only = [](const TargetBindings& b, InputSource s) { return b[0] == s && b[1].empty(); };
     const InputSource zr{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::RightTrigger)};
     const InputSource zl{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::LeftTrigger)};
-    expect(only(sw[WiiTarget::A], {SourceKind::Button, pad::kEastBit}), "Switch: A is Wii A");
-    expect(only(sw[WiiTarget::JumpBack], {SourceKind::Button, pad::kSouthBit}), "Switch: B is jump/back");
-    expect(only(sw[WiiTarget::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Switch: only L shoots Star Bits (Wii B)");
-    expect(only(sw[WiiTarget::Z], zl), "Switch: ZL crouches (Wii Z)");
-    expect(only(sw[WiiTarget::C], {SourceKind::Button, pad::kLeftStickBit}), "Switch: left-stick click resets the camera");
-    expect(only(sw[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightShoulderBit}), "Switch: R recenters");
-    expect(sw[WiiTarget::Shake][0] == InputSource{SourceKind::Button, pad::kWestBit} &&
-               sw[WiiTarget::Shake][1] == InputSource{SourceKind::Button, pad::kNorthBit} &&
-               sw[WiiTarget::Shake][2] == zr && sw[WiiTarget::Shake][3].empty(),
+    expect(only(sw[GameInput::A], {SourceKind::Button, pad::kEastBit}), "Switch: A is Wii A");
+    expect(only(sw[GameInput::JumpBack], {SourceKind::Button, pad::kSouthBit}), "Switch: B is jump/back");
+    expect(only(sw[GameInput::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Switch: only L shoots Star Bits (Wii B)");
+    expect(only(sw[GameInput::Z], zl), "Switch: ZL crouches (Wii Z)");
+    expect(only(sw[GameInput::C], {SourceKind::Button, pad::kLeftStickBit}), "Switch: left-stick click resets the camera");
+    expect(only(sw[GameInput::PointerRecenter], {SourceKind::Button, pad::kRightShoulderBit}), "Switch: R recenters");
+    expect(sw[GameInput::Shake][0] == InputSource{SourceKind::Button, pad::kWestBit} &&
+               sw[GameInput::Shake][1] == InputSource{SourceKind::Button, pad::kNorthBit} &&
+               sw[GameInput::Shake][2] == zr && sw[GameInput::Shake][3].empty(),
            "Switch: Y, X and ZR spin (with motion), not R");
-    expect(sw[WiiTarget::DpadLeft][1] == InputSource{SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::RightX)},
+    expect(sw[GameInput::DpadLeft][1] == InputSource{SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::RightX)},
            "Switch: right stick left is D-pad left (camera)");
     expect(config.tune(ControlScheme::SwitchPro).gyro_pointer && config.tune(ControlScheme::SwitchPro2).gyro_pointer,
            "gyro pointer on by default for both Switch schemes");
-    expect(only(xb[WiiTarget::JumpBack], {SourceKind::Button, pad::kEastBit}), "Xbox: B is jump/back");
-    expect(only(xb[WiiTarget::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Xbox: only LB shoots Star Bits");
-    expect(only(xb[WiiTarget::Z], zl), "Xbox: LT crouches");
-    expect(only(xb[WiiTarget::C], {SourceKind::Button, pad::kLeftStickBit}), "Xbox: LS click resets the camera");
-    expect(xb[WiiTarget::Shake][2] == InputSource{SourceKind::Button, pad::kRightShoulderBit} &&
-               xb[WiiTarget::Shake][3] == zr,
+    expect(only(xb[GameInput::JumpBack], {SourceKind::Button, pad::kEastBit}), "Xbox: B is jump/back");
+    expect(only(xb[GameInput::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Xbox: only LB shoots Star Bits");
+    expect(only(xb[GameInput::Z], zl), "Xbox: LT crouches");
+    expect(only(xb[GameInput::C], {SourceKind::Button, pad::kLeftStickBit}), "Xbox: LS click resets the camera");
+    expect(xb[GameInput::Shake][2] == InputSource{SourceKind::Button, pad::kRightShoulderBit} &&
+               xb[GameInput::Shake][3] == zr,
            "Xbox: RB and RT spin");
     // A trigger bound to a level target presses at the trigger threshold.
     {
@@ -1292,18 +1292,18 @@ void test_defaults_and_migration() {
         pad_sample.scheme = ControlScheme::Xbox;
         pad_sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 0.6f;
         const LogicalInput rt = evaluate_pad_bindings(xb, pad_sample, 0.12f);
-        expect(rt.held(WiiTarget::Shake) && !rt.held(WiiTarget::Z) && !rt.held(WiiTarget::B),
+        expect(rt.held(GameInput::Shake) && !rt.held(GameInput::Z) && !rt.held(GameInput::B),
                "Xbox: RT spins, does not crouch or shoot");
         pad_sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 0.0f;
         pad_sample.axes[static_cast<std::size_t>(PadAxis::LeftTrigger)] = 0.6f;
         const LogicalInput lt = evaluate_pad_bindings(xb, pad_sample, 0.12f);
-        expect(lt.held(WiiTarget::Z) && !lt.held(WiiTarget::Shake), "Xbox: LT crouches");
+        expect(lt.held(GameInput::Z) && !lt.held(GameInput::Shake), "Xbox: LT crouches");
     }
     expect(config.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 4.0f &&
                config.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius &&
                config.tune(ControlScheme::Xbox).pointer_hide_seconds == kDefaultPointerHideSeconds,
            "still pointer hides after 4 s within 0.12 units by default");
-    expect(only(xb[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
+    expect(only(xb[GameInput::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
     expect(!config.tune(ControlScheme::Xbox).gyro_pointer, "Xbox has no gyro");
 
     // Right stick role: pointer with the gyro off, camera (D-pad) with it on.
@@ -1313,18 +1313,18 @@ void test_defaults_and_migration() {
     s.axes[static_cast<std::size_t>(PadAxis::RightX)] = -0.8f;
     const LogicalInput gyro_off = evaluate_pad_bindings(sw, s, 0.4f, 0u, false);
     const LogicalInput gyro_on = evaluate_pad_bindings(sw, s, 0.4f, 0u, true);
-    expect(approx(gyro_off.pointer_x, -0.8f) && !gyro_off.held(WiiTarget::DpadLeft),
+    expect(approx(gyro_off.pointer_x, -0.8f) && !gyro_off.held(GameInput::DpadLeft),
            "gyro off: the right stick is the pointer");
-    expect(gyro_on.pointer_x == 0.0f && gyro_on.held(WiiTarget::DpadLeft),
+    expect(gyro_on.pointer_x == 0.0f && gyro_on.held(GameInput::DpadLeft),
            "gyro on: the right stick turns the camera");
     // Stick-fed digital targets release with hysteresis.
     s.axes[static_cast<std::size_t>(PadAxis::RightX)] = -0.4f;
-    expect(evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(WiiTarget::DpadLeft),
+    expect(evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(GameInput::DpadLeft),
            "a held stick direction stays pressed down to the release level");
-    expect(!evaluate_pad_bindings(sw, s, 0.4f, 0u, true).held(WiiTarget::DpadLeft),
+    expect(!evaluate_pad_bindings(sw, s, 0.4f, 0u, true).held(GameInput::DpadLeft),
            "0.4 does not press from rest");
     s.axes[static_cast<std::size_t>(PadAxis::RightX)] = -0.3f;
-    expect(!evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(WiiTarget::DpadLeft),
+    expect(!evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(GameInput::DpadLeft),
            "below the release level the direction releases");
 
     // Migration: a file holding the earlier defaults moves to the new ones. A binding the player
@@ -1334,23 +1334,23 @@ void test_defaults_and_migration() {
         old.tables[i] = legacy_binding_table(static_cast<ControlScheme>(i));
         old.tuning[i] = legacy_scheme_tuning(static_cast<ControlScheme>(i));
     }
-    old.tables[static_cast<std::size_t>(ControlScheme::Xbox)][WiiTarget::B] = {};
-    add_binding(old.tables[static_cast<std::size_t>(ControlScheme::Xbox)][WiiTarget::B],
+    old.tables[static_cast<std::size_t>(ControlScheme::Xbox)][GameInput::B] = {};
+    add_binding(old.tables[static_cast<std::size_t>(ControlScheme::Xbox)][GameInput::B],
                 {SourceKind::Button, pad::kWestBit});
     ControlsConfig migrated = old;
     // Old files have no jump_back line: the loader starts from the defaults.
     for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
-        migrated.tables[i][WiiTarget::JumpBack] =
-            default_binding_table(static_cast<ControlScheme>(i))[WiiTarget::JumpBack];
+        migrated.tables[i][GameInput::JumpBack] =
+            default_binding_table(static_cast<ControlScheme>(i))[GameInput::JumpBack];
     }
     const unsigned changed = migrate_legacy_controls(migrated, 1u);
     expect(changed > 0u, "migration changes the old defaults");
     expect(migrated.table(ControlScheme::SwitchPro) == default_binding_table(ControlScheme::SwitchPro),
            "an untouched Switch table becomes the new defaults");
     expect(migrated.tune(ControlScheme::SwitchPro).gyro_pointer, "gyro pointer turns on");
-    expect(migrated.table(ControlScheme::Xbox)[WiiTarget::B][0] == InputSource{SourceKind::Button, pad::kWestBit},
+    expect(migrated.table(ControlScheme::Xbox)[GameInput::B][0] == InputSource{SourceKind::Button, pad::kWestBit},
            "a binding the player changed stays");
-    expect(migrated.table(ControlScheme::Xbox)[WiiTarget::Z] == default_binding_table(ControlScheme::Xbox)[WiiTarget::Z],
+    expect(migrated.table(ControlScheme::Xbox)[GameInput::Z] == default_binding_table(ControlScheme::Xbox)[GameInput::Z],
            "other Xbox defaults move");
     ControlsConfig again = migrated;
     expect(migrate_legacy_controls(again, kControlsVersion) == 0u && again == migrated,
@@ -1369,16 +1369,16 @@ void test_defaults_and_migration() {
             }
         }
         v3.tune(ControlScheme::Xbox).pointer_hide_seconds = 7.0f;
-        v3.table(ControlScheme::SwitchPro)[WiiTarget::Z] = {};
-        add_binding(v3.table(ControlScheme::SwitchPro)[WiiTarget::Z], {SourceKind::Button, pad::kRightShoulderBit});
+        v3.table(ControlScheme::SwitchPro)[GameInput::Z] = {};
+        add_binding(v3.table(ControlScheme::SwitchPro)[GameInput::Z], {SourceKind::Button, pad::kRightShoulderBit});
         expect(migrate_legacy_controls(v3, 3u) > 0u, "version-3 defaults migrate");
         expect(v3.table(ControlScheme::Xbox) == default_binding_table(ControlScheme::Xbox) &&
                    v3.table(ControlScheme::SwitchPro2) == default_binding_table(ControlScheme::SwitchPro2),
                "untouched version-3 tables become the version-4 defaults");
-        expect(v3.table(ControlScheme::SwitchPro)[WiiTarget::Shake] ==
-                   default_binding_table(ControlScheme::SwitchPro)[WiiTarget::Shake],
+        expect(v3.table(ControlScheme::SwitchPro)[GameInput::Shake] ==
+                   default_binding_table(ControlScheme::SwitchPro)[GameInput::Shake],
                "version-3 Switch spin gains ZR");
-        expect(v3.table(ControlScheme::SwitchPro)[WiiTarget::Z][0] == InputSource{SourceKind::Button, pad::kRightShoulderBit},
+        expect(v3.table(ControlScheme::SwitchPro)[GameInput::Z][0] == InputSource{SourceKind::Button, pad::kRightShoulderBit},
                "a changed version-3 crouch binding stays");
         expect(v3.tune(ControlScheme::SwitchPro).pointer_hide_seconds == kDefaultPointerHideSeconds &&
                    v3.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius,
@@ -1417,20 +1417,20 @@ void test_defaults_and_migration() {
         v2.tuning[i] = default_scheme_tuning(static_cast<ControlScheme>(i));
     }
     v2.tune(ControlScheme::SwitchPro).gyro_pointer = false;
-    v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake] = {};
-    add_binding(v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake], {SourceKind::Button, pad::kNorthBit});
+    v2.table(ControlScheme::SwitchPro)[GameInput::Shake] = {};
+    add_binding(v2.table(ControlScheme::SwitchPro)[GameInput::Shake], {SourceKind::Button, pad::kNorthBit});
     expect(migrate_legacy_controls(v2, 2u) > 0u, "version-2 defaults migrate");
     expect(v2.table(ControlScheme::Xbox) == default_binding_table(ControlScheme::Xbox),
            "an untouched version-2 Xbox table becomes the current defaults");
-    expect(v2.table(ControlScheme::SwitchPro)[WiiTarget::B] == default_binding_table(ControlScheme::SwitchPro)[WiiTarget::B],
+    expect(v2.table(ControlScheme::SwitchPro)[GameInput::B] == default_binding_table(ControlScheme::SwitchPro)[GameInput::B],
            "version-2 ZR Star Bits move to L");
     expect(!v2.tune(ControlScheme::SwitchPro).gyro_pointer, "a version-2 gyro choice stays");
-    expect(v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake][0] == InputSource{SourceKind::Button, pad::kNorthBit} &&
-               v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake][1].empty(),
+    expect(v2.table(ControlScheme::SwitchPro)[GameInput::Shake][0] == InputSource{SourceKind::Button, pad::kNorthBit} &&
+               v2.table(ControlScheme::SwitchPro)[GameInput::Shake][1].empty(),
            "a changed version-2 binding stays");
 }
 
-std::string bindings_text(ControlScheme scheme, WiiTarget target) {
+std::string bindings_text(ControlScheme scheme, GameInput target) {
     return format_target_bindings(scheme, default_binding_table(scheme)[target]);
 }
 
@@ -1448,25 +1448,25 @@ void test_playstation_and_steam_schemes() {
                !scheme_has_motion(ControlScheme::Xbox),
            "family traits");
 
-    expect(bindings_text(ControlScheme::PlayStation, WiiTarget::A) == "Cross" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::JumpBack) == "Circle" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::B) == "L1" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::Z) == "L2" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::C) == "L3" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::Shake) == "Square, Triangle, R2" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::PointerRecenter) == "R1" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::Plus) == "Options" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::Minus) == "Share" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::Home) == "PS" &&
-               bindings_text(ControlScheme::PlayStation, WiiTarget::DpadUp) == "DpadUp, RY+",
+    expect(bindings_text(ControlScheme::PlayStation, GameInput::A) == "Cross" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::JumpBack) == "Circle" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::B) == "L1" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::Z) == "L2" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::C) == "L3" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::Shake) == "Square, Triangle, R2" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::PointerRecenter) == "R1" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::Plus) == "Options" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::Minus) == "Share" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::Home) == "PS" &&
+               bindings_text(ControlScheme::PlayStation, GameInput::DpadUp) == "DpadUp, RY+",
            "PlayStation defaults");
-    expect(bindings_text(ControlScheme::Steam, WiiTarget::A) == "A" &&
-               bindings_text(ControlScheme::Steam, WiiTarget::JumpBack) == "B" &&
-               bindings_text(ControlScheme::Steam, WiiTarget::B) == "LB" &&
-               bindings_text(ControlScheme::Steam, WiiTarget::Z) == "LT" &&
-               bindings_text(ControlScheme::Steam, WiiTarget::Shake) == "X, Y, RT" &&
-               bindings_text(ControlScheme::Steam, WiiTarget::PointerRecenter) == "RB" &&
-               bindings_text(ControlScheme::Steam, WiiTarget::Home) == "Steam",
+    expect(bindings_text(ControlScheme::Steam, GameInput::A) == "A" &&
+               bindings_text(ControlScheme::Steam, GameInput::JumpBack) == "B" &&
+               bindings_text(ControlScheme::Steam, GameInput::B) == "LB" &&
+               bindings_text(ControlScheme::Steam, GameInput::Z) == "LT" &&
+               bindings_text(ControlScheme::Steam, GameInput::Shake) == "X, Y, RT" &&
+               bindings_text(ControlScheme::Steam, GameInput::PointerRecenter) == "RB" &&
+               bindings_text(ControlScheme::Steam, GameInput::Home) == "Steam",
            "Steam defaults");
     for (ControlScheme scheme : {ControlScheme::PlayStation, ControlScheme::Steam}) {
         expect(legacy_binding_table(scheme) == default_binding_table(scheme) &&
@@ -1492,7 +1492,7 @@ void test_playstation_and_steam_schemes() {
 
     // Which buttons exist on which controller.
     const auto allowed = [](ControlScheme scheme, unsigned bit_index) {
-        return binding_source_allowed(scheme, WiiTarget::A,
+        return binding_source_allowed(scheme, GameInput::A,
                                       {SourceKind::Button, static_cast<std::uint8_t>(bit_index)});
     };
     expect(allowed(ControlScheme::PlayStation, pad::kCaptureBit) && allowed(ControlScheme::PlayStation, pad::kChatBit) &&
@@ -1512,7 +1512,7 @@ void test_playstation_and_steam_schemes() {
         const auto scheme = static_cast<ControlScheme>(s);
         for (unsigned index = 0; index < pad::kButtonBitCount; ++index) {
             const InputSource source{SourceKind::Button, static_cast<std::uint8_t>(index)};
-            if (!binding_source_allowed(scheme, WiiTarget::A, source)) continue;
+            if (!binding_source_allowed(scheme, GameInput::A, source)) continue;
             expect(parse_input_source(scheme, format_input_source(scheme, source)) == source,
                    "every allowed button has a distinct name");
         }
@@ -1530,10 +1530,10 @@ void test_playstation_and_steam_schemes() {
         }
     };
     ControlsConfig config = default_controls_config();
-    config.table(ControlScheme::PlayStation)[WiiTarget::A] = {};
-    add_binding(config.table(ControlScheme::PlayStation)[WiiTarget::A], {SourceKind::Button, pad::kCaptureBit});
-    config.table(ControlScheme::Steam)[WiiTarget::Z] = {};
-    add_binding(config.table(ControlScheme::Steam)[WiiTarget::Z], {SourceKind::Button, pad::kLeftPadBit});
+    config.table(ControlScheme::PlayStation)[GameInput::A] = {};
+    add_binding(config.table(ControlScheme::PlayStation)[GameInput::A], {SourceKind::Button, pad::kCaptureBit});
+    config.table(ControlScheme::Steam)[GameInput::Z] = {};
+    add_binding(config.table(ControlScheme::Steam)[GameInput::Z], {SourceKind::Button, pad::kLeftPadBit});
     config.tune(ControlScheme::PlayStation).rumble = 80;
     config.tune(ControlScheme::Steam).gyro_sensitivity = 2.0f;
     const std::string text = format_controls_settings(config);
@@ -1548,7 +1548,7 @@ void test_playstation_and_steam_schemes() {
 
     ControlsConfig old_file = default_controls_config();
     apply_all(old_file, "bind.xbox.a=B\nbind.switch_pro.b=Y\ntune.switch_pro2.rumble=30\n");
-    expect(old_file.table(ControlScheme::Xbox)[WiiTarget::A][0] == InputSource{SourceKind::Button, pad::kEastBit} &&
+    expect(old_file.table(ControlScheme::Xbox)[GameInput::A][0] == InputSource{SourceKind::Button, pad::kEastBit} &&
                old_file.tune(ControlScheme::SwitchPro2).rumble == 30u,
            "lines of the older schemes apply");
     expect(old_file.table(ControlScheme::PlayStation) == default_binding_table(ControlScheme::PlayStation) &&
@@ -1582,7 +1582,7 @@ void test_playstation_and_steam_schemes() {
     sample.buttons = pad::bit(pad::kSouthBit) | pad::bit(pad::kLeftShoulderBit);
     const LogicalInput logic =
         evaluate_pad_bindings(default_binding_table(ControlScheme::PlayStation), sample, 0.4f);
-    expect(logic.held(WiiTarget::A) && logic.held(WiiTarget::B) && !logic.held(WiiTarget::JumpBack),
+    expect(logic.held(GameInput::A) && logic.held(GameInput::B) && !logic.held(GameInput::JumpBack),
            "Cross is Wii A and L1 is Wii B");
 }
 
@@ -1618,8 +1618,8 @@ void test_button_icons() {
     for (const ButtonGlyph glyph : wii.glyphs) kept = kept && glyph == ButtonGlyph::Keep;
     expect(kept, "the Wii style keeps every icon");
     BindingTable remapped = xbox;
-    remapped[WiiTarget::A] = {};
-    remapped[WiiTarget::A][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kNorthBit)};
+    remapped[GameInput::A] = {};
+    remapped[GameInput::A][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kNorthBit)};
     expect(icon(button_icon_spec(ButtonIconStyle::Xbox, remapped, false), ButtonIcon::A) == Glyph{ButtonGlyph::Face, 3u},
            "a rebound A shows the button it is bound to");
 }
@@ -1673,10 +1673,10 @@ void test_keyboard_icons() {
     expect(icon(menu, ButtonIcon::B) == Glyph{ButtonGlyph::Key, kKeyIconMouseLeft + 1u}, "and B the right click");
 
     BindingTable keys_only = keyboard;
-    keys_only[WiiTarget::A] = {};
-    keys_only[WiiTarget::A][0] = InputSource{SourceKind::Key, VK_RETURN};
-    keys_only[WiiTarget::C] = {};
-    keys_only[WiiTarget::DpadLeft] = {};
+    keys_only[GameInput::A] = {};
+    keys_only[GameInput::A][0] = InputSource{SourceKind::Key, VK_RETURN};
+    keys_only[GameInput::C] = {};
+    keys_only[GameInput::DpadLeft] = {};
     const ButtonIconSpec rebound = button_icon_spec(ButtonIconStyle::Keyboard, keys_only, true);
     expect(icon(rebound, ButtonIcon::A) == Glyph{ButtonGlyph::Key, 76u}, "A without a mouse button shows its key in menus too");
     expect(icon(rebound, ButtonIcon::C) == Glyph{ButtonGlyph::Keep, 0u}, "an unbound button keeps the Wii's icon");
@@ -1685,16 +1685,16 @@ void test_keyboard_icons() {
                std::string(key_icon_name(VK_CONVERT).data()) == "CONV" &&
                std::string(key_icon_name(0x88).data()) == "VK88",
            "a key without its own icon carries the name keyboards print, else its code");
-    keys_only[WiiTarget::Z] = {};
-    keys_only[WiiTarget::Z][0] = InputSource{SourceKind::Key, VK_MEDIA_PLAY_PAUSE};
-    keys_only[WiiTarget::C][0] = InputSource{SourceKind::Key, VK_VOLUME_MUTE};
+    keys_only[GameInput::Z] = {};
+    keys_only[GameInput::Z][0] = InputSource{SourceKind::Key, VK_MEDIA_PLAY_PAUSE};
+    keys_only[GameInput::C][0] = InputSource{SourceKind::Key, VK_VOLUME_MUTE};
     const ButtonIconSpec named = button_icon_spec(ButtonIconStyle::Keyboard, keys_only, false);
     expect(icon(named, ButtonIcon::Z) == Glyph{ButtonGlyph::Key, kKeyIconOther} &&
                std::string(named.other[static_cast<std::size_t>(ButtonIcon::Z)].data()) == "PLAY" &&
                std::string(named.other[static_cast<std::size_t>(ButtonIcon::C)].data()) == "MUTE" &&
                named.other[static_cast<std::size_t>(ButtonIcon::A)][0] == 0,
            "each such icon names its own key");
-    keys_only[WiiTarget::JumpBack][0] = InputSource{SourceKind::Key, VK_BACK};
+    keys_only[GameInput::JumpBack][0] = InputSource{SourceKind::Key, VK_BACK};
     expect(icon(button_icon_spec(ButtonIconStyle::Keyboard, keys_only, true), ButtonIcon::B) == Glyph{ButtonGlyph::Key, 78u},
            "in menus B is the back key's first (JumpBack)");
 }
@@ -1711,18 +1711,18 @@ void test_shared_bindings() {
     }
     BindingTable table = default_binding_table(ControlScheme::Keyboard);
     const InputSource space{SourceKind::Key, 0x20};
-    table[WiiTarget::A] = {space};
-    table[WiiTarget::Two] = {InputSource{SourceKind::Key, 'X'}, space};
-    const std::uint32_t both = wii_target_bit(WiiTarget::A) | wii_target_bit(WiiTarget::Two);
+    table[GameInput::A] = {space};
+    table[GameInput::Two] = {InputSource{SourceKind::Key, 'X'}, space};
+    const std::uint32_t both = game_input_bit(GameInput::A) | game_input_bit(GameInput::Two);
     expect((shared_binding_targets(table) & both) == both, "a key bound to two targets marks both");
     BindingTable pad = default_binding_table(ControlScheme::Xbox);
     const InputSource right_up{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::RightY)};
-    pad[WiiTarget::PointerUp] = {right_up};
-    pad[WiiTarget::DpadUp] = {right_up};
-    expect((shared_binding_targets(pad) & wii_target_bit(WiiTarget::PointerUp)) == 0u,
+    pad[GameInput::PointerUp] = {right_up};
+    pad[GameInput::DpadUp] = {right_up};
+    expect((shared_binding_targets(pad) & game_input_bit(GameInput::PointerUp)) == 0u,
            "a stick direction shared by the pointer and another target drives one at a time");
-    pad[WiiTarget::PointerDown] = {right_up};
-    expect((shared_binding_targets(pad) & wii_target_bit(WiiTarget::PointerDown)) != 0u,
+    pad[GameInput::PointerDown] = {right_up};
+    expect((shared_binding_targets(pad) & game_input_bit(GameInput::PointerDown)) != 0u,
            "two pointer directions on one stick direction act together");
 }
 

@@ -1,5 +1,5 @@
 #include "Game/NPC/MiiFacePartsHolder.hpp"
-#include "RFL_Native.h"
+#include "MiiNative.h"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NPC/MiiDatabase.hpp"

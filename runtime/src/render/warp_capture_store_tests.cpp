@@ -10,7 +10,7 @@
 #include <wrl/client.h>
 #pragma warning(pop)
 
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/draw_constants.h"
@@ -253,8 +253,8 @@ bool test_remove_texel_checker() {
     return expect(untouched && same, "only texel-scale detail in one checker phase is removed");
 }
 
-galaxy::render::CaptureRequest make_filter_params(bool filtered) {
-    galaxy::render::CaptureRequest params{};
+galaxy::render::FramePassRequest make_filter_params(bool filtered) {
+    galaxy::render::FramePassRequest params{};
     (void)filtered;
     return params;
 }
@@ -265,7 +265,7 @@ Pixel oracle_convert(
     Pixel previous,
     Pixel current,
     Pixel next,
-    const galaxy::render::CaptureRequest& params,
+    const galaxy::render::FramePassRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
     (void)params;
@@ -315,7 +315,7 @@ Pixel oracle_convert(
 
 Pixel oracle_from_three_rows(
     const std::array<Pixel, 3>& rows,
-    const galaxy::render::CaptureRequest& params,
+    const galaxy::render::FramePassRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
     // Rows 0-2 are logical rows 0-2 and row 1 is converted; every sample stays inside the copy rectangle.
@@ -337,7 +337,7 @@ Pixel depth_pixel(double depth24) {
 }
 
 // The depth rows 0-2 through the filter inside the rectangle (row 1 converted), as a depth capture's texel.
-Pixel oracle_depth(const std::array<std::uint32_t, 3>& depth_rows, const galaxy::render::CaptureRequest& params) {
+Pixel oracle_depth(const std::array<std::uint32_t, 3>& depth_rows, const galaxy::render::FramePassRequest& params) {
     (void)params;
     constexpr int minimum = 1;
     constexpr int maximum = 1;
@@ -773,11 +773,11 @@ V main(uint id : SV_VertexID) {
 
     bool test_display_retirement_rollback() {
         using namespace galaxy::render;
-        SceneCopyManager manager;
+        DisplayPictures manager;
         if (!manager.initialize(device_.Get(), FrameMap(8u, 8u))) {
             throw std::runtime_error("initialize display picture rollback manager");
         }
-        CaptureRequest params{};
+        FramePassRequest params{};
         params.display = true;
         // Three published pictures fill the ring; the next acquire is the first again.
         DisplayTexture* shown = nullptr;
@@ -809,12 +809,12 @@ V main(uint id : SV_VertexID) {
 
     bool test_display_idle_pool_admission() {
         using namespace galaxy::render;
-        SceneCopyManager manager;
+        DisplayPictures manager;
         if (!manager.initialize(device_.Get(), FrameMap(8u, 8u))) {
             throw std::runtime_error("initialize display picture pool manager");
         }
         manager.begin_frame(0u, kFramesInFlight);
-        CaptureRequest params{};
+        FramePassRequest params{};
         params.display = true;
         // Eight one-off sizes fill the idle pool; the ninth is the current display picture.
         for (unsigned i = 0; i < 9u; ++i) {
@@ -1619,7 +1619,7 @@ bool test_clear_precision() {
 }
 
 galaxy::render::SceneConversionShaderConstants constants_for_case(
-    const galaxy::render::CaptureRequest& params,
+    const galaxy::render::FramePassRequest& params,
     unsigned scale,
     bool is_depth,
     std::uint8_t format) {
@@ -1667,7 +1667,7 @@ bool test_warp_against_oracle() {
 
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
             {
-                galaxy::render::CaptureRequest params = make_filter_params(true);
+                galaxy::render::FramePassRequest params = make_filter_params(true);
                 const Pixel expected =
                     oracle_from_three_rows(rows, params, false, 0u);
                 char label[96]{};
@@ -1686,14 +1686,14 @@ bool test_warp_against_oracle() {
                     label);
             }
 
-            const galaxy::render::CaptureRequest identity = make_filter_params(false);
+            const galaxy::render::FramePassRequest identity = make_filter_params(false);
             passed &= expect_uniform_pixels(
                 harness.run_color(red_rows, scale, constants_for_case(identity, scale, false, 3u)),
                 scale,
                 oracle_from_three_rows(red_rows, identity, false, 3u),
                 "red in every channel");
 
-            const galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
+            const galaxy::render::FramePassRequest depth_filter = make_filter_params(true);
             char depth_label[64]{};
             std::snprintf(
                 depth_label,

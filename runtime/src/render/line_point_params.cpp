@@ -2,7 +2,7 @@
 
 #include "galaxy/render/line_point_params.h"
 
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 
 #include "galaxy/render/render_config.h"
 

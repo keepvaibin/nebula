@@ -258,8 +258,6 @@ void home_menu_close() noexcept;
 void home_menu_point(unsigned answer) noexcept;
 void home_menu_choose(unsigned answer) noexcept;
 [[nodiscard]] bool native_window_input_captured() noexcept;
-[[nodiscard]] NativeSettingsOverlaySnapshot
-native_settings_overlay_snapshot() noexcept;
 [[nodiscard]] NativeSettingsLayout compute_native_settings_layout(
     unsigned backbuffer_width,
     unsigned backbuffer_height,
@@ -268,20 +266,22 @@ native_settings_overlay_snapshot() noexcept;
 // toggling so keyboard autorepeat cannot flap the overlay.
 [[nodiscard]] bool native_settings_handle_window_key(
     std::uintptr_t virtual_key,
-    bool was_down);
-void native_settings_reset_overlay_state_for_tests() noexcept;
+    bool was_down,
+    std::uint32_t normalized = 0u);
+// A key from a controller.
+bool native_settings_pad_key(std::uintptr_t virtual_key);
+// A mouse button while a binding waits for its input: true when it took it.
+[[nodiscard]] bool native_settings_capture_mouse(galaxy::input::MouseButton button);
+// The wheel's turn in 120ths of a notch; false while the menu is closed.
+[[nodiscard]] bool native_settings_wheel(int delta);
+void native_settings_files_dropped(std::vector<std::filesystem::path> files);
+void native_settings_window_resized(unsigned width, unsigned height);
 // Waits until the settings files the overlay queued are written (saves run on a worker).
-void native_settings_wait_saved_for_tests();
 // The controllers the CONTROLS page lists in place of the attached ones, and
 // the device marked active.
-void native_settings_set_controllers_for_tests(std::span<const input::ControllerInfo> controllers,
-                                               std::optional<input::DeviceKey> active);
 // The Joy-Con halves connected, for tests.
-void native_settings_set_joycons_for_tests(unsigned lefts, unsigned rights);
 // The text of a row of the open page as drawn.
-[[nodiscard]] std::string native_settings_row_text_for_tests(unsigned row);
 // The settings the menu would apply (its draft), for tests.
-[[nodiscard]] RenderConfig native_settings_draft_for_tests();
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 

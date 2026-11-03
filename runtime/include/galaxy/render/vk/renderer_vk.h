@@ -15,7 +15,7 @@
 // unavailable.
 #pragma once
 
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/interp_types.h"
@@ -203,7 +203,7 @@ public:
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
     // A copy right after the display copy, from the output scene target the 2D layer drew in (the scene target itself without one).
-    [[nodiscard]] bool copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures);
+    [[nodiscard]] bool draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures);
 
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
     void attach_texture_uploads(TextureCache& cache);
@@ -239,14 +239,22 @@ public:
     [[nodiscard]] std::byte* stage_resident_vertices(std::uint64_t offset, std::uint64_t) noexcept {
         return resident_mapped_ + offset;
     }
-    void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
+    void copy_scene_to_display(const FramePassRequest& params, DisplayTexture& dest);
     // Native presentation (E-10, RendererD3D12's): at default settings the display copy takes the scene target's colour image
     // instead of copying it (the display's vertical filter is applied when the frame is presented), and the scene target
     // continues on `fresh`, an idle picture of its size (made when null). The handed picture stays owed to the scene target
     // until a clear covers it: any other use copies it back (settle_owed_scene), at the latest when the frame ends.
-    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const;
+    [[nodiscard]] bool can_hand_over_display_copy(const FramePassRequest& params, const DisplayTexture& dest) const;
     [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh);
-    [[nodiscard]] bool copy_scene_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy);
+    // The frame so far becomes picture `key`; the frame goes on in `fresh`, not owed its contents. `released` is the
+    // picture `key` had.
+    [[nodiscard]] bool can_take_scene() const noexcept;
+    bool take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureCache& textures, gpu::TextureRef& released);
+    // The frame, and its depth, as pictures for the next target pass (a key of 0: not wanted); end_target_pass gives
+    // them back, or close_frame_for_pass when the pass could not begin.
+    void open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key, TextureCache& textures);
+    void close_frame_for_pass(TextureCache& textures);
+    [[nodiscard]] bool draw_frame_pass(const FramePassRequest& params, TextureCache& textures);
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
 
@@ -331,8 +339,6 @@ public:
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() noexcept { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const noexcept { return frame_slot_; }
-    [[nodiscard]] std::uint64_t scene_copy_dest_bytes() const noexcept { return scene_copy_dests_bytes_; }
-    [[nodiscard]] static std::uint64_t scene_copy_dest_budget_bytes() { return render::scene_copy_dest_budget_bytes(); }
     [[nodiscard]] std::uint64_t last_latency_wait_us() const noexcept { return 0u; }
     [[nodiscard]] std::uint64_t last_frame_slot_wait_us() const noexcept { return last_frame_slot_wait_us_; }
     [[nodiscard]] std::uint64_t last_timestamp_read_us() const noexcept { return 0u; }
@@ -374,7 +380,7 @@ private:
         std::vector<VkFramebuffer> framebuffers;
         std::vector<VkSemaphore> rendered;  // per image: the frame's commands finished writing it
     };
-    struct SceneCopyDest {
+    struct FramePassTarget {
         gpu::TextureRef texture;
         unsigned width = 0;
         unsigned height = 0;
@@ -438,7 +444,7 @@ private:
     [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
                                                 VkDeviceSize palette_range, VkBuffer earlier);
     [[nodiscard]] VkSampler sampler_for(std::uint32_t key, const RenderConfig& cfg);
-    void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, bool is_depth_copy,
+    void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
                                 std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y);
     // `color_image`: the colour image read (none: the scene target's).
     void transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
@@ -487,7 +493,6 @@ private:
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants
     VkPipelineLayout conversion_layout_ = VK_NULL_HANDLE;   // conversion set + 64 bytes of push constants
     VkRenderPass color_pass_ = VK_NULL_HANDLE;    // one RGBA8 target, ends shader-readable
-    VkRenderPass grey_pass_ = VK_NULL_HANDLE;     // one R8 target (one-channel copies), ends shader-readable
     VkRenderPass present_pass_ = VK_NULL_HANDLE;  // the swapchain image, cleared, ends presentable
     VkSampler linear_clamp_ = VK_NULL_HANDLE;
     VkSampler point_clamp_ = VK_NULL_HANDLE;
@@ -524,6 +529,8 @@ private:
     // hand-over in the open frame replaced it, the open frame's input set for a turned scene target colour, the separate
     // submissions' colour input and the present's filtered picture.
     gpu::TextureRef scene_owed_;
+    std::uint64_t frame_pass_color_key_ = 0u;
+    std::uint64_t frame_pass_depth_key_ = 0u;
     std::weak_ptr<vk::Texture> scene_submitted_color_;
     VkImage scene_shown_image_ = VK_NULL_HANDLE;  // that picture while it stays owed across a submission
     bool scene_turned_in_frame_ = false;
@@ -558,8 +565,7 @@ private:
     // must look it up again (a new view, or a capture replacing others).
     bool publish_picture(std::uint64_t key, std::uint32_t width, std::uint32_t height, gpu::TextureRef texture,
                          std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
-    bool publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
-                         TextureCache& textures);
+    bool publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureCache& textures);
     static constexpr std::uint64_t kTargetIdleFrames = 600u;
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
     std::vector<std::pair<VkDescriptorSet, VkDescriptorSet>> target_free_sources_;  // dropped slots' inputs
@@ -582,7 +588,6 @@ private:
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline grey_conversion_pipeline_ = VK_NULL_HANDLE;  // into one-channel copies (grey_pass_)
     VkPipeline display_filter_pipeline_ = VK_NULL_HANDLE;   // 1:1 display copies without gamma
     // The renderer's own draws into the scene target pass, per scene target sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
@@ -641,9 +646,7 @@ private:
     } bound_;
 
     // scene target copies.
-    std::unordered_map<std::uint64_t, SceneCopyDest> scene_copy_dests_;
-    std::uint64_t scene_copy_dests_bytes_ = 0;
-    std::uint64_t scene_copy_dests_tick_ = 0;
+    std::unordered_map<std::uint64_t, FramePassTarget> frame_pass_targets_;
 
     // Screen probes: one pixel of the target per point, each slot's readback fenced with its frame.
     gpu::TextureRef probe_target_;
@@ -714,10 +717,9 @@ private:
         std::uint8_t format = 0;
     };
     struct ReplayCopy {
-        CaptureRequest params{};
-        bool depth = false;
+        FramePassRequest params{};
         bool display = false;            // the display copy (closes the log)
-        std::uint64_t dest_key = 0;      // a texture copy's destination (scene_copy_dests_)
+        std::uint64_t dest_key = 0;      // a texture copy's destination (frame_pass_targets_)
         unsigned width = 0, height = 0;  // the destination's size
         float geometry[4]{};  // sampling: src x, y, step x, y
         VkImageView dest_view = VK_NULL_HANDLE;  // the destination's view as the log's tables name it
@@ -1024,7 +1026,7 @@ private:
     // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
     // in the upload commands, takes the two queries after the frame's marks.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, SceneCopy, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+        Scene, Resolve, FramePass, DisplayCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
