@@ -782,6 +782,7 @@ enum {
     NEBULA_SETTINGS_INPUT_XBOX,        /* Xbox, Steam and other controllers: A B X Y, LB RB */
     NEBULA_SETTINGS_INPUT_NINTENDO,    /* Switch Pro and Switch 2 Pro: A B X Y, L R */
     NEBULA_SETTINGS_INPUT_PLAYSTATION, /* cross circle square triangle, L1 R1 */
+    NEBULA_SETTINGS_INPUT_TOUCH,       /* the finger: no key or button hints */
 };
 
 typedef struct NebulaSettingsRow {

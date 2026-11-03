@@ -65,6 +65,7 @@ InputState g_input;                 // guarded by g_input_mutex
 SDL_Window* g_window = nullptr;
 std::atomic<bool> g_background{false};
 std::atomic<bool> g_menu_context{false};
+std::atomic<bool> g_title_screen{false};
 
 // SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
 // their own, which the Java VM refuses to attach (it aborts the process), so they leave requests here instead, done
@@ -90,6 +91,9 @@ std::uint32_t g_rumble_sent_pad = 0;
 std::uint32_t g_rumble_sent_level = 0;
 std::uint64_t g_rumble_sent_ms = 0;
 
+// A finger's travel on a pointer screen, in pixels, not yet turned into the wheel's steps. Guarded by g_input_mutex.
+float g_menu_swipe_px = 0.0f;
+float g_finger_last_y = 0.0f;
 // On-screen buttons pressed since the game's last read: a quick tap can end between two reads, and is not lost
 // (native_game_input then holds it for the game's frames). Guarded by g_input_mutex.
 std::uint32_t g_touch_pressed = 0u;
@@ -423,6 +427,11 @@ void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
     }
     const float side = static_cast<float>(std::max(1, std::min(g_input.window_width, g_input.window_height)));
     g_finger_travel = std::max(g_finger_travel, std::hypot(x - g_finger_down_x, y - g_finger_down_y) / side);
+    // A swipe on a pointer screen scrolls, once it has gone further than a tap can, the list following the finger.
+    if (!down && g_finger_travel > kTapTravel && g_menu_context.load(std::memory_order_relaxed)) {
+        g_menu_swipe_px += y - g_finger_last_y;
+    }
+    g_finger_last_y = y;
     g_input.finger_x = x;
     g_input.finger_y = y;
     g_input.finger_ms = now;
@@ -685,6 +694,16 @@ void pump_events(int timeout_ms) noexcept {
             break;
         }
     }
+    {
+        // A tenth of the window's height is a wheel notch. The game's list scrolls it itself and takes no key from it.
+        const std::lock_guard<std::mutex> lock(g_input_mutex);
+        const float notch_px = static_cast<float>(std::max(1, g_input.window_height)) / 10.0f;
+        const int steps = static_cast<int>(g_menu_swipe_px * 120.0f / notch_px);
+        if (steps != 0) {
+            g_menu_swipe_px -= static_cast<float>(steps) * notch_px / 120.0f;
+            galaxy::render::host_window::pointer_wheel.fetch_add(steps, std::memory_order_relaxed);
+        }
+    }
     if (menu_wheel != 0 && !galaxy::render::native_settings_wheel(menu_wheel)) {
         galaxy::render::host_window::pointer_wheel.fetch_add(menu_wheel, std::memory_order_relaxed);
     }
@@ -709,6 +728,10 @@ void show_fatal(const char* message) noexcept {
     if (std::this_thread::get_id() == g_sdl_thread) {
         (void)SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Nebula", message, g_window);
     }
+}
+
+void set_title_screen(bool title) noexcept {
+    g_title_screen.store(title, std::memory_order_relaxed);
 }
 
 void set_menu_context(bool menu) noexcept {
@@ -748,10 +771,43 @@ void rumble(std::uint32_t pad_id, float strength) noexcept {
 
 #if defined(__ANDROID__)
 // The activity's on-screen controls (GameActivity.java): every change of the held buttons or the stick.
+// The phone's accelerometer (metres a second squared) and gyroscope (radians a second) on the screen's axes as it is turned:
+// x right, y up, z out of the glass. As a controller lying flat: x right, y out of the face, z toward the player.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePhoneMotion(
+    JNIEnv*, jclass, jfloat ax, jfloat ay, jfloat az, jfloat gx, jfloat gy, jfloat gz, jlong time_ns) {
+    namespace sw = galaxy::input::switch_hid;
+    static sw::SwitchMotion s_motion;
+    static std::int64_t s_last_ns = 0;
+    const float dt = s_last_ns != 0 ? std::min(0.1f, static_cast<float>(time_ns - s_last_ns) * 1e-9f) : 0.0f;
+    s_last_ns = time_ns;
+    sw::ImuSample imu{};
+    imu.gyro[0] = gx;
+    imu.gyro[1] = gz;
+    imu.gyro[2] = -gy;
+    imu.accel[0] = ax / SDL_STANDARD_GRAVITY;
+    imu.accel[1] = az / SDL_STANDARD_GRAVITY;
+    imu.accel[2] = -ay / SDL_STANDARD_GRAVITY;
+    sw::MotionSettings settings{};
+    settings.gyro_pointer = false;
+    const std::uint64_t now_us = galaxy::steady_ms() * 1000u;
+    const sw::SwitchMotion::Output out = s_motion.feed(imu, dt, now_us, settings);
+    std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    galaxy::sdl::PadMotion& motion = galaxy::sdl::g_input.device_motion;
+    motion.imu_live = true;
+    motion.gravity = s_motion.gravity();
+    motion.gravity_valid = s_motion.gravity_ready();
+    if (out.shake_started) {
+        motion.shake_until_us = now_us + sw::SwitchMotion::kShakeHoldUs;
+    }
+}
+
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouchControls(
     JNIEnv*, jclass, jint buttons, jfloat stick_x, jfloat stick_y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
     const auto held = static_cast<std::uint32_t>(buttons);
+    if ((held & ~galaxy::sdl::g_input.touch_buttons) != 0u) {
+        galaxy::sdl::g_last_input.store(galaxy::sdl::kLastNone, std::memory_order_relaxed);
+    }
     galaxy::sdl::g_touch_pressed |= held & ~galaxy::sdl::g_input.touch_buttons;
     galaxy::sdl::g_input.touch_buttons = held;
     galaxy::sdl::g_input.touch_stick_x = std::clamp(stick_x, -1.0f, 1.0f);
@@ -763,7 +819,14 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouc
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePointer(
     JNIEnv*, jclass, jint action, jint id, jfloat x, jfloat y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    if (action == 0) {
+        galaxy::sdl::g_last_input.store(galaxy::sdl::kLastNone, std::memory_order_relaxed);
+    }
     galaxy::sdl::finger_event(static_cast<std::uint64_t>(id), x, y, action == 0, action == 2);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTitleScreen(JNIEnv*, jclass) {
+    return galaxy::sdl::g_title_screen.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Whether the game is on a pointer screen (set_menu_context), for the controls deciding what a touch is.
@@ -1091,6 +1154,12 @@ void set_input_missing_shown(bool shown) noexcept {
 bool input_missing_shown() noexcept {
     return g_input_missing_shown.load(std::memory_order_relaxed);
 }
+
+#if defined(__ANDROID__)
+bool physical_keyboard_attached() noexcept {
+    return SDL_HasKeyboard();
+}
+#endif
 
 bool keyboard_or_mouse_attached() noexcept {
 #if defined(__ANDROID__)

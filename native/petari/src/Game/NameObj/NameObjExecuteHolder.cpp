@@ -404,6 +404,11 @@ namespace MR {
         }
     }
 
+    bool isMovementPlanet(const NameObj* pObj) {
+        const NameObjExecuteInfo* pInfo = ::getNameObjExecuteHolder()->getConnectToSceneInfo(pObj);
+        return pInfo != nullptr && pInfo->getMovementType() == MR::MovementType_Planet;
+    }
+
     void executeRequirementConnectMovement() {
         ::getNameObjExecuteHolder()->executeRequirementConnectMovement();
     }

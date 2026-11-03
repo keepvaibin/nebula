@@ -28,6 +28,7 @@ public:
     void setTypeToSphere(LiveActor*, f32, const TVec3f*);
     void setFarClipLevel(LiveActor*, s32);
     ClippingActorInfo* find(const LiveActor*) const;
+    const ClippingActorInfo* findGround(const ClippingActorInfo*) const;
 
     s32 mActorNum;
     ClippingActorInfoList* _10;
@@ -35,4 +36,6 @@ public:
     ClippingActorInfoList* _18;
     ClippingActorInfoList* _1C;
     ViewGroupCtrl* mViewGroupCtrl;
+    ClippingActorInfo** mPlanets;
+    s32 mPlanetNum;
 };

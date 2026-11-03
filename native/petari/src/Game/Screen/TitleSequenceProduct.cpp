@@ -1,5 +1,7 @@
 #include "Game/Screen/TitleSequenceProduct.hpp"
 #include "Game/System/NebulaRegion.hpp"
+#include "Game/System/NebulaText.hpp"
+#include <nw4r/lyt/textBox.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/Util/PlayerInputUtil.hpp"
@@ -38,6 +40,31 @@ TitleSequenceProduct::TitleSequenceProduct()
     mLogoLayout = new TitleSequenceProductSub::LogoLayout();
     mPressStartLayout = new SimpleLayout("Press[A][B]", "PressStart", 1, -1);
     mPressStartLayout->initWithoutIter();
+#if defined(__ANDROID__)
+    // "Press A or tap the screen": one thumb starts the game. The game's own tag for A, whichever device shows it.
+    static char16_t sPrompt[96];
+    NebulaText::get(sPrompt, 96 - 3, "PressATap");
+    s32 at = 0;
+    while (sPrompt[at] != 0 && sPrompt[at] != u'\u25A0') {
+        at++;
+    }
+    if (sPrompt[at] != 0) {
+        s32 end = at + 1;
+        while (sPrompt[end] != 0) {
+            end++;
+        }
+        for (s32 i = end; i > at; i--) {
+            sPrompt[i + 2] = sPrompt[i];
+        }
+        sPrompt[at] = 0x1A;
+        sPrompt[at + 1] = static_cast< char16_t >(6 | (3 << 8));
+        sPrompt[at + 2] = 0x0000;
+    }
+    // The layout's boxes hold the prompt they ship with.
+    static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "TxtStart"))->AllocStringBuffer(96);
+    static_cast< nw4r::lyt::TextBox* >(MR::getPane(mPressStartLayout, "ShaStart"))->AllocStringBuffer(96);
+    MR::setTextBoxMessageRecursive(mPressStartLayout, "PressAB", sPrompt);
+#endif
     mAButtonChecker = new TriggerChecker();
     mBButtonChecker = new TriggerChecker();
 }
@@ -94,7 +121,11 @@ void TitleSequenceProduct::exeLogoDisplay() {
     mAButtonChecker->update(MR::isHeldJump(PLAYER_1));
     mBButtonChecker->update(MR::isHeldFire(PLAYER_1));
 
+#if defined(__ANDROID__)
+    if (mAButtonChecker->getLevel() || mBButtonChecker->getLevel()) {
+#else
     if (mAButtonChecker->getLevel() && mBButtonChecker->getLevel()) {
+#endif
         MR::stopStageBGM(75);
         MR::startSystemSE("SE_SY_GAME_START");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);

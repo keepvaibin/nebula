@@ -467,6 +467,11 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
 
                 SectionTitle("Help")
                 GlassCard(Modifier.fillMaxWidth().padding(horizontal = 16.dp), padding = androidx.compose.foundation.layout.PaddingValues(vertical = 8.dp)) {
+                    SwitchRow(
+                        "Record diagnostics",
+                        "The next run writes frame times and pointer delay to its log. Share the log after it.",
+                        model.recordNextRun,
+                    ) { model.updateRecordNextRun(it) }
                     NavigationRow(Icons.Rounded.Share, "Share the game's log", "The last run's, to report a problem", onShareLog)
                 }
             }

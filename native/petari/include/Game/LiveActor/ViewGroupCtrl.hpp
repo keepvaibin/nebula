@@ -32,4 +32,5 @@ public:
     s32 mViewCtrlCount;
     LodCtrl** mLodCtrls;
     s32 mLodCtrlCapacity;
+    bool mPlanetsFromStart;
 };

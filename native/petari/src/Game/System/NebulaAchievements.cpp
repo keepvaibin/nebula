@@ -195,6 +195,8 @@ namespace {
         rWaiting.mIcon = rEntry.mIcon;
     }
 
+    bool sRosalinaWelcome = false;
+
     // Asks the host to unlock what is met; a new one waits for its pop-up.
     void tryUnlock(bool met, const char* pId) {
         const Entry* pEntry = met ? findEntry(pId) : nullptr;
@@ -356,7 +358,8 @@ namespace NebulaAchievements {
 
         // The story, in the order it is played.
         tryUnlock("first_star");
-        tryUnlock(hasGrandStar(1), "gateway");
+        // Rosalina's talk in the Observatory, or a save already past it.
+        tryUnlock(sRosalinaWelcome || hasGrandStar(2), "gateway");
         tryUnlock(hasGrandStar(2), "robot_reactor");
         tryUnlock(hasGrandStar(3), "star_reactor");
         tryUnlock(hasGrandStar(4), "airship_armada");
@@ -509,6 +512,11 @@ namespace NebulaAchievements {
         default:
             return true;
         }
+    }
+
+    void onRosalinaWelcome() {
+        sRosalinaWelcome = true;
+        sEvaluatedStars = -1;  // the next update evaluates, with no new star to prompt it
     }
 
     void onGrandStarGet() {

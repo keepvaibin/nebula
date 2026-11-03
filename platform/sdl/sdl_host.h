@@ -101,6 +101,8 @@ struct InputState {
     std::array<std::uint32_t, kMaxPads> pad_ids{};
     // Each pad's motion and touch surface since the game last took them (take_pad_motion).
     std::array<PadMotion, kMaxPads> motion{};
+    // The device's own sensors (a phone), when it has them.
+    PadMotion device_motion{};
 };
 
 [[nodiscard]] InputState input_state() noexcept;
@@ -108,6 +110,8 @@ struct InputState {
 [[nodiscard]] InputState take_input_state() noexcept;
 // The game is on a pointer screen (menus, the file select): the on-screen controls leave the picture to the pointer.
 void set_menu_context(bool menu) noexcept;
+// The game shows its title: a tap anywhere starts it.
+void set_title_screen(bool title) noexcept;
 // Rumble on the gamepad with this SDL id (0: none) at `strength` (0..1). Any thread: SDL's thread applies it.
 void rumble(std::uint32_t pad_id, float strength) noexcept;
 
