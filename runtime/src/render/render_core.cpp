@@ -1691,7 +1691,7 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
             scene_stage_known_ = true;
         }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
-        const std::uint32_t known = sky_up_known ? 1u : 0u;
+        const std::uint32_t known = (sky_up_known ? 1u : 0u) | (enhanced_lighting_ ? 2u : 0u);
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
             cpu_vs_constants_.sky_up = sky_up;
             cpu_vs_constants_.sky_up_known = known;
@@ -4184,7 +4184,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     {
         // The native material's pipeline: its build-compiled shaders under the draw's render state.
-        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
+        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_,
+                                                       per_pixel_lighting_ || enhanced_lighting_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
         current_pso_key_valid_ = false;
         // A curved native draw goes whole through its patch stages (native_curved.hlsl).

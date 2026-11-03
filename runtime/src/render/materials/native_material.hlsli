@@ -8,7 +8,8 @@
 //
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the
 // effects layer's colour and transmission at SV_Target2-3), NATIVE_MOTION (SV_Target1: the motion vector), NATIVE_SAMPLE
-// (inputs per sample: an alpha test decides each sample of a multisampled target).
+// (inputs per sample: an alpha test decides each sample of a multisampled target), NATIVE_PIXEL_LIT (the eye position and
+// normal reach the pixel stage, which lights: j3d_material.hlsli).
 
 cbuffer NativeDraw : register(b0) {
     row_major float4x4 projection : packoffset(c0);  // row-major, as every draw constant (VertexConstants)
@@ -146,7 +147,13 @@ struct NativeVertex {
 #else
 #define NATIVE_PER_SAMPLE
 #endif
+#if NATIVE_PIXEL_LIT
+#define NATIVE_PIXEL_LIT_MEMBERS NATIVE_PER_SAMPLE float3 lit_eye : TEXCOORD8; NATIVE_PER_SAMPLE float3 lit_nrm : TEXCOORD9;
+#else
+#define NATIVE_PIXEL_LIT_MEMBERS
+#endif
 #define NATIVE_VARYING_MEMBERS \
+    NATIVE_PIXEL_LIT_MEMBERS \
     float4 pos : SV_Position; NATIVE_PER_SAMPLE float4 color : COLOR0; NATIVE_PER_SAMPLE float4 color1 : COLOR1; NATIVE_PER_SAMPLE float4 uv[8] : TEXCOORD; \
     NATIVE_MOTION_MEMBERS
 
@@ -311,6 +318,10 @@ NativeVsOut native_vs(NativeVertexIn input) {
     out_.pos = o.pos;
     out_.color = o.color;
     out_.color1 = o.color1;
+#if NATIVE_PIXEL_LIT
+    out_.lit_eye = o.lit_eye;
+    out_.lit_nrm = o.lit_nrm;
+#endif
     [unroll] for (uint k = 0u; k < 8u; ++k) {
         out_.uv[k] = o.uv[k];
     }

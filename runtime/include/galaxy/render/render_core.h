@@ -1016,7 +1016,7 @@ private:
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.
-    bool per_pixel_lighting_ = true;
+    bool per_pixel_lighting_ = false;
     // RenderConfig::curved_surfaces where the renderer tessellates, sampled at each frame start; whether the last
     // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
     bool curved_surfaces_ = false;

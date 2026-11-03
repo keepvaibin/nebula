@@ -100,6 +100,10 @@ NativeVaryings native_ds(CurvePatch c, float3 b : SV_DomainLocation, const Outpu
     o.pos = b.x * p[0].pos + b.y * p[1].pos + b.z * p[2].pos;
     o.color = b.x * p[0].color + b.y * p[1].color + b.z * p[2].color;
     o.color1 = b.x * p[0].color1 + b.y * p[1].color1 + b.z * p[2].color1;
+#if NATIVE_PIXEL_LIT
+    o.lit_eye = b.x * p[0].lit_eye + b.y * p[1].lit_eye + b.z * p[2].lit_eye;
+    o.lit_nrm = b.x * p[0].lit_nrm + b.y * p[1].lit_nrm + b.z * p[2].lit_nrm;
+#endif
     [unroll] for (uint k = 0u; k < 8u; ++k) {
         o.uv[k] = b.x * p[0].uv[k] + b.y * p[1].uv[k] + b.z * p[2].uv[k];
     }
@@ -116,6 +120,9 @@ NativeVaryings native_ds(CurvePatch c, float3 b : SV_DomainLocation, const Outpu
         move -= b[i] * b[k] * (dot(e, ni) * ni - dot(e, nk) * nk);
     }
     const float3 d = 0.5 * move;
+#if NATIVE_PIXEL_LIT
+    o.lit_eye += d;
+#endif
     const float4 dc = mul(projection, float4(d, 0.0));
     const float2 jitter = float2(p[0].curve_pos.w, p[0].curve_nrm.w);
     o.pos += float4(dc.xy + jitter * dc.w, dc.z, dc.w);
