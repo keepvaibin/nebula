@@ -44,7 +44,7 @@ void ParticleDrawExecutor::draw2D() const {
 
         f32 width;
         f32 height = static_cast< s32 >(NebulaFrameClock::cScreenUnitsDown);
-        width = MR::isScreen16Per9() ? MR::getScreenWidth() : 608.0f;
+        width = MR::isScreen16Per9() ? MR::getScreenWidth() : NebulaFrameClock::cLayoutWidth;
         width *= 0.5f;
         height *= 0.5f;
 

@@ -353,7 +353,7 @@ void detail::expand_record_level(std::uint8_t layout, const std::uint8_t* src, s
 namespace {
 
 // A texture record's levels (nebula_cooked_texture.h) as RGBA8: the first `source_levels` it holds, widened from
-// its layout, through the dither-checker filters when it asks for them; then any generated levels, as for a decoded
+// its layout, through the grain-checker filters when it asks for them; then any generated levels, as for a decoded
 // image. Pure.
 static void expand_record_levels(
     const NebulaTexture* record,
@@ -1355,7 +1355,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     }
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     // A record carries the disc image's names (pack hash, palette hash, disc format); one the game made has none.
-    const TexFormat source_format = static_cast<TexFormat>(image.disc_format);
+    const TexturePackFormat source_format = static_cast<TexturePackFormat>(image.disc_format);
     const bool nameless = record != nullptr && record->disc_format == NEBULA_TEXTURE_MADE;
     std::uint16_t rt_material = 0u;
     std::uint64_t pack = 0u;
@@ -1376,10 +1376,10 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         pack_name.format = static_cast<std::uint8_t>(source_format);
         pack_name.mipmapped = source_levels > 1u;
         pack_name.hash = record->pack_hash;
-        pack_name.tlut = record->pack_palette_hash;
+        pack_name.palette = record->pack_palette_hash;
         ++pack_hashed_;
         if (pack_lookup) {
-            pack_slot = packs_.find(image.width, image.height, source_format, pack_name.hash, pack_name.tlut,
+            pack_slot = packs_.find(image.width, image.height, source_format, pack_name.hash, pack_name.palette,
                                     pack_name.mipmapped);
             if (const TextureReplacement* replacement = packs_.resident(pack_slot)) {
                 Entry entry = make_replacement_entry(*replacement, pack_slot, image.width, image.height,

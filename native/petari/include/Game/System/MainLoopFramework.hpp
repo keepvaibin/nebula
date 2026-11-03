@@ -31,7 +31,7 @@ public:
     void endRender();
     void endFrame();
     void clearFrame(NebulaColor8);
-    static void setForOSResetSystem();
+    static void prepareForExit();
 
     Color8 mClearColor;
     bool mUseAlpha;

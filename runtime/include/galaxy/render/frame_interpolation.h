@@ -133,7 +133,7 @@ struct PaletteMotion {
     std::uint32_t snapped = 0;
 };
 // Only the PNMTX slots in `position_mask`, the normal matrices in
-// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: console
+// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: game
 // light n) are interpolated: the parts its draws can read.
 inline constexpr std::uint16_t kAllPaletteSlots = 0x3FFu;
 void palette_motion(RowView a, RowView b, const CameraMotion& camera,

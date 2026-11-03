@@ -171,7 +171,7 @@ bool test_flatten_texel_checker() {
     };
     // The sky's DotNoise (4-bit intensity, 238/255) becomes one level of 247.
     auto dots = checker(128u, 128u, {238, 238, 238, 238}, {255, 255, 255, 255});
-    if (!expect(galaxy::render::detail::flatten_texel_checker(dots, 128u, 128u), "a one-texel checker is a dither")) return false;
+    if (!expect(galaxy::render::detail::flatten_texel_checker(dots, 128u, 128u), "a one-texel checker is a grain")) return false;
     for (const RGBA8& pixel : dots) {
         if (!expect(pixel.r == 247u && pixel.g == 247u && pixel.b == 247u && pixel.a == 247u,
                     "a flattened checker is its two values' rounded average")) return false;
@@ -201,27 +201,27 @@ bool test_flatten_texel_checker() {
 
 bool test_remove_texel_checker() {
     using galaxy::render::RGBA8;
-    // Art under a baked dither: a smooth ramp in red and green with a +-6 one-texel checker, alpha a ramp of its own.
+    // Art under a baked grain: a smooth ramp in red and green with a +-6 one-texel checker, alpha a ramp of its own.
     constexpr std::uint32_t kSize = 64u;
     std::vector<RGBA8> art(kSize * kSize);
-    std::vector<RGBA8> dithered(kSize * kSize);
+    std::vector<RGBA8> grained(kSize * kSize);
     for (std::uint32_t y = 0u; y < kSize; ++y) {
         for (std::uint32_t x = 0u; x < kSize; ++x) {
             const RGBA8 smooth{static_cast<std::uint8_t>(40u + 2u * x), static_cast<std::uint8_t>(60u + 2u * y), 120u,
                                static_cast<std::uint8_t>(3u * x)};
             const std::int32_t k = ((x + y) & 1u) == 0u ? 6 : -6;
             art[y * kSize + x] = smooth;
-            dithered[y * kSize + x] = {static_cast<std::uint8_t>(smooth.r + k), static_cast<std::uint8_t>(smooth.g + k),
+            grained[y * kSize + x] = {static_cast<std::uint8_t>(smooth.r + k), static_cast<std::uint8_t>(smooth.g + k),
                                        static_cast<std::uint8_t>(smooth.b + k), smooth.a};
         }
     }
-    if (!expect(galaxy::render::detail::remove_texel_checker(dithered, kSize, kSize), "a checker over content is a dither")) {
+    if (!expect(galaxy::render::detail::remove_texel_checker(grained, kSize, kSize), "a checker over content is a grain")) {
         return false;
     }
     for (std::uint32_t y = 1u; y + 1u < kSize; ++y) {
         for (std::uint32_t x = 1u; x + 1u < kSize; ++x) {
             const RGBA8 a = art[y * kSize + x];
-            const RGBA8 b = dithered[y * kSize + x];
+            const RGBA8 b = grained[y * kSize + x];
             if (!expect(std::abs(a.r - b.r) <= 1 && std::abs(a.g - b.g) <= 1 && std::abs(a.b - b.b) <= 1 && a.a == b.a,
                         "the checker goes, the art and alpha stay")) {
                 return false;
@@ -330,27 +330,27 @@ Pixel oracle_from_three_rows(
         copy_format);
 }
 
-// A depth capture's texel: the game's depth (z24 / 2^24) in every colour channel, rounded to a byte; opaque.
-Pixel depth_pixel(double z24) {
-    const auto v = static_cast<std::uint8_t>(std::lround(std::clamp(z24 / 16777216.0 * 255.0, 0.0, 255.0)));
+// A depth capture's texel: the game's depth (depth24 / 2^24) in every colour channel, rounded to a byte; opaque.
+Pixel depth_pixel(double depth24) {
+    const auto v = static_cast<std::uint8_t>(std::lround(std::clamp(depth24 / 16777216.0 * 255.0, 0.0, 255.0)));
     return Pixel{v, v, v, 255u};
 }
 
 // The depth rows 0-2 through the filter inside the rectangle (row 1 converted), as a depth capture's texel.
-Pixel oracle_depth(const std::array<std::uint32_t, 3>& z24_rows, const galaxy::render::CaptureRequest& params) {
+Pixel oracle_depth(const std::array<std::uint32_t, 3>& depth_rows, const galaxy::render::CaptureRequest& params) {
     (void)params;
     constexpr int minimum = 1;
     constexpr int maximum = 1;
-    const auto row = [&](int i) { return static_cast<double>(z24_rows[static_cast<std::size_t>(std::clamp(i, minimum, maximum))]); };
+    const auto row = [&](int i) { return static_cast<double>(depth_rows[static_cast<std::size_t>(std::clamp(i, minimum, maximum))]); };
     return depth_pixel((row(1) * 64.0) / 64.0);
 }
 
-Pixel packed_depth(std::uint32_t z24) {
-    z24 &= 0x00ffffffu;
+Pixel packed_depth(std::uint32_t depth24) {
+    depth24 &= 0x00ffffffu;
     return Pixel{
-        static_cast<std::uint8_t>((z24 >> 16u) & 0xffu),
-        static_cast<std::uint8_t>((z24 >> 8u) & 0xffu),
-        static_cast<std::uint8_t>(z24 & 0xffu),
+        static_cast<std::uint8_t>((depth24 >> 16u) & 0xffu),
+        static_cast<std::uint8_t>((depth24 >> 8u) & 0xffu),
+        static_cast<std::uint8_t>(depth24 & 0xffu),
         255u,
     };
 }
@@ -590,7 +590,7 @@ V main(uint id : SV_VertexID) {
     }
 
     std::vector<Pixel> run_depth(
-        const std::array<std::uint32_t, 3>& z24_rows,
+        const std::array<std::uint32_t, 3>& depth_rows,
         unsigned scale,
         const galaxy::render::SceneConversionShaderConstants& constants) {
         const UINT width = scale;
@@ -598,9 +598,9 @@ V main(uint id : SV_VertexID) {
         std::vector<std::uint8_t> bytes(
             static_cast<std::size_t>(width) * height * sizeof(float));
         for (UINT y = 0u; y < height; ++y) {
-            const std::uint32_t z24 = z24_rows[y / scale] & 0x00ffffffu;
+            const std::uint32_t depth24 = depth_rows[y / scale] & 0x00ffffffu;
             const float depth =
-                1.0f - static_cast<float>(z24) / 16777216.0f;
+                1.0f - static_cast<float>(depth24) / 16777216.0f;
             for (UINT x = 0u; x < width; ++x) {
                 const std::size_t offset =
                     (static_cast<std::size_t>(y) * width + x) * sizeof(float);
@@ -1735,7 +1735,7 @@ bool test_warp_against_oracle() {
             Pixel{255u, 0u, 0u, 77u},
             Pixel{0u, 0u, 0u, 2u},
         };
-        const std::array<std::uint32_t, 3> z24_rows{
+        const std::array<std::uint32_t, 3> depth_rows{
             0x102030u,
             0x405060u,
             0x708090u,
@@ -1778,11 +1778,11 @@ bool test_warp_against_oracle() {
                 scale);
             passed &= expect_uniform_pixels(
                 harness.run_depth(
-                    z24_rows,
+                    depth_rows,
                     scale,
                     constants_for_case(depth_filter, scale, true, 0u)),
                 scale,
-                oracle_depth(z24_rows, depth_filter),
+                oracle_depth(depth_rows, depth_filter),
                 depth_label);
         }
     } catch (const std::exception& error) {

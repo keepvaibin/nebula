@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's bloom blur (Game/Screen/BloomEffect.cpp drawBlur): texture 0 sampled at up to eight offsets of the tile's
-// coordinates, each times the intensity, summed as the console's stages chained them (unclamped) and taken at the result's low
+// coordinates, each times the intensity, summed unclamped and taken at the result's low
 // 8 bits as the pixel engine did; alpha 1.
 struct MaterialConstants {
     float4 color;       // the intensity (rgb, 0-1)

@@ -111,7 +111,7 @@ VkBlendFactor to_alpha_blend(VkBlendFactor factor) {
     }
 }
 
-// console LogicOp 0-15.
+// game LogicOp 0-15.
 VkLogicOp logic_op_mode(std::uint32_t op) {
     static constexpr VkLogicOp kOps[16] = {
         VK_LOGIC_OP_CLEAR,        VK_LOGIC_OP_AND,          VK_LOGIC_OP_AND_REVERSE, VK_LOGIC_OP_COPY,
@@ -402,13 +402,13 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     viewport.viewportCount = 1;
     viewport.scissorCount = 1;
 
-    // console screen space is y-down against D3D-style NDC, so console front faces are the rasteriser's back faces (the D3D12
+    // game screen space is y-down against D3D-style NDC, so game front faces are the rasteriser's back faces (the D3D12
     // pipelines make the same swap); the viewport flips y as D3D's does, so clockwise is front as there.
     VkPipelineRasterizationStateCreateInfo raster{VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
     raster.polygonMode = VK_POLYGON_MODE_FILL;
     raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster.lineWidth = 1.0f;
-    // D3D clamps fragment depth, a shader-written one too, to the viewport's range and clips primitives to it (console
+    // D3D clamps fragment depth, a shader-written one too, to the viewport's range and clips primitives to it (game
     // depth clears rely on the clamp: near == far). Without VK_EXT_depth_clip_enable only depth-writing shaders clamp,
     // and their primitives go unclipped in depth.
     VkPipelineRasterizationDepthClipStateCreateInfoEXT depth_clip{
@@ -429,7 +429,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << rs.samples_log2);
 
-    // Reversed-Z against the console's z24 (the projection negates z; RendererVk's viewport maps the console depth range), so the
+    // Reversed-Z against the game's depth24 (the projection negates z; RendererVk's viewport maps the game's depth range), so the
     // compare directions flip, as on D3D12.
     static constexpr VkCompareOp kDepthCompare[8] = {
         VK_COMPARE_OP_NEVER,   VK_COMPARE_OP_GREATER,   VK_COMPARE_OP_EQUAL,         VK_COMPARE_OP_GREATER_OR_EQUAL,
@@ -453,7 +453,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     if ((bb & 1u) != 0u) {
         target.blendEnable = VK_TRUE;
         if ((bb & 2u) != 0u) {
-            // console subtract: dst - src, factors one.
+            // game subtract: dst - src, factors one.
             target.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
             target.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
             target.colorBlendOp = VK_BLEND_OP_REVERSE_SUBTRACT;

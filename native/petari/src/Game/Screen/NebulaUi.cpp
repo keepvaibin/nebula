@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include <nebula_cooked_texture.h>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
@@ -482,11 +483,11 @@ namespace NebulaUi {
 
     // The screen in screen units (LayoutAspect's canvas, its width made square).
     void readScreen(f32* pScaleX, f32* pWidth, f32* pHeight) {
-        f32 canvasWidth = 608.0f;
-        f32 canvasHeight = 456.0f;
+        f32 canvasWidth = NebulaFrameClock::cLayoutWidth;
+        f32 canvasHeight = NebulaFrameClock::cScreenHeight;
         if (MR::isScreen16Per9() && MR::getDisplay().wide) {
             canvasWidth = MR::getDisplay().layout_width;
-            canvasHeight = 456.0f * MR::getDisplay().vertical_fit;
+            canvasHeight = NebulaFrameClock::cScreenHeight * MR::getDisplay().vertical_fit;
         }
         *pScaleX = MR::isScreen16Per9() ? 0.75f : 1.0f;
         *pWidth = canvasWidth / *pScaleX;

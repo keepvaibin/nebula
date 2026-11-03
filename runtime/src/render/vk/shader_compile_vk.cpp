@@ -363,6 +363,8 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     // Every resource carries an explicit [[vk::binding]] (annotate()); stage inputs and outputs take provisional
     // locations, replaced by their semantics' after compiling.
     shader.setAutoMapLocations(true);
+    // SV_Position.w is w in a pixel shader, as on D3D12; SPIR-V's FragCoord.w is 1/w (fog reads it).
+    shader.setDxPositionW(true);
     const auto messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules | EShMsgReadHlsl |
                                                    EShMsgHlslOffsets | EShMsgHlslLegalization);
     if (!shader.parse(GetDefaultResources(), 100, false, messages)) {

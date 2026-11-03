@@ -14,7 +14,7 @@ struct NebulaNativeMaterial;
 // The parts a material loads (the others keep what was set before).
 enum {
     J3D_LOADS_FOG = 1u << 0,
-    J3D_LOADS_TEV_COLOR = 1u << 2,
+    J3D_LOADS_REGISTER_COLOR = 1u << 2,
     J3D_LOADS_KONST_COLOR = 1u << 3,
     J3D_LOADS_AMBIENT = 1u << 6,
     J3D_LOADS_LIGHTS = 1u << 7,

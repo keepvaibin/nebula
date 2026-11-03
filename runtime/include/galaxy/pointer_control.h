@@ -123,7 +123,7 @@ inline constexpr std::uint32_t kStarPointerModeCount = 26;
 enum class PlayContext : std::uint8_t { Menu, Play };
 [[nodiscard]] PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept;
 
-// The jump/back button: Wii A while the player controls Mario, Wii B in menus.
+// The jump/back button: the game's A while the player controls Mario, its B in menus.
 // The choice is made when the button goes down and kept until it is released,
 // so a menu opening mid-press never turns a held jump into a back press.
 struct JumpBackLatch {

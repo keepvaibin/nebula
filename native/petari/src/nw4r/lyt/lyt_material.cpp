@@ -502,7 +502,7 @@ namespace nw4r {
             J3DMaterialValues& rValues = sValues;
             memset(&rSetup, 0, sizeof(rSetup));
             memset(&rValues, 0, sizeof(rValues));
-            rSetup.loads = J3D_LOADS_TEV_COLOR | J3D_LOADS_KONST_COLOR | J3D_LOADS_AMBIENT | J3D_LOADS_CHANNELS | J3D_LOADS_INDIRECT;
+            rSetup.loads = J3D_LOADS_REGISTER_COLOR | J3D_LOADS_KONST_COLOR | J3D_LOADS_AMBIENT | J3D_LOADS_CHANNELS | J3D_LOADS_INDIRECT;
             rSetup.cull = NEBULA_CULL_NONE;
             bool useVtxColor = true;
             bool useMatColor = false;

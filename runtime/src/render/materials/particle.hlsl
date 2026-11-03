@@ -48,7 +48,7 @@ float4 material_color(NativeVaryings i) {
         uv /= i.uv[0].z;
     }
     if ((flags & 1u) != 0u) {
-        // the console's indirect lookup: the indirect texture's alpha, blue, green less 128 by indirect matrix 0, in texels.
+        // the game's indirect lookup: the indirect texture's alpha, blue, green less 128 by indirect matrix 0, in texels.
         uint w, h;
         tex[0].GetDimensions(w, h);
         const float3 sv = round(tex[2].Sample(samp[2], i.uv[1].xy).abg * 255.0) - 128.0;

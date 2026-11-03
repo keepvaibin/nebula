@@ -8,7 +8,7 @@ OUT=$2
 CC=${3:-clang}
 N=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$OUT"
-FL="-std=gnu11 -O2 -g -DTARGET_PC=1 -DVERSION=1 -DNEBULA_GAME_MODULE=1 -fsigned-char -fno-strict-aliasing
+FL="-std=gnu11 -O2 -g -DVERSION=1 -DNEBULA_GAME_MODULE=1 -fsigned-char -fno-strict-aliasing
     -fno-strict-float-cast-overflow -fno-math-errno -Wno-everything -Werror=return-type
     -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast -Werror=pointer-to-enum-cast
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion

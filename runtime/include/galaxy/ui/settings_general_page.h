@@ -5,7 +5,7 @@
 namespace galaxy::ui {
 
 struct GeneralPageState {
-    ButtonIcons auto_icons = ButtonIcons::Wii;
+    ButtonIcons auto_icons = ButtonIcons::Game;
     GameLanguage display_language = GameLanguage::English;
     std::vector<GameLanguage> languages;
     GameLanguage saved_language = GameLanguage::Auto;

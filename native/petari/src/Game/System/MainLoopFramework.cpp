@@ -106,7 +106,7 @@ void MainLoopFramework::clearFrame(NebulaColor8 color) {
                                 NEBULA_CLEAR_COLOR | (mUseAlpha ? NEBULA_CLEAR_ALPHA : 0u) | NEBULA_CLEAR_DEPTH);
 }
 
-void MainLoopFramework::setForOSResetSystem() {
+void MainLoopFramework::prepareForExit() {
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
     if (sManager) {

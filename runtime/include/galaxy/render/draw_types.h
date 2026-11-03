@@ -20,11 +20,10 @@ enum class BlendFactor : std::uint8_t {
 
 enum class CullMode : std::uint8_t { None = 0, Front, Back, All };
 
-// The disc's texture format codes, as texture pack names carry them (data: tex1_WxH_<hash>_<code>).
-enum class TexFormat : std::uint8_t {
-    I4 = 0x0, I8 = 0x1, IA4 = 0x2, IA8 = 0x3,
-    RGB565 = 0x4, RGB5A3 = 0x5, RGBA8 = 0x6,
-    C4 = 0x8, C8 = 0x9, C14X2 = 0xA, CMPR = 0xE,
+// Texture pack file names carry a format code (tex1_WxH_<hash>_<code>).
+enum class TexturePackFormat : std::uint8_t {
+    Gray8 = 0x1, GrayAlpha8 = 0x3, Rgb565 = 0x4, Packed16 = 0x5, Rgba8 = 0x6,
+    Palette4 = 0x8, Palette8 = 0x9, Palette14 = 0xA, Block4 = 0xE,
 };
 
 

@@ -569,7 +569,7 @@ void RendererD3D12::wait_for_gpu() {
 
 bool RendererD3D12::create_scene_targets(const FrameMap& map) {
     // The physical targets scale; game scene target/display picture addresses and dimensions keep the
-    // Wii's logical size (as Aurora's lib/window.cpp and lib/gx/gx.cpp do).
+    // frame's size .
     //
     // Both resources are created before anything is replaced: a failure
     // (out of video memory) leaves the current targets untouched. On success
@@ -6147,7 +6147,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::Clear: {
                 const ReplayClear& c = run_clears_[op.index];
-                clear_scene(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+                clear_scene(c.rgba, c.depth24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
                 break;
             }
             case ReplayKind::Copy: {
@@ -7519,7 +7519,7 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
     in.scale = static_cast<float>(frame_.height / kAuthoredLines);
     in.frame_width = std::min(frame_.width, static_cast<unsigned>(desc.Width));
     in.frame_height = std::min(frame_.height, static_cast<unsigned>(desc.Height));
-    if (bloom.phase == motion::kBloomKeep) {
+    if (bloom.phase == motion::kBloomHold) {
         if (game_bloom_.ready() && scene_msaa_.samples <= 1u && !scene_hdr_ && !replay_recording_ && !replay_playing_ &&
             ring_mode_ != RingMode::Interp) {
             // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
@@ -7570,7 +7570,7 @@ bool RendererD3D12::begin_output_scene() {
     scene_temporal_ = false;
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (sharp_2d): at the
     // internal scale their letters would lose strokes on a wide or large window. Otherwise the game's layouts keep at
-    // least the Wii's own density on a window wider than 16:9 or narrower than 4:3, never above the window's.
+    // least the design's density on a window wider than 16:9 or narrower than 4:3, never above the window's.
     const bool full = temporal || get_render_config().hud_output_resolution || sharp_2d_requested();
     if (output_scene_active_ || !full) {
         return false;
@@ -7664,7 +7664,7 @@ void RendererD3D12::bind_scene() {
     command_list_->RSSetScissorRects(1, &sci);
     bound_viewport_ = vp;
     bound_scissor_ = sci;
-    // Full-scene target binding can overwrite a previously applied console scissor even
+    // Full-scene target binding can overwrite a previously applied game scissor even
     // though its raw draw input is unchanged on the next draw.
     bound_scissor_input_valid_ = false;
     bound_viewport_valid_ = true;
@@ -7672,7 +7672,7 @@ void RendererD3D12::bind_scene() {
 }
 
 void RendererD3D12::clear_scene(
-    std::uint32_t clear_rgba, std::uint32_t clear_z24,
+    std::uint32_t clear_rgba, std::uint32_t clear_depth,
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
@@ -7681,10 +7681,10 @@ void RendererD3D12::clear_scene(
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
-        replay_clears_.push_back({clear_rgba, clear_z24, color_enable, alpha_enable,
+        replay_clears_.push_back({clear_rgba, clear_depth, color_enable, alpha_enable,
                                   depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
-        log_start_clear_ = {clear_rgba, clear_z24, color_enable, alpha_enable,
+        log_start_clear_ = {clear_rgba, clear_depth, color_enable, alpha_enable,
                             depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format};
         log_start_clear_valid_ = true;
     }
@@ -7717,7 +7717,7 @@ void RendererD3D12::clear_scene(
         const bool rgba = color_enable && (alpha_enable || pixel_format != 1u);
         restore_owed_scene(rgba ? &rect : nullptr);
     }
-    const auto clear = make_scene_clear_values(clear_rgba, clear_z24, pixel_format);
+    const auto clear = make_scene_clear_values(clear_rgba, clear_depth, pixel_format);
     if (color_enable || alpha_enable) {
         if (pixel_format != 1u) alpha_enable = true;
         const float* col = clear.color.data();
@@ -7745,7 +7745,7 @@ void RendererD3D12::clear_scene(
         }
     }
     if (depth_enable) {
-        // REVERSED-Z buffer: console z24 (near=0, far=2^24) inverts into the D3D depth value.
+        // REVERSED-Z buffer: game depth24 (near=0, far=2^24) inverts into the D3D depth value.
         // GX_MAX_Z24 (0xFFFFFF = "clear to farthest") becomes about 0.0 here, which the flipped
         // GEQUAL-style funcs pass.
         command_list_->ClearDepthStencilView(
@@ -7833,7 +7833,7 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_rt_aux_ = call.aux_target;
     }
 
-    // Per-draw console scissor, scaled to the scene target and clamped. An empty scissor
+    // Per-draw game scissor, scaled to the scene target and clamped. An empty scissor
     // rasterizes nothing (also how CullMode::All is expressed). The raw input
     // is cached only after a nonempty one has been applied.
     if (!bound_scissor_valid_ || !bound_scissor_input_valid_ ||
@@ -7870,12 +7870,12 @@ void RendererD3D12::draw(const DrawCall& call) {
     // Per-draw XF viewport with its depth range: SMG clears depth by drawing fullscreen quads with
     // the state near == far == 1.0, so such a quad writes z = FAR whatever its geometry z.
     // XF layout: wd, ht, zRange, xOrig, yOrig, farZ.
-    // Depth range (Dolphin BPFunctions::SetScissorAndViewport, the REVERSED-Z form for backends
+    // Depth range (the REVERSED-Z form for backends
     // without reversed-range support):
     //   min_filter = (farZ - zRange) / 2^24,  max_filter = farZ / 2^24
     //   MinDepth = 1 - max_filter,  MaxDepth = 1 - min_filter
-    // Composes with the negated projection z (fill_projection): console near maps to the depth MaxDepth
-    // side, console far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
+    // Composes with the negated projection z (fill_projection): game near maps to the depth MaxDepth
+    // side, game far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {
         const ScaledViewport scaled =
             viewport_pixels(call.viewport, frame_);
@@ -8111,7 +8111,7 @@ void RendererD3D12::record_conversion_blit(
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 
-    // Restore the console drawing state (root signature changed; scene target RTV/DSV and full
+    // Restore the game drawing state (root signature changed; scene target RTV/DSV and full
     // viewport/scissor re-bound; per-draw viewport/scissor follow).
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_draw_bindings();
@@ -8328,7 +8328,7 @@ bool RendererD3D12::copy_scene_to_texture(
             }
         }
     }
-    // The HDR scene scene target's copies go through the conversion blit (clamped to the texture's range, as the console's).
+    // The HDR scene scene target's copies go through the conversion blit (clamped to the texture's range).
     if (const auto source_box = scene_hdr_ ? std::optional<D3D12_BOX>{} : detail::scene_identity_copy_box(
             params, is_depth_copy, frame_, w, h)) {
         if (replay_recording_) [[unlikely]] {
@@ -8898,12 +8898,12 @@ bool RendererD3D12::present(
         static_cast<LONG>(content_viewport.top + content_viewport.height)};
 
     // Both shader-visible heaps stay bound: the blit uses static samplers, but
-    // the overlays and console recording expect the sampler heap.
+    // the overlays and game recording expect the sampler heap.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     const GpuPassScope present_pass{*this, GpuPass::Present};
     command_list_->SetDescriptorHeaps(2, heaps);
     if (black) {
-        // The VI shows black (VISetBlack): the display picture is not scanned out.
+        // The frame shows black : the display picture is not scanned out.
     } else if (post_process_.ready()) {
         // The picture: an display picture copy's whole texture, or the top rows of a handed-over scene target.
         post_process_.record(

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Mii faces (RVLFaceLib RFL_Model.c RFLDrawOpaCore / RFLDrawXluCore, and the stages the game adds for its Mii NPCs:
 // Game/NPC/MiiFacePartsHolder.cpp setTevOpa / setTevXlu). Stage 0 is the part's own form; the chain after it is RFL's
-// lit stage or the NPC holder's two stages, as console ran them. Texture 0 at the part's own coordinates.
+// lit stage or the NPC holder's two stages, in the same form. Texture 0 at the part's own coordinates.
 //   form (params.x): 0 the constant colour (beard, nose, forehead, hair); 1 the cap, (K + K tex) / 2; 2 the face
 //     texture over the faceline colour, lerp(K, tex.rab, tex.g) (swap table N + 1: R, A, B, G); 3 the mask, tex;
 //     4 the nose line, black; 5 the glasses, K tex. Forms 0-2 are opaque (alpha 1: the constant's 8/8), 3-5 take the
@@ -77,7 +77,7 @@ float4 material_color(NativeVaryings i) {
     if (chain == 1u) {
         c = saturate(c * i.color.rgb);
     } else if (chain == 2u) {
-        // the console's stage 1: colour C0 + lerp(C1, PREV, RASC) with C0 and C1 black; alpha A0 + lerp(A1, 1/4, RASA) with
+        // the game's stage 1: colour C0 + lerp(C1, PREV, RASC) with C0 and C1 black; alpha A0 + lerp(A1, 1/4, RASA) with
         // A0 -89 and A1 246. Stage 2: colour (PREV + RASC APREV) x2; alpha the constant 1/4 x2.
         c = saturate(c * i.color.rgb);
         const float a1 = saturate(-89.0 / 255.0 + lerp(246.0 / 255.0, 64.0 / 255.0, i.color.a));

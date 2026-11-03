@@ -23,12 +23,12 @@ namespace {
         ErrorMessageWindow::MessageType_Game,
     };
     const GameSystemErrorWatcher::Message cMessageDisconnect = {
-        "CONT_10",
-        ErrorMessageWindow::MessageType_Game,
+        "ControllerLost",
+        ErrorMessageWindow::MessageType_Nebula,
     };
     const GameSystemErrorWatcher::Message cMessageNoBattery = {
-        "CONT_10_2",
-        ErrorMessageWindow::MessageType_Game,
+        "ControllerBatteryOut",
+        ErrorMessageWindow::MessageType_Nebula,
     };
 
     static const s32 sCounterMaxIgnoreCheckMoveStick = 90;
@@ -118,7 +118,7 @@ void GameSystemErrorWatcher::exeNoError() {
         setNerve(GET_NERVE_ANON(GameSystemErrorWatcherErrorWindowIn));
 
         if (AudWrap::getSystem() != nullptr) {
-            AudWrap::getSystem()->doDvdErrorProcess();
+            AudWrap::getSystem()->pauseForErrorWindow();
         }
     }
 }
@@ -164,7 +164,7 @@ void GameSystemErrorWatcher::exeErrorWindowOut() {
             setNerve(GET_NERVE_ANON(GameSystemErrorWatcherErrorWindowIn));
         } else {
             if (AudWrap::getSystem() != nullptr) {
-                AudWrap::getSystem()->exitDvdErrorProcess();
+                AudWrap::getSystem()->resumeFromErrorWindow();
             }
 
             setNerve(GET_NERVE_ANON(GameSystemErrorWatcherNoError));

@@ -32,7 +32,7 @@ inline constexpr float kActorLightDistance = 1.0e7f;
 // (RenderCore::note_rt_world_key).
 inline constexpr float kActorLightFar = 20000.0f;
 
-// One LightLoad host marker (aux: motion::LightSite, b: follow-camera bit per LightInfo): the console
+// One LightLoad host marker (aux: motion::LightSite, b: follow-camera bit per LightInfo): the game
 // lights the load writes and those of them that follow the camera.
 struct ActorLightLoad {
     std::uint8_t written = 0;

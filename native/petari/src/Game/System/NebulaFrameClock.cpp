@@ -19,14 +19,14 @@ namespace {
 
     // VI_DM_DEFAULT: 5 minutes of NTSC fields.
 
-    // The design's picture: 16:9 at the game's 832 screen units.
+    // The design's picture: 16:9 at NebulaFrameClock::cWideScreenWidth screen units.
     const f64 cDesignAspect = 16.0 / 9.0;
-    const NebulaDisplay cDesignDisplay = {0, 16.0f / 9.0f, 832, 608.0f, 1.0f};
+    const NebulaDisplay cDesignDisplay = {0, 16.0f / 9.0f, NebulaFrameClock::cWideScreenWidth, NebulaFrameClock::cLayoutWidth, 1.0f};
     NebulaDisplay sDisplay = cDesignDisplay;
     u32 sDisplayExtent;
 
     // Every shape is held to 9:21 .. 32:9 (the presentation fits the rest). The screen width runs in even units from
-    // the game's 832 at 16:9 (608 is its own 4:3 mode); below 4:3 it stays 4:3's 624 and the picture grows taller
+    // NebulaFrameClock::cWideScreenWidth at 16:9 (NebulaFrameClock::cLayoutWidth is its own 4:3 mode); below 4:3 it stays 4:3's 624 and the picture grows taller
     // (Vert+: CameraContext::getRenderFovy, the layouts' vertical_fit).
     void refreshDisplay() {
         const NebulaHostServices* const host = nebula_host();
@@ -44,15 +44,15 @@ namespace {
         }
 
         const f64 aspect = fmin(fmax(static_cast< f64 >(w) / h, 9.0 / 21.0), 32.0 / 9.0);
-        const long width = lround(832.0 * (fmax(aspect, 4.0 / 3.0) / cDesignAspect) * 0.5) * 2;
-        if (width <= 608 || width > 1664) {
+        const long width = lround(NebulaFrameClock::cWideScreenWidth * (fmax(aspect, 4.0 / 3.0) / cDesignAspect) * 0.5) * 2;
+        if (width <= static_cast< long >(NebulaFrameClock::cLayoutWidth) || width > NebulaFrameClock::cWideScreenWidth * 2) {
             return;
         }
 
         sDisplay.wide = 1;
         sDisplay.content_aspect = static_cast< f32 >(aspect);
         sDisplay.screen_width = static_cast< s32 >(width);
-        sDisplay.layout_width = static_cast< f32 >(608.0 * fmax(1.0, aspect / cDesignAspect));
+        sDisplay.layout_width = static_cast< f32 >(NebulaFrameClock::cLayoutWidth * fmax(1.0, aspect / cDesignAspect));
         sDisplay.vertical_fit = static_cast< f32 >(fmax(1.0, cDesignAspect / aspect));
     }
 
