@@ -662,12 +662,12 @@ namespace {
     }
 
     // The colours: Xbox's face buttons in theirs, its other buttons dark; the other styles' white with the window ink.
-    const u32 cXboxFaces[4] = {0x5FA83CFF, 0xD8443AFF, 0x3C78D8FF, 0xE6B422FF};
+    const u32 cXboxFaces[4] = {0x5FA83CFF, NEBULA_RGBA(0xD8, 0x44, 0x3A, 0xFF), 0x3C78D8FF, 0xE6B422FF};
     const u32 cRing = 0x262A33FF;
     const u32 cDarkTop = 0x52555EFF;
     const u32 cDarkBottom = 0x2E3036FF;
     const u32 cWhiteTop = 0xFFFFFFFF;
-    const u32 cWhiteBottom = 0xD3D9E6FF;
+    const u32 cWhiteBottom = NEBULA_RGBA(0xD3, 0xD9, 0xE6, 0xFF);
     const u32 cInk = 0x2B3045FF;
     const u32 cWhite = 0xFFFFFFFF;
 
@@ -800,7 +800,7 @@ namespace {
     const s32 cKeyNamed = NEBULA_KEYS + 1;
     const s32 cKeyCells = cKeyNamed + NEBULA_BUTTON_ICONS;
     const u32 cKeySideTop = 0xBDC6D6FF;
-    const u32 cKeySideBottom = 0x8F9AB0FF;
+    const u32 cKeySideBottom = NEBULA_RGBA(0x8F, 0x9A, 0xB0, 0xFF);
     const u32 cKeyEdge = 0xB4BDCDFF;
     const u32 cKeyAccentTop = 0x5D9CF2FF;
     const u32 cKeyAccentBottom = 0x2F6FD0FF;  // the menu's blue (NebulaSettingsMenu cAccent)
@@ -1073,7 +1073,7 @@ namespace {
         // The wheel.
         const bool wheel = button == NEBULA_KEY_MOUSE_MIDDLE;
         const Shape roll = {x, y - unit * 0.22f, unit * 0.068f, unit * 0.11f, unit * 0.068f};
-        drawShape(rCanvas, roll, ink, ring * 0.5f, wheel ? accentTop : rgba(0x9AA3B5FF), wheel ? accentBottom : rgba(0x7A8396FF));
+        drawShape(rCanvas, roll, ink, ring * 0.5f, wheel ? accentTop : rgba(NEBULA_RGBA(0x9A, 0xA3, 0xB5, 0xFF)), wheel ? accentBottom : rgba(0x7A8396FF));
     }
 
     // The Control Pad's four keys (`pPadKeys`: up, down, left, right; NEBULA_KEYS or more: none), small keycaps as a
@@ -1852,8 +1852,8 @@ namespace {
         const bool left = half == 0;
         const bool shown = look != NebulaIcons::JoyConAway;
         const bool held = look == NebulaIcons::JoyConHeld;
-        const Rgba body = rgba(shown ? NebulaIcons::cJoyConColours[half] : 0xD3D8E1FF);
-        const Rgba outline = rgba(shown ? 0x1E2024FF : 0x8D939EFF);
+        const Rgba body = rgba(shown ? NebulaIcons::cJoyConColours[half] : NEBULA_RGBA(0xD3, 0xD8, 0xE1, 0xFF));
+        const Rgba outline = rgba(shown ? 0x1E2024FF : NEBULA_RGBA(0x8D, 0x93, 0x9E, 0xFF));
         const Rgba part = rgba(shown ? 0x43464BFF : 0xAAB0BAFF);  // the rail, the shoulder, the buttons
         const Rgba white = rgba(0xFFFFFFFF);
         // The half's own coordinates: `o` from its outer side.

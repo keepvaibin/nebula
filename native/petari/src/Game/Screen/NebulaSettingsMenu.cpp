@@ -99,16 +99,16 @@ namespace {
     const u32 cText = 0x4A5274FF;
     const u32 cSubText = 0x737B9AFF;
     const u32 cAccent = 0x2F6FD0FF;
-    const u32 cDisabled = 0x9AA2BCFF;
-    const u32 cWarning = 0xC8402EFF;
+    const u32 cDisabled = NEBULA_RGBA(0x9A, 0xA2, 0xBC, 0xFF);
+    const u32 cWarning = NEBULA_RGBA(0xC8, 0x40, 0x2E, 0xFF);
     const u32 cHighlightFill = 0xFFFFFFFF;
     const u32 cFrameFill = 0xFFFFFFB4;   // a row's frame
     const u32 cFrameFixed = 0xFFFFFF5A;  // a row that only shows something
-    const u32 cFrameRing = 0xC6D3EBFF;
+    const u32 cFrameRing = NEBULA_RGBA(0xC6, 0xD3, 0xEB, 0xFF);
     const u32 cHighlightRing = 0x7EC8F4FF;
     const u32 cRule = 0xB4C2DEFF;
     const u32 cTrack = 0x4A527428;
-    const u32 cSliderTrack = 0xCBD6EBFF;
+    const u32 cSliderTrack = NEBULA_RGBA(0xCB, 0xD6, 0xEB, 0xFF);
     const u32 cSliderFill = 0x6FA6EAFF;
     const u32 cRowButtonFill = 0xE4F6FFFF;  // a row's own button: its face, its ring, the edge under it
     const u32 cRowButtonRing = 0x5CC4F0FF;
@@ -260,7 +260,7 @@ namespace {
     // PlayStation controller's by place): Xbox's in their colours, the others white with the window's ink; then the
     // shoulders, which turn the pages.
     const PadButton cPadFaces[3][4] = {
-        {{u"A", 0x5FA83CFF, 0xFFFFFFFF}, {u"B", 0xD8443AFF, 0xFFFFFFFF}, {u"X", 0x3C78D8FF, 0xFFFFFFFF}, {u"Y", 0xE6B422FF, 0x3A3A3AFF}},
+        {{u"A", 0x5FA83CFF, 0xFFFFFFFF}, {u"B", NEBULA_RGBA(0xD8, 0x44, 0x3A, 0xFF), 0xFFFFFFFF}, {u"X", 0x3C78D8FF, 0xFFFFFFFF}, {u"Y", 0xE6B422FF, 0x3A3A3AFF}},
         {{u"A", 0xFFFFFFFF, cText}, {u"B", 0xFFFFFFFF, cText}, {u"X", 0xFFFFFFFF, cText}, {u"Y", 0xFFFFFFFF, cText}},
         {{u"\u00D7", 0xFFFFFFFF, cText}, {u"\u25CB", 0xFFFFFFFF, cText}, {u"\u25A1", 0xFFFFFFFF, cText}, {u"\u25B3", 0xFFFFFFFF, cText}},
     };

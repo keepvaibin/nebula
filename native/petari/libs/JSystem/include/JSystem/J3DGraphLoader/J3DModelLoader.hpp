@@ -44,7 +44,7 @@ enum J3DModelLoaderFlagTypes {
     J3DMLF_Material_PE_Full = 0x10000000,
     J3DMLF_Material_PE_FogOff = 0x20000000,
     J3DMLF_Material_Color_LightOn = 0x40000000,
-    J3DMLF_Material_Color_AmbientOn = 0x80000000
+    J3DMLF_Material_Color_AmbientOn = 1u << 31
 };
 
 // The file header, every block's header (kind, size, count, offsets) and the INF1/JNT1/EVP1/DRW1 contents are in
@@ -220,7 +220,7 @@ static inline u32 getMdlDataFlag_TexGenFlag(u32 flags) {
 }
 
 static inline u32 getMdlDataFlag_ColorFlag(u32 flags) {
-    return flags & 0xc0000000;
+    return flags & (3u << 30);
 }
 
 static inline u32 getMdlDataFlag_PEFlag(u32 flags) {

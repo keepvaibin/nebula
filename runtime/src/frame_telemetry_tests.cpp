@@ -16,7 +16,7 @@ int main() try {
     using namespace galaxy::telemetry;
     std::atomic<std::uint64_t> copies{20};
     std::unique_ptr<Publisher> publisher = std::make_unique<Publisher>([&] {
-        return Counts{copies.load(), 10, 30, 20, 123, 456, 0x80001000, 100, 200};
+        return Counts{copies.load(), 10, 30, 20, 123, 456, 0x70001000, 100, 200};
     }, 3840, 2160, 6);
     const auto name = L"Local\\Nebula.FrameTelemetry.v1." + std::to_wstring(GetCurrentProcessId());
     const auto mapping = OpenFileMappingW(FILE_MAP_READ, FALSE, name.c_str());
