@@ -455,6 +455,9 @@ bool PipelineCache::initialize(ID3D12Device* device, ID3D12RootSignature* root_s
     }
     device_ = device;
     root_signature_ = root_signature;
+    // From here, not the first frame: the pipelines are ready sooner and the start is not held for them.
+    prepare_started_ = true;
+    start_prepare();
     return true;
 }
 

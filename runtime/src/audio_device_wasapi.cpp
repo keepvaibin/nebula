@@ -117,7 +117,7 @@ public:
         start_wake_.notify_one();
     }
 
-    void set_paused(bool) override {}  // Windows keeps the game and its sound running while minimised.
+    void set_paused(bool paused) override { paused_.store(paused, std::memory_order_relaxed); }
 
 private:
     bool open_endpoint(IMMDeviceEnumerator* endpoints) {
@@ -206,6 +206,13 @@ private:
             if (FAILED(renderer_->GetBuffer(frames, &data))) {
                 return;
             }
+            // Paused: the device plays silence, and the mixer, the game's sound and a movie's place stand still.
+            if (paused_.load(std::memory_order_relaxed)) {
+                if (FAILED(renderer_->ReleaseBuffer(frames, AUDCLNT_BUFFERFLAGS_SILENT))) {
+                    return;
+                }
+                continue;
+            }
             render_(reinterpret_cast<float*>(data), frames, rate_.load(std::memory_order_relaxed));
             if (FAILED(renderer_->ReleaseBuffer(frames, 0))) {
                 return;
@@ -262,6 +269,7 @@ private:
     std::condition_variable start_wake_;
     Render render_;
     std::atomic<std::uint32_t> queued_{0u};
+    std::atomic<bool> paused_{false};
     std::atomic<std::uint32_t> rate_{48000u};
     ComPtr<IAudioClient> client_;
     ComPtr<IAudioRenderClient> renderer_;
