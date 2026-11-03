@@ -993,7 +993,7 @@ namespace Nebula.Launcher
                 string[] lines = File.ReadAllLines(marker);
                 Check(lines.Length == 4 && lines[0] == "--pak" && lines[1] == Path.Combine(later.Content, "game.pak"),
                       "the game receives game.pak: " + string.Join(" ", lines));
-                Check(lines[2] == "--nand" && lines[3].StartsWith(dataRoot, StringComparison.OrdinalIgnoreCase),
+                Check(lines[2] == "--saves" && lines[3].StartsWith(dataRoot, StringComparison.OrdinalIgnoreCase),
                       "saves live under the data root: " + (lines.Length > 3 ? lines[3] : ""));
                 return 0;
             }
