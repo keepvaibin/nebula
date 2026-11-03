@@ -37,8 +37,14 @@ these checks cover what only a real controller shows. Mark each cell pass, fail 
 
 ## Device list and proof
 
+The missing-controller screen, virtual DS4 in Controller mode: shown with no pad, gone within 2 s of it arriving, back
+within 2 s of it leaving, twice over (`hotplug_ds4ctl`). In Auto, no screen.
+
 Decoder tested: a unit test feeds the documented report bytes (`galaxy_pad_controller_tests`). No row below has been on
 real hardware unless it says so; the checks above are what prove it.
+
+Virtual pad: a ViGEm device on the Windows device path, a hidden run (`vigem_hotplug.sh`). It shows connecting, the
+reports reaching play and reconnecting; it shows nothing about a real pad's timing, sensors or Bluetooth.
 
 | Device | Ids | Read by | Motion, touch to POINTER | Vibration | Proof |
 |---|---|---|---|---|---|
@@ -62,7 +68,9 @@ real hardware unless it says so; the checks above are what prove it.
 | Hori Steam pad | 0f0d:01ab, 0196 | fixed report | gyro | none | decoder tested, unproven on a real pad |
 | Steam Controller (2015), Bluetooth | 28de:1105, 1106 | report 0x03 in segments | gyro, right pad | pad pulses | decoder tested, unproven on a real pad |
 | Wii U Pro | 057e:0330 named RVL-CNT-01-UC | report 0x3d, extension bytes | none | yes | decoder tested, unproven on a real pad; the name test unproven |
-| Xbox over XInput | | XInput: four pads; no paddles, Share or trigger motors | none | two motors | as before |
+| DualShock 4 | 054c:05c4 | report 0x01 | gyro, touchpad | yes | decoder tested; virtual pad: connects, calibrates, reads, leaves and returns, Controller and Auto; not on a real pad in this work |
+| Xbox over XInput | | XInput: four pads; no paddles, Share or trigger motors | none | two motors | virtual pad: its input reaches play in Auto; XInput logs no connection; not on a real pad in this work |
+| Switch Pro, Joy-Con, DualSense, Steam controllers, Deck | | their own reports | as listed under Families | as listed | decoder tested; not on a real pad in this work |
 
 Not read, on any device: Joy-Con 2's optical mouse sensor, the magnetometer, a second finger on a touchpad, a Steam pad's left trackpad as a pointer, Elite paddles.
 
