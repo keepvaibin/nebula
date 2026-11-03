@@ -1,4 +1,4 @@
-#include "galaxy/test_hooks.h"
+#include "../../tools/test_driver/switches.h"
 #include "galaxy/host_env.h"
 #include "galaxy/test_data_paths.h"
 

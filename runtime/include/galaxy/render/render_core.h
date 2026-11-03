@@ -16,7 +16,7 @@
 // render_frame() call rather than leaving a frozen display.
 
 #include "galaxy/render/actor_lights.h"
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/drawing_state.h"
 #include "galaxy/render/draw_matrices.h"
@@ -241,7 +241,7 @@ private:
         std::size_t draw_count);
     void end_cached_draw_run();
     // A copy (scene target to texture or display) with the pixel format it reads.
-    void on_scene_copy(const CaptureRequest& params);
+    void on_frame_output(const FramePassRequest& params);
     // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
     [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
     // A light op's words (the state), into matrix memory.
@@ -662,8 +662,6 @@ private:
     std::uint64_t interp_sequence_serial_ = 0;
     // GALAXY_INTERP_SNAPSHOT_DIR/_FIRST/_LAST: sequences whose sub-frames and
     // real frame are read back (seq_<n>_sub<i>.ppm, seq_<n>_real.ppm).
-    std::string interp_snapshot_path_;
-    [[nodiscard]] std::string interp_snapshot_path(const char* suffix) const;
     void run_pending_interp_start();
     InterpSequence interp_sequence_{};
     // A recorded frame whose present arrives as a separate present.
@@ -838,7 +836,7 @@ private:
     }
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
-    SceneCopyManager scene_copies_;
+    DisplayPictures display_pictures_;
     Renderer renderer_;
 
     const RenderServices* frame_services_ = nullptr;
@@ -1101,7 +1099,7 @@ private:
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
-    void mark_texture_binding_alias_dirty(const CaptureRequest& params);
+    void mark_texture_binding_alias_dirty(const FramePassRequest& params);
     void prune_dirty_texture_binding_tables();
     void clear_frame_texture_binding_table_cache();
     void clear_texture_binding_table_cache();
@@ -1252,7 +1250,7 @@ private:
     bool scene_seeded_ = false;
 
     // The last display copy came from the output scene target and nothing has drawn or cleared since: an scene target-to-texture
-    // copy now takes that picture (RendererD3D12::copy_output_scene_to_texture), not the render scene target's scene.
+    // copy now takes that picture (RendererD3D12::draw_frame_pass_from_output), not the render scene target's scene.
     bool display_copy_on_output_ = false;
 
     // Bring-up stats, reported every 300 frames.

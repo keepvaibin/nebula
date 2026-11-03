@@ -297,18 +297,18 @@ namespace MR {
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        // runtime/src/render/materials/clip_fill.hlsl: black at alpha 0x80 where the captured screen alpha is above 1
-        // Blended by alpha, depth not tested, the alpha buffer cleared to 0
-        // there (constant destination alpha).
+        // runtime/src/render/materials/clip_fill.hlsl over the taken frame: black at alpha 0x80 where its alpha is above 1,
+        // and alpha 0 there; the frame elsewhere. Depth not tested.
         NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_CLIP_FILL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+        NativeShader::init(material, NEBULA_SHADER_CLIP_FILL, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         material.color_write = 1;
         material.alpha_write = 1;
         NativeShader::setColor(material, 0, 0, 0, 0, 0x80);
         material.constants[4] = 1.0f;
+        material.constants[5] = 1.0f;
         NativeShader::setTexture(material, 0, MR::getScreenAlphaTexture(0));
-        J3DPass::constantAlpha(true, 0);
+        J3DPass::constantAlpha(false, 0);
         NativeShader::send(material);
         J3DNativeShape::setCurrentIdentity();
 

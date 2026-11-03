@@ -433,7 +433,7 @@ namespace TDDraw {
         f32 nearZ = MR::getNearZ();
         f32 farZ = MR::getFarZ();
         NebulaColor8 color;
-        setGXColor(packedColor, &color);
+        setColor8(packedColor, &color);
         f32 start;
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);

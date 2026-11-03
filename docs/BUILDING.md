@@ -49,7 +49,7 @@ A build for players adds `-Pgo`: ThinLTO with the profile in `native/pgo` (`tool
 Put `NebulaNative.exe` and `smg_game.dll` in one folder, then:
 
 ```powershell
-.\NebulaNative.exe --pak D:\nebula\content\game.pak --nand "$env:LOCALAPPDATA\Nebula\saves"
+.\NebulaNative.exe --pak D:\nebula\content\game.pak --saves "$env:LOCALAPPDATA\Nebula\saves"
 ```
 
 ## Tests

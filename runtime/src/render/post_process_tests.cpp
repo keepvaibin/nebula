@@ -1,6 +1,7 @@
 // plan_post_process, the AA status texts, the start-up self-test and the scene
 // anti-aliasing on the WARP software device (no GPU or window needed).
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
+#include "../../../tools/test_driver/switches.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/renderer_d3d12.h"
 

@@ -41,7 +41,7 @@ enum class TexGenType : std::uint8_t {
 struct DrawCounts {
     std::uint8_t num_texgens;       // 0-8
     std::uint8_t num_color_chans;   // 0-2
-    std::uint8_t num_tev_stages;    // 1-16
+    std::uint8_t num_stages;    // 1-16
     CullMode cull;
     std::uint8_t num_ind_stages;    // 0-4
 };

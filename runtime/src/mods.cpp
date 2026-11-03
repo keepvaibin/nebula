@@ -86,7 +86,7 @@ struct Patch {
     std::vector<FilePatch> files;
     std::vector<FolderPatch> folders;
     std::vector<SavePatch> saves;
-    unsigned memory = 0;  // patches over the console's code: not supported
+    unsigned memory = 0;  // patches over the game's original code: not supported
 };
 struct PatchRef {
     std::string id;
@@ -852,7 +852,7 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         mod.changed_textures = static_cast<unsigned>(changed_textures[mod.id].size());
         if (mod.code_patches != 0u) {
             mod.enabled = false;
-            mod.problem = "CHANGES THE CONSOLE'S CODE: NOT SUPPORTED";
+            mod.problem = "CHANGES THE GAME'S CODE: NOT SUPPORTED";
         }
         if (!mod.riivolution && !mod.files && !mod.textures && !mod.movies && !mod.loose) {
             mod.problem = "NOTHING NEBULA CAN USE (NO RIIVOLUTION, GAME FILES, TEXTURES OR MOVIES)";

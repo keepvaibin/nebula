@@ -1,6 +1,6 @@
 // PostProcessor: the D3D12 presentation chain (post_process.h).
 #include "galaxy/render/post_process.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/render/renderer_d3d12.h"
 
 #include <algorithm>
@@ -164,7 +164,7 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 bool test_fault(const char* name) noexcept {
     char value[64]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), nebula_switch::test_post_fault_name()) != 0 || length <= 1u) {
+    if (::galaxy::run_option_read(&length, value, sizeof(value), ::galaxy::run_options().test_post_fault) != 0 || length <= 1u) {
         return false;
     }
     const std::size_t n = std::strlen(name);
@@ -947,7 +947,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one (a
     // supersampled scene) in the window after the box filter, where it has a third or less of the pixels, its taps
     // stay in the texture cache and its grain is at the size it is seen.
-    const bool deband = deband_ && deband_wanted();
+    const bool deband = deband_;
     const bool deband_in_window = deband &&
         target_width < source_width && target_height < source_height &&
         plan.resample && !plan.rcas &&

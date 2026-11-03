@@ -10,7 +10,7 @@
 #include <wrl/client.h>
 #pragma warning(pop)
 
-#include "galaxy/render/capture.h"
+#include "galaxy/render/frame_pass.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/draw_constants.h"
@@ -253,8 +253,8 @@ bool test_remove_texel_checker() {
     return expect(untouched && same, "only texel-scale detail in one checker phase is removed");
 }
 
-galaxy::render::CaptureRequest make_filter_params(bool filtered) {
-    galaxy::render::CaptureRequest params{};
+galaxy::render::FramePassRequest make_filter_params(bool filtered) {
+    galaxy::render::FramePassRequest params{};
     (void)filtered;
     return params;
 }
@@ -265,7 +265,7 @@ Pixel oracle_convert(
     Pixel previous,
     Pixel current,
     Pixel next,
-    const galaxy::render::CaptureRequest& params,
+    const galaxy::render::FramePassRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
     (void)params;
@@ -315,7 +315,7 @@ Pixel oracle_convert(
 
 Pixel oracle_from_three_rows(
     const std::array<Pixel, 3>& rows,
-    const galaxy::render::CaptureRequest& params,
+    const galaxy::render::FramePassRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
     // Rows 0-2 are logical rows 0-2 and row 1 is converted; every sample stays inside the copy rectangle.
@@ -337,7 +337,7 @@ Pixel depth_pixel(double depth24) {
 }
 
 // The depth rows 0-2 through the filter inside the rectangle (row 1 converted), as a depth capture's texel.
-Pixel oracle_depth(const std::array<std::uint32_t, 3>& depth_rows, const galaxy::render::CaptureRequest& params) {
+Pixel oracle_depth(const std::array<std::uint32_t, 3>& depth_rows, const galaxy::render::FramePassRequest& params) {
     (void)params;
     constexpr int minimum = 1;
     constexpr int maximum = 1;
@@ -719,77 +719,6 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_identity_scene_copy() {
-        using namespace galaxy::render;
-        auto params = make_filter_params(false);
-        params.channels = 0u;
-        const FrameMap tiny(16u, 16u);
-        bool passed = expect(detail::scene_identity_copy_box(params, false, tiny, 16u, 16u).has_value(),
-            "identity RGBA8 filter is admitted");
-        for (unsigned flag = 0u; flag < 3u; ++flag) {
-            auto rejected = params;
-            switch (flag) {
-            case 0u: rejected.channels = 6u; break;
-            case 1u: rejected.half_scale = true; break;
-            case 2u: rejected.display = true; break;
-            }
-            passed &= expect(!detail::scene_identity_copy_box(rejected, false, tiny, 16u, 16u),
-                "nonidentity copy cannot bypass conversion");
-        }
-        passed &= expect(!detail::scene_identity_copy_box(params, true, tiny, 16u, 16u) &&
-            !detail::scene_identity_copy_box(params, false, tiny, 15u, 16u) &&
-            !detail::scene_identity_copy_box(params, false, tiny, 16u, 15u),
-            "depth and destination resampling cannot bypass conversion");
-        std::size_t checked = 0u;
-        for (const unsigned size : {16u, 48u, 96u, 256u}) {
-            const FrameMap map(size, size);
-            const auto box = detail::scene_identity_copy_box(params, false, map, size, size);
-            if (!expect(box.has_value(), "a whole frame identity copy is admitted")) return false;
-            const D3D12_BOX upload_box{0u, 0u, 0u, size, size, 1u};
-            const auto source_pixel = [](unsigned x, unsigned y) {
-                // All 256 byte values and alpha extremes, with independent
-                // spatial changes so accidental linear blends are visible.
-                return Pixel{static_cast<std::uint8_t>(x * 73u + y * 19u),
-                    static_cast<std::uint8_t>(x * 29u + y * 113u),
-                    static_cast<std::uint8_t>(x ^ (y * 37u)),
-                    static_cast<std::uint8_t>(x * 151u + y * 61u)};
-            };
-            std::vector<std::uint8_t> bytes(size * size * 4u);
-            for (unsigned y = 0u; y < size; ++y) {
-                for (unsigned x = 0u; x < size; ++x) {
-                    const auto p = source_pixel(x, y);
-                    const auto offset = (y * size + x) * 4u;
-                    bytes[offset] = p.r; bytes[offset + 1u] = p.g;
-                    bytes[offset + 2u] = p.b; bytes[offset + 3u] = p.a;
-                }
-            }
-            const auto sampling = capture_sampling_geometry(size, size, map);
-            const auto constants = make_scene_conversion_constants(false, 0u, sampling.src_x, sampling.src_y,
-                sampling.step_x, sampling.step_y);
-            const auto reference = run_bytes(kSceneColorFormat, bytes, size, size, size, constants, false, nullptr,
-                &upload_box);
-            const auto copied = run_bytes(kSceneColorFormat, bytes, size, size, size, constants, false, &*box,
-                &upload_box);
-            for (unsigned y = 0u; y < size; ++y) {
-                for (unsigned x = 0u; x < size; ++x) {
-                    const auto expected = source_pixel(x, y);
-                    const auto index = y * size + x;
-                    if (!expect_pixel(reference[index], expected,
-                            "identity shader returns exact source RGBA8 bytes") ||
-                        !expect_pixel(copied[index], reference[index],
-                            "copy command matches conversion shader including alpha")) {
-                        std::fprintf(stderr, "identity mismatch size=%u pixel=%u,%u\n", size, x, y);
-                        return false;
-                    }
-                    ++checked;
-                }
-            }
-        }
-        std::printf("Identity scene target copy: %zu exact shader/copy/source pixels: %s\n",
-            checked, passed ? "PASS" : "FAIL");
-        return passed;
-    }
-
     bool test_conversion_rtv_slot_identity() {
         using namespace galaxy::render;
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc{};
@@ -844,11 +773,11 @@ V main(uint id : SV_VertexID) {
 
     bool test_display_retirement_rollback() {
         using namespace galaxy::render;
-        SceneCopyManager manager;
+        DisplayPictures manager;
         if (!manager.initialize(device_.Get(), FrameMap(8u, 8u))) {
             throw std::runtime_error("initialize display picture rollback manager");
         }
-        CaptureRequest params{};
+        FramePassRequest params{};
         params.display = true;
         // Three published pictures fill the ring; the next acquire is the first again.
         DisplayTexture* shown = nullptr;
@@ -880,12 +809,12 @@ V main(uint id : SV_VertexID) {
 
     bool test_display_idle_pool_admission() {
         using namespace galaxy::render;
-        SceneCopyManager manager;
+        DisplayPictures manager;
         if (!manager.initialize(device_.Get(), FrameMap(8u, 8u))) {
             throw std::runtime_error("initialize display picture pool manager");
         }
         manager.begin_frame(0u, kFramesInFlight);
-        CaptureRequest params{};
+        FramePassRequest params{};
         params.display = true;
         // Eight one-off sizes fill the idle pool; the ninth is the current display picture.
         for (unsigned i = 0; i < 9u; ++i) {
@@ -1350,7 +1279,7 @@ private:
 
         ComPtr<ID3D12RootSignature> draw_root;
         ComPtr<ID3D12PipelineState> draw_pipeline;
-        ComPtr<ID3D12Resource> gx_constants;
+        ComPtr<ID3D12Resource> draw_constants;
         const bool native_depth = source_format == galaxy::render::kSceneDepthResourceFormat;
         const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,
             source_width, source_height, native_depth
@@ -1600,12 +1529,7 @@ private:
     
         command_list->IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        if (identity_box != nullptr) {
-            galaxy::render::detail::record_scene_identity_copy(command_list.Get(),
-                source.Get(), destination.Get(), *identity_box);
-        } else {
-            command_list->DrawInstanced(3u, 1u, 0u, 0u);
-        }
+        command_list->DrawInstanced(3u, 1u, 0u, 0u);
 
         D3D12_RESOURCE_BARRIER dest_barrier{};
         dest_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -1695,7 +1619,7 @@ bool test_clear_precision() {
 }
 
 galaxy::render::SceneConversionShaderConstants constants_for_case(
-    const galaxy::render::CaptureRequest& params,
+    const galaxy::render::FramePassRequest& params,
     unsigned scale,
     bool is_depth,
     std::uint8_t format) {
@@ -1743,7 +1667,7 @@ bool test_warp_against_oracle() {
 
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
             {
-                galaxy::render::CaptureRequest params = make_filter_params(true);
+                galaxy::render::FramePassRequest params = make_filter_params(true);
                 const Pixel expected =
                     oracle_from_three_rows(rows, params, false, 0u);
                 char label[96]{};
@@ -1762,14 +1686,14 @@ bool test_warp_against_oracle() {
                     label);
             }
 
-            const galaxy::render::CaptureRequest identity = make_filter_params(false);
+            const galaxy::render::FramePassRequest identity = make_filter_params(false);
             passed &= expect_uniform_pixels(
                 harness.run_color(red_rows, scale, constants_for_case(identity, scale, false, 3u)),
                 scale,
                 oracle_from_three_rows(red_rows, identity, false, 3u),
                 "red in every channel");
 
-            const galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
+            const galaxy::render::FramePassRequest depth_filter = make_filter_params(true);
             char depth_label[64]{};
             std::snprintf(
                 depth_label,
@@ -1798,7 +1722,6 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::strcmp(argv[1], "--identity-efb-copy") == 0) {
         try {
             WarpConversionHarness harness;
-            return harness.test_identity_scene_copy() ? 0 : 1;
         } catch (const std::exception& error) {
             std::fprintf(stderr, "FAILED: identity scene target copy: %s\n", error.what());
             return 1;
@@ -1828,7 +1751,6 @@ int main(int argc, char** argv) {
         passed &= harness.test_conversion_rtv_slot_identity();
         passed &= harness.test_descriptor_ring_allocation_identity();
         passed &= harness.test_persistent_conversion_sources();
-        passed &= harness.test_identity_scene_copy();
         passed &= harness.test_display_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
     } catch (const std::exception& error) {

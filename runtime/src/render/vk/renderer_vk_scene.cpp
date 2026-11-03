@@ -325,9 +325,7 @@ void RendererVk::apply_window_size() {
         return;
     }
     drain_gpu();
-    scene_copy_dests_.clear();
-    scene_copy_dests_bytes_ = 0u;
-    scene_copy_dests_tick_ = 0u;
+    frame_pass_targets_.clear();
     for (Frame& frame : frames_) {
         frame.retired.clear();
     }
@@ -686,6 +684,9 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureCache& textures) 
         return;
     }
     swap_target_set();
+    if (frame_pass_color_key_ != 0u || frame_pass_depth_key_ != 0u) {
+        close_frame_for_pass(textures);
+    }
     log_paused_ = target_log_paused_;
     // The picture is sampled until the key's next pass.
     vk::Texture& picture = *target_scene_.color;
@@ -792,14 +793,9 @@ bool RendererVk::publish_picture(std::uint64_t key, std::uint32_t width, std::ui
     return true;
 }
 
-bool RendererVk::publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
-                          TextureCache& textures) {
-    const FrameExtent size = capture_extent(params.half_scale, scene_map_);
-    // A one-channel destination's own view repeats its channel (Context::grey_view), and sub-frames redirect draws by
-    // that view (redirect_), so the picture is read through it, unswizzled.
-    (void)is_depth_copy;
-    return publish_picture(params.key, size.width, size.height, std::move(texture), 0u,
-                           0u, textures);
+bool RendererVk::publish_frame_pass(const FramePassRequest& params, gpu::TextureRef texture, TextureCache& textures) {
+    const FrameExtent size = frame_pass_extent(scene_map_);
+    return publish_picture(params.key, size.width, size.height, std::move(texture), 0u, 0u, textures);
 }
 
 bool RendererVk::begin_output_scene() {
@@ -832,8 +828,8 @@ bool RendererVk::enter_output_scene(const FrameMap& output) {
     }
     const unsigned width = output.width;
     const unsigned height = output.height;
-    const SceneCopySamplingGeometry sampling = capture_sampling_geometry(width, height, scene_map_);
-    record_conversion_blit(*alt_scene_.color, width, height, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    const FramePassGeometry sampling = frame_pass_geometry(width, height, scene_map_);
+    record_conversion_blit(*alt_scene_.color, width, height, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     end_scene_pass();
     image_barrier(commands_, alt_scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                   VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -857,16 +853,16 @@ void RendererVk::end_output_scene() {
     bind_scene();
 }
 
-bool RendererVk::copy_output_scene_to_texture(const CaptureRequest& params, TextureCache& textures) {
+bool RendererVk::draw_frame_pass_from_output(const FramePassRequest& params, TextureCache& textures) {
     if (output_scene_active_ || !alt_scene_.color) {
-        return copy_scene_to_texture(params, textures, false);
+        return draw_frame_pass(params, textures);
     }
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::SwapSceneSets, 0u});
     }
     swap_scene_sets();
     bind_scene();
-    const bool updated = copy_scene_to_texture(params, textures, false);
+    const bool updated = draw_frame_pass(params, textures);
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::SwapSceneSets, 0u});
     }
@@ -1060,8 +1056,8 @@ VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
         return it->second;
     }
     const vk::Context& context = vk::Context::get();
-    const auto wrap = [](std::uint32_t gx) {
-        switch (gx) {
+    const auto wrap = [](std::uint32_t wrap) {
+        switch (wrap) {
         case 0: return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
         case 2: return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         default: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -1579,7 +1575,7 @@ void RendererVk::draw(const DrawCall& call) {
 VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
     if (texture.framebuffer == VK_NULL_HANDLE) {
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        info.renderPass = texture.format == VK_FORMAT_R8_UNORM ? grey_pass_ : color_pass_;
+        info.renderPass = color_pass_;
         info.attachmentCount = 1;
         info.pAttachments = &texture.target_view;
         info.width = texture.width;
@@ -1624,17 +1620,14 @@ void RendererVk::transition_scene_to_attachment(VkCommandBuffer commands, bool d
 
 // The conversion blit (scene_conversion_shader_source): a full-screen triangle into `dest`, sampling the scene target colour
 // or depth. The scene target leaves its attachment layout for the read and returns; `dest` ends shader-readable.
-void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, bool is_depth_copy,
+void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
                                         std::uint8_t copy_format, float src_x, float src_y, float step_x, float step_y) {
     end_scene_pass();
-    if (!is_depth_copy) {
-        settle_owed_scene();
-    }
+    settle_owed_scene();
     const VkCommandBuffer commands = commands_;
-    transition_scene_for_sampling(commands, is_depth_copy);
-    const bool grey = dest.format == VK_FORMAT_R8_UNORM;
+    transition_scene_for_sampling(commands, false);
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = grey ? grey_pass_ : color_pass_;
+    begin.renderPass = color_pass_;
     begin.framebuffer = framebuffer_for(dest);
     begin.renderArea = {{0, 0}, {dest_w, dest_h}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
@@ -1644,33 +1637,31 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     // A display copy one scene target pixel to one display picture pixel without gamma: its filter alone (display_filter_shader_source).
-    const bool display_filter = copy_format == kCopyLayoutDisplay && !is_depth_copy && !grey &&
+    const bool display_filter = copy_format == kCopyLayoutDisplay &&
                                 step_x == 1.0f && step_y == 1.0f &&
                                 display_filter_pipeline_ != VK_NULL_HANDLE;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      display_filter ? display_filter_pipeline_
-                      : grey         ? grey_conversion_pipeline_
-                                     : conversion_pipeline_);
-    const VkDescriptorSet source = is_depth_copy ? scene_.depth_source : scene_color_source();
+                      display_filter ? display_filter_pipeline_ : conversion_pipeline_);
+    const VkDescriptorSet source = scene_color_source();
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(is_depth_copy, copy_format, src_x, src_y, step_x, step_y);
+        make_scene_conversion_constants(false, copy_format, src_x, src_y, step_x, step_y);
     vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
                        constants.values.data());
     vkCmdDraw(commands, 3, 1, 0, 0);
     vkCmdEndRenderPass(commands);
     dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    transition_scene_to_attachment(commands, is_depth_copy);
+    transition_scene_to_attachment(commands, false);
     reset_draw_bindings();
     bind_scene();
 }
 
-void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest) {
+void RendererVk::copy_scene_to_display(const FramePassRequest& params, DisplayTexture& dest) {
     const GpuPassScope pass{*this, GpuPass::DisplayCopy};
     if (!dest.texture) {
         throw std::runtime_error("display picture copy has no destination texture");
     }
-    const SceneCopySamplingGeometry sampling = capture_sampling_geometry(dest.width, dest.height, scene_map_);
+    const FramePassGeometry sampling = frame_pass_geometry(dest.width, dest.height, scene_map_);
     const bool logged = logging();
     if (logged) {
         ReplayCopy copy{};
@@ -1688,7 +1679,7 @@ void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayText
     }
     {
         const LogPause pause{*this};
-        record_conversion_blit(*dest.texture, dest.width, dest.height, false, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+        record_conversion_blit(*dest.texture, dest.width, dest.height, kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
     }
     if (ring_mode_ == RingMode::Interp && !replaying_) {
         // The display copy closes the game frame: its log is complete and the next frame takes a new segment.
@@ -1703,7 +1694,7 @@ void RendererVk::copy_scene_to_display(const CaptureRequest& params, DisplayText
 // E-10: the display copy hands the frame over (RendererD3D12::can_hand_over_display_copy): the whole 640x456 frame
 // one scene target pixel to one picture pixel, on the plain path (one sample, no sub-frames, no 2D layer or target pass, no
 // pending carry). The filter, the display's vertical filter or none, is applied when the frame is presented.
-bool RendererVk::can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const {
+bool RendererVk::can_hand_over_display_copy(const FramePassRequest&, const DisplayTexture& dest) const {
     if (!scene_.color || scene_owed_ || scene_carry_color_ ||
         scene_carry_depth_ || scene_carry_clear_ || ring_mode_ == RingMode::Interp || recording_log_valid_ ||
         run_valid_ || replaying_ || output_scene_active_ || target_pass_active_ || scene_.samples > 1u ||
@@ -1712,8 +1703,79 @@ bool RendererVk::can_hand_over_display_copy(const CaptureRequest& params, const 
     }
     const unsigned width = scene_map_.width;
     const unsigned height = scene_map_.height;
-    return !params.half_scale && dest.width == width &&
+    return dest.width == width &&
            dest.height == height && scene_.color->width == width && scene_.color->height == height;
+}
+
+bool RendererVk::can_take_scene() const noexcept {
+    return scene_.color && !scene_carry_color_ && !scene_carry_depth_ && !scene_carry_clear_ && ring_mode_ != RingMode::Interp &&
+           !recording_log_valid_ && !run_valid_ && !replaying_ && !output_scene_active_ && !target_pass_active_ &&
+           scene_.samples <= 1u;
+}
+
+bool RendererVk::take_scene(std::uint64_t key, gpu::TextureRef fresh, TextureCache& textures, gpu::TextureRef& released) {
+    end_scene_pass();
+    settle_owed_scene();
+    if (const auto it = pictures_.find(key); it != pictures_.end()) {
+        released = it->second.viewed;
+    }
+    gpu::TextureRef picture = hand_over_scene_color(std::move(fresh));
+    scene_owed_ = {};
+    const FrameExtent size = frame_pass_extent(scene_map_);
+    return publish_picture(key, size.width, size.height, std::move(picture), 0u, 0u, textures);
+}
+
+void RendererVk::open_frame_for_pass(std::uint64_t color_key, std::uint8_t channels, std::uint64_t depth_key,
+                                     TextureCache& textures) {
+    end_scene_pass();
+    settle_owed_scene();
+    const VkCommandBuffer commands = commands_;
+    const FrameExtent size = frame_pass_extent(scene_map_);
+    if (color_key != 0u) {
+        transition_scene_for_sampling(commands, false);
+        (void)publish_picture(color_key, size.width, size.height, scene_.color, channels, 0u, textures);
+    }
+    if (depth_key != 0u) {
+        // Materials read their textures in the shader-read layout (TextureBackend).
+        resolve_scene_depth(commands);
+        image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_),
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        (void)publish_picture(depth_key, size.width, size.height, scene_.depth, 0u, 0u, textures);
+    }
+    frame_pass_color_key_ = color_key;
+    frame_pass_depth_key_ = depth_key;
+}
+
+void RendererVk::close_frame_for_pass(TextureCache& textures) {
+    const VkDevice device = vk::Context::get().device();
+    const VkCommandBuffer commands = commands_;
+    for (const std::uint64_t key : {frame_pass_color_key_, frame_pass_depth_key_}) {
+        if (key == 0u) {
+            continue;
+        }
+        if (const auto it = pictures_.find(key); it != pictures_.end()) {
+            textures.retire_view(it->second.view, std::move(it->second.viewed));
+            if (it->second.sampled != VK_NULL_HANDLE) {
+                const VkImageView old = it->second.sampled;
+                vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+            }
+            pictures_.erase(it);
+        }
+    }
+    if (frame_pass_color_key_ != 0u) {
+        transition_scene_to_attachment(commands, false);
+    }
+    if (frame_pass_depth_key_ != 0u) {
+        image_barrier(commands, scene_.depth->image, depth_aspects(depth_format_), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                      VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+    }
+    frame_pass_color_key_ = 0u;
+    frame_pass_depth_key_ = 0u;
+    reset_draw_bindings();
 }
 
 gpu::TextureRef RendererVk::hand_over_scene_color(gpu::TextureRef fresh) {
@@ -1887,76 +1949,46 @@ VkDescriptorSet RendererVk::scene_color_source() {
     return turn_source_;
 }
 
-bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy) {
-    const GpuPassScope pass{*this, GpuPass::SceneCopy};
+bool RendererVk::draw_frame_pass(const FramePassRequest& params, TextureCache& textures) {
+    const GpuPassScope pass{*this, GpuPass::FramePass};
     ++gpu_window_.copies;
-    // The game composites its picture from scene target->texture copies; half_scale halves both dimensions (a 2x2 box).
-    const FrameExtent extent = capture_extent(params.half_scale, scene_map_);
+    const FrameExtent extent = frame_pass_extent(scene_map_);
     const unsigned w = extent.width;
     const unsigned h = extent.height;
     if (w == 0u || h == 0u) {
         return false;
     }
-    // Keyed by address, format and source: one address alternates between formats and copies of each.
+    // Keyed by the texture and its channels.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(params.key) |
-        (static_cast<std::uint64_t>(params.channels) << 48u) | (is_depth_copy ? (1ull << 56u) : 0ull);
-    SceneCopyDest& dest = scene_copy_dests_[dest_key];
-    dest.last_used = ++scene_copy_dests_tick_;
+        (static_cast<std::uint64_t>(params.channels) << 48u);
+    FramePassTarget& dest = frame_pass_targets_[dest_key];
     if (!dest.texture || dest.width != w || dest.height != h) {
         if (dest.texture) {
             retire(std::move(dest.texture));
-            scene_copy_dests_bytes_ -= std::min(scene_copy_dests_bytes_, dest.bytes);
         }
-        const bool grey = scene_copy_single_channel(params.channels, is_depth_copy);
         dest.texture = vk::Context::get().create_texture(
-            w, h, 1u, grey ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM,
+            w, h, 1u, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             true, nullptr);
-        if (dest.texture && grey && !vk::Context::get().grey_view(*dest.texture)) {
-            dest.texture.reset();
-        }
         if (!dest.texture) {
-            scene_copy_dests_.erase(dest_key);
+            frame_pass_targets_.erase(dest_key);
             static std::atomic<unsigned> reported{0u};
             if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
-                std::cerr << "[frame-read] destination allocation failed size=" << w << 'x' << h
+                std::cerr << "[frame-pass] destination allocation failed size=" << w << 'x' << h
                           << "; copy skipped\n";
             }
             return false;
         }
         dest.width = w;
         dest.height = h;
-        dest.bytes = dest.texture->allocation_bytes;
-        scene_copy_dests_bytes_ += dest.bytes;
     }
-    // Over budget: the least recently used destinations go (a destination is a pure function of its key).
-    const std::uint64_t budget = scene_copy_dest_budget_bytes();
-    while (budget != 0u && scene_copy_dests_bytes_ > budget) {
-        auto victim = scene_copy_dests_.end();
-        for (auto it = scene_copy_dests_.begin(); it != scene_copy_dests_.end(); ++it) {
-            if (it->first != dest_key && (victim == scene_copy_dests_.end() ||
-                                          it->second.last_used < victim->second.last_used)) {
-                victim = it;
-            }
-        }
-        if (victim == scene_copy_dests_.end()) {
-            break;
-        }
-        if (victim->second.texture) {
-            retire(std::move(victim->second.texture));
-        }
-        scene_copy_dests_bytes_ -= std::min(scene_copy_dests_bytes_, victim->second.bytes);
-        scene_copy_dests_.erase(victim);
-    }
-    SceneCopyDest& current = scene_copy_dests_[dest_key];
+    FramePassTarget& current = dest;
     vk::Texture& texture = *current.texture;
-    const auto identity = scene_identity_copy_rect(params, is_depth_copy, scene_map_, w, h);
-    const SceneCopySamplingGeometry sampling = capture_sampling_geometry(w, h, scene_map_);
+    const FramePassGeometry sampling = frame_pass_geometry(w, h, scene_map_);
     if (logging()) {
         ReplayCopy copy{};
         copy.params = params;
-        copy.depth = is_depth_copy;
         copy.dest_key = dest_key;
         copy.width = w;
         copy.height = h;
@@ -1964,11 +1996,6 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
         copy.geometry[3] = sampling.step_y;
-        copy.exact = identity.has_value();
-        if (identity) {
-            copy.box_left = identity->left;
-            copy.box_top = identity->top;
-        }
         copy.dest_view = texture.view;
         recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
         recording_log_.copies.push_back(copy);
@@ -1976,40 +2003,8 @@ bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCach
     }
     const LogPause pause{*this};
 
-    if (const auto& box = identity) {
-        // An exact colour copy: the scene target's texels as they are.
-        end_scene_pass();
-        settle_owed_scene();
-        const VkCommandBuffer commands = commands_;
-        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-        image_barrier(commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
-                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
-        VkImageCopy region{};
-        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.srcOffset = {static_cast<std::int32_t>(box->left), static_cast<std::int32_t>(box->top), 0};
-        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-        region.extent = {w, h, 1};
-        vkCmdCopyImage(commands, scene_.color->image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture.image,
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-        image_barrier(commands, texture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                      VK_ACCESS_SHADER_READ_BIT);
-        image_barrier(commands, scene_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-        texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        reset_draw_bindings();
-        bind_scene();
-        return publish_capture(params, current.texture, is_depth_copy, textures);
-    }
-    record_conversion_blit(texture, w, h, is_depth_copy, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
-    return publish_capture(params, current.texture, is_depth_copy, textures);
+    record_conversion_blit(texture, w, h, params.channels, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y);
+    return publish_frame_pass(params, current.texture, textures);
 }
 
 void RendererVk::create_first_use_resources() {

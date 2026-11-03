@@ -18,7 +18,7 @@
 
 namespace galaxy::host {
 
-// One Mii as the Wii stores it (RFLiCharData, big-endian): 74 bytes. Only imports read it.
+// One Mii as the Wii stores it (MiiCharData, big-endian): 74 bytes. Only imports read it.
 inline constexpr std::size_t kMiiRecordSize = 0x4A;
 inline constexpr std::size_t kMiiLibrarySlots = 100;
 // The Wii's limit of favourite Miis (its Mii Channel; the game's icon picker holds that many).

@@ -62,7 +62,7 @@ public:
     u8* newStaticSeqDataBlock_(JAISoundID, u32);
     bool newStaticSeqData(JAISoundID, void const*, u32);
     bool newStaticSeqData(JAISoundID);
-    void* loadDVDFile(const char*, bool);
+    void* loadStoreFile(const char*, bool);
     void* newCopy(void const*, u32, s32);
     JASWaveBank* newWaveBank(u32, void const*);
     bool loadWaveArc(u32, u32);

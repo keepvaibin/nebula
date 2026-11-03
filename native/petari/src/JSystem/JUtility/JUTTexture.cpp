@@ -72,27 +72,16 @@ void JUTTexture::initTexObj() {
                                 mTIMG->mDoEdgeLod, mTIMG->mMaxAnisotropy);
 }
 
-void JUTTexture::frameColor(bool half) {
+void JUTTexture::frameColor() {
     if (mFlag & 0x1) {
-        J3DNativeTarget::read(mImage, NEBULA_TARGET_RGB, half ? NEBULA_CAPTURE_HALF : 0u);
+        J3DNativeTarget::framePass(mImage, NEBULA_TARGET_RGB);
     }
 }
 
 void JUTTexture::frameColorAlpha() {
     if (mFlag & 0x1) {
-        J3DNativeTarget::read(mImage, NEBULA_TARGET_RGBA);
+        J3DNativeTarget::framePass(mImage, NEBULA_TARGET_RGBA);
     }
 }
 
-void JUTTexture::frameAlpha(bool half) {
-    if (mFlag & 0x1) {
-        J3DNativeTarget::read(mImage, NEBULA_TARGET_ALPHA, half ? NEBULA_CAPTURE_HALF : 0u);
-    }
-}
-
-void JUTTexture::frameDepth(bool half) {
-    if (mFlag & 0x1) {
-        J3DNativeTarget::read(mImage, NEBULA_TARGET_RED, NEBULA_CAPTURE_DEPTH | (half ? NEBULA_CAPTURE_HALF : 0u));
-    }
-}
 

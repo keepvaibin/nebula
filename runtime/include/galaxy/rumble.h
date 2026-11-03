@@ -1,7 +1,7 @@
 #pragma once
 
 // Controller vibration that mirrors the virtual Wii Remote's motor. The game
-// drives the motor itself (WPadRumble::updateRumble -> WPADControlMotor); its
+// drives the motor itself (the rumble pattern it was given); its
 // on/off bit goes through the motor model below to the controller in use,
 // with no patterns of the host's own.
 //

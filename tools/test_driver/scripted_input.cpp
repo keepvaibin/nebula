@@ -2,7 +2,7 @@
 // Scripted and replayed input for test runs. Not in a release: controls_engine.cpp answers with nothing.
 #if !defined(NEBULA_RELEASE)
 #include "galaxy/input/controls_engine.h"
-#include "galaxy/test_hooks.h"
+#include "switches.h"
 #include "galaxy/host_env.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/pointer_control.h"

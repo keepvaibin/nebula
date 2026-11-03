@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/input/raw_mouse_win32.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 #include "galaxy/host_env.h"
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -33,7 +33,7 @@ std::optional<galaxy::input::RawMouseMotion> decode_native_raw_mouse(std::span<c
 }
 
 bool install_native_raw_mouse(std::uintptr_t window) noexcept {
-    if (read_env_flag(nebula_switch::hide_window_name())) return false;
+    if (::galaxy::run_option_flag(::galaxy::run_options().hide_window, false)) return false;
     const auto hwnd = reinterpret_cast<HWND>(window);
     if (!own_window(hwnd)) return false;
     if (const auto previous = registered_window.load(); previous != nullptr && previous != hwnd) return false;

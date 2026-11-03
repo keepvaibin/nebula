@@ -10,7 +10,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
-#include <RVLFaceLib.h>
+#include <MiiLib.h>
 
 namespace {
     NEW_NERVE(MiiSelectNrvAppear, MiiSelect, Appear);
@@ -26,7 +26,7 @@ namespace {
     static const CallbackFuncPtr func[2] = {&MiiSelect::callbackLeft, &MiiSelect::callbackRight};
 };  // namespace
 
-// RFL_Database.c: the database's Miis changed (Mii import while the game runs).
+// MiiDatabase.c: the database's Miis changed (Mii import while the game runs).
 extern "C" u32 __NebulaMiiGeneration;
 static u32 sCollectedMiiGeneration = 0;
 

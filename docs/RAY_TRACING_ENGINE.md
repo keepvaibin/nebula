@@ -93,7 +93,7 @@ is not traced and shows the game's picture.
   Jerlov's coastal types), dimmed by the water above the camera at Kd. The water carries the stage's light into its
   caves as it is lit from above. The game's own filter (WaterCameraFilter: red and green lowered with the depth) still
   follows the composite.
-- Fog: each traced draw's GX fog (type, A, B magnitude and shift, C, colour: the draw table's words 12-15).
+- Fog: each traced draw's fog (type, A, B magnitude and shift, C, colour: the draw table's words 12-15).
   EngineGBufferCS evaluates the raster's share at the pixel as the hardware does (ze = A 2^24 / (B - z >> shift) in
   perspective, A z / 2^24 orthographic; f = saturate(ze - C) through the exponential types; 1/256 steps). The composite
   takes the fog out of the game's colour, (c - fc f) / (1 - f), lights that, and lays the fog over the lit surface in
@@ -148,7 +148,7 @@ is not traced and shows the game's picture.
   scene only after the frame's lighting, so what lies in front of them takes the light of the surface behind.
 - Waterfall mist (the table's `mist` effects: the spray at the falls' feet, the Twin Falls', Beach Bowl's, Honeyhive's):
   the game paints its spray as cloud sprites (lobed, opaque, tinted blue). Under the engine each sprite is a puff of
-  drops instead (GxBackend::note_rt_mist): a Gaussian cloud at the sprite's quad centre (its corners through its
+  drops instead (RenderCore::note_rt_mist): a Gaussian cloud at the sprite's quad centre (its corners through its
   position matrix), sigma half the quad's half side (the cloud reaches the quad's edges at two sigma), optical depth
   through its centre its row's `intensity` times the sprite's opacity (stage register 0's alpha, JPA's particle colour):
   4 for the cloud sprites (as opaque at the core as the painted cloud), 1.6 for steam, 0.8 for the droplets' dot
@@ -279,7 +279,7 @@ late: the restart closed the water window untraced).
 Player choices (Graphics, RAY TRACING; `render_config.h` `rt_effect_on`, read each frame): REFLECTIONS (E5 and E5b,
 `SceneRayTracer::surface_reflections_active`; off, the composite keeps each surface's painted reflection in its albedo
 and metals take diffuse light, so they show the game's own reflection, and glass and crystal are the game's draws
-again), WATER REFLECTIONS (the water draws join the water window, `GxBackend::rt_water_draw`; off, the game's water),
+again), WATER REFLECTIONS (the water draws join the water window, `RenderCore::rt_water_draw`; off, the game's water),
 SUN RAYS and LENS BLOOM (E10's shafts and pyramid, independent). There is no switch for the bounce light: E4 also
 carries the sky's light, which needs a fallback before it can be turned off. Tests: GALAXY_TEST_RT_EFFECT_AB turns one
 off in frames that end in an odd present, so at 60 fps consecutive presents of one run show it on and off.

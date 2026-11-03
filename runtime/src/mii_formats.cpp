@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Mii files of every console as Wii Mii records (mii_formats.h).
 //
-// Layouts: the Wii's record from the game's own RVLFaceLib (RFLi_Endian.h bit positions); the 3DS/Wii U record
+// Layouts: the Wii's record from the game's own MiiLib (MII_Endian.h bit positions); the 3DS/Wii U record
 // (Ver3StoreData), the Switch's CharInfo, CoreData and StoreData from MiiPort's structure patterns (Genwald, ISC) and
 // 3dbrew; Mii Studio's and Mii Creator's from MiiJS (Stewared, ISC). The Switch's colour and glasses tables are the
 // Switch's own downgrade to the 3DS's (MiiPort); the 3DS parts the Wii lacks take MiiJS's nearest Wii part (its own
@@ -45,7 +45,7 @@ u16 be16(std::span<const std::byte> b, std::size_t at) { return static_cast<u16>
 u32 be32(std::span<const std::byte> b, std::size_t at) { return static_cast<u32>(be16(b, at)) << 16 | be16(b, at + 2); }
 
 // The Wii record's fields: bit position from the record's first bit, most significant first in each big-endian
-// 16-bit unit, and width (RVLFaceLib RFLi_Endian.h).
+// 16-bit unit, and width (MiiLib MII_Endian.h).
 struct WiiField {
     u16 pos;
     u8 len;
@@ -190,8 +190,8 @@ MiiRecord wii_from_modern(ModernMii m) {
     if (m.mouth_type > 23u) m.mouth_type = lookup(kWiiMouthForVer3, m.mouth_type - 24u);
 
     MiiRecord r{};
-    // A placeholder create ID (a fresh one is made on import): its type bits, special or not (RVLFaceLib
-    // RFLi_CREATE_ID_MASK_NOT_SPECIAL; MiiJS: 100 normal, 010 special).
+    // A placeholder create ID (a fresh one is made on import): its type bits, special or not (MiiLib
+    // MII_CREATE_ID_MASK_NOT_SPECIAL; MiiJS: 100 normal, 010 special).
     r[0x18] = static_cast<std::byte>(m.special ? 0x40u : 0x80u);
     for (std::size_t i = 0; i < 10u; ++i) {
         r[0x02 + 2 * i] = static_cast<std::byte>(m.name[i] >> 8u);

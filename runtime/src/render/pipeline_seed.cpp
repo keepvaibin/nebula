@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#include "galaxy/portable.h"
 #include "galaxy/render/pipeline_seed.h"
-#include "galaxy/test_hooks.h"
+#include "galaxy/run_options.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -26,8 +27,8 @@ void note_pipeline_for_seed(std::uint32_t shader, const RenderStateKey& rs) noex
         std::size_t length = 0;
         char path[512] = {};
         std::FILE* out = nullptr;
-        if (getenv_s(&length, path, sizeof(path), nebula_switch::pipeline_seed_out_name()) == 0 && length > 1u) {
-            (void)fopen_s(&out, path, "ab");
+        if (::galaxy::run_option_read(&length, path, sizeof(path), ::galaxy::run_options().pipeline_seed_out) == 0 && length > 1u) {
+            out = ::galaxy::open_file(path, "ab");
         }
         return out;
     }();

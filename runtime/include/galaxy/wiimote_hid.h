@@ -96,24 +96,24 @@ struct Ack {
 [[nodiscard]] bool is_wii_u_pro_name(const wchar_t* product_string) noexcept;
 // A Nunchuk's 6 id bytes end a4 20 00 00.
 [[nodiscard]] bool is_nunchuk(std::span<const std::uint8_t> id) noexcept;
-// The status report's battery byte (0xc8 full) as WPAD's level, 0 (empty) to 4, by the SDK's thresholds.
+// The status report's battery byte (0xc8 full) as a level, 0 (empty) to 4, by the SDK's thresholds.
 [[nodiscard]] std::uint8_t battery_level(std::uint8_t battery) noexcept;
 
 }  // namespace galaxy::input::wiimote
 
 namespace galaxy::host {
 
-// What the game's WPAD takes at a remote's connection (NebulaWiimoteConnection).
+// What the game takes at a remote's connection (NebulaWiimoteConnection).
 struct RealWiimoteConnection {
     std::array<std::uint8_t, input::wiimote::kCalibrationBytes> eeprom{};
     std::array<std::uint8_t, input::wiimote::kExtensionCalibrationBytes> extension_calibration{};
     bool nunchuk = false;
-    std::uint8_t battery = 0;  // WPAD's level (battery_level)
+    std::uint8_t battery = 0;  // a level (battery_level)
 };
 
 enum class RealWiimoteEvent : std::uint8_t { None, Report, Connected, Disconnected, Battery };
 
-// The remote's state and data reports from the worker to the host's WPAD thread. `serial` counts state changes; the
+// The remote's state and data reports from the worker to the host's remote thread. `serial` counts state changes; the
 // host is told the newest state it has not seen (a quick connect and disconnect can never leave it on a remote that
 // is gone). Data reports pass only while connected, and only those of the current connection, oldest first; a host
 // a whole ring behind loses the oldest.
@@ -158,7 +158,7 @@ private:
 // Starts the worker on first use. It reads a remote while the input mode is Auto or Wii Remote, never in hidden test
 // runs (a test never takes the player's remote).
 void ensure_real_wiimote_started() noexcept;
-// The host's WPAD thread plays with the remote: in Auto mode from its first button press until another input device
+// The host's input thread plays with the remote: in Auto mode from its first button press until another input device
 // is used; in Wii Remote mode while it is connected.
 void real_wiimote_set_active(bool active) noexcept;
 // What the game asks of the remote: its data report (0x30, 0x31, 0x33, 0x37), the IR camera and the motor.

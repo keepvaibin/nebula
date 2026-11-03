@@ -118,7 +118,7 @@ namespace Nebula.Launcher
     }
 
     /// <summary>
-    /// Export and import of the saves folder (the runtime's NAND root). An export holds the files the game reads and
+    /// Export and import of the saves folder (the game's save folder). An export holds the files the game reads and
     /// the folders above them, each with its NTFS streams (galaxy.isfs.meta holds the ISFS metadata) as separate zip
     /// entries, so an imported export is the same tree. /tmp is left out: it only holds files a save stages.
     /// Archive layout: nebula-saves.json (items with sizes and SHA-256), saves/&lt;path&gt;, streams/&lt;path&gt;/&lt;stream&gt;.

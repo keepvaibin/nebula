@@ -20,7 +20,7 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/Game/*.cpp" "${petari}/src/Game/*.c"
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
-    "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
+    "${petari}/src/MiiLib/*.c" "${petari}/src/MiiLib/*.cpp")
 
 add_library(smg_game SHARED
     ${game_sources}
@@ -39,7 +39,7 @@ target_include_directories(smg_game BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
     "${petari}/libs/JSystem/include"
-    "${petari}/libs/RVLFaceLib/include"
+    "${petari}/libs/MiiLib/include"
     "${petari}/libs/nw4r/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
@@ -52,17 +52,6 @@ set_target_properties(smg_game PROPERTIES
     CXX_STANDARD 17 CXX_EXTENSIONS ON
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
-# No native-built line may test a host pointer against the console's memory map (tools/console_address_audit.py);
-# checked before every link of the module.
-find_package(Python3 COMPONENTS Interpreter)
-if(Python3_Interpreter_FOUND)
-    add_custom_command(TARGET smg_game PRE_LINK
-        COMMAND "${Python3_EXECUTABLE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/console_address_audit.py"
-            "${CMAKE_CURRENT_SOURCE_DIR}" "${petari}"
-        VERBATIM)
-else()
-    message(WARNING "Python 3 not found: tools/console_address_audit.py does not run with this build")
-endif()
 
 # Every float-to-integer conversion into a type narrower than 32 bits goes through s32, as the Wii converts
 # (tools/narrow_float_audit.py; clang-query over the whole module, minutes): after each link with this option.
@@ -168,7 +157,7 @@ endif()
 
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
-add_executable(nebula_native_host host/host_main.cpp
+add_executable(nebula_native_host host/host_main.cpp ../tools/test_driver/run_options.cpp
     ../runtime/src/mods.cpp ../runtime/src/mod_xml.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/disc_files.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp)

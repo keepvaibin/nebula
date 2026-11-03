@@ -381,8 +381,8 @@ void Flag::draw() const {
 
     loadMaterial();
 
-    u8 gxPosA = 0;
-    u8 gxPosB = mNumPointsU + 1;
+    u8 indexA = 0;
+    u8 indexB = mNumPointsU + 1;
     for (s32 idxV = 0; idxV < mNumPointsV - 1; idxV++) {
         const TVec3f& posA = mFixPoints[idxV + 0].mPos;
         const TVec3f& posB = mFixPoints[idxV + 1].mPos;
@@ -390,22 +390,22 @@ void Flag::draw() const {
         J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, (mNumPointsU + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             J3DNativeDraw::position(posB.x, posB.y, posB.z);
-            sendEntry(gxPosB);
+            sendEntry(indexB);
             J3DNativeDraw::position(posA.x, posA.y, posA.z);
-            sendEntry(gxPosA);
-            gxPosB++;
-            gxPosA++;
+            sendEntry(indexA);
+            indexB++;
+            indexA++;
 
             for (s32 idxU = 0; idxU < mNumPointsU; idxU++) {
                 const TVec3f& posA = mFixPoints[idxV].mPoints[idxU]->mPosition;
                 const TVec3f& posB = mFixPoints[idxV + 1].mPoints[idxU]->mPosition;
                 J3DNativeDraw::position(posB.x, posB.y, posB.z);
-                sendEntry(gxPosB);
+                sendEntry(indexB);
                 J3DNativeDraw::position(posA.x, posA.y, posA.z);
-                sendEntry(gxPosA);
+                sendEntry(indexA);
 
-                gxPosB++;
-                gxPosA++;
+                indexB++;
+                indexA++;
             }
         }
     }

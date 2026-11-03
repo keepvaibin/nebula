@@ -1,4 +1,5 @@
 #include "Game/Screen/ScreenAlphaCapture.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
@@ -33,7 +34,7 @@ void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
 }
 
 void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
-    mTexture[textureIndex]->frameAlpha(false);
+    J3DNativeTarget::take(mTexture[textureIndex]->mImage);
 }
 
 JUTTexture* ScreenAlphaCapture::getTexture(s32 index) {

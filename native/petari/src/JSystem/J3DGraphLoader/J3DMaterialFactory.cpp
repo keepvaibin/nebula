@@ -113,7 +113,7 @@ J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, i
     u32 texgens = countTexGens(i_idx);
     u32 texgen_flag = texgens > 4 ? getMdlDataFlag_TexGenFlag(0) : getMdlDataFlag_TexGenFlag(i_flags);
     u32 color_flag = getMdlDataFlag_ColorFlag(i_flags);
-    u32 pe_flag = getMdlDataFlag_PEFlag(i_flags);
+    u32 output_flag = getMdlDataFlag_OutputFlag(i_flags);
     BOOL ind_flag = (i_flags & 0x1000000) ? TRUE : FALSE;
     if (i_material == nullptr) {
         i_material = new J3DMaterial();
@@ -123,7 +123,7 @@ J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, i
     i_material->mTexGenBlock = J3DMaterial::createTexGenBlock(texgen_flag);
     i_material->mRegisterBlock = J3DMaterial::createRegisterBlock((u16)stage_count_max);
     i_material->mIndBlock = J3DMaterial::createIndBlock(ind_flag);
-    i_material->mOutputBlock = J3DMaterial::createOutputBlock(pe_flag, getMaterialMode(i_idx));
+    i_material->mOutputBlock = J3DMaterial::createOutputBlock(output_flag, getMaterialMode(i_idx));
     i_material->mIndex = i_idx;
     i_material->mNativeMaterial = mpNativeMaterials != nullptr ? mpNativeMaterials + i_idx : nullptr;
     i_material->mMaterialMode = getMaterialMode(i_idx);

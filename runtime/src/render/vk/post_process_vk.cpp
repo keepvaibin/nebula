@@ -684,7 +684,7 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
     // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one in the
     // window after the box filter (PostProcessor::record).
     VkImageView input = source.view;
-    const bool deband = deband_ != VK_NULL_HANDLE && deband_wanted();
+    const bool deband = deband_ != VK_NULL_HANDLE;
     const VkPipeline deband_last = present ? to_present_.deband : deband_;
     const bool deband_in_window = deband && deband_last != VK_NULL_HANDLE && target_width < source_width &&
         target_height < source_height && plan.resample && !plan.rcas &&

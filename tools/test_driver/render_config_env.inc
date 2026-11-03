@@ -3,7 +3,7 @@
 static void apply_env(RenderConfig& cfg, const char* env_name, const char* key) {
     char value[128]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env_name) == 0 &&
+    if (::galaxy::env_read(&length, value, sizeof(value), env_name) == 0 &&
         length > 1) {
         apply_kv(cfg, key, value);
     }

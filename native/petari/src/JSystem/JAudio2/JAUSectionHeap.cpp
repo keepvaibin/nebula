@@ -271,7 +271,7 @@ bool JAUSection::newStaticSeqData(JAISoundID param_0) {
     return false;
 }
 
-void* JAUSection::loadDVDFile(const char* pFileName, bool direction) {
+void* JAUSection::loadStoreFile(const char* pFileName, bool direction) {
     {
         TPushCurrentHeap push(getHeap_());
         return GameAssets::load(pFileName, nullptr, 0, getHeap_(), direction ? GameAssets::ALLOC_DIRECTION_BACKWARD : GameAssets::ALLOC_DIRECTION_FORWARD, nullptr);

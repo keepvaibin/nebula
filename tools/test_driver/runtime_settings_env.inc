@@ -3,7 +3,7 @@
 void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
     char value[128]{};
     std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env) == 0 && length > 1u) {
+    if (::galaxy::env_read(&length, value, sizeof(value), env) == 0 && length > 1u) {
         apply_kv(settings, key, value);
     }
 }
