@@ -249,7 +249,7 @@ namespace GameSystemFunction {
         SingletonHolder< GameSystem >::get()->mSceneController->restartGameAfterResetting();
     }
 
-    bool isDisplayStrapRemineder() {
-        return MR::isEqualSceneName("Logo") && ::getLogoScene() != nullptr && ::getLogoScene()->isDisplayStrapRemineder();
+    bool isBeforeTitle() {
+        return MR::isEqualSceneName("Logo") && ::getLogoScene() != nullptr && ::getLogoScene()->isBeforeTitle();
     }
 };  // namespace GameSystemFunction

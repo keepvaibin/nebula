@@ -2,6 +2,7 @@
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -18,18 +19,6 @@
 #include <cstring>
 
 extern "C" const NebulaHostServices* nebula_host(void);
-
-namespace {
-    // The texture draws' coordinate offset (the blur's samples).
-    f32 sTransX = 0.0f;
-    f32 sTransY = 0.0f;
-
-    void setTextureTrans(f32 x, f32 y) {
-        sTransX = x;
-        sTransY = y;
-    }
-
-};  // namespace
 
 void MR::connectToSceneImageEffect(NameObj* pObj) {
     MR::connectToScene(pObj, MR::MovementType_ImageEffect, MR::CalcAnimType_Environment, MR::DrawBufferType_None, MR::DrawType_ImageEffect);
@@ -67,8 +56,18 @@ namespace {
         NativeShader::setColor(material, 4, sKonst.r, sKonst.g, sKonst.b, sKonst.a);
         NativeShader::setColor(material, 8, sEdge.r, sEdge.g, sEdge.b, sEdge.a);
         material.constants[12] = static_cast< f32 >(sMode);
-        material.constants[14] = sTransX;
-        material.constants[15] = sTransY;
+        NativeShader::setTexture(material, 0, pTexture);
+        NativeShader::send(material);
+    }
+
+    void sendGaussianMaterial(JUTTexture* pTexture, f32 axisX, f32 axisY, f32 width, f32 alphaGain) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_GAUSSIAN_BLUR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.constants[0] = axisX;
+        material.constants[1] = axisY;
+        material.constants[2] = width;
+        material.constants[3] = alphaGain;
         NativeShader::setTexture(material, 0, pTexture);
         NativeShader::send(material);
     }
@@ -129,25 +128,24 @@ void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     J3DNativeDraw::texCoord(1.0f, 0.0f);
 }
 
-void ImageEffectLocalUtil::blurTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u32 sampleCount, f32 radius, f32 intensity) {
-    f32 aspect = MR::isScreen16Per9() ? 1.333f : 1.0f;
-    f32 verticalRadius = radius * aspect;
-    s32 sampleIntensity = 255.0f * intensity / sampleCount;
-
-    for (u32 i = 0; i < sampleCount; i++) {
-        f32 angle = 2.0f * (i * JGeometry::TUtil< f32 >::PI()) / sampleCount;
-        ::setTextureTrans(radius * JMACosRadian(angle), verticalRadius * JMASinRadian(angle));
-        ETexDrawType type;
-        if (i == 0) {
-            type = TexDrawType_0;
-        } else {
-            type = TexDrawType_1;
-        }
-
-        drawTexture(pTexture, divisions, tile, sampleIntensity, type);
-    }
-
-    ::setTextureTrans(0.0f, 0.0f);
+void ImageEffectLocalUtil::blurTexture(JUTTexture* pSource, JUTTexture* pScratch, JUTTexture* pTarget, f32 radius,
+                                       NebulaTargetChannels channels, f32 alphaGain) {
+    // A ring of `radius` spreads radius^2 / 2 along each axis, and a tap's bilinear footprint at the picture this blur
+    // was made for (160 x 114) adds texel^2 / 6: the same width at every resolution.
+    const f32 verticalRadius = radius * (MR::isScreen16Per9() ? 1.333f : 1.0f);
+    const f32 texelX = 1.0f / 160.0f;
+    const f32 texelY = 1.0f / 114.0f;
+    const f32 widthX = __builtin_sqrtf(radius * radius / 2.0f + texelX * texelX / 6.0f);
+    const f32 widthY = __builtin_sqrtf(verticalRadius * verticalRadius / 2.0f + texelY * texelY / 6.0f);
+    const bool alphaAlone = channels == NEBULA_TARGET_ALPHA;
+    J3DNativeTarget::begin(pScratch->mImage, pScratch->getWidth(), pScratch->getHeight(), 0, 0xFFFFFF);
+    sendGaussianMaterial(pSource, 1.0f, 0.0f, widthX, alphaAlone ? 1.0f : 0.0f);
+    sendTextureVertex(4, 0);
+    J3DNativeTarget::end(pScratch->mImage, channels);
+    J3DNativeTarget::begin(pTarget->mImage, pTarget->getWidth(), pTarget->getHeight(), 0, 0xFFFFFF);
+    sendGaussianMaterial(pScratch, 0.0f, 1.0f, widthY, alphaAlone ? alphaGain : 0.0f);
+    sendTextureVertex(4, 0);
+    J3DNativeTarget::end(pTarget->mImage, channels);
 }
 
 void MR::connectToSceneNormalBloom(BloomEffect* pBloomEffect) {

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 111u
+#define NEBULA_GAME_API_VERSION 112u
 
 /* Viewports, scissors, clears, target sizes and picture points count this many units across a frame on each axis. */
 #define NEBULA_FRAME_UNITS 65536.0f
@@ -297,7 +297,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_MII_FACE = 32,             /* Mii faces: a part's form, RFL's light or the Mii NPCs' stages */
     NEBULA_SHADER_MII_TEXTURE = 33,          /* a Mii's face texture parts: eyes, eyebrows, mouth, mustache, mole */
     NEBULA_SHADER_IMAGE_EFFECT = 34,         /* the game's screen texture passes: modulate, threshold, masks, edge */
-    NEBULA_SHADER_BLOOM_BLUR = 35,           /* the game's bloom blur: up to eight offset samples summed */
+    NEBULA_SHADER_GAUSSIAN_BLUR = 35,        /* ImageEffectLocalUtil::blurTexture: one axis of a Gaussian */
     NEBULA_SHADER_DOF_FINAL = 36,            /* the game's depth of field: blurred over sharp by the depth's ramp */
     NEBULA_SHADER_NORMAL_MAP = 37,           /* NormalMapBase: a normal-mapped shape lit through a light gradient */
     NEBULA_SHADER_MOVIE = 38,      /* MovieDraw (THPDraw): a movie frame's Y, U and V planes to RGB */
@@ -530,11 +530,20 @@ typedef struct NebulaDisplay {
     float vertical_fit;    /* the layouts' height scale under 16:9 (1 at 16:9 and wider) */
 } NebulaDisplay;
 
+/* The input mode the player chose (NEBULA_OPTION_INPUT_MODE). */
+typedef enum NebulaInputMode {
+    NEBULA_INPUT_MODE_AUTO = 0,
+    NEBULA_INPUT_MODE_KEYBOARD_MOUSE,
+    NEBULA_INPUT_MODE_CONTROLLER,
+    NEBULA_INPUT_MODE_WII_REMOTE
+} NebulaInputMode;
+
 /* Nebula options the game follows (option). */
 enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
+    NEBULA_OPTION_INPUT_MODE,        /* NebulaInputMode: the input mode the player chose */
     NEBULA_OPTION_BLOOM,             /* 1 when the renderer's bloom is built: BloomEffect and BloomEffectSimple give it
                                         their values (NebulaRender::bloomMarker); 0 no bloom */
     NEBULA_OPTION_RT_PREPARATION,    /* ray tracing's shader preparation, which the title waits for (NebulaRtPrepare):
@@ -1006,9 +1015,6 @@ typedef struct NebulaHostServices {
     /* The output's shape latched at this frame, after frame_begun: width << 16 | height (only the ratio counts), or 0
        for 16:9. */
     uint32_t (*display_extent)(void* user);
-    /* The borders around a fitted picture take this grey (0 black to 1 white) for the scene being drawn: the Wii Remote
-       strap screen's white backing, as it fades. */
-    void (*scene_surround)(void* user, float intensity);
     /* A Nebula option (NEBULA_OPTION_*), read when the game needs it. */
     uint32_t (*option)(void* user, uint32_t what);
     /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (its object's address; 0: none), `values` as

@@ -56,7 +56,7 @@ void HomeButtonLayout::exeDeactive() {
         return;
     }
 
-    if (GameSystemFunction::isDisplayStrapRemineder()) {
+    if (GameSystemFunction::isBeforeTitle()) {
         return;
     }
 

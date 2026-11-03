@@ -8870,12 +8870,7 @@ bool RendererD3D12::present(
 
     if (black || content_has_borders) {
         constexpr float kBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-        const float kSafety[4] = {source->safety_surround, source->safety_surround,
-                                 source->safety_surround, 1.0f};
-        const float* clear_color = black ? kBlack
-            : source->safety_surround > 0.0f ? kSafety : kBlack;
-        command_list_->ClearRenderTargetView(
-            back_rtv, clear_color, 0, nullptr);
+        command_list_->ClearRenderTargetView(back_rtv, kBlack, 0, nullptr);
         ++telemetry_backbuffer_clear_count_;
     }
 

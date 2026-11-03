@@ -41,5 +41,5 @@ namespace GameSystemFunction {
     void prepareResetSystem();
     bool isPreparedFadeinSystem();
     void restartSceneController();
-    bool isDisplayStrapRemineder();
+    bool isBeforeTitle();
 };  // namespace GameSystemFunction

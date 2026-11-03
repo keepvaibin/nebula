@@ -203,12 +203,5 @@ namespace Nebula.Launcher
             return monitors.Count > 0 ? monitors[0] : null;
         }
 
-        /// <summary>Internal resolution whose 640x456 picture covers the given output (runtime: efb_scale_covering).</summary>
-        public static int ScaleCovering(int width, int height)
-        {
-            if (width <= 0 || height <= 0) return 16;
-            double needed = Math.Max(width / 640.0, height / 456.0);
-            return Math.Max(1, Math.Min(16, (int)Math.Ceiling(needed - 1e-6)));
-        }
     }
 }

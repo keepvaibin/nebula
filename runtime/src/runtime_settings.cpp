@@ -49,7 +49,7 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     case RuntimeInputMode::RealWiimote:
         break;
     default:
-        settings.input_mode = RuntimeInputMode::Auto;
+        settings.input_mode = RuntimeInputMode::KeyboardMouse;
         break;
     }
     const auto sanitize_gain = [](float gain) {
@@ -208,21 +208,13 @@ std::filesystem::path settings_path() {
 }
 
 // A file of an older controls version carries that version's defaults: those bindings move to the
-// current defaults, and a version-1 file's keyboard_mouse becomes auto (from version 2 the one-source
-// modes are overrides). Choices that differ from the old defaults stay.
-void migrate_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls,
-                           unsigned version) {
+// current defaults. Choices that differ from the old defaults stay.
+void migrate_settings_file(input::ControlsConfig& controls, unsigned version) {
     if (version >= input::kControlsVersion) {
         return;
     }
     const unsigned changed = input::migrate_legacy_controls(controls, version);
-    const bool mode = version < 2u && settings.input_mode == RuntimeInputMode::KeyboardMouse;
-    if (mode) {
-        settings.input_mode = RuntimeInputMode::Auto;
-    }
-    std::fprintf(stderr, "[settings] controls version %u -> %u: %u defaults updated%s\n",
-                 version, input::kControlsVersion, changed,
-                 mode ? ", input_mode keyboard_mouse -> auto" : "");
+    std::fprintf(stderr, "[settings] controls version %u -> %u: %u defaults updated\n", version, input::kControlsVersion, changed);
 }
 
 void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls) {
@@ -280,7 +272,7 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
             apply_kv(settings, key_text.c_str(), value_text.c_str());
         }
     }
-    migrate_settings_file(settings, controls, controls_version);
+    migrate_settings_file(controls, controls_version);
 }
 
 void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
@@ -475,8 +467,8 @@ namespace {
 // controller that is not connected, would fail it. The source the file names (Nebula Settings may have saved
 // a new one) is written back by the game's saves unless the game changed its own source since the file was
 // last read or written. Guarded by s_settings_lock.
-RuntimeInputMode s_file_input_mode = RuntimeInputMode::Auto;
-RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::Auto;
+RuntimeInputMode s_file_input_mode = RuntimeInputMode::KeyboardMouse;
+RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::KeyboardMouse;
 
 void record_input_mode_sync(RuntimeInputMode file_mode, RuntimeInputMode live_mode) {
     s_settings_lock.lock();

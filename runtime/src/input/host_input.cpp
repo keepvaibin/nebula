@@ -128,6 +128,34 @@ std::optional<input::InputSource> take_controller_binding_capture() noexcept {
                               static_cast<std::uint8_t>(result & 0xffu)};
 }
 
+namespace {
+std::atomic<bool> g_input_missing_shown{false};
+}  // namespace
+
+bool keyboard_or_mouse_attached() noexcept {
+    RAWINPUTDEVICELIST devices[32];
+    UINT count = static_cast<UINT>(std::size(devices));
+    const UINT listed = GetRawInputDeviceList(devices, &count, sizeof(RAWINPUTDEVICELIST));
+    if (listed == static_cast<UINT>(-1)) {
+        // More devices than the list holds, or no answer: nothing says they are gone.
+        return true;
+    }
+    for (UINT i = 0; i < listed; ++i) {
+        if (devices[i].dwType == RIM_TYPEKEYBOARD || devices[i].dwType == RIM_TYPEMOUSE) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void set_input_missing_shown(bool shown) noexcept {
+    g_input_missing_shown.store(shown, std::memory_order_relaxed);
+}
+
+bool input_missing_shown() noexcept {
+    return g_input_missing_shown.load(std::memory_order_relaxed);
+}
+
 bool controller_present_now() noexcept {
     for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
         XINPUT_STATE state{};

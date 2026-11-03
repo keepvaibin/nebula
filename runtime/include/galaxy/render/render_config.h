@@ -20,9 +20,6 @@ inline constexpr float kMinFrameRate = 1.0f;
 inline constexpr float kMaxFrameRate = 1000.0f;
 // The bloom settings' top (percent of the game's and the camera's own strength).
 inline constexpr unsigned kMaxBloom = 200;
-// RenderConfig::bloom_mode.
-inline constexpr unsigned kBloomNative = 0;
-inline constexpr unsigned kBloomEnhanced = 1;
 
 struct RenderConfig {
 
@@ -70,9 +67,7 @@ struct RenderConfig {
     bool     enhanced_lighting   = false;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
-    // The game's bloom: kBloomNative its own chain at 456 lines, kBloomEnhanced the renderer's at the internal
-    // resolution (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
-    unsigned bloom_mode          = kBloomEnhanced;
+    // The game's bloom (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
     unsigned bloom               = 100;
 
     // The 2D layer (HUD, menus, text) renders at the window's resolution over the resampled 3D scene when the

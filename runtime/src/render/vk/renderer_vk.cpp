@@ -1711,9 +1711,8 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         }
     }
 
-    const float surround = source->safety_surround;
     VkClearValue clear{};
-    clear.color = {{surround, surround, surround, 1.0f}};
+    clear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = present_pass_;
     begin.framebuffer = swapchain_.framebuffers[image];

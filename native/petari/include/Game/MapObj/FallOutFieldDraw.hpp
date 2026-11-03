@@ -20,6 +20,7 @@ public:
 
     bool _C;
     JUTTexture* mMask;  // the screen mask at half size
+    JUTTexture* mBlurScratch;
 };
 
 namespace MR {

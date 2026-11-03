@@ -224,7 +224,6 @@ public:
         mark.width = static_cast<std::uint16_t>(width);
         mark.height = static_cast<std::uint16_t>(height);
     }
-    void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
     // Simulation thread: channel `channel`'s latest finished probes, at most `capacity`; how many.
     [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);
     void pump_messages();
@@ -303,7 +302,6 @@ private:
     struct FrameChunk {
         PointerResponseStamp pointer_response{};
         bool prerecorded_movie{};
-        float safety_surround{};
         MovieFrameMark movie_frame{};
         const RenderServices* services = nullptr;
         std::uint64_t producer_wait_ns = 0;
@@ -797,7 +795,6 @@ private:
     MovieReplacements movie_replacements_;
     std::uint64_t movie_mods_generation_ = ~0ull;
     std::uint64_t movie_stats_tick_ = 0;
-    float producer_safety_surround_{},render_safety_surround_{};
     std::array<std::uint64_t,512> pointer_latency_bins_{};
     std::uint64_t pointer_response_count_{}, pointer_latency_total_{}, pointer_latency_max_{}, pointer_report_ns_{};
     std::array<std::uint64_t,512> pointer_acquisition_age_bins_{};
