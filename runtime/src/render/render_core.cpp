@@ -2296,6 +2296,55 @@ void RenderCore::interp_sleep_us(std::int64_t us) {
     std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
+namespace {
+// GALAXY_TRACE_INTERP_SLOTS=<file>: each present slot, kept in memory and written once after 30 s, so the timing measured is the
+// timing played. tools/verify/interp_slots.py reads it.
+struct InterpSlotRecord {
+    std::int64_t slot;
+    std::int64_t began;
+    std::int64_t ended;
+    double t;
+    std::uint32_t sequence;
+    std::uint32_t kind;  // 0 a sub-frame, 1 the game frame itself
+};
+std::vector<InterpSlotRecord> g_interp_slots;
+
+void write_interp_slots() {
+    const char* const path = ::galaxy::run_options().trace_interp_slots;
+    if (path == nullptr) {
+        return;
+    }
+    if (std::FILE* const file = ::galaxy::open_file(path, "w")) {
+        std::fprintf(file, "frequency %lld\n", static_cast<long long>(galaxy::qpc_frequency()));
+        for (const InterpSlotRecord& r : g_interp_slots) {
+            std::fprintf(file, "%lld %lld %lld %.6f %u %u\n", static_cast<long long>(r.slot), static_cast<long long>(r.began),
+                         static_cast<long long>(r.ended), r.t, r.sequence, r.kind);
+        }
+        std::fclose(file);
+    }
+}
+
+void note_interp_slot(std::int64_t slot, std::int64_t began, double t, std::uint32_t sequence, std::uint32_t kind) {
+    static bool trace = [] {
+        if (::galaxy::run_options().trace_interp_slots == nullptr) {
+            return false;
+        }
+        g_interp_slots.reserve(4'000'000u);
+        return true;
+    }();
+    if (!trace) {
+        return;
+    }
+    g_interp_slots.push_back({slot, began, galaxy::qpc_now(), t, sequence, kind});
+    // 30 s of slots, then the one stall of writing them, after anything measured.
+    if (g_interp_slots.size() == g_interp_slots.capacity() ||
+        began - g_interp_slots.front().began > 30 * galaxy::qpc_frequency()) {
+        write_interp_slots();
+        trace = false;
+    }
+}
+}  // namespace
+
 void RenderCore::advance_interp_sequence(bool flush) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     flush = flush || interp_sequence_.flush_requested;
@@ -2332,6 +2381,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
             const std::int64_t subframe_start = galaxy::qpc_now();
             const bool presented = render_interp_subframe(static_cast<float>(t));
             interp_subframe_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - subframe_start);
+            note_interp_slot(slot, subframe_start, t, static_cast<std::uint32_t>(interp_sequence_serial_), 0u);
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
                 renderer_.set_capture_waits(false);
@@ -2353,7 +2403,9 @@ void RenderCore::advance_interp_sequence(bool flush) {
         }
         sequence.active = false;
         interp_presenting_real_ = true;
+        const std::int64_t real_start = galaxy::qpc_now();
         present_cached_display_on_thread(false, false, true, sequence.picture_slot);
+        note_interp_slot(slot, real_start, 1.0, static_cast<std::uint32_t>(interp_sequence_serial_), 1u);
         note_present_vblank(slot);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);

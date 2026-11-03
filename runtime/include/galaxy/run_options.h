@@ -64,6 +64,7 @@ struct RunOptions {
     const char* trace_frame_times = nullptr;
     const char* trace_loads = nullptr;
     const char* trace_memory = nullptr;
+    const char* trace_interp_slots = nullptr;
     const char* trace_present_stats = nullptr;
     const char* trace_thread_cpu = nullptr;
     const char* vk_simulate_driver = nullptr;
