@@ -560,6 +560,9 @@ namespace {
     // (as the game's icons draw them; its name in words while the icons cannot be drawn), a controller's as its buttons.
     void fillKeyCap(KeyCap& rCap, s32 key, u32 input, bool controls) {
         f32 height = 0.0f;
+        if (input == NEBULA_SETTINGS_INPUT_TOUCH) {
+            key = -1;
+        }
         const bool pad = input >= NEBULA_SETTINGS_INPUT_XBOX && input <= NEBULA_SETTINGS_INPUT_PLAYSTATION;
         rCap.mBadgeCount = 0;
         rCap.mWidth = 0.0f;
@@ -1383,7 +1386,7 @@ __attribute__((noinline)) void NebulaSettingsScreen::fillTexts(const NebulaSetti
         }
         fillKeyCap(rHint.mKey, key, rView.input, controls);
         text[0] = 0;
-        if (pWord != nullptr) {
+        if (pWord != nullptr && rView.input != NEBULA_SETTINGS_INPUT_TOUCH) {
             NebulaText::get(text, 64, pWord);
         }
         setText(rHint.mWord, text);

@@ -67,6 +67,15 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
         private set
     var license by mutableStateOf<License?>(null)
 
+    /** The next run records diagnostics in its log, to share after it. */
+    var recordNextRun by mutableStateOf(GameFiles.controls(application).getBoolean(GameFiles.RECORD_NEXT_RUN, false))
+        private set
+
+    fun updateRecordNextRun(value: Boolean) {
+        recordNextRun = value
+        GameFiles.controls(app).edit().putBoolean(GameFiles.RECORD_NEXT_RUN, value).commit()
+    }
+
     val imports = Imports.state
 
     init {
@@ -87,6 +96,7 @@ class LauncherModel(application: Application) : AndroidViewModel(application) {
     fun resumed() {
         install = Install.read(app)
         freeBytes = Storage.freeBytes(app)
+        recordNextRun = GameFiles.controls(app).getBoolean(GameFiles.RECORD_NEXT_RUN, false)
         viewModelScope.launch(Dispatchers.IO) {
             val saves = Storage.saveBytes(app)
             withContext(Dispatchers.Main) { saveBytes = saves }
