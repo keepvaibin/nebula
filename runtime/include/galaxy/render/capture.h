@@ -29,14 +29,15 @@
 
 namespace galaxy::render {
 
-// A capture of the frame (shapes::Record TargetCapture) or the frame shown (FrameShow), as the game asks for it: the
-// rectangle in logical pixels, the texture the capture becomes and the picture's channels (NebulaTargetChannels), and
-// NebulaCaptureFlags. Every sample stays inside the rectangle.
-// The game's frame in its units (640x456).
-inline constexpr unsigned kFrameWidth = 640;
-inline constexpr unsigned kFrameHeight = 456;
+// A capture of the whole frame (shapes::Record TargetCapture) or the frame shown (FrameShow): the texture it becomes,
+// the picture's channels (NebulaTargetChannels) and NebulaCaptureFlags.
+// Rectangles from the game (viewports, scissors, clears) count kFrameUnits across a frame or target on each axis.
+inline constexpr unsigned kFrameUnits = 65536;
+// The picture height effects and arbitrary mip chains were made for: their reach and bias follow the frame's height
+// over it.
+inline constexpr double kAuthoredLines = 456.0;
 
-// A target's map from the game's units to its pixels (E-08): the frame's size in pixels and pixels per unit.
+// A target's size in pixels and its pixels per unit.
 struct FrameMap {
     unsigned width = 0;
     unsigned height = 0;
@@ -44,28 +45,14 @@ struct FrameMap {
     float sy = 0.0f;
 
     constexpr FrameMap() noexcept = default;
-    constexpr FrameMap(unsigned scale) noexcept  // NOLINT: an integer scale is a map
-        : width(kFrameWidth * scale), height(kFrameHeight * scale), sx(static_cast<float>(scale)),
-          sy(static_cast<float>(scale)) {}
-    // A frame of exactly `pixels_wide` x `pixels_high`: square pixels at any size.
     constexpr FrameMap(unsigned pixels_wide, unsigned pixels_high) noexcept
-        : width(pixels_wide), height(pixels_high), sx(static_cast<float>(pixels_wide) / static_cast<float>(kFrameWidth)),
-          sy(static_cast<float>(pixels_high) / static_cast<float>(kFrameHeight)) {}
-    // The smallest whole scale that covers it, for what still works in them.
-    [[nodiscard]] unsigned scale() const noexcept {
-        return static_cast<unsigned>(std::ceil(std::max(sx, sy) - 1e-4f));
-    }
-    // An integer multiple of the game's frame.
-    [[nodiscard]] bool whole() const noexcept {
-        const unsigned s = scale();
-        return width == kFrameWidth * s && height == kFrameHeight * s;
-    }
+        : width(pixels_wide), height(pixels_high), sx(static_cast<float>(pixels_wide) / static_cast<float>(kFrameUnits)),
+          sy(static_cast<float>(pixels_high) / static_cast<float>(kFrameUnits)) {}
+    [[nodiscard]] constexpr bool empty() const noexcept { return width == 0u || height == 0u; }
     [[nodiscard]] constexpr bool operator==(const FrameMap&) const noexcept = default;
 };
 
 struct CaptureRequest {
-    std::uint16_t src_x = 0, src_y = 0;
-    std::uint16_t src_width = 0, src_height = 0;
     std::uint64_t key = 0;          // the texture (0: the frame shown)
     std::uint8_t channels = 0;      // NebulaTargetChannels
     bool display = false;           // the frame shown (frame_show), not a texture
@@ -117,16 +104,13 @@ struct DisplaySerialAccountingEvent {
     std::uint64_t copy_serial) noexcept;
 
 
-// scene target-copy textures are at the internal resolution; addresses, strides and VI selection stay in game units.
-struct ScaledSceneCopyExtent {
+// A capture's size in pixels: the whole frame, or half of it.
+struct FrameExtent {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
 };
 
-[[nodiscard]] ScaledSceneCopyExtent compute_scaled_scene_copy_extent(
-    std::uint16_t logical_width,
-    std::uint16_t logical_height,
-    const FrameMap& map) noexcept;
+[[nodiscard]] FrameExtent capture_extent(bool half_scale, const FrameMap& map) noexcept;
 
 struct SceneCopySamplingGeometry {
     float src_x = 0.0f;
@@ -135,14 +119,12 @@ struct SceneCopySamplingGeometry {
     float step_y = 0.0f;
 };
 
-[[nodiscard]] SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
-    const CaptureRequest& params,
+[[nodiscard]] SceneCopySamplingGeometry capture_sampling_geometry(
     unsigned dest_width,
     unsigned dest_height,
     const FrameMap& map) noexcept;
 
-// A copy that is an exact colour/alpha identity at `map`: its source rectangle in scaled scene target texels. Rejects
-// filtering, conversion, resampling and any source rectangle that would need the conversion shader's clamp.
+// A capture that is an exact colour/alpha identity of the frame at `map`. Rejects filtering, conversion and resampling.
 struct SceneCopyRect {
     std::uint32_t left = 0;
     std::uint32_t top = 0;
@@ -176,22 +158,21 @@ struct ScaledSceneRect {
     }
 };
 
-// Inline: this and compute_scaled_viewport run once per draw.
-[[nodiscard]] inline ScaledSceneRect compute_scaled_scene_rect(
+// A rectangle in frame units in its target's pixels, clamped to the target. Inline: this and viewport_pixels run once
+// per draw.
+[[nodiscard]] inline ScaledSceneRect rect_pixels(
     std::int32_t logical_left,
     std::int32_t logical_top,
     std::int32_t logical_right,
     std::int32_t logical_bottom,
-    unsigned logical_target_width,
-    unsigned logical_target_height,
     const FrameMap& map) noexcept {
     // Target extents are arbitrary unsigned values; saturate to the signed 32-bit rectangle range.
     constexpr std::int64_t kRectLimit = std::numeric_limits<std::int32_t>::max();
     const auto scaled = [](std::int64_t units, float scale) {
         return static_cast<std::int64_t>(std::lround(static_cast<double>(units) * scale));
     };
-    const std::int64_t target_width = std::min(scaled(logical_target_width, map.sx), kRectLimit);
-    const std::int64_t target_height = std::min(scaled(logical_target_height, map.sy), kRectLimit);
+    const std::int64_t target_width = std::min<std::int64_t>(map.width, kRectLimit);
+    const std::int64_t target_height = std::min<std::int64_t>(map.height, kRectLimit);
     return ScaledSceneRect{
         static_cast<std::int32_t>(std::clamp<std::int64_t>(scaled(logical_left, map.sx), 0, target_width)),
         static_cast<std::int32_t>(std::clamp<std::int64_t>(scaled(logical_top, map.sy), 0, target_height)),
@@ -212,8 +193,8 @@ struct ScaledViewport {
     }
 };
 
-// The viewport (drawing_state.h: left, top, width, height, near and far depth) at the frame scale, depth reversed.
-[[nodiscard]] inline ScaledViewport compute_scaled_viewport(
+// The viewport (drawing_state.h: left, top, width, height, near and far depth) in pixels, depth reversed.
+[[nodiscard]] inline ScaledViewport viewport_pixels(
     const float viewport[6],
     const FrameMap& map) noexcept {
     if (viewport == nullptr) {
@@ -282,7 +263,7 @@ private:
     std::vector<std::vector<PooledTexture>> retired_textures_;
     std::vector<PooledTexture> idle_textures_;
     unsigned current_frame_slot_ = 0;
-    FrameMap map_ = FrameMap(1u);
+    FrameMap map_{};
 };
 
 }  // namespace galaxy::render

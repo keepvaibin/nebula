@@ -1617,9 +1617,9 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
 // GALAXY_EXPORT_ART=<folder>: Nebula's own pictures (NebulaIcons) as a texture pack, pack/RMG/tex1_..._5.png at their
 // HD size, named by the texture the game draws; previews in native/ and hd/; pack-names.txt pairs them.
 // The scale the renderer last drew the 2D layer at (render_core: the scene target in use when the scene ends).
-uint32_t svc_layer_2d_scale(void*) {
+uint32_t svc_layer_2d_lines(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    return galaxy::render::layer_2d_scale();
+    return galaxy::render::layer_2d_lines();
 #else
     return 0u;
 #endif
@@ -2208,7 +2208,7 @@ uint32_t svc_screen_probe_results(void*, uint32_t channel, NebulaScreenProbe* pr
 }
 
 // A pass into a texture target (E-07): its start and end as records in draw order.
-void svc_target_begin(void*, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba, uint32_t clear_z) {
+void svc_target_begin(void*, uint64_t key, uint32_t width, uint32_t height, uint32_t clear_rgba, uint32_t clear_z) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
@@ -2270,7 +2270,7 @@ void svc_frame_read(void*, uint64_t key, uint32_t channels, uint32_t flags) {
 }
 
 // A clear of the frame's rectangle.
-void svc_frame_clear(void*, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
+void svc_frame_clear(void*, uint32_t left, uint32_t top, uint32_t width, uint32_t height, uint32_t clear_rgba,
                      uint32_t clear_z, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -4266,7 +4266,7 @@ int main(int argc, char** argv) {
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
     services.art_export = svc_art_export;
-    services.layer_2d_scale = svc_layer_2d_scale;
+    services.layer_2d_lines = svc_layer_2d_lines;
     services.pointer_wheel = svc_pointer_wheel;
     services.galaxy_select_stage = svc_galaxy_select_stage;
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;

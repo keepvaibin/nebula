@@ -48,13 +48,11 @@ bool test_scaled_display_resource_allocation() {
     }
 
     galaxy::render::SceneCopyManager manager;
-    if (!manager.initialize(device.Get(), 3u)) {
+    if (!manager.initialize(device.Get(), galaxy::render::FrameMap(1920u, 1368u))) {
         return expect(false, "3x scene target copy manager initialization");
     }
     manager.begin_frame(0u, 2u);
     galaxy::render::CaptureRequest params{};
-    params.src_width = 640u;
-    params.src_height = 456u;
     params.display = true;
     galaxy::render::DisplayTexture* display_picture = manager.acquire_display(params, 1u);
     const bool allocated = display_picture != nullptr && display_picture->texture != nullptr;
@@ -158,137 +156,38 @@ int main() {
     }
 
     {
-        galaxy::render::CaptureRequest bloom{};
-        bloom.src_x = 480u;
-        bloom.src_width = 160u;
-        bloom.src_height = 114u;
-        bloom.half_scale = true;
-        const auto native_bloom = galaxy::render::compute_scene_copy_sampling_geometry(bloom, 80u, 57u, 6u);
-        passed &= expect_near(native_bloom.src_x, 2880.0f,
-            "native bloom samples the genuine scaled scene target origin");
-        passed &= expect_near(native_bloom.step_x, 12.0f,
-            "native bloom downsamples the scaled source instead of lowering the scene");
+        const galaxy::render::FrameMap frame(1280u, 912u);
+        const galaxy::render::FrameExtent whole = galaxy::render::capture_extent(false, frame);
+        const galaxy::render::FrameExtent half = galaxy::render::capture_extent(true, frame);
+        passed &= expect(whole.width == 1280u && whole.height == 912u, "a capture is the frame's size");
+        passed &= expect(half.width == 640u && half.height == 456u, "a half capture is half of it");
+        const auto same = galaxy::render::capture_sampling_geometry(1280u, 912u, frame);
+        passed &= expect_near(same.step_x, 1.0f, "a whole capture keeps every column");
+        passed &= expect_near(same.step_y, 1.0f, "a whole capture keeps every row");
+        const auto smaller = galaxy::render::capture_sampling_geometry(640u, 456u, frame);
+        passed &= expect_near(smaller.step_x, 2.0f, "a half capture steps two columns");
+        passed &= expect_near(smaller.step_y, 2.0f, "a half capture steps two rows");
     }
     {
-        const galaxy::render::ScaledSceneCopyExtent native =
-            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 1u);
-        const galaxy::render::ScaledSceneCopyExtent double_res =
-            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 2u);
-        const galaxy::render::ScaledSceneCopyExtent quadruple_res =
-            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 4u);
-        const galaxy::render::ScaledSceneCopyExtent sixfold_res =
-            galaxy::render::compute_scaled_scene_copy_extent(640u, 456u, 6u);
-        passed &= expect(
-            native.width == 640u && native.height == 456u,
-            "1x display picture backing texture preserves logical copy dimensions");
-        passed &= expect(
-            double_res.width == 1280u && double_res.height == 912u,
-            "2x display picture backing texture retains 2x scene target resolution");
-        passed &= expect(
-            quadruple_res.width == 2560u && quadruple_res.height == 1824u,
-            "4x display picture backing texture retains 4x scene target resolution");
-        passed &= expect(
-            sixfold_res.width == 3840u && sixfold_res.height == 2736u,
-            "6x display picture backing texture retains 6x scene target resolution");
+        const galaxy::render::FrameMap frame(1920u, 1368u);
+        const galaxy::render::ScaledSceneRect scissor = galaxy::render::rect_pixels(-100, 32768, 70000, 70000, frame);
+        passed &= expect(scissor.left == 0 && scissor.top == 684 && scissor.right == 1920 && scissor.bottom == 1368,
+                         "a rectangle in frame units clamps to the target");
+        passed &= expect(galaxy::render::rect_pixels(200, 200, 100, 100, frame).empty(), "an inverted rectangle is empty");
+        const galaxy::render::ScaledSceneRect oversized =
+            galaxy::render::rect_pixels(0, 0, std::numeric_limits<std::int32_t>::max(),
+                                        std::numeric_limits<std::int32_t>::max(), frame);
+        passed &= expect(oversized.right == 1920 && oversized.bottom == 1368, "a huge rectangle saturates");
     }
     {
-        galaxy::render::CaptureRequest params{};
-        params.src_x = 10u;
-        params.src_y = 20u;
-        params.src_width = 640u;
-        params.src_height = 456u;
-        const galaxy::render::SceneCopySamplingGeometry display =
-            galaxy::render::compute_scene_copy_sampling_geometry(
-                params, 1280u, 912u, 2u);
-        passed &= expect_near(
-            display.src_x, 20.0f,
-            "2x display copy scales the scene target source X origin");
-        passed &= expect_near(
-            display.src_y, 40.0f,
-            "2x display copy scales the scene target source Y origin");
-        passed &= expect_near(
-            display.step_x, 1.0f,
-            "2x display copy preserves every scaled scene target column in scaled display picture");
-        passed &= expect_near(
-            display.step_y, 1.0f,
-            "2x display copy preserves every scaled scene target row in scaled display picture");
-
-        const galaxy::render::SceneCopySamplingGeometry half_scale =
-            galaxy::render::compute_scene_copy_sampling_geometry(
-                params, 640u, 456u, 2u);
-        passed &= expect_near(
-            half_scale.step_x, 2.0f,
-            "2x internal half-scale texture copy downsamples its scaled source by two");
-        passed &= expect_near(
-            half_scale.step_y, 2.0f,
-            "2x internal half-scale texture copy keeps proportional Y sampling");
-
-        const galaxy::render::SceneCopySamplingGeometry sixfold =
-            galaxy::render::compute_scene_copy_sampling_geometry(
-                params, 3840u, 2736u, 6u);
-        passed &= expect_near(
-            sixfold.step_x, 1.0f,
-            "6x display copy retains every scaled scene target column");
-        passed &= expect_near(
-            sixfold.step_y, 1.0f,
-            "6x display copy retains every scaled scene target row");
-    }
-    {
-        const galaxy::render::ScaledSceneRect scissor =
-            galaxy::render::compute_scaled_scene_rect(
-                -10, 10, 650, 600, 640u, 528u, 3u);
-        passed &= expect(
-            scissor.left == 0 && scissor.top == 30 &&
-                scissor.right == 1920 && scissor.bottom == 1584,
-            "3x scene target scissor scales and clamps to the physical scene target extent");
-        passed &= expect(
-            galaxy::render::compute_scaled_scene_rect(
-                20, 20, 10, 10, 640u, 528u, 4u).empty(),
-            "scaled inverted scissor remains an empty raster region");
-        const galaxy::render::ScaledSceneRect sixfold_scissor =
-            galaxy::render::compute_scaled_scene_rect(
-                -10, 10, 650, 600, 640u, 528u, 6u);
-        passed &= expect(
-            sixfold_scissor.left == 0 && sixfold_scissor.top == 60 &&
-                sixfold_scissor.right == 3840 &&
-                sixfold_scissor.bottom == 3168,
-            "6x scene target scissor scales and clamps to the physical scene target extent");
-        const galaxy::render::ScaledSceneRect oversized_target =
-            galaxy::render::compute_scaled_scene_rect(
-                0, 0,
-                std::numeric_limits<std::int32_t>::max(),
-                std::numeric_limits<std::int32_t>::max(),
-                std::numeric_limits<unsigned>::max(),
-                std::numeric_limits<unsigned>::max(),
-                6u);
-    }
-    {
-        const float full_viewport[6] = {0.0f, 0.0f, 640.0f, 456.0f, 0.0f, 1.0f};
+        const float full_viewport[6] = {0.0f, 0.0f, 65536.0f, 65536.0f, 0.0f, 1.0f};
         const galaxy::render::ScaledViewport viewport =
-            galaxy::render::compute_scaled_viewport(full_viewport, 4u);
-        passed &= expect_near(
-            viewport.x, 0.0f,
-            "4x full viewport retains its zero X origin");
-        passed &= expect_near(
-            viewport.y, 0.0f,
-            "4x full viewport retains its zero Y origin");
-        passed &= expect_near(
-            viewport.width, 2560.0f,
-            "4x viewport rasterizes geometry across the scaled scene target width");
-        passed &= expect_near(
-            viewport.height, 1824.0f,
-            "4x viewport rasterizes geometry across the scaled copy height");
-        passed &= expect(
-            viewport.valid() && viewport.min_depth <= viewport.max_depth,
-            "scaled viewport preserves a valid reversed depth range");
-        const galaxy::render::ScaledViewport sixfold_viewport =
-            galaxy::render::compute_scaled_viewport(full_viewport, 6u);
-        passed &= expect_near(
-            sixfold_viewport.width, 3840.0f,
-            "6x viewport spans the scaled scene target width");
-        passed &= expect_near(
-            sixfold_viewport.height, 2736.0f,
-            "6x viewport spans the scaled copy height");
+            galaxy::render::viewport_pixels(full_viewport, galaxy::render::FrameMap(2560u, 1824u));
+        passed &= expect_near(viewport.x, 0.0f, "a full viewport starts at zero across");
+        passed &= expect_near(viewport.y, 0.0f, "a full viewport starts at zero down");
+        passed &= expect_near(viewport.width, 2560.0f, "a full viewport spans the target's width");
+        passed &= expect_near(viewport.height, 1824.0f, "a full viewport spans the target's height");
+        passed &= expect(viewport.valid() && viewport.min_depth <= viewport.max_depth, "the depth range stays valid");
     }
     passed &= expect(
         galaxy::render::scene_copy_single_channel(2u, false) && !galaxy::render::scene_copy_single_channel(2u, true),

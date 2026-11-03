@@ -82,8 +82,8 @@ namespace NebulaHost {
         return nebula_host()->art_export(nebula_host()->user, pArt);
     }
 
-    inline u32 layer2DScale() {
-        return nebula_host()->layer_2d_scale(nebula_host()->user);
+    inline u32 layer2DLines() {
+        return nebula_host()->layer_2d_lines(nebula_host()->user);
     }
 
     inline s32 pointerWheel() {

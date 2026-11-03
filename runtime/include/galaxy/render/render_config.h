@@ -16,9 +16,6 @@
 
 namespace galaxy::render {
 
-// The largest scene target/display picture backing scale; the game's logical scene target/VI sizes and addresses are unchanged. 12x covers 32:9 at
-// 2160 lines; 16x (10240x8448) stays inside D3D12's 16384-texel limit.
-inline constexpr unsigned kMaxSceneScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
 inline constexpr float kMaxFrameRate = 1000.0f;
 // The bloom settings' top (percent of the game's and the camera's own strength).

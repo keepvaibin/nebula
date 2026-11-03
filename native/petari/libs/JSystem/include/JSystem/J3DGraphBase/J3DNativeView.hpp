@@ -9,6 +9,10 @@
 // 0 for perspective, then the six terms).
 #ifdef __cplusplus
 namespace J3DNativeView {
+    // Frame units per unit of the game's screen.
+    const f32 cUnitsAcross = NEBULA_FRAME_UNITS / 640.0f;
+    const f32 cUnitsDown = NEBULA_FRAME_UNITS / 456.0f;
+
     void setPerspective(const f32 (*pMtx)[4]);
     void setOrthographic(const f32 (*pMtx)[4]);
     void setProjectionv(const f32* pValues);

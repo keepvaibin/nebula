@@ -23,7 +23,8 @@ namespace {
 
     void sendViewport() {
         // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far planes map to.
-        const f32 viewport[6] = {sViewport[0], sViewport[1], sViewport[2], sViewport[3], sViewport[4] * sDepthScale + sDepthOffset,
+        const f32 viewport[6] = {sViewport[0] * J3DNativeView::cUnitsAcross, sViewport[1] * J3DNativeView::cUnitsDown,
+                                 sViewport[2] * J3DNativeView::cUnitsAcross, sViewport[3] * J3DNativeView::cUnitsDown, sViewport[4] * sDepthScale + sDepthOffset,
                                  sViewport[5] * sDepthScale + sDepthOffset};
         J3DNativeDraw::flush();
         const NebulaHostServices* pHost = nebula_host();
@@ -40,8 +41,15 @@ namespace {
 namespace J3DNativeView {
     void probeScreen(u32 channel, NebulaScreenProbeKind what, const NebulaScreenProbe* pProbes, u32 count) {
         J3DNativeDraw::flush();
+        NebulaScreenProbe probes[NEBULA_SCREEN_PROBES_MAX];
+        const u32 sent = count < NEBULA_SCREEN_PROBES_MAX ? count : NEBULA_SCREEN_PROBES_MAX;
+        for (u32 i = 0; i < sent; i++) {
+            probes[i] = pProbes[i];
+            probes[i].x *= cUnitsAcross;
+            probes[i].y *= cUnitsDown;
+        }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->screen_probe(pHost->user, channel, what, pProbes, count);
+        pHost->screen_probe(pHost->user, channel, what, probes, sent);
     }
 
     u32 screenProbeResults(u32 channel, NebulaScreenProbe* pProbes, u32 capacity) {
@@ -129,8 +137,7 @@ namespace J3DNativeView {
         sScissorSet = true;
         J3DNativeDraw::flush();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->view_scissor(pHost->user, static_cast< f32 >(left), static_cast< f32 >(top), static_cast< f32 >(width),
-                            static_cast< f32 >(height));
+        pHost->view_scissor(pHost->user, left * cUnitsAcross, top * cUnitsDown, width * cUnitsAcross, height * cUnitsDown);
     }
 
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight) {

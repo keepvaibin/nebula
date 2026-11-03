@@ -141,42 +141,26 @@ std::vector<unsigned> available_upscalers() {
 }
 
 // Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3), at least 1x.
-using ui::quality_render_scale;
+using ui::quality_render_fraction;
 
 // Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
 bool spatial_quality_mode(const RenderConfig& render) {
     return temporal_upscaler(render) == 0u && std::min(render.spatial_quality, 4u) >= 1u;
 }
 
-// DLSS's narrowest render scale for a quality and output scale (its mode's range starts above
-// ultra performance's 3x ratio at low outputs).
-unsigned dlss_min_render_scale(unsigned quality, unsigned output_scale) {
-    static std::mutex mutex;
-    static unsigned cached_quality = ~0u;
-    static unsigned cached_output = 0u;
-    static unsigned cached_scale = 1u;
-    const std::lock_guard<std::mutex> lock(mutex);
-    if (quality != cached_quality || output_scale != cached_output) {
-        const unsigned width = dlss_min_render_width(quality, kFrameWidth * output_scale, kFrameHeight * output_scale);
-        cached_quality = quality;
-        cached_output = output_scale;
-        cached_scale = std::max((width + kFrameWidth - 1u) / kFrameWidth, 1u);
-    }
-    return cached_scale;
-}
-
-// The render scale the upscaling settings give below the internal resolution `internal`.
-unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
+// The fraction of the output's size the upscaling settings render at; DLSS's mode has a narrowest render width.
+float upscaler_render_fraction(const RenderConfig& render, unsigned output_width, unsigned output_height) {
     const unsigned temporal = temporal_upscaler(render);
     if (temporal == 0u) {
-        return spatial_quality_mode(render) ? quality_render_scale(internal, render.spatial_quality) : internal;
+        return spatial_quality_mode(render) ? quality_render_fraction(render.spatial_quality) : 1.0f;
     }
     const unsigned quality = std::min(render.temporal_quality, 4u);
-    unsigned scale = quality_render_scale(internal, quality);
-    if (temporal == 3u) {
-        scale = std::max(scale, dlss_min_render_scale(quality, internal));
+    float fraction = quality_render_fraction(quality);
+    if (temporal == 3u && output_width != 0u) {
+        const unsigned narrowest = dlss_min_render_width(quality, output_width, output_height);
+        fraction = std::max(fraction, static_cast<float>(narrowest) / static_cast<float>(output_width));
     }
-    return std::clamp(scale, 1u, std::max(internal, 1u));
+    return std::min(fraction, 1.0f);
 }
 
 std::string native_settings_row_text(
@@ -385,7 +369,7 @@ std::pair<unsigned, unsigned> settings_output_size(const RenderConfig& render) {
 }
 
 // The largest internal resolution the selected display can show.
-unsigned settings_scale_cap(const RenderConfig& render) {
+float settings_render_fraction(const RenderConfig& render) {
     const MonitorInfo* monitor = settings_monitor(render);
     unsigned width = monitor ? monitor->current.width : host_window::backbuffer_width;
     unsigned height = monitor ? monitor->current.height : host_window::backbuffer_height;
@@ -393,7 +377,7 @@ unsigned settings_scale_cap(const RenderConfig& render) {
         width = render.fullscreen_width;
         height = render.fullscreen_height;
     }
-    return scene_target_scale_covering(width, height, kMaxSceneScale);
+    return upscaler_render_fraction(render, width, height);
 }
 
 // Window client sizes that fit the monitor's work area, smallest first: those
@@ -2164,7 +2148,7 @@ public:
     ui::GraphicsPageState query(const RenderConfig& render) const override {
         ui::GraphicsPageState state;
         state.upscalers = available_upscalers();
-        state.render_scale = upscaler_render_scale(render, settings_scale_cap(render));
+        state.render_percent = static_cast<unsigned>(std::lround(settings_render_fraction(render) * 100.0f));
         state.dlss_supported = streamline::dlss_supported();
         state.dlss_installed = dlss_installed_now();
         state.ray_tracing_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
@@ -3368,8 +3352,8 @@ bool flush_native_settings_if_dirty() {
     return s_settings_save.queue();
 }
 
-unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
-    return render::upscaler_render_scale(render, internal);
+float upscaler_render_fraction(const RenderConfig& render, unsigned output_width, unsigned output_height) {
+    return render::upscaler_render_fraction(render, output_width, output_height);
 }
 
 // Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.

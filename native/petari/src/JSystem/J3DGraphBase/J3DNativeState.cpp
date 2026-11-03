@@ -3,6 +3,7 @@
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <math.h>
 #include <string.h>
@@ -323,14 +324,14 @@ namespace J3DPass {
 
     void lineWidth(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
-        sPass.line_width = pixels;
+        sPass.line_width = pixels * J3DNativeView::cUnitsDown;
         sPass.line_divisor = spreadTexture ? 1 : 0;
         sPass.line_offsets = spreadTexture ? 7 : 0;
     }
 
     void pointSize(f32 pixels, bool spreadTexture) {
         J3DNativeShape::flushState();
-        sPass.point_size = pixels;
+        sPass.point_size = pixels * J3DNativeView::cUnitsDown;
         sPass.point_divisor = spreadTexture ? 1 : 0;
         sPass.point_offsets = spreadTexture ? 7 : 0;
     }

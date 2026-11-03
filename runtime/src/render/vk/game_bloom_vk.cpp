@@ -380,7 +380,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
         pending_ = true;
         return true;
     }
-    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.logical_height, in.scale);
+    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = ensure(dummy_, 1u, 1u, kWorkFormat, true, "bloom unused slot") &&
                 ensure(work_, s.w1, s.h1, kWorkFormat, true, "bloom work") &&
@@ -414,8 +414,7 @@ bool GameBloomVk::prepare(VkCommandBuffer commands, const Inputs& in, const Para
     vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
 
-    const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, in.logical_width,
-                                             in.logical_height, p.ring_x, p.ring_y);
+    const bloom::Widths w = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);
     // The selection's source: the glowing models drawn over black (normal: the scene target itself), the scene (simple).
     if (normal) {
         image_barrier(commands, in.color->image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

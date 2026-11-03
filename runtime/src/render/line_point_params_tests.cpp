@@ -40,7 +40,7 @@ int main() {
     try {
         const galaxy::render::LinePointRasterParams decoded =
             galaxy::render::make_line_point_raster_params(
-                {1.0f / 6.0f, 255.0f / 6.0f, 8u, 1u, 0x81u, 0x88u}, 20.0f, 40.0f, 3u);
+                {1.0f / 6.0f, 255.0f / 6.0f, 8u, 1u, 0x81u, 0x88u}, 20.0f, 40.0f, galaxy::render::RasterScale{3.0f, 3.0f});
         passed &= expect_near(
             decoded.viewport_width_pixels,
             60.0f,
@@ -68,15 +68,15 @@ int main() {
 
         const galaxy::render::LinePointRasterParams fallback =
             galaxy::render::make_line_point_raster_params(
-                {1.0f, 2.0f}, 0.0f, 0.0f, 0u);
+                {1.0f, 2.0f}, 0.0f, 0.0f, galaxy::render::RasterScale{1280.0f / 65536.0f, 720.0f / 65536.0f});
         passed &= expect_near(
             fallback.viewport_width_pixels,
-            640.0f,
-            "unset viewport uses the 1x frame width");
+            1280.0f,
+            "unset viewport covers the frame's width");
         passed &= expect_near(
             fallback.viewport_height_pixels,
-            456.0f,
-            "unset viewport uses the 1x frame height");
+            720.0f,
+            "unset viewport covers the frame's height");
 
         galaxy::render::NativeDrawState state;
         (void)state.consume_dirty();

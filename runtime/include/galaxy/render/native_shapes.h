@@ -168,7 +168,7 @@ struct Record {
     std::uint32_t marker_aux = 0;
     std::array<std::uint64_t, 2> marker{};
     // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth.
-    std::uint16_t target_width = 0, target_height = 0;
+    std::uint32_t target_width = 0, target_height = 0;
     std::uint32_t target_clear_rgba = 0, target_clear_z = 0;
     // TargetClear, FrameClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd, TargetCapture:
     // NebulaTargetChannels. FrameClear: its rectangle (target_x, target_y, target_width x target_height).

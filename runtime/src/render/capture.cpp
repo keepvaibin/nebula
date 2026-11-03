@@ -77,7 +77,7 @@ void SceneCopyManager::shutdown() {
     latest_slot_ = 0;
     next_slot_ = 0;
     next_copy_serial_ = 1;
-    map_ = FrameMap(1u);
+    map_ = FrameMap{};
     device_.Reset();
 }
 
@@ -141,40 +141,31 @@ gpu::TextureRef SceneCopyManager::acquire_idle_texture(
 }
 
 // A capture's size at the frame scale, within the largest texture the device makes.
-ScaledSceneCopyExtent compute_scaled_scene_copy_extent(
-    std::uint16_t logical_width,
-    std::uint16_t logical_height,
-    const FrameMap& map) noexcept {
-    constexpr long kMaxTextureDimension = static_cast<long>(gpu::kMaxTexture2DDimension);
-    return ScaledSceneCopyExtent{
-        static_cast<std::uint16_t>(std::min(std::lround(static_cast<double>(logical_width) * map.sx), kMaxTextureDimension)),
-        static_cast<std::uint16_t>(std::min(std::lround(static_cast<double>(logical_height) * map.sy), kMaxTextureDimension))};
+FrameExtent capture_extent(bool half_scale, const FrameMap& map) noexcept {
+    constexpr unsigned kMaxTextureDimension = gpu::kMaxTexture2DDimension;
+    const unsigned width = half_scale ? std::max(map.width / 2u, 1u) : map.width;
+    const unsigned height = half_scale ? std::max(map.height / 2u, 1u) : map.height;
+    return FrameExtent{static_cast<std::uint16_t>(std::min(width, kMaxTextureDimension)),
+                       static_cast<std::uint16_t>(std::min(height, kMaxTextureDimension))};
 }
 
-SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
-    const CaptureRequest& params,
+SceneCopySamplingGeometry capture_sampling_geometry(
     unsigned dest_width,
     unsigned dest_height,
     const FrameMap& map) noexcept {
     SceneCopySamplingGeometry geometry{};
-    geometry.src_x = static_cast<float>(params.src_x) * map.sx;
-    geometry.src_y = static_cast<float>(params.src_y) * map.sy;
-    geometry.step_x = dest_width == 0u ? 0.0f : static_cast<float>(params.src_width) * map.sx / static_cast<float>(dest_width);
-    geometry.step_y = dest_height == 0u ? 0.0f : static_cast<float>(params.src_height) * map.sy / static_cast<float>(dest_height);
+    geometry.step_x = dest_width == 0u ? 0.0f : static_cast<float>(map.width) / static_cast<float>(dest_width);
+    geometry.step_y = dest_height == 0u ? 0.0f : static_cast<float>(map.height) / static_cast<float>(dest_height);
     return geometry;
 }
 
 DisplayTexture* SceneCopyManager::acquire_display(
-    const CaptureRequest& params,
+    const CaptureRequest& /*params*/,
     std::uint64_t frame_index) {
     // The ring moves on when a picture is published (mark_display_copied).
     const std::uint32_t slot = next_slot_;
 
-    const std::uint16_t logical_h = params.src_height;
-    const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
-        params.src_width,
-        logical_h,
-        map_);
+    const FrameExtent extent = capture_extent(false, map_);
     const std::uint16_t wanted_w = extent.width;
     const std::uint16_t wanted_h = extent.height;
 
@@ -265,20 +256,10 @@ std::optional<SceneCopyRect> scene_identity_copy_rect(
     const CaptureRequest& params, bool is_depth_copy, const FrameMap& map,
     unsigned dest_width, unsigned dest_height) noexcept {
     if (is_depth_copy || params.display || params.channels != kCopyLayoutRgba ||
-        params.half_scale ||
-        params.src_width == 0u || params.src_height == 0u ||
-        static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
-        static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {
+        params.half_scale || dest_width != map.width || dest_height != map.height) {
         return std::nullopt;
     }
-    const auto left = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_x) * map.sx));
-    const auto top = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_y) * map.sy));
-    const auto right = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_x + params.src_width) * map.sx));
-    const auto bottom = static_cast<std::uint32_t>(std::lround(static_cast<double>(params.src_y + params.src_height) * map.sy));
-    if (dest_width != right - left || dest_height != bottom - top) {
-        return std::nullopt;
-    }
-    return SceneCopyRect{left, top, right, bottom};
+    return SceneCopyRect{0u, 0u, map.width, map.height};
 }
 
 }  // namespace galaxy::render

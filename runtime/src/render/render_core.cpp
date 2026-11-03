@@ -73,7 +73,7 @@ std::uint32_t pack_sampler_key(
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16,
     bool arbitrary,
-    std::uint8_t scene_target_scale_log2_x32) noexcept {
+    std::uint8_t mip_lines_log2_x32) noexcept {
     std::uint32_t min_filter =
         min_filter_code(mode) & 0x7u;
     std::uint32_t min_lod =
@@ -96,7 +96,7 @@ std::uint32_t pack_sampler_key(
         static_cast<std::uint32_t>(static_cast<std::uint8_t>(lod_bias_x32(mode.lod_bias))) & 0xFFu;
     if (arbitrary && source_mips) {
         const int bias = static_cast<int>(static_cast<std::int8_t>(lod_bias_x32(mode.lod_bias))) +
-                         static_cast<int>(scene_target_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
+                         static_cast<int>(mip_lines_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
         lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
             static_cast<std::int8_t>(std::clamp(bias, -128, 127))));
         max_lod = 0xFFu;
@@ -125,11 +125,8 @@ void boot_step(const char* step) noexcept;
 
 namespace {
 
-static_assert(kFrameWidth == 640u && kFrameHeight == 456u);
 
-std::atomic<unsigned> s_layer_2d_scale{0u};
-// The 3D image's scale as shown, at each scene's begin (scene_display_scale).
-std::atomic<unsigned> s_scene_display_scale{0u};
+std::atomic<unsigned> s_layer_2d_lines{0u};
 
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
@@ -551,7 +548,7 @@ bool RenderCore::initialize(int w, int h) {
         galaxy::fit_content_viewport(w, h, start_aspect ? start_aspect->content_aspect : galaxy::kWiiContentAspect);
     const FrameMap start_frame = start_content.width > 0 && start_content.height > 0
                                      ? FrameMap(static_cast<unsigned>(start_content.width), static_cast<unsigned>(start_content.height))
-                                     : FrameMap(1u);
+                                     : FrameMap{};
     if (!renderer_.initialize(w, h, start_frame)) {
         std::cerr << "[RenderCore] RendererD3D12::initialize failed\n";
         return false;
@@ -614,7 +611,7 @@ bool RenderCore::initialize(int w, int h) {
                     display_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
                     display_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
             }, static_cast<std::uint64_t>(w), static_cast<std::uint64_t>(h),
-               renderer_.covering_scale());
+               renderer_.frame_map().height);
         } catch (...) { /* Optional startup allocation cannot fail gameplay. */ }
     }
     return true;
@@ -1980,11 +1977,10 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
         frame_bindings_dirty_ = true;
     }
     if (marker == SceneMarker::SceneEnd) {
-        s_layer_2d_scale.store(renderer_.covering_scale(), std::memory_order_relaxed);
+        s_layer_2d_lines.store(renderer_.frame_map().height, std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
     if (marker == SceneMarker::SceneBegin) {
-        s_scene_display_scale.store(renderer_.scene_display_scale(), std::memory_order_relaxed);
     }
 }
 
@@ -4372,8 +4368,8 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
     std::uint8_t map_mask,
     const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
     std::array<std::uint32_t, kMaxTextureMaps> keys{};
-    const auto scene_target_scale_log2_x32 = static_cast<std::uint8_t>(std::clamp(
-        std::lround(32.0 * std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().sy)))), 0l, 127l));
+    const auto mip_lines_log2_x32 = static_cast<std::uint8_t>(std::clamp(
+        std::lround(32.0 * std::log2(std::max(1.0, static_cast<double>(renderer_.frame_map().height) / kAuthoredLines))), 0l, 127l));
     for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
         if ((map_mask & (1u << map)) == 0u) {
             continue;
@@ -4381,7 +4377,7 @@ std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
         const TextureHandle& handle = handles[map];
         keys[map] = pack_sampler_key(
             draw_state_.texture[map].mode, handle.generated_mips, handle.mip_levels,
-            handle.lod_shift_x16, handle.lod_arbitrary, scene_target_scale_log2_x32);
+            handle.lod_shift_x16, handle.lod_arbitrary, mip_lines_log2_x32);
     }
     // Unused slots still get valid zero-key descriptors, but cannot fragment
     // the table cache. map_mask includes both direct and indirect sampling.
@@ -4451,18 +4447,8 @@ void RenderCore::invalidate_texture_binding_cache_key(std::uint64_t key) {
 
 void RenderCore::mark_texture_binding_alias_dirty(
     const CaptureRequest& params) {
-    const std::uint16_t alias_width = static_cast<std::uint16_t>(
-        params.half_scale
-            ? std::max<std::uint16_t>(1u, params.src_width / 2u)
-            : params.src_width);
-    const std::uint16_t alias_height = static_cast<std::uint16_t>(
-        params.half_scale
-            ? std::max<std::uint16_t>(1u, params.src_height / 2u)
-            : params.src_height);
     DirtyTextureAlias dirty{};
     dirty.dependency.address = params.key;
-    dirty.dependency.width = alias_width;
-    dirty.dependency.height = alias_height;
     dirty.dependency.source_bytes = 1u;  // the picture is found by its key (the capture buffer) alone
     dirty_texture_aliases_.push_back(dirty);
     invalidate_texture_handle_cache_dependency(dirty.dependency);
@@ -4929,7 +4915,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         {
             // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
             auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
-            native_vs->draw_header[1] = static_cast<std::uint32_t>(std::lround(renderer_.frame_map().sy));
+            native_vs->draw_header[1] = renderer_.frame_map().height;
             native_vs->draw_header[2] = native_pe;
             native_vs->draw_header[3] = native_texmtx;
             for (unsigned i = 0; i < 8u; ++i) {
@@ -5242,8 +5228,8 @@ bool RenderCore::begin_cached_draw_run(
         cull_all_suppresses_primitive(draw_state_.gen.cull, primitive) ||
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
         sc.x1 < 0 || sc.y1 < 0 ||
-        sc.x0 >= static_cast<std::int32_t>(kFrameWidth) ||
-        sc.y0 >= static_cast<std::int32_t>(kFrameHeight);
+        sc.x0 >= static_cast<std::int32_t>(kFrameUnits) ||
+        sc.y0 >= static_cast<std::int32_t>(kFrameUnits);
     cached_draw_run_primitive_ = primitive;
     cached_draw_run_vtxfmt_ = vtxfmt;
     cached_draw_run_primitive_indexed_ =
@@ -5409,8 +5395,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     case shapes::Record::Kind::TargetCapture: {
         CaptureRequest request{};
-        request.src_width = static_cast<std::uint16_t>(kFrameWidth);
-        request.src_height = static_cast<std::uint16_t>(kFrameHeight);
         request.key = record.key;
         request.channels = record.target_channels < 7u ? record.target_channels : 0u;
         request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
@@ -5420,8 +5404,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     }
     case shapes::Record::Kind::FrameShow: {
         CaptureRequest request{};
-        request.src_width = static_cast<std::uint16_t>(((record.target_width - 1u) & 0x3FFu) + 1u);
-        request.src_height = static_cast<std::uint16_t>(((record.target_height - 1u) & 0x3FFu) + 1u);
         request.display = true;
         on_scene_copy(request);
         return;
@@ -5937,22 +5919,6 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                 scene_copies_.set_frame_map(renderer_.frame_map());
                 frame_bindings_dirty_ = true;
             }
-            static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;
-            if (trace_layout) {
-                const std::array<unsigned,7> current{params.src_x,params.src_y,params.src_width,params.src_height,
-                    display_picture->width,display_picture->height,renderer_.covering_scale()};
-                static std::array<std::array<unsigned,7>,8> seen{};
-                static unsigned count{};
-                if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
-                    seen[count++]=current;
-                    const auto scale=renderer_.covering_scale();
-                    std::cerr<<"[display-render-layout] unique="<<count<<" backing-scene="<<640u*scale<<'x'<<456u*scale
-                        <<" copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
-                        <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
-                        <<" scaled-display="<<display_picture->width<<'x'<<display_picture->height
-                        <<" internal-scale="<<scale<<" display-serial-before-publication="<<display_picture->copy_serial<<'\n';
-                }
-            }
             display_picture->pointer_response=render_pointer_response_;
             display_picture->prerecorded_movie=render_movie_content_;
             display_picture->safety_surround=render_safety_surround_;
@@ -5995,7 +5961,6 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
         std::cerr << "[frame-read-timing] frame=" << frame_index_
                   << " kind=" << (params.display ? "display" : "texture")
                   << " us=" << copy_us
-                  << " src=" << params.src_width << 'x' << params.src_height
                   << " dst=0x" << std::hex << params.key << std::dec << '\n';
     }
 }
@@ -6021,12 +5986,9 @@ void boot_step(const char* step) noexcept {
     last = now;
 }
 
-unsigned layer_2d_scale() noexcept {
-    return s_layer_2d_scale.load(std::memory_order_relaxed);
+unsigned layer_2d_lines() noexcept {
+    return s_layer_2d_lines.load(std::memory_order_relaxed);
 }
 
-unsigned scene_display_scale() noexcept {
-    return s_scene_display_scale.load(std::memory_order_relaxed);
-}
 
 }  // namespace galaxy::render

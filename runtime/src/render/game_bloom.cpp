@@ -271,7 +271,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
         return false;
     }
     ID3D12PipelineState* const composite = composite_pipeline(in.samples, in.hdr);
-    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.logical_height, in.scale);
+    const bloom::Shape s = bloom::shape_of(in.frame_width, in.frame_height, in.scale);
     const unsigned blurs1 = normal ? 2u : 1u;
     bool made = composite != nullptr &&
                 ensure_target(work_, kWorkFormat, s.w1, s.h1, true, frame_index, frames_in_flight, L"bloom work") &&
@@ -299,8 +299,7 @@ bool GameBloom::apply(ID3D12GraphicsCommandList* list, DescriptorRing& ring, con
     }
 
     // The Gaussians standing for the rings (game_bloom_shape.h).
-    const bloom::Widths widths = bloom::widths_of(normal, s, in.frame_width, in.frame_height, in.logical_width,
-                                                  in.logical_height, p.ring_x, p.ring_y);
+    const bloom::Widths widths = bloom::widths_of(normal, s, in.frame_width, in.frame_height, p.ring_x, p.ring_y);
     const float* const sigma1x = widths.x1;
     const float* const sigma1y = widths.y1;
     const float* const sigma2x = widths.x2;
